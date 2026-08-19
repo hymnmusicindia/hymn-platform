@@ -117,6 +117,7 @@ model User {
   payoutBalance        ArtistPayoutBalance?
   royaltyLineItems     RoyaltyLineItem[]
   notifications        Notification[]
+  creditLedgerEntries  CreditLedgerEntry[]
   emailLogs            EmailLog[]
   supportTickets       SupportTicket[]
   auditLogs            AuditLog[]
@@ -742,6 +743,29 @@ model Notification {
   @@index([userId, readAt])
   @@index([userId, createdAt])
   @@map("notifications")
+}
+
+model CreditLedgerEntry {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @map("user_id")
+  type           String
+  bucket         String
+  amount         Decimal  @db.Decimal(12, 2)
+  currency       String   @default("INR")
+  direction      String
+  sourceType     String   @map("source_type")
+  sourceId       String   @map("source_id")
+  description    String
+  idempotencyKey String   @unique @map("idempotency_key")
+  status         String   @default("posted")
+  balanceAfter   Decimal  @map("balance_after") @db.Decimal(12, 2)
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, bucket, createdAt])
+  @@index([sourceType, sourceId])
+  @@map("credit_ledger_entries")
 }
 
 model EmailLog {
