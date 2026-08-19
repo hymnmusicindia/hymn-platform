@@ -1,0 +1,64 @@
+{
+  "name": "hymn-platform",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "prisma generate && prisma db push --accept-data-loss && next build",
+    "start": "next start",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "test:payout": "tsx scripts/verify-payout-domain.ts",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "@vercel/blob": "^2.5.0",
+    "axios": "^1.18.0",
+    "bcrypt": "^6.0.0",
+    "clsx": "^2.1.1",
+    "exceljs": "^4.4.0",
+    "framer-motion": "^12.38.0",
+    "google-auth-library": "^10.7.0",
+    "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.511.0",
+    "mysql2": "^3.22.4",
+    "next": "16.2.11",
+    "razorpay": "^2.9.6",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "resend": "^6.18.0",
+    "tesseract.js": "^7.0.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/node": "^22.14.1",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.2.11",
+    "postcss": "8.5.12",
+    "prisma": "^6.19.3",
+    "tailwindcss": "^3.4.17",
+    "ts-api-utils": "^2.5.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.22.4",
+    "typescript": "^5.8.3"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "8.5.12",
+      "sharp": "0.35.0"
+    },
+    "exceljs": {
+      "uuid": "11.1.1"
+    }
+  }
+}

@@ -1,0 +1,305 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  PRODUCER
+  ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  BANNED
+}
+
+enum ProducerApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ReleaseStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  CHANGES_REQUESTED
+  APPROVED
+  QUEUED_FOR_DISTRIBUTION
+  SENT_TO_DISTRIBUTOR
+  PROCESSING
+  DISTRIBUTED
+  DELIVERED
+  LIVE
+  REJECTED
+  FAILED
+}
+
+enum UploadKind {
+  AUDIO
+  ARTWORK
+  BEAT
+  DOCUMENT
+  SAMPLE
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum PayoutStatus {
+  PENDING
+  APPROVED
+  PAID
+  FAILED
+}
+
+model User {
+  id              Int           @id @default(autoincrement())
+  googleId        String        @unique @map("google_id")
+  name            String
+  email           String
+  avatar          String?
+  role            UserRole      @default(CUSTOMER)
+  status          AccountStatus @default(ACTIVE)
+  onboardingDone  Boolean       @default(false) @map("onboarding_done")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  sessions        Session[]
+  applications    ProducerApplication[] @relation("ApplicantApplications")
+  reviewedApps    ProducerApplication[] @relation("ApplicationReviewer")
+  releases        Release[]
+  uploads         Upload[]
+  royalties       Royalty[]
+  payouts         Payout[]
+  notifications   Notification[]
+  supportTickets  SupportTicket[]
+  auditLogs       AuditLog[]
+
+  @@index([role])
+  @@index([email])
+  @@map("users")
+}
+
+model Session {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @map("user_id")
+  tokenHash    String   @unique @map("token_hash")
+  userAgent    String?  @map("user_agent")
+  ipAddress    String?  @map("ip_address")
+  expiresAt    DateTime @map("expires_at")
+  revokedAt    DateTime? @map("revoked_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("sessions")
+}
+
+model ProducerApplication {
+  id              Int                       @id @default(autoincrement())
+  userId          Int                       @map("user_id")
+  producerName    String                    @map("producer_name")
+  genre           String
+  portfolioLinks  String[]                  @default([]) @map("portfolio_links")
+  instagram       String?
+  youtube         String?
+  soundcloud      String?
+  spotify         String?
+  yearsExperience Int                       @map("years_experience")
+  pricing         String
+  sampleBeats     String[]                  @default([]) @map("sample_beats")
+  bio             String
+  status          ProducerApplicationStatus @default(PENDING)
+  internalNotes   String?                   @map("internal_notes")
+  reviewedById    Int?                      @map("reviewed_by_id")
+  reviewedAt      DateTime?                 @map("reviewed_at")
+  createdAt       DateTime                  @default(now()) @map("created_at")
+  updatedAt       DateTime                  @updatedAt @map("updated_at")
+  user            User                      @relation("ApplicantApplications", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy      User?                     @relation("ApplicationReviewer", fields: [reviewedById], references: [id])
+
+  @@index([status, createdAt])
+  @@map("producer_applications")
+}
+
+model Release {
+  id              Int           @id @default(autoincrement())
+  userId          Int           @map("user_id")
+  title           String
+  artistName      String        @map("artist_name")
+  genre           String
+  collaborators   String[]      @default([])
+  producer        String?
+  bpm             Int?
+  explicit        Boolean       @default(false)
+  releaseDate     DateTime      @map("release_date")
+  status          ReleaseStatus @default(DRAFT)
+  distributorReleaseId String?  @map("distributor_release_id")
+  upc             String?
+  submittedAt     DateTime?     @map("submitted_at")
+  approvedAt      DateTime?     @map("approved_at")
+  distributedAt   DateTime?     @map("distributed_at")
+  liveAt          DateTime?     @map("live_at")
+  rejectionReason String?       @map("rejection_reason")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tracks          Track[]
+  uploads         Upload[]
+  analytics       Analytics[]
+  royalties       Royalty[]
+  distributionLogs DistributionLog[]
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@map("releases")
+}
+
+model Track {
+  id          Int      @id @default(autoincrement())
+  releaseId   Int      @map("release_id")
+  title       String
+  duration    Int?
+  isrc        String?
+  audioUploadId Int?    @map("audio_upload_id")
+  audioUrl     String?  @map("audio_url")
+  distributorStatus String? @map("distributor_status")
+  createdAt   DateTime @default(now()) @map("created_at")
+  release     Release  @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@map("tracks")
+}
+
+model DistributionLog {
+  id              Int      @id @default(autoincrement())
+  releaseId       Int      @map("release_id")
+  requestPayload  Json?    @map("request_payload")
+  responsePayload Json?    @map("response_payload")
+  warnings        Json?
+  errors          Json?
+  success         Boolean  @default(false)
+  createdAt       DateTime @default(now()) @map("created_at")
+  release         Release  @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@index([releaseId, createdAt])
+  @@map("distribution_logs")
+}
+
+model Upload {
+  id          Int        @id @default(autoincrement())
+  userId      Int        @map("user_id")
+  releaseId   Int?       @map("release_id")
+  kind        UploadKind
+  storageKey  String     @map("storage_key")
+  fileName    String     @map("file_name")
+  mimeType    String     @map("mime_type")
+  sizeBytes   Int        @map("size_bytes")
+  checksum    String?
+  publicUrl   String?    @map("public_url")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  release     Release?   @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+
+  @@index([userId, kind])
+  @@map("uploads")
+}
+
+model Analytics {
+  id          Int      @id @default(autoincrement())
+  releaseId   Int      @map("release_id")
+  platform    String
+  country     String
+  streams     Int      @default(0)
+  saves       Int      @default(0)
+  revenueCents Int     @default(0) @map("revenue_cents")
+  periodStart DateTime @map("period_start")
+  periodEnd   DateTime @map("period_end")
+  release     Release  @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@index([releaseId, periodStart])
+  @@map("analytics")
+}
+
+model Royalty {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  releaseId   Int?     @map("release_id")
+  amountCents Int      @map("amount_cents")
+  currency    String   @default("INR")
+  source      String
+  periodStart DateTime @map("period_start")
+  periodEnd   DateTime @map("period_end")
+  createdAt   DateTime @default(now()) @map("created_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  release     Release? @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+
+  @@index([userId, periodStart])
+  @@map("royalties")
+}
+
+model Payout {
+  id          Int          @id @default(autoincrement())
+  userId      Int          @map("user_id")
+  amountCents Int          @map("amount_cents")
+  currency    String       @default("INR")
+  status      PayoutStatus @default(PENDING)
+  reference   String?
+  createdAt   DateTime     @default(now()) @map("created_at")
+  paidAt      DateTime?    @map("paid_at")
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("payouts")
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  title     String
+  body      String
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model SupportTicket {
+  id        Int          @id @default(autoincrement())
+  userId    Int          @map("user_id")
+  subject   String
+  message   String
+  status    TicketStatus @default(OPEN)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("support_tickets")
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  actorId   Int?     @map("actor_id")
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  metadata  Json?
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([entity, entityId])
+  @@map("audit_logs")
+}

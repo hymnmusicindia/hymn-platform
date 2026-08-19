@@ -1,0 +1,16 @@
+{
+  "crons": [
+    { "path": "/api/cron/birthday-notifications", "schedule": "15 0 * * *" },
+    { "path": "/api/cron/release-status-sync", "schedule": "25 1 * * *" },
+    { "path": "/api/cron/payment-reconciliation", "schedule": "35 1 * * *" },
+    { "path": "/api/cron/draft-nudges", "schedule": "45 8 * * *" },
+    { "path": "/api/cron/quarterly-payout-reset", "schedule": "10 1 * * *" }
+  ],
+  "build": {
+    "env": {
+      "VERCEL_SUPPORT_LARGE_FUNCTIONS": "1"
+    }
+  }
+}
+
+
