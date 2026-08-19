@@ -1,0 +1,4 @@
+import { redirect } from "next/navigation"; import { requireAdminPermission } from "@/lib/access"; import { FraudOperationsConsole } from "@/components/fraud-operations-console";
+export default async function FraudPage(){const admin=await requireAdminPermission("fraud.read");if("error"in admin)redirect("/admin/login");return <main className="mx-auto min-h-screen max-w-[1500px] px-5 pb-16 pt-28 sm:px-8 sm:pt-32"><div className="mb-8"><p className="text-xs font-semibold uppercase tracking-[.22em]" style={{color:"var(--text-muted)"}}>Admin workspace · Risk operations</p><h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Fraud Detection</h1><p className="mt-3 max-w-4xl text-sm leading-6 sm:text-base" style={{color:"var(--text-muted)"}}>Investigate persisted risk signals and financial anomalies. A signal is not proof of fraud; all enforcement remains administrator-controlled.</p></div><FraudOperationsConsole /></main>}
+
+// vercel trigger 14

@@ -1,0 +1,4 @@
+import { NextResponse } from "next/server"; import { requireAdminPermission } from "@/lib/access"; import { prisma } from "@/lib/prisma"; import { safePage } from "@/lib/fraud";
+export async function GET(request:Request){const admin=await requireAdminPermission("fraud.read");if("error"in admin)return admin.error;const u=new URL(request.url),page=safePage(u.searchParams.get("page")),take=20;try{const db=prisma as any;const [cases,total]=await Promise.all([db.fraudCase.findMany({include:{primaryAlert:{include:{signals:true}},notes:{orderBy:{createdAt:"desc"}},evidence:true,links:true},orderBy:{openedAt:"desc"},skip:(page-1)*take,take}),db.fraudCase.count()]);return NextResponse.json({cases,total,page,pages:Math.max(1,Math.ceil(total/take))});}catch{return NextResponse.json({error:"Could not load fraud cases."},{status:503});}}
+
+// vercel trigger 14
