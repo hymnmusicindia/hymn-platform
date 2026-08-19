@@ -133,6 +133,8 @@ model User {
   splitEarnings        SplitEarningLineItem[]
   walletTransactions   WalletTransaction[]
   quarterCarryForwards QuarterCarryForward[]
+  managedServiceRequests ManagedServiceRequest[]
+  storedAssets         StoredAsset[]
 
   @@index([role])
   @@index([email])
@@ -221,6 +223,8 @@ model Release {
   splitRecords    SplitRecord[]
   splitRecipients SplitRecipient[]
   splitEarnings   SplitEarningLineItem[]
+  managedServiceRequests ManagedServiceRequest[]
+  storedAssets    StoredAsset[]
 
   @@index([userId, status])
   @@index([status, createdAt])
@@ -247,6 +251,94 @@ model Track {
   splitEarnings    SplitEarningLineItem[]
 
   @@map("tracks")
+}
+
+model ManagedServiceRequest {
+  id                  Int      @id @default(autoincrement())
+  userId              Int      @map("user_id")
+  releaseId           Int      @map("release_id")
+  trackId             Int?     @map("track_id")
+  serviceType         String   @map("service_type")
+  provider            String?
+  status              String   @default("submitted")
+  eligibilityAnswers  Json     @map("eligibility_answers")
+  declarations        Json?
+  publicLinks         Json?    @map("public_links")
+  riskFlags           Json?    @map("risk_flags")
+  internalNotes       String?  @map("internal_notes")
+  userVisibleUpdate   String?  @map("user_visible_update")
+  assignedAdminId     Int?     @map("assigned_admin_id")
+  externalReference   String?  @map("external_reference")
+  rejectionReason     String?  @map("rejection_reason")
+  idempotencyKey      String   @unique @map("idempotency_key")
+  submittedAt         DateTime @default(now()) @map("submitted_at")
+  reviewedAt          DateTime? @map("reviewed_at")
+  completedAt         DateTime? @map("completed_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  user                User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  release             Release  @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+  documents           ManagedServiceDocument[]
+  providerStatuses    ManagedServiceProviderStatus[]
+
+  @@index([userId, serviceType, submittedAt])
+  @@index([serviceType, status, submittedAt])
+  @@index([releaseId, trackId])
+  @@map("managed_service_requests")
+}
+
+model ManagedServiceProviderStatus {
+  id        Int      @id @default(autoincrement())
+  requestId Int      @map("request_id")
+  provider  String
+  status    String
+  reference String?
+  note      String?
+  updatedAt DateTime @updatedAt @map("updated_at")
+  request   ManagedServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, provider])
+  @@index([status, updatedAt])
+  @@map("managed_service_provider_statuses")
+}
+
+model ManagedServiceDocument {
+  requestId Int @map("request_id")
+  assetId   Int @map("asset_id")
+  request   ManagedServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  asset     StoredAsset @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@id([requestId, assetId])
+  @@index([assetId])
+  @@map("managed_service_documents")
+}
+
+model StoredAsset {
+  id                   Int      @id @default(autoincrement())
+  ownerUserId          Int      @map("owner_user_id")
+  releaseId            Int?     @map("release_id")
+  beatId               Int?     @unique @map("beat_id")
+  beatPurchaseId       Int?     @unique @map("beat_purchase_id")
+  assetType            String   @map("asset_type")
+  storageProvider      String   @map("storage_provider")
+  objectKey            String   @unique @map("object_key")
+  originalFilename     String   @map("original_filename")
+  safeFilename         String   @map("safe_filename")
+  mimeType             String   @map("mime_type")
+  byteSize             Int      @map("byte_size")
+  checksum             String
+  accessClassification String   @map("access_classification")
+  uploadStatus         String   @default("ready") @map("upload_status")
+  createdAt            DateTime @default(now()) @map("created_at")
+  deletedAt            DateTime? @map("deleted_at")
+  retentionUntil       DateTime? @map("retention_until")
+  owner                User     @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  release              Release? @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+  documents            ManagedServiceDocument[]
+
+  @@index([ownerUserId, assetType, createdAt])
+  @@index([releaseId, assetType])
+  @@index([deletedAt, retentionUntil])
+  @@map("stored_assets")
 }
 
 model AdminTask {
