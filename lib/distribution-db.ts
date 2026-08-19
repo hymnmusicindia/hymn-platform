@@ -5,6 +5,7 @@ import { sampleReleases } from "@/lib/site";
 import { prisma } from "@/lib/prisma";
 import { createNotification, findUserById } from "@/lib/db";
 import { emailAppUrl, sendReleaseEmail } from "@/lib/email/email-events";
+import { transitionReleaseStatus } from "@/lib/release-status-engine";
 
 export function isPostgresPrisma() {
   return /^postgres(?:ql)?:\/\//i.test(process.env.DATABASE_URL?.trim() || "");
@@ -17,6 +18,7 @@ export function deserializeRelease(dbData: any): Release {
     ...metadata,
     id: dbData.id,
     userId: dbData.userId,
+    ownerEmail: dbData.ownerEmail ?? dbData.user?.email ?? metadata.ownerEmail ?? null,
     trackName: dbData.title,
     releaseTitle: metadata.releaseTitle || dbData.title,
     artistName: dbData.artistName,
@@ -263,16 +265,18 @@ const queueStages: DistributionQueueStage[] = [
   "rejected"
 ];
 
+const allQueueStageValues: DistributionQueueStage[] = ["draft_submitted", "quality_check", "awaiting_approval", "approved", "sent_to_direnote", "processing", "delivered", "completed", "rejected"];
+
 const allowedQueueTransitions: Record<DistributionQueueStage, DistributionQueueStage[]> = {
-  draft_submitted: ["quality_check", "awaiting_approval", "approved", "sent_to_direnote", "processing", "delivered", "completed", "rejected"],
-  quality_check: ["awaiting_approval", "approved", "sent_to_direnote", "processing", "delivered", "completed", "rejected"],
-  awaiting_approval: ["approved", "sent_to_direnote", "processing", "delivered", "completed", "quality_check", "rejected"],
-  approved: ["sent_to_direnote", "processing", "delivered", "completed", "rejected"],
-  sent_to_direnote: ["processing", "delivered", "completed", "rejected"],
-  processing: ["delivered", "completed", "rejected"],
-  delivered: ["completed"],
-  completed: [],
-  rejected: ["draft_submitted", "quality_check", "awaiting_approval"]
+  draft_submitted: allQueueStageValues,
+  quality_check: allQueueStageValues,
+  awaiting_approval: allQueueStageValues,
+  approved: allQueueStageValues,
+  sent_to_direnote: allQueueStageValues,
+  processing: allQueueStageValues,
+  delivered: allQueueStageValues,
+  completed: allQueueStageValues,
+  rejected: allQueueStageValues
 };
 
 function assertQueueStage(stage: string): DistributionQueueStage {
@@ -303,6 +307,20 @@ async function notifyReleaseStatusChange(release: Release, status: ReleaseStatus
     if (!user) return;
     await sendReleaseEmail(event, { to: user.email, userId: user.id, userName: user.name, releaseTitle: releaseName, artistName: release.artistName, releaseId: release.id, releaseStatus: status, releaseDate: release.releaseDate, manageReleaseUrl: emailAppUrl(`/dashboard/releases/${release.id}`), correctionUrl: emailAppUrl(`/dashboard/releases/${release.id}?tab=corrections`), rejectionReason: reason ?? undefined });
   };
+
+  if (status === "under_review") {
+    await createNotification({
+      userId: release.userId,
+      title: "Your release is under review",
+      body: `HYMN has started reviewing “${releaseName}”.`,
+      type: "release",
+      href: `/dashboard/releases/${release.id}`,
+      actionLabel: "View release",
+      eventKey: `release:${release.id}:under_review`,
+      metadata: baseMetadata
+    });
+    return;
+  }
 
   if (status === "rejected") {
     await createNotification({
@@ -392,18 +410,10 @@ function releaseStatusForQueueStage(stage: DistributionQueueStage): ReleaseStatu
   if (stage === "quality_check" || stage === "awaiting_approval") return "under_review";
   if (stage === "approved") return "approved";
   if (stage === "sent_to_direnote") return "sent_to_distributor";
-  if (stage === "processing") return "processing";
-  if (stage === "delivered") return "delivered";
+  if (stage === "processing") return "distributor_processing";
+  if (stage === "delivered") return "awaiting_live_confirmation";
   if (stage === "completed") return "live";
   return "rejected";
-}
-
-function prismaReleaseStatusForQueueStage(stage: DistributionQueueStage) {
-  if (stage === "draft_submitted") return "SUBMITTED";
-  if (stage === "quality_check" || stage === "awaiting_approval") return "UNDER_REVIEW";
-  if (stage === "approved" || stage === "sent_to_direnote" || stage === "processing" || stage === "delivered") return "APPROVED";
-  if (stage === "completed") return "DISTRIBUTED";
-  return "REJECTED";
 }
 
 function normalizeQueueEntry(entry: any): DistributionQueueEntry {
@@ -429,8 +439,8 @@ function getPool() {
   const databaseUrl = process.env.DATABASE_URL?.trim();
   const isPostgres = /^postgres(?:ql)?:\/\//i.test(databaseUrl || "");
   const looksLikeExample = isPostgres || !databaseUrl || databaseUrl === "mysql://user:password@localhost:3306/hymn";
-  if (!isPostgres && looksLikeExample && process.env.NODE_ENV === "production") {
-    throw new Error("Production database is not configured. Refusing to use in-memory distribution storage.");
+  if (!isPostgres && process.env.NODE_ENV === "production") {
+    throw new Error("Legacy MySQL distribution persistence is disabled in production; configure PostgreSQL through DATABASE_URL.");
   }
   if (looksLikeExample) return null;
   if (!globalState.hymnDistributionPool) {
@@ -462,14 +472,21 @@ function queueSummaryFromMemory(): DistributionQueueSummary {
 }
 
 export async function getDistributionQueueSummary(): Promise<DistributionQueueSummary> {
+  if (isPostgresPrisma()) {
+    const [currentlyReviewing, pendingQueue] = await Promise.all([
+      prisma.release.count({ where: { status: "UNDER_REVIEW" } }),
+      prisma.release.count({ where: { status: { in: ["SUBMITTED", "IN_QC_QUEUE", "QUEUED_FOR_DISTRIBUTION"] } } })
+    ]);
+    return { currentlyReviewing, pendingQueue, nextBatchIn: "Not scheduled", averageApprovalTime: "Not available" };
+  }
   const pool = getPool();
   if (!pool) return queueSummaryFromMemory();
   const [queueRows] = await pool.query("SELECT COUNT(*) AS total FROM release_queue WHERE status IN ('submitted','in_queue')");
   const [reviewRows] = await pool.query("SELECT COUNT(*) AS total FROM releases WHERE status = 'under_review'");
   return {
-    currentlyReviewing: Number((reviewRows as Array<{ total: number }>)[0]?.total ?? 6),
-    nextBatchIn: "4h 21m",
-    averageApprovalTime: "24-48 hours",
+    currentlyReviewing: Number((reviewRows as Array<{ total: number }>)[0]?.total ?? 0),
+    nextBatchIn: "Not scheduled",
+    averageApprovalTime: "Not available",
     pendingQueue: Number((queueRows as Array<{ total: number }>)[0]?.total ?? 0)
   };
 }
@@ -479,7 +496,7 @@ export async function listDetailedReleasesByUser(userId: number): Promise<Releas
   if (!pool) {
     if (isPostgresPrisma()) {
       const dbReleases = await prisma.release.findMany({
-        where: { userId },
+        where: { archivedAt: null, OR: [{ ownerUserId: userId }, { ownerUserId: null, userId, releaseSource: { not: "ADMIN_MANUAL" } }] },
         include: { tracks: true },
         orderBy: { createdAt: "desc" }
       });
@@ -520,7 +537,7 @@ export async function getDetailedReleaseByUserId(userId: number, releaseId: numb
   if (!pool) {
     if (isPostgresPrisma()) {
       const dbRelease = await prisma.release.findFirst({
-        where: { id: releaseId, userId },
+        where: { id: releaseId, archivedAt: null, OR: [{ ownerUserId: userId }, { ownerUserId: null, userId, releaseSource: { not: "ADMIN_MANUAL" } }] },
         include: { tracks: true }
       });
       return dbRelease ? deserializeRelease(dbRelease) : null;
@@ -530,17 +547,79 @@ export async function getDetailedReleaseByUserId(userId: number, releaseId: numb
   const releases = await listDetailedReleasesByUser(userId);
   return releases.find((release) => release.id === releaseId) ?? null;
 }
+
+const duplicateUnsafeMetadataKeys = new Set(["direnoteResponse", "direnoteValidationErrors", "reviewIssues", "reviewHistory", "analytics", "earnings", "audit"]);
+
+function duplicateSafeValue(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).filter(([key]) => !duplicateUnsafeMetadataKeys.has(key)));
+}
+
+export async function duplicateReleaseForUser(userId: number, releaseId: number) {
+  const source = await getDetailedReleaseByUserId(userId, releaseId);
+  if (!source) return null;
+  const { id: _id, userId: _userId, status: _status, createdAt: _createdAt, queuePosition: _queuePosition,
+    estimatedReviewTime: _estimatedReviewTime, tracks, reviewIssues: _reviewIssues, rejectionReason: _rejectionReason,
+    correctionReason: _correctionReason, reviewedAt: _reviewedAt, reviewedBy: _reviewedBy,
+    distributorReleaseId: _distributorReleaseId, upcCode: _upcCode, ...safeSource } = source;
+  return saveDraftDistributionRelease({
+    userId,
+    metadata: {
+      ...safeSource,
+      releaseTitle: `${source.releaseTitle || source.trackName || "Untitled release"} - Copy`,
+      trackName: `${source.releaseTitle || source.trackName || "Untitled release"} - Copy`,
+      paymentStatus: "pending",
+      metadata: duplicateSafeValue(source.metadata),
+      tracks: (tracks ?? []).map((track) => {
+        const { id: _trackId, releaseId: _trackReleaseId, createdAt: _trackCreatedAt, isrc: _isrc,
+          distributorStatus: _distributorStatus, ...safeTrack } = track;
+        return { ...safeTrack, metadata: duplicateSafeValue(track.metadata) };
+      })
+    } as any
+  });
+}
+
+export async function deleteDraftReleaseForUser(userId: number, releaseId: number): Promise<"deleted" | "blocked" | "not_found"> {
+  const source = await getDetailedReleaseByUserId(userId, releaseId);
+  if (!source) return "not_found";
+  if (source.status !== "draft") return "blocked";
+  const pool = getPool();
+  if (!pool) {
+    if (isPostgresPrisma()) await prisma.release.delete({ where: { id: releaseId } });
+    else {
+      const index = memory.releases.findIndex((release) => release.id === releaseId && release.userId === userId);
+      if (index < 0) return "not_found";
+      memory.releases.splice(index, 1);
+    }
+    return "deleted";
+  }
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.query("DELETE FROM tracks WHERE release_id = ?", [releaseId]);
+    const [result] = await connection.query("DELETE FROM releases WHERE id = ? AND user_id = ? AND status = 'draft'", [releaseId, userId]);
+    if ((result as { affectedRows?: number }).affectedRows !== 1) { await connection.rollback(); return "not_found"; }
+    await connection.commit();
+    return "deleted";
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
 export async function listAllDetailedReleases(): Promise<Release[]> {
   const pool = getPool();
   if (!pool) {
     if (isPostgresPrisma()) {
       const dbReleases = await prisma.release.findMany({
-        include: { tracks: true },
+        include: { tracks: true, user: { select: { email: true } } },
         orderBy: { createdAt: "desc" }
       });
       return dbReleases.map(deserializeRelease);
     }
-    return [...memory.releases].sort((a, b) => b.id - a.id);
+    const releases = [...memory.releases].sort((a, b) => b.id - a.id);
+    return Promise.all(releases.map(async (release) => ({ ...release, ownerEmail: release.ownerEmail ?? (await findUserById(release.userId))?.email ?? null })));
   }
   const [rows] = await pool.query(
     `SELECT r.id, r.user_id AS userId, r.artist_name AS artistName, r.track_name AS trackName, r.release_title AS releaseTitle,
@@ -551,8 +630,10 @@ export async function listAllDetailedReleases(): Promise<Release[]> {
             r.monetisation_clauses AS monetisationClauses, r.territory, r.upc_code AS upcCode,
             r.release_timing AS releaseTiming, r.copyright_owner AS copyrightOwner, r.publishing_rights AS publishingRights,
             r.payment_model AS paymentModel, r.payment_status AS paymentStatus, r.distribution_plan AS distributionPlan,
-            r.status, q.position AS queuePosition, q.estimated_review_time AS estimatedReviewTime, r.created_at AS createdAt
+             r.status, q.position AS queuePosition, q.estimated_review_time AS estimatedReviewTime, r.created_at AS createdAt,
+             u.email AS ownerEmail
      FROM releases r
+     LEFT JOIN users u ON u.id = r.user_id
      LEFT JOIN release_queue q ON q.release_id = r.id
      ORDER BY r.created_at DESC`
   );
@@ -568,6 +649,10 @@ export async function listAllDetailedReleases(): Promise<Release[]> {
 }
 
 export async function listTracksByRelease(releaseId: number): Promise<ReleaseTrack[]> {
+  if (isPostgresPrisma()) {
+    const release = await prisma.release.findUnique({ where: { id: releaseId }, include: { tracks: { orderBy: { trackNumber: "asc" } } } });
+    return release ? deserializeRelease(release).tracks ?? [] : [];
+  }
   const pool = getPool();
   if (!pool) {
     return memory.releases.find((release) => release.id === releaseId)?.tracks ?? [];
@@ -591,24 +676,24 @@ export async function updateDetailedReleaseStatus(releaseId: number, status: Rel
   fields: NonNullable<Release["reviewIssues"]>["fields"];
   adminInternalNote?: string;
   reviewedBy?: string | null;
-}) {
+}, options?: { manualOverride?: boolean; actorType?: string; actorId?: number | null }) {
   const pool = getPool();
   if (!pool) {
     if (isPostgresPrisma()) {
       const reviewIssues = review ? { type: review.issueType, severity: review.severity, fields: review.fields } : undefined;
-      await prisma.release.update({
-        where: { id: releaseId },
-        data: {
-          status: status.toUpperCase() as any,
-          ...(review ? {
-            rejectionReason: status === "rejected" ? review.reason : undefined,
-            correctionReason: status === "changes_requested" ? review.reason : undefined,
-            reviewIssues: reviewIssues as any,
-            adminInternalNote: review.adminInternalNote || null,
-            reviewedAt: new Date(),
-            reviewedBy: review.reviewedBy ?? null
-          } : {})
-        }
+      await prisma.$transaction(async (tx) => {
+        const current = await tx.release.findUnique({ where: { id: releaseId }, select: { status: true, version: true } });
+        if (!current) throw new Error("Release not found.");
+        const previousStatus = current.status.toLowerCase() as ReleaseStatus;
+        transitionReleaseStatus({ currentStatus: previousStatus, nextStatus: status, reason: note, manualOverride: options?.manualOverride });
+        if (previousStatus === status) return;
+        const changed = await tx.release.updateMany({ where: { id: releaseId, version: current.version }, data: {
+          status: status.toUpperCase() as any, version: { increment: 1 },
+          ...(review ? { rejectionReason: status === "rejected" ? review.reason : undefined, correctionReason: status === "changes_requested" ? review.reason : undefined, reviewIssues: reviewIssues as any, adminInternalNote: review.adminInternalNote || null, reviewedAt: new Date(), reviewedBy: review.reviewedBy ?? null } : {})
+        } });
+        if (changed.count !== 1) throw new Error("Release changed concurrently. Refresh and retry.");
+        await tx.releaseStatusTransition.create({ data: { releaseId, previousStatus: current.status, newStatus: status.toUpperCase() as any, actorType: options?.actorType ?? (review?.reviewedBy ? "admin" : "system"), actorId: options?.actorId ?? null, reason: note?.trim() || null, metadata: { manualOverride: Boolean(options?.manualOverride) } } });
+        await tx.auditLog.create({ data: { actorId: options?.actorId ?? null, action: "RELEASE_STATUS_TRANSITION", entity: "release", entityId: String(releaseId), metadata: { previousStatus, newStatus: status, reason: note?.trim() || null, version: current.version + 1, manualOverride: Boolean(options?.manualOverride) } } });
       });
       const release = await getDetailedReleaseById(releaseId);
       if (release) await notifyReleaseStatusChange(release, status, note);
@@ -750,6 +835,13 @@ export async function createOrRefreshSubscription(userId: number, plan: Subscrip
   if (plan === "one_time") return null;
   const { limit, expiryDays } = planLimits(plan);
   const expiryDate = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
+  if (isPostgresPrisma()) {
+    return prisma.subscription.upsert({
+      where: { userId },
+      update: { plan, expiryDate, releaseLimit: limit, status: "active" },
+      create: { userId, plan, expiryDate, releaseLimit: limit, releasesUsed: 0, status: "active" }
+    });
+  }
   const pool = getPool();
   if (!pool) {
     const existing = memory.subscriptions.find((item) => item.userId === userId);
@@ -775,11 +867,7 @@ export async function createOrRefreshSubscription(userId: number, plan: Subscrip
     memory.subscriptions.unshift(subscription);
     return subscription;
   }
-  return prisma.subscription.upsert({
-    where: { userId },
-    update: { plan, expiryDate, releaseLimit: limit },
-    create: { userId, plan, expiryDate, releaseLimit: limit, releasesUsed: 0 }
-  });
+  throw new Error("Unsupported legacy subscription persistence state.");
 }
 
 type DraftTrackInput = Omit<ReleaseTrack, "id" | "releaseId" | "createdAt"> & { audioUrl?: string };
@@ -1017,7 +1105,7 @@ export async function submitPaidDistributionRelease(input: {
           title: input.metadata.releaseTitle || input.metadata.tracks[0]?.trackTitle || "Untitled Release",
           artistName: input.metadata.artistName || "",
           genre: input.metadata.primaryGenre || "",
-          status: "UNDER_REVIEW",
+          status: "SUBMITTED",
           releaseType: input.metadata.releaseType || "single",
           artworkUrl: input.metadata.artworkUrl || null,
           audioUrl: input.metadata.tracks[0]?.audioUrl || null,
@@ -1209,7 +1297,6 @@ export async function updatePaidDistributionRelease(input: {
             audioUrl: input.metadata.tracks[0]?.audioUrl || existingRelease.audioUrl || null,
             releaseDate: input.metadata.releaseDate ? new Date(input.metadata.releaseDate) : new Date(existingRelease.releaseDate),
             paymentStatus: "paid",
-            status: "UNDER_REVIEW",
             metadata: { ...rest, submittedAt: new Date().toISOString() } as any,
             lastEditedAt: new Date()
           }
@@ -1232,6 +1319,11 @@ export async function updatePaidDistributionRelease(input: {
           });
         }
       });
+      const reviewReason = "Paid release metadata was submitted for review.";
+      const currentStatus = existingRelease.status;
+      if (currentStatus === "changes_requested" || currentStatus === "rejected") await updateDetailedReleaseStatus(input.releaseId, "resubmitted", reviewReason);
+      else if (currentStatus === "draft") await updateDetailedReleaseStatus(input.releaseId, "submitted", reviewReason);
+      await updateDetailedReleaseStatus(input.releaseId, "under_review", reviewReason);
       await createDistributionQueueEntry({ releaseId: input.releaseId, initialStage: "quality_check", notes: "Draft completed and submitted for HYMN review." });
       return getDetailedReleaseByUserId(input.userId, input.releaseId);
     }
@@ -1417,10 +1509,7 @@ export async function createDistributionQueueEntry(input: {
         }
       });
 
-      await prisma.release.update({
-        where: { id: input.releaseId },
-        data: { status: prismaReleaseStatusForQueueStage(initialStage) as any }
-      });
+      await updateDetailedReleaseStatus(input.releaseId, releaseStatusForQueueStage(initialStage), input.notes ?? `Distribution queue entered ${initialStage}.`);
 
       return normalizeQueueEntry({ ...entry, stageHistory: await listDistributionQueueLogs(entry.id) });
     }
@@ -1537,7 +1626,7 @@ export async function transitionDistributionQueueEntry(input: {
       if (!entry) throw new Error("Distribution queue entry not found.");
 
       const currentStage = assertQueueStage(entry.currentStage);
-      if (!allowedQueueTransitions[currentStage].includes(nextStage)) {
+      if (currentStage !== nextStage && !allowedQueueTransitions[currentStage]?.includes(nextStage)) {
         throw new Error(`Cannot move from ${currentStage.replace(/_/g, " ")} to ${nextStage.replace(/_/g, " ")}.`);
       }
 
@@ -1569,17 +1658,14 @@ export async function transitionDistributionQueueEntry(input: {
         }
       });
 
-      await prisma.release.update({
-        where: { id: entry.releaseId },
-        data: { status: prismaReleaseStatusForQueueStage(nextStage) as any }
-      });
+      await updateDetailedReleaseStatus(entry.releaseId, releaseStatusForQueueStage(nextStage), input.notes ?? `Distribution queue moved to ${nextStage}.`);
 
       return normalizeQueueEntry({ ...updated, stageHistory: await listDistributionQueueLogs(updated.id) });
     }
 
     const entry = queueMemory.entries.find((item) => item.id === input.entryId || item.releaseId === input.releaseId);
     if (!entry) throw new Error("Distribution queue entry not found.");
-    if (!allowedQueueTransitions[entry.currentStage].includes(nextStage)) {
+    if (entry.currentStage !== nextStage && !allowedQueueTransitions[entry.currentStage]?.includes(nextStage)) {
       throw new Error(`Cannot move from ${entry.currentStage.replace(/_/g, " ")} to ${nextStage.replace(/_/g, " ")}.`);
     }
 
@@ -1622,11 +1708,13 @@ export async function getDetailedReleaseById(releaseId: number): Promise<Release
     if (isPostgresPrisma()) {
       const dbRelease = await prisma.release.findUnique({
         where: { id: releaseId },
-        include: { tracks: true }
+        include: { tracks: true, user: { select: { email: true } } }
       });
       return dbRelease ? deserializeRelease(dbRelease) : null;
     }
-    return memory.releases.find((release: any) => release.id === releaseId) ?? null;
+    const release = memory.releases.find((item: any) => item.id === releaseId) ?? null;
+    if (!release) return null;
+    return { ...release, ownerEmail: release.ownerEmail ?? (await findUserById(release.userId))?.email ?? null };
   }
   const releases = await listAllDetailedReleases();
   return releases.find((release: any) => release.id === releaseId) ?? null;
@@ -1636,6 +1724,8 @@ export async function getDetailedReleaseById(releaseId: number): Promise<Release
 export async function logDistributionEvent(input: {
   releaseId: number;
   action?: string;
+  httpStatus?: number | null;
+  responseRaw?: string;
   createdByAdminId?: number | null;
   requestPayload?: unknown;
   responsePayload?: unknown;
@@ -1645,6 +1735,19 @@ export async function logDistributionEvent(input: {
 }) {
   const pool = getPool();
   if (!pool) {
+    if (isPostgresPrisma()) {
+      return prisma.direNoteLog.create({ data: {
+        releaseId: input.releaseId,
+        action: input.action ?? "release_submission",
+        httpStatus: input.httpStatus ?? null,
+        success: input.success,
+        requestPayloadRedacted: (input.requestPayload ?? undefined) as any,
+        responseRaw: input.responseRaw ?? null,
+        responseJson: (input.responsePayload ?? undefined) as any,
+        errorMessage: input.errors?.join("; ") ?? null,
+        createdByAdminId: input.createdByAdminId ?? null
+      } });
+    }
     const log: DistributionLog = {
       id: nextId(memory.distributionLogs),
       releaseId: input.releaseId,
@@ -1663,11 +1766,18 @@ export async function logDistributionEvent(input: {
 
 export async function listDistributionLogsByRelease(releaseId: number): Promise<DistributionLog[]> {
   const pool = getPool();
-  if (!pool) return memory.distributionLogs.filter((log) => log.releaseId === releaseId);
+  if (!pool) {
+    if (isPostgresPrisma()) return (await prisma.direNoteLog.findMany({ where: { releaseId }, orderBy: { createdAt: "desc" } })) as any;
+    return memory.distributionLogs.filter((log) => log.releaseId === releaseId);
+  }
   return [];
 }
 
 export async function createReleaseAuditLog(input: { releaseId: number; userId?: number | null; action: string; details?: unknown }) {
+  if (isPostgresPrisma()) {
+    const row = await prisma.auditLog.create({ data: { actorId: input.userId ?? null, action: input.action, entity: "release", entityId: String(input.releaseId), metadata: { details: (input.details ?? null) as any } } });
+    return { id: row.id, releaseId: input.releaseId, userId: row.actorId, action: row.action, details: input.details, createdAt: row.createdAt.toISOString() };
+  }
   const pool = getPool();
   if (!pool) {
     const log: ReleaseAuditLog = {
@@ -1685,6 +1795,10 @@ export async function createReleaseAuditLog(input: { releaseId: number; userId?:
 }
 
 export async function listReleaseAuditLogs(releaseId: number): Promise<ReleaseAuditLog[]> {
+  if (isPostgresPrisma()) {
+    const rows = await prisma.auditLog.findMany({ where: { entity: "release", entityId: String(releaseId) }, orderBy: { createdAt: "desc" }, take: 250 });
+    return rows.map(row => ({ id: row.id, releaseId, userId: row.actorId, action: row.action, details: row.metadata, createdAt: row.createdAt.toISOString() }));
+  }
   const pool = getPool();
   if (!pool) return memory.auditLogs.filter((log) => log.releaseId === releaseId);
   return [];
@@ -1718,10 +1832,11 @@ export async function markReleaseDistributionSuccess(input: {
       newMetadata.direnoteReleaseDate = (input.responsePayload as any)?.release_date ?? null;
       newMetadata.latestStatusSyncAt = new Date().toISOString();
 
+      await updateDetailedReleaseStatus(input.releaseId, input.status, "DireNote accepted the release submission.");
       await prisma.release.update({
         where: { id: input.releaseId },
         data: {
-          status: input.status.toUpperCase() as any,
+          distributorReleaseId: input.distributorReleaseId || undefined,
           upc: input.upc || undefined,
           metadata: newMetadata
         }
@@ -1769,3 +1884,6 @@ export async function markReleaseDistributionSuccess(input: {
 // vercel trigger 2
 // vercel trigger 4
 // vercel trigger 6
+// vercel trigger 7
+// vercel trigger 8
+// vercel trigger 9

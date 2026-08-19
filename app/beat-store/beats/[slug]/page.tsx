@@ -46,7 +46,10 @@ export default async function BeatDetailPage({ params }: Props) {
     </section>
     <div id="compare-licenses" className="mt-8 scroll-mt-24"><BeatLicenseComparison /></div>
     {similar.length ? <section className="mt-12"><h2 className="text-2xl font-semibold text-[var(--text)]">Similar beats</h2><div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{similar.map((item) => <BeatCard key={item.id} beat={item} />)}</div></section> : null}
+    <div className="fixed inset-x-3 bottom-3 z-40 flex items-center justify-between gap-3 rounded-xl border p-3 shadow-2xl md:hidden" style={{ borderColor: "var(--border-strong)", background: "var(--bg-elevated)" }}><div className="min-w-0"><p className="truncate text-sm font-semibold">{beat.title}</p><p className="text-xs" style={{ color: "var(--text-muted)" }}>From ₹{beat.startingPrice.toLocaleString("en-IN")}</p></div><Link href={`/beat-store?beat=${beat.id}#beat-catalog`} className="btn-primary pressable shrink-0">Choose licence</Link></div>
   </main>;
 }
 
 // vercel trigger 3
+
+// vercel trigger 11

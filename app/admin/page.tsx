@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { AdminControlCenter } from "@/components/admin-control-center";
-import { getAdminSessionForPage, getCurrentUserForPage } from "@/lib/access";
+import { getAdminAccessForPage, getAdminSessionForPage, getCurrentUserForPage } from "@/lib/access";
 import type { User } from "@/lib/types";
 import {
   getSiteSettings,
@@ -9,7 +9,6 @@ import {
   listLatestNotifications,
   listAllOrders,
   listAllSupportTickets,
-  listAllReleases,
   listPartnershipLeads,
   listProducerApplications,
   listProducerProfiles,
@@ -23,13 +22,14 @@ const ADMIN_TABS = [
   "producers",
   "releases",
   "distribution-queue",
+  "delivery",
   "analytics",
   "revenue",
   "royalties",
+  "earnings-entry",
   "contracts",
   "promotions",
   "support",
-  "moderation",
   "fraud",
   "notifications",
   "team",
@@ -39,6 +39,7 @@ const ADMIN_TABS = [
   "content",
   "timed-playlists",
   "operations"
+  ,"activity"
 ] as const;
 
 type AdminPageProps = {
@@ -68,34 +69,21 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const currentAdmin = signedInUser?.role === "admin" ? signedInUser : localAdmin;
 
   if (!currentAdmin) redirect("/admin/login");
+  const adminAccess = await getAdminAccessForPage();
 
   const resolvedSearchParams = await searchParams;
-  const [users, releases, beats, orders, applications, leads, distributionOrders, artistProfiles, producerProfiles, siteSettings, notifications, supportTickets] = await Promise.all([
-    listUsers(),
-    listAllDetailedReleases(),
-    listAllBeats(),
-    listAllOrders(),
-    listProducerApplications(),
-    listPartnershipLeads(),
-    listAllDistributionOrders(),
-    listAllArtistProfiles(),
-    listProducerProfiles(),
-    getSiteSettings(),
-    listLatestNotifications(50),
-    listAllSupportTickets()
-  ]);
+  const [users, releases, beats] = await Promise.all([listUsers(), listAllDetailedReleases(), listAllBeats()]);
+  const [orders, applications, leads] = await Promise.all([listAllOrders(), listProducerApplications(), listPartnershipLeads()]);
+  const [distributionOrders, artistProfiles, producerProfiles] = await Promise.all([listAllDistributionOrders(), listAllArtistProfiles(), listProducerProfiles()]);
+  const [siteSettings, notifications, supportTickets] = await Promise.all([getSiteSettings(), listLatestNotifications(50), listAllSupportTickets()]);
   const requestedTab = resolvedSearchParams?.tab && ADMIN_TABS.includes(resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) ? (resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) : undefined;
 
   return (
-    <main className="shell py-16">
-      <div className="mb-10 max-w-3xl">
-        <h1 className="text-5xl font-semibold" style={{ color: "var(--text)" }}>HYMN control center.</h1>
-        <p className="mt-5 text-lg" style={{ color: "var(--text-muted)" }}>
-          Review releases, users, payments, beats, and producer operations from one protected admin surface.
-        </p>
-      </div>
+    <main className="admin-panel-shell py-6 sm:py-8">
+      <div className="mb-4 flex justify-end"><a className="btn-secondary" href="/admin/releases/manual">Manual Releases</a></div>
       <AdminControlCenter
         currentAdmin={currentAdmin}
+        adminAccess={adminAccess ?? { role: "admin", permissions: [] }}
         initialTab={requestedTab}
         initialReleases={releases}
         initialBeats={beats}
@@ -117,3 +105,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 // vercel trigger
 
 // vercel trigger 2
+// vercel trigger 7
+
+// vercel trigger 11
+
+// vercel trigger 14

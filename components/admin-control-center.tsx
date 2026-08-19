@@ -1,10 +1,15 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
+import { CheckCircle2, X, XCircle } from "lucide-react";
 import { AdminContentManager } from "@/components/admin-content-manager";
 import { AdminTimedPlaylistManager } from "@/components/admin-timed-playlist-manager";
+import { AdminActivityAndLogs } from "@/components/admin-activity-and-logs";
+import { AdminUserBenefits } from "@/components/admin-user-benefits";
 import { DashboardFrame } from "@/components/dashboard-frame";
+import { DireNoteDiagnostics } from "@/components/direnote-diagnostics";
 import type { AdminPayoutRequest } from "@/lib/payout";
+import type { AdminPermissionKey } from "@/lib/access";
 import type { AdminStoreStatus, ArtistProfile, Beat, DistributionOrder, Notification, Order, PartnershipLead, ProducerApplication, ProducerProfile, Release, SiteSettings, StoreStatus, StoreStatusHistoryEntry, SupportTicket, User, UserRole } from "@/lib/types";
 
 type PersistedAdminTask = { id: number; type: string; priority: string; title: string; body: string; href: string; status: string; createdAt: string };
@@ -15,25 +20,29 @@ function formatMoney(amount: number) {
 
 function StatCard({ label, value, detail }: { label: string; value: string | number; detail?: string }) {
   return (
-    <div className="metric-card fade-up">
-      <p className="text-sm" style={{ color: "var(--text-soft)" }}>{label}</p>
-      <p className="mt-3 text-3xl font-semibold" style={{ color: "var(--text)" }}>{value}</p>
+    <div className="metric-card admin-stat-card fade-up h-full">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>{label}</p>
+      <p className="mt-3 text-3xl font-semibold tracking-tight" style={{ color: "var(--text)" }}>{value}</p>
       {detail ? <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{detail}</p> : null}
     </div>
   );
 }
 
 function StatusPill({ label, active = true }: { label: string; active?: boolean }) {
-  return <span className={active ? "status-pill status-pill-active" : "status-pill"}>{label}</span>;
+  const normalized = label.toLowerCase().replace(/_/g, " ");
+  const negative = /failed|rejected|denied|critical|missing|issue/.test(normalized);
+  const warning = /pending|review|scheduled|requested|waiting|processing/.test(normalized);
+  return <span className={`status-pill ${active ? "status-pill-active" : ""} ${negative ? "admin-status-negative" : warning ? "admin-status-warning" : ""}`}>{normalized}</span>;
 }
 
 function SurfaceSection({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
-    <section className="surface-card fade-up p-5 sm:p-6 lg:p-8">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <section className="surface-card admin-module-section fade-up p-5 sm:p-6 lg:p-7">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-5" style={{ borderColor: "var(--border)" }}>
         <div>
-          <h2 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>{title}</h2>
-          {description ? <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{description}</p> : null}
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: "var(--accent)" }}>Admin workspace</p>
+          <h2 className="text-xl font-semibold tracking-tight sm:text-2xl" style={{ color: "var(--text)" }}>{title}</h2>
+          {description ? <p className="mt-2 max-w-3xl text-sm leading-6" style={{ color: "var(--text-muted)" }}>{description}</p> : null}
         </div>
       </div>
       <div className="mt-5">{children}</div>
@@ -42,7 +51,7 @@ function SurfaceSection({ title, description, children }: { title: string; descr
 }
 
 function EmptyState({ copy }: { copy: string }) {
-  return <p className="text-sm" style={{ color: "var(--text-soft)" }}>{copy}</p>;
+  return <div className="rounded-2xl border border-dashed px-5 py-8 text-center text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text-soft)" }}>{copy}</div>;
 }
 
 function adminReleaseTitle(release: Release) {
@@ -261,7 +270,9 @@ function AdminPayoutManager() {
   const [requests, setRequests] = useState<AdminPayoutRequest[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [adminNote, setAdminNote] = useState<Record<number, string>>({});
+  const [paymentEvidence, setPaymentEvidence] = useState<Record<number, { paymentReference: string; paymentMethod: string; paymentDate: string; paidAmount: string }>>({});
   const [isPending, startTransition] = useTransition();
+  const [fx, setFx] = useState<{ usdToInrRate: number | null; rateUpdatedAt: string | null; rateStatus: string; approximateMinimumInr: number | null } | null>(null);
 
   async function loadRequests() {
     const response = await fetch("/api/admin/payouts", { cache: "no-store" });
@@ -273,16 +284,31 @@ function AdminPayoutManager() {
     setRequests(data.requests ?? []);
   }
 
+  async function loadFx() {
+    const response = await fetch("/api/payout/config", { cache: "no-store" });
+    if (response.ok) setFx(await response.json());
+  }
+
+  function refreshFx() {
+    startTransition(async () => {
+      const response = await fetch("/api/admin/exchange-rates/refresh", { method: "POST" });
+      const data = await response.json();
+      setFeedback(response.ok ? "USD/INR exchange rate refreshed." : data.error || "Exchange-rate refresh failed.");
+      if (response.ok) await loadFx();
+    });
+  }
+
   useEffect(() => {
     loadRequests();
+    loadFx();
   }, []);
 
-  function updateStatus(requestId: number, status: "approved" | "processing" | "paid" | "rejected") {
+  function updateStatus(requestId: number, status: "under_review" | "approved" | "processing" | "paid" | "rejected") {
     startTransition(async () => {
       const response = await fetch("/api/admin/payouts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId, status, adminNote: adminNote[requestId] ?? "" })
+        body: JSON.stringify({ requestId, status, adminNote: adminNote[requestId] ?? "", ...(status === "paid" ? { ...paymentEvidence[requestId], paidAmount: Number(paymentEvidence[requestId]?.paidAmount) } : {}) })
       });
       const data = await response.json();
       if (!response.ok) {
@@ -294,8 +320,18 @@ function AdminPayoutManager() {
     });
   }
 
+  async function uploadPayoutProof(requestId: number, file?: File) {
+    if (!file) return; const form = new FormData(); form.set("file", file); setFeedback("Uploading private payment proof...");
+    const response = await fetch(`/api/admin/payouts/${requestId}/proof`, { method: "POST", body: form }); const data = await response.json().catch(() => ({}));
+    if (!response.ok) return setFeedback(data.error || "Payment proof upload failed."); setFeedback(`Private proof attached to payout #${requestId}.`); await loadRequests();
+  }
+
   return (
     <SurfaceSection title="Payout requests" description="Approve, process, pay, or reject artist payout requests. Sensitive payout details are masked here.">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b pb-4" style={{ borderColor: "var(--border)" }}>
+        <div><p className="font-semibold">USD/INR payout rate</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{fx?.usdToInrRate ? `1 USD = ${fx.usdToInrRate.toFixed(4)} INR · $105 ≈ ${formatMoney(fx.approximateMinimumInr ?? 0)}` : "No successful rate stored"}{fx?.rateUpdatedAt ? ` · updated ${new Date(fx.rateUpdatedAt).toLocaleString("en-IN")}` : ""}{fx?.rateStatus === "stale" ? " · STALE" : ""}</p></div>
+        <button type="button" className="btn-outline pressable" disabled={isPending} onClick={refreshFx}>{isPending ? "Refreshing…" : "Refresh rate"}</button>
+      </div>
       {feedback ? <p className="mb-4 text-sm" style={{ color: "var(--text)" }}>{feedback}</p> : null}
       <div className="grid gap-4">
         {requests.map((request) => (
@@ -305,13 +341,16 @@ function AdminPayoutManager() {
                 <p className="font-semibold" style={{ color: "var(--text)" }}>{request.userName}</p>
                 <p className="mt-1 text-sm" style={{ color: "var(--text-soft)" }}>{request.userEmail} / User #{request.userId}</p>
                 <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4" style={{ color: "var(--text-muted)" }}>
-                  <span>Requested: {formatMoney(request.requestedAmount)}</span>
+                  <span>Requested: {formatMoney(request.requestedAmount)}{request.requestedAmountUsd !== null ? ` · $${request.requestedAmountUsd.toFixed(2)}` : ""}</span>
+                  {request.usdToInrRate !== null ? <span>FX: 1 USD = {request.usdToInrRate.toFixed(4)} INR · {request.exchangeRateProvider}</span> : null}
                   <span>Fee: {formatMoney(request.serviceFee)}</span>
                   <span>Net: {formatMoney(request.netAmount)}</span>
                   <span>{request.method}: {request.payoutDetails}</span>
                 </div>
                 <p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>Requested {new Date(request.requestedAt).toLocaleString("en-IN")}</p>
                 {request.adminNote ? <p className="mt-2 text-sm" style={{ color: "var(--danger)" }}>Admin note: {request.adminNote}</p> : null}
+                <details className="mt-3 text-sm"><summary className="cursor-pointer font-semibold">Audit timeline ({request.events.length})</summary><ol className="mt-2 space-y-1">{request.events.map(event => <li key={event.id}>{new Date(event.createdAt).toLocaleString("en-IN")} · {event.actorType} · {event.previousStatus || "created"} → {event.newStatus}{event.note ? ` · ${event.note}` : ""}</li>)}</ol></details>
+                {request.proofPath ? <a className="mt-2 inline-block text-sm underline" href={request.proofPath}>Open private payment proof</a> : null}
               </div>
               <div className="min-w-[260px]">
                 <StatusPill label={request.status} active={request.status === "paid" || request.status === "processing"} />
@@ -321,7 +360,15 @@ function AdminPayoutManager() {
                   value={adminNote[request.id] ?? ""}
                   onChange={(event) => setAdminNote((notes) => ({ ...notes, [request.id]: event.target.value }))}
                 />
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <input className="field" placeholder="Unique UTR / reference" value={paymentEvidence[request.id]?.paymentReference ?? ""} onChange={(event) => setPaymentEvidence(current => ({ ...current, [request.id]: { paymentReference: event.target.value, paymentMethod: current[request.id]?.paymentMethod ?? "", paymentDate: current[request.id]?.paymentDate ?? "", paidAmount: current[request.id]?.paidAmount ?? String(request.netAmount) } }))} />
+                  <input className="field" placeholder="Method (NEFT / UPI)" value={paymentEvidence[request.id]?.paymentMethod ?? ""} onChange={(event) => setPaymentEvidence(current => ({ ...current, [request.id]: { paymentReference: current[request.id]?.paymentReference ?? "", paymentMethod: event.target.value, paymentDate: current[request.id]?.paymentDate ?? "", paidAmount: current[request.id]?.paidAmount ?? String(request.netAmount) } }))} />
+                  <input type="date" className="field" aria-label="Payment date" value={paymentEvidence[request.id]?.paymentDate ?? ""} onChange={(event) => setPaymentEvidence(current => ({ ...current, [request.id]: { paymentReference: current[request.id]?.paymentReference ?? "", paymentMethod: current[request.id]?.paymentMethod ?? "", paymentDate: event.target.value, paidAmount: current[request.id]?.paidAmount ?? String(request.netAmount) } }))} />
+                  <input type="number" min="0.01" step="0.01" className="field" aria-label="Paid amount" value={paymentEvidence[request.id]?.paidAmount ?? String(request.netAmount)} onChange={(event) => setPaymentEvidence(current => ({ ...current, [request.id]: { paymentReference: current[request.id]?.paymentReference ?? "", paymentMethod: current[request.id]?.paymentMethod ?? "", paymentDate: current[request.id]?.paymentDate ?? "", paidAmount: event.target.value } }))} />
+                  <label className="field text-xs">Optional private payment proof<input type="file" className="mt-1 block w-full" accept="application/pdf,image/jpeg,image/png" onChange={event => uploadPayoutProof(request.id, event.target.files?.[0])} /></label>
+                </div>
                 <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button type="button" disabled={isPending} onClick={() => updateStatus(request.id, "under_review")} className="btn-outline pressable px-3 py-2 text-xs">Start review</button>
                   <button type="button" disabled={isPending} onClick={() => updateStatus(request.id, "approved")} className="btn-outline pressable px-3 py-2 text-xs">Approve</button>
                   <button type="button" disabled={isPending} onClick={() => updateStatus(request.id, "processing")} className="btn-outline pressable px-3 py-2 text-xs">Processing</button>
                   <button type="button" disabled={isPending} onClick={() => updateStatus(request.id, "paid")} className="btn-primary pressable px-3 py-2 text-xs">Paid</button>
@@ -360,6 +407,7 @@ type AdminTab =
   | "producers"
   | "releases"
   | "distribution-queue"
+  | "delivery"
   | "analytics"
   | "revenue"
   | "earnings-entry"
@@ -367,7 +415,6 @@ type AdminTab =
   | "contracts"
   | "promotions"
   | "support"
-  | "moderation"
   | "fraud"
   | "notifications"
   | "team"
@@ -376,10 +423,12 @@ type AdminTab =
   | "payments"
   | "content"
   | "timed-playlists"
-  | "operations";
+  | "operations"
+  | "activity";
 
 export function AdminControlCenter({
   currentAdmin,
+  adminAccess,
   initialTab,
   initialReleases,
   initialBeats,
@@ -395,6 +444,7 @@ export function AdminControlCenter({
   initialSupportTickets
 }: {
   currentAdmin: User;
+  adminAccess: { role: string; permissions: AdminPermissionKey[] };
   initialTab?: AdminTab;
   initialReleases: Release[];
   initialBeats: Beat[];
@@ -409,6 +459,7 @@ export function AdminControlCenter({
   initialNotifications: Notification[];
   initialSupportTickets: SupportTicket[];
 }) {
+  const hasPermission = (permission: AdminPermissionKey) => adminAccess.permissions.includes(permission);
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab ?? "overview");
   const [releases, setReleases] = useState(initialReleases);
   const [beats, setBeats] = useState(initialBeats);
@@ -429,7 +480,35 @@ export function AdminControlCenter({
   const [reviewFields, setReviewFields] = useState<Record<string, { label: string; note: string }>>({});
   const [reviewInternalNote, setReviewInternalNote] = useState("");
   const [confirmStatusAction, setConfirmStatusAction] = useState<Release["status"] | null>(null);
+  const [direNoteResult, setDireNoteResult] = useState<{ type: "success" | "error"; title: string; message: string } | null>(null);
+  const [isSubmittingToDireNote, setIsSubmittingToDireNote] = useState(false);
+  const [direNoteCooldowns, setDireNoteCooldowns] = useState<Record<number, number>>({});
+  const [cooldownClock, setCooldownClock] = useState(() => Date.now());
+  const [queueSearch, setQueueSearch] = useState("");
+  const [queueStatus, setQueueStatus] = useState("all");
+  const [queueType, setQueueType] = useState("all");
+  const [userSearch, setUserSearch] = useState("");
+  const [userRoleFilter, setUserRoleFilter] = useState("all");
+  const [userActivityFilter, setUserActivityFilter] = useState("all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
+  const [paymentPlanFilter, setPaymentPlanFilter] = useState("all");
+  const [paymentPeriodFilter, setPaymentPeriodFilter] = useState("all");
+  const [paymentSort, setPaymentSort] = useState("newest");
+  const [activityTypeFilter, setActivityTypeFilter] = useState("all");
+  const [activityStatusFilter, setActivityStatusFilter] = useState("all");
+  const [activitySort, setActivitySort] = useState("newest");
+  const [taskPriorityFilter, setTaskPriorityFilter] = useState("all");
+  const [taskTypeFilter, setTaskTypeFilter] = useState("all");
+  const [reviewTab, setReviewTab] = useState<"overview" | "metadata" | "tracks" | "assets" | "rights" | "direnote" | "activity">("overview");
+  const [catalogTab, setCatalogTab] = useState<"overview" | "tracks" | "distribution" | "identifiers" | "stores" | "promolink" | "earnings" | "activity">(initialTab === "delivery" ? "distribution" : "overview");
+  const [moduleSearch, setModuleSearch] = useState("");
+  const [producerManagement, setProducerManagement] = useState<any[]>([]);
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCooldownClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -438,9 +517,13 @@ export function AdminControlCenter({
   }, []);
   useEffect(() => {
     if (!selectedReleaseId) return;
-    fetch(`/api/admin/releases/${selectedReleaseId}/audit`).then((response) => response.json()).then((data) => setReleaseAudit(data.logs ?? [])).catch(() => setReleaseAudit([]));
-    fetch(`/api/admin/releases/${selectedReleaseId}/direnote/readiness`).then((response) => response.json()).then((data) => setDireNoteReadiness(data)).catch(() => setDireNoteReadiness(null));
+    fetch(`/api/admin/releases/${selectedReleaseId}/audit`).then((response) => response.ok ? response.json() : null).then((data) => setReleaseAudit(Array.isArray(data?.logs) ? data.logs : [])).catch(() => setReleaseAudit([]));
+    fetch(`/api/admin/releases/${selectedReleaseId}/direnote/readiness`).then((response) => response.ok ? response.json() : null).then((data) => setDireNoteReadiness(data && Array.isArray(data.issues) ? { ...data, warnings: Array.isArray(data.warnings) ? data.warnings : [] } : null)).catch(() => setDireNoteReadiness(null));
   }, [selectedReleaseId]);
+  useEffect(() => {
+    if (activeTab !== "producers") return;
+    fetch("/api/admin/producers", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => setProducerManagement(Array.isArray(data?.producers) ? data.producers : [])).catch(() => setProducerManagement([]));
+  }, [activeTab, users]);
 
   async function resolvePersistedTask(id: number) {
     const response = await fetch(`/api/admin/tasks/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "resolved", note: "Resolved from Operations Queue." }) });
@@ -469,14 +552,47 @@ export function AdminControlCenter({
   const sentToDireNote = releases.filter((release) => ["sent", "sent_to_distributor", "processing", "delivered", "live"].includes(release.status.toLowerCase())).length;
   const openSupportTickets = supportTickets.filter((ticket) => ["open", "in_progress"].includes(ticket.status)).length;
   const pendingProducerApplications = applications.filter((application) => application.status === "pending").length;
-  const selectedRelease = releases.find((release) => release.id === selectedReleaseId) ?? releases[0] ?? null;
-  const todayLabel = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short", year: "numeric" });
+  const oldestWaiting = (dates: Array<string | null | undefined>) => {
+    const valid = dates.filter((date): date is string => Boolean(date)).map((date) => new Date(date).getTime()).filter(Number.isFinite);
+    if (!valid.length) return "No waiting items";
+    const hours = Math.max(0, Math.floor((Date.now() - Math.min(...valid)) / 3_600_000));
+    return hours < 24 ? `Oldest ${hours}h` : `Oldest ${Math.floor(hours / 24)}d`;
+  };
+  const operationalQueues = [
+    { label: "Releases awaiting QC", count: pendingReviews, urgency: pendingReviews ? "High" : "Clear", oldest: oldestWaiting(releases.filter((release) => ["submitted", "in_queue", "under_review"].includes(release.status)).map((release) => release.submittedAt || release.createdAt)), tab: "distribution-queue" as AdminTab },
+    { label: "Corrections awaiting artist", count: changesRequested, urgency: changesRequested ? "Attention" : "Clear", oldest: oldestWaiting(releases.filter((release) => release.status === "changes_requested").map((release) => release.reviewedAt || release.createdAt)), tab: "releases" as AdminTab },
+    { label: "Failed distributor submissions", count: failedDistributionJobs, urgency: failedDistributionJobs ? "Critical" : "Clear", oldest: oldestWaiting(releases.filter((release) => ["failed", "rejected"].includes(release.status)).map((release) => release.createdAt)), tab: "distribution-queue" as AdminTab },
+    { label: "Awaiting live confirmation", count: releases.filter((release) => ["awaiting_live_confirmation", "partially_live"].includes(release.status)).length, urgency: "Normal", oldest: oldestWaiting(releases.filter((release) => ["awaiting_live_confirmation", "partially_live"].includes(release.status)).map((release) => release.distributedAt || release.createdAt)), tab: "releases" as AdminTab },
+    { label: "Failed payment events", count: initialDistributionOrders.filter((order) => order.paymentStatus === "failed").length, urgency: initialDistributionOrders.some((order) => order.paymentStatus === "failed") ? "Critical" : "Clear", oldest: oldestWaiting(initialDistributionOrders.filter((order) => order.paymentStatus === "failed").map((order) => order.createdAt)), tab: "payments" as AdminTab },
+    { label: "Overdue support tickets", count: openSupportTickets, urgency: openSupportTickets ? "Attention" : "Clear", oldest: oldestWaiting(supportTickets.filter((ticket) => ["open", "in_progress"].includes(ticket.status)).map((ticket) => ticket.createdAt)), tab: "support" as AdminTab },
+  ];
+  const reviewQueueStatuses = ["submitted", "in_queue", "under_review", "changes_requested", "approved", "failed"];
+  const catalogStatuses = ["sent", "sent_to_distributor", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered", "live"];
+  const requestedSelectedRelease = releases.find((release) => release.id === selectedReleaseId) ?? null;
+  const selectedRelease = activeTab === "distribution-queue"
+    ? (requestedSelectedRelease && reviewQueueStatuses.includes(requestedSelectedRelease.status) ? requestedSelectedRelease : releases.find((release) => reviewQueueStatuses.includes(release.status)) ?? null)
+    : requestedSelectedRelease ?? releases[0] ?? null;
+  const direNoteCooldownSeconds = selectedRelease
+    ? Math.max(0, Math.ceil(((direNoteCooldowns[selectedRelease.id] ?? 0) - cooldownClock) / 1000))
+    : 0;
+  const direNoteCooldownLabel = `${Math.floor(direNoteCooldownSeconds / 60)}:${String(direNoteCooldownSeconds % 60).padStart(2, "0")}`;
+  const queueReleases = useMemo(() => releases.filter((release) => {
+    const query = queueSearch.trim().toLowerCase();
+    const searchable = [release.releaseTitle, release.trackName, release.artistName, release.upcCode, release.ownerEmail, ...(release.tracks ?? []).map((track) => track.isrc)].filter(Boolean).join(" ").toLowerCase();
+    const belongsToModule = activeTab === "distribution-queue" ? reviewQueueStatuses.includes(release.status) : true;
+    return belongsToModule && (!query || searchable.includes(query)) && (queueStatus === "all" || release.status === queueStatus) && (queueType === "all" || release.releaseType === queueType);
+  }), [activeTab, queueSearch, queueStatus, queueType, releases]);
+  const catalogReleases = useMemo(() => releases.filter((release) => catalogStatuses.includes(release.status)), [releases]);
+  const selectedCatalogRelease = catalogReleases.find((release) => release.id === selectedReleaseId) ?? catalogReleases[0] ?? null;
+  const today = new Date();
+  const todayLabel = `${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][today.getUTCDay()]}, ${today.getUTCDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][today.getUTCMonth()]} ${today.getUTCFullYear()}`;
   const notificationCountsByType = useMemo(() => {
     const counts = new Map<string, number>();
     initialNotifications.forEach((notification) => counts.set(notification.type, (counts.get(notification.type) ?? 0) + 1));
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   }, [initialNotifications]);
   const highPriorityNotifications = useMemo(() => initialNotifications.filter((notification) => notification.priority === "high"), [initialNotifications]);
+  const searchMatch = (...values: unknown[]) => !moduleSearch.trim() || values.filter(Boolean).join(" ").toLowerCase().includes(moduleSearch.trim().toLowerCase());
 
   const releaseCountByUser = useMemo(() => {
     const counts = new Map<number, number>();
@@ -500,7 +616,23 @@ export function AdminControlCenter({
     });
     return stamps;
   }, [initialOrders, releases]);
-
+  const filteredUsers = useMemo(() => {
+    const query = userSearch.trim().toLowerCase();
+    const recentCutoff = Date.now() - 30 * 86_400_000;
+    return users.filter((user) => {
+      const activity = latestUserActivity.get(user.id);
+      const matchesSearch = !query || `${user.name} ${user.email} ${user.id}`.toLowerCase().includes(query);
+      const matchesRole = userRoleFilter === "all" || user.role === userRoleFilter;
+      const matchesActivity = userActivityFilter === "all" || (userActivityFilter === "recent" ? Boolean(activity && new Date(activity).getTime() >= recentCutoff) : !activity || new Date(activity).getTime() < recentCutoff);
+      return matchesSearch && matchesRole && matchesActivity;
+    });
+  }, [latestUserActivity, userActivityFilter, userRoleFilter, userSearch, users]);
+  const filteredDistributionPayments = useMemo(() => {
+    const periodDays = paymentPeriodFilter === "7d" ? 7 : paymentPeriodFilter === "30d" ? 30 : 0;
+    const cutoff = periodDays ? Date.now() - periodDays * 86_400_000 : 0;
+    return initialDistributionOrders.filter((order) => (paymentStatusFilter === "all" || order.paymentStatus === paymentStatusFilter) && (paymentPlanFilter === "all" || order.plan === paymentPlanFilter) && (!cutoff || new Date(order.createdAt).getTime() >= cutoff)).sort((a, b) => paymentSort === "amount-high" ? b.amount - a.amount : paymentSort === "amount-low" ? a.amount - b.amount : paymentSort === "oldest" ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [initialDistributionOrders, paymentPeriodFilter, paymentPlanFilter, paymentSort, paymentStatusFilter]);
+  const recentActivityItems = useMemo(() => [...releases.map((release) => ({ type: "release", status: release.status, title: adminReleaseTitle(release), detail: `${release.artistName} / ${release.status.replace(/_/g, " ")}`, time: release.createdAt })), ...initialOrders.map((order) => ({ type: "commerce", status: order.paymentStatus, title: `Beat store order #${order.id}`, detail: `${order.paymentStatus} / ${formatMoney(order.amount)}`, time: order.createdAt }))].filter((item) => (activityTypeFilter === "all" || item.type === activityTypeFilter) && (activityStatusFilter === "all" || item.status === activityStatusFilter)).sort((a, b) => activitySort === "oldest" ? new Date(a.time).getTime() - new Date(b.time).getTime() : new Date(b.time).getTime() - new Date(a.time).getTime()), [activitySort, activityStatusFilter, activityTypeFilter, initialOrders, releases]);
   const actionQueue = useMemo(() => {
     const releaseItems = releases
       .filter((release) => ["submitted", "in_queue", "under_review", "changes_requested", "failed", "rejected"].includes(release.status.toLowerCase()))
@@ -554,9 +686,13 @@ export function AdminControlCenter({
       .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
       .slice(0, 8);
   }, [applications, initialNotifications, releases, supportTickets]);
+  const filteredPersistedTasks = useMemo(() => persistedTasks.filter((item) => (taskPriorityFilter === "all" || item.priority === taskPriorityFilter) && (taskTypeFilter === "all" || item.type === taskTypeFilter)), [persistedTasks, taskPriorityFilter, taskTypeFilter]);
+  const filteredActionQueue = useMemo(() => actionQueue.filter((item) => (taskPriorityFilter === "all" || item.priority.toLowerCase() === taskPriorityFilter) && (taskTypeFilter === "all" || item.type === taskTypeFilter)), [actionQueue, taskPriorityFilter, taskTypeFilter]);
 
   function selectAdminTab(tab: AdminTab) {
     setActiveTab(tab);
+    if (tab === "delivery") setCatalogTab("distribution");
+    setModuleSearch("");
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       url.searchParams.set("tab", tab);
@@ -566,18 +702,44 @@ export function AdminControlCenter({
 
   function updateReleaseStatus(id: number, status: Release["status"]) {
     startTransition(async () => {
-      const response = await fetch(`/api/admin/update-status/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status, note: `Status set to ${status}` })
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setFeedback(data.error || "Could not update release.");
-        return;
+      const isDireNoteAction = status === "sent";
+      if (isDireNoteAction) {
+        setIsSubmittingToDireNote(true);
+        setDireNoteResult(null);
+        setDireNoteCooldowns((current) => ({ ...current, [id]: Date.now() + 5 * 60 * 1000 }));
       }
-      setReleases((items) => items.map((item) => (item.id === id ? data.release : item)));
-      setFeedback(`Release updated: ${data.release.trackName}`);
+      try {
+        const response = await fetch(`/api/admin/update-status/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status, note: `Status set to ${status}` })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const issueMessages = Array.isArray(data.validation?.issues)
+            ? data.validation.issues.map((issue: { message?: string }) => issue.message).filter(Boolean)
+            : [];
+          const reason = [data.error, ...issueMessages].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(" ") || "Could not update release.";
+          setFeedback(reason);
+          if (isDireNoteAction) setDireNoteResult({ type: "error", title: "DireNote submission failed", message: reason });
+          return;
+        }
+        setReleases((items) => items.map((item) => (item.id === id ? data.release : item)));
+        const releaseName = data.release?.releaseTitle || data.release?.trackName || "Release";
+        setFeedback(status === "approved" ? `${releaseName} was approved by HYMN.` : status === "sent" ? `${releaseName} was sent to DireNote successfully.` : `${releaseName} status updated to ${status.replace(/_/g, " ")}.`);
+        if (isDireNoteAction) {
+          const warningText = Array.isArray(data.warnings) && data.warnings.length
+            ? ` DireNote accepted it with ${data.warnings.length} warning${data.warnings.length === 1 ? "" : "s"}.`
+            : " DireNote accepted the submission for processing.";
+          setDireNoteResult({ type: "success", title: "Sent to DireNote", message: `${releaseName} was sent successfully.${warningText}` });
+        }
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "The DireNote request could not be completed.";
+        setFeedback(reason);
+        if (isDireNoteAction) setDireNoteResult({ type: "error", title: "DireNote connection error", message: reason });
+      } finally {
+        if (isDireNoteAction) setIsSubmittingToDireNote(false);
+      }
     });
   }
 
@@ -612,6 +774,22 @@ export function AdminControlCenter({
       }
       setUsers((items) => items.map((item) => (item.id === user.id ? data.user : item)));
       setFeedback(`Role updated for ${data.user.name}`);
+    });
+  }
+
+  function updateProducerPhoto(producerId: number, file?: File | null) {
+    if (!file) return;
+    startTransition(async () => {
+      const formData = new FormData();
+      formData.append("avatar", file);
+      const response = await fetch(`/api/admin/producers/${producerId}/photo`, { method: "PATCH", body: formData });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setFeedback(data.error || "Could not update producer photo.");
+        return;
+      }
+      setProducerManagement((items) => items.map((prod) => prod.id === producerId ? { ...prod, profile: { ...prod.profile, avatarUrl: data.avatarUrl, coverPhotoUrl: data.avatarUrl } } : prod));
+      setFeedback("Producer profile photo updated successfully.");
     });
   }
 
@@ -717,21 +895,26 @@ export function AdminControlCenter({
 
   return (
     <DashboardFrame
-      eyebrow="Admin"
       title="HYMN Command Center"
-      subtitle={`${currentAdmin.name} / ${currentAdmin.email} / ${todayLabel}`}
+      subtitle={<span className="admin-identity"><span className="admin-identity-line"><span className="admin-online-dot" />{currentAdmin.name}<span className="admin-active-label">Active</span></span><span className="admin-identity-meta">{currentAdmin.email} · {todayLabel}</span></span>}
       navItems={[
-        { key: "overview", label: "Overview", description: "Today and platform health", group: "Command Center" },
+        { key: "overview", label: "Operations Overview", description: "Queues requiring attention", group: "Command Center" },
         { key: "notifications", label: "Notifications", description: "Operations feed", group: "Command Center" },
-        { key: "analytics", label: "Analytics", description: "Live platform signals", group: "Command Center" },
-        { key: "releases", label: "Releases", description: "Approval workflow", group: "Distribution Operations" },
-        { key: "distribution-queue", label: "Distribution Queue", description: "DSP delivery", group: "Distribution Operations" },
-        { key: "moderation", label: "Content Moderation", description: "Artwork and metadata", group: "Distribution Operations" },
-        { key: "fraud", label: "Fraud Detection", description: "Risk signals", group: "Distribution Operations" },
+        { key: "analytics", label: "Operational Reporting", description: "Persisted platform activity", group: "Command Center" },
+        { key: "releases", label: "Releases", description: "Manage approved, scheduled, and live catalog releases", group: "Distribution Operations" },
+        { key: "distribution-queue", label: "QC Queue", description: "Review and process submissions", group: "Distribution Operations" },
+        { key: "delivery", label: "Distributor Delivery", description: "DireNote and store status", group: "Distribution Operations" },
+        { key: "updates", label: "Update Requests", description: "Metadata and delivery changes", group: "Distribution Operations", href: "/admin/release-change-requests" },
+        { key: "takedowns", label: "Takedowns", description: "Removal requests and outcomes", group: "Distribution Operations", href: "/admin/release-change-requests" },
+        { key: "fraud", label: "Fraud Detection", description: "Risk monitoring and investigations", group: "Distribution Operations", href: "/admin/fraud" },
+        { key: "referrals-admin", label: "Referrals", description: "Attribution, credits and abuse review", group: "Money Operations", href: "/admin/referrals" },
         { key: "payments", label: "Payments", description: "Checkout records", group: "Money Operations" },
         { key: "revenue", label: "Revenue", description: "Revenue overview", group: "Money Operations" },
         { key: "royalties", label: "Payouts", description: "Withdrawal controls", group: "Money Operations" },
-        { key: "earnings-entry", label: "Earnings Entry", description: "Import release earnings", group: "Money Operations" },
+        { key: "earnings-entry", label: "Royalty Management", description: "Import reports and manage ledgers", group: "Money Operations", href: "/admin/royalties" },
+        { key: "reconciliation", label: "Reconciliation", description: "Resolve unmatched statement rows", group: "Money Operations", href: "/admin/royalties/reconciliation" },
+        { key: "kyc", label: "KYC", description: "Payout-profile review", group: "Money Operations", href: "/admin/payout-profiles" },
+        { key: "managed-services", label: "Managed Services", description: "CRBT, OAC and Content ID", group: "Growth / Content", href: "/admin/managed-services" },
         { key: "artists", label: "Artists", description: "Profiles and creators", group: "Growth / Content" },
         { key: "promotions", label: "Promotions", description: "Campaign ops", group: "Growth / Content" },
         { key: "timed-playlists", label: "Timed Playlists", description: "Playlist scheduling", group: "Growth / Content" },
@@ -742,10 +925,18 @@ export function AdminControlCenter({
         { key: "support", label: "Support Tickets", description: "Inbound help", group: "Support / Legal" },
         { key: "users", label: "Users", description: "Role management", group: "Platform" },
         { key: "team", label: "Team", description: "Staff operations", group: "Platform" },
+        { key: "activity", label: "Activity and Logs", description: "Active admins and session history", group: "Platform" },
+        { key: "integrations", label: "Integrations", description: "Provider configuration", group: "Platform", href: "/admin?tab=settings" },
+        { key: "health", label: "System Health", description: "Readiness and provider state", group: "Platform", href: "/admin?tab=settings#system-health" },
         { key: "settings", label: "Settings", description: "Platform config", group: "Platform" }
       ]}
       activeKey={activeTab}
       onSelect={selectAdminTab}
+      searchValue={moduleSearch}
+      onSearchChange={setModuleSearch}
+      searchPlaceholder={`Search ${activeTab.replace(/-/g, " ")}...`}
+      onNotificationsClick={() => selectAdminTab("notifications")}
+      notificationCount={initialNotifications.filter((notification) => !notification.readAt).length}
       quickActions={
         <>
           <button type="button" onClick={() => selectAdminTab("releases")} className="btn-outline pressable px-4 py-2 text-sm">Review Releases</button>
@@ -754,25 +945,29 @@ export function AdminControlCenter({
         </>
       }
     >
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <AdminActivityAndLogs currentPage={activeTab} visible={activeTab === "activity"} />
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div><span style={{ color: "var(--text-muted)" }}>Signed in as </span><strong>{currentAdmin.name}</strong><span style={{ color: "var(--text-muted)" }}> · Admin role: </span><strong className="capitalize">{adminAccess.role.replace(/_/g, " ")}</strong></div><span className="status-pill">{adminAccess.permissions.length} permissions</span></div>
+      {activeTab === "overview" ? <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{operationalQueues.map((queue) => <button key={queue.label} type="button" onClick={() => selectAdminTab(queue.tab)} className="surface-list-item pressable min-h-32 p-4 text-left"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold">{queue.label}</p><p className="mt-2 text-3xl font-semibold">{queue.count}</p></div><StatusPill label={queue.urgency} active={queue.count > 0} /></div><p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>{queue.oldest}</p></button>)}</section> : null}
+      {activeTab === "overview" ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <button type="button" onClick={() => selectAdminTab("releases")} className="text-left"><StatCard label="Pending reviews" value={pendingReviews} detail="Submitted, queued, or under review" /></button>
         <button type="button" onClick={() => selectAdminTab("releases")} className="text-left"><StatCard label="Changes requested" value={changesRequested} detail="Correction flow needs follow-up" /></button>
         <button type="button" onClick={() => selectAdminTab("distribution-queue")} className="text-left"><StatCard label="Sent to DireNote" value={sentToDireNote} detail="Sent, processing, delivered, or live" /></button>
         <button type="button" onClick={() => selectAdminTab("revenue")} className="text-left"><StatCard label="Revenue" value={formatMoney(distributionRevenue + commerceRevenue)} detail={`${formatMoney(distributionRevenue)} distribution + ${formatMoney(commerceRevenue)} commerce`} /></button>
-      </section>
+      </section> : null}
 
-      {feedback ? <p className="text-sm" style={{ color: "var(--text)" }}>{feedback}</p> : null}
+      {feedback ? <div role="status" className="flex items-start justify-between gap-4 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text)" }}><p className="leading-6">{feedback}</p><button type="button" onClick={() => setFeedback(null)} className="pressable shrink-0 rounded-lg p-1" aria-label="Dismiss message"><X className="h-4 w-4" /></button></div> : null}
 
       {activeTab === "overview" ? (
         <div className="grid gap-6 xl:grid-cols-[1.15fr,0.85fr]">
           <SurfaceSection title="Today's Action Queue" description="Live admin tasks assembled from releases, payouts, support, and producer applications.">
+            <div className="mb-4 grid gap-2 border-b pb-4 sm:grid-cols-2" style={{ borderColor: "var(--border)" }}><select className="field" value={taskPriorityFilter} onChange={(event) => setTaskPriorityFilter(event.target.value)}><option value="all">All priorities</option><option value="high">High priority</option><option value="normal">Normal priority</option><option value="active">Active</option><option value="critical">Critical</option></select><select className="field" value={taskTypeFilter} onChange={(event) => setTaskTypeFilter(event.target.value)}><option value="all">All queue types</option>{Array.from(new Set([...persistedTasks.map((item) => item.type), ...actionQueue.map((item) => item.type)])).sort().map((type) => <option key={type} value={type}>{type}</option>)}</select></div>
             <div className="grid gap-4">
-              {persistedTasks.map((item) => (
+              {filteredPersistedTasks.map((item) => (
                 <article key={`task-${item.id}`} className="surface-list-item p-4" style={item.priority === "critical" ? { borderColor: "var(--danger)" } : undefined}>
                   <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><StatusPill label={item.type} active={item.priority === "high" || item.priority === "critical"} /><span className="text-xs capitalize" style={{ color: "var(--text-soft)" }}>{item.priority} · {new Date(item.createdAt).toLocaleString("en-IN")}</span></div><p className="mt-3 font-semibold" style={{ color: "var(--text)" }}>{item.title}</p><p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>{item.body}</p></div><div className="flex flex-wrap gap-2"><a href={item.href} className="btn-outline pressable px-3 py-2 text-xs">Open</a><button type="button" onClick={() => updatePersistedTask(item.id, { status: "assigned", assignToMe: true, note: "Assigned from Operations Queue." })} className="btn-outline pressable px-3 py-2 text-xs">Assign to me</button><button type="button" onClick={() => updatePersistedTask(item.id, { status: "snoozed", snoozedUntil: new Date(Date.now() + 86_400_000).toISOString(), note: "Snoozed for 24 hours." })} className="btn-outline pressable px-3 py-2 text-xs">Snooze 24h</button><button type="button" onClick={() => resolvePersistedTask(item.id)} className="btn-outline pressable px-3 py-2 text-xs">Resolve</button></div></div>
                 </article>
               ))}
-              {actionQueue.map((item, index) => (
+              {filteredActionQueue.map((item, index) => (
                 <article key={`${item.type}-${item.title}-${index}`} className="surface-list-item p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -787,7 +982,7 @@ export function AdminControlCenter({
                   </div>
                 </article>
               ))}
-              {persistedTasks.length === 0 && actionQueue.length === 0 ? <EmptyState copy="No action required right now. Release, payout, support, and application queues are clear." /> : null}
+              {filteredPersistedTasks.length === 0 && filteredActionQueue.length === 0 ? <EmptyState copy="No queue items match the selected filters." /> : null}
             </div>
           </SurfaceSection>
 
@@ -801,8 +996,9 @@ export function AdminControlCenter({
           </SurfaceSection>
 
           <SurfaceSection title="Recent distribution payments" description="Track pay-per-release and subscription checkout states.">
+            <div className="mb-4 grid gap-2 border-b pb-4 sm:grid-cols-2" style={{ borderColor: "var(--border)" }}><select className="field" value={paymentStatusFilter} onChange={(event) => setPaymentStatusFilter(event.target.value)}><option value="all">All payment statuses</option>{Array.from(new Set(initialDistributionOrders.map((order) => order.paymentStatus))).sort().map((status) => <option key={status} value={status}>{status.replace(/_/g, " ")}</option>)}</select><select className="field" value={paymentPlanFilter} onChange={(event) => setPaymentPlanFilter(event.target.value)}><option value="all">All plans</option>{Array.from(new Set(initialDistributionOrders.map((order) => order.plan))).sort().map((plan) => <option key={plan} value={plan}>{plan.replace(/_/g, " ")}</option>)}</select><select className="field" value={paymentPeriodFilter} onChange={(event) => setPaymentPeriodFilter(event.target.value)}><option value="all">Any date</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option></select><select className="field" value={paymentSort} onChange={(event) => setPaymentSort(event.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="amount-high">Highest amount</option><option value="amount-low">Lowest amount</option></select></div>
             <div className="grid gap-4">
-              {initialDistributionOrders.slice(0, 6).map((order) => (
+              {filteredDistributionPayments.slice(0, 8).map((order) => (
                 <article key={order.id} className="surface-list-item p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -813,61 +1009,101 @@ export function AdminControlCenter({
                   </div>
                 </article>
               ))}
-              {initialDistributionOrders.length === 0 ? <EmptyState copy="No distribution checkouts yet." /> : null}
+              {filteredDistributionPayments.length === 0 ? <EmptyState copy="No distribution payments match the selected filters." /> : null}
             </div>
           </SurfaceSection>
 
           <SurfaceSection title="Recent activity" description="Latest release and commerce events from existing platform data.">
+            <div className="mb-4 grid gap-2 border-b pb-4 sm:grid-cols-3" style={{ borderColor: "var(--border)" }}><select className="field" value={activityTypeFilter} onChange={(event) => setActivityTypeFilter(event.target.value)}><option value="all">All activity</option><option value="release">Releases</option><option value="commerce">Commerce</option></select><select className="field" value={activityStatusFilter} onChange={(event) => setActivityStatusFilter(event.target.value)}><option value="all">All statuses</option>{Array.from(new Set([...releases.map((release) => release.status), ...initialOrders.map((order) => order.paymentStatus)])).sort().map((status) => <option key={status} value={status}>{status.replace(/_/g, " ")}</option>)}</select><select className="field" value={activitySort} onChange={(event) => setActivitySort(event.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></div>
             <div className="grid gap-4">
-              {[...releases.slice(0, 4).map((release) => ({ title: adminReleaseTitle(release), detail: `${release.artistName} / ${release.status.replace(/_/g, " ")}`, time: release.createdAt })), ...initialOrders.slice(0, 2).map((order) => ({ title: `Beat store order #${order.id}`, detail: `${order.paymentStatus} / ${formatMoney(order.amount)}`, time: order.createdAt }))].map((item) => (
+              {recentActivityItems.slice(0, 8).map((item) => (
                 <article key={`${item.title}-${item.time}`} className="surface-list-item p-4">
                   <p className="font-semibold" style={{ color: "var(--text)" }}>{item.title}</p>
                   <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{item.detail}</p>
                 </article>
               ))}
-              {releases.length === 0 && initialOrders.length === 0 ? <EmptyState copy="No release or commerce activity yet." /> : null}
+              {recentActivityItems.length === 0 ? <EmptyState copy="No activity matches the selected filters." /> : null}
             </div>
           </SurfaceSection>
         </div>
       ) : null}
 
-      {(activeTab === "releases" || activeTab === "distribution-queue" || activeTab === "moderation") ? (
+      {activeTab === "releases" || activeTab === "delivery" ? (
+        <div className="grid gap-6 xl:grid-cols-[0.82fr,1.18fr]">
+          <SurfaceSection title={activeTab === "delivery" ? "Distributor Delivery" : "Releases"} description={activeTab === "delivery" ? "Track DireNote processing, delivery state, store availability, and live confirmation." : "Manage approved, scheduled, distributed, and live catalog releases."}>
+            <div className="grid gap-3">
+              {catalogReleases.map((release) => <button key={release.id} type="button" onClick={() => { setSelectedReleaseId(release.id); setCatalogTab("overview"); }} className="surface-list-item pressable p-4 text-left" style={selectedCatalogRelease?.id === release.id ? { borderColor: "var(--accent)", background: "var(--accent-soft)" } : undefined}><div className="flex gap-3">{release.artworkUrl ? <img src={release.artworkUrl} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" /> : <div className="h-16 w-16 shrink-0 rounded-xl border border-dashed" style={{ borderColor: "var(--border)" }} />}<div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold">{release.releaseTitle || release.trackName}</p><p className="mt-1 truncate text-sm" style={{ color: "var(--text-muted)" }}>{release.artistName} · {release.releaseType.toUpperCase()} · {release.tracks?.length ?? 0} tracks</p></div><StatusPill label={release.status.replace(/_/g, " ")} active /></div><div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-soft)" }}><span>Release {release.releaseDate || "—"}</span><span>UPC {release.upcCode || "Pending"}</span><span>{release.distributionStores?.filter((store) => store.status === "Live").length ?? 0} stores live</span></div></div></div></button>)}
+              {catalogReleases.length === 0 ? <EmptyState copy="No approved or live releases yet. Releases will appear here after they are sent for distribution or marked live." /> : null}
+            </div>
+          </SurfaceSection>
+          <SurfaceSection title={activeTab === "delivery" ? "Delivery Details" : "Catalog Details"} description="Distribution state, identifiers, stores, links, and reporting for the selected release.">
+            {selectedCatalogRelease ? <div className="grid gap-5">
+              <div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="text-2xl font-semibold">{selectedCatalogRelease.releaseTitle || selectedCatalogRelease.trackName}</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{selectedCatalogRelease.artistName} · {selectedCatalogRelease.releaseType.toUpperCase()} · Release {selectedCatalogRelease.releaseDate || "—"}</p></div><StatusPill label={selectedCatalogRelease.status.replace(/_/g, " ")} active /></div>
+              <nav className="flex gap-1 overflow-x-auto rounded-2xl border p-1.5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} aria-label="Catalog sections">{(["overview", "tracks", "distribution", "identifiers", "stores", "promolink", "earnings", "activity"] as const).map((tab) => <button key={tab} type="button" onClick={() => setCatalogTab(tab)} className={catalogTab === tab ? "btn-primary pressable shrink-0 px-3 py-2 text-xs capitalize" : "pressable shrink-0 rounded-full px-3 py-2 text-xs font-semibold capitalize"} style={catalogTab === tab ? undefined : { color: "var(--text-muted)" }}>{tab === "identifiers" ? "UPC / ISRC" : tab}</button>)}</nav>
+              {catalogTab === "overview" ? <div className="grid gap-5 rounded-2xl border p-5 sm:grid-cols-[10rem,1fr]" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{selectedCatalogRelease.artworkUrl ? <img src={selectedCatalogRelease.artworkUrl} alt={selectedCatalogRelease.releaseTitle} className="aspect-square w-full rounded-2xl object-cover" /> : <div className="aspect-square rounded-2xl border border-dashed" style={{ borderColor: "var(--border)" }} />}<div className="grid content-start gap-3 sm:grid-cols-2">{[["Title", selectedCatalogRelease.releaseTitle], ["Artist", selectedCatalogRelease.artistName], ["Label", selectedCatalogRelease.labelName || selectedCatalogRelease.labelDisplayName], ["Language", selectedCatalogRelease.language], ["Genre", [selectedCatalogRelease.primaryGenre, selectedCatalogRelease.secondaryGenre].filter(Boolean).join(" / ")], ["UPC", selectedCatalogRelease.upcCode || "Pending"]].map(([label, value]) => <div key={String(label)}><p className="text-xs font-semibold uppercase tracking-[0.1em]" style={{ color: "var(--text-soft)" }}>{label}</p><p className="mt-1 text-sm font-semibold">{value || "—"}</p></div>)}</div></div> : null}
+              {catalogTab === "tracks" ? <div className="grid gap-3">{(selectedCatalogRelease.tracks ?? []).map((track) => <article key={track.id} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">{track.trackNumber}. {track.trackTitle}</p><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{track.primaryArtist} · ISRC {track.isrc || "Pending"}</p></div><StatusPill label={track.explicitContent ? "Explicit" : "Clean"} active={track.explicitContent} /></div>{track.audioUrl ? <audio controls preload="none" className="mt-3 w-full" src={track.audioUrl} /> : null}</article>)}</div> : null}
+              {catalogTab === "distribution" ? <div className="grid gap-3 sm:grid-cols-2">{[["Distribution status", selectedCatalogRelease.status.replace(/_/g, " ")], ["DireNote release ID", selectedCatalogRelease.distributorReleaseId], ["Scheduled / release date", selectedCatalogRelease.releaseDate], ["Distributed at", selectedCatalogRelease.distributedAt ? new Date(selectedCatalogRelease.distributedAt).toLocaleString("en-IN") : null], ["Live confirmation", selectedCatalogRelease.liveAt ? new Date(selectedCatalogRelease.liveAt).toLocaleString("en-IN") : "Awaiting confirmation"], ["Last updated", selectedCatalogRelease.lastEditedAt ? new Date(selectedCatalogRelease.lastEditedAt).toLocaleString("en-IN") : new Date(selectedCatalogRelease.createdAt).toLocaleString("en-IN")]].map(([label, value]) => <div key={String(label)} className="summary-card"><span>{label}</span><strong>{value || "—"}</strong></div>)}</div> : null}
+              {catalogTab === "identifiers" ? <div className="grid gap-3"><div className="summary-card"><span>Release UPC</span><strong>{selectedCatalogRelease.upcCode || "Pending"}</strong></div>{(selectedCatalogRelease.tracks ?? []).map((track) => <div key={track.id} className="summary-card"><span>{track.trackNumber}. {track.trackTitle}</span><strong>{track.isrc || "Pending"}</strong></div>)}</div> : null}
+              {catalogTab === "stores" ? <AdminStoreStatusEditor release={selectedCatalogRelease} /> : null}
+              {catalogTab === "promolink" ? <div className="rounded-2xl border p-5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{typeof selectedCatalogRelease.metadata?.promolinkUrl === "string" ? <a href={selectedCatalogRelease.metadata.promolinkUrl} target="_blank" rel="noreferrer" className="btn-primary inline-flex">View Promolink</a> : <p className="text-sm" style={{ color: "var(--text-muted)" }}>Promolink will appear after the release is scheduled or live.</p>}</div> : null}
+              {catalogTab === "earnings" ? <div className="rounded-2xl border p-5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{selectedCatalogRelease.analytics ? <div className="grid gap-3 sm:grid-cols-2">{Object.entries(selectedCatalogRelease.analytics).filter(([, value]) => typeof value === "number").map(([label, value]) => <div key={label} className="summary-card"><span>{label.replace(/([A-Z])/g, " $1")}</span><strong>{Number(value).toLocaleString("en-IN")}</strong></div>)}</div> : <p className="text-sm leading-6" style={{ color: "var(--text-muted)" }}>Earnings usually take around 1.5 months to reflect after platform reporting and distributor processing.</p>}</div> : null}
+              {catalogTab === "activity" ? <div className="grid gap-2">{releaseAudit.map((event) => <div key={event.id} className="summary-card"><span><strong>{event.action.replace(/_/g, " ")}</strong><br /><small>{new Date(event.createdAt).toLocaleString("en-IN")}</small></span><span>Recorded</span></div>)}{releaseAudit.length === 0 ? <EmptyState copy="No catalog activity has been recorded yet." /> : null}</div> : null}
+              <div className="flex flex-wrap gap-2">{["scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered", "sent"].includes(selectedCatalogRelease.status) ? <button type="button" disabled={isPending} onClick={() => setConfirmStatusAction("live")} className="btn-primary pressable">Mark Live</button> : null}<button type="button" onClick={() => setCatalogTab("stores")} className="btn-outline pressable">Update Store Status</button>{selectedCatalogRelease.analytics ? <button type="button" onClick={() => setCatalogTab("earnings")} className="btn-outline pressable">View Earnings</button> : null}</div>
+            </div> : <EmptyState copy="Select a catalog release to manage its distribution details." />}
+          </SurfaceSection>
+        </div>
+      ) : null}
+
+      {activeTab === "distribution-queue" ? (
         <div className="grid gap-6 xl:grid-cols-[0.92fr,1.08fr]">
-          <SurfaceSection title="All submissions" description="Open a release to inspect assets and change review status.">
+          <SurfaceSection title="All Submissions" description="Review submitted releases, inspect readiness, and open the complete operations record.">
             <div className="grid gap-4">
-              {releases.map((release) => (
-                <button key={release.id} type="button" onClick={() => setSelectedReleaseId(release.id)} className="surface-list-item pressable p-4 text-left" style={selectedRelease?.id === release.id ? { borderColor: "var(--accent)", background: "var(--accent-soft)" } : undefined}>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold" style={{ color: "var(--text)" }}>{release.releaseTitle}</p>
-                      <p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>{release.artistName} / {release.releaseType.toUpperCase()} / {release.releaseDate}</p>
+              <div className="grid gap-3 rounded-2xl border p-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+                <input className="field" value={queueSearch} onChange={(event) => setQueueSearch(event.target.value)} placeholder="Search title, artist, UPC, ISRC, or user email" aria-label="Search submissions" />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <select className="field" value={queueStatus} onChange={(event) => setQueueStatus(event.target.value)} aria-label="Filter by status"><option value="all">All statuses</option>{Array.from(new Set(releases.map((release) => release.status))).map((status) => <option key={status} value={status}>{status.replace(/_/g, " ")}</option>)}</select>
+                  <select className="field" value={queueType} onChange={(event) => setQueueType(event.target.value)} aria-label="Filter by release type"><option value="all">All release types</option><option value="single">Single</option><option value="ep">EP</option><option value="album">Album</option></select>
+                </div>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>{queueReleases.length} of {releases.length} submissions</p>
+              </div>
+              {queueReleases.map((release) => {
+                const assetReady = Boolean(release.artworkUrl && (release.tracks ?? []).length && (release.tracks ?? []).every((track) => track.audioUrl));
+                return <button key={release.id} type="button" onClick={() => { setSelectedReleaseId(release.id); setReviewTab("overview"); }} className="surface-list-item pressable p-4 text-left" style={selectedRelease?.id === release.id ? { borderColor: "var(--accent)", background: "var(--accent-soft)" } : undefined}>
+                  <div className="flex gap-3">
+                    {release.artworkUrl ? <img src={release.artworkUrl} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" /> : <div className="h-16 w-16 shrink-0 rounded-xl border border-dashed" style={{ borderColor: "var(--border)" }} />}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold" style={{ color: "var(--text)" }}>{release.releaseTitle || release.trackName}</p><p className="mt-1 truncate text-sm" style={{ color: "var(--text-soft)" }}>{release.artistName} · {release.tracks?.length ?? 0} track{release.tracks?.length === 1 ? "" : "s"} · {release.releaseType.toUpperCase()}</p></div><StatusPill label={release.status.replace(/_/g, " ")} active /></div>
+                      <div className="mt-3 grid gap-1 text-xs sm:grid-cols-2" style={{ color: "var(--text-muted)" }}><span>Submitted {release.submittedAt ? new Date(release.submittedAt).toLocaleDateString("en-IN") : "Not submitted"}</span><span>Release {release.releaseDate ? new Date(release.releaseDate).toLocaleDateString("en-IN") : "—"}</span><span>Payment {release.paymentStatus === "paid" ? "Verified" : release.paymentStatus ?? "Pending"}</span><span style={{ color: assetReady ? "var(--success)" : "var(--danger)" }}>DireNote {assetReady ? "Ready to check" : "Issues found"}</span></div>
                     </div>
-                    <StatusPill label={release.status.replace(/_/g, " ")} active />
                   </div>
-                </button>
-              ))}
+                </button>;
+              })}
+              {queueReleases.length === 0 ? <EmptyState copy="No submissions match these filters. Submitted releases will appear here for review." /> : null}
             </div>
           </SurfaceSection>
 
-          <SurfaceSection title="Detailed view" description="Approve, reject, or push a release through review states.">
+          <SurfaceSection title="Selected Release Review" description="Inspect metadata, files, rights, readiness, and the complete activity record.">
             {selectedRelease ? (
               <div className="grid gap-5">
-                <div className="grid gap-4 lg:grid-cols-[0.9fr,1.1fr]">
-                  <div className="rounded-[1.4rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-                    {selectedRelease.artworkUrl ? <img src={selectedRelease.artworkUrl} alt={selectedRelease.releaseTitle} className="aspect-square w-full rounded-[1.1rem] object-cover" /> : <div className="aspect-square w-full rounded-[1.1rem] border border-dashed" style={{ borderColor: "var(--border)" }} />}
+                <div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>{selectedRelease.releaseTitle || selectedRelease.trackName}</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{selectedRelease.releaseType.toUpperCase()} · {selectedRelease.tracks?.length ?? 0} track{selectedRelease.tracks?.length === 1 ? "" : "s"} · {selectedRelease.artistName}</p><p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>Submitted {selectedRelease.submittedAt ? new Date(selectedRelease.submittedAt).toLocaleString("en-IN") : "—"} · Release {selectedRelease.releaseDate || "—"} · {selectedRelease.ownerEmail || "Account email unavailable"}</p></div><StatusPill label={selectedRelease.status.replace(/_/g, " ")} active /></div>
+                <nav className="flex gap-1 overflow-x-auto rounded-2xl border p-1.5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} aria-label="Release review sections">{(["overview", "metadata", "tracks", "assets", "rights", "direnote", "activity"] as const).map((tab) => <button key={tab} type="button" onClick={() => setReviewTab(tab)} className={reviewTab === tab ? "btn-primary pressable shrink-0 px-3 py-2 text-xs capitalize" : "pressable shrink-0 rounded-full px-3 py-2 text-xs font-semibold capitalize"} style={reviewTab === tab ? undefined : { color: "var(--text-muted)" }}>{tab === "assets" ? "Artwork & Audio" : tab === "direnote" ? "DireNote Readiness" : tab}</button>)}</nav>
+                {reviewTab === "overview" ? <div className="grid gap-5 rounded-[1.4rem] border p-5 sm:grid-cols-[9rem,1fr] sm:items-start" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+                  <div>
+                    {selectedRelease.artworkUrl ? <img src={selectedRelease.artworkUrl} alt={selectedRelease.releaseTitle} className="aspect-square w-full rounded-2xl object-cover shadow-lg" /> : <div className="flex aspect-square w-full items-center justify-center rounded-2xl border border-dashed text-xs" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>No artwork</div>}
                   </div>
-                  <div className="grid gap-3 text-sm">
-                    <div className="surface-list-item p-4"><span style={{ color: "var(--text-soft)" }}>Artist</span><p className="mt-2 font-semibold" style={{ color: "var(--text)" }}>{selectedRelease.artistName}</p></div>
-                    <div className="surface-list-item p-4"><span style={{ color: "var(--text-soft)" }}>Release</span><p className="mt-2 font-semibold" style={{ color: "var(--text)" }}>{selectedRelease.releaseTitle}</p></div>
-                    <div className="surface-list-item p-4"><span style={{ color: "var(--text-soft)" }}>Metadata</span><p className="mt-2" style={{ color: "var(--text)" }}>{selectedRelease.primaryGenre ?? "-"} / {selectedRelease.secondaryGenre ?? "-"} / {selectedRelease.language}</p></div>
-                    <div className="surface-list-item p-4"><span style={{ color: "var(--text-soft)" }}>Mood</span><p className="mt-2" style={{ color: "var(--text)" }}>{selectedRelease.mood || "Missing"}</p></div>
-                    <div className="surface-list-item p-4"><span style={{ color: "var(--text-soft)" }}>Existing identifiers</span><p className="mt-2" style={{ color: "var(--text)" }}>Already released: {selectedRelease.releasePreviouslyReleased ? "Yes" : "No"}</p>{selectedRelease.releasePreviouslyReleased ? <div className="mt-1 grid gap-1" style={{ color: "var(--text-muted)" }}><p>UPC: {selectedRelease.upcCode || "Missing"}</p>{selectedRelease.tracks?.map((track,index)=><p key={track.id}>Track {index+1} — {track.trackTitle}: {track.isrc || "ISRC missing"}</p>)}</div> : null}</div>
-                    <div className="surface-list-item p-4"><span style={{ color: "var(--text-soft)" }}>Queue</span><p className="mt-2" style={{ color: "var(--text)" }}>#{selectedRelease.queuePosition ?? 0} Â· {selectedRelease.estimatedReviewTime ?? "Pending"}</p></div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--accent)" }}>Operational summary</p>
+                    <h3 className="mt-2 truncate text-xl font-semibold" style={{ color: "var(--text)" }}>{selectedRelease.releaseTitle || selectedRelease.trackName}</h3>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {[["Submitted", selectedRelease.submittedAt ? new Date(selectedRelease.submittedAt).toLocaleDateString("en-IN") : "Not submitted"], ["Release date", selectedRelease.releaseDate ? new Date(selectedRelease.releaseDate).toLocaleDateString("en-IN") : "Not scheduled"], ["Payment", selectedRelease.paymentStatus === "paid" ? "Verified" : "Pending"], ["DireNote", direNoteReadiness ? direNoteReadiness.ready ? "Ready" : `${(direNoteReadiness.issues || []).length} issue${(direNoteReadiness.issues || []).length === 1 ? "" : "s"}` : "Checking"]].map(([label, value]) => <div key={String(label)}><p className="text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: "var(--text-soft)" }}>{label}</p><p className="mt-1 text-sm font-semibold" style={{ color: label === "DireNote" && direNoteReadiness?.ready === false ? "var(--danger)" : "var(--text)" }}>{value}</p></div>)}
+                    </div>
                   </div>
-                </div>
-                <AdminStoreStatusEditor release={selectedRelease} />
-                <details className="rounded-[1.4rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><summary className="cursor-pointer font-semibold">Automation &amp; Audit Timeline ({releaseAudit.length})</summary><div className="mt-4 grid gap-2">{releaseAudit.map((event) => <div key={event.id} className="summary-card"><span><strong>{event.action.replace(/_/g, " ")}</strong><br /><small>{new Date(event.createdAt).toLocaleString("en-IN")}</small></span><span className="max-w-[50%] truncate text-xs">{event.metadata ? JSON.stringify(event.metadata) : "Recorded"}</span></div>)}{releaseAudit.length === 0 ? <p className="text-sm" style={{ color: "var(--text-muted)" }}>No audit events recorded yet.</p> : null}</div></details>
-                <div className="rounded-[1.4rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+                </div> : null}
+                {reviewTab === "metadata" ? <div className="grid gap-3 sm:grid-cols-2">{[["Release title", selectedRelease.releaseTitle], ["Release type", selectedRelease.releaseType], ["Primary artist", selectedRelease.artistName], ["Genre", selectedRelease.primaryGenre], ["Subgenre", selectedRelease.secondaryGenre], ["Mood", selectedRelease.mood], ["Language", selectedRelease.language], ["Label", selectedRelease.labelName || selectedRelease.labelDisplayName], ["Release date", selectedRelease.releaseDate], ["Original release date", selectedRelease.originalReleaseDate], ["UPC", selectedRelease.upcCode || (selectedRelease.releasePreviouslyReleased ? "Missing" : "Pending")], ["YouTube Content ID", selectedRelease.youtubeContentIdEnabled ? "Enabled" : "Disabled"], ["Previously released", selectedRelease.releasePreviouslyReleased ? "Yes" : "No"], ["Additional request", selectedRelease.adminInstructions]].map(([label, value]) => <div key={String(label)} className="summary-card"><span>{label}</span><strong>{value || "—"}</strong></div>)}</div> : null}
+                {reviewTab === "assets" ? <div className="grid gap-4"><div className="grid gap-4 sm:grid-cols-2"><div className="rounded-2xl border p-4" style={{ borderColor: "var(--border)" }}>{selectedRelease.artworkUrl ? <><img src={selectedRelease.artworkUrl} alt={selectedRelease.releaseTitle} className="aspect-square w-full rounded-xl object-cover" /><a href={selectedRelease.artworkUrl} target="_blank" rel="noreferrer" className="btn-outline mt-3 inline-flex text-xs">Open artwork file</a></> : <EmptyState copy="Artwork file is missing." />}</div><div className="grid gap-3">{(selectedRelease.tracks ?? []).map((track) => <article key={track.id} className="surface-list-item p-4"><p className="font-semibold">{track.trackNumber}. {track.trackTitle}</p>{track.audioUrl ? <audio controls preload="none" className="mt-3 w-full" src={track.audioUrl} /> : <p className="mt-2 text-sm" style={{ color: "var(--danger)" }}>Audio file missing</p>}</article>)}</div></div><AdminStoreStatusEditor release={selectedRelease} /></div> : null}
+                {reviewTab === "rights" ? <div className="grid gap-3 sm:grid-cols-2">{[["Content type", selectedRelease.contentType], ["Copyright owner", selectedRelease.copyrightOwner], ["Publishing rights", selectedRelease.publishingRights], ["Ownership confirmed", selectedRelease.ownershipConfirmed ? "Yes" : "No"], ["Terms accepted", selectedRelease.agreedToTerms ? "Yes" : "No"], ["License proof", selectedRelease.licenseReceiptUrl || selectedRelease.license_receipt_url || selectedRelease.licenseDocumentUrl || selectedRelease.beatLicenseUrl], ["AI / Suno proof", selectedRelease.sunoReceiptUrl || selectedRelease.suno_receipt_url || selectedRelease.sunoLink], ["Unauthorised samples", selectedRelease.noUnauthorizedSamples ? "Confirmed none" : "Not confirmed"]].map(([label, value]) => <div key={String(label)} className="summary-card"><span>{label}</span>{typeof value === "string" && /^https?:/.test(value) ? <a className="font-semibold underline" href={value} target="_blank" rel="noreferrer">Open proof</a> : <strong>{value || "—"}</strong>}</div>)}</div> : null}
+                {reviewTab === "activity" ? <div className="rounded-[1.4rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><h3 className="font-semibold">Activity &amp; Audit Timeline ({releaseAudit.length})</h3><div className="mt-4 grid gap-2">{releaseAudit.map((event) => <div key={event.id} className="summary-card"><span><strong>{event.action.replace(/_/g, " ")}</strong><br /><small>{new Date(event.createdAt).toLocaleString("en-IN")}</small></span><span className="max-w-[50%] truncate text-xs">{event.metadata ? JSON.stringify(event.metadata) : "Recorded"}</span></div>)}{releaseAudit.length === 0 ? <EmptyState copy="No activity has been recorded yet." /> : null}</div></div> : null}
+                {reviewTab === "direnote" ? <div className="rounded-[1.4rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold" style={{ color: "var(--text)" }}>DireNote readiness</p>
@@ -889,41 +1125,22 @@ export function AdminControlCenter({
                       <div key={String(label)} className="summary-card"><span>{label}</span><span>{ready ? "Ready" : "Needs fix"}</span></div>
                     ))}
                   </div>
-                  {direNoteReadiness ? <div className="mt-4 grid gap-2">{direNoteReadiness.issues.map((issue) => <div key={`${issue.category}-${issue.field}`} className="rounded-xl border p-3 text-sm" style={{ borderColor: "var(--danger)", background: "var(--danger-soft)" }}><p className="font-semibold">{issue.category} · {issue.field}</p><p className="mt-1">{issue.message}</p><p className="mt-1 text-xs">Fix: {issue.fixSuggestion}</p></div>)}{direNoteReadiness.warnings.map((issue) => <div key={`warning-${issue.field}`} className="rounded-xl border p-3 text-sm" style={{ borderColor: "var(--border)" }}><p className="font-semibold">Warning · {issue.category}</p><p className="mt-1">{issue.message}</p></div>)}</div> : null}
+                  {direNoteReadiness ? <div className="mt-4 grid gap-2">{(direNoteReadiness.issues || []).map((issue) => <div key={`${issue.category}-${issue.field}`} className="rounded-xl border p-3 text-sm" style={{ borderColor: "var(--danger)", background: "var(--danger-soft)" }}><p className="font-semibold">{issue.category} · {issue.field}</p><p className="mt-1">{issue.message}</p><p className="mt-1 text-xs">Fix: {issue.fixSuggestion}</p></div>)}{(direNoteReadiness.warnings || []).map((issue) => <div key={`warning-${issue.field}`} className="rounded-xl border p-3 text-sm" style={{ borderColor: "var(--border)" }}><p className="font-semibold">Warning · {issue.category}</p><p className="mt-1">{issue.message}</p></div>)}</div> : null}
+                </div> : null}
+                <div className="sticky bottom-3 z-10 grid gap-3 rounded-2xl border p-3 shadow-xl sm:grid-cols-2 xl:grid-cols-3" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
+                  {["submitted", "in_queue", "changes_requested", "failed", "draft"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => updateReleaseStatus(selectedRelease.id, "under_review")} className="btn-outline pressable disabled:opacity-45">Start Review</button> : null}
+                  {selectedRelease.status === "under_review" ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => setConfirmStatusAction("approved")} className="btn-primary pressable disabled:opacity-45">Approve</button> : null}
+                  {selectedRelease.status === "approved" || selectedRelease.status === "failed" ? <button type="button" disabled={isPending || isSubmittingToDireNote || direNoteCooldownSeconds > 0 || direNoteReadiness?.ready === false || !hasPermission(selectedRelease.status === "failed" ? "distribution.retry" : "distribution.submit")} title={direNoteCooldownSeconds > 0 ? `DireNote cooldown: ${direNoteCooldownLabel} remaining` : !hasPermission(selectedRelease.status === "failed" ? "distribution.retry" : "distribution.submit") ? `Requires ${selectedRelease.status === "failed" ? "distribution.retry" : "distribution.submit"} permission` : undefined} onClick={() => setConfirmStatusAction("sent")} className="btn-primary pressable disabled:opacity-45">{isSubmittingToDireNote ? "Submitting to DireNote..." : direNoteCooldownSeconds > 0 ? `Try again in ${direNoteCooldownLabel}` : selectedRelease.status === "failed" ? "Retry Send" : "Send to DireNote"}</button> : null}
+                  {["sent", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("distribution.confirm_status")} title={!hasPermission("distribution.confirm_status") ? "Requires distribution.confirm_status permission" : undefined} onClick={() => setConfirmStatusAction("live")} className="btn-primary pressable disabled:opacity-45">Mark Live</button> : null}
+                  {["submitted", "in_queue", "under_review", "approved"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => openReview("changes_requested")} className="btn-outline pressable disabled:opacity-45" style={{ color: "var(--money)" }}>Request Metadata Changes</button> : null}
+                  {["submitted", "in_queue", "under_review", "approved"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => openReview("rejected")} className="btn-outline pressable disabled:opacity-45" style={{ color: "var(--danger)" }}>Reject Release</button> : null}
+                  {selectedRelease.status === "changes_requested" ? <div className="rounded-full border px-4 py-2 text-center text-sm font-semibold" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>Awaiting user correction</div> : null}
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {([
-                    ["under_review", "Start review"],
-                    ["approved", "Approve"],
-                    ["sent", "Send to DireNote"],
-                    ["live", "Mark live"]
-                  ] as Array<[Release["status"], string]>).map(([status, label]) => (
-                    <button key={status} type="button" disabled={isPending} onClick={() => {
-                      if (status === "approved" || status === "sent") {
-                        setConfirmStatusAction(status);
-                      } else {
-                        updateReleaseStatus(selectedRelease.id, status);
-                      }
-                    }} className={status === "approved" || status === "sent" ? "btn-primary pressable" : "btn-outline pressable"}>
-                      {label}
-                    </button>
-                  ))}
-                  <button type="button" disabled={isPending} onClick={() => openReview("changes_requested")} className="btn-outline pressable">Request Metadata Changes</button>
-                  <button type="button" disabled={isPending} onClick={() => openReview("rejected")} className="btn-outline pressable" style={{ color: "var(--danger)" }}>Reject Release</button>
-                </div>
-                <div className="grid gap-3">
+                {reviewTab === "tracks" ? <div className="grid gap-3">
                   {(selectedRelease.tracks ?? []).map((track) => (
-                    <article key={track.id} className="surface-list-item p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="font-semibold" style={{ color: "var(--text)" }}>{track.trackNumber}. {track.trackTitle}</p>
-                          <p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>{track.primaryArtist} / {track.duration}</p>
-                        </div>
-                        <StatusPill label={track.explicitContent ? "explicit" : "clean"} active={track.explicitContent} />
-                      </div>
-                    </article>
+                    <details key={track.id} className="surface-list-item p-4" open={(selectedRelease.tracks?.length ?? 0) === 1}><summary className="cursor-pointer"><div className="inline-flex w-[calc(100%-1.5rem)] items-start justify-between gap-3 align-middle"><div><p className="font-semibold" style={{ color: "var(--text)" }}>{track.trackNumber}. {track.trackTitle}</p><p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>{track.primaryArtist} · {track.duration}</p></div><StatusPill label={track.explicitContent ? "Explicit" : "Clean"} active={track.explicitContent} /></div></summary><div className="mt-4 grid gap-2 border-t pt-4 sm:grid-cols-2" style={{ borderColor: "var(--border)" }}>{[["Version", track.version], ["Featured artists", track.featuredArtists], ["Songwriters", track.songwriters], ["Composers", track.composers], ["Producers", track.producers], ["ISRC", track.isrc || (track.previouslyReleased ? "Missing" : "Pending")], ["Lyrics", track.trackLyrics || track.lyrics], ["Audio", track.audioUrl ? "Ready" : "Missing"]].map(([label, value]) => <div key={String(label)} className="summary-card"><span>{label}</span><strong className="max-w-[60%] truncate">{value || "—"}</strong></div>)}</div></details>
                   ))}
-                </div>
+                </div> : null}
               </div>
             ) : <EmptyState copy="Select a release to open the detailed view." />}
           </SurfaceSection>
@@ -932,26 +1149,35 @@ export function AdminControlCenter({
 
       {activeTab === "users" ? (
         <SurfaceSection title="Users" description="Review email, release counts, activity, and role assignments.">
+          <div className="mb-5 grid gap-3 border-b pb-5 md:grid-cols-[minmax(0,1fr),180px,180px]" style={{ borderColor: "var(--border)" }}>
+            <input className="field" value={userSearch} onChange={(event) => setUserSearch(event.target.value)} placeholder="Search by name, email, or user ID" aria-label="Search users" />
+            <select className="field" value={userRoleFilter} onChange={(event) => setUserRoleFilter(event.target.value)} aria-label="Filter users by role"><option value="all">All roles</option><option value="customer">Artists</option><option value="producer">Producers</option><option value="admin">Admins</option></select>
+            <select className="field" value={userActivityFilter} onChange={(event) => setUserActivityFilter(event.target.value)} aria-label="Filter users by activity"><option value="all">Any activity</option><option value="recent">Active in 30 days</option><option value="inactive">Inactive 30+ days</option></select>
+          </div>
           <div className="grid gap-4">
-            {users.map((user) => (
+            {filteredUsers.map((user) => (
               <article key={user.id} className="surface-list-item p-4">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div>
-                    <p className="font-semibold" style={{ color: "var(--text)" }}>{user.name}</p>
-                    <p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>{user.email}</p>
+                   <div className="flex min-w-0 items-start gap-3">
+                     <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-semibold" style={{ background: "var(--bg-soft)", color: "var(--text)" }}>{user.avatarUrl ? <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : user.name.slice(0, 1).toUpperCase()}</span>
+                     <div className="min-w-0"><p className="truncate font-semibold" style={{ color: "var(--text)" }}>{user.name}</p>
+                     <p className="mt-1 truncate text-sm" style={{ color: "var(--text-soft)" }}>{user.email}</p>
                     <div className="mt-3 flex flex-wrap gap-3 text-xs" style={{ color: "var(--text-muted)" }}>
                       <span>{releaseCountByUser.get(user.id) ?? 0} releases</span>
                       <span>{latestUserActivity.get(user.id) ? new Date(latestUserActivity.get(user.id) as string).toLocaleDateString() : "No activity yet"}</span>
-                    </div>
+                     </div>
+                     </div>
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-3">
+                   <div className="grid gap-2 sm:grid-cols-3">
                     {(["customer", "producer", "admin"] as UserRole[]).map((role) => (
                       <button key={role} type="button" onClick={() => updateRole(user, role)} className={user.role === role ? "btn-primary pressable" : "btn-outline pressable"}>{role}</button>
                     ))}
-                  </div>
-                </div>
-              </article>
+                   </div>
+                 </div>
+                 <AdminUserBenefits user={user} onCreditChange={(balance) => setUsers((items) => items.map((item) => item.id === user.id ? { ...item, referralCredits: balance } : item))} />
+               </article>
             ))}
+            {filteredUsers.length === 0 ? <EmptyState copy="No users match the selected search and filters." /> : null}
           </div>
         </SurfaceSection>
       ) : null}
@@ -960,11 +1186,11 @@ export function AdminControlCenter({
 
       {activeTab === "royalties" ? <div className="grid gap-6"><AdminPayoutManager /><AdminPayoutReports /></div> : null}
 
-      {(activeTab === "payments" || activeTab === "revenue" || activeTab === "royalties") ? (
+      {(activeTab === "payments" || activeTab === "revenue") ? (
         <div className="grid gap-6 xl:grid-cols-2">
           <SurfaceSection title="Distribution payments" description="Track Rs 99 submissions, subscriptions, and payment outcomes.">
             <div className="grid gap-4">
-              {initialDistributionOrders.map((order) => {
+              {initialDistributionOrders.filter((order) => searchMatch(order.id, order.plan, order.paymentStatus, order.releaseId)).map((order) => {
                 const linkedRelease = releases.find((release) => release.id === order.releaseId);
                 return (
                   <article key={order.id} className="surface-list-item p-4">
@@ -985,7 +1211,7 @@ export function AdminControlCenter({
 
           <SurfaceSection title="Beat store payments" description="Verified storefront orders and payment state.">
             <div className="grid gap-4">
-              {initialOrders.map((order) => (
+              {initialOrders.filter((order) => searchMatch(order.id, order.buyerEmail, order.paymentStatus, order.razorpayOrderId)).map((order) => (
                 <article key={order.id} className="surface-list-item p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -1006,12 +1232,12 @@ export function AdminControlCenter({
       {activeTab === "artists" ? (
         <SurfaceSection title="Artist profiles" description="Every saved artist profile with live store links when available.">
           <div className="grid gap-4 lg:grid-cols-2">
-            {initialArtistProfiles.map((profile) => (
+            {initialArtistProfiles.filter((profile) => searchMatch(profile.name, profile.userId)).map((profile) => (
               <article key={profile.id} className="surface-list-item flex gap-4 p-4">
                 {profile.imageUrl ? <img src={profile.imageUrl} alt={profile.name} className="h-16 w-16 rounded-2xl object-cover" /> : <div className="flex h-16 w-16 items-center justify-center rounded-2xl border" style={{ borderColor: "var(--border)", background: "var(--card)" }}>{profile.name.slice(0, 1)}</div>}
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold" style={{ color: "var(--text)" }}>{profile.name}</p>
-                  <p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>User #{profile.userId} Â· {profile.followers ? `${profile.followers.toLocaleString("en-IN")} followers` : "No follower data"}</p>
+                  <p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>User #{profile.userId} · {profile.followers ? `${profile.followers.toLocaleString("en-IN")} followers` : "No follower data"}</p>
                   <div className="mt-3 flex flex-wrap gap-2 text-xs">
                     {profile.spotifyUrl ? <a href={profile.spotifyUrl} target="_blank" rel="noreferrer" className="rounded-full border px-3 py-1" style={{ borderColor: "var(--border)", color: "var(--text)" }}>Spotify</a> : null}
                     {profile.appleUrl ? <a href={profile.appleUrl} target="_blank" rel="noreferrer" className="rounded-full border px-3 py-1" style={{ borderColor: "var(--border)", color: "var(--text)" }}>Apple Music</a> : null}
@@ -1026,6 +1252,7 @@ export function AdminControlCenter({
 
       {(activeTab === "content" || activeTab === "settings") ? (
         <div className="grid gap-6">
+          {activeTab === "settings" ? <DireNoteDiagnostics /> : null}
           {activeTab === "settings" ? <SurfaceSection title="Transactional email" description="Resend delivery configuration, attempts, failures, and retries."><div className="flex flex-col gap-4 rounded-2xl border p-5 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div><p className="font-semibold">Email logs</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Review every transactional email attempt and retry failed deliveries safely.</p></div><a href="/admin/email-logs" className="btn-primary w-fit">Open email logs</a></div></SurfaceSection> : null}
           <AdminContentManager initialProducerProfiles={initialProducerProfiles} initialSiteSettings={initialSiteSettings} />
         </div>
@@ -1065,7 +1292,7 @@ export function AdminControlCenter({
               {notificationFeedback ? <p className="text-sm" style={{ color: "var(--text)" }}>{notificationFeedback}</p> : null}
             </form>
             <div className="grid gap-4">
-              {initialNotifications.slice(0, 12).map((notification) => (
+              {initialNotifications.filter((notification) => searchMatch(notification.title, notification.body, notification.type, notification.userId)).slice(0, 12).map((notification) => (
                 <article key={notification.id} className="surface-list-item p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -1115,7 +1342,7 @@ export function AdminControlCenter({
       {activeTab === "support" ? (
         <SurfaceSection title="Support tickets" description="Customer and producer requests with admin status control.">
           <div className="grid gap-4">
-            {supportTickets.map((ticket) => (
+            {supportTickets.filter((ticket) => searchMatch(ticket.subject, ticket.message, ticket.category, ticket.status, ticket.userId)).map((ticket) => (
               <article key={ticket.id} className="surface-list-item p-4">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div>
@@ -1139,11 +1366,13 @@ export function AdminControlCenter({
         </SurfaceSection>
       ) : null}
 
-      {(activeTab === "operations" || activeTab === "producers") ? (
+      {activeTab === "producers" ? <div className="grid gap-6"><section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Producers" value={producerManagement.length} /><StatCard label="Active beats" value={producerManagement.reduce((sum, producer) => sum + producer.activeBeats, 0)} /><StatCard label="Gross sales" value={formatMoney(producerManagement.reduce((sum, producer) => sum + producer.grossRevenue, 0))} /><StatCard label="Producer earnings 70%" value={formatMoney(producerManagement.reduce((sum, producer) => sum + producer.producerEarnings, 0))} /></section><SurfaceSection title="Producer Management" description="Manage producer access, public profiles, beat catalogs, verified 70/30 sales, and payout balances."><div className="grid gap-4">{producerManagement.filter((producer) => searchMatch(producer.name, producer.email, producer.status)).map((producer) => <article key={producer.id} className="surface-list-item p-4"><div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between"><div className="flex gap-4">{producer.profile?.coverPhotoUrl || producer.profile?.avatarUrl ? <img src={producer.profile.coverPhotoUrl || producer.profile.avatarUrl} alt="" className="h-16 w-16 rounded-2xl object-cover" /> : <div className="flex h-16 w-16 items-center justify-center rounded-2xl border font-semibold" style={{ borderColor: "var(--border)" }}>{producer.name.slice(0, 1)}</div>}<div><p className="font-semibold">{producer.profile?.displayName || producer.name}</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{producer.email}</p><div className="mt-2"><StatusPill label={producer.status} active={producer.status === "active"} /></div></div></div><div className="grid gap-2 sm:grid-cols-3"><div className="summary-card"><span>Beats</span><strong>{producer.activeBeats}/{producer.totalBeats}</strong></div><div className="summary-card"><span>Sales</span><strong>{producer.totalSales}</strong></div><div className="summary-card"><span>Available</span><strong>{formatMoney(producer.availableBalance)}</strong></div></div></div><div className="mt-4 grid gap-2 sm:grid-cols-4"><label className="btn-outline pressable text-center cursor-pointer">Change Photo<input type="file" accept="image/*" className="hidden" onChange={(e) => updateProducerPhoto(producer.id, e.target.files?.[0])} /></label><button type="button" onClick={() => selectAdminTab("operations")} className="btn-outline pressable">View Beats</button><button type="button" onClick={() => selectAdminTab("royalties")} className="btn-outline pressable">View Payouts</button><button type="button" onClick={() => { const linked = users.find((user) => user.id === producer.id); if (linked) updateRole(linked, "customer"); }} className="btn-outline pressable" style={{ color: "var(--danger)" }}>Revoke Producer Role</button></div></article>)}{producerManagement.length === 0 ? <EmptyState copy="No producers found. Grant producer access from Admin Portal → Users." /> : null}</div></SurfaceSection></div> : null}
+
+      {activeTab === "operations" ? (
         <div className="grid gap-6 xl:grid-cols-3">
           <SurfaceSection title="Beats" description="Enable or disable storefront inventory.">
             <div className="grid gap-4">
-              {beats.map((beat) => (
+              {beats.filter((beat) => searchMatch(beat.title, beat.genre, beat.mood, beat.status)).map((beat) => (
                 <article key={beat.id} className="surface-list-item p-4">
                   <div className="flex flex-col gap-3">
                     <div>
@@ -1161,7 +1390,7 @@ export function AdminControlCenter({
 
           <SurfaceSection title="Producer applications" description="Approve or reject producer onboarding.">
             <div className="grid gap-4">
-              {applications.map((application) => (
+              {applications.filter((application) => searchMatch(application.artistName, application.email, application.genreFocus, application.status)).map((application) => (
                 <article key={application.id} className="surface-list-item p-4">
                   <p className="font-semibold" style={{ color: "var(--text)" }}>{application.artistName}</p>
                   <p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>{application.email} / {application.genreFocus}</p>
@@ -1175,7 +1404,7 @@ export function AdminControlCenter({
 
           <SurfaceSection title="Partnership leads" description="Inbound business development and partnership requests.">
             <div className="grid gap-4">
-              {initialLeads.map((lead) => (
+              {initialLeads.filter((lead) => searchMatch(lead.name, lead.email, lead.collaborationType)).map((lead) => (
                 <article key={lead.id} className="surface-list-item p-4">
                   <p className="font-semibold" style={{ color: "var(--text)" }}>{lead.name}</p>
                   <p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>{lead.email} / {lead.collaborationType}</p>
@@ -1224,9 +1453,11 @@ export function AdminControlCenter({
           <section role="dialog" aria-modal="true" aria-label="Confirm Action" className="w-full max-w-md rounded-[1.5rem] border p-5 shadow-2xl sm:p-7" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
             <h2 className="text-xl font-semibold text-center" style={{ color: "var(--text)" }}>Are you sure?</h2>
             <p className="mt-3 text-center text-sm" style={{ color: "var(--text-muted)" }}>
-              {confirmStatusAction === "approved" 
-                ? "This will approve the release and immediately send it to DireNote for processing." 
-                : "This will directly send the release to DireNote for distribution."}
+              {confirmStatusAction === "approved"
+                ? "This confirms that HYMN has reviewed the metadata, artwork, audio, and rights. DireNote submission remains a separate action."
+                : confirmStatusAction === "live"
+                  ? "Only continue if platform or store availability is confirmed. This does not claim availability on every platform."
+                  : "The DireNote readiness check must pass before this release is submitted for distribution."}
             </p>
             <div className="mt-6 flex gap-3 justify-center">
               <button type="button" onClick={() => setConfirmStatusAction(null)} className="btn-outline pressable px-4 py-2">Cancel</button>
@@ -1234,9 +1465,47 @@ export function AdminControlCenter({
                 updateReleaseStatus(selectedRelease.id, confirmStatusAction);
                 setConfirmStatusAction(null);
               }} className="btn-primary pressable px-4 py-2">
-                Yes, {confirmStatusAction === "approved" ? "Approve" : "Send"}
+                Yes, {confirmStatusAction === "approved" ? "Approve" : confirmStatusAction === "live" ? "Mark live" : "Send"}
               </button>
             </div>
+          </section>
+        </div>
+      ) : null}
+      {isSubmittingToDireNote ? (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md animate-in fade-in duration-200">
+          <section role="status" aria-label="Submitting to DireNote" className="w-full max-w-md rounded-[1.75rem] border p-8 shadow-2xl text-center flex flex-col items-center justify-center gap-5" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
+            <div className="relative flex items-center justify-center">
+              <div className="h-16 w-16 animate-spin rounded-full border-4 border-t-transparent" style={{ borderColor: "var(--border-strong)", borderTopColor: "var(--accent)" }} />
+              <div className="absolute h-8 w-8 animate-pulse rounded-full" style={{ background: "var(--accent-soft)" }} />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "var(--accent)" }}>Transmission in progress</p>
+              <h3 className="mt-1 text-xl font-bold" style={{ color: "var(--text)" }}>Submitting to DireNote...</h3>
+              <p className="mt-3 text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                We are bundling metadata, verifying audio signatures, and transmitting the catalog package to distributor servers. <br /><br />
+                <span className="font-semibold" style={{ color: "var(--text)" }}>This may take 1–2 minutes.</span> Please do not close or refresh this tab while we complete the distributor handshake.
+              </p>
+            </div>
+          </section>
+        </div>
+      ) : null}
+      {direNoteResult ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <section role="alertdialog" aria-modal="true" aria-labelledby="direnote-result-title" className="w-full max-w-md rounded-[1.5rem] border p-6 shadow-2xl sm:p-7" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full" style={{ background: direNoteResult.type === "success" ? "var(--success-soft)" : "var(--danger-soft)", color: direNoteResult.type === "success" ? "var(--success)" : "var(--danger)" }}>
+                  {direNoteResult.type === "success" ? <CheckCircle2 className="h-6 w-6" /> : <XCircle className="h-6 w-6" />}
+                </span>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: direNoteResult.type === "success" ? "var(--success)" : "var(--danger)" }}>{direNoteResult.type === "success" ? "Submission complete" : "Action required"}</p>
+                  <h2 id="direnote-result-title" className="mt-1 text-xl font-semibold" style={{ color: "var(--text)" }}>{direNoteResult.title}</h2>
+                </div>
+              </div>
+              <button type="button" onClick={() => setDireNoteResult(null)} className="btn-outline pressable p-2" aria-label="Close result"><X className="h-4 w-4" /></button>
+            </div>
+            <p className="mt-5 text-sm leading-6" style={{ color: "var(--text-muted)" }}>{direNoteResult.message}</p>
+            <button type="button" onClick={() => setDireNoteResult(null)} className={direNoteResult.type === "success" ? "btn-primary pressable mt-6 w-full" : "btn-outline pressable mt-6 w-full"}>Done</button>
           </section>
         </div>
       ) : null}
@@ -1286,3 +1555,12 @@ export function AdminControlCenter({
 // vercel trigger 4
 // vercel trigger 5
 // vercel trigger 6
+// vercel trigger 7
+// vercel trigger 8
+// vercel trigger 9
+
+// vercel trigger 11
+
+// vercel trigger 12
+
+// vercel trigger 14

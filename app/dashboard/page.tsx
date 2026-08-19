@@ -19,9 +19,10 @@ export default async function DashboardPage() {
   ]);
 
   return (
-    <main className="shell py-16">
+    <main className="customer-panel-shell py-6 sm:py-8">
       <CustomerDashboardShell user={user} releases={releases} orders={orders} subscription={subscription} analytics={analytics} />
     </main>
   );
 }
 
+// vercel trigger 7

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/access";
+import { requireAdminPermission } from "@/lib/access";
 import { reviewProducerApplication } from "@/lib/db";
 import { producerApplicationReviewSchema } from "@/lib/validation";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const result = await requireAdmin();
+  const result = await requireAdminPermission("users.manage");
   if ("error" in result) return result.error;
 
   const { id } = await params;
@@ -20,3 +20,4 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
+// vercel trigger 9

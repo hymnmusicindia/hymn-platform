@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
-import { requireAdmin } from "@/lib/access";
+import { requireAdminPermission } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export async function GET() {
-  const admin = await requireAdmin(); if (typeof admin === "object" && "error" in admin) return admin.error;
+  const admin = await requireAdminPermission("royalties.reconcile"); if (typeof admin === "object" && "error" in admin) return admin.error;
   const workbook = new ExcelJS.Workbook(); workbook.creator = "HYMN"; workbook.created = new Date();
   const sets: Array<[string, any[]]> = await Promise.all([
     (prisma as any).royaltyLineItem.findMany({ orderBy: { createdAt: "desc" } }).then((r: any[]) => ["Royalty Line Items", r]),
@@ -20,3 +20,4 @@ export async function GET() {
   const output = await workbook.xlsx.writeBuffer();
   return new NextResponse(output as BodyInit, { headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": `attachment; filename="hymn-financial-export-${new Date().toISOString().slice(0,10)}.xlsx"`, "Cache-Control": "no-store" } });
 }
+// vercel trigger 9

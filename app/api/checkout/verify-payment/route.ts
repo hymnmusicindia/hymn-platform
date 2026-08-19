@@ -1,15 +1,18 @@
 import { NextResponse } from "next/server";
-import { completeCheckoutOrder, createBeatPurchase, createNotification, getCheckoutOrderByRazorpayId } from "@/lib/db";
+import { getCheckoutOrderByRazorpayId } from "@/lib/db";
 import { verifyRazorpaySignature } from "@/lib/razorpay";
 import { getSession } from "@/lib/session";
 import { checkoutVerifySchema } from "@/lib/validation";
-import { generateBeatLicense } from "@/lib/beat-license";
 import { prisma } from "@/lib/prisma";
 import { emailAppUrl, sendBeatEmailEvent } from "@/lib/email/email-events";
+import { confirmCheckoutPayment } from "@/lib/payment-webhooks";
+import { consumeRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  const rate = await consumeRateLimit({ scope: "checkout-payment-verify", identity: String(session.sub), limit: 20, windowSeconds: 15 * 60 });
+  if (!rate.allowed) return NextResponse.json({ error: "Too many payment verification attempts." }, { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } });
 
   try {
     const payload = checkoutVerifySchema.parse(await request.json());
@@ -21,26 +24,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Order not found." }, { status: 404 });
     }
 
-    const order = await completeCheckoutOrder(payload.razorpay_order_id, payload.razorpay_payment_id);
+    const order = await confirmCheckoutPayment({ razorpayOrderId: payload.razorpay_order_id, paymentId: payload.razorpay_payment_id, userId: session.sub, source: "browser" });
     if (order?.paymentStatus === "paid") {
       for (const item of order.items) {
-        const purchase = await createBeatPurchase(order.userId, item.beatId, item.licenseType, payload.razorpay_payment_id);
+        const purchase = await prisma.beatPurchase.findFirst({ where: { userId: order.userId, beatId: item.beatId, licenseType: item.licenseType, paymentId: payload.razorpay_payment_id } });
         const beat = purchase ? await prisma.beat.findUnique({ where: { id: item.beatId }, select: { title: true } }) : null;
         if (purchase && beat) await sendBeatEmailEvent({ event: "beat_purchase_success", to: session.email, userId: session.sub, purchaseId: purchase.id, userName: session.name, beatTitle: beat.title, url: emailAppUrl("/dashboard?module=purchases") });
-        if (purchase && !purchase.licenseUrl) await generateBeatLicense(purchase.id, order.userId).catch((error) => console.error("Beat license generation failed:", error));
       }
-    }
-    if (order?.paymentStatus === "paid" && existing.paymentStatus !== "paid") {
-      await createNotification({
-        userId: order.userId,
-        title: "Beat purchase successful",
-        body: "Your beat purchase was successful. Check your dashboard for downloads and license details.",
-        type: "beat",
-        href: "/dashboard?tab=purchases",
-        actionLabel: "Open dashboard",
-        eventKey: `payment:${order.razorpayOrderId}:success`,
-        metadata: { orderId: order.id, razorpayOrderId: order.razorpayOrderId }
-      });
     }
     return NextResponse.json({ success: true, order });
   } catch (error) {
@@ -51,3 +41,5 @@ export async function POST(request: Request) {
 
 // vercel trigger
 // vercel trigger 6
+// vercel trigger 7
+// vercel trigger 9

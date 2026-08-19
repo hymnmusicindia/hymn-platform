@@ -158,6 +158,31 @@ export function AudioWaveform({ src, title, subtitle, compact = false }: AudioWa
     setProgress(ratio);
   }
 
+  if (compact) {
+    return (
+      <div className={clsx("audio-waveform-inline", playing && "is-playing", !validSrc && "is-disabled")}>
+        {validSrc ? <audio ref={audioRef} src={src} preload="metadata" /> : null}
+        <button type="button" className="audio-waveform-inline-title" onClick={togglePlayback} disabled={!validSrc} aria-label={`${playing ? "Pause" : "Play"} ${title}`}>
+          <span>{title}</span>
+          {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+        </button>
+        <div role="slider" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-label={`Seek ${title}`} onClick={seek} className="audio-waveform-inline-track">
+          {!playing ? (
+            <span className="audio-waveform-flat-line"><span style={{ width: `${progress * 100}%` }} /></span>
+          ) : (
+            <div className="audio-waveform-live" aria-hidden="true">
+              {bars.map((bar, index) => {
+                const active = index / Math.max(1, bars.length - 1) <= progress;
+                const motion = .72 + Math.abs(Math.sin((progress * 55) + (index * .78))) * .55;
+                return <span key={`${index}-${bar.toFixed(3)}`} style={{ height: `${Math.max(3, Math.round(bar * 20 * motion))}px`, background: active ? "var(--accent)" : "var(--border-strong)" }} />;
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-3 rounded-[1.4rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
       {validSrc ? <audio ref={audioRef} src={src} preload="metadata" /> : null}
@@ -226,3 +251,5 @@ export function AudioWaveform({ src, title, subtitle, compact = false }: AudioWa
   );
 }
 
+
+// vercel trigger 12

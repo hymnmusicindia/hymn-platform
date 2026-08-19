@@ -1,12 +1,14 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/access";
+import { requireAdminPermission } from "@/lib/access";
 import { createBeat, listAllBeats } from "@/lib/db";
 import { saveUploadedFile } from "@/lib/storage";
+import { localPrivateStorage } from "@/lib/private-storage";
+import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  const result = await requireAdmin();
+  const result = await requireAdminPermission("users.read");
   if ("error" in result) return result.error;
 
   const beats = await listAllBeats();
@@ -14,7 +16,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const result = await requireAdmin();
+  const result = await requireAdminPermission("users.manage");
   if ("error" in result) return result.error;
 
   try {
@@ -32,7 +34,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required beat fields or producer selection." }, { status: 400 });
     }
 
-    const fileUrl = await saveUploadedFile(file, "beats/files", "audio");
+    const privateAudio = await localPrivateStorage.upload({ ownerUserId: producerIdValue, assetType: "private_beat_deliverable", fileName: file.name, mimeType: file.type, bytes: Buffer.from(await file.arrayBuffer()) });
+    const fileUrl = privateAudio.downloadPath;
     const artworkUrl = artwork instanceof File && artwork.size ? await saveUploadedFile(artwork, "beats/artwork", "image") : undefined;
 
     const beat = await createBeat({
@@ -46,6 +49,7 @@ export async function POST(request: Request) {
       artworkUrl,
       enabled: true
     });
+    await prisma.storedAsset.update({ where: { id: privateAudio.id }, data: { beatId: beat.id } });
 
     return NextResponse.json({ beat }, { status: 201 });
   } catch (error) {
@@ -56,3 +60,4 @@ export async function POST(request: Request) {
 
 
 // vercel trigger 3
+// vercel trigger 9

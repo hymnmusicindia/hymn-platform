@@ -47,7 +47,7 @@ export async function saveUploadedFile(file: File, directory: string, kind: "aud
   }
 
   const root = getUploadRoot();
-  const folder = path.join(process.cwd(), root, directory);
+  const folder = path.join(/* turbopackIgnore: true */ process.cwd(), root, directory);
   await fs.mkdir(folder, { recursive: true });
 
   const filePath = path.join(folder, fileName);

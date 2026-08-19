@@ -19,6 +19,7 @@ export async function POST(request: Request) {
       bankAccountNumber: typeof body.bankAccountNumber === "string" ? body.bankAccountNumber : undefined,
       ifsc: typeof body.ifsc === "string" ? body.ifsc : undefined,
       userNote: typeof body.userNote === "string" ? body.userNote : undefined
+      ,sourceType: result.user.role === "producer" ? "producer_beat_sales" : "artist_royalty"
     });
 
     return NextResponse.json({ request: payoutRequest }, { status: 201 });
@@ -28,3 +29,4 @@ export async function POST(request: Request) {
 }
 
 // vercel trigger 2
+// vercel trigger 7

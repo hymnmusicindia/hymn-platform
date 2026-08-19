@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { AlertCircle, Bell, CheckCircle2, Disc3, HelpCircle, LayoutDashboard, LogOut, Menu, PackageCheck, Settings, ShieldCheck, ShoppingCart, UserRound, WalletCards, X } from "lucide-react";
+import { AlertCircle, Bell, CheckCircle2, Disc3, HelpCircle, LayoutDashboard, LogOut, Menu, PackageCheck, ShieldCheck, ShoppingCart, UserRound, WalletCards, X } from "lucide-react";
 import clsx from "clsx";
 import { useEffect, useRef, useState } from "react";
 import { mainNav } from "@/lib/site";
@@ -26,6 +26,9 @@ type HeaderNotification = {
   createdAt: string;
 };
 
+type HeaderCartItem = { beatId: number; licenseType: "basic" | "exclusive"; price: number };
+type HeaderCartBeat = { id: number; title: string; producerName?: string; artworkUrl?: string };
+
 function notificationTimeAgo(value: string) {
   const diffMs = Date.now() - new Date(value).getTime();
   const minutes = Math.max(0, Math.floor(diffMs / 60000));
@@ -46,6 +49,9 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   const [scrolled, setScrolled] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [cartCount, setCartCount] = useState(0);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [cartItems, setCartItems] = useState<HeaderCartItem[]>([]);
+  const [cartBeats, setCartBeats] = useState<HeaderCartBeat[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<HeaderNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -215,22 +221,21 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
       try {
         const raw = window.localStorage.getItem("hymn-beat-cart");
         if (!raw) {
+          setCartItems([]);
           setCartCount(0);
           return;
         }
         const cart = JSON.parse(raw);
-        setCartCount(Array.isArray(cart) ? cart.length : 0);
+        const items = Array.isArray(cart) ? cart : [];
+        setCartItems(items);
+        setCartCount(items.length);
       } catch {
+        setCartItems([]);
         setCartCount(0);
       }
     };
 
-    const onCartUpdated = (event: Event) => {
-      const detail = (event as CustomEvent<{ count?: number }>).detail;
-      if (typeof detail?.count === "number") {
-        setCartCount(detail.count);
-        return;
-      }
+    const onCartUpdated = () => {
       readCartCount();
     };
 
@@ -250,12 +255,34 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   const openCart = () => {
     setOpen(false);
     setScrolled(true);
-    if (pathname?.startsWith("/beat-store")) {
-      window.dispatchEvent(new CustomEvent("hymn-open-cart"));
-      return;
-    }
-    router.push("/beat-store?cart=open");
+    setHidden(false);
+    setCartOpen(true);
   };
+
+  useEffect(() => {
+    if (!cartOpen || cartBeats.length) return;
+    fetch("/api/beats")
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data) => setCartBeats(Array.isArray(data.beats) ? data.beats : []))
+      .catch(() => setCartBeats([]));
+  }, [cartBeats.length, cartOpen]);
+
+  useEffect(() => {
+    if (!cartOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setCartOpen(false); };
+    window.addEventListener("keydown", close);
+    return () => { document.body.style.overflow = previous; window.removeEventListener("keydown", close); };
+  }, [cartOpen]);
+
+  function removeCartItem(beatId: number, licenseType: HeaderCartItem["licenseType"]) {
+    const next = cartItems.filter((item) => !(item.beatId === beatId && item.licenseType === licenseType));
+    setCartItems(next);
+    setCartCount(next.length);
+    window.localStorage.setItem("hymn-beat-cart", JSON.stringify(next));
+    window.dispatchEvent(new CustomEvent("hymn-cart-updated", { detail: { count: next.length } }));
+  }
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -291,16 +318,16 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
         <button
           type="button"
           onClick={() => { setNotificationsOpen((value) => !value); setProfileOpen(false); }}
-          className={clsx("site-icon-button relative inline-flex h-11 w-11 items-center justify-center rounded-full border", mobile ? "w-full justify-start gap-3 px-4" : "")}
-          style={{ borderColor: "color-mix(in srgb, var(--glass-border) 88%, transparent)", background: "color-mix(in srgb, var(--glass-bg) 84%, transparent)", color: "var(--text)", backdropFilter: "blur(10px) saturate(140%)" }}
+          className={clsx("site-header-bare-icon relative inline-flex h-11 w-11 items-center justify-center rounded-full border-0 bg-transparent", mobile ? "w-full justify-start gap-3 px-3" : "")}
+          style={{ color: "var(--text)" }}
           aria-expanded={notificationsOpen}
           aria-haspopup="dialog"
           aria-label="Notifications"
         >
-          <Bell className="h-4 w-4" />
+          <Bell className="h-5 w-5" />
           {mobile ? <span className="text-sm font-semibold">Notifications</span> : null}
           {unreadCount > 0 ? (
-            <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ background: "var(--danger)", color: "#fff" }}>
+            <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full border px-1 text-[9px] font-extrabold leading-none shadow-sm" style={{ borderColor: "var(--header-bg-solid)", background: "var(--text)", color: "var(--bg)" }}>
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           ) : null}
@@ -311,7 +338,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
             role="dialog"
             aria-label="Notifications"
             onMouseDown={(event) => event.stopPropagation()}
-            className={clsx("z-50 mt-3 rounded-2xl border p-3 shadow-2xl", mobile ? "w-full" : "absolute right-0 w-[min(24rem,calc(100vw-2rem))]")}
+            className={clsx("site-notification-panel z-50 mt-3 rounded-2xl border p-3 shadow-2xl", mobile ? "w-full" : "absolute right-0 w-[min(24rem,calc(100vw-2rem))]")}
             style={{ borderColor: "var(--border)", background: "var(--card-strong)", color: "var(--text)" }}
           >
             <div className="flex items-start justify-between gap-3 border-b pb-3" style={{ borderColor: "var(--border)" }}>
@@ -387,27 +414,26 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           type="button"
           onClick={() => setProfileOpen((value) => !value)}
           className={clsx(
-            "inline-flex items-center gap-3 rounded-full border p-1.5 pr-3 text-left transition hover:translate-y-[-1px]",
-            mobile ? "w-full justify-start" : ""
+            "inline-flex h-11 w-11 items-center justify-center rounded-full text-left transition hover:translate-y-[-1px]",
+            mobile ? "w-full justify-start border p-1.5 pr-3" : "border-0 bg-transparent p-0"
           )}
-          style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}
+          style={mobile ? { borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" } : { color: "var(--text)" }}
           aria-expanded={profileOpen}
           aria-haspopup="menu"
         >
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border text-xs font-bold" style={{ borderColor: "var(--border-strong)", background: "var(--bg-soft)" }}>
-            <img
-              src={user.avatarUrl || fallbackAvatar}
-              alt={user.name}
-              className="h-full w-full object-cover"
-              referrerPolicy="no-referrer"
-              onError={(event) => {
-                event.currentTarget.src = fallbackAvatar;
-              }}
-            />
-          </span>
-          <span className={clsx("min-w-0", mobile ? "block" : "hidden xl:block")}>
-            <span className="block truncate text-sm font-semibold">{user.name}</span>
-            <span className="block truncate text-xs capitalize" style={{ color: "var(--text-soft)" }}>{user.role}</span>
+          <span className="relative inline-flex h-10 w-10 shrink-0">
+            <span className="inline-flex h-full w-full items-center justify-center overflow-hidden rounded-full border text-xs font-bold" style={{ borderColor: "var(--border-strong)", background: "var(--bg-soft)" }}>
+              <img
+                src={user.avatarUrl || fallbackAvatar}
+                alt={user.name}
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+                onError={(event) => {
+                  event.currentTarget.src = fallbackAvatar;
+                }}
+              />
+            </span>
+            <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 shadow-sm" style={{ borderColor: "var(--header-bg-solid)", background: "var(--success)" }} aria-label="Online" />
           </span>
         </button>
 
@@ -441,13 +467,6 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
                 <HelpCircle className="h-4 w-4" />
                 Help and FAQ
               </Link>
-              <div className="flex items-center justify-between gap-3 rounded-xl px-3 py-2">
-                <span className="inline-flex items-center gap-3 text-sm font-medium">
-                  <Settings className="h-4 w-4" />
-                  Change theme
-                </span>
-                <ThemeToggle />
-              </div>
             </div>
             <button type="button" onClick={logout} className="mt-2 flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left text-sm font-semibold" style={{ borderColor: "var(--border)", color: "var(--danger)" }}>
               <LogOut className="h-4 w-4" />
@@ -460,12 +479,12 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
   return (
     <header
-      className="sticky top-0 z-50 border-b backdrop-blur-xl"
+      className="sticky top-0 z-50 border-b backdrop-blur-2xl backdrop-saturate-150"
       style={{
         borderColor: scrolled || open ? "var(--header-border)" : "transparent",
         background: scrolled || open ? "var(--header-bg-solid)" : "var(--header-bg)",
-        boxShadow: scrolled ? "var(--header-shadow)" : "none",
-        transform: hidden ? "translateY(-110%)" : "translateY(0)",
+        boxShadow: scrolled ? "var(--header-shadow), inset 0 1px 0 rgba(255,255,255,0.12)" : "inset 0 1px 0 rgba(255,255,255,0.1)",
+        transform: hidden ? "translateY(-110%)" : undefined,
         transition: "background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)"
       }}
     >
@@ -508,6 +527,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
               </Link>
             )}
             {isAuthenticated ? <NotificationBell /> : null}
+            {isAuthenticated ? <ThemeToggle /> : null}
             {isAuthenticated ? <ProfileMenu /> : null}
           </div>
 
@@ -517,13 +537,13 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
             type="button"
             aria-label="Shopping cart"
             onClick={openCart}
-            className="site-icon-button relative inline-flex h-11 w-11 items-center justify-center rounded-full border"
-            style={{ borderColor: "color-mix(in srgb, var(--glass-border) 88%, transparent)", background: "color-mix(in srgb, var(--glass-bg) 84%, transparent)", color: "var(--text)", backdropFilter: "blur(10px) saturate(140%)" }}
+            className="site-header-bare-icon relative z-10 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-0 bg-transparent"
+            style={{ color: "var(--text)" }}
           >
-            <ShoppingCart className="h-4 w-4" />
-            <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ background: "var(--accent)", color: "var(--accent-foreground)" }}>
-              {cartCount}
-            </span>
+            <ShoppingCart className="h-5 w-5" />
+            {cartCount > 0 ? <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full border px-1 text-[9px] font-extrabold leading-none shadow-sm" style={{ borderColor: "var(--header-bg-solid)", background: "var(--text)", color: "var(--bg)" }}>
+              {cartCount > 99 ? "99+" : cartCount}
+            </span> : null}
           </button>
 
           <button
@@ -554,7 +574,6 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
                 <Link href={user?.role === "producer" ? "/producer/dashboard" : "/dashboard"} className="w-full rounded-full border px-4 py-3 text-center text-sm font-semibold" style={{ borderColor: "rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.06)", color: "var(--text)" }} onClick={() => setOpen(false)}>
                   Dashboard
                 </Link>
-                <NotificationBell mobile />
                 <ProfileMenu mobile />
               </>
             ) : (
@@ -566,6 +585,30 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           </div>
         </div>
       ) : null}
+
+      <div className={clsx("fixed inset-0 z-[100] transition", cartOpen ? "pointer-events-auto" : "pointer-events-none")} aria-hidden={!cartOpen}>
+        <button type="button" className={clsx("absolute inset-0 bg-black/45 transition-opacity", cartOpen ? "opacity-100" : "opacity-0")} onClick={() => setCartOpen(false)} aria-label="Close cart" />
+        <aside className={clsx("absolute right-0 top-0 flex h-[100dvh] w-full max-w-[410px] flex-col border-l p-5 shadow-2xl transition-transform duration-300", cartOpen ? "translate-x-0" : "translate-x-full")} style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)", opacity: 1 }} role="dialog" aria-modal="true" aria-label="Shopping cart">
+          <div className="flex items-center justify-between border-b border-[var(--border)] pb-4">
+            <div><p className="text-xs uppercase tracking-[0.24em] text-[var(--text-soft)]">Cart</p><h2 className="mt-1 text-xl font-semibold text-[var(--text)]">Your beats</h2></div>
+            <button type="button" onClick={() => setCartOpen(false)} className="inline-flex h-10 w-10 items-center justify-center text-[var(--text-muted)] transition hover:text-[var(--text)]" aria-label="Close cart"><X className="h-5 w-5" /></button>
+          </div>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-5">
+            {cartItems.length ? cartItems.map((item) => {
+              const beat = cartBeats.find((entry) => entry.id === item.beatId);
+              return <div key={`${item.beatId}-${item.licenseType}`} className="flex items-center gap-3 border-b border-[var(--border)] py-3">
+                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-[var(--bg-soft)]">{beat?.artworkUrl ? <Image src={beat.artworkUrl} alt="" fill sizes="56px" className="object-cover" /> : <Disc3 className="absolute inset-0 m-auto h-5 w-5 text-[var(--text-soft)]" />}</div>
+                <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-[var(--text)]">{beat?.title ?? `Beat ${item.beatId}`}</p><p className="mt-1 truncate text-xs text-[var(--text-soft)]">{beat?.producerName ?? (item.licenseType === "exclusive" ? "Exclusive licence" : "Non-exclusive licence")}</p></div>
+                <div className="text-right"><p className="text-sm font-semibold text-[var(--text)]">₹{Number(item.price).toLocaleString("en-IN")}</p><button type="button" onClick={() => removeCartItem(item.beatId, item.licenseType)} className="mt-1 text-xs text-[var(--danger)]">Remove</button></div>
+              </div>;
+            }) : <div className="py-12 text-center text-sm text-[var(--text-soft)]">Your cart is empty.</div>}
+          </div>
+          <div className="border-t border-[var(--border)] pt-4">
+            <div className="flex items-center justify-between text-sm"><span className="text-[var(--text-muted)]">Total</span><strong className="text-[var(--text)]">₹{cartItems.reduce((sum, item) => sum + Number(item.price || 0), 0).toLocaleString("en-IN")}</strong></div>
+            {cartItems.length ? <Link href="/checkout?product=beatstore" onClick={() => setCartOpen(false)} className="btn-primary mt-4 w-full">Continue to checkout</Link> : <Link href="/beat-store" onClick={() => setCartOpen(false)} className="btn-primary mt-4 w-full">Browse beats</Link>}
+          </div>
+        </aside>
+      </div>
     </header>
   );
 }
@@ -574,3 +617,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 // vercel trigger
 
 // vercel trigger 2
+
+// vercel trigger 12
+
+// vercel trigger 14

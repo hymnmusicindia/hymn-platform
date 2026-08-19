@@ -9,7 +9,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const jsonResponse = await handleUpload({
       body,
       request,
-      onBeforeGenerateToken: async (pathname) => {
+      onBeforeGenerateToken: async () => {
         // Authenticate the user
         const session = await getSession();
         if (!session || !session.sub) {
@@ -17,16 +17,16 @@ export async function POST(request: Request): Promise<NextResponse> {
         }
 
         return {
-          allowedContentTypes: ["audio/mpeg", "audio/wav", "image/jpeg", "image/png", "application/pdf"],
+          allowedContentTypes: process.env.NODE_ENV === "production" ? ["image/jpeg", "image/png"] : ["audio/mpeg", "audio/wav", "image/jpeg", "image/png", "application/pdf"],
           tokenPayload: JSON.stringify({
             userId: session.sub,
           }),
         };
       },
-      onUploadCompleted: async ({ blob, tokenPayload }) => {
+      onUploadCompleted: async ({ tokenPayload }) => {
         // You could update a database here if you wanted, but we will save
         // the URLs when the main form is submitted instead.
-        console.log("Upload completed", blob.url);
+        console.info("Public development upload completed", { owner: JSON.parse(tokenPayload ?? "{}").userId });
       },
     });
 
@@ -38,3 +38,4 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 }
+// vercel trigger 9

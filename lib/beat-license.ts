@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { saveUploadedFile } from "@/lib/storage";
+import { localPrivateStorage } from "@/lib/private-storage";
 import { createNotificationOnce } from "@/lib/notifications";
 import { emailAppUrl, sendBeatEmailEvent } from "@/lib/email/email-events";
 import { logAuditEvent } from "@/lib/audit-log";
@@ -15,15 +15,29 @@ function buildPdf(lines: string[]) {
 }
 
 export async function generateBeatLicense(purchaseId: number, actorId: number, isAdmin = false) {
-  const purchase = await prisma.beatPurchase.findUnique({ where: { id: purchaseId } });
+  const purchase = await prisma.beatPurchase.findUnique({ where: { id: purchaseId }, include: { licenseAsset: true } });
   if (!purchase || (!isAdmin && purchase.userId !== actorId)) throw new Error("Beat purchase not found.");
   const [buyer, beat] = await Promise.all([prisma.user.findUnique({ where: { id: purchase.userId } }), prisma.beat.findUnique({ where: { id: purchase.beatId } })]);
   if (!buyer || !beat) throw new Error("License source data is incomplete.");
+  if (purchase.licenseAsset && !purchase.licenseAsset.deletedAt) {
+    const existingUrl = `/api/assets/${purchase.licenseAsset.id}/download`;
+    if (purchase.licenseUrl !== existingUrl) await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { licenseUrl: existingUrl, licenseUploadedAt: purchase.licenseUploadedAt ?? new Date() } });
+    return { purchaseId: purchase.id, licenseUrl: existingUrl };
+  }
   const producer = await prisma.user.findUnique({ where: { id: beat.userId } });
   const lines = ["HYMN BEAT LICENSE", `Purchase ID: ${purchase.id}`, `Buyer: ${buyer.name} (${buyer.email})`, `Producer: ${producer?.name ?? `User ${beat.userId}`}`, `Beat: ${beat.title}`, `License type: ${purchase.licenseType}`, `Payment ID: ${purchase.paymentId ?? "Verified checkout"}`, `Issued: ${new Date().toISOString()}`, "Terms: This license grants the buyer usage rights according to the selected HYMN license tier.", "Ownership of the underlying composition remains subject to the producer's listed terms."];
   const bytes = buildPdf(lines);
-  const file = new File([bytes], `hymn-license-${purchase.id}.pdf`, { type: "application/pdf" });
-  const url = await saveUploadedFile(file, "licenses", "file");
+  let asset;
+  try {
+    asset = await localPrivateStorage.upload({ ownerUserId: purchase.userId, beatPurchaseId: purchase.id, assetType: "private_beat_license", fileName: `hymn-license-${purchase.id}.pdf`, mimeType: "application/pdf", bytes });
+  } catch (error) {
+    const existing = await prisma.storedAsset.findUnique({ where: { beatPurchaseId: purchase.id } });
+    if (!existing) throw error;
+    const existingUrl = `/api/assets/${existing.id}/download`;
+    await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { licenseUrl: existingUrl, licenseUploadedAt: purchase.licenseUploadedAt ?? new Date() } });
+    return { purchaseId: purchase.id, licenseUrl: existingUrl };
+  }
+  const url = asset.downloadPath;
   await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { licenseUrl: url, licenseUploadedAt: new Date() } });
   await Promise.all([
     createNotificationOnce({ eventKey: `beat:${purchase.id}:license_ready`, userId: purchase.userId, title: "Beat license ready", body: `Your license for ${beat.title} is ready to download.`, type: "beat", href: `/api/beat-purchases/${purchase.id}/license`, actionLabel: "Download license" }),
@@ -33,3 +47,4 @@ export async function generateBeatLicense(purchaseId: number, actorId: number, i
   return { purchaseId: purchase.id, licenseUrl: url };
 }
 // vercel trigger 6
+// vercel trigger 9

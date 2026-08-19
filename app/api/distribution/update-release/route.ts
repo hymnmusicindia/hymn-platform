@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { saveUploadedFile } from "@/lib/storage";
+import { localPrivateStorage, type PrivateAssetType } from "@/lib/private-storage";
 import { touchArtistProfiles } from "@/lib/db";
 import { getDetailedReleaseById, updatePaidDistributionRelease } from "@/lib/distribution-db";
 import type { ReleaseTrack } from "@/lib/types";
@@ -27,9 +27,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Release not found." }, { status: 404 });
     }
 
+    const savePrivate = async (file: File, assetType: PrivateAssetType) => (await localPrivateStorage.upload({ ownerUserId: session.sub, releaseId: existingRelease.id, assetType, fileName: file.name, mimeType: file.type, bytes: Buffer.from(await file.arrayBuffer()) })).downloadPath;
     const artworkUpload = formData.get(parsed.metadata.artworkFileKey);
     const artworkUrl = artworkUpload instanceof File
-      ? await saveUploadedFile(artworkUpload, "releases/artwork", "image")
+      ? await savePrivate(artworkUpload, "private_unreleased_artwork")
       : parsed.metadata.uploadedArtworkUrl ?? parsed.metadata.existingArtworkUrl ?? existingRelease.artworkUrl;
 
     if (!artworkUrl) {
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
     for (const track of parsed.metadata.tracks) {
       const audioUpload = formData.get(track.audioFileKey);
       const audioUrl = audioUpload instanceof File
-        ? await saveUploadedFile(audioUpload, "releases/audio", "audio")
+        ? await savePrivate(audioUpload, "private_audio_master")
         : track.uploadedAudioUrl ?? track.existingAudioUrl ?? existingRelease.tracks?.find((item) => item.trackNumber === track.trackNumber)?.audioUrl ?? "";
 
       if (!audioUrl) {
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
       if (track.coverLicenseFileKey) {
         const licenseUpload = formData.get(track.coverLicenseFileKey);
         if (licenseUpload instanceof File) {
-          coverLicenseUrl = await saveUploadedFile(licenseUpload, "releases/licenses", "file");
+          coverLicenseUrl = await savePrivate(licenseUpload, "private_cover_licence");
         } else if (!(track.existingCoverLicenseConfirmed ?? track.coverLicenseConfirmed)) {
           return NextResponse.json({ error: `Cover license missing for ${track.trackTitle}.` }, { status: 400 });
         }
@@ -141,3 +142,4 @@ export async function POST(request: Request) {
   }
 }
 // vercel trigger 6
+// vercel trigger 9

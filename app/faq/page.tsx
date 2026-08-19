@@ -8,14 +8,14 @@ export const metadata: Metadata = {
   description: "Searchable answers for HYMN distribution, pricing, artist profiles, payments, and technical support."
 };
 
-const LAST_UPDATED = "March 30, 2026";
+const LAST_UPDATED = "August 3, 2026";
 
 export default function FAQPage() {
   return (
     <ContentPageShell
       eyebrow="FAQ"
-      title="Quick answers for distribution, pricing, artist profiles, and support."
-      intro="Use the search bar to find answers instantly, then open a question for the detailed explanation."
+      title="Answers grounded in how HYMN actually works."
+      intro="Search distribution, metadata, rights, Beat Store, royalties, payouts, security, and account workflows—or follow a contextual help link directly to its answer."
       lastUpdated={LAST_UPDATED}
       sections={[
         {

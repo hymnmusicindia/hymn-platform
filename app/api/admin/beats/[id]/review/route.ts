@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/access";
+import { requireAdminPermission } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { validateBeatReadiness } from "@/lib/beat-readiness";
 import { createNotificationOnce } from "@/lib/notifications";
 import { resolveAdminTask } from "@/lib/task-queue";
 import { logAuditEvent } from "@/lib/audit-log";
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin(); if ("error" in admin) return admin.error;
+  const admin = await requireAdminPermission("users.manage"); if ("error" in admin) return admin.error;
   const id = Number((await params).id); const body = await request.json().catch(() => ({}));
   if (body.decision !== "approved" && body.decision !== "changes_requested") return NextResponse.json({ error: "Choose approved or changes_requested." }, { status: 400 });
   const beat = await prisma.beat.findUnique({ where: { id }, include: { audio: true, artwork: true } });
@@ -22,3 +22,4 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   ]);
   return NextResponse.json({ beat: updated, readiness });
 }
+// vercel trigger 9

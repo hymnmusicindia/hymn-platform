@@ -3,7 +3,7 @@ import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { getSession } from "@/lib/session";
-import { FirstVisitOnboarding } from "@/components/first-visit-onboarding";
+import { OnboardingEntryRedirect } from "@/components/onboarding-entry-redirect";
 
 export const metadata: Metadata = {
   title: "HYMN Platform",
@@ -15,29 +15,35 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const session = await getSession();
 
   return (
-    <html lang="en" data-theme="dark" suppressHydrationWarning>
-      <body suppressHydrationWarning>
+    <html lang="en" data-theme="light" suppressHydrationWarning>
+      <head>
         <script
+          id="hymn-theme-initializer"
           dangerouslySetInnerHTML={{
             __html: `(function () {
               try {
                 var stored = localStorage.getItem("hymn-theme");
-                var systemDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-                var theme = stored === "dark" || stored === "light" ? stored : (systemDark ? "dark" : "dark");
+                var theme = stored === "dark" || stored === "light" ? stored : "light";
                 document.documentElement.dataset.theme = theme;
                 var language = localStorage.getItem("hymn_preferred_language");
                 if (language) document.documentElement.lang = language;
               } catch (error) {
-                document.documentElement.dataset.theme = "dark";
+                document.documentElement.dataset.theme = "light";
               }
             })();`
           }}
         />
+      </head>
+      <body suppressHydrationWarning>
         <SiteHeader user={session} />
-        <FirstVisitOnboarding isAuthenticated={Boolean(session)} />
+        <OnboardingEntryRedirect isAuthenticated={Boolean(session)} />
         {children}
         <SiteFooter />
       </body>
     </html>
   );
 }
+
+// vercel trigger 12
+
+// vercel trigger 14

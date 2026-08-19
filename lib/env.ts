@@ -45,6 +45,8 @@ export function getProductionReadinessIssues() {
   const issues = required.filter((name) => !process.env[name]?.trim()).map((name) => `${name} is missing.`);
   if (process.env.BYPASS_DISTRIBUTION_PAYMENT === "true") issues.push("BYPASS_DISTRIBUTION_PAYMENT must not be enabled in production.");
   if (process.env.ENABLE_MOCK_LOGIN === "true" || process.env.NEXT_PUBLIC_ENABLE_MOCK_LOGIN === "true") issues.push("Mock login must not be enabled in production.");
+  if (process.env.VERCEL !== "1" && !process.env.PRIVATE_STORAGE_ROOT?.trim()) issues.push("PRIVATE_STORAGE_ROOT is missing; private asset features must remain disabled locally.");
   return issues;
 }
 // vercel trigger 5
+// vercel trigger 10

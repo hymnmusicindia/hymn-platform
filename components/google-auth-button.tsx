@@ -16,8 +16,8 @@ interface GoogleAuthButtonProps {
   expectedRole?: GoogleAuthButtonRole;
   referralCode?: string;
   loginContext?: "admin";
-  appearance?: "quiet" | "default";
   onAuthenticated?: (data: { redirectPath?: string }) => Promise<void> | void;
+  appearance?: "default" | "quiet";
 }
 
 export function GoogleAuthButton({
@@ -26,7 +26,8 @@ export function GoogleAuthButton({
   expectedRole,
   referralCode,
   loginContext,
-  onAuthenticated
+  onAuthenticated,
+  appearance = "default"
 }: GoogleAuthButtonProps) {
   const router = useRouter();
   const [scriptReady, setScriptReady] = useState(false);
@@ -201,7 +202,8 @@ export function GoogleAuthButton({
       <button
         type="button"
         className={clsx(
-          "group relative inline-flex min-h-14 w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border px-6 py-4 text-sm font-semibold shadow-[0_22px_70px_rgba(0,0,0,0.22)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_28px_90px_rgba(89,223,224,0.18)] focus:outline-none focus:ring-2 focus:ring-[#59dfe0]/45 focus:ring-offset-2 focus:ring-offset-transparent active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0",
+          "group relative inline-flex w-full items-center justify-center gap-3 overflow-hidden border text-sm font-semibold transition duration-300 focus:outline-none focus:ring-2 focus:ring-[#59dfe0]/45 focus:ring-offset-2 focus:ring-offset-transparent disabled:cursor-not-allowed disabled:opacity-70",
+          appearance === "quiet" ? "min-h-12 rounded-xl px-5 py-3 shadow-[0_8px_24px_rgba(0,0,0,.12)] hover:brightness-[1.03] active:scale-[.995]" : "min-h-14 rounded-2xl px-6 py-4 shadow-[0_22px_70px_rgba(0,0,0,0.22)] hover:-translate-y-0.5 hover:shadow-[0_28px_90px_rgba(89,223,224,0.18)] active:translate-y-0",
           className
         )}
         style={{ borderColor: "color-mix(in srgb, var(--border) 72%, #ffffff)", background: "linear-gradient(180deg, #ffffff, #f5f8fb 54%, #e9eef6)", color: "#121722" }}
@@ -222,10 +224,11 @@ export function GoogleAuthButton({
       {helperText ? (
         <p
           className={clsx(
-            "mx-auto inline-flex max-w-full items-center justify-center rounded-full border px-3 py-1.5 text-xs",
+            "mx-auto max-w-full items-center justify-center text-xs",
+            appearance === "quiet" ? "block px-2 leading-5" : "inline-flex rounded-full border px-3 py-1.5",
             helperTone === "error" ? "" : "font-medium"
           )}
-          style={helperTone === "error"
+          style={appearance === "quiet" ? { color: helperTone === "error" ? "var(--danger)" : "var(--text-soft)" } : helperTone === "error"
             ? { borderColor: "rgba(248,113,113,0.28)", background: "rgba(248,113,113,0.08)", color: "var(--danger)" }
             : { borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text-muted)" }}
           aria-live="polite"
@@ -271,3 +274,5 @@ declare global {
 // vercel trigger 2
 
 // vercel trigger 3
+
+// vercel trigger 12

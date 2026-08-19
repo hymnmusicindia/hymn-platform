@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/access";
+import { requireAdminPermission } from "@/lib/access";
 import { listAdminTaskHistory, updateAdminTask } from "@/lib/task-queue";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin(); if ("error" in admin) return admin.error;
+  const admin = await requireAdminPermission("system.manage"); if ("error" in admin) return admin.error;
   return NextResponse.json({ history: await listAdminTaskHistory(Number((await params).id)) });
 }
 import { logAuditEvent } from "@/lib/audit-log";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("system.manage");
   if ("error" in admin) return admin.error;
   const id = Number((await params).id);
   const body = await request.json().catch(() => ({}));
@@ -23,3 +23,4 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ task });
   } catch { return NextResponse.json({ error: "Task not found." }, { status: 404 }); }
 }
+// vercel trigger 9

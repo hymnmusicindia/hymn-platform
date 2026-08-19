@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, requireUser } from "@/lib/access";
+import { requireAdminPermission, requireUser } from "@/lib/access";
 import {
   createDistributionQueueEntry,
   getDetailedReleaseByUserId,
@@ -69,7 +69,7 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const result = await requireAdmin();
+  const result = await requireAdminPermission("distribution.confirm_status");
   if ("error" in result) return result.error;
 
   try {
@@ -94,3 +94,4 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
+// vercel trigger 9

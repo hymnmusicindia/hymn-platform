@@ -18,7 +18,10 @@ function detectActivePlan(orders: Awaited<ReturnType<typeof listOrdersByUser>>):
   return null;
 }
 
-export default async function DistributionPage() {
+export default async function DistributionPage({ searchParams }: { searchParams?: Promise<{ recommended?: string }> }) {
+  const requestedPlan = (await searchParams)?.recommended;
+  const normalizedRecommendation = requestedPlan === "half-yearly" ? "half_yearly" : requestedPlan;
+  const recommendedPlan = ["half_yearly", "yearly", "yearly_plus"].includes(normalizedRecommendation || "") ? normalizedRecommendation as DistributionPlanOption : null;
   const user = await getCurrentUserForPage();
   const [releases, orders, subscription] = user
     ? await Promise.all([listDetailedReleasesByUser(user.id), listOrdersByUser(user.id), getSubscriptionByUserId(user.id)])
@@ -27,13 +30,13 @@ export default async function DistributionPage() {
   const activePlan = subscription ? (subscription.plan as DistributionPlanOption) : (user ? detectActivePlan(orders) : null);
 
   return (
-    <main className="pb-20">
+    <main className="distribution-page pb-20">
       <section className="shell py-8 sm:py-10 lg:py-12">
         <DistributionHero />
       </section>
 
       <section className="shell">
-        <DistributionPricingStrip activePlan={activePlan} />
+        <DistributionPricingStrip activePlan={activePlan} recommendedPlan={recommendedPlan} />
       </section>
 
       {user ? (
@@ -91,3 +94,5 @@ export default async function DistributionPage() {
 // vercel trigger 2
 // vercel trigger 4
 // vercel trigger 5
+
+// vercel trigger 12

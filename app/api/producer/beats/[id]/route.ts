@@ -54,7 +54,17 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   }
 
   try {
+    const [purchaseCount, saleCount] = await Promise.all([
+      prisma.beatPurchase.count({ where: { beatId } }),
+      prisma.beatSale.count({ where: { beatId } })
+    ]);
+    if (purchaseCount > 0 || saleCount > 0) {
+      const archived = await prisma.beat.update({ where: { id: beatId }, data: { enabled: false, status: "ARCHIVED" } });
+      await prisma.auditLog.create({ data: { actorId: result.user.id, action: "BEAT_ARCHIVED", entity: "beat", entityId: String(beatId), metadata: { purchaseCount, saleCount } } });
+      return NextResponse.json({ success: true, archived: true, beat: archived });
+    }
     await deleteBeat(beatId);
+    await prisma.auditLog.create({ data: { actorId: result.user.id, action: "BEAT_DRAFT_DELETED", entity: "beat", entityId: String(beatId) } });
     return NextResponse.json({ success: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not delete beat.";
@@ -62,3 +72,4 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   }
 }
 
+// vercel trigger 7

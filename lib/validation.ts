@@ -196,7 +196,7 @@ export const distributionMetadataSchema = z.object({
   monetisationClauses: z.record(z.boolean()).optional(),
   copyrightOwner: z.string().min(1),
   labelName: z.string().nullable().optional(),
-  publishingRights: z.string().nullable().optional(),
+  publishingRights: z.string().trim().min(1, "P-Line is required."),
   legal: z.object({
     ownershipConfirmation: z.literal(true),
     noInfringement: z.literal(true),
@@ -312,3 +312,5 @@ export const timedPlaylistMutationSchema = z.object({
 
 // vercel trigger
 // vercel trigger 4
+
+// vercel trigger 14

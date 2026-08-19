@@ -7,5 +7,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!purchase || (purchase.userId !== user.user.id && user.user.role !== "admin")) return NextResponse.json({ error: "Purchase not found." }, { status: 404 });
   if (!purchase.hasAccess) return NextResponse.json({ error: "License access has been revoked." }, { status: 403 });
   if (!purchase.licenseUrl) return NextResponse.json({ error: "License is still processing." }, { status: 409 });
-  return NextResponse.redirect(new URL(purchase.licenseUrl, _request.url));
+  const target = new URL(purchase.licenseUrl, _request.url);
+  if (target.origin !== new URL(_request.url).origin || !target.pathname.startsWith("/api/assets/")) return NextResponse.json({ error: "Legacy public licence access is disabled; regenerate this licence." }, { status: 409 });
+  return NextResponse.redirect(target);
 }
+// vercel trigger 9

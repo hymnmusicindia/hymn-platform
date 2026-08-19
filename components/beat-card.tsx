@@ -45,7 +45,7 @@ export function BeatCard({
   const activityLabel = beat.activityLabel || (beat.enabled ? "Live" : "Disabled");
   const producerName = beat.producer?.name || "Producer";
   const producerSlug = beat.producer?.slug || "#";
-  const exclusiveRemaining = beat.exclusiveRemaining ?? 1;
+  const exclusiveRemaining = beat.exclusiveRemaining;
 
   function formatMoney(value: number) {
     return `\u20B9${value.toLocaleString("en-IN")}`;
@@ -83,9 +83,9 @@ export function BeatCard({
               <span className="rounded-full border border-white/20 bg-black/30 px-2 sm:px-2.5 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-md">
                 {activityLabel}
               </span>
-              {exclusiveRemaining <= 1 ? (
+              {typeof exclusiveRemaining === "number" ? (
                 <span className="rounded-full border border-white/20 bg-black/30 px-2 sm:px-2.5 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur-md">
-                  1 Exclusive Left
+                  {exclusiveRemaining > 0 ? `${exclusiveRemaining} exclusive licence${exclusiveRemaining === 1 ? "" : "s"} available` : "Exclusive sold"}
                 </span>
               ) : null}
             </div>
@@ -163,3 +163,5 @@ export function BeatCard({
 }
 
 // vercel trigger 3
+
+// vercel trigger 11

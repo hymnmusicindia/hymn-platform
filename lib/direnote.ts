@@ -2,12 +2,13 @@ import type { ArtistProfile, Release } from "@/lib/types";
 import {
   DIRENOTE_CONTENT_TYPES,
   DIRENOTE_GENRES,
-  DIRENOTE_INGEST_ENDPOINT,
   DIRENOTE_LANGUAGES,
   DIRENOTE_SUBGENRES_BY_GENRE,
   normalizeDireNoteGenre,
   type DireNoteContentType
 } from "@/lib/direnote-config";
+import { getDireNoteConfig } from "@/lib/direnote/direnote-config";
+export { submitToDireNote } from "@/lib/direnote/direnote-client";
 
 export type DireNoteArtist = {
   name: string;
@@ -86,6 +87,8 @@ export type DireNoteSuccessResponse = {
   upc?: string;
   track_count?: number;
   release_date?: string;
+  release_id?: string;
+  distributor_release_id?: string;
   cover_art?: string;
   tracks?: Array<{ track_name?: string; isrc?: string; wav_file?: string; status?: string }>;
   warnings?: string[];
@@ -106,6 +109,7 @@ export type DireNoteParsedResponse = {
   success: boolean;
   message: string;
   upc?: string | null;
+  distributorReleaseId?: string | null;
   warnings: string[];
   trackIsrcs: Array<{ trackNumber?: number; trackTitle?: string; isrc?: string | null; distributorStatus?: string | null }>;
   status: "sent_to_distributor" | "processing" | "delivered";
@@ -217,13 +221,13 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
   const featuringArtists = splitNames(release.tracks?.flatMap((track) => splitNames(track.featuredArtists)).join(",")).map((name) => toDireNoteArtist(name, options.artistProfiles, extended));
   const contenttype = normalizeContentType(extended);
   const normalizedGenre = normalizeDireNoteGenre(release.primaryGenre || release.genre, release.secondaryGenre);
-  const releasePreviouslyReleased = release.releasePreviouslyReleased ?? Boolean(meta.releasePreviouslyReleased || meta.previouslyReleased || release.originalReleaseDate);
+  const isPreviouslyReleased = release.releasePreviouslyReleased !== undefined ? Boolean(release.releasePreviouslyReleased) : meta.releasePreviouslyReleased !== undefined ? Boolean(meta.releasePreviouslyReleased) : Boolean(meta.previouslyReleased);
   const moodCandidate = release.mood || meta.mood || meta.formData?.mood || "";
   const mood = typeof moodCandidate === "string" ? moodCandidate.trim() : "";
 
   const payload: DireNotePayload = {
-    pin: process.env.DIRENOTE_API_PIN?.trim() || process.env.DISTRIBUTOR_API_PIN?.trim() || "",
-    client_id: process.env.DIRENOTE_CLIENT_ID?.trim() || process.env.DISTRIBUTOR_CLIENT_ID?.trim() || "",
+    pin: getDireNoteConfig().pin || "",
+    client_id: getDireNoteConfig().clientId || "",
     albumname: release.releaseTitle,
     albumVersion: meta.albumVersion ?? meta.version ?? meta.edition ?? undefined,
     typeOfRelease: normalizeType(release.releaseType),
@@ -233,22 +237,22 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
     metadata: { mood },
     contenttype,
     trackReleaseDate: release.releaseDate,
-    originalReleaseDate: release.originalReleaseDate || undefined,
+    originalReleaseDate: isPreviouslyReleased ? (release.originalReleaseDate || undefined) : undefined,
     presaveSpotify: meta.presaveSpotify ?? meta.spotifyPresaveDate ?? undefined,
     presaveApple: meta.presaveApple ?? meta.applePresaveDate ?? undefined,
     exclusiveSpotify: meta.exclusiveSpotify ?? meta.spotifyExclusiveDate ?? undefined,
     exclusiveApple: meta.exclusiveApple ?? meta.appleExclusiveDate ?? undefined,
     labelName: release.labelName || release.labelDisplayName || "",
-    cLine: release.copyrightOwner || "",
-    pLine: release.publishingRights || release.copyrightOwner || "",
+    cLine: release.copyrightOwner ?? "",
+    pLine: release.publishingRights ?? "",
     upc: release.upcCode || undefined,
     youtubeContentID: typeof release.youtubeContentIdEnabled === "boolean" ? (release.youtubeContentIdEnabled ? "Yes" : "No") : undefined,
-    releasePreviouslyReleased: releasePreviouslyReleased ? "Yes" : "No",
+    releasePreviouslyReleased: isPreviouslyReleased ? "Yes" : "No",
     addrequest: meta.adminInstructions ?? meta.reviewNote ?? meta.addrequest ?? undefined,
     owner_email: options.ownerEmail || meta.ownerEmail || undefined,
     cover_art_url: publicUrl(release.artworkUrl, options.siteUrl),
     artists: primaryArtists,
-    featuring_artists: featuringArtists.length ? featuringArtists : undefined,
+    featuring_artists: featuringArtists,
     tracks: (release.tracks ?? []).map((track) => ({
       trackName: track.trackTitle,
       audio_url: publicUrl(track.audioUrl, options.siteUrl),
@@ -256,15 +260,12 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
       trackSubgenre: normalizedGenre.subgenre || undefined,
       trackLanguage: release.language || undefined,
       isrc: track.isrc || undefined,
-      trackVersion: track.version || undefined,
-      previewStart: (track as any).previewStart || undefined,
+      trackVersion: track.version || "",
+      previewStart: String((track as any).previewStart || 30),
       vocalist: (track as any).vocalist || undefined,
       explicitLyrics: track.explicitContent ? "Yes" : "No",
       trackLyrics: (track as any).lyrics || (track as any).trackLyrics || undefined,
-      previouslyReleased: ((track as any).previouslyReleased || releasePreviouslyReleased) ? "Yes" : "No",
-      producers: splitNames(track.producers),
-      artists: splitNames(track.primaryArtist).map((name) => toDireNoteArtist(name, options.artistProfiles, extended)),
-      featuring_artists: splitNames(track.featuredArtists).map((name) => toDireNoteArtist(name, options.artistProfiles, extended)),
+      previouslyReleased: ((track as any).previouslyReleased || isPreviouslyReleased) ? "Yes" : "No",
       songwriters: contributors(track.songwriters, track.contributors as any, "songwriter"),
       composers: contributors(track.composers, track.contributors as any, "composer")
     }))
@@ -315,6 +316,7 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
   pushMissing(issues, "albumname", payload.albumname, "Album name is required.");
   pushMissing(issues, "typeOfRelease", payload.typeOfRelease, "Release type is required.");
   pushMissing(issues, "albumGenre", payload.albumGenre, "Album genre is required.");
+  pushMissing(issues, "albumSubgenre", payload.albumSubgenre, "Album subgenre is required.");
   pushMissing(issues, "albumLanguage", payload.albumLanguage, "Album language is required.");
   if (!payload.metadata || typeof payload.metadata.mood !== "string" || !payload.metadata.mood.trim()) {
     issues.push({ field: "metadata.mood", message: "Mood is required and must be a string.", severity: "error", suggestion: "This release is missing mood metadata. Please select a mood before DireNote submission." });
@@ -373,6 +375,8 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
     const number = index + 1;
     pushMissing(issues, `tracks.${index}.trackName`, track.trackName, `Track ${number} requires a title.`);
     pushMissing(issues, `tracks.${index}.audio_url`, track.audio_url, `Track ${number} audio URL is required.`);
+    if (!track.songwriters.length) issues.push({ field: `tracks.${index}.songwriters`, message: `Track ${number} requires at least one songwriter.` });
+    if (!track.composers.length) issues.push({ field: `tracks.${index}.composers`, message: `Track ${number} requires at least one composer.` });
     if (!isPublicHttpUrl(track.audio_url)) issues.push({ field: `tracks.${index}.audio_url`, message: `Track ${number} audio must be a public HTTP(S) URL.` });
     if (!/\.(wav|mp3)(?:[?#].*)?$/i.test(track.audio_url)) issues.push({ field: `tracks.${index}.audio_url`, message: `Track ${number} audio must be WAV or MP3.` });
     if (track.explicitLyrics === "Yes" && !track.trackLyrics?.trim()) issues.push({ field: `tracks.${index}.trackLyrics`, message: "Explicit tracks require lyrics before DireNote submission." });
@@ -386,32 +390,23 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
   return { ok: issues.length === 0, issues: issues.map((issue) => ({ ...issue, severity: "error" as const })), warnings: warnings.map((issue) => ({ ...issue, severity: "warning" as const })) };
 }
 
-export async function submitToDireNote(payload: DireNotePayload) {
-  if (!payload.metadata || typeof payload.metadata.mood !== "string" || !payload.metadata.mood.trim()) {
-    throw new Error("Mood is required for DireNote submission.");
-  }
-  const endpoint = process.env.DIRENOTE_INGEST_ENDPOINT?.trim() || DIRENOTE_INGEST_ENDPOINT;
-  return fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-}
-
 export function parseDireNoteResponse(response: unknown): DireNoteParsedResponse {
   const record = (response ?? {}) as DireNoteSuccessResponse | DireNoteErrorResponse;
-  const success = record.success === true;
-  const tracks = Array.isArray(record.tracks) ? record.tracks : [];
+  const nested = [record, (record as any).data, (record as any).result, (record as any).release].find((value) => value && typeof value === "object" && (value.upc || value.UPC || value.tracks)) as any ?? record;
+  const success = record.success === true || nested.success === true;
+  const tracks = Array.isArray(nested.tracks) ? nested.tracks : Array.isArray((record as any).tracks) ? (record as any).tracks : [];
+  const upc = nested.upc ?? nested.UPC ?? nested.upc_code ?? nested.upcCode ?? (record as any).upc ?? (record as any).UPC;
   return {
     raw: response,
     success,
     message: String(record.message ?? record.error ?? (success ? "DireNote accepted release." : "DireNote rejected release.")),
-    upc: typeof record.upc === "string" ? record.upc : null,
+    upc: typeof upc === "string" || typeof upc === "number" ? String(upc).trim() || null : null,
+    distributorReleaseId: typeof nested.distributor_release_id === "string" ? nested.distributor_release_id : typeof nested.release_id === "string" ? nested.release_id : null,
     warnings: Array.isArray(record.warnings) ? record.warnings.map(String) : [],
-    trackIsrcs: tracks.map((track, index) => ({
+    trackIsrcs: tracks.map((track: any, index: number) => ({
       trackNumber: index + 1,
-      trackTitle: track.track_name,
-      isrc: track.isrc ?? null,
+      trackTitle: track.track_name ?? track.trackName ?? track.title,
+      isrc: track.isrc ?? track.ISRC ?? null,
       distributorStatus: track.status ?? null
     })),
     status: "processing"
@@ -422,3 +417,7 @@ export function parseDireNoteResponse(response: unknown): DireNoteParsedResponse
 
 // vercel trigger
 // vercel trigger 4
+// vercel trigger 8
+// vercel trigger 9
+
+// vercel trigger 14

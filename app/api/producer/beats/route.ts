@@ -4,6 +4,8 @@ import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/access";
 import { createBeat, listBeatsByProducer } from "@/lib/db";
 import { saveUploadedFile } from "@/lib/storage";
+import { localPrivateStorage } from "@/lib/private-storage";
+import { prisma } from "@/lib/prisma";
 import { validateBeatReadiness } from "@/lib/beat-readiness";
 import { createAdminTaskOnce } from "@/lib/task-queue";
 
@@ -43,7 +45,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid file format. WAV expected." }, { status: 400 });
     }
 
-    const fileUrl = await saveUploadedFile(file, "beats/files", "audio");
+    const privateAudio = await localPrivateStorage.upload({ ownerUserId: result.user.id, assetType: "private_beat_deliverable", fileName: file.name, mimeType: file.type, bytes: Buffer.from(await file.arrayBuffer()) });
+    const fileUrl = privateAudio.downloadPath;
     const artworkUrl = artwork instanceof File && artwork.size ? await saveUploadedFile(artwork, "beats/artwork", "image") : undefined;
 
     const beat = await createBeat({
@@ -58,6 +61,7 @@ export async function POST(request: Request) {
       artworkUrl,
       enabled: false
     });
+    await prisma.storedAsset.update({ where: { id: privateAudio.id }, data: { beatId: beat.id } });
 
     const readiness = validateBeatReadiness({ title, bpm, genre, mood, keySignature, price, audioUrl: fileUrl, artworkUrl });
     await createAdminTaskOnce({ eventKey: `producer:${result.user.id}:beat:${beat.id}:review`, type: "Beat Awaiting Approval", priority: readiness.ready ? "normal" : "high", title: readiness.ready ? `Beat ready for review: ${title}` : `Beat needs corrections: ${title}`, body: readiness.ready ? "All required beat fields are present." : readiness.issues.map((issue) => issue.message).join(" "), href: `/admin?tab=beats&beatId=${beat.id}`, entityType: "beat", entityId: beat.id });
@@ -70,3 +74,4 @@ export async function POST(request: Request) {
 }
 
 
+// vercel trigger 9

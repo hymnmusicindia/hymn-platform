@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export type AuditActorType = "user" | "admin" | "system" | "webhook" | "cron";
@@ -9,11 +10,14 @@ export type AuditEventInput = {
   action: string;
   oldValue?: unknown;
   newValue?: unknown;
-  metadata?: Record<string, unknown>;
   actorRole?: string;
+  reason?: string;
+  requestId?: string;
+  ipAddress?: string;
+  userAgent?: string;
   sessionId?: string;
-  riskLevel?: "low" | "normal" | "high" | "critical" | string;
-  reason?: string | null;
+  riskLevel?: "low" | "normal" | "high" | "critical";
+  metadata?: Record<string, unknown>;
 };
 
 const memoryAuditEvents: Array<AuditEventInput & { id: number; createdAt: string }> = [];
@@ -34,19 +38,20 @@ export async function logAuditEvent(input: AuditEventInput) {
     return prisma.auditLog.create({
       data: {
         actorId: input.actorId ?? null,
+        actorType: input.actorType,
+        actorRole: input.actorRole ?? "unknown",
         entity: input.entityType,
         entityId: String(input.entityId),
         action: input.action,
-        metadata: {
-          actorType: input.actorType,
-          actorRole: input.actorRole ?? null,
-          sessionId: input.sessionId ?? null,
-          riskLevel: input.riskLevel ?? "normal",
-          reason: input.reason ?? null,
-          oldValue: safe.oldValue ?? null,
-          newValue: safe.newValue ?? null,
-          ...(safe.metadata ?? {})
-        }
+        previousValue: safe.oldValue === undefined ? undefined : safe.oldValue as Prisma.InputJsonValue,
+        newValue: safe.newValue === undefined ? undefined : safe.newValue as Prisma.InputJsonValue,
+        reason: input.reason?.trim() || null,
+        requestId: input.requestId ?? null,
+        ipAddress: input.ipAddress ?? null,
+        userAgent: input.userAgent ?? null,
+        sessionId: input.sessionId ?? null,
+        riskLevel: input.riskLevel ?? "normal",
+        metadata: safe.metadata as Prisma.InputJsonValue | undefined
       }
     });
   }
@@ -64,10 +69,14 @@ export async function listAuditEvents(filters: { entityType?: string; entityId?:
         ...(filters.entityId !== undefined ? { entityId: String(filters.entityId) } : {}),
         ...(filters.actorId ? { actorId: filters.actorId } : {})
         ,...(filters.action ? { action: filters.action } : {})
+        ,...(filters.riskLevel ? { riskLevel: filters.riskLevel } : {})
+        ,...(filters.requestId ? { requestId: filters.requestId } : {})
+        ,...(filters.cursor ? { id: { lt: filters.cursor } } : {})
       },
       orderBy: { createdAt: "desc" },
       take: limit
     });
   }
-  return memoryAuditEvents.filter((event) => (!filters.entityType || event.entityType === filters.entityType) && (filters.entityId === undefined || String(event.entityId) === String(filters.entityId)) && (!filters.actorId || event.actorId === filters.actorId) && (!filters.action || event.action === filters.action)).slice(0, limit);
+  return memoryAuditEvents.filter((event) => (!filters.entityType || event.entityType === filters.entityType) && (filters.entityId === undefined || String(event.entityId) === String(filters.entityId)) && (!filters.actorId || event.actorId === filters.actorId) && (!filters.action || event.action === filters.action) && (!filters.riskLevel || event.riskLevel === filters.riskLevel) && (!filters.requestId || event.requestId === filters.requestId) && (!filters.cursor || event.id < filters.cursor)).slice(0, limit).map(event => ({ ...event, entity: event.entityType, previousValue: event.oldValue, newValue: event.newValue, actorRole: event.actorRole ?? "unknown", reason: event.reason ?? null, requestId: event.requestId ?? null, riskLevel: event.riskLevel ?? "normal" }));
 }
+// vercel trigger 9

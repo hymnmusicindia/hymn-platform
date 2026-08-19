@@ -2,10 +2,10 @@
 
 import clsx from "clsx";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, Check, ChevronDown, Clock3, Disc3 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, ArrowRight, Check, ChevronDown, Clock3, Disc3, Globe2, Search, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { contributorRoles, countryOptions, legalGroups } from "@/lib/release-config";
+import { contributorRoles, legalGroups } from "@/lib/release-config";
 import type { Release } from "@/lib/types";
 
 export type ContributorDraft = { id: string; legalName: string; artistName: string; ipi?: string; iprsMember?: boolean; instagramUrl?: string; xUrl?: string };
@@ -78,50 +78,47 @@ export function CountrySelector({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const filtered = useMemo(
-    () => countryOptions.filter((country) => country.toLowerCase().includes(query.trim().toLowerCase())),
-    [query]
-  );
+  const regions = [
+    { name: "South Asia", countries: ["India", "Sri Lanka", "Pakistan", "Bangladesh"] },
+    { name: "Americas", countries: ["United States", "Canada", "Brazil", "Mexico"] },
+    { name: "Europe", countries: ["United Kingdom", "Germany", "France", "Netherlands"] },
+    { name: "Asia Pacific", countries: ["Australia", "Japan", "South Korea", "Singapore"] },
+    { name: "Middle East & Africa", countries: ["United Arab Emirates", "Saudi Arabia", "South Africa", "Nigeria"] }
+  ];
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleRegions = regions.map((region) => ({ ...region, countries: region.countries.filter((country) => country.toLowerCase().includes(normalizedQuery)) })).filter((region) => region.countries.length);
+
+  function toggle(country: string) {
+    onChange(selected.includes(country) ? selected.filter((item) => item !== country) : [...selected, country]);
+  }
 
   return (
-    <div className="relative">
+    <div>
       <button
         ref={registerField}
         type="button"
-        className={clsx("field flex min-h-[52px] w-full items-center justify-between text-left", showError ? "field-invalid" : "", shaking ? "field-shake" : "")}
+        className={clsx("flex min-h-[64px] w-full items-center justify-between gap-4 rounded-2xl border px-4 text-left transition hover:-translate-y-0.5", showError ? "field-invalid" : "", shaking ? "field-shake" : "")}
+        style={{ borderColor: open || selected.length ? "var(--accent)" : "var(--border)", background: open || selected.length ? "var(--accent-soft)" : "var(--card)" }}
         onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
       >
-        <span>{selected.length === 0 ? "No restricted countries" : `${selected.length} restricted`}</span>
-        <span style={{ color: "var(--text-soft)" }}>{open ? "Hide" : "Choose"}</span>
+        <span className="flex min-w-0 items-center gap-3"><span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--accent)" }}><Globe2 className="h-5 w-5" /></span><span className="min-w-0"><strong className="block text-sm" style={{ color: "var(--text)" }}>{selected.length === 0 ? "Worldwide delivery" : `${selected.length} countr${selected.length === 1 ? "y" : "ies"} restricted`}</strong><span className="mt-0.5 block truncate text-xs" style={{ color: "var(--text-muted)" }}>{selected.length === 0 ? "No country restrictions applied" : selected.join(", ")}</span></span></span>
+        <span className="flex shrink-0 items-center gap-2 text-xs font-semibold" style={{ color: "var(--text-muted)" }}>{open ? "Done" : "Choose"}<ChevronDown className={clsx("h-4 w-4 transition", open && "rotate-180")} /></span>
       </button>
       {selected.length > 0 ? (
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           {selected.map((country) => (
-            <button
-              key={country}
-              type="button"
-              className="rounded-full border px-3 py-1.5 text-xs transition hover:-translate-y-0.5"
-              style={{ borderColor: "var(--accent)", background: "var(--accent-soft)", color: "var(--text)" }}
-              onClick={() => onChange(selected.filter((item) => item !== country))}
-              aria-label={`Remove ${country} from restricted countries`}
-            >
-              {country} x
-            </button>
+            <button key={country} type="button" className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition hover:-translate-y-0.5" style={{ borderColor: "var(--accent)", background: "var(--accent-soft)", color: "var(--text)" }} onClick={() => toggle(country)} aria-label={`Remove ${country} from restricted countries`}>{country}<X className="h-3.5 w-3.5" /></button>
           ))}
+          <button type="button" onClick={() => onChange([])} className="px-2 py-1 text-xs font-semibold" style={{ color: "var(--text-soft)" }}>Clear all</button>
         </div>
       ) : null}
       {open ? (
-        <div className="absolute z-20 mt-2 w-full rounded-[1.4rem] border p-3 shadow-2xl" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
-          <input className="field" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search countries" />
-          <div className="mt-3 flex flex-wrap gap-2">
-            {filtered.map((country) => {
-              const active = selected.includes(country);
-              return (
-                <button key={country} type="button" className="rounded-full border px-3 py-1.5 text-xs transition-transform duration-200 hover:scale-[1.02]" style={active ? { borderColor: "var(--accent)", background: "var(--accent-soft)", color: "var(--text)" } : { borderColor: "var(--border)", color: "var(--text-muted)" }} onClick={() => onChange(active ? selected.filter((item) => item !== country) : [...selected, country])}>
-                  {country}
-                </button>
-              );
-            })}
+        <div className="mt-3 w-full overflow-hidden rounded-[1.4rem] border shadow-xl" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
+          <div className="border-b p-3" style={{ borderColor: "var(--border)" }}><label className="relative block"><Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--text-soft)" }} /><input className="field pl-10" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by country name" autoFocus /></label></div>
+          <div className="max-h-80 overflow-y-auto overscroll-contain p-3 sm:p-4">
+            {visibleRegions.map((region) => <section key={region.name} className="mb-5 last:mb-0"><div className="mb-2 flex items-center justify-between"><h4 className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-soft)" }}>{region.name}</h4><span className="text-[11px]" style={{ color: "var(--text-soft)" }}>{region.countries.filter((country) => selected.includes(country)).length} selected</span></div><div className="grid gap-2 sm:grid-cols-2">{region.countries.map((country) => { const active = selected.includes(country); return <button key={country} type="button" aria-pressed={active} onClick={() => toggle(country)} className="flex min-h-11 items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left text-sm transition hover:-translate-y-0.5" style={active ? { borderColor: "var(--accent)", background: "var(--accent-soft)", color: "var(--text)" } : { borderColor: "var(--border)", background: "var(--card)", color: "var(--text-muted)" }}><span>{country}</span><span className="inline-flex h-5 w-5 items-center justify-center rounded-full border" style={{ borderColor: active ? "var(--accent)" : "var(--border)", background: active ? "var(--accent)" : "transparent", color: active ? "var(--bg)" : "transparent" }}><Check className="h-3.5 w-3.5" /></span></button>; })}</div></section>)}
+            {!visibleRegions.length ? <div className="py-8 text-center"><Globe2 className="mx-auto h-7 w-7" style={{ color: "var(--text-soft)" }} /><p className="mt-3 text-sm font-semibold">No countries found</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Try a different search term.</p></div> : null}
           </div>
         </div>
       ) : null}
@@ -168,7 +165,7 @@ export function ContributorsModal({
 
   return (
     <ModalShell open={state.open} onClose={onClose} maxWidthClass="max-w-4xl">
-      <div className="flex max-h-[calc(100vh-3rem)] flex-col overflow-hidden rounded-[1.4rem] border shadow-2xl" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
+      <div className="contributors-modal flex max-h-[calc(100vh-3rem)] flex-col overflow-hidden rounded-[1.4rem] border shadow-2xl" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
         <div className="flex flex-col gap-4 border-b px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6" style={{ borderColor: "var(--border)", background: "linear-gradient(135deg, color-mix(in srgb, var(--accent) 8%, var(--bg-soft)), var(--bg-soft))" }}>
           <div>
             <p className="text-xs uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>Credits & rights</p>
@@ -203,7 +200,7 @@ export function ContributorsModal({
                     <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]" style={complete ? { borderColor: "rgba(34,197,94,0.4)", color: "#86efac", background: "rgba(34,197,94,0.09)" } : { borderColor: "rgba(250,204,21,0.38)", color: "#fde68a", background: "rgba(250,204,21,0.09)" }}>
                       {complete ? "Complete" : "Missing"}
                     </span>
-                    <button type="button" className="btn-outline pressable px-3 py-2 text-xs" onClick={() => addRoleEntry(key)}>+ Add</button>
+                    <button type="button" className="contributor-add-action btn-outline pressable px-3 py-2 text-xs" onClick={() => addRoleEntry(key)}>+ Add</button>
                   </div>
                 </div>
                 <div className="mt-3 grid gap-2">
@@ -219,7 +216,7 @@ export function ContributorsModal({
                         <input className="field min-h-10 py-2 text-sm" placeholder="Optional public credit" value={entry.artistName} onChange={(event) => updateRole(key, entry.id, { artistName: event.target.value })} />
                       </label>
                       {role.key !== "producer" ? <div className="col-span-full grid gap-2 sm:grid-cols-2 lg:grid-cols-4"><label className="grid gap-1"><span className="text-[11px] uppercase tracking-[0.16em]" style={{color:"var(--text-soft)"}}>IPI number</span><input className="field min-h-10 py-2 text-sm" value={entry.ipi ?? ""} onChange={(event)=>updateRole(key,entry.id,{ipi:event.target.value})} placeholder="Optional" /></label><label className="flex items-center gap-2 pt-5 text-sm"><input type="checkbox" checked={Boolean(entry.iprsMember)} onChange={(event)=>updateRole(key,entry.id,{iprsMember:event.target.checked})} />IPRS member</label><label className="grid gap-1"><span className="text-[11px] uppercase tracking-[0.16em]" style={{color:"var(--text-soft)"}}>Instagram</span><input className="field min-h-10 py-2 text-sm" value={entry.instagramUrl ?? ""} onChange={(event)=>updateRole(key,entry.id,{instagramUrl:event.target.value})} placeholder="Optional URL" /></label><label className="grid gap-1"><span className="text-[11px] uppercase tracking-[0.16em]" style={{color:"var(--text-soft)"}}>X / Twitter</span><input className="field min-h-10 py-2 text-sm" value={entry.xUrl ?? ""} onChange={(event)=>updateRole(key,entry.id,{xUrl:event.target.value})} placeholder="Optional URL" /></label></div> : null}
-                      <button type="button" className="btn-outline pressable px-3 py-2 text-xs" disabled={entries.length === 1} onClick={() => removeRoleEntry(key, entry.id)}>Remove</button>
+                      <button type="button" className="contributor-remove-action btn-outline pressable px-3 py-2 text-xs" disabled={entries.length === 1} onClick={() => removeRoleEntry(key, entry.id)}>Remove</button>
                     </div>
                   ))}
                 </div>
@@ -230,7 +227,7 @@ export function ContributorsModal({
         {!valid ? <p className="px-4 pb-0 text-sm sm:px-6" style={{ color: "#fca5a5" }}>Each contributor role needs at least one legal name.</p> : null}
         <div className="flex flex-col-reverse gap-2 border-t px-4 py-4 sm:flex-row sm:justify-end sm:px-6" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
           <button type="button" className="btn-outline pressable justify-center" onClick={onClose}>Cancel</button>
-          <button type="button" className="btn-primary pressable justify-center" disabled={!valid} onClick={() => onSave(local)}>Save contributors</button>
+          <button type="button" className="contributors-save-action pressable justify-center" disabled={!valid} onClick={() => onSave(local)}>Save contributors</button>
         </div>
       </div>
     </ModalShell>
@@ -382,17 +379,17 @@ export function MonetisationConsentModal({
           </div>
 
           {!onFinalStep ? (
-            <div key={activeClause.key} className="clause-slide rounded-[1.45rem] border p-5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+            <div key={activeClause.key} className="monetisation-clause clause-slide">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: "var(--text-soft)" }}>
                   Clause {currentIndex + 1} of {monetisationClauses.length}
                 </p>
-                <span className="status-pill">{currentClauseAccepted ? "Agreed" : "Pending"}</span>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: currentClauseAccepted ? "var(--success)" : "var(--text-soft)" }}>{currentClauseAccepted ? "Agreed" : "Pending"}</span>
               </div>
               <h4 className="mt-4 text-2xl font-semibold" style={{ color: "var(--text)" }}>{activeClause.title}</h4>
               <p className="mt-3 text-sm leading-6" style={{ color: "var(--text-muted)" }}>{activeClause.body}</p>
               {activeClause.notes.length ? (
-                <div className="mt-5 rounded-[1.2rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
+                <div className="monetisation-exclusions mt-6 border-t pt-5" style={{ borderColor: "var(--border)" }}>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-soft)" }}>This excludes</p>
                   <ul className="mt-3 grid gap-2 text-sm leading-5" style={{ color: "var(--text-muted)" }}>
                     {activeClause.notes.map((note) => <li key={note}>- {note}</li>)}
@@ -400,20 +397,6 @@ export function MonetisationConsentModal({
                 </div>
               ) : null}
 
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <button type="button" onClick={onClose} className="btn-outline pressable">
-                  I do not agree
-                </button>
-                {currentClauseAccepted ? (
-                  <button type="button" onClick={goNext} className="btn-primary pressable">
-                    Next
-                  </button>
-                ) : (
-                  <button type="button" onClick={agreeCurrentClause} className="btn-primary pressable">
-                    I agree
-                  </button>
-                )}
-              </div>
             </div>
           ) : (
             <div key="final-agreement" className="clause-slide rounded-[1.45rem] border p-5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
@@ -429,14 +412,11 @@ export function MonetisationConsentModal({
             </div>
           )}
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t px-6 py-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-          <p className="text-sm" style={{ color: "var(--text-soft)" }}>
-            {onFinalStep ? "Enable monetisation to complete this approval popup." : "Agree with the current clause to continue."}
-          </p>
-          <div className="flex flex-wrap gap-3">
-            {currentIndex > 0 ? <button type="button" className="btn-outline pressable" onClick={goBack}>Back</button> : null}
-            <button type="button" className="btn-outline pressable" onClick={onClose}>{onFinalStep ? "I do not agree" : "Not now"}</button>
-            {onFinalStep ? <button type="button" className="btn-primary pressable" disabled={!monetisationComplete} onClick={onConfirm}>Enable monetisation</button> : null}
+        <div className="monetisation-consent-footer flex items-center justify-between gap-5 border-t px-5 py-3 sm:px-6" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+          {currentIndex > 0 ? <button type="button" aria-label="Previous clause" className="inline-flex h-9 w-9 shrink-0 items-center justify-start border-0 bg-transparent p-0 text-xl font-light leading-none text-[var(--text-muted)] transition hover:-translate-x-0.5 hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]" onClick={goBack}>‹</button> : <span className="h-9 w-9 shrink-0" />}
+          <div className="flex items-center gap-5 sm:gap-7">
+            <button type="button" className="group relative min-h-9 overflow-hidden border-0 bg-transparent px-0 text-sm font-medium text-[var(--text-muted)] transition hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]" onClick={onClose}><span className="relative">I do not agree</span><span className="absolute inset-x-0 bottom-0 h-px origin-left scale-x-0 bg-[var(--text-muted)] transition-transform group-hover:scale-x-100" /></button>
+            {onFinalStep ? <button type="button" className="btn-primary pressable" disabled={!monetisationComplete} onClick={onConfirm}>Enable monetisation</button> : currentClauseAccepted ? <button type="button" onClick={goNext} className="group relative min-h-11 overflow-hidden border-0 bg-transparent px-3 text-sm font-semibold text-[var(--accent)] transition hover:brightness-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"><span className="relative">Next</span><span className="absolute inset-x-3 bottom-1 h-px origin-left scale-x-0 bg-[var(--accent)] transition-transform group-hover:scale-x-100" /></button> : <button type="button" onClick={agreeCurrentClause} className="group relative min-h-11 overflow-hidden border-0 bg-transparent px-3 text-sm font-semibold text-[var(--accent)] transition hover:brightness-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"><span className="relative">I agree</span><span className="absolute inset-x-3 bottom-1 h-px origin-left scale-x-0 bg-[var(--accent)] transition-transform group-hover:scale-x-100" /></button>}
           </div>
         </div>
       </div>
@@ -458,6 +438,24 @@ export function LegalConsentModal({
   onChange: (value: Record<string, boolean>) => void;
 }) {
   const allAccepted = legalGroups.every((group) => group.items.every(([key]) => Boolean(value[key])));
+  const [reachedBottom, setReachedBottom] = useState(allAccepted);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setReachedBottom(allAccepted);
+    const frame = window.requestAnimationFrame(() => {
+      const area = scrollAreaRef.current;
+      if (!area) return;
+      area.scrollTop = 0;
+      if (area.scrollHeight <= area.clientHeight + 4) setReachedBottom(true);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [open]);
+
+  function setAcknowledged(checked: boolean) {
+    onChange(Object.fromEntries(legalGroups.flatMap((group) => group.items.map(([key]) => [key, checked]))));
+  }
 
   return (
     <ModalShell open={open} onClose={onClose} maxWidthClass="max-w-5xl">
@@ -469,27 +467,24 @@ export function LegalConsentModal({
           </div>
           <button type="button" className="btn-outline pressable" onClick={onClose}>Close</button>
         </div>
-        <div className="grid flex-1 gap-5 overflow-y-auto overscroll-contain px-6 py-5 pr-5">
+        <div ref={scrollAreaRef} onScroll={(event) => { const area = event.currentTarget; if (area.scrollTop + area.clientHeight >= area.scrollHeight - 12) setReachedBottom(true); }} className="grid flex-1 gap-5 overflow-y-auto overscroll-contain px-6 py-5 pr-5">
+          <div className="rounded-2xl border px-4 py-3 text-sm leading-6" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text-muted)" }}>Please read every statement below. After you reach the end, acknowledge the complete checklist once.</div>
           {legalGroups.map((group) => (
             <div key={group.title} className="rounded-[1.45rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
               <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>{group.title}</p>
               <div className="mt-3 grid gap-2">
-                {group.items.map(([key, label]) => {
-                  const checked = value[key];
-                  return (
-                    <label key={key} className="flex items-start gap-3 rounded-xl border px-3 py-2 text-[12px] leading-5" style={checked ? { borderColor: "var(--accent)", background: "var(--accent-soft)", color: "var(--text)" } : { borderColor: "var(--border)", background: "var(--card)", color: "var(--text-muted)" }}>
-                      <input type="checkbox" checked={checked} onChange={(event) => onChange({ ...value, [key]: event.target.checked })} className="mt-0.5 h-4 w-4 shrink-0" />
-                      <span>{label}</span>
-                    </label>
-                  );
-                })}
+                {group.items.map(([key, label], index) => <div key={key} className="flex items-start gap-3 rounded-xl border px-4 py-3 text-sm leading-6" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text-muted)" }}><span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full border text-xs font-semibold" style={{ borderColor: "var(--border)", color: "var(--text-soft)" }}>{index + 1}</span><span>{label}</span></div>)}
               </div>
             </div>
           ))}
+          <label className={clsx("flex items-start gap-3 rounded-[1.35rem] border p-4 transition", !reachedBottom && "cursor-not-allowed opacity-55")} style={{ borderColor: allAccepted ? "var(--accent)" : "var(--border)", background: allAccepted ? "var(--accent-soft)" : "var(--card)", color: "var(--text)" }}>
+            <input type="checkbox" disabled={!reachedBottom} checked={allAccepted} onChange={(event) => setAcknowledged(event.target.checked)} className="mt-1 h-5 w-5 shrink-0" />
+            <span><strong className="block">I have read and acknowledge all legal confirmations.</strong><span className="mt-1 block text-sm leading-6" style={{ color: "var(--text-muted)" }}>I confirm that every statement above is accurate and applies to this release.</span></span>
+          </label>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t px-6 py-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
           <div className="flex items-center gap-3 text-sm" style={{ color: "var(--text-soft)" }}>
-            <p>{allAccepted ? "All legal confirmations are complete." : "All legal confirmations must be checked before continuing."}</p>
+            <p>{allAccepted ? "All legal confirmations are complete." : reachedBottom ? "Tick the acknowledgement box above to continue." : "Read the checklist and scroll to the bottom to continue."}</p>
             {allAccepted ? (
               <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-400/12 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "rgb(34, 197, 94)" }}>
                 <span className="animate-pulse">✓</span>
@@ -545,8 +540,8 @@ export function YoutubeContentIdModal({
   );
 }
 
-export function SuccessState({ release, onReset, title = "Your release has been submitted", resetLabel = "Submit another release" }: { release: Release; onReset: () => void; title?: string; resetLabel?: string }) {
-  const [openFaq, setOpenFaq] = useState(0);
+export function SuccessState({ release, onReset, isResubmission = false, resetLabel = "Submit another release" }: { release: Release; onReset: () => void; isResubmission?: boolean; resetLabel?: string }) {
+  const [openFaq, setOpenFaq] = useState(-1);
   const releaseTitle = release.releaseTitle || release.trackName || "GULLAK SAMBHAL";
   const artistName = release.artistName || "HYMN Artist";
   const artworkUrl = release.artworkUrl || "/uploads/site/home-hero/380d946e-e499-4860-a0cd-2f19ba1b258b.png";
@@ -555,7 +550,7 @@ export function SuccessState({ release, onReset, title = "Your release has been 
     : "To be confirmed";
   const releaseType = release.releaseType ? `${release.releaseType.charAt(0).toUpperCase()}${release.releaseType.slice(1)}` : "Release";
   const checklist = [
-    { label: "Submitted", description: "Your files and metadata have been received.", state: "done" },
+    { label: isResubmission ? "Changes submitted" : "Submitted", description: isResubmission ? "Your updated release details have been received." : "Your files and metadata have been received.", state: "done" },
     { label: "Review in progress", description: "We are reviewing artwork, audio, metadata, and rights.", state: "active" },
     { label: "Distribution processing", description: "Once approved, your release will be prepared for delivery.", state: "future" },
     { label: "Scheduled / Live", description: "Your release moves into scheduled or live status.", state: "future" }
@@ -582,43 +577,48 @@ export function SuccessState({ release, onReset, title = "Your release has been 
   return (
     <section className="hymn-success-page relative isolate overflow-hidden rounded-[1.75rem] border px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
       <div className="relative z-10 mx-auto max-w-6xl">
-        <header className="flex items-center justify-between gap-4 border-b border-white/[0.06] pb-5">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#59dfe0]">Distribution submission</p>
-            <p className="mt-1 text-sm text-[#98a1b3]">Confirmation and next steps</p>
-          </div>
-          <span className="inline-flex items-center gap-2 rounded-full border border-[#59dfe0]/20 bg-[#59dfe0]/[0.07] px-3 py-1.5 text-xs font-semibold text-[#b7f7f7]">
-            <Check className="h-3.5 w-3.5" /> Submitted
-          </span>
-        </header>
-
-        <div className="grid gap-5 py-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.75fr)] lg:items-start">
-          <div className="hymn-success-enter rounded-[1.4rem] border border-white/[0.06] bg-[#0d1118]/80 p-5 sm:p-7">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#59dfe0]">Submission successful</p>
-            <h1 className="mt-3 max-w-3xl text-3xl font-semibold leading-tight tracking-[-0.035em] text-[#f5f7fb] sm:text-4xl">{title}</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-[#98a1b3] sm:text-base">
-              Your release is now in HYMN review. We’ll verify metadata, artwork, audio, and rights before moving it forward.
+        <div className="grid items-stretch gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.75fr)]">
+          <div className="hymn-success-surface hymn-success-enter flex h-full flex-col rounded-[1.4rem] border p-5 sm:p-7">
+            <h1 className="hymn-success-heading max-w-3xl text-3xl font-semibold leading-tight tracking-[-0.035em] sm:text-4xl">{isResubmission ? "Your changes are back in review" : "Your release is under review"}</h1>
+            <p className="hymn-success-muted mt-3 max-w-2xl text-sm leading-6 sm:text-base">
+              {isResubmission ? "We’ve received your updates and returned this release to HYMN review. We’ll check the revised metadata, artwork, audio, and rights before moving it forward." : "We’ve received your release and it is now in HYMN review. We’ll verify the metadata, artwork, audio, and rights before moving it forward."}
             </p>
 
-            <div className="mt-6 border-t border-white/[0.06] pt-5">
-              <h2 className="text-sm font-semibold text-[#f5f7fb]">What happens next</h2>
+            <div className="hymn-success-divider mt-6 border-t pt-5">
+              <h2 className="hymn-success-heading text-sm font-semibold">What happens next</h2>
               <ol className="mt-4 grid gap-0 sm:grid-cols-4">
                 {checklist.map((item, index) => (
                   <li key={item.label} className="relative flex gap-3 pb-5 last:pb-0 sm:block sm:pb-0 sm:pr-4">
-                    {index < checklist.length - 1 ? <span className="absolute left-[15px] top-8 h-[calc(100%-2rem)] w-px bg-white/[0.08] sm:left-8 sm:top-[15px] sm:h-px sm:w-[calc(100%-2rem)]" /> : null}
-                    <span className={clsx("relative z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs", item.state === "done" && "border-[#59dfe0]/40 bg-[#59dfe0]/15 text-[#59dfe0]", item.state === "active" && "border-[#59dfe0] bg-[#59dfe0] text-[#061012] shadow-[0_0_22px_rgba(89,223,224,0.2)]", item.state === "future" && "border-white/10 bg-[#121720] text-[#667085]")}>
+                    {index < checklist.length - 1 ? <span className="hymn-success-step-line absolute left-[15px] top-8 h-[calc(100%-2rem)] w-px sm:left-8 sm:top-[15px] sm:h-px sm:w-[calc(100%-2rem)]" /> : null}
+                    <span className={clsx("hymn-success-step-node relative z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs", `is-${item.state}`)}>
                       {item.state === "done" ? <Check className="h-4 w-4" /> : item.state === "active" ? <Clock3 className="h-4 w-4" /> : index + 1}
                     </span>
                     <div className="sm:mt-3">
-                      <p className={clsx("text-sm font-semibold", item.state === "future" ? "text-[#737d90]" : "text-[#f5f7fb]")}>{item.label}</p>
-                      <p className="mt-1 text-xs leading-5 text-[#7f899b]">{item.description}</p>
+                      <p className={clsx("text-sm font-semibold", item.state === "future" ? "hymn-success-soft" : "hymn-success-heading")}>{item.label}</p>
+                      <p className="hymn-success-muted mt-1 text-xs leading-5">{item.description}</p>
                     </div>
                   </li>
                 ))}
               </ol>
             </div>
 
-            <div className="mt-6 flex flex-col gap-3 border-t border-white/[0.06] pt-5 sm:flex-row">
+            <section className="hymn-review-details" aria-labelledby="review-details-title">
+              <div className="hymn-review-details-head">
+                <div>
+                  <p className="hymn-success-accent text-xs font-semibold uppercase tracking-[0.2em]">Review details</p>
+                  <h2 id="review-details-title" className="hymn-success-heading mt-1 text-base font-semibold">Nothing else is required right now</h2>
+                </div>
+                <span className="hymn-review-ready"><Check className="h-3.5 w-3.5" /> Package received</span>
+              </div>
+              <dl className="hymn-review-detail-grid">
+                <div><dt>Submission</dt><dd>{isResubmission ? "Updated release" : "New release"}</dd></div>
+                <div><dt>Typical review</dt><dd>24–48 hours</dd></div>
+                <div><dt>Status updates</dt><dd>Dashboard and email</dd></div>
+              </dl>
+              <p className="hymn-success-muted text-xs leading-5">If the review team needs another correction, you’ll receive a clear note explaining what to update.</p>
+            </section>
+
+            <div className="hymn-success-divider mt-6 flex flex-col gap-3 border-t pt-5 sm:flex-row lg:mt-auto">
               <Link href={`/dashboard/releases?releaseId=${release.id}`} className="hymn-success-primary-cta inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold">
                 Open release dashboard <ArrowRight className="h-4 w-4" />
               </Link>
@@ -626,30 +626,28 @@ export function SuccessState({ release, onReset, title = "Your release has been 
             </div>
           </div>
 
-          <aside className="hymn-success-enter-delayed rounded-[1.4rem] border border-white/[0.07] bg-[#0d1118]/90 p-4 shadow-[0_24px_60px_rgba(0,0,0,0.25)]">
+          <aside className="hymn-success-surface hymn-success-enter-delayed h-full rounded-[1.4rem] border p-4">
             <div className="flex gap-4 lg:block">
-              <img src={artworkUrl} alt={`${releaseTitle} artwork`} className="h-24 w-24 shrink-0 rounded-xl border border-white/[0.08] object-cover lg:h-auto lg:w-full lg:aspect-square" />
-              <div className="min-w-0 lg:mt-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#59dfe0]">Release summary</p>
-                <h2 className="mt-2 truncate text-xl font-semibold tracking-[-0.02em] text-[#f5f7fb]">{releaseTitle}</h2>
-                <p className="mt-1 truncate text-sm text-[#98a1b3]">{artistName}</p>
+              <img src={artworkUrl} alt={`${releaseTitle} artwork`} loading="lazy" decoding="async" className="h-24 w-24 shrink-0 rounded-xl border object-cover lg:h-auto lg:w-full lg:aspect-square" style={{ borderColor: "var(--border)" }} />
+              <div className="hymn-release-summary-copy min-w-0 lg:mt-5">
+                <h2 className="hymn-success-heading truncate text-2xl font-semibold tracking-[-0.035em]">{releaseTitle}</h2>
+                <p className="hymn-success-muted mt-1.5 truncate text-sm">by <strong>{artistName}</strong></p>
               </div>
             </div>
-            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-white/[0.06] pt-4 text-sm">
-              <div><dt className="text-xs text-[#707a8c]">Format</dt><dd className="mt-1 text-[#e9edf4]">{releaseType}</dd></div>
-              <div><dt className="text-xs text-[#707a8c]">Status</dt><dd className="mt-1 text-[#b7f7f7]">Under review</dd></div>
-              <div className="col-span-2"><dt className="text-xs text-[#707a8c]">Release date</dt><dd className="mt-1 text-[#e9edf4]">{releaseDate}</dd></div>
-              {release.primaryGenre || release.genre ? <div><dt className="text-xs text-[#707a8c]">Genre</dt><dd className="mt-1 truncate text-[#e9edf4]">{release.primaryGenre || release.genre}</dd></div> : null}
-              {release.language ? <div><dt className="text-xs text-[#707a8c]">Language</dt><dd className="mt-1 truncate text-[#e9edf4]">{release.language}</dd></div> : null}
+            <dl className="hymn-release-summary-meta">
+              <div><dt>Format</dt><dd>{releaseType}</dd></div>
+              <div><dt>Status</dt><dd><span className="hymn-release-review-badge"><Clock3 className="h-3 w-3" />Under review</span></dd></div>
+              <div className="is-wide"><dt>Release date</dt><dd>{releaseDate}</dd></div>
+              {release.primaryGenre || release.genre ? <div className="hymn-release-meta-start"><dt>Genre</dt><dd className="truncate">{release.primaryGenre || release.genre}</dd></div> : null}
+              {release.language ? <div className="hymn-release-meta-end"><dt>Language</dt><dd className="truncate">{release.language}</dd></div> : null}
             </dl>
           </aside>
         </div>
 
-        <div className="border-t border-white/[0.06] pt-6">
+        <div className="hymn-success-divider border-t pt-6">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.26em] text-[#59dfe0]">Help after submission</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-[-0.025em] text-[#f5f7fb] sm:text-3xl">Frequently asked questions</h2>
-            <p className="mt-2 text-sm text-[#98a1b3]">Everything you need to know after submitting your release.</p>
+            <h2 className="hymn-success-heading text-2xl font-semibold tracking-[-0.025em] sm:text-3xl">Frequently asked questions</h2>
+            <p className="hymn-success-muted mt-2 text-sm">Everything you need to know after submitting your release.</p>
           </div>
           <div className="mt-5 grid gap-2 lg:grid-cols-2 lg:items-start">
             {faqs.map((faq, index) => {
@@ -657,11 +655,11 @@ export function SuccessState({ release, onReset, title = "Your release has been 
               return (
                 <div key={faq.question} className={clsx("hymn-success-faq", open && "hymn-success-faq-open")}>
                   <button type="button" onClick={() => setOpenFaq(open ? -1 : index)} className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left">
-                    <span className="text-sm font-semibold text-[#f5f7fb]">{faq.question}</span>
-                    <ChevronDown className="h-5 w-5 shrink-0 text-[#59dfe0] transition duration-300" />
+                    <span className="hymn-success-heading text-sm font-semibold">{faq.question}</span>
+                    <ChevronDown className="hymn-success-accent h-5 w-5 shrink-0 transition duration-300" />
                   </button>
                   <div className="hymn-success-faq-answer px-4">
-                    <p className="pb-4 text-sm leading-6 text-[#98a1b3]">{faq.answer}</p>
+                    <p className="hymn-success-muted pb-4 text-sm leading-6">{faq.answer}</p>
                   </div>
                 </div>
               );
@@ -669,7 +667,7 @@ export function SuccessState({ release, onReset, title = "Your release has been 
           </div>
         </div>
 
-        <p className="mt-6 border-t border-white/[0.06] pt-5 text-sm text-[#98a1b3]">
+        <p className="hymn-success-divider hymn-success-muted mt-6 border-t pt-5 text-sm">
           Need help? Visit the <Link href="/faq" className="hymn-success-help-link">help center</Link> or contact the HYMN team.
         </p>
       </div>
@@ -707,3 +705,6 @@ export function ArtworkWarning({ warning }: { warning: string }) {
 // vercel trigger
 
 // vercel trigger
+// vercel trigger 7
+
+// vercel trigger 12

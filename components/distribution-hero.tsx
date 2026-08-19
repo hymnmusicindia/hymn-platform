@@ -10,46 +10,21 @@ type StoreLogo = {
 };
 
 const STORE_LOGOS: readonly StoreLogo[] = [
-  {
-    name: "Spotify",
-    src: "/assets/store-logos/spotify.png",
-    className: "h-8 w-auto sm:h-9"
-  },
-  {
-    name: "Apple Music",
-    src: "/assets/store-logos/apple-music.png",
-    className: "h-6 w-auto sm:h-7"
-  },
-  {
-    name: "YouTube Music",
-    src: "/assets/store-logos/youtube-music.png",
-    className: "h-7 w-auto sm:h-8"
-  },
-  {
-    name: "Amazon Music",
-    src: "/assets/store-logos/amazon-music.png",
-    className: "h-7 w-auto sm:h-8"
-  },
-  {
-    name: "Gaana",
-    src: "/assets/store-logos/gaana.png",
-    className: "h-6 w-auto sm:h-7"
-  },
-  {
-    name: "TikTok",
-    src: "/assets/store-logos/tiktok.png",
-    className: "h-9 w-auto sm:h-10"
-  },
-  {
-    name: "Instagram",
-    src: "/assets/store-logos/instagram.png",
-    className: "h-7 w-auto sm:h-8"
-  },
-  {
-    name: "Facebook",
-    src: "/assets/store-logos/facebook.png",
-    className: "h-6 w-auto sm:h-7"
-  }
+  { name: "Spotify", src: "/assets/store-logos/wordmark-spotify.png", className: "h-8 w-auto" },
+  { name: "Apple Music", src: "/assets/store-logos/wordmark-apple.png", className: "h-7 w-auto" },
+  { name: "YouTube Music", src: "/assets/store-logos/wordmark-youtube.png", className: "h-7 w-auto" },
+  { name: "Amazon Music", src: "/assets/store-logos/wordmark-amazon.png", className: "h-8 w-auto" },
+  { name: "Gaana", src: "/assets/store-logos/wordmark-gaana.png", className: "h-8 w-auto" },
+  { name: "TikTok", src: "/assets/store-logos/wordmark-tiktok.png", className: "h-7 w-auto" },
+  { name: "Instagram", src: "/assets/store-logos/instagram.png", className: "h-8 w-auto" },
+  { name: "Facebook", src: "/assets/store-logos/wordmark-facebook.png", className: "h-7 w-auto" },
+  { name: "Pandora", src: "/assets/store-logos/wordmark-pandora.png", className: "h-7 w-auto" },
+  { name: "Deezer", src: "/assets/store-logos/wordmark-deezer.png", className: "h-8 w-auto" },
+  { name: "TIDAL", src: "/assets/store-logos/wordmark-tidal.png", className: "h-7 w-auto" },
+  { name: "SoundCloud", src: "/assets/store-logos/wordmark-soundcloud.png", className: "h-7 w-auto" },
+  { name: "Boomplay", src: "/assets/store-logos/wordmark-boomplay.png", className: "h-12 w-auto scale-125" },
+  { name: "Anghami", src: "/assets/store-logos/wordmark-anghami.png", className: "h-8 w-auto" },
+  { name: "JioSaavn", src: "/assets/store-logos/wordmark-jiosaavn.png", className: "h-8 w-auto" }
 ] as const;
 
 export function DistributionHero() {
@@ -100,12 +75,12 @@ export function DistributionHero() {
               className="overflow-hidden rounded-2xl border"
               style={{
                 borderColor: "color-mix(in srgb, var(--glass-border) 82%, transparent)",
-                background: "color-mix(in srgb, var(--glass-bg) 76%, transparent)"
+                background: "rgba(255, 255, 255, 0.97)"
               }}
             >
-              <div className="marquee-row items-center gap-7 px-5 py-4">
+              <div className="marquee-row music-store-marquee items-center gap-10 px-6 py-4">
                 {marqueeItems.map((item, index) => (
-                  <div key={`${item.name}-${index}`} className="inline-flex shrink-0 items-center justify-center">
+                  <div key={`${item.name}-${index}`} className="inline-flex h-12 w-32 shrink-0 items-center justify-center" title={item.name}>
                     <img src={item.src} alt={item.name} className={`distribution-store-logo ${item.className}`} loading="lazy" decoding="async" />
                   </div>
                 ))}

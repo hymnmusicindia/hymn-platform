@@ -9,7 +9,7 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
   const mode = params.mode === "signup" || params.ref ? "signup" : "login";
 
   return (
-    <main className="relative min-h-[calc(100vh-73px)] overflow-hidden py-6 sm:py-10">
+    <main className="auth-standalone-page relative min-h-screen overflow-hidden py-6 sm:py-10">
       <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(circle at 14% 18%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 32%), radial-gradient(circle at 86% 10%, color-mix(in srgb, var(--money) 10%, transparent), transparent 28%), linear-gradient(180deg, var(--bg), var(--bg-soft))" }} />
       <div className="shell relative">
         <UnifiedAuthForm initialRole={role as AuthRole} initialMode={mode} initialReferralCode={params.ref} />
@@ -19,3 +19,5 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
 }
 
 // vercel trigger 2
+
+// vercel trigger 12

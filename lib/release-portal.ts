@@ -20,7 +20,7 @@ export function getReleasePortalStageLabel(stage: ReleasePortalStage) {
   if (stage === "rejected") return "Rejected";
   if (stage === "review") return "Under Review";
   if (stage === "processing") return "Processing";
-  if (stage === "partially_live") return "Partially Live";
+  if (stage === "partially_live") return "Partially Released";
   return "Draft";
 }
 
@@ -74,6 +74,22 @@ export function getReleasePortalBadgeStyle(stage: ReleasePortalStage) {
     } as const;
   }
 
+  if (stage === "review") {
+    return {
+      borderColor: "rgba(234, 179, 8, 0.48)",
+      background: "rgba(234, 179, 8, 0.14)",
+      color: "rgb(202, 138, 4)"
+    } as const;
+  }
+
+  if (stage === "partially_live") {
+    return {
+      borderColor: "rgba(59, 130, 246, 0.46)",
+      background: "rgba(59, 130, 246, 0.13)",
+      color: "rgb(37, 99, 235)"
+    } as const;
+  }
+
   if (stage === "released") {
     return {
       borderColor: "rgba(16, 185, 129, 0.4)",
@@ -100,3 +116,5 @@ export function getReleasePortalFilterLabel(status: ReleaseStatus) {
 
 // vercel trigger
 // vercel trigger 5
+
+// vercel trigger 12

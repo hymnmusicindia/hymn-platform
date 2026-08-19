@@ -1,12 +1,12 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/access";
+import { requireAdminPermission } from "@/lib/access";
 import { createProducerProfile, listProducerProfiles } from "@/lib/db";
 import { saveUploadedFile } from "@/lib/storage";
 
 export async function GET() {
-  const result = await requireAdmin();
+  const result = await requireAdminPermission("users.read");
   if ("error" in result) return result.error;
 
   const producerProfiles = await listProducerProfiles();
@@ -14,7 +14,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const result = await requireAdmin();
+  const result = await requireAdminPermission("users.manage");
   if ("error" in result) return result.error;
 
   try {
@@ -39,3 +39,4 @@ export async function POST(request: Request) {
   }
 }
 
+// vercel trigger 9

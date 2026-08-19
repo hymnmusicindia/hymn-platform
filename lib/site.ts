@@ -29,6 +29,7 @@ export const footerColumns = {
     { href: "/services", label: "Services" },
     { href: "/privacy-policy", label: "Privacy Policy" },
     { href: "/terms-of-service", label: "Terms of Service" },
+    { href: "/policies", label: "Policy Center" },
     { href: "/faq", label: "FAQ" }
   ]
 };

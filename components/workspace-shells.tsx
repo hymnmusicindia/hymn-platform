@@ -10,6 +10,8 @@ import { BeatCard } from "@/components/beat-card";
 import { Beat, BeatPurchase, Notification, Order, Release, SupportTicket, User } from "@/lib/types";
 import { ProfilePreferencesForm } from "@/components/profile-preferences-form";
 import { SplitsDashboard } from "@/components/splits-dashboard";
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { CustomerHome, ProducerHome } from "@/components/simplified-dashboard-home";
 
 type CustomerPayoutSummary = {
   totalEarnings: number;
@@ -23,22 +25,41 @@ type CustomerPayoutSummary = {
 };
 type SmartNextAction = { key: string; title: string; reason: string; cta: string; href: string; priority: "critical" | "high" | "normal" };
 
+const RELEASE_PIPELINE_STAGES = [
+  { key: "draft", label: "Draft", statuses: ["draft"] },
+  { key: "payment", label: "Payment", statuses: [] },
+  { key: "review", label: "HYMN Review", statuses: ["submitted", "in_queue", "under_review", "resubmitted"] },
+  { key: "changes", label: "Changes Required", statuses: ["changes_requested", "rejected"] },
+  { key: "distributor", label: "Distributor Processing", statuses: ["approved", "sent", "sent_to_distributor", "delivered", "processing"] },
+  { key: "scheduled", label: "Scheduled", statuses: ["scheduled"] },
+  { key: "live", label: "Live", statuses: ["live"] }
+] as const;
+
+function releaseMatchesPipeline(release: Release, key: string) {
+  if (key === "all") return true;
+  if (key === "needs_attention") return ["changes_requested", "rejected", "failed"].includes(release.status);
+  if (key === "payment") return release.status !== "draft" && release.paymentStatus !== "paid";
+  const stage = RELEASE_PIPELINE_STAGES.find((item) => item.key === key);
+  return stage ? (stage.statuses as readonly string[]).includes(release.status) : release.status === key;
+}
+
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="metric-card fade-up">
-      <p className="text-sm" style={{ color: "var(--text-soft)" }}>{label}</p>
-      <p className="mt-3 text-3xl font-semibold" style={{ color: "var(--text)" }}>{value}</p>
+    <div className="metric-card customer-stat-card fade-up h-full">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>{label}</p>
+      <p className="mt-3 text-3xl font-semibold tracking-tight" style={{ color: "var(--text)" }}>{value}</p>
     </div>
   );
 }
 
 function Panel({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
-    <section className="surface-card p-5 sm:p-6 lg:p-8 overflow-hidden fade-up">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <section className="surface-card customer-module-section overflow-hidden p-5 sm:p-6 lg:p-7 fade-up">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-5" style={{ borderColor: "var(--border)" }}>
         <div>
-          <h2 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>{title}</h2>
-          {description ? <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{description}</p> : null}
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: "var(--accent)" }}>Artist workspace</p>
+          <h2 className="text-xl font-semibold tracking-tight sm:text-2xl" style={{ color: "var(--text)" }}>{title}</h2>
+          {description ? <p className="mt-2 max-w-3xl text-sm leading-6" style={{ color: "var(--text-muted)" }}>{description}</p> : null}
         </div>
       </div>
       <div className="mt-5">{children}</div>
@@ -47,11 +68,14 @@ function Panel({ title, description, children }: { title: string; description?: 
 }
 
 function StatusPill({ label, active = true }: { label: string; active?: boolean }) {
-  return <span className={active ? "status-pill status-pill-active" : "status-pill"}>{label}</span>;
+  const normalized = label.toLowerCase().replace(/_/g, " ");
+  const negative = /failed|rejected|denied|missing|issue/.test(normalized);
+  const warning = /pending|review|scheduled|requested|processing/.test(normalized);
+  return <span className={`status-pill ${active ? "status-pill-active" : ""} ${negative ? "customer-status-negative" : warning ? "customer-status-warning" : ""}`}>{normalized}</span>;
 }
 
 function EmptyState({ copy }: { copy: string }) {
-  return <p className="text-sm" style={{ color: "var(--text-soft)" }}>{copy}</p>;
+  return <div className="rounded-2xl border border-dashed px-5 py-8 text-center text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text-soft)" }}>{copy}</div>;
 }
 
 function formatMoney(amount: number) {
@@ -96,6 +120,10 @@ function Timeline({ items }: { items: Array<{ label: string; detail?: string; ac
   );
 }
 
+function ProducerProfileWorkspace({ user, profile, onSubmit, pending, feedback }: { user: User; profile: any; onSubmit: (event: FormEvent<HTMLFormElement>) => void; pending: boolean; feedback: string | null }) {
+  return <div className="grid gap-6 xl:grid-cols-[0.75fr,1.25fr]"><Panel title="Producer identity" description="This profile powers your public identity across the HYMN Beat Store."><div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{profile?.coverPhotoUrl ? <img src={profile.coverPhotoUrl} alt="Producer cover" className="aspect-[16/7] w-full object-cover" /> : <div className="flex aspect-[16/7] items-center justify-center text-sm" style={{ color: "var(--text-muted)" }}>Add a cover photo</div>}<div className="p-5"><h3 className="text-2xl font-semibold">{profile?.displayName || user.name}</h3><p className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }}>{profile?.bio || "Complete your producer profile before publishing beats."}</p><div className="mt-4"><StatusPill label={profile?.status || "pending setup"} active={profile?.status === "active"} /></div></div></div></Panel><Panel title="Edit producer profile" description="Display name is required. Images are validated and stored through HYMN uploads."><form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2"><label className="grid gap-2 text-sm">Display name<input name="displayName" required minLength={2} defaultValue={profile?.displayName || user.name} className="field" /></label><label className="grid gap-2 text-sm">Location<input name="location" defaultValue={profile?.location || ""} className="field" /></label><label className="grid gap-2 text-sm sm:col-span-2">Bio<textarea name="bio" defaultValue={profile?.bio || ""} className="field min-h-28" /></label><label className="grid gap-2 text-sm sm:col-span-2">Genre tags<input name="producerTags" defaultValue={Array.isArray(profile?.tags) ? profile.tags.join(", ") : profile?.specialty || ""} className="field" placeholder="Hip-Hop, Trap, R&B" /></label><label className="grid gap-2 text-sm">Cover photo<input name="coverPhoto" type="file" accept="image/jpeg,image/png,image/webp" className="field" /></label><label className="grid gap-2 text-sm">Profile image<input name="avatar" type="file" accept="image/jpeg,image/png,image/webp" className="field" /></label>{[["instagramUrl","Instagram"],["youtubeUrl","YouTube"],["spotifyUrl","Spotify"],["websiteUrl","Website"]].map(([name,label])=><label key={name} className="grid gap-2 text-sm">{label}<input name={name} type="url" defaultValue={profile?.[name] || ""} className="field" /></label>)}<button type="submit" disabled={pending} className="btn-primary pressable sm:col-span-2">{pending ? "Saving..." : "Save producer profile"}</button>{feedback ? <p className="text-sm sm:col-span-2" style={{ color: "var(--text-muted)" }}>{feedback}</p> : null}</form></Panel></div>;
+}
+
 export function CustomerDashboardShell({ user, releases, orders, subscription, analytics = [] }: { user: User; releases: Release[]; orders: Order[]; subscription?: any | null; analytics?: any[] }) {
   const [activeTab, setActiveTab] = useState<"overview" | "releases" | "upload" | "analytics" | "earnings" | "promotions" | "collaborators" | "distribution" | "content-id" | "messages" | "support" | "settings" | "purchases" | "subscription" | "referral" | "account">("overview");
   const [dashboardSearch, setDashboardSearch] = useState("");
@@ -107,11 +135,12 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   const [smartActions, setSmartActions] = useState<SmartNextAction[]>([]);
   const [payoutSummary, setPayoutSummary] = useState<CustomerPayoutSummary | null>(null);
   const [supportFeedback, setSupportFeedback] = useState<string | null>(null);
+  const [sidebarSummaryOpen, setSidebarSummaryOpen] = useState(true);
   const paidOrders = orders.filter((order) => order.paymentStatus === "paid");
-  const underReviewReleases = releases.filter((release) => ["submitted", "in_queue", "under_review", "changes_requested"].includes(release.status));
-  const liveOrApprovedReleases = releases.filter((release) => ["approved", "sent", "sent_to_distributor", "delivered", "live"].includes(release.status));
   const releaseLimit = subscription?.releaseLimit ?? subscription?.release_limit ?? null;
   const subscriptionExpiry = subscription?.expiryDate ?? subscription?.expiry ?? null;
+  const releasesNeedingAttention = releases.filter((release) => ["changes_requested", "rejected", "failed"].includes(release.status)).length;
+  const planDaysRemaining = subscriptionExpiry ? Math.max(0, Math.ceil((new Date(subscriptionExpiry).getTime() - Date.now()) / 86_400_000)) : 0;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -122,22 +151,10 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
     }
   }, []);
 
-  const latestActivity = useMemo(
-    () =>
-      [
-        ...releases.map((release) => ({
-          title: release.trackName,
-          detail: `Distribution / ${release.status.replace(/_/g, " ")}`,
-          createdAt: release.createdAt
-        })),
-        ...orders.map((order) => ({
-          title: `Order #${order.id}`,
-          detail: `${order.items.length} license(s) / ${order.paymentStatus}`,
-          createdAt: order.createdAt
-        }))
-      ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [orders, releases]
-  );
+  useEffect(() => {
+    const saved = window.localStorage.getItem("hymn-artist-sidebar-summary");
+    if (saved === "hidden") setSidebarSummaryOpen(false);
+  }, []);
 
   useEffect(() => {
     let ignore = false;
@@ -195,7 +212,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
 
   const filteredReleases = useMemo(() => {
     return releases.filter((release) => {
-      const matchesStatus = releaseStatusFilter === "all" || release.status === releaseStatusFilter;
+      const matchesStatus = releaseMatchesPipeline(release, releaseStatusFilter);
       return matchesStatus && matchesQuery([releaseTitle(release), release.artistName, release.releaseType, release.status, release.primaryGenre, release.secondaryGenre], dashboardSearch);
     });
   }, [dashboardSearch, releaseStatusFilter, releases]);
@@ -203,10 +220,6 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => matchesQuery([order.id, order.razorpayOrderId, order.paymentStatus, ...order.items.flatMap((item) => [item.beatTitle, item.licenseType, item.producerName])], dashboardSearch));
   }, [dashboardSearch, orders]);
-
-  const collaboratorRows = useMemo(() => {
-    return releases.flatMap((release) => (release.tracks ?? []).map((track) => ({ release, track })));
-  }, [releases]);
 
   const actionItems = useMemo(() => {
     const releaseActions = releases
@@ -219,17 +232,6 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         cta: "Fix release",
         tab: "releases" as typeof activeTab
       }));
-    const licenseActions = orders
-      .filter((order) => order.paymentStatus === "paid" && order.items.some((item) => item.licenseUrl || item.downloadUrl))
-      .slice(0, 3)
-      .map((order) => ({
-        title: "License asset ready",
-        detail: `Order #${order.id} has downloadable beat/license assets.`,
-        severity: "Ready",
-        time: order.createdAt,
-        cta: "Open assets",
-        tab: "purchases" as typeof activeTab
-      }));
     const notificationActions = notifications
       .filter((notification) => !notification.readAt && ["high", "normal"].includes(notification.priority))
       .slice(0, 4)
@@ -241,13 +243,14 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         cta: "Read",
         tab: "messages" as typeof activeTab
       }));
-    return [...releaseActions, ...licenseActions, ...notificationActions]
+    return [...releaseActions, ...notificationActions]
       .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
       .slice(0, 6);
-  }, [notifications, orders, releases]);
+  }, [notifications, releases]);
 
   function selectCustomerTab(tab: typeof activeTab) {
     setActiveTab(tab);
+    setDashboardSearch("");
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       url.searchParams.set("tab", tab);
@@ -277,41 +280,45 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
 
   return (
     <DashboardFrame
-      eyebrow="Artist"
       title={`Welcome back, ${user.name}`}
-      subtitle="Track releases, purchases, payouts, and distribution updates from one workspace."
+      subtitle={<div className="artist-sidebar-summary"><button type="button" className="artist-sidebar-summary-toggle" aria-expanded={sidebarSummaryOpen} onClick={() => setSidebarSummaryOpen((current) => { const next = !current; window.localStorage.setItem("hymn-artist-sidebar-summary", next ? "shown" : "hidden"); return next; })}><span className="artist-sidebar-summary-title"><span className="artist-sidebar-summary-mark" aria-hidden="true" />Workspace summary</span><span className="artist-sidebar-summary-action"><span>{sidebarSummaryOpen ? "Collapse" : "Expand"}</span><span className="artist-sidebar-summary-chevron" aria-hidden="true" /></span></button>{sidebarSummaryOpen ? <div className="artist-sidebar-utility">
+        <button type="button" onClick={() => { setReleaseStatusFilter(releasesNeedingAttention ? "needs_attention" : "all"); selectCustomerTab("releases"); }}><span>Catalogue</span><strong>{releases.length} release{releases.length === 1 ? "" : "s"}{releasesNeedingAttention ? ` · ${releasesNeedingAttention} need attention` : " · clear"}</strong></button>
+        {subscription ? <button type="button" onClick={() => selectCustomerTab("subscription")}><span>Plan</span><strong>{`${String(subscription.plan).replace(/_/g, " ")} · ${planDaysRemaining} days left`}</strong></button> : <div className="artist-sidebar-plan-row"><span>Plan</span><span className="artist-sidebar-plan-empty"><strong>No active plan</strong><Link href="/distribution#distribution-pricing">compare plans</Link></span></div>}
+        <button type="button" onClick={() => selectCustomerTab("referral")}><span>Checkout wallet</span><strong>Rs {Number(user.referralCredits || 0).toLocaleString("en-IN")}</strong></button>
+      </div> : null}</div>}
+      overviewSubtitle={actionItems.length > 0 ? <button type="button" className="text-left font-medium transition-opacity hover:opacity-70" style={{ color: "var(--accent)" }} onClick={() => selectCustomerTab(actionItems[0].tab)}>{actionItems.length} item{actionItems.length === 1 ? "" : "s"} need your attention <span aria-hidden="true">→</span></button> : <span>Your workspace is clear.</span>}
       navItems={[
-        { key: "overview", label: "Overview", description: "Artist command center", group: "Workspace" },
-        { key: "releases", label: "My Releases", description: "Catalog and statuses", group: "Release Operations" },
-        { key: "distribution", label: "Distribution Queue", description: "DSP delivery", group: "Release Operations" },
-        { key: "upload", label: "Upload Music", description: "Submit new music", group: "Release Operations" },
-        { key: "purchases", label: "Purchases & Licenses", description: "Beat assets and licenses", group: "Assets" },
-        { key: "subscription", label: "Subscription", description: "Plan, usage, and renewal", group: "Money" },
-        { key: "earnings", label: "Payout", description: "Earnings and withdrawal", group: "Money" },
-        { key: "referral", label: "Referral", description: "Invite artists and track referral credits", group: "Growth" },
-        { key: "analytics", label: "Analytics", description: "Real reporting only", group: "Money" },
-        { key: "promotions", label: "Promotions", description: "Campaign requests", group: "Growth" },
-        { key: "collaborators", label: "Splits", description: "Invites, shares, and earnings", group: "Money" },
-        { key: "content-id", label: "Content ID", description: "Monetization claims", group: "Growth" },
-        { key: "messages", label: "Notifications", description: "HYMN updates", group: "Support" },
-        { key: "support", label: "Support", description: "Help and requests", group: "Support" },
-        { key: "settings", label: "Settings", description: "Profile and security", group: "Account" }
+        { key: "overview", label: "Overview", description: "What matters now", group: "Home" },
+        { key: "releases", label: "Releases", description: "Your music and status", group: "Music" },
+        { key: "upload", label: "New Release", description: "Upload and submit music", group: "Music" },
+        { key: "beat-store", label: "Beat Store", description: "Find your next sound", group: "Music", href: "/beat-store" },
+        { key: "earnings", label: "Earnings", description: "Reported royalties", group: "Money" },
+        { key: "collaborators", label: "Splits", description: "Invites and shares", group: "Money" },
+        { key: "payouts", label: "Payouts", description: "Balance and requests", group: "Money", href: "/payout" },
+        { key: "profile", label: "Artist Profiles", description: "Your store identities", group: "Account", href: "/dashboard?tab=settings" },
+        { key: "referral", label: "Referrals", description: "Invites and HYMN credit", group: "Account" },
+        { key: "settings", label: "Settings", description: "Profile and security", group: "Account" },
+        { key: "support", label: "Help & FAQ", description: "Guidance and support", group: "Support" }
       ]}
       activeKey={activeTab}
       onSelect={selectCustomerTab}
+      onNotificationsClick={() => selectCustomerTab("messages")}
+      notificationCount={notifications.filter((notification) => !notification.readAt).length}
+      compactOverview
       searchValue={dashboardSearch}
       onSearchChange={setDashboardSearch}
       searchPlaceholder={activeTab === "releases" ? "Search releases, artists, status..." : activeTab === "purchases" ? "Search orders, beats, licenses..." : activeTab === "messages" ? "Search notifications..." : "Search releases, orders, tickets..."}
       quickActions={
         <>
-          <Link href="/distribution" className="btn-primary pressable px-4 py-2 text-sm">Upload New Release</Link>
+          <Link href="/distribution/start" className="btn-primary pressable px-4 py-2 text-sm">Create Release</Link>
           <button type="button" onClick={() => selectCustomerTab("earnings")} className="btn-outline pressable px-4 py-2 text-sm">Open Payout</button>
           <Link href="/beat-store" className="btn-outline pressable px-4 py-2 text-sm">Buy Beats</Link>
         </>
       }
-      workspaceAction={user.role === "producer" ? <Link href="/producer/dashboard" className="btn-outline pressable px-3 py-2 text-xs">Producer Workspace</Link> : undefined}
+      workspaceAction={user.role === "producer" ? <WorkspaceSwitcher current="customer" /> : undefined}
     >
-      {subscription && activeTab === "overview" ? (
+      {activeTab === "overview" ? <CustomerHome user={user} releases={releases} attention={actionItems.map(item => ({ title: item.title, detail: item.detail, cta: item.cta, href: `/dashboard?tab=${item.tab}` }))} earnings={payoutSummary} notifications={notifications} tickets={supportTickets} onEarnings={() => selectCustomerTab("earnings")} /> : null}
+      {false && subscription && activeTab === "overview" ? (
         <section className="surface-card p-5 sm:p-6 mb-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
@@ -327,26 +334,9 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         </section>
       ) : null}
 
-      {activeTab === "overview" ? (
-        <div className="grid gap-6 xl:grid-cols-[1.12fr,0.88fr]">
-          <Panel title="Artist command center" description="A focused view of release motion, owned assets, payout readiness, and next actions.">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Link href="/distribution" className="btn-primary pressable">Upload Music</Link>
-              <button type="button" onClick={() => selectCustomerTab("releases")} className="btn-outline pressable">View Releases</button>
-              <button type="button" onClick={() => selectCustomerTab("earnings")} className="btn-outline pressable">Open Payout</button>
-            </div>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <StatCard label="Total releases" value={releases.length} />
-              <StatCard label="Under review" value={underReviewReleases.length} />
-              <StatCard label="Live / approved" value={liveOrApprovedReleases.length} />
-              <StatCard label="Available payout" value={formatMoney(payoutSummary?.availableBalance ?? 0)} />
-            </div>
-            <p className="mt-5 rounded-2xl border p-4 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text-muted)" }}>
-              Earnings usually take around 1.5 months to reflect after platform reporting and distributor processing.
-            </p>
-          </Panel>
-
-          <Panel title="Action required" description="Real account items that need attention.">
+      {false && activeTab === "overview" ? (
+        <div className="grid gap-6">
+          <Panel title="Action centre" description="Items backed by your account, releases and HYMN notifications that need a decision or correction.">
             <div className="grid gap-4">
               {smartActions.map((item) => <article key={item.key} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><StatusPill label={item.priority} active={item.priority === "critical" || item.priority === "high"} /><p className="mt-3 font-semibold" style={{ color: "var(--text)" }}>{item.title}</p><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{item.reason}</p></div><a href={item.href} className="btn-outline pressable px-3 py-2 text-xs">{item.cta}</a></div></article>)}
               {smartActions.length === 0 ? actionItems.map((item, index) => (
@@ -361,42 +351,40 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
                   </div>
                 </article>
               )) : null}
-              {smartActions.length === 0 && actionItems.length === 0 ? <EmptyState copy="No action required." /> : null}
+              {smartActions.length === 0 && actionItems.length === 0 ? <EmptyState copy="Nothing needs your attention right now. New corrections, payment issues, split invitations and information requests will appear here." /> : null}
             </div>
           </Panel>
 
-          <Panel title="Payout snapshot" description="Real payout data from verified royalty entries.">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <StatCard label="Total earnings" value={formatMoney(payoutSummary?.totalEarnings ?? 0)} />
-              <StatCard label="Pending payout" value={formatMoney(payoutSummary?.pendingBalance ?? 0)} />
-              <StatCard label="Paid till date" value={formatMoney(payoutSummary?.paidTillDate ?? 0)} />
-              <StatCard label="Latest status" value={payoutSummary?.nextPayoutStatus ?? "No payout data"} />
-            </div>
-            <div className="mt-5 flex flex-wrap gap-3">
-              <Link href="/payout" className="btn-primary pressable">View Payout Dashboard</Link>
-              <button type="button" onClick={() => selectCustomerTab("earnings")} className="btn-outline pressable">Request Payout</button>
+          <Panel title="Release pipeline" description="Real release counts by current operational stage. Select a stage to open the matching catalogue filter.">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+              {RELEASE_PIPELINE_STAGES.map((stage) => { const count = releases.filter((release) => releaseMatchesPipeline(release, stage.key)).length; return <button type="button" key={stage.key} className="surface-list-item min-h-28 p-4 text-left transition hover:border-[var(--border-strong)]" onClick={() => { setReleaseStatusFilter(stage.key); selectCustomerTab("releases"); }}><span className="text-3xl font-semibold" style={{ color: "var(--text)" }}>{count}</span><span className="mt-2 block text-sm" style={{ color: "var(--text-muted)" }}>{stage.label}</span></button>; })}
             </div>
           </Panel>
 
-          <Panel title="Recent updates" description="Latest release, purchase, and platform activity.">
-            <div className="grid gap-4">
-              {latestActivity.slice(0, 5).map((item) => (
-                <article key={`${item.title}-${item.createdAt}`} className="surface-list-item p-4">
-                  <p className="font-semibold" style={{ color: "var(--text)" }}>{item.title}</p>
-                  <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{item.detail}</p>
-                </article>
-              ))}
-              {latestActivity.length === 0 ? <EmptyState copy="No artist activity yet." /> : null}
-            </div>
-          </Panel>
+          <div className="grid gap-6 xl:grid-cols-[0.9fr,1.1fr]">
+            <Panel title="Verified money" description="Balances derived from imported royalty lines and recorded payout activity.">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <StatCard label="Available balance" value={formatMoney(payoutSummary?.availableBalance ?? 0)} />
+                <StatCard label="Held / pending payout" value={formatMoney(payoutSummary?.pendingBalance ?? 0)} />
+                <StatCard label="Lifetime verified earnings" value={formatMoney(payoutSummary?.totalEarnings ?? 0)} />
+                <StatCard label="Lifetime paid" value={formatMoney(payoutSummary?.paidTillDate ?? 0)} />
+              </div>
+              <p className="mt-4 text-xs" style={{ color: "var(--text-soft)" }}>Verified through the latest imported provider statement. Reporting is historical, not real-time.</p>
+              <Link href="/payout" className="btn-outline pressable mt-5 inline-flex">Open Payouts</Link>
+            </Panel>
+
+            <Panel title="Recent releases" description="Your latest catalogue records and their immediate operational state.">
+              <div className="grid gap-3">
+                {releases.slice(0, 5).map((release) => <article key={release.id} className="surface-list-item flex flex-wrap items-center justify-between gap-4 p-4"><div className="min-w-0"><p className="truncate font-semibold" style={{ color: "var(--text)" }}>{releaseTitle(release)}</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{release.artistName} · {formatDate(release.releaseDate)}</p><div className="mt-2"><StatusPill label={release.status} active /></div></div><Link href={`/dashboard/releases/${release.id}`} className="btn-outline pressable px-3 py-2 text-xs">View release</Link></article>)}
+                {releases.length === 0 ? <EmptyState copy="No releases yet. Create a release to begin your catalogue and delivery workflow." /> : null}
+              </div>
+            </Panel>
+          </div>
         </div>
       ) : null}
 
-      {activeTab === "overview" ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Subscription" value={subscription ? subscription.plan.toUpperCase() : "None"} />
-        <StatCard label="Releases in system" value={releases.length} />
-        <StatCard label="Paid purchases" value={paidOrders.length} />
-        <StatCard label="Referral credits" value={`Rs ${user.referralCredits}`} />
+      {activeTab === "overview" ? <section className="sr-only" aria-label="Account summary">
+        <p>Plan {subscription ? subscription.plan : "none"}; {releases.length} releases; {paidOrders.length} paid purchases; {user.referralCredits} referral credits.</p>
       </section> : null}
 
       {activeTab === "referral" ? <ReferralPanel /> : null}
@@ -407,7 +395,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
           <div className="summary-card"><span>Valid until</span><span>{subscription ? formatDate(subscriptionExpiry) : "Not applicable"}</span></div>
           <div className="summary-card"><span>Releases used</span><span>{subscription ? `${subscription.releasesUsed ?? 0} / ${releaseLimit ?? "Unlimited"}` : "No plan allowance"}</span></div>
         </div>
-        <Link href="/pricing" className="btn-primary pressable mt-5 inline-flex">View plans</Link>
+        <Link href="/distribution#distribution-pricing" className="btn-primary pressable mt-5 inline-flex">View plans</Link>
       </Panel> : null}
 
       {activeTab === "releases" ? (
@@ -686,18 +674,18 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
           </Panel>
           <Panel title="Activity overview" description="Recent distribution and purchase events in one place.">
             <div className="grid gap-4">
-              {latestActivity.slice(0, 6).map((item) => (
-                <article key={`${item.title}-${item.createdAt}`} className="surface-list-item p-4">
+              {releases.slice(0, 6).map((release) => (
+                <article key={release.id} className="surface-list-item p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="font-semibold" style={{ color: "var(--text)" }}>{item.title}</p>
+                    <p className="font-semibold" style={{ color: "var(--text)" }}>{release.releaseTitle || release.trackName}</p>
                     <span className="text-xs uppercase tracking-[0.22em]" style={{ color: "var(--text-soft)" }}>
-                      {new Date(item.createdAt).toLocaleDateString()}
+                      {new Date(release.createdAt).toLocaleDateString()}
                     </span>
                   </div>
-                  <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{item.detail}</p>
+                  <p className="mt-2 text-sm capitalize" style={{ color: "var(--text-muted)" }}>Release status: {release.status.replace(/_/g, " ")}</p>
                 </article>
               ))}
-              {latestActivity.length === 0 ? <EmptyState copy="No activity yet." /> : null}
+              {releases.length === 0 ? <EmptyState copy="No release activity yet." /> : null}
             </div>
           </Panel>
         </div>
@@ -774,8 +762,8 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   );
 }
 
-export function ProducerDashboardShell({ user, beats, orders, earnings }: { user: User; beats: Beat[]; orders: Order[]; earnings: { totalSales: number; totalRevenue: number; beatsSold: number } }) {
-  const [activeTab, setActiveTab] = useState<"overview" | "catalog" | "collaborations" | "placements" | "contracts" | "earnings" | "upload" | "licensing" | "messages" | "analytics" | "settings" | "manage" | "sales">("overview");
+export function ProducerDashboardShell({ user, beats, orders, earnings, finance }: { user: User; beats: Beat[]; orders: Order[]; earnings: { totalSales: number; totalRevenue: number; beatsSold: number }; finance: any }) {
+  const [activeTab, setActiveTab] = useState<"overview" | "profile" | "catalog" | "collaborations" | "placements" | "contracts" | "earnings" | "payout" | "ledger" | "upload" | "licensing" | "messages" | "analytics" | "settings" | "manage" | "sales">("overview");
   const [catalog, setCatalog] = useState(beats);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -786,6 +774,8 @@ export function ProducerDashboardShell({ user, beats, orders, earnings }: { user
   const [catalogStatusFilter, setCatalogStatusFilter] = useState("all");
   const [catalogGenreFilter, setCatalogGenreFilter] = useState("all");
   const [selectedAudioFile, setSelectedAudioFile] = useState<File | null>(null);
+  const [producerProfile, setProducerProfile] = useState(finance.profile ?? null);
+  const [producerNotifications, setProducerNotifications] = useState<Notification[]>([]);
   const enabledBeats = catalog.filter((beat) => beat.enabled);
   const disabledBeats = catalog.filter((beat) => !beat.enabled);
   const licenseRows = orders.flatMap((order) => order.items.map((item) => ({ order, item })));
@@ -801,6 +791,22 @@ export function ProducerDashboardShell({ user, beats, orders, earnings }: { user
     filteredLicenseRows.forEach(({ item }) => { counts[item.licenseType] += 1; });
     return counts;
   }, [filteredLicenseRows]);
+
+  useEffect(() => {
+    fetch("/api/notifications?limit=30", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => setProducerNotifications(Array.isArray(data?.notifications) ? data.notifications : [])).catch(() => undefined);
+  }, []);
+
+  function saveProducerProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    startTransition(async () => {
+      const response = await fetch("/api/producer/profile", { method: "PATCH", body: new FormData(form) });
+      const data = await response.json();
+      if (!response.ok) return setFeedback(data.error || "Could not update producer profile.");
+      setProducerProfile(data.profile);
+      setFeedback("Producer profile saved.");
+    });
+  }
 
   function handleBeatUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -882,8 +888,8 @@ export function ProducerDashboardShell({ user, beats, orders, earnings }: { user
         setDeletingBeat(null);
         return;
       }
-      setCatalog((items) => items.filter((item) => item.id !== deletingBeat.id));
-      setFeedback(`Beat deleted: ${deletingBeat.title}`);
+      setCatalog((items) => data.archived ? items.map((item) => item.id === deletingBeat.id ? { ...item, enabled: false, status: "ARCHIVED" } : item) : items.filter((item) => item.id !== deletingBeat.id));
+      setFeedback(data.archived ? `Beat archived because it has sales history: ${deletingBeat.title}` : `Beat deleted: ${deletingBeat.title}`);
       setDeletingBeat(null);
     });
   }
@@ -894,35 +900,40 @@ export function ProducerDashboardShell({ user, beats, orders, earnings }: { user
       title={user.name}
       subtitle={user.email}
       navItems={[
-        { key: "overview", label: "Overview", description: "Creative command center" },
-        { key: "catalog", label: "Beat Catalog", description: "Inventory and metadata" },
-        { key: "collaborations", label: "Collaborations", description: "Artist rooms" },
-        { key: "placements", label: "Placements", description: "Tracks and wins" },
-        { key: "contracts", label: "Contracts", description: "Splits and signing" },
-        { key: "earnings", label: "Earnings", description: "Revenue and payouts" },
-        { key: "sales", label: "Sales", description: "Buyer order history" },
-        { key: "upload", label: "Uploads", description: "Push new inventory live" },
-        { key: "licensing", label: "Licensing", description: "License tiers" },
-        { key: "messages", label: "Messages", description: "Requests and inbox" },
-        { key: "analytics", label: "Analytics", description: "Beat performance" },
-        { key: "settings", label: "Settings", description: "Profile and catalog" }
+        { key: "overview", label: "Overview", description: "Catalogue, sales and actions", group: "Home" },
+        { key: "catalog", label: "My Beats", description: "Catalogue and pricing", group: "Beats" },
+        { key: "upload", label: "Upload Beat", description: "Add a new beat", group: "Beats" },
+        { key: "store", label: "Beat Store", description: "Open your storefront", group: "Beats", href: "/beat-store" },
+        { key: "sales", label: "Sales", description: "Verified purchases", group: "Business" },
+        { key: "earnings", label: "Earnings", description: "Your 70% share", group: "Business" },
+        { key: "payout", label: "Payouts", description: "Balance and withdrawals", group: "Business" },
+        { key: "profile", label: "Producer Profile", description: "Your public identity", group: "Profile" },
+        { key: "messages", label: "Notifications", description: "Sales and account updates", group: "Account" },
+        { key: "settings", label: "Settings", description: "Workspace preferences", group: "Account" },
+        { key: "help", label: "Help & FAQ", description: "Guidance and support", group: "Support", href: "/faq" }
       ]}
       activeKey={activeTab}
       onSelect={setActiveTab}
       searchValue={dashboardSearch}
       onSearchChange={setDashboardSearch}
       searchPlaceholder={activeTab === "catalog" ? "Search beats, genre, mood, BPM..." : activeTab === "licensing" || activeTab === "sales" ? "Search buyers, orders, licenses..." : "Search catalog and sales..."}
-      workspaceAction={<Link href="/dashboard" className="btn-outline pressable px-3 py-2 text-xs">Artist Workspace</Link>}
+      workspaceAction={<WorkspaceSwitcher current="producer" />}
+      onNotificationsClick={() => setActiveTab("messages")}
+      notificationCount={producerNotifications.filter((notification) => !notification.readAt).length}
+      compactOverview
     >
-      {activeTab === "overview" ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {activeTab === "overview" ? <ProducerHome user={user} beats={catalog} orders={orders} finance={finance} notifications={producerNotifications} onTab={(tab) => setActiveTab(tab)} /> : null}
+      {false && activeTab === "overview" ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Catalog size" value={catalog.length} />
         <StatCard label="Enabled beats" value={enabledBeats.length} />
         <StatCard label="Disabled beats" value={disabledBeats.length} />
-        <StatCard label="Licenses sold" value={earnings.beatsSold} />
-        <StatCard label="Revenue" value={`Rs ${earnings.totalRevenue}`} />
+        <StatCard label="Total sales" value={finance.totalSales} />
+        <StatCard label="Available payout" value={formatMoney(finance.availableBalance)} />
+        <StatCard label="Producer earnings 70%" value={formatMoney(finance.producerEarnings)} />
+        <StatCard label="HYMN commission 30%" value={formatMoney(finance.hymnCommission)} />
       </section> : null}
 
-      {activeTab === "overview" ? (
+      {false && activeTab === "overview" ? (
         <div className="grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
           <Panel title="Creative collaboration workspace" description="Catalog, placements, licensing, and artist requests in one premium producer OS.">
             <div className="grid gap-3 sm:grid-cols-3">
@@ -948,6 +959,8 @@ export function ProducerDashboardShell({ user, beats, orders, earnings }: { user
           </Panel>
         </div>
       ) : null}
+
+      {activeTab === "profile" ? <ProducerProfileWorkspace user={user} profile={producerProfile} onSubmit={saveProducerProfile} pending={isPending} feedback={feedback} /> : null}
 
       {activeTab === "upload" ? (
         <Panel title="Upload beats" description="Add your beat file, select its format, and provide optional artwork in a mobile-friendly layout.">
@@ -1098,8 +1111,8 @@ export function ProducerDashboardShell({ user, beats, orders, earnings }: { user
       ) : null}
 
       {activeTab === "messages" ? (
-        <Panel title="Producer messages" description="Admin/support notifications appear in the site bell. This panel points to the active notification center.">
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>Use the notification bell in the header for beat purchase notifications, license updates, support responses, and admin notices.</p>
+        <Panel title="Producer messages" description="Beat sales, payout changes, approvals, license updates, and admin notices.">
+          <div className="grid gap-3">{producerNotifications.map((notification) => <article key={notification.id} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">{notification.title}</p><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{notification.body}</p><p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>{new Date(notification.createdAt).toLocaleString("en-IN")}</p></div><StatusPill label={notification.readAt ? "Read" : "Unread"} active={!notification.readAt} /></div>{notification.href ? <a href={notification.href} className="btn-outline mt-3 inline-flex px-3 py-2 text-xs">{notification.actionLabel || "Open"}</a> : null}</article>)}{producerNotifications.length === 0 ? <EmptyState copy="No producer notifications yet." /> : null}</div>
         </Panel>
       ) : null}
 
@@ -1115,14 +1128,14 @@ export function ProducerDashboardShell({ user, beats, orders, earnings }: { user
       ) : null}
 
       {activeTab === "earnings" ? (
-        <Panel title="Producer earnings" description="Revenue from verified beat purchases. Unavailable payout balances are not estimated.">
-          {earnings.totalSales > 0 ? <section className="grid gap-4 md:grid-cols-3">
-            <StatCard label="Total sales" value={earnings.totalSales} />
-            <StatCard label="Verified revenue" value={formatMoney(earnings.totalRevenue)} />
-            <StatCard label="Licenses sold" value={earnings.beatsSold} />
-          </section> : <EmptyState copy="No producer earnings yet. Earnings will appear after verified beat purchases or royalty reports." />}
+        <Panel title="Producer earnings" description="Every paid beat sale is split server-side: 70% producer share and 30% HYMN commission.">
+          {finance.totalSales > 0 ? <section className="grid gap-4 md:grid-cols-4"><StatCard label="Gross sales" value={formatMoney(finance.grossRevenue)} /><StatCard label="Your 70%" value={formatMoney(finance.producerEarnings)} /><StatCard label="HYMN 30%" value={formatMoney(finance.hymnCommission)} /><StatCard label="Sales" value={finance.totalSales} /></section> : <EmptyState copy="No beat sales yet. Earnings will appear after a verified purchase is credited." />}
         </Panel>
       ) : null}
+
+      {activeTab === "payout" ? <Panel title="Producer payout" description="Producer sale balances use the existing secure payout request and quarterly processing system."><div className="grid gap-4 sm:grid-cols-3"><StatCard label="Available balance" value={formatMoney(finance.availableBalance)} /><StatCard label="Pending payout" value={formatMoney(finance.pendingPayout)} /><StatCard label="Lifetime paid" value={formatMoney(finance.lifetimePaid)} /></div><div className="mt-5 flex flex-wrap gap-3"><Link href="/payout" className="btn-primary pressable">Open payout dashboard</Link><button type="button" onClick={() => setActiveTab("ledger")} className="btn-outline pressable">View producer ledger</button></div>{!finance.payouts?.length ? <div className="mt-5"><EmptyState copy="No producer payout activity yet. Your available balance will appear after beat sales are credited." /></div> : null}</Panel> : null}
+
+      {activeTab === "ledger" ? <Panel title="Producer wallet ledger" description="Immutable credits created from verified beat sales. Commission percentages cannot be edited here."><div className="grid gap-3">{finance.ledger?.map((entry: any) => <article key={entry.id} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">{entry.type.replace(/_/g, " ")}</p><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{entry.note || `Reference ${entry.referenceId}`}</p><p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>{new Date(entry.createdAt).toLocaleString("en-IN")}</p></div><div className="text-right"><p className="font-semibold" style={{ color: "var(--success)" }}>+{formatMoney(Number(entry.amount))}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Balance {formatMoney(Number(entry.balanceAfter))}</p></div></div></article>)}{!finance.ledger?.length ? <EmptyState copy="No producer ledger entries yet. Verified beat sales will be credited automatically." /> : null}</div></Panel> : null}
 
       {activeTab === "sales" ? (
         <Panel title="Sales history" description="See every verified order and the license mix behind it.">
@@ -1137,7 +1150,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings }: { user
                 <div className="mt-4 grid gap-2">
                   {order.items.filter((item) => matchesQuery([order.id, order.buyerName, order.buyerEmail, item.beatTitle, item.licenseType], dashboardSearch)).map((item, index) => (
                     <div key={`${order.id}-${item.beatId}-${index}`} className="rounded-xl border px-3 py-2 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
-                      {item.beatTitle ?? `Beat #${item.beatId}`} / {item.licenseType} / Rs {item.price}
+                      <div className="flex flex-wrap items-center justify-between gap-2"><span>{item.beatTitle ?? `Beat #${item.beatId}`} · {item.licenseType}</span><span>Gross {formatMoney(item.price)} · Your 70% {formatMoney(Math.round(item.price * 0.7 * 100) / 100)} · HYMN 30% {formatMoney(Math.round(item.price * 0.3 * 100) / 100)}</span></div>
                     </div>
                   ))}
                 </div>
@@ -1231,3 +1244,6 @@ export function ProducerDashboardShell({ user, beats, orders, earnings }: { user
 
 // vercel trigger 3
 // vercel trigger 4
+// vercel trigger 7
+
+// vercel trigger 11

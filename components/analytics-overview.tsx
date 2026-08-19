@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, Globe2, RefreshCw, Sparkles, TrendingUp } from "lucide-react";
 import { analyticsWindows } from "@/lib/analytics";
 import { AnalyticsCountryStat, AnalyticsPoint, AnalyticsPlatformStat, AnalyticsReleaseRow, AnalyticsSummary, AnalyticsWindow } from "@/lib/types";
+import { DataSourceBadge, EmptyState, ErrorState, LoadingState } from "@/components/ui/hymn-ui";
 
 const WINDOW_LABELS: Record<AnalyticsWindow, string> = { "7d": "7 days", "30d": "30 days", all: "All time" };
 const PLATFORM_COLORS: Record<string, string> = { Spotify: "#22c55e", "Apple Music": "#e879f9", YouTube: "#60a5fa" };
@@ -29,29 +30,9 @@ function buildPath(points: AnalyticsPoint[], width: number, height: number, padd
 }
 
 function AnimatedValue({ value, kind }: { value: number; kind: "number" | "currency" | "percent" }) {
-  const [display, setDisplay] = useState(value);
-  const previous = useRef(value);
-  const raf = useRef<number | null>(null);
-
-  useEffect(() => {
-    const from = previous.current;
-    const to = value;
-    const start = performance.now();
-    const duration = 550;
-    if (raf.current) cancelAnimationFrame(raf.current);
-    const tick = (now: number) => {
-      const progress = clamp((now - start) / duration, 0, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplay(from + (to - from) * eased);
-      if (progress < 1) raf.current = requestAnimationFrame(tick); else previous.current = to;
-    };
-    raf.current = requestAnimationFrame(tick);
-    return () => { if (raf.current) cancelAnimationFrame(raf.current); };
-  }, [value]);
-
-  if (kind === "currency") return <>{formatCurrency(display)}</>;
-  if (kind === "percent") return <>{formatPercent(display)}</>;
-  return <>{formatNumber(display)}</>;
+  if (kind === "currency") return <>{formatCurrency(value)}</>;
+  if (kind === "percent") return <>{formatPercent(value)}</>;
+  return <>{formatNumber(value)}</>;
 }
 
 function MetricCard({ label, value, kind, detail }: { label: string; value: number; kind: "number" | "currency" | "percent"; detail: string }) {
@@ -86,7 +67,7 @@ function CountryMap({ countries, selectedCountry, onSelect }: { countries: Analy
 }
 
 function PlatformBreakdown({ platforms }: { platforms: AnalyticsPlatformStat[] }) {
-  return <div className="surface-card p-5 sm:p-6"><div className="flex items-start justify-between gap-4"><div><h2 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>Where you are winning</h2></div><TrendingUp className="h-5 w-5" style={{ color: "var(--text-soft)" }} /></div><div className="mt-5 space-y-4">{platforms.map((platform) => <div key={platform.platform} className="rounded-[1.5rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold" style={{ color: "var(--text)" }}>{platform.platform}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{formatNumber(platform.streams)} streams</p></div><p className="text-lg font-semibold" style={{ color: PLATFORM_COLORS[platform.platform] ?? "var(--accent)" }}>{platform.percent.toFixed(0)}%</p></div><div className="mt-3 h-2 overflow-hidden rounded-full" style={{ background: "var(--card-strong)" }}><div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(platform.percent, 4)}%`, background: PLATFORM_COLORS[platform.platform] ?? "var(--accent)" }} /></div></div>)}</div></div>;
+  return <div className="surface-card p-5 sm:p-6"><div className="flex items-start justify-between gap-4"><div><h2 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>Platform distribution</h2></div><TrendingUp className="h-5 w-5" style={{ color: "var(--text-soft)" }} /></div><div className="mt-5 space-y-4">{platforms.map((platform) => <div key={platform.platform} className="rounded-[1.5rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold" style={{ color: "var(--text)" }}>{platform.platform}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{formatNumber(platform.streams)} streams</p></div><p className="text-lg font-semibold" style={{ color: PLATFORM_COLORS[platform.platform] ?? "var(--accent)" }}>{platform.percent.toFixed(0)}%</p></div><div className="mt-3 h-2 overflow-hidden rounded-full" style={{ background: "var(--card-strong)" }}><div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.max(platform.percent, 4)}%`, background: PLATFORM_COLORS[platform.platform] ?? "var(--accent)" }} /></div></div>)}</div></div>;
 }
 
 function RevenueSection({ summary, windowKey, points }: { summary: AnalyticsSummary; windowKey: AnalyticsWindow; points: AnalyticsPoint[] }) {
@@ -101,7 +82,7 @@ function InsightCard({ insight }: { insight: AnalyticsSummary["insights"][number
 
 function ReleaseTable({ releases, selectedReleaseId, onSelect }: { releases: AnalyticsReleaseRow[]; selectedReleaseId: number | null; onSelect: (id: number) => void }) {
   const selected = releases.find((release) => release.id === selectedReleaseId) ?? releases[0] ?? null;
-  return <div className="surface-card p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>Release performance table</h2></div><p className="text-sm" style={{ color: "var(--text-muted)" }}>Sorted by streams</p></div><div className="mt-5 grid gap-5 xl:grid-cols-[1.25fr,0.75fr]"><div className="overflow-x-auto overflow-y-hidden rounded-[1.5rem] border" style={{ borderColor: "var(--border)" }}><div className="grid min-w-[640px] grid-cols-[1.6fr,0.7fr,0.7fr,0.9fr,0.7fr] gap-3 border-b px-4 py-3 text-xs uppercase tracking-[0.2em]" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text-soft)" }}><span>Track Name</span><span>Streams</span><span>Revenue</span><span>Top Country</span><span>Status</span></div><div>{releases.length === 0 ? <div className="p-6 text-sm" style={{ color: "var(--text-muted)" }}>No release performance data yet.</div> : releases.map((release) => { const active = release.id === selectedReleaseId; return <button key={release.id} type="button" onClick={() => onSelect(release.id)} className="grid min-w-[640px] w-full grid-cols-[1.6fr,0.7fr,0.7fr,0.9fr,0.7fr] gap-3 px-4 py-4 text-left transition" style={{ background: active ? "var(--accent-soft)" : "transparent", borderTop: "1px solid var(--border)" }}><span><span className="block font-semibold" style={{ color: "var(--text)" }}>{release.trackName}</span><span className="mt-1 block text-xs" style={{ color: "var(--text-muted)" }}>{formatDateTime(release.updatedAt)}</span></span><span style={{ color: "var(--text)" }}>{formatNumber(release.streams)}</span><span style={{ color: "var(--text)" }}>{formatCurrency(release.revenue)}</span><span style={{ color: "var(--text)" }}>{release.topCountry}</span><span><span className="status-pill" style={{ borderColor: "var(--border)", color: "var(--text)" }}>{release.statusLabel}</span></span></button>; })}</div></div><div className="rounded-[1.5rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{selected ? <div><p className="text-xs uppercase tracking-[0.22em]" style={{ color: "var(--text-soft)" }}>Selected release</p><h3 className="mt-3 text-xl font-semibold" style={{ color: "var(--text)" }}>{selected.trackName}</h3><div className="mt-4 space-y-3">{[["Streams", formatNumber(selected.streams)], ["Revenue", formatCurrency(selected.revenue)], ["Top country", selected.topCountry], ["Status", selected.statusLabel]].map(([label, value]) => <div key={String(label)} className="rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border)", background: "var(--card)" }}><p className="text-xs uppercase tracking-[0.18em]" style={{ color: "var(--text-soft)" }}>{label}</p><p className="mt-2 text-lg font-semibold" style={{ color: "var(--text)" }}>{value}</p></div>)}</div></div> : <div className="flex min-h-[260px] items-center justify-center text-center"><p className="text-sm" style={{ color: "var(--text-muted)" }}>Select a release to see more detail.</p></div>}</div></div></div>;
+  return <div className="surface-card p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>Release performance table</h2></div><p className="text-sm" style={{ color: "var(--text-muted)" }}>Sorted by streams</p></div><div className="mt-5 grid gap-5 xl:grid-cols-[1.25fr,0.75fr]"><div className="analytics-performance-table overflow-hidden rounded-[1.5rem] border" style={{ borderColor: "var(--border)" }}><div className="analytics-performance-head grid min-w-[640px] grid-cols-[1.6fr,0.7fr,0.7fr,0.9fr,0.7fr] gap-3 border-b px-4 py-3 text-xs uppercase tracking-[0.2em]" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text-soft)" }}><span>Track Name</span><span>Streams</span><span>Revenue</span><span>Top Country</span><span>Status</span></div><div>{releases.length === 0 ? <div className="p-6 text-sm" style={{ color: "var(--text-muted)" }}>No release performance data yet.</div> : releases.map((release) => { const active = release.id === selectedReleaseId; return <button key={release.id} type="button" onClick={() => onSelect(release.id)} className="analytics-performance-row grid min-w-[640px] w-full grid-cols-[1.6fr,0.7fr,0.7fr,0.9fr,0.7fr] gap-3 px-4 py-4 text-left transition" style={{ background: active ? "var(--accent-soft)" : "transparent", borderTop: "1px solid var(--border)" }}><span><span className="block font-semibold" style={{ color: "var(--text)" }}>{release.trackName}</span><span className="mt-1 block text-xs" style={{ color: "var(--text-muted)" }}>{formatDateTime(release.updatedAt)}</span></span><span data-label="Streams" style={{ color: "var(--text)" }}>{formatNumber(release.streams)}</span><span data-label="Revenue" style={{ color: "var(--text)" }}>{formatCurrency(release.revenue)}</span><span data-label="Top country" style={{ color: "var(--text)" }}>{release.topCountry}</span><span data-label="Status"><span className="status-pill" style={{ borderColor: "var(--border)", color: "var(--text)" }}>{release.statusLabel}</span></span></button>; })}</div></div><div className="rounded-[1.5rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{selected ? <div><p className="text-xs uppercase tracking-[0.22em]" style={{ color: "var(--text-soft)" }}>Selected release</p><h3 className="mt-3 text-xl font-semibold" style={{ color: "var(--text)" }}>{selected.trackName}</h3><div className="mt-4 space-y-3">{[["Streams", formatNumber(selected.streams)], ["Revenue", formatCurrency(selected.revenue)], ["Top country", selected.topCountry], ["Status", selected.statusLabel]].map(([label, value]) => <div key={String(label)} className="rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border)", background: "var(--card)" }}><p className="text-xs uppercase tracking-[0.18em]" style={{ color: "var(--text-soft)" }}>{label}</p><p className="mt-2 text-lg font-semibold" style={{ color: "var(--text)" }}>{value}</p></div>)}</div></div> : <div className="flex min-h-[260px] items-center justify-center text-center"><p className="text-sm" style={{ color: "var(--text-muted)" }}>Select a release to see more detail.</p></div>}</div></div></div>;
 }
 
 export function AnalyticsOverview({ summary }: { summary: AnalyticsSummary }) {
@@ -110,6 +91,7 @@ export function AnalyticsOverview({ summary }: { summary: AnalyticsSummary }) {
   const [selectedCountry, setSelectedCountry] = useState(summary.selectedCountry || summary.countryBreakdown[0]?.country || "India");
   const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(summary.releaseRows[0]?.id ?? null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   useEffect(() => {
     setData(summary);
@@ -121,17 +103,18 @@ export function AnalyticsOverview({ summary }: { summary: AnalyticsSummary }) {
     let active = true;
     async function refresh() {
       setIsRefreshing(true);
+      setRefreshError(null);
       try {
         const response = await fetch("/api/analytics", { cache: "no-store" });
-        if (!response.ok) return;
+        if (!response.ok) throw new Error("Verified analytics could not be loaded.");
         const payload = await response.json() as { summary?: AnalyticsSummary };
         if (active && payload.summary) {
           setData(payload.summary);
           setSelectedCountry((current) => payload.summary?.countryBreakdown.some((country) => country.country === current) ? current : payload.summary?.selectedCountry || payload.summary?.countryBreakdown[0]?.country || current);
           setSelectedReleaseId((current) => payload.summary?.releaseRows.some((release) => release.id === current) ? current : payload.summary?.releaseRows[0]?.id ?? null);
         }
-      } catch {
-        // Keep the current dashboard data on network errors.
+      } catch (error) {
+        if (active) setRefreshError(error instanceof Error ? error.message : "Verified analytics could not be loaded.");
       } finally {
         if (active) setIsRefreshing(false);
       }
@@ -148,7 +131,12 @@ export function AnalyticsOverview({ summary }: { summary: AnalyticsSummary }) {
   const selectedRelease = data.releaseRows.find((release) => release.id === selectedReleaseId) ?? data.releaseRows[0] ?? null;
   const topCountry = data.countryBreakdown[0];
 
-  return <div className="grid gap-6 xl:gap-8"><section className="surface-card relative overflow-hidden p-6 sm:p-8"><div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full blur-3xl" style={{ background: "color-mix(in srgb, var(--accent) 11%, transparent)" }} /><div className="pointer-events-none absolute -bottom-20 left-6 h-48 w-48 rounded-full blur-3xl" style={{ background: "color-mix(in srgb, var(--money) 12%, transparent)" }} /><div className="relative flex flex-wrap items-start justify-between gap-4"><div className="max-w-3xl"><h1 className="text-4xl font-semibold tracking-tight sm:text-5xl" style={{ color: "var(--text)" }}>{data.headline}</h1><p className="mt-4 max-w-2xl text-base leading-7" style={{ color: "var(--text-muted)" }}>Understand your performance in five seconds: what is working, what is not, and where the next release should go.</p></div><div className="rounded-[1.5rem] border px-4 py-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}><RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />Live refresh</div><p className="mt-2 text-sm font-medium" style={{ color: "var(--text)" }}>{formatDateTime(data.updatedAt)}</p></div></div><div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">{data.metrics.map((metric) => <MetricCard key={metric.label} label={metric.label} value={metric.value} kind={metric.format} detail={metric.detail} />)}</div></section>
+
+  if (isRefreshing && data.state === "empty") return <LoadingState label="Loading verified analytics" />;
+  if (data.state === "error") return <ErrorState title="Analytics unavailable" description={data.errorMessage ?? "Verified analytics could not be loaded."} retry={() => window.location.reload()} />;
+  if (data.state === "empty") return <EmptyState title="Verified analytics will appear here" description="HYMN has not yet received verified analytics for the selected catalogue and reporting period. No estimates, fallback metrics or audience demographics are shown." action={{ label: "View Catalogue", href: "/dashboard/releases" }} secondaryAction={{ label: "How Reporting Works", href: "/royalty-payouts" }} />;
+
+  return <div className="grid gap-6 xl:gap-8">{refreshError ? <div className="rounded-xl border p-3 text-sm" role="status" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>{refreshError} Showing the last successfully loaded report.</div> : null}<section className="surface-card relative overflow-hidden p-6 sm:p-8"><div className="relative flex flex-wrap items-start justify-between gap-4"><div className="max-w-3xl"><h1 className="text-4xl font-semibold tracking-tight sm:text-5xl" style={{ color: "var(--text)" }}>{data.headline}</h1><p className="mt-4 max-w-2xl text-base leading-7" style={{ color: "var(--text-muted)" }}>Verified provider performance only. Royalty statements are historical reports, not real-time analytics.</p><div className="mt-4"><DataSourceBadge source={data.dataSource ?? "Source not recorded"} period={data.statementPeriod} /></div><dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm" style={{ color: "var(--text-muted)" }}><div><dt className="inline font-semibold">Imported: </dt><dd className="inline">{data.importedAt ? formatDateTime(data.importedAt) : "Not recorded"}</dd></div></dl></div><div className="rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-soft)" }}><RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />Report refreshed</div><p className="mt-2 text-sm font-medium" style={{ color: "var(--text)" }}>{formatDateTime(data.updatedAt)}</p></div></div><div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">{data.metrics.map((metric) => <MetricCard key={metric.label} label={metric.label} value={metric.value} kind={metric.format} detail={metric.detail} />)}</div></section>
 
 <section className="surface-card p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>Streams over time</h2><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Spot the shape of your catalog growth at a glance.</p></div><div className="flex flex-wrap gap-2 rounded-full border p-1" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{analyticsWindows.map((window) => <button key={window} type="button" onClick={() => setWindowKey(window)} className="rounded-full px-4 py-2 text-sm font-medium transition" style={{ background: windowKey === window ? "var(--accent)" : "transparent", color: windowKey === window ? "var(--accent-foreground)" : "var(--text)" }}>{WINDOW_LABELS[window]}</button>)}</div></div><div className="mt-5 rounded-[1.5rem] border p-4 sm:p-5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><Chart points={currentSeries.streams} kind="number" /></div><div className="mt-5 grid gap-4 sm:grid-cols-3"><div className="rounded-[1.5rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--card)" }}><p className="text-xs uppercase tracking-[0.22em]" style={{ color: "var(--text-soft)" }}>Weekly growth</p><p className="mt-2 text-2xl font-semibold" style={{ color: "var(--text)" }}>{formatPercent(data.growth.weekly)}</p></div><div className="rounded-[1.5rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--card)" }}><p className="text-xs uppercase tracking-[0.22em]" style={{ color: "var(--text-soft)" }}>Monthly growth</p><p className="mt-2 text-2xl font-semibold" style={{ color: "var(--text)" }}>{formatPercent(data.growth.monthly)}</p></div><div className="rounded-[1.5rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--card)" }}><p className="text-xs uppercase tracking-[0.22em]" style={{ color: "var(--text-soft)" }}>Active releases</p><p className="mt-2 text-2xl font-semibold" style={{ color: "var(--text)" }}>{formatNumber(data.metrics[2]?.value ?? 0)}</p></div></div></section>
 
@@ -156,7 +144,7 @@ export function AnalyticsOverview({ summary }: { summary: AnalyticsSummary }) {
 
 <RevenueSection summary={data} windowKey={windowKey} points={currentSeries.revenue} />
 
-<section className="surface-card p-5 sm:p-6"><div className="flex items-start justify-between gap-4"><div><h2 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>What the data is telling you</h2></div><Sparkles className="h-5 w-5" style={{ color: "var(--text-soft)" }} /></div><div className="mt-5 grid gap-4 lg:grid-cols-3">{data.insights.map((insight) => <InsightCard key={insight.title} insight={insight} />)}</div></section>
+{data.insights.length ? <section className="surface-card p-5 sm:p-6"><div className="flex items-start justify-between gap-4"><div><h2 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>Verified report notes</h2></div><Sparkles className="h-5 w-5" style={{ color: "var(--text-soft)" }} /></div><div className="mt-5 grid gap-4 lg:grid-cols-3">{data.insights.map((insight) => <InsightCard key={insight.title} insight={insight} />)}</div></section> : null}
 
 <ReleaseTable releases={data.releaseRows} selectedReleaseId={selectedReleaseId} onSelect={setSelectedReleaseId} />
 
@@ -164,3 +152,8 @@ export function AnalyticsOverview({ summary }: { summary: AnalyticsSummary }) {
 }
 
 // vercel trigger 2
+// vercel trigger 9
+
+// vercel trigger 11
+
+// vercel trigger 12

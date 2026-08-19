@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/access";
+import { requireRecentAdminPermission } from "@/lib/access";
 import { createAdminEarningsEntry } from "@/lib/payout";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const admin = await requireAdmin();
+  const admin = await requireRecentAdminPermission("royalties.import");
   if (typeof admin === "object" && "error" in admin) return admin.error;
 
   const body = await request.json().catch(() => ({}));
+  if (typeof body.sourceReference !== "string" || body.sourceReference.trim().length < 5 || typeof body.adminNote !== "string" || body.adminNote.trim().length < 10) return NextResponse.json({ error: "Source reference and a detailed administrative note are required." }, { status: 400 });
 
   try {
     const entry = await createAdminEarningsEntry({
@@ -35,3 +36,4 @@ export async function POST(request: Request) {
 }
 
 // vercel trigger 2
+// vercel trigger 9

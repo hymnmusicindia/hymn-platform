@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/access';
+import { requireAdminPermission } from '@/lib/access';
 import { saveDraftDistributionRelease } from '@/lib/distribution-db';
 import { prisma } from '@/lib/prisma';
 
@@ -8,7 +8,7 @@ export async function GET() {
     return NextResponse.json({ error: "Debug route disabled in production." }, { status: 404 });
   }
 
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("system.manage");
   if ("error" in admin) return admin.error;
 
   try {
@@ -48,3 +48,4 @@ export async function GET() {
 }
 
 // vercel trigger
+// vercel trigger 9

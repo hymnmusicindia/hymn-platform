@@ -46,7 +46,7 @@ export async function creditSplitRecipients(royaltyLineItemId: number, actorId?:
       } });
       if (creditable) {
         const balance = await tx.artistPayoutBalance.upsert({ where: { userId: item.recipient.recipientUserId }, create: { userId: item.recipient.recipientUserId, availableBalance: item.amount, lifetimeEarnings: item.amount }, update: { availableBalance: { increment: item.amount }, lifetimeEarnings: { increment: item.amount }, lastUpdatedAt: new Date() } });
-        await tx.walletTransaction.create({ data: { userId: item.recipient.recipientUserId, type: "earning_credit", amount: item.amount, referenceType: "split_earning", referenceId: String(earning.id), balanceAfter: balance.availableBalance, note: `Split earnings for ${royalty.release.title}` } });
+        await tx.walletTransaction.create({ data: { userId: item.recipient.recipientUserId, type: "earning_credit", amount: item.amount, direction: "credit", idempotencyKey: `split-earning:${earning.id}:credit`, referenceType: "split_earning", referenceId: String(earning.id), balanceAfter: balance.availableBalance, note: `Split earnings for ${royalty.release.title}` } });
       }
       rows.push(earning);
     }
@@ -76,9 +76,10 @@ export async function reverseSplitEarnings(referenceId: number, actorId?: number
   await (prisma as any).$transaction(async (tx: any) => {
     if (earning.status === "credited" && earning.recipientUserId) {
       const balance = await tx.artistPayoutBalance.update({ where: { userId: earning.recipientUserId }, data: { availableBalance: { decrement: earning.netShareAmount }, lifetimeEarnings: { decrement: earning.netShareAmount }, lastUpdatedAt: new Date() } });
-      await tx.walletTransaction.create({ data: { userId: earning.recipientUserId, type: "payout_reversal", amount: -number(earning.netShareAmount), referenceType: "split_earning_reversal", referenceId: String(earning.id), balanceAfter: balance.availableBalance, note } });
+      await tx.walletTransaction.create({ data: { userId: earning.recipientUserId, type: "payout_reversal", amount: -number(earning.netShareAmount), direction: "debit", idempotencyKey: `split-earning:${earning.id}:reversal`, referenceType: "split_earning_reversal", referenceId: String(earning.id), balanceAfter: balance.availableBalance, note } });
     }
     await tx.splitEarningLineItem.update({ where: { id: earning.id }, data: { status: "reversed" } });
   });
   await logAuditEvent({ actorType: "admin", actorId: actorId ?? null, entityType: "split_earning", entityId: earning.id, action: "earning.reversed", oldValue: { status: earning.status }, newValue: { status: "reversed" }, metadata: { note } });
 }
+// vercel trigger 9

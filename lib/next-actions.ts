@@ -20,9 +20,11 @@ export async function getNextActionsForUser(userId: number): Promise<NextAction[
   if (unusedBeat) actions.push({ key: `beat:${unusedBeat.id}:release`, title: "Release with your purchased beat", reason: "Your license is ready and can prefill a distribution draft.", cta: "Start release", href: `/dashboard?tab=purchases&purchaseId=${unusedBeat.id}`, priority: "high" });
   const missingLicense = purchases.find((purchase) => !purchase.licenseUrl);
   if (missingLicense) actions.push({ key: `beat:${missingLicense.id}:license`, title: "Beat license is processing", reason: "Generate or request the license before starting distribution.", cta: "Open purchases", href: "/dashboard?tab=purchases", priority: "normal" });
-  if (payout.availableBalance >= payout.minimumPayoutAmount) actions.push({ key: "payout:available", title: "Payout is available", reason: `Rs ${payout.availableBalance.toLocaleString("en-IN")} is available.`, cta: "Request payout", href: "/payout", priority: "high" });
+  if (payout.payoutEligible) actions.push({ key: "payout:available", title: "Payout is available", reason: `Rs ${payout.availableBalance.toLocaleString("en-IN")} is available.`, cta: "Request payout", href: "/payout", priority: "high" });
   if (!artistCount) actions.push({ key: "artist:create", title: "Create your artist profile", reason: "An artist profile makes release metadata faster and safer.", cta: "Create profile", href: "/distribution/start", priority: "normal" });
   if (producer && !producer.active) actions.push({ key: "producer:inactive", title: "Complete producer setup", reason: "Your producer workspace is not active yet.", cta: "Open producer dashboard", href: "/producer/dashboard", priority: "normal" });
   const rank = { critical: 0, high: 1, normal: 2 };
   return actions.sort((a, b) => rank[a.priority] - rank[b.priority]).slice(0, 3);
 }
+
+// vercel trigger 12

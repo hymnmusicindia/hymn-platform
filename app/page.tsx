@@ -24,9 +24,12 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { FloatingAssistant } from "@/components/floating-assistant";
-import { ServicesEcosystem } from "@/components/services-ecosystem";
+import { AnimatedHeroMetrics } from "@/components/animated-hero-metrics";
+import { GoogleAuthButton } from "@/components/google-auth-button";
 import { beatStoreReviews, buildBeatStorefront } from "@/lib/beat-store";
-import { listAllBeats, listProducerProfiles } from "@/lib/db";
+import { listAllBeats, listProducerProfiles, listRecentGoogleAvatarUrls } from "@/lib/db";
+import { getSession } from "@/lib/session";
+import { destinationForRole } from "@/lib/routes";
 
 
 
@@ -53,62 +56,25 @@ const images = {
   }
 };
 
-const metrics = [
-  ["2.4K+", "artists supported"],
-  ["180M+", "catalog streams influenced"],
-  ["5+", "countries reached"],
-  ["24/7", "release visibility"]
-];
-
 const storeLogos = [
-  { name: "Spotify", src: "/assets/store-logos/spotify.png", className: "h-8 w-auto sm:h-9" },
-  { name: "Apple Music", src: "/assets/store-logos/apple-music.png", className: "h-6 w-auto sm:h-7" },
-  { name: "YouTube Music", src: "/assets/store-logos/youtube-music.png", className: "h-7 w-auto sm:h-8" },
-  { name: "Amazon Music", src: "/assets/store-logos/amazon-music.png", className: "h-7 w-auto sm:h-8" },
-  { name: "Gaana", src: "/assets/store-logos/gaana.png", className: "h-6 w-auto sm:h-7" },
-  { name: "TikTok", src: "/assets/store-logos/tiktok.png", className: "h-9 w-auto sm:h-10" },
-  { name: "Instagram", src: "/assets/store-logos/instagram.png", className: "h-7 w-auto sm:h-8" },
-  { name: "Facebook", src: "/assets/store-logos/facebook.png", className: "h-6 w-auto sm:h-7" }
+  { name: "Spotify", src: "/assets/store-logos/wordmark-spotify.png", className: "h-8 w-auto" },
+  { name: "Apple Music", src: "/assets/store-logos/wordmark-apple.png", className: "h-7 w-auto" },
+  { name: "YouTube Music", src: "/assets/store-logos/wordmark-youtube.png", className: "h-7 w-auto" },
+  { name: "Amazon Music", src: "/assets/store-logos/wordmark-amazon.png", className: "h-8 w-auto" },
+  { name: "Gaana", src: "/assets/store-logos/wordmark-gaana.png", className: "h-8 w-auto" },
+  { name: "TikTok", src: "/assets/store-logos/wordmark-tiktok.png", className: "h-7 w-auto" },
+  { name: "Instagram", src: "/assets/store-logos/instagram.png", className: "h-8 w-auto" },
+  { name: "Facebook", src: "/assets/store-logos/wordmark-facebook.png", className: "h-7 w-auto" },
+  { name: "Pandora", src: "/assets/store-logos/wordmark-pandora.png", className: "h-7 w-auto" },
+  { name: "Deezer", src: "/assets/store-logos/wordmark-deezer.png", className: "h-8 w-auto" },
+  { name: "TIDAL", src: "/assets/store-logos/wordmark-tidal.png", className: "h-7 w-auto" },
+  { name: "SoundCloud", src: "/assets/store-logos/wordmark-soundcloud.png", className: "h-7 w-auto" },
+  { name: "Boomplay", src: "/assets/store-logos/wordmark-boomplay.png", className: "h-12 w-auto scale-125" },
+  { name: "Anghami", src: "/assets/store-logos/wordmark-anghami.png", className: "h-8 w-auto" },
+  { name: "JioSaavn", src: "/assets/store-logos/wordmark-jiosaavn.png", className: "h-8 w-auto" }
 ] as const;
 
 const storeLogoMarquee = [...storeLogos, ...storeLogos];
-
-const services: Array<[string, string, LucideIcon]> = [
-  ["Music Distribution", "Release singles, EPs, and albums through a guided workflow built for serious launches.", Disc3],
-  ["Artist Management", "Shape positioning, timelines, rollout decisions, and audience development with clarity.", Users2],
-  ["Label Services", "Access release infrastructure, catalog systems, creative operations, and campaign support.", Building2],
-  ["Playlist Promotion", "Build discovery momentum with pitch-ready assets, timing, and platform strategy.", Radio],
-  ["Music Marketing", "Turn releases into campaigns across social, short-form video, press, and fan channels.", Megaphone],
-  ["Branding & Creative", "Develop art direction, narrative, visual identity, and cultural signals around the artist.", Wand2],
-  ["YouTube Monetization", "Support content strategy, claim readiness, channel growth, and creator monetization.", Play],
-  ["Release Strategy", "Plan the sequence before the upload: pre-save, assets, audience, and post-release growth.", CalendarCheck2],
-  ["Rights Management", "Keep metadata, splits, royalties, and catalog ownership organized from the start.", ShieldCheck],
-  ["Analytics & Insights", "Understand what is moving, where audiences form, and which moments deserve fuel.", BarChart3]
-];
-
-const artists = [
-  {
-    name: "Four-T",
-    role: "Independent artist",
-    image: "/assets/four-t.png",
-    stat: "1M+ views",
-    note: "More than one million views with HYMN Music"
-  },
-  {
-    name: "Mira Vale",
-    role: "Alt pop / R&B",
-    image: images.backstage.src,
-    stat: "42 countries",
-    note: "Identity-first campaign architecture"
-  },
-  {
-    name: "Noor District",
-    role: "Producer collective",
-    image: images.studio.src,
-    stat: "9 sync-ready releases",
-    note: "Catalog systems for long-term value"
-  }
-];
 
 const testimonials = [
   ["HYMN treated the release like a brand moment, not a file upload.", "Rhea K.", "Independent Artist", "3.1M launch streams"],
@@ -130,7 +96,7 @@ const howItWorks: Array<[string, string, string, LucideIcon]> = [
 ];
 
 export default async function HomePage() {
-  const [beats, producerProfiles] = await Promise.all([listAllBeats(), listProducerProfiles()]);
+  const [beats, producerProfiles, session, googleAvatarUrls] = await Promise.all([listAllBeats(), listProducerProfiles(), getSession(), listRecentGoogleAvatarUrls(4)]);
   const { catalog } = buildBeatStorefront(beats, producerProfiles);
   return (
     <main className="overflow-hidden bg-background pb-20 text-foreground">
@@ -142,100 +108,82 @@ export default async function HomePage() {
           <div className="absolute inset-0 opacity-35 [background-image:radial-gradient(circle_at_20%_30%,rgba(255,255,255,0.25)_0_1px,transparent_1px),radial-gradient(circle_at_80%_45%,rgba(255,255,255,0.34)_0_1px,transparent_1px)] [background-size:90px_90px,140px_140px] motion-safe:animate-[hymn-grid-float_22s_linear_infinite]" />
         </div>
 
-        <div className="shell relative grid min-h-[calc(96vh-73px)] items-center gap-12 py-12 sm:py-14">
+        <div className={`shell relative grid min-h-[calc(96vh-73px)] items-center gap-10 py-12 sm:py-14 ${session ? "" : "lg:grid-cols-[minmax(0,1fr)_minmax(330px,410px)] lg:gap-12"}`}>
           <div className="max-w-4xl">
-            <h1 className="text-4xl font-semibold leading-[1.02] tracking-[-0.03em] text-white sm:text-5xl sm:leading-[0.96] lg:text-7xl xl:text-[5.8rem]">
+            <h1 className="text-4xl font-semibold leading-[1.02] tracking-[-0.035em] text-white sm:text-5xl sm:leading-[0.96] lg:text-7xl xl:text-[5.8rem]">
               Where Artists Become Movements.
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-white opacity-70 sm:mt-6 sm:text-base sm:leading-8 lg:text-lg">
               HYMN helps artists release music, build audiences, monetize creatively, grow brands, access label services, and scale into a global career ecosystem.
             </p>
-            <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:flex-wrap">
-              <Link href="/login" className="premium-cta inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[#f4f7fb] px-6 py-3 text-sm font-semibold text-[#071013] shadow-[0_0_42px_rgba(255,255,255,0.18)] sm:w-auto sm:min-h-12">
-                Login
-                <ArrowRight className="h-4 w-4" />
+            <AnimatedHeroMetrics />
+            <div className="mt-7 h-px max-w-3xl bg-gradient-to-r from-white/20 via-white/10 to-transparent" aria-hidden="true" />
+            <Link
+                href={session ? "/distribution/start" : "/login?mode=signup"}
+                className="group mt-5 inline-flex max-w-full items-center gap-4 text-left transition duration-300 hover:-translate-y-0.5"
+              >
+                {googleAvatarUrls.length ? (
+                  <span className="flex shrink-0 -space-x-2.5" aria-hidden="true">
+                    {googleAvatarUrls.map((src, index) => (
+                      <span key={`${src}-${index}`} className="relative h-9 w-9 overflow-hidden rounded-full border-2 border-[#11141b] bg-[#1b1f28] sm:h-10 sm:w-10" style={{ zIndex: googleAvatarUrls.length - index }}>
+                        <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+                      </span>
+                    ))}
+                  </span>
+                ) : null}
+                <span className="min-w-0">
+                  <span className="flex items-center gap-2 text-sm font-semibold text-white">
+                    {session ? "Ready to release? Start your release." : "Ready to release? Create your account."}
+                    <ArrowRight className="hidden h-4 w-4 shrink-0 transition-transform group-hover:translate-x-1 sm:block" />
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-5 text-white/50">Join 2.4K+ artists supported by HYMN.</span>
+                </span>
               </Link>
-              <Link href="/services" className="premium-ghost inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-white/12 bg-card px-6 py-3 text-sm font-semibold sm:w-auto sm:min-h-12" style={{ color: "var(--text)" }}>
-                Explore Services
-              </Link>
-            </div>
-            <div className="mt-7 grid max-w-3xl grid-cols-2 gap-3 sm:mt-9 sm:grid-cols-4">
-              {metrics.map(([value, label]) => (
-                <div key={label} className="border-l border-border pl-3 sm:pl-4">
-                  <p className="text-xl font-semibold text-white sm:text-2xl">{value}</p>
-                  <p className="mt-1 text-[10px] uppercase tracking-[0.14em] sm:text-xs sm:tracking-[0.18em]"
-  style={{ color: "#8f97aa" }}>{label}</p>
-                </div>
-              ))}
-            </div>
           </div>
+          {!session ? (
+            <aside className="force-dark relative mx-auto w-full max-w-[410px] overflow-hidden rounded-[1.65rem] border border-white/15 bg-black/[0.12] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-lg sm:p-6 lg:p-7">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(255,255,255,0.1),transparent_38%),linear-gradient(145deg,rgba(255,255,255,0.035),transparent_62%)]" />
+              <div className="relative">
+                <h2 className="max-w-sm text-[clamp(2.15rem,3.2vw,3.35rem)] font-bold leading-[0.94] tracking-[-0.05em] text-white">
+                  <span className="block">Sign up.</span>
+                  <span className="mt-1.5 block text-white/55">Your next move</span>
+                  <span className="mt-1.5 block">starts here.</span>
+                </h2>
+                <div className="my-5 h-px bg-gradient-to-r from-white/20 via-white/8 to-transparent" />
+                <GoogleAuthButton label="Continue with Google" expectedRole="customer" appearance="quiet" className="w-full" />
+                <p className="mt-5 whitespace-nowrap text-center text-[8px] leading-5 tracking-tight text-white/45 sm:text-[10px]">
+                  By continuing, you agree to our{" "}
+                  <Link href="/terms-of-service" className="text-white/75 underline decoration-white/25 underline-offset-4 transition hover:text-white">Terms of Service</Link>
+                  {" "}and{" "}
+                  <Link href="/privacy-policy" className="text-white/75 underline decoration-white/25 underline-offset-4 transition hover:text-white">Privacy Policy</Link>.
+                </p>
+              </div>
+            </aside>
+          ) : null}
         </div>
       </section>
 
       <section className="shell py-10 sm:py-14">
         <div className="rounded-[2rem] border border-border bg-surface/72 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.3)] backdrop-blur-2xl sm:p-7">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <h2 className="max-w-lg text-2xl font-semibold tracking-[-0.02em] text-[var(--text)] sm:text-3xl">
+          <div className="flex justify-center py-2 text-center sm:py-4">
+            <h2 className="whitespace-nowrap text-[clamp(1.05rem,3vw,2.25rem)] font-bold leading-none tracking-[-0.04em] text-[var(--text)]" style={{ fontFamily: '"Avenir Next", "Century Gothic", "Segoe UI Variable Display", "Segoe UI", sans-serif' }}>
               Connected To The Global Music Ecosystem
             </h2>
-            <p className="max-w-xl text-sm leading-7 text-[var(--text-soft)]">
-              Built for the channels where modern artists are discovered, streamed, shared, monetized, and remembered.
-            </p>
           </div>
           <div className="mt-7 overflow-hidden rounded-2xl border"
             style={{
               borderColor: "color-mix(in srgb, var(--glass-border) 82%, transparent)",
-              background: "color-mix(in srgb, var(--glass-bg) 76%, transparent)"
+              background: "rgba(255, 255, 255, 0.96)"
             }}
           >          
-            <div className="marquee-row items-center gap-7 px-5 py-5">
+            <div className="marquee-row music-store-marquee items-center gap-12 px-8 py-5 sm:gap-16">
               {storeLogoMarquee.map((item, index) => (
-                <div key={`${item.name}-${index}`} className="inline-flex shrink-0 items-center justify-center">
+                <div key={`${item.name}-${index}`} className="inline-flex h-12 w-36 shrink-0 items-center justify-center" title={item.name}>
                   <img src={item.src} alt={item.name} className={`distribution-store-logo ${item.className}`} loading="lazy" decoding="async" />
                 </div>
               ))}
             </div>
           </div>
-        </div>
-      </section>
-
-      <ServicesEcosystem services={services.map(([title, body]) => ({ title, body }))} />
-
-      <section id="artist-spotlight" className="shell py-10 sm:py-16">
-        <div className="grid gap-5 lg:grid-cols-[0.9fr,1.1fr] lg:items-end lg:gap-7">
-          <div>
-            <h2 className="text-3xl font-semibold tracking-[-0.03em] text-[var(--text)] sm:text-4xl lg:text-5xl">A roster presentation for artists building culture.</h2>
-          </div>
-          <p className="border-l pl-5 text-base font-medium leading-8 tracking-[-0.01em] text-[var(--text-muted)] sm:text-lg lg:max-w-xl" style={{ borderColor: "var(--accent)" }}>
-            <span className="font-semibold text-[var(--text)]">HYMN</span> combines release execution with creative direction, audience intelligence, and the confidence of a modern label room.
-          </p>
-        </div>
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 sm:gap-5 lg:mt-12 lg:grid-cols-3">
-          {artists.map((artist, index) => (
-            <article
-              key={artist.name}
-              className={`group relative overflow-hidden rounded-[1.6rem] border bg-card shadow-[0_22px_65px_rgba(0,0,0,0.24)] transition-[transform,border-color,box-shadow] duration-500 hover:-translate-y-1.5 hover:border-[color-mix(in_srgb,var(--accent)_32%,var(--border))] hover:shadow-[0_30px_90px_rgba(0,0,0,0.34)] sm:rounded-[2rem] ${index === 1 ? "border-[color-mix(in_srgb,var(--accent)_24%,var(--border))] lg:-translate-y-4 lg:hover:-translate-y-6" : "border-border"}`}
-            >
-              <div className="pointer-events-none absolute inset-0 z-20 rounded-[inherit] border border-white/[0.06]" />
-              <div className="relative h-[320px] overflow-hidden sm:h-[390px] lg:h-[460px]">
-                <Image src={artist.image} alt={`${artist.name} artist spotlight`} fill sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw" className="object-cover opacity-90 saturate-[0.82] transition duration-700 ease-out group-hover:scale-[1.045] group-hover:saturate-100" />
-                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(9,11,16,0.08)_0%,rgba(9,11,16,0.06)_35%,rgba(9,11,16,0.96)_100%)]" />
-                <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4 sm:p-5">
-                  <span className="rounded-full border border-white/15 bg-black/25 px-3 py-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/80 backdrop-blur-md">
-                    {artist.role}
-                  </span>
-                  <span className="font-mono text-[0.65rem] tracking-[0.16em] text-white/45">0{index + 1}</span>
-                </div>
-              </div>
-              <div className="absolute inset-x-0 bottom-0 z-10 p-5 sm:p-7">
-                <h3 className="text-3xl font-semibold tracking-[-0.035em] text-white sm:text-4xl">{artist.name}</h3>
-                <div className="mt-4 flex items-end justify-between gap-5 border-t border-white/15 pt-4">
-                  <span className="max-w-[68%] text-xs leading-5 text-white/60 sm:text-sm sm:leading-6">{artist.note}</span>
-                  <span className="shrink-0 text-right text-xs font-semibold tracking-[-0.01em] text-white sm:text-sm">{artist.stat}</span>
-                </div>
-              </div>
-            </article>
-          ))}
         </div>
       </section>
 
@@ -266,10 +214,10 @@ export default async function HomePage() {
               <Link href="/dashboard" className="btn-outline">Open Dashboard</Link>
             </div>
           </div>
-          <div className="rounded-[2rem] border border-border bg-surface/82 p-4 shadow-[0_34px_110px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:p-6">
+          <div className="home-workspace-shell rounded-[2rem] border border-border bg-surface/82 p-4 shadow-[0_34px_110px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:p-6">
             <div className="grid gap-4 md:grid-cols-2">
               {platformPanels.map(([title, body, Icon]) => (
-                <div key={title} className="rounded-3xl border border-border bg-card p-5">
+                <div key={title} className="home-workspace-card rounded-3xl border border-border bg-card p-5">
                   <Icon className="h-5 w-5 text-foreground" />
                   <h3 className="mt-5 text-lg font-semibold text-[var(--text)]">{title}</h3>
                   <p className="mt-2 text-sm leading-6 text-muted">{body}</p>
@@ -283,7 +231,7 @@ export default async function HomePage() {
       <section className="shell py-10 sm:py-16">
         <div className="grid gap-3 sm:gap-4 sm:grid-cols-3">
           {howItWorks.map(([step, title, body, Icon]) => (
-            <article key={title} className="rounded-[1.5rem] border border-border bg-card p-5 shadow-[0_20px_70px_rgba(0,0,0,0.26)] sm:rounded-[2rem] sm:p-6">
+            <article key={title} className="home-step-card rounded-[1.5rem] border border-border bg-card p-5 shadow-[0_20px_70px_rgba(0,0,0,0.26)] sm:rounded-[2rem] sm:p-6">
               <div className="flex items-center justify-between gap-4">
                 <span className="text-4xl font-semibold tracking-[-0.04em] text-[var(--text)] opacity-20 sm:text-5xl">{step}</span>
                 <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#f4f7fb]/12 text-foreground sm:h-12 sm:w-12">
@@ -342,10 +290,15 @@ export default async function HomePage() {
               Join a premium agency and label ecosystem built for artists who want releases, audiences, identity, monetization, and cultural impact to grow together.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:flex-wrap">
-              <Link href="/login" className="premium-cta inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[#f4f7fb] px-6 py-3 text-sm font-semibold text-[#071013] shadow-[0_0_42px_rgba(255,255,255,0.18)] sm:w-auto sm:min-h-12">
-                Login
+              <Link href={session ? destinationForRole(session.role) : "/login"} className="premium-cta inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[#f4f7fb] px-6 py-3 text-sm font-semibold text-[#071013] shadow-[0_0_42px_rgba(255,255,255,0.18)] sm:w-auto sm:min-h-12">
+                {session ? "Go to Dashboard" : "Login"}
                 <ArrowRight className="h-4 w-4" />
               </Link>
+              {!session ? (
+                <Link href="/login?mode=signup" className="premium-ghost inline-flex min-h-11 w-full items-center justify-center rounded-full border border-white/25 bg-white/[0.06] px-6 py-3 text-sm font-semibold text-white backdrop-blur-md transition-colors hover:border-white/45 hover:bg-white/[0.12] sm:w-auto sm:min-h-12">
+                  Sign Up
+                </Link>
+              ) : null}
               <Link href="/contact" className="premium-ghost inline-flex min-h-11 w-full items-center justify-center rounded-full border border-white/12 bg-card px-6 py-3 text-sm font-semibold backdrop-blur-xl sm:w-auto sm:min-h-12" style={{ color: "var(--text)" }}>
                 Contact The Team
               </Link>

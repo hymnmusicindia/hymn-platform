@@ -1,4 +1,4 @@
-export type ReleaseStatus = "draft" | "submitted" | "resubmitted" | "in_queue" | "under_review" | "changes_requested" | "approved" | "queued_for_distribution" | "sent_to_distributor" | "scheduled" | "processing" | "awaiting_live_confirmation" | "partially_live" | "delivered" | "sent" | "live" | "rejected" | "failed" | "takedown_requested" | "takedown_processing" | "taken_down";
+export type ReleaseStatus = "draft" | "awaiting_payment" | "submitted" | "in_queue" | "in_qc_queue" | "under_review" | "changes_requested" | "resubmitted" | "approved" | "queued_for_distribution" | "submitting_to_distributor" | "sent_to_distributor" | "distributor_processing" | "distributor_changes_required" | "scheduled" | "processing" | "awaiting_live_confirmation" | "partially_live" | "delivered" | "sent" | "live" | "delivery_failed" | "takedown_requested" | "takedown_processing" | "taken_down" | "archived" | "rejected" | "failed";
 
 export type LicenseType = "basic" | "premium" | "exclusive";
 
@@ -105,6 +105,7 @@ export interface User {
   name: string;
   email: string;
   googleId: string;
+  avatarUrl?: string | null;
   passwordHash?: string | null;
   role: UserRole;
   referralCode: string;
@@ -282,11 +283,7 @@ export interface AnalyticsPoint {
 export interface ReleaseAnalytics {
   streams_total: number;
   revenue_total: number;
-  platforms: {
-    spotify: number;
-    apple: number;
-    youtube: number;
-  };
+  platforms: Record<string, number>;
   countries: Record<string, number>;
   daily_streams: AnalyticsPoint[];
   daily_revenue: AnalyticsPoint[];
@@ -541,12 +538,13 @@ export interface Coupon {
 
 export interface ReferralActivity {
   id: number;
-  userId: number;
+  userId?: number;
   referredUserId?: number | null;
-  referralCode: string;
-  signupEmail: string;
-  status: "signed_up" | "rewarded";
-  purchaseAmount: number;
+  referralCode?: string;
+  signupEmail?: string;
+  person?: string;
+  status: "signed_up" | "rewarded" | "ATTRIBUTED" | "REGISTERED" | "PENDING" | "QUALIFIED" | "REWARDED" | "REVERSED" | "REJECTED";
+  purchaseAmount?: number;
   earnings: number;
   createdAt: string;
   rewardedAt?: string | null;
@@ -555,20 +553,15 @@ export interface ReferralActivity {
 export interface ReferralDashboard {
   referralCode: string;
   referralLink: string;
-  referralCredits: number;
-  earnPerReferral: number;
-  friendDiscount: number;
+  availableCredit: number;
+  referrerReward: number;
+  referredReward: number;
   totalReferrals: number;
   successfulReferrals: number;
+  pendingReferrals: number;
   totalCreditsEarned: number;
-  nextMilestone: {
-    referrals: number;
-    bonus: number;
-    progress: number;
-  } | null;
-  campaignEndsAt: string;
-  socialProofCount: number;
   activities: ReferralActivity[];
+  creditHistory: Array<{ id: number; type: string; direction: string; amount: number; description: string; createdAt: string }>;
 }
 
 export interface ContactMessage {
@@ -623,6 +616,15 @@ export interface ProducerProfile {
   description: string;
   specialty: string;
   imageUrl?: string | null;
+  coverPhotoUrl?: string | null;
+  avatarUrl?: string | null;
+  instagramUrl?: string | null;
+  youtubeUrl?: string | null;
+  spotifyUrl?: string | null;
+  websiteUrl?: string | null;
+  tags?: string[];
+  location?: string | null;
+  status?: "pending_setup" | "active" | "suspended" | "disabled" | string;
   active: boolean;
   sortOrder: number;
   createdAt: string;
@@ -642,6 +644,13 @@ export interface ProducerEarning {
 }
 
 export interface AnalyticsSummary {
+  state: "verified" | "empty" | "error";
+  emptyReason?: "no_verified_data" | "period_unavailable";
+  errorMessage?: string;
+  dataSource: string | null;
+  statementPeriod: string | null;
+  importedAt: string | null;
+  isVerified: boolean;
   role: UserRole;
   headline: string;
   updatedAt: string;
@@ -709,3 +718,5 @@ export interface ReleaseAuditLog {
 // vercel trigger
 
 // vercel trigger
+// vercel trigger 7
+// vercel trigger 9

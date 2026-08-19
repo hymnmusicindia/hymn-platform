@@ -131,7 +131,7 @@ export async function respondToSplitInvite(userId: number, inviteId: number, res
           return;
         }
         const balance = await tx.artistPayoutBalance.upsert({ where: { userId }, create: { userId, availableBalance: current.netShareAmount, lifetimeEarnings: current.netShareAmount }, update: { availableBalance: { increment: current.netShareAmount }, lifetimeEarnings: { increment: current.netShareAmount }, lastUpdatedAt: new Date() } });
-        await tx.walletTransaction.create({ data: { userId, type: "earning_credit", amount: current.netShareAmount, referenceType: "split_earning", referenceId: String(current.id), balanceAfter: balance.availableBalance, note: `Split earnings released for ${invite.release.title}` } });
+        await tx.walletTransaction.create({ data: { userId, type: "earning_credit", amount: current.netShareAmount, direction: "credit", idempotencyKey: `split-earning:${current.id}:credit`, referenceType: "split_earning", referenceId: String(current.id), balanceAfter: balance.availableBalance, note: `Split earnings released for ${invite.release.title}` } });
         await tx.splitEarningLineItem.update({ where: { id: current.id }, data: { recipientUserId: userId, recipientEmail: user.email, status: "credited" } });
       });
     }
@@ -164,3 +164,4 @@ export async function listUserSplits(userId: number) {
   return { created, received, requests: received.filter((item: any) => item.inviteStatus === "pending"), earnings };
 }
 // vercel trigger 6
+// vercel trigger 9

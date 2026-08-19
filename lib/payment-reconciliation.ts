@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { createAdminTaskOnce, resolveAdminTask } from "@/lib/task-queue";
 import { logAuditEvent } from "@/lib/audit-log";
 import { generateBeatLicense } from "@/lib/beat-license";
+import { confirmCheckoutPayment, confirmDistributionPayment } from "@/lib/payment-webhooks";
 
 export type PaymentReconciliationIssue = { key: string; type: "beat" | "distribution" | "subscription" | "duplicate"; message: string; autoRepaired: boolean };
 
@@ -12,9 +13,10 @@ export async function reconcilePayments() {
   const paid = orders.filter((order) => order.paymentStatus === "paid");
   const paymentIds = new Map<string, number[]>();
   for (const order of paid) {
+    if (order.razorpayPaymentId) await confirmCheckoutPayment({ razorpayOrderId: order.razorpayOrderId, paymentId: order.razorpayPaymentId, source: "reconciliation" });
     if (order.razorpayPaymentId) paymentIds.set(order.razorpayPaymentId, [...(paymentIds.get(order.razorpayPaymentId) ?? []), order.id]);
     for (const item of order.items) {
-      const purchase = await prisma.beatPurchase.findFirst({ where: { userId: order.userId, beatId: item.beatId, licenseType: item.licenseType } });
+      const purchase = await prisma.beatPurchase.findFirst({ where: { userId: order.userId, beatId: item.beatId, licenseType: item.licenseType, paymentId: order.razorpayPaymentId ?? null } });
       if (!purchase) {
         const created = await prisma.beatPurchase.create({ data: { userId: order.userId, beatId: item.beatId, licenseType: item.licenseType, paymentId: order.razorpayPaymentId ?? null, hasAccess: true } });
         const license = await generateBeatLicense(created.id, order.userId).catch(() => null);
@@ -33,6 +35,7 @@ export async function reconcilePayments() {
   }
   const distributionOrders = await prisma.distributionOrder.findMany({ where: { paymentStatus: "paid" } });
   for (const order of distributionOrders) {
+    if (order.razorpayPaymentId) await confirmDistributionPayment({ razorpayOrderId: order.razorpayOrderId, paymentId: order.razorpayPaymentId, source: "reconciliation" });
     const release = await prisma.release.findFirst({ where: { userId: order.userId, paymentStatus: "paid", createdAt: { gte: new Date(order.createdAt.getTime() - 60_000) } } });
     if (!release) {
       const key = `payment:distribution:${order.id}`;
@@ -54,3 +57,4 @@ export async function reconcilePayments() {
   await logAuditEvent({ actorType: "cron", entityType: "payment_reconciliation", entityId: new Date().toISOString().slice(0, 10), action: "payments.reconciled", metadata: { paidOrders: paid.length, issues: issues.length, repaired: issues.filter((issue) => issue.autoRepaired).length } });
   return { checkedAt: new Date().toISOString(), issues };
 }
+// vercel trigger 9

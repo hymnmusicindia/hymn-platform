@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Copy, Disc3, MoreHorizontal, Settings, Trash2, X } from "lucide-react";
+import { Copy, Disc3, MoreHorizontal, Pencil, Settings, Trash2, X } from "lucide-react";
 import type { Release } from "@/lib/types";
 import {
   getReleasePortalBadgeStyle,
@@ -28,6 +28,7 @@ export function ReleaseSummaryCard({
   const title = release.releaseTitle?.trim() || release.trackName || "Untitled release";
   const stage = getReleasePortalStage(release);
   const trackCount = getReleasePortalTrackCount(release);
+  const primaryActionLabel = release.status === "draft" ? "Edit" : actionLabel;
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -76,7 +77,7 @@ export function ReleaseSummaryCard({
 
   return (
     <article
-      className="group flex h-full w-full max-w-[282px] flex-col rounded-[9px] border p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+      className="release-summary-tile group flex h-full w-full max-w-[282px] flex-col rounded-[9px] border p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg"
       style={{
         borderColor: selected ? "var(--accent)" : "var(--border)",
         background: "var(--card)",
@@ -134,10 +135,10 @@ export function ReleaseSummaryCard({
           href={href}
           className="pressable inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-semibold"
           style={{ borderColor: "var(--border)", background: "var(--text)", color: "var(--bg)" }}
-          aria-label={`${actionLabel} ${title}`}
+          aria-label={`${primaryActionLabel} ${title}`}
         >
-          <Settings className="h-4 w-4" aria-hidden="true" />
-          {actionLabel}
+          {release.status === "draft" ? <Pencil className="h-4 w-4" aria-hidden="true" /> : <Settings className="h-4 w-4" aria-hidden="true" />}
+          {primaryActionLabel}
         </Link>
       </div>
       {deleteOpen && typeof document !== "undefined" ? createPortal(<div role="dialog" aria-modal="true" aria-labelledby={`delete-title-${release.id}`} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onKeyDown={(event) => { if (event.key === "Escape" && !busy) setDeleteOpen(false); }}>
@@ -151,3 +152,6 @@ export function ReleaseSummaryCard({
   );
 }
 // vercel trigger 5
+// vercel trigger 7
+
+// vercel trigger 12

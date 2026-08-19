@@ -1,12 +1,12 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/access";
+import { requireAdminPermission } from "@/lib/access";
 import { deleteProducerProfile, updateProducerProfile } from "@/lib/db";
 import { saveUploadedFile } from "@/lib/storage";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const result = await requireAdmin();
+  const result = await requireAdminPermission("users.manage");
   if ("error" in result) return result.error;
 
   const { id } = await params;
@@ -39,7 +39,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const result = await requireAdmin();
+  const result = await requireAdminPermission("users.manage");
   if ("error" in result) return result.error;
 
   const { id } = await params;
@@ -47,3 +47,4 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
   if (!removed) return NextResponse.json({ error: "Producer profile not found." }, { status: 404 });
   return NextResponse.json({ ok: true });
 }
+// vercel trigger 9

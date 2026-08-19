@@ -16,8 +16,6 @@ export default async function ProducerProfilePage({ params }: { params: Promise<
   if (!result) notFound();
 
   const { producer, beats: producerBeats } = result;
-  const totalPlays = producerBeats.reduce((sum, beat) => sum + beat.plays, 0);
-  const totalSales = producerBeats.reduce((sum, beat) => sum + beat.weeklySales, 0);
 
   return (
     <main className="pb-20">
@@ -45,18 +43,10 @@ export default async function ProducerProfilePage({ params }: { params: Promise<
               </div>
             </div>
             <div className="rounded-[2rem] border border-white/15 bg-white/10 p-6 backdrop-blur-xl">
-              <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
+              <div className="grid gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-white/60">Beats live</p>
                   <p className="mt-2 text-3xl font-semibold">{producerBeats.length}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-white/60">Total plays</p>
-                  <p className="mt-2 text-3xl font-semibold">{totalPlays.toLocaleString("en-IN")}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-white/60">Weekly sales</p>
-                  <p className="mt-2 text-3xl font-semibold">{totalSales}</p>
                 </div>
               </div>
             </div>
@@ -67,7 +57,7 @@ export default async function ProducerProfilePage({ params }: { params: Promise<
       <section className="shell py-16">
         <div className="mb-8 max-w-3xl">
           <h2 className="text-3xl font-semibold sm:text-4xl">Every beat from {producer.name}</h2>
-          <p className="mt-3 text-soft">Sound-first merchandising still leads here. Each beat keeps its emotion tag, type beat signal, and instant licensing path.</p>
+          <p className="mt-3 text-soft">Each available beat keeps its genre, mood, tempo, key and current licensing path visible.</p>
         </div>
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {producerBeats.map((beat) => (
@@ -85,11 +75,6 @@ export default async function ProducerProfilePage({ params }: { params: Promise<
                   <p className="mt-2 text-sm text-soft">{beat.typeBeat}</p>
                 </div>
                 <p className="text-sm leading-7 text-soft">{beat.shortHook}</p>
-                <div className="flex flex-wrap gap-3 text-sm text-soft">
-                  <span>{beat.listenersNow} listening now</span>
-                  <span>{beat.cartsNow} in carts</span>
-                  <span>{beat.weeklySales} sold this week</span>
-                </div>
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs uppercase tracking-[0.22em] text-soft">Starting from</p>
@@ -110,3 +95,5 @@ export default async function ProducerProfilePage({ params }: { params: Promise<
 
 
 // vercel trigger 2
+
+// vercel trigger 11

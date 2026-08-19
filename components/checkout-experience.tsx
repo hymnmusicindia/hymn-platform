@@ -197,7 +197,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
         <div className="surface-card p-6 sm:p-8">
           <h1 className="text-4xl font-semibold" style={{ color: "var(--text)" }}>Review before payment.</h1>
           <p className="mt-3 text-sm leading-6" style={{ color: "var(--text-muted)" }}>
-            Pricing, coupons, referral credits, and the Razorpay order amount are recalculated on the backend before payment.
+            Pricing, coupons, checkout credits, and the Razorpay order amount are recalculated on the backend before payment.
           </p>
 
           <div className="mt-6 grid gap-3">
@@ -238,7 +238,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
             <span>
               <span className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text)" }}>
                 <Gift className="h-4 w-4" />
-                Apply referral credits
+                Apply HYMN checkout credits
               </span>
               <span className="mt-1 block text-sm" style={{ color: "var(--text-muted)" }}>
                 Available balance: {formatMoney(quote?.referralCreditBalance ?? 0)}
@@ -257,8 +257,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
             {[
               ["Original price", quote?.originalPrice ?? 0],
               ["Coupon discount", -(quote?.couponDiscount ?? 0)],
-              ["Referral signup benefit", -(quote?.referralBenefitApplied ?? 0)],
-              ["Referral credits used", -(quote?.referralCreditsApplied ?? 0)]
+              ["Checkout credits used", -(quote?.referralCreditsApplied ?? 0)]
             ].map(([label, value]) => (
               <div key={label as string} className="flex items-center justify-between gap-4">
                 <span style={{ color: "var(--text-muted)" }}>{label}</span>

@@ -1,12 +1,12 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/access";
+import { requireAdminPermission } from "@/lib/access";
 import { getSiteSettings, updateSiteSettings } from "@/lib/db";
 import { saveUploadedFile } from "@/lib/storage";
 
 export async function GET() {
-  const result = await requireAdmin();
+  const result = await requireAdminPermission("system.manage");
   if ("error" in result) return result.error;
 
   const siteSettings = await getSiteSettings();
@@ -14,7 +14,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const result = await requireAdmin();
+  const result = await requireAdminPermission("system.manage");
   if ("error" in result) return result.error;
 
   try {
@@ -29,3 +29,4 @@ export async function PATCH(request: Request) {
   }
 }
 
+// vercel trigger 9

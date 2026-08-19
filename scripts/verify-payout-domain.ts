@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { getCurrentQuarter, getPreviousQuarter, getQuarterFromDate, getQuarterStartEnd } from "../lib/payout/quarters";
 import { calculateSplitEarnings, validateSplitRecord } from "../lib/payout/split-engine";
+import { inrToUsd, meetsUsdThreshold } from "../lib/payout/currency";
 
 assert.equal(getQuarterFromDate(new Date("2026-01-01T00:00:00Z")), 1);
 assert.equal(getQuarterFromDate(new Date("2026-06-30T23:59:59Z")), 2);
@@ -21,5 +22,11 @@ assert.equal(validateSplitRecord({ recipients: split.recipients.slice(0, 2) }).v
 const calculated = calculateSplitEarnings({ netRevenue: 10000 }, split);
 assert.deepEqual(calculated.map((row) => row.amount), [7000, 2000, 1000]);
 assert.equal(calculated.reduce((sum, row) => sum + row.amount, 0), 10000);
+assert.equal(inrToUsd(8715, 83).toFixed(6), "105.000000");
+assert.equal(meetsUsdThreshold(8715, 83, 105), true);
+assert.equal(meetsUsdThreshold(8714.99, 83, 105), false);
+assert.throws(() => inrToUsd(8715, 0), /valid USD\/INR/);
 
 console.log("Payout domain verification passed.");
+
+// vercel trigger 12

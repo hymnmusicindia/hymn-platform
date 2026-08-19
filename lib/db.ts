@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import mysql from "mysql2/promise";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   AdminNote,
@@ -32,8 +33,10 @@ import {
   UserRole
 } from "@/lib/types";
 import { buildAnalyticsSummary, ensureReleaseAnalytics } from "@/lib/analytics";
+import { createUniqueReferralCode, qualifyReferralInTransaction, registerReferralForNewUser, sendReferralRewardEmails } from "@/lib/referrals";
 import { sampleBeats, sampleReleases } from "@/lib/site";
 import { searchSpotifyTracks } from "@/lib/spotify";
+import { PRODUCER_COMMISSION_CONFIG } from "@/lib/finance-config";
 
 type MemoryState = {
   users: User[];
@@ -69,13 +72,15 @@ function usesPostgresPrisma() {
   return /^postgres(?:ql)?:\/\//i.test(process.env.DATABASE_URL?.trim() ?? "");
 }
 
-function productionDatabaseUnavailable() {
-  return new Error("Production database is not configured. Refusing to use in-memory storage for persistent data.");
+function rethrowProductionPersistenceFailure(error: unknown) {
+  if (process.env.NODE_ENV === "production") {
+    throw error instanceof Error ? error : new Error("Persistent database operation failed.");
+  }
 }
 
 function assertNoProductionMemoryStore(feature: string) {
   if (process.env.NODE_ENV === "production") {
-    throw new Error(`${feature} requires a persistent database table. Refusing to use in-memory storage in production.`);
+    console.warn(`${feature} requires a persistent database table; currently using fallback in-memory storage.`);
   }
 }
 
@@ -107,6 +112,8 @@ function mapPrismaUser(user: {
   name: string;
   email: string;
   googleId: string;
+  avatar?: string | null;
+  passwordHash?: string | null;
   role: string;
   referralCode: string | null;
   referralCredits: number;
@@ -127,6 +134,8 @@ function mapPrismaUser(user: {
     name: user.name,
     email: user.email,
     googleId: user.googleId,
+    avatarUrl: user.avatar ?? null,
+    passwordHash: user.passwordHash ?? undefined,
     role: fromPrismaRole(user.role),
     referralCode: user.referralCode ?? "",
     referralCredits: user.referralCredits ?? 0,
@@ -350,11 +359,11 @@ globalState.hymnSiteSettings = memory.siteSettings;
 function getPool() {
   const databaseUrl = process.env.DATABASE_URL?.trim();
   if (usesPostgresPrisma()) return null;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Legacy MySQL persistence is disabled in production; configure PostgreSQL through DATABASE_URL.");
+  }
   const looksLikeExample = !databaseUrl || databaseUrl === "mysql://user:password@localhost:3306/hymn";
 
-  if (looksLikeExample && process.env.NODE_ENV === "production") {
-    throw productionDatabaseUnavailable();
-  }
   if (looksLikeExample) return null;
   if (!globalState.hymnPool) {
     globalState.hymnPool = mysql.createPool({ uri: databaseUrl, connectionLimit: 10 });
@@ -397,6 +406,20 @@ export async function createPasswordUser(input: {
   role: AuthAccountRole;
   referralCode?: string;
 }) {
+  if (usesPostgresPrisma()) {
+    const normalizedEmail = input.email.trim().toLowerCase();
+    return prisma.$transaction(async tx => {
+      const existing = await tx.user.findFirst({ where: { email: { equals: normalizedEmail, mode: "insensitive" } } });
+      if (existing) return null;
+      const permanentReferralCode = await createUniqueReferralCode(tx, input.name);
+      const user = await tx.user.create({ data: {
+        name: input.name.trim(), email: normalizedEmail, googleId: createLocalGoogleId(input.role),
+        passwordHash: input.passwordHash, role: toPrismaRole(input.role), referralCode: permanentReferralCode
+      } });
+      await registerReferralForNewUser(tx, { referredUserId: user.id, referredEmail: user.email, referralCode: input.referralCode });
+      return mapPrismaUser(user);
+    });
+  }
   const pool = getPool();
   const referrer = await resolveReferrer(input.referralCode);
   rejectSelfReferral(referrer, input.email);
@@ -530,6 +553,35 @@ function mapOrders(rows: OrderRow[]) {
   return rows.map((row) => ({ ...row, items: normalizeOrderItems(row.items) }));
 }
 
+type PrismaCheckoutOrderRow = Prisma.CheckoutOrderGetPayload<{
+  include: { user: true; items: { include: { beat: { include: { user: true; audio: true } } } } };
+}>;
+
+const checkoutOrderInclude = {
+  user: true,
+  items: { include: { beat: { include: { user: true, audio: true } } } }
+} as const;
+
+function mapPrismaCheckoutOrder(row: PrismaCheckoutOrderRow): Order {
+  return {
+    id: row.id, userId: row.userId, buyerName: row.user.name, buyerEmail: row.user.email, productId: row.productId,
+    originalPrice: Number(row.originalPrice), discountApplied: Number(row.discountApplied), referralCreditsUsed: row.referralCreditsUsed,
+    finalAmount: Number(row.finalAmount), couponCode: row.couponCode, razorpayOrderId: row.razorpayOrderId,
+    razorpayPaymentId: row.razorpayPaymentId ?? undefined, amount: Number(row.finalAmount),
+    paymentStatus: row.paymentStatus as Order["paymentStatus"], createdAt: row.createdAt.toISOString(),
+    items: row.items.map(item => ({
+      beatId: item.beatId, beatTitle: item.beat.title, producerId: item.beat.userId, producerName: item.beat.user.name,
+      licenseType: item.licenseType as OrderItem["licenseType"], price: Number(item.price), licenseUrl: item.licenseUrl,
+      downloadUrl: item.beat.audio?.publicUrl?.startsWith("/api/assets/") ? item.beat.audio.publicUrl : null
+    }))
+  };
+}
+
+async function listPrismaCheckoutOrders(where: Prisma.CheckoutOrderWhereInput = {}) {
+  const rows = await prisma.checkoutOrder.findMany({ where, include: checkoutOrderInclude, orderBy: { createdAt: "desc" } });
+  return rows.map(mapPrismaCheckoutOrder);
+}
+
 function normalizeNotificationType(value?: string | null): NotificationType {
   if (value === "release" || value === "beat" || value === "order" || value === "payout" || value === "account" || value === "system") return value;
   return "system";
@@ -602,23 +654,14 @@ export async function createNotification(input: {
     href: payload.href,
     actionLabel: payload.actionLabel,
     priority: payload.priority,
-    metadata: payload.metadata
+    eventKey: payload.eventKey,
+    metadata: payload.metadata ? payload.metadata as Prisma.InputJsonValue : Prisma.JsonNull
   };
 
   if (usesPostgresPrisma()) {
-    if (eventKey) {
-      const recent = await (prisma as any).notification.findMany({
-        where: { userId: payload.userId },
-        orderBy: { createdAt: "desc" },
-        take: 100
-      });
-      const duplicate = recent.find((notification: any) => {
-        const metadata = typeof notification.metadata === "object" && notification.metadata ? notification.metadata : {};
-        return metadata.eventKey === eventKey;
-      });
-      if (duplicate) return mapNotification(duplicate);
-    }
-    const notification = await (prisma as any).notification.create({ data: databasePayload });
+    const notification = eventKey
+      ? await prisma.notification.upsert({ where: { eventKey }, create: databasePayload, update: {} })
+      : await prisma.notification.create({ data: databasePayload });
     return mapNotification(notification);
   }
 
@@ -966,7 +1009,7 @@ export async function findUserByEmail(email: string) {
   if (!pool) return memory.users.find((user) => user.email.toLowerCase() === email.toLowerCase()) ?? null;
 
   const [rows] = await pool.query(
-    "SELECT id, name, email, password_hash AS passwordHash, google_id AS googleId, role, referral_code AS referralCode, referral_credits AS referralCredits, referred_by AS referredBy, first_payment_rewarded AS firstPaymentRewarded, created_at AS createdAt FROM users WHERE email = ? LIMIT 1",
+    "SELECT id, name, email, password_hash AS passwordHash, google_id AS googleId, avatar AS avatarUrl, role, referral_code AS referralCode, referral_credits AS referralCredits, referred_by AS referredBy, first_payment_rewarded AS firstPaymentRewarded, created_at AS createdAt FROM users WHERE email = ? LIMIT 1",
     [email]
   );
   return (rows as User[])[0] ?? null;
@@ -982,7 +1025,7 @@ export async function findUserById(id: number) {
   if (!pool) return memory.users.find((user) => user.id === id) ?? null;
 
   const [rows] = await pool.query(
-    "SELECT id, name, email, google_id AS googleId, role, referral_code AS referralCode, referral_credits AS referralCredits, referred_by AS referredBy, first_payment_rewarded AS firstPaymentRewarded, created_at AS createdAt FROM users WHERE id = ? LIMIT 1",
+    "SELECT id, name, email, google_id AS googleId, avatar AS avatarUrl, role, referral_code AS referralCode, referral_credits AS referralCredits, referred_by AS referredBy, first_payment_rewarded AS firstPaymentRewarded, created_at AS createdAt FROM users WHERE id = ? LIMIT 1",
     [id]
   );
   return (rows as User[])[0] ?? null;
@@ -991,11 +1034,15 @@ export async function findUserById(id: number) {
 export async function findUserByReferralCode(referralCode: string) {
   const code = normalizeReferralCode(referralCode);
   if (!code) return null;
+  if (usesPostgresPrisma()) {
+    const user = await prisma.user.findFirst({ where: { referralCode: { equals: code, mode: "insensitive" } } });
+    return user ? mapPrismaUser(user) : null;
+  }
   const pool = getPool();
   if (!pool) return memory.users.find((user) => user.referralCode.toUpperCase() === code) ?? null;
 
   const [rows] = await pool.query(
-    "SELECT id, name, email, google_id AS googleId, role, referral_code AS referralCode, referral_credits AS referralCredits, referred_by AS referredBy, first_payment_rewarded AS firstPaymentRewarded, created_at AS createdAt FROM users WHERE referral_code = ? LIMIT 1",
+    "SELECT id, name, email, google_id AS googleId, avatar AS avatarUrl, role, referral_code AS referralCode, referral_credits AS referralCredits, referred_by AS referredBy, first_payment_rewarded AS firstPaymentRewarded, created_at AS createdAt FROM users WHERE UPPER(referral_code) = ? LIMIT 1",
     [code]
   );
   return (rows as User[])[0] ?? null;
@@ -1011,9 +1058,41 @@ export async function listUsers() {
   if (!pool) return [...memory.users].sort((a, b) => a.name.localeCompare(b.name));
 
   const [rows] = await pool.query(
-    "SELECT id, name, email, google_id AS googleId, role, referral_code AS referralCode, referral_credits AS referralCredits, referred_by AS referredBy, first_payment_rewarded AS firstPaymentRewarded, created_at AS createdAt FROM users ORDER BY created_at DESC"
+    "SELECT id, name, email, google_id AS googleId, avatar AS avatarUrl, role, referral_code AS referralCode, referral_credits AS referralCredits, referred_by AS referredBy, first_payment_rewarded AS firstPaymentRewarded, created_at AS createdAt FROM users ORDER BY created_at DESC"
   );
   return rows as User[];
+}
+
+export async function listRecentGoogleAvatarUrls(limit = 4) {
+  const take = Math.max(1, Math.min(limit, 8));
+
+  if (usesPostgresPrisma()) {
+    const users = await prisma.user.findMany({
+      where: {
+        avatar: { not: null },
+        googleId: { not: "" },
+        role: { in: ["CUSTOMER", "PRODUCER"] }
+      },
+      select: { avatar: true },
+      orderBy: { createdAt: "desc" },
+      take
+    });
+    return users.flatMap((user) => user.avatar ? [user.avatar] : []);
+  }
+
+  const pool = getPool();
+  if (!pool) {
+    return memory.users
+      .filter((user) => Boolean(user.googleId && user.avatarUrl && user.role !== "admin"))
+      .slice(0, take)
+      .flatMap((user) => user.avatarUrl ? [user.avatarUrl] : []);
+  }
+
+  const [rows] = await pool.query(
+    "SELECT avatar AS avatarUrl FROM users WHERE google_id IS NOT NULL AND google_id <> '' AND avatar IS NOT NULL AND role IN ('customer', 'producer') ORDER BY created_at DESC LIMIT ?",
+    [take]
+  );
+  return (rows as Array<{ avatarUrl?: string | null }>).flatMap((user) => user.avatarUrl ? [user.avatarUrl] : []);
 }
 
 export async function updateUserRole(userId: number, role: UserRole) {
@@ -1046,36 +1125,20 @@ export async function updateUserRole(userId: number, role: UserRole) {
   return findUserById(userId);
 }
 
-export async function upsertGoogleUser(input: Pick<User, "name" | "email" | "googleId"> & { referralCode?: string; expectedRole?: AuthAccountRole }) {
+export async function upsertGoogleUser(input: Pick<User, "name" | "email" | "googleId"> & { avatarUrl?: string | null; referralCode?: string; expectedRole?: AuthAccountRole }) {
   if (usesPostgresPrisma()) {
-    const existing = await prisma.user.findUnique({ where: { googleId: input.googleId } });
-    const role = resolveGoogleRole(input.email, input.expectedRole, existing?.role);
-    const user = await prisma.user.upsert({
-      where: { googleId: input.googleId },
-      create: {
-        googleId: input.googleId,
-        name: input.name,
-        email: input.email,
-        avatar: null,
-        role: toPrismaRole(role),
-        referralCode: randomReferralCode()
-      },
-      update: {
-        name: input.name,
-        email: input.email,
-        role: toPrismaRole(role)
-      }
+    return prisma.$transaction(async tx => {
+      const normalizedEmail = input.email.trim().toLowerCase();
+      const existing = await tx.user.findFirst({ where: { OR: [{ googleId: input.googleId }, { email: { equals: normalizedEmail, mode: "insensitive" } }] } });
+      const role = resolveGoogleRole(normalizedEmail, input.expectedRole, existing?.role);
+      const permanentReferralCode = existing?.referralCode || await createUniqueReferralCode(tx, input.name);
+      const user = existing
+        ? await tx.user.update({ where: { id: existing.id }, data: { googleId: input.googleId, name: input.name.trim(), email: normalizedEmail, avatar: input.avatarUrl || existing.avatar, role: toPrismaRole(role) } })
+        : await tx.user.create({ data: { googleId: input.googleId, name: input.name.trim(), email: normalizedEmail, avatar: input.avatarUrl || null, role: toPrismaRole(role), referralCode: permanentReferralCode } });
+      if (!existing) await registerReferralForNewUser(tx, { referredUserId: user.id, referredEmail: user.email, referralCode: input.referralCode });
+      await tx.auditLog.create({ data: { actorId: user.id, action: existing ? "LOGIN" : "USER_CREATED_WITH_GOOGLE", entity: "users", entityId: String(user.id), metadata: { authenticationProvider: "google" } } });
+      return mapPrismaUser(user);
     });
-    await prisma.auditLog.create({
-      data: {
-        actorId: user.id,
-        action: existing ? "LOGIN" : "USER_CREATED_WITH_GOOGLE",
-        entity: "users",
-        entityId: String(user.id),
-        metadata: { googleId: input.googleId, email: input.email }
-      }
-    });
-    return mapPrismaUser(user);
   }
 
   const pool = getPool();
@@ -1089,6 +1152,7 @@ export async function upsertGoogleUser(input: Pick<User, "name" | "email" | "goo
     if (localUser) {
       localUser.name = input.name;
       localUser.googleId = input.googleId;
+      localUser.avatarUrl = input.avatarUrl || localUser.avatarUrl;
       localUser.role = resolvedRole;
       return localUser;
     }
@@ -1098,6 +1162,7 @@ export async function upsertGoogleUser(input: Pick<User, "name" | "email" | "goo
       name: input.name,
       email: input.email,
       googleId: input.googleId,
+      avatarUrl: input.avatarUrl || null,
       role: resolvedRole,
       referralCode: randomReferralCode(),
       referralCredits: 0,
@@ -1124,10 +1189,10 @@ export async function upsertGoogleUser(input: Pick<User, "name" | "email" | "goo
   }
 
   await pool.query(
-    `INSERT INTO users (name, email, google_id, role, referral_code, referred_by)
-     VALUES (?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE name = VALUES(name), google_id = VALUES(google_id), role = VALUES(role)`,
-    [input.name, input.email, input.googleId, resolvedRole, existing?.referralCode || randomReferralCode(), referrer?.id ?? null]
+    `INSERT INTO users (name, email, google_id, avatar, role, referral_code, referred_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE name = VALUES(name), google_id = VALUES(google_id), avatar = COALESCE(VALUES(avatar), avatar), role = VALUES(role)`,
+    [input.name, input.email, input.googleId, input.avatarUrl || null, resolvedRole, existing?.referralCode || randomReferralCode(), referrer?.id ?? null]
   );
   const user = await findUserByEmail(input.email);
   if (referrer && user) {
@@ -1140,6 +1205,7 @@ export async function upsertGoogleUser(input: Pick<User, "name" | "email" | "goo
 }
 
 export async function listBeats() {
+  if (usesPostgresPrisma()) return listAllBeats();
   const pool = getPool();
   if (!pool) return memory.beats.filter((beat) => beat.enabled).sort((a, b) => b.id - a.id);
   const [rows] = await pool.query(
@@ -1163,7 +1229,8 @@ export async function listAllBeats(): Promise<Beat[]> {
       });
       if (prismaBeats.length > 0) return prismaBeats.map(mapPrismaBeat);
     } catch (e) {
-      console.error("Prisma listAllBeats error, falling back to memory:", e);
+      rethrowProductionPersistenceFailure(e);
+      console.error("Prisma listAllBeats error; using development memory data:", e);
     }
   }
 
@@ -1189,6 +1256,7 @@ export async function listBeatsByProducer(producerId: number): Promise<Beat[]> {
       });
       return prismaBeats.map(mapPrismaBeat);
     } catch (e) {
+      rethrowProductionPersistenceFailure(e);
       console.error("Prisma listBeatsByProducer error:", e);
     }
   }
@@ -1255,7 +1323,8 @@ export async function createBeat(input: Omit<Beat, "id" | "createdAt" | "produce
       console.log("Prisma beat creation successful! Beat ID:", beat.id);
       return mapPrismaBeat(beat);
     } catch (e) {
-      console.error("Prisma createBeat error, falling back to memory:", e);
+      rethrowProductionPersistenceFailure(e);
+      console.error("Prisma createBeat error; using development memory data:", e);
     }
   }
 
@@ -1305,6 +1374,7 @@ export async function updateBeat(id: number, input: Partial<Pick<Beat, "title" |
       });
       return mapPrismaBeat(updated);
     } catch (err) {
+      rethrowProductionPersistenceFailure(err);
       console.error("Prisma updateBeat error:", err);
     }
   }
@@ -1317,6 +1387,17 @@ export async function updateBeat(id: number, input: Partial<Pick<Beat, "title" |
 }
 
 export async function createRelease(input: Omit<Release, "id" | "createdAt" | "status"> & { status?: ReleaseStatus }) {
+  if (usesPostgresPrisma()) {
+    const status = (input.status ?? "submitted").toUpperCase() as Prisma.ReleaseCreateInput["status"];
+    const row = await prisma.release.create({ data: {
+      user: { connect: { id: input.userId } }, title: input.releaseTitle || input.trackName || "Untitled release",
+      artistName: input.artistName, genre: input.primaryGenre || "", releaseDate: new Date(input.releaseDate), status,
+      releaseType: input.releaseType, artworkUrl: input.artworkUrl || null, audioUrl: input.audioUrl || null,
+      paymentStatus: input.paymentStatus ?? "pending", upc: input.upcCode ?? null,
+      metadata: input as unknown as Prisma.InputJsonValue
+    }, include: { tracks: true } });
+    return (await listReleasesByUser(input.userId)).find(release => release.id === row.id) ?? null;
+  }
   const pool = getPool();
   const status = input.status ?? "submitted";
   if (!pool) {
@@ -1381,6 +1462,10 @@ export async function listAllReleases() {
 }
 
 export async function updateReleaseStatus(releaseId: number, status: ReleaseStatus, note?: string) {
+  if (usesPostgresPrisma()) {
+    const { updateDetailedReleaseStatus } = await import("@/lib/distribution-db");
+    return updateDetailedReleaseStatus(releaseId, status, note);
+  }
   const pool = getPool();
   if (!pool) {
     const release = memory.releases.find((item) => item.id === releaseId);
@@ -1408,6 +1493,30 @@ export async function updateReleaseStatus(releaseId: number, status: ReleaseStat
 }
 
 export async function createOrder(input: Omit<Order, "id" | "createdAt" | "buyerName" | "buyerEmail">) {
+  if (usesPostgresPrisma()) {
+    return prisma.$transaction(async tx => {
+      const beatIds = [...new Set(input.items.map(item => item.beatId))];
+      const beats = await tx.beat.findMany({ where: { id: { in: beatIds }, enabled: true }, select: { id: true } });
+      if (beats.length !== beatIds.length) throw new Error("One or more selected beats are unavailable.");
+      const order = await tx.checkoutOrder.create({
+        data: {
+          userId: input.userId,
+          productId: input.productId ?? "beatstore",
+          originalPrice: new Prisma.Decimal(input.originalPrice ?? input.amount),
+          discountApplied: new Prisma.Decimal(input.discountApplied ?? 0),
+          referralCreditsUsed: input.referralCreditsUsed ?? 0,
+          finalAmount: new Prisma.Decimal(input.finalAmount ?? input.amount),
+          couponCode: input.couponCode ?? null,
+          razorpayOrderId: input.razorpayOrderId,
+          paymentStatus: input.paymentStatus,
+          currency: "INR",
+          items: { create: input.items.map(item => ({ beatId: item.beatId, licenseType: item.licenseType, price: new Prisma.Decimal(item.price), licenseUrl: item.licenseUrl ?? null })) }
+        },
+        include: checkoutOrderInclude
+      });
+      return mapPrismaCheckoutOrder(order);
+    });
+  }
   const user = await findUserById(input.userId);
   const mappedItems = input.items.map((item) => {
     const beat = memory.beats.find((entry) => entry.id === item.beatId);
@@ -1525,12 +1634,17 @@ async function listOrdersQuery(where = "", params: unknown[] = []) {
 }
 
 export async function listOrdersByUser(userId: number) {
+  if (usesPostgresPrisma()) return listPrismaCheckoutOrders({ userId });
   const pool = getPool();
   if (!pool) return memory.orders.filter((order) => order.userId === userId).map(mapOrder).sort((a, b) => b.id - a.id);
   return listOrdersQuery("WHERE o.user_id = ?", [userId]);
 }
 
 export async function listOrdersByProducer(producerId: number) {
+  if (usesPostgresPrisma()) {
+    const orders = await listPrismaCheckoutOrders({ items: { some: { beat: { userId: producerId } } } });
+    return orders.map(order => ({ ...order, items: order.items.filter(item => item.producerId === producerId) }));
+  }
   const pool = getPool();
   if (!pool) {
     return memory.orders
@@ -1543,6 +1657,7 @@ export async function listOrdersByProducer(producerId: number) {
 }
 
 export async function listAllOrders() {
+  if (usesPostgresPrisma()) return listPrismaCheckoutOrders();
   const pool = getPool();
   if (!pool) return [...memory.orders].map(mapOrder).sort((a, b) => b.id - a.id);
   return listOrdersQuery();
@@ -1551,6 +1666,10 @@ export async function listAllOrders() {
 export async function findCouponByCode(code: string) {
   const normalized = normalizeReferralCode(code);
   if (!normalized) return null;
+  if (usesPostgresPrisma()) {
+    const coupon = await prisma.coupon.findFirst({ where: { code: normalized, active: true, OR: [{ expiryDate: null }, { expiryDate: { gt: new Date() } }] } });
+    return coupon ? { id: coupon.id, code: coupon.code, discountType: coupon.discountType as Coupon["discountType"], discountValue: Number(coupon.discountValue), expiryDate: coupon.expiryDate?.toISOString() ?? null, usageLimit: coupon.usageLimit, perUserLimit: coupon.perUserLimit, active: coupon.active, createdAt: coupon.createdAt.toISOString() } : null;
+  }
   const pool = getPool();
   if (!pool) return memory.coupons.find((coupon) => coupon.code.toUpperCase() === normalized && coupon.active) ?? null;
 
@@ -1568,6 +1687,15 @@ export async function findCouponByCode(code: string) {
 
 export async function getCouponUsage(code: string, userId: number) {
   const normalized = normalizeReferralCode(code);
+  if (usesPostgresPrisma()) {
+    const coupon = await prisma.coupon.findUnique({ where: { code: normalized }, select: { id: true } });
+    if (!coupon) return { total: 0, byUser: 0 };
+    const [total, byUser] = await Promise.all([
+      prisma.couponRedemption.count({ where: { couponId: coupon.id } }),
+      prisma.couponRedemption.count({ where: { couponId: coupon.id, userId } })
+    ]);
+    return { total, byUser };
+  }
   const pool = getPool();
   if (!pool) {
     const total = memory.orders.filter((order) => order.couponCode?.toUpperCase() === normalized && order.paymentStatus === "paid").length;
@@ -1590,6 +1718,10 @@ export async function getCouponUsage(code: string, userId: number) {
 }
 
 export async function getCheckoutOrderByRazorpayId(razorpayOrderId: string) {
+  if (usesPostgresPrisma()) {
+    const order = await prisma.checkoutOrder.findUnique({ where: { razorpayOrderId }, include: checkoutOrderInclude });
+    return order ? mapPrismaCheckoutOrder(order) : null;
+  }
   const pool = getPool();
   if (!pool) {
     assertNoProductionMemoryStore("Checkout orders");
@@ -1599,17 +1731,84 @@ export async function getCheckoutOrderByRazorpayId(razorpayOrderId: string) {
   return orders[0] ?? null;
 }
 
-function getMilestoneBonus(successfulReferralCount: number) {
-  if (successfulReferralCount === 10) return 1000;
-  if (successfulReferralCount === 5) return 300;
-  return 0;
-}
-
+// Legacy MySQL/memory compatibility. PostgreSQL uses the immutable referral
+// ledger and qualification service below.
 function calculateReferralReward(successfulReferralCount: number) {
-  return 100 + getMilestoneBonus(successfulReferralCount);
+  void successfulReferralCount;
+  return 5;
 }
 
 export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: string) {
+  if (usesPostgresPrisma()) {
+    const qualification = await prisma.$transaction(async tx => {
+      const order = await tx.checkoutOrder.findUnique({
+        where: { razorpayOrderId },
+        include: { user: true, items: { include: { beat: { select: { id: true, userId: true, title: true } } } } }
+      });
+      if (!order) throw new Error("Order not found.");
+      const alreadyPaid = order.paymentStatus === "paid";
+      if (alreadyPaid && order.razorpayPaymentId !== paymentId) throw new Error("Order is already fulfilled by a different payment.");
+      if (!alreadyPaid && !["created", "authorized"].includes(order.paymentStatus)) throw new Error(`Order cannot be fulfilled from ${order.paymentStatus}.`);
+      if (!alreadyPaid && order.referralCreditsUsed > 0) {
+        const debited = await tx.user.updateMany({ where: { id: order.userId, referralCredits: { gte: order.referralCreditsUsed } }, data: { referralCredits: { decrement: order.referralCreditsUsed } } });
+        if (debited.count !== 1) throw new Error("Referral credit balance changed. Please recreate checkout.");
+        await tx.creditLedgerEntry.create({
+          data: {
+            userId: order.userId,
+            type: "CREDIT_REDEMPTION",
+            bucket: "HYMN_CREDIT",
+            amount: order.referralCreditsUsed,
+            direction: "debit",
+            sourceType: "checkout_order",
+            sourceId: String(order.id),
+            description: "HYMN credit applied to checkout",
+            idempotencyKey: `CREDIT_REDEMPTION:CHECKOUT:${order.id}`,
+            balanceAfter: Number(order.user.referralCredits) - order.referralCreditsUsed,
+            metadata: { razorpayOrderId }
+          }
+        });
+      }
+      if (!alreadyPaid && order.couponCode) {
+        const coupon = await tx.coupon.findFirst({ where: { code: order.couponCode, active: true, OR: [{ expiryDate: null }, { expiryDate: { gt: new Date() } }] } });
+        if (!coupon) throw new Error("Coupon is no longer valid.");
+        const [total, byUser] = await Promise.all([
+          tx.couponRedemption.count({ where: { couponId: coupon.id } }),
+          tx.couponRedemption.count({ where: { couponId: coupon.id, userId: order.userId } })
+        ]);
+        if (coupon.usageLimit != null && total >= coupon.usageLimit) throw new Error("Coupon usage limit was reached before verification.");
+        if (byUser >= coupon.perUserLimit) throw new Error("Coupon per-user limit was reached before verification.");
+        await tx.couponRedemption.create({ data: { couponId: coupon.id, userId: order.userId, orderId: order.id } });
+      }
+      for (const item of order.items) {
+        await tx.beatPurchase.upsert({
+          where: { checkoutOrderItemId: item.id },
+          create: { userId: order.userId, beatId: item.beatId, licenseType: item.licenseType, paymentId, checkoutOrderItemId: item.id, hasAccess: true },
+          update: { paymentId, hasAccess: true }
+        });
+        const existingSale = await tx.beatSale.findUnique({ where: { orderId_beatId_licenseType: { orderId: order.id, beatId: item.beatId, licenseType: item.licenseType } } });
+        if (!existingSale) {
+          const grossAmount = new Prisma.Decimal(item.price);
+          const hymnCommissionAmount = grossAmount.mul(PRODUCER_COMMISSION_CONFIG.hymnCommissionPercent).div(100).toDecimalPlaces(2);
+          const producerEarningAmount = grossAmount.sub(hymnCommissionAmount);
+          const latest = await tx.walletTransaction.findFirst({ where: { userId: item.beat.userId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
+          const balanceAfter = new Prisma.Decimal(latest?.balanceAfter ?? 0).add(producerEarningAmount);
+          const sale = await tx.beatSale.create({ data: { beatId: item.beatId, producerUserId: item.beat.userId, buyerUserId: order.userId, orderId: order.id, paymentId, grossAmount, hymnCommissionAmount, producerEarningAmount, licenseType: item.licenseType, status: "paid" } });
+          await tx.walletTransaction.create({ data: { userId: item.beat.userId, type: "beat_sale_credit", amount: producerEarningAmount, referenceType: "beat_sale", referenceId: String(sale.id), idempotencyKey: `beat-sale:${sale.id}:producer-credit`, direction: "credit", balanceAfter, note: `${item.beat.title} sale producer share.` } });
+          await tx.artistPayoutBalance.upsert({ where: { userId: item.beat.userId }, create: { userId: item.beat.userId, availableBalance: producerEarningAmount, lifetimeEarnings: producerEarningAmount }, update: { availableBalance: { increment: producerEarningAmount }, lifetimeEarnings: { increment: producerEarningAmount } } });
+          await tx.notification.upsert({ where: { eventKey: `beat-sale:${sale.id}:producer-credit` }, create: { userId: item.beat.userId, title: "Beat sold", body: `Your beat “${item.beat.title}” was purchased and your producer share was credited.`, type: "beat", href: "/producer/dashboard?module=sales", actionLabel: "View sale", eventKey: `beat-sale:${sale.id}:producer-credit`, metadata: { saleId: sale.id, beatId: item.beatId, orderId: order.id } }, update: {} });
+        }
+      }
+      await tx.notification.upsert({ where: { eventKey: `payment:${order.razorpayOrderId}:success` }, create: { userId: order.userId, title: "Beat purchase successful", body: "Your beat purchase was successful. Check your dashboard for downloads and licence details.", type: "beat", href: "/dashboard?tab=purchases", actionLabel: "Open dashboard", eventKey: `payment:${order.razorpayOrderId}:success`, metadata: { orderId: order.id, razorpayOrderId: order.razorpayOrderId } }, update: {} });
+      await tx.checkoutOrderItem.updateMany({ where: { orderId: order.id, licenseUrl: null }, data: { licenseUrl: `/api/licenses/order/${order.id}` } });
+      if (!alreadyPaid) {
+        const fulfilled = await tx.checkoutOrder.updateMany({ where: { id: order.id, paymentStatus: { in: ["created", "authorized"] } }, data: { paymentStatus: "paid", razorpayPaymentId: paymentId, fulfilledAt: new Date() } });
+        if (fulfilled.count !== 1) throw new Error("Order was fulfilled concurrently.");
+      }
+      return !alreadyPaid ? qualifyReferralInTransaction(tx, { referredUserId: order.userId, transactionType: "checkout_order", transactionId: order.id, paymentId, paidAmountInr: Number(order.finalAmount), source: "verified_payment" }) : { qualified: false as const, reason: "already_paid" as const };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    if (qualification.qualified) await sendReferralRewardEmails(qualification.referralId).catch(() => undefined);
+    return getCheckoutOrderByRazorpayId(razorpayOrderId);
+  }
   const pool = getPool();
   if (!pool) {
     assertNoProductionMemoryStore("Checkout orders");
@@ -1632,9 +1831,9 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
 
     if (user?.referredBy && !user.firstPaymentRewarded) {
       const referrer = memory.users.find((item) => item.id === user.referredBy);
-      const successfulCount = memory.referrals.filter((referral) => referral.userId === user.referredBy && referral.status === "rewarded").length + 1;
-      const reward = calculateReferralReward(successfulCount);
+      const reward = 5;
       if (referrer) referrer.referralCredits = Number(referrer.referralCredits) + reward;
+      user.referralCredits = Number(user.referralCredits) + 3;
       user.firstPaymentRewarded = true;
       const referral = memory.referrals.find((item) => item.referredUserId === user.id);
       if (referral) {
@@ -1736,6 +1935,10 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
 }
 
 export async function markOrderFailed(razorpayOrderId: string) {
+  if (usesPostgresPrisma()) {
+    await prisma.checkoutOrder.updateMany({ where: { razorpayOrderId, paymentStatus: "created" }, data: { paymentStatus: "failed" } });
+    return getCheckoutOrderByRazorpayId(razorpayOrderId);
+  }
   const pool = getPool();
   if (!pool) {
     assertNoProductionMemoryStore("Checkout orders");
@@ -1805,6 +2008,7 @@ async function ensureDefaultCoupons(pool: mysql.Pool) {
 }
 
 export async function createContactMessage(input: Omit<ContactMessage, "id" | "createdAt">) {
+  if (usesPostgresPrisma()) assertNoProductionMemoryStore("Contact messages");
   const pool = getPool();
   if (!pool) {
     const message: ContactMessage = { ...input, id: nextId(memory.contactMessages), createdAt: new Date().toISOString() };
@@ -1819,6 +2023,7 @@ export async function createContactMessage(input: Omit<ContactMessage, "id" | "c
 }
 
 export async function createPartnershipLead(input: Omit<PartnershipLead, "id" | "createdAt">) {
+  if (usesPostgresPrisma()) assertNoProductionMemoryStore("Partnership leads");
   const pool = getPool();
   if (!pool) {
     const lead: PartnershipLead = { ...input, id: nextId(memory.partnershipLeads), createdAt: new Date().toISOString() };
@@ -1833,6 +2038,7 @@ export async function createPartnershipLead(input: Omit<PartnershipLead, "id" | 
 }
 
 export async function listPartnershipLeads() {
+  if (usesPostgresPrisma()) assertNoProductionMemoryStore("Partnership leads");
   const pool = getPool();
   if (!pool) return [...memory.partnershipLeads].sort((a, b) => b.id - a.id);
   const [rows] = await pool.query(
@@ -2000,7 +2206,7 @@ export async function reviewProducerApplication(applicationId: number, status: P
           title: status === "approved" ? "Producer access approved" : "Producer application reviewed",
           body: status === "approved" ? "Your HYMN producer dashboard is now unlocked." : "Your producer application was not approved. Review the notes and try again.",
           type: "account",
-          href: "/producer-dashboard",
+          href: "/producer/dashboard",
           actionLabel: status === "approved" ? "Open producer dashboard" : "Review notes",
           priority: status === "approved" ? "normal" : "high",
           metadata: { reviewNote: reviewNote ?? null }
@@ -2037,7 +2243,7 @@ export async function reviewProducerApplication(applicationId: number, status: P
       title: status === "approved" ? "Producer access approved" : "Producer application reviewed",
       body: status === "approved" ? "Your HYMN producer dashboard is now unlocked." : "Your producer application was not approved. Review the notes and try again.",
       type: "account",
-      href: "/producer-dashboard",
+      href: "/producer/dashboard",
       actionLabel: status === "approved" ? "Open producer dashboard" : "Review notes",
       priority: status === "approved" ? "normal" : "high",
       metadata: { reviewNote: reviewNote ?? null }
@@ -2068,7 +2274,7 @@ export async function reviewProducerApplication(applicationId: number, status: P
       title: status === "approved" ? "Producer access approved" : "Producer application reviewed",
       body: status === "approved" ? "Your HYMN producer dashboard is now unlocked." : "Your producer application was not approved. Review the notes and try again.",
       type: "account",
-      href: "/producer-dashboard",
+      href: "/producer/dashboard",
       actionLabel: status === "approved" ? "Open producer dashboard" : "Review notes",
       priority: status === "approved" ? "normal" : "high",
       metadata: { reviewNote: reviewNote ?? null }
@@ -2323,7 +2529,8 @@ export async function listProducerProfiles(): Promise<ProducerProfile[]> {
       });
       if (profiles.length > 0) return profiles.map(mapPrismaProducerProfile);
     } catch (e) {
-      console.error("Prisma listProducerProfiles error, falling back to memory:", e);
+      rethrowProductionPersistenceFailure(e);
+      console.error("Prisma listProducerProfiles error; using development memory data:", e);
     }
   }
 
@@ -2340,6 +2547,7 @@ export async function listProducerProfiles(): Promise<ProducerProfile[]> {
 }
 
 export async function createProducerProfile(input: { name: string; description: string; specialty: string; imageUrl?: string | null; active?: boolean; sortOrder?: number }) {
+  if (usesPostgresPrisma()) assertNoProductionMemoryStore("Legacy producer profile creation");
   const pool = getPool();
   const slugBase = slugifyProducerName(input.name);
   if (!pool) {
@@ -2372,6 +2580,7 @@ export async function createProducerProfile(input: { name: string; description: 
 }
 
 export async function updateProducerProfile(id: number, input: Partial<{ name: string; description: string; specialty: string; imageUrl: string | null; active: boolean; sortOrder: number }>) {
+  if (usesPostgresPrisma()) assertNoProductionMemoryStore("Legacy producer profile updates");
   const pool = getPool();
   if (!pool) {
     const profile = memory.producerProfiles.find((item) => item.id === id);
@@ -2405,6 +2614,7 @@ export async function updateProducerProfile(id: number, input: Partial<{ name: s
 }
 
 export async function deleteProducerProfile(id: number) {
+  if (usesPostgresPrisma()) assertNoProductionMemoryStore("Legacy producer profile deletion");
   const pool = getPool();
   if (!pool) {
     const index = memory.producerProfiles.findIndex((item) => item.id === id);
@@ -2420,6 +2630,7 @@ export async function deleteProducerProfile(id: number) {
 }
 
 export async function getSiteSettings() {
+  if (usesPostgresPrisma()) assertNoProductionMemoryStore("Legacy site settings");
   const pool = getPool();
   if (!pool) return memory.siteSettings;
 
@@ -2430,6 +2641,7 @@ export async function getSiteSettings() {
 }
 
 export async function updateSiteSettings(input: Partial<SiteSettings>) {
+  if (usesPostgresPrisma()) assertNoProductionMemoryStore("Legacy site settings");
   const pool = getPool();
   if (!pool) {
     memory.siteSettings = { ...memory.siteSettings, ...input };
@@ -2460,7 +2672,27 @@ export async function getProducerEarnings(producerId: number) {
 
 export async function getAnalyticsSummary(user: User): Promise<AnalyticsSummary> {
   const releases = user.role === "admin" ? await listAllReleases() : await listReleasesByUser(user.id);
-  return buildAnalyticsSummary(releases, user.role);
+  if (!usesPostgresPrisma()) return buildAnalyticsSummary([], user.role);
+  type VerifiedRow = { releaseId: number; platform: string; country: string; streams: number; saves: number; revenueCents: number; periodStart: Date; periodEnd: Date; dataSource: string; statementPeriod: string | null; importedAt: Date };
+  const ownership = user.role === "admin" ? Prisma.empty : Prisma.sql`AND r."user_id" = ${user.id}`;
+  const rows = await prisma.$queryRaw<VerifiedRow[]>(Prisma.sql`
+    SELECT a."release_id" AS "releaseId", a."platform", a."country", a."streams", a."saves",
+           a."revenue_cents" AS "revenueCents", a."period_start" AS "periodStart", a."period_end" AS "periodEnd",
+           a."data_source" AS "dataSource", a."statement_period" AS "statementPeriod", a."imported_at" AS "importedAt"
+      FROM "analytics" a JOIN "releases" r ON r."id" = a."release_id"
+     WHERE a."is_verified" = true ${ownership}
+     ORDER BY a."period_end" ASC, a."imported_at" ASC
+  `);
+  const byRelease = new Map<number, VerifiedRow[]>();
+  rows.forEach(row => byRelease.set(row.releaseId, [...(byRelease.get(row.releaseId) ?? []), row]));
+  const withAnalytics = releases.flatMap(release => {
+    const entries = byRelease.get(release.id); if (!entries?.length) return [];
+    const countries: Record<string, number> = {}; const platforms: Record<string, number> = {}; const dailyStreams = new Map<string, number>(); const dailyRevenue = new Map<string, number>();
+    entries.forEach(row => { const date = row.periodEnd.toISOString().slice(0, 10); countries[row.country] = (countries[row.country] ?? 0) + row.streams; platforms[row.platform] = (platforms[row.platform] ?? 0) + row.streams; dailyStreams.set(date, (dailyStreams.get(date) ?? 0) + row.streams); dailyRevenue.set(date, (dailyRevenue.get(date) ?? 0) + row.revenueCents / 100); });
+    return [{ ...release, analytics: { streams_total: entries.reduce((n,row)=>n+row.streams,0), revenue_total: entries.reduce((n,row)=>n+row.revenueCents,0)/100, platforms, countries, daily_streams: [...dailyStreams].map(([date,value])=>({date,value})), daily_revenue: [...dailyRevenue].map(([date,value])=>({date,value})) } }];
+  });
+  const latest = rows.at(-1);
+  return buildAnalyticsSummary(withAnalytics, user.role, latest ? { dataSource: latest.dataSource, statementPeriod: latest.statementPeriod, importedAt: latest.importedAt.toISOString() } : undefined);
 }
 
 function toIsoString(value: unknown) {
@@ -2492,6 +2724,7 @@ function normalizeTimedPlaylistName(value: string) {
 }
 
 function getTimedPlaylistStore() {
+  if (usesPostgresPrisma()) assertNoProductionMemoryStore("Timed playlists");
   return memory.timedPlaylistTracks;
 }
 
@@ -2677,6 +2910,7 @@ export async function createTimedPlaylistTrack(input: {
   startAt: string;
   endAt: string;
 }) {
+  if (usesPostgresPrisma()) assertNoProductionMemoryStore("Timed playlists");
   const start = toDateOrThrow(input.startAt, 'Start time');
   const end = toDateOrThrow(input.endAt, 'End time');
   if (end.getTime() <= start.getTime()) {
@@ -2729,6 +2963,7 @@ export async function createTimedPlaylistTrack(input: {
 }
 
 export async function extendTimedPlaylistTrack(trackId: number, endAt: string) {
+  if (usesPostgresPrisma()) assertNoProductionMemoryStore("Timed playlists");
   const end = toDateOrThrow(endAt, 'End time');
   const pool = getPool();
   if (!pool) {
@@ -2781,6 +3016,7 @@ export async function extendTimedPlaylistTrack(trackId: number, endAt: string) {
 }
 
 export async function removeTimedPlaylistTrack(trackId: number) {
+  if (usesPostgresPrisma()) assertNoProductionMemoryStore("Timed playlists");
   const pool = getPool();
   const now = new Date();
   if (!pool) {
@@ -3072,18 +3308,17 @@ export async function listArtistCardsByUser(userId: number) {
 
 export async function createBeatPurchase(userId: number, beatId: number, licenseType: "basic" | "premium" | "exclusive", paymentId?: string | null) {
   if (usesPostgresPrisma()) {
-    const existing = await prisma.beatPurchase.findFirst({ where: { userId, beatId, licenseType } });
-    const purchase = existing ? await prisma.beatPurchase.update({
-      where: { id: existing.id },
-      data: { hasAccess: true, updatedAt: new Date(), paymentId: paymentId ?? undefined }
-    }) : await prisma.beatPurchase.create({ data: {
+    const existing = await prisma.beatPurchase.findFirst({ where: paymentId ? { userId, beatId, licenseType, paymentId } : { userId, beatId, licenseType, paymentId: null } });
+    const purchase = existing
+      ? await prisma.beatPurchase.update({ where: { id: existing.id }, data: { hasAccess: true, paymentId: paymentId ?? undefined } })
+      : await prisma.beatPurchase.create({ data: {
         userId,
         beatId,
         licenseType,
         purchasedAt: new Date(),
-        hasAccess: true
-        ,paymentId: paymentId ?? null
-      }});
+        hasAccess: true,
+        paymentId: paymentId ?? null
+      } });
     
     return {
       id: purchase.id,
@@ -3184,6 +3419,7 @@ export async function deleteBeat(id: number) {
       await prisma.beat.delete({ where: { id } });
       return true;
     } catch (err) {
+      rethrowProductionPersistenceFailure(err);
       console.error("Prisma deleteBeat error:", err);
     }
   }
@@ -3218,9 +3454,18 @@ export function mapPrismaProducerProfile(prismaProfile: any): ProducerProfile {
     userId: prismaProfile.userId,
     slug: prismaProfile.slug,
     name: prismaProfile.displayName,
-    description: prismaProfile.description ?? "",
+    description: prismaProfile.bio ?? "",
     specialty: prismaProfile.specialty ?? "",
-    imageUrl: prismaProfile.imageUrl ?? null,
+    imageUrl: prismaProfile.coverPhotoUrl ?? prismaProfile.avatarUrl ?? null,
+    coverPhotoUrl: prismaProfile.coverPhotoUrl ?? null,
+    avatarUrl: prismaProfile.avatarUrl ?? null,
+    instagramUrl: prismaProfile.instagramUrl ?? null,
+    youtubeUrl: prismaProfile.youtubeUrl ?? null,
+    spotifyUrl: prismaProfile.spotifyUrl ?? null,
+    websiteUrl: prismaProfile.websiteUrl ?? null,
+    tags: Array.isArray(prismaProfile.tags) ? prismaProfile.tags : [],
+    location: prismaProfile.location ?? null,
+    status: prismaProfile.status ?? (prismaProfile.active ? "active" : "disabled"),
     active: prismaProfile.active,
     sortOrder: prismaProfile.sortOrder,
     createdAt: prismaProfile.createdAt.toISOString(),
@@ -3233,3 +3478,7 @@ export function mapPrismaProducerProfile(prismaProfile: any): ProducerProfile {
 // vercel trigger
 
 // vercel trigger
+// vercel trigger 7
+// vercel trigger 9
+
+// vercel trigger 11

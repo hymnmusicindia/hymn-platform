@@ -3,6 +3,7 @@ import { getAdminSession, getSession } from "@/lib/session";
 import { findUserById } from "@/lib/db";
 import { SessionPayload, User, UserRole } from "@/lib/types";
 import { destinationForRole } from "@/lib/routes";
+import { prisma } from "@/lib/prisma";
 
 export { destinationForRole };
 
@@ -28,7 +29,7 @@ export async function requireRole(roles: UserRole[]) {
   return result;
 }
 
-export async function requireAdmin() {
+export async function requireAdminIdentity() {
   const userResult = await requireRole(["admin"]);
   if (!("error" in userResult)) return userResult.session;
 
@@ -37,27 +38,52 @@ export async function requireAdmin() {
   return session;
 }
 
-/**
- * Compatibility layer for the newer admin surfaces. The current application
- * has one administrator role (rather than separately persisted permission
- * grants), so a verified administrator is permitted to use each named admin
- * capability. Keeping the permission argument here makes the callers ready
- * for granular RBAC when those grants are introduced.
- */
-export async function requireAdminIdentity() {
-  return requireAdmin();
+export type AdminPermissionKey = "releases.read" | "releases.review" | "releases.override" | "distribution.submit" | "distribution.retry" | "distribution.confirm_status" | "updates.review" | "takedowns.review" | "royalties.import" | "royalties.reconcile" | "wallets.adjust" | "payouts.review" | "payouts.approve" | "payouts.mark_paid" | "kyc.review" | "fraud.read" | "fraud.manage" | "fraud.rules" | "users.read" | "users.manage" | "services.manage" | "audit.read" | "system.manage";
+export const ALL_ADMIN_PERMISSIONS: AdminPermissionKey[] = ["releases.read", "releases.review", "releases.override", "distribution.submit", "distribution.retry", "distribution.confirm_status", "updates.review", "takedowns.review", "royalties.import", "royalties.reconcile", "wallets.adjust", "payouts.review", "payouts.approve", "payouts.mark_paid", "kyc.review", "fraud.read", "fraud.manage", "fraud.rules", "users.read", "users.manage", "services.manage", "audit.read", "system.manage"];
+
+export async function getAdminAccessForPage() {
+  const admin = await requireAdminIdentity();
+  if ("error" in admin) return null;
+  if (!("sub" in admin)) return { role: "super_admin", permissions: ALL_ADMIN_PERMISSIONS };
+  try {
+    const membership = await prisma.adminMembership.findFirst({ where: { userId: Number(admin.sub), active: true, revokedAt: null }, include: { role: { include: { permissions: { include: { permission: true } } } } } });
+    if (!membership) return { role: "admin", permissions: ALL_ADMIN_PERMISSIONS };
+    return { role: membership.role.key, permissions: membership.role.permissions.map((row) => row.permission.key as AdminPermissionKey) };
+  } catch {
+    return { role: "admin", permissions: ALL_ADMIN_PERMISSIONS };
+  }
 }
 
-export async function requireAdminPermission(_permission: string) {
-  return requireAdmin();
+export async function requireAdminPermission(permission: AdminPermissionKey) {
+  const admin = await requireAdminIdentity();
+  if ("error" in admin) return admin;
+  if (!("sub" in admin)) {
+    return Object.assign(admin, { adminRole: "super_admin", permissions: [permission] });
+  }
+  try {
+    const membership = await prisma.adminMembership.findFirst({ where: { userId: Number(admin.sub), active: true, revokedAt: null }, include: { role: { include: { permissions: { include: { permission: true } } } } } });
+    if (!membership) {
+      return Object.assign(admin, { adminRole: "admin", permissions: [permission] });
+    }
+    if (!membership.role.permissions.some(row => row.permission.key === permission)) {
+      return { error: NextResponse.json({ error: "Forbidden: missing administrator permission." }, { status: 403 }) };
+    }
+    return Object.assign(admin, { adminRole: membership.role.key, permissions: membership.role.permissions.map(row => row.permission.key) });
+  } catch {
+    return Object.assign(admin, { adminRole: "admin", permissions: [permission] });
+  }
 }
 
-/**
- * Sensitive workflows use the same authenticated administrator check until a
- * dedicated re-authentication timestamp is stored with admin sessions.
- */
-export async function requireRecentAdminPermission(_permission: string) {
-  return requireAdmin();
+export function isRecentAdminAuthentication(issuedAt: number | undefined, nowSeconds = Math.floor(Date.now() / 1000), maximumAgeSeconds = 15 * 60) {
+  return typeof issuedAt === "number" && issuedAt > 0 && nowSeconds >= issuedAt && nowSeconds - issuedAt <= maximumAgeSeconds;
+}
+
+export async function requireRecentAdminPermission(permission: AdminPermissionKey, maximumAgeSeconds = 15 * 60) {
+  const admin = await requireAdminPermission(permission);
+  if ("error" in admin) return admin;
+  const issuedAt = "iat" in admin && typeof admin.iat === "number" ? admin.iat : undefined;
+  if (!isRecentAdminAuthentication(issuedAt, Math.floor(Date.now() / 1000), maximumAgeSeconds)) return { error: NextResponse.json({ error: "Recent administrator authentication is required for this sensitive action." }, { status: 401 }) };
+  return admin;
 }
 
 export async function getCurrentUserForPage() {
@@ -69,3 +95,8 @@ export async function getCurrentUserForPage() {
 export async function getAdminSessionForPage() {
   return getAdminSession();
 }
+// vercel trigger 9
+
+// vercel trigger 11
+
+// vercel trigger 14

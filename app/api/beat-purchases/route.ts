@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, requireUser } from "@/lib/access";
+import { requireAdminPermission, requireUser } from "@/lib/access";
 import { createBeatPurchase, createNotification, getBeatPurchasesByUser, uploadBeatLicense, revokeOrRestoreBeatAccess } from "@/lib/db";
 import { prisma } from "@/lib/prisma";
 import { emailAppUrl, sendBeatEmailEvent } from "@/lib/email/email-events";
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     }
 
     if (action === "uploadLicense" || action === "toggleAccess") {
-      const admin = await requireAdmin();
+      const admin = await requireAdminPermission("users.manage");
       if ("error" in admin) return admin.error;
 
       const purchaseId = Number(body.purchaseId);
@@ -115,3 +115,4 @@ export async function GET(request: Request) {
 
 // vercel trigger
 // vercel trigger 6
+// vercel trigger 9

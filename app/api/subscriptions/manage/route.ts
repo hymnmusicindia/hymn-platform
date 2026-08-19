@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, requireUser } from "@/lib/access";
+import { requireAdminPermission, requireUser } from "@/lib/access";
 import { createOrUpdateSubscription, getSubscriptionByUserId, upgradeSubscription, downgradeSubscription } from "@/lib/db";
 import { prisma } from "@/lib/prisma";
 import type { DistributionPlan } from "@/lib/types";
@@ -51,7 +51,7 @@ async function logSubscriptionAction(actorId: number | null, userId: number, act
 }
 
 export async function POST(request: Request) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("users.manage");
   if ("error" in admin) return admin.error;
   const actorId = "sub" in admin ? admin.sub : null;
 
@@ -185,3 +185,4 @@ export async function GET(request: Request) {
 }
 
 // vercel trigger 2
+// vercel trigger 9

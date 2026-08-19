@@ -3,10 +3,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowDown, Check, ChevronDown, Disc3, Filter, Gauge, Music2, Pause, Play, Search, ShoppingBag, ShoppingCart, Sparkles, Users2, X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { ArrowDown, Check, ChevronDown, Disc3, Filter, Gauge, Music2, Search, ShoppingBag, Sparkles, Users2, X } from "lucide-react";
 import { beatLicenseOptions, buildBeatStorefront, type StorefrontBeat } from "@/lib/beat-store";
 import type { Beat, ProducerProfile } from "@/lib/types";
 import { BeatCard } from "@/components/beat-card";
+import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 
 type LicenseChoice = "basic" | "exclusive";
 
@@ -19,29 +21,6 @@ type CartItem = {
 type SectionKey = "genre" | "mood" | "bpm" | "key";
 
 const initialVisibleCount = 12;
-const demoCreatedAt = "2026-01-01T00:00:00.000Z";
-const DEMO_PRODUCERS: ProducerProfile[] = [
-  { id: -901, userId: -901, slug: "astra-demo", name: "Astra", description: "Atmospheric melodies, spacious drums, and nocturnal textures built for expansive records.", specialty: "Melodic trap / atmospheric", imageUrl: "/images/producers/astra.png", active: true, sortOrder: 900, createdAt: demoCreatedAt, updatedAt: demoCreatedAt },
-  { id: -902, userId: -902, slug: "noirwave-demo", name: "Noirwave", description: "Dark drill pressure and cinematic bounce shaped with a precise, heavyweight edge.", specialty: "Dark drill / cinematic", imageUrl: "/images/producers/noirwave.png", active: true, sortOrder: 901, createdAt: demoCreatedAt, updatedAt: demoCreatedAt },
-  { id: -903, userId: -903, slug: "kairo-vale-demo", name: "Kairo Vale", description: "Warm analog textures, disciplined drums, and soulful details for focused late-night records.", specialty: "Hip-hop / soul", imageUrl: "/images/producers/kairo-vale.png", active: true, sortOrder: 902, createdAt: demoCreatedAt, updatedAt: demoCreatedAt },
-  { id: -904, userId: -904, slug: "mira-sol-demo", name: "Mira Sol", description: "Luminous synth layers and intimate rhythm choices built around expressive vocal performances.", specialty: "Alt R&B / electronic", imageUrl: "/images/producers/mira-sol.png", active: true, sortOrder: 903, createdAt: demoCreatedAt, updatedAt: demoCreatedAt },
-  { id: -905, userId: -905, slug: "rohan-flux-demo", name: "Rohan Flux", description: "Polished low-end, crisp percussion, and widescreen arrangements with contemporary momentum.", specialty: "Pop trap / hip-hop", imageUrl: "/images/producers/rohan-flux.png", active: true, sortOrder: 904, createdAt: demoCreatedAt, updatedAt: demoCreatedAt },
-  { id: -906, userId: -906, slug: "zoya-static-demo", name: "Zoya Static", description: "Futuristic club pressure and minimal electronic production made for bold artist identities.", specialty: "Electronic / club", imageUrl: "/images/producers/zoya-static.png", active: true, sortOrder: 905, createdAt: demoCreatedAt, updatedAt: demoCreatedAt },
-  { id: -907, userId: -907, slug: "dev-arclight-demo", name: "Dev Arclight", description: "Raw melodic instincts meet heavyweight drums and cinematic shifts for high-energy sessions.", specialty: "Trap / alternative", imageUrl: "/images/producers/dev-arclight.png", active: true, sortOrder: 906, createdAt: demoCreatedAt, updatedAt: demoCreatedAt },
-  { id: -908, userId: -908, slug: "nysa-bloom-demo", name: "Nysa Bloom", description: "Rich harmony, restrained grooves, and vocal-first production shaped for timeless R&B records.", specialty: "R&B / neo-soul", imageUrl: "/images/producers/nysa-bloom.png", active: true, sortOrder: 907, createdAt: demoCreatedAt, updatedAt: demoCreatedAt }
-];
-const DEMO_BEATS: Beat[] = [
-  { id: -9101, producerId: -901, producerName: "Astra", title: "Afterglow", bpm: 142, genre: "Melodic Trap", mood: "Atmospheric", keySignature: "F#m", price: 499, fileUrl: "", artworkUrl: "", enabled: true, createdAt: demoCreatedAt },
-  { id: -9102, producerId: -901, producerName: "Astra", title: "Zero Gravity", bpm: 136, genre: "Trap", mood: "Ethereal", keySignature: "C#m", price: 499, fileUrl: "", artworkUrl: "", enabled: true, createdAt: demoCreatedAt },
-  { id: -9201, producerId: -902, producerName: "Noirwave", title: "Black Glass", bpm: 144, genre: "Drill", mood: "Dark", keySignature: "Gm", price: 549, fileUrl: "", artworkUrl: "", enabled: true, createdAt: demoCreatedAt },
-  { id: -9202, producerId: -902, producerName: "Noirwave", title: "Night Shift", bpm: 140, genre: "Cinematic Drill", mood: "Focused", keySignature: "Dm", price: 549, fileUrl: "", artworkUrl: "", enabled: true, createdAt: demoCreatedAt },
-  { id: -9301, producerId: -903, producerName: "Kairo Vale", title: "Amber Hours", bpm: 92, genre: "Hip-Hop", mood: "Soulful", keySignature: "Am", price: 599, fileUrl: "", artworkUrl: "", enabled: true, createdAt: demoCreatedAt },
-  { id: -9401, producerId: -904, producerName: "Mira Sol", title: "Violet Air", bpm: 118, genre: "Alt R&B", mood: "Dreamy", keySignature: "C#m", price: 649, fileUrl: "", artworkUrl: "", enabled: true, createdAt: demoCreatedAt },
-  { id: -9501, producerId: -905, producerName: "Rohan Flux", title: "Current", bpm: 138, genre: "Pop Trap", mood: "Uplifting", keySignature: "Em", price: 599, fileUrl: "", artworkUrl: "", enabled: true, createdAt: demoCreatedAt },
-  { id: -9601, producerId: -906, producerName: "Zoya Static", title: "Blue Circuit", bpm: 126, genre: "Electronic", mood: "Futuristic", keySignature: "Fm", price: 699, fileUrl: "", artworkUrl: "", enabled: true, createdAt: demoCreatedAt },
-  { id: -9701, producerId: -907, producerName: "Dev Arclight", title: "Redline", bpm: 148, genre: "Trap", mood: "Aggressive", keySignature: "Gm", price: 599, fileUrl: "", artworkUrl: "", enabled: true, createdAt: demoCreatedAt },
-  { id: -9801, producerId: -908, producerName: "Nysa Bloom", title: "Soft Focus", bpm: 84, genre: "R&B", mood: "Romantic", keySignature: "Dmaj", price: 649, fileUrl: "", artworkUrl: "", enabled: true, createdAt: demoCreatedAt }
-];
 
 function formatMoney(value: number) {
   return `\u20B9${value.toLocaleString("en-IN")}`;
@@ -117,6 +96,7 @@ function CartDrawer({
   onClose: () => void;
   onRemove: (beatId: number, licenseType: LicenseChoice) => void;
 }) {
+  const dialogRef = useAccessibleDialog(open, onClose);
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -135,10 +115,12 @@ function CartDrawer({
         aria-label="Close cart"
       />
       <aside
+        ref={dialogRef as React.RefObject<HTMLElement | null>}
         className={`absolute right-0 top-0 z-10 h-full w-full max-w-[420px] border-l border-[var(--border)] bg-[var(--bg)] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28)] transition-transform duration-300 ${open ? "translate-x-0" : "translate-x-full"}`}
         role="dialog"
         aria-modal="true"
         aria-label="Shopping cart"
+        tabIndex={-1}
       >
         <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] pb-4">
           <div>
@@ -218,6 +200,7 @@ function MobileFiltersModal({
   onClose: () => void;
   content: ReactNode;
 }) {
+  const dialogRef = useAccessibleDialog(open, onClose);
   return (
     <div className={`fixed inset-0 z-40 lg:hidden transition ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
       <button
@@ -226,14 +209,14 @@ function MobileFiltersModal({
         className={`absolute inset-0 bg-black/50 transition-opacity duration-200 ${open ? "opacity-100" : "opacity-0"}`}
         aria-label="Close filters"
       />
-      <div className={`absolute inset-x-0 bottom-0 max-h-[92vh] overflow-y-auto rounded-t-[28px] border border-[var(--border)] bg-[var(--bg)] p-4 shadow-[0_-24px_80px_rgba(0,0,0,0.3)] transition-transform duration-300 ${open ? "translate-y-0" : "translate-y-full"}`}>
+      <div ref={dialogRef as React.RefObject<HTMLDivElement | null>} role="dialog" aria-modal="true" aria-labelledby="beat-filter-title" tabIndex={-1} className={`absolute inset-x-0 bottom-0 max-h-[92vh] overflow-y-auto rounded-t-[28px] border border-[var(--border)] bg-[var(--bg)] p-4 shadow-[0_-24px_80px_rgba(0,0,0,0.3)] transition-transform duration-300 ${open ? "translate-y-0" : "translate-y-full"}`}>
         <div className="mx-auto mb-4 h-1.5 w-16 rounded-full bg-[var(--border)]" />
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-[0.28em] text-[var(--text-soft)]">Filters</p>
-            <h3 className="mt-2 text-xl font-semibold text-[var(--text)]">Refine the catalog</h3>
+            <h3 id="beat-filter-title" className="mt-2 text-xl font-semibold text-[var(--text)]">Refine the catalog</h3>
           </div>
-          <button type="button" onClick={onClose} className="btn-outline inline-flex h-10 w-10 items-center justify-center rounded-full p-0">
+          <button type="button" onClick={onClose} className="btn-outline inline-flex h-11 w-11 items-center justify-center rounded-full p-0" aria-label="Close filters">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -244,80 +227,15 @@ function MobileFiltersModal({
 }
 
 
-const FALLBACK_NAMES = ["ARIA", "NOVA", "VEX", "LUNAR", "KAIRO", "VERTEX", "ECLIPSE", "MIDNIGHT", "ASCEND", "SONIC"];
-
 function getFallbackImage(id: number | string) {
   const index = (typeof id === 'number' ? id : id.charCodeAt(0)) % 5 + 1;
   return `/assets/producers/placeholder-${index}.jpg`;
 }
 
-function getFallbackName(id: number | string) {
-  const index = (typeof id === 'number' ? id : id.charCodeAt(0)) % FALLBACK_NAMES.length;
-  return FALLBACK_NAMES[index];
-}
-
-function ProducerCard({
-  producer,
-  isActive,
-  isDimmed,
-  beatCount,
-  onClick
-}: {
-  producer?: ProducerProfile;
-  isActive: boolean;
-  isDimmed?: boolean;
-  beatCount: number;
-  onClick: () => void;
-}) {
-  const isAllProducers = !producer;
-  const displayName = isAllProducers 
-    ? "All Producers" 
-    : (producer.name && producer.name.trim() !== "" ? producer.name : getFallbackName(producer.id));
-  const displayImage = isAllProducers
-    ? null
-    : (producer.imageUrl || getFallbackImage(producer.id));
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={isActive}
-      className={`group relative w-[152px] shrink-0 snap-start overflow-hidden rounded-[20px] border bg-[var(--card)] text-left outline-none transition duration-300 hover:-translate-y-1 focus-visible:ring-2 focus-visible:ring-[var(--accent)] sm:w-[180px] ${
-        isActive 
-          ? "-translate-y-1 border-[var(--accent)] shadow-[0_18px_48px_rgba(0,0,0,0.18)] ring-1 ring-[var(--accent)]"
-          : "border-[var(--border)] shadow-[0_24px_60px_rgba(0,0,0,0.14)] hover:border-[var(--border-strong)]"
-      }`}
-    >
-      <div className="relative aspect-[4/5] w-full overflow-hidden bg-[var(--surface)]">
-        {displayImage ? (
-          <Image
-            src={displayImage}
-            alt={displayName}
-            fill
-            sizes="(max-width: 640px) 150px, 200px"
-            className={`object-cover transition duration-500 group-hover:scale-105 ${isDimmed ? "grayscale opacity-55 group-hover:opacity-80" : "opacity-90"}`}
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[var(--surface)] to-[var(--bg)]">
-            <Users2 className="h-10 w-10 text-[var(--text-soft)] transition-transform duration-500 group-hover:scale-110" />
-          </div>
-        )}
-        
-        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent" />
-        {isActive ? <span className="absolute right-3 top-3 rounded-full border border-white/20 bg-black/35 px-2 py-1 text-[0.58rem] font-semibold uppercase tracking-[0.15em] text-white">Active</span> : null}
-        <div className="absolute inset-x-0 bottom-0 p-3.5 sm:p-4">
-          <p className="truncate font-semibold text-white sm:text-lg">{displayName}</p>
-          <p className="mt-1 text-[0.65rem] uppercase tracking-[0.12em] text-white/55">{isAllProducers ? "Full catalog" : producer.specialty || "HYMN producer"} · {beatCount} beats</p>
-        </div>
-      </div>
-    </button>
-  );
-}
-
 export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: Beat[]; producerProfiles?: ProducerProfile[] }) {
-  const showDemoProducers = process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_ENABLE_BEATSTORE_DEMO_DATA === "true";
-  const displayProducerProfiles = useMemo(() => showDemoProducers ? [...producerProfiles, ...DEMO_PRODUCERS.filter((demo) => !producerProfiles.some((producer) => producer.slug === demo.slug))] : producerProfiles, [producerProfiles, showDemoProducers]);
-  const displayBeats = useMemo(() => showDemoProducers ? [...beats, ...DEMO_BEATS] : beats, [beats, showDemoProducers]);
+  const searchParams = useSearchParams();
+  const displayProducerProfiles = producerProfiles;
+  const displayBeats = beats;
   const { catalog } = useMemo(() => buildBeatStorefront(displayBeats, displayProducerProfiles), [displayBeats, displayProducerProfiles]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -330,6 +248,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
   const [visibleCount, setVisibleCount] = useState(initialVisibleCount);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
+  const [onboardingBudgetMax, setOnboardingBudgetMax] = useState<number | null>(null);
   const [selectedKey, setSelectedKey] = useState("All");
   const [bpmMin, setBpmMin] = useState(60);
   const [bpmMax, setBpmMax] = useState(180);
@@ -353,13 +272,22 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
     const matches = catalog.filter((beat) => {
       const genreMatch = selectedGenres.length === 0 || selectedGenres.includes(beat.genre);
       const moodMatch = selectedMoods.length === 0 || selectedMoods.includes(beat.mood);
+      const budgetMatch = onboardingBudgetMax === null || beat.startingPrice <= onboardingBudgetMax;
       const keyMatch = selectedKey === "All" || beat.keySignature === selectedKey;
       const producerMatch = !selectedProducerSlug || beat?.producer?.slug === selectedProducerSlug;
       const searchMatch = !query || [beat.title, beat.producer.name, beat.genre, beat.mood, beat.keySignature, beat.typeBeat, beat.vibeTag, String(beat.bpm)].some((value) => value.toLowerCase().includes(query));
-      return genreMatch && moodMatch && keyMatch && producerMatch && searchMatch && beat.bpm >= bpmMin && beat.bpm <= bpmMax;
+      return genreMatch && moodMatch && budgetMatch && keyMatch && producerMatch && searchMatch && beat.bpm >= bpmMin && beat.bpm <= bpmMax;
     });
     return [...matches].sort((a, b) => sortBy === "price-asc" ? a.startingPrice - b.startingPrice : sortBy === "price-desc" ? b.startingPrice - a.startingPrice : sortBy === "bpm-asc" ? a.bpm - b.bpm : sortBy === "bpm-desc" ? b.bpm - a.bpm : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [bpmMax, bpmMin, catalog, searchQuery, selectedGenres, selectedKey, selectedMoods, selectedProducerSlug, sortBy]);
+  }, [bpmMax, bpmMin, catalog, onboardingBudgetMax, searchQuery, selectedGenres, selectedKey, selectedMoods, selectedProducerSlug, sortBy]);
+
+  useEffect(() => {
+    const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const genre = searchParams.get("genre"); const mood = searchParams.get("mood"); const budgetMax = Number(searchParams.get("budgetMax"));
+    if (genre) { const match = genres.find(value => normalize(value) === genre); if (match) setSelectedGenres([match]); }
+    if (mood) { const match = moods.find(value => normalize(value) === mood || normalize(value).includes(mood.split("-")[0])); if (match) setSelectedMoods([match]); }
+    if (Number.isFinite(budgetMax) && budgetMax > 0) setOnboardingBudgetMax(budgetMax);
+  }, [genres, moods, searchParams]);
 
   const selectedProducer = useMemo(() => displayProducerProfiles.find((producer) => producer.slug === selectedProducerSlug) ?? null, [displayProducerProfiles, selectedProducerSlug]);
   const previewProducer = displayProducerProfiles[previewProducerIndex % Math.max(displayProducerProfiles.length, 1)] ?? null;
@@ -523,18 +451,6 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
     });
   };
 
-  const removeChip = (type: "genre" | "mood" | "key" | "bpm", value: string) => {
-    if (type === "genre") setSelectedGenres((current) => current.filter((entry) => entry !== value));
-    if (type === "mood") setSelectedMoods((current) => current.filter((entry) => entry !== value));
-    if (type === "key") setSelectedKey("All");
-    if (type === "bpm") {
-      setBpmMin(60);
-      setBpmMax(180);
-      setDraftBpmMin(60);
-      setDraftBpmMax(180);
-    }
-  };
-
   const clearFilters = () => {
     setSelectedGenres([]);
     setSelectedMoods([]);
@@ -673,7 +589,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
             <div className="grid md:min-h-[420px] md:grid-cols-2">
               <div key={spotlightProducer?.slug ?? "producer-room"} className="producer-spotlight-enter relative z-10 flex flex-col justify-center bg-[var(--card)] p-6 sm:p-9 lg:p-12">
                 {selectedProducer ? <p className="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">Producer spotlight</p> : null}
-                <h3 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-[var(--text)] sm:text-5xl">{spotlightProducer ? spotlightProducer.name || getFallbackName(spotlightProducer.id) : "Explore beats from every producer."}</h3>
+                <h3 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-[var(--text)] sm:text-5xl">{spotlightProducer ? spotlightProducer.name || "Unnamed producer" : "Explore beats from every producer."}</h3>
                 <p className="mt-4 max-w-xl text-sm leading-6 text-[var(--text-muted)] sm:text-base sm:leading-7">
                   {spotlightProducer ? spotlightProducer.description || `${spotlightProducer.specialty || "Distinctive sounds"}, shaped for artists building their next release.` : "Move across distinct sounds, moods, and creative perspectives to find the right foundation for your next record."}
                 </p>
@@ -687,7 +603,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
                     <Image
                       key={(selectedProducer ?? previewProducer)?.slug}
                       src={(selectedProducer ?? previewProducer)?.imageUrl || getFallbackImage((selectedProducer ?? previewProducer)!.id)}
-                      alt={`${(selectedProducer ?? previewProducer)?.name || getFallbackName((selectedProducer ?? previewProducer)!.id)} producer portrait`}
+                      alt={`${(selectedProducer ?? previewProducer)?.name || "Unnamed producer"} producer portrait`}
                       fill
                       sizes="(max-width: 768px) 100vw, 50vw"
                       className="producer-spotlight-enter object-cover object-[center_28%]"
@@ -708,7 +624,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
             <div className="surface-card p-5">
               <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-semibold text-[var(--text)]">{selectedProducer ? `Beats by ${selectedProducer.name || getFallbackName(selectedProducer.id)}` : "All Beats"}</h2>
+                <h2 className="text-2xl font-semibold text-[var(--text)]">{selectedProducer ? `Beats by ${selectedProducer.name || "Unnamed producer"}` : "All Beats"}</h2>
                 <p className="mt-2 text-sm text-[var(--text-soft)]">
                   Showing {visibleBeats.length} of {filteredBeats.length} beats.
                 </p>
@@ -833,3 +749,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
 // vercel trigger 2
 
 // vercel trigger 3
+
+// vercel trigger 11
+
+// vercel trigger 12

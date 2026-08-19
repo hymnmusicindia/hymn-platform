@@ -3,12 +3,13 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { getCurrentUserForPage } from "@/lib/access";
 import { listDetailedReleasesByUser } from "@/lib/distribution-db";
 import { ReleaseForm } from "@/components/release-form";
+import { ReleaseOnboardingGate } from "@/components/release-onboarding-gate";
 
 function firstValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function DistributionStartPage({ searchParams }: { searchParams?: Promise<{ edit?: string | string[]; resume?: string | string[]; manage?: string | string[] }> }) {
+export default async function DistributionStartPage({ searchParams }: { searchParams?: Promise<{ edit?: string | string[]; resume?: string | string[]; manage?: string | string[]; onboarding?: string | string[] }> }) {
   const user = await getCurrentUserForPage();
   const params = (await searchParams) ?? {};
   const requestedId = Number(firstValue(params.edit) ?? firstValue(params.resume) ?? firstValue(params.manage) ?? "");
@@ -23,10 +24,10 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
   const isEditing = Boolean(editingRelease);
 
   return (
-    <main className="pb-20">
+    <main className="distribution-start-page pb-20">
       <section className="shell py-8 sm:py-10 lg:py-12">
         <div className="mx-auto grid gap-6">
-          <div className="surface-card p-6 sm:p-8">
+          <div className="distribution-start-header surface-card p-4 sm:p-8">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h1 className="text-3xl font-semibold sm:text-4xl" style={{ color: "var(--text)" }}>
@@ -58,7 +59,7 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
             <div className="mx-auto w-full max-w-[1440px]">
               <ReleaseForm selectedPlan={selectedPlan} initialRelease={editingRelease} />
             </div>
-          ) : (
+          ) : firstValue(params.onboarding) === "release" ? <ReleaseOnboardingGate /> : (
             <div className="surface-card p-6 text-center sm:p-8">
               <h2 className="text-2xl font-semibold sm:text-3xl" style={{ color: "var(--text)" }}>Sign in to continue into the release flow.</h2>
               <p className="mx-auto mt-3 max-w-2xl text-sm sm:text-base" style={{ color: "var(--text-muted)" }}>
@@ -82,3 +83,5 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
 }
 
 // vercel trigger 2
+
+// vercel trigger 12

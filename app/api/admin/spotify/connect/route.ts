@@ -2,7 +2,7 @@
 
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/access";
+import { requireAdminPermission } from "@/lib/access";
 import { buildSpotifyAuthorizeUrl } from "@/lib/spotify";
 
 const STATE_COOKIE = "hymn_spotify_admin_state";
@@ -17,7 +17,7 @@ function sanitizeReturnTo(value: string | null) {
 }
 
 export async function GET(request: NextRequest) {
-  const result = await requireAdmin();
+  const result = await requireAdminPermission("system.manage");
   if ("error" in result) return result.error;
 
   try {
@@ -39,3 +39,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
+// vercel trigger 9

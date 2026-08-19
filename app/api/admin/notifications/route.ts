@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/access";
+import { requireAdminPermission } from "@/lib/access";
 import { createNotification, listLatestNotifications, listUsers } from "@/lib/db";
 import type { NotificationPriority, NotificationType, UserRole } from "@/lib/types";
 
@@ -16,14 +16,14 @@ function parsePriority(value: unknown): NotificationPriority {
 }
 
 export async function GET() {
-  const result = await requireAdmin();
+  const result = await requireAdminPermission("system.manage");
   if ("error" in result) return result.error;
   const notifications = await listLatestNotifications(100);
   return NextResponse.json({ notifications });
 }
 
 export async function POST(request: Request) {
-  const result = await requireAdmin();
+  const result = await requireAdminPermission("system.manage");
   if ("error" in result) return result.error;
 
   const body = await request.json().catch(() => ({}));
@@ -68,3 +68,4 @@ export async function POST(request: Request) {
 }
 
 // vercel trigger
+// vercel trigger 9

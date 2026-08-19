@@ -1,18 +1,20 @@
 import { createHash } from "crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createNotificationOnce } from "@/lib/notifications";
 import { createAdminTaskOnce, resolveAdminTask } from "@/lib/task-queue";
 import { logAuditEvent } from "@/lib/audit-log";
 import { creditSplitRecipients } from "@/lib/payout/split-engine";
-import { decryptPayoutSecret } from "@/lib/payout/credentials";
 import { syncPayoutRequestToSheet, syncRoyaltyLineItemToSheet, syncSplitEarningLineItemsToSheet } from "@/lib/payout/sheets-sync";
 import { ensurePayoutPeriod, getCurrentQuarter } from "@/lib/payout/quarters";
 import { emailAppUrl, sendPayoutEmailEvent } from "@/lib/email/email-events";
+import { PAYOUT_CONFIG } from "@/lib/payout/config";
+import { getLatestUsdInrRate, getPublicPayoutConfig } from "@/lib/payout/exchange-rates";
+import { inrToUsd } from "@/lib/payout/currency";
 
-const MINIMUM_PAYOUT_AMOUNT = 500;
-const PAYOUT_SERVICE_FEE_RATE = 0.02;
+const PAYOUT_SERVICE_FEE_RATE = PAYOUT_CONFIG.payoutServiceFeePercent / 100;
 
-type PayoutRequestStatus = "requested" | "approved" | "processing" | "paid" | "rejected";
+type PayoutRequestStatus = "requested" | "under_review" | "approved" | "processing" | "paid" | "failed" | "rejected" | "cancelled";
 type PayoutMethod = "UPI" | "BANK";
 
 export type PayoutSummary = {
@@ -34,6 +36,10 @@ export type PayoutSummary = {
   reports: Array<{ id: number; type: string; month: number | null; quarter: number | null; year: number; fileName: string; status: string; generatedAt: string }>;
   nextPayoutStatus: string;
   minimumPayoutAmount: number;
+  minimumPayoutUsd: number;
+  availableBalanceUsd: number | null;
+  payoutEligible: boolean;
+  exchangeRate: Awaited<ReturnType<typeof getPublicPayoutConfig>>;
   serviceFeeRate: number;
   monthlyEarnings: Array<{ month: string; grossEarnings: number; hymnServiceFee: number; netPayable: number; payoutStatus: string }>;
   releaseBreakdown: Array<{ releaseTitle: string; upc: string; grossEarnings: number; hymnFee: number; netEarnings: number; payoutStatus: string }>;
@@ -43,12 +49,22 @@ export type PayoutSummary = {
     id: number;
     requestDate: string;
     requestedAmount: number;
+    requestedAmountUsd: number | null;
+    usdToInrRate: number | null;
+    exchangeRateProvider: string | null;
+    exchangeRateFetchedAt: string | null;
     serviceFee: number;
     netPayout: number;
     method: "UPI" | "Bank Transfer";
     status: PayoutRequestStatus;
     processedDate: string | null;
     adminNote: string | null;
+    paymentReference: string | null;
+    paymentMethod: string | null;
+    paymentDate: string | null;
+    receiptPath: string | null;
+    proofPath: string | null;
+    events: Array<{ id: number; actorType: string; previousStatus: string | null; newStatus: string; note: string | null; createdAt: string }>;
   }>;
 };
 
@@ -58,6 +74,9 @@ export type AdminPayoutRequest = {
   userName: string;
   userEmail: string;
   requestedAmount: number;
+  requestedAmountUsd: number | null;
+  usdToInrRate: number | null;
+  exchangeRateProvider: string | null;
   serviceFee: number;
   netAmount: number;
   method: "UPI" | "Bank Transfer";
@@ -65,6 +84,8 @@ export type AdminPayoutRequest = {
   requestedAt: string;
   status: PayoutRequestStatus;
   adminNote: string | null;
+  proofPath: string | null;
+  events: Array<{ id: number; actorType: string; previousStatus: string | null; newStatus: string; note: string | null; createdAt: string }>;
 };
 
 export type AdminEarningsEntryInput = {
@@ -82,6 +103,9 @@ export type AdminEarningsEntryInput = {
   streamsDownloads?: number | null;
   sourceReference?: string | null;
   adminNote?: string | null;
+  statementId?: number;
+  sourceLineNumber?: number;
+  originalValues?: Record<string, unknown>;
 };
 
 function usesPostgresPrisma() {
@@ -102,7 +126,7 @@ function money(value: number) {
 
 function statusFromPrisma(value: string | null | undefined): PayoutRequestStatus {
   const normalized = String(value ?? "REQUESTED").toLowerCase();
-  if (normalized === "approved" || normalized === "processing" || normalized === "paid" || normalized === "rejected") return normalized;
+  if (["under_review", "approved", "processing", "paid", "failed", "rejected", "cancelled"].includes(normalized)) return normalized as PayoutRequestStatus;
   return "requested";
 }
 
@@ -129,7 +153,11 @@ function emptySummary(): PayoutSummary {
     currentQuarterEarnings: 0, currentQuarterPaid: 0, currentQuarterHeld: 0, currentQuarterPending: 0, carryForwardBalance: 0,
     quarter: { quarter: 1, year: new Date().getUTCFullYear(), status: "open", startDate: "", endDate: "", payoutRequestsOpen: false }, monthlyBreakdown: [], reports: [],
     nextPayoutStatus: "No royalty statement imported",
-    minimumPayoutAmount: MINIMUM_PAYOUT_AMOUNT,
+    minimumPayoutAmount: 0,
+    minimumPayoutUsd: PAYOUT_CONFIG.minimumPayoutUsd,
+    availableBalanceUsd: null,
+    payoutEligible: false,
+    exchangeRate: { minimumPayoutUsd: PAYOUT_CONFIG.minimumPayoutUsd, approximateMinimumInr: null, usdToInrRate: null, rateUpdatedAt: null, rateStatus: "unavailable", payoutServiceFeePercent: PAYOUT_CONFIG.payoutServiceFeePercent },
     serviceFeeRate: PAYOUT_SERVICE_FEE_RATE,
     monthlyEarnings: [],
     releaseBreakdown: [],
@@ -155,23 +183,27 @@ function aggregate<T extends Record<string, unknown>>(
   return Array.from(grouped.values());
 }
 
-function maskAccount(value?: string | null) {
-  const clean = String(value ?? "").replace(/\s+/g, "");
-  if (!clean) return "Bank details provided";
-  return `Bank account ending ${clean.slice(-4).padStart(clean.length, "*")}`;
-}
-
 function mapRequest(row: any): PayoutSummary["payoutHistory"][number] {
   return {
     id: row.id,
     requestDate: row.requestedAt.toISOString(),
     requestedAmount: toNumber(row.amount),
+    requestedAmountUsd: row.requestedAmountUsd == null ? null : toNumber(row.requestedAmountUsd),
+    usdToInrRate: row.usdToInrRate == null ? null : toNumber(row.usdToInrRate),
+    exchangeRateProvider: row.exchangeRateProvider ?? null,
+    exchangeRateFetchedAt: row.exchangeRateFetchedAt?.toISOString() ?? null,
     serviceFee: toNumber(row.serviceFee),
     netPayout: toNumber(row.netAmount),
     method: row.method === "BANK" ? "Bank Transfer" : "UPI",
     status: statusFromPrisma(row.status),
     processedDate: (row.paidAt ?? row.processedAt)?.toISOString() ?? null,
-    adminNote: row.adminNote ?? null
+    adminNote: row.adminNote ?? null,
+    paymentReference: row.paymentReference ?? null,
+    paymentMethod: row.paymentMethod ?? null,
+    paymentDate: row.paymentDate?.toISOString() ?? null,
+    receiptPath: row.status === "PAID" ? `/api/payout/requests/${row.id}/receipt` : null,
+    proofPath: row.proofAssetId ? `/api/assets/${row.proofAssetId}/download` : null,
+    events: (row.events ?? []).map((event: any) => ({ id: event.id, actorType: event.actorType, previousStatus: event.previousStatus, newStatus: event.newStatus, note: event.note, createdAt: event.createdAt.toISOString() }))
   };
 }
 
@@ -188,6 +220,7 @@ export async function getPayoutSummary(userId: number): Promise<PayoutSummary> {
     }),
     (prisma as any).payoutRequest.findMany({
       where: { userId },
+      include: { events: { orderBy: { createdAt: "asc" } } },
       orderBy: { requestedAt: "desc" }
     }),
     (prisma as any).splitEarningLineItem.findMany({ where: { recipientUserId: userId }, include: { release: true, track: true, royaltyLineItem: true }, orderBy: { createdAt: "desc" } }),
@@ -284,6 +317,8 @@ export async function getPayoutSummary(userId: number): Promise<PayoutSummary> {
     }
   ) as PayoutSummary["platformBreakdown"];
 
+  const exchangeRate = await getPublicPayoutConfig();
+  const availableBalanceUsd = exchangeRate.usdToInrRate ? new Prisma.Decimal(availableBalance).div(exchangeRate.usdToInrRate).toNumber() : null;
   return {
     totalEarnings: money(totalEarnings || lineGross),
     availableBalance: money(availableBalance),
@@ -297,7 +332,11 @@ export async function getPayoutSummary(userId: number): Promise<PayoutSummary> {
     monthlyBreakdown,
     reports: reports.map((report: any) => ({ id: report.id, type: report.type, month: report.month, quarter: report.quarter, year: report.year, fileName: report.fileName, status: report.status, generatedAt: report.generatedAt.toISOString() })),
     nextPayoutStatus: heldRequests[0] ? `Request ${heldRequests[0].status}` : "No active payout request",
-    minimumPayoutAmount: MINIMUM_PAYOUT_AMOUNT,
+    minimumPayoutAmount: exchangeRate.approximateMinimumInr ?? 0,
+    minimumPayoutUsd: PAYOUT_CONFIG.minimumPayoutUsd,
+    availableBalanceUsd,
+    payoutEligible: availableBalanceUsd !== null && new Prisma.Decimal(availableBalanceUsd).gte(PAYOUT_CONFIG.minimumPayoutUsd),
+    exchangeRate,
     serviceFeeRate: PAYOUT_SERVICE_FEE_RATE,
     monthlyEarnings,
     releaseBreakdown,
@@ -365,6 +404,9 @@ export async function createAdminEarningsEntry(input: AdminEarningsEntryInput) {
         downloads: null,
         statementMonth: statementDate,
         sourceKey,
+        statementId: input.statementId,
+        sourceLineNumber: input.sourceLineNumber,
+        originalValues: input.originalValues as any,
         rawMetadata: {
           distributorDeduction,
           sourceReference: input.sourceReference?.trim() || null,
@@ -436,12 +478,17 @@ export async function createPayoutRequest(userId: number, input: {
   bankAccountNumber?: string;
   ifsc?: string;
   userNote?: string;
+  sourceType?: "artist_royalty" | "producer_beat_sales" | "mixed";
 }) {
   if (!usesPostgresPrisma()) throw new Error("Payout requests require a persistent database.");
 
   const amount = money(Number(input.amount));
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be greater than 0.");
-  if (amount < MINIMUM_PAYOUT_AMOUNT) throw new Error(`Minimum payout amount is Rs ${MINIMUM_PAYOUT_AMOUNT}.`);
+  const exchangeRate = await getLatestUsdInrRate();
+  if (!exchangeRate) throw new Error("Payout requests are temporarily unavailable while the exchange rate is refreshed.");
+  if (exchangeRate.stale) throw new Error("Payout requests are temporarily unavailable because the exchange rate is stale.");
+  const requestedAmountUsd = inrToUsd(amount, exchangeRate.rate);
+  if (requestedAmountUsd.lt(PAYOUT_CONFIG.minimumPayoutUsd)) throw new Error(`HYMN's minimum payout threshold is $${PAYOUT_CONFIG.minimumPayoutUsd} USD (approximately Rs ${Math.round(PAYOUT_CONFIG.minimumPayoutUsd * exchangeRate.rate).toLocaleString("en-IN")}).`);
   if ((process.env.PAYOUT_CYCLE ?? "quarterly") === "quarterly" && process.env.ALLOW_PAYOUT_REQUESTS_DURING_OPEN_QUARTER !== "true") {
     const current = getCurrentQuarter();
     const payoutWindow = await (prisma as any).quarterCarryForward.findFirst({ where: { userId, toQuarter: current.quarter, toYear: current.year } });
@@ -449,50 +496,44 @@ export async function createPayoutRequest(userId: number, input: {
   }
   const credential = await (prisma as any).payoutCredential.findUnique({ where: { userId } });
   if (!credential) throw new Error("Add payout details before requesting a withdrawal.");
+  if (credential.status !== "verified") throw new Error("HYMN must manually verify your payout profile before withdrawals are enabled.");
   const method: PayoutMethod = credential.method === "BANK" ? "BANK" : "UPI";
-
-  const existing = await (prisma as any).payoutRequest.findFirst({
-    where: { userId, status: { in: ["REQUESTED", "APPROVED", "PROCESSING"] } }
-  });
-  if (existing) throw new Error("You already have a payout request in progress.");
-
-  const summary = await getPayoutSummary(userId);
-  if (amount > summary.availableBalance) throw new Error("Amount cannot exceed available balance.");
 
   const serviceFee = money(amount * PAYOUT_SERVICE_FEE_RATE);
   const netAmount = money(amount - serviceFee);
 
   const request = await (prisma as any).$transaction(async (tx: any) => {
-    await tx.artistPayoutBalance.upsert({
-      where: { userId },
-      create: {
-        userId,
-        availableBalance: Math.max(0, summary.availableBalance - amount),
-        pendingBalance: summary.pendingBalance + amount,
-        lifetimeEarnings: summary.totalEarnings,
-        lifetimePaid: summary.paidTillDate
-      },
-      update: {
-        availableBalance: Math.max(0, summary.availableBalance - amount),
-        pendingBalance: summary.pendingBalance + amount,
-        lastUpdatedAt: new Date()
-      }
-    });
-
-    return tx.payoutRequest.create({
+    const active = await tx.payoutRequest.findFirst({ where: { userId, status: { in: ["REQUESTED", "UNDER_REVIEW", "APPROVED", "PROCESSING"] } } });
+    if (active) throw new Error("You already have a payout request in progress.");
+    await tx.$queryRaw`SELECT id FROM artist_payout_balances WHERE user_id = ${userId} FOR UPDATE`;
+    const current = await tx.artistPayoutBalance.findUnique({ where: { userId } });
+    if (!current || new Prisma.Decimal(current.availableBalance).lt(amount)) throw new Error("Amount cannot exceed available balance.");
+    const balance = await tx.artistPayoutBalance.update({ where: { userId }, data: { availableBalance: { decrement: amount }, pendingBalance: { increment: amount }, lastUpdatedAt: new Date() } });
+    const created = await tx.payoutRequest.create({
       data: {
         userId,
         amount,
         serviceFee,
         netAmount,
+        requestedAmountInr: amount,
+        requestedAmountUsd,
+        minimumPayoutUsd: PAYOUT_CONFIG.minimumPayoutUsd,
+        usdToInrRate: exchangeRate.rate,
+        exchangeRateId: exchangeRate.id,
+        exchangeRateProvider: exchangeRate.provider,
+        exchangeRateFetchedAt: exchangeRate.fetchedAt,
         method,
-        upiId: method === "UPI" ? decryptPayoutSecret(credential.upiIdEncrypted) : null,
-        accountHolderName: method === "BANK" ? credential.accountHolderName : null,
-        bankAccountNumber: method === "BANK" ? decryptPayoutSecret(credential.bankAccountEncrypted) : null,
-        ifsc: method === "BANK" ? decryptPayoutSecret(credential.ifscEncrypted) : null,
+        sourceType: input.sourceType ?? "artist_royalty",
+        upiId: null,
+        accountHolderName: null,
+        bankAccountNumber: null,
+        ifsc: null,
         userNote: input.userNote?.trim() || null
       }
     });
+    await tx.walletTransaction.create({ data: { userId, type: "payout_reservation", amount: 0, direction: "hold", idempotencyKey: `payout:${created.id}:reservation`, referenceType: "payout_request", referenceId: String(created.id), balanceAfter: balance.availableBalance, availabilityStatus: "held", auditMetadata: { reservedAmount: String(amount), pendingBalance: balance.pendingBalance.toString() }, note: "Funds reserved for payout request." } });
+    await tx.payoutRequestEvent.create({ data: { payoutRequestId: created.id, actorType: "user", actorId: userId, previousStatus: null, newStatus: "requested", note: input.userNote?.trim() || "Payout requested.", metadata: { requestedAmountInr: String(amount), requestedAmountUsd: requestedAmountUsd.toString(), minimumPayoutUsd: PAYOUT_CONFIG.minimumPayoutUsd, usdToInrRate: exchangeRate.rate, exchangeRateId: exchangeRate.id, serviceFee: String(serviceFee), netAmount: String(netAmount) } } });
+    return created;
   });
 
   await syncPayoutRequestToSheet(request);
@@ -504,7 +545,7 @@ export async function createPayoutRequest(userId: number, input: {
     body: `Your payout request of Rs ${amount.toLocaleString("en-IN")} has been submitted. Processing usually takes 24-48 hours.`,
     type: "payout",
     href: "/payout"
-  }), prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } }).then((user) => user ? sendPayoutEmailEvent({ event: "payout_request_submitted", to: user.email, userId, payoutId: request.id, userName: user.name, requestedAmount: amount, serviceFee, netAmount, url: emailAppUrl("/payout") }) : undefined), createAdminTaskOnce({ eventKey: `payout:${request.id}:pending`, type: "Payout Pending", priority: "high", title: `Payout #${request.id} needs review`, body: `User #${userId} requested Rs ${amount.toLocaleString("en-IN")}; net after fee is Rs ${netAmount.toLocaleString("en-IN")}.`, href: `/admin?tab=payouts&requestId=${request.id}`, entityType: "payout_request", entityId: request.id }), logAuditEvent({ actorType: "user", actorId: userId, entityType: "payout_request", entityId: request.id, action: "payout.requested", newValue: { amount, serviceFee, netAmount, method } })]);
+  }), prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } }).then((user) => user ? sendPayoutEmailEvent({ event: "payout_request_submitted", to: user.email, userId, payoutId: request.id, userName: user.name, requestedAmount: amount, serviceFee, netAmount, url: emailAppUrl("/payout") }) : undefined), createAdminTaskOnce({ eventKey: `payout:${request.id}:pending`, type: "Payout Pending", priority: "high", title: `Payout #${request.id} needs review`, body: `User #${userId} requested Rs ${amount.toLocaleString("en-IN")} ($${requestedAmountUsd.toFixed(2)} at ${exchangeRate.rate} INR/USD); net after the separate 2% fee is Rs ${netAmount.toLocaleString("en-IN")}.`, href: `/admin?tab=payouts&requestId=${request.id}`, entityType: "payout_request", entityId: request.id }), logAuditEvent({ actorType: "user", actorId: userId, entityType: "payout_request", entityId: request.id, action: "payout.requested", newValue: { requestedAmountInr: amount, requestedAmountUsd: requestedAmountUsd.toString(), minimumPayoutUsd: PAYOUT_CONFIG.minimumPayoutUsd, usdToInrRate: exchangeRate.rate, exchangeRateId: exchangeRate.id, serviceFee, netAmount, method } })]);
 
   return mapRequest(request);
 }
@@ -513,7 +554,7 @@ export async function listAdminPayoutRequests(): Promise<AdminPayoutRequest[]> {
   if (!usesPostgresPrisma()) return [];
 
   const requests = await (prisma as any).payoutRequest.findMany({
-    include: { user: true },
+    include: { user: { include: { payoutCredential: true } }, events: { orderBy: { createdAt: "asc" } } },
     orderBy: [{ status: "asc" }, { requestedAt: "desc" }]
   });
 
@@ -523,76 +564,70 @@ export async function listAdminPayoutRequests(): Promise<AdminPayoutRequest[]> {
     userName: request.user?.name ?? `User #${request.userId}`,
     userEmail: request.user?.email ?? "",
     requestedAmount: toNumber(request.amount),
+    requestedAmountUsd: request.requestedAmountUsd == null ? null : toNumber(request.requestedAmountUsd),
+    usdToInrRate: request.usdToInrRate == null ? null : toNumber(request.usdToInrRate),
+    exchangeRateProvider: request.exchangeRateProvider ?? null,
     serviceFee: toNumber(request.serviceFee),
     netAmount: toNumber(request.netAmount),
     method: request.method === "BANK" ? "Bank Transfer" : "UPI",
-    payoutDetails: request.method === "BANK" ? maskAccount(request.bankAccountNumber) : `UPI ${request.upiId ?? "provided"}`,
+    payoutDetails: request.method === "BANK" ? (request.user?.payoutCredential?.bankAccountMasked ?? "Bank details provided") : `UPI ${request.user?.payoutCredential?.upiIdMasked ?? "provided"}`,
     requestedAt: request.requestedAt.toISOString(),
     status: statusFromPrisma(request.status),
-    adminNote: request.adminNote ?? null
+    adminNote: request.adminNote ?? null,
+    proofPath: request.proofAssetId ? `/api/assets/${request.proofAssetId}/download` : null,
+    events: request.events.map((event: any) => ({ id: event.id, actorType: event.actorType, previousStatus: event.previousStatus, newStatus: event.newStatus, note: event.note, createdAt: event.createdAt.toISOString() }))
   }));
 }
 
-export async function updatePayoutRequestStatus(input: { requestId: number; status: PayoutRequestStatus; adminNote?: string | null; actorId?: number | null }) {
+export async function updatePayoutRequestStatus(input: { requestId: number; status: PayoutRequestStatus; adminNote?: string | null; actorId?: number | null; paymentReference?: string; paymentMethod?: string; paymentDate?: Date; paidAmount?: number }) {
   if (!usesPostgresPrisma()) throw new Error("Payout management requires a persistent database.");
-  if (!["approved", "processing", "paid", "rejected"].includes(input.status)) throw new Error("Invalid payout status.");
+  if (!["under_review", "approved", "processing", "paid", "failed", "rejected", "cancelled"].includes(input.status)) throw new Error("Invalid payout status.");
 
   const existing = await (prisma as any).payoutRequest.findUnique({ where: { id: input.requestId }, include: { user: true } });
   if (!existing) throw new Error("Payout request not found.");
 
   const currentStatus = statusFromPrisma(existing.status);
   const nextStatus = input.status;
+  const allowed: Record<string, PayoutRequestStatus[]> = { requested: ["under_review", "cancelled"], under_review: ["approved", "rejected", "cancelled"], approved: ["processing", "rejected", "cancelled"], processing: ["paid", "failed"], paid: [], failed: [], rejected: [], cancelled: [] };
+  if (currentStatus === nextStatus) return mapRequest(existing);
+  if (!allowed[currentStatus]?.includes(nextStatus)) throw new Error(`Payout cannot move from ${currentStatus} to ${nextStatus}.`);
+  if (["failed", "rejected", "cancelled"].includes(nextStatus) && !input.adminNote?.trim()) throw new Error(`${nextStatus} payouts require an administrative reason.`);
   const requestedAmount = toNumber(existing.amount);
   const netAmount = toNumber(existing.netAmount);
   const now = new Date();
+  if (nextStatus === "paid") {
+    if (!input.paymentReference?.trim() || !input.paymentMethod?.trim() || !input.paymentDate || !input.paidAmount) throw new Error("Paid payouts require payment date, paid amount, payment method, and unique UTR/reference.");
+    if (money(input.paidAmount) !== netAmount) throw new Error("Paid amount must equal the persisted net payout amount.");
+  }
 
   const updated = await (prisma as any).$transaction(async (tx: any) => {
     if (nextStatus === "paid" && currentStatus !== "paid") {
-      await tx.artistPayoutBalance.upsert({
-        where: { userId: existing.userId },
-        create: {
-          userId: existing.userId,
-          availableBalance: 0,
-          pendingBalance: 0,
-          lifetimeEarnings: netAmount,
-          lifetimePaid: netAmount
-        },
-        update: {
-          pendingBalance: { decrement: requestedAmount },
-          lifetimePaid: { increment: netAmount },
-          lastUpdatedAt: now
-        }
-      });
+      const balance = await tx.artistPayoutBalance.update({ where: { userId: existing.userId }, data: { pendingBalance: { decrement: requestedAmount }, lifetimePaid: { increment: netAmount }, lastUpdatedAt: now } });
+      await tx.walletTransaction.create({ data: { userId: existing.userId, type: "payout_debit", amount: -netAmount, direction: "debit", idempotencyKey: `payout:${existing.id}:debit`, referenceType: "payout_request", referenceId: String(existing.id), balanceAfter: balance.availableBalance, effectiveAt: input.paymentDate, auditMetadata: { paymentReference: input.paymentReference, paymentMethod: input.paymentMethod, paidAmount: input.paidAmount }, note: `Manual payout ${input.paymentReference}` } });
+      if (toNumber(existing.serviceFee) > 0) await tx.walletTransaction.create({ data: { userId: existing.userId, type: "payout_service_fee", amount: -toNumber(existing.serviceFee), direction: "debit", idempotencyKey: `payout:${existing.id}:fee`, referenceType: "payout_request", referenceId: String(existing.id), balanceAfter: balance.availableBalance, effectiveAt: input.paymentDate, auditMetadata: { paymentReference: input.paymentReference }, note: "HYMN payout service fee." } });
     }
 
-    if (nextStatus === "rejected" && currentStatus !== "rejected") {
-      await tx.artistPayoutBalance.upsert({
-        where: { userId: existing.userId },
-        create: {
-          userId: existing.userId,
-          availableBalance: requestedAmount,
-          pendingBalance: 0,
-          lifetimeEarnings: requestedAmount,
-          lifetimePaid: 0
-        },
-        update: {
-          availableBalance: { increment: requestedAmount },
-          pendingBalance: { decrement: requestedAmount },
-          lastUpdatedAt: now
-        }
-      });
+    if (["rejected", "failed", "cancelled"].includes(nextStatus) && !["rejected", "failed", "cancelled"].includes(currentStatus)) {
+      const balance = await tx.artistPayoutBalance.update({ where: { userId: existing.userId }, data: { availableBalance: { increment: requestedAmount }, pendingBalance: { decrement: requestedAmount }, lastUpdatedAt: now } });
+      await tx.walletTransaction.create({ data: { userId: existing.userId, type: "payout_reservation_release", amount: 0, direction: "release", idempotencyKey: `payout:${existing.id}:release`, referenceType: "payout_request", referenceId: String(existing.id), balanceAfter: balance.availableBalance, auditMetadata: { releasedAmount: String(requestedAmount), reason: input.adminNote }, note: input.adminNote || `Payout ${nextStatus}` } });
     }
 
-    return tx.payoutRequest.update({
-      where: { id: existing.id },
+    const changed = await tx.payoutRequest.updateMany({
+      where: { id: existing.id, status: existing.status },
       data: {
         status: statusToPrisma(nextStatus),
         adminNote: input.adminNote?.trim() || null,
         processedAt: nextStatus === "processing" || nextStatus === "paid" || nextStatus === "rejected" ? now : existing.processedAt,
         paidAt: nextStatus === "paid" ? now : existing.paidAt
+        ,paymentReference: nextStatus === "paid" ? input.paymentReference?.trim() : existing.paymentReference
+        ,paymentMethod: nextStatus === "paid" ? input.paymentMethod?.trim() : existing.paymentMethod
+        ,paymentDate: nextStatus === "paid" ? input.paymentDate : existing.paymentDate
+        ,paidAmount: nextStatus === "paid" ? input.paidAmount : existing.paidAmount
       },
-      include: { user: true }
     });
+    if (changed.count !== 1) throw new Error("Payout changed concurrently. Refresh and retry.");
+    await tx.payoutRequestEvent.create({ data: { payoutRequestId: existing.id, actorType: "admin", actorId: input.actorId ?? null, previousStatus: currentStatus, newStatus: nextStatus, note: input.adminNote?.trim() || null, metadata: nextStatus === "paid" ? { paymentReference: input.paymentReference?.trim(), paymentMethod: input.paymentMethod?.trim(), paymentDate: input.paymentDate?.toISOString(), paidAmount: String(input.paidAmount) } : undefined } });
+    return tx.payoutRequest.findUniqueOrThrow({ where: { id: existing.id }, include: { user: true } });
   });
 
   await syncPayoutRequestToSheet(updated);
@@ -629,3 +664,7 @@ export async function updatePayoutRequestStatus(input: { requestId: number; stat
 
 // vercel trigger 2
 // vercel trigger 6
+// vercel trigger 7
+// vercel trigger 9
+
+// vercel trigger 12

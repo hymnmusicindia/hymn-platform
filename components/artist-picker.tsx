@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ArtistProfile, SpotifyArtistResult } from "@/lib/types";
+import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 
 type ArtistPickerProps = {
   label: string;
@@ -28,7 +29,7 @@ function initials(name: string) {
 
 function ArtistAvatar({ name, imageUrl }: { name: string; imageUrl?: string | null }) {
   if (imageUrl) {
-    return <img src={imageUrl} alt={name} className="h-10 w-10 rounded-full object-cover" />;
+    return <img src={imageUrl} alt={name} loading="lazy" decoding="async" className="h-10 w-10 rounded-full object-cover" />;
   }
 
   return (
@@ -56,6 +57,7 @@ export function ArtistPicker({
   const [loading, setLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const artistDialogRef = useAccessibleDialog(createOpen, () => setCreateOpen(false));
   const [createName, setCreateName] = useState("");
   const [spotifySearch, setSpotifySearch] = useState("");
   const [spotifyResults, setSpotifyResults] = useState<SpotifyArtistResult[]>([]);
@@ -328,14 +330,11 @@ export function ArtistPicker({
   }
 
   return (
-    <div ref={rootRef} className="relative grid gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <label className="text-sm font-medium" style={{ color: "var(--text-muted)" }}>
+    <div ref={rootRef} className="relative grid gap-2">
+      <div>
+        <label className="px-[.8rem] text-sm font-medium" style={{ color: "var(--text-muted)" }}>
           {label}
         </label>
-        <span className="text-xs" style={{ color: "var(--text-soft)" }}>
-          {helper === "Max 3 artists" ? "Max 3 primary artists per release" : helper}
-        </span>
       </div>
 
       <input
@@ -349,6 +348,10 @@ export function ArtistPicker({
           setOpen(true);
         }}
       />
+
+      <p className="px-[.8rem] text-xs leading-5" style={{ color: "var(--text-soft)" }}>
+        {helper === "Max 3 artists" ? "Max 3 primary artists per release" : helper}
+      </p>
 
       {valueIds.length > 0 ? (
         <div className="flex flex-wrap gap-2">
@@ -368,21 +371,22 @@ export function ArtistPicker({
 
       {open ? (
         <div className="absolute top-full z-30 mt-2 w-full rounded-[1.6rem] border p-3 shadow-2xl" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
-          <div className="mb-3 px-2"><div className="flex items-center justify-between gap-3"><p className="text-xs uppercase tracking-[0.18em]" style={{ color: "var(--text-soft)" }}>Saved Artist Profiles</p><span className="text-xs" style={{ color: "var(--text-soft)" }}>{`Artist profiles used: ${usage.currentCount}/${usage.allowedLimit}`}</span></div><p className="mt-1 text-xs" style={{color:"var(--text-muted)"}}>Select a saved Primary Artist Profile for this release.</p></div>
+          <div className="mb-3 flex items-center justify-between gap-3 px-2"><p className="text-xs uppercase tracking-[0.18em]" style={{ color: "var(--text-soft)" }}>Saved Artist Profiles</p><span className="text-xs" style={{ color: "var(--text-soft)" }}>{`Artist profiles used: ${usage.currentCount}/${usage.allowedLimit}`}</span></div>
           {loading ? <p className="px-2 py-2 text-sm" style={{ color: "var(--text-soft)" }}>Searching artists...</p> : null}
           {searchError ? <p className="px-2 py-2 text-sm" style={{ color: "var(--danger)" }}>{searchError}</p> : null}
 
           {visibleSavedProfiles.length > 0 ? (
             <div className="grid gap-2">
               {visibleSavedProfiles.map((profile) => (
-                <div key={`recent-${profile.id}`} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left" style={{ background: "var(--card)", color: "var(--text)" }}>
+                <div key={`recent-${profile.id}`} className="grid w-full gap-3 rounded-xl border px-3 py-3 text-left sm:grid-cols-[auto,1fr,auto] sm:items-center" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}>
                   <ArtistAvatar name={profile.name} imageUrl={profile.imageUrl} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{profile.name}</p>
+                    <div className="flex flex-wrap items-center gap-2"><p className="truncate font-medium">{profile.name}</p><span className="status-pill text-[10px]">Primary artist</span></div>
                     <p className="truncate text-xs" style={{ color: "var(--text-soft)" }}>{[profile.spotifyUrl && "Spotify", profile.appleUrl && "Apple Music", profile.instagramUrl && "Instagram", profile.youtubeUrl && "YouTube"].filter(Boolean).join(" · ")}</p>
+                    <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{profile.lastUsedAt ? `Last used ${new Date(profile.lastUsedAt).toLocaleDateString()}` : "Not used on a release yet"}</p>
+                    {!profile.spotifyUrl || !profile.instagramUrl ? <p className="mt-1 text-xs" style={{ color: "var(--warning)" }}>Profile details need attention before delivery.</p> : null}
                   </div>
-                  <button type="button" className="text-xs" style={{ color: "var(--text-soft)" }} onClick={() => openEditModal(profile)}>Edit</button>
-                  <button type="button" className="btn-outline pressable px-3 py-2 text-xs" onClick={() => selectSaved(profile)}>Use this artist</button>
+                  <div className="flex gap-2 sm:flex-col"><button type="button" className="btn-outline pressable min-h-11 px-3 py-2 text-xs" onClick={() => openEditModal(profile)}>Edit</button><button type="button" className="btn-primary pressable min-h-11 px-3 py-2 text-xs" onClick={() => selectSaved(profile)}>Use artist</button></div>
                 </div>
               ))}
             </div>
@@ -395,12 +399,12 @@ export function ArtistPicker({
       ) : null}
 
       {createOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6">
-          <div className="w-full max-w-2xl rounded-[1.8rem] border p-6 shadow-2xl" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6" onMouseDown={(event) => { if (event.currentTarget === event.target) setCreateOpen(false); }}>
+          <div ref={artistDialogRef as React.RefObject<HTMLDivElement | null>} role="dialog" aria-modal="true" aria-labelledby="artist-profile-dialog-title" tabIndex={-1} className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[1.8rem] border p-6 shadow-2xl" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm uppercase tracking-[0.22em]" style={{ color: "var(--text-soft)" }}>Primary Artist Profile</p>
-                <h3 className="mt-3 text-2xl font-semibold" style={{ color: "var(--text)" }}>{editingProfile ? "Edit artist profile" : "Create new artist profile"}</h3>
+                <h3 id="artist-profile-dialog-title" className="mt-3 text-2xl font-semibold" style={{ color: "var(--text)" }}>{editingProfile ? "Edit artist profile" : "Create new artist profile"}</h3>
                 <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Find your Spotify artist profile, then add the identity links distribution partners need.</p>
               </div>
               <button type="button" className="btn-outline pressable" onClick={() => setCreateOpen(false)}>Close</button>
@@ -472,3 +476,7 @@ export function ArtistPicker({
 // vercel trigger
 
 // vercel trigger 2
+
+// vercel trigger 11
+
+// vercel trigger 12

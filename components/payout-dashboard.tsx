@@ -1,9 +1,11 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
-import { AlertCircle, Landmark, WalletCards, X } from "lucide-react";
+import { AlertCircle, ArrowUpRight, Landmark, ShieldCheck, WalletCards, X } from "lucide-react";
 import { RoyaltyCalculator } from "@/components/royalty-calculator";
+import { ContextualHelp } from "@/components/contextual-help";
 import type { PayoutSummary } from "@/lib/payout";
+import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 
 function formatMoney(amount: number) {
   return `Rs ${Math.round(amount).toLocaleString("en-IN")}`;
@@ -24,9 +26,10 @@ function EmptyState({ children }: { children: React.ReactNode }) {
 
 function KpiCard({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
-    <article className="metric-card">
-      <p className="text-sm" style={{ color: "var(--text-soft)" }}>{label}</p>
-      <p className="mt-3 text-3xl font-semibold" style={{ color: "var(--text)" }}>{value}</p>
+    <article className="metric-card group relative overflow-hidden transition-transform duration-200 hover:-translate-y-0.5">
+      <div className="absolute inset-x-0 top-0 h-px" style={{ background: "linear-gradient(90deg, transparent, var(--accent), transparent)" }} />
+      <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>{label}</p>
+      <p className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl" style={{ color: "var(--text)" }}>{value}</p>
       {detail ? <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{detail}</p> : null}
     </article>
   );
@@ -61,10 +64,10 @@ function MonthlyChart({ rows }: { rows: PayoutSummary["monthlyEarnings"] }) {
 function TableShell({ headers, empty, children }: { headers: string[]; empty: string; children: React.ReactNode }) {
   const hasRows = Array.isArray(children) ? children.length > 0 : Boolean(children);
   return (
-    <div className="overflow-x-auto rounded-[1.5rem] border" style={{ borderColor: "var(--border)" }}>
+    <div className="overflow-x-auto rounded-[1.25rem] border" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
       <table className="min-w-full text-left text-sm">
         <thead style={{ background: "var(--bg-soft)", color: "var(--text-soft)" }}>
-          <tr>{headers.map((header) => <th key={header} className="px-4 py-3 font-medium">{header}</th>)}</tr>
+          <tr>{headers.map((header) => <th key={header} className="whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em]">{header}</th>)}</tr>
         </thead>
         <tbody style={{ color: "var(--text)" }}>{hasRows ? children : <tr><td className="px-4 py-6" colSpan={headers.length} style={{ color: "var(--text-muted)" }}>{empty}</td></tr>}</tbody>
       </table>
@@ -80,6 +83,7 @@ function PayoutModal({ summary, onClose, onSuccess }: { summary: PayoutSummary; 
   const requestedAmount = Number(amount) || 0;
   const serviceFee = requestedAmount * summary.serviceFeeRate;
   const netPayout = requestedAmount - serviceFee;
+  const dialogRef = useAccessibleDialog(true, onClose);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -105,12 +109,12 @@ function PayoutModal({ summary, onClose, onSuccess }: { summary: PayoutSummary; 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
-      <form onSubmit={submit} className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border p-5 shadow-2xl sm:p-6" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.currentTarget === event.target && !isPending) onClose(); }}>
+      <form ref={dialogRef as React.RefObject<HTMLFormElement | null>} role="dialog" aria-modal="true" aria-labelledby="payout-dialog-title" tabIndex={-1} onSubmit={submit} className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border p-5 shadow-2xl sm:p-6" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>Request Payout</h2>
-            <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Payouts are usually processed within 24-48 hours.</p>
+            <h2 id="payout-dialog-title" className="text-2xl font-semibold" style={{ color: "var(--text)" }}>Request Payout</h2>
+            <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>HYMN manually reviews and processes payout requests. Track the confirmed status here instead of submitting another request.</p>
           </div>
           <button type="button" onClick={onClose} className="btn-outline pressable px-3 py-2" aria-label="Close payout request"><X className="h-4 w-4" /></button>
         </div>
@@ -118,7 +122,7 @@ function PayoutModal({ summary, onClose, onSuccess }: { summary: PayoutSummary; 
         <div className="mt-5 grid gap-4">
           <label className="grid gap-2 text-sm" style={{ color: "var(--text-muted)" }}>
             Amount to withdraw
-            <input name="amount" type="number" min={summary.minimumPayoutAmount} max={summary.availableBalance} step="1" required value={amount} onChange={(event) => setAmount(event.target.value)} className="field" placeholder="500" />
+            <input name="amount" type="number" min={summary.minimumPayoutAmount || undefined} max={summary.availableBalance} step="1" required value={amount} onChange={(event) => setAmount(event.target.value)} className="field" placeholder={summary.minimumPayoutAmount ? String(summary.minimumPayoutAmount) : ""} />
           </label>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -147,7 +151,7 @@ function PayoutModal({ summary, onClose, onSuccess }: { summary: PayoutSummary; 
 
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>A 2% HYMN service fee will be deducted from each payout request.</p>
           {feedback ? <p className="text-sm" style={{ color: "var(--danger)" }}>{feedback}</p> : null}
-          <button type="submit" disabled={isPending || summary.availableBalance < summary.minimumPayoutAmount} className="btn-primary pressable disabled:opacity-50">{isPending ? "Submitting..." : "Submit payout request"}</button>
+          <button type="submit" disabled={isPending || !summary.payoutEligible} className="btn-primary pressable disabled:opacity-50">{isPending ? "Submitting..." : "Submit payout request"}</button>
         </div>
       </form>
     </div>
@@ -160,8 +164,14 @@ export function PayoutDashboard({ initialSummary }: { initialSummary: PayoutSumm
   const [activeTab, setActiveTab] = useState<"overview" | "monthly" | "quarterly" | "statements" | "requests" | "details">("overview");
   const [reportFeedback, setReportFeedback] = useState("");
   const hasStatements = summary.monthlyEarnings.length > 0 || summary.releaseBreakdown.length > 0 || summary.trackBreakdown.length > 0 || summary.platformBreakdown.length > 0;
-  const buttonDisabled = summary.availableBalance < summary.minimumPayoutAmount || !summary.quarter.payoutRequestsOpen;
+  const buttonDisabled = !summary.payoutEligible || !summary.quarter.payoutRequestsOpen;
+  const payoutProgress = Math.min(100, Math.max(0, ((summary.availableBalanceUsd ?? 0) / summary.minimumPayoutUsd) * 100));
   const maxMonthly = useMemo(() => Math.max(0, ...summary.monthlyEarnings.map((row) => row.netPayable)), [summary.monthlyEarnings]);
+  const verifiedThrough = summary.monthlyEarnings[0]?.month || "No imported statement period";
+  const ledgerRows = useMemo(() => [
+    ...summary.monthlyEarnings.map((row) => ({ key: `royalty-${row.month}`, date: row.month, description: "Verified royalty statement", source: "Distributor statement", credit: row.netPayable, debit: 0, status: row.payoutStatus })),
+    ...summary.payoutHistory.map((row) => ({ key: `payout-${row.id}`, date: new Date(row.requestDate).toLocaleDateString("en-IN"), description: row.status === "paid" ? "Payout completion" : "Payout reservation", source: row.method, credit: 0, debit: row.netPayout, status: row.status })),
+  ], [summary.monthlyEarnings, summary.payoutHistory]);
 
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("tab");
@@ -191,29 +201,32 @@ export function PayoutDashboard({ initialSummary }: { initialSummary: PayoutSumm
 
   return (
     <main className="shell py-12 sm:py-16">
-      <section className="surface-card overflow-hidden p-6 sm:p-8">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+      <section className="surface-card relative overflow-hidden p-6 sm:p-8">
+        <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full opacity-20 blur-3xl" style={{ background: "var(--accent)" }} />
+        <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-3xl">
-            <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl" style={{ color: "var(--text)" }}>Payout</h1>
-            <p className="mt-4 text-base leading-7" style={{ color: "var(--text-muted)" }}>Track your HYMN earnings, request withdrawals, and review payout history.</p>
-            <p className="mt-3 text-sm" style={{ color: "var(--text-soft)" }}>Final payout depends on verified royalty statements and cleared earnings.</p>
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em]" style={{ borderColor: "var(--border)", color: "var(--text-muted)", background: "var(--bg-soft)" }}><ShieldCheck className="h-3.5 w-3.5" /> Verified earnings</div>
+            <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl" style={{ color: "var(--text)" }}>Payouts <ContextualHelp faqId="payout-pending" label="Payout eligibility" side="bottom">Availability depends on reported balance, the USD threshold, quarter status, verification, holds, and active requests.</ContextualHelp></h1>
+            <p className="mt-4 max-w-2xl text-base leading-7" style={{ color: "var(--text-muted)" }}>A clear view of your verified royalties, available funds, statements, and withdrawal history.</p>
           </div>
-          <div className="rounded-[1.5rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>Available balance</p>
-            <p className="mt-2 text-3xl font-semibold" style={{ color: "var(--text)" }}>{formatMoney(summary.availableBalance)}</p>
+          <div className="w-full rounded-[1.5rem] border p-5 lg:max-w-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+            <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Available to withdraw</p><WalletCards className="h-5 w-5" style={{ color: "var(--money)" }} /></div>
+            <p className="mt-3 text-4xl font-semibold tracking-tight" style={{ color: "var(--text)" }}>{formatMoney(summary.availableBalance)}</p>
+            <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>$105 USD · approximately {summary.exchangeRate.approximateMinimumInr ? formatMoney(summary.exchangeRate.approximateMinimumInr) : "unavailable"}</p>
+            <div className="mt-4 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--border)" }}><div className="h-full rounded-full transition-all" style={{ width: `${payoutProgress}%`, background: "var(--money)" }} /></div>
+            <div className="mt-2 flex justify-between gap-3 text-xs" style={{ color: "var(--text-soft)" }}><span>{summary.availableBalanceUsd === null ? "USD estimate unavailable" : `$${summary.availableBalanceUsd.toFixed(2)} of $${summary.minimumPayoutUsd}`}</span><span>{Math.round(payoutProgress)}%</span></div>
+            {summary.exchangeRate.usdToInrRate ? <p className="mt-3 text-xs" style={{ color: "var(--text-soft)" }}>1 USD = {summary.exchangeRate.usdToInrRate.toFixed(4)} INR · updated {summary.exchangeRate.rateUpdatedAt ? new Date(summary.exchangeRate.rateUpdatedAt).toLocaleString("en-IN") : "—"}{summary.exchangeRate.rateStatus === "stale" ? " · stale" : ""}</p> : null}
             <button type="button" disabled={buttonDisabled} onClick={() => setModalOpen(true)} className="btn-primary pressable mt-4 w-full disabled:opacity-50">
-              <WalletCards className="h-4 w-4" />
-              Request Payout
+              Request payout <ArrowUpRight className="h-4 w-4" />
             </button>
-            <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>Fetch your available balance to your preferred payment method.</p>
-            {buttonDisabled ? <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>{!summary.quarter.payoutRequestsOpen ? "Payout requests open after the current quarter closes." : "Minimum payout amount is Rs 500."}</p> : null}
+            {buttonDisabled ? <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>{!summary.quarter.payoutRequestsOpen ? "Payout requests open after the current quarter closes." : summary.exchangeRate.rateStatus !== "active" ? "Payout requests pause while the exchange rate is unavailable or stale." : `HYMN's minimum payout threshold is $${summary.minimumPayoutUsd} USD.`}</p> : null}
           </div>
         </div>
       </section>
 
-      <nav className="mt-6 flex flex-wrap gap-2" aria-label="Payout sections">
+      <nav className="surface-card mt-6 flex gap-1 overflow-x-auto p-1.5" aria-label="Payout sections">
         {(["overview", "monthly", "quarterly", "statements", "requests", "details"] as const).map((tab) => (
-          <button key={tab} type="button" onClick={() => selectTab(tab)} className={activeTab === tab ? "btn-primary pressable px-4 py-2 text-sm capitalize" : "btn-outline pressable px-4 py-2 text-sm capitalize"}>
+          <button key={tab} type="button" onClick={() => selectTab(tab)} aria-current={activeTab === tab ? "page" : undefined} className={activeTab === tab ? "btn-primary pressable shrink-0 px-4 py-2 text-sm capitalize" : "pressable shrink-0 rounded-full px-4 py-2 text-sm font-medium capitalize transition-colors hover:bg-black/5 dark:hover:bg-white/5"} style={activeTab === tab ? undefined : { color: "var(--text-muted)" }}>
             {tab === "details" ? "Payout details" : tab}
           </button>
         ))}
@@ -233,7 +246,7 @@ export function PayoutDashboard({ initialSummary }: { initialSummary: PayoutSumm
 
       {activeTab === "quarterly" ? (
         <section className="surface-card mt-6 p-5 sm:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm" style={{ color: "var(--text-soft)" }}>Current Quarter</p><h2 className="mt-1 text-3xl font-semibold">Q{summary.quarter.quarter} {summary.quarter.year}</h2><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Closes on {new Date(summary.quarter.endDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p></div><StatusBadge status={summary.quarter.status} /></div>
+          <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm" style={{ color: "var(--text-soft)" }}>Current Quarter <ContextualHelp faqId="quarterly-payouts" label="Quarterly payouts">Quarterly closing locks the reporting period, publishes statements, and carries eligible unpaid balances forward.</ContextualHelp></p><h2 className="mt-1 text-3xl font-semibold">Q{summary.quarter.quarter} {summary.quarter.year}</h2><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Closes on {new Date(summary.quarter.endDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p></div><StatusBadge status={summary.quarter.status} /></div>
           <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3"><KpiCard label="Quarter-to-date earnings" value={formatMoney(summary.currentQuarterEarnings)} /><KpiCard label="Quarter paid" value={formatMoney(summary.currentQuarterPaid)} /><KpiCard label="Quarter pending payout" value={formatMoney(summary.currentQuarterPending)} /><KpiCard label="Quarter held" value={formatMoney(summary.currentQuarterHeld)} /><KpiCard label="Available balance" value={formatMoney(summary.availableBalance)} /><KpiCard label="Carry forward" value={formatMoney(summary.carryForwardBalance)} /></div>
           <p className="mt-5 rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>{summary.quarter.payoutRequestsOpen ? "Payout requests are open for your carried-forward available balance." : "Payout requests open after the current quarter closes."}</p>
         </section>
@@ -249,6 +262,19 @@ export function PayoutDashboard({ initialSummary }: { initialSummary: PayoutSumm
 
       {activeTab === "details" ? <section className="surface-card mt-6 p-5 sm:p-6"><h2 className="text-2xl font-semibold">Payout details</h2><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Encrypted payout credentials are managed in the Splits workspace and remain masked in the UI.</p><a href="/dashboard?module=splits&tab=payout-details" className="btn-primary mt-5 inline-flex">Manage payout details</a></section> : null}
 
+      {activeTab === "requests" ? (
+        <section className="surface-card mt-6 p-5 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Withdrawal activity</p><h2 className="mt-2 text-2xl font-semibold">Payout requests</h2><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Track every request from submission through processing.</p></div>
+            <button type="button" disabled={buttonDisabled} onClick={() => setModalOpen(true)} className="btn-primary pressable disabled:opacity-50">Request payout <ArrowUpRight className="h-4 w-4" /></button>
+          </div>
+          <div className="mt-6"><TableShell headers={["Request date", "Requested", "Service fee", "Net payout", "Method", "Status", "Processed", "Evidence / timeline"]} empty="No payout requests yet.">
+            {summary.payoutHistory.map((row) => <tr key={row.id} className="border-t" style={{ borderColor: "var(--border)" }}><td className="whitespace-nowrap px-4 py-3">{new Date(row.requestDate).toLocaleDateString("en-IN")}</td><td className="px-4 py-3">{formatMoney(row.requestedAmount)}</td><td className="px-4 py-3">{formatMoney(row.serviceFee)}</td><td className="px-4 py-3 font-semibold">{formatMoney(row.netPayout)}</td><td className="px-4 py-3">{row.method}</td><td className="px-4 py-3"><StatusBadge status={row.status} /></td><td className="whitespace-nowrap px-4 py-3">{row.processedDate ? new Date(row.processedDate).toLocaleDateString("en-IN") : "-"}</td><td className="px-4 py-3">{row.receiptPath ? <a className="mr-3 underline" href={row.receiptPath}>Receipt</a> : null}{row.proofPath ? <a className="underline" href={row.proofPath}>Proof</a> : null}<details className="mt-2"><summary className="cursor-pointer">Timeline ({row.events.length})</summary><ol className="mt-1 min-w-72 space-y-1 text-xs">{row.events.map(event => <li key={event.id}>{new Date(event.createdAt).toLocaleString("en-IN")} · {event.previousStatus || "created"} → {event.newStatus}{event.note ? ` · ${event.note}` : ""}</li>)}</ol></details></td></tr>)}
+          </TableShell></div>
+        </section>
+      ) : null}
+
+      {activeTab === "overview" ? <>
       {!hasStatements ? (
         <div className="mt-6">
           <EmptyState>No royalty statement has been imported yet. Earnings will appear after HYMN processes distributor reports.</EmptyState>
@@ -256,15 +282,17 @@ export function PayoutDashboard({ initialSummary }: { initialSummary: PayoutSumm
       ) : null}
 
       <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Available balance" value={formatMoney(summary.availableBalance)} />
-        <KpiCard label="Current month earnings" value={formatMoney(summary.currentMonthEarnings)} detail={maxMonthly ? "Based on imported statement month" : undefined} />
-        <KpiCard label="Current quarter earnings" value={formatMoney(summary.currentQuarterEarnings)} />
-        <KpiCard label="Held balance" value={formatMoney(summary.currentQuarterHeld)} />
-        <KpiCard label="Pending payout" value={formatMoney(summary.pendingBalance)} />
-        <KpiCard label="Lifetime earnings" value={formatMoney(summary.totalEarnings)} />
-        <KpiCard label="Lifetime paid" value={formatMoney(summary.paidTillDate)} />
-        <KpiCard label="Carry forward balance" value={formatMoney(summary.carryForwardBalance)} />
+        <KpiCard label="Available balance" value={formatMoney(summary.availableBalance)} detail={`Verified statements · ${verifiedThrough}`} />
+        <KpiCard label="Current month earnings" value={formatMoney(summary.currentMonthEarnings)} detail={maxMonthly ? `Imported statement · ${verifiedThrough}` : "No imported statement period"} />
+        <KpiCard label="Current quarter earnings" value={formatMoney(summary.currentQuarterEarnings)} detail={`Q${summary.quarter.quarter} ${summary.quarter.year} · verified records`} />
+        <KpiCard label="Held balance" value={formatMoney(summary.currentQuarterHeld)} detail="Held in verified payout records" />
+        <KpiCard label="Pending payout" value={formatMoney(summary.pendingBalance)} detail="Submitted manual payout requests" />
+        <KpiCard label="Lifetime verified earnings" value={formatMoney(summary.totalEarnings)} detail={`Verified through ${verifiedThrough}`} />
+        <KpiCard label="Lifetime paid" value={formatMoney(summary.paidTillDate)} detail="Confirmed completed payouts" />
+        <KpiCard label="Carry forward balance" value={formatMoney(summary.carryForwardBalance)} detail="Verified unpaid balance" />
       </section>
+
+      <section className="surface-card mt-6 p-5 sm:p-6"><div><h2 className="text-2xl font-semibold">Financial ledger</h2><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Verified through {verifiedThrough}. Running balance is omitted because the current backend does not supply an auditable per-entry running balance.</p></div><div className="mt-5"><TableShell headers={["Date", "Description", "Source", "Credit", "Debit", "Status"]} empty="No verified royalty credits or payout reservations yet.">{ledgerRows.map((row) => <tr key={row.key} className="border-t" style={{ borderColor: "var(--border)" }}><td className="whitespace-nowrap px-4 py-3">{row.date}</td><td className="px-4 py-3">{row.description}</td><td className="px-4 py-3" style={{ color: "var(--text-muted)" }}>{row.source}</td><td className="px-4 py-3" style={{ color: row.credit ? "var(--success)" : "var(--text-soft)" }}>{row.credit ? formatMoney(row.credit) : "—"}</td><td className="px-4 py-3">{row.debit ? formatMoney(row.debit) : "—"}</td><td className="px-4 py-3"><StatusBadge status={row.status} /></td></tr>)}</TableShell></div></section>
 
       <section className="surface-card mt-6 p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -305,8 +333,8 @@ export function PayoutDashboard({ initialSummary }: { initialSummary: PayoutSumm
         <div className="surface-card p-5 sm:p-6">
           <h2 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>Payout history</h2>
           <div className="mt-5">
-            <TableShell headers={["Request date", "Requested", "Service fee", "Net payout", "Method", "Status", "Processed", "Admin note"]} empty="No payout requests yet.">
-              {summary.payoutHistory.map((row) => <tr key={row.id} className="border-t" style={{ borderColor: "var(--border)" }}><td className="px-4 py-3">{new Date(row.requestDate).toLocaleDateString("en-IN")}</td><td className="px-4 py-3">{formatMoney(row.requestedAmount)}</td><td className="px-4 py-3">{formatMoney(row.serviceFee)}</td><td className="px-4 py-3">{formatMoney(row.netPayout)}</td><td className="px-4 py-3">{row.method}</td><td className="px-4 py-3"><StatusBadge status={row.status} /></td><td className="px-4 py-3">{row.processedDate ? new Date(row.processedDate).toLocaleDateString("en-IN") : "-"}</td><td className="px-4 py-3">{row.adminNote ?? "-"}</td></tr>)}
+            <TableShell headers={["Request date", "Requested", "Service fee", "Net payout", "Method", "Status", "Processed", "Evidence"]} empty="No payout requests yet.">
+              {summary.payoutHistory.map((row) => <tr key={row.id} className="border-t" style={{ borderColor: "var(--border)" }}><td className="px-4 py-3">{new Date(row.requestDate).toLocaleDateString("en-IN")}</td><td className="px-4 py-3">{formatMoney(row.requestedAmount)}</td><td className="px-4 py-3">{formatMoney(row.serviceFee)}</td><td className="px-4 py-3">{formatMoney(row.netPayout)}</td><td className="px-4 py-3">{row.method}</td><td className="px-4 py-3"><StatusBadge status={row.status} /></td><td className="px-4 py-3">{row.processedDate ? new Date(row.processedDate).toLocaleDateString("en-IN") : "-"}</td><td className="px-4 py-3">{row.receiptPath ? <a className="underline" href={row.receiptPath}>Receipt</a> : row.adminNote ?? "-"}</td></tr>)}
             </TableShell>
           </div>
         </div>
@@ -346,6 +374,7 @@ export function PayoutDashboard({ initialSummary }: { initialSummary: PayoutSumm
           </article>
         ))}
       </section>
+      </> : null}
 
       {modalOpen ? <PayoutModal summary={summary} onClose={() => setModalOpen(false)} onSuccess={setSummary} /> : null}
     </main>
@@ -353,3 +382,9 @@ export function PayoutDashboard({ initialSummary }: { initialSummary: PayoutSumm
 }
 
 // vercel trigger 2
+// vercel trigger 7
+// vercel trigger 9
+
+// vercel trigger 11
+
+// vercel trigger 12

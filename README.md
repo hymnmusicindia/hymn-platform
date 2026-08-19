@@ -66,6 +66,10 @@ npm run build
 npm start
 ```
 
+## UI Previews
+
+- Submitted and resubmitted release confirmation: [http://localhost:3000/release-submitted-preview](http://localhost:3000/release-submitted-preview)
+
 ## Notes
 
 The legacy MySQL/memory adapter remains for older local HYMN data, but any PostgreSQL `DATABASE_URL` switches core identity, sessions, producer applications, notifications, and audit logs to Prisma.

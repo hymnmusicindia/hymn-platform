@@ -11,21 +11,6 @@ type ProducerSeed = {
 
 type ProducerSource = ProducerSeed & { imageUrl?: string | null };
 
-type BeatSeed = {
-  producerSlug: string;
-  vibeTag: string;
-  typeBeat: string;
-  activityLabel: string;
-  activityTone: "trending" | "new" | "sold";
-  keySignature: string;
-  subgenre: string;
-  listenersNow: number;
-  cartsNow: number;
-  weeklySales: number;
-  plays: number;
-  shortHook: string;
-};
-
 export type ProducerSpotlight = ProducerSeed & {
   id?: number;
   userId?: number;
@@ -47,12 +32,11 @@ export type StorefrontBeat = Beat & {
   cartsNow: number;
   weeklySales: number;
   plays: number;
-  exclusiveRemaining: number;
+  exclusiveRemaining?: number;
   startingPrice: number;
   shortHook: string;
 };
 
-const previewFallbackUrl = "/uploads/releases/audio/5cbceaeb-fae9-493a-8e1a-effcec097f98.wav";
 
 export const beatLicenseOptions: Array<{
   key: Extract<LicenseType, "basic" | "exclusive">;
@@ -112,28 +96,7 @@ export function findBeatByStoreSlug(beats: Beat[], slug: string, producerProfile
   return buildBeatStorefront(beats, producerProfiles).catalog.find((beat) => beatStoreSlug(beat) === slug) ?? null;
 }
 
-export const beatStoreReviews = [
-  {
-    name: "Armaan S",
-    role: "Independent Artist",
-    review: "I found the beat in under five minutes and checked out before the hook left my head."
-  },
-  {
-    name: "Nyla K",
-    role: "Singer / Songwriter",
-    review: "The vibe tags made the search feel emotional instead of technical. That changed everything."
-  },
-  {
-    name: "Raghav V",
-    role: "Rapper",
-    review: "The quick-buy flow is dangerous in the best way. One click and the session was alive."
-  },
-  {
-    name: "Mira J",
-    role: "Creative Director",
-    review: "It feels curated, not crowded. Every beat already sounds like a brand decision."
-  }
-] as const;
+export const beatStoreReviews: Array<{ name: string; role: string; review: string }> = [];
 
 function svgDataUri(svg: string) {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
@@ -166,13 +129,7 @@ function createPoster(title: string, subtitle: string, palette: [string, string,
 }
 
 function resolvePreviewUrl(url?: string) {
-  if (!url || url.startsWith("/demo-previews/")) return previewFallbackUrl;
-  return url;
-}
-
-function resolveDownloadUrl(url?: string) {
-  if (!url || url.startsWith("/downloads/")) return previewFallbackUrl;
-  return url;
+  return url && !url.startsWith("/demo-previews/") ? url : "";
 }
 
 export function buildBeatStorefront(beats: Beat[], producerProfiles: ProducerProfile[] = []) {
@@ -235,8 +192,7 @@ export function buildBeatStorefront(beats: Beat[], producerProfiles: ProducerPro
     }
   }
 
-  const demoMetricsEnabled = process.env.NEXT_PUBLIC_ENABLE_BEATSTORE_DEMO_DATA === "true";
-  const catalog: StorefrontBeat[] = beats.map((beat) => {
+  const catalog: StorefrontBeat[] = beats.filter((beat) => beat.enabled).map((beat) => {
     const producer = producerMap.get(beat.producerId?.toString() ?? "") ?? unknownProducer;
       
     producer.beatIds.push(beat.id);
@@ -251,17 +207,16 @@ export function buildBeatStorefront(beats: Beat[], producerProfiles: ProducerPro
       coverImage,
       vibeTag,
       typeBeat: `${beat.genre} type beat`,
-      activityLabel: "New",
+      activityLabel: beat.enabled ? "Available" : "Unavailable",
       activityTone: "new" as const,
-      keySignature: beat.keySignature ?? "Fm",
+      keySignature: beat.keySignature ?? "Not supplied",
       subgenre: beat.genre,
-      listenersNow: demoMetricsEnabled ? Math.abs(beat.id * 7) % 10 + 1 : 0,
-      cartsNow: demoMetricsEnabled ? Math.abs(beat.id * 3) % 3 : 0,
-      weeklySales: demoMetricsEnabled ? Math.abs(beat.id * 5) % 5 : 0,
-      plays: demoMetricsEnabled ? Math.abs(beat.id * 47) % 500 + 50 : 0,
-      exclusiveRemaining: 1,
+      listenersNow: 0,
+      cartsNow: 0,
+      weeklySales: 0,
+      plays: 0,
       startingPrice: beat.price,
-      shortHook: `${beat.genre} textures with an immediate emotional pull.`,
+      shortHook: `${beat.genre} · ${beat.mood} · ${beat.bpm} BPM`,
       producerName: producer.name,
       producerId: beat.producerId
     };
@@ -285,3 +240,5 @@ export function findProducerBySlug(beats: Beat[], slug: string, producerProfiles
 }
 
 // vercel trigger 3
+
+// vercel trigger 11

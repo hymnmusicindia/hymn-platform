@@ -21,6 +21,10 @@ const protectedApis: Array<{ prefix: string; roles: Role[] }> = [
 
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  if (pathname.startsWith("/api/") && !pathname.startsWith("/api/webhooks/") && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+    const origin = request.headers.get("origin"); const fetchSite = request.headers.get("sec-fetch-site");
+    if ((origin && origin !== request.nextUrl.origin) || fetchSite === "cross-site") return NextResponse.json({ error: "Cross-site mutation rejected." }, { status: 403 });
+  }
   const rule = [...protectedApis, ...protectedRoutes].find((item) => pathname === item.prefix || pathname.startsWith(`${item.prefix}/`));
   if (!rule || pathname === "/admin/login" || pathname === "/api/admin/auth/login") return NextResponse.next();
 
@@ -139,8 +143,9 @@ function requiredProxySecret(name: "JWT_SECRET" | "ADMIN_JWT_SECRET") {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/producer-dashboard/:path*", "/producer/dashboard/:path*", "/admin/:path*", "/api/admin/:path*", "/api/producer/:path*", "/api/distribution/:path*", "/api/orders/:path*", "/api/analytics/:path*"]
+  matcher: ["/dashboard/:path*", "/producer-dashboard/:path*", "/producer/dashboard/:path*", "/admin/:path*", "/api/:path*"]
 };
 
 // vercel trigger
 // vercel trigger 5
+// vercel trigger 9

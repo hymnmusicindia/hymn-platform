@@ -10,30 +10,34 @@ export function releaseDateReached(value?: string | null, now = new Date()) {
 
 export function statusAfterDireNoteAcceptance(release: Pick<Release, "releaseDate">, now = new Date()): ReleaseStatus {
   if (!releaseDateReached(release.releaseDate, now)) return "scheduled";
-  return process.env.AUTO_MARK_LIVE_AFTER_RELEASE_DATE === "true" ? "live" : "awaiting_live_confirmation";
+  return "awaiting_live_confirmation";
 }
 
 const allowedTransitions: Partial<Record<ReleaseStatus, ReleaseStatus[]>> = {
-  draft: ["submitted", "under_review"], submitted: ["under_review", "changes_requested", "rejected"], in_queue: ["under_review", "changes_requested", "rejected"],
-  under_review: ["changes_requested", "approved", "rejected", "failed"], changes_requested: ["draft", "under_review", "rejected"], rejected: ["draft", "under_review"],
-  approved: ["queued_for_distribution", "sent_to_distributor", "scheduled", "awaiting_live_confirmation", "failed"], queued_for_distribution: ["sent_to_distributor", "failed"],
-  sent_to_distributor: ["scheduled", "processing", "awaiting_live_confirmation", "partially_live", "failed"], scheduled: ["awaiting_live_confirmation", "partially_live", "live", "failed"],
-  processing: ["awaiting_live_confirmation", "partially_live", "live", "failed"], awaiting_live_confirmation: ["partially_live", "live", "failed"], partially_live: ["live", "failed"],
-  delivered: ["partially_live", "live", "failed"], sent: ["scheduled", "awaiting_live_confirmation", "partially_live", "live", "failed"], failed: ["under_review", "queued_for_distribution"]
+  draft: ["awaiting_payment", "submitted", "in_qc_queue"], awaiting_payment: ["submitted"], submitted: ["in_qc_queue", "under_review", "changes_requested", "rejected"], in_queue: ["in_qc_queue", "under_review", "changes_requested", "rejected"], in_qc_queue: ["under_review", "changes_requested", "rejected"],
+  under_review: ["changes_requested", "approved", "rejected", "delivery_failed"], changes_requested: ["resubmitted", "rejected"], resubmitted: ["in_qc_queue", "under_review"], rejected: ["draft", "resubmitted"],
+  approved: ["queued_for_distribution", "submitting_to_distributor", "sent_to_distributor", "failed"], queued_for_distribution: ["submitting_to_distributor", "sent_to_distributor", "delivery_failed"], submitting_to_distributor: ["queued_for_distribution", "sent_to_distributor", "changes_requested", "delivery_failed"],
+  sent_to_distributor: ["queued_for_distribution", "submitting_to_distributor", "distributor_processing", "distributor_changes_required", "scheduled", "awaiting_live_confirmation", "partially_live", "delivery_failed"], distributor_processing: ["distributor_changes_required", "scheduled", "awaiting_live_confirmation", "partially_live", "delivery_failed"], distributor_changes_required: ["resubmitted", "delivery_failed"], scheduled: ["awaiting_live_confirmation", "partially_live", "delivery_failed"],
+  processing: ["queued_for_distribution", "submitting_to_distributor", "awaiting_live_confirmation", "partially_live", "delivery_failed"], awaiting_live_confirmation: ["partially_live", "live", "delivery_failed"],
+  delivered: ["partially_live", "live", "delivery_failed"], sent: ["queued_for_distribution", "submitting_to_distributor", "scheduled", "awaiting_live_confirmation", "partially_live", "delivery_failed"], failed: ["under_review", "queued_for_distribution"], delivery_failed: ["queued_for_distribution", "archived"], live: ["takedown_requested", "archived"], partially_live: ["live", "delivery_failed", "takedown_requested"], takedown_requested: ["takedown_processing"], takedown_processing: ["taken_down", "delivery_failed"], taken_down: ["archived"]
 };
 
 export function transitionReleaseStatus(input: { currentStatus: ReleaseStatus; nextStatus: ReleaseStatus; manualOverride?: boolean; reason?: string }) {
   if (input.currentStatus === input.nextStatus) return input.nextStatus;
-  if (input.manualOverride) {
-    if (!input.reason?.trim()) throw new Error("Manual release status override requires a reason.");
+  if (input.manualOverride || ["queued_for_distribution", "submitting_to_distributor", "sent_to_distributor", "sent"].includes(input.nextStatus)) {
+    if (input.manualOverride && !input.reason?.trim() && !["queued_for_distribution", "submitting_to_distributor", "sent_to_distributor", "sent", "approved"].includes(input.nextStatus)) {
+      throw new Error("Manual release status override requires a reason.");
+    }
     return input.nextStatus;
   }
+  if (["changes_requested", "rejected", "failed", "delivery_failed", "takedown_requested", "takedown_processing", "taken_down", "archived"].includes(input.nextStatus) && !input.reason?.trim()) throw new Error(`${input.nextStatus} requires a reason.`);
   if (!allowedTransitions[input.currentStatus]?.includes(input.nextStatus)) throw new Error(`Release cannot move from ${input.currentStatus} to ${input.nextStatus}.`);
   return input.nextStatus;
 }
 
 export function statusWhenScheduledDateArrives(autoMarkLive: boolean): ReleaseStatus {
-  return autoMarkLive ? "live" : "awaiting_live_confirmation";
+  void autoMarkLive;
+  return "awaiting_live_confirmation";
 }
 
 export function isDireNoteAccepted(release: Release) {
@@ -53,3 +57,4 @@ export function automaticStatusCopy(release: Release) {
   if (release.status === "rejected") return "This release was rejected. Check the reason and correction notes.";
   return null;
 }
+// vercel trigger 9

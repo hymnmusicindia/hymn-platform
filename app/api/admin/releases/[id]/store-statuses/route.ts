@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/access";
+import { requireAdminPermission } from "@/lib/access";
 import { getAdminStoreStatusData, getDetailedReleaseById, STORE_DENIAL_REASONS, STORE_STATUSES, updateStoreStatuses } from "@/lib/distribution-db";
 
 export const runtime = "nodejs";
@@ -20,7 +20,7 @@ async function resolveRelease(id: string) {
 }
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("releases.read");
   if ("error" in admin) return admin.error;
   const resolved = await resolveRelease((await params).id);
   if ("error" in resolved) return NextResponse.json({ error: resolved.error }, { status: resolved.status });
@@ -28,7 +28,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("distribution.confirm_status");
   if ("error" in admin) return admin.error;
   const resolved = await resolveRelease((await params).id);
   if ("error" in resolved) return NextResponse.json({ error: resolved.error }, { status: resolved.status });
@@ -52,3 +52,4 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const result = await updateStoreStatuses({ releaseId: resolved.releaseId, adminId: actorId, adminLabel: actorLabel, stores });
   return NextResponse.json(result);
 }
+// vercel trigger 9

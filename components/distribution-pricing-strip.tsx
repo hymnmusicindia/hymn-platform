@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, Check, ChevronDown, Crown, RefreshCcw, Route, Zap } from "lucide-react";
+import { ArrowRight, BadgeCheck, Check, Minus, RefreshCcw, Zap } from "lucide-react";
 import { distributionPlanCards } from "@/lib/distribution-plans";
 import type { DistributionPlanOption } from "@/lib/distribution-plans";
 
@@ -9,9 +9,9 @@ const subscriptionPlans = distributionPlanCards.filter((plan) =>
 );
 
 const planVisuals = {
-  half_yearly: { icon: Route, eyebrow: "Flexible start" },
-  yearly: { icon: Zap, eyebrow: "Most popular" },
-  yearly_plus: { icon: Crown, eyebrow: "For professionals" }
+  half_yearly: { eyebrow: "Flexible start" },
+  yearly: { eyebrow: "Most popular" },
+  yearly_plus: { eyebrow: "For professionals" }
 } as const;
 
 const planPerks = {
@@ -55,9 +55,10 @@ const planPerks = {
 
 interface DistributionPricingStripProps {
   activePlan?: DistributionPlanOption | null;
+  recommendedPlan?: DistributionPlanOption | null;
 }
 
-export function DistributionPricingStrip({ activePlan }: DistributionPricingStripProps = {}) {
+export function DistributionPricingStrip({ activePlan, recommendedPlan }: DistributionPricingStripProps = {}) {
   const planDetails =
     activePlan && activePlan !== "one_time"
       ? distributionPlanCards.find((p) => p.key === activePlan)
@@ -174,102 +175,47 @@ export function DistributionPricingStrip({ activePlan }: DistributionPricingStri
           </div>
         </div>
 
-        <div className="mt-9 grid gap-4 sm:grid-cols-1 lg:grid-cols-3 lg:items-stretch">
+        <div className="mt-5 flex items-center justify-between text-xs sm:hidden" style={{ color: "var(--text-muted)" }}><span>3 plans available</span><span className="font-semibold" style={{ color: "var(--accent)" }}>Swipe to compare →</span></div>
+        <div className="distribution-plan-grid mt-3 grid grid-cols-1 items-stretch gap-3 sm:mt-7 sm:grid-cols-3 lg:mt-9 lg:gap-4">
           {subscriptionPlans.map((plan, index) => {
             const visual = planVisuals[plan.key as keyof typeof planVisuals];
-            const PlanIcon = visual.icon;
-            const includedPerks = planPerks[plan.key as keyof typeof planPerks].filter((feature) => feature.included);
+            const perks = planPerks[plan.key as keyof typeof planPerks];
 
             return (
             <article
               key={plan.key}
-              className="fade-up group relative flex overflow-hidden rounded-[1.5rem] border p-5 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 sm:p-6"
+              className="distribution-plan-card fade-up group relative flex min-w-0 overflow-hidden rounded-xl border p-2.5 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 sm:rounded-[1.25rem] sm:p-4 lg:rounded-[1.5rem] lg:p-5"
               style={{
                 animationDelay: `${0.08 * index}s`,
-                borderColor: plan.featured ? "color-mix(in srgb, var(--accent) 52%, var(--border))" : "var(--border)",
-                background: plan.featured
+                borderColor: plan.key === recommendedPlan || plan.featured ? "color-mix(in srgb, var(--accent) 52%, var(--border))" : "var(--border)",
+                background: plan.key === recommendedPlan || plan.featured
                   ? "linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 22%, var(--card)) 0%, var(--card) 38%)"
                   : "linear-gradient(180deg, color-mix(in srgb, var(--card) 98%, transparent) 0%, color-mix(in srgb, var(--bg-soft) 65%, var(--card)) 100%)",
-                boxShadow: plan.featured
+                boxShadow: plan.key === recommendedPlan || plan.featured
                   ? "0 18px 46px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.12)"
                   : "0 12px 34px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.08)"
               }}
             >
-              {plan.featured ? (
-                <div
-                  className="absolute inset-x-6 top-0 h-px"
-                  style={{ background: "linear-gradient(90deg, transparent, var(--accent), transparent)" }}
-                />
-              ) : null}
-
               <div className="relative z-10 flex w-full flex-col">
-                <div className="flex items-center justify-between gap-3">
-                  <div
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl border"
-                    style={{
-                      borderColor: "color-mix(in srgb, var(--accent) 25%, var(--border))",
-                      color: "var(--accent)",
-                      background: "color-mix(in srgb, var(--accent-soft) 28%, var(--card))"
-                    }}
-                  >
-                    <PlanIcon className="h-4 w-4" />
-                  </div>
-                  <div className="flex flex-col items-end">
-                    <span className="rounded-full border px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.17em]" style={{ color: plan.featured ? "var(--accent)" : "var(--text-soft)", borderColor: plan.featured ? "color-mix(in srgb, var(--accent) 28%, var(--border))" : "var(--border)", background: "color-mix(in srgb, var(--card) 84%, transparent)" }}>
-                      {visual.eyebrow}
-                    </span>
-                  </div>
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="break-words text-lg font-semibold tracking-[-0.02em] lg:text-xl" style={{ color: "var(--text)" }}>{plan.title}</h3>
+                  <span className="distribution-plan-badge shrink-0 rounded-md px-2 py-1 text-[0.58rem] font-bold uppercase tracking-[0.08em]" style={{ color: plan.key === recommendedPlan || plan.featured ? "var(--accent-foreground)" : "var(--text)", background: plan.key === recommendedPlan || plan.featured ? "var(--accent)" : "var(--accent-soft)" }}>{plan.key === recommendedPlan ? "Your match" : visual.eyebrow}</span>
+                </div>
+                <p className="distribution-plan-description mt-2 text-xs leading-5 lg:text-sm" style={{ color: "var(--text-muted)" }}>{plan.description}</p>
+
+                <div className="mt-4 flex items-end gap-1.5">
+                  <span className="distribution-plan-currency pb-1 text-xs font-semibold" style={{ color: "var(--text-soft)" }}>Rs</span>
+                  <span className="distribution-plan-price text-3xl font-semibold tracking-[-0.05em]" style={{ color: "var(--text)" }}>{plan.price.toLocaleString("en-IN")}</span>
+                  <span className="distribution-plan-cadence pb-1 text-xs" style={{ color: "var(--text-soft)" }}>/ {plan.cadence}</span>
                 </div>
 
-                <h3 className="mt-6 text-2xl font-semibold tracking-[-0.03em] sm:text-[1.75rem]" style={{ color: "var(--text)" }}>
-                  {plan.title}
-                </h3>
-                <p className="mt-2 min-h-[3rem] text-sm leading-6" style={{ color: "var(--text-muted)" }}>
-                  {plan.description}
-                </p>
+                <Link href="/distribution/start" className="distribution-plan-action pressable mt-4 inline-flex w-full items-center justify-center rounded-lg border px-3 py-2.5 text-center text-xs font-semibold transition hover:bg-[var(--accent-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>Choose plan</Link>
 
-                <div className="mt-6 border-b pb-6" style={{ borderColor: "var(--border)" }}>
-                  <div className="flex items-baseline gap-2">
-                  <span className="text-sm font-semibold uppercase tracking-[0.08em]" style={{ color: "var(--text-soft)" }}>Rs</span>
-                  <span className="text-4xl font-semibold tracking-[-0.05em]" style={{ color: "var(--text)" }}>
-                    {plan.price.toLocaleString("en-IN")}
-                  </span>
+                <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--border)" }}>
+                  <p className="text-xs font-semibold" style={{ color: "var(--text)" }}>Plan includes:</p>
+                  <div className="mt-3 grid gap-2.5">
+                    {perks.map((feature) => <div key={feature.label} className="distribution-plan-perk flex items-start gap-2 text-xs leading-5" style={{ color: feature.included ? "var(--text-muted)" : "var(--text-soft)", opacity: feature.included ? 1 : 0.58 }}>{feature.included ? <Check className="mt-1 h-3 w-3 shrink-0" style={{ color: "var(--success)" }} /> : <Minus className="mt-1 h-3 w-3 shrink-0" />}<span>{feature.label}</span></div>)}
                   </div>
-                  <span className="mt-1 block text-xs" style={{ color: "var(--text-soft)" }}>per {plan.cadence}</span>
-                </div>
-
-                <div className="mt-5 space-y-3.5">
-                  {includedPerks.slice(0, 3).map((feature) => (
-                    <div key={feature.label} className="flex items-center gap-3 text-sm" style={{ color: "var(--text-muted)" }}>
-                      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full" style={{ background: "color-mix(in srgb, var(--accent-soft) 32%, var(--card))", color: "var(--accent)" }}>
-                        <Check className="h-3 w-3 stroke-[3]" />
-                      </span>
-                      <span>{feature.label}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <details className="group/details mt-5 border-t pt-4" style={{ borderColor: "var(--border)" }}>
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg text-xs font-semibold outline-none transition hover:opacity-75 focus-visible:ring-2 focus-visible:ring-[var(--accent)] [&::-webkit-details-marker]:hidden" style={{ color: "var(--text-muted)" }}>
-                    <span>See full plan details</span>
-                    <ChevronDown className="h-3.5 w-3.5 transition group-open/details:rotate-180" />
-                  </summary>
-                  <div className="mt-4 space-y-2.5 border-l pl-3" style={{ borderColor: "color-mix(in srgb, var(--accent) 30%, var(--border))" }}>
-                    {includedPerks.slice(3).map((feature) => (
-                      <p key={feature.label} className="text-xs leading-5" style={{ color: "var(--text-muted)" }}>{feature.label}</p>
-                    ))}
-                  </div>
-                </details>
-
-                <div className="mt-auto pt-7">
-                  <Link
-                    href="/distribution/start"
-                    className="pressable inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition duration-200 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2"
-                    style={{ borderColor: plan.featured ? "var(--accent)" : "var(--border)", background: plan.featured ? "var(--accent)" : "color-mix(in srgb, var(--card) 88%, var(--bg-soft))", color: plan.featured ? "var(--accent-foreground)" : "var(--text)" }}
-                  >
-                    Choose {plan.title}
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
                 </div>
               </div>
             </article>
@@ -278,7 +224,7 @@ export function DistributionPricingStrip({ activePlan }: DistributionPricingStri
         </div>
 
         <div
-          className="mt-8 overflow-hidden rounded-[1.5rem] border p-6 sm:p-8 lg:p-10"
+          className="distribution-quick-option mt-8 overflow-hidden rounded-[1.5rem] border p-6 sm:p-8 lg:p-10"
           style={{
             borderColor: "color-mix(in srgb, var(--accent) 28%, var(--border))",
             background:
@@ -305,7 +251,7 @@ export function DistributionPricingStrip({ activePlan }: DistributionPricingStri
             </div>
             <Link 
               href="/distribution/start" 
-              className="pressable inline-flex items-center gap-2 rounded-[1rem] border-2 px-6 py-3 font-semibold transition duration-200 hover:translate-y-[-2px] hover:shadow-lg w-fit"
+              className="distribution-quick-action pressable inline-flex w-fit items-center gap-2 rounded-[1rem] border-2 px-6 py-3 font-semibold transition duration-200 hover:translate-y-[-2px] hover:shadow-lg"
               style={{
                 borderColor: "var(--accent)",
                 background: "var(--accent)",
@@ -333,3 +279,5 @@ export function DistributionPricingStrip({ activePlan }: DistributionPricingStri
 // vercel trigger
 
 // vercel trigger 3
+
+// vercel trigger 12

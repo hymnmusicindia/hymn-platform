@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { AdminSessionPayload, SessionPayload } from "@/lib/types";
 import { getAdminSessionSecret, getUserSessionSecret } from "@/lib/env";
+import { logAuditEvent } from "@/lib/audit-log";
 
 const USER_SESSION_COOKIE = "hymn_session";
 const ADMIN_SESSION_COOKIE = "hymn_admin_session";
@@ -20,7 +21,7 @@ async function getCookieStore() {
   return cookies();
 }
 
-export async function createSession(payload: SessionPayload) {
+export async function createSession(payload: SessionPayload, context: { ipAddress?: string; userAgent?: string; requestId?: string } = {}) {
   const sessionId = randomUUID();
   const token = jwt.sign({ ...payload, sid: sessionId }, getUserSessionSecret(), { expiresIn: "7d" });
   const store = await getCookieStore();
@@ -37,10 +38,13 @@ export async function createSession(payload: SessionPayload) {
       data: {
         userId: payload.sub,
         tokenHash: hashToken(sessionId),
-        expiresAt: new Date(Date.now() + 60 * 60 * 24 * 7 * 1000)
+        expiresAt: new Date(Date.now() + 60 * 60 * 24 * 7 * 1000),
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent
       }
     });
   }
+  await logAuditEvent({ actorType: "user", actorId: payload.sub, actorRole: payload.role, entityType: "session", entityId: sessionId, action: "session.created", requestId: context.requestId, ipAddress: context.ipAddress, userAgent: context.userAgent, sessionId, riskLevel: "low" });
 }
 
 export async function getSession() {
@@ -72,6 +76,7 @@ export async function clearSession() {
           where: { tokenHash: hashToken(decoded.sid), revokedAt: null },
           data: { revokedAt: new Date() }
         });
+        await logAuditEvent({ actorType: "user", actorId: typeof decoded.sub === "number" ? decoded.sub : null, actorRole: typeof decoded.role === "string" ? decoded.role : "unknown", entityType: "session", entityId: decoded.sid, action: "session.revoked", sessionId: decoded.sid, riskLevel: "low" });
       }
     } catch {
       // The browser cookie is still cleared even when the token is invalid.
@@ -81,7 +86,7 @@ export async function clearSession() {
 }
 
 export async function createAdminSession() {
-  const token = jwt.sign({ username: "admin", role: "admin" } satisfies AdminSessionPayload, getAdminSessionSecret(), { expiresIn: "1d" });
+  const token = jwt.sign({ username: "admin", role: "admin", sid: randomUUID() } satisfies AdminSessionPayload, getAdminSessionSecret(), { expiresIn: "1d" });
   const store = await getCookieStore();
   store.set(ADMIN_SESSION_COOKIE, token, {
     httpOnly: true,
@@ -111,3 +116,4 @@ export async function clearAdminSession() {
   store.delete(ADMIN_SESSION_COOKIE);
 }
 // vercel trigger 5
+// vercel trigger 9

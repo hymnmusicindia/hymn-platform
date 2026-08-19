@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { saveUploadedFile } from "@/lib/storage";
 import { getDetailedReleaseByUserId, saveDraftDistributionRelease } from "@/lib/distribution-db";
 
 export async function POST(request: Request) {
@@ -13,17 +12,22 @@ export async function POST(request: Request) {
     const metadata = payload.metadata ?? {};
     const draftReleaseId = payload.draftReleaseId ? Number(payload.draftReleaseId) : undefined;
     const existingRelease = draftReleaseId ? await getDetailedReleaseByUserId(session.sub, draftReleaseId) : null;
+    const rejectPublicDeliverable = (value: unknown) => {
+      const url = String(value || "");
+      if (process.env.NODE_ENV === "production" && /^(https?:)?\/\//i.test(url)) throw new Error("Public upload URLs are not accepted for unreleased release assets.");
+      return url;
+    };
 
-    const artworkUrl = metadata.uploadedArtworkUrl ?? metadata.existingArtworkUrl ?? existingRelease?.artworkUrl ?? "";
+    const artworkUrl = rejectPublicDeliverable(metadata.uploadedArtworkUrl ?? metadata.existingArtworkUrl ?? existingRelease?.artworkUrl ?? "");
 
     const tracks = [];
     for (const track of metadata.tracks ?? []) {
       const existingTrack = existingRelease?.tracks?.find((item: any) => item.trackNumber === track.trackNumber);
-      const audioUrl = track.uploadedAudioUrl ?? track.existingAudioUrl ?? existingTrack?.audioUrl ?? "";
+      const audioUrl = rejectPublicDeliverable(track.uploadedAudioUrl ?? track.existingAudioUrl ?? existingTrack?.audioUrl ?? "");
 
       let coverLicenseUrl: string | undefined;
       if (track.isCover) {
-        coverLicenseUrl = track.uploadedCoverLicenseUrl ?? (track.existingCoverLicenseConfirmed || track.coverLicenseConfirmed ? "previously_uploaded" : undefined);
+        coverLicenseUrl = track.uploadedCoverLicenseUrl ? rejectPublicDeliverable(track.uploadedCoverLicenseUrl) : (track.existingCoverLicenseConfirmed || track.coverLicenseConfirmed ? "previously_uploaded" : undefined);
       }
 
       tracks.push({
@@ -102,3 +106,4 @@ export async function POST(request: Request) {
   }
 }
 // vercel trigger 4
+// vercel trigger 9

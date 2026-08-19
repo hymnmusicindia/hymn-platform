@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/access";
+import { requireAdminPermission } from "@/lib/access";
 import {
   createDistributionQueueEntry,
   getDetailedReleaseById,
@@ -34,7 +34,7 @@ async function syncQueueStage(releaseId: number, nextStage: DistributionQueueSta
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("releases.read");
   if ("error" in admin) return admin.error;
 
   const { id } = await params;
@@ -57,7 +57,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("distribution.submit");
   if ("error" in admin) return admin.error;
 
   const { id } = await params;
@@ -82,3 +82,4 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 }
 
 // vercel trigger
+// vercel trigger 9

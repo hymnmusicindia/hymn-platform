@@ -6,9 +6,9 @@ import type { LicenseType, User } from "@/lib/types";
 import type { z } from "zod";
 import type { checkoutQuoteSchema } from "@/lib/validation";
 
-export const REFERRAL_REWARD_AMOUNT = 100;
-export const REFERRAL_FRIEND_DISCOUNT = 50;
-export const REFERRAL_CAMPAIGN_ENDS_AT = "2026-05-31T23:59:59.000Z";
+export const REFERRAL_REWARD_AMOUNT = 5;
+export const REFERRAL_FRIEND_DISCOUNT = 3;
+export const REFERRAL_CAMPAIGN_ENDS_AT = "";
 
 export type CheckoutInput = z.infer<typeof checkoutQuoteSchema>;
 
@@ -122,11 +122,10 @@ export async function buildCheckoutQuote(userId: number, input: CheckoutInput): 
   const afterCoupon = roundMoney(originalPrice - couponDiscount);
   const referralCreditBalance = roundMoney(Number(user.referralCredits ?? 0));
   const referralCreditsApplied = input.useReferralCredits ? Math.min(referralCreditBalance, afterCoupon) : 0;
-  const referralBenefitApplied = user.referredBy && !user.firstPaymentRewarded ? Math.min(REFERRAL_FRIEND_DISCOUNT, Math.max(0, afterCoupon - referralCreditsApplied)) : 0;
+  const referralBenefitApplied = 0;
   const finalAmount = roundMoney(afterCoupon - referralCreditsApplied - referralBenefitApplied);
 
-  if (referralCreditsApplied > 0) messages.push(`Referral credits worth Rs ${referralCreditsApplied.toLocaleString("en-IN")} applied.`);
-  if (referralBenefitApplied > 0) messages.push(`Referral signup benefit worth Rs ${referralBenefitApplied.toLocaleString("en-IN")} applied.`);
+  if (referralCreditsApplied > 0) messages.push(`HYMN checkout credits worth Rs ${referralCreditsApplied.toLocaleString("en-IN")} applied.`);
 
   return {
     productId: lineItems.length === 1 ? lineItems[0].productId : "bundle",
@@ -153,5 +152,5 @@ export function quoteToOrderItems(quote: CheckoutQuote) {
 }
 
 export function buildReferralLink(user: User, origin: string) {
-  return `${origin.replace(/\/$/, "")}/ref/${encodeURIComponent(user.referralCode)}`;
+  return `${origin.replace(/\/$/, "")}/join?ref=${encodeURIComponent(user.referralCode)}`;
 }

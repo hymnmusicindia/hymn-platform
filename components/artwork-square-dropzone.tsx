@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, ImagePlus, LoaderCircle } from "lucide-react";
+import { UploadCloud } from "lucide-react";
 import clsx from "clsx";
 import { useEffect, useRef, useState } from "react";
 
@@ -18,21 +18,18 @@ export function ArtworkSquareDropzone({ previewUrl, fileName, fileType, dimensio
   const [dragging, setDragging] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [success, setSuccess] = useState(false);
   const suppressNextClickRef = useRef(false);
 
   useEffect(() => {
     if (!error) return;
     setProcessing(false);
     setProgress(0);
-    setSuccess(false);
   }, [error]);
 
   async function stageFile(file: File | null) {
     if (!file) return;
 
     setProcessing(true);
-    setSuccess(false);
     setProgress(10);
 
     let active = true;
@@ -47,14 +44,11 @@ export function ArtworkSquareDropzone({ previewUrl, fileName, fileType, dimensio
       window.clearInterval(timer);
       setProgress(100);
       setProcessing(false);
-      setSuccess(true);
-      window.setTimeout(() => setSuccess(false), 1500);
     } catch (selectionError) {
       active = false;
       window.clearInterval(timer);
       setProcessing(false);
       setProgress(0);
-      setSuccess(false);
       throw selectionError;
     }
   }
@@ -64,7 +58,7 @@ export function ArtworkSquareDropzone({ previewUrl, fileName, fileType, dimensio
       <input
         ref={inputRef}
         type="file"
-        accept="image/png,image/jpeg"
+        accept="image/jpeg,.jpg,.jpeg"
         className="hidden"
         onChange={(event) => {
           void stageFile(event.target.files?.[0] ?? null);
@@ -74,6 +68,7 @@ export function ArtworkSquareDropzone({ previewUrl, fileName, fileType, dimensio
 
       <button
         type="button"
+        aria-label={previewUrl ? "Replace cover artwork" : "Upload cover artwork"}
         onClick={(event) => {
           if (suppressNextClickRef.current) {
             event.preventDefault();
@@ -102,29 +97,20 @@ export function ArtworkSquareDropzone({ previewUrl, fileName, fileType, dimensio
           }, 350);
         }}
         className={clsx(
-          "pressable relative aspect-square w-full overflow-hidden rounded-[1.25rem] border border-dashed p-4 text-left",
+          "pressable group relative aspect-square w-full overflow-hidden rounded-xl border text-left transition duration-300",
           dragging ? "scale-[1.01]" : ""
         )}
         style={{
-          borderColor: error ? "var(--danger)" : dragging ? "var(--accent)" : "var(--border)",
-          background: previewUrl ? "var(--card)" : "var(--bg-soft)",
-          boxShadow: dragging ? "var(--shadow-soft)" : undefined
+          borderColor: error ? "var(--danger)" : dragging ? "var(--accent)" : "color-mix(in srgb, var(--accent) 30%, var(--border))",
+          borderStyle: previewUrl ? "solid" : "dashed",
+          background: previewUrl ? "var(--card)" : "linear-gradient(145deg, color-mix(in srgb, var(--accent) 5%, var(--card)), var(--card))",
+          boxShadow: dragging ? "0 16px 44px color-mix(in srgb, var(--accent) 12%, transparent)" : "none"
         }}
       >
-        {previewUrl ? <img src={previewUrl} alt="Artwork preview" className="absolute inset-0 h-full w-full object-cover" /> : null}
-        <div className="absolute inset-0" style={{ background: previewUrl ? "linear-gradient(180deg, transparent 42%, rgba(0,0,0,0.58) 100%)" : "transparent" }} />
-
-        <div className="relative flex h-full flex-col justify-between">
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-full border" style={{ borderColor: previewUrl ? "rgba(255,255,255,0.24)" : "var(--border)", background: previewUrl ? "rgba(0,0,0,0.28)" : "var(--card)" }}>
-            {processing ? <LoaderCircle className="h-5 w-5 animate-spin" /> : success ? <CheckCircle2 className="h-5 w-5" /> : <ImagePlus className="h-5 w-5" />}
-          </div>
-
-          <div>
-            <p className="text-base font-semibold" style={{ color: previewUrl ? "#ffffff" : "var(--text)" }}>Drop square cover artwork</p>
-            <p className="mt-1 text-sm" style={{ color: previewUrl ? "rgba(255,255,255,0.78)" : "var(--text-soft)" }}>or click to upload</p>
-            <p className="mt-3 text-xs uppercase tracking-[0.18em]" style={{ color: previewUrl ? "rgba(255,255,255,0.65)" : "var(--text-soft)" }}>JPG / PNG · square 3000 x 3000 recommended</p>
-            {fileName ? <p className="mt-3 text-sm" style={{ color: previewUrl ? "#ffffff" : "var(--text)" }}>{fileName}</p> : null}
-          </div>
+        {previewUrl ? <img src={previewUrl} alt="Artwork preview" decoding="async" className="absolute inset-0 h-full w-full object-cover" /> : null}
+        <div className="absolute inset-0 transition-colors duration-300 group-hover:bg-white/[.025]" />
+        <div className="relative grid h-full place-items-center">
+          <UploadCloud className="h-8 w-8 text-[var(--text-muted)] transition-[transform,color,filter] duration-300 group-hover:scale-105 group-hover:text-[var(--text)] group-hover:drop-shadow-[0_0_14px_rgba(255,255,255,.2)]" style={{ color: previewUrl ? "white" : undefined }} aria-hidden="true" />
         </div>
       </button>
 
@@ -151,3 +137,6 @@ export function ArtworkSquareDropzone({ previewUrl, fileName, fileType, dimensio
 
 // vercel trigger
 // vercel trigger 6
+// vercel trigger 7
+
+// vercel trigger 12

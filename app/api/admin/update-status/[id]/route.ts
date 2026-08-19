@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/access";
+import { requireAdminPermission } from "@/lib/access";
 import { adminStatusSchema } from "@/lib/validation";
 import { createDistributionQueueEntry, createReleaseAuditLog, listDistributionQueueEntries, transitionDistributionQueueEntry, updateDetailedReleaseStatus } from "@/lib/distribution-db";
 import type { DistributionQueueStage, ReleaseStatus } from "@/lib/types";
@@ -25,7 +25,7 @@ async function syncQueueStage(releaseId: number, nextStage: DistributionQueueSta
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const result = await requireAdmin();
+  const result = await requireAdminPermission("releases.review");
   if ("error" in result) return result.error;
 
   const { id } = await params;
@@ -36,14 +36,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (payload.status !== "approved" && payload.status !== "sent" && !payload.note?.trim() && !payload.reason?.trim()) {
       return NextResponse.json({ error: "A reason is required for a manual status override." }, { status: 400 });
     }
-    if (payload.status === "approved" || payload.status === "sent") {
+    if (payload.status === "approved") {
+      const release = await updateDetailedReleaseStatus(Number(id), "approved", payload.note || "HYMN review approved.");
+      if (!release) return NextResponse.json({ error: "Release not found." }, { status: 404 });
+      const queueEntry = await syncQueueStage(Number(id), "approved", actorId, payload.note || "HYMN review approved.");
+      await createReleaseAuditLog({ releaseId: Number(id), userId: actorId, action: "RELEASE_APPROVED_BY_HYMN", details: { newStatus: "approved", note: payload.note ?? null } });
+      return NextResponse.json({ release, queueEntry });
+    }
+    if (payload.status === "sent") {
       const origin = new URL(request.url).origin;
-      await syncQueueStage(Number(id), statusStageMap[payload.status]!, actorId, payload.note);
+      await syncQueueStage(Number(id), statusStageMap.sent!, actorId, payload.note);
       const submission = await submitRelease(Number(id), { actorId, siteUrl: origin });
       if (!submission.submitted) {
         const messages = submission.validation.issues.map((issue) => issue.message);
         return NextResponse.json(
-          { release: submission.release, error: messages[0] ?? "Distributor submission did not complete.", validation: submission.validation, retryable: submission.retryable },
+          { release: submission.release, error: submission.error ?? messages[0] ?? "Distributor submission did not complete.", validation: submission.validation, retryable: submission.retryable, retryAfterSeconds: submission.retryAfterSeconds },
           { status: submission.validation.ok ? 502 : 400 }
         );
       }
@@ -70,3 +77,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 // vercel trigger
+// vercel trigger 7
+// vercel trigger 9
+
+// vercel trigger 12

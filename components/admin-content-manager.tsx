@@ -98,7 +98,7 @@ export function AdminContentManager({
           </div>
         </div>
         <div className="mt-5 overflow-hidden rounded-[1.5rem] border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-          <img src={imageSrc(siteSettings.homeHeroImageUrl)} alt="Homepage hero preview" className="h-64 w-full object-cover" />
+          <img src={imageSrc(siteSettings.homeHeroImageUrl)} alt="Homepage hero preview" loading="lazy" decoding="async" className="h-64 w-full object-cover" />
         </div>
         <form onSubmit={submitHeroImage} className="mt-5 grid gap-4">
           <input name="homeHeroImage" type="file" accept="image/*" className="field" />
@@ -144,7 +144,7 @@ export function AdminContentManager({
             <form key={profile.id} onSubmit={(event) => updateProducer(profile.id, event)} className="rounded-[1.4rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
               <div className="grid gap-4 lg:grid-cols-[160px,1fr]">
                 <div className="overflow-hidden rounded-[1.2rem] border" style={{ borderColor: "var(--border)" }}>
-                  <img src={imageSrc(profile.imageUrl)} alt={profile.name} className="h-40 w-full object-cover" />
+                  <img src={imageSrc(profile.imageUrl)} alt={profile.name} loading="lazy" decoding="async" className="h-40 w-full object-cover" />
                 </div>
                 <div className="grid gap-3">
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -176,3 +176,5 @@ export function AdminContentManager({
     </div>
   );
 }
+
+// vercel trigger 12

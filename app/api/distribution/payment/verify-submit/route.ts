@@ -1,21 +1,29 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { saveUploadedFile } from "@/lib/storage";
-import { submitPaidDistributionRelease, markDistributionOrderPaid } from "@/lib/distribution-db";
+import { submitPaidDistributionRelease } from "@/lib/distribution-db";
 import { createNotification, getSubscriptionByUserId, touchArtistProfiles } from "@/lib/db";
 import { verifyRazorpaySignature } from "@/lib/razorpay";
 import { distributionSubmitSchema } from "@/lib/validation";
 import { isProductionPaymentBypassEnabled } from "@/lib/env";
 import { emailAppUrl, sendReleaseEmail } from "@/lib/email/email-events";
+import { confirmDistributionPayment } from "@/lib/payment-webhooks";
+import { consumeRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  const rate = await consumeRateLimit({ scope: "distribution-payment-verify", identity: String(session.sub), limit: 12, windowSeconds: 15 * 60 });
+  if (!rate.allowed) return NextResponse.json({ error: "Too many payment verification attempts." }, { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } });
 
   try {
     const formData = await request.formData();
     const payload = JSON.parse(String(formData.get("payload") || "{}"));
     const parsed = distributionSubmitSchema.parse(payload);
+    const requirePrivateAsset = (value: string | undefined, label: string) => {
+      if (!value) return value;
+      if (process.env.NODE_ENV === "production" && !value.startsWith("/api/assets/")) throw new Error(`${label} must use authenticated private storage.`);
+      return value;
+    };
 
     const paymentBypassEnabled = isProductionPaymentBypassEnabled();
 
@@ -30,21 +38,21 @@ export async function POST(request: Request) {
       if (!valid) return NextResponse.json({ error: "Invalid Razorpay signature." }, { status: 400 });
     }
 
-    const artworkUrl = parsed.metadata.uploadedArtworkUrl || parsed.metadata.existingArtworkUrl;
+    const artworkUrl = requirePrivateAsset(parsed.metadata.uploadedArtworkUrl || parsed.metadata.existingArtworkUrl, "Artwork");
     if (!artworkUrl) {
       return NextResponse.json({ error: "Artwork upload missing." }, { status: 400 });
     }
 
     const tracks = [];
     for (const track of parsed.metadata.tracks) {
-      const audioUrl = track.uploadedAudioUrl || track.existingAudioUrl;
+      const audioUrl = requirePrivateAsset(track.uploadedAudioUrl || track.existingAudioUrl, `Audio for ${track.trackTitle}`);
       if (!audioUrl) {
         return NextResponse.json({ error: `Audio upload missing for ${track.trackTitle}.` }, { status: 400 });
       }
 
       let coverLicenseUrl: string | undefined;
       if (track.isCover) {
-        coverLicenseUrl = track.uploadedCoverLicenseUrl || (track.existingCoverLicenseConfirmed ? "previously_uploaded" : undefined);
+        coverLicenseUrl = track.uploadedCoverLicenseUrl ? requirePrivateAsset(track.uploadedCoverLicenseUrl, `Cover licence for ${track.trackTitle}`) : (track.existingCoverLicenseConfirmed ? "previously_uploaded" : undefined);
         if (!coverLicenseUrl && track.coverLicenseConfirmed) {
           return NextResponse.json({ error: `Cover license missing for ${track.trackTitle}.` }, { status: 400 });
         }
@@ -73,7 +81,9 @@ export async function POST(request: Request) {
       });
     }
 
-    await markDistributionOrderPaid(parsed.razorpay_order_id, parsed.razorpay_payment_id);
+    if (parsed.razorpay_order_id !== "sub_active") {
+      await confirmDistributionPayment({ razorpayOrderId: parsed.razorpay_order_id, paymentId: parsed.razorpay_payment_id, userId: session.sub, source: "browser" });
+    }
     const artistProfileIds = [...new Set(parsed.metadata.tracks.flatMap((track) => [
       ...(track.artistProfileIds ?? []),
       ...(track.featuredArtistProfileIds ?? []),
@@ -172,3 +182,4 @@ export async function POST(request: Request) {
 // vercel trigger
 // vercel trigger 5
 // vercel trigger 6
+// vercel trigger 9

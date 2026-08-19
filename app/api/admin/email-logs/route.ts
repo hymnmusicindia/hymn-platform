@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/access";
+import { requireAdminPermission } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { getEmailConfig } from "@/lib/email/email-client";
 
 export async function GET(request: Request) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminPermission("system.manage");
   if ("error" in admin) return admin.error;
   const query = new URL(request.url).searchParams;
   const status = query.get("status")?.trim();
@@ -14,3 +14,4 @@ export async function GET(request: Request) {
   return NextResponse.json({ logs, configured: getEmailConfig().enabled });
 }
 // vercel trigger 6
+// vercel trigger 9

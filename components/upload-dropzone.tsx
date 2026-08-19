@@ -13,11 +13,14 @@ type UploadDropzoneProps = {
   fileFormat?: string;
   fileSize?: string;
   error?: string | null;
+  iconOnly?: boolean;
+  compact?: boolean;
+  splitLayout?: boolean;
   children?: ReactNode;
   onSelect: (file: File, controls: { signal: AbortSignal; reportProgress: (loaded: number, total: number) => void }) => Promise<void> | void;
 };
 
-export function UploadDropzone({ accept, title, description, helperLines = [], fileName, fileFormat, fileSize, error, children, onSelect }: UploadDropzoneProps) {
+export function UploadDropzone({ accept, title, description, helperLines = [], fileName, fileFormat, fileSize, error, iconOnly = false, compact = false, splitLayout = false, children, onSelect }: UploadDropzoneProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragging, setDragging] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -26,6 +29,7 @@ export function UploadDropzone({ accept, title, description, helperLines = [], f
   const [lastFile, setLastFile] = useState<File | null>(null);
   const [speed, setSpeed] = useState(0);
   const [eta, setEta] = useState(0);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const suppressNextClickRef = useRef(false);
 
@@ -41,6 +45,7 @@ export function UploadDropzone({ accept, title, description, helperLines = [], f
     if (!file) return;
 
     setProcessing(true);
+    setSelectionError(null);
     setLastFile(file);
     setSuccess(false);
     setProgress(8);
@@ -65,12 +70,14 @@ export function UploadDropzone({ accept, title, description, helperLines = [], f
       setProcessing(false);
       setSuccess(false);
       setProgress(0);
-      if (!(selectionError instanceof DOMException && selectionError.name === "AbortError")) throw selectionError;
+      if (!(selectionError instanceof DOMException && selectionError.name === "AbortError")) {
+        setSelectionError(selectionError instanceof Error ? selectionError.message : "This file could not be uploaded.");
+      }
     }
   }
 
   return (
-    <div className="grid gap-3">
+    <div className={clsx("grid gap-3", iconOnly && "audio-upload-control", compact && "is-compact")}>
       <div
         role="button"
         tabIndex={0}
@@ -108,6 +115,7 @@ export function UploadDropzone({ accept, title, description, helperLines = [], f
         }}
         className={clsx(
           "pressable hover-lift rounded-[1.25rem] border border-dashed p-4 text-left outline-none transition duration-200",
+          iconOnly ? "upload-dropzone-icon-only" : "",
           dragging ? "pulse-glow" : "",
           error ? "field-shake" : ""
         )}
@@ -133,6 +141,25 @@ export function UploadDropzone({ accept, title, description, helperLines = [], f
             event.currentTarget.value = "";
           }}
         />
+        {iconOnly ? (
+          <div className="flex min-h-28 flex-col items-center justify-center gap-2" aria-label={`${description}. Drag and drop or choose a file.`}>
+            <span className="inline-flex h-10 w-10 items-center justify-center text-[var(--text)]">
+              {processing ? <LoaderCircle className="h-6 w-6 animate-spin" /> : success ? <CheckCircle2 className="h-6 w-6 text-[var(--success)]" /> : <UploadCloud className="h-6 w-6" />}
+            </span>
+            <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Upload your track</span>
+          </div>
+        ) : splitLayout ? (
+          <div className="grid gap-5 md:grid-cols-[minmax(0,1fr),9rem] md:items-center">
+            <div className="pointer-events-none">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>{title}</p>
+              <h3 className="mt-3 text-2xl font-semibold tracking-[-0.025em] md:text-3xl" style={{ color: "var(--text)" }}>{description}</h3>
+            </div>
+            <div className="license-drop-target flex aspect-square min-h-32 flex-col items-center justify-center gap-2 rounded-xl border border-dashed" style={{ borderColor: dragging ? "var(--accent)" : "var(--border)", background: "var(--bg-soft)", color: success ? "var(--success)" : "var(--text)" }}>
+              {processing ? <LoaderCircle className="h-6 w-6 animate-spin" /> : success ? <CheckCircle2 className="h-6 w-6" /> : <UploadCloud className="h-6 w-6" />}
+              <span className="text-xs font-semibold">Drop PDF</span>
+            </div>
+          </div>
+        ) : <>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-xs uppercase tracking-[0.22em]" style={{ color: "var(--text-soft)" }}>
@@ -141,9 +168,6 @@ export function UploadDropzone({ accept, title, description, helperLines = [], f
             <h3 className="mt-2 text-base font-semibold" style={{ color: "var(--text)" }}>
               {description}
             </h3>
-            <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-              Drag and drop here or click to browse.
-            </p>
           </div>
           <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl border transition" style={{ borderColor: dragging ? "var(--accent)" : "var(--border)", background: "var(--card)", boxShadow: dragging ? "0 0 28px rgba(89,223,224,0.22)" : "none", color: success ? "var(--success)" : "var(--accent)" }}>
             {processing ? <LoaderCircle className="h-5 w-5 animate-spin" /> : success ? <CheckCircle2 className="h-5 w-5" /> : <UploadCloud className="h-5 w-5" />}
@@ -174,9 +198,10 @@ export function UploadDropzone({ accept, title, description, helperLines = [], f
         ) : null}
 
         {children ? <div className="mt-4">{children}</div> : null}
+        </>}
       </div>
 
-      {fileName ? (
+      {fileName && !iconOnly ? (
         <div className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-xs" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}>
           <span className="min-w-0">
             <span className="block truncate font-medium">{fileName}</span>
@@ -186,10 +211,12 @@ export function UploadDropzone({ accept, title, description, helperLines = [], f
         </div>
       ) : null}
 
-      {error ? <p className="inline-error">{error}</p> : null}
+      {error || selectionError ? <p className="text-xs font-medium leading-5 text-red-500">{error || selectionError}</p> : null}
     </div>
   );
 }
 
 
 // vercel trigger
+
+// vercel trigger 12

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Release, ReleaseStatus } from "@/lib/types";
 
 const statuses: ReleaseStatus[] = ["submitted", "under_review", "changes_requested", "approved", "queued_for_distribution", "sent_to_distributor", "processing", "delivered", "rejected", "live"];
@@ -20,7 +20,17 @@ export function AdminReleaseBoard({ initialReleases }: { initialReleases: Releas
   const [readinessByRelease, setReadinessByRelease] = useState<Record<number, Readiness>>({});
   const [expandedPayloadId, setExpandedPayloadId] = useState<number | null>(null);
   const [errorByRelease, setErrorByRelease] = useState<Record<number, string>>({});
+  const [cooldowns, setCooldowns] = useState<Record<number, number>>({});
+  const [cooldownClock, setCooldownClock] = useState(() => Date.now());
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCooldownClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const cooldownSeconds = (id: number) => Math.max(0, Math.ceil(((cooldowns[id] ?? 0) - cooldownClock) / 1000));
+  const cooldownLabel = (id: number) => `${Math.floor(cooldownSeconds(id) / 60)}:${String(cooldownSeconds(id) % 60).padStart(2, "0")}`;
 
   function updateStatus(id: number, status: ReleaseStatus) {
     startTransition(async () => {
@@ -49,6 +59,7 @@ export function AdminReleaseBoard({ initialReleases }: { initialReleases: Releas
   }
 
   function sendToDireNote(id: number, action: "submit" | "retry" = "submit") {
+    setCooldowns((current) => ({ ...current, [id]: Date.now() + 5 * 60 * 1000 }));
     startTransition(async () => {
       setErrorByRelease((items) => ({ ...items, [id]: "" }));
       const response = await fetch(`/api/admin/releases/${id}/direnote`, {
@@ -113,10 +124,10 @@ export function AdminReleaseBoard({ initialReleases }: { initialReleases: Releas
                 <button type="button" disabled={isPending} onClick={() => validateForDireNote(release.id)} className="rounded-full border border-border px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70">
                   Validate for DireNote
                 </button>
-                <button type="button" disabled={isPending || readinessByRelease[release.id]?.ready === false} onClick={() => sendToDireNote(release.id)} className="rounded-full bg-cyan px-4 py-2 text-xs uppercase tracking-[0.2em] text-ink disabled:cursor-not-allowed disabled:opacity-50">
-                  Approve & Send to DireNote
+                <button type="button" disabled={isPending || cooldownSeconds(release.id) > 0 || readinessByRelease[release.id]?.ready === false} onClick={() => sendToDireNote(release.id)} className="rounded-full bg-cyan px-4 py-2 text-xs uppercase tracking-[0.2em] text-ink disabled:cursor-not-allowed disabled:opacity-50">
+                  {cooldownSeconds(release.id) > 0 ? `Try again in ${cooldownLabel(release.id)}` : "Approve & Send to DireNote"}
                 </button>
-                <button type="button" disabled={isPending} onClick={() => sendToDireNote(release.id, "retry")} className="rounded-full border border-border px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70">
+                <button type="button" disabled={isPending || cooldownSeconds(release.id) > 0} onClick={() => sendToDireNote(release.id, "retry")} className="rounded-full border border-border px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70">
                   Retry DireNote Submission
                 </button>
                 <button type="button" disabled={isPending} onClick={() => markChangesRequested(release.id)} className="rounded-full border border-amber-300/50 px-4 py-2 text-xs uppercase tracking-[0.2em] text-amber-200">
@@ -162,3 +173,5 @@ export function AdminReleaseBoard({ initialReleases }: { initialReleases: Releas
 
 // vercel trigger
 // vercel trigger 4
+
+// vercel trigger 12

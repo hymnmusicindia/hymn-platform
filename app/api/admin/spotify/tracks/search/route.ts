@@ -1,12 +1,12 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/access";
+import { requireAdminPermission } from "@/lib/access";
 import { searchSpotifyTracks } from "@/lib/spotify";
 import { spotifySearchSchema } from "@/lib/validation";
 
 export async function GET(request: Request) {
-  const result = await requireAdmin();
+  const result = await requireAdminPermission("system.manage");
   if ("error" in result) return result.error;
 
   try {
@@ -19,3 +19,4 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
+// vercel trigger 9

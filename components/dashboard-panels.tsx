@@ -5,7 +5,7 @@ export function DashboardPanels({ user, releases, orders }: { user: User; releas
     <div className="grid gap-8">
       <section className="grid gap-4 md:grid-cols-3">
         {[
-          { label: "Referral credits", value: `Rs ${user.referralCredits}` },
+          { label: "Checkout wallet", value: `Rs ${user.referralCredits}` },
           { label: "Releases in system", value: String(releases.length) },
           { label: "Verified purchases", value: String(orders.filter((order) => order.paymentStatus === "paid").length) }
         ].map((card) => (
