@@ -40,7 +40,6 @@ export function ReleaseSubmittedPreview() {
 
       <SuccessState
         release={{ ...sampleRelease, status: isResubmission ? "resubmitted" : "under_review" }}
-        isResubmission={isResubmission}
         onReset={() => setIsResubmission((current) => !current)}
         resetLabel={isResubmission ? "Preview new submission" : "Preview resubmission"}
       />

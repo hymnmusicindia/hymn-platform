@@ -37,6 +37,29 @@ export async function requireAdmin() {
   return session;
 }
 
+/**
+ * Compatibility layer for the newer admin surfaces. The current application
+ * has one administrator role (rather than separately persisted permission
+ * grants), so a verified administrator is permitted to use each named admin
+ * capability. Keeping the permission argument here makes the callers ready
+ * for granular RBAC when those grants are introduced.
+ */
+export async function requireAdminIdentity() {
+  return requireAdmin();
+}
+
+export async function requireAdminPermission(_permission: string) {
+  return requireAdmin();
+}
+
+/**
+ * Sensitive workflows use the same authenticated administrator check until a
+ * dedicated re-authentication timestamp is stored with admin sessions.
+ */
+export async function requireRecentAdminPermission(_permission: string) {
+  return requireAdmin();
+}
+
 export async function getCurrentUserForPage() {
   const session = await getSession();
   if (!session) return null;

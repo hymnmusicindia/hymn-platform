@@ -16,6 +16,7 @@ interface GoogleAuthButtonProps {
   expectedRole?: GoogleAuthButtonRole;
   referralCode?: string;
   loginContext?: "admin";
+  appearance?: "quiet" | "default";
   onAuthenticated?: (data: { redirectPath?: string }) => Promise<void> | void;
 }
 

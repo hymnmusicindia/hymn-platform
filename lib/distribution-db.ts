@@ -1635,6 +1635,8 @@ export async function getDetailedReleaseById(releaseId: number): Promise<Release
 
 export async function logDistributionEvent(input: {
   releaseId: number;
+  action?: string;
+  createdByAdminId?: number | null;
   requestPayload?: unknown;
   responsePayload?: unknown;
   warnings?: string[] | null;

@@ -3072,24 +3072,18 @@ export async function listArtistCardsByUser(userId: number) {
 
 export async function createBeatPurchase(userId: number, beatId: number, licenseType: "basic" | "premium" | "exclusive", paymentId?: string | null) {
   if (usesPostgresPrisma()) {
-    const purchase = await prisma.beatPurchase.upsert({
-      where: {
-        userId_beatId_licenseType: { userId, beatId, licenseType }
-      },
-      create: {
+    const existing = await prisma.beatPurchase.findFirst({ where: { userId, beatId, licenseType } });
+    const purchase = existing ? await prisma.beatPurchase.update({
+      where: { id: existing.id },
+      data: { hasAccess: true, updatedAt: new Date(), paymentId: paymentId ?? undefined }
+    }) : await prisma.beatPurchase.create({ data: {
         userId,
         beatId,
         licenseType,
         purchasedAt: new Date(),
         hasAccess: true
         ,paymentId: paymentId ?? null
-      },
-      update: {
-        hasAccess: true,
-        updatedAt: new Date()
-        ,paymentId: paymentId ?? undefined
-      }
-    });
+      }});
     
     return {
       id: purchase.id,

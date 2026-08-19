@@ -14,7 +14,7 @@ export async function reconcilePayments() {
   for (const order of paid) {
     if (order.razorpayPaymentId) paymentIds.set(order.razorpayPaymentId, [...(paymentIds.get(order.razorpayPaymentId) ?? []), order.id]);
     for (const item of order.items) {
-      const purchase = await prisma.beatPurchase.findUnique({ where: { userId_beatId_licenseType: { userId: order.userId, beatId: item.beatId, licenseType: item.licenseType } } });
+      const purchase = await prisma.beatPurchase.findFirst({ where: { userId: order.userId, beatId: item.beatId, licenseType: item.licenseType } });
       if (!purchase) {
         const created = await prisma.beatPurchase.create({ data: { userId: order.userId, beatId: item.beatId, licenseType: item.licenseType, paymentId: order.razorpayPaymentId ?? null, hasAccess: true } });
         const license = await generateBeatLicense(created.id, order.userId).catch(() => null);

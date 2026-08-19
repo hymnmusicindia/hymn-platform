@@ -1,4 +1,4 @@
-export type ReleaseStatus = "draft" | "submitted" | "in_queue" | "under_review" | "changes_requested" | "approved" | "queued_for_distribution" | "sent_to_distributor" | "scheduled" | "processing" | "awaiting_live_confirmation" | "partially_live" | "delivered" | "sent" | "live" | "rejected" | "failed";
+export type ReleaseStatus = "draft" | "submitted" | "resubmitted" | "in_queue" | "under_review" | "changes_requested" | "approved" | "queued_for_distribution" | "sent_to_distributor" | "scheduled" | "processing" | "awaiting_live_confirmation" | "partially_live" | "delivered" | "sent" | "live" | "rejected" | "failed" | "takedown_requested" | "takedown_processing" | "taken_down";
 
 export type LicenseType = "basic" | "premium" | "exclusive";
 
@@ -672,6 +672,7 @@ export interface SessionPayload {
 export interface AdminSessionPayload {
   username: string;
   role: "admin";
+  sid?: string;
 }
 
 

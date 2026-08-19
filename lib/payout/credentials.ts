@@ -64,3 +64,20 @@ export async function savePayoutCredential(userId: number, input: { method: "UPI
   await logAuditEvent({ actorType: "user", actorId: userId, entityType: "payout_credential", entityId: saved.id, action: existing ? "payout_credential.updated" : "payout_credential.created", oldValue: existing ? { method: existing.method, status: existing.status } : null, newValue: { method: saved.method, status: saved.status } });
   return getPayoutCredential(userId);
 }
+
+export async function reviewPayoutCredential(userId: number, input: { status: "under_review" | "changes_requested" | "verified" | "rejected" | "suspended"; note: string; actorId?: number | null }) {
+  const profile = await (prisma as any).payoutCredential.update({
+    where: { userId },
+    data: { status: input.status, verificationNote: input.note, verifiedByAdminId: input.actorId ?? null, verifiedAt: input.status === "verified" ? new Date() : null }
+  });
+  let releasedEarnings = 0;
+  if (input.status === "verified") {
+    const pending = await (prisma as any).splitEarningLineItem.findMany({ where: { recipientUserId: userId, status: "pending_payout_details" } });
+    for (const earning of pending) {
+      await (prisma as any).splitEarningLineItem.update({ where: { id: earning.id }, data: { status: "credited" } });
+      releasedEarnings += Number(earning.netShareAmount) || 0;
+    }
+  }
+  await logAuditEvent({ actorType: "admin", actorId: input.actorId ?? null, entityType: "payout_credential", entityId: profile.id, action: "payout_credential.reviewed", metadata: { status: input.status, note: input.note } });
+  return { profile, releasedEarnings };
+}

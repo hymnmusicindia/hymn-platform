@@ -51,7 +51,7 @@ export default async function ManualReleasesPage() {
       <ManualReleaseManager
         initialUsers={users}
         initialReleases={JSON.parse(JSON.stringify(releases))}
-        canManage={databaseConfigured && ("permissions" in admin ? admin.permissions.includes("releases.override") : true)}
+        canManage={databaseConfigured}
       />
     </main>
   );

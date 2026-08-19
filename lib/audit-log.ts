@@ -10,6 +10,10 @@ export type AuditEventInput = {
   oldValue?: unknown;
   newValue?: unknown;
   metadata?: Record<string, unknown>;
+  actorRole?: string;
+  sessionId?: string;
+  riskLevel?: "low" | "normal" | "high" | "critical" | string;
+  reason?: string | null;
 };
 
 const memoryAuditEvents: Array<AuditEventInput & { id: number; createdAt: string }> = [];
@@ -35,6 +39,10 @@ export async function logAuditEvent(input: AuditEventInput) {
         action: input.action,
         metadata: {
           actorType: input.actorType,
+          actorRole: input.actorRole ?? null,
+          sessionId: input.sessionId ?? null,
+          riskLevel: input.riskLevel ?? "normal",
+          reason: input.reason ?? null,
           oldValue: safe.oldValue ?? null,
           newValue: safe.newValue ?? null,
           ...(safe.metadata ?? {})
@@ -47,7 +55,7 @@ export async function logAuditEvent(input: AuditEventInput) {
   return event;
 }
 
-export async function listAuditEvents(filters: { entityType?: string; entityId?: string | number; actorId?: number; limit?: number } = {}) {
+export async function listAuditEvents(filters: { entityType?: string; entityId?: string | number; actorId?: number; action?: string; riskLevel?: string; requestId?: string; cursor?: number; limit?: number } = {}) {
   const limit = Math.max(1, Math.min(filters.limit ?? 100, 250));
   if (usesPostgres()) {
     return prisma.auditLog.findMany({
@@ -55,10 +63,11 @@ export async function listAuditEvents(filters: { entityType?: string; entityId?:
         ...(filters.entityType ? { entity: filters.entityType } : {}),
         ...(filters.entityId !== undefined ? { entityId: String(filters.entityId) } : {}),
         ...(filters.actorId ? { actorId: filters.actorId } : {})
+        ,...(filters.action ? { action: filters.action } : {})
       },
       orderBy: { createdAt: "desc" },
       take: limit
     });
   }
-  return memoryAuditEvents.filter((event) => (!filters.entityType || event.entityType === filters.entityType) && (filters.entityId === undefined || String(event.entityId) === String(filters.entityId)) && (!filters.actorId || event.actorId === filters.actorId)).slice(0, limit);
+  return memoryAuditEvents.filter((event) => (!filters.entityType || event.entityType === filters.entityType) && (filters.entityId === undefined || String(event.entityId) === String(filters.entityId)) && (!filters.actorId || event.actorId === filters.actorId) && (!filters.action || event.action === filters.action)).slice(0, limit);
 }
