@@ -4,10 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "prisma generate && prisma db push --accept-data-loss && next build",
+    "build": "prisma generate --schema=prisma/schema.prisma && prisma db push --schema=prisma/schema.prisma --accept-data-loss && next build",
     "start": "next start",
-    "db:generate": "prisma generate",
-    "db:push": "prisma db push",
+    "db:generate": "prisma generate --schema=prisma/schema.prisma",
+    "db:push": "prisma db push --schema=prisma/schema.prisma",
     "db:migrate:deploy": "prisma migrate deploy",
     "test:payout": "tsx scripts/verify-payout-domain.ts",
     "lint": "eslint ."
