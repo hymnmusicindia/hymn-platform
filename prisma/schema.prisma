@@ -124,6 +124,7 @@ model User {
   referredBy           User?         @relation("UserReferrals", fields: [referredById], references: [id])
   referrals            User[]        @relation("UserReferrals")
   sentReferrals        Referral[]    @relation("ReferralOwner")
+  receivedReferrals    Referral[]    @relation("ReferralReferredUser")
   beats                Beat[]
   producerProfile      ProducerProfile?
   artistCards          ArtistCard[]
@@ -840,6 +841,7 @@ model Referral {
   rewardedAt      DateTime? @map("rewarded_at")
   createdAt       DateTime  @default(now()) @map("created_at")
   owner           User      @relation("ReferralOwner", fields: [userId], references: [id], onDelete: Cascade)
+  referredUser    User?     @relation("ReferralReferredUser", fields: [referredUserId], references: [id], onDelete: SetNull)
 
   @@index([userId, status])
   @@map("referrals")
