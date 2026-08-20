@@ -1,0 +1,9 @@
+ALTER TABLE "artist_payout_balances" ALTER COLUMN "available_balance" TYPE DECIMAL(18,6);
+ALTER TABLE "artist_payout_balances" ALTER COLUMN "pending_balance" TYPE DECIMAL(18,6);
+ALTER TABLE "artist_payout_balances" ALTER COLUMN "lifetime_earnings" TYPE DECIMAL(18,6);
+ALTER TABLE "artist_payout_balances" ALTER COLUMN "lifetime_paid" TYPE DECIMAL(18,6);
+ALTER TABLE "royalty_line_items" ALTER COLUMN "gross_revenue" TYPE DECIMAL(18,6);
+ALTER TABLE "royalty_line_items" ALTER COLUMN "hymn_service_fee" TYPE DECIMAL(18,6);
+ALTER TABLE "royalty_line_items" ALTER COLUMN "net_revenue" TYPE DECIMAL(18,6);
+ALTER TABLE "wallet_transactions" ALTER COLUMN "amount" TYPE DECIMAL(18,6);
+ALTER TABLE "wallet_transactions" ALTER COLUMN "balance_after" TYPE DECIMAL(18,6);

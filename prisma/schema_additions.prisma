@@ -1,0 +1,69 @@
+// New models to be added to schema.prisma
+
+model ArtistCard {
+  id                Int       @id @default(autoincrement())
+  userId            Int       @map("user_id")
+  artistName        String    @map("artist_name")
+  spotifyProfileUrl String?   @map("spotify_profile_url")
+  appleMusicProfileUrl String? @map("apple_music_profile_url")
+  role              String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  
+  @@unique([userId, artistName])
+  @@index([userId])
+  @@map("artist_cards")
+}
+
+model BeatPurchase {
+  id                Int             @id @default(autoincrement())
+  userId            Int             @map("user_id")
+  beatId            Int             @map("beat_id")
+  licenseType       BeatLicenseType @map("license_type")
+  purchasedAt       DateTime        @default(now()) @map("purchased_at")
+  licenseUploadedAt DateTime?       @map("license_uploaded_at")
+  licenseUrl        String?         @map("license_url")
+  hasAccess         Boolean         @default(true) @map("has_access")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  
+  @@unique([userId, beatId, licenseType])
+  @@index([userId, purchasedAt])
+  @@map("beat_purchases")
+}
+
+model DistributionQueueEntry {
+  id                    Int                      @id @default(autoincrement())
+  releaseId             Int                      @unique @map("release_id")
+  currentStage          DistributionQueueStage   @map("current_stage")
+  qualityCheckNotes     String?                  @map("quality_check_notes")
+  approvalNotes         String?                  @map("approval_notes")
+  direnoteRequestId     String?                  @map("direnote_request_id")
+  direnoteResponse      Json?                    @map("direnote_response")
+  submissionId          String?                  @map("submission_id")
+  apiErrorMessage       String?                  @map("api_error_message")
+  stageHistory          Json?                    @map("stage_history")
+  timestamps            Json?
+  operatorId            Int?                     @map("operator_id")
+  createdAt             DateTime                 @default(now()) @map("created_at")
+  updatedAt             DateTime                 @updatedAt @map("updated_at")
+  
+  @@index([currentStage, updatedAt])
+  @@index([releaseId])
+  @@map("distribution_queue_entries")
+}
+
+model DistributionQueueLog {
+  id                    Int       @id @default(autoincrement())
+  queueEntryId          Int       @map("queue_entry_id")
+  stage                 DistributionQueueStage
+  stageStartTime        DateTime  @map("stage_start_time")
+  stageEndTime          DateTime? @map("stage_end_time")
+  operatorId            Int?      @map("operator_id")
+  notes                 String?
+  metadata              Json?
+  createdAt             DateTime  @default(now()) @map("created_at")
+  
+  @@index([queueEntryId, stageStartTime])
+  @@map("distribution_queue_logs")
+}

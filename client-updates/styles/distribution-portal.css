@@ -1,0 +1,265 @@
+/* Distribution Portal - Beautiful Design Enhancements */
+
+/* Form Container */
+.distribution-form {
+  @apply rounded-[2rem] border;
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* Card Base Styling */
+.card-base {
+  @apply rounded-[1.5rem] border p-4 md:p-5;
+  border-color: var(--border);
+  background: var(--bg-soft);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-base:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* Section Headers */
+.section-header {
+  @apply text-lg md:text-2xl font-semibold;
+  color: var(--text);
+  letter-spacing: -0.5px;
+}
+
+.section-subtitle {
+  @apply mt-2 text-xs md:text-sm;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* Input Fields - Enhanced */
+.field {
+  @apply w-full rounded-[1.1rem] border px-3 md:px-4 py-2.5 md:py-3;
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.field:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--card);
+  box-shadow: 0 0 0 3px rgba(89, 223, 224, 0.1);
+}
+
+.field::placeholder {
+  color: var(--text-soft);
+}
+
+.field-invalid {
+  border-color: var(--danger) !important;
+  background: rgba(248, 113, 113, 0.06);
+}
+
+/* Buttons */
+.btn-primary {
+  @apply w-full md:w-auto px-4 md:px-6 py-2.5 md:py-3 rounded-full font-semibold text-sm md:text-base;
+  background: #ffffff;
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--glass-border) 90%, transparent);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.09);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-outline {
+  @apply px-3 md:px-4 py-2 md:py-2.5 rounded-full font-semibold text-xs md:text-sm;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-outline:hover {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, rgba(89, 223, 224, 0.08), rgba(89, 223, 224, 0.04));
+  transform: translateY(-1px);
+}
+
+/* Track Cards */
+.track-card {
+  @apply rounded-[1.7rem] border p-4 md:p-5;
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+}
+
+.track-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+}
+
+.track-card.expanded {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, rgba(89, 223, 224, 0.08), rgba(89, 223, 224, 0.04));
+}
+
+/* Platform Buttons */
+.platform-button {
+  @apply flex min-h-[104px] w-full items-center gap-4 rounded-2xl border p-4 text-left transition duration-200;
+  cursor: pointer;
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--text-muted);
+}
+
+.platform-button.active {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, rgba(89, 223, 224, 0.14), rgba(89, 223, 224, 0.045));
+  color: var(--text);
+  box-shadow: 0 18px 48px rgba(89, 223, 224, 0.08);
+}
+
+.platform-button:hover:not(.active) {
+  transform: translateY(-2px);
+  border-color: var(--border);
+}
+
+/* Mobile Menu */
+.mobile-step-menu {
+  @apply md:hidden rounded-[1.3rem] border p-3 md:p-4;
+  border-color: var(--border);
+  background: var(--bg-soft);
+}
+
+.mobile-step-button {
+  @apply flex w-full items-center justify-between gap-3 rounded-xl border px-3 md:px-4 py-2.5 md:py-3 text-left transition-all;
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--text);
+}
+
+.mobile-step-button:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+/* Progress Bar */
+.progress-bar {
+  @apply h-3 overflow-hidden rounded-full;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.progress-fill {
+  @apply h-full rounded-full transition-all duration-500;
+  background: var(--accent);
+}
+
+/* Summary Card */
+.summary-card {
+  @apply flex items-center justify-between rounded-xl border px-3 md:px-4 py-2.5 md:py-3;
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.summary-card span {
+  color: var(--text);
+}
+
+/* Responsive Adjustments */
+@media (max-width: 640px) {
+  .distribution-form {
+    @apply p-4;
+  }
+
+  .section-header {
+    @apply text-lg;
+  }
+
+  .card-base {
+    @apply p-4;
+  }
+
+  .field {
+    @apply text-sm py-2.5 px-3;
+  }
+
+  .track-card {
+    @apply p-4;
+  }
+}
+
+/* Fade-up Animation */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-up {
+  animation: fadeUp 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Checkbox Styling */
+input[type="checkbox"] {
+  @apply w-4 h-4 rounded cursor-pointer;
+  accent-color: var(--accent);
+}
+
+/* Select Styling */
+select.field {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23b8b8b8' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.5rem;
+  appearance: none;
+}
+
+/* Typography */
+.text-uppercase-small {
+  @apply text-xs uppercase tracking-[0.18em];
+  letter-spacing: 0.18em;
+  font-weight: 600;
+}
+
+.text-uppercase-medium {
+  @apply text-xs md:text-sm uppercase tracking-[0.22em];
+  letter-spacing: 0.22em;
+  font-weight: 600;
+}
+
+/* Touch-Friendly Sizing */
+@media (hover: none) and (pointer: coarse) {
+  .field {
+    @apply py-3 px-3;
+    min-height: 44px;
+  }
+
+  .btn-primary,
+  .btn-outline {
+    min-height: 44px;
+  }
+
+  .platform-button {
+    min-height: 120px;
+  }
+}

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 54" role="img" aria-labelledby="title desc">
+  <title id="title">150 plus stores</title>
+  <desc id="desc">HYMN distribution network</desc>
+  <defs>
+    <linearGradient id="network-gradient" x1="12" y1="8" x2="51" y2="51" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#74F0E4"/>
+      <stop offset="1" stop-color="#59A8FF"/>
+    </linearGradient>
+  </defs>
+  <text x="32" y="8" fill="url(#network-gradient)" font-family="Arial, Helvetica, sans-serif" font-size="7" font-weight="700" letter-spacing="1" text-anchor="middle">150+ STORES</text>
+  <g transform="translate(12 12)">
+    <circle cx="20" cy="20" r="15" fill="none" stroke="url(#network-gradient)" stroke-width="2"/>
+    <path d="M20 5v30M5 20h30M9.5 10.5c2.8 2.2 6.4 3.3 10.5 3.3s7.7-1.1 10.5-3.3M9.5 29.5c2.8-2.2 6.4-3.3 10.5-3.3s7.7 1.1 10.5 3.3" fill="none" stroke="url(#network-gradient)" stroke-width="1.65" opacity=".82"/>
+    <circle cx="20" cy="20" r="3.25" fill="url(#network-gradient)"/>
+  </g>
+</svg>

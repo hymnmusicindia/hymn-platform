@@ -1,0 +1,88 @@
+{
+  "name": "hymn-platform",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "prisma generate && next build",
+    "deploy:release": "prisma migrate deploy",
+    "start": "next start",
+    "db:generate": "prisma generate",
+    "db:validate": "prisma validate",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:migrate:fresh": "tsx scripts/migrate-fresh-database.ts",
+    "db:backfill:spotify": "tsx scripts/backfill-legacy-spotify.ts",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "test": "npm run test:analytics && npm run test:migration-safety && npm run test:razorpay && npm run test:storage && npm run test:release-status && npm run test:distribution-idempotency && npm run test:payout && npm run test:managed-services",
+    "test:payout": "tsx scripts/verify-payout-domain.ts",
+    "test:analytics": "tsx scripts/verify-analytics-domain.ts",
+    "test:migration-safety": "tsx scripts/verify-migration-safety.ts",
+    "test:postgres-canonical": "tsx scripts/verify-postgres-canonical.ts",
+    "test:razorpay": "tsx scripts/verify-razorpay-signatures.ts",
+    "test:payments-integration": "tsx scripts/verify-payment-webhooks-integration.ts",
+    "test:referrals-integration": "tsx scripts/verify-referral-integration.ts",
+    "test:storage": "tsx scripts/verify-private-storage.ts",
+    "test:storage-integration": "tsx scripts/verify-private-storage-integration.ts",
+    "test:release-status": "tsx scripts/verify-release-status.ts",
+    "test:release-status-integration": "tsx scripts/verify-release-status-integration.ts",
+    "test:change-requests-integration": "tsx scripts/verify-release-change-requests-integration.ts",
+    "test:royalty-integration": "tsx scripts/verify-royalty-ledger-integration.ts",
+    "test:payout-kyc-integration": "tsx scripts/verify-payout-kyc-integration.ts",
+    "test:admin-controls-integration": "tsx scripts/verify-admin-controls-integration.ts",
+    "test:distribution-idempotency": "tsx scripts/verify-distribution-idempotency.ts",
+    "test:direnote-integration": "tsx scripts/verify-direnote-integration.ts",
+    "test:managed-services": "tsx scripts/verify-managed-services.ts",
+    "test:managed-services-integration": "tsx scripts/verify-managed-services-integration.ts",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "@vercel/blob": "^2.5.0",
+    "axios": "^1.18.0",
+    "bcrypt": "^6.0.0",
+    "clsx": "^2.1.1",
+    "exceljs": "^4.4.0",
+    "framer-motion": "^12.38.0",
+    "google-auth-library": "^10.7.0",
+    "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.511.0",
+    "mysql2": "^3.22.4",
+    "next": "16.2.11",
+    "razorpay": "^2.9.6",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "resend": "^6.18.0",
+    "server-only": "^0.0.1",
+    "tesseract.js": "^7.0.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/node": "^22.14.1",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.2.11",
+    "postcss": "8.5.12",
+    "prisma": "^6.19.3",
+    "tailwindcss": "^3.4.17",
+    "ts-api-utils": "^2.5.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.22.4",
+    "typescript": "^5.8.3"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "8.5.12",
+      "sharp": "0.35.0"
+    },
+    "exceljs": {
+      "uuid": "11.1.1"
+    }
+  }
+}

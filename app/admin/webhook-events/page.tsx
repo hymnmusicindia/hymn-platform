@@ -1,0 +1,10 @@
+import { redirect } from "next/navigation";
+import { getAdminSessionForPage } from "@/lib/access";
+import { prisma } from "@/lib/prisma";
+
+export default async function WebhookEventsPage() {
+  if (!await getAdminSessionForPage()) redirect("/admin/login");
+  const events = await prisma.paymentWebhookEvent.findMany({ orderBy: { receivedAt: "desc" }, take: 100 });
+  return <main className="mx-auto max-w-7xl p-6"><h1 className="text-3xl font-semibold">Razorpay webhook events</h1><p className="mt-2 text-sm text-gray-500">Persisted, signature-verified events. Replay repeats internal processing only and never creates a charge.</p><div className="mt-6 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr>{["Event", "Type", "Order", "Payment", "Amount", "Signature", "State", "Attempts", "Received", "Processed", "Action"].map(label => <th className="border-b p-3" key={label}>{label}</th>)}</tr></thead><tbody>{events.map(event => <tr key={event.id}><td className="border-b p-3">{event.id}</td><td className="border-b p-3">{event.eventType}</td><td className="border-b p-3">{event.razorpayOrderId ?? "—"}</td><td className="border-b p-3">{event.paymentId ?? "—"}</td><td className="border-b p-3">{event.amountMinor == null ? "—" : `${event.currency ?? ""} ${(event.amountMinor / 100).toFixed(2)}`}</td><td className="border-b p-3">{event.signatureValid ? "Valid" : "Invalid"}</td><td className="border-b p-3">{event.processingState}{event.errorMessage ? `: ${event.errorMessage}` : ""}</td><td className="border-b p-3">{event.attemptCount}</td><td className="border-b p-3">{event.receivedAt.toISOString()}</td><td className="border-b p-3">{event.processedAt?.toISOString() ?? "—"}</td><td className="border-b p-3"><form action={`/api/admin/webhook-events/${event.id}/replay`} method="post"><button className="btn-outline" type="submit">Safe replay</button></form></td></tr>)}</tbody></table>{events.length === 0 ? <p className="p-6 text-center text-gray-500">No webhook events received.</p> : null}</div></main>;
+}
+// vercel trigger 9

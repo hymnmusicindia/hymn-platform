@@ -1,0 +1,1815 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  PRODUCER
+  ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  BANNED
+}
+
+enum ProducerApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ReleaseStatus {
+  DRAFT
+  AWAITING_PAYMENT
+  SUBMITTED
+  IN_QUEUE
+  IN_QC_QUEUE
+  UNDER_REVIEW
+  CHANGES_REQUESTED
+  RESUBMITTED
+  APPROVED
+  QUEUED_FOR_DISTRIBUTION
+  SUBMITTING_TO_DISTRIBUTOR
+  SENT_TO_DISTRIBUTOR
+  DISTRIBUTOR_PROCESSING
+  DISTRIBUTOR_CHANGES_REQUIRED
+  SCHEDULED
+  PROCESSING
+  AWAITING_LIVE_CONFIRMATION
+  PARTIALLY_LIVE
+  DELIVERED
+  SENT
+  LIVE
+  DISTRIBUTED
+  REJECTED
+  FAILED
+  DELIVERY_FAILED
+  TAKEDOWN_REQUESTED
+  TAKEDOWN_PROCESSING
+  TAKEN_DOWN
+  ARCHIVED
+}
+
+enum ReleaseSource {
+  CUSTOMER_SUBMISSION
+  ADMIN_MANUAL
+  DIRENOTE_SYNC
+  MIGRATED
+}
+
+enum UploadKind {
+  AUDIO
+  ARTWORK
+  BEAT
+  DOCUMENT
+  SAMPLE
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum PayoutStatus {
+  PENDING
+  APPROVED
+  PAID
+  FAILED
+}
+
+enum PayoutRequestMethod {
+  UPI
+  BANK
+}
+
+enum PayoutRequestStatus {
+  REQUESTED
+  UNDER_REVIEW
+  APPROVED
+  PROCESSING
+  PAID
+  FAILED
+  REJECTED
+  CANCELLED
+}
+
+model User {
+  id                            Int                     @id @default(autoincrement())
+  googleId                      String                  @unique @map("google_id")
+  name                          String
+  email                         String                  @unique
+  passwordHash                  String?                 @map("password_hash")
+  avatar                        String?
+  role                          UserRole                @default(CUSTOMER)
+  status                        AccountStatus           @default(ACTIVE)
+  onboardingDone                Boolean                 @default(false) @map("onboarding_done")
+  mobile                        String?
+  contactEmail                  String?                 @map("contact_email")
+  dateOfBirth                   DateTime?               @map("date_of_birth") @db.Date
+  preferredLanguage             String                  @default("en") @map("preferred_language")
+  onboardingPurpose             String?                 @map("onboarding_purpose")
+  onboardingUserType            String?                 @map("onboarding_user_type")
+  referralSource                String?                 @map("referral_source")
+  onboardingReferralCode        String?                 @map("onboarding_referral_code")
+  onboardingCompletedAt         DateTime?               @map("onboarding_completed_at")
+  onboardingPreferences         Json?                   @map("onboarding_preferences")
+  referralCode                  String?                 @unique @map("referral_code")
+  referralCredits               Int                     @default(0) @map("referral_credits")
+  referredById                  Int?                    @map("referred_by")
+  firstPaymentRewarded          Boolean                 @default(false) @map("first_payment_rewarded")
+  createdAt                     DateTime                @default(now()) @map("created_at")
+  updatedAt                     DateTime                @updatedAt @map("updated_at")
+  sessions                      Session[]
+  applications                  ProducerApplication[]   @relation("ApplicantApplications")
+  reviewedApps                  ProducerApplication[]   @relation("ApplicationReviewer")
+  releases                      Release[]
+  ownedManualReleases           Release[]               @relation("ManualReleaseOwner")
+  assignedManualReleases        Release[]               @relation("ManualReleaseAssigner")
+  uploads                       Upload[]
+  royalties                     Royalty[]
+  payouts                       Payout[]
+  payoutRequests                PayoutRequest[]
+  payoutBalance                 ArtistPayoutBalance?
+  royaltyLineItems              RoyaltyLineItem[]
+  notifications                 Notification[]
+  emailLogs                     EmailLog[]
+  supportTickets                SupportTicket[]
+  auditLogs                     AuditLog[]
+  subscription                  Subscription?
+  referredBy                    User?                   @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals                     User[]                  @relation("UserReferrals")
+  sentReferrals                 Referral[]              @relation("ReferralOwner")
+  receivedReferral              Referral?               @relation("ReferralRecipient")
+  creditLedgerEntries           CreditLedgerEntry[]
+  referralVisits                ReferralVisit[]
+  beats                         Beat[]
+  producerProfile               ProducerProfile?
+  artistCards                   ArtistCard[]
+  ownedSplitRecords             SplitRecord[]           @relation("SplitOwner")
+  splitRecipients               SplitRecipient[]        @relation("SplitRecipientUser")
+  payoutCredential              PayoutCredential?
+  splitEarnings                 SplitEarningLineItem[]
+  walletTransactions            WalletTransaction[]
+  producerSales                 BeatSale[]              @relation("ProducerBeatSales")
+  purchasedBeatSales            BeatSale[]              @relation("BuyerBeatSales")
+  quarterCarryForwards          QuarterCarryForward[]
+  storedAssets                  StoredAsset[]
+  royaltyStatements             RoyaltyStatement[]
+  royaltyImportJobs             RoyaltyImportJob[]
+  royaltyAllocations            RoyaltyAllocation[]
+  adminMembership               AdminMembership?
+  managedServiceRequests        ManagedServiceRequest[]
+  distributionOrders            DistributionOrder[]
+  checkoutOrders                CheckoutOrder[]
+  couponRedemptions             CouponRedemption[]
+  beatPurchases                 BeatPurchase[]
+  financialAdjustmentSubjects   FinancialAdjustment[]   @relation("FinancialAdjustmentSubject")
+  requestedFinancialAdjustments FinancialAdjustment[]   @relation("FinancialAdjustmentRequester")
+  approvedFinancialAdjustments  FinancialAdjustment[]   @relation("FinancialAdjustmentApprover")
+
+  @@index([role])
+  @@index([email])
+  @@map("users")
+}
+
+model Session {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  userAgent String?   @map("user_agent")
+  ipAddress String?   @map("ip_address")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("sessions")
+}
+
+model ProducerApplication {
+  id              Int                       @id @default(autoincrement())
+  userId          Int                       @map("user_id")
+  producerName    String                    @map("producer_name")
+  genre           String
+  portfolioLinks  String[]                  @default([]) @map("portfolio_links")
+  instagram       String?
+  youtube         String?
+  soundcloud      String?
+  spotify         String?
+  yearsExperience Int                       @map("years_experience")
+  pricing         String
+  sampleBeats     String[]                  @default([]) @map("sample_beats")
+  bio             String
+  status          ProducerApplicationStatus @default(PENDING)
+  internalNotes   String?                   @map("internal_notes")
+  reviewedById    Int?                      @map("reviewed_by_id")
+  reviewedAt      DateTime?                 @map("reviewed_at")
+  createdAt       DateTime                  @default(now()) @map("created_at")
+  updatedAt       DateTime                  @updatedAt @map("updated_at")
+  user            User                      @relation("ApplicantApplications", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy      User?                     @relation("ApplicationReviewer", fields: [reviewedById], references: [id])
+
+  @@index([status, createdAt])
+  @@map("producer_applications")
+}
+
+model Release {
+  id                      Int                             @id @default(autoincrement())
+  userId                  Int                             @map("user_id")
+  ownerUserId             Int?                            @map("owner_user_id")
+  artistProfileId         Int?                            @map("artist_profile_id")
+  releaseSource           ReleaseSource                   @default(CUSTOMER_SUBMISSION) @map("release_source")
+  customerEditable        Boolean                         @default(true) @map("customer_editable")
+  assignedByAdminId       Int?                            @map("assigned_by_admin_id")
+  assignedAt              DateTime?                       @map("assigned_at")
+  archivedAt              DateTime?                       @map("archived_at")
+  title                   String
+  artistName              String                          @map("artist_name")
+  genre                   String
+  collaborators           String[]                        @default([])
+  producer                String?
+  bpm                     Int?
+  explicit                Boolean                         @default(false)
+  releaseDate             DateTime                        @map("release_date")
+  status                  ReleaseStatus                   @default(DRAFT)
+  distributorReleaseId    String?                         @map("distributor_release_id")
+  upc                     String?                         @map("upc_code")
+  rejectionReason         String?                         @map("rejection_reason")
+  correctionReason        String?                         @map("correction_reason")
+  reviewIssues            Json?                           @map("review_issues")
+  adminInternalNote       String?                         @map("admin_internal_note")
+  reviewedAt              DateTime?                       @map("reviewed_at")
+  reviewedBy              String?                         @map("reviewed_by")
+  releaseType             String?                         @map("release_type")
+  artworkUrl              String?                         @map("artwork_url")
+  audioUrl                String?                         @map("audio_url")
+  paymentStatus           String?                         @default("pending") @map("payment_status")
+  metadata                Json?
+  draftCompletionPercent  Int                             @default(0) @map("draft_completion_percent")
+  lastEditedAt            DateTime?                       @map("last_edited_at")
+  missingFields           Json?                           @map("missing_fields")
+  createdAt               DateTime                        @default(now()) @map("created_at")
+  updatedAt               DateTime                        @updatedAt @map("updated_at")
+  version                 Int                             @default(1)
+  user                    User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  owner                   User?                           @relation("ManualReleaseOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  artistProfile           ArtistCard?                     @relation(fields: [artistProfileId], references: [id], onDelete: SetNull)
+  assignedByAdmin         User?                           @relation("ManualReleaseAssigner", fields: [assignedByAdminId], references: [id], onDelete: SetNull)
+  ownershipHistory        ReleaseOwnershipHistory[]
+  tracks                  Track[]
+  uploads                 Upload[]
+  analytics               Analytics[]
+  royalties               Royalty[]
+  royaltyLineItems        RoyaltyLineItem[]
+  distributionQueueEntry  DistributionQueueEntry?
+  splitRecords            SplitRecord[]
+  splitRecipients         SplitRecipient[]
+  splitEarnings           SplitEarningLineItem[]
+  direNoteLogs            DireNoteLog[]
+  storedAssets            StoredAsset[]
+  statusTransitions       ReleaseStatusTransition[]
+  distributionSubmissions DistributionSubmissionAttempt[]
+  changeRequests          ReleaseChangeRequest[]
+  managedServiceRequests  ManagedServiceRequest[]
+  unmatchedRoyaltyRows    UnmatchedRoyaltyRow[]
+
+  @@index([ownerUserId, status])
+  @@index([releaseSource, archivedAt, createdAt])
+  @@index([artistProfileId])
+  @@index([status, createdAt])
+  @@index([distributorReleaseId])
+  @@index([upc])
+  @@map("releases")
+}
+
+model ReleaseOwnershipHistory {
+  id                  Int      @id @default(autoincrement())
+  releaseId           Int      @map("release_id")
+  previousOwnerUserId Int?     @map("previous_owner_user_id")
+  newOwnerUserId      Int      @map("new_owner_user_id")
+  changedByAdminId    Int?     @map("changed_by_admin_id")
+  reason              String?
+  createdAt           DateTime @default(now()) @map("created_at")
+  release             Release  @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+
+  @@index([releaseId, createdAt])
+  @@index([previousOwnerUserId])
+  @@index([newOwnerUserId])
+  @@map("release_ownership_history")
+}
+
+model Track {
+  id                   Int                    @id @default(autoincrement())
+  releaseId            Int                    @map("release_id")
+  title                String
+  duration             Int?
+  isrc                 String?
+  distributorStatus    String?                @map("distributor_status")
+  audioUploadId        Int?                   @map("audio_upload_id")
+  trackNumber          Int?                   @map("track_number")
+  audioUrl             String?                @map("audio_url")
+  primaryArtist        String?                @map("primary_artist")
+  metadata             Json?
+  createdAt            DateTime               @default(now()) @map("created_at")
+  release              Release                @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  royaltyLineItems     RoyaltyLineItem[]
+  splitRecords         SplitRecord[]
+  splitRecipients      SplitRecipient[]
+  splitEarnings        SplitEarningLineItem[]
+  unmatchedRoyaltyRows UnmatchedRoyaltyRow[]
+
+  @@index([isrc])
+  @@map("tracks")
+}
+
+model AdminRole {
+  id          Int                   @id @default(autoincrement())
+  key         String                @unique
+  name        String
+  description String?
+  createdAt   DateTime              @default(now()) @map("created_at")
+  updatedAt   DateTime              @updatedAt @map("updated_at")
+  permissions AdminRolePermission[]
+  memberships AdminMembership[]
+
+  @@map("admin_roles")
+}
+
+model AdminPermission {
+  id          Int                   @id @default(autoincrement())
+  key         String                @unique
+  description String?
+  roles       AdminRolePermission[]
+
+  @@map("admin_permissions")
+}
+
+model AdminRolePermission {
+  roleId       Int             @map("role_id")
+  permissionId Int             @map("permission_id")
+  role         AdminRole       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   AdminPermission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("admin_role_permissions")
+}
+
+model AdminMembership {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @unique @map("user_id")
+  roleId    Int       @map("role_id")
+  active    Boolean   @default(true)
+  createdBy Int?      @map("created_by")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  role      AdminRole @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@index([roleId, active])
+  @@map("admin_memberships")
+}
+
+model ReleaseStatusTransition {
+  id             Int           @id @default(autoincrement())
+  releaseId      Int           @map("release_id")
+  previousStatus ReleaseStatus @map("previous_status")
+  newStatus      ReleaseStatus @map("new_status")
+  actorId        Int?          @map("actor_id")
+  actorType      String        @map("actor_type")
+  reason         String?
+  requestId      String?       @map("request_id")
+  metadata       Json?
+  createdAt      DateTime      @default(now()) @map("created_at")
+  release        Release       @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@index([releaseId, createdAt])
+  @@map("release_status_transitions")
+}
+
+model DistributionSubmissionAttempt {
+  id                Int       @id @default(autoincrement())
+  releaseId         Int       @map("release_id")
+  provider          String    @default("direnote")
+  idempotencyKey    String    @unique @map("idempotency_key")
+  payloadHash       String    @map("payload_hash")
+  state             String    @default("processing")
+  attemptCount      Int       @default(1) @map("attempt_count")
+  providerReference String?   @map("provider_reference")
+  httpStatus        Int?      @map("http_status")
+  safeError         String?   @map("safe_error")
+  responseRedacted  Json?     @map("response_redacted")
+  startedAt         DateTime  @default(now()) @map("started_at")
+  completedAt       DateTime? @map("completed_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  release           Release   @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@index([releaseId, state, updatedAt])
+  @@index([provider, state, updatedAt])
+  @@map("distribution_submission_attempts")
+}
+
+model ReleaseChangeRequest {
+  id                 Int                         @id @default(autoincrement())
+  releaseId          Int                         @map("release_id")
+  requestedByUserId  Int                         @map("requested_by_user_id")
+  requestType        String                      @map("request_type")
+  status             String                      @default("submitted")
+  reason             String
+  desiredEffectiveAt DateTime?                   @map("desired_effective_at")
+  requestedChanges   Json?                       @map("requested_changes")
+  providerReference  String?                     @map("provider_reference")
+  adminNote          String?                     @map("admin_note")
+  reviewedByAdminId  Int?                        @map("reviewed_by_admin_id")
+  submittedAt        DateTime                    @default(now()) @map("submitted_at")
+  reviewedAt         DateTime?                   @map("reviewed_at")
+  completedAt        DateTime?                   @map("completed_at")
+  updatedAt          DateTime                    @updatedAt @map("updated_at")
+  release            Release                     @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  events             ReleaseChangeRequestEvent[]
+
+  @@index([releaseId, requestType, status])
+  @@index([status, submittedAt])
+  @@map("release_change_requests")
+}
+
+model ReleaseChangeRequestEvent {
+  id                Int                  @id @default(autoincrement())
+  requestId         Int                  @map("request_id")
+  actorType         String               @map("actor_type")
+  actorId           Int?                 @map("actor_id")
+  previousStatus    String?              @map("previous_status")
+  newStatus         String               @map("new_status")
+  note              String
+  providerReference String?              @map("provider_reference")
+  metadata          Json?
+  createdAt         DateTime             @default(now()) @map("created_at")
+  request           ReleaseChangeRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt])
+  @@map("release_change_request_events")
+}
+
+model ManagedServiceRequest {
+  id                 Int                            @id @default(autoincrement())
+  userId             Int                            @map("user_id")
+  releaseId          Int                            @map("release_id")
+  trackId            Int?                           @map("track_id")
+  serviceType        String                         @map("service_type")
+  provider           String?
+  status             String                         @default("submitted")
+  eligibilityAnswers Json                           @map("eligibility_answers")
+  declarations       Json?
+  publicLinks        Json?                          @map("public_links")
+  riskFlags          Json?                          @map("risk_flags")
+  internalNotes      String?                        @map("internal_notes")
+  userVisibleUpdate  String?                        @map("user_visible_update")
+  assignedAdminId    Int?                           @map("assigned_admin_id")
+  externalReference  String?                        @map("external_reference")
+  rejectionReason    String?                        @map("rejection_reason")
+  idempotencyKey     String                         @unique @map("idempotency_key")
+  submittedAt        DateTime                       @default(now()) @map("submitted_at")
+  reviewedAt         DateTime?                      @map("reviewed_at")
+  completedAt        DateTime?                      @map("completed_at")
+  updatedAt          DateTime                       @updatedAt @map("updated_at")
+  user               User                           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  release            Release                        @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+  documents          ManagedServiceDocument[]
+  providerStatuses   ManagedServiceProviderStatus[]
+
+  @@index([userId, serviceType, submittedAt])
+  @@index([serviceType, status, submittedAt])
+  @@index([releaseId, trackId])
+  @@map("managed_service_requests")
+}
+
+model ManagedServiceProviderStatus {
+  id        Int                   @id @default(autoincrement())
+  requestId Int                   @map("request_id")
+  provider  String
+  status    String
+  reference String?
+  note      String?
+  updatedAt DateTime              @updatedAt @map("updated_at")
+  request   ManagedServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, provider])
+  @@index([status, updatedAt])
+  @@map("managed_service_provider_statuses")
+}
+
+model ManagedServiceDocument {
+  requestId Int                   @map("request_id")
+  assetId   Int                   @map("asset_id")
+  request   ManagedServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  asset     StoredAsset           @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@id([requestId, assetId])
+  @@index([assetId])
+  @@map("managed_service_documents")
+}
+
+model SpotifyAdminConnection {
+  id            Int      @id
+  spotifyUserId String   @map("spotify_user_id")
+  displayName   String   @map("display_name")
+  refreshToken  String   @map("refresh_token")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("spotify_admin_connections")
+}
+
+model DireNoteLog {
+  id                     Int      @id @default(autoincrement())
+  releaseId              Int?     @map("release_id")
+  action                 String
+  httpStatus             Int?     @map("http_status")
+  success                Boolean
+  requestPayloadRedacted Json?    @map("request_payload_redacted")
+  responseRaw            String?  @map("response_raw") @db.Text
+  responseJson           Json?    @map("response_json")
+  errorMessage           String?  @map("error_message") @db.Text
+  createdAt              DateTime @default(now()) @map("created_at")
+  createdByAdminId       Int?     @map("created_by_admin_id")
+  release                Release? @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@index([releaseId, createdAt])
+  @@index([action, createdAt])
+  @@map("direnote_logs")
+}
+
+model AdminTask {
+  id             Int       @id @default(autoincrement())
+  eventKey       String    @unique @map("event_key")
+  type           String
+  priority       String    @default("normal")
+  title          String
+  body           String
+  href           String
+  entityType     String    @map("entity_type")
+  entityId       String    @map("entity_id")
+  status         String    @default("open")
+  assignedTo     Int?      @map("assigned_to")
+  resolutionNote String?   @map("resolution_note")
+  snoozedUntil   DateTime? @map("snoozed_until")
+  resolvedAt     DateTime? @map("resolved_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([status, priority, createdAt])
+  @@index([entityType, entityId])
+  @@map("admin_tasks")
+}
+
+model AdminTaskHistory {
+  id        Int      @id @default(autoincrement())
+  taskId    Int      @map("task_id")
+  actorId   Int?     @map("actor_id")
+  action    String
+  note      String?
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([taskId, createdAt])
+  @@map("admin_task_history")
+}
+
+model Upload {
+  id           Int        @id @default(autoincrement())
+  userId       Int        @map("user_id")
+  releaseId    Int?       @map("release_id")
+  kind         UploadKind
+  storageKey   String     @map("storage_key")
+  fileName     String     @map("file_name")
+  mimeType     String     @map("mime_type")
+  sizeBytes    Int        @map("size_bytes")
+  checksum     String?
+  publicUrl    String?    @map("public_url")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  release      Release?   @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+  audioBeats   Beat[]     @relation("BeatAudio")
+  artworkBeats Beat[]     @relation("BeatArtwork")
+
+  @@index([userId, kind])
+  @@map("uploads")
+}
+
+model Analytics {
+  id              Int      @id @default(autoincrement())
+  releaseId       Int      @map("release_id")
+  platform        String
+  country         String
+  streams         Int      @default(0)
+  saves           Int      @default(0)
+  revenueCents    Int      @default(0) @map("revenue_cents")
+  periodStart     DateTime @map("period_start")
+  periodEnd       DateTime @map("period_end")
+  dataSource      String   @map("data_source")
+  statementPeriod String?  @map("statement_period")
+  importedAt      DateTime @default(now()) @map("imported_at")
+  isVerified      Boolean  @default(false) @map("is_verified")
+  release         Release  @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@index([releaseId, periodStart])
+  @@index([isVerified, periodStart, periodEnd])
+  @@map("analytics")
+}
+
+model Royalty {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  releaseId   Int?     @map("release_id")
+  amountCents Int      @map("amount_cents")
+  currency    String   @default("INR")
+  source      String
+  periodStart DateTime @map("period_start")
+  periodEnd   DateTime @map("period_end")
+  createdAt   DateTime @default(now()) @map("created_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  release     Release? @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+
+  @@index([userId, periodStart])
+  @@map("royalties")
+}
+
+model Payout {
+  id          Int          @id @default(autoincrement())
+  userId      Int          @map("user_id")
+  amountCents Int          @map("amount_cents")
+  currency    String       @default("INR")
+  status      PayoutStatus @default(PENDING)
+  reference   String?
+  createdAt   DateTime     @default(now()) @map("created_at")
+  paidAt      DateTime?    @map("paid_at")
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("payouts")
+}
+
+model PayoutRequest {
+  id                Int                  @id @default(autoincrement())
+  userId            Int                  @map("user_id")
+  amount            Decimal              @db.Decimal(12, 2)
+  serviceFee        Decimal              @map("service_fee") @db.Decimal(12, 2)
+  netAmount         Decimal              @map("net_amount") @db.Decimal(12, 2)
+  currency          String               @default("INR")
+  requestedAmountUsd Decimal?            @map("requested_amount_usd") @db.Decimal(18, 6)
+  requestedAmountInr Decimal?            @map("requested_amount_inr") @db.Decimal(18, 6)
+  minimumPayoutUsd   Decimal?            @map("minimum_payout_usd") @db.Decimal(12, 2)
+  usdToInrRate       Decimal?            @map("usd_to_inr_rate") @db.Decimal(18, 8)
+  exchangeRateId     Int?                @map("exchange_rate_id")
+  exchangeRateProvider String?           @map("exchange_rate_provider")
+  exchangeRateFetchedAt DateTime?        @map("exchange_rate_fetched_at")
+  sourceType        String               @default("artist_royalty") @map("source_type")
+  method            PayoutRequestMethod
+  upiId             String?              @map("upi_id")
+  accountHolderName String?              @map("account_holder_name")
+  bankAccountNumber String?              @map("bank_account_number")
+  ifsc              String?
+  status            PayoutRequestStatus  @default(REQUESTED)
+  userNote          String?              @map("user_note")
+  adminNote         String?              @map("admin_note")
+  requestedAt       DateTime             @default(now()) @map("requested_at")
+  processedAt       DateTime?            @map("processed_at")
+  paidAt            DateTime?            @map("paid_at")
+  paymentReference  String?              @unique @map("payment_reference")
+  paymentMethod     String?              @map("payment_method")
+  paymentDate       DateTime?            @map("payment_date")
+  paidAmount        Decimal?             @map("paid_amount") @db.Decimal(12, 2)
+  proofAssetId      Int?                 @unique @map("proof_asset_id")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  proofAsset        StoredAsset?         @relation("PayoutProof", fields: [proofAssetId], references: [id], onDelete: SetNull)
+  events            PayoutRequestEvent[]
+
+  @@index([userId, status])
+  @@index([status, requestedAt])
+  @@map("payout_requests")
+}
+
+model ExchangeRate {
+  id            Int      @id @default(autoincrement())
+  baseCurrency  String   @map("base_currency")
+  quoteCurrency String   @map("quote_currency")
+  rate          Decimal  @db.Decimal(18, 8)
+  provider      String
+  status        String   @default("ACTIVE")
+  fetchedAt     DateTime @map("fetched_at")
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([baseCurrency, quoteCurrency, status, fetchedAt])
+  @@map("exchange_rates")
+}
+
+model PayoutRequestEvent {
+  id              Int           @id @default(autoincrement())
+  payoutRequestId Int           @map("payout_request_id")
+  actorType       String        @map("actor_type")
+  actorId         Int?          @map("actor_id")
+  previousStatus  String?       @map("previous_status")
+  newStatus       String        @map("new_status")
+  note            String?
+  metadata        Json?
+  createdAt       DateTime      @default(now()) @map("created_at")
+  payoutRequest   PayoutRequest @relation(fields: [payoutRequestId], references: [id], onDelete: Cascade)
+
+  @@index([payoutRequestId, createdAt])
+  @@map("payout_request_events")
+}
+
+model ArtistPayoutBalance {
+  id               Int      @id @default(autoincrement())
+  userId           Int      @unique @map("user_id")
+  availableBalance Decimal  @default(0) @map("available_balance") @db.Decimal(18, 6)
+  pendingBalance   Decimal  @default(0) @map("pending_balance") @db.Decimal(18, 6)
+  lifetimeEarnings Decimal  @default(0) @map("lifetime_earnings") @db.Decimal(18, 6)
+  lifetimePaid     Decimal  @default(0) @map("lifetime_paid") @db.Decimal(18, 6)
+  currency         String   @default("INR")
+  lastUpdatedAt    DateTime @default(now()) @map("last_updated_at")
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("artist_payout_balances")
+}
+
+model RoyaltyLineItem {
+  id               Int                    @id @default(autoincrement())
+  userId           Int                    @map("user_id")
+  releaseId        Int?                   @map("release_id")
+  trackId          Int?                   @map("track_id")
+  upc              String?
+  isrc             String?
+  platform         String
+  territory        String?
+  grossRevenue     Decimal                @default(0) @map("gross_revenue") @db.Decimal(18, 6)
+  hymnServiceFee   Decimal                @default(0) @map("hymn_service_fee") @db.Decimal(18, 6)
+  netRevenue       Decimal                @default(0) @map("net_revenue") @db.Decimal(18, 6)
+  streams          Int?
+  downloads        Int?
+  statementMonth   DateTime               @map("statement_month")
+  salesMonth       DateTime?              @map("sales_month")
+  salesType        String?                @map("sales_type")
+  quantity         Int                    @default(0)
+  rawMetadata      Json?                  @map("raw_metadata")
+  sourceKey        String?                @unique @map("source_key")
+  statementId      Int?                   @map("statement_id")
+  sourceLineNumber Int?                   @map("source_line_number")
+  originalValues   Json?                  @map("original_values")
+  createdAt        DateTime               @default(now()) @map("created_at")
+  user             User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  release          Release?               @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+  track            Track?                 @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  splitEarnings    SplitEarningLineItem[]
+  statement        RoyaltyStatement?      @relation(fields: [statementId], references: [id], onDelete: Restrict)
+  adjustments      RoyaltyAdjustment[]
+  unmatchedRows    UnmatchedRoyaltyRow[]
+  allocations      RoyaltyAllocation[]
+
+  @@index([userId, statementMonth])
+  @@index([releaseId])
+  @@index([trackId])
+  @@index([statementId, sourceLineNumber])
+  @@index([isrc])
+  @@index([upc])
+  @@map("royalty_line_items")
+}
+
+model RoyaltyStatement {
+  id                   Int                   @id @default(autoincrement())
+  provider             String
+  periodStart          DateTime              @map("period_start")
+  periodEnd            DateTime              @map("period_end")
+  currency             String
+  fileChecksum         String                @unique @map("file_checksum")
+  originalFileName     String                @map("original_file_name")
+  storedAssetId        Int?                  @unique @map("stored_asset_id")
+  status               String                @default("staged")
+  reportingMonth       DateTime?             @map("reporting_month")
+  rolledBackAt         DateTime?             @map("rolled_back_at")
+  rolledBackByUserId   Int?                  @map("rolled_back_by_user_id")
+  rollbackReason       String?               @map("rollback_reason")
+  importedByUserId     Int                   @map("imported_by_user_id")
+  importedAt           DateTime?             @map("imported_at")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  storedAsset          StoredAsset?          @relation(fields: [storedAssetId], references: [id], onDelete: Restrict)
+  importedBy           User                  @relation(fields: [importedByUserId], references: [id], onDelete: Restrict)
+  jobs                 RoyaltyImportJob[]
+  lines                RoyaltyLineItem[]
+  adjustments          RoyaltyAdjustment[]
+  unmatchedRoyaltyRows UnmatchedRoyaltyRow[]
+
+  @@index([provider, periodStart, periodEnd])
+  @@map("royalty_statements")
+}
+
+model RoyaltyImportJob {
+  id             Int              @id @default(autoincrement())
+  statementId    Int              @map("statement_id")
+  actorUserId    Int              @map("actor_user_id")
+  state          String           @default("staged")
+  idempotencyKey String           @unique @map("idempotency_key")
+  rowCount       Int              @default(0) @map("row_count")
+  matchedCount   Int              @default(0) @map("matched_count")
+  unmatchedCount Int              @default(0) @map("unmatched_count")
+  errorCount     Int              @default(0) @map("error_count")
+  ignoredCount   Int              @default(0) @map("ignored_count")
+  manualCount    Int              @default(0) @map("manual_count")
+  totalRevenue   Decimal          @default(0) @map("total_revenue") @db.Decimal(18, 6)
+  progress       Int              @default(0)
+  phase          String           @default("uploading")
+  safeError      String?          @map("safe_error")
+  startedAt      DateTime         @default(now()) @map("started_at")
+  completedAt    DateTime?        @map("completed_at")
+  statement      RoyaltyStatement @relation(fields: [statementId], references: [id], onDelete: Restrict)
+  actor          User             @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([state, startedAt])
+  @@map("royalty_import_jobs")
+}
+
+model RoyaltyManualMapping {
+  id          Int      @id @default(autoincrement())
+  isrc        String?
+  upc         String?
+  releaseId   Int      @map("release_id")
+  trackId     Int?     @map("track_id")
+  createdById Int      @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([isrc, upc])
+  @@index([isrc])
+  @@index([upc])
+  @@map("royalty_manual_mappings")
+}
+
+model RoyaltyAdjustment {
+  id                Int              @id @default(autoincrement())
+  statementId       Int              @map("statement_id")
+  royaltyLineItemId Int?             @map("royalty_line_item_id")
+  amount            Decimal          @db.Decimal(18, 6)
+  currency          String
+  reason            String
+  idempotencyKey    String           @unique @map("idempotency_key")
+  reversalOfId      Int?             @map("reversal_of_id")
+  createdByUserId   Int              @map("created_by_user_id")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  statement         RoyaltyStatement @relation(fields: [statementId], references: [id], onDelete: Restrict)
+  royaltyLineItem   RoyaltyLineItem? @relation(fields: [royaltyLineItemId], references: [id], onDelete: Restrict)
+
+  @@index([statementId, createdAt])
+  @@map("royalty_adjustments")
+}
+
+model RoyaltyAllocation {
+  id                Int             @id @default(autoincrement())
+  royaltyLineItemId Int             @map("royalty_line_item_id")
+  userId            Int             @map("user_id")
+  grossAmount       Decimal         @map("gross_amount") @db.Decimal(18, 6)
+  commissionAmount  Decimal         @map("commission_amount") @db.Decimal(18, 6)
+  allocatedAmount   Decimal         @map("allocated_amount") @db.Decimal(18, 6)
+  heldAmount        Decimal         @default(0) @map("held_amount") @db.Decimal(18, 6)
+  currency          String
+  idempotencyKey    String          @unique @map("idempotency_key")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  lineItem          RoyaltyLineItem @relation(fields: [royaltyLineItemId], references: [id], onDelete: Restrict)
+  user              User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@map("royalty_allocations")
+}
+
+model StoredAsset {
+  id                      Int                      @id @default(autoincrement())
+  ownerUserId             Int                      @map("owner_user_id")
+  releaseId               Int?                     @map("release_id")
+  beatId                  Int?                     @unique @map("beat_id")
+  beatPurchaseId          Int?                     @unique @map("beat_purchase_id")
+  assetType               String                   @map("asset_type")
+  storageProvider         String                   @map("storage_provider")
+  objectKey               String                   @unique @map("object_key")
+  originalFilename        String                   @map("original_filename")
+  safeFilename            String                   @map("safe_filename")
+  mimeType                String                   @map("mime_type")
+  byteSize                Int                      @map("byte_size")
+  checksum                String
+  accessClassification    String                   @map("access_classification")
+  uploadStatus            String                   @default("ready") @map("upload_status")
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  deletedAt               DateTime?                @map("deleted_at")
+  retentionUntil          DateTime?                @map("retention_until")
+  owner                   User                     @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  release                 Release?                 @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+  beatDeliverable         Beat?                    @relation(fields: [beatId], references: [id], onDelete: SetNull)
+  beatPurchase            BeatPurchase?            @relation(fields: [beatPurchaseId], references: [id], onDelete: SetNull)
+  royaltyStatement        RoyaltyStatement?
+  managedServiceDocuments ManagedServiceDocument[]
+  payoutProofs            PayoutRequest[]          @relation("PayoutProof")
+
+  @@index([ownerUserId, assetType, createdAt])
+  @@index([releaseId, assetType])
+  @@index([deletedAt, retentionUntil])
+  @@map("stored_assets")
+}
+
+model SplitRecord {
+  id                 Int                    @id @default(autoincrement())
+  releaseId          Int                    @map("release_id")
+  trackId            Int?                   @map("track_id")
+  ownerUserId        Int                    @map("owner_user_id")
+  status             String                 @default("draft")
+  totalSharePercent  Decimal                @default(0) @map("total_share_percent") @db.Decimal(5, 2)
+  effectiveFromMonth Int?                   @map("effective_from_month")
+  effectiveFromYear  Int?                   @map("effective_from_year")
+  lockedAt           DateTime?              @map("locked_at")
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+  release            Release                @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+  track              Track?                 @relation(fields: [trackId], references: [id], onDelete: Restrict)
+  owner              User                   @relation("SplitOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  recipients         SplitRecipient[]
+  earnings           SplitEarningLineItem[]
+
+  @@index([ownerUserId, status])
+  @@index([releaseId, trackId, status])
+  @@map("split_records")
+}
+
+model SplitRecipient {
+  id                 Int         @id @default(autoincrement())
+  splitRecordId      Int         @map("split_record_id")
+  releaseId          Int         @map("release_id")
+  trackId            Int?        @map("track_id")
+  recipientUserId    Int?        @map("recipient_user_id")
+  recipientEmail     String?     @map("recipient_email")
+  recipientName      String      @map("recipient_name")
+  role               String
+  sharePercent       Decimal     @map("share_percent") @db.Decimal(5, 2)
+  payoutEligible     Boolean     @default(true) @map("payout_eligible")
+  inviteMethod       String      @map("invite_method")
+  inviteStatus       String      @default("pending") @map("invite_status")
+  splitCodeHash      String?     @unique @map("split_code_hash")
+  splitCodeDisplay   String?     @map("split_code_display")
+  splitCodeExpiresAt DateTime?   @map("split_code_expires_at")
+  splitCodeUsedAt    DateTime?   @map("split_code_used_at")
+  acceptedAt         DateTime?   @map("accepted_at")
+  declinedAt         DateTime?   @map("declined_at")
+  revokedAt          DateTime?   @map("revoked_at")
+  note               String?
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+  splitRecord        SplitRecord @relation(fields: [splitRecordId], references: [id], onDelete: Restrict)
+  release            Release     @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+  track              Track?      @relation(fields: [trackId], references: [id], onDelete: Restrict)
+  recipient          User?       @relation("SplitRecipientUser", fields: [recipientUserId], references: [id], onDelete: SetNull)
+
+  @@index([recipientUserId, inviteStatus])
+  @@index([recipientEmail, inviteStatus])
+  @@index([splitRecordId, inviteStatus])
+  @@map("split_recipients")
+}
+
+model PayoutCredential {
+  id                   Int       @id @default(autoincrement())
+  userId               Int       @unique @map("user_id")
+  method               String
+  upiIdMasked          String?   @map("upi_id_masked")
+  upiIdEncrypted       String?   @map("upi_id_encrypted")
+  accountHolderName    String?   @map("account_holder_name")
+  bankAccountMasked    String?   @map("bank_account_masked")
+  bankAccountEncrypted String?   @map("bank_account_encrypted")
+  ifscMasked           String?   @map("ifsc_masked")
+  ifscEncrypted        String?   @map("ifsc_encrypted")
+  taxInfoEncrypted     String?   @map("tax_info_encrypted")
+  status               String    @default("submitted")
+  legalName            String?   @map("legal_name")
+  country              String?
+  taxResidency         String?   @map("tax_residency")
+  panLastFour          String?   @map("pan_last_four")
+  rejectionReason      String?   @map("rejection_reason")
+  verificationNote     String?   @map("verification_note")
+  submittedAt          DateTime? @default(now()) @map("submitted_at")
+  verifiedAt           DateTime? @map("verified_at")
+  verifiedByAdminId    Int?      @map("verified_by_admin_id")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("payout_credentials")
+}
+
+model SplitEarningLineItem {
+  id                Int             @id @default(autoincrement())
+  royaltyLineItemId Int             @map("royalty_line_item_id")
+  splitRecordId     Int             @map("split_record_id")
+  recipientUserId   Int?            @map("recipient_user_id")
+  recipientEmail    String?         @map("recipient_email")
+  recipientName     String          @map("recipient_name")
+  recipientRole     String          @map("recipient_role")
+  releaseId         Int             @map("release_id")
+  trackId           Int?            @map("track_id")
+  sharePercent      Decimal         @map("share_percent") @db.Decimal(5, 2)
+  grossShareAmount  Decimal         @map("gross_share_amount") @db.Decimal(12, 2)
+  netShareAmount    Decimal         @map("net_share_amount") @db.Decimal(12, 2)
+  currency          String          @default("INR")
+  status            String          @default("held")
+  reversalOfId      Int?            @map("reversal_of_id")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  royaltyLineItem   RoyaltyLineItem @relation(fields: [royaltyLineItemId], references: [id], onDelete: Restrict)
+  splitRecord       SplitRecord     @relation(fields: [splitRecordId], references: [id], onDelete: Restrict)
+  recipient         User?           @relation(fields: [recipientUserId], references: [id], onDelete: SetNull)
+  release           Release         @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+  track             Track?          @relation(fields: [trackId], references: [id], onDelete: Restrict)
+
+  @@unique([royaltyLineItemId, splitRecordId, recipientEmail])
+  @@index([recipientUserId, status])
+  @@index([releaseId, trackId])
+  @@map("split_earning_line_items")
+}
+
+model WalletTransaction {
+  id                 Int      @id @default(autoincrement())
+  userId             Int      @map("user_id")
+  type               String
+  amount             Decimal  @db.Decimal(18, 6)
+  currency           String   @default("INR")
+  referenceType      String   @map("reference_type")
+  referenceId        String   @map("reference_id")
+  balanceAfter       Decimal  @map("balance_after") @db.Decimal(18, 6)
+  direction          String   @default("credit")
+  idempotencyKey     String?  @unique @map("idempotency_key")
+  effectiveAt        DateTime @default(now()) @map("effective_at")
+  availabilityStatus String   @default("available") @map("availability_status")
+  auditMetadata      Json?    @map("audit_metadata")
+  note               String?
+  createdAt          DateTime @default(now()) @map("created_at")
+  user               User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, type, referenceType, referenceId])
+  @@index([userId, createdAt])
+  @@map("wallet_transactions")
+}
+
+model FinancialAdjustment {
+  id             Int       @id @default(autoincrement())
+  userId         Int       @map("user_id")
+  amount         Decimal   @db.Decimal(18, 6)
+  currency       String    @default("INR")
+  reason         String
+  state          String    @default("pending")
+  requestedBy    Int       @map("requested_by")
+  approvedBy     Int?      @map("approved_by")
+  decisionNote   String?   @map("decision_note")
+  idempotencyKey String    @unique @map("idempotency_key")
+  requestedAt    DateTime  @default(now()) @map("requested_at")
+  decidedAt      DateTime? @map("decided_at")
+  appliedAt      DateTime? @map("applied_at")
+  subject        User      @relation("FinancialAdjustmentSubject", fields: [userId], references: [id], onDelete: Restrict)
+  requester      User      @relation("FinancialAdjustmentRequester", fields: [requestedBy], references: [id], onDelete: Restrict)
+  approver       User?     @relation("FinancialAdjustmentApprover", fields: [approvedBy], references: [id], onDelete: Restrict)
+
+  @@index([state, requestedAt])
+  @@index([userId, requestedAt])
+  @@map("financial_adjustments")
+}
+
+model SecurityRateLimit {
+  keyHash     String   @id @map("key_hash")
+  scope       String
+  count       Int      @default(0)
+  windowStart DateTime @map("window_start")
+  expiresAt   DateTime @map("expires_at")
+
+  @@index([expiresAt])
+  @@map("security_rate_limits")
+}
+
+model PayoutPeriod {
+  id                   Int       @id @default(autoincrement())
+  type                 String
+  month                Int?
+  quarter              Int?
+  year                 Int
+  startDate            DateTime  @map("start_date") @db.Date
+  endDate              DateTime  @map("end_date") @db.Date
+  status               String    @default("open")
+  totalGrossRevenue    Decimal   @default(0) @map("total_gross_revenue") @db.Decimal(14, 2)
+  totalArtistPool      Decimal   @default(0) @map("total_artist_pool") @db.Decimal(14, 2)
+  totalSplitEarnings   Decimal   @default(0) @map("total_split_earnings") @db.Decimal(14, 2)
+  totalHeldAmount      Decimal   @default(0) @map("total_held_amount") @db.Decimal(14, 2)
+  totalRequestedPayout Decimal   @default(0) @map("total_requested_payout") @db.Decimal(14, 2)
+  totalPaidAmount      Decimal   @default(0) @map("total_paid_amount") @db.Decimal(14, 2)
+  totalCarryForward    Decimal   @default(0) @map("total_carry_forward") @db.Decimal(14, 2)
+  generatedReportUrl   String?   @map("generated_report_url")
+  closedAt             DateTime? @map("closed_at")
+  closedByAdminId      Int?      @map("closed_by_admin_id")
+  closeNote            String?   @map("close_note")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  @@unique([type, month, quarter, year])
+  @@index([type, year, status])
+  @@map("payout_periods")
+}
+
+model QuarterCarryForward {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  fromQuarter Int      @map("from_quarter")
+  fromYear    Int      @map("from_year")
+  toQuarter   Int      @map("to_quarter")
+  toYear      Int      @map("to_year")
+  amount      Decimal  @db.Decimal(14, 2)
+  currency    String   @default("INR")
+  reason      String
+  createdAt   DateTime @default(now()) @map("created_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, fromQuarter, fromYear, toQuarter, toYear])
+  @@index([userId, toYear, toQuarter])
+  @@map("quarter_carry_forwards")
+}
+
+model PayoutReport {
+  id                 Int      @id @default(autoincrement())
+  type               String
+  userId             Int?     @map("user_id")
+  month              Int?
+  quarter            Int?
+  year               Int
+  fileName           String   @map("file_name")
+  storagePath        String?  @map("storage_path")
+  generatedByAdminId Int?     @map("generated_by_admin_id")
+  generatedAt        DateTime @default(now()) @map("generated_at")
+  status             String   @default("generated")
+  checksum           String?
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@index([type, year, quarter, month])
+  @@index([userId, generatedAt])
+  @@map("payout_reports")
+}
+
+model UnmatchedRoyaltyRow {
+  id                Int               @id @default(autoincrement())
+  sourceKey         String            @unique @map("source_key")
+  statementId       Int?              @map("statement_id")
+  sourceLineNumber  Int?              @map("source_line_number")
+  matchedReleaseId  Int?              @map("matched_release_id")
+  matchedTrackId    Int?              @map("matched_track_id")
+  importReference   String?           @map("import_reference")
+  statementMonth    DateTime?         @map("statement_month")
+  upc               String?
+  isrc              String?
+  rawData           Json              @map("raw_data")
+  status            String            @default("unmatched")
+  resolutionNote    String?           @map("resolution_note")
+  resolvedAt        DateTime?         @map("resolved_at")
+  resolvedById      Int?              @map("resolved_by_id")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  statement         RoyaltyStatement? @relation(fields: [statementId], references: [id], onDelete: Restrict)
+  matchedRelease    Release?          @relation(fields: [matchedReleaseId], references: [id], onDelete: Restrict)
+  matchedTrack      Track?            @relation(fields: [matchedTrackId], references: [id], onDelete: Restrict)
+  royaltyLineItem   RoyaltyLineItem?  @relation(fields: [royaltyLineItemId], references: [id])
+  royaltyLineItemId Int?              @map("royalty_line_item_id")
+
+  @@index([status, statementMonth])
+  @@index([statementId, sourceLineNumber])
+  @@map("unmatched_royalty_rows")
+}
+
+model Notification {
+  id          Int       @id @default(autoincrement())
+  userId      Int       @map("user_id")
+  title       String
+  body        String
+  type        String    @default("system")
+  href        String?
+  actionLabel String?   @map("action_label")
+  priority    String    @default("normal")
+  metadata    Json?
+  eventKey    String?   @unique @map("event_key")
+  readAt      DateTime? @map("read_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model EmailLog {
+  id                Int       @id @default(autoincrement())
+  userId            Int?      @map("user_id")
+  toEmail           String    @map("to_email")
+  subject           String
+  template          String
+  eventKey          String    @unique @map("event_key")
+  entityType        String?   @map("entity_type")
+  entityId          String?   @map("entity_id")
+  provider          String    @default("resend")
+  status            String    @default("queued")
+  providerMessageId String?   @map("provider_message_id")
+  errorMessage      String?   @map("error_message")
+  payload           Json?
+  retryCount        Int       @default(0) @map("retry_count")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  sentAt            DateTime? @map("sent_at")
+  user              User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([template, createdAt])
+  @@index([userId, createdAt])
+  @@index([entityType, entityId])
+  @@map("email_logs")
+}
+
+model Subscription {
+  id                Int       @id @default(autoincrement())
+  userId            Int       @unique @map("user_id")
+  plan              String
+  planName          String?   @map("plan_name")
+  expiryDate        DateTime  @map("expiry")
+  status            String    @default("active")
+  purchasedAt       DateTime  @default(now()) @map("purchased_at")
+  releasesUsed      Int       @default(0) @map("releases_used")
+  releaseLimit      Int?      @map("release_limit")
+  artistLimit       Int       @default(5) @map("artist_limit")
+  availableFeatures String    @default("[]") @map("available_features")
+  daysRemaining     Int       @default(0) @map("days_remaining")
+  autoRenewal       Boolean   @default(true) @map("auto_renewal")
+  nextRenewalDate   DateTime? @map("next_renewal_date")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, expiryDate])
+  @@map("subscriptions")
+}
+
+model SupportTicket {
+  id                Int          @id @default(autoincrement())
+  userId            Int          @map("user_id")
+  subject           String
+  message           String
+  status            TicketStatus @default(OPEN)
+  category          String       @default("general")
+  priority          String       @default("normal")
+  relatedReleaseId  Int?         @map("related_release_id")
+  relatedPurchaseId Int?         @map("related_purchase_id")
+  relatedPayoutId   Int?         @map("related_payout_id")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([category, priority])
+  @@map("support_tickets")
+}
+
+model AuditLog {
+  id            Int      @id @default(autoincrement())
+  actorType     String   @default("system") @map("actor_type")
+  actorId       Int?     @map("actor_id")
+  actorRole     String   @default("unknown") @map("actor_role")
+  action        String
+  entity        String
+  entityId      String?  @map("entity_id")
+  previousValue Json?    @map("previous_value")
+  newValue      Json?    @map("new_value")
+  reason        String?
+  requestId     String?  @map("request_id")
+  ipAddress     String?  @map("ip_address")
+  userAgent     String?  @map("user_agent")
+  sessionId     String?  @map("session_id")
+  riskLevel     String   @default("normal") @map("risk_level")
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+  actor         User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([entity, entityId])
+  @@index([entity, createdAt])
+  @@index([action, createdAt])
+  @@index([riskLevel, createdAt])
+  @@index([requestId])
+  @@map("audit_logs")
+}
+
+model FraudRule {
+  id             Int       @id @default(autoincrement())
+  name           String    @unique
+  category       String
+  description    String
+  conditionJson  Json      @map("condition_json")
+  weight         Int
+  severity       String
+  enabled        Boolean   @default(true)
+  autoCreateCase Boolean   @default(true) @map("auto_create_case")
+  autoHoldPayout Boolean   @default(false) @map("auto_hold_payout")
+  notifyAdmin    Boolean   @default(true) @map("notify_admin")
+  cooldownMinutes Int      @default(60) @map("cooldown_minutes")
+  triggerCount   Int       @default(0) @map("trigger_count")
+  lastTriggeredAt DateTime? @map("last_triggered_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([enabled, category])
+  @@map("fraud_rules")
+}
+
+model FraudAlert {
+  id              Int       @id @default(autoincrement())
+  category        String
+  severity        String
+  riskScore       Int       @map("risk_score")
+  status          String    @default("new")
+  entityType      String    @map("entity_type")
+  entityId        String    @map("entity_id")
+  userId          Int?      @map("user_id")
+  ruleId          Int?      @map("rule_id")
+  confidence      Decimal?  @db.Decimal(5, 2)
+  summary         String
+  detectedAt      DateTime  @default(now()) @map("detected_at")
+  assignedAdminId Int?      @map("assigned_admin_id")
+  resolvedAt      DateTime? @map("resolved_at")
+  resolution      String?
+  signals         FraudSignal[]
+  primaryCase     FraudCase?
+
+  @@index([status, severity, detectedAt])
+  @@index([userId, status])
+  @@index([entityType, entityId])
+  @@index([ruleId, detectedAt])
+  @@map("fraud_alerts")
+}
+
+model FraudSignal {
+  id           Int      @id @default(autoincrement())
+  alertId      Int      @map("alert_id")
+  signalType   String   @map("signal_type")
+  weight       Int
+  confidence   Decimal? @db.Decimal(5, 2)
+  source       String
+  evidenceJson Json?    @map("evidence_json")
+  entityType   String?  @map("entity_type")
+  entityId     String?  @map("entity_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  alert        FraudAlert @relation(fields: [alertId], references: [id], onDelete: Restrict)
+
+  @@index([alertId, createdAt])
+  @@map("fraud_signals")
+}
+
+model FraudCase {
+  id              Int       @id @default(autoincrement())
+  primaryAlertId  Int       @unique @map("primary_alert_id")
+  caseNumber      String    @unique @map("case_number")
+  status          String    @default("new")
+  severity        String
+  riskScore       Int       @map("risk_score")
+  assignedAdminId Int?      @map("assigned_admin_id")
+  userId          Int?      @map("user_id")
+  openedAt        DateTime  @default(now()) @map("opened_at")
+  closedAt        DateTime? @map("closed_at")
+  resolutionType  String?   @map("resolution_type")
+  resolutionNote  String?   @map("resolution_note")
+  primaryAlert    FraudAlert @relation(fields: [primaryAlertId], references: [id], onDelete: Restrict)
+  evidence        FraudEvidence[]
+  notes           FraudCaseNote[]
+  links           FraudEntityLink[]
+
+  @@index([status, severity, openedAt])
+  @@index([userId, status])
+  @@index([assignedAdminId, status])
+  @@map("fraud_cases")
+}
+
+model FraudEvidence {
+  id             Int      @id @default(autoincrement())
+  caseId         Int      @map("case_id")
+  type           String
+  source         String
+  fileAssetId    Int?     @map("file_asset_id")
+  dataJson       Json?    @map("data_json")
+  addedByAdminId Int      @map("added_by_admin_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  case           FraudCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
+
+  @@index([caseId, createdAt])
+  @@map("fraud_evidence")
+}
+
+model FraudCaseNote {
+  id         Int      @id @default(autoincrement())
+  caseId     Int      @map("case_id")
+  adminId    Int      @map("admin_id")
+  note       String
+  visibility String   @default("internal")
+  createdAt  DateTime @default(now()) @map("created_at")
+  case       FraudCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
+
+  @@index([caseId, createdAt])
+  @@map("fraud_case_notes")
+}
+
+model FraudEntityLink {
+  id               Int      @id @default(autoincrement())
+  caseId           Int      @map("case_id")
+  sourceEntityType String   @map("source_entity_type")
+  sourceEntityId   String   @map("source_entity_id")
+  targetEntityType String   @map("target_entity_type")
+  targetEntityId   String   @map("target_entity_id")
+  linkType         String   @map("link_type")
+  confidence       Decimal? @db.Decimal(5, 2)
+  reason           String
+  createdAt        DateTime @default(now()) @map("created_at")
+  case             FraudCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
+
+  @@index([caseId, createdAt])
+  @@map("fraud_entity_links")
+}
+
+model Referral {
+  id                          Int       @id @default(autoincrement())
+  userId                      Int       @map("user_id")
+  referredUserId              Int?      @unique @map("referred_user_id")
+  referralCode                String    @map("referral_code")
+  signupEmail                 String    @map("signup_email")
+  status                      String    @default("PENDING")
+  purchaseAmount              Int       @default(0) @map("purchase_amount")
+  earnings                    Int       @default(0)
+  referredReward              Int       @default(0) @map("referred_reward")
+  attributedAt                DateTime  @default(now()) @map("attributed_at")
+  registeredAt                DateTime? @map("registered_at")
+  qualifiedAt                 DateTime? @map("qualified_at")
+  rewardedAt                  DateTime? @map("rewarded_at")
+  reversedAt                  DateTime? @map("reversed_at")
+  qualifyingTransactionType   String?   @map("qualifying_transaction_type")
+  qualifyingTransactionId     String?   @map("qualifying_transaction_id")
+  qualifyingPaymentId         String?   @map("qualifying_payment_id")
+  riskStatus                  String    @default("clear") @map("risk_status")
+  rejectionReason             String?   @map("rejection_reason")
+  createdAt                   DateTime  @default(now()) @map("created_at")
+  updatedAt                   DateTime  @updatedAt @map("updated_at")
+  owner                       User      @relation("ReferralOwner", fields: [userId], references: [id], onDelete: Restrict)
+  referredUser                User?     @relation("ReferralRecipient", fields: [referredUserId], references: [id], onDelete: Restrict)
+
+  @@unique([qualifyingTransactionType, qualifyingTransactionId])
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@map("referrals")
+}
+
+model CreditLedgerEntry {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @map("user_id")
+  type           String
+  bucket         String
+  amount         Decimal  @db.Decimal(12, 2)
+  currency       String   @default("INR")
+  direction      String
+  sourceType     String   @map("source_type")
+  sourceId       String   @map("source_id")
+  description    String
+  idempotencyKey String   @unique @map("idempotency_key")
+  status         String   @default("posted")
+  balanceAfter   Decimal  @map("balance_after") @db.Decimal(12, 2)
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, bucket, createdAt])
+  @@index([sourceType, sourceId])
+  @@map("credit_ledger_entries")
+}
+
+model ReferralVisit {
+  id           Int      @id @default(autoincrement())
+  referrerId   Int      @map("referrer_id")
+  referralCode String   @map("referral_code")
+  visitorHash  String   @map("visitor_hash")
+  capturedAt   DateTime @default(now()) @map("captured_at")
+  referrer     User     @relation(fields: [referrerId], references: [id], onDelete: Restrict)
+
+  @@index([referrerId, capturedAt])
+  @@index([referralCode, capturedAt])
+  @@map("referral_visits")
+}
+
+model Beat {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @map("user_id")
+  title           String
+  bpm             Int
+  genre           String
+  mood            String
+  keySignature    String   @map("key_signature")
+  priceCents      Int      @map("price_cents")
+  audioUploadId   Int?     @map("audio_upload_id")
+  artworkUploadId Int?     @map("artwork_upload_id")
+  enabled         Boolean  @default(true)
+  status          String   @default("PENDING_REVIEW")
+  reviewIssues    Json?    @map("review_issues")
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  audio            Upload?             @relation("BeatAudio", fields: [audioUploadId], references: [id])
+  artwork          Upload?             @relation("BeatArtwork", fields: [artworkUploadId], references: [id])
+  sales            BeatSale[]
+  checkoutItems    CheckoutOrderItem[]
+  purchases        BeatPurchase[]
+  deliverableAsset StoredAsset?
+
+  @@index([userId, enabled])
+  @@index([genre, mood])
+  @@map("beats")
+}
+
+model ProducerProfile {
+  id            Int      @id @default(autoincrement())
+  userId        Int      @unique @map("user_id")
+  slug          String   @unique
+  displayName   String   @map("display_name")
+  bio           String
+  specialty     String
+  coverPhotoUrl String?  @map("cover_photo_url")
+  avatarUrl     String?  @map("avatar_url")
+  instagramUrl  String?  @map("instagram_url")
+  youtubeUrl    String?  @map("youtube_url")
+  spotifyUrl    String?  @map("spotify_url")
+  websiteUrl    String?  @map("website_url")
+  tags          Json?
+  location      String?
+  status        String   @default("pending_setup")
+  active        Boolean  @default(true)
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([slug])
+  @@index([active, sortOrder])
+  @@map("producer_profiles")
+}
+
+model BeatSale {
+  id                    Int      @id @default(autoincrement())
+  beatId                Int      @map("beat_id")
+  producerUserId        Int      @map("producer_user_id")
+  buyerUserId           Int      @map("buyer_user_id")
+  orderId               Int      @map("order_id")
+  paymentId             String   @map("payment_id")
+  grossAmount           Decimal  @map("gross_amount") @db.Decimal(12, 2)
+  hymnCommissionAmount  Decimal  @map("hymn_commission_amount") @db.Decimal(12, 2)
+  producerEarningAmount Decimal  @map("producer_earning_amount") @db.Decimal(12, 2)
+  currency              String   @default("INR")
+  licenseType           String   @map("license_type")
+  status                String   @default("paid")
+  createdAt             DateTime @default(now()) @map("created_at")
+  beat                  Beat     @relation(fields: [beatId], references: [id], onDelete: Restrict)
+  producer              User     @relation("ProducerBeatSales", fields: [producerUserId], references: [id], onDelete: Restrict)
+  buyer                 User     @relation("BuyerBeatSales", fields: [buyerUserId], references: [id], onDelete: Restrict)
+
+  @@unique([orderId, beatId, licenseType])
+  @@index([producerUserId, createdAt])
+  @@index([buyerUserId, createdAt])
+  @@map("beat_sales")
+}
+
+model Coupon {
+  id                 Int                @id @default(autoincrement())
+  code               String             @unique
+  discountPercentage Int                @map("discount_percentage")
+  maxUses            Int?               @map("max_uses")
+  active             Boolean            @default(true)
+  expiresAt          DateTime?          @map("expires_at")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  discountType       String             @default("percentage") @map("discount_type")
+  discountValue      Decimal            @default(0) @map("discount_value") @db.Decimal(12, 2)
+  expiryDate         DateTime?          @map("expiry_date")
+  usageLimit         Int?               @map("usage_limit")
+  perUserLimit       Int                @default(1) @map("per_user_limit")
+  redemptions        CouponRedemption[]
+
+  @@index([code])
+  @@map("coupons")
+}
+
+model CheckoutOrder {
+  id                  Int                   @id @default(autoincrement())
+  userId              Int                   @map("user_id")
+  productId           String                @default("beatstore") @map("product_id")
+  originalPrice       Decimal               @map("original_price") @db.Decimal(12, 2)
+  discountApplied     Decimal               @default(0) @map("discount_applied") @db.Decimal(12, 2)
+  referralCreditsUsed Int                   @default(0) @map("referral_credits_used")
+  finalAmount         Decimal               @map("final_amount") @db.Decimal(12, 2)
+  couponCode          String?               @map("coupon_code")
+  razorpayOrderId     String                @unique @map("razorpay_order_id")
+  razorpayPaymentId   String?               @unique @map("razorpay_payment_id")
+  currency            String                @default("INR")
+  paymentStatus       String                @default("created") @map("payment_status")
+  fulfilledAt         DateTime?             @map("fulfilled_at")
+  createdAt           DateTime              @default(now()) @map("created_at")
+  updatedAt           DateTime              @updatedAt @map("updated_at")
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  items               CheckoutOrderItem[]
+  couponRedemptions   CouponRedemption[]
+  webhookEvents       PaymentWebhookEvent[]
+
+  @@index([userId, paymentStatus, createdAt])
+  @@index([paymentStatus, createdAt])
+  @@map("checkout_orders")
+}
+
+model CheckoutOrderItem {
+  id          Int           @id @default(autoincrement())
+  orderId     Int           @map("order_id")
+  beatId      Int           @map("beat_id")
+  licenseType String        @map("license_type")
+  price       Decimal       @db.Decimal(12, 2)
+  licenseUrl  String?       @map("license_url")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  order       CheckoutOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  beat        Beat          @relation(fields: [beatId], references: [id], onDelete: Restrict)
+  purchase    BeatPurchase?
+
+  @@unique([orderId, beatId, licenseType])
+  @@index([beatId, createdAt])
+  @@map("checkout_order_items")
+}
+
+model CouponRedemption {
+  id        Int           @id @default(autoincrement())
+  couponId  Int           @map("coupon_id")
+  userId    Int           @map("user_id")
+  orderId   Int           @unique @map("order_id")
+  createdAt DateTime      @default(now()) @map("created_at")
+  coupon    Coupon        @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  order     CheckoutOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([couponId, userId])
+  @@map("coupon_redemptions")
+}
+
+model DistributionOrder {
+  id                Int                   @id @default(autoincrement())
+  userId            Int                   @map("user_id")
+  plan              String
+  amount            Int
+  razorpayOrderId   String                @unique @map("razorpay_order_id")
+  razorpayPaymentId String?               @unique @map("razorpay_payment_id")
+  paymentStatus     String                @default("created") @map("payment_status")
+  currency          String                @default("INR")
+  fulfilledAt       DateTime?             @map("fulfilled_at")
+  webhookEvents     PaymentWebhookEvent[]
+  user              User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt         DateTime              @default(now()) @map("created_at")
+
+  @@index([userId, paymentStatus])
+  @@map("distribution_orders")
+}
+
+model PaymentWebhookEvent {
+  id                  Int                @id @default(autoincrement())
+  provider            String             @default("razorpay")
+  providerEventId     String?            @unique @map("provider_event_id")
+  eventType           String             @map("event_type")
+  payloadHash         String             @unique @map("payload_hash")
+  signatureValid      Boolean            @map("signature_valid")
+  processingState     String             @default("received") @map("processing_state")
+  attemptCount        Int                @default(0) @map("attempt_count")
+  distributionOrderId Int?               @map("distribution_order_id")
+  checkoutOrderId     Int?               @map("checkout_order_id")
+  razorpayOrderId     String?            @map("razorpay_order_id")
+  paymentId           String?            @map("payment_id")
+  amountMinor         Int?               @map("amount_minor")
+  currency            String?
+  errorCode           String?            @map("error_code")
+  errorMessage        String?            @map("error_message")
+  payloadRedacted     Json?              @map("payload_redacted")
+  receivedAt          DateTime           @default(now()) @map("received_at")
+  processedAt         DateTime?          @map("processed_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+  distributionOrder   DistributionOrder? @relation(fields: [distributionOrderId], references: [id], onDelete: SetNull)
+  checkoutOrder       CheckoutOrder?     @relation(fields: [checkoutOrderId], references: [id], onDelete: SetNull)
+
+  @@index([processingState, receivedAt])
+  @@index([razorpayOrderId])
+  @@index([checkoutOrderId])
+  @@map("payment_webhook_events")
+}
+
+// New models to be added to schema.prisma
+
+model ArtistCard {
+  id                   Int       @id @default(autoincrement())
+  userId               Int       @map("user_id")
+  artistName           String    @map("artist_name")
+  spotifyProfileUrl    String?   @map("spotify_profile_url")
+  spotifyArtistId      String?   @map("spotify_artist_id")
+  appleMusicProfileUrl String?   @map("apple_music_profile_url")
+  appleArtistId        String?   @map("apple_artist_id")
+  instagramUrl         String?   @map("instagram_url")
+  youtubeUrl           String?   @map("youtube_url")
+  imageUrl             String?   @map("image_url")
+  followers            Int?
+  isPrimary            Boolean   @default(false) @map("is_primary")
+  archivedAt           DateTime? @map("archived_at")
+  role                 String?
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  releases             Release[]
+
+  @@unique([userId, artistName])
+  @@index([userId])
+  @@map("artist_cards")
+}
+
+model BeatPurchase {
+  id                  Int       @id @default(autoincrement())
+  userId              Int       @map("user_id")
+  beatId              Int       @map("beat_id")
+  licenseType         String    @map("license_type")
+  purchasedAt         DateTime  @default(now()) @map("purchased_at")
+  licenseUploadedAt   DateTime? @map("license_uploaded_at")
+  licenseUrl          String?   @map("license_url")
+  releaseId           Int?      @unique @map("release_id")
+  paymentId           String?   @map("payment_id")
+  checkoutOrderItemId Int?      @unique @map("checkout_order_item_id")
+  hasAccess           Boolean   @default(true) @map("has_access")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  beat              Beat               @relation(fields: [beatId], references: [id], onDelete: Restrict)
+  checkoutOrderItem CheckoutOrderItem? @relation(fields: [checkoutOrderItemId], references: [id], onDelete: Restrict)
+  licenseAsset      StoredAsset?
+
+  @@index([userId, beatId, licenseType])
+  @@index([paymentId])
+  @@index([userId, purchasedAt])
+  @@map("beat_purchases")
+}
+
+model DistributionQueueEntry {
+  id                Int                    @id @default(autoincrement())
+  releaseId         Int                    @unique @map("release_id")
+  currentStage      String                 @map("current_stage")
+  qualityCheckNotes String?                @map("quality_check_notes")
+  approvalNotes     String?                @map("approval_notes")
+  direnoteRequestId String?                @map("direnote_request_id")
+  direnoteResponse  Json?                  @map("direnote_response")
+  submissionId      String?                @map("submission_id")
+  apiErrorMessage   String?                @map("api_error_message")
+  stageHistory      Json?                  @map("stage_history")
+  timestamps        Json?
+  operatorId        Int?                   @map("operator_id")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+  release           Release                @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  logs              DistributionQueueLog[]
+
+  @@index([currentStage, updatedAt])
+  @@index([releaseId])
+  @@map("distribution_queue_entries")
+}
+
+model DistributionQueueLog {
+  id             Int                    @id @default(autoincrement())
+  queueEntryId   Int                    @map("queue_entry_id")
+  stage          String
+  stageStartTime DateTime               @map("stage_start_time")
+  stageEndTime   DateTime?              @map("stage_end_time")
+  operatorId     Int?                   @map("operator_id")
+  notes          String?
+  metadata       Json?
+  createdAt      DateTime               @default(now()) @map("created_at")
+  queueEntry     DistributionQueueEntry @relation(fields: [queueEntryId], references: [id], onDelete: Cascade)
+
+  @@index([queueEntryId, stageStartTime])
+  @@map("distribution_queue_logs")
+}
+
+// vercel trigger
+
+// vercel trigger 2
