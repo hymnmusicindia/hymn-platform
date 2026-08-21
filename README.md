@@ -83,7 +83,10 @@ Production (and Preview only when using a non-production integration account):
 the second day of each month. Vercel supplies `CRON_SECRET` to protected cron
 requests when that project variable is configured. The repository's
 `vercel-build` command applies versioned Prisma migrations only for Production
-deployments before building; Preview deployments never run migrations.
+deployments before building; Preview deployments never run migrations. For a
+recognised legacy HYMN database created before migration tracking, the first
+Production deployment safely records the pre-v2.2 migration history, then
+applies the v2.2 migration. It refuses unknown or incomplete databases.
 
 ## UI Previews
 
