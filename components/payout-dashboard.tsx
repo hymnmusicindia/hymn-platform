@@ -1,8 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
-import { AlertCircle, ArrowUpRight, Landmark, ShieldCheck, WalletCards, X } from "lucide-react";
-import { RoyaltyCalculator } from "@/components/royalty-calculator";
+import { ArrowUpRight, ShieldCheck, WalletCards, X } from "lucide-react";
 import { ContextualHelp } from "@/components/contextual-help";
 import type { PayoutSummary } from "@/lib/payout";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
@@ -344,39 +343,21 @@ export function PayoutDashboard({ initialSummary }: { initialSummary: PayoutSumm
         </div>
       </section>
 
-      <section className="mt-8 grid gap-6 lg:grid-cols-[0.95fr,1.05fr]">
-        <div className="surface-card p-5 sm:p-6">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="mt-1 h-5 w-5" style={{ color: "var(--money)" }} />
-            <div>
-              <h2 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>Royalty estimator & payout information</h2>
-              <p className="mt-3 text-sm leading-6" style={{ color: "var(--text-muted)" }}>
-                HYMN calculates withdrawable payout balance only from verified royalty statements, cleared earnings, admin-confirmed royalty imports, and future DireNote earnings data when available.
-              </p>
-              <p className="mt-3 text-sm leading-6" style={{ color: "var(--text-muted)" }}>
-                Payouts are usually processed within 24-48 hours. A 2% HYMN service fee is deducted from each payout request.
-              </p>
-              <p className="mt-3 rounded-2xl border p-4 text-sm font-semibold" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text)" }}>
-                The royalty calculator is only an estimate. Withdrawable payout balance is based only on verified royalty statements and cleared earnings.
-              </p>
-            </div>
+      <section className="surface-card mt-8 overflow-hidden p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-5" style={{ borderColor: "var(--border)" }}>
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]" style={{ borderColor: "var(--border)", color: "var(--success)", background: "var(--bg-soft)" }}><ShieldCheck className="h-3.5 w-3.5" /> Verified reporting data</div>
+            <h2 className="mt-3 text-2xl font-semibold" style={{ color: "var(--text)" }}>DireNote earnings snapshot</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6" style={{ color: "var(--text-muted)" }}>Only imported, verified distributor reporting is shown here. HYMN does not use stream-rate estimates for payout balances.</p>
           </div>
+          <p className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: "var(--border)", color: "var(--text-muted)", background: "var(--bg-soft)" }}>Reporting period: {verifiedThrough}</p>
         </div>
-        <RoyaltyCalculator />
-      </section>
-
-      <section className="mt-6 grid gap-4 md:grid-cols-3">
-        {[
-          ["Verified sales base", "Only verified royalty statements and cleared earnings count toward payout-ready balances."],
-          ["How HYMN calculates royalties", "Gross reported earnings minus applicable HYMN service fees become net payable balances after statement verification."],
-          ["Estimator terms", "The royalty calculator is only an estimate and does not represent withdrawable balance."]
-        ].map(([title, body]) => (
-          <article key={title} className="surface-card p-5">
-            <Landmark className="h-5 w-5" style={{ color: "var(--text-soft)" }} />
-            <h3 className="mt-4 text-xl font-semibold" style={{ color: "var(--text)" }}>{title}</h3>
-            <p className="mt-3 text-sm leading-6" style={{ color: "var(--text-muted)" }}>{body}</p>
-          </article>
-        ))}
+        {hasStatements ? <div className="mt-5 grid gap-4 lg:grid-cols-[0.8fr_0.8fr_0.8fr_1.6fr]">
+          <div className="rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Payout-ready</p><p className="mt-2 text-2xl font-semibold" style={{ color: "var(--text)" }}>{formatUsd(summary.availableBalanceUsd)}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{formatMoney(summary.availableBalance)} INR</p></div>
+          <div className="rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Verified earnings</p><p className="mt-2 text-2xl font-semibold" style={{ color: "var(--text)" }}>{formatMoney(summary.totalEarnings)}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Imported royalty records</p></div>
+          <div className="rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Platforms reported</p><p className="mt-2 text-2xl font-semibold" style={{ color: "var(--text)" }}>{summary.platformBreakdown.length}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{summary.monthlyEarnings.length} statement period{summary.monthlyEarnings.length === 1 ? "" : "s"}</p></div>
+          <div className="rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--card)" }}><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Top reported platforms</p><div className="mt-3 grid gap-2">{summary.platformBreakdown.slice(0, 3).map((row) => <div key={row.platform} className="flex items-center justify-between gap-3 text-sm"><span className="truncate" style={{ color: "var(--text-muted)" }}>{row.platform}</span><span className="font-semibold" style={{ color: "var(--text)" }}>{formatMoney(row.earnings)}</span></div>)}</div></div>
+        </div> : <div className="mt-5 rounded-2xl border border-dashed p-6 text-center" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><p className="font-semibold" style={{ color: "var(--text)" }}>No verified DireNote earnings imported yet</p><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>This area will populate after a verified DireNote revenue report is imported into your HYMN ledger.</p></div>}
       </section>
       </> : null}
 
