@@ -11,6 +11,10 @@ function formatMoney(amount: number) {
   return `Rs ${Math.round(amount).toLocaleString("en-IN")}`;
 }
 
+function formatUsd(amount: number | null) {
+  return amount === null ? "USD unavailable" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+}
+
 function StatusBadge({ status }: { status: string }) {
   const active = status === "paid" || status === "Cleared";
   return <span className={active ? "status-pill status-pill-active" : "status-pill"}>{status.replace(/_/g, " ")}</span>;
@@ -211,8 +215,8 @@ export function PayoutDashboard({ initialSummary }: { initialSummary: PayoutSumm
           </div>
           <div className="w-full rounded-[1.5rem] border p-5 lg:max-w-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
             <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Available to withdraw</p><WalletCards className="h-5 w-5" style={{ color: "var(--money)" }} /></div>
-            <p className="mt-3 text-4xl font-semibold tracking-tight" style={{ color: "var(--text)" }}>{formatMoney(summary.availableBalance)}</p>
-            <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>$105 USD · approximately {summary.exchangeRate.approximateMinimumInr ? formatMoney(summary.exchangeRate.approximateMinimumInr) : "unavailable"}</p>
+            <p className="mt-3 text-4xl font-semibold tracking-tight" style={{ color: "var(--text)" }}>{formatUsd(summary.availableBalanceUsd)}</p>
+            <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{formatMoney(summary.availableBalance)} INR{summary.exchangeRate.usdToInrRate ? " · converted at the latest USD/INR rate" : " · USD conversion unavailable"}</p>
             <div className="mt-4 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--border)" }}><div className="h-full rounded-full transition-all" style={{ width: `${payoutProgress}%`, background: "var(--money)" }} /></div>
             <div className="mt-2 flex justify-between gap-3 text-xs" style={{ color: "var(--text-soft)" }}><span>{summary.availableBalanceUsd === null ? "USD estimate unavailable" : `$${summary.availableBalanceUsd.toFixed(2)} of $${summary.minimumPayoutUsd}`}</span><span>{Math.round(payoutProgress)}%</span></div>
             {summary.exchangeRate.usdToInrRate ? <p className="mt-3 text-xs" style={{ color: "var(--text-soft)" }}>1 USD = {summary.exchangeRate.usdToInrRate.toFixed(4)} INR · updated {summary.exchangeRate.rateUpdatedAt ? new Date(summary.exchangeRate.rateUpdatedAt).toLocaleString("en-IN") : "—"}{summary.exchangeRate.rateStatus === "stale" ? " · stale" : ""}</p> : null}
