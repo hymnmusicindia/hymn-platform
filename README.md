@@ -81,12 +81,9 @@ Production (and Preview only when using a non-production integration account):
 
 `vercel.json` schedules the release-status sync daily and the revenue sync on
 the second day of each month. Vercel supplies `CRON_SECRET` to protected cron
-requests when that project variable is configured. The repository's
-`vercel-build` command applies versioned Prisma migrations only for Production
-deployments before building; Preview deployments never run migrations. For a
-recognised legacy HYMN database created before migration tracking, the first
-Production deployment safely records the pre-v2.2 migration history, then
-applies the v2.2 migration. It refuses unknown or incomplete databases.
+requests when that project variable is configured. Apply migrations with
+`npm run deploy:release` against the same production database before enabling
+the DireNote cron flags.
 
 ## UI Previews
 
