@@ -61,6 +61,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   const notificationMenuRef = useRef<HTMLDivElement>(null);
   const notificationMutationsRef = useRef<Set<number>>(new Set());
   const markAllPendingRef = useRef(false);
+  const scrollFrameRef = useRef<number | null>(null);
   const isAuthenticated = Boolean(user);
 
   useEffect(() => {
@@ -68,6 +69,9 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
     lastScrollRef.current = window.scrollY;
     const onScroll = () => {
+      if (scrollFrameRef.current !== null) return;
+      scrollFrameRef.current = window.requestAnimationFrame(() => {
+        scrollFrameRef.current = null;
       const current = Math.max(0, window.scrollY || document.documentElement.scrollTop);
       const previous = lastScrollRef.current;
       
@@ -87,10 +91,14 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
       // Hide when scrolling down, show when scrolling up
       setHidden(current > previous);
       lastScrollRef.current = current;
+      });
     };
 
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (scrollFrameRef.current !== null) window.cancelAnimationFrame(scrollFrameRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -189,10 +197,14 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
       return;
     }
 
-    loadNotifications();
-    const interval = window.setInterval(loadNotifications, 45000);
+    // Keep the unread badge current, but avoid waking every authenticated page more
+    // often than necessary. Manual opening still refreshes immediately below.
+    void loadNotifications();
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadNotifications();
+    }, 120_000);
     const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") loadNotifications();
+      if (document.visibilityState === "visible" && notificationsOpen) void loadNotifications();
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
@@ -200,6 +212,11 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!notificationsOpen || !isAuthenticated) return;
+    void loadNotifications();
+  }, [isAuthenticated, notificationsOpen]);
 
   useEffect(() => {
     if (!notificationsOpen) return;

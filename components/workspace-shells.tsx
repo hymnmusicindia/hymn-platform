@@ -1,17 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { DashboardFrame } from "@/components/dashboard-frame";
 import { FloatingAssistant } from "@/components/floating-assistant";
-import { ReferralPanel } from "@/components/referral-panel";
-import { AnalyticsDashboard } from "@/components/analytics-dashboard";
 import { BeatCard } from "@/components/beat-card";
 import { Beat, BeatPurchase, Notification, Order, Release, SupportTicket, User } from "@/lib/types";
-import { ProfilePreferencesForm } from "@/components/profile-preferences-form";
-import { SplitsDashboard } from "@/components/splits-dashboard";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { CustomerHome, ProducerHome } from "@/components/simplified-dashboard-home";
+
+const AnalyticsDashboard = dynamic(() => import("@/components/analytics-dashboard").then((module) => module.AnalyticsDashboard));
+const ReferralPanel = dynamic(() => import("@/components/referral-panel").then((module) => module.ReferralPanel));
+const SplitsDashboard = dynamic(() => import("@/components/splits-dashboard").then((module) => module.SplitsDashboard));
+const ProfilePreferencesForm = dynamic(() => import("@/components/profile-preferences-form").then((module) => module.ProfilePreferencesForm));
 
 type CustomerPayoutSummary = {
   totalEarnings: number;
@@ -160,11 +162,10 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   useEffect(() => {
     let ignore = false;
     async function loadWorkspaceData() {
-      const [notificationResponse, ticketResponse, payoutResponse, actionResponse] = await Promise.all([
+      const [notificationResponse, ticketResponse, payoutResponse] = await Promise.all([
         fetch("/api/notifications?limit=30", { cache: "no-store" }).catch(() => null),
         fetch("/api/support-tickets", { cache: "no-store" }).catch(() => null),
-        fetch("/api/payout/summary", { cache: "no-store" }).catch(() => null),
-        fetch("/api/dashboard/next-actions", { cache: "no-store" }).catch(() => null)
+        fetch("/api/payout/summary", { cache: "no-store" }).catch(() => null)
       ]);
       if (ignore) return;
       if (notificationResponse?.ok) {
@@ -179,7 +180,6 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         const data = await payoutResponse.json();
         setPayoutSummary(data);
       }
-      if (actionResponse?.ok) { const data = await actionResponse.json(); setSmartActions(Array.isArray(data.actions) ? data.actions : []); }
     }
     loadWorkspaceData();
     return () => {
