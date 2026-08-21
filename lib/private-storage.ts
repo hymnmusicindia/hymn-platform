@@ -72,6 +72,13 @@ export function validatePrivateUpload(input: PrivateUploadInput) {
   const policy = policies[input.assetType];
   if (!policy.mime.includes(input.mimeType)) throw new Error("Unsupported private asset MIME type.");
   if (input.bytes.length < 1 || input.bytes.length > policy.max) throw new Error("Private asset size is invalid.");
+  const requestedName = input.fileName?.trim() || "";
+  // A storage key is generated independently, but rejecting path syntax and
+  // executable double extensions keeps the filename shown to users/auditors
+  // unambiguous and prevents content-disposition confusion downstream.
+  if (!requestedName || /[\\/]|\.\./.test(requestedName) || /\.(?:ade|adp|app|bat|cmd|com|cpl|exe|hta|inf|ins|jar|js|jse|lnk|msc|msi|msp|pif|ps1|reg|scr|sct|sh|vb|vbe|vbs|wsf|wsh)\./i.test(requestedName)) {
+    throw new Error("Private asset filename is invalid.");
+  }
   let base = path.basename(input.fileName || "unnamed_file").replace(/\\/g, "/").split("/").pop() || "asset";
   if (base.includes("..")) base = base.replace(/\.\./g, "");
   const extIndex = base.lastIndexOf(".");

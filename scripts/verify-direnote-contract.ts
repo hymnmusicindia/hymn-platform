@@ -1,0 +1,55 @@
+import assert from "node:assert/strict";
+import { buildDireNotePayload, parseDireNoteResponse, validateDireNotePayload } from "../lib/direnote";
+import { getDireNoteReleaseInformation, getDireNoteRevenueReport, submitToDireNote } from "../lib/direnote/direnote-client";
+import { royaltyEconomicFingerprint } from "../lib/royalty-fingerprint";
+import type { Release } from "../lib/types";
+
+const release: Release = { id: 1, userId: 1, artistName: "NZLDR", trackName: "TEST", releaseTitle: "TEST", releaseType: "single", audioUrl: "https://cdn.example.test/test.wav", artworkUrl: "https://cdn.example.test/cover.jpg", releaseDate: "2099-01-10", language: "English", platforms: [], primaryGenre: "Pop", secondaryGenre: "Indie Pop", labelName: "Example Records", copyrightOwner: "2026 Example Records", publishingRights: "2026 NZLDR", contentType: "original", tracks: [{ id: 1, releaseId: 1, trackTitle: "TEST", trackNumber: 1, primaryArtist: "NZLDR", audioUrl: "https://cdn.example.test/test.wav", duration: "180", explicitContent: false, dolbyAtmos: false, songwriters: "Nzl Dr", composers: "Nzl Dr", createdAt: new Date().toISOString() }], status: "approved", createdAt: new Date().toISOString() };
+const payload = buildDireNotePayload(release);
+assert.equal(payload.cLine, "2026 Example Records");
+assert.equal(payload.pLine, "2026 NZLDR");
+assert.equal(payload.albumMood, undefined);
+assert.equal(payload.tracks[0].trackName, "TEST");
+assert.equal(validateDireNotePayload({ ...payload, pin: "pin", client_id: "client" }).issues.some(issue => issue.field === "albumname"), false);
+const validated = (next: Partial<typeof payload>) => validateDireNotePayload({ ...payload, pin: "pin", client_id: "client", artists: [{ name: "NZLDR", instagram_url: "https://instagram.com/nzldr" }], ...next });
+assert.equal(validated({ tracks: [] }).issues.some(issue => issue.message.includes("exactly 1 track")), true);
+assert.equal(validated({ albumname: "DIFFERENT" }).issues.some(issue => issue.message.includes("exactly match")), true);
+assert.equal(validated({ typeOfRelease: "EP", tracks: [payload.tracks[0]] }).issues.some(issue => issue.message.includes("at least 2 tracks")), true);
+assert.equal(validated({ trackReleaseDate: "2000-01-01" }).issues.some(issue => issue.field === "trackReleaseDate"), true);
+assert.equal(validated({ presaveSpotify: "2099-02-01" }).issues.some(issue => issue.field === "presaveSpotify"), true);
+assert.equal(validated({ contenttype: "AI Generated", suno_receipt_url: undefined, sunoLink: undefined }).issues.filter(issue => issue.field.startsWith("suno")).length, 2);
+assert.equal(validated({ contenttype: "Non-Exclusive Licensed", license_receipt_url: undefined }).issues.some(issue => issue.field === "license_receipt_url"), true);
+assert.equal(validated({ artists: [{ name: "New Artist" }] }).issues.some(issue => issue.field === "artists.0.instagram_url"), true);
+assert.equal(validateDireNotePayload({ ...payload, pin: "pin", client_id: "client", artists: [{ name: "Existing Artist" }] }, { adminConfirmedExistingArtists: true }).issues.some(issue => issue.field === "artists.0.instagram_url"), false);
+assert.equal(validated({ tracks: [{ ...payload.tracks[0], songwriters: [{ name: "Mononym" }] }] }).issues.some(issue => issue.message.includes("first and last name")), true);
+assert.equal(validated({ albumGenre: "Not a genre" }).issues.some(issue => issue.field === "albumGenre"), true);
+assert.equal(validated({ albumLanguage: "Not a language" }).issues.some(issue => issue.field === "albumLanguage"), true);
+assert.equal(validated({ cover_art_url: "https://cdn.example.test/cover.png" }).issues.some(issue => issue.message.includes("JPEG")), true);
+assert.equal(validated({ tracks: [{ ...payload.tracks[0], audio_url: "https://cdn.example.test/audio.aac" }] }).issues.some(issue => issue.message.includes("WAV or MP3")), true);
+assert.equal(parseDireNoteResponse({ success: true, release_id: "dn_1", upc: "890123", tracks: [{ track_name: "TEST", isrc: "IN-TEST-1", status: "Pending" }] }).trackIsrcs[0].isrc, "IN-TEST-1");
+
+async function verifyClientContract() {
+process.env.DIRENOTE_CLIENT_ID = "contract-client";
+process.env.DIRENOTE_API_PIN = "contract-pin";
+process.env.DIRENOTE_INGEST_ENDPOINT = "https://direnote.invalid/ingest";
+process.env.DIRENOTE_RELEASE_INFORMATION_ENDPOINT = "https://direnote.invalid/status";
+process.env.DIRENOTE_REVENUE_REPORT_ENDPOINT = "https://direnote.invalid/revenue";
+const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+const fetchStub: typeof fetch = async (input, init) => { requests.push({ url: String(input), body: JSON.parse(String(init?.body ?? "{}")) }); return new Response(JSON.stringify({ success: true }), { status: 200 }); };
+await submitToDireNote({ albumname: "TEST" }, { fetchImpl: fetchStub });
+await getDireNoteReleaseInformation("890- 123", { fetchImpl: fetchStub });
+await getDireNoteRevenueReport("in-test 1", { fetchImpl: fetchStub });
+assert.deepEqual(requests.map(request => request.url), ["https://direnote.invalid/ingest", "https://direnote.invalid/status", "https://direnote.invalid/revenue"]);
+assert.equal(requests[0].body.pin, "contract-pin");
+assert.equal(requests[0].body.client_id, "contract-client");
+assert.equal(requests[1].body.upc, "890123");
+assert.equal(requests[2].body.isrc, "INTEST1");
+const rejected = await submitToDireNote({}, { fetchImpl: async () => new Response(JSON.stringify({ success: false, error: "invalid" }), { status: 400 }) });
+assert.deepEqual({ success: rejected.success, status: rejected.httpStatus }, { success: false, status: 400 });
+const reportingMonth = new Date("2026-06-01T00:00:00.000Z"); const salesMonth = new Date("2026-05-01T00:00:00.000Z");
+const fingerprint = royaltyEconomicFingerprint({ reportingMonth, salesMonth, isrc: "INDN-22601883", upc: "890 123 456", platform: "Spotify", country: "in", salesType: "Streaming", quantity: 1234, currency: "usd", netRevenue: 142.8 });
+assert.equal(fingerprint, royaltyEconomicFingerprint({ reportingMonth, salesMonth, isrc: "indn22601883", upc: "890123456", platform: " spotify ", country: "IN", salesType: "streaming", quantity: 1234, currency: "USD", netRevenue: 142.8000001 }));
+console.log("DireNote v2.2 payload contract and C/P-line regression verification passed.");
+}
+
+verifyClientContract().catch((error) => { console.error(error); process.exitCode = 1; });

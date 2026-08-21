@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { requireAdminPermission } from "@/lib/access";
 import { getDireNoteConfig } from "@/lib/direnote/direnote-config";
 import { submitToDireNote } from "@/lib/direnote/direnote-client";
+import { redactDireNoteDiagnostic } from "@/lib/direnote";
 import { prisma } from "@/lib/prisma";
 import { isPostgresPrisma } from "@/lib/distribution-db";
 
@@ -15,7 +17,7 @@ function status() {
 async function lastTest() {
   if (!isPostgresPrisma()) return null;
   const log = await prisma.direNoteLog.findFirst({ where: { action: "test_payload" }, orderBy: { createdAt: "desc" } });
-  return log ? { success: log.success, httpStatus: log.httpStatus, response: log.responseJson ?? log.responseRaw ?? log.errorMessage, createdAt: log.createdAt } : null;
+  return log ? { success: log.success, httpStatus: log.httpStatus, response: redactDireNoteDiagnostic(log.responseJson ?? log.responseRaw ?? log.errorMessage), createdAt: log.createdAt } : null;
 }
 
 export async function GET() {
@@ -35,8 +37,10 @@ export async function POST() {
     tracks: [{ trackName: "Dummy API Release", trackVersion: "", audio_url: "https://samplelib.com/lib/preview/wav/sample-3s.wav", explicitLyrics: "No", previewStart: "30", previouslyReleased: "No", producers: ["DireNote Studio"], songwriters: [{ name: "John Smith", ipi: "" }], composers: [{ name: "John Smith", ipi: "" }] }]
   };
   const result = await submitToDireNote(payload);
-  if (isPostgresPrisma()) await prisma.direNoteLog.create({ data: { action: "test_payload", httpStatus: result.httpStatus, success: result.success, requestPayloadRedacted: payload as any, responseRaw: result.raw ?? null, responseJson: result.data as any, errorMessage: result.error ?? null, createdByAdminId: Number((admin as any).sub) || null } });
-  return NextResponse.json({ ...status(), result: { success: result.success, httpStatus: result.httpStatus, response: result.data ?? null, error: result.error ?? null }, lastTest: await lastTest() }, { status: result.success ? 200 : 502 });
+  const safeResponse = redactDireNoteDiagnostic(result.data ?? result.raw ?? null);
+  const safeError = redactDireNoteDiagnostic(result.error ?? null);
+  if (isPostgresPrisma()) await prisma.direNoteLog.create({ data: { action: "test_payload", httpStatus: result.httpStatus, success: result.success, requestPayloadRedacted: payload as any, responseRaw: typeof safeResponse === "string" ? safeResponse : null, responseJson: typeof safeResponse === "object" && safeResponse !== null ? safeResponse as Prisma.InputJsonValue : undefined, errorMessage: typeof safeError === "string" ? safeError : null, createdByAdminId: Number((admin as any).sub) || null } });
+  return NextResponse.json({ ...status(), result: { success: result.success, httpStatus: result.httpStatus, response: safeResponse, error: safeError }, lastTest: await lastTest() }, { status: result.success ? 200 : 502 });
 }
 
 // vercel trigger 9

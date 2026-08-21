@@ -175,6 +175,7 @@ model User {
   financialAdjustmentSubjects   FinancialAdjustment[]   @relation("FinancialAdjustmentSubject")
   requestedFinancialAdjustments FinancialAdjustment[]   @relation("FinancialAdjustmentRequester")
   approvedFinancialAdjustments  FinancialAdjustment[]   @relation("FinancialAdjustmentApprover")
+  direNoteDiscrepanciesResolved DireNoteReconciliationDiscrepancy[] @relation("DireNoteDiscrepancyResolver")
 
   @@index([role])
   @@index([email])
@@ -243,6 +244,10 @@ model Release {
   releaseDate             DateTime                        @map("release_date")
   status                  ReleaseStatus                   @default(DRAFT)
   distributorReleaseId    String?                         @map("distributor_release_id")
+  direNoteStatus          String?                         @map("direnote_status")
+  direNoteLastSyncedAt    DateTime?                       @map("direnote_last_synced_at")
+  direNoteLastAttemptedAt DateTime?                       @map("direnote_last_attempted_at")
+  direNoteSyncError       String?                         @map("direnote_sync_error")
   upc                     String?                         @map("upc_code")
   rejectionReason         String?                         @map("rejection_reason")
   correctionReason        String?                         @map("correction_reason")
@@ -282,6 +287,8 @@ model Release {
   changeRequests          ReleaseChangeRequest[]
   managedServiceRequests  ManagedServiceRequest[]
   unmatchedRoyaltyRows    UnmatchedRoyaltyRow[]
+  reconciliationDiscrepancies DireNoteReconciliationDiscrepancy[]
+  identifierHistory       ExternalIdentifierHistory[]
 
   @@index([ownerUserId, status])
   @@index([releaseSource, archivedAt, createdAt])
@@ -327,6 +334,8 @@ model Track {
   splitRecipients      SplitRecipient[]
   splitEarnings        SplitEarningLineItem[]
   unmatchedRoyaltyRows UnmatchedRoyaltyRow[]
+  reconciliationDiscrepancies DireNoteReconciliationDiscrepancy[]
+  identifierHistory       ExternalIdentifierHistory[]
 
   @@index([isrc])
   @@map("tracks")
@@ -1735,14 +1744,60 @@ model ArtistCard {
   isPrimary            Boolean   @default(false) @map("is_primary")
   archivedAt           DateTime? @map("archived_at")
   role                 String?
+  direNoteArtistId     String?   @map("direnote_artist_id")
+  direNoteLastSyncedAt DateTime? @map("direnote_last_synced_at")
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
   user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   releases             Release[]
+  identifierHistory    ExternalIdentifierHistory[]
 
   @@unique([userId, artistName])
   @@index([userId])
   @@map("artist_cards")
+}
+
+model DireNoteReconciliationDiscrepancy {
+  id            Int       @id @default(autoincrement())
+  releaseId     Int       @map("release_id")
+  trackId       Int?      @map("track_id")
+  field         String
+  hymnValue     Json?     @map("hymn_value")
+  direNoteValue Json?     @map("direnote_value")
+  severity      String    @default("warning")
+  status        String    @default("open")
+  detectedAt    DateTime  @default(now()) @map("detected_at")
+  resolvedAt    DateTime? @map("resolved_at")
+  resolvedById  Int?      @map("resolved_by_id")
+  resolution    String?
+  release       Release   @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  track         Track?    @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  resolvedBy    User?     @relation("DireNoteDiscrepancyResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([releaseId, status, detectedAt])
+  @@index([status, severity, detectedAt])
+  @@map("direnote_reconciliation_discrepancies")
+}
+
+model ExternalIdentifierHistory {
+  id            Int       @id @default(autoincrement())
+  releaseId     Int?      @map("release_id")
+  trackId       Int?      @map("track_id")
+  artistCardId  Int?      @map("artist_card_id")
+  provider      String
+  identifierType String   @map("identifier_type")
+  previousValue String?   @map("previous_value")
+  canonicalValue String   @map("canonical_value")
+  source        String
+  reason        String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  release       Release?  @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  track         Track?    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  artistCard    ArtistCard? @relation(fields: [artistCardId], references: [id], onDelete: Cascade)
+
+  @@index([releaseId, identifierType, createdAt])
+  @@index([trackId, identifierType, createdAt])
+  @@map("external_identifier_history")
 }
 
 model BeatPurchase {

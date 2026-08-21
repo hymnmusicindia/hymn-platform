@@ -1,4 +1,6 @@
-export const DIRENOTE_INGEST_ENDPOINT = "https://dashboard.direnotemedia.com/ingest_api";
+// Taxonomy shared by the form and server preflight. The canonical runtime
+// endpoint is configured in lib/direnote/direnote-config.ts.
+export const DIRENOTE_INGEST_ENDPOINT = "https://api.direnotemedia.com/ingest_content";
 
 export const DIRENOTE_CONTENT_TYPES = ["Original/Exclusive Licensed", "AI Generated", "Non-Exclusive Licensed"] as const;
 export type DireNoteContentType = typeof DIRENOTE_CONTENT_TYPES[number];
@@ -44,6 +46,3 @@ export function normalizeDireNoteGenre(genre?: string | null, subgenre?: string 
   const mapped = FRIENDLY_GENRES[genre?.trim() ?? ""];
   return mapped ? { genre: mapped[0], subgenre: subgenre?.trim() || mapped[1] } : { genre: genre?.trim() || "", subgenre: subgenre?.trim() || "Other" };
 }
-
-// vercel trigger
-// vercel trigger 7

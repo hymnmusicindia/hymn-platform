@@ -20,6 +20,7 @@ import type { Release } from "@/lib/types";
 import { createAdminTaskOnce, resolveAdminTask } from "@/lib/task-queue";
 import { getDireNoteConfig } from "@/lib/direnote/direnote-config";
 import { claimDistributionSubmission, finishDistributionSubmission } from "@/lib/distribution-idempotency";
+import { reserveDireNoteRequest } from "@/lib/direnote-rate-limit";
 
 export type DistributionValidationIssue = {
   field: string;
@@ -161,6 +162,7 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
   await updateDetailedReleaseStatus(releaseId, "submitting_to_distributor", "DireNote submission claimed and started.");
 
   try {
+    await reserveDireNoteRequest("content_ingestion", releaseId, options.actorId);
     const response = await submitToDireNote(payload);
     const data = response.data ?? (response.error ? { error: response.error } : {});
     if (!response.success) {

@@ -182,6 +182,10 @@ export interface Release {
   upcCode?: string | null;
   releasePreviouslyReleased?: boolean;
   distributorReleaseId?: string | null;
+  direNoteStatus?: string | null;
+  direNoteLastSyncedAt?: string | null;
+  direNoteLastAttemptedAt?: string | null;
+  direNoteSyncError?: string | null;
   submittedAt?: string | null;
   approvedAt?: string | null;
   distributedAt?: string | null;

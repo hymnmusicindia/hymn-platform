@@ -13,7 +13,7 @@
     "db:migrate:fresh": "tsx scripts/migrate-fresh-database.ts",
     "db:backfill:spotify": "tsx scripts/backfill-legacy-spotify.ts",
     "db:migrate:deploy": "prisma migrate deploy",
-    "test": "npm run test:analytics && npm run test:migration-safety && npm run test:razorpay && npm run test:storage && npm run test:release-status && npm run test:distribution-idempotency && npm run test:payout && npm run test:managed-services",
+    "test": "npm run test:direnote-contract && npm run test:analytics && npm run test:migration-safety && npm run test:razorpay && npm run test:storage && npm run test:release-status && npm run test:distribution-idempotency && npm run test:payout && npm run test:managed-services",
     "test:payout": "tsx scripts/verify-payout-domain.ts",
     "test:analytics": "tsx scripts/verify-analytics-domain.ts",
     "test:migration-safety": "tsx scripts/verify-migration-safety.ts",
@@ -30,7 +30,8 @@
     "test:payout-kyc-integration": "tsx scripts/verify-payout-kyc-integration.ts",
     "test:admin-controls-integration": "tsx scripts/verify-admin-controls-integration.ts",
     "test:distribution-idempotency": "tsx scripts/verify-distribution-idempotency.ts",
-    "test:direnote-integration": "tsx scripts/verify-direnote-integration.ts",
+    "test:direnote-integration": "node --conditions=react-server --import tsx scripts/verify-direnote-integration.ts",
+    "test:direnote-contract": "tsx scripts/verify-direnote-contract.ts",
     "test:managed-services": "tsx scripts/verify-managed-services.ts",
     "test:managed-services-integration": "tsx scripts/verify-managed-services-integration.ts",
     "lint": "eslint ."

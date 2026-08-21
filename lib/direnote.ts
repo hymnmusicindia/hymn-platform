@@ -8,7 +8,7 @@ import {
   type DireNoteContentType
 } from "@/lib/direnote-config";
 import { getDireNoteConfig } from "@/lib/direnote/direnote-config";
-export { submitToDireNote } from "@/lib/direnote/direnote-client";
+export { submitToDireNote, getDireNoteReleaseInformation, getDireNoteRevenueReport } from "@/lib/direnote/direnote-client";
 
 export type DireNoteArtist = {
   name: string;
@@ -42,6 +42,7 @@ export type DireNoteTrack = {
   producers?: string[];
   artists?: DireNoteArtist[];
   featuring_artists?: DireNoteArtist[];
+  contributors?: Array<{ name: string; role: string }>;
   songwriters: DireNoteContributor[];
   composers: DireNoteContributor[];
 };
@@ -55,7 +56,7 @@ export type DireNotePayload = {
   albumGenre: string;
   albumSubgenre: string;
   albumLanguage: string;
-  metadata: { mood: string };
+  albumMood?: string;
   contenttype: DireNoteContentType;
   trackReleaseDate: string;
   originalReleaseDate?: string;
@@ -214,6 +215,30 @@ export function redactDireNotePayload(payload: DireNotePayload) {
   return { ...payload, pin: "[REDACTED]", client_id: "[REDACTED]" };
 }
 
+const DIRENOTE_SENSITIVE_KEY = /(?:api[_-]?key|client[_-]?secret|client[_-]?id|authorization|bearer|token|password|pin|secret)/i;
+const DIRENOTE_MAX_DIAGNOSTIC_STRING_LENGTH = 4_000;
+
+/**
+ * Produces an admin-safe diagnostic record. Provider replies are useful for
+ * troubleshooting, but must never become a path for credentials to reach the
+ * database or browser (including when a provider nests them in an error).
+ */
+export function redactDireNoteDiagnostic(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value.length > DIRENOTE_MAX_DIAGNOSTIC_STRING_LENGTH
+      ? `${value.slice(0, DIRENOTE_MAX_DIAGNOSTIC_STRING_LENGTH)}…[TRUNCATED]`
+      : value;
+  }
+  if (Array.isArray(value)) return value.map(redactDireNoteDiagnostic);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+      key,
+      DIRENOTE_SENSITIVE_KEY.test(key) ? "[REDACTED]" : redactDireNoteDiagnostic(item)
+    ]));
+  }
+  return value;
+}
+
 export function buildDireNotePayload(release: Release, options: BuildOptions = {}): DireNotePayload {
   const extended = release as ExtendedRelease;
   const meta = releaseMeta(extended);
@@ -234,7 +259,7 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
     albumGenre: normalizedGenre.genre,
     albumSubgenre: normalizedGenre.subgenre,
     albumLanguage: release.language || "",
-    metadata: { mood },
+    albumMood: mood || undefined,
     contenttype,
     trackReleaseDate: release.releaseDate,
     originalReleaseDate: isPreviouslyReleased ? (release.originalReleaseDate || undefined) : undefined,
@@ -266,8 +291,12 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
       explicitLyrics: track.explicitContent ? "Yes" : "No",
       trackLyrics: (track as any).lyrics || (track as any).trackLyrics || undefined,
       previouslyReleased: ((track as any).previouslyReleased || isPreviouslyReleased) ? "Yes" : "No",
+      producers: splitNames((track as any).producers ?? (track as any).producer),
+      artists: splitNames(track.primaryArtist || release.artistName).map((name) => toDireNoteArtist(name, options.artistProfiles, extended)),
+      featuring_artists: splitNames(track.featuredArtists).map((name) => toDireNoteArtist(name, options.artistProfiles, extended)),
       songwriters: contributors(track.songwriters, track.contributors as any, "songwriter"),
-      composers: contributors(track.composers, track.contributors as any, "composer")
+      composers: contributors(track.composers, track.contributors as any, "composer"),
+      contributors: Array.isArray(track.contributors) ? track.contributors.map((contributor: any) => ({ name: String(contributor.name ?? contributor.legalName ?? "").trim(), role: String(contributor.role ?? "").trim() })).filter((contributor) => contributor.name && contributor.role) : undefined
     }))
   };
 
@@ -316,11 +345,7 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
   pushMissing(issues, "albumname", payload.albumname, "Album name is required.");
   pushMissing(issues, "typeOfRelease", payload.typeOfRelease, "Release type is required.");
   pushMissing(issues, "albumGenre", payload.albumGenre, "Album genre is required.");
-  pushMissing(issues, "albumSubgenre", payload.albumSubgenre, "Album subgenre is required.");
   pushMissing(issues, "albumLanguage", payload.albumLanguage, "Album language is required.");
-  if (!payload.metadata || typeof payload.metadata.mood !== "string" || !payload.metadata.mood.trim()) {
-    issues.push({ field: "metadata.mood", message: "Mood is required and must be a string.", severity: "error", suggestion: "This release is missing mood metadata. Please select a mood before DireNote submission." });
-  }
   pushMissing(issues, "contenttype", payload.contenttype, "Content type is required.");
   pushMissing(issues, "trackReleaseDate", payload.trackReleaseDate, "Release date is required.");
   pushMissing(issues, "labelName", payload.labelName, "Label name is required.");
@@ -367,7 +392,10 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
     pushMissing(issues, "license_receipt_url", payload.license_receipt_url, "Non-Exclusive Licensed releases require license_receipt_url.");
   }
 
-  for (const [index, artist] of payload.artists.entries()) {
+  // DireNote needs Instagram only when it must provision an artist. A trusted
+  // admin may confirm that a linked profile already exists; customers cannot
+  // set this server-side option themselves.
+  if (!options.adminConfirmedExistingArtists) for (const [index, artist] of payload.artists.entries()) {
     pushMissing(issues, `artists.${index}.instagram_url`, artist.instagram_url, "Instagram profile link is required for artist verification and DireNote artist provisioning.");
   }
 

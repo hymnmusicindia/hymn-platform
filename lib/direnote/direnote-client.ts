@@ -10,7 +10,7 @@ export type DireNoteSubmitResult = {
   missing?: ReturnType<typeof getDireNoteConfig>["missing"];
 };
 
-export async function submitToDireNote(payload: Record<string, unknown>, options: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}): Promise<DireNoteSubmitResult> {
+async function postToDireNote(endpoint: string, payload: Record<string, unknown>, options: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}): Promise<DireNoteSubmitResult> {
   const config = getDireNoteConfig();
   if (!config.isConfigured) return { success: false, httpStatus: null, error: "DireNote credentials are not configured.", missing: config.missing };
 
@@ -19,7 +19,7 @@ export async function submitToDireNote(payload: Record<string, unknown>, options
   const timeoutMs = options.timeoutMs ?? 60_000;
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await (options.fetchImpl ?? fetch)(config.endpoint, {
+    const response = await (options.fetchImpl ?? fetch)(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(finalPayload),
@@ -33,6 +33,22 @@ export async function submitToDireNote(payload: Record<string, unknown>, options
   } catch (error: any) {
     return { success: false, httpStatus: null, error: error?.name === "AbortError" ? `DireNote request timed out after ${timeoutMs} milliseconds.` : error?.message || "DireNote request failed." };
   } finally { clearTimeout(timeout); }
+}
+
+export function submitToDireNote(payload: Record<string, unknown>, options: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}) {
+  return postToDireNote(getDireNoteConfig().endpoint, payload, options);
+}
+
+function normalizeIdentifier(value: string) {
+  return value.replace(/[\s-]+/g, "").toUpperCase();
+}
+
+export function getDireNoteReleaseInformation(upc: string, options: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}) {
+  return postToDireNote(getDireNoteConfig().releaseInformationEndpoint, { upc: normalizeIdentifier(upc) }, options);
+}
+
+export function getDireNoteRevenueReport(isrc: string, options: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}) {
+  return postToDireNote(getDireNoteConfig().revenueReportEndpoint, { isrc: normalizeIdentifier(isrc) }, options);
 }
 
 // vercel trigger 9

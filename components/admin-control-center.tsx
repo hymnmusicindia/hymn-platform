@@ -743,6 +743,27 @@ export function AdminControlCenter({
     });
   }
 
+  function syncDireNoteRelease(id: number) {
+    startTransition(async () => {
+      setDireNoteResult(null);
+      try {
+        const response = await fetch(`/api/admin/releases/${id}/direnote/sync`, { method: "POST" });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const message = data.error || "DireNote sync could not be completed.";
+          setFeedback(message); setDireNoteResult({ type: "error", title: "DireNote sync failed", message });
+          return;
+        }
+        const message = data.status ? `Synced successfully. DireNote status: ${String(data.status).replace(/_/g, " ")}.` : "Synced successfully.";
+        setFeedback(message); setDireNoteResult({ type: "success", title: "DireNote synced", message });
+        window.location.reload();
+      } catch {
+        const message = "DireNote sync could not be completed.";
+        setFeedback(message); setDireNoteResult({ type: "error", title: "DireNote sync failed", message });
+      }
+    });
+  }
+
   function toggleBeat(beat: Beat) {
     startTransition(async () => {
       const response = await fetch(`/api/producer/beats/${beat.id}`, {
@@ -1131,6 +1152,7 @@ export function AdminControlCenter({
                   {["submitted", "in_queue", "changes_requested", "failed", "draft"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => updateReleaseStatus(selectedRelease.id, "under_review")} className="btn-outline pressable disabled:opacity-45">Start Review</button> : null}
                   {selectedRelease.status === "under_review" ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => setConfirmStatusAction("approved")} className="btn-primary pressable disabled:opacity-45">Approve</button> : null}
                   {selectedRelease.status === "approved" || selectedRelease.status === "failed" ? <button type="button" disabled={isPending || isSubmittingToDireNote || direNoteCooldownSeconds > 0 || direNoteReadiness?.ready === false || !hasPermission(selectedRelease.status === "failed" ? "distribution.retry" : "distribution.submit")} title={direNoteCooldownSeconds > 0 ? `DireNote cooldown: ${direNoteCooldownLabel} remaining` : !hasPermission(selectedRelease.status === "failed" ? "distribution.retry" : "distribution.submit") ? `Requires ${selectedRelease.status === "failed" ? "distribution.retry" : "distribution.submit"} permission` : undefined} onClick={() => setConfirmStatusAction("sent")} className="btn-primary pressable disabled:opacity-45">{isSubmittingToDireNote ? "Submitting to DireNote..." : direNoteCooldownSeconds > 0 ? `Try again in ${direNoteCooldownLabel}` : selectedRelease.status === "failed" ? "Retry Send" : "Send to DireNote"}</button> : null}
+                  {selectedRelease.upcCode ? <button type="button" disabled={isPending || !hasPermission("releases.read")} title={!hasPermission("releases.read") ? "Requires releases.read permission" : undefined} onClick={() => syncDireNoteRelease(selectedRelease.id)} className="btn-outline pressable disabled:opacity-45">Sync with DireNote</button> : null}
                   {["sent", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("distribution.confirm_status")} title={!hasPermission("distribution.confirm_status") ? "Requires distribution.confirm_status permission" : undefined} onClick={() => setConfirmStatusAction("live")} className="btn-primary pressable disabled:opacity-45">Mark Live</button> : null}
                   {["submitted", "in_queue", "under_review", "approved"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => openReview("changes_requested")} className="btn-outline pressable disabled:opacity-45" style={{ color: "var(--money)" }}>Request Metadata Changes</button> : null}
                   {["submitted", "in_queue", "under_review", "approved"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => openReview("rejected")} className="btn-outline pressable disabled:opacity-45" style={{ color: "var(--danger)" }}>Reject Release</button> : null}

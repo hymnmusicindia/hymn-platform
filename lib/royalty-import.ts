@@ -7,6 +7,7 @@ export type MatchedRoyaltyImportRow = {
   salesMonth?: Date | null; salesType?: string | null; quantity?: number;
   grossRevenue: Prisma.Decimal.Value; serviceFee: Prisma.Decimal.Value; netRevenue: Prisma.Decimal.Value;
   streams?: number | null; downloads?: number | null; originalValues: Prisma.InputJsonValue;
+  sourceKey?: string;
 };
 export type UnmatchedRoyaltyImportRow = { sourceKey: string; sourceLineNumber: number; statementMonth?: Date | null; isrc?: string | null; upc?: string | null; rawData: Prisma.InputJsonValue };
 
@@ -37,13 +38,26 @@ async function allocateLine(tx: Prisma.TransactionClient, input: { lineId: numbe
   if (split) await tx.splitRecord.update({ where: { id: split.id }, data: { status: "locked", lockedAt: split.lockedAt ?? new Date() } });
 }
 
-export async function importRoyaltyStatementAtomic(input: { provider: string; currency: string; periodStart: Date; periodEnd: Date; checksum: string; originalFileName: string; storedAssetId: number; actorId: number; matched: MatchedRoyaltyImportRow[]; unmatched: UnmatchedRoyaltyImportRow[]; failAfterLine?: number }) {
+export async function importRoyaltyStatementAtomic(input: { provider: string; currency: string; periodStart: Date; periodEnd: Date; checksum: string; originalFileName: string; storedAssetId?: number; actorId: number; matched: MatchedRoyaltyImportRow[]; unmatched: UnmatchedRoyaltyImportRow[]; failAfterLine?: number }) {
+  const keyForMatched = (row: MatchedRoyaltyImportRow) => row.sourceKey ?? `royalty:${input.checksum}:${row.sourceLineNumber}`;
+  const incomingKeys = [...input.matched.map(keyForMatched), ...input.unmatched.map(row => row.sourceKey)];
+  const existing = new Set<string>();
+  if (incomingKeys.length) {
+    const [lines, unmatched] = await Promise.all([
+      prisma.royaltyLineItem.findMany({ where: { sourceKey: { in: incomingKeys } }, select: { sourceKey: true } }),
+      prisma.unmatchedRoyaltyRow.findMany({ where: { sourceKey: { in: incomingKeys } }, select: { sourceKey: true } })
+    ]);
+    for (const row of [...lines, ...unmatched]) if (row.sourceKey) existing.add(row.sourceKey);
+  }
+  const matched = input.matched.filter(row => !existing.has(keyForMatched(row)));
+  const unmatched = input.unmatched.filter(row => !existing.has(row.sourceKey));
+  const ignoredCount = input.matched.length + input.unmatched.length - matched.length - unmatched.length;
   return prisma.$transaction(async tx => {
     const statement = await tx.royaltyStatement.create({ data: { provider: input.provider, currency: input.currency, periodStart: input.periodStart, periodEnd: input.periodEnd, fileChecksum: input.checksum, originalFileName: input.originalFileName, storedAssetId: input.storedAssetId, importedByUserId: input.actorId, status: "importing" } });
-    const job = await tx.royaltyImportJob.create({ data: { statementId: statement.id, actorUserId: input.actorId, idempotencyKey: `royalty-import:${input.checksum}`, state: "processing", phase: "generating_ledgers", progress: 75, rowCount: input.matched.length + input.unmatched.length, matchedCount: input.matched.length, unmatchedCount: input.unmatched.length, totalRevenue: input.matched.reduce((sum, row) => sum.add(row.netRevenue), new Prisma.Decimal(0)) } });
-    for (const row of input.unmatched) await tx.unmatchedRoyaltyRow.create({ data: { sourceKey: row.sourceKey, statementId: statement.id, sourceLineNumber: row.sourceLineNumber, importReference: input.originalFileName, statementMonth: row.statementMonth, upc: row.upc, isrc: row.isrc, rawData: row.rawData } });
-    for (const [index, row] of input.matched.entries()) {
-      const sourceKey = `royalty:${input.checksum}:${row.sourceLineNumber}`;
+    const job = await tx.royaltyImportJob.create({ data: { statementId: statement.id, actorUserId: input.actorId, idempotencyKey: `royalty-import:${input.checksum}`, state: "processing", phase: "generating_ledgers", progress: 75, rowCount: input.matched.length + input.unmatched.length, matchedCount: matched.length, unmatchedCount: unmatched.length, ignoredCount, totalRevenue: matched.reduce((sum, row) => sum.add(row.netRevenue), new Prisma.Decimal(0)) } });
+    for (const row of unmatched) await tx.unmatchedRoyaltyRow.create({ data: { sourceKey: row.sourceKey, statementId: statement.id, sourceLineNumber: row.sourceLineNumber, importReference: input.originalFileName, statementMonth: row.statementMonth, upc: row.upc, isrc: row.isrc, rawData: row.rawData } });
+    for (const [index, row] of matched.entries()) {
+      const sourceKey = keyForMatched(row);
       const line = await tx.royaltyLineItem.create({ data: { userId: row.userId, releaseId: row.releaseId, trackId: row.trackId, upc: row.upc, isrc: row.isrc, platform: row.platform, territory: row.territory, grossRevenue: row.grossRevenue, hymnServiceFee: row.serviceFee, netRevenue: row.netRevenue, streams: row.streams, downloads: row.downloads, quantity: row.quantity ?? row.streams ?? row.downloads ?? 0, salesMonth: row.salesMonth, salesType: row.salesType, statementMonth: row.statementMonth, sourceKey, statementId: statement.id, sourceLineNumber: row.sourceLineNumber, originalValues: row.originalValues, rawMetadata: { enteredVia: "statement_import" } } });
       await allocateLine(tx, { lineId: line.id, row, currency: input.currency, sourceKey });
       if (decimal(row.netRevenue).isNegative()) await tx.royaltyAdjustment.create({ data: { statementId: statement.id, royaltyLineItemId: line.id, amount: row.netRevenue, currency: input.currency, reason: "Negative statement adjustment", idempotencyKey: `${sourceKey}:adjustment`, createdByUserId: input.actorId } });
@@ -51,8 +65,8 @@ export async function importRoyaltyStatementAtomic(input: { provider: string; cu
     }
     await tx.royaltyStatement.update({ where: { id: statement.id }, data: { status: "imported", importedAt: new Date() } });
     await tx.royaltyImportJob.update({ where: { id: job.id }, data: { state: "completed", phase: "completed", progress: 100, completedAt: new Date() } });
-    await tx.auditLog.create({ data: { actorId: input.actorId, action: "ROYALTY_STATEMENT_IMPORTED", entity: "royalty_statement", entityId: String(statement.id), metadata: { checksum: input.checksum, matched: input.matched.length, unmatched: input.unmatched.length } } });
-    return { statementId: statement.id, jobId: job.id, imported: input.matched.length, unmatched: input.unmatched.length };
+    await tx.auditLog.create({ data: { actorId: input.actorId, action: "ROYALTY_STATEMENT_IMPORTED", entity: "royalty_statement", entityId: String(statement.id), metadata: { checksum: input.checksum, matched: matched.length, unmatched: unmatched.length, ignored: ignoredCount } } });
+    return { statementId: statement.id, jobId: job.id, imported: matched.length, unmatched: unmatched.length, duplicatesIgnored: ignoredCount };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 

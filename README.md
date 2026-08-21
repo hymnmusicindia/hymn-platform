@@ -66,6 +66,25 @@ npm run build
 npm start
 ```
 
+## Vercel deployment
+
+Set the following values in Vercel Project Settings → Environment Variables for
+Production (and Preview only when using a non-production integration account):
+
+- `DATABASE_URL` — pooled PostgreSQL production connection.
+- `JWT_SECRET`, `ADMIN_JWT_SECRET`, `CRON_SECRET`, and `PAYOUT_ENCRYPTION_KEY` — distinct high-entropy secrets.
+- `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_SITE_URL`, `PUBLIC_SITE_URL`, and `APP_URL` — the canonical HTTPS application URL.
+- Google, Razorpay, storage, email, and Spotify values required by the enabled features.
+- `DIRENOTE_CLIENT_ID` and `DIRENOTE_API_PIN` — server-only DireNote credentials.
+- Optional DireNote endpoint overrides only when supplied by DireNote; the documented v2.2 defaults are already configured.
+- `DIRENOTE_RELEASE_SYNC_ENABLED=true`; enable revenue only after finance approval with `DIRENOTE_REVENUE_SYNC_ENABLED=true` and a valid `DIRENOTE_REVENUE_SYNC_ACTOR_ID`.
+
+`vercel.json` schedules the release-status sync daily and the revenue sync on
+the second day of each month. Vercel supplies `CRON_SECRET` to protected cron
+requests when that project variable is configured. Apply migrations with
+`npm run deploy:release` against the same production database before enabling
+the DireNote cron flags.
+
 ## UI Previews
 
 - Submitted and resubmitted release confirmation: [http://localhost:3000/release-submitted-preview](http://localhost:3000/release-submitted-preview)
