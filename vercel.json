@@ -1,4 +1,5 @@
 {
+  "buildCommand": "npm run vercel-build",
   "crons": [
     { "path": "/api/cron/birthday-notifications", "schedule": "15 0 * * *" },
     { "path": "/api/cron/release-status-sync", "schedule": "25 1 * * *" },
