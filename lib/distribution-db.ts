@@ -11,6 +11,29 @@ export function isPostgresPrisma() {
   return /^postgres(?:ql)?:\/\//i.test(process.env.DATABASE_URL?.trim() || "");
 }
 
+function camelCaseDatabaseRow(row: Record<string, any>) {
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => [key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase()), value]));
+}
+
+async function legacyCompatibleReleaseRows(where: "user" | "all", userId?: number) {
+  const rows = where === "user"
+    ? await prisma.$queryRaw<Array<Record<string, any>>>`
+        SELECT * FROM "releases"
+        WHERE "archived_at" IS NULL AND ("owner_user_id" = ${userId} OR ("owner_user_id" IS NULL AND "user_id" = ${userId} AND "release_source" <> 'ADMIN_MANUAL'))
+        ORDER BY "created_at" DESC
+      `
+    : await prisma.$queryRaw<Array<Record<string, any>>>`
+        SELECT r.*, u.email AS owner_email FROM "releases" r
+        LEFT JOIN "users" u ON u.id = r.user_id
+        ORDER BY r.created_at DESC
+      `;
+  const ids = rows.map((row) => Number(row.id)).filter(Number.isInteger);
+  const tracks = ids.length ? await prisma.track.findMany({ where: { releaseId: { in: ids } }, orderBy: { trackNumber: "asc" } }) : [];
+  const tracksByRelease = new Map<number, typeof tracks>();
+  for (const track of tracks) tracksByRelease.set(track.releaseId, [...(tracksByRelease.get(track.releaseId) ?? []), track]);
+  return rows.map((row) => ({ ...camelCaseDatabaseRow(row), tracks: tracksByRelease.get(Number(row.id)) ?? [] }));
+}
+
 export function deserializeRelease(dbData: any): Release {
   const metadata = typeof dbData.metadata === "string" ? JSON.parse(dbData.metadata) : dbData.metadata || {};
   const distributionStores = sanitizeStoreStatuses(metadata.distributionStores);
@@ -499,11 +522,7 @@ export async function listDetailedReleasesByUser(userId: number): Promise<Releas
   const pool = getPool();
   if (!pool) {
     if (isPostgresPrisma()) {
-      const dbReleases = await prisma.release.findMany({
-        where: { archivedAt: null, OR: [{ ownerUserId: userId }, { ownerUserId: null, userId, releaseSource: { not: "ADMIN_MANUAL" } }] },
-        include: { tracks: true },
-        orderBy: { createdAt: "desc" }
-      });
+      const dbReleases = await legacyCompatibleReleaseRows("user", userId);
       return dbReleases.map(deserializeRelease);
     }
     return memory.releases.filter((release) => release.userId === userId).sort((a, b) => b.id - a.id);
@@ -616,10 +635,7 @@ export async function listAllDetailedReleases(): Promise<Release[]> {
   const pool = getPool();
   if (!pool) {
     if (isPostgresPrisma()) {
-      const dbReleases = await prisma.release.findMany({
-        include: { tracks: true, user: { select: { email: true } } },
-        orderBy: { createdAt: "desc" }
-      });
+      const dbReleases = await legacyCompatibleReleaseRows("all");
       return dbReleases.map(deserializeRelease);
     }
     const releases = [...memory.releases].sort((a, b) => b.id - a.id);
