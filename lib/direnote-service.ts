@@ -95,7 +95,7 @@ export async function getDireNoteTrackRevenue(isrc: string, actorId?: number | n
   await reserveDireNoteRequest("revenue_report", track?.releaseId ?? null, actorId);
   const result = await getDireNoteRevenueReport(isrc);
   const payload = record(result.data);
-  await prisma.direNoteLog.create({ data: { releaseId: track?.releaseId ?? null, action: "revenue_report", httpStatus: result.httpStatus, success: result.success, responseJson: redactDireNoteDiagnostic(payload) as never, errorMessage: result.error ?? null, createdByAdminId: actorId ?? null } });
+  await prisma.direNoteLog.create({ data: { releaseId: track?.releaseId ?? null, action: "revenue_report", httpStatus: result.httpStatus, success: result.success, requestPayloadRedacted: { isrc: normalized(isrc) }, responseJson: redactDireNoteDiagnostic(payload) as never, errorMessage: result.error ?? null, createdByAdminId: actorId ?? null } });
   if (!result.success) throw new Error(result.error || text(payload.message) || "DireNote revenue report lookup failed.");
   const ingestion = importIntoLedger && actorId ? await importDireNoteRevenueReport(payload, actorId) : null;
   return { report: payload, ingestion };

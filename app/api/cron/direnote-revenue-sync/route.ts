@@ -10,9 +10,26 @@ export async function GET(request: Request) {
   if (process.env.DIRENOTE_REVENUE_SYNC_ENABLED !== "true") return NextResponse.json({ success: true, skipped: "disabled" });
   const actorId = Number(process.env.DIRENOTE_REVENUE_SYNC_ACTOR_ID);
   if (!Number.isInteger(actorId) || actorId < 1) return NextResponse.json({ error: "DIRENOTE_REVENUE_SYNC_ACTOR_ID must be a valid finance administrator ID." }, { status: 503 });
-  // Revenue is monthly and DNM is capped at 100 requests/IP/hour. One bounded
-  // sweep per invocation preserves request capacity for release operations.
-  const tracks = await prisma.track.findMany({ where: { isrc: { not: null }, release: { status: { in: ["SENT_TO_DISTRIBUTOR", "PROCESSING", "DELIVERED", "LIVE"] } } }, select: { id: true, isrc: true }, take: 20, orderBy: { createdAt: "asc" } });
+  // Revenue is accounting-period data. A monthly sweep reads only tracks that
+  // have not already produced a revenue lookup during this reporting month.
+  const periodStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
+  const candidates = await prisma.track.findMany({
+    where: { isrc: { not: null }, release: { status: { in: ["SENT_TO_DISTRIBUTOR", "PROCESSING", "DELIVERED", "LIVE"] } } },
+    select: { id: true, isrc: true, releaseId: true },
+    take: 100,
+    orderBy: { createdAt: "asc" }
+  });
+  const releaseIds = [...new Set(candidates.map((track) => track.releaseId))];
+  const checkedIsrcs = releaseIds.length ? new Set((await prisma.direNoteLog.findMany({
+    where: { releaseId: { in: releaseIds }, action: "revenue_report", success: true, createdAt: { gte: periodStart } },
+    select: { requestPayloadRedacted: true }
+  })).flatMap((row) => {
+    const value = row.requestPayloadRedacted;
+    return value && typeof value === "object" && "isrc" in value && typeof (value as { isrc?: unknown }).isrc === "string" ? [(value as { isrc: string }).isrc] : [];
+  })) : new Set<string>();
+  // Revenue reports are retrieved per ISRC; cap each scheduled invocation to
+  // protect both the provider quota and Vercel function resources.
+  const tracks = candidates.filter((track) => !checkedIsrcs.has(track.isrc!.replace(/[\s-]+/g, "").toUpperCase())).slice(0, 10);
   const results: Array<{ trackId: number; success: boolean; imported?: number; unmatched?: number; duplicatesIgnored?: number; error?: string }> = [];
   for (const track of tracks) {
     try {
@@ -20,5 +37,5 @@ export async function GET(request: Request) {
       results.push({ trackId: track.id, success: true, imported: imported.ingestion?.imported ?? 0, unmatched: imported.ingestion?.unmatched ?? 0, duplicatesIgnored: imported.ingestion?.duplicatesIgnored ?? 0 });
     } catch (error) { results.push({ trackId: track.id, success: false, error: error instanceof Error ? error.message : "Revenue sync failed." }); }
   }
-  return NextResponse.json({ success: true, checked: results.length, imported: results.reduce((sum, row) => sum + (row.imported ?? 0), 0), unmatched: results.reduce((sum, row) => sum + (row.unmatched ?? 0), 0), duplicatesIgnored: results.reduce((sum, row) => sum + (row.duplicatesIgnored ?? 0), 0), results });
+  return NextResponse.json({ success: true, eligible: candidates.length, checked: results.length, imported: results.reduce((sum, row) => sum + (row.imported ?? 0), 0), unmatched: results.reduce((sum, row) => sum + (row.unmatched ?? 0), 0), duplicatesIgnored: results.reduce((sum, row) => sum + (row.duplicatesIgnored ?? 0), 0), results });
 }

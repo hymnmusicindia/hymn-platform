@@ -1415,14 +1415,29 @@ export async function createRelease(input: Omit<Release, "id" | "createdAt" | "s
   return ensureReleaseAnalytics({ ...input, id: Number((result as mysql.ResultSetHeader).insertId), status, createdAt: new Date().toISOString() });
 }
 
+function mapPostgresReleaseRows(rows: Array<Record<string, any>>, tracks: Array<Record<string, any>>) {
+  const tracksByRelease = new Map<number, Array<Record<string, any>>>();
+  for (const track of tracks) tracksByRelease.set(Number(track.releaseId), [...(tracksByRelease.get(Number(track.releaseId)) ?? []), track]);
+  return rows.map((row) => {
+    const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata as Record<string, any> : {};
+    return ensureReleaseAnalytics({ ...metadata, id: Number(row.id), userId: Number(row.userId), artistName: String(row.artistName), trackName: String(row.title), releaseTitle: metadata.releaseTitle ?? row.title, releaseType: (row.releaseType ?? metadata.releaseType ?? "single") as Release["releaseType"], audioUrl: row.audioUrl ?? "", artworkUrl: row.artworkUrl ?? "", releaseDate: new Date(row.releaseDate).toISOString().slice(0, 10), primaryGenre: String(row.genre), mood: typeof metadata.mood === "string" ? metadata.mood : null, language: String(metadata.language ?? ""), platforms: Array.isArray(metadata.platforms) ? metadata.platforms : [], status: String(row.status).toLowerCase() as ReleaseStatus, paymentStatus: row.paymentStatus === "paid" ? "paid" : "pending", upcCode: row.upc ?? null, draftCompletionPercent: Number(row.draftCompletionPercent ?? 0), lastEditedAt: row.lastEditedAt ? new Date(row.lastEditedAt).toISOString() : null, missingFields: Array.isArray(row.missingFields) ? row.missingFields as string[] : [], metadata, createdAt: new Date(row.createdAt).toISOString(), tracks: (tracksByRelease.get(Number(row.id)) ?? []).map((track) => { const trackMetadata = track.metadata && typeof track.metadata === "object" ? track.metadata as Record<string, any> : {}; return { ...trackMetadata, id: Number(track.id), releaseId: Number(row.id), trackTitle: String(track.title), trackNumber: Number(track.trackNumber ?? 1), primaryArtist: track.primaryArtist ?? "", audioUrl: track.audioUrl ?? "", isrc: track.isrc ?? undefined, duration: String(trackMetadata.duration ?? ""), explicitContent: Boolean(trackMetadata.explicitContent), dolbyAtmos: Boolean(trackMetadata.dolbyAtmos), createdAt: new Date(track.createdAt).toISOString() }; }) } as Release);
+  });
+}
+
+async function listPostgresReleaseSummaries(userId?: number) {
+  // Keep customer reads compatible with the deployed legacy schema: Prisma's
+  // model now contains optional DireNote fields which are not present until
+  // the production migration is deliberately applied.
+  const rows = userId == null
+    ? await prisma.$queryRaw<Array<Record<string, any>>>(Prisma.sql`SELECT "id", "user_id" AS "userId", "title", "artist_name" AS "artistName", "genre", "release_type" AS "releaseType", "artwork_url" AS "artworkUrl", "audio_url" AS "audioUrl", "release_date" AS "releaseDate", "status", "payment_status" AS "paymentStatus", "metadata", "upc_code" AS "upc", "draft_completion_percent" AS "draftCompletionPercent", "last_edited_at" AS "lastEditedAt", "missing_fields" AS "missingFields", "created_at" AS "createdAt", "updated_at" AS "updatedAt" FROM "releases" ORDER BY "updated_at" DESC`)
+    : await prisma.$queryRaw<Array<Record<string, any>>>(Prisma.sql`SELECT "id", "user_id" AS "userId", "title", "artist_name" AS "artistName", "genre", "release_type" AS "releaseType", "artwork_url" AS "artworkUrl", "audio_url" AS "audioUrl", "release_date" AS "releaseDate", "status", "payment_status" AS "paymentStatus", "metadata", "upc_code" AS "upc", "draft_completion_percent" AS "draftCompletionPercent", "last_edited_at" AS "lastEditedAt", "missing_fields" AS "missingFields", "created_at" AS "createdAt", "updated_at" AS "updatedAt" FROM "releases" WHERE "user_id" = ${userId} ORDER BY "updated_at" DESC`);
+  const ids = rows.map((row) => Number(row.id)).filter(Number.isInteger);
+  const tracks = ids.length ? await prisma.track.findMany({ where: { releaseId: { in: ids } }, orderBy: { trackNumber: "asc" }, select: { id: true, releaseId: true, title: true, trackNumber: true, primaryArtist: true, audioUrl: true, isrc: true, metadata: true, createdAt: true } }) : [];
+  return mapPostgresReleaseRows(rows, tracks);
+}
+
 export async function listReleasesByUser(userId: number) {
-  if (usesPostgresPrisma()) {
-    const rows = await prisma.release.findMany({ where: { userId }, include: { tracks: true }, orderBy: { updatedAt: "desc" } });
-    return rows.map((row) => {
-      const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata as Record<string, any> : {};
-      return ensureReleaseAnalytics({ ...metadata, id: row.id, userId: row.userId, artistName: row.artistName, trackName: row.title, releaseTitle: metadata.releaseTitle ?? row.title, releaseType: (row.releaseType ?? metadata.releaseType ?? "single") as Release["releaseType"], audioUrl: row.audioUrl ?? "", artworkUrl: row.artworkUrl ?? "", releaseDate: row.releaseDate.toISOString().slice(0, 10), primaryGenre: row.genre, mood: typeof metadata.mood === "string" ? metadata.mood : null, language: String(metadata.language ?? ""), platforms: Array.isArray(metadata.platforms) ? metadata.platforms : [], status: row.status.toLowerCase() as ReleaseStatus, paymentStatus: row.paymentStatus === "paid" ? "paid" : "pending", upcCode: row.upc, draftCompletionPercent: row.draftCompletionPercent, lastEditedAt: row.lastEditedAt?.toISOString() ?? null, missingFields: Array.isArray(row.missingFields) ? row.missingFields as string[] : [], metadata, createdAt: row.createdAt.toISOString(), tracks: row.tracks.map((track) => { const trackMetadata = track.metadata && typeof track.metadata === "object" ? track.metadata as Record<string, any> : {}; return { ...trackMetadata, id: track.id, releaseId: row.id, trackTitle: track.title, trackNumber: track.trackNumber ?? 1, primaryArtist: track.primaryArtist ?? "", audioUrl: track.audioUrl ?? "", isrc: track.isrc ?? undefined, duration: String(trackMetadata.duration ?? ""), explicitContent: Boolean(trackMetadata.explicitContent), dolbyAtmos: Boolean(trackMetadata.dolbyAtmos), createdAt: track.createdAt.toISOString() }; }) } as Release);
-    });
-  }
+  if (usesPostgresPrisma()) return listPostgresReleaseSummaries(userId);
   const pool = getPool();
   if (!pool) return memory.releases.filter((release) => release.userId === userId).map((release) => ensureReleaseAnalytics(release)).sort((a, b) => b.id - a.id);
 
@@ -1441,10 +1456,7 @@ export async function listReleasesByUser(userId: number) {
 }
 
 export async function listAllReleases() {
-  if (usesPostgresPrisma()) {
-    const users = await prisma.user.findMany({ select: { id: true } });
-    return (await Promise.all(users.map((user) => listReleasesByUser(user.id)))).flat().sort((a, b) => b.id - a.id);
-  }
+  if (usesPostgresPrisma()) return listPostgresReleaseSummaries();
   const pool = getPool();
   if (!pool) return [...memory.releases].map((release) => ensureReleaseAnalytics(release)).sort((a, b) => b.id - a.id);
 

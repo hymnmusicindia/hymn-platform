@@ -21,7 +21,7 @@ export function AdminActivityAndLogs({ currentPage, visible }: { currentPage: st
     send("heartbeat");
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") send("heartbeat").then(() => { if (visible) return load(); }); }, 45_000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [visible]);
 
   useEffect(() => {
     pageRef.current = currentPage;
@@ -32,7 +32,7 @@ export function AdminActivityAndLogs({ currentPage, visible }: { currentPage: st
   useEffect(() => {
     if (!visible) return;
     load();
-    const timer = window.setInterval(load, 30_000);
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void load(); }, 30_000);
     return () => window.clearInterval(timer);
   }, [visible]);
 

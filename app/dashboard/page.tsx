@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { CustomerDashboardShell } from "@/components/workspace-shells";
-import { destinationForRole, getCurrentUserForPage } from "@/lib/access";
-import { listOrdersByUser, listReleasesByUser, getSubscriptionByUserId, getAnalyticsByUserId } from "@/lib/db";
+import { getCurrentUserForPage } from "@/lib/access";
+import { listOrdersByUser, listReleasesByUser, getSubscriptionByUserId } from "@/lib/db";
 
 export default async function DashboardPage() {
   const user = await getCurrentUserForPage();
@@ -11,16 +11,15 @@ export default async function DashboardPage() {
   }
 
 
-  const [releases, orders, subscription, analytics] = await Promise.all([
+  const [releases, orders, subscription] = await Promise.all([
     listReleasesByUser(user.id),
     listOrdersByUser(user.id),
-    getSubscriptionByUserId(user.id),
-    getAnalyticsByUserId(user.id)
+    getSubscriptionByUserId(user.id)
   ]);
 
   return (
     <main className="customer-panel-shell py-6 sm:py-8">
-      <CustomerDashboardShell user={user} releases={releases} orders={orders} subscription={subscription} analytics={analytics} />
+      <CustomerDashboardShell user={user} releases={releases} orders={orders} subscription={subscription} />
     </main>
   );
 }

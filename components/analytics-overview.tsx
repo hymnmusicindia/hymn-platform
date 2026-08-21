@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, Globe2, RefreshCw, Sparkles, TrendingUp } from "lucide-react";
 import { analyticsWindows } from "@/lib/analytics";
 import { AnalyticsCountryStat, AnalyticsPoint, AnalyticsPlatformStat, AnalyticsReleaseRow, AnalyticsSummary, AnalyticsWindow } from "@/lib/types";
-import { DataSourceBadge, EmptyState, ErrorState, LoadingState } from "@/components/ui/hymn-ui";
+import { DataSourceBadge, EmptyState, ErrorState } from "@/components/ui/hymn-ui";
 
 const WINDOW_LABELS: Record<AnalyticsWindow, string> = { "7d": "7 days", "30d": "30 days", all: "All time" };
 const PLATFORM_COLORS: Record<string, string> = { Spotify: "#22c55e", "Apple Music": "#e879f9", YouTube: "#60a5fa" };
@@ -90,8 +90,6 @@ export function AnalyticsOverview({ summary }: { summary: AnalyticsSummary }) {
   const [windowKey, setWindowKey] = useState<AnalyticsWindow>("30d");
   const [selectedCountry, setSelectedCountry] = useState(summary.selectedCountry || summary.countryBreakdown[0]?.country || "India");
   const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(summary.releaseRows[0]?.id ?? null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   useEffect(() => {
     setData(summary);
@@ -99,44 +97,15 @@ export function AnalyticsOverview({ summary }: { summary: AnalyticsSummary }) {
     setSelectedReleaseId((current) => summary.releaseRows.some((release) => release.id === current) ? current : summary.releaseRows[0]?.id ?? null);
   }, [summary]);
 
-  useEffect(() => {
-    let active = true;
-    async function refresh() {
-      setIsRefreshing(true);
-      setRefreshError(null);
-      try {
-        const response = await fetch("/api/analytics", { cache: "no-store" });
-        if (!response.ok) throw new Error("Verified analytics could not be loaded.");
-        const payload = await response.json() as { summary?: AnalyticsSummary };
-        if (active && payload.summary) {
-          setData(payload.summary);
-          setSelectedCountry((current) => payload.summary?.countryBreakdown.some((country) => country.country === current) ? current : payload.summary?.selectedCountry || payload.summary?.countryBreakdown[0]?.country || current);
-          setSelectedReleaseId((current) => payload.summary?.releaseRows.some((release) => release.id === current) ? current : payload.summary?.releaseRows[0]?.id ?? null);
-        }
-      } catch (error) {
-        if (active) setRefreshError(error instanceof Error ? error.message : "Verified analytics could not be loaded.");
-      } finally {
-        if (active) setIsRefreshing(false);
-      }
-    }
-
-    refresh();
-    const interval = window.setInterval(refresh, 30000);
-    const onVisibility = () => { if (document.visibilityState === "visible") refresh(); };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => { active = false; window.clearInterval(interval); document.removeEventListener("visibilitychange", onVisibility); };
-  }, []);
-
   const currentSeries = data.series[windowKey] ?? data.series["30d"];
   const selectedRelease = data.releaseRows.find((release) => release.id === selectedReleaseId) ?? data.releaseRows[0] ?? null;
   const topCountry = data.countryBreakdown[0];
 
 
-  if (isRefreshing && data.state === "empty") return <LoadingState label="Loading verified analytics" />;
   if (data.state === "error") return <ErrorState title="Analytics unavailable" description={data.errorMessage ?? "Verified analytics could not be loaded."} retry={() => window.location.reload()} />;
   if (data.state === "empty") return <EmptyState title="Verified analytics will appear here" description="HYMN has not yet received verified analytics for the selected catalogue and reporting period. No estimates, fallback metrics or audience demographics are shown." action={{ label: "View Catalogue", href: "/dashboard/releases" }} secondaryAction={{ label: "How Reporting Works", href: "/royalty-payouts" }} />;
 
-  return <div className="grid gap-6 xl:gap-8">{refreshError ? <div className="rounded-xl border p-3 text-sm" role="status" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>{refreshError} Showing the last successfully loaded report.</div> : null}<section className="surface-card relative overflow-hidden p-6 sm:p-8"><div className="relative flex flex-wrap items-start justify-between gap-4"><div className="max-w-3xl"><h1 className="text-4xl font-semibold tracking-tight sm:text-5xl" style={{ color: "var(--text)" }}>{data.headline}</h1><p className="mt-4 max-w-2xl text-base leading-7" style={{ color: "var(--text-muted)" }}>Verified provider performance only. Royalty statements are historical reports, not real-time analytics.</p><div className="mt-4"><DataSourceBadge source={data.dataSource ?? "Source not recorded"} period={data.statementPeriod} /></div><dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm" style={{ color: "var(--text-muted)" }}><div><dt className="inline font-semibold">Imported: </dt><dd className="inline">{data.importedAt ? formatDateTime(data.importedAt) : "Not recorded"}</dd></div></dl></div><div className="rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-soft)" }}><RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />Report refreshed</div><p className="mt-2 text-sm font-medium" style={{ color: "var(--text)" }}>{formatDateTime(data.updatedAt)}</p></div></div><div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">{data.metrics.map((metric) => <MetricCard key={metric.label} label={metric.label} value={metric.value} kind={metric.format} detail={metric.detail} />)}</div></section>
+  return <div className="grid gap-6 xl:gap-8"><section className="surface-card relative overflow-hidden p-6 sm:p-8"><div className="relative flex flex-wrap items-start justify-between gap-4"><div className="max-w-3xl"><h1 className="text-4xl font-semibold tracking-tight sm:text-5xl" style={{ color: "var(--text)" }}>{data.headline}</h1><p className="mt-4 max-w-2xl text-base leading-7" style={{ color: "var(--text-muted)" }}>Verified provider performance only. Royalty statements are historical reports, not real-time analytics.</p><div className="mt-4"><DataSourceBadge source={data.dataSource ?? "Source not recorded"} period={data.statementPeriod} /></div><dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm" style={{ color: "var(--text-muted)" }}><div><dt className="inline font-semibold">Imported: </dt><dd className="inline">{data.importedAt ? formatDateTime(data.importedAt) : "Not recorded"}</dd></div></dl></div><div className="rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-soft)" }}><RefreshCw className="h-3.5 w-3.5" />Imported report</div><p className="mt-2 text-sm font-medium" style={{ color: "var(--text)" }}>{formatDateTime(data.updatedAt)}</p></div></div><div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">{data.metrics.map((metric) => <MetricCard key={metric.label} label={metric.label} value={metric.value} kind={metric.format} detail={metric.detail} />)}</div></section>
 
 <section className="surface-card p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>Streams over time</h2><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Spot the shape of your catalog growth at a glance.</p></div><div className="flex flex-wrap gap-2 rounded-full border p-1" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{analyticsWindows.map((window) => <button key={window} type="button" onClick={() => setWindowKey(window)} className="rounded-full px-4 py-2 text-sm font-medium transition" style={{ background: windowKey === window ? "var(--accent)" : "transparent", color: windowKey === window ? "var(--accent-foreground)" : "var(--text)" }}>{WINDOW_LABELS[window]}</button>)}</div></div><div className="mt-5 rounded-[1.5rem] border p-4 sm:p-5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><Chart points={currentSeries.streams} kind="number" /></div><div className="mt-5 grid gap-4 sm:grid-cols-3"><div className="rounded-[1.5rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--card)" }}><p className="text-xs uppercase tracking-[0.22em]" style={{ color: "var(--text-soft)" }}>Weekly growth</p><p className="mt-2 text-2xl font-semibold" style={{ color: "var(--text)" }}>{formatPercent(data.growth.weekly)}</p></div><div className="rounded-[1.5rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--card)" }}><p className="text-xs uppercase tracking-[0.22em]" style={{ color: "var(--text-soft)" }}>Monthly growth</p><p className="mt-2 text-2xl font-semibold" style={{ color: "var(--text)" }}>{formatPercent(data.growth.monthly)}</p></div><div className="rounded-[1.5rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--card)" }}><p className="text-xs uppercase tracking-[0.22em]" style={{ color: "var(--text-soft)" }}>Active releases</p><p className="mt-2 text-2xl font-semibold" style={{ color: "var(--text)" }}>{formatNumber(data.metrics[2]?.value ?? 0)}</p></div></div></section>
 

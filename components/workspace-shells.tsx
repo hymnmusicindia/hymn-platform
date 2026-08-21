@@ -134,6 +134,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   const [beatPurchases, setBeatPurchases] = useState<BeatPurchase[]>([]);
   const [smartActions, setSmartActions] = useState<SmartNextAction[]>([]);
   const [payoutSummary, setPayoutSummary] = useState<CustomerPayoutSummary | null>(null);
+  const [workspaceAnalytics, setWorkspaceAnalytics] = useState<any[]>(analytics);
   const [supportFeedback, setSupportFeedback] = useState<string | null>(null);
   const [sidebarSummaryOpen, setSidebarSummaryOpen] = useState(true);
   const paidOrders = orders.filter((order) => order.paymentStatus === "paid");
@@ -159,11 +160,10 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   useEffect(() => {
     let ignore = false;
     async function loadWorkspaceData() {
-      const [notificationResponse, ticketResponse, payoutResponse, purchaseResponse, actionResponse] = await Promise.all([
+      const [notificationResponse, ticketResponse, payoutResponse, actionResponse] = await Promise.all([
         fetch("/api/notifications?limit=30", { cache: "no-store" }).catch(() => null),
         fetch("/api/support-tickets", { cache: "no-store" }).catch(() => null),
         fetch("/api/payout/summary", { cache: "no-store" }).catch(() => null),
-        fetch("/api/beat-purchases", { cache: "no-store" }).catch(() => null),
         fetch("/api/dashboard/next-actions", { cache: "no-store" }).catch(() => null)
       ]);
       if (ignore) return;
@@ -179,7 +179,6 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         const data = await payoutResponse.json();
         setPayoutSummary(data);
       }
-      if (purchaseResponse?.ok) { const data = await purchaseResponse.json(); setBeatPurchases(Array.isArray(data.purchases) ? data.purchases : []); }
       if (actionResponse?.ok) { const data = await actionResponse.json(); setSmartActions(Array.isArray(data.actions) ? data.actions : []); }
     }
     loadWorkspaceData();
@@ -187,6 +186,26 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       ignore = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== "purchases" && activeTab !== "support") return;
+    let ignore = false;
+    fetch("/api/beat-purchases", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => { if (!ignore && data) setBeatPurchases(Array.isArray(data.purchases) ? data.purchases : []); })
+      .catch(() => undefined);
+    return () => { ignore = true; };
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== "analytics" || workspaceAnalytics.length) return;
+    let ignore = false;
+    fetch("/api/dashboard/analytics", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => { if (!ignore && data) setWorkspaceAnalytics(Array.isArray(data.analytics) ? data.analytics : []); })
+      .catch(() => undefined);
+    return () => { ignore = true; };
+  }, [activeTab, workspaceAnalytics.length]);
 
   async function openNotification(notification: Notification) {
     if (!notification.readAt) {
@@ -488,7 +507,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         </Panel>
       ) : null}
       {activeTab === "analytics" ? (
-        <AnalyticsDashboard userName={user.name} analytics={analytics} />
+        <AnalyticsDashboard userName={user.name} analytics={workspaceAnalytics} />
       ) : null}
 
       {activeTab === "earnings" ? (
