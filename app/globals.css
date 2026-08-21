@@ -5304,14 +5304,33 @@ html[data-theme="light"] .release-step-button.is-current:hover {
 }
 
 .track-editor-fields .contributors-edit {
-  padding: .35rem 0 !important;
+  display: inline-flex;
+  min-height: 2.25rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent) !important;
+  border-radius: .6rem !important;
+  background: color-mix(in srgb, var(--card) 92%, transparent) !important;
+  box-shadow: none !important;
   color: var(--text-muted) !important;
-  transition: color 160ms ease, text-shadow 160ms ease !important;
+  padding: .45rem .75rem !important;
+  text-shadow: none !important;
+  transform: none !important;
+  transition: color 160ms ease, border-color 160ms ease, background-color 160ms ease !important;
+  white-space: nowrap;
 }
 
 .track-editor-fields .contributors-edit:hover {
   color: var(--text) !important;
-  text-shadow: 0 0 16px color-mix(in srgb, var(--accent) 35%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border)) !important;
+  background: color-mix(in srgb, var(--accent) 8%, var(--card)) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.track-editor-fields .contributors-edit:active {
+  transform: translateY(1px) !important;
 }
 
 .track-editor-fields .contributors-grid {
