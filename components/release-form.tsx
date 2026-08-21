@@ -611,7 +611,7 @@ async function readAsDataUrl(file: File) {
 
 async function validateArtwork(file: File) {
   if (file.type !== "image/jpeg" && !/\.(jpe?g)$/i.test(file.name))
-    throw new Error("DireNote mandate: Cover artwork must be in JPG / JPEG format only (no PNG or other file types).");
+    throw new Error("Distribution requirement: Cover artwork must be in JPG / JPEG format only (no PNG or other file types).");
   const objectUrl = URL.createObjectURL(file);
   try {
     const dimensions = await new Promise<{ width: number; height: number }>(
@@ -2505,11 +2505,11 @@ export function ReleaseForm({
                       <p><span aria-hidden="true">✓</span><span>I confirm that I own or control all rights required to distribute this content.</span></p>
                       <p><span aria-hidden="true">✓</span><span>I confirm that all collaborators, contributors and rights holders have authorized this release.</span></p>
                       <p><span aria-hidden="true">✓</span><span>I understand that false ownership claims, copyright infringement or fraudulent submissions may result in removal of my release and suspension of my HYMN account.</span></p>
-                      <p><span aria-hidden="true">✓</span><span>I understand that this release will be distributed through DireNote Initiatives LLP, which retains 30% of Net Royalty Revenue. The remaining eligible earnings will be reflected in my HYMN dashboard where reporting, royalty tracking, splits and payouts are managed.</span></p>
+                      <p><span aria-hidden="true">✓</span><span>I understand that this release will be distributed through HYMN&apos;s distribution network, which retains 30% of Net Royalty Revenue. The remaining eligible earnings will be reflected in my HYMN dashboard where reporting, royalty tracking, splits and payouts are managed.</span></p>
                     </div>
                     <div className="legal-declaration-disclosure">
                       <span className="legal-declaration-disclosure-label">Distribution disclosure</span>
-                      <p>By submitting this release, you acknowledge that distribution is fulfilled through DireNote Initiatives LLP, which retains 30% of Net Royalty Revenue in accordance with its distribution agreement. The remaining 70% of eligible Net Royalty Revenue is reflected within your HYMN earnings dashboard, where HYMN manages reporting, royalty tracking, splits, and payout processing according to your account settings and any configured royalty splits.</p>
+                      <p>By submitting this release, you acknowledge that distribution is fulfilled through HYMN&apos;s distribution network, which retains 30% of Net Royalty Revenue in accordance with the applicable distribution agreement. The remaining 70% of eligible Net Royalty Revenue is reflected within your HYMN earnings dashboard, where HYMN manages reporting, royalty tracking, splits, and payout processing according to your account settings and any configured royalty splits.</p>
                     </div>
                   </div>
                 </details>
@@ -4469,9 +4469,9 @@ export function ReleaseForm({
                       <p>✓ I confirm that I own or control all rights required to distribute this content.</p>
                       <p>✓ I confirm that all collaborators, contributors and rights holders have authorized this release.</p>
                       <p>✓ I understand that false ownership claims, copyright infringement or fraudulent submissions may result in removal of my release and suspension of my HYMN account.</p>
-                      <p>✓ I understand that this release will be distributed through DireNote Initiatives LLP, which retains 30% of Net Royalty Revenue. The remaining eligible earnings will be reflected in my HYMN dashboard where reporting, royalty tracking, splits and payouts are managed.</p>
+                      <p>✓ I understand that this release will be distributed through HYMN&apos;s distribution network, which retains 30% of Net Royalty Revenue. The remaining eligible earnings will be reflected in my HYMN dashboard where reporting, royalty tracking, splits and payouts are managed.</p>
                     </div>
-                    <p className="mt-5 border-t pt-5 text-sm leading-6" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>By submitting this release, you acknowledge that distribution is fulfilled through DireNote Initiatives LLP, which retains 30% of Net Royalty Revenue in accordance with its distribution agreement. The remaining 70% of eligible Net Royalty Revenue is reflected within your HYMN earnings dashboard, where HYMN manages reporting, royalty tracking, splits, and payout processing according to your account settings and any configured royalty splits.</p>
+                    <p className="mt-5 border-t pt-5 text-sm leading-6" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>By submitting this release, you acknowledge that distribution is fulfilled through HYMN&apos;s distribution network, which retains 30% of Net Royalty Revenue in accordance with the applicable distribution agreement. The remaining 70% of eligible Net Royalty Revenue is reflected within your HYMN earnings dashboard, where HYMN manages reporting, royalty tracking, splits, and payout processing according to your account settings and any configured royalty splits.</p>
                     <p className="mt-5 border-t pt-5 text-sm font-semibold" style={{ borderColor: "var(--border)", color: legalComplete ? "var(--success)" : "var(--danger)" }}>{legalComplete ? "Legal Declaration accepted." : "Return to Delivery and accept the Legal Declaration before submitting."}</p>
                   </div>
                 </div>

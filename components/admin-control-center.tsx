@@ -721,22 +721,22 @@ export function AdminControlCenter({
             : [];
           const reason = [data.error, ...issueMessages].filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).join(" ") || "Could not update release.";
           setFeedback(reason);
-          if (isDireNoteAction) setDireNoteResult({ type: "error", title: "DireNote submission failed", message: reason });
+          if (isDireNoteAction) setDireNoteResult({ type: "error", title: "Distribution submission failed", message: reason });
           return;
         }
         setReleases((items) => items.map((item) => (item.id === id ? data.release : item)));
         const releaseName = data.release?.releaseTitle || data.release?.trackName || "Release";
-        setFeedback(status === "approved" ? `${releaseName} was approved by HYMN.` : status === "sent" ? `${releaseName} was sent to DireNote successfully.` : `${releaseName} status updated to ${status.replace(/_/g, " ")}.`);
+        setFeedback(status === "approved" ? `${releaseName} was approved by HYMN.` : status === "sent" ? `${releaseName} was sent for distribution successfully.` : `${releaseName} status updated to ${status.replace(/_/g, " ")}.`);
         if (isDireNoteAction) {
           const warningText = Array.isArray(data.warnings) && data.warnings.length
-            ? ` DireNote accepted it with ${data.warnings.length} warning${data.warnings.length === 1 ? "" : "s"}.`
-            : " DireNote accepted the submission for processing.";
-          setDireNoteResult({ type: "success", title: "Sent to DireNote", message: `${releaseName} was sent successfully.${warningText}` });
+            ? ` HYMN distribution accepted it with ${data.warnings.length} warning${data.warnings.length === 1 ? "" : "s"}.`
+            : " HYMN distribution accepted the submission for processing.";
+          setDireNoteResult({ type: "success", title: "Sent for distribution", message: `${releaseName} was sent successfully.${warningText}` });
         }
       } catch (error) {
-        const reason = error instanceof Error ? error.message : "The DireNote request could not be completed.";
+        const reason = error instanceof Error ? error.message : "The distribution request could not be completed.";
         setFeedback(reason);
-        if (isDireNoteAction) setDireNoteResult({ type: "error", title: "DireNote connection error", message: reason });
+        if (isDireNoteAction) setDireNoteResult({ type: "error", title: "Distribution connection error", message: reason });
       } finally {
         if (isDireNoteAction) setIsSubmittingToDireNote(false);
       }
@@ -750,16 +750,16 @@ export function AdminControlCenter({
         const response = await fetch(`/api/admin/releases/${id}/direnote/sync`, { method: "POST" });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-          const message = data.error || "DireNote sync could not be completed.";
-          setFeedback(message); setDireNoteResult({ type: "error", title: "DireNote sync failed", message });
+          const message = data.error || "Distribution sync could not be completed.";
+          setFeedback(message); setDireNoteResult({ type: "error", title: "Distribution sync failed", message });
           return;
         }
-        const message = data.status ? `Synced successfully. DireNote status: ${String(data.status).replace(/_/g, " ")}.` : "Synced successfully.";
-        setFeedback(message); setDireNoteResult({ type: "success", title: "DireNote synced", message });
+        const message = data.status ? `Synced successfully. Distribution status: ${String(data.status).replace(/_/g, " ")}.` : "Synced successfully.";
+        setFeedback(message); setDireNoteResult({ type: "success", title: "Distribution synced", message });
         window.location.reload();
       } catch {
-        const message = "DireNote sync could not be completed.";
-        setFeedback(message); setDireNoteResult({ type: "error", title: "DireNote sync failed", message });
+        const message = "Distribution sync could not be completed.";
+        setFeedback(message); setDireNoteResult({ type: "error", title: "Distribution sync failed", message });
       }
     });
   }
@@ -924,7 +924,7 @@ export function AdminControlCenter({
         { key: "analytics", label: "Operational Reporting", description: "Persisted platform activity", group: "Command Center" },
         { key: "releases", label: "Releases", description: "Manage approved, scheduled, and live catalog releases", group: "Distribution Operations" },
         { key: "distribution-queue", label: "QC Queue", description: "Review and process submissions", group: "Distribution Operations" },
-        { key: "delivery", label: "Distributor Delivery", description: "DireNote and store status", group: "Distribution Operations" },
+        { key: "delivery", label: "Distributor Delivery", description: "Distribution and store status", group: "Distribution Operations" },
         { key: "updates", label: "Update Requests", description: "Metadata and delivery changes", group: "Distribution Operations", href: "/admin/release-change-requests" },
         { key: "takedowns", label: "Takedowns", description: "Removal requests and outcomes", group: "Distribution Operations", href: "/admin/release-change-requests" },
         { key: "fraud", label: "Fraud Detection", description: "Risk monitoring and investigations", group: "Distribution Operations", href: "/admin/fraud" },
@@ -972,7 +972,7 @@ export function AdminControlCenter({
       {activeTab === "overview" ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <button type="button" onClick={() => selectAdminTab("releases")} className="text-left"><StatCard label="Pending reviews" value={pendingReviews} detail="Submitted, queued, or under review" /></button>
         <button type="button" onClick={() => selectAdminTab("releases")} className="text-left"><StatCard label="Changes requested" value={changesRequested} detail="Correction flow needs follow-up" /></button>
-        <button type="button" onClick={() => selectAdminTab("distribution-queue")} className="text-left"><StatCard label="Sent to DireNote" value={sentToDireNote} detail="Sent, processing, delivered, or live" /></button>
+        <button type="button" onClick={() => selectAdminTab("distribution-queue")} className="text-left"><StatCard label="Sent for distribution" value={sentToDireNote} detail="Sent, processing, delivered, or live" /></button>
         <button type="button" onClick={() => selectAdminTab("revenue")} className="text-left"><StatCard label="Revenue" value={formatMoney(distributionRevenue + commerceRevenue)} detail={`${formatMoney(distributionRevenue)} distribution + ${formatMoney(commerceRevenue)} commerce`} /></button>
       </section> : null}
 
@@ -1051,7 +1051,7 @@ export function AdminControlCenter({
 
       {activeTab === "releases" || activeTab === "delivery" ? (
         <div className="grid gap-6 xl:grid-cols-[0.82fr,1.18fr]">
-          <SurfaceSection title={activeTab === "delivery" ? "Distributor Delivery" : "Releases"} description={activeTab === "delivery" ? "Track DireNote processing, delivery state, store availability, and live confirmation." : "Manage approved, scheduled, distributed, and live catalog releases."}>
+          <SurfaceSection title={activeTab === "delivery" ? "Distributor Delivery" : "Releases"} description={activeTab === "delivery" ? "Track distribution processing, delivery state, store availability, and live confirmation." : "Manage approved, scheduled, distributed, and live catalog releases."}>
             <div className="grid gap-3">
               {catalogReleases.map((release) => <button key={release.id} type="button" onClick={() => { setSelectedReleaseId(release.id); setCatalogTab("overview"); }} className="surface-list-item pressable p-4 text-left" style={selectedCatalogRelease?.id === release.id ? { borderColor: "var(--accent)", background: "var(--accent-soft)" } : undefined}><div className="flex gap-3">{release.artworkUrl ? <img src={release.artworkUrl} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" /> : <div className="h-16 w-16 shrink-0 rounded-xl border border-dashed" style={{ borderColor: "var(--border)" }} />}<div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold">{release.releaseTitle || release.trackName}</p><p className="mt-1 truncate text-sm" style={{ color: "var(--text-muted)" }}>{release.artistName} · {release.releaseType.toUpperCase()} · {release.tracks?.length ?? 0} tracks</p></div><StatusPill label={release.status.replace(/_/g, " ")} active /></div><div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-soft)" }}><span>Release {release.releaseDate || "—"}</span><span>UPC {release.upcCode || "Pending"}</span><span>{release.distributionStores?.filter((store) => store.status === "Live").length ?? 0} stores live</span></div></div></div></button>)}
               {catalogReleases.length === 0 ? <EmptyState copy="No approved or live releases yet. Releases will appear here after they are sent for distribution or marked live." /> : null}
@@ -1063,7 +1063,7 @@ export function AdminControlCenter({
               <nav className="flex gap-1 overflow-x-auto rounded-2xl border p-1.5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} aria-label="Catalog sections">{(["overview", "tracks", "distribution", "identifiers", "stores", "promolink", "earnings", "activity"] as const).map((tab) => <button key={tab} type="button" onClick={() => setCatalogTab(tab)} className={catalogTab === tab ? "btn-primary pressable shrink-0 px-3 py-2 text-xs capitalize" : "pressable shrink-0 rounded-full px-3 py-2 text-xs font-semibold capitalize"} style={catalogTab === tab ? undefined : { color: "var(--text-muted)" }}>{tab === "identifiers" ? "UPC / ISRC" : tab}</button>)}</nav>
               {catalogTab === "overview" ? <div className="grid gap-5 rounded-2xl border p-5 sm:grid-cols-[10rem,1fr]" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{selectedCatalogRelease.artworkUrl ? <img src={selectedCatalogRelease.artworkUrl} alt={selectedCatalogRelease.releaseTitle} className="aspect-square w-full rounded-2xl object-cover" /> : <div className="aspect-square rounded-2xl border border-dashed" style={{ borderColor: "var(--border)" }} />}<div className="grid content-start gap-3 sm:grid-cols-2">{[["Title", selectedCatalogRelease.releaseTitle], ["Artist", selectedCatalogRelease.artistName], ["Label", selectedCatalogRelease.labelName || selectedCatalogRelease.labelDisplayName], ["Language", selectedCatalogRelease.language], ["Genre", [selectedCatalogRelease.primaryGenre, selectedCatalogRelease.secondaryGenre].filter(Boolean).join(" / ")], ["UPC", selectedCatalogRelease.upcCode || "Pending"]].map(([label, value]) => <div key={String(label)}><p className="text-xs font-semibold uppercase tracking-[0.1em]" style={{ color: "var(--text-soft)" }}>{label}</p><p className="mt-1 text-sm font-semibold">{value || "—"}</p></div>)}</div></div> : null}
               {catalogTab === "tracks" ? <div className="grid gap-3">{(selectedCatalogRelease.tracks ?? []).map((track) => <article key={track.id} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">{track.trackNumber}. {track.trackTitle}</p><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{track.primaryArtist} · ISRC {track.isrc || "Pending"}</p></div><StatusPill label={track.explicitContent ? "Explicit" : "Clean"} active={track.explicitContent} /></div>{track.audioUrl ? <audio controls preload="none" className="mt-3 w-full" src={track.audioUrl} /> : null}</article>)}</div> : null}
-              {catalogTab === "distribution" ? <div className="grid gap-3 sm:grid-cols-2">{[["Distribution status", selectedCatalogRelease.status.replace(/_/g, " ")], ["DireNote release ID", selectedCatalogRelease.distributorReleaseId], ["Scheduled / release date", selectedCatalogRelease.releaseDate], ["Distributed at", selectedCatalogRelease.distributedAt ? new Date(selectedCatalogRelease.distributedAt).toLocaleString("en-IN") : null], ["Live confirmation", selectedCatalogRelease.liveAt ? new Date(selectedCatalogRelease.liveAt).toLocaleString("en-IN") : "Awaiting confirmation"], ["Last updated", selectedCatalogRelease.lastEditedAt ? new Date(selectedCatalogRelease.lastEditedAt).toLocaleString("en-IN") : new Date(selectedCatalogRelease.createdAt).toLocaleString("en-IN")]].map(([label, value]) => <div key={String(label)} className="summary-card"><span>{label}</span><strong>{value || "—"}</strong></div>)}</div> : null}
+              {catalogTab === "distribution" ? <div className="grid gap-3 sm:grid-cols-2">{[["Distribution status", selectedCatalogRelease.status.replace(/_/g, " ")], ["Distribution release ID", selectedCatalogRelease.distributorReleaseId], ["Scheduled / release date", selectedCatalogRelease.releaseDate], ["Distributed at", selectedCatalogRelease.distributedAt ? new Date(selectedCatalogRelease.distributedAt).toLocaleString("en-IN") : null], ["Live confirmation", selectedCatalogRelease.liveAt ? new Date(selectedCatalogRelease.liveAt).toLocaleString("en-IN") : "Awaiting confirmation"], ["Last updated", selectedCatalogRelease.lastEditedAt ? new Date(selectedCatalogRelease.lastEditedAt).toLocaleString("en-IN") : new Date(selectedCatalogRelease.createdAt).toLocaleString("en-IN")]].map(([label, value]) => <div key={String(label)} className="summary-card"><span>{label}</span><strong>{value || "—"}</strong></div>)}</div> : null}
               {catalogTab === "identifiers" ? <div className="grid gap-3"><div className="summary-card"><span>Release UPC</span><strong>{selectedCatalogRelease.upcCode || "Pending"}</strong></div>{(selectedCatalogRelease.tracks ?? []).map((track) => <div key={track.id} className="summary-card"><span>{track.trackNumber}. {track.trackTitle}</span><strong>{track.isrc || "Pending"}</strong></div>)}</div> : null}
               {catalogTab === "stores" ? <AdminStoreStatusEditor release={selectedCatalogRelease} /> : null}
               {catalogTab === "promolink" ? <div className="rounded-2xl border p-5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{typeof selectedCatalogRelease.metadata?.promolinkUrl === "string" ? <a href={selectedCatalogRelease.metadata.promolinkUrl} target="_blank" rel="noreferrer" className="btn-primary inline-flex">View Promolink</a> : <p className="text-sm" style={{ color: "var(--text-muted)" }}>Promolink will appear after the release is scheduled or live.</p>}</div> : null}
@@ -1094,7 +1094,7 @@ export function AdminControlCenter({
                     {release.artworkUrl ? <img src={release.artworkUrl} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" /> : <div className="h-16 w-16 shrink-0 rounded-xl border border-dashed" style={{ borderColor: "var(--border)" }} />}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold" style={{ color: "var(--text)" }}>{release.releaseTitle || release.trackName}</p><p className="mt-1 truncate text-sm" style={{ color: "var(--text-soft)" }}>{release.artistName} · {release.tracks?.length ?? 0} track{release.tracks?.length === 1 ? "" : "s"} · {release.releaseType.toUpperCase()}</p></div><StatusPill label={release.status.replace(/_/g, " ")} active /></div>
-                      <div className="mt-3 grid gap-1 text-xs sm:grid-cols-2" style={{ color: "var(--text-muted)" }}><span>Submitted {release.submittedAt ? new Date(release.submittedAt).toLocaleDateString("en-IN") : "Not submitted"}</span><span>Release {release.releaseDate ? new Date(release.releaseDate).toLocaleDateString("en-IN") : "—"}</span><span>Payment {release.paymentStatus === "paid" ? "Verified" : release.paymentStatus ?? "Pending"}</span><span style={{ color: assetReady ? "var(--success)" : "var(--danger)" }}>DireNote {assetReady ? "Ready to check" : "Issues found"}</span></div>
+                      <div className="mt-3 grid gap-1 text-xs sm:grid-cols-2" style={{ color: "var(--text-muted)" }}><span>Submitted {release.submittedAt ? new Date(release.submittedAt).toLocaleDateString("en-IN") : "Not submitted"}</span><span>Release {release.releaseDate ? new Date(release.releaseDate).toLocaleDateString("en-IN") : "—"}</span><span>Payment {release.paymentStatus === "paid" ? "Verified" : release.paymentStatus ?? "Pending"}</span><span style={{ color: assetReady ? "var(--success)" : "var(--danger)" }}>Distribution {assetReady ? "Ready to check" : "Issues found"}</span></div>
                     </div>
                   </div>
                 </button>;
@@ -1107,7 +1107,7 @@ export function AdminControlCenter({
             {selectedRelease ? (
               <div className="grid gap-5">
                 <div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>{selectedRelease.releaseTitle || selectedRelease.trackName}</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{selectedRelease.releaseType.toUpperCase()} · {selectedRelease.tracks?.length ?? 0} track{selectedRelease.tracks?.length === 1 ? "" : "s"} · {selectedRelease.artistName}</p><p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>Submitted {selectedRelease.submittedAt ? new Date(selectedRelease.submittedAt).toLocaleString("en-IN") : "—"} · Release {selectedRelease.releaseDate || "—"} · {selectedRelease.ownerEmail || "Account email unavailable"}</p></div><StatusPill label={selectedRelease.status.replace(/_/g, " ")} active /></div>
-                <nav className="flex gap-1 overflow-x-auto rounded-2xl border p-1.5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} aria-label="Release review sections">{(["overview", "metadata", "tracks", "assets", "rights", "direnote", "activity"] as const).map((tab) => <button key={tab} type="button" onClick={() => setReviewTab(tab)} className={reviewTab === tab ? "btn-primary pressable shrink-0 px-3 py-2 text-xs capitalize" : "pressable shrink-0 rounded-full px-3 py-2 text-xs font-semibold capitalize"} style={reviewTab === tab ? undefined : { color: "var(--text-muted)" }}>{tab === "assets" ? "Artwork & Audio" : tab === "direnote" ? "DireNote Readiness" : tab}</button>)}</nav>
+                <nav className="flex gap-1 overflow-x-auto rounded-2xl border p-1.5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} aria-label="Release review sections">{(["overview", "metadata", "tracks", "assets", "rights", "direnote", "activity"] as const).map((tab) => <button key={tab} type="button" onClick={() => setReviewTab(tab)} className={reviewTab === tab ? "btn-primary pressable shrink-0 px-3 py-2 text-xs capitalize" : "pressable shrink-0 rounded-full px-3 py-2 text-xs font-semibold capitalize"} style={reviewTab === tab ? undefined : { color: "var(--text-muted)" }}>{tab === "assets" ? "Artwork & Audio" : tab === "direnote" ? "Distribution readiness" : tab}</button>)}</nav>
                 {reviewTab === "overview" ? <div className="grid gap-5 rounded-[1.4rem] border p-5 sm:grid-cols-[9rem,1fr] sm:items-start" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
                   <div>
                     {selectedRelease.artworkUrl ? <img src={selectedRelease.artworkUrl} alt={selectedRelease.releaseTitle} className="aspect-square w-full rounded-2xl object-cover shadow-lg" /> : <div className="flex aspect-square w-full items-center justify-center rounded-2xl border border-dashed text-xs" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>No artwork</div>}

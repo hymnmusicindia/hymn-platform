@@ -50,7 +50,7 @@ export function AdminReleaseBoard({ initialReleases }: { initialReleases: Releas
       const response = await fetch(`/api/admin/releases/${id}/direnote`);
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setErrorByRelease((items) => ({ ...items, [id]: data.error ?? "Could not validate DireNote payload." }));
+        setErrorByRelease((items) => ({ ...items, [id]: data.error ?? "Could not validate the distribution payload." }));
         return;
       }
       setReadinessByRelease((items) => ({ ...items, [id]: data }));
@@ -70,7 +70,7 @@ export function AdminReleaseBoard({ initialReleases }: { initialReleases: Releas
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         setReadinessByRelease((items) => ({ ...items, [id]: data }));
-        setErrorByRelease((items) => ({ ...items, [id]: data.error ?? data.validation?.issues?.[0]?.message ?? "DireNote submission failed." }));
+        setErrorByRelease((items) => ({ ...items, [id]: data.error ?? data.validation?.issues?.[0]?.message ?? "Distribution submission failed." }));
         return;
       }
       if (data.release) setReleases((items) => items.map((item) => (item.id === id ? data.release : item)));
@@ -110,7 +110,7 @@ export function AdminReleaseBoard({ initialReleases }: { initialReleases: Releas
           <div className="mt-5 border-t border-border pt-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <p className="text-sm font-semibold text-white">DireNote Readiness</p>
+                <p className="text-sm font-semibold text-white">Distribution readiness</p>
                 <p className="text-xs text-white/55">
                   {readinessByRelease[release.id]?.validation
                     ? readinessByRelease[release.id].ready ? "Payload ready" : "Payload needs fixes"
@@ -119,16 +119,16 @@ export function AdminReleaseBoard({ initialReleases }: { initialReleases: Releas
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" disabled={isPending} onClick={() => validateForDireNote(release.id, true)} className="rounded-full border border-border px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70">
-                  Preview DireNote Payload
+                  Preview distribution payload
                 </button>
                 <button type="button" disabled={isPending} onClick={() => validateForDireNote(release.id)} className="rounded-full border border-border px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70">
-                  Validate for DireNote
+                  Validate for distribution
                 </button>
                 <button type="button" disabled={isPending || cooldownSeconds(release.id) > 0 || readinessByRelease[release.id]?.ready === false} onClick={() => sendToDireNote(release.id)} className="rounded-full bg-cyan px-4 py-2 text-xs uppercase tracking-[0.2em] text-ink disabled:cursor-not-allowed disabled:opacity-50">
-                  {cooldownSeconds(release.id) > 0 ? `Try again in ${cooldownLabel(release.id)}` : "Approve & Send to DireNote"}
+                  {cooldownSeconds(release.id) > 0 ? `Try again in ${cooldownLabel(release.id)}` : "Approve & Send for distribution"}
                 </button>
                 <button type="button" disabled={isPending || cooldownSeconds(release.id) > 0} onClick={() => sendToDireNote(release.id, "retry")} className="rounded-full border border-border px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/70">
-                  Retry DireNote Submission
+                  Retry distribution submission
                 </button>
                 <button type="button" disabled={isPending} onClick={() => markChangesRequested(release.id)} className="rounded-full border border-amber-300/50 px-4 py-2 text-xs uppercase tracking-[0.2em] text-amber-200">
                   Mark Changes Requested
@@ -142,7 +142,7 @@ export function AdminReleaseBoard({ initialReleases }: { initialReleases: Releas
                   <p className="font-medium text-white">Blocking issues</p>
                   {readinessByRelease[release.id].validation?.issues.length ? (
                     <ul className="mt-2 space-y-1 text-rose-200">
-                      {readinessByRelease[release.id].validation?.issues.map((issue, index) => <li key={`${issue.field}-${index}`}><strong>{issue.field}:</strong> {issue.field === "metadata.mood" ? "Mood is missing. Select a mood before sending to DireNote." : issue.message}</li>)}
+                      {readinessByRelease[release.id].validation?.issues.map((issue, index) => <li key={`${issue.field}-${index}`}><strong>{issue.field}:</strong> {issue.field === "metadata.mood" ? "Mood is missing. Select a mood before sending for distribution." : issue.message}</li>)}
                     </ul>
                   ) : <p className="mt-2 text-white/55">No blocking issues found.</p>}
                 </div>

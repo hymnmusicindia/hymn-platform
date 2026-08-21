@@ -28,8 +28,8 @@ const STAGE_CONFIG: Record<QueueStage, { label: string; description: string; ico
   quality_check: { label: "Quality Check", description: "We're reviewing your files and metadata", icon: "check" },
   awaiting_approval: { label: "Awaiting Approval", description: "Pending editorial review", icon: "clock" },
   approved: { label: "Approved", description: "Your release has been approved", icon: "approved" },
-  sent_to_direnote: { label: "Sent to DireNote", description: "Uploading to distribution partner", icon: "upload" },
-  processing: { label: "Processing", description: "Being processed by DireNote", icon: "process" },
+  sent_to_direnote: { label: "Sent to distribution", description: "Uploading to HYMN's distribution network", icon: "upload" },
+  processing: { label: "Processing", description: "Being processed for store delivery", icon: "process" },
   delivered: { label: "Delivered", description: "Successfully delivered to stores", icon: "delivered" },
   completed: { label: "Completed", description: "Your release is now live", icon: "complete" },
   rejected: { label: "Rejected", description: "Your release needs revision", icon: "rejected" }
@@ -178,7 +178,7 @@ function QueueEntryCard({ entry }: { entry: QueueEntry }) {
                     : "text-gray-400 dark:text-gray-600"
                 }`}
               >
-                {stage === "quality_check" ? "QC" : stage === "sent_to_direnote" ? "DireNote" : stage.charAt(0).toUpperCase()}
+                {stage === "quality_check" ? "QC" : stage === "sent_to_direnote" ? "Delivery" : stage.charAt(0).toUpperCase()}
               </span>
             </div>
           );
