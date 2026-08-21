@@ -6,9 +6,14 @@ import { getSession } from "@/lib/session";
 import { OnboardingEntryRedirect } from "@/components/onboarding-entry-redirect";
 
 export const metadata: Metadata = {
-  title: "HYMN Platform",
+  title: "HYMN Music - Hitting Your Music Notes",
   description:
-    "HYMN full-stack platform for distribution, beats, services, payments, dashboard and admin operations."
+    "HYMN full-stack platform for distribution, beats, services, payments, dashboard and admin operations.",
+  icons: {
+    icon: "/assets/hymnlogowhite.png",
+    shortcut: "/assets/hymnlogowhite.png",
+    apple: "/assets/hymnlogowhite.png"
+  }
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
