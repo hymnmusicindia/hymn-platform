@@ -2298,8 +2298,7 @@ export async function reviewProducerApplication(applicationId: number, status: P
 
 export async function listAllArtistProfiles() {
   if (usesPostgresPrisma()) {
-    const cards = await prisma.artistCard.findMany({ where: { archivedAt: null }, orderBy: { updatedAt: "desc" } });
-    return cards.map(mapPrismaArtistCard);
+    return listPostgresArtistCards();
   }
   const pool = getPool();
   if (!pool) {
@@ -2324,10 +2323,42 @@ function mapPrismaArtistCard(card: any): ArtistProfile {
   return { id: card.id, userId: card.userId, name: card.artistName, spotifyArtistId: card.spotifyArtistId ?? null, spotifyUrl: card.spotifyProfileUrl ?? null, appleArtistId: card.appleArtistId ?? null, appleUrl: card.appleMusicProfileUrl ?? null, instagramUrl: card.instagramUrl ?? null, youtubeUrl: card.youtubeUrl ?? null, imageUrl: card.imageUrl ?? null, followers: card.followers ?? null, isLinked: Boolean(card.spotifyProfileUrl || card.appleMusicProfileUrl), isPrimary: Boolean(card.isPrimary), archivedAt: card.archivedAt?.toISOString?.() ?? null, lastUsedAt: null, createdAt: card.createdAt.toISOString(), updatedAt: card.updatedAt.toISOString() };
 }
 
+async function listPostgresArtistCards(input: { userId?: number; query?: string; take?: number } = {}) {
+  // The production database predates optional DireNote artist columns. Use an
+  // explicit projection so ordinary portal reads work before that migration is
+  // deliberately applied; never select `direnote_artist_id` by default.
+  const query = input.query?.trim() ?? "";
+  const limit = Math.max(1, Math.min(input.take ?? 10_000, 10_000));
+  const rows = input.userId == null
+    ? await prisma.$queryRaw<Array<Record<string, any>>>(Prisma.sql`
+        SELECT "id", "user_id" AS "userId", "artist_name" AS "artistName",
+               "spotify_profile_url" AS "spotifyProfileUrl", "spotify_artist_id" AS "spotifyArtistId",
+               "apple_music_profile_url" AS "appleMusicProfileUrl", "apple_artist_id" AS "appleArtistId",
+               "instagram_url" AS "instagramUrl", "youtube_url" AS "youtubeUrl", "image_url" AS "imageUrl",
+               "followers", "is_primary" AS "isPrimary", "archived_at" AS "archivedAt", "role",
+               "created_at" AS "createdAt", "updated_at" AS "updatedAt"
+          FROM "artist_cards"
+         WHERE "archived_at" IS NULL
+         ORDER BY "updated_at" DESC
+         LIMIT ${limit}`)
+    : await prisma.$queryRaw<Array<Record<string, any>>>(Prisma.sql`
+        SELECT "id", "user_id" AS "userId", "artist_name" AS "artistName",
+               "spotify_profile_url" AS "spotifyProfileUrl", "spotify_artist_id" AS "spotifyArtistId",
+               "apple_music_profile_url" AS "appleMusicProfileUrl", "apple_artist_id" AS "appleArtistId",
+               "instagram_url" AS "instagramUrl", "youtube_url" AS "youtubeUrl", "image_url" AS "imageUrl",
+               "followers", "is_primary" AS "isPrimary", "archived_at" AS "archivedAt", "role",
+               "created_at" AS "createdAt", "updated_at" AS "updatedAt"
+          FROM "artist_cards"
+         WHERE "user_id" = ${input.userId} AND "archived_at" IS NULL
+           AND (${query} = '' OR "artist_name" ILIKE ${`%${query}%`})
+         ORDER BY "updated_at" DESC
+         LIMIT ${limit}`);
+  return rows.map(mapPrismaArtistCard);
+}
+
 export async function listArtistProfilesByUser(userId: number, query = "") {
   if (usesPostgresPrisma()) {
-    const cards = await prisma.artistCard.findMany({ where: { userId, archivedAt: null, ...(query.trim() ? { artistName: { contains: query.trim(), mode: "insensitive" as const } } : {}) }, orderBy: { updatedAt: "desc" } });
-    return cards.map(mapPrismaArtistCard);
+    return listPostgresArtistCards({ userId, query });
   }
   const pool = getPool();
   const normalized = normalizeArtistProfileName(query);
@@ -2353,8 +2384,7 @@ export async function listArtistProfilesByUser(userId: number, query = "") {
 
 export async function listRecentArtistProfilesByUser(userId: number, limit = 6) {
   if (usesPostgresPrisma()) {
-    const cards = await prisma.artistCard.findMany({ where: { userId, archivedAt: null }, orderBy: { updatedAt: "desc" }, take: limit });
-    return cards.map(mapPrismaArtistCard);
+    return listPostgresArtistCards({ userId, take: limit });
   }
   const pool = getPool();
   if (!pool) {

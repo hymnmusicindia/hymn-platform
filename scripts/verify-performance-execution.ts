@@ -22,4 +22,8 @@ assert(releaseCron.includes("nextStatusCheckDelay"), "DireNote status polling mu
 const revenueCron = source("app/api/cron/direnote-revenue-sync/route.ts");
 assert(revenueCron.includes("checkedIsrcs"), "Revenue sync must skip ISRCs already checked for the reporting month.");
 
+const database = source("lib/db.ts");
+assert(database.includes("function listPostgresArtistCards"), "Artist-card reads must use a legacy-schema-compatible projection.");
+assert(!database.includes("const cards = await prisma.artistCard.findMany({ where: { archivedAt: null }, orderBy: { updatedAt: \"desc\" } });"), "Admin artist-card reads must not select unavailable DireNote columns.");
+
 console.log("Performance execution guard verification passed.");
