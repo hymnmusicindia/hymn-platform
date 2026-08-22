@@ -26,4 +26,8 @@ const database = source("lib/db.ts");
 assert(database.includes("function listPostgresArtistCards"), "Artist-card reads must use a legacy-schema-compatible projection.");
 assert(!database.includes("const cards = await prisma.artistCard.findMany({ where: { archivedAt: null }, orderBy: { updatedAt: \"desc\" } });"), "Admin artist-card reads must not select unavailable DireNote columns.");
 
+const distributionDatabase = source("lib/distribution-db.ts");
+assert(distributionDatabase.includes("legacyCompatibleReleaseForUser(userId, releaseId)"), "Single-release reads must tolerate pending optional DireNote columns.");
+assert(distributionDatabase.includes("select: { id: true }"), "Release mutations must not return unavailable optional DireNote columns by default.");
+
 console.log("Performance execution guard verification passed.");

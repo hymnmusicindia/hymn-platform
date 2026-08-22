@@ -34,6 +34,20 @@ async function legacyCompatibleReleaseRows(where: "user" | "all", userId?: numbe
   return rows.map((row) => ({ ...camelCaseDatabaseRow(row), tracks: tracksByRelease.get(Number(row.id)) ?? [] }));
 }
 
+async function legacyCompatibleReleaseForUser(userId: number, releaseId: number) {
+  const rows = await prisma.$queryRaw<Array<Record<string, any>>>`
+    SELECT * FROM "releases"
+    WHERE "id" = ${releaseId}
+      AND "archived_at" IS NULL
+      AND ("owner_user_id" = ${userId} OR ("owner_user_id" IS NULL AND "user_id" = ${userId} AND "release_source" <> 'ADMIN_MANUAL'))
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row) return null;
+  const tracks = await prisma.track.findMany({ where: { releaseId }, orderBy: { trackNumber: "asc" } });
+  return { ...camelCaseDatabaseRow(row), tracks };
+}
+
 export function deserializeRelease(dbData: any): Release {
   const metadata = typeof dbData.metadata === "string" ? JSON.parse(dbData.metadata) : dbData.metadata || {};
   const distributionStores = sanitizeStoreStatuses(metadata.distributionStores);
@@ -559,10 +573,7 @@ export async function getDetailedReleaseByUserId(userId: number, releaseId: numb
   const pool = getPool();
   if (!pool) {
     if (isPostgresPrisma()) {
-      const dbRelease = await prisma.release.findFirst({
-        where: { id: releaseId, archivedAt: null, OR: [{ ownerUserId: userId }, { ownerUserId: null, userId, releaseSource: { not: "ADMIN_MANUAL" } }] },
-        include: { tracks: true }
-      });
+      const dbRelease = await legacyCompatibleReleaseForUser(userId, releaseId);
       return dbRelease ? deserializeRelease(dbRelease) : null;
     }
     return memory.releases.find((release) => release.userId === userId && release.id === releaseId) ?? null;
@@ -608,7 +619,7 @@ export async function deleteDraftReleaseForUser(userId: number, releaseId: numbe
   if (source.status !== "draft") return "blocked";
   const pool = getPool();
   if (!pool) {
-    if (isPostgresPrisma()) await prisma.release.delete({ where: { id: releaseId } });
+    if (isPostgresPrisma()) await prisma.release.delete({ where: { id: releaseId }, select: { id: true } });
     else {
       const index = memory.releases.findIndex((release) => release.id === releaseId && release.userId === userId);
       if (index < 0) return "not_found";
@@ -963,7 +974,8 @@ export async function saveDraftDistributionRelease(input: {
           audioUrl: input.metadata.audioUrl || null,
           paymentStatus: input.metadata.paymentStatus || "pending",
           metadata: rest as any
-        }
+        },
+        select: { id: true }
       });
       
       if (tracks && tracks.length) {
