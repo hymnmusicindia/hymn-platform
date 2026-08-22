@@ -2319,6 +2319,27 @@ function normalizeArtistProfileName(name: string) {
   return name.trim().toLowerCase();
 }
 
+// Keep ordinary artist-card operations compatible with databases where the
+// optional DireNote reconciliation migration has not been deployed yet.
+const portalArtistCardSelect = {
+  id: true,
+  userId: true,
+  artistName: true,
+  spotifyProfileUrl: true,
+  spotifyArtistId: true,
+  appleMusicProfileUrl: true,
+  appleArtistId: true,
+  instagramUrl: true,
+  youtubeUrl: true,
+  imageUrl: true,
+  followers: true,
+  isPrimary: true,
+  archivedAt: true,
+  role: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.ArtistCardSelect;
+
 function mapPrismaArtistCard(card: any): ArtistProfile {
   return { id: card.id, userId: card.userId, name: card.artistName, spotifyArtistId: card.spotifyArtistId ?? null, spotifyUrl: card.spotifyProfileUrl ?? null, appleArtistId: card.appleArtistId ?? null, appleUrl: card.appleMusicProfileUrl ?? null, instagramUrl: card.instagramUrl ?? null, youtubeUrl: card.youtubeUrl ?? null, imageUrl: card.imageUrl ?? null, followers: card.followers ?? null, isLinked: Boolean(card.spotifyProfileUrl || card.appleMusicProfileUrl), isPrimary: Boolean(card.isPrimary), archivedAt: card.archivedAt?.toISOString?.() ?? null, lastUsedAt: null, createdAt: card.createdAt.toISOString(), updatedAt: card.updatedAt.toISOString() };
 }
@@ -2409,7 +2430,10 @@ export async function listRecentArtistProfilesByUser(userId: number, limit = 6) 
 
 export async function createArtistProfile(input: Omit<ArtistProfile, "id" | "createdAt" | "updatedAt" | "lastUsedAt">) {
   if (usesPostgresPrisma()) {
-    const card = await prisma.artistCard.create({ data: { userId: input.userId, artistName: input.name, spotifyProfileUrl: input.spotifyUrl, spotifyArtistId: input.spotifyArtistId, appleMusicProfileUrl: input.appleUrl, appleArtistId: input.appleArtistId, instagramUrl: input.instagramUrl!, youtubeUrl: input.youtubeUrl, imageUrl: input.imageUrl, followers: input.followers, isPrimary: input.isPrimary ?? false } });
+    const card = await prisma.artistCard.create({
+      data: { userId: input.userId, artistName: input.name, spotifyProfileUrl: input.spotifyUrl, spotifyArtistId: input.spotifyArtistId, appleMusicProfileUrl: input.appleUrl, appleArtistId: input.appleArtistId, instagramUrl: input.instagramUrl!, youtubeUrl: input.youtubeUrl, imageUrl: input.imageUrl, followers: input.followers, isPrimary: input.isPrimary ?? false },
+      select: portalArtistCardSelect,
+    });
     return mapPrismaArtistCard(card);
   }
   const pool = getPool();
@@ -2464,7 +2488,7 @@ export async function updateArtistProfile(userId: number, id: number, patch: Par
   if (usesPostgresPrisma()) {
     const result = await prisma.artistCard.updateMany({ where: { id, userId, archivedAt: null }, data: { artistName: next.name, spotifyProfileUrl: next.spotifyUrl, spotifyArtistId: next.spotifyArtistId, appleMusicProfileUrl: next.appleUrl, appleArtistId: next.appleArtistId, instagramUrl: next.instagramUrl!, youtubeUrl: next.youtubeUrl, imageUrl: next.imageUrl, followers: next.followers } });
     if (!result.count) return null;
-    const card = await prisma.artistCard.findUnique({ where: { id } });
+    const card = await prisma.artistCard.findUnique({ where: { id }, select: portalArtistCardSelect });
     return card ? mapPrismaArtistCard(card) : null;
   }
   const pool = getPool();
@@ -3293,7 +3317,8 @@ export async function getOrCreateArtistCard(userId: number, artistName: string) 
     const card = await prisma.artistCard.findUnique({
       where: {
         userId_artistName: { userId, artistName }
-      }
+      },
+      select: portalArtistCardSelect,
     });
     
     if (card) {
@@ -3310,7 +3335,8 @@ export async function getOrCreateArtistCard(userId: number, artistName: string) 
     }
     
     const newCard = await prisma.artistCard.create({
-      data: { userId, artistName }
+      data: { userId, artistName },
+      select: portalArtistCardSelect,
     });
     
     return {
@@ -3331,7 +3357,8 @@ export async function listArtistCardsByUser(userId: number) {
   if (usesPostgresPrisma()) {
     const cards = await prisma.artistCard.findMany({
       where: { userId },
-      orderBy: { createdAt: "desc" }
+      orderBy: { createdAt: "desc" },
+      select: portalArtistCardSelect,
     });
     
     return cards.map(card => ({

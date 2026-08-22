@@ -52,6 +52,7 @@ export function ArtistPicker({
 }: ArtistPickerProps) {
   const [open, setOpen] = useState(false);
   const [recent, setRecent] = useState<ArtistProfile[]>([]);
+  const [profilesLoading, setProfilesLoading] = useState(false);
   const [usage, setUsage] = useState({ currentCount: 0, allowedLimit: 0, canCreateMore: false });
   const [savedMatches, setSavedMatches] = useState<ArtistProfile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -74,7 +75,10 @@ export function ArtistPicker({
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const reachedMax = Boolean(max && valueIds.length >= max);
-  const visibleSavedProfiles = query.trim() ? savedMatches : recent;
+  const hasQuery = Boolean(query.trim());
+  const visibleSavedProfiles = hasQuery
+    ? [...savedMatches, ...recent.filter((profile) => !savedMatches.some((match) => match.id === profile.id))]
+    : recent;
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -90,13 +94,15 @@ export function ArtistPicker({
   useEffect(() => {
     if (!open) return;
 
+    setProfilesLoading(true);
     fetch("/api/artists")
       .then((response) => response.json())
       .then((data) => {
         setRecent(data.artists ?? []);
         setUsage({ currentCount: data.currentCount ?? 0, allowedLimit: data.allowedLimit ?? 0, canCreateMore: Boolean(data.canCreateMore) });
       })
-      .catch(() => setRecent([]));
+      .catch(() => setRecent([]))
+      .finally(() => setProfilesLoading(false));
   }, [open]);
 
   useEffect(() => {
@@ -370,10 +376,16 @@ export function ArtistPicker({
       {required && valueIds.length === 0 ? <p className="inline-error">Select at least one artist profile.</p> : null}
 
       {open ? (
-        <div className="absolute top-full z-30 mt-2 w-full rounded-[1.6rem] border p-3 shadow-2xl" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
-          <div className="mb-3 flex items-center justify-between gap-3 px-2"><p className="text-xs uppercase tracking-[0.18em]" style={{ color: "var(--text-soft)" }}>Saved Artist Profiles</p><span className="text-xs" style={{ color: "var(--text-soft)" }}>{`Artist profiles used: ${usage.currentCount}/${usage.allowedLimit}`}</span></div>
+        <div className="absolute top-full z-30 mt-2 w-full min-w-0 rounded-2xl border p-3 shadow-2xl sm:min-w-[32rem]" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
+            <div><p className="text-sm font-semibold" style={{ color: "var(--text)" }}>Saved artist profiles</p><p className="mt-0.5 text-xs" style={{ color: "var(--text-soft)" }}>{hasQuery ? "Matches first - all saved profiles remain available" : "Choose a profile for this release"}</p></div>
+            <span className="shrink-0 rounded-full border px-2.5 py-1 text-xs" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>{`${usage.currentCount} of ${usage.allowedLimit} used`}</span>
+          </div>
+          {profilesLoading ? <p className="px-2 py-3 text-sm" style={{ color: "var(--text-soft)" }}>Loading saved profiles...</p> : null}
           {loading ? <p className="px-2 py-2 text-sm" style={{ color: "var(--text-soft)" }}>Searching artists...</p> : null}
           {searchError ? <p className="px-2 py-2 text-sm" style={{ color: "var(--danger)" }}>{searchError}</p> : null}
+
+          {hasQuery && savedMatches.length === 0 && recent.length > 0 && !loading ? <p className="mb-2 rounded-lg px-2 py-2 text-xs" style={{color:"var(--text-muted)",background:"var(--bg-soft)"}}>No exact match. Showing all your saved profiles.</p> : null}
 
           {visibleSavedProfiles.length > 0 ? (
             <div className="grid gap-2">
@@ -392,9 +404,15 @@ export function ArtistPicker({
             </div>
           ) : null}
 
-          {query.trim() && savedMatches.length === 0 && !loading ? <div className="mt-2 rounded-xl border p-3" style={{borderColor:"var(--border)",background:"var(--card)"}}><p className="text-sm" style={{color:"var(--text-muted)"}}>No saved artist profiles match this search.</p><button type="button" className="mt-2 text-xs underline underline-offset-4" onClick={()=>onQueryChange("")}>Clear search to view saved profiles</button></div> : null}
-          {!query.trim() && recent.length === 0 && !loading ? <p className="px-2 py-2 text-sm" style={{color:"var(--text-muted)"}}>No saved artist profile yet. Create your first Primary Artist Profile Card to continue.</p> : null}
-          <div className="mt-3 border-t pt-3" style={{borderColor:"var(--border)"}}><button type="button" disabled={!usage.canCreateMore} onClick={openCreateModal} className="flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}><span>Create new artist profile</span><span className="text-xs" style={{ color: "var(--text-soft)" }}>{usage.canCreateMore ? "New" : "Upgrade plan"}</span></button>{!usage.canCreateMore ? <div className="mt-2 rounded-xl border p-3 text-xs" style={{borderColor:"rgba(250,204,21,0.35)",color:"var(--text-muted)"}}><p>Artist profile limit reached. You can still use saved artist profiles, but you need to upgrade to create more.</p><p className="mt-1">Limit reached. Upgrade to create more artist profiles.</p></div> : null}</div>
+          {recent.length === 0 && !profilesLoading ? (
+            <div className="rounded-xl border p-4" style={{borderColor:"var(--border)",background:"var(--card)"}}>
+              <p className="font-medium" style={{color:"var(--text)"}}>Save your first artist profile</p>
+              <p className="mt-1 text-sm leading-5" style={{color:"var(--text-muted)"}}>Create it once, then reuse the card on this and future releases.</p>
+              <button type="button" disabled={!usage.canCreateMore} onClick={openCreateModal} className="btn-primary pressable mt-4 min-h-11 w-full disabled:cursor-not-allowed disabled:opacity-50">{query.trim() ? `Save "${query.trim()}" as an artist` : "Create artist profile"}</button>
+            </div>
+          ) : null}
+          {recent.length > 0 ? <div className="mt-3 border-t pt-3" style={{borderColor:"var(--border)"}}><button type="button" disabled={!usage.canCreateMore} onClick={openCreateModal} className="flex min-h-11 w-full items-center justify-between rounded-xl border px-3 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}><span>Add another artist profile</span><span className="text-xs" style={{ color: "var(--text-soft)" }}>{usage.canCreateMore ? "New" : "Upgrade plan"}</span></button></div> : null}
+          {!usage.canCreateMore && !profilesLoading ? <div className="mt-2 rounded-xl border p-3 text-xs" style={{borderColor:"rgba(250,204,21,0.35)",color:"var(--text-muted)"}}>Artist profile limit reached. You can keep using saved profiles or upgrade to create another.</div> : null}
         </div>
       ) : null}
 
