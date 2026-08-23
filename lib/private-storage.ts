@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { put } from "@vercel/blob";
+import { get, put } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 
 export type PrivateAssetType = "private_audio_master" | "private_beat_deliverable" | "private_beat_license" | "private_cover_licence" | "private_ownership_proof" | "private_ai_receipt" | "private_royalty_statement" | "private_payout_report" | "private_payout_proof" | "private_kyc_document" | "private_unreleased_artwork";
@@ -101,7 +101,7 @@ export const localPrivateStorage: PrivateStorageAdapter = {
     
     if (isVercel) {
       const objectKey = `${input.ownerUserId}/${crypto.randomUUID()}-${safeFilename}`;
-      const blob = await put(`private/${objectKey}`, input.bytes, { access: 'public' });
+      const blob = await put(`private/${objectKey}`, input.bytes, { access: 'private' });
       const asset = await prisma.storedAsset.create({
         data: {
           ownerUserId: input.ownerUserId,
@@ -142,9 +142,9 @@ export const localPrivateStorage: PrivateStorageAdapter = {
       if (!purchased) throw new Error("Forbidden.");
     }
     if (asset.storageProvider === "vercel_blob" || asset.objectKey.startsWith("http://") || asset.objectKey.startsWith("https://")) {
-      const res = await fetch(asset.objectKey);
-      if (!res.ok) throw new Error("Could not fetch remote private asset.");
-      const buf = Buffer.from(await res.arrayBuffer());
+      const blob = await get(asset.objectKey, { access: "private" });
+      if (!blob || blob.statusCode !== 200 || !blob.stream) throw new Error("Could not fetch remote private asset.");
+      const buf = Buffer.from(await new Response(blob.stream).arrayBuffer());
       return { bytes: buf, mimeType: asset.mimeType, fileName: asset.safeFilename };
     }
     return { bytes: await fs.readFile(path.resolve(rootPath(), asset.objectKey)), mimeType: asset.mimeType, fileName: asset.safeFilename };

@@ -1,6 +1,6 @@
 "use client";
 
-import { upload } from "@vercel/blob/client";
+import { uploadPresigned } from "@vercel/blob/client";
 
 import clsx from "clsx";
 import {
@@ -1372,16 +1372,23 @@ export function ReleaseForm({
     });
     try {
       const safeName = `audio-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
-      const newBlob = await upload(safeName, file, {
-        access: 'public',
+      const newBlob = await uploadPresigned(safeName, file, {
+        access: 'private',
         handleUploadUrl: '/api/assets/client-upload',
-        clientPayload: JSON.stringify({ assetType: 'private_audio_master', mimeType: file.type })
+        clientPayload: JSON.stringify({ assetType: 'private_audio_master', mimeType: file.type, originalFilename: file.name, byteSize: file.size }),
+        onUploadProgress: ({ loaded, total }) => controls.reportProgress(loaded, total),
       });
-      controls.reportProgress(file.size, file.size);
+      const completedResponse = await fetch('/api/assets/client-upload/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: newBlob.url }),
+      });
+      const completed = await completedResponse.json();
+      if (!completedResponse.ok) throw new Error(completed.error || 'Could not finalize the private upload.');
       updateTrack(index, {
         audioFile: null,
         audioFileName: file.name,
-        existingAudioUrl: newBlob.url,
+        existingAudioUrl: completed.downloadPath,
         audioPreviewUrl: previewUrl,
         duration,
         audioUploadStatus: "uploaded",
@@ -1860,12 +1867,15 @@ export function ReleaseForm({
 
     let completedFiles = 0;
     for (const item of filesToUpload) {
-      const newBlob = await upload(item.name, item.file, {
-        access: 'public',
+      const newBlob = await uploadPresigned(item.name, item.file, {
+        access: 'private',
         handleUploadUrl: '/api/assets/client-upload',
-        clientPayload: JSON.stringify({ assetType: item.assetType, releaseId: initialRelease?.id, mimeType: item.file.type })
+        clientPayload: JSON.stringify({ assetType: item.assetType, releaseId: initialRelease?.id, mimeType: item.file.type, originalFilename: item.file.name, byteSize: item.file.size })
       });
-      item.setter(newBlob.url);
+      const completedResponse = await fetch('/api/assets/client-upload/complete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: newBlob.url }) });
+      const completed = await completedResponse.json();
+      if (!completedResponse.ok) throw new Error(completed.error || 'Could not finalize the private upload.');
+      item.setter(completed.downloadPath);
       completedFiles++;
       setUploadProgress(Math.round((completedFiles / filesToUpload.length) * 100));
     }

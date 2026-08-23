@@ -1,55 +1,79 @@
-import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
+import { issueSignedToken } from '@vercel/blob';
+import { handleUploadPresigned, type HandleUploadPresignedBody } from '@vercel/blob/client';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/access';
 import { prisma } from '@/lib/prisma';
 
+const uploadPolicies: Record<string, { maximumSizeInBytes: number; allowedContentTypes: string[] }> = {
+  private_audio_master: { maximumSizeInBytes: 500 * 1024 * 1024, allowedContentTypes: ['audio/wav', 'audio/x-wav', 'audio/flac', 'audio/mpeg'] },
+  private_unreleased_artwork: { maximumSizeInBytes: 20 * 1024 * 1024, allowedContentTypes: ['image/jpeg', 'image/png', 'image/webp'] },
+  private_cover_licence: { maximumSizeInBytes: 20 * 1024 * 1024, allowedContentTypes: ['application/pdf', 'image/jpeg', 'image/png'] },
+};
+
 export async function POST(request: Request): Promise<NextResponse> {
-  let body: HandleUploadBody;
+  let body: HandleUploadPresignedBody;
   try {
-    body = (await request.json()) as HandleUploadBody;
+    body = (await request.json()) as HandleUploadPresignedBody;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
   try {
-    const jsonResponse = await handleUpload({
+    const jsonResponse = await handleUploadPresigned({
       body,
       request,
-      onBeforeGenerateToken: async (pathname, clientPayload) => {
+      getSignedToken: async (pathname, clientPayload) => {
          const result = await requireUser();
          if ("error" in result) throw new Error("Unauthorized");
          
          const payload = JSON.parse(clientPayload || '{}');
-         if (!payload.assetType || !payload.mimeType) throw new Error("Missing asset details");
+         const policy = uploadPolicies[payload.assetType];
+         if (!policy || !policy.allowedContentTypes.includes(payload.mimeType)) throw new Error("Unsupported private asset type.");
+         if (!Number.isFinite(payload.byteSize) || payload.byteSize < 1 || payload.byteSize > policy.maximumSizeInBytes) throw new Error("Private asset size is invalid.");
+         if (payload.releaseId) {
+           const ownedRelease = await prisma.release.count({ where: { id: Number(payload.releaseId), userId: result.user.id } });
+           if (!ownedRelease) throw new Error("Release not found.");
+         }
 
+         const tokenPayload = JSON.stringify({ userId: result.user.id, assetType: payload.assetType, releaseId: payload.releaseId, mimeType: payload.mimeType, originalFilename: payload.originalFilename, byteSize: payload.byteSize });
+         const token = await issueSignedToken({
+           pathname,
+           operations: ['put'],
+           allowedContentTypes: policy.allowedContentTypes,
+           maximumSizeInBytes: policy.maximumSizeInBytes,
+         });
          return {
-           allowedContentTypes: ['audio/wav', 'audio/x-wav', 'audio/flac', 'audio/mpeg', 'image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'application/zip', 'text/csv', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-           tokenPayload: JSON.stringify({ userId: result.user.id, assetType: payload.assetType, releaseId: payload.releaseId, mimeType: payload.mimeType }),
+           token,
+           urlOptions: { allowedContentTypes: policy.allowedContentTypes, maximumSizeInBytes: policy.maximumSizeInBytes, addRandomSuffix: true, tokenPayload },
          };
       },
       onUploadCompleted: async ({ blob, tokenPayload }) => {
-         const { userId, assetType, releaseId, mimeType } = JSON.parse(tokenPayload || '{}');
-         
-         await prisma.storedAsset.create({
-           data: {
+         const { userId, assetType, releaseId, mimeType, originalFilename, byteSize } = JSON.parse(tokenPayload || '{}');
+         const safeFilename = String(originalFilename || blob.pathname.split('/').pop() || 'asset').replace(/[^a-zA-Z0-9._-]/g, '_');
+
+         await prisma.storedAsset.upsert({
+           where: { objectKey: blob.url },
+           create: {
              ownerUserId: userId,
              releaseId: releaseId ? Number(releaseId) : undefined,
              assetType,
              storageProvider: "vercel_blob",
              objectKey: blob.url,
-             originalFilename: blob.pathname,
-             safeFilename: blob.pathname.split('/').pop() || 'asset',
+             originalFilename: String(originalFilename || safeFilename),
+             safeFilename,
              mimeType: mimeType,
-             byteSize: 0, 
-             checksum: "", 
+             byteSize: Number(byteSize),
+             checksum: blob.etag,
              accessClassification: "private"
-           }
+           },
+           update: { uploadStatus: "ready", deletedAt: null }
          });
       },
     });
     return NextResponse.json(jsonResponse);
   } catch (error) {
-    return NextResponse.json({ error: (error as Error).message }, { status: 400 });
+    console.error("Blob client upload authorization failed", { error });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not authorize file upload." }, { status: 400 });
   }
 }
 // vercel trigger 13

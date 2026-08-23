@@ -39,7 +39,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
-    "@vercel/blob": "^2.5.0",
+    "@vercel/blob": "^2.8.0",
     "axios": "^1.18.0",
     "bcrypt": "^6.0.0",
     "clsx": "^2.1.1",
