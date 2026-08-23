@@ -260,6 +260,7 @@ function createInitialReleaseDraft(
     initialRelease.territory && initialRelease.territory !== "Worldwide"
       ? "Selected countries"
       : "Worldwide";
+  const existingScheduledDate = initialRelease.releaseDate?.slice(0, 10) ?? "";
   return {
     releasePreviouslyReleased: Boolean(
       initialRelease.releasePreviouslyReleased,
@@ -294,9 +295,10 @@ function createInitialReleaseDraft(
         ? "schedule_release"
         : "quick_release",
     scheduledReleaseDate:
-      initialRelease.originalReleaseDate ||
-      initialRelease.releaseDate ||
-      minimumScheduledDate,
+      initialRelease.releaseTiming === "schedule_release" &&
+      existingScheduledDate >= minimumScheduledDate
+        ? existingScheduledDate
+        : minimumScheduledDate,
     copyrightOwner: initialRelease.copyrightOwner?.trim() || "",
     publishingRights: initialRelease.publishingRights?.trim() || "",
   };
@@ -898,6 +900,11 @@ export function ReleaseForm({
   );
   const [shakingField, setShakingField] = useState<string | null>(null);
   const isEditing = Boolean(initialRelease);
+  const scheduledDateWasMoved = Boolean(
+    initialRelease?.releaseTiming === "schedule_release" &&
+      initialRelease.releaseDate &&
+      initialRelease.releaseDate.slice(0, 10) < minimumScheduledDate,
+  );
   const draftCreationRef = useRef(false);
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
   const releaseType = useMemo(
@@ -3492,6 +3499,7 @@ export function ReleaseForm({
                 </div>
                 {release.releaseTiming === "schedule_release" ? (
                   <div className="mt-4 rounded-xl border p-4" style={{ borderColor: "var(--accent)", background: "var(--accent-soft)" }}>
+                    {scheduledDateWasMoved ? <div className="mb-4 flex items-start gap-2 rounded-lg border p-3 text-sm leading-5" role="alert" style={{ borderColor: "var(--warning)", background: "var(--warning-soft)", color: "var(--text-muted)" }}><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--warning)" }} /><p>Your previous release date is now too close for delivery. We moved it to the earliest available date, <strong style={{ color: "var(--text)" }}>{minimumScheduledDate}</strong>. Choose a later date if that works better.</p></div> : null}
                     <label
                       className="mb-2 block text-sm font-medium"
                       style={{ color: "var(--text-muted)" }}

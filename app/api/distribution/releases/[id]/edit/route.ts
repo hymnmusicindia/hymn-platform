@@ -19,7 +19,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   if (!release) return NextResponse.json({ error: "Release not found." }, { status: 404 });
   const access = await prisma.release.findUnique({ where: { id: releaseId }, select: { releaseSource: true, customerEditable: true } });
   if (access?.releaseSource === "ADMIN_MANUAL" && !access.customerEditable) return NextResponse.json({ error: "This imported catalog release is view-only. Contact HYMN support to request a metadata change." }, { status: 403 });
-  if (!["draft", "changes_requested", "rejected"].includes(release.status)) return NextResponse.json({ error: "This release cannot be edited in its current status." }, { status: 409 });
+  if (!["draft", "changes_requested", "rejected", "under_review"].includes(release.status)) return NextResponse.json({ error: "This release cannot be edited in its current status." }, { status: 409 });
 
   const updated = release.status === "rejected" ? await updateDetailedReleaseStatus(releaseId, "draft", "User reopened the rejected release for editing.") : release;
   return NextResponse.json({ release: updated });

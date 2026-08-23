@@ -26,6 +26,19 @@ export async function POST(request: Request) {
     if (!existingRelease || (existingRelease.userId !== session.sub && session.role !== "admin" && session.role !== "producer")) {
       return NextResponse.json({ error: "Release not found." }, { status: 404 });
     }
+    if (!["draft", "changes_requested", "rejected", "under_review"].includes(existingRelease.status)) {
+      return NextResponse.json({ error: "This release cannot be edited in its current status." }, { status: 409 });
+    }
+
+    if (parsed.metadata.releaseTiming === "schedule_release") {
+      const earliest = new Date();
+      earliest.setHours(0, 0, 0, 0);
+      earliest.setDate(earliest.getDate() + 20);
+      const minimumScheduledDate = `${earliest.getFullYear()}-${String(earliest.getMonth() + 1).padStart(2, "0")}-${String(earliest.getDate()).padStart(2, "0")}`;
+      if (parsed.metadata.releaseDate < minimumScheduledDate) {
+        return NextResponse.json({ error: `Scheduled releases must be at least 20 days from today. Choose ${minimumScheduledDate} or later.`, minimumScheduledDate }, { status: 400 });
+      }
+    }
 
     const savePrivate = async (file: File, assetType: PrivateAssetType) => (await localPrivateStorage.upload({ ownerUserId: session.sub, releaseId: existingRelease.id, assetType, fileName: file.name, mimeType: file.type, bytes: Buffer.from(await file.arrayBuffer()) })).downloadPath;
     const artworkUpload = formData.get(parsed.metadata.artworkFileKey);
@@ -103,7 +116,7 @@ export async function POST(request: Request) {
         audioUrl: tracks[0]?.audioUrl ?? existingRelease.audioUrl,
         artworkUrl,
         releaseDate: parsed.metadata.releaseDate,
-        originalReleaseDate: parsed.metadata.originalReleaseDate,
+        originalReleaseDate: parsed.metadata.releasePreviouslyReleased ? parsed.metadata.originalReleaseDate : undefined,
         labelName: parsed.metadata.labelName,
         labelDisplayName: parsed.metadata.labelName ?? parsed.metadata.recordLabelName,
         primaryGenre: parsed.metadata.primaryGenre,
