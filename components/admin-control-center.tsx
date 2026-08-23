@@ -117,6 +117,36 @@ const REVIEW_ISSUE_TYPES = [
 ] as const;
 const METADATA_REVIEW_FIELDS = ["Release title", "Track title", "Artist name", "Primary artist links", "Spotify artist URL", "Apple Music artist URL", "Instagram URL", "Genre", "Subgenre", "Mood", "Language", "Track title language", "Label name", "C Line", "P Line", "Release date", "Original release date", "UPC", "ISRC", "Explicit lyrics flag", "Lyrics", "Songwriters", "Composers", "Producers", "Featuring artists", "Content type", "AI proof / Suno receipt", "License receipt", "Artwork", "Audio file", "Platform destinations", "Other metadata"];
 function reviewFieldKey(label: string) { return label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, ""); }
+type ReadinessIssue = { field: string; category: string; message: string; fixSuggestion: string };
+
+function readinessIssueLabel(issue: ReadinessIssue) {
+  const field = `${issue.category} ${issue.field}`.toLowerCase();
+  const mappings: Array<[RegExp, string]> = [
+    [/cover|artwork/, "Artwork"], [/audio/, "Audio file"], [/release.*title/, "Release title"], [/track.*title/, "Track title"],
+    [/spotify/, "Spotify artist URL"], [/apple/, "Apple Music artist URL"], [/instagram/, "Instagram URL"], [/primary.*artist|artist.*name/, "Artist name"],
+    [/subgenre/, "Subgenre"], [/genre/, "Genre"], [/mood/, "Mood"], [/language/, "Language"], [/label/, "Label name"],
+    [/original.*date/, "Original release date"], [/release.*date/, "Release date"], [/upc/, "UPC"], [/isrc/, "ISRC"],
+    [/songwriter/, "Songwriters"], [/composer/, "Composers"], [/producer/, "Producers"], [/lyric/, "Lyrics"],
+    [/platform|destination/, "Platform destinations"], [/licen[cs]e/, "License receipt"], [/suno|\bai\b/, "AI proof / Suno receipt"],
+  ];
+  return mappings.find(([pattern]) => pattern.test(field))?.[1] ?? "Other metadata";
+}
+
+function correctionDefaults(issues: ReadinessIssue[]) {
+  const source = issues.length ? issues : [{ field: "metadata", category: "Metadata", message: "Review and correct the highlighted release metadata before resubmitting.", fixSuggestion: "Update the release metadata and validate it again." }];
+  const fields: Record<string, { label: string; note: string }> = {};
+  for (const issue of source) {
+    const label = readinessIssueLabel(issue);
+    const key = reviewFieldKey(label);
+    const note = issue.fixSuggestion?.trim() || issue.message.trim();
+    fields[key] = { label, note: fields[key]?.note ? `${fields[key].note} ${note}` : note };
+  }
+  const details = source.map((issue) => `• ${readinessIssueLabel(issue)}: ${issue.message}`).join("\n");
+  return {
+    fields,
+    reason: `HYMN found metadata that needs correction before this release can be delivered. Please update the highlighted fields and resubmit the release for review.\n\n${details}`,
+  };
+}
 
 function AdminEarningsEntry({ users, releases }: { users: User[]; releases: Release[] }) {
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -835,12 +865,13 @@ export function AdminControlCenter({
   }
 
   function openReview(action: "rejected" | "changes_requested") {
+    const defaults = action === "changes_requested" ? correctionDefaults(direNoteReadiness?.issues ?? []) : null;
     setReviewAction(action);
-    setReviewReason("");
-    setReviewIssueType("");
+    setReviewReason(defaults?.reason ?? "");
+    setReviewIssueType(defaults ? "metadata" : "");
     setReviewSeverity("required_correction");
     setReviewFieldSearch("");
-    setReviewFields({});
+    setReviewFields(defaults?.fields ?? {});
     setReviewInternalNote("");
   }
 
@@ -864,6 +895,9 @@ export function AdminControlCenter({
       setReleases((items) => items.map((item) => item.id === selectedRelease.id ? data.release : item));
       setFeedback(reviewAction === "rejected" ? "Release rejected with a saved reason." : "Corrections requested and sent to the artist.");
       setReviewAction(null);
+      if (reviewAction === "changes_requested") {
+        setDireNoteResult({ type: "success", title: "Correction request sent!", message: "The artist has been notified and the affected release fields are highlighted for correction." });
+      }
     });
   }
 
