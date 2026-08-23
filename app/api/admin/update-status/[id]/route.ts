@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/access";
 import { adminStatusSchema } from "@/lib/validation";
-import { createDistributionQueueEntry, createReleaseAuditLog, listDistributionQueueEntries, transitionDistributionQueueEntry, updateDetailedReleaseStatus } from "@/lib/distribution-db";
+import { createDistributionQueueEntry, createReleaseAuditLog, getDetailedReleaseById, listDistributionQueueEntries, transitionDistributionQueueEntry, updateDetailedReleaseStatus } from "@/lib/distribution-db";
 import type { DistributionQueueStage, ReleaseStatus } from "@/lib/types";
 
 import { submitRelease } from "@/lib/distribution-service";
@@ -45,8 +45,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     if (payload.status === "sent") {
       const origin = new URL(request.url).origin;
+      const currentRelease = await getDetailedReleaseById(Number(id));
+      if (!currentRelease) return NextResponse.json({ error: "Release not found." }, { status: 404 });
+      const retry = ["failed", "delivery_failed", "queued_for_distribution"].includes(currentRelease.status);
       await syncQueueStage(Number(id), statusStageMap.sent!, actorId, payload.note);
-      const submission = await submitRelease(Number(id), { actorId, siteUrl: origin });
+      const submission = await submitRelease(Number(id), { actorId, siteUrl: origin, retry });
       if (!submission.submitted) {
         const messages = submission.validation.issues.map((issue) => issue.message);
         return NextResponse.json(

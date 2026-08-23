@@ -2,6 +2,7 @@ import {
   buildDireNotePayload,
   parseDireNoteResponse,
   redactDireNotePayload,
+  redactDireNoteDiagnostic,
   submitToDireNote,
   validateDireNotePayload,
   type DireNotePayload
@@ -21,6 +22,7 @@ import { createAdminTaskOnce, resolveAdminTask } from "@/lib/task-queue";
 import { getDireNoteConfig } from "@/lib/direnote/direnote-config";
 import { claimDistributionSubmission, finishDistributionSubmission } from "@/lib/distribution-idempotency";
 import { reserveDireNoteRequest } from "@/lib/direnote-rate-limit";
+import { createDistributorAssetUrl } from "@/lib/distributor-asset-delivery";
 
 export type DistributionValidationIssue = {
   field: string;
@@ -70,12 +72,14 @@ function validationResult(payload: DireNotePayload, options: { adminConfirmedExi
 }
 
 export async function buildDireNotePayloadForRelease(release: Release, options: { siteUrl?: string; adminConfirmedExistingArtists?: boolean } = {}) {
-  const [owner, artistProfiles] = await Promise.all([
+  const [owner, artistProfiles, artworkUrl, tracks] = await Promise.all([
     findUserById(release.userId),
-    listArtistProfilesByUser(release.userId)
+    listArtistProfilesByUser(release.userId),
+    createDistributorAssetUrl(release.artworkUrl, options.siteUrl),
+    Promise.all((release.tracks ?? []).map(async (track) => ({ ...track, audioUrl: await createDistributorAssetUrl(track.audioUrl, options.siteUrl) }))),
   ]);
 
-  return buildDireNotePayload(release, {
+  return buildDireNotePayload({ ...release, artworkUrl, tracks }, {
     siteUrl: options.siteUrl,
     ownerEmail: owner?.email ?? null,
     artistProfiles,
@@ -170,6 +174,7 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
       const mode = httpErrorMode(status);
       const parsed = parseDireNoteResponse(data);
       const message = response.error || parsed.message || `DireNote API returned ${status}.`;
+      console.error("[DireNote] Provider rejected submission", { releaseId, httpStatus: response.httpStatus, message, response: redactDireNoteDiagnostic(data) });
       await updateDetailedReleaseStatus(releaseId, mode.releaseStatus, message);
       await finishDistributionSubmission(claim.attempt.id, { state: mode.retryable ? "retryable" : "failed", httpStatus: response.httpStatus, safeError: message.slice(0, 500), responseRedacted: { message, warnings: parsed.warnings } });
       await logDistributionEvent({ releaseId, action: options.retry ? "retry_submission" : "release_submission", httpStatus: response.httpStatus, createdByAdminId: options.actorId, requestPayload: redactedPayload, responsePayload: data, responseRaw: response.raw, warnings: parsed.warnings, errors: [message], success: false });
@@ -235,12 +240,13 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
     return { release: updatedRelease, validation, submitted: true, retryable: false, warnings: parsed.warnings };
   } catch (error) {
     const message = error instanceof Error ? error.message : "DireNote submission failed.";
+    console.error("[DireNote] Submission pipeline failed", { releaseId, message });
     await updateDetailedReleaseStatus(releaseId, "queued_for_distribution", message);
     await finishDistributionSubmission(claim.attempt.id, { state: "retryable", safeError: message.slice(0, 500) });
     await logDistributionEvent({ releaseId, requestPayload: redactedPayload, responsePayload: null, errors: [message], success: false });
     await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: "DIRENOTE_NETWORK_ERROR", details: { message } });
     await createAdminTaskOnce({ eventKey: `release:${releaseId}:direnote:network`, type: "DireNote Failed", priority: "critical", title: `DireNote submission failed: ${displayName(release)}`, body: message, href: `/admin?tab=releases&releaseId=${releaseId}`, entityType: "release", entityId: releaseId });
-    return { release: await getDetailedReleaseById(releaseId), validation, submitted: false, retryable: true, retryCount: retryCountFromRelease(release) + 1 };
+    return { release: await getDetailedReleaseById(releaseId), validation, submitted: false, retryable: true, retryCount: retryCountFromRelease(release) + 1, error: message };
   }
 }
 
