@@ -47,7 +47,6 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [hidden, setHidden] = useState(false);
   const [cartCount, setCartCount] = useState(0);
   const [cartOpen, setCartOpen] = useState(false);
   const [cartItems, setCartItems] = useState<HeaderCartItem[]>([]);
@@ -56,55 +55,25 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   const [notifications, setNotifications] = useState<HeaderNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
-  const lastScrollRef = useRef(0);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const notificationMenuRef = useRef<HTMLDivElement>(null);
   const notificationMutationsRef = useRef<Set<number>>(new Set());
   const markAllPendingRef = useRef(false);
-  const scrollFrameRef = useRef<number | null>(null);
   const isAuthenticated = Boolean(user);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    lastScrollRef.current = window.scrollY;
-    const onScroll = () => {
-      if (scrollFrameRef.current !== null) return;
-      scrollFrameRef.current = window.requestAnimationFrame(() => {
-        scrollFrameRef.current = null;
-      const current = Math.max(0, window.scrollY || document.documentElement.scrollTop);
-      const previous = lastScrollRef.current;
-      
-      setScrolled(current > 18);
-      
-      if (current <= 80) {
-        setHidden(false);
-        lastScrollRef.current = current;
-        return;
-      }
-      
-      // Ignore tiny scroll events (e.g., trackpad resting, micro-bounces)
-      if (Math.abs(current - previous) < 12) {
-        return;
-      }
+    const onScroll = () => setScrolled(Math.max(0, window.scrollY || document.documentElement.scrollTop) > 18);
 
-      // Hide when scrolling down, show when scrolling up
-      setHidden(current > previous);
-      lastScrollRef.current = current;
-      });
-    };
-
+    onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      if (scrollFrameRef.current !== null) window.cancelAnimationFrame(scrollFrameRef.current);
-    };
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   useEffect(() => {
     if (open) {
       setScrolled(true);
-      setHidden(false);
     }
   }, [open]);
 
@@ -272,7 +241,6 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   const openCart = () => {
     setOpen(false);
     setScrolled(true);
-    setHidden(false);
     setCartOpen(true);
   };
 
@@ -335,7 +303,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
         <button
           type="button"
           onClick={() => { setNotificationsOpen((value) => !value); setProfileOpen(false); }}
-          className={clsx("site-header-bare-icon relative inline-flex h-11 w-11 items-center justify-center rounded-full border-0 bg-transparent", mobile ? "w-full justify-start gap-3 px-3" : "")}
+          className={clsx("site-header-bare-icon relative inline-flex h-10 w-10 items-center justify-center rounded-full border-0 bg-transparent sm:h-11 sm:w-11", mobile ? "w-full justify-start gap-3 px-3" : "")}
           style={{ color: "var(--text)" }}
           aria-expanded={notificationsOpen}
           aria-haspopup="dialog"
@@ -501,13 +469,12 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
         borderColor: scrolled || open ? "var(--header-border)" : "transparent",
         background: scrolled || open ? "var(--header-bg-solid)" : "var(--header-bg)",
         boxShadow: scrolled ? "var(--header-shadow), inset 0 1px 0 rgba(255,255,255,0.12)" : "inset 0 1px 0 rgba(255,255,255,0.1)",
-        transform: hidden ? "translateY(-110%)" : undefined,
-        transition: "background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)"
+        transition: "background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease"
       }}
     >
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center" aria-label="HYMN Music home">
-          <Image src="/assets/hymnlogowhite.png" alt="HYMN Music Logo" width={156} height={52} className="h-7 w-auto object-contain sm:h-9 lg:h-10" style={{ filter: "var(--logo-filter)" }} priority />
+      <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-1 px-3 py-2 sm:min-h-[4.5rem] sm:gap-4 sm:px-6 sm:py-3 lg:px-8">
+        <Link href="/" className="flex min-w-0 shrink items-center" aria-label="HYMN Music home">
+          <Image src="/assets/hymnlogowhite.png" alt="HYMN Music Logo" width={156} height={52} className="h-7 w-auto max-w-24 object-contain sm:h-9 sm:max-w-none lg:h-10" style={{ filter: "var(--logo-filter)" }} priority />
         </Link>
 
         <nav className="hidden items-center gap-1 lg:flex" aria-label="Main navigation">
@@ -523,7 +490,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           ))}
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <div className="hidden items-center gap-3 lg:flex">
             {!isAuthenticated ? <ThemeToggle /> : null}
             {isAuthenticated ? (
@@ -554,7 +521,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
             type="button"
             aria-label="Shopping cart"
             onClick={openCart}
-            className="site-header-bare-icon relative z-10 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-0 bg-transparent"
+            className="site-header-bare-icon relative z-10 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-transparent sm:h-11 sm:w-11"
             style={{ color: "var(--text)" }}
           >
             <ShoppingCart className="h-5 w-5" />
@@ -565,7 +532,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
           <button
             type="button"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full border lg:hidden"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border sm:h-11 sm:w-11 lg:hidden"
             style={{ borderColor: "color-mix(in srgb, var(--glass-border) 88%, transparent)", background: "color-mix(in srgb, var(--glass-bg) 84%, transparent)", color: "var(--text)", backdropFilter: "blur(10px) saturate(140%)" }}
             onClick={() => setOpen((value) => !value)}
             aria-expanded={open}
@@ -579,7 +546,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
       {open ? (
         <div id="site-mobile-nav" className="border-t lg:hidden" style={{ borderColor: "var(--glass-border)", background: "color-mix(in srgb, var(--glass-bg-strong) 88%, transparent)", backdropFilter: "blur(18px) saturate(155%)" }}>
-          <div className="mx-auto flex max-h-[calc(100vh-4rem)] max-w-7xl flex-col gap-3 overflow-y-auto px-4 py-4 sm:px-6">
+          <div className="mx-auto flex max-h-[calc(100dvh-4rem)] max-w-7xl flex-col gap-3 overflow-y-auto overscroll-contain px-3 py-4 sm:max-h-[calc(100dvh-4.5rem)] sm:px-6">
             {mainNav.map((item) => (
               <Link key={item.href} href={item.href} className="rounded-lg border px-4 py-3 transition" style={{ color: "var(--text-muted)", background: "color-mix(in srgb, var(--glass-bg) 75%, transparent)", borderColor: "color-mix(in srgb, var(--glass-border) 72%, transparent)" }} onClick={() => setOpen(false)}>
                 {item.label}
