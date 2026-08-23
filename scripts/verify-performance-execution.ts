@@ -28,7 +28,10 @@ assert(!database.includes("const cards = await prisma.artistCard.findMany({ wher
 
 const distributionDatabase = source("lib/distribution-db.ts");
 assert(distributionDatabase.includes("legacyCompatibleReleaseForUser(userId, releaseId)"), "Single-release reads must tolerate pending optional DireNote columns.");
+assert(distributionDatabase.includes("legacyCompatibleReleaseById(releaseId)"), "Administrative single-release reads must tolerate pending optional DireNote columns.");
 assert(distributionDatabase.includes("select: { id: true }"), "Release mutations must not return unavailable optional DireNote columns by default.");
+assert(!distributionDatabase.includes("prisma.release.findUnique({ where: { id: input.releaseId } })"), "Release submission must not select unavailable DireNote columns while entering the distribution queue.");
+assert(!distributionDatabase.includes("include: { tracks: true, user: { select: { email: true } } }"), "Detailed release reads must not implicitly select unavailable DireNote columns.");
 
 const draftCreateRoute = source("app/api/distribution/drafts/route.ts");
 const draftUpdateRoute = source("app/api/distribution/drafts/[id]/route.ts");

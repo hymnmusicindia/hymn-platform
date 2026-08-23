@@ -48,6 +48,20 @@ async function legacyCompatibleReleaseForUser(userId: number, releaseId: number)
   return { ...camelCaseDatabaseRow(row), tracks };
 }
 
+async function legacyCompatibleReleaseById(releaseId: number) {
+  const rows = await prisma.$queryRaw<Array<Record<string, any>>>`
+    SELECT r.*, u."email" AS "owner_email"
+    FROM "releases" r
+    LEFT JOIN "users" u ON u."id" = r."user_id"
+    WHERE r."id" = ${releaseId}
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row) return null;
+  const tracks = await prisma.track.findMany({ where: { releaseId }, orderBy: { trackNumber: "asc" } });
+  return { ...camelCaseDatabaseRow(row), tracks };
+}
+
 export function deserializeRelease(dbData: any): Release {
   const metadata = typeof dbData.metadata === "string" ? JSON.parse(dbData.metadata) : dbData.metadata || {};
   const distributionStores = sanitizeStoreStatuses(metadata.distributionStores);
@@ -153,7 +167,7 @@ export async function updateStoreStatuses(input: { releaseId: number; adminId: n
   if (isPostgresPrisma()) {
     const row = await prisma.release.findUnique({ where: { id: input.releaseId }, select: { metadata: true } });
     const metadata = (row?.metadata && typeof row.metadata === "object" ? row.metadata : {}) as Record<string, any>;
-    await prisma.release.update({ where: { id: input.releaseId }, data: { metadata: { ...metadata, distributionStores: stores, storeStatusHistory: history.slice(0, 250) } as any } });
+    await prisma.release.update({ where: { id: input.releaseId }, data: { metadata: { ...metadata, distributionStores: stores, storeStatusHistory: history.slice(0, 250) } as any }, select: { id: true } });
   } else {
     const target = memory.releases.find((item) => item.id === input.releaseId);
     if (!target) throw new Error("Release not found.");
@@ -681,8 +695,8 @@ export async function listAllDetailedReleases(): Promise<Release[]> {
 
 export async function listTracksByRelease(releaseId: number): Promise<ReleaseTrack[]> {
   if (isPostgresPrisma()) {
-    const release = await prisma.release.findUnique({ where: { id: releaseId }, include: { tracks: { orderBy: { trackNumber: "asc" } } } });
-    return release ? deserializeRelease(release).tracks ?? [] : [];
+    const tracks = await prisma.track.findMany({ where: { releaseId }, orderBy: { trackNumber: "asc" } });
+    return tracks.map((track) => deserializeRelease({ id: releaseId, userId: 0, title: "", artistName: "", genre: "", status: "DRAFT", createdAt: new Date(0), tracks: [track] }).tracks?.[0]).filter((track): track is ReleaseTrack => Boolean(track));
   }
   const pool = getPool();
   if (!pool) {
@@ -1144,7 +1158,8 @@ export async function submitPaidDistributionRelease(input: {
           paymentStatus: "paid",
           releaseDate: input.metadata.releaseDate ? new Date(input.metadata.releaseDate) : new Date(),
           metadata: { ...rest, paymentStatus: "paid", submittedAt: new Date().toISOString() } as any
-        }
+        },
+        select: { id: true }
       });
       
       if (tracks && tracks.length) {
@@ -1331,7 +1346,8 @@ export async function updatePaidDistributionRelease(input: {
             paymentStatus: "paid",
             metadata: { ...rest, submittedAt: new Date().toISOString() } as any,
             lastEditedAt: new Date()
-          }
+          },
+          select: { id: true }
         });
         await tx.track.deleteMany({ where: { releaseId: input.releaseId } });
         if (tracks.length) {
@@ -1511,7 +1527,7 @@ export async function createDistributionQueueEntry(input: {
 
   if (!pool) {
     if (isPostgresPrisma()) {
-      const release = await prisma.release.findUnique({ where: { id: input.releaseId } });
+      const release = await prisma.release.findUnique({ where: { id: input.releaseId }, select: { id: true } });
       if (!release) throw new Error("Release not found.");
 
       const entry = await prisma.distributionQueueEntry.upsert({
@@ -1738,10 +1754,7 @@ export async function getDetailedReleaseById(releaseId: number): Promise<Release
   const pool = getPool();
   if (!pool) {
     if (isPostgresPrisma()) {
-      const dbRelease = await prisma.release.findUnique({
-        where: { id: releaseId },
-        include: { tracks: true, user: { select: { email: true } } }
-      });
+      const dbRelease = await legacyCompatibleReleaseById(releaseId);
       return dbRelease ? deserializeRelease(dbRelease) : null;
     }
     const release = memory.releases.find((item: any) => item.id === releaseId) ?? null;
@@ -1848,7 +1861,7 @@ export async function markReleaseDistributionSuccess(input: {
   const pool = getPool();
   if (!pool) {
     if (isPostgresPrisma()) {
-      const release = await prisma.release.findUnique({ where: { id: input.releaseId }, include: { tracks: true } });
+      const release = await prisma.release.findUnique({ where: { id: input.releaseId }, select: { metadata: true, tracks: { orderBy: { trackNumber: "asc" } } } });
       if (!release) return null;
       
       const newMetadata = { ...(typeof release.metadata === "object" && release.metadata !== null ? release.metadata : {}) } as any;
@@ -1871,7 +1884,8 @@ export async function markReleaseDistributionSuccess(input: {
           distributorReleaseId: input.distributorReleaseId || undefined,
           upc: input.upc || undefined,
           metadata: newMetadata
-        }
+        },
+        select: { id: true }
       });
 
       for (const isrc of input.trackIsrcs ?? []) {
