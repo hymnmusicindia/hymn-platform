@@ -56,16 +56,19 @@ const planPerks = {
 interface DistributionPricingStripProps {
   activePlan?: DistributionPlanOption | null;
   recommendedPlan?: DistributionPlanOption | null;
+  showPlanManagement?: boolean;
 }
 
-export function DistributionPricingStrip({ activePlan, recommendedPlan }: DistributionPricingStripProps = {}) {
+const subscriptionPlanRank: Record<string, number> = { half_yearly: 1, yearly: 2, yearly_plus: 3 };
+
+export function DistributionPricingStrip({ activePlan, recommendedPlan, showPlanManagement = false }: DistributionPricingStripProps = {}) {
   const planDetails =
     activePlan && activePlan !== "one_time"
       ? distributionPlanCards.find((p) => p.key === activePlan)
       : null;
 
   // ── Active Plan View ─────────────────────────────────────────────────────────
-  if (planDetails) {
+  if (planDetails && !showPlanManagement) {
     return (
       <section id="distribution-pricing" className="scroll-mt-24 py-6 sm:py-8">
         <div
@@ -140,7 +143,7 @@ export function DistributionPricingStrip({ activePlan, recommendedPlan }: Distri
                 New Release
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link href="/dashboard" className="btn-outline pressable inline-flex">
+              <Link href="/distribution?manage=plans#distribution-pricing" className="btn-outline pressable inline-flex">
                 <RefreshCcw className="h-4 w-4" />
                 Manage Plan
               </Link>
@@ -167,10 +170,12 @@ export function DistributionPricingStrip({ activePlan, recommendedPlan }: Distri
           <div className="max-w-3xl">
             <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em]" style={{ color: "var(--accent)" }}>Distribution plans</p>
             <h2 className="mt-3 text-3xl font-semibold tracking-[-0.035em] sm:text-4xl" style={{ color: "var(--text)" }}>
-              Choose the lane that fits your release strategy.
+              {planDetails ? "Manage and upgrade your plan." : "Choose the lane that fits your release strategy."}
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 sm:text-base" style={{ color: "var(--text-muted)" }}>
-              From a focused release schedule to a professional label operation, choose the plan that matches how you work.
+              {planDetails
+                ? `Your ${planDetails.title} plan remains active until an upgrade payment is verified. Choose a higher plan below to upgrade.`
+                : "From a focused release schedule to a professional label operation, choose the plan that matches how you work."}
             </p>
           </div>
         </div>
@@ -180,6 +185,9 @@ export function DistributionPricingStrip({ activePlan, recommendedPlan }: Distri
           {subscriptionPlans.map((plan, index) => {
             const visual = planVisuals[plan.key as keyof typeof planVisuals];
             const perks = planPerks[plan.key as keyof typeof planPerks];
+            const isCurrentPlan = plan.key === activePlan;
+            const canUpgrade = Boolean(activePlan && subscriptionPlanRank[plan.key] > (subscriptionPlanRank[activePlan] ?? 0));
+            const isUnavailableDowngrade = Boolean(planDetails && !isCurrentPlan && !canUpgrade);
 
             return (
             <article
@@ -199,7 +207,7 @@ export function DistributionPricingStrip({ activePlan, recommendedPlan }: Distri
               <div className="relative z-10 flex w-full flex-col">
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="break-words text-lg font-semibold tracking-[-0.02em] lg:text-xl" style={{ color: "var(--text)" }}>{plan.title}</h3>
-                  <span className="distribution-plan-badge shrink-0 rounded-md px-2 py-1 text-[0.58rem] font-bold uppercase tracking-[0.08em]" style={{ color: plan.key === recommendedPlan || plan.featured ? "var(--accent-foreground)" : "var(--text)", background: plan.key === recommendedPlan || plan.featured ? "var(--accent)" : "var(--accent-soft)" }}>{plan.key === recommendedPlan ? "Your match" : visual.eyebrow}</span>
+                  <span className="distribution-plan-badge shrink-0 rounded-md px-2 py-1 text-[0.58rem] font-bold uppercase tracking-[0.08em]" style={{ color: isCurrentPlan || plan.key === recommendedPlan || plan.featured ? "var(--accent-foreground)" : "var(--text)", background: isCurrentPlan || plan.key === recommendedPlan || plan.featured ? "var(--accent)" : "var(--accent-soft)" }}>{isCurrentPlan ? "Current plan" : plan.key === recommendedPlan ? "Your match" : visual.eyebrow}</span>
                 </div>
                 <p className="distribution-plan-description mt-2 text-xs leading-5 lg:text-sm" style={{ color: "var(--text-muted)" }}>{plan.description}</p>
 
@@ -209,7 +217,13 @@ export function DistributionPricingStrip({ activePlan, recommendedPlan }: Distri
                   <span className="distribution-plan-cadence pb-1 text-xs" style={{ color: "var(--text-soft)" }}>/ {plan.cadence}</span>
                 </div>
 
-                <Link href="/distribution/start" className="distribution-plan-action pressable mt-4 inline-flex w-full items-center justify-center rounded-lg border px-3 py-2.5 text-center text-xs font-semibold transition hover:bg-[var(--accent-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>Choose plan</Link>
+                {isCurrentPlan ? (
+                  <span className="distribution-plan-action mt-4 inline-flex w-full cursor-default items-center justify-center rounded-lg border px-3 py-2.5 text-center text-xs font-semibold" style={{ borderColor: "var(--border)", color: "var(--text-muted)", background: "var(--bg-soft)" }}>Your current plan</span>
+                ) : isUnavailableDowngrade ? (
+                  <span className="distribution-plan-action mt-4 inline-flex w-full cursor-not-allowed items-center justify-center rounded-lg border px-3 py-2.5 text-center text-xs font-semibold opacity-60" style={{ borderColor: "var(--border)", color: "var(--text-soft)" }}>Included in your current plan</span>
+                ) : (
+                  <Link href={`/checkout?product=subscription-${plan.key}`} className="distribution-plan-action pressable mt-4 inline-flex w-full items-center justify-center rounded-lg border px-3 py-2.5 text-center text-xs font-semibold transition hover:bg-[var(--accent-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>{planDetails ? "Upgrade plan" : "Choose plan"}</Link>
+                )}
 
                 <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--border)" }}>
                   <p className="text-xs font-semibold" style={{ color: "var(--text)" }}>Plan includes:</p>

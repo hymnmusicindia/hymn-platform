@@ -18,8 +18,10 @@ function detectActivePlan(orders: Awaited<ReturnType<typeof listOrdersByUser>>):
   return null;
 }
 
-export default async function DistributionPage({ searchParams }: { searchParams?: Promise<{ recommended?: string }> }) {
-  const requestedPlan = (await searchParams)?.recommended;
+export default async function DistributionPage({ searchParams }: { searchParams?: Promise<{ recommended?: string; manage?: string }> }) {
+  const resolvedSearchParams = await searchParams;
+  const requestedPlan = resolvedSearchParams?.recommended;
+  const showPlanManagement = resolvedSearchParams?.manage === "plans";
   const normalizedRecommendation = requestedPlan === "half-yearly" ? "half_yearly" : requestedPlan;
   const recommendedPlan = ["half_yearly", "yearly", "yearly_plus"].includes(normalizedRecommendation || "") ? normalizedRecommendation as DistributionPlanOption : null;
   const user = await getCurrentUserForPage();
@@ -36,7 +38,7 @@ export default async function DistributionPage({ searchParams }: { searchParams?
       </section>
 
       <section className="shell">
-        <DistributionPricingStrip activePlan={activePlan} recommendedPlan={recommendedPlan} />
+        <DistributionPricingStrip activePlan={activePlan} recommendedPlan={recommendedPlan} showPlanManagement={showPlanManagement} />
       </section>
 
       {user ? (
