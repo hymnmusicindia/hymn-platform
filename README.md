@@ -77,7 +77,7 @@ Production (and Preview only when using a non-production integration account):
 - Google, Razorpay, storage, email, and Spotify values required by the enabled features.
 - `DIRENOTE_CLIENT_ID` and `DIRENOTE_API_PIN` — server-only DireNote credentials.
 - Optional DireNote endpoint overrides only when supplied by DireNote; the documented v2.2 defaults are already configured.
-- `DIRENOTE_RELEASE_SYNC_ENABLED=true`; enable revenue only after finance approval with `DIRENOTE_REVENUE_SYNC_ENABLED=true` and a valid `DIRENOTE_REVENUE_SYNC_ACTOR_ID`.
+- `DIRENOTE_RELEASE_SYNC_ENABLED=true` and `DIRENOTE_REVENUE_SYNC_ENABLED=true` enable automatic catalog and monthly revenue synchronization. `DIRENOTE_REVENUE_SYNC_ACTOR_ID` is optional; when omitted, automation uses the oldest active HYMN administrator for audit attribution.
 
 `vercel.json` schedules the release-status sync daily and the revenue sync on
 the second day of each month. Vercel supplies `CRON_SECRET` to protected cron

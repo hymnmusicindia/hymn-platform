@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { buildDireNotePayload, parseDireNoteResponse, validateDireNotePayload } from "../lib/direnote";
 import { extractDireNoteProviderError, getDireNoteReleaseInformation, getDireNoteRevenueReport, submitToDireNote } from "../lib/direnote/direnote-client";
 import { getDireNoteConfig } from "../lib/direnote/direnote-config";
+import { normalizeDireNoteGenre } from "../lib/direnote-config";
 import { royaltyEconomicFingerprint } from "../lib/royalty-fingerprint";
 import type { Release } from "../lib/types";
 
@@ -27,6 +28,12 @@ assert.equal(validated({ albumGenre: "Not a genre" }).issues.some(issue => issue
 assert.equal(validated({ albumLanguage: "Not a language" }).issues.some(issue => issue.field === "albumLanguage"), true);
 assert.equal(validated({ cover_art_url: "https://cdn.example.test/cover.png" }).issues.some(issue => issue.message.includes("JPEG")), true);
 assert.equal(validated({ tracks: [{ ...payload.tracks[0], audio_url: "https://cdn.example.test/audio.aac" }] }).issues.some(issue => issue.message.includes("WAV or MP3")), true);
+assert.deepEqual(normalizeDireNoteGenre("Rap"), { genre: "Hip-Hop", subgenre: "Other Hip-Hop" });
+assert.deepEqual(normalizeDireNoteGenre("Electronic"), { genre: "Electronic/Dance", subgenre: "Other Electronic" });
+assert.equal(validated({ featuring_artists: [{ name: "New Feature" }] }).issues.some(issue => issue.field === "featuring_artists.0.instagram_url"), true);
+assert.equal(validated({ tracks: [{ ...payload.tracks[0], artists: [{ name: "New Track Artist" }] }] }).issues.some(issue => issue.field === "tracks.0.artists.0.instagram_url"), true);
+assert.equal(validated({ tracks: [{ ...payload.tracks[0], trackGenre: "Pop", trackSubgenre: "Trap" }] }).issues.some(issue => issue.field === "tracks.0.trackSubgenre"), true);
+assert.equal(validated({ contenttype: "AI Generated", suno_receipt_url: "https://cdn.example.test/receipt.jpg", sunoLink: "https://suno.com/song/example" }).issues.some(issue => issue.field === "suno_receipt_url" && issue.message.includes("PDF")), true);
 assert.equal(parseDireNoteResponse({ success: true, release_id: "dn_1", upc: "890123", tracks: [{ track_name: "TEST", isrc: "IN-TEST-1", status: "Pending" }] }).trackIsrcs[0].isrc, "IN-TEST-1");
 
 async function verifyClientContract() {

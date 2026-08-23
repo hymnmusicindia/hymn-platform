@@ -39,7 +39,7 @@ export const DIRENOTE_LANGUAGES = [
 ] as const;
 
 const FRIENDLY_GENRES: Record<string, [string, string]> = {
-  Bollywood: ["Indian", "Bollywood"], Punjabi: ["Indian", "Bhangra"], Bhangra: ["Indian", "Bhangra"], Ghazal: ["Indian", "Ghazal"], Devotional: ["Indian", "Devotional"], "Indian Classical": ["Indian", "Indian Classical"], Rap: ["Hip-Hop", "Rap"], Dance: ["Electronic/Dance", "Dance"], Electronic: ["Electronic/Dance", "Electronic"], Alternative: ["Indie/Alternative", "Alternative"], "R&B": ["R&B/Soul", "R&B"]
+  Bollywood: ["Indian", "Bollywood"], Punjabi: ["Indian", "Bhangra"], Bhangra: ["Indian", "Bhangra"], Ghazal: ["Indian", "Ghazal"], Devotional: ["Indian", "Devotional"], "Indian Classical": ["Indian", "Indian Classical"], Rap: ["Hip-Hop", "Other Hip-Hop"], Dance: ["Electronic/Dance", "Other Electronic"], Electronic: ["Electronic/Dance", "Other Electronic"], Alternative: ["Indie/Alternative", "Other Indie"], "R&B": ["R&B/Soul", "Other R&B/Soul"]
 };
 
 export function normalizeDireNoteGenre(genre?: string | null, subgenre?: string | null) {

@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { getDireNoteReleaseInformation, getDireNoteRevenueReport, redactDireNoteDiagnostic } from "@/lib/direnote";
 import { importDireNoteRevenueReport } from "@/lib/direnote-revenue";
 import { reserveDireNoteRequest } from "@/lib/direnote-rate-limit";
+import { createNotification } from "@/lib/db";
 
 type RecordValue = Record<string, unknown>;
 
@@ -43,6 +44,15 @@ export function mapDireNoteStatus(value: unknown) {
   return status || "unknown";
 }
 
+function aggregateReleaseStatus(tracks: RecordValue[]) {
+  const statuses = tracks.map((track) => mapDireNoteStatus(track.status));
+  if (!statuses.length) return { provider: "unknown", canonical: null } as const;
+  if (statuses.every((status) => status === "live")) return { provider: "live", canonical: "LIVE" } as const;
+  if (statuses.some((status) => status === "live")) return { provider: "partially_live", canonical: "PARTIALLY_LIVE" } as const;
+  if (statuses.every((status) => status === "delivered")) return { provider: "delivered", canonical: "DELIVERED" } as const;
+  return { provider: statuses.some((status) => status === "processing") ? "processing" : statuses[0], canonical: "PROCESSING" } as const;
+}
+
 /** Fetches the documented UPC lookup and caches provider facts without overwriting HYMN metadata. */
 export async function syncDireNoteRelease(releaseId: number, actorId?: number | null) {
   const release = await prisma.release.findUnique({ where: { id: releaseId }, include: { tracks: true } });
@@ -54,6 +64,7 @@ export async function syncDireNoteRelease(releaseId: number, actorId?: number | 
   const payload = record(result.data);
   const remoteRelease = record(payload.release);
   const remoteTracks = Array.isArray(payload.tracks) ? payload.tracks.map(record) : [];
+  const aggregateStatus = aggregateReleaseStatus(remoteTracks);
   const safe = redactDireNoteDiagnostic(payload) as RecordValue;
   await prisma.direNoteLog.create({ data: { releaseId, action: "release_information", httpStatus: result.httpStatus, success: result.success, responseJson: safe as never, errorMessage: result.error ?? null, createdByAdminId: actorId ?? null } });
   if (!result.success) {
@@ -84,9 +95,21 @@ export async function syncDireNoteRelease(releaseId: number, actorId?: number | 
       if (!existing) await tx.direNoteReconciliationDiscrepancy.create({ data: { releaseId, field: comparison.field, hymnValue: comparison.hymn ?? Prisma.JsonNull, direNoteValue: comparison.external ?? Prisma.JsonNull, severity: comparison.severity } });
     }
     if (remoteUpc !== release.upc) await tx.externalIdentifierHistory.create({ data: { releaseId, provider: "direnote", identifierType: "upc", previousValue: release.upc, canonicalValue: remoteUpc, source: "release_information_sync" } });
-    await tx.release.update({ where: { id: releaseId }, data: { upc: remoteUpc, direNoteStatus: mapDireNoteStatus(remoteTracks[0]?.status), direNoteLastSyncedAt: new Date(), metadata: json({ ...(record(release.metadata)), direNote: { lastSyncedAt: new Date().toISOString(), status: mapDireNoteStatus(remoteTracks[0]?.status), release: redactDireNoteDiagnostic(remoteRelease) } }) } });
+    await tx.release.update({ where: { id: releaseId }, data: { upc: remoteUpc, ...(aggregateStatus.canonical ? { status: aggregateStatus.canonical } : {}), direNoteStatus: aggregateStatus.provider, direNoteLastSyncedAt: new Date(), metadata: json({ ...(record(release.metadata)), direNote: { lastSyncedAt: new Date().toISOString(), status: aggregateStatus.provider, release: redactDireNoteDiagnostic(remoteRelease) } }) } });
   });
-  return { success: true, releaseId, upc: text(remoteRelease.upc_code) || release.upc, status: mapDireNoteStatus(remoteTracks[0]?.status), trackCount: remoteTracks.length };
+  if (aggregateStatus.canonical && aggregateStatus.canonical !== release.status && ["LIVE", "PARTIALLY_LIVE", "DELIVERED"].includes(aggregateStatus.canonical)) {
+    const copy = aggregateStatus.canonical === "LIVE"
+      ? { title: `Release live: ${release.title}`, body: "DireNote has confirmed that your release is live." }
+      : aggregateStatus.canonical === "PARTIALLY_LIVE"
+        ? { title: `Release partially live: ${release.title}`, body: "DireNote has confirmed availability on at least one platform. Other stores may still be processing." }
+        : { title: `Release delivered: ${release.title}`, body: "DireNote has confirmed delivery of your release to distribution platforms." };
+    try {
+      await createNotification({ userId: release.userId, ...copy, type: "release", href: `/dashboard/releases?releaseId=${releaseId}&tab=distribution`, actionLabel: "View release", eventKey: `release:${releaseId}:direnote:${aggregateStatus.provider}`, metadata: { releaseId, status: aggregateStatus.provider, source: "direnote" } });
+    } catch (error) {
+      console.error("[DireNote] Status notification failed after sync", { releaseId, status: aggregateStatus.provider, message: error instanceof Error ? error.message : "Notification persistence failed." });
+    }
+  }
+  return { success: true, releaseId, upc: text(remoteRelease.upc_code) || release.upc, status: aggregateStatus.provider, trackCount: remoteTracks.length };
 }
 
 /** Returns the documented ISRC report. Accounting ingestion remains explicit and admin-controlled. */

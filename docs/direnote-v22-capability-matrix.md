@@ -1,6 +1,6 @@
 # DireNote DNM API v2.2 capability matrix
 
-Last audited: 2026-08-22
+Last audited: 2026-08-23
 
 This is the implementation contract for the three documented DireNote endpoints.
 
@@ -50,7 +50,7 @@ the documented 100/IP/hour ceiling.
 | Revenue track/summary/month/breakdown values | canonical normalized records into existing transactional ledger | IMPLEMENTED |
 | API/CSV duplicate protection | shared `royaltyEconomicFingerprint` plus importer precheck | IMPLEMENTED |
 | Financial atomicity | existing `importRoyaltyStatementAtomic` transaction | IMPLEMENTED |
-| Status/revenue scheduling | authenticated bounded cron routes; revenue is opt-in | IMPLEMENTED |
+| Status/revenue scheduling | authenticated bounded cron routes; revenue is enabled by default with administrator audit attribution | IMPLEMENTED |
 | Safe transient retry handling | idempotent ingestion claim; explicit 400/401/405/429/500 classification | IMPLEMENTED |
 | Sanitized API logs/audit trail | `DireNoteLog`, release and financial audits | IMPLEMENTED |
 | Customer-safe release status | portal reads cached HYMN facts only | IMPLEMENTED |
@@ -61,7 +61,7 @@ the documented 100/IP/hour ceiling.
 
 - `DIRENOTE_INGEST_ENDPOINT`, `DIRENOTE_RELEASE_INFORMATION_ENDPOINT`, `DIRENOTE_REVENUE_REPORT_ENDPOINT`
 - `DIRENOTE_API_PIN` / `DIRENOTE_PIN`, `DIRENOTE_CLIENT_ID`
-- `CRON_SECRET`, `DIRENOTE_RELEASE_SYNC_ENABLED`, `DIRENOTE_REVENUE_SYNC_ENABLED`, `DIRENOTE_REVENUE_SYNC_ACTOR_ID`
+- `CRON_SECRET`, `DIRENOTE_RELEASE_SYNC_ENABLED`, `DIRENOTE_REVENUE_SYNC_ENABLED`; optional `DIRENOTE_REVENUE_SYNC_ACTOR_ID`
 
 Run `prisma migrate deploy` against production PostgreSQL before enabling the
 new routes. Sandbox credentials and a PostgreSQL test database are required for

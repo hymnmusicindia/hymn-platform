@@ -21,6 +21,8 @@ assert(releaseCron.includes("nextStatusCheckDelay"), "DireNote status polling mu
 
 const revenueCron = source("app/api/cron/direnote-revenue-sync/route.ts");
 assert(revenueCron.includes("checkedIsrcs"), "Revenue sync must skip ISRCs already checked for the reporting month.");
+assert(revenueCron.includes('DIRENOTE_REVENUE_SYNC_ENABLED === "false"'), "DireNote revenue automation must default to enabled while retaining an emergency disable switch.");
+assert(revenueCron.includes('role: "ADMIN", status: "ACTIVE"'), "Automated revenue imports must resolve a valid active administrator for audit attribution.");
 
 const database = source("lib/db.ts");
 assert(database.includes("function listPostgresArtistCards"), "Artist-card reads must use a legacy-schema-compatible projection.");

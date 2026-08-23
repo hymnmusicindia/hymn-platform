@@ -324,6 +324,22 @@ function pushMissing(issues: DireNoteValidationIssue[], field: string, value: un
   if (value == null || String(value).trim() === "") issues.push({ field, message, severity: "error" });
 }
 
+function validatePublicPdf(issues: DireNoteValidationIssue[], field: string, value?: string) {
+  if (!value) return;
+  if (!isPublicHttpUrl(value)) issues.push({ field, message: `${field} must be a public HTTP(S) URL.` });
+  if (!/\.pdf$/i.test(assetFileName(value))) issues.push({ field, message: `${field} must link to a PDF file.` });
+}
+
+function validateArtists(issues: DireNoteValidationIssue[], artists: DireNoteArtist[] | undefined, path: string, requireInstagram: boolean) {
+  for (const [index, artist] of (artists ?? []).entries()) {
+    pushMissing(issues, `${path}.${index}.name`, artist.name, "Artist name is required.");
+    if (requireInstagram) pushMissing(issues, `${path}.${index}.instagram_url`, artist.instagram_url, "Instagram profile link is required for artist verification and DireNote artist provisioning.");
+    for (const [field, value] of Object.entries(artist).filter(([field]) => field.endsWith("_url"))) {
+      if (value && !isPublicHttpUrl(value)) issues.push({ field: `${path}.${index}.${field}`, message: `${field} must be a public HTTP(S) URL.` });
+    }
+  }
+}
+
 function parseDateOnly(value?: string) {
   if (!value) return null;
   const date = new Date(`${value.slice(0, 10)}T00:00:00Z`);
@@ -400,13 +416,15 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
   if (payload.contenttype === "Non-Exclusive Licensed") {
     pushMissing(issues, "license_receipt_url", payload.license_receipt_url, "Non-Exclusive Licensed releases require license_receipt_url.");
   }
+  validatePublicPdf(issues, "suno_receipt_url", payload.suno_receipt_url);
+  validatePublicPdf(issues, "license_receipt_url", payload.license_receipt_url);
 
   // DireNote needs Instagram only when it must provision an artist. A trusted
   // admin may confirm that a linked profile already exists; customers cannot
   // set this server-side option themselves.
-  if (!options.adminConfirmedExistingArtists) for (const [index, artist] of payload.artists.entries()) {
-    pushMissing(issues, `artists.${index}.instagram_url`, artist.instagram_url, "Instagram profile link is required for artist verification and DireNote artist provisioning.");
-  }
+  const requireInstagram = !options.adminConfirmedExistingArtists;
+  validateArtists(issues, payload.artists, "artists", requireInstagram);
+  validateArtists(issues, payload.featuring_artists, "featuring_artists", requireInstagram);
 
   payload.tracks.forEach((track, index) => {
     const number = index + 1;
@@ -418,7 +436,10 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
     if (!/\.(wav|mp3)$/i.test(assetFileName(track.audio_url))) issues.push({ field: `tracks.${index}.audio_url`, message: `Track ${number} audio must be WAV or MP3.` });
     if (track.explicitLyrics === "Yes" && !track.trackLyrics?.trim()) issues.push({ field: `tracks.${index}.trackLyrics`, message: "Explicit tracks require lyrics before DireNote submission." });
     if (track.trackGenre && !DIRENOTE_GENRES.includes(track.trackGenre as any)) issues.push({ field: `tracks.${index}.trackGenre`, message: `Track ${number} genre is not DireNote-compatible.` });
+    if (track.trackSubgenre && track.trackGenre && !DIRENOTE_SUBGENRES_BY_GENRE[track.trackGenre]?.includes(track.trackSubgenre)) issues.push({ field: `tracks.${index}.trackSubgenre`, message: `Track ${number} subgenre is not valid for ${track.trackGenre}.` });
     if (track.trackLanguage && !DIRENOTE_LANGUAGES.includes(track.trackLanguage as any)) issues.push({ field: `tracks.${index}.trackLanguage`, message: `Track ${number} language is not DireNote-compatible.` });
+    validateArtists(issues, track.artists, `tracks.${index}.artists`, requireInstagram);
+    validateArtists(issues, track.featuring_artists, `tracks.${index}.featuring_artists`, requireInstagram);
     for (const contributor of [...track.songwriters, ...track.composers]) {
       if (!hasFirstAndLastName(contributor.name)) issues.push({ field: `tracks.${index}.credits`, message: "Songwriter/Composer must include first and last name. Stage names or mononyms are not accepted by DireNote." });
     }

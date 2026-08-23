@@ -4,12 +4,24 @@ import { getDireNoteTrackRevenue } from "@/lib/direnote-service";
 
 export const runtime = "nodejs";
 
+async function resolveAutomationActorId() {
+  const configured = Number(process.env.DIRENOTE_REVENUE_SYNC_ACTOR_ID);
+  if (Number.isInteger(configured) && configured > 0) {
+    const user = await prisma.user.findFirst({ where: { id: configured, role: "ADMIN", status: "ACTIVE" }, select: { id: true } });
+    if (user) return user.id;
+  }
+  const fallback = await prisma.user.findFirst({ where: { role: "ADMIN", status: "ACTIVE" }, select: { id: true }, orderBy: { id: "asc" } });
+  if (!fallback) throw new Error("Revenue automation requires at least one active HYMN administrator for audit attribution.");
+  return fallback.id;
+}
+
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  if (process.env.DIRENOTE_REVENUE_SYNC_ENABLED !== "true") return NextResponse.json({ success: true, skipped: "disabled" });
-  const actorId = Number(process.env.DIRENOTE_REVENUE_SYNC_ACTOR_ID);
-  if (!Number.isInteger(actorId) || actorId < 1) return NextResponse.json({ error: "DIRENOTE_REVENUE_SYNC_ACTOR_ID must be a valid finance administrator ID." }, { status: 503 });
+  if (process.env.DIRENOTE_REVENUE_SYNC_ENABLED === "false") return NextResponse.json({ success: true, skipped: "disabled" });
+  let actorId: number;
+  try { actorId = await resolveAutomationActorId(); }
+  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Revenue automation audit attribution failed." }, { status: 503 }); }
   // Revenue is accounting-period data. A monthly sweep reads only tracks that
   // have not already produced a revenue lookup during this reporting month.
   const periodStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
