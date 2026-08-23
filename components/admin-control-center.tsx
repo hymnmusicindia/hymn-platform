@@ -1191,7 +1191,7 @@ export function AdminControlCenter({
                 </div> : null}
                 <div className="sticky bottom-3 z-10 grid gap-3 rounded-2xl border p-3 shadow-xl sm:grid-cols-2 xl:grid-cols-3" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
                   {["submitted", "in_queue", "changes_requested", "failed", "draft"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => updateReleaseStatus(selectedRelease.id, "under_review")} className="btn-outline pressable disabled:opacity-45">Start Review</button> : null}
-                  {selectedRelease.status === "under_review" ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => setConfirmStatusAction("approved")} className="btn-primary pressable disabled:opacity-45">Approve</button> : null}
+                  {selectedRelease.status === "under_review" ? <button type="button" disabled={isPending || isSubmittingToDireNote || direNoteCooldownSeconds > 0 || direNoteReadiness?.ready === false || !hasPermission("releases.review") || !hasPermission("distribution.submit")} title={direNoteCooldownSeconds > 0 ? `DireNote cooldown: ${direNoteCooldownLabel} remaining` : direNoteReadiness?.ready === false ? "Resolve DireNote readiness issues before approval" : !hasPermission("releases.review") || !hasPermission("distribution.submit") ? "Requires release review and distribution submit permissions" : undefined} onClick={() => setConfirmStatusAction("sent")} className="btn-primary pressable disabled:opacity-45">{isSubmittingToDireNote ? "Approving & Sending..." : direNoteCooldownSeconds > 0 ? `Try again in ${direNoteCooldownLabel}` : "Approve & Send to DireNote"}</button> : null}
                   {["approved", "failed", "delivery_failed", "queued_for_distribution"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || isSubmittingToDireNote || direNoteCooldownSeconds > 0 || direNoteReadiness?.ready === false || !hasPermission(selectedRelease.status === "approved" ? "distribution.submit" : "distribution.retry")} title={direNoteCooldownSeconds > 0 ? `DireNote cooldown: ${direNoteCooldownLabel} remaining` : !hasPermission(selectedRelease.status === "approved" ? "distribution.submit" : "distribution.retry") ? `Requires ${selectedRelease.status === "approved" ? "distribution.submit" : "distribution.retry"} permission` : undefined} onClick={() => setConfirmStatusAction("sent")} className="btn-primary pressable disabled:opacity-45">{isSubmittingToDireNote ? "Submitting to DireNote..." : direNoteCooldownSeconds > 0 ? `Try again in ${direNoteCooldownLabel}` : selectedRelease.status === "approved" ? "Send to DireNote" : "Retry Send"}</button> : null}
                   {selectedRelease.upcCode ? <button type="button" disabled={isPending || !hasPermission("releases.read")} title={!hasPermission("releases.read") ? "Requires releases.read permission" : undefined} onClick={() => syncDireNoteRelease(selectedRelease.id)} className="btn-outline pressable disabled:opacity-45">Sync with DireNote</button> : null}
                   {["sent", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("distribution.confirm_status")} title={!hasPermission("distribution.confirm_status") ? "Requires distribution.confirm_status permission" : undefined} onClick={() => setConfirmStatusAction("live")} className="btn-primary pressable disabled:opacity-45">Mark Live</button> : null}
@@ -1516,11 +1516,11 @@ export function AdminControlCenter({
           <section role="dialog" aria-modal="true" aria-label="Confirm Action" className="w-full max-w-md rounded-[1.5rem] border p-5 shadow-2xl sm:p-7" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
             <h2 className="text-xl font-semibold text-center" style={{ color: "var(--text)" }}>Are you sure?</h2>
             <p className="mt-3 text-center text-sm" style={{ color: "var(--text-muted)" }}>
-              {confirmStatusAction === "approved"
-                ? "This confirms that HYMN has reviewed the metadata, artwork, audio, and rights. DireNote submission remains a separate action."
-                : confirmStatusAction === "live"
+              {confirmStatusAction === "live"
                   ? "Only continue if platform or store availability is confirmed. This does not claim availability on every platform."
-                  : "The DireNote readiness check must pass before this release is submitted for distribution."}
+                  : selectedRelease.status === "under_review"
+                    ? "This approves HYMN's metadata, artwork, audio, and rights review and immediately sends the release to DireNote. The customer is notified only after DireNote accepts it."
+                    : "The DireNote readiness check must pass before this release is submitted for distribution."}
             </p>
             <div className="mt-6 flex gap-3 justify-center">
               <button type="button" onClick={() => setConfirmStatusAction(null)} className="btn-outline pressable px-4 py-2">Cancel</button>
@@ -1528,7 +1528,7 @@ export function AdminControlCenter({
                 updateReleaseStatus(selectedRelease.id, confirmStatusAction);
                 setConfirmStatusAction(null);
               }} className="btn-primary pressable px-4 py-2">
-                Yes, {confirmStatusAction === "approved" ? "Approve" : confirmStatusAction === "live" ? "Mark live" : "Send"}
+                Yes, {confirmStatusAction === "live" ? "Mark live" : selectedRelease.status === "under_review" ? "Approve & Send" : "Send"}
               </button>
             </div>
           </section>

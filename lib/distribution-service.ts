@@ -50,6 +50,18 @@ async function notifyRelease(release: Release | null, input: { title: string; bo
   });
 }
 
+async function notifyReleaseSafely(release: Release | null, input: { title: string; body: string; priority?: "low" | "normal" | "high"; eventKey?: string; metadata?: Record<string, unknown> }) {
+  try {
+    await notifyRelease(release, input);
+  } catch (error) {
+    console.error("[DireNote] Customer notification failed after provider acceptance", {
+      releaseId: release?.id ?? null,
+      eventKey: input.eventKey ?? null,
+      message: error instanceof Error ? error.message : "Notification persistence failed."
+    });
+  }
+}
+
 async function moveQueue(releaseId: number, nextStage: "sent_to_direnote" | "processing" | "rejected", actorId?: number | null, notes?: string, metadata?: Record<string, unknown>) {
   const entry = (await listDistributionQueueEntries()).find((item) => item.releaseId === releaseId);
   if (!entry) return null;
@@ -219,20 +231,15 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
     await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: "DIRENOTE_ACCEPTED", details: { status: automaticStatus, upc: parsed.upc, warnings: parsed.warnings } });
     await resolveAdminTask(`release:${releaseId}:direnote:validation`, "DireNote submission accepted.");
     await resolveAdminTask(`release:${releaseId}:direnote:network`, "DireNote submission accepted.");
-    await notifyRelease(updatedRelease ?? release, {
+    await finishDistributionSubmission(claim.attempt.id, { state: "submitted", httpStatus: response.httpStatus, providerReference: parsed.distributorReleaseId ?? parsed.upc ?? null, responseRedacted: { distributorReleaseId: parsed.distributorReleaseId ?? null, upc: parsed.upc ?? null, trackIsrcs: parsed.trackIsrcs, warnings: parsed.warnings } });
+    await notifyReleaseSafely(updatedRelease ?? release, {
       title: `Release sent to DireNote: ${displayName(updatedRelease ?? release)}`,
       body: "Your release has cleared HYMN review and has been submitted to DireNote for distribution.",
       eventKey: `release:${releaseId}:status:sent_to_direnote`,
       metadata: { upc: parsed.upc ?? null, warnings: parsed.warnings }
     });
-    await finishDistributionSubmission(claim.attempt.id, { state: "submitted", httpStatus: response.httpStatus, providerReference: parsed.distributorReleaseId ?? parsed.upc ?? null, responseRedacted: { distributorReleaseId: parsed.distributorReleaseId ?? null, upc: parsed.upc ?? null, trackIsrcs: parsed.trackIsrcs, warnings: parsed.warnings } });
-    await notifyRelease(updatedRelease ?? release, {
-      title: `Release processing: ${displayName(updatedRelease ?? release)}`,
-      body: "Your release has cleared distribution submission. Platform availability may still take time depending on DSP processing.",
-      eventKey: `release:${releaseId}:status:processing`
-    });
     if (parsed.upc) {
-      await notifyRelease(updatedRelease ?? release, {
+      await notifyReleaseSafely(updatedRelease ?? release, {
         title: `UPC generated: ${displayName(updatedRelease ?? release)}`,
         body: `DireNote returned UPC ${parsed.upc}.`,
         eventKey: `release:${releaseId}:upc:${parsed.upc}`,
@@ -240,7 +247,7 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
       });
     }
     for (const track of parsed.trackIsrcs.filter((item) => item.isrc)) {
-      await notifyRelease(updatedRelease ?? release, {
+      await notifyReleaseSafely(updatedRelease ?? release, {
         title: `ISRC generated: ${track.trackTitle ?? displayName(updatedRelease ?? release)}`,
         body: `DireNote returned ISRC ${track.isrc}.`,
         eventKey: `release:${releaseId}:isrc:${track.isrc}`,

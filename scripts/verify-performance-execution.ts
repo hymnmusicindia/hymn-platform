@@ -38,4 +38,9 @@ const draftUpdateRoute = source("app/api/distribution/drafts/[id]/route.ts");
 assert(draftCreateRoute.includes("select: { id: true }"), "Draft creation must not return unavailable optional Release columns.");
 assert(draftUpdateRoute.includes("select: { metadata: true }") && draftUpdateRoute.includes("select: { id: true, updatedAt: true }"), "Draft autosave must use legacy-schema-compatible Release projections.");
 
+const adminControlCenter = source("components/admin-control-center.tsx");
+const adminStatusRoute = source("app/api/admin/update-status/[id]/route.ts");
+assert(adminControlCenter.includes('"Approve & Send to DireNote"') && adminControlCenter.includes('setConfirmStatusAction("sent")'), "HYMN approval must submit to DireNote in one admin action.");
+assert(adminStatusRoute.includes('syncQueueStage(Number(id), "approved"') && !adminStatusRoute.includes("syncQueueStage(Number(id), statusStageMap.sent!"), "The queue must not be marked sent before DireNote accepts the release.");
+
 console.log("Performance execution guard verification passed.");
