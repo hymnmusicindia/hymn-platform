@@ -86,6 +86,7 @@ type TrackDraft = {
   audioFileName: string;
   existingAudioUrl: string;
   audioUploadStatus: "idle" | "uploading" | "uploaded" | "failed";
+  requiresAudioReplacement: boolean;
   audioPreviewUrl: string;
   duration: string;
   titleLanguage: string;
@@ -201,6 +202,7 @@ function createTrack(trackNumber = 1): TrackDraft {
     audioFileName: "",
     existingAudioUrl: "",
     audioUploadStatus: "idle",
+    requiresAudioReplacement: false,
     audioPreviewUrl: "",
     duration: "",
     titleLanguage: "English",
@@ -211,6 +213,10 @@ function createTrack(trackNumber = 1): TrackDraft {
 
 function isPlaceholderTrackTitle(value: string) {
   return /^(?:track\s*\d+|untitled(?:\s+(?:track|single|release))?)$/i.test(value.trim());
+}
+
+function correctionMentions(release: Release | null | undefined, pattern: RegExp) {
+  return Boolean(release?.reviewIssues?.fields.some((issue) => pattern.test(`${issue.field} ${issue.label} ${issue.note ?? ""}`)));
 }
 function fileNameFromUrl(value: string) {
   if (!value) return "";
@@ -524,6 +530,7 @@ function createTracksFromRelease(
       existingAudioUrl: track?.audioUrl || initialRelease?.audioUrl || "",
       audioUploadStatus:
         track?.audioUrl || initialRelease?.audioUrl ? "uploaded" : "idle",
+      requiresAudioReplacement: correctionMentions(initialRelease, new RegExp(`audio|tracks\\.${index}\\.audio_url`, "i")),
       audioPreviewUrl: track?.audioUrl || initialRelease?.audioUrl || "",
       duration: track?.duration?.trim() || "",
       titleLanguage:
@@ -622,7 +629,7 @@ async function readAsDataUrl(file: File) {
 }
 
 async function validateArtwork(file: File) {
-  if (file.type !== "image/jpeg" && !/\.(jpe?g)$/i.test(file.name))
+  if (file.type !== "image/jpeg" || !/\.(jpe?g)$/i.test(file.name))
     throw new Error("Distribution requirement: Cover artwork must be in JPG / JPEG format only (no PNG or other file types).");
   const objectUrl = URL.createObjectURL(file);
   try {
@@ -636,6 +643,10 @@ async function validateArtwork(file: File) {
         image.src = objectUrl;
       },
     );
+    if (dimensions.width !== dimensions.height)
+      throw new Error("Distribution requirement: Cover artwork must be a perfect square (1:1).");
+    if (dimensions.width < 3000 || dimensions.height < 3000)
+      throw new Error("Distribution requirement: Cover artwork must be at least 3000 x 3000 pixels.");
     return dimensions;
   } finally {
     URL.revokeObjectURL(objectUrl);
@@ -846,7 +857,11 @@ export function ReleaseForm({
   const [artworkDimensions, setArtworkDimensions] = useState<string | null>(
     null,
   );
-  const [artworkError, setArtworkError] = useState<string | null>(null);
+  const [artworkError, setArtworkError] = useState<string | null>(() =>
+    correctionMentions(initialRelease, /artwork|cover_art_url/i)
+      ? "Replace the artwork with a DireNote-compliant JPG/JPEG file (square and at least 3000 x 3000 pixels)."
+      : null,
+  );
   const [artworkWarning, setArtworkWarning] = useState<string | null>(null);
   const [artworkScanning, setArtworkScanning] = useState(false);
   const [contributorsModal, setContributorsModal] =
@@ -1377,8 +1392,9 @@ export function ReleaseForm({
       reportProgress: (loaded: number, total: number) => void;
     },
   ) {
-    if (!file.type.startsWith("audio/") && !/\.(wav|mp3|flac)$/i.test(file.name)) {
-      throw new Error("Unsupported audio format. Upload a WAV, MP3, or FLAC file.");
+    const supportedMime = ["audio/wav", "audio/x-wav", "audio/mpeg"].includes(file.type);
+    if (!supportedMime || !/\.(wav|mp3)$/i.test(file.name)) {
+      throw new Error("DireNote requires WAV or MP3 audio. FLAC and other formats are not accepted.");
     }
     const currentTrack = tracks[index];
     if (currentTrack?.audioPreviewUrl)
@@ -1394,6 +1410,7 @@ export function ReleaseForm({
       audioPreviewUrl: previewUrl,
       duration,
       audioUploadStatus: "uploading",
+      requiresAudioReplacement: false,
     });
     try {
       const safeName = `audio-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
@@ -1419,7 +1436,7 @@ export function ReleaseForm({
         audioUploadStatus: "uploaded",
       });
     } catch (error) {
-      updateTrack(index, { audioUploadStatus: "failed" });
+      updateTrack(index, { audioUploadStatus: "failed", requiresAudioReplacement: true });
       throw error;
     }
   }
@@ -1508,6 +1525,13 @@ export function ReleaseForm({
         key: `track-${index}-title`,
         trackIndex: index,
         message: "Enter the actual title for every track before continuing.",
+      };
+    if (track.requiresAudioReplacement)
+      return {
+        step: 3,
+        key: `track-${index}-audio`,
+        trackIndex: index,
+        message: "Replace this audio master with a DireNote-compliant WAV or MP3 file.",
       };
     if (track.versionPreset === "Other" && !track.customVersion.trim())
       return {
@@ -2327,7 +2351,11 @@ export function ReleaseForm({
     setArtworkFile(null);
     setArtworkPreview(initialRelease?.artworkUrl ?? null);
     setArtworkDimensions(null);
-    setArtworkError(null);
+    setArtworkError(
+      correctionMentions(initialRelease, /artwork|cover_art_url/i)
+        ? "Replace the artwork with a DireNote-compliant JPG/JPEG file (square and at least 3000 x 3000 pixels)."
+        : null,
+    );
     setArtworkWarning(null);
     setArtworkScanning(false);
     setMonetisationModalOpen(false);
@@ -3063,14 +3091,14 @@ export function ReleaseForm({
                           }}
                         >
                           <UploadDropzone
-                            accept="audio/*,.wav,.mp3,.flac"
+                            accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3"
                             iconOnly
                             compact={Boolean(track.audioPreviewUrl && track.audioUploadStatus === "uploaded")}
                             title="Audio upload"
                             description="Drop the master audio here"
                             helperLines={[
                               "Direct-to-storage",
-                              "WAV/FLAC preferred",
+                              "WAV or MP3 only",
                               "Resumable for large files",
                             ]}
                             fileName={
@@ -3627,7 +3655,7 @@ export function ReleaseForm({
                 <div className="grid gap-3 sm:grid-cols-2">
                   {[
                     ["Resolution", "Minimum 3000 × 3000 px"],
-                    ["File format", "JPG or PNG"],
+                    ["File format", "JPG / JPEG only"],
                     ["Aspect ratio", "Perfect square · 1:1"],
                     ["Content", "Clear, original, and store-safe"],
                   ].map(([label, detail]) => (

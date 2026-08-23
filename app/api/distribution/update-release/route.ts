@@ -5,6 +5,7 @@ import { listArtistProfilesByUser, touchArtistProfiles } from "@/lib/db";
 import { getDetailedReleaseById, updatePaidDistributionRelease } from "@/lib/distribution-db";
 import type { ReleaseTrack } from "@/lib/types";
 import { distributionEditSchema } from "@/lib/validation";
+import { assertDireNoteAssetFormat } from "@/lib/distribution-asset-format";
 
 type EditTrackPayload = Omit<ReleaseTrack, "id" | "releaseId" | "createdAt"> & {
   coverLicenseUrl?: string;
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
     if (!artworkUrl) {
       return NextResponse.json({ error: "Artwork upload missing." }, { status: 400 });
     }
+    await assertDireNoteAssetFormat({ userId: existingRelease.userId, url: artworkUrl, kind: "artwork", label: "Cover artwork" });
 
     const tracks: EditTrackPayload[] = [];
     for (const track of parsed.metadata.tracks) {
@@ -67,6 +69,7 @@ export async function POST(request: Request) {
       if (!audioUrl) {
         return NextResponse.json({ error: `Audio upload missing for ${track.trackTitle}.` }, { status: 400 });
       }
+      await assertDireNoteAssetFormat({ userId: existingRelease.userId, url: audioUrl, kind: "audio", label: `Audio for ${track.trackTitle}` });
 
       let coverLicenseUrl: string | undefined;
       if (track.coverLicenseFileKey) {

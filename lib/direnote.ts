@@ -147,6 +147,15 @@ function isPublicHttpUrl(value?: string | null) {
   } catch { return false; }
 }
 
+function assetFileName(value?: string | null) {
+  try {
+    const url = new URL(value?.trim() ?? "");
+    return url.searchParams.get("filename") || url.pathname.split("/").pop() || "";
+  } catch {
+    return value?.split(/[?#]/)[0].split("/").pop() ?? "";
+  }
+}
+
 function publicUrl(value: string | undefined | null, siteUrl?: string) {
   const trimmed = value?.trim() ?? "";
   if (!trimmed || /^(blob:|file:|data:)/i.test(trimmed)) return "";
@@ -353,7 +362,7 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
   pushMissing(issues, "pLine", payload.pLine, "Publishing line is required.");
   pushMissing(issues, "cover_art_url", payload.cover_art_url, "Cover artwork must resolve to a public URL.");
   if (!isPublicHttpUrl(payload.cover_art_url)) issues.push({ field: "cover_art_url", message: "Cover artwork must be a public HTTP(S) URL." });
-  if (!/\.(jpe?g)(?:[?#].*)?$/i.test(payload.cover_art_url)) issues.push({ field: "cover_art_url", message: "DireNote cover artwork must be JPEG. Convert PNG to JPEG before submission." });
+  if (!/\.jpe?g$/i.test(assetFileName(payload.cover_art_url))) issues.push({ field: "cover_art_url", message: "DireNote cover artwork must be JPEG. Convert PNG to JPEG before submission." });
 
   if (!DIRENOTE_GENRES.includes(payload.albumGenre as any)) issues.push({ field: "albumGenre", message: `Genre "${payload.albumGenre}" is not in DireNote allowed values.` });
   if (!DIRENOTE_SUBGENRES_BY_GENRE[payload.albumGenre]?.includes(payload.albumSubgenre)) issues.push({ field: "albumSubgenre", message: `Subgenre "${payload.albumSubgenre}" is not valid for ${payload.albumGenre}.` });
@@ -406,7 +415,7 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
     if (!track.songwriters.length) issues.push({ field: `tracks.${index}.songwriters`, message: `Track ${number} requires at least one songwriter.` });
     if (!track.composers.length) issues.push({ field: `tracks.${index}.composers`, message: `Track ${number} requires at least one composer.` });
     if (!isPublicHttpUrl(track.audio_url)) issues.push({ field: `tracks.${index}.audio_url`, message: `Track ${number} audio must be a public HTTP(S) URL.` });
-    if (!/\.(wav|mp3)(?:[?#].*)?$/i.test(track.audio_url)) issues.push({ field: `tracks.${index}.audio_url`, message: `Track ${number} audio must be WAV or MP3.` });
+    if (!/\.(wav|mp3)$/i.test(assetFileName(track.audio_url))) issues.push({ field: `tracks.${index}.audio_url`, message: `Track ${number} audio must be WAV or MP3.` });
     if (track.explicitLyrics === "Yes" && !track.trackLyrics?.trim()) issues.push({ field: `tracks.${index}.trackLyrics`, message: "Explicit tracks require lyrics before DireNote submission." });
     if (track.trackGenre && !DIRENOTE_GENRES.includes(track.trackGenre as any)) issues.push({ field: `tracks.${index}.trackGenre`, message: `Track ${number} genre is not DireNote-compatible.` });
     if (track.trackLanguage && !DIRENOTE_LANGUAGES.includes(track.trackLanguage as any)) issues.push({ field: `tracks.${index}.trackLanguage`, message: `Track ${number} language is not DireNote-compatible.` });

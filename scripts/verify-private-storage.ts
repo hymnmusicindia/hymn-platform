@@ -14,7 +14,10 @@ assert.equal(validatePrivateUpload({ ownerUserId: 1, assetType: "private_audio_m
 assert.throws(() => validatePrivateUpload({ ownerUserId: 1, assetType: "private_audio_master", fileName: "fake.wav", mimeType: "audio/wav", bytes: Buffer.from("not audio") }), /content/);
 const png = Buffer.alloc(24); Buffer.from("89504e470d0a1a0a", "hex").copy(png); png.writeUInt32BE(3000, 16); png.writeUInt32BE(3000, 20);
 assert.deepEqual(readImageDimensions("image/png", png), { width: 3000, height: 3000 });
-assert.equal(validatePrivateUpload({ ownerUserId: 1, assetType: "private_unreleased_artwork", fileName: "cover.png", mimeType: "image/png", bytes: png }), "cover.png");
+assert.throws(() => validatePrivateUpload({ ownerUserId: 1, assetType: "private_unreleased_artwork", fileName: "cover.png", mimeType: "image/png", bytes: png }), /MIME/);
+const jpeg = Buffer.alloc(20); Buffer.from("ffd8ffc0000b08", "hex").copy(jpeg); jpeg.writeUInt16BE(3000, 7); jpeg.writeUInt16BE(3000, 9);
+assert.deepEqual(readImageDimensions("image/jpeg", jpeg), { width: 3000, height: 3000 });
+assert.equal(validatePrivateUpload({ ownerUserId: 1, assetType: "private_unreleased_artwork", fileName: "cover.jpg", mimeType: "image/jpeg", bytes: jpeg }), "cover.jpg");
 
 const releaseForm = readFileSync("components/release-form.tsx", "utf8");
 const clientUploadRoute = readFileSync("app/api/assets/client-upload/route.ts", "utf8");

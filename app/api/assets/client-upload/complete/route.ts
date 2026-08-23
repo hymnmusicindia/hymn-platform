@@ -13,9 +13,9 @@ export async function POST(request: Request) {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const asset = await prisma.storedAsset.findFirst({
       where: { objectKey: url, ownerUserId: result.user.id, deletedAt: null },
-      select: { id: true },
+      select: { id: true, safeFilename: true },
     });
-    if (asset) return NextResponse.json({ downloadPath: `/api/assets/${asset.id}/download` }, { headers: { "Cache-Control": "no-store" } });
+    if (asset) return NextResponse.json({ downloadPath: `/api/assets/${asset.id}/download?filename=${encodeURIComponent(asset.safeFilename)}` }, { headers: { "Cache-Control": "no-store" } });
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
 

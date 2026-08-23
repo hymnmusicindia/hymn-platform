@@ -1,12 +1,13 @@
-import { issueSignedToken } from '@vercel/blob';
+import { get, issueSignedToken } from '@vercel/blob';
 import { handleUploadPresigned, type HandleUploadPresignedBody } from '@vercel/blob/client';
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/access';
 import { prisma } from '@/lib/prisma';
+import { validatePrivateUpload, type PrivateAssetType } from '@/lib/private-storage';
 
 const uploadPolicies: Record<string, { maximumSizeInBytes: number; allowedContentTypes: string[] }> = {
-  private_audio_master: { maximumSizeInBytes: 500 * 1024 * 1024, allowedContentTypes: ['audio/wav', 'audio/x-wav', 'audio/flac', 'audio/mpeg'] },
-  private_unreleased_artwork: { maximumSizeInBytes: 20 * 1024 * 1024, allowedContentTypes: ['image/jpeg', 'image/png', 'image/webp'] },
+  private_audio_master: { maximumSizeInBytes: 500 * 1024 * 1024, allowedContentTypes: ['audio/wav', 'audio/x-wav', 'audio/mpeg'] },
+  private_unreleased_artwork: { maximumSizeInBytes: 20 * 1024 * 1024, allowedContentTypes: ['image/jpeg'] },
   private_cover_licence: { maximumSizeInBytes: 20 * 1024 * 1024, allowedContentTypes: ['application/pdf', 'image/jpeg', 'image/png'] },
 };
 
@@ -50,6 +51,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       onUploadCompleted: async ({ blob, tokenPayload }) => {
          const { userId, assetType, releaseId, mimeType, originalFilename, byteSize } = JSON.parse(tokenPayload || '{}');
          const safeFilename = String(originalFilename || blob.pathname.split('/').pop() || 'asset').replace(/[^a-zA-Z0-9._-]/g, '_');
+         const sample = await get(blob.url, { access: "private", headers: { Range: "bytes=0-1048575" } });
+         if (!sample?.stream) throw new Error("Could not verify uploaded file content.");
+         validatePrivateUpload({ ownerUserId: Number(userId), releaseId: releaseId ? Number(releaseId) : undefined, assetType: assetType as PrivateAssetType, fileName: safeFilename, mimeType: String(mimeType), bytes: Buffer.from(await new Response(sample.stream).arrayBuffer()) });
 
          await prisma.storedAsset.upsert({
            where: { objectKey: blob.url },

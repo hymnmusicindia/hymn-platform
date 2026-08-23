@@ -16,10 +16,10 @@ export interface PrivateStorageAdapter {
 }
 
 const policies: Record<PrivateAssetType, { max: number; mime: string[] }> = {
-  private_audio_master: { max: 500 * 1024 * 1024, mime: ["audio/wav", "audio/x-wav", "audio/flac", "audio/mpeg"] },
+  private_audio_master: { max: 500 * 1024 * 1024, mime: ["audio/wav", "audio/x-wav", "audio/mpeg"] },
   private_beat_deliverable: { max: 500 * 1024 * 1024, mime: ["audio/wav", "audio/x-wav", "audio/flac", "audio/mpeg", "application/zip"] },
   private_beat_license: { max: 20 * 1024 * 1024, mime: ["application/pdf"] },
-  private_unreleased_artwork: { max: 20 * 1024 * 1024, mime: ["image/jpeg", "image/png", "image/webp"] },
+  private_unreleased_artwork: { max: 20 * 1024 * 1024, mime: ["image/jpeg"] },
   private_cover_licence: { max: 20 * 1024 * 1024, mime: ["application/pdf", "image/jpeg", "image/png"] },
   private_ownership_proof: { max: 20 * 1024 * 1024, mime: ["application/pdf", "image/jpeg", "image/png"] },
   private_ai_receipt: { max: 20 * 1024 * 1024, mime: ["application/pdf", "image/jpeg", "image/png"] },
@@ -89,7 +89,12 @@ export function validatePrivateUpload(input: PrivateUploadInput) {
   const magic = input.bytes.subarray(0, 12);
   const validMagic = input.mimeType === "application/pdf" ? magic.subarray(0, 4).toString() === "%PDF" : input.mimeType === "image/png" ? magic.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")) : input.mimeType === "image/jpeg" ? magic.subarray(0, 3).equals(Buffer.from("ffd8ff", "hex")) : input.mimeType === "image/webp" ? magic.subarray(0, 4).toString() === "RIFF" && input.bytes.subarray(8, 12).toString() === "WEBP" : input.mimeType === "application/zip" || input.mimeType.includes("spreadsheetml") ? magic.subarray(0, 2).toString() === "PK" : hasValidAudioMagic(input.mimeType, input.bytes);
   if (!validMagic) throw new Error("File content does not match its MIME type.");
-  if (input.assetType === "private_unreleased_artwork" && !readImageDimensions(input.mimeType, input.bytes)) throw new Error("Artwork dimensions could not be verified.");
+  if (input.assetType === "private_unreleased_artwork") {
+    const dimensions = readImageDimensions(input.mimeType, input.bytes);
+    if (!dimensions) throw new Error("Artwork dimensions could not be verified.");
+    if (dimensions.width !== dimensions.height) throw new Error("Artwork must be a perfect square.");
+    if (dimensions.width < 3000 || dimensions.height < 3000) throw new Error("Artwork must be at least 3000 x 3000 pixels.");
+  }
   return base.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
@@ -120,7 +125,7 @@ export const localPrivateStorage: PrivateStorageAdapter = {
           retentionUntil: input.retentionUntil
         }
       });
-      return { id: asset.id, downloadPath: `/api/assets/${asset.id}/download`, checksum, byteSize: input.bytes.length };
+      return { id: asset.id, downloadPath: `/api/assets/${asset.id}/download?filename=${encodeURIComponent(safeFilename)}`, checksum, byteSize: input.bytes.length };
     }
 
     const objectKey = `${input.ownerUserId}/${crypto.randomUUID()}`;
@@ -132,7 +137,7 @@ export const localPrivateStorage: PrivateStorageAdapter = {
       await fs.unlink(fullPath).catch(() => undefined);
       throw error;
     });
-    return { id: asset.id, downloadPath: `/api/assets/${asset.id}/download`, checksum, byteSize: input.bytes.length };
+    return { id: asset.id, downloadPath: `/api/assets/${asset.id}/download?filename=${encodeURIComponent(safeFilename)}`, checksum, byteSize: input.bytes.length };
   },
   async createAuthorizedRead(input) {
     const asset = await prisma.storedAsset.findUnique({ where: { id: input.assetId } });

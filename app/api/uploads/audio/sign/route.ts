@@ -16,7 +16,7 @@ export async function POST(request: Request) {
       body,
       request,
       onBeforeGenerateToken: async (pathname) => ({
-        allowedContentTypes: ["audio/mpeg", "audio/wav", "audio/x-wav", "audio/flac"],
+        allowedContentTypes: ["audio/mpeg", "audio/wav", "audio/x-wav"],
         maximumSizeInBytes: 500 * 1024 * 1024,
         addRandomSuffix: true,
         tokenPayload: JSON.stringify({ userId: user.user.id, pathname })

@@ -8,6 +8,7 @@ import { isProductionPaymentBypassEnabled } from "@/lib/env";
 import { emailAppUrl, sendReleaseEmail } from "@/lib/email/email-events";
 import { confirmDistributionPayment } from "@/lib/payment-webhooks";
 import { consumeRateLimit } from "@/lib/rate-limit";
+import { assertDireNoteAssetFormat } from "@/lib/distribution-asset-format";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
     if (!artworkUrl) {
       return NextResponse.json({ error: "Artwork upload missing." }, { status: 400 });
     }
+    await assertDireNoteAssetFormat({ userId: session.sub, url: artworkUrl, kind: "artwork", label: "Cover artwork" });
 
     const tracks = [];
     for (const track of parsed.metadata.tracks) {
@@ -56,6 +58,7 @@ export async function POST(request: Request) {
       if (!audioUrl) {
         return NextResponse.json({ error: `Audio upload missing for ${track.trackTitle}.` }, { status: 400 });
       }
+      await assertDireNoteAssetFormat({ userId: session.sub, url: audioUrl, kind: "audio", label: `Audio for ${track.trackTitle}` });
 
       let coverLicenseUrl: string | undefined;
       if (track.isCover) {
