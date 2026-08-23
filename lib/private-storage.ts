@@ -6,12 +6,12 @@ import { prisma } from "@/lib/prisma";
 
 export type PrivateAssetType = "private_audio_master" | "private_beat_deliverable" | "private_beat_license" | "private_cover_licence" | "private_ownership_proof" | "private_ai_receipt" | "private_royalty_statement" | "private_payout_report" | "private_payout_proof" | "private_kyc_document" | "private_unreleased_artwork";
 export type PrivateUploadInput = { ownerUserId: number; releaseId?: number; beatPurchaseId?: number; beatId?: number; assetType: PrivateAssetType; fileName: string; mimeType: string; bytes: Buffer; retentionUntil?: Date };
-export type AuthorizedReadInput = { assetId: number; requesterUserId: number; isAdmin: boolean };
+export type AuthorizedReadInput = { assetId: number; requesterUserId: number; isAdmin: boolean; range?: string | null };
 export type StoredPrivateAsset = { id: number; downloadPath: string; checksum: string; byteSize: number };
 
 export interface PrivateStorageAdapter {
   upload(input: PrivateUploadInput): Promise<StoredPrivateAsset>;
-  createAuthorizedRead(input: AuthorizedReadInput): Promise<{ bytes: Buffer; mimeType: string; fileName: string }>;
+  createAuthorizedRead(input: AuthorizedReadInput): Promise<{ bytes: Buffer; mimeType: string; fileName: string; contentRange?: string | null; contentLength?: string | null }>;
   delete(input: { assetId: number; requesterUserId: number; isAdmin: boolean }): Promise<void>;
 }
 
@@ -142,10 +142,10 @@ export const localPrivateStorage: PrivateStorageAdapter = {
       if (!purchased) throw new Error("Forbidden.");
     }
     if (asset.storageProvider === "vercel_blob" || asset.objectKey.startsWith("http://") || asset.objectKey.startsWith("https://")) {
-      const blob = await get(asset.objectKey, { access: "private" });
+      const blob = await get(asset.objectKey, { access: "private", headers: input.range ? { Range: input.range } : undefined });
       if (!blob || blob.statusCode !== 200 || !blob.stream) throw new Error("Could not fetch remote private asset.");
       const buf = Buffer.from(await new Response(blob.stream).arrayBuffer());
-      return { bytes: buf, mimeType: asset.mimeType, fileName: asset.safeFilename };
+      return { bytes: buf, mimeType: asset.mimeType, fileName: asset.safeFilename, contentRange: blob.headers.get("content-range"), contentLength: blob.headers.get("content-length") };
     }
     return { bytes: await fs.readFile(path.resolve(rootPath(), asset.objectKey)), mimeType: asset.mimeType, fileName: asset.safeFilename };
   },

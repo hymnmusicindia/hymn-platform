@@ -30,4 +30,9 @@ const distributionDatabase = source("lib/distribution-db.ts");
 assert(distributionDatabase.includes("legacyCompatibleReleaseForUser(userId, releaseId)"), "Single-release reads must tolerate pending optional DireNote columns.");
 assert(distributionDatabase.includes("select: { id: true }"), "Release mutations must not return unavailable optional DireNote columns by default.");
 
+const draftCreateRoute = source("app/api/distribution/drafts/route.ts");
+const draftUpdateRoute = source("app/api/distribution/drafts/[id]/route.ts");
+assert(draftCreateRoute.includes("select: { id: true }"), "Draft creation must not return unavailable optional Release columns.");
+assert(draftUpdateRoute.includes("select: { metadata: true }") && draftUpdateRoute.includes("select: { id: true, updatedAt: true }"), "Draft autosave must use legacy-schema-compatible Release projections.");
+
 console.log("Performance execution guard verification passed.");

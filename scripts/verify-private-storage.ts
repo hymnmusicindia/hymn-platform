@@ -22,6 +22,6 @@ const privateStorage = readFileSync("lib/private-storage.ts", "utf8");
 assert(releaseForm.includes("uploadPresigned") && releaseForm.includes("access: 'private'"), "Release files must use private presigned Blob uploads.");
 assert(!releaseForm.includes("access: 'public'"), "Release files must never be uploaded to public Blob storage.");
 assert(clientUploadRoute.includes("handleUploadPresigned") && clientUploadRoute.includes("issueSignedToken"), "Client upload authorization must support Vercel OIDC.");
-assert(privateStorage.includes("get(asset.objectKey, { access: \"private\" })"), "Private Blob downloads must use authenticated SDK reads.");
+assert(privateStorage.includes("get(asset.objectKey, { access: \"private\"") && privateStorage.includes("Range: input.range"), "Private Blob downloads must use authenticated, range-aware SDK reads.");
 console.log("Private storage validation passed.");
 // vercel trigger 9

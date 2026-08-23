@@ -16,7 +16,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const body = await request.json().catch(() => ({}));
   const metadata = typeof body.metadata === "object" && body.metadata ? body.metadata : {};
   const { prisma } = await import("@/lib/prisma");
-  const current = await prisma.release.findUnique({ where: { id } });
+  const current = await prisma.release.findUnique({ where: { id }, select: { metadata: true } });
   const existing = typeof current?.metadata === "object" && current.metadata ? current.metadata as Record<string, unknown> : {};
   const updated = await prisma.release.update({ where: { id }, data: {
     metadata: { ...existing, ...metadata, lastEditedAt: new Date().toISOString() } as any,
@@ -29,7 +29,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     lastEditedAt: new Date(),
     artworkUrl: typeof body.artworkUrl === "string" ? body.artworkUrl : undefined,
     audioUrl: typeof body.audioUrl === "string" ? body.audioUrl : undefined
-  } });
+  }, select: { id: true, updatedAt: true } });
   if (Array.isArray((metadata as any).tracks)) {
     await prisma.$transaction([
       prisma.track.deleteMany({ where: { releaseId: id } }),

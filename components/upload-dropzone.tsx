@@ -142,11 +142,12 @@ export function UploadDropzone({ accept, title, description, helperLines = [], f
           }}
         />
         {iconOnly ? (
-          <div className="flex min-h-28 flex-col items-center justify-center gap-2" aria-label={`${description}. Drag and drop or choose a file.`}>
+          <div className={clsx("flex flex-col items-center justify-center gap-2", compact ? "min-h-20" : "min-h-28")} aria-label={`${fileName ? "Replace the track" : description}. Drag and drop or choose a file.`}>
             <span className="inline-flex h-10 w-10 items-center justify-center text-[var(--text)]">
               {processing ? <LoaderCircle className="h-6 w-6 animate-spin" /> : success ? <CheckCircle2 className="h-6 w-6 text-[var(--success)]" /> : <UploadCloud className="h-6 w-6" />}
             </span>
-            <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Upload your track</span>
+            <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>{fileName ? "Replace the track" : "Upload your track"}</span>
+            {fileName && compact ? <span className="max-w-full truncate px-2 text-[10px]" style={{ color: "var(--text-soft)" }}>{fileName}</span> : null}
           </div>
         ) : splitLayout ? (
           <div className="grid gap-5 md:grid-cols-[minmax(0,1fr),9rem] md:items-center">

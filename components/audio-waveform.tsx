@@ -32,6 +32,7 @@ export function AudioWaveform({ src, title, subtitle, compact = false }: AudioWa
   const [playing, setPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [playbackError, setPlaybackError] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rafRef = useRef<number | null>(null);
 
@@ -40,7 +41,7 @@ export function AudioWaveform({ src, title, subtitle, compact = false }: AudioWa
   }, [barCount]);
 
   useEffect(() => {
-    if (!validSrc || typeof window === "undefined") {
+    if (!validSrc || typeof window === "undefined" || src?.startsWith("/api/assets/")) {
       setBars(fallbackBars(barCount));
       return;
     }
@@ -90,6 +91,8 @@ export function AudioWaveform({ src, title, subtitle, compact = false }: AudioWa
     if (!audio) return;
 
     const onLoadedMetadata = () => setDuration(audio.duration);
+    const onCanPlay = () => setPlaybackError(false);
+    const onError = () => { setPlaying(false); setPlaybackError(true); };
     const onPause = () => setPlaying(false);
     const onPlay = () => setPlaying(true);
     const onEnded = () => {
@@ -98,12 +101,16 @@ export function AudioWaveform({ src, title, subtitle, compact = false }: AudioWa
     };
 
     audio.addEventListener("loadedmetadata", onLoadedMetadata);
+    audio.addEventListener("canplay", onCanPlay);
+    audio.addEventListener("error", onError);
     audio.addEventListener("pause", onPause);
     audio.addEventListener("play", onPlay);
     audio.addEventListener("ended", onEnded);
 
     return () => {
       audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+      audio.removeEventListener("canplay", onCanPlay);
+      audio.removeEventListener("error", onError);
       audio.removeEventListener("pause", onPause);
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("ended", onEnded);
@@ -142,7 +149,8 @@ export function AudioWaveform({ src, title, subtitle, compact = false }: AudioWa
     if (!audio || !validSrc) return;
 
     if (audio.paused) {
-      void audio.play();
+      setPlaybackError(false);
+      void audio.play().catch(() => setPlaybackError(true));
     } else {
       audio.pause();
     }
@@ -163,7 +171,7 @@ export function AudioWaveform({ src, title, subtitle, compact = false }: AudioWa
       <div className={clsx("audio-waveform-inline", playing && "is-playing", !validSrc && "is-disabled")}>
         {validSrc ? <audio ref={audioRef} src={src} preload="metadata" /> : null}
         <button type="button" className="audio-waveform-inline-title" onClick={togglePlayback} disabled={!validSrc} aria-label={`${playing ? "Pause" : "Play"} ${title}`}>
-          <span>{title}</span>
+          <span>{playbackError ? "Preview unavailable - retry" : title}</span>
           {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
         </button>
         <div role="slider" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-label={`Seek ${title}`} onClick={seek} className="audio-waveform-inline-track">
