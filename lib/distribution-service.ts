@@ -101,7 +101,8 @@ function retryCountFromRelease(release: Release) {
   return Number.isFinite(Number(value)) ? Number(value) : 0;
 }
 
-function httpErrorMode(status: number) {
+function httpErrorMode(status: number, providerReason?: string) {
+  if (providerReason === "storageQuotaExceeded") return { retryable: true, releaseStatus: "delivery_failed" as const, queueStage: null, action: "DIRENOTE_STORAGE_QUOTA_EXCEEDED" };
   if (status === 400) return { retryable: false, releaseStatus: "changes_requested" as const, queueStage: "rejected" as const, action: "DIRENOTE_VALIDATION_REJECTED" };
   if (status === 401) return { retryable: false, releaseStatus: "delivery_failed" as const, queueStage: "rejected" as const, action: "DIRENOTE_CREDENTIAL_ERROR" };
   if (status === 405) return { retryable: false, releaseStatus: "delivery_failed" as const, queueStage: "rejected" as const, action: "DIRENOTE_METHOD_ERROR" };
@@ -171,11 +172,14 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
     const data = response.data ?? (response.error ? { error: response.error } : {});
     if (!response.success) {
       const status = response.httpStatus ?? 503;
-      const mode = httpErrorMode(status);
+      const mode = httpErrorMode(status, response.providerReason);
       const parsed = parseDireNoteResponse(data);
       const endpointNotFound = status === 404 && typeof response.raw === "string" && /page does not exist|page not found/i.test(response.raw);
+      const storageQuotaExceeded = response.providerReason === "storageQuotaExceeded";
       const message = endpointNotFound
         ? "DireNote ingestion endpoint returned 404 (page not found). Verify DIRENOTE_INGEST_ENDPOINT."
+        : storageQuotaExceeded
+          ? "DireNote cannot accept uploads because its Google Drive storage quota is full. The release is safe and was not rejected; free or increase storage on the DireNote account, then retry sending."
         : response.error || parsed.message || `DireNote API returned ${status}.`;
       console.error("[DireNote] Provider rejected submission", { releaseId, httpStatus: response.httpStatus, message, response: redactDireNoteDiagnostic(data) });
       await updateDetailedReleaseStatus(releaseId, mode.releaseStatus, message);
@@ -183,6 +187,9 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
       await logDistributionEvent({ releaseId, action: options.retry ? "retry_submission" : "release_submission", httpStatus: response.httpStatus, createdByAdminId: options.actorId, requestPayload: redactedPayload, responsePayload: data, responseRaw: response.raw, warnings: parsed.warnings, errors: [message], success: false });
       if (mode.queueStage) await moveQueue(releaseId, mode.queueStage, options.actorId, message, { status: response.httpStatus, response: data });
       await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: mode.action, details: { status: response.httpStatus, message } });
+      if (response.httpStatus !== 400) {
+        await createAdminTaskOnce({ eventKey: `release:${releaseId}:direnote:provider:${response.providerReason ?? response.httpStatus ?? "unknown"}`, type: "DireNote Failed", priority: "critical", title: `DireNote provider failure: ${displayName(release)}`, body: message, href: `/admin?tab=releases&releaseId=${releaseId}`, entityType: "release", entityId: releaseId });
+      }
       if (response.httpStatus === 400) {
         await notifyRelease(release, {
           title: `DireNote needs fixes: ${displayName(release)}`,

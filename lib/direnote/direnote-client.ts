@@ -7,8 +7,36 @@ export type DireNoteSubmitResult = {
   data?: any;
   raw?: string;
   error?: string;
+  providerCode?: number;
+  providerReason?: string;
   missing?: ReturnType<typeof getDireNoteConfig>["missing"];
 };
+
+type ProviderError = { message?: string; code?: number; reason?: string };
+
+function parsedJson(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return value;
+  try { return JSON.parse(trimmed); } catch { return value; }
+}
+
+export function extractDireNoteProviderError(value: unknown): ProviderError {
+  const parsed = parsedJson(value);
+  if (typeof parsed === "string") return { message: parsed };
+  if (!parsed || typeof parsed !== "object") return {};
+  const record = parsed as Record<string, unknown>;
+  const nested = extractDireNoteProviderError(record.error ?? record.errors);
+  const firstError = Array.isArray(record.errors) ? extractDireNoteProviderError(record.errors[0]) : {};
+  const code = Number(record.code ?? nested.code ?? firstError.code);
+  const messageValue = record.message ?? nested.message ?? firstError.message;
+  const reasonValue = record.reason ?? nested.reason ?? firstError.reason;
+  return {
+    message: typeof messageValue === "string" ? messageValue.trim() : undefined,
+    code: Number.isFinite(code) ? code : undefined,
+    reason: typeof reasonValue === "string" ? reasonValue.trim() : undefined,
+  };
+}
 
 async function postToDireNote(endpoint: string, payload: Record<string, unknown>, options: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}): Promise<DireNoteSubmitResult> {
   const config = getDireNoteConfig();
@@ -29,7 +57,8 @@ async function postToDireNote(endpoint: string, payload: Record<string, unknown>
     let data: any;
     try { data = JSON.parse(raw); } catch { data = { raw }; }
     const apiRejected = data?.success === false || Boolean(data?.error) || Boolean(data?.errors);
-    return { success: response.ok && !apiRejected, httpStatus: response.status, ok: response.ok, data, raw };
+    const providerError = apiRejected || !response.ok ? extractDireNoteProviderError(data) : {};
+    return { success: response.ok && !apiRejected, httpStatus: response.status, ok: response.ok, data, raw, error: providerError.message, providerCode: providerError.code, providerReason: providerError.reason };
   } catch (error: any) {
     return { success: false, httpStatus: null, error: error?.name === "AbortError" ? `DireNote request timed out after ${timeoutMs} milliseconds.` : error?.message || "DireNote request failed." };
   } finally { clearTimeout(timeout); }
