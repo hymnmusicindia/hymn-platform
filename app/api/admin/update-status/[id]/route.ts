@@ -57,7 +57,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ release: submission.release, validation: submission.validation, warnings: submission.warnings ?? [] });
     }
     const requiresReview = payload.status === "rejected" || payload.status === "changes_requested";
-    const release = await updateDetailedReleaseStatus(Number(id), payload.status, payload.note, requiresReview ? {
+    const statusReason = payload.note?.trim() || payload.reason?.trim();
+    const release = await updateDetailedReleaseStatus(Number(id), payload.status, statusReason, requiresReview ? {
       reason: payload.reason!,
       issueType: payload.issueType!,
       severity: payload.severity ?? "required_correction",
@@ -67,7 +68,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     } : undefined);
     if (!release) return NextResponse.json({ error: "Release not found." }, { status: 404 });
     const nextStage = statusStageMap[payload.status];
-    const queueEntry = nextStage ? await syncQueueStage(Number(id), nextStage, actorId, payload.note) : null;
+    const queueEntry = nextStage ? await syncQueueStage(Number(id), nextStage, actorId, statusReason) : null;
     await createReleaseAuditLog({ releaseId: Number(id), userId: actorId, action: "ADMIN_MANUAL_STATUS_OVERRIDE", details: { status: payload.status, reason: payload.reason ?? payload.note ?? "Admin override", adminNote: payload.adminInternalNote ?? null } });
     return NextResponse.json({ release, queueEntry });
   } catch (error) {

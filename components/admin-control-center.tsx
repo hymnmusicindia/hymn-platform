@@ -509,6 +509,7 @@ export function AdminControlCenter({
   const [reviewFieldSearch, setReviewFieldSearch] = useState("");
   const [reviewFields, setReviewFields] = useState<Record<string, { label: string; note: string }>>({});
   const [reviewInternalNote, setReviewInternalNote] = useState("");
+  const [reviewError, setReviewError] = useState("");
   const [confirmStatusAction, setConfirmStatusAction] = useState<Release["status"] | null>(null);
   const [direNoteResult, setDireNoteResult] = useState<{ type: "success" | "error"; title: string; message: string } | null>(null);
   const [isSubmittingToDireNote, setIsSubmittingToDireNote] = useState(false);
@@ -873,30 +874,36 @@ export function AdminControlCenter({
     setReviewFieldSearch("");
     setReviewFields(defaults?.fields ?? {});
     setReviewInternalNote("");
+    setReviewError("");
   }
 
   function submitReleaseReview() {
     if (!selectedRelease || !reviewAction || !reviewReason.trim() || !reviewIssueType || (reviewIssueType === "metadata" && !Object.keys(reviewFields).length)) return;
     startTransition(async () => {
-      const response = await fetch(`/api/admin/update-status/${selectedRelease.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: reviewAction,
-          reason: reviewReason.trim(),
-          issueType: reviewIssueType,
-          severity: reviewSeverity,
-          fields: Object.entries(reviewFields).map(([field, value]) => ({ field, label: value.label, note: value.note.trim() })),
-          adminInternalNote: reviewInternalNote.trim()
-        })
-      });
-      const data = await response.json();
-      if (!response.ok) { setFeedback(data.error || "Could not save release review."); return; }
-      setReleases((items) => items.map((item) => item.id === selectedRelease.id ? data.release : item));
-      setFeedback(reviewAction === "rejected" ? "Release rejected with a saved reason." : "Corrections requested and sent to the artist.");
-      setReviewAction(null);
-      if (reviewAction === "changes_requested") {
-        setDireNoteResult({ type: "success", title: "Correction request sent!", message: "The artist has been notified and the affected release fields are highlighted for correction." });
+      setReviewError("");
+      try {
+        const response = await fetch(`/api/admin/update-status/${selectedRelease.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status: reviewAction,
+            reason: reviewReason.trim(),
+            issueType: reviewIssueType,
+            severity: reviewSeverity,
+            fields: Object.entries(reviewFields).map(([field, value]) => ({ field, label: value.label, note: value.note.trim() })),
+            adminInternalNote: reviewInternalNote.trim()
+          })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) { setReviewError(data.error || "Could not send the correction request."); return; }
+        setReleases((items) => items.map((item) => item.id === selectedRelease.id ? data.release : item));
+        setFeedback(reviewAction === "rejected" ? "Release rejected with a saved reason." : "Corrections requested and sent to the artist.");
+        setReviewAction(null);
+        if (reviewAction === "changes_requested") {
+          setDireNoteResult({ type: "success", title: "Correction request sent!", message: "The artist has been notified and the affected release fields are highlighted for correction." });
+        }
+      } catch {
+        setReviewError("Could not reach the server. Please try again.");
       }
     });
   }
@@ -1587,7 +1594,8 @@ export function AdminControlCenter({
               </div> : null}
               <label className="grid gap-2 text-sm" style={{ color: "var(--text-muted)" }}>Internal admin note (not shown to artist)<textarea className="field min-h-20" value={reviewInternalNote} onChange={(event) => setReviewInternalNote(event.target.value)} /></label>
               <div className="rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><p className="text-xs uppercase tracking-[0.18em]" style={{ color: "var(--text-soft)" }}>Artist message preview</p><p className="mt-2 text-sm" style={{ color: "var(--text)" }}>{reviewReason.trim() || "Enter a reason to preview the user-facing message."}</p></div>
-              <button type="button" onClick={submitReleaseReview} disabled={isPending || !reviewReason.trim() || !reviewIssueType || (reviewIssueType === "metadata" && !Object.keys(reviewFields).length)} className="btn-primary pressable disabled:cursor-not-allowed disabled:opacity-45">{isPending ? "Saving..." : reviewAction === "rejected" ? "Reject Release" : "Send Correction Request"}</button>
+              {reviewError ? <p role="alert" className="rounded-xl border p-3 text-sm" style={{ borderColor: "var(--danger)", background: "var(--danger-soft)", color: "var(--danger)" }}>{reviewError}</p> : null}
+              <button type="button" onClick={submitReleaseReview} disabled={isPending || !reviewReason.trim() || !reviewIssueType || (reviewIssueType === "metadata" && !Object.keys(reviewFields).length)} className="btn-primary pressable disabled:cursor-not-allowed disabled:opacity-45">{isPending ? "Sending..." : reviewAction === "rejected" ? "Reject Release" : "Send Correction Request"}</button>
             </div>
           </section>
         </div>
