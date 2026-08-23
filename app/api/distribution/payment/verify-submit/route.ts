@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { submitPaidDistributionRelease } from "@/lib/distribution-db";
-import { createNotification, getSubscriptionByUserId, touchArtistProfiles } from "@/lib/db";
+import { createNotification, getSubscriptionByUserId, listArtistProfilesByUser, touchArtistProfiles } from "@/lib/db";
 import { verifyRazorpaySignature } from "@/lib/razorpay";
 import { distributionSubmitSchema } from "@/lib/validation";
 import { isProductionPaymentBypassEnabled } from "@/lib/env";
@@ -19,6 +19,13 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const payload = JSON.parse(String(formData.get("payload") || "{}"));
     const parsed = distributionSubmitSchema.parse(payload);
+    const savedArtistIds = new Set((await listArtistProfilesByUser(session.sub)).map((profile) => profile.id));
+    const invalidPrimaryArtist = parsed.metadata.tracks.some((track) =>
+      track.artistProfileIds.some((id) => !savedArtistIds.has(id)),
+    );
+    if (invalidPrimaryArtist) {
+      return NextResponse.json({ error: "Select primary artists from your saved artist cards before submitting." }, { status: 400 });
+    }
     const requirePrivateAsset = (value: string | undefined, label: string) => {
       if (!value) return value;
       if (process.env.NODE_ENV === "production" && !value.startsWith("/api/assets/")) throw new Error(`${label} must use authenticated private storage.`);

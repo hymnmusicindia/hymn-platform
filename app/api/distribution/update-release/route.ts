@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { localPrivateStorage, type PrivateAssetType } from "@/lib/private-storage";
-import { touchArtistProfiles } from "@/lib/db";
+import { listArtistProfilesByUser, touchArtistProfiles } from "@/lib/db";
 import { getDetailedReleaseById, updatePaidDistributionRelease } from "@/lib/distribution-db";
 import type { ReleaseTrack } from "@/lib/types";
 import { distributionEditSchema } from "@/lib/validation";
@@ -28,6 +28,13 @@ export async function POST(request: Request) {
     }
     if (!["draft", "changes_requested", "rejected", "under_review"].includes(existingRelease.status)) {
       return NextResponse.json({ error: "This release cannot be edited in its current status." }, { status: 409 });
+    }
+    const savedArtistIds = new Set((await listArtistProfilesByUser(existingRelease.userId)).map((profile) => profile.id));
+    const invalidPrimaryArtist = parsed.metadata.tracks.some((track) =>
+      track.artistProfileIds.some((id) => !savedArtistIds.has(id)),
+    );
+    if (invalidPrimaryArtist) {
+      return NextResponse.json({ error: "Select primary artists from your saved artist cards before submitting." }, { status: 400 });
     }
 
     if (parsed.metadata.releaseTiming === "schedule_release") {

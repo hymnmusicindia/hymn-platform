@@ -12,6 +12,12 @@ export async function POST(request: Request) {
     const metadata = payload.metadata ?? {};
     const draftReleaseId = payload.draftReleaseId ? Number(payload.draftReleaseId) : undefined;
     const existingRelease = draftReleaseId ? await getDetailedReleaseByUserId(session.sub, draftReleaseId) : null;
+    if (draftReleaseId && !existingRelease) {
+      return NextResponse.json({ error: "The release being edited was not found." }, { status: 404 });
+    }
+    if (existingRelease && existingRelease.status !== "draft") {
+      return NextResponse.json({ error: "Move this release to Draft before saving changes." }, { status: 409 });
+    }
     const rejectPublicDeliverable = (value: unknown) => {
       const url = String(value || "");
       if (process.env.NODE_ENV === "production" && /^(https?:)?\/\//i.test(url)) throw new Error("Public upload URLs are not accepted for unreleased release assets.");
@@ -52,7 +58,13 @@ export async function POST(request: Request) {
         musicalKey: track.musicalKey ?? undefined,
         explicitContent: Boolean(track.explicitContent),
         dolbyAtmos: Boolean(track.dolbyAtmos),
-        contributors: track.contributors ?? []
+        contributors: track.contributors ?? [],
+        metadata: {
+          ...(track.metadata && typeof track.metadata === "object" ? track.metadata : {}),
+          artistProfileIds: Array.isArray(track.artistProfileIds) ? track.artistProfileIds : [],
+          featuredArtistProfileIds: Array.isArray(track.featuredArtistProfileIds) ? track.featuredArtistProfileIds : [],
+          remixerProfileIds: Array.isArray(track.remixerProfileIds) ? track.remixerProfileIds : []
+        }
       });
     }
 

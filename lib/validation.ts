@@ -142,7 +142,10 @@ const contributorSchema = z.object({
 });
 
 export const distributionTrackSchema = z.object({
-  trackTitle: z.string().min(1),
+  trackTitle: z.string().trim().min(1, "Enter a title for every track.").refine(
+    (value) => !/^(?:track\s*\d+|untitled(?:\s+(?:track|single|release))?)$/i.test(value),
+    "Replace the placeholder with the actual track title.",
+  ),
   version: z.string().optional(),
   trackNumber: z.number().int().min(1),
   primaryArtist: z.string().min(1),
@@ -169,7 +172,7 @@ export const distributionTrackSchema = z.object({
   explicitContent: z.boolean(),
   dolbyAtmos: z.boolean(),
   metadata: z.record(z.unknown()).optional(),
-  artistProfileIds: z.array(z.number().int().positive()).optional(),
+  artistProfileIds: z.array(z.number().int().positive()).min(1, "Select at least one saved primary artist card.").max(3),
   featuredArtistProfileIds: z.array(z.number().int().positive()).optional(),
   remixerProfileIds: z.array(z.number().int().positive()).optional()
 });

@@ -208,6 +208,10 @@ function createTrack(trackNumber = 1): TrackDraft {
     dolbyAtmos: false,
   };
 }
+
+function isPlaceholderTrackTitle(value: string) {
+  return /^(?:track\s*\d+|untitled(?:\s+(?:track|single|release))?)$/i.test(value.trim());
+}
 function fileNameFromUrl(value: string) {
   if (!value) return "";
   const clean = value.split("?")[0].split("#")[0];
@@ -477,10 +481,19 @@ function createTracksFromRelease(
     const version = (track?.version?.trim() ||
       "Original") as (typeof versionOptions)[number];
     const legacyExplicitVersion = version.toLowerCase() === "explicit";
+    const trackMetadata = track?.metadata && typeof track.metadata === "object"
+      ? track.metadata as Record<string, unknown>
+      : {};
+    const savedPrimaryArtistIds = Array.isArray(trackMetadata.artistProfileIds)
+      ? trackMetadata.artistProfileIds.filter((id): id is number => Number.isInteger(id) && Number(id) > 0)
+      : [];
     return {
       id: createId(),
       trackNumber: track?.trackNumber ?? index + 1,
-      trackTitle: track?.trackTitle?.trim() || "",
+      trackTitle:
+        track?.trackTitle && !isPlaceholderTrackTitle(track.trackTitle)
+          ? track.trackTitle.trim()
+          : "",
       existingIsrcCode: track?.isrc?.trim() || "",
       versionPreset: legacyExplicitVersion
         ? "Original"
@@ -489,11 +502,8 @@ function createTracksFromRelease(
           : "Other",
       customVersion:
         legacyExplicitVersion || versionOptions.includes(version) ? "" : version,
-      primaryArtistIds: [],
-      primaryArtistQuery:
-        track?.primaryArtist?.trim() ||
-        initialRelease?.artistName?.trim() ||
-        "",
+      primaryArtistIds: savedPrimaryArtistIds,
+      primaryArtistQuery: "",
       featuredArtists: track?.featuredArtists?.trim() || "",
       remixers: track?.additionalPrimaryArtists?.trim() || "",
       songwriters: splitContributorNames(track?.songwriters),
@@ -823,6 +833,12 @@ export function ReleaseForm({
   const [knownProfiles, setKnownProfiles] = useState<
     Record<number, ArtistProfile>
   >({});
+  useEffect(() => {
+    fetch("/api/artists")
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data) => setKnownProfiles(Object.fromEntries(((data.artists ?? []) as ArtistProfile[]).map((profile) => [profile.id, profile]))))
+      .catch(() => undefined);
+  }, []);
   const [artworkFile, setArtworkFile] = useState<File | null>(null);
   const [artworkPreview, setArtworkPreview] = useState<string | null>(
     initialRelease?.artworkUrl ?? null,
@@ -845,7 +861,7 @@ export function ReleaseForm({
   const [youtubeContentIdModalOpen, setYoutubeContentIdModalOpen] =
     useState(false);
   const [draftReleaseId, setDraftReleaseId] = useState<number | null>(() =>
-    initialRelease?.status === "draft" ? initialRelease.id : null,
+    initialRelease?.id ?? null,
   );
   const [socialConsentAccepted, setSocialConsentAccepted] = useState(
     () =>
@@ -1082,8 +1098,10 @@ export function ReleaseForm({
   const autosaveSnapshot = useMemo(
     () => ({
       title: displayedReleaseTitle,
-      artistName:
-        tracks[0]?.primaryArtistQuery || initialRelease?.artistName || "",
+      artistName: (tracks[0]?.primaryArtistIds ?? [])
+        .map((id) => knownProfiles[id]?.name)
+        .filter(Boolean)
+        .join(", "),
       genre: release.primaryGenre,
       releaseDate: selectedReleaseDate,
       artworkUrl:
@@ -1105,8 +1123,11 @@ export function ReleaseForm({
         tracks: tracks.map((track, index) => ({
           trackTitle: track.trackTitle,
           trackNumber: index + 1,
-          primaryArtist:
-            track.primaryArtistQuery || initialRelease?.artistName || "",
+          primaryArtist: track.primaryArtistIds
+            .map((id) => knownProfiles[id]?.name)
+            .filter(Boolean)
+            .join(", "),
+          artistProfileIds: track.primaryArtistIds,
           featuredArtists: track.featuredArtists,
           songwriters: contributorNames(track.songwriters),
           composers: contributorNames(track.composers),
@@ -1128,7 +1149,7 @@ export function ReleaseForm({
     [
       artworkPreview,
       displayedReleaseTitle,
-      initialRelease?.artistName,
+      knownProfiles,
       legal,
       platforms,
       readinessScore,
@@ -1265,10 +1286,7 @@ export function ReleaseForm({
       .map((profile) => profile.name)
       .join(", ");
   const primaryArtistName =
-    namesFor(tracks[0]?.primaryArtistIds ?? []) ||
-    tracks[0]?.primaryArtistQuery.trim() ||
-    initialRelease?.artistName ||
-    "";
+    namesFor(tracks[0]?.primaryArtistIds ?? []);
   const updateTrack = (index: number, patch: Partial<TrackDraft>) =>
     setTracks((current) =>
       current.map((track, trackIndex) =>
@@ -1484,12 +1502,12 @@ export function ReleaseForm({
     track: TrackDraft,
     index: number,
   ): ValidationIssue | null {
-    if (!track.trackTitle.trim())
+    if (!track.trackTitle.trim() || isPlaceholderTrackTitle(track.trackTitle))
       return {
         step: 3,
         key: `track-${index}-title`,
         trackIndex: index,
-        message: "Add a title for every track before continuing.",
+        message: "Enter the actual title for every track before continuing.",
       };
     if (track.versionPreset === "Other" && !track.customVersion.trim())
       return {
@@ -1505,13 +1523,12 @@ export function ReleaseForm({
         trackIndex: index,
         message: "Each track needs 1 to 3 primary artist profiles.",
       };
-    if (track.primaryArtistIds.length === 0 && !track.primaryArtistQuery.trim())
+    if (track.primaryArtistIds.length === 0)
       return {
         step: 3,
         key: `track-${index}-artists`,
         trackIndex: index,
-        message:
-          "Each track needs at least one primary artist or a filled artist name.",
+        message: "Select at least one saved primary artist card for every track.",
       };
     if (
       !contributorsValid(track.songwriters) ||
@@ -1696,7 +1713,7 @@ export function ReleaseForm({
     artworkIssue(),
     ...destinationsIssues(),
   ].filter((issue): issue is ValidationIssue => Boolean(issue));
-  const primaryArtistComplete = Boolean(tracks[0]?.primaryArtistIds.length || tracks[0]?.primaryArtistQuery.trim());
+  const primaryArtistComplete = Boolean(tracks[0]?.primaryArtistIds.length);
   const audioAssetsComplete = tracks.every((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl));
   const stepChecks = [
     Boolean(currentPlan),
@@ -1717,7 +1734,6 @@ export function ReleaseForm({
   const artistCount = new Set(
     tracks.flatMap((track) => [
       ...track.primaryArtistIds.map((id) => `profile:${id}`),
-      ...(track.primaryArtistQuery.trim() ? [`name:${track.primaryArtistQuery.trim().toLowerCase()}`] : []),
     ]),
   ).size;
   const showErrors = attemptedStep === step || submitting;
@@ -1951,10 +1967,7 @@ export function ReleaseForm({
               : track.versionPreset,
           trackNumber: index + 1,
           primaryArtist:
-            namesFor(track.primaryArtistIds.slice(0, 1)) ||
-            track.primaryArtistQuery.trim() ||
-            initialRelease?.artistName ||
-            "",
+            namesFor(track.primaryArtistIds.slice(0, 1)),
           featuredArtists: track.featuredArtists.trim() || undefined,
           additionalPrimaryArtists: track.remixers.trim() || undefined,
           songwriters: contributorNames(track.songwriters),
@@ -2058,10 +2071,7 @@ export function ReleaseForm({
                 : track.versionPreset,
             trackNumber: index + 1,
             primaryArtist:
-              namesFor(track.primaryArtistIds.slice(0, 1)) ||
-              track.primaryArtistQuery.trim() ||
-              initialRelease?.artistName ||
-              "",
+              namesFor(track.primaryArtistIds.slice(0, 1)),
             featuredArtists: track.featuredArtists.trim() || undefined,
             additionalPrimaryArtists: track.remixers.trim() || undefined,
             songwriters: contributorNames(track.songwriters),
@@ -2172,10 +2182,7 @@ export function ReleaseForm({
               : track.versionPreset,
           trackNumber: index + 1,
           primaryArtist:
-            namesFor(track.primaryArtistIds.slice(0, 1)) ||
-            track.primaryArtistQuery.trim() ||
-            initialRelease?.artistName ||
-            "",
+            namesFor(track.primaryArtistIds.slice(0, 1)),
           featuredArtists: track.featuredArtists.trim() || undefined,
           additionalPrimaryArtists: track.remixers.trim() || undefined,
           songwriters: contributorNames(track.songwriters),
@@ -2326,7 +2333,7 @@ export function ReleaseForm({
     setMonetisationModalOpen(false);
     setYoutubeContentIdModalOpen(false);
     setDraftReleaseId(
-      initialRelease?.status === "draft" ? initialRelease.id : null,
+      initialRelease?.id ?? null,
     );
     setSocialConsentAccepted(
       initialRelease?.monetisationAccepted ??
@@ -2695,7 +2702,7 @@ export function ReleaseForm({
             {tracks.map((track, index) => {
               const expanded = expandedTrack === index;
               const issue = showErrors ? trackIssue(track, index) : null;
-              const metadataReady = Boolean(track.trackTitle.trim() && (track.primaryArtistIds.length || track.primaryArtistQuery.trim()) && contributorsValid(track.songwriters) && contributorsValid(track.composers) && contributorsValid(track.producers));
+              const metadataReady = Boolean(track.trackTitle.trim() && !isPlaceholderTrackTitle(track.trackTitle) && track.primaryArtistIds.length && contributorsValid(track.songwriters) && contributorsValid(track.composers) && contributorsValid(track.producers));
               const audioReady = Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl);
               const trackReady = metadataReady && audioReady;
               return (
