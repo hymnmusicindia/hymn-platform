@@ -54,7 +54,7 @@ async function moveQueue(releaseId: number, nextStage: "sent_to_direnote" | "pro
   const entry = (await listDistributionQueueEntries()).find((item) => item.releaseId === releaseId);
   if (!entry) return null;
   try {
-    return transitionDistributionQueueEntry({ entryId: entry.id, nextStage, operatorId: actorId ?? null, notes: notes ?? null, metadata });
+    return await transitionDistributionQueueEntry({ entryId: entry.id, nextStage, operatorId: actorId ?? null, notes: notes ?? null, metadata, syncReleaseStatus: false });
   } catch {
     return null;
   }
@@ -173,7 +173,10 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
       const status = response.httpStatus ?? 503;
       const mode = httpErrorMode(status);
       const parsed = parseDireNoteResponse(data);
-      const message = response.error || parsed.message || `DireNote API returned ${status}.`;
+      const endpointNotFound = status === 404 && typeof response.raw === "string" && /page does not exist|page not found/i.test(response.raw);
+      const message = endpointNotFound
+        ? "DireNote ingestion endpoint returned 404 (page not found). Verify DIRENOTE_INGEST_ENDPOINT."
+        : response.error || parsed.message || `DireNote API returned ${status}.`;
       console.error("[DireNote] Provider rejected submission", { releaseId, httpStatus: response.httpStatus, message, response: redactDireNoteDiagnostic(data) });
       await updateDetailedReleaseStatus(releaseId, mode.releaseStatus, message);
       await finishDistributionSubmission(claim.attempt.id, { state: mode.retryable ? "retryable" : "failed", httpStatus: response.httpStatus, safeError: message.slice(0, 500), responseRedacted: { message, warnings: parsed.warnings } });

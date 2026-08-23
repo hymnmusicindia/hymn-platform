@@ -1661,6 +1661,7 @@ export async function transitionDistributionQueueEntry(input: {
   operatorId?: number | null;
   notes?: string | null;
   metadata?: Record<string, unknown>;
+  syncReleaseStatus?: boolean;
 }) {
   const nextStage = assertQueueStage(input.nextStage);
   const pool = getPool();
@@ -1706,7 +1707,9 @@ export async function transitionDistributionQueueEntry(input: {
         }
       });
 
-      await updateDetailedReleaseStatus(entry.releaseId, releaseStatusForQueueStage(nextStage), input.notes ?? `Distribution queue moved to ${nextStage}.`);
+      if (input.syncReleaseStatus !== false) {
+        await updateDetailedReleaseStatus(entry.releaseId, releaseStatusForQueueStage(nextStage), input.notes ?? `Distribution queue moved to ${nextStage}.`);
+      }
 
       return normalizeQueueEntry({ ...updated, stageHistory: await listDistributionQueueLogs(updated.id) });
     }
@@ -1734,8 +1737,10 @@ export async function transitionDistributionQueueEntry(input: {
     entry.operatorId = input.operatorId ?? null;
     entry.updatedAt = now.toISOString();
     entry.stageHistory = listDistributionQueueLogsFromMemory(entry.id);
-    const release = memory.releases.find((item) => item.id === entry.releaseId);
-    if (release) release.status = releaseStatusForQueueStage(nextStage);
+    if (input.syncReleaseStatus !== false) {
+      const release = memory.releases.find((item) => item.id === entry.releaseId);
+      if (release) release.status = releaseStatusForQueueStage(nextStage);
+    }
     return entry;
   }
 

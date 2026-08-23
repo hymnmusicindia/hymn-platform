@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { buildDireNotePayload, parseDireNoteResponse, validateDireNotePayload } from "../lib/direnote";
 import { getDireNoteReleaseInformation, getDireNoteRevenueReport, submitToDireNote } from "../lib/direnote/direnote-client";
+import { getDireNoteConfig } from "../lib/direnote/direnote-config";
 import { royaltyEconomicFingerprint } from "../lib/royalty-fingerprint";
 import type { Release } from "../lib/types";
 
@@ -31,6 +32,8 @@ assert.equal(parseDireNoteResponse({ success: true, release_id: "dn_1", upc: "89
 async function verifyClientContract() {
 process.env.DIRENOTE_CLIENT_ID = "contract-client";
 process.env.DIRENOTE_API_PIN = "contract-pin";
+process.env.DIRENOTE_INGEST_ENDPOINT = "https://dashboard.direnotemedia.com/ingest_content";
+assert.equal(getDireNoteConfig().endpoint, "https://api.direnotemedia.com/ingest_content");
 process.env.DIRENOTE_INGEST_ENDPOINT = "https://direnote.invalid/ingest";
 process.env.DIRENOTE_RELEASE_INFORMATION_ENDPOINT = "https://direnote.invalid/status";
 process.env.DIRENOTE_REVENUE_REPORT_ENDPOINT = "https://direnote.invalid/revenue";
