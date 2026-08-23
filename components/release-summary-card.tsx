@@ -28,7 +28,8 @@ export function ReleaseSummaryCard({
   const title = release.releaseTitle?.trim() || release.trackName || "Untitled release";
   const stage = getReleasePortalStage(release);
   const trackCount = getReleasePortalTrackCount(release);
-  const primaryActionLabel = release.status === "draft" ? "Edit" : actionLabel;
+  const needsCorrection = release.status === "changes_requested";
+  const primaryActionLabel = release.status === "draft" ? "Edit" : needsCorrection ? "Fix release" : actionLabel;
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -137,7 +138,7 @@ export function ReleaseSummaryCard({
           style={{ borderColor: "var(--border)", background: "var(--text)", color: "var(--bg)" }}
           aria-label={`${primaryActionLabel} ${title}`}
         >
-          {release.status === "draft" ? <Pencil className="h-4 w-4" aria-hidden="true" /> : <Settings className="h-4 w-4" aria-hidden="true" />}
+          {release.status === "draft" || needsCorrection ? <Pencil className="h-4 w-4" aria-hidden="true" /> : <Settings className="h-4 w-4" aria-hidden="true" />}
           {primaryActionLabel}
         </Link>
       </div>

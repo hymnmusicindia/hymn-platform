@@ -1,12 +1,13 @@
 import { Release, ReleaseStatus } from "@/lib/types";
 
-export type ReleasePortalStage = "draft" | "review" | "scheduled" | "processing" | "partially_live" | "released" | "rejected";
+export type ReleasePortalStage = "draft" | "review" | "changes_requested" | "scheduled" | "processing" | "partially_live" | "released" | "rejected";
 
 export function getReleasePortalStage(release: Release): ReleasePortalStage {
   const s = release.status.toLowerCase();
   if (s === "draft") return "draft";
   if (s === "rejected") return "rejected";
-  if (s === "under_review" || s === "submitted" || s === "in_queue" || s === "changes_requested") return "review";
+  if (s === "changes_requested") return "changes_requested";
+  if (s === "under_review" || s === "submitted" || s === "in_queue") return "review";
   if (s === "processing" || s === "awaiting_live_confirmation" || s === "sent_to_distributor") return "processing";
   if (s === "partially_live") return "partially_live";
   if (s === "scheduled") return "scheduled";
@@ -18,6 +19,7 @@ export function getReleasePortalStageLabel(stage: ReleasePortalStage) {
   if (stage === "scheduled") return "Scheduled";
   if (stage === "released") return "Released";
   if (stage === "rejected") return "Rejected";
+  if (stage === "changes_requested") return "Changes Requested";
   if (stage === "review") return "Under Review";
   if (stage === "processing") return "Processing";
   if (stage === "partially_live") return "Partially Released";
@@ -71,6 +73,14 @@ export function getReleasePortalBadgeStyle(stage: ReleasePortalStage) {
       borderColor: "rgba(239, 68, 68, 0.4)",
       background: "rgba(239, 68, 68, 0.1)",
       color: "rgb(220, 38, 38)"
+    } as const;
+  }
+
+  if (stage === "changes_requested") {
+    return {
+      borderColor: "rgba(239, 68, 68, 0.48)",
+      background: "rgba(239, 68, 68, 0.14)",
+      color: "rgb(248, 113, 113)"
     } as const;
   }
 

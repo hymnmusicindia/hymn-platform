@@ -22,6 +22,7 @@ const STATUS_OPTIONS = [
   { value: "all", label: "All Statuses" },
   { value: "draft", label: "Draft" },
   { value: "review", label: "Under Review" },
+  { value: "changes_requested", label: "Changes Requested" },
   { value: "scheduled", label: "Scheduled" },
   { value: "processing", label: "Processing" },
   { value: "partially_live", label: "Partially Live" },
