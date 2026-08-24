@@ -11,6 +11,8 @@ type ArtistPickerProps = {
   max?: number;
   query: string;
   required?: boolean;
+  showRecentQuickAdd?: boolean;
+  hideSelectionChips?: boolean;
   onQueryChange: (query: string) => void;
   onSelect: (profile: ArtistProfile) => void;
   onRemove: (profileId: number) => void;
@@ -46,6 +48,8 @@ export function ArtistPicker({
   max,
   query,
   required,
+  showRecentQuickAdd = false,
+  hideSelectionChips = false,
   onQueryChange,
   onSelect,
   onRemove
@@ -92,7 +96,7 @@ export function ArtistPicker({
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open && !showRecentQuickAdd) return;
 
     setProfilesLoading(true);
     fetch("/api/artists")
@@ -103,7 +107,7 @@ export function ArtistPicker({
       })
       .catch(() => setRecent([]))
       .finally(() => setProfilesLoading(false));
-  }, [open]);
+  }, [open, showRecentQuickAdd]);
 
   useEffect(() => {
     if (!open) return;
@@ -359,7 +363,12 @@ export function ArtistPicker({
         {helper === "Max 3 artists" ? "Max 3 primary artists per release" : helper}
       </p>
 
-      {valueIds.length > 0 ? (
+      {showRecentQuickAdd && recent.length > 0 ? <div className="artist-picker-quick-add">
+        <p>Recently used</p>
+        <div>{recent.filter((profile) => !valueIds.some((selected) => selected.id === profile.id)).slice(0, 5).map((profile) => <button key={`quick-${profile.id}`} type="button" onClick={() => selectSaved(profile)}><ArtistAvatar name={profile.name} imageUrl={profile.imageUrl} /><span>{profile.name}</span><b aria-hidden="true">+</b></button>)}</div>
+      </div> : null}
+
+      {valueIds.length > 0 && !hideSelectionChips ? (
         <div className="flex flex-wrap gap-2">
           {valueIds.map((profile) => (
             <div key={profile.id} className="selection-chip">

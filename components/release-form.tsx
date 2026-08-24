@@ -61,6 +61,7 @@ import type {
   Release,
 } from "@/lib/types";
 import { DIRENOTE_LANGUAGES } from "@/lib/direnote-config";
+import type { ReleasePrefillSuggestion } from "@/lib/release-prefill";
 
 type TrackDraft = {
   id: string;
@@ -138,7 +139,7 @@ declare global {
 
 const steps = [
   "",
-  "",
+  "Artists",
   "Release info",
   "Tracks",
   "Artwork & audio",
@@ -146,7 +147,7 @@ const steps = [
   "",
   "Review & payment",
 ] as const;
-const visibleStepIndexes = [3, 2, 4, 5, 7] as const;
+const visibleStepIndexes = [1, 3, 2, 4, 5, 7] as const;
 const COPYRIGHT_OWNER_PREFERENCES_KEY = "hymn:copyright-owner-preferences";
 const defaultLegalState: LegalState = {
   ownershipConfirmation: false,
@@ -245,24 +246,26 @@ function safeRevokePreviewUrl(value: string) {
 function createInitialReleaseDraft(
   initialRelease: Release | null | undefined,
   minimumScheduledDate: string,
+  prefillSuggestions: ReleasePrefillSuggestion[] = [],
 ): ReleaseDraft {
   if (!initialRelease) {
+    const suggested = Object.fromEntries(prefillSuggestions.map((item) => [item.field, item.value]));
     return {
       releasePreviouslyReleased: false,
       upcCode: "",
       existingIsrcCode: "",
       releaseTitle: "",
-      recordLabelName: "",
-      primaryGenre: "",
-      secondaryGenre: "",
+      recordLabelName: suggested.recordLabelName ?? "",
+      primaryGenre: suggested.primaryGenre ?? "",
+      secondaryGenre: suggested.secondaryGenre ?? "",
       mood: "",
-      language: "",
+      language: suggested.language ?? "",
       territory: "Worldwide",
       selectedCountries: [],
       releaseTiming: "quick_release",
       scheduledReleaseDate: minimumScheduledDate,
-      copyrightOwner: "",
-      publishingRights: "",
+      copyrightOwner: suggested.copyrightOwner ?? "",
+      publishingRights: suggested.publishingRights ?? "",
     };
   }
 
@@ -808,11 +811,13 @@ export function ReleaseForm({
   initialRelease,
   firstReleaseOffer = false,
   campaignAttribution = {},
+  prefillSuggestions = [],
 }: {
   selectedPlan: DistributionPlanOption;
   initialRelease?: Release | null;
   firstReleaseOffer?: boolean;
   campaignAttribution?: Record<string, string>;
+  prefillSuggestions?: ReleasePrefillSuggestion[];
 }) {
   const router = useRouter();
   const today = useMemo(() => new Date(), []);
@@ -824,7 +829,7 @@ export function ReleaseForm({
     () => toDateInputValue(addDays(today, 20)),
     [today],
   );
-  const [step, setStep] = useState(initialRelease ? 7 : 3);
+  const [step, setStep] = useState(initialRelease ? 7 : 1);
   const trackCampaignEvent = (event: string, metadata?: Record<string, unknown>) => {
     if (!firstReleaseOffer) return;
     void fetch("/api/promotions/first-release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event, attribution: campaignAttribution, metadata }) }).catch(() => undefined);
@@ -913,8 +918,10 @@ export function ReleaseForm({
     () => initialRelease?.youtubeContentIdChannelUrl ?? "",
   );
   const [release, setRelease] = useState<ReleaseDraft>(() =>
-    createInitialReleaseDraft(initialRelease, minimumScheduledDate),
+    createInitialReleaseDraft(initialRelease, minimumScheduledDate, prefillSuggestions),
   );
+  const [pendingPrefills, setPendingPrefills] = useState(() => new Set(prefillSuggestions.map((item) => item.field)));
+  const [preferencesStatus, setPreferencesStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [legal, setLegal] = useState<LegalState>(() =>
     createInitialLegalState(initialRelease),
   );
@@ -1330,9 +1337,47 @@ export function ReleaseForm({
     );
   const addTrack = () => {
     if (firstReleaseOffer) return;
-    setTrackList((current) => [...current, createTrack(current.length + 1)]);
+    setTrackList((current) => [...current, { ...createTrack(current.length + 1), primaryArtistIds: current[0]?.primaryArtistIds ?? [] }]);
     setExpandedTrack(tracks.length);
   };
+
+  function movePrimaryArtist(from: number, direction: -1 | 1) {
+    const target = from + direction;
+    const ids = tracks[0]?.primaryArtistIds ?? [];
+    if (target < 0 || target >= ids.length) return;
+    const reordered = [...ids];
+    [reordered[from], reordered[target]] = [reordered[target], reordered[from]];
+    updateTrack(0, { primaryArtistIds: reordered });
+  }
+
+  function resolvePrefill(field: ReleasePrefillSuggestion["field"], keep: boolean) {
+    if (!keep) setRelease((current) => ({ ...current, [field]: "" }));
+    setPendingPrefills((current) => { const next = new Set(current); next.delete(field); return next; });
+  }
+
+  function approveSafePrefills() {
+    const sensitive = new Set<ReleasePrefillSuggestion["field"]>(["copyrightOwner", "publishingRights"]);
+    setPendingPrefills((current) => new Set([...current].filter((field) => sensitive.has(field))));
+  }
+
+  async function saveCurrentReleaseDefaults() {
+    setPreferencesStatus("saving");
+    try {
+      const response = await fetch("/api/distribution/preferences", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ defaultArtistProfileId: tracks[0]?.primaryArtistIds[0], preferredTitleLanguage: release.language, preferredGenre: release.primaryGenre, preferredSubgenre: release.secondaryGenre, rightsDefaults: { compositionOwner: release.copyrightOwner, masterRecordingOwner: release.publishingRights, defaultLabelName: release.recordLabelName, defaultCLineName: release.copyrightOwner, defaultPLineName: release.publishingRights } }) });
+      if (!response.ok) throw new Error("Could not save defaults.");
+      setPreferencesStatus("saved");
+    } catch { setPreferencesStatus("error"); }
+  }
+
+  async function clearReleaseDefaults() {
+    if (!window.confirm("Clear your saved distribution and rights defaults? Existing drafts will not change.")) return;
+    setPreferencesStatus("saving");
+    try {
+      const response = await fetch("/api/distribution/preferences", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clear: true }) });
+      if (!response.ok) throw new Error("Could not clear defaults.");
+      setPreferencesStatus("idle");
+    } catch { setPreferencesStatus("error"); }
+  }
 
   function removeTrack(index: number) {
     setTrackList((current) => {
@@ -1619,6 +1664,9 @@ export function ReleaseForm({
 
   const releaseInfoIssues = (): ValidationIssue[] =>
     [
+      pendingPrefills.size > 0
+        ? { step: 2, key: "prefill-review", message: `Review ${pendingPrefills.size} suggested field${pendingPrefills.size === 1 ? "" : "s"} before continuing.` }
+        : null,
       release.releasePreviouslyReleased && !release.upcCode.trim()
         ? {
             step: 2,
@@ -1787,6 +1835,7 @@ export function ReleaseForm({
 
   function firstIssueForStep(stepIndex: number): ValidationIssue | null {
     if (stepIndex === 0) return null;
+    if (stepIndex === 1 && !primaryArtistComplete) return { step: 1, key: "release-primary-artists", message: "Select at least one saved primary artist profile." };
     if (stepIndex === 2) return releaseInfoIssue();
     if (stepIndex === 3)
       return (
@@ -2367,7 +2416,7 @@ export function ReleaseForm({
       safeRevokePreviewUrl(track.audioPreviewUrl);
     });
     if (artworkPreview) safeRevokePreviewUrl(artworkPreview);
-    setStep(initialRelease ? 7 : 3);
+    setStep(initialRelease ? 7 : 1);
     setStepMotion("step-adjacent-forward");
     setMobileStepMenuOpen(false);
     setExpandedTrack(0);
@@ -2442,6 +2491,13 @@ export function ReleaseForm({
         className="release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8"
         style={{ borderColor: "var(--border)", background: "var(--card)" }}
       >
+        <header className="release-workspace-header">
+          <button type="button" onClick={saveDraftRelease} disabled={submitting} className="release-workspace-quit">Save &amp; Quit</button>
+          <div className="release-workspace-state" aria-live="polite">
+            <span className={autosaveStatus === "saved" ? "is-saved" : ""}>{autosaveStatus === "saving" ? "Saving…" : autosaveStatus === "error" ? "Save failed" : autosaveStatus === "saved" ? "Saved ✓" : "Changes pending"}</span>
+            {step !== 7 ? <button type="button" onClick={() => goToStep(7)} className="release-workspace-review">Review</button> : null}
+          </div>
+        </header>
         {firstReleaseOffer ? <div className="flex items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-500">🎁 First release on us</div> : null}
         <div
           className="md:hidden rounded-[1.3rem] border p-3 md:p-4"
@@ -2571,6 +2627,43 @@ export function ReleaseForm({
           <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between text-sm font-semibold">Release summary <span>{completion}% complete</span></summary>
           <div className="mt-3 grid grid-cols-2 gap-3 border-t pt-3 text-sm" style={{ borderColor: "var(--border)" }}><p style={{ color: "var(--text-muted)" }}>Missing required</p><p className="text-right">{validationIssueCount}</p><p style={{ color: "var(--text-muted)" }}>Plan</p><p className="text-right">{currentPlan.title}</p><p style={{ color: "var(--text-muted)" }}>Artists / tracks</p><p className="text-right">{artistCount} / {tracks.length}</p><p style={{ color: "var(--text-muted)" }}>Save state</p><p className="text-right" aria-live="polite">{autosaveStatus === "waiting" ? "Changes pending" : autosaveStatus === "saving" ? "Saving…" : autosaveStatus === "saved" ? "Saved" : "Save failed"}</p></div>
         </details>
+        {step === 1 ? (
+          <section className={clsx("release-artist-stage", stepMotion)}>
+            <div className="release-focused-intro">
+              <p className="release-focused-kicker">Start with the people behind the release</p>
+              <h2>Who are the primary artists?</h2>
+              <p>Choose saved Artist Profiles so HYMN can reuse verified store links and DireNote mappings.</p>
+            </div>
+            <div ref={registerField("release-primary-artists")} className="release-focused-card">
+              {(tracks[0]?.primaryArtistIds ?? []).length > 0 ? <div className="release-selected-artists" aria-label="Selected primary artists">
+                {(tracks[0]?.primaryArtistIds ?? []).map((profileId, index) => {
+                  const profile = knownProfiles[profileId];
+                  if (!profile) return null;
+                  return <div key={profileId} className="release-selected-artist">
+                    <span className="release-selected-artist-order">{String(index + 1).padStart(2, "0")}</span>
+                    {profile.imageUrl ? <img src={profile.imageUrl} alt="" /> : <span className="release-selected-artist-avatar">{profile.name.slice(0, 1).toUpperCase()}</span>}
+                    <span className="min-w-0 flex-1 truncate font-semibold">{profile.name}</span>
+                    <span className="release-selected-artist-actions"><button type="button" onClick={() => movePrimaryArtist(index, -1)} disabled={index === 0} aria-label={`Move ${profile.name} earlier`}><ChevronUp /></button><button type="button" onClick={() => movePrimaryArtist(index, 1)} disabled={index === tracks[0].primaryArtistIds.length - 1} aria-label={`Move ${profile.name} later`}><ChevronDown /></button><button type="button" onClick={() => updateTrack(0, { primaryArtistIds: tracks[0].primaryArtistIds.filter((id) => id !== profileId) })} aria-label={`Remove ${profile.name}`}><X /></button></span>
+                  </div>;
+                })}
+              </div> : null}
+              <ArtistPicker
+                label="Add artist"
+                helper="Max 3 artists"
+                valueIds={profilesFor(tracks[0]?.primaryArtistIds ?? [])}
+                query={tracks[0]?.primaryArtistQuery ?? ""}
+                max={3}
+                showRecentQuickAdd
+                hideSelectionChips
+                required={showErrors && !primaryArtistComplete}
+                onQueryChange={(value) => updateTrack(0, { primaryArtistQuery: value })}
+                onSelect={(profile) => { if (tracks[0].primaryArtistIds.length >= 3) return; upsertKnownProfile(profile); updateTrack(0, { primaryArtistIds: tracks[0].primaryArtistIds.includes(profile.id) ? tracks[0].primaryArtistIds : [...tracks[0].primaryArtistIds, profile.id], primaryArtistQuery: "" }); }}
+                onRemove={() => undefined}
+              />
+              <div className="release-artist-stage-count"><span>{tracks[0]?.primaryArtistIds.length ?? 0} of 3 selected</span><span>Artist order is used for store delivery</span></div>
+            </div>
+          </section>
+        ) : null}
         {step === 5 ? (
           <section className={clsx("grid gap-5", stepMotion)}>
             <StepIntro title="Confirm ownership and delivery" />
@@ -2727,8 +2820,9 @@ export function ReleaseForm({
                     className="text-lg md:text-2xl font-semibold"
                     style={{ color: "var(--text)" }}
                   >
-                    Build the release one track at a time
+                    What are we releasing today?
                   </h3>
+                  <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{firstReleaseOffer ? "Your free offer includes one Single. Upload the audio now; detailed metadata comes next." : "Establish the track list first. You can complete each track’s details progressively."}</p>
                 </div>
                 <div
                   className="flex w-fit items-baseline gap-3 rounded-xl border px-4 py-3"
@@ -3343,7 +3437,20 @@ export function ReleaseForm({
                 </div>
               );
             })}
-            {firstReleaseOffer ? <div className="inline-flex max-w-max items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold" style={{ borderColor: "color-mix(in srgb, var(--success) 35%, var(--border))", background: "var(--success-soft)", color: "var(--success)" }}><Check className="h-4 w-4" /> Free offer locked to 1 Single</div> : <button
+            {firstReleaseOffer ? <div className="group relative inline-flex max-w-max pb-7">
+              <button
+                type="button"
+                aria-disabled="true"
+                aria-describedby="free-release-track-lock"
+                title="Locked for this FREE Single release"
+                onClick={addTrack}
+                className="inline-flex cursor-not-allowed items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold grayscale transition focus:outline-none focus:ring-2"
+                style={{ borderColor: "var(--border-strong)", background: "var(--bg-elevated)", color: "var(--text-soft)", boxShadow: "inset 0 1px 0 var(--glass-highlight)" }}
+              >
+                <span aria-hidden="true">🔒</span> Add another track
+              </button>
+              <span id="free-release-track-lock" role="tooltip" className="pointer-events-none absolute bottom-0 left-0 whitespace-nowrap rounded-md px-2 py-1 text-[10px] font-semibold opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100" style={{ background: "var(--text)", color: "var(--bg)" }}>Locked for this FREE Single release</span>
+            </div> : <button
                 type="button"
                 className="btn-outline pressable hover-lift max-w-max text-xs md:text-sm py-2 md:py-2.5 px-3 md:px-4"
                 onClick={addTrack}
@@ -3359,6 +3466,11 @@ export function ReleaseForm({
               stepMotion,
             )}
           >
+            {pendingPrefills.size > 0 ? <div ref={registerField("prefill-review")} className="release-prefill-review md:col-span-2">
+              <div><p><span aria-hidden="true">⚡</span> {pendingPrefills.size} suggestion{pendingPrefills.size === 1 ? "" : "s"} ready for review</p><span>Based on your saved preferences and previous release. Nothing becomes final until you approve it.</span></div>
+              <div className="release-prefill-items">{prefillSuggestions.filter((item) => pendingPrefills.has(item.field)).map((item) => <div key={item.field}><span><b>{({ language: "Title language", primaryGenre: "Genre", secondaryGenre: "Subgenre", recordLabelName: "Label", copyrightOwner: "C-Line / composition owner", publishingRights: "P-Line / master owner" } as const)[item.field]}</b><small>{item.value} · {item.source === "USER_DEFAULT" ? "Saved default" : "Previous release"}</small></span><span><button type="button" onClick={() => resolvePrefill(item.field, true)} aria-label={`Approve ${item.field}`}>Approve</button><button type="button" onClick={() => resolvePrefill(item.field, false)} aria-label={`Clear ${item.field}`}>Clear</button></span></div>)}</div>
+              {[...pendingPrefills].some((field) => field !== "copyrightOwner" && field !== "publishingRights") ? <button type="button" onClick={approveSafePrefills} className="release-prefill-approve-all">Approve safe suggestions</button> : null}
+            </div> : null}
             <div className="release-details-fields grid gap-5">
               {requiresReleaseTitle ? (
                 <div>
@@ -3595,6 +3707,10 @@ export function ReleaseForm({
                 </p>
                 </div>
               </div>
+            </div>
+            <div className="release-save-defaults md:col-span-2">
+              <div><p>Make the next release faster</p><span>Save artist, language, genre, label, and rights values as editable distribution defaults.</span></div>
+              <span className="release-save-default-actions"><button type="button" onClick={saveCurrentReleaseDefaults} disabled={preferencesStatus === "saving"}>{preferencesStatus === "saving" ? "Saving…" : preferencesStatus === "saved" ? "Defaults saved ✓" : preferencesStatus === "error" ? "Try again" : "Use these for future releases"}</button><button type="button" onClick={clearReleaseDefaults} className="is-clear">Clear saved defaults</button></span>
             </div>
           </section>
         ) : null}
@@ -5435,9 +5551,10 @@ export function ReleaseForm({
               <button
                 type="button"
                 onClick={advanceStep}
-                className="release-footer-action is-primary w-full whitespace-nowrap md:w-auto"
+                disabled={step === 1 && !primaryArtistComplete}
+                className="release-footer-action is-primary w-full whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-45 md:w-auto"
               >
-                Save and Continue →
+                {step === 1 ? `Continue with ${tracks[0]?.primaryArtistIds.length ?? 0} artist${(tracks[0]?.primaryArtistIds.length ?? 0) === 1 ? "" : "s"} →` : "Save and Continue →"}
               </button>
             ) : null}
           </div>

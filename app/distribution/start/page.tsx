@@ -5,6 +5,7 @@ import { listDetailedReleasesByUser } from "@/lib/distribution-db";
 import { ReleaseForm } from "@/components/release-form";
 import { ReleaseOnboardingGate } from "@/components/release-onboarding-gate";
 import { getFirstReleaseEligibility } from "@/lib/first-release-promotion";
+import { getReleasePrefill } from "@/lib/release-prefill";
 
 function firstValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
@@ -31,12 +32,13 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
     (editingRelease.tracks?.length ?? 1) === 1
   );
   const attribution = Object.fromEntries(["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"].map((key) => [key, firstValue(params[key as keyof typeof params])]).filter(([, value]) => Boolean(value))) as Record<string, string>;
+  const releasePrefill = user && !editingRelease ? await getReleasePrefill(user.id) : { suggestions: [], preferences: {} };
 
   return (
     <main className="distribution-start-page pb-20">
       <section className="shell py-8 sm:py-10 lg:py-12">
         <div className="mx-auto grid gap-6">
-          <div className="distribution-start-header surface-card p-4 sm:p-8">
+          {!user ? <div className="distribution-start-header surface-card p-4 sm:p-8">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h1 className="text-3xl font-semibold sm:text-4xl" style={{ color: "var(--text)" }}>
@@ -62,11 +64,11 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
                 Back to portal
               </Link>
             </div>
-          </div>
+          </div> : null}
 
           {user ? (
             <div className="mx-auto w-full max-w-[1440px]">
-              <ReleaseForm selectedPlan={selectedPlan} initialRelease={editingRelease} firstReleaseOffer={Boolean(campaignEligibility?.eligible && campaignDraftEligible)} campaignAttribution={attribution} />
+              <ReleaseForm selectedPlan={selectedPlan} initialRelease={editingRelease} firstReleaseOffer={Boolean(campaignEligibility?.eligible && campaignDraftEligible)} campaignAttribution={attribution} prefillSuggestions={releasePrefill.suggestions} />
             </div>
           ) : firstValue(params.onboarding) === "release" ? <ReleaseOnboardingGate /> : (
             <div className="surface-card p-6 text-center sm:p-8">
