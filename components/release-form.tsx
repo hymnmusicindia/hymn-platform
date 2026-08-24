@@ -1392,6 +1392,20 @@ export function ReleaseForm({
     );
   }
 
+  function clearTrackAudio(index: number) {
+    const target = tracks[index];
+    if (target?.audioPreviewUrl) safeRevokePreviewUrl(target.audioPreviewUrl);
+    updateTrack(index, {
+      audioFile: null,
+      audioFileName: "",
+      existingAudioUrl: "",
+      audioPreviewUrl: "",
+      audioUploadStatus: "idle",
+      duration: "",
+      requiresAudioReplacement: false,
+    });
+  }
+
   function moveTrack(index: number, direction: -1 | 1) {
     const target = index + direction;
     if (target < 0 || target >= tracks.length) return;
@@ -2490,7 +2504,7 @@ export function ReleaseForm({
     <>
       <form
         onSubmit={handleFinalSubmit}
-        className={clsx("release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", (step === 0 || step === 1) && "is-focused-step")}
+        className={clsx("release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", (step === 0 || step === 1) && "is-focused-step", step === 0 && "is-audio-upload-step", step === 1 && "is-artist-step")}
         style={{ borderColor: "var(--border)", background: "var(--card)" }}
       >
         <header className="release-workspace-header">
@@ -2500,7 +2514,7 @@ export function ReleaseForm({
             {step !== 7 ? <button type="button" onClick={() => goToStep(7)} className="release-workspace-review">Review</button> : null}
           </div>
         </header>
-        {firstReleaseOffer ? <div className="flex items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-500">🎁 First release on us</div> : null}
+        {firstReleaseOffer ? <div className="release-free-offer-banner flex items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-500">🎁 First release on us</div> : null}
         <div
           className="release-mobile-step-menu md:hidden rounded-[1.3rem] border p-3 md:p-4"
           style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}
@@ -2632,9 +2646,7 @@ export function ReleaseForm({
         {step === 1 ? (
           <section className={clsx("release-artist-stage", stepMotion)}>
             <div className="release-focused-intro">
-              <p className="release-focused-kicker">Start with the people behind the release</p>
-              <h2>Who are the primary artists?</h2>
-              <p>Choose saved Artist Profiles so HYMN can reuse verified store links and DireNote mappings.</p>
+              <h2>Who are the primary artists on this release?</h2>
             </div>
             <div ref={registerField("release-primary-artists")} className="release-focused-card">
               {(tracks[0]?.primaryArtistIds ?? []).length > 0 ? <div className="release-selected-artists" aria-label="Selected primary artists">
@@ -2642,7 +2654,7 @@ export function ReleaseForm({
                   const profile = knownProfiles[profileId];
                   if (!profile) return null;
                   return <div key={profileId} className="release-selected-artist">
-                    <span className="release-selected-artist-order">{String(index + 1).padStart(2, "0")}</span>
+                    <span className="release-selected-artist-order"><GripVertical /></span>
                     {profile.imageUrl ? <img src={profile.imageUrl} alt="" /> : <span className="release-selected-artist-avatar">{profile.name.slice(0, 1).toUpperCase()}</span>}
                     <span className="min-w-0 flex-1 truncate font-semibold">{profile.name}</span>
                     <span className="release-selected-artist-actions"><button type="button" onClick={() => movePrimaryArtist(index, -1)} disabled={index === 0} aria-label={`Move ${profile.name} earlier`}><ChevronUp /></button><button type="button" onClick={() => movePrimaryArtist(index, 1)} disabled={index === tracks[0].primaryArtistIds.length - 1} aria-label={`Move ${profile.name} later`}><ChevronDown /></button><button type="button" onClick={() => updateTrack(0, { primaryArtistIds: tracks[0].primaryArtistIds.filter((id) => id !== profileId) })} aria-label={`Remove ${profile.name}`}><X /></button></span>
@@ -2657,6 +2669,7 @@ export function ReleaseForm({
                 max={3}
                 showRecentQuickAdd
                 hideSelectionChips
+                focused
                 required={showErrors && !primaryArtistComplete}
                 onQueryChange={(value) => updateTrack(0, { primaryArtistQuery: value })}
                 onSelect={(profile) => { if (tracks[0].primaryArtistIds.length >= 3) return; upsertKnownProfile(profile); updateTrack(0, { primaryArtistIds: tracks[0].primaryArtistIds.includes(profile.id) ? tracks[0].primaryArtistIds : [...tracks[0].primaryArtistIds, profile.id], primaryArtistQuery: "" }); }}
@@ -2696,38 +2709,41 @@ export function ReleaseForm({
         {step === 0 ? (
           <section className={clsx("release-audio-stage", stepMotion)}>
             <div className="release-focused-intro">
-              <p className="release-focused-kicker">Start with the sound</p>
               <h2>What are we releasing today?</h2>
-              <p>{firstReleaseOffer ? "Upload one WAV or MP3 master. Your free release is locked to a Single." : "Add your audio masters now. You can complete titles, credits, and store metadata next."}</p>
+              <p>{firstReleaseOffer ? "Upload 1 track for your free Single release" : "Add up to 30 tracks for a maximum length of 1 hour"}<br /><span aria-hidden="true">◀▶</span> Add Dolby Atmos™ files directly in track information.</p>
             </div>
             <div className="release-audio-queue">
-              {tracks.map((track, index) => {
+              {!tracks.some((track) => track.audioPreviewUrl && track.audioUploadStatus === "uploaded") ? (
+                <div className="release-audio-empty-state">
+                  {[0, 1, 2, 3].map((slot) => <span key={slot} />)}
+                  <div className="release-audio-empty-action">
+                    <UploadDropzone accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" iconOnly compact ctaLabel="Add tracks" title="Add tracks" description="Choose a WAV or MP3 master" helperLines={[]} onSelect={async (file, controls) => handleAudioFile(0, file, controls)} />
+                  </div>
+                </div>
+              ) : tracks.map((track, index) => {
                 const hasAudio = Boolean(track.audioPreviewUrl && track.audioUploadStatus === "uploaded");
                 return (
                   <article key={track.id} className={clsx("release-audio-queue-item", hasAudio && "is-ready")}>
-                    <span className="release-audio-track-number">{String(index + 1).padStart(2, "0")}</span>
                     <div className="release-audio-queue-main">
                       {hasAudio ? (
                         <AudioWaveform src={track.audioPreviewUrl} title={track.audioFileName || track.trackTitle || `Track ${index + 1}`} subtitle={[track.duration, fileFormat(track.audioFile, track.audioFileName)].filter(Boolean).join(" • ")} compact />
                       ) : (
-                        <UploadDropzone accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" iconOnly compact title={`Track ${index + 1} audio`} description="Choose a WAV or MP3 master" helperLines={[]} fileName={track.audioFile?.name || track.audioFileName} fileFormat={fileFormat(track.audioFile, track.audioFileName)} onSelect={async (file, controls) => handleAudioFile(index, file, controls)} />
+                        <UploadDropzone accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" iconOnly compact ctaLabel="Add track" title={`Track ${index + 1} audio`} description="Choose a WAV or MP3 master" helperLines={[]} fileName={track.audioFile?.name || track.audioFileName} fileFormat={fileFormat(track.audioFile, track.audioFileName)} onSelect={async (file, controls) => handleAudioFile(index, file, controls)} />
                       )}
                     </div>
                     {hasAudio ? (
                       <div className="release-audio-row-actions">
-                        <UploadDropzone accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" iconOnly compact title="Replace audio" description="Replace audio" helperLines={[]} fileName={track.audioFile?.name || track.audioFileName} fileFormat={fileFormat(track.audioFile, track.audioFileName)} onSelect={async (file, controls) => handleAudioFile(index, file, controls)} />
-                        {tracks.length > 1 ? <button type="button" onClick={() => removeTrack(index)} aria-label={`Remove track ${index + 1}`}><X /></button> : null}
+                        <button type="button" onClick={() => tracks.length > 1 ? removeTrack(index) : clearTrackAudio(index)} aria-label={`Remove track ${index + 1}`}><X /></button>
                       </div>
                     ) : tracks.length > 1 ? <button type="button" className="release-audio-remove" onClick={() => removeTrack(index)} aria-label={`Remove empty track ${index + 1}`}><X /></button> : null}
                   </article>
                 );
               })}
-              <button type="button" onClick={addTrack} disabled={firstReleaseOffer} className="release-add-audio-track" title={firstReleaseOffer ? "Locked for this FREE Single release" : "Add another audio master"}>
+              {tracks.some((track) => track.audioPreviewUrl && track.audioUploadStatus === "uploaded") ? <button type="button" onClick={addTrack} disabled={firstReleaseOffer} className="release-add-audio-track" title={firstReleaseOffer ? "Locked for this FREE Single release" : "Add another audio master"}>
                 {firstReleaseOffer ? <LockKeyhole /> : <Plus />}
                 <span>{firstReleaseOffer ? "Add another track — locked for this FREE release" : "Add track"}</span>
-              </button>
+              </button> : null}
             </div>
-            <p className="release-audio-stage-note">WAV or MP3 • Secure upload • Detailed track information comes next</p>
           </section>
         ) : null}
         {step === 2 ? (
@@ -5555,7 +5571,7 @@ export function ReleaseForm({
                 type="button"
                 onClick={advanceStep}
                 disabled={step === 1 && !primaryArtistComplete}
-                className="release-footer-action is-primary w-full whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-45 md:w-auto"
+                className={clsx("release-footer-action is-primary w-full whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-45 md:w-auto", step === 0 && !audioAssetsComplete && "is-skip")}
               >
                 {step === 1
                   ? `Continue with ${tracks[0]?.primaryArtistIds.length ?? 0} artist${(tracks[0]?.primaryArtistIds.length ?? 0) === 1 ? "" : "s"} →`

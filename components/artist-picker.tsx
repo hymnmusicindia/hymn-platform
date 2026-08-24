@@ -13,6 +13,7 @@ type ArtistPickerProps = {
   required?: boolean;
   showRecentQuickAdd?: boolean;
   hideSelectionChips?: boolean;
+  focused?: boolean;
   onQueryChange: (query: string) => void;
   onSelect: (profile: ArtistProfile) => void;
   onRemove: (profileId: number) => void;
@@ -50,6 +51,7 @@ export function ArtistPicker({
   required,
   showRecentQuickAdd = false,
   hideSelectionChips = false,
+  focused = false,
   onQueryChange,
   onSelect,
   onRemove
@@ -340,7 +342,7 @@ export function ArtistPicker({
   }
 
   return (
-    <div ref={rootRef} className="relative grid gap-2">
+    <div ref={rootRef} className={`relative grid gap-2${focused ? " artist-picker-focused" : ""}`}>
       <div>
         <label className="px-[.8rem] text-sm font-medium" style={{ color: "var(--text-muted)" }}>
           {label}
@@ -351,7 +353,7 @@ export function ArtistPicker({
         className="field"
         value={query}
         disabled={reachedMax}
-        placeholder={reachedMax ? "Maximum reached" : `Search ${label.toLowerCase()}`}
+        placeholder={reachedMax ? "Maximum reached" : focused ? "Add artist..." : `Search ${label.toLowerCase()}`}
         onFocus={() => setOpen(true)}
         onChange={(event) => {
           onQueryChange(event.target.value);
@@ -364,7 +366,7 @@ export function ArtistPicker({
       </p>
 
       {showRecentQuickAdd && recent.length > 0 ? <div className="artist-picker-quick-add">
-        <p>Recently used</p>
+        <p>{focused ? "Last used" : "Recently used"}</p>
         <div>{recent.filter((profile) => !valueIds.some((selected) => selected.id === profile.id)).slice(0, 5).map((profile) => <button key={`quick-${profile.id}`} type="button" onClick={() => selectSaved(profile)}><ArtistAvatar name={profile.name} imageUrl={profile.imageUrl} /><span>{profile.name}</span><b aria-hidden="true">+</b></button>)}</div>
       </div> : null}
 

@@ -15,12 +15,13 @@ type UploadDropzoneProps = {
   error?: string | null;
   iconOnly?: boolean;
   compact?: boolean;
+  ctaLabel?: string;
   splitLayout?: boolean;
   children?: ReactNode;
   onSelect: (file: File, controls: { signal: AbortSignal; reportProgress: (loaded: number, total: number) => void }) => Promise<void> | void;
 };
 
-export function UploadDropzone({ accept, title, description, helperLines = [], fileName, fileFormat, fileSize, error, iconOnly = false, compact = false, splitLayout = false, children, onSelect }: UploadDropzoneProps) {
+export function UploadDropzone({ accept, title, description, helperLines = [], fileName, fileFormat, fileSize, error, iconOnly = false, compact = false, ctaLabel, splitLayout = false, children, onSelect }: UploadDropzoneProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragging, setDragging] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -146,7 +147,7 @@ export function UploadDropzone({ accept, title, description, helperLines = [], f
             <span className="inline-flex h-10 w-10 items-center justify-center text-[var(--text)]">
               {processing ? <LoaderCircle className="h-6 w-6 animate-spin" /> : success ? <CheckCircle2 className="h-6 w-6 text-[var(--success)]" /> : <UploadCloud className="h-6 w-6" />}
             </span>
-            <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>{fileName ? "Replace the track" : "Upload your track"}</span>
+            <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>{ctaLabel || (fileName ? "Replace the track" : "Upload your track")}</span>
             {fileName && compact ? <span className="max-w-full truncate px-2 text-[10px]" style={{ color: "var(--text-soft)" }}>{fileName}</span> : null}
           </div>
         ) : splitLayout ? (
