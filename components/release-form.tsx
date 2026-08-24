@@ -838,6 +838,9 @@ export function ReleaseForm({
     void fetch("/api/promotions/first-release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event, attribution: campaignAttribution, metadata }) }).catch(() => undefined);
   };
   const [stepMotion, setStepMotion] = useState("step-adjacent-forward");
+  const [stepTransitioning, setStepTransitioning] = useState(false);
+  const stepTransitionRef = useRef(false);
+  const stepTransitionTimerRef = useRef<number | null>(null);
   const [mobileStepMenuOpen, setMobileStepMenuOpen] = useState(false);
   const [expandedTrack, setExpandedTrack] = useState(0);
   const [draggedTrackIndex, setDraggedTrackIndex] = useState<number | null>(null);
@@ -949,6 +952,9 @@ export function ReleaseForm({
   );
   const [shakingField, setShakingField] = useState<string | null>(null);
   const isEditing = Boolean(initialRelease);
+  useEffect(() => () => {
+    if (stepTransitionTimerRef.current != null) window.clearTimeout(stepTransitionTimerRef.current);
+  }, []);
   const scheduledDateWasMoved = Boolean(
     initialRelease?.releaseTiming === "schedule_release" &&
       initialRelease.releaseDate &&
@@ -1925,7 +1931,15 @@ export function ReleaseForm({
   }
 
   function goToStep(nextStep: number) {
-    if (step === nextStep) return;
+    if (step === nextStep || stepTransitionRef.current) return;
+    stepTransitionRef.current = true;
+    setStepTransitioning(true);
+    if (stepTransitionTimerRef.current != null) window.clearTimeout(stepTransitionTimerRef.current);
+    stepTransitionTimerRef.current = window.setTimeout(() => {
+      stepTransitionRef.current = false;
+      setStepTransitioning(false);
+      stepTransitionTimerRef.current = null;
+    }, 750);
     setVisitedSteps((current) => new Set([...current, step]));
     const currentVisibleIndex = visibleStepIndexes.indexOf(
       step as (typeof visibleStepIndexes)[number],
@@ -5587,10 +5601,13 @@ export function ReleaseForm({
               <button
                 type="button"
                 onClick={advanceStep}
-                disabled={submitting}
+                disabled={submitting || stepTransitioning}
+                aria-busy={stepTransitioning}
                 className={clsx("release-footer-action is-primary w-full whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-45 md:w-auto", step === 0 && !audioAssetsComplete && "is-skip")}
               >
-                {step === 1
+                {stepTransitioning
+                  ? step === 0 ? "Add music ready" : "Opening add music…"
+                  : step === 1
                   ? `Continue with ${tracks[0]?.primaryArtistIds.length ?? 0} artist${(tracks[0]?.primaryArtistIds.length ?? 0) === 1 ? "" : "s"} →`
                   : step === 0
                     ? audioAssetsComplete
