@@ -5587,7 +5587,7 @@ export function ReleaseForm({
               <button
                 type="button"
                 onClick={advanceStep}
-                disabled={step === 1 && !primaryArtistComplete}
+                disabled={submitting}
                 className={clsx("release-footer-action is-primary w-full whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-45 md:w-auto", step === 0 && !audioAssetsComplete && "is-skip")}
               >
                 {step === 1

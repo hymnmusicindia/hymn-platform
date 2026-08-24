@@ -4668,6 +4668,13 @@ html[data-theme="light"] .release-step-button.is-current:hover {
 
 .release-workspace-header { display:flex; min-height:3rem; align-items:center; justify-content:space-between; gap:1rem; border-bottom:1px solid var(--border); padding:0 0 1rem; }
 .release-workflow.is-focused-step { border-color:transparent !important; background:transparent !important; box-shadow:none; backdrop-filter:none; }
+body:has(.release-workflow.is-focused-step) { height:100svh; overflow:hidden; }
+body:has(.release-workflow.is-focused-step) > header,
+body:has(.release-workflow.is-focused-step) > footer { display:none; }
+.distribution-start-page:has(.release-workflow.is-focused-step) { height:100svh; overflow:hidden; padding-bottom:0 !important; }
+.distribution-start-page:has(.release-workflow.is-focused-step) > .shell { height:100%; padding-top:0 !important; padding-bottom:0 !important; }
+.distribution-start-page:has(.release-workflow.is-focused-step) > .shell > div,
+.distribution-start-page:has(.release-workflow.is-focused-step) > .shell > div > div { height:100%; }
 .release-workflow.is-focused-step .release-workflow-nav,.release-workflow.is-focused-step .release-workflow-summary,.release-workflow.is-focused-step .release-mobile-step-menu,.release-workflow.is-focused-step .release-mobile-summary { display:none !important; }
 .release-workflow.is-focused-step .release-footer-mobile-actions { display:flex !important; width:fit-content; max-width:100%; justify-self:center; justify-content:center; gap:0 !important; border:0 !important; border-radius:0 !important; padding:0 !important; background:transparent !important; box-shadow:none !important; backdrop-filter:none !important; }
 .release-workflow.is-focused-step .release-footer-mobile-actions > button:nth-child(-n+2) { display:none; }
