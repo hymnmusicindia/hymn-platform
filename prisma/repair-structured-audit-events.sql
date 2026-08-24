@@ -1,0 +1,12 @@
+ALTER TABLE "audit_logs" ADD COLUMN IF NOT EXISTS "actor_type" TEXT NOT NULL DEFAULT 'system';
+ALTER TABLE "audit_logs" ADD COLUMN IF NOT EXISTS "actor_role" TEXT NOT NULL DEFAULT 'unknown';
+ALTER TABLE "audit_logs" ADD COLUMN IF NOT EXISTS "previous_value" JSONB;
+ALTER TABLE "audit_logs" ADD COLUMN IF NOT EXISTS "new_value" JSONB;
+ALTER TABLE "audit_logs" ADD COLUMN IF NOT EXISTS "reason" TEXT;
+ALTER TABLE "audit_logs" ADD COLUMN IF NOT EXISTS "request_id" TEXT;
+ALTER TABLE "audit_logs" ADD COLUMN IF NOT EXISTS "user_agent" TEXT;
+ALTER TABLE "audit_logs" ADD COLUMN IF NOT EXISTS "session_id" TEXT;
+ALTER TABLE "audit_logs" ADD COLUMN IF NOT EXISTS "risk_level" TEXT NOT NULL DEFAULT 'normal';
+CREATE INDEX IF NOT EXISTS "audit_logs_action_created_at_idx" ON "audit_logs"("action", "created_at");
+CREATE INDEX IF NOT EXISTS "audit_logs_risk_level_created_at_idx" ON "audit_logs"("risk_level", "created_at");
+CREATE INDEX IF NOT EXISTS "audit_logs_request_id_idx" ON "audit_logs"("request_id");
