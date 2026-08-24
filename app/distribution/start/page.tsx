@@ -25,7 +25,11 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
   const isEditing = Boolean(editingRelease);
   const campaignRequested = firstValue(params.campaign) === "first-release";
   const campaignEligibility = user && campaignRequested ? await getFirstReleaseEligibility(user.id) : null;
-  const campaignDraftEligible = !editingRelease || ["draft", "awaiting_payment"].includes(editingRelease.status);
+  const campaignDraftEligible = !editingRelease || (
+    ["draft", "awaiting_payment"].includes(editingRelease.status) &&
+    editingRelease.releaseType === "single" &&
+    (editingRelease.tracks?.length ?? 1) === 1
+  );
   const attribution = Object.fromEntries(["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"].map((key) => [key, firstValue(params[key as keyof typeof params])]).filter(([, value]) => Boolean(value))) as Record<string, string>;
 
   return (

@@ -40,9 +40,11 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
               <span className="first-release-free-word">FREE</span>
             </div>
             <span className="first-release-free-caption">Your first release is on us.</span>
-            <span className="first-release-stamp-note">This time, on us.</span>
           </div>
-          <p className="first-release-offer-copy">Distribute your first Single without paying the ₹99 base fee. Optional add-ons remain chargeable and are always shown before submission.</p>
+          <div className="first-release-offer-copy">
+            <p><strong>Release one Single for ₹0.</strong> We cover the ₹99 base distribution fee.</p>
+            <p><span>Single release only</span><span>Optional add-ons shown upfront</span></p>
+          </div>
         </div>
 
         <aside className="first-release-trust-card text-left">

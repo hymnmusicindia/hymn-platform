@@ -6188,9 +6188,13 @@ html[data-theme="light"] .store-platform-option img[alt="Apple Music"] {
 .first-release-stamp-old i { position:absolute; left:-8%; right:-8%; top:52%; height:clamp(3px,.55vw,6px); border-radius:999px; background:var(--danger); box-shadow:0 0 18px color-mix(in srgb,var(--danger) 36%,transparent); transform:rotate(-8deg) scaleX(0); transform-origin:left; animation:first-release-cut .5s .62s var(--motion-ease) forwards; }
 .first-release-free-word { position:relative; z-index:2; font-size:clamp(5.2rem,18vw,9.2rem); font-weight:900; line-height:.82; letter-spacing:-.085em; color:var(--text); opacity:0; transform:scale(1.7) rotate(-4deg); filter:blur(5px); text-shadow:0 18px 50px color-mix(in srgb,var(--bg) 55%,transparent); animation:first-release-stomp .48s 1.12s cubic-bezier(.16,1.4,.3,1) forwards; }
 .first-release-free-caption { margin-top:.55rem; font-size:1.02rem; font-weight:750; color:var(--text); opacity:0; animation:first-release-note-in .4s 1.55s ease forwards; }
-.first-release-stamp-note { margin-top:.3rem; font-size:.65rem; font-weight:800; text-transform:uppercase; letter-spacing:.18em; color:var(--success); opacity:0; transform:translateY(6px); animation:first-release-note-in .42s 1.85s ease forwards; }
-.first-release-offer-copy { margin:.8rem auto 0; max-width:31rem; color:var(--text-muted); }
-.first-release-trust-card { width:100%; max-width:28rem; margin-inline:auto; border:1px solid var(--border-strong); border-radius:1.65rem; padding:1.25rem; background:linear-gradient(145deg,color-mix(in srgb,var(--card) 94%,var(--accent-soft)),var(--card)); box-shadow:var(--shadow-strong); backdrop-filter:blur(18px); }
+.first-release-offer-copy { display:grid; gap:.55rem; margin:.8rem auto 0; max-width:31rem; color:var(--text-muted); }
+.first-release-offer-copy > p:first-child { font-size:.9rem; line-height:1.45; }
+.first-release-offer-copy strong { color:var(--text); font-weight:800; }
+.first-release-offer-copy > p:last-child { display:flex; flex-wrap:wrap; justify-content:center; gap:.4rem; }
+.first-release-offer-copy span { display:inline-flex; align-items:center; border:1px solid color-mix(in srgb,var(--success) 26%,var(--border)); border-radius:999px; padding:.27rem .58rem; background:var(--success-soft); color:var(--success); font-size:.61rem; font-weight:750; letter-spacing:.035em; }
+.first-release-trust-card { position:relative; width:100%; max-width:28rem; margin-inline:auto; overflow:hidden; border:1px solid color-mix(in srgb,var(--border-strong) 82%,var(--success)); border-radius:1.65rem; padding:1.35rem; background:linear-gradient(145deg,color-mix(in srgb,var(--card-strong) 94%,var(--success-soft)),var(--card)); box-shadow:0 30px 80px color-mix(in srgb,var(--bg) 35%,transparent),0 8px 26px color-mix(in srgb,var(--success) 9%,transparent),inset 0 1px 0 var(--glass-highlight); backdrop-filter:blur(22px); }
+.first-release-trust-card::before { content:""; position:absolute; inset:0 12% auto; height:1px; background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--success) 65%,var(--text)),transparent); }
 .first-release-trust-head { display:flex; align-items:flex-start; gap:.8rem; padding-bottom:1rem; border-bottom:1px solid var(--border); }
 .first-release-trust-head p:first-child { font-weight:750; }
 .first-release-trust-head p:last-child { margin-top:.2rem; font-size:.78rem; line-height:1.3rem; color:var(--text-muted); }
@@ -6200,6 +6204,8 @@ html[data-theme="light"] .store-platform-option img[alt="Apple Music"] {
 .first-release-trust-points p { display:flex; align-items:center; gap:.65rem; }
 .first-release-trust-points svg { width:1rem; height:1rem; flex:none; color:var(--success); }
 .first-release-auth { margin-top:1.1rem; }
+.first-release-auth button { border:1px solid color-mix(in srgb,var(--border-strong) 70%,var(--success)); border-radius:1rem !important; box-shadow:0 14px 36px color-mix(in srgb,var(--bg) 22%,transparent),inset 0 1px 0 rgba(255,255,255,.55); transition:transform .2s var(--motion-ease),box-shadow .2s ease; }
+.first-release-auth button:hover { transform:translateY(-2px); box-shadow:0 18px 42px color-mix(in srgb,var(--bg) 28%,transparent),0 0 0 3px color-mix(in srgb,var(--success) 8%,transparent); }
 .first-release-disclaimer { margin-top:.65rem; text-align:center; font-size:.61rem; letter-spacing:.02em; color:var(--text-soft); }
 .first-release-primary,.first-release-secondary { display:inline-flex; min-height:3.5rem; align-items:center; justify-content:center; gap:.65rem; border-radius:1rem; padding:.8rem 1.2rem; font-weight:700; transition:transform .2s ease,box-shadow .2s ease,background .2s ease; }
 .first-release-primary { background:var(--accent); color:var(--accent-foreground); box-shadow:0 20px 60px color-mix(in srgb,var(--accent) 10%,transparent); }
@@ -6247,8 +6253,9 @@ html[data-theme="light"] .store-platform-option img[alt="Apple Music"] {
   .first-release-stamp-old { font-size:clamp(3rem,14vw,4rem); }
   .first-release-free-word { font-size:clamp(4.65rem,23vw,6.35rem); }
   .first-release-free-caption { margin-top:.35rem; font-size:.88rem; }
-  .first-release-stamp-note { margin-top:.18rem; font-size:.52rem; }
-  .first-release-offer-copy { margin-top:.45rem; max-width:22rem; font-size:.7rem; line-height:1.08rem; }
+  .first-release-offer-copy { gap:.36rem; margin-top:.42rem; max-width:22rem; }
+  .first-release-offer-copy > p:first-child { font-size:.7rem; line-height:1.08rem; }
+  .first-release-offer-copy span { padding:.2rem .45rem; font-size:.52rem; }
   .first-release-price-inline { margin-top:.7rem; min-height:3.25rem; padding:.48rem .8rem; }
   .first-release-old-price { font-size:1.05rem; }
   .first-release-free-price { font-size:1.48rem; }
@@ -6265,6 +6272,6 @@ html[data-theme="light"] .store-platform-option img[alt="Apple Music"] {
   .first-release-disclaimer { margin-top:.35rem; font-size:.54rem; }
   .first-release-stores { gap:.35rem; font-size:.49rem; letter-spacing:.07em; }
 }
-@media (prefers-reduced-motion: reduce) { .first-release-stamp-old,.first-release-stamp-old i,.first-release-free-word,.first-release-free-caption,.first-release-stamp-note { animation:none; opacity:1; transform:none; filter:none; } }
+@media (prefers-reduced-motion: reduce) { .first-release-stamp-old,.first-release-stamp-old i,.first-release-free-word,.first-release-free-caption { animation:none; opacity:1; transform:none; filter:none; } }
 body:has(.first-release-page) > header,
 body:has(.first-release-page) > footer { display: none; }

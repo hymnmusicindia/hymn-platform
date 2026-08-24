@@ -1329,6 +1329,7 @@ export function ReleaseForm({
       })),
     );
   const addTrack = () => {
+    if (firstReleaseOffer) return;
     setTrackList((current) => [...current, createTrack(current.length + 1)]);
     setExpandedTrack(tracks.length);
   };
@@ -3342,13 +3343,13 @@ export function ReleaseForm({
                 </div>
               );
             })}
-            <button
-              type="button"
-              className="btn-outline pressable hover-lift max-w-max text-xs md:text-sm py-2 md:py-2.5 px-3 md:px-4"
-              onClick={addTrack}
-            >
-              + Add another track
-            </button>
+            {firstReleaseOffer ? <div className="inline-flex max-w-max items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold" style={{ borderColor: "color-mix(in srgb, var(--success) 35%, var(--border))", background: "var(--success-soft)", color: "var(--success)" }}><Check className="h-4 w-4" /> Free offer locked to 1 Single</div> : <button
+                type="button"
+                className="btn-outline pressable hover-lift max-w-max text-xs md:text-sm py-2 md:py-2.5 px-3 md:px-4"
+                onClick={addTrack}
+              >
+                + Add another track
+              </button>}
           </section>
         ) : null}
         {step === 2 ? (
@@ -4639,7 +4640,7 @@ export function ReleaseForm({
                       >
                         &#8377;{" "}
                         {selectedPlan === "one_time"
-                          ? trackPricingQuote.discountAmount.toLocaleString(
+                          ? (trackPricingQuote.discountAmount + firstReleaseDiscount).toLocaleString(
                               "en-IN",
                             )
                           : "0"}
@@ -4672,7 +4673,7 @@ export function ReleaseForm({
                         </div>
                       ))}
                     </div>
-                    {selectedPlan === "one_time" ? (
+                    {selectedPlan === "one_time" && !firstReleaseOffer ? (
                       <div
                         className="mt-5 border-t pt-5"
                         style={{ borderColor: "var(--border)" }}
