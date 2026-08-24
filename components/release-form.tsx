@@ -2767,7 +2767,7 @@ export function ReleaseForm({
           <section className={clsx("release-audio-stage", stepMotion)}>
             <div className="release-focused-intro">
               <h2>What are we releasing today?</h2>
-              <p>{firstReleaseOffer ? "Upload 1 track for your free Single release" : "Add up to 30 tracks for a maximum length of 1 hour"}<br /><span aria-hidden="true">◀▶</span> Add Dolby Atmos™ files directly in track information.</p>
+              <p>{firstReleaseOffer ? "Upload 1 track for your free Single release" : "Add up to 30 tracks for a maximum length of 1 hour"}<br /><span className="release-dolby-note"><span className="release-dolby-mark" aria-hidden="true"><i /><i /></span> Add Dolby Atmos™ files directly in track information.</span></p>
             </div>
             <div className="release-audio-queue">
               {!tracks.some((track) => track.audioPreviewUrl && track.audioUploadStatus === "uploaded") ? (
