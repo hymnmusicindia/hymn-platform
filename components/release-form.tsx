@@ -923,8 +923,8 @@ export function ReleaseForm({
   );
   const defaultStorePlatforms = useMemo(
     () =>
-      [...storePlatforms, ...socialPlatforms].map((platform) => platform.name),
-    [],
+      (firstReleaseOffer ? storePlatforms : [...storePlatforms, ...socialPlatforms]).map((platform) => platform.name),
+    [firstReleaseOffer],
   );
   const [platforms, setPlatforms] = useState<string[]>(
     initialRelease?.platforms?.length
@@ -2556,7 +2556,7 @@ export function ReleaseForm({
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Plan</dt><dd className="text-right">{currentPlan.title}</dd></div>
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Artists</dt><dd>{artistCount}</dd></div>
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Tracks</dt><dd>{tracks.length}</dd></div>
-              <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>{selectedPlan === "one_time" ? "Price" : "Plan coverage"}</dt><dd className="text-right">{selectedPlan === "one_time" ? `₹${distributionAmount.toLocaleString("en-IN")}` : `${currentPlan.cadence} · ₹${distributionAmount.toLocaleString("en-IN")}`}</dd></div>
+              <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>{selectedPlan === "one_time" ? "Price" : "Plan coverage"}</dt><dd className="text-right">{selectedPlan === "one_time" ? (firstReleaseOffer && finalDistributionAmount === 0 ? "FREE" : `₹${finalDistributionAmount.toLocaleString("en-IN")}`) : `${currentPlan.cadence} · ₹${distributionAmount.toLocaleString("en-IN")}`}</dd></div>
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Save state</dt><dd aria-live="polite" style={{ color: autosaveStatus === "error" ? "var(--danger)" : autosaveStatus === "saved" ? "var(--success)" : "var(--text-muted)" }}>{autosaveStatus === "waiting" ? "Changes pending" : autosaveStatus === "saving" ? "Saving…" : autosaveStatus === "saved" ? "Saved" : "Save failed"}</dd></div>
             </dl>
             {validationIssueCount > 0 ? <div className="release-summary-tasks mt-5 border-t pt-4" style={{ borderColor: "var(--border)" }}><p className="text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Next up</p><ul className="mt-3 grid gap-1">{validationIssues.slice(0, 5).map((issue) => <li key={`${issue.key}-${issue.trackIndex ?? "release"}`}><button type="button" onClick={() => triggerFieldFocus(issue)} className="group flex w-full items-start justify-between gap-3 py-2 text-left text-xs leading-5 transition" style={{ color: "var(--text-muted)" }}><span>{issue.message}</span><span className="shrink-0 text-[var(--text-soft)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" aria-hidden="true">→</span></button></li>)}</ul></div> : null}
@@ -4615,7 +4615,7 @@ export function ReleaseForm({
                         className="mt-1.5 text-lg font-semibold"
                         style={{ color: "var(--text)" }}
                       >
-                        &#8377; {distributionAmount.toLocaleString("en-IN")}
+                        {firstReleaseOffer && finalDistributionAmount === 0 ? "FREE" : <>₹ {finalDistributionAmount.toLocaleString("en-IN")}</>}
                       </p>
                     </div>
                     <div className="p-4" style={{ background: "var(--card)" }}>
@@ -5248,7 +5248,7 @@ export function ReleaseForm({
                               ],
                             ]
                           : []),
-                        ["Payment status", "Pending"],
+                        ["Payment status", firstReleaseOffer && finalDistributionAmount === 0 ? "No payment required" : "Pending"],
                       ].map(([label, value]) => (
                         <div
                           key={label}
@@ -5389,7 +5389,11 @@ export function ReleaseForm({
               >
                 {submitting
                   ? "Processing…"
-                  : `Pay Rs ${distributionAmount.toLocaleString("en-IN")} & Submit`}
+                  : firstReleaseOffer
+                    ? finalDistributionAmount === 0
+                      ? "Release for free"
+                      : `Pay Rs ${finalDistributionAmount.toLocaleString("en-IN")} for add-ons & Submit`
+                    : `Pay Rs ${distributionAmount.toLocaleString("en-IN")} & Submit`}
               </button>
             </div>
           </section>

@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, ReleaseStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export const FIRST_RELEASE_PROMOTION_CODE = "FIRST_RELEASE_FREE";
@@ -6,6 +6,11 @@ export const FIRST_RELEASE_BASE_DISCOUNT = 99;
 const RESERVATION_TTL_MS = 30 * 60 * 1000;
 
 export type CampaignAttribution = Partial<Record<"utm_source" | "utm_medium" | "utm_campaign" | "utm_content" | "utm_term", string>>;
+
+const submittedReleaseWhere = (userId: number): Prisma.ReleaseWhereInput => ({
+  OR: [{ userId }, { ownerUserId: userId }],
+  status: { notIn: [ReleaseStatus.DRAFT, ReleaseStatus.AWAITING_PAYMENT] }
+});
 
 async function promotion() {
   return prisma.promotion.findFirst({
@@ -21,6 +26,8 @@ async function promotion() {
 export async function getFirstReleaseEligibility(userId: number) {
   const offer = await promotion();
   if (!offer) return { eligible: false as const, reason: "promotion_inactive" as const };
+  const submittedReleaseCount = await prisma.release.count({ where: submittedReleaseWhere(userId) });
+  if (submittedReleaseCount > 0) return { eligible: false as const, reason: "release_already_submitted" as const };
   const redemption = await prisma.promotionRedemption.findUnique({ where: { promotionId_userId: { promotionId: offer.id, userId } } });
   if (!redemption) return { eligible: true as const, reason: "available" as const, promotionId: offer.id };
   if (redemption.status === "RESERVED" && redemption.updatedAt.getTime() < Date.now() - RESERVATION_TTL_MS) {
@@ -40,6 +47,8 @@ export async function reserveFirstRelease(input: { userId: number; originalAmoun
     const offer = await tx.promotion.findUnique({ where: { code: FIRST_RELEASE_PROMOTION_CODE } });
     const now = new Date();
     if (!offer || !offer.active || (offer.startsAt && offer.startsAt > now) || (offer.endsAt && offer.endsAt <= now)) throw new Error("The first-release offer is not available.");
+    const submittedReleaseCount = await tx.release.count({ where: submittedReleaseWhere(input.userId) });
+    if (submittedReleaseCount > 0) throw new Error("The free first-release offer has already been used on this account.");
     await tx.promotionRedemption.deleteMany({ where: { promotionId: offer.id, userId: input.userId, status: "RESERVED", updatedAt: { lt: new Date(Date.now() - RESERVATION_TTL_MS) } } });
     if (offer.maxRedemptions != null) {
       const used = await tx.promotionRedemption.count({ where: { promotionId: offer.id, status: "REDEEMED" } });

@@ -19,4 +19,7 @@ for (const invalid of [
 const migration = fs.readFileSync(path.join(process.cwd(), "prisma/migrations/20260825090000_first_release_free_funnel/migration.sql"), "utf8");
 assert.match(migration, /UNIQUE INDEX "promotion_redemptions_promotion_id_user_id_key"/);
 assert.match(migration, /FIRST_RELEASE_FREE/);
+const promotionSource = fs.readFileSync(path.join(process.cwd(), "lib/first-release-promotion.ts"), "utf8");
+assert.match(promotionSource, /submittedReleaseCount/);
+assert.match(promotionSource, /release_already_submitted/);
 console.log("First Release Free pricing, add-on, qualification, and database uniqueness guards passed.");

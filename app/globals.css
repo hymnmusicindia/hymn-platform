@@ -6174,7 +6174,7 @@ html[data-theme="light"] .store-platform-option img[alt="Apple Music"] {
   .workspace-switcher-thumb,
   .workspace-switcher-track button { transition: none; }
 }
-.first-release-aurora { background: radial-gradient(circle at 18% 18%, rgba(69,229,180,.14), transparent 28%), radial-gradient(circle at 82% 68%, rgba(89,223,224,.1), transparent 30%), linear-gradient(145deg,#0d1317,#070a0d 58%); }
+.first-release-aurora { background: radial-gradient(circle at 50% 12%, rgba(89,223,224,.13), transparent 32%), linear-gradient(180deg,#0d1116 0%,#080a0d 65%); }
 .first-release-trust-card { border: 1px solid rgba(255,255,255,.12); border-radius: 1.75rem; padding: 1.35rem; background: linear-gradient(150deg,rgba(255,255,255,.075),rgba(255,255,255,.025)); box-shadow: 0 32px 100px rgba(0,0,0,.38); backdrop-filter: blur(18px); }
 .first-release-primary,.first-release-secondary { display:inline-flex; min-height:3.5rem; align-items:center; justify-content:center; gap:.65rem; border-radius:1rem; padding:.8rem 1.2rem; font-weight:700; transition:transform .2s ease,box-shadow .2s ease,background .2s ease; }
 .first-release-primary { background:#fff; color:#090c10; box-shadow:0 20px 60px rgba(255,255,255,.1); }
@@ -6185,13 +6185,34 @@ html[data-theme="light"] .store-platform-option img[alt="Apple Music"] {
 .first-release-old-price i { position:absolute; left:-12%; right:-12%; top:50%; height:2px; background:#ff7a7a; transform:rotate(-8deg) scaleX(0); transform-origin:left; animation:first-release-cut .55s .5s cubic-bezier(.2,.8,.2,1) forwards; }
 .first-release-old-price span { animation:first-release-fade-price .4s 1s ease forwards; }
 .first-release-price-arrow { color:rgba(255,255,255,.28); animation:first-release-arrow .45s 1s ease both; }
-.first-release-free-price { justify-self:center; font-size:2.25rem; font-weight:900; letter-spacing:-.06em; color:#8ff0ce; opacity:0; transform:translateY(12px) scale(.88); animation:first-release-pop .55s 1.15s cubic-bezier(.16,1,.3,1) forwards; }
-.first-release-on-us { position:absolute; right:.9rem; top:.45rem; font-size:.52rem; font-weight:800; letter-spacing:.16em; color:rgba(143,240,206,.7); opacity:0; animation:first-release-pop .4s 1.45s ease forwards; }
+.first-release-free-price { justify-self:center; font-size:2.25rem; font-weight:900; letter-spacing:-.06em; color:#7ee9ef; opacity:0; transform:translateY(12px) scale(.88); animation:first-release-pop .55s 1.15s cubic-bezier(.16,1,.3,1) forwards; }
+.first-release-on-us { position:absolute; right:.9rem; top:.45rem; font-size:.52rem; font-weight:800; letter-spacing:.16em; color:rgba(126,233,239,.72); opacity:0; animation:first-release-pop .4s 1.45s ease forwards; }
 @keyframes first-release-cut { to { transform:rotate(-8deg) scaleX(1); } }
 @keyframes first-release-fade-price { to { opacity:.55; } }
 @keyframes first-release-arrow { from { opacity:0; transform:translateX(-8px); } to { opacity:1; transform:none; } }
 @keyframes first-release-pop { to { opacity:1; transform:none; } }
-@media (max-width: 639px) { .first-release-trust-card { border-radius:1.35rem; padding:1.1rem; } .first-release-price-stage { padding:.85rem 1rem; } .first-release-free-price { font-size:1.9rem; } }
+@media (max-width: 639px) {
+  .first-release-layout { align-content:start; gap:.65rem; padding:.75rem 1rem max(.65rem,env(safe-area-inset-bottom)); }
+  .first-release-logo { width:5.8rem; }
+  .first-release-hero { margin-top:.65rem; }
+  .first-release-hero h1 { margin-top:.35rem; font-size:clamp(2.15rem,10.5vw,3rem); line-height:.95; }
+  .first-release-offer-copy { margin-top:.65rem; max-width:22rem; font-size:.78rem; line-height:1.3rem; }
+  .first-release-price-stage { margin-top:.75rem; min-height:3.7rem; padding:.55rem .9rem; }
+  .first-release-old-price { font-size:1.25rem; }
+  .first-release-free-price { font-size:1.7rem; }
+  .first-release-trust-card { border-radius:1.2rem; padding:.8rem .9rem; }
+  .first-release-trust-head { gap:.65rem; padding-bottom:.65rem; }
+  .first-release-trust-head > span { width:2rem; height:2rem; border-radius:.7rem; }
+  .first-release-trust-head svg { width:1.1rem; height:1.1rem; }
+  .first-release-trust-head p:first-child { font-size:.86rem; }
+  .first-release-trust-head p:last-child { margin-top:.15rem; font-size:.72rem; line-height:1.15rem; }
+  .first-release-trust-points { margin-top:.65rem; gap:.42rem; font-size:.75rem; }
+  .first-release-trust-points p { gap:.55rem; }
+  .first-release-auth { margin-top:.75rem; }
+  .first-release-auth button { min-height:3rem; padding:.65rem 1rem; }
+  .first-release-disclaimer { margin-top:.4rem; font-size:.59rem; line-height:.9rem; }
+  .first-release-layout > div:last-child { font-size:.52rem; letter-spacing:.08em; }
+}
 @media (prefers-reduced-motion: reduce) { .first-release-old-price i,.first-release-old-price span,.first-release-price-arrow,.first-release-free-price,.first-release-on-us { animation:none; opacity:1; transform:none; } }
 body:has(.first-release-page) > header,
 body:has(.first-release-page) > footer { display: none; }
