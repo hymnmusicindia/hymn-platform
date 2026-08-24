@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "prisma generate && next build",
-    "vercel-build": "prisma db execute --schema prisma/schema.prisma --file prisma/repair-managed-service-details.sql && prisma migrate resolve --applied 20260726222000_managed_service_details && prisma migrate deploy && prisma generate && next build",
+    "vercel-build": "prisma db execute --schema prisma/schema.prisma --file prisma/repair-payout-usd-threshold-fx.sql && prisma migrate resolve --applied 20260801120000_payout_usd_threshold_fx && prisma migrate deploy && prisma generate && next build",
     "deploy:release": "prisma migrate deploy",
     "start": "next start",
     "db:generate": "prisma generate",
