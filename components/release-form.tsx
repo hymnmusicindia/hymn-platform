@@ -5554,8 +5554,10 @@ export function ReleaseForm({
         ) : null}
         {step !== 7 ? (
           <div
-            className="release-footer-mobile-actions sticky bottom-3 z-20 grid grid-cols-[0.85fr_0.7fr_1.55fr] items-stretch gap-1.5 rounded-[1.4rem] border p-2 shadow-2xl backdrop-blur-xl md:flex md:flex-wrap md:items-center md:justify-between md:gap-3 md:p-3"
-            style={{
+            className={(step === 0 || step === 1)
+              ? "release-focused-actions"
+              : "release-footer-mobile-actions sticky bottom-3 z-20 grid grid-cols-[0.85fr_0.7fr_1.55fr] items-stretch gap-1.5 rounded-[1.4rem] border p-2 shadow-2xl backdrop-blur-xl md:flex md:flex-wrap md:items-center md:justify-between md:gap-3 md:p-3"}
+            style={(step === 0 || step === 1) ? undefined : {
               borderColor: "var(--border)",
               background: "color-mix(in srgb, var(--card) 90%, transparent)",
             }}

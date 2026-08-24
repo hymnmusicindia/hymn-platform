@@ -4672,6 +4672,9 @@ html[data-theme="light"] .release-step-button.is-current:hover {
 .release-workflow.is-focused-step .release-footer-mobile-actions { display:flex !important; width:fit-content; max-width:100%; justify-self:center; justify-content:center; gap:0 !important; border:0 !important; border-radius:0 !important; padding:0 !important; background:transparent !important; box-shadow:none !important; backdrop-filter:none !important; }
 .release-workflow.is-focused-step .release-footer-mobile-actions > button:nth-child(-n+2) { display:none; }
 .release-workflow.is-focused-step .release-footer-mobile-actions > button:last-child { min-width:min(100%,17rem); margin:0; }
+.release-focused-actions { display:flex; width:fit-content; max-width:100%; justify-self:center; justify-content:center; margin-top:-5rem; }
+.release-focused-actions > button:nth-child(-n+2) { display:none; }
+.release-focused-actions > button:last-child { min-width:min(100%,17rem); margin:0; }
 .release-workflow.is-artist-step { min-height:calc(100svh - 2rem); align-content:start; }
 .release-workflow.is-artist-step .release-workspace-state,.release-workflow.is-artist-step .release-free-offer-banner { display:none; }
 .release-workflow.is-artist-step .release-workspace-header { margin-inline:calc(clamp(1rem,3vw,2rem) * -1); padding:0 clamp(1rem,3vw,2rem) 1rem; }
@@ -4724,6 +4727,7 @@ html[data-theme="light"] .release-step-button.is-current:hover {
 .release-add-audio-track:disabled { cursor:not-allowed; filter:grayscale(1); opacity:.5; }
 .release-add-audio-track svg { width:1rem; height:1rem; }
 .release-workflow.is-audio-upload-step .release-footer-mobile-actions { position:static; margin-top:-5.5rem; }
+.release-workflow.is-audio-upload-step .release-focused-actions { margin-top:-5.5rem; }
 .release-workflow.is-audio-upload-step .release-footer-action.is-primary { min-width:auto !important; border-radius:999px !important; padding-inline:1.2rem; background:var(--accent) !important; color:var(--accent-foreground) !important; }
 .release-workflow.is-audio-upload-step .release-footer-action.is-primary.is-skip { background:var(--text) !important; color:var(--bg) !important; }
 @media (max-width:640px) {
@@ -4733,6 +4737,7 @@ html[data-theme="light"] .release-step-button.is-current:hover {
   .release-audio-queue-item { padding:.4rem .5rem; }
   .release-add-audio-track { font-size:.7rem; }
   .release-workflow.is-audio-upload-step .release-footer-mobile-actions { margin-top:-4.5rem; }
+  .release-workflow.is-audio-upload-step .release-focused-actions { margin-top:-4.5rem; }
 }
 .release-focused-card { display:grid; gap:.5rem; border:0; border-radius:0; padding:0; background:transparent; box-shadow:none; }
 .release-selected-artists { display:grid; gap:.5rem; }
