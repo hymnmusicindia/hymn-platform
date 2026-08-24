@@ -150,6 +150,7 @@ const steps = [
   "Review & payment",
 ] as const;
 const visibleStepIndexes = [1, 0, 3, 2, 4, 5, 7] as const;
+const menuStepIndexes = [3, 2, 4, 5, 7] as const;
 const COPYRIGHT_OWNER_PREFERENCES_KEY = "hymn:copyright-owner-preferences";
 const defaultLegalState: LegalState = {
   ownershipConfirmation: false,
@@ -1330,6 +1331,12 @@ export function ReleaseForm({
         trackIndex === index ? { ...track, ...patch } : track,
       ),
     );
+  const updatePrimaryArtistsForAllTracks = (primaryArtistIds: number[]) =>
+    setTracks((current) => current.map((track) => ({
+      ...track,
+      primaryArtistIds,
+      primaryArtistQuery: "",
+    })));
   const setTrackList = (updater: (current: TrackDraft[]) => TrackDraft[]) =>
     setTracks((current) =>
       updater(current).map((track, index) => ({
@@ -1349,7 +1356,7 @@ export function ReleaseForm({
     if (target < 0 || target >= ids.length) return;
     const reordered = [...ids];
     [reordered[from], reordered[target]] = [reordered[target], reordered[from]];
-    updateTrack(0, { primaryArtistIds: reordered });
+    updatePrimaryArtistsForAllTracks(reordered);
   }
 
   function resolvePrefill(field: ReleasePrefillSuggestion["field"], keep: boolean) {
@@ -1946,6 +1953,14 @@ export function ReleaseForm({
     }
     setAttemptedStep(null);
     setStatus(null);
+    if (step === 1) {
+      goToStep(0);
+      return;
+    }
+    if (step === 0) {
+      goToStep(3);
+      return;
+    }
     const currentIndex = visibleStepIndexes.indexOf(
       step as (typeof visibleStepIndexes)[number],
     );
@@ -2531,7 +2546,7 @@ export function ReleaseForm({
                 className="text-[10px] md:text-xs uppercase tracking-[0.18em]"
                 style={{ color: "var(--text-soft)" }}
               >
-                Stage {visibleStepIndexes.indexOf(step as (typeof visibleStepIndexes)[number]) + 1} of {visibleStepIndexes.length}
+                Stage {menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1} of {menuStepIndexes.length}
               </p>
               <p
                 className="mt-1 text-sm md:text-base font-semibold"
@@ -2566,7 +2581,7 @@ export function ReleaseForm({
               style={{ borderColor: "var(--border)" }}
             >
               <div className="grid gap-2">
-                {visibleStepIndexes.map((index) => {
+                {menuStepIndexes.map((index) => {
                   const label = steps[index];
                   const buttonState = stepButtonStyles(index);
                   return (
@@ -2598,7 +2613,7 @@ export function ReleaseForm({
         </div>
 
         <div className="release-workflow-nav hidden gap-2 md:grid md:grid-cols-5 lg:grid-cols-1" aria-label="Release submission steps">
-          {visibleStepIndexes.map((index) => {
+          {menuStepIndexes.map((index) => {
             const label = steps[index];
             const buttonState = stepButtonStyles(index);
             return (
@@ -2657,7 +2672,7 @@ export function ReleaseForm({
                     <span className="release-selected-artist-order"><GripVertical /></span>
                     {profile.imageUrl ? <img src={profile.imageUrl} alt="" /> : <span className="release-selected-artist-avatar">{profile.name.slice(0, 1).toUpperCase()}</span>}
                     <span className="min-w-0 flex-1 truncate font-semibold">{profile.name}</span>
-                    <span className="release-selected-artist-actions"><button type="button" onClick={() => movePrimaryArtist(index, -1)} disabled={index === 0} aria-label={`Move ${profile.name} earlier`}><ChevronUp /></button><button type="button" onClick={() => movePrimaryArtist(index, 1)} disabled={index === tracks[0].primaryArtistIds.length - 1} aria-label={`Move ${profile.name} later`}><ChevronDown /></button><button type="button" onClick={() => updateTrack(0, { primaryArtistIds: tracks[0].primaryArtistIds.filter((id) => id !== profileId) })} aria-label={`Remove ${profile.name}`}><X /></button></span>
+                    <span className="release-selected-artist-actions"><button type="button" onClick={() => movePrimaryArtist(index, -1)} disabled={index === 0} aria-label={`Move ${profile.name} earlier`}><ChevronUp /></button><button type="button" onClick={() => movePrimaryArtist(index, 1)} disabled={index === tracks[0].primaryArtistIds.length - 1} aria-label={`Move ${profile.name} later`}><ChevronDown /></button><button type="button" onClick={() => updatePrimaryArtistsForAllTracks(tracks[0].primaryArtistIds.filter((id) => id !== profileId))} aria-label={`Remove ${profile.name}`}><X /></button></span>
                   </div>;
                 })}
               </div> : null}
@@ -2672,7 +2687,7 @@ export function ReleaseForm({
                 focused
                 required={showErrors && !primaryArtistComplete}
                 onQueryChange={(value) => updateTrack(0, { primaryArtistQuery: value })}
-                onSelect={(profile) => { if (tracks[0].primaryArtistIds.length >= 3) return; upsertKnownProfile(profile); updateTrack(0, { primaryArtistIds: tracks[0].primaryArtistIds.includes(profile.id) ? tracks[0].primaryArtistIds : [...tracks[0].primaryArtistIds, profile.id], primaryArtistQuery: "" }); }}
+                onSelect={(profile) => { if (tracks[0].primaryArtistIds.length >= 3) return; upsertKnownProfile(profile); updatePrimaryArtistsForAllTracks(tracks[0].primaryArtistIds.includes(profile.id) ? tracks[0].primaryArtistIds : [...tracks[0].primaryArtistIds, profile.id]); }}
                 onRemove={() => undefined}
               />
               <div className="release-artist-stage-count"><span>{tracks[0]?.primaryArtistIds.length ?? 0} of 3 selected</span><span>Artist order is used for store delivery</span></div>
@@ -5547,12 +5562,12 @@ export function ReleaseForm({
           >
             <button
               type="button"
-              disabled={step === visibleStepIndexes[0] || submitting}
+              disabled={step === 1 || step === 0 || step === menuStepIndexes[0] || submitting}
               onClick={() => {
-                const currentIndex = visibleStepIndexes.indexOf(
-                  step as (typeof visibleStepIndexes)[number],
+                const currentIndex = menuStepIndexes.indexOf(
+                  step as (typeof menuStepIndexes)[number],
                 );
-                goToStep(visibleStepIndexes[Math.max(currentIndex - 1, 0)]);
+                goToStep(menuStepIndexes[Math.max(currentIndex - 1, 0)]);
               }}
               className="release-footer-action is-muted w-full whitespace-nowrap disabled:opacity-40 md:w-auto"
             >
