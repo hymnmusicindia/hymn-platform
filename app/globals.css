@@ -4667,6 +4667,11 @@ html[data-theme="light"] .release-step-button.is-current:hover {
 }
 
 .release-workspace-header { display:flex; min-height:3rem; align-items:center; justify-content:space-between; gap:1rem; border-bottom:1px solid var(--border); padding:0 0 1rem; }
+.release-workflow.is-focused-step { border-color:transparent !important; background:transparent !important; box-shadow:none; backdrop-filter:none; }
+.release-workflow.is-focused-step .release-workflow-nav,.release-workflow.is-focused-step .release-workflow-summary,.release-workflow.is-focused-step .release-mobile-step-menu,.release-workflow.is-focused-step .release-mobile-summary { display:none !important; }
+.release-workflow.is-focused-step .release-footer-mobile-actions { justify-content:center; border:0 !important; background:transparent !important; box-shadow:none; backdrop-filter:none; }
+.release-workflow.is-focused-step .release-footer-mobile-actions > button:nth-child(-n+2) { display:none; }
+.release-workflow.is-focused-step .release-footer-mobile-actions > button:last-child { min-width:min(100%,17rem); margin:0; }
 .release-workspace-quit { min-height:2.5rem; border:1px solid var(--border); border-radius:999px; padding:.55rem .9rem; background:var(--bg-elevated); color:var(--text); font-size:.75rem; font-weight:700; }
 .release-workspace-state { display:flex; align-items:center; gap:.75rem; color:var(--text-soft); font-size:.72rem; }
 .release-workspace-state .is-saved { color:var(--success); }

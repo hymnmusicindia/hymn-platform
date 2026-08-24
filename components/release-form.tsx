@@ -2488,7 +2488,7 @@ export function ReleaseForm({
     <>
       <form
         onSubmit={handleFinalSubmit}
-        className="release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8"
+        className={clsx("release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", step === 1 && "is-focused-step")}
         style={{ borderColor: "var(--border)", background: "var(--card)" }}
       >
         <header className="release-workspace-header">
@@ -2500,7 +2500,7 @@ export function ReleaseForm({
         </header>
         {firstReleaseOffer ? <div className="flex items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-500">🎁 First release on us</div> : null}
         <div
-          className="md:hidden rounded-[1.3rem] border p-3 md:p-4"
+          className="release-mobile-step-menu md:hidden rounded-[1.3rem] border p-3 md:p-4"
           style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}
         >
           <button
@@ -2623,7 +2623,7 @@ export function ReleaseForm({
           </div>
         </aside>
         <div className="grid min-w-0 gap-6">
-        <details className="rounded-xl border p-3 lg:hidden" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+        <details className="release-mobile-summary rounded-xl border p-3 lg:hidden" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
           <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between text-sm font-semibold">Release summary <span>{completion}% complete</span></summary>
           <div className="mt-3 grid grid-cols-2 gap-3 border-t pt-3 text-sm" style={{ borderColor: "var(--border)" }}><p style={{ color: "var(--text-muted)" }}>Missing required</p><p className="text-right">{validationIssueCount}</p><p style={{ color: "var(--text-muted)" }}>Plan</p><p className="text-right">{currentPlan.title}</p><p style={{ color: "var(--text-muted)" }}>Artists / tracks</p><p className="text-right">{artistCount} / {tracks.length}</p><p style={{ color: "var(--text-muted)" }}>Save state</p><p className="text-right" aria-live="polite">{autosaveStatus === "waiting" ? "Changes pending" : autosaveStatus === "saving" ? "Saving…" : autosaveStatus === "saved" ? "Saved" : "Save failed"}</p></div>
         </details>
