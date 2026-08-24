@@ -17,6 +17,8 @@ import {
   ChevronDown,
   ChevronUp,
   GripVertical,
+  LockKeyhole,
+  Plus,
   X,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -138,7 +140,7 @@ declare global {
 }
 
 const steps = [
-  "",
+  "Add music",
   "Artists",
   "Release info",
   "Tracks",
@@ -147,7 +149,7 @@ const steps = [
   "",
   "Review & payment",
 ] as const;
-const visibleStepIndexes = [1, 3, 2, 4, 5, 7] as const;
+const visibleStepIndexes = [1, 0, 3, 2, 4, 5, 7] as const;
 const COPYRIGHT_OWNER_PREFERENCES_KEY = "hymn:copyright-owner-preferences";
 const defaultLegalState: LegalState = {
   ownershipConfirmation: false,
@@ -1804,7 +1806,7 @@ export function ReleaseForm({
   const primaryArtistComplete = Boolean(tracks[0]?.primaryArtistIds.length);
   const audioAssetsComplete = tracks.every((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl));
   const stepChecks = [
-    Boolean(currentPlan),
+    audioAssetsComplete,
     primaryArtistComplete,
     !releaseInfoIssue(),
     tracks.every((track, index) => !trackIssue(track, index)),
@@ -2488,7 +2490,7 @@ export function ReleaseForm({
     <>
       <form
         onSubmit={handleFinalSubmit}
-        className={clsx("release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", step === 1 && "is-focused-step")}
+        className={clsx("release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", (step === 0 || step === 1) && "is-focused-step")}
         style={{ borderColor: "var(--border)", background: "var(--card)" }}
       >
         <header className="release-workspace-header">
@@ -2691,10 +2693,42 @@ export function ReleaseForm({
             </div>
           </section>
         ) : null}
-        {step === 3 ? (
-          <StepIntro
-            title={<span className="inline-block text-[3rem] leading-[1.02] tracking-[-0.05em] md:text-[4rem]"><span className="font-extrabold">Build your</span>{" "}<span className="font-normal italic underline decoration-2 underline-offset-[8px]">tracklist</span></span>}
-          />
+        {step === 0 ? (
+          <section className={clsx("release-audio-stage", stepMotion)}>
+            <div className="release-focused-intro">
+              <p className="release-focused-kicker">Start with the sound</p>
+              <h2>What are we releasing today?</h2>
+              <p>{firstReleaseOffer ? "Upload one WAV or MP3 master. Your free release is locked to a Single." : "Add your audio masters now. You can complete titles, credits, and store metadata next."}</p>
+            </div>
+            <div className="release-audio-queue">
+              {tracks.map((track, index) => {
+                const hasAudio = Boolean(track.audioPreviewUrl && track.audioUploadStatus === "uploaded");
+                return (
+                  <article key={track.id} className={clsx("release-audio-queue-item", hasAudio && "is-ready")}>
+                    <span className="release-audio-track-number">{String(index + 1).padStart(2, "0")}</span>
+                    <div className="release-audio-queue-main">
+                      {hasAudio ? (
+                        <AudioWaveform src={track.audioPreviewUrl} title={track.audioFileName || track.trackTitle || `Track ${index + 1}`} subtitle={[track.duration, fileFormat(track.audioFile, track.audioFileName)].filter(Boolean).join(" • ")} compact />
+                      ) : (
+                        <UploadDropzone accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" iconOnly compact title={`Track ${index + 1} audio`} description="Choose a WAV or MP3 master" helperLines={[]} fileName={track.audioFile?.name || track.audioFileName} fileFormat={fileFormat(track.audioFile, track.audioFileName)} onSelect={async (file, controls) => handleAudioFile(index, file, controls)} />
+                      )}
+                    </div>
+                    {hasAudio ? (
+                      <div className="release-audio-row-actions">
+                        <UploadDropzone accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" iconOnly compact title="Replace audio" description="Replace audio" helperLines={[]} fileName={track.audioFile?.name || track.audioFileName} fileFormat={fileFormat(track.audioFile, track.audioFileName)} onSelect={async (file, controls) => handleAudioFile(index, file, controls)} />
+                        {tracks.length > 1 ? <button type="button" onClick={() => removeTrack(index)} aria-label={`Remove track ${index + 1}`}><X /></button> : null}
+                      </div>
+                    ) : tracks.length > 1 ? <button type="button" className="release-audio-remove" onClick={() => removeTrack(index)} aria-label={`Remove empty track ${index + 1}`}><X /></button> : null}
+                  </article>
+                );
+              })}
+              <button type="button" onClick={addTrack} disabled={firstReleaseOffer} className="release-add-audio-track" title={firstReleaseOffer ? "Locked for this FREE Single release" : "Add another audio master"}>
+                {firstReleaseOffer ? <LockKeyhole /> : <Plus />}
+                <span>{firstReleaseOffer ? "Add another track — locked for this FREE release" : "Add track"}</span>
+              </button>
+            </div>
+            <p className="release-audio-stage-note">WAV or MP3 • Secure upload • Detailed track information comes next</p>
+          </section>
         ) : null}
         {step === 2 ? (
           <StepIntro
@@ -2807,48 +2841,17 @@ export function ReleaseForm({
           </div>
         ) : null}
         {step === 3 ? (
-          <section className={clsx("grid gap-4 md:gap-5", stepMotion)}>
-            <div
-              className="border-b pb-5"
-              style={{
-                borderColor: "var(--border)",
-              }}
-            >
-              <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:justify-between">
-                <div>
-                  <h3
-                    className="text-lg md:text-2xl font-semibold"
-                    style={{ color: "var(--text)" }}
-                  >
-                    What are we releasing today?
-                  </h3>
-                  <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{firstReleaseOffer ? "Your free offer includes one Single. Upload the audio now; detailed metadata comes next." : "Establish the track list first. You can complete each track’s details progressively."}</p>
-                </div>
-                <div
-                  className="flex w-fit items-baseline gap-3 rounded-xl border px-4 py-3"
-                  style={{
-                    borderColor: "color-mix(in srgb, var(--border) 82%, transparent)",
-                    background: "color-mix(in srgb, var(--card) 58%, transparent)",
-                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.025)",
-                  }}
-                >
-                  <p
-                    className="text-lg font-bold tracking-[-0.02em] md:text-xl"
-                    style={{ color: "var(--text)" }}
-                  >
-                    {releaseType === "single"
-                      ? "Single"
-                      : releaseType === "ep"
-                        ? "EP"
-                        : "Album"}
-                  </p>
-                  <span className="text-lg" aria-hidden="true" style={{ color: "var(--border-strong)" }}>·</span>
-                  <p className="text-base font-medium md:text-lg" style={{ color: "var(--text-muted)" }}>
-                    {tracks.length} track{tracks.length > 1 ? "s" : ""}
-                  </p>
-                </div>
+          <section className={clsx("release-tracklist-stage grid gap-3", stepMotion)}>
+            <header className="release-tracklist-heading">
+              <div>
+                <h2>Track list</h2>
+                <p>{tracks.length} track{tracks.length === 1 ? "" : "s"}</p>
               </div>
-            </div>
+              <div>
+                <button type="button" onClick={() => setExpandedTrack(-1)} disabled={expandedTrack === -1}><ChevronUp /> Collapse all</button>
+                <span><GripVertical /> Drag rows to reorder</span>
+              </div>
+            </header>
             {tracks.map((track, index) => {
               const expanded = expandedTrack === index;
               const issue = showErrors ? trackIssue(track, index) : null;
@@ -2896,15 +2899,15 @@ export function ReleaseForm({
                         className="truncate text-xl font-bold tracking-[-0.025em] md:text-2xl"
                         style={{ color: "var(--text)" }}
                       >
-                        {track.trackTitle || `Track ${index + 1}`}
+                        {!isPlaceholderTrackTitle(track.trackTitle) && track.trackTitle.trim()
+                          ? track.trackTitle
+                          : track.audioFileName || `Track ${index + 1}`}
                       </h3>
                       <p
                         className="mt-1 md:mt-2 truncate text-xs md:text-sm"
                         style={{ color: "var(--text-muted)" }}
                       >
-                        {namesFor(track.primaryArtistIds) ||
-                          track.primaryArtistQuery ||
-                          "Primary artist required"}
+                        {[fileFormat(track.audioFile, track.audioFileName), namesFor(track.primaryArtistIds) || track.primaryArtistQuery || "Primary artist required"].filter(Boolean).join(" • ")}
                       </p>
                       <div className="release-track-status mt-2 flex flex-wrap gap-2 text-[11px] font-medium"><span style={{ color: audioReady ? "var(--success)" : "var(--danger)" }}>{audioReady ? "Audio ready" : "Audio required"}</span><span aria-hidden="true" style={{ color: trackReady ? "var(--success)" : "var(--danger)", opacity: .45 }}>·</span><span style={{ color: metadataReady ? "var(--success)" : "var(--danger)" }}>{metadataReady ? "Metadata ready" : "Metadata required"}</span>{issue ? <><span aria-hidden="true" style={{ color: "var(--danger)", opacity: .45 }}>·</span><span style={{ color: "var(--danger)" }}>Action required</span></> : null}</div>
                     </div>
@@ -5554,7 +5557,13 @@ export function ReleaseForm({
                 disabled={step === 1 && !primaryArtistComplete}
                 className="release-footer-action is-primary w-full whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-45 md:w-auto"
               >
-                {step === 1 ? `Continue with ${tracks[0]?.primaryArtistIds.length ?? 0} artist${(tracks[0]?.primaryArtistIds.length ?? 0) === 1 ? "" : "s"} →` : "Save and Continue →"}
+                {step === 1
+                  ? `Continue with ${tracks[0]?.primaryArtistIds.length ?? 0} artist${(tracks[0]?.primaryArtistIds.length ?? 0) === 1 ? "" : "s"} →`
+                  : step === 0
+                    ? audioAssetsComplete
+                      ? `Continue with ${tracks.length} track${tracks.length === 1 ? "" : "s"} →`
+                      : "Skip for now →"
+                    : "Save and Continue →"}
               </button>
             ) : null}
           </div>

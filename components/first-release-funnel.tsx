@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, Check, LockKeyhole, Music2, ShieldCheck } from "lucide-react";
+import { ArrowRight, BadgeCheck, Check, CircleAlert, LockKeyhole, Music2, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { GoogleAuthButton } from "@/components/google-auth-button";
@@ -28,8 +28,15 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
 
       {offerUsed ? <div className="first-release-used text-center lg:text-left">
         <p className="first-release-eyebrow">Welcome back{eligibility.firstName ? `, ${eligibility.firstName}` : ""}</p>
+        <div className="first-release-exhausted-notice">
+          <CircleAlert aria-hidden="true" />
+          <div>
+            <strong>Your one-time free release has been used</strong>
+            <p>This offer is limited to one submitted Single per account. If you believe this is a mistake, <Link href="/contact">contact HYMN Support</Link>.</p>
+          </div>
+        </div>
         <h1>Ready for your next release?</h1>
-        <p>Your one-time free release has been used. Continue with a release from ₹99, or choose a plan that fits your schedule.</p>
+        <p>Continue with a release from ₹99, or choose a plan that fits your schedule.</p>
         <div className="first-release-used-actions"><button onClick={() => router.push("/distribution/start")} className="first-release-primary">Start another release <ArrowRight className="h-4 w-4" /></button><Link href="/distribution?manage=plans#distribution-pricing" className="first-release-secondary">View plans</Link></div>
       </div> : <>
         <div className="first-release-hero text-center lg:text-left">
