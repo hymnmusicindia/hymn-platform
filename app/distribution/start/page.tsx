@@ -25,6 +25,7 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
   const isEditing = Boolean(editingRelease);
   const campaignRequested = firstValue(params.campaign) === "first-release";
   const campaignEligibility = user && campaignRequested ? await getFirstReleaseEligibility(user.id) : null;
+  const campaignDraftEligible = !editingRelease || ["draft", "awaiting_payment"].includes(editingRelease.status);
   const attribution = Object.fromEntries(["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"].map((key) => [key, firstValue(params[key as keyof typeof params])]).filter(([, value]) => Boolean(value))) as Record<string, string>;
 
   return (
@@ -61,7 +62,7 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
 
           {user ? (
             <div className="mx-auto w-full max-w-[1440px]">
-              <ReleaseForm selectedPlan={selectedPlan} initialRelease={editingRelease} firstReleaseOffer={Boolean(campaignEligibility?.eligible && !isEditing)} campaignAttribution={attribution} />
+              <ReleaseForm selectedPlan={selectedPlan} initialRelease={editingRelease} firstReleaseOffer={Boolean(campaignEligibility?.eligible && campaignDraftEligible)} campaignAttribution={attribution} />
             </div>
           ) : firstValue(params.onboarding) === "release" ? <ReleaseOnboardingGate /> : (
             <div className="surface-card p-6 text-center sm:p-8">

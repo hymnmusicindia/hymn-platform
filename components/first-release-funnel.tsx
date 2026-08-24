@@ -18,7 +18,7 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
   const start = () => { void track("release_started"); router.push(startHref); };
   const offerUsed = eligibility.authenticated && !eligibility.eligible;
 
-  return <main className="first-release-page relative min-h-[100svh] overflow-hidden bg-[#070a0d] text-white">
+  return <main className="first-release-page relative h-[100svh] overflow-hidden">
     <div className="first-release-aurora pointer-events-none absolute inset-0" />
     <section className={`first-release-layout relative mx-auto grid min-h-[100svh] w-full max-w-5xl content-center px-5 py-6 sm:px-8 sm:py-10 ${offerUsed ? "first-release-layout-used" : ""}`}>
       <header className="first-release-brand">
@@ -34,17 +34,15 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
       </div> : <>
         <div className="first-release-hero text-center lg:text-left">
           <p className="first-release-eyebrow">{eligibility.authenticated ? `Welcome, ${eligibility.firstName}` : "Your music. Your account. Your control."}</p>
-          <div className="first-release-free-lockup" aria-label="Your first release is free">
-            <span className="first-release-free-word">FREE</span>
+          <div className="first-release-free-lockup" aria-label="₹99 reduced to free for this release">
+            <div className="first-release-stamp-stage">
+              <span className="first-release-stamp-old">₹99<i /></span>
+              <span className="first-release-free-word">FREE</span>
+            </div>
             <span className="first-release-free-caption">Your first release is on us.</span>
+            <span className="first-release-stamp-note">This time, on us.</span>
           </div>
           <p className="first-release-offer-copy">Distribute your first Single without paying the ₹99 base fee. Optional add-ons remain chargeable and are always shown before submission.</p>
-          <div className="first-release-price-inline" aria-label="₹99 reduced to free">
-            <span className="first-release-old-price"><span>₹99</span><i /></span>
-            <ArrowRight className="first-release-price-arrow" aria-hidden="true" />
-            <strong className="first-release-free-price">FREE</strong>
-            <span className="first-release-on-us">ONE TIME · ON US</span>
-          </div>
         </div>
 
         <aside className="first-release-trust-card text-left">

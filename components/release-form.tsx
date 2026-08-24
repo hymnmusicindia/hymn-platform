@@ -1211,13 +1211,16 @@ export function ReleaseForm({
         const id = Number(data.draft?.id);
         if (id > 0) {
           setDraftReleaseId(id);
-          router.replace(`/distribution/start?edit=${id}`);
+          const campaignQuery = firstReleaseOffer
+            ? `&campaign=first-release${Object.entries(campaignAttribution).map(([key, value]) => `&${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join("")}`
+            : "";
+          router.replace(`/distribution/start?edit=${id}${campaignQuery}`);
         }
       })
       .catch(() => {
         draftCreationRef.current = false;
       });
-  }, [displayedReleaseTitle, draftReleaseId, initialRelease, router]);
+  }, [campaignAttribution, displayedReleaseTitle, draftReleaseId, firstReleaseOffer, initialRelease, router]);
 
   useEffect(() => {
     if (!draftReleaseId || submitting || submittedRelease) return;
