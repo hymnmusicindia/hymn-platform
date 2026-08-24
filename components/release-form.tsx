@@ -824,7 +824,7 @@ export function ReleaseForm({
     () => toDateInputValue(addDays(today, 20)),
     [today],
   );
-  const [step, setStep] = useState(initialRelease ? 7 : firstReleaseOffer ? 4 : 3);
+  const [step, setStep] = useState(initialRelease ? 7 : 3);
   const trackCampaignEvent = (event: string, metadata?: Record<string, unknown>) => {
     if (!firstReleaseOffer) return;
     void fetch("/api/promotions/first-release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event, attribution: campaignAttribution, metadata }) }).catch(() => undefined);
@@ -2363,7 +2363,7 @@ export function ReleaseForm({
       safeRevokePreviewUrl(track.audioPreviewUrl);
     });
     if (artworkPreview) safeRevokePreviewUrl(artworkPreview);
-    setStep(initialRelease ? 7 : firstReleaseOffer ? 4 : 3);
+    setStep(initialRelease ? 7 : 3);
     setStepMotion("step-adjacent-forward");
     setMobileStepMenuOpen(false);
     setExpandedTrack(0);

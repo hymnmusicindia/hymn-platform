@@ -3,7 +3,11 @@ import { getCurrentUserForPage } from "@/lib/access";
 import { getFirstReleaseEligibility } from "@/lib/first-release-promotion";
 import { FirstReleaseFunnel } from "@/components/first-release-funnel";
 
-export const metadata: Metadata = { title: "Your First Release Is Free | HYMN", description: "Distribute your first Single through HYMN with the ₹99 base release fee on us.", robots: { index: false, follow: false } };
+export const metadata: Metadata = {
+  title: "Your First Release Is Free | HYMN",
+  description: "Distribute your first Single through HYMN with the ₹99 base release fee on us.",
+  robots: { index: false, follow: false },
+};
 
 export default async function FirstReleasePage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const user = await getCurrentUserForPage();
