@@ -103,37 +103,37 @@ enum PayoutRequestStatus {
 }
 
 model User {
-  id                            Int                     @id @default(autoincrement())
-  googleId                      String                  @unique @map("google_id")
+  id                            Int                                 @id @default(autoincrement())
+  googleId                      String                              @unique @map("google_id")
   name                          String
-  email                         String                  @unique
-  passwordHash                  String?                 @map("password_hash")
+  email                         String                              @unique
+  passwordHash                  String?                             @map("password_hash")
   avatar                        String?
-  role                          UserRole                @default(CUSTOMER)
-  status                        AccountStatus           @default(ACTIVE)
-  onboardingDone                Boolean                 @default(false) @map("onboarding_done")
+  role                          UserRole                            @default(CUSTOMER)
+  status                        AccountStatus                       @default(ACTIVE)
+  onboardingDone                Boolean                             @default(false) @map("onboarding_done")
   mobile                        String?
-  contactEmail                  String?                 @map("contact_email")
-  dateOfBirth                   DateTime?               @map("date_of_birth") @db.Date
-  preferredLanguage             String                  @default("en") @map("preferred_language")
-  onboardingPurpose             String?                 @map("onboarding_purpose")
-  onboardingUserType            String?                 @map("onboarding_user_type")
-  referralSource                String?                 @map("referral_source")
-  onboardingReferralCode        String?                 @map("onboarding_referral_code")
-  onboardingCompletedAt         DateTime?               @map("onboarding_completed_at")
-  onboardingPreferences         Json?                   @map("onboarding_preferences")
-  referralCode                  String?                 @unique @map("referral_code")
-  referralCredits               Int                     @default(0) @map("referral_credits")
-  referredById                  Int?                    @map("referred_by")
-  firstPaymentRewarded          Boolean                 @default(false) @map("first_payment_rewarded")
-  createdAt                     DateTime                @default(now()) @map("created_at")
-  updatedAt                     DateTime                @updatedAt @map("updated_at")
+  contactEmail                  String?                             @map("contact_email")
+  dateOfBirth                   DateTime?                           @map("date_of_birth") @db.Date
+  preferredLanguage             String                              @default("en") @map("preferred_language")
+  onboardingPurpose             String?                             @map("onboarding_purpose")
+  onboardingUserType            String?                             @map("onboarding_user_type")
+  referralSource                String?                             @map("referral_source")
+  onboardingReferralCode        String?                             @map("onboarding_referral_code")
+  onboardingCompletedAt         DateTime?                           @map("onboarding_completed_at")
+  onboardingPreferences         Json?                               @map("onboarding_preferences")
+  referralCode                  String?                             @unique @map("referral_code")
+  referralCredits               Int                                 @default(0) @map("referral_credits")
+  referredById                  Int?                                @map("referred_by")
+  firstPaymentRewarded          Boolean                             @default(false) @map("first_payment_rewarded")
+  createdAt                     DateTime                            @default(now()) @map("created_at")
+  updatedAt                     DateTime                            @updatedAt @map("updated_at")
   sessions                      Session[]
-  applications                  ProducerApplication[]   @relation("ApplicantApplications")
-  reviewedApps                  ProducerApplication[]   @relation("ApplicationReviewer")
+  applications                  ProducerApplication[]               @relation("ApplicantApplications")
+  reviewedApps                  ProducerApplication[]               @relation("ApplicationReviewer")
   releases                      Release[]
-  ownedManualReleases           Release[]               @relation("ManualReleaseOwner")
-  assignedManualReleases        Release[]               @relation("ManualReleaseAssigner")
+  ownedManualReleases           Release[]                           @relation("ManualReleaseOwner")
+  assignedManualReleases        Release[]                           @relation("ManualReleaseAssigner")
   uploads                       Upload[]
   royalties                     Royalty[]
   payouts                       Payout[]
@@ -145,22 +145,22 @@ model User {
   supportTickets                SupportTicket[]
   auditLogs                     AuditLog[]
   subscription                  Subscription?
-  referredBy                    User?                   @relation("UserReferrals", fields: [referredById], references: [id])
-  referrals                     User[]                  @relation("UserReferrals")
-  sentReferrals                 Referral[]              @relation("ReferralOwner")
-  receivedReferral              Referral?               @relation("ReferralRecipient")
+  referredBy                    User?                               @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals                     User[]                              @relation("UserReferrals")
+  sentReferrals                 Referral[]                          @relation("ReferralOwner")
+  receivedReferral              Referral?                           @relation("ReferralRecipient")
   creditLedgerEntries           CreditLedgerEntry[]
   referralVisits                ReferralVisit[]
   beats                         Beat[]
   producerProfile               ProducerProfile?
   artistCards                   ArtistCard[]
-  ownedSplitRecords             SplitRecord[]           @relation("SplitOwner")
-  splitRecipients               SplitRecipient[]        @relation("SplitRecipientUser")
+  ownedSplitRecords             SplitRecord[]                       @relation("SplitOwner")
+  splitRecipients               SplitRecipient[]                    @relation("SplitRecipientUser")
   payoutCredential              PayoutCredential?
   splitEarnings                 SplitEarningLineItem[]
   walletTransactions            WalletTransaction[]
-  producerSales                 BeatSale[]              @relation("ProducerBeatSales")
-  purchasedBeatSales            BeatSale[]              @relation("BuyerBeatSales")
+  producerSales                 BeatSale[]                          @relation("ProducerBeatSales")
+  purchasedBeatSales            BeatSale[]                          @relation("BuyerBeatSales")
   quarterCarryForwards          QuarterCarryForward[]
   storedAssets                  StoredAsset[]
   royaltyStatements             RoyaltyStatement[]
@@ -172,10 +172,11 @@ model User {
   checkoutOrders                CheckoutOrder[]
   couponRedemptions             CouponRedemption[]
   beatPurchases                 BeatPurchase[]
-  financialAdjustmentSubjects   FinancialAdjustment[]   @relation("FinancialAdjustmentSubject")
-  requestedFinancialAdjustments FinancialAdjustment[]   @relation("FinancialAdjustmentRequester")
-  approvedFinancialAdjustments  FinancialAdjustment[]   @relation("FinancialAdjustmentApprover")
+  financialAdjustmentSubjects   FinancialAdjustment[]               @relation("FinancialAdjustmentSubject")
+  requestedFinancialAdjustments FinancialAdjustment[]               @relation("FinancialAdjustmentRequester")
+  approvedFinancialAdjustments  FinancialAdjustment[]               @relation("FinancialAdjustmentApprover")
   direNoteDiscrepanciesResolved DireNoteReconciliationDiscrepancy[] @relation("DireNoteDiscrepancyResolver")
+  promotionRedemptions          PromotionRedemption[]
 
   @@index([role])
   @@index([email])
@@ -225,70 +226,71 @@ model ProducerApplication {
 }
 
 model Release {
-  id                      Int                             @id @default(autoincrement())
-  userId                  Int                             @map("user_id")
-  ownerUserId             Int?                            @map("owner_user_id")
-  artistProfileId         Int?                            @map("artist_profile_id")
-  releaseSource           ReleaseSource                   @default(CUSTOMER_SUBMISSION) @map("release_source")
-  customerEditable        Boolean                         @default(true) @map("customer_editable")
-  assignedByAdminId       Int?                            @map("assigned_by_admin_id")
-  assignedAt              DateTime?                       @map("assigned_at")
-  archivedAt              DateTime?                       @map("archived_at")
-  title                   String
-  artistName              String                          @map("artist_name")
-  genre                   String
-  collaborators           String[]                        @default([])
-  producer                String?
-  bpm                     Int?
-  explicit                Boolean                         @default(false)
-  releaseDate             DateTime                        @map("release_date")
-  status                  ReleaseStatus                   @default(DRAFT)
-  distributorReleaseId    String?                         @map("distributor_release_id")
-  direNoteStatus          String?                         @map("direnote_status")
-  direNoteLastSyncedAt    DateTime?                       @map("direnote_last_synced_at")
-  direNoteLastAttemptedAt DateTime?                       @map("direnote_last_attempted_at")
-  direNoteSyncError       String?                         @map("direnote_sync_error")
-  upc                     String?                         @map("upc_code")
-  rejectionReason         String?                         @map("rejection_reason")
-  correctionReason        String?                         @map("correction_reason")
-  reviewIssues            Json?                           @map("review_issues")
-  adminInternalNote       String?                         @map("admin_internal_note")
-  reviewedAt              DateTime?                       @map("reviewed_at")
-  reviewedBy              String?                         @map("reviewed_by")
-  releaseType             String?                         @map("release_type")
-  artworkUrl              String?                         @map("artwork_url")
-  audioUrl                String?                         @map("audio_url")
-  paymentStatus           String?                         @default("pending") @map("payment_status")
-  metadata                Json?
-  draftCompletionPercent  Int                             @default(0) @map("draft_completion_percent")
-  lastEditedAt            DateTime?                       @map("last_edited_at")
-  missingFields           Json?                           @map("missing_fields")
-  createdAt               DateTime                        @default(now()) @map("created_at")
-  updatedAt               DateTime                        @updatedAt @map("updated_at")
-  version                 Int                             @default(1)
-  user                    User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  owner                   User?                           @relation("ManualReleaseOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
-  artistProfile           ArtistCard?                     @relation(fields: [artistProfileId], references: [id], onDelete: SetNull)
-  assignedByAdmin         User?                           @relation("ManualReleaseAssigner", fields: [assignedByAdminId], references: [id], onDelete: SetNull)
-  ownershipHistory        ReleaseOwnershipHistory[]
-  tracks                  Track[]
-  uploads                 Upload[]
-  analytics               Analytics[]
-  royalties               Royalty[]
-  royaltyLineItems        RoyaltyLineItem[]
-  distributionQueueEntry  DistributionQueueEntry?
-  splitRecords            SplitRecord[]
-  splitRecipients         SplitRecipient[]
-  splitEarnings           SplitEarningLineItem[]
-  direNoteLogs            DireNoteLog[]
-  storedAssets            StoredAsset[]
-  statusTransitions       ReleaseStatusTransition[]
-  distributionSubmissions DistributionSubmissionAttempt[]
-  changeRequests          ReleaseChangeRequest[]
-  managedServiceRequests  ManagedServiceRequest[]
-  unmatchedRoyaltyRows    UnmatchedRoyaltyRow[]
+  id                          Int                                 @id @default(autoincrement())
+  userId                      Int                                 @map("user_id")
+  ownerUserId                 Int?                                @map("owner_user_id")
+  artistProfileId             Int?                                @map("artist_profile_id")
+  releaseSource               ReleaseSource                       @default(CUSTOMER_SUBMISSION) @map("release_source")
+  customerEditable            Boolean                             @default(true) @map("customer_editable")
+  assignedByAdminId           Int?                                @map("assigned_by_admin_id")
+  assignedAt                  DateTime?                           @map("assigned_at")
+  archivedAt                  DateTime?                           @map("archived_at")
+  title                       String
+  artistName                  String                              @map("artist_name")
+  genre                       String
+  collaborators               String[]                            @default([])
+  producer                    String?
+  bpm                         Int?
+  explicit                    Boolean                             @default(false)
+  releaseDate                 DateTime                            @map("release_date")
+  status                      ReleaseStatus                       @default(DRAFT)
+  distributorReleaseId        String?                             @map("distributor_release_id")
+  direNoteStatus              String?                             @map("direnote_status")
+  direNoteLastSyncedAt        DateTime?                           @map("direnote_last_synced_at")
+  direNoteLastAttemptedAt     DateTime?                           @map("direnote_last_attempted_at")
+  direNoteSyncError           String?                             @map("direnote_sync_error")
+  upc                         String?                             @map("upc_code")
+  rejectionReason             String?                             @map("rejection_reason")
+  correctionReason            String?                             @map("correction_reason")
+  reviewIssues                Json?                               @map("review_issues")
+  adminInternalNote           String?                             @map("admin_internal_note")
+  reviewedAt                  DateTime?                           @map("reviewed_at")
+  reviewedBy                  String?                             @map("reviewed_by")
+  releaseType                 String?                             @map("release_type")
+  artworkUrl                  String?                             @map("artwork_url")
+  audioUrl                    String?                             @map("audio_url")
+  paymentStatus               String?                             @default("pending") @map("payment_status")
+  metadata                    Json?
+  draftCompletionPercent      Int                                 @default(0) @map("draft_completion_percent")
+  lastEditedAt                DateTime?                           @map("last_edited_at")
+  missingFields               Json?                               @map("missing_fields")
+  createdAt                   DateTime                            @default(now()) @map("created_at")
+  updatedAt                   DateTime                            @updatedAt @map("updated_at")
+  version                     Int                                 @default(1)
+  user                        User                                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  owner                       User?                               @relation("ManualReleaseOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  artistProfile               ArtistCard?                         @relation(fields: [artistProfileId], references: [id], onDelete: SetNull)
+  assignedByAdmin             User?                               @relation("ManualReleaseAssigner", fields: [assignedByAdminId], references: [id], onDelete: SetNull)
+  ownershipHistory            ReleaseOwnershipHistory[]
+  tracks                      Track[]
+  uploads                     Upload[]
+  analytics                   Analytics[]
+  royalties                   Royalty[]
+  royaltyLineItems            RoyaltyLineItem[]
+  distributionQueueEntry      DistributionQueueEntry?
+  splitRecords                SplitRecord[]
+  splitRecipients             SplitRecipient[]
+  splitEarnings               SplitEarningLineItem[]
+  direNoteLogs                DireNoteLog[]
+  storedAssets                StoredAsset[]
+  statusTransitions           ReleaseStatusTransition[]
+  distributionSubmissions     DistributionSubmissionAttempt[]
+  changeRequests              ReleaseChangeRequest[]
+  managedServiceRequests      ManagedServiceRequest[]
+  unmatchedRoyaltyRows        UnmatchedRoyaltyRow[]
   reconciliationDiscrepancies DireNoteReconciliationDiscrepancy[]
-  identifierHistory       ExternalIdentifierHistory[]
+  promotionRedemptions        PromotionRedemption[]
+  identifierHistory           ExternalIdentifierHistory[]
 
   @@index([ownerUserId, status])
   @@index([releaseSource, archivedAt, createdAt])
@@ -297,6 +299,63 @@ model Release {
   @@index([distributorReleaseId])
   @@index([upc])
   @@map("releases")
+}
+
+model Promotion {
+  id             Int                   @id @default(autoincrement())
+  code           String                @unique
+  name           String
+  product        String
+  discountType   String                @map("discount_type")
+  discountValue  Decimal               @map("discount_value") @db.Decimal(12, 2)
+  active         Boolean               @default(true)
+  startsAt       DateTime?             @map("starts_at")
+  endsAt         DateTime?             @map("ends_at")
+  maxRedemptions Int?                  @map("max_redemptions")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  redemptions    PromotionRedemption[]
+
+  @@map("promotions")
+}
+
+model PromotionRedemption {
+  id             Int       @id @default(autoincrement())
+  promotionId    Int       @map("promotion_id")
+  userId         Int       @map("user_id")
+  releaseId      Int?      @map("release_id")
+  originalAmount Decimal   @map("original_amount") @db.Decimal(12, 2)
+  discountAmount Decimal   @map("discount_amount") @db.Decimal(12, 2)
+  finalAmount    Decimal   @map("final_amount") @db.Decimal(12, 2)
+  currency       String    @default("INR")
+  status         String    @default("RESERVED")
+  campaignSource Json?     @map("campaign_source")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  redeemedAt     DateTime? @map("redeemed_at")
+  promotion      Promotion @relation(fields: [promotionId], references: [id], onDelete: Restrict)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  release        Release?  @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+
+  @@unique([promotionId, userId])
+  @@index([status, createdAt])
+  @@index([releaseId])
+  @@map("promotion_redemptions")
+}
+
+model AcquisitionEvent {
+  id          Int      @id @default(autoincrement())
+  userId      Int?     @map("user_id")
+  anonymousId String?  @map("anonymous_id")
+  funnel      String
+  event       String
+  attribution Json?
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([funnel, event, createdAt])
+  @@index([userId, createdAt])
+  @@map("acquisition_events")
 }
 
 model ReleaseOwnershipHistory {
@@ -316,26 +375,26 @@ model ReleaseOwnershipHistory {
 }
 
 model Track {
-  id                   Int                    @id @default(autoincrement())
-  releaseId            Int                    @map("release_id")
-  title                String
-  duration             Int?
-  isrc                 String?
-  distributorStatus    String?                @map("distributor_status")
-  audioUploadId        Int?                   @map("audio_upload_id")
-  trackNumber          Int?                   @map("track_number")
-  audioUrl             String?                @map("audio_url")
-  primaryArtist        String?                @map("primary_artist")
-  metadata             Json?
-  createdAt            DateTime               @default(now()) @map("created_at")
-  release              Release                @relation(fields: [releaseId], references: [id], onDelete: Cascade)
-  royaltyLineItems     RoyaltyLineItem[]
-  splitRecords         SplitRecord[]
-  splitRecipients      SplitRecipient[]
-  splitEarnings        SplitEarningLineItem[]
-  unmatchedRoyaltyRows UnmatchedRoyaltyRow[]
+  id                          Int                                 @id @default(autoincrement())
+  releaseId                   Int                                 @map("release_id")
+  title                       String
+  duration                    Int?
+  isrc                        String?
+  distributorStatus           String?                             @map("distributor_status")
+  audioUploadId               Int?                                @map("audio_upload_id")
+  trackNumber                 Int?                                @map("track_number")
+  audioUrl                    String?                             @map("audio_url")
+  primaryArtist               String?                             @map("primary_artist")
+  metadata                    Json?
+  createdAt                   DateTime                            @default(now()) @map("created_at")
+  release                     Release                             @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  royaltyLineItems            RoyaltyLineItem[]
+  splitRecords                SplitRecord[]
+  splitRecipients             SplitRecipient[]
+  splitEarnings               SplitEarningLineItem[]
+  unmatchedRoyaltyRows        UnmatchedRoyaltyRow[]
   reconciliationDiscrepancies DireNoteReconciliationDiscrepancy[]
-  identifierHistory       ExternalIdentifierHistory[]
+  identifierHistory           ExternalIdentifierHistory[]
 
   @@index([isrc])
   @@map("tracks")
@@ -669,41 +728,41 @@ model Payout {
 }
 
 model PayoutRequest {
-  id                Int                  @id @default(autoincrement())
-  userId            Int                  @map("user_id")
-  amount            Decimal              @db.Decimal(12, 2)
-  serviceFee        Decimal              @map("service_fee") @db.Decimal(12, 2)
-  netAmount         Decimal              @map("net_amount") @db.Decimal(12, 2)
-  currency          String               @default("INR")
-  requestedAmountUsd Decimal?            @map("requested_amount_usd") @db.Decimal(18, 6)
-  requestedAmountInr Decimal?            @map("requested_amount_inr") @db.Decimal(18, 6)
-  minimumPayoutUsd   Decimal?            @map("minimum_payout_usd") @db.Decimal(12, 2)
-  usdToInrRate       Decimal?            @map("usd_to_inr_rate") @db.Decimal(18, 8)
-  exchangeRateId     Int?                @map("exchange_rate_id")
-  exchangeRateProvider String?           @map("exchange_rate_provider")
-  exchangeRateFetchedAt DateTime?        @map("exchange_rate_fetched_at")
-  sourceType        String               @default("artist_royalty") @map("source_type")
-  method            PayoutRequestMethod
-  upiId             String?              @map("upi_id")
-  accountHolderName String?              @map("account_holder_name")
-  bankAccountNumber String?              @map("bank_account_number")
-  ifsc              String?
-  status            PayoutRequestStatus  @default(REQUESTED)
-  userNote          String?              @map("user_note")
-  adminNote         String?              @map("admin_note")
-  requestedAt       DateTime             @default(now()) @map("requested_at")
-  processedAt       DateTime?            @map("processed_at")
-  paidAt            DateTime?            @map("paid_at")
-  paymentReference  String?              @unique @map("payment_reference")
-  paymentMethod     String?              @map("payment_method")
-  paymentDate       DateTime?            @map("payment_date")
-  paidAmount        Decimal?             @map("paid_amount") @db.Decimal(12, 2)
-  proofAssetId      Int?                 @unique @map("proof_asset_id")
-  createdAt         DateTime             @default(now()) @map("created_at")
-  updatedAt         DateTime             @updatedAt @map("updated_at")
-  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  proofAsset        StoredAsset?         @relation("PayoutProof", fields: [proofAssetId], references: [id], onDelete: SetNull)
-  events            PayoutRequestEvent[]
+  id                    Int                  @id @default(autoincrement())
+  userId                Int                  @map("user_id")
+  amount                Decimal              @db.Decimal(12, 2)
+  serviceFee            Decimal              @map("service_fee") @db.Decimal(12, 2)
+  netAmount             Decimal              @map("net_amount") @db.Decimal(12, 2)
+  currency              String               @default("INR")
+  requestedAmountUsd    Decimal?             @map("requested_amount_usd") @db.Decimal(18, 6)
+  requestedAmountInr    Decimal?             @map("requested_amount_inr") @db.Decimal(18, 6)
+  minimumPayoutUsd      Decimal?             @map("minimum_payout_usd") @db.Decimal(12, 2)
+  usdToInrRate          Decimal?             @map("usd_to_inr_rate") @db.Decimal(18, 8)
+  exchangeRateId        Int?                 @map("exchange_rate_id")
+  exchangeRateProvider  String?              @map("exchange_rate_provider")
+  exchangeRateFetchedAt DateTime?            @map("exchange_rate_fetched_at")
+  sourceType            String               @default("artist_royalty") @map("source_type")
+  method                PayoutRequestMethod
+  upiId                 String?              @map("upi_id")
+  accountHolderName     String?              @map("account_holder_name")
+  bankAccountNumber     String?              @map("bank_account_number")
+  ifsc                  String?
+  status                PayoutRequestStatus  @default(REQUESTED)
+  userNote              String?              @map("user_note")
+  adminNote             String?              @map("admin_note")
+  requestedAt           DateTime             @default(now()) @map("requested_at")
+  processedAt           DateTime?            @map("processed_at")
+  paidAt                DateTime?            @map("paid_at")
+  paymentReference      String?              @unique @map("payment_reference")
+  paymentMethod         String?              @map("payment_method")
+  paymentDate           DateTime?            @map("payment_date")
+  paidAmount            Decimal?             @map("paid_amount") @db.Decimal(12, 2)
+  proofAssetId          Int?                 @unique @map("proof_asset_id")
+  createdAt             DateTime             @default(now()) @map("created_at")
+  updatedAt             DateTime             @updatedAt @map("updated_at")
+  user                  User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  proofAsset            StoredAsset?         @relation("PayoutProof", fields: [proofAssetId], references: [id], onDelete: SetNull)
+  events                PayoutRequestEvent[]
 
   @@index([userId, status])
   @@index([status, requestedAt])
@@ -1320,42 +1379,42 @@ model AuditLog {
 }
 
 model FraudRule {
-  id             Int       @id @default(autoincrement())
-  name           String    @unique
-  category       String
-  description    String
-  conditionJson  Json      @map("condition_json")
-  weight         Int
-  severity       String
-  enabled        Boolean   @default(true)
-  autoCreateCase Boolean   @default(true) @map("auto_create_case")
-  autoHoldPayout Boolean   @default(false) @map("auto_hold_payout")
-  notifyAdmin    Boolean   @default(true) @map("notify_admin")
-  cooldownMinutes Int      @default(60) @map("cooldown_minutes")
-  triggerCount   Int       @default(0) @map("trigger_count")
+  id              Int       @id @default(autoincrement())
+  name            String    @unique
+  category        String
+  description     String
+  conditionJson   Json      @map("condition_json")
+  weight          Int
+  severity        String
+  enabled         Boolean   @default(true)
+  autoCreateCase  Boolean   @default(true) @map("auto_create_case")
+  autoHoldPayout  Boolean   @default(false) @map("auto_hold_payout")
+  notifyAdmin     Boolean   @default(true) @map("notify_admin")
+  cooldownMinutes Int       @default(60) @map("cooldown_minutes")
+  triggerCount    Int       @default(0) @map("trigger_count")
   lastTriggeredAt DateTime? @map("last_triggered_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   @@index([enabled, category])
   @@map("fraud_rules")
 }
 
 model FraudAlert {
-  id              Int       @id @default(autoincrement())
+  id              Int           @id @default(autoincrement())
   category        String
   severity        String
-  riskScore       Int       @map("risk_score")
-  status          String    @default("new")
-  entityType      String    @map("entity_type")
-  entityId        String    @map("entity_id")
-  userId          Int?      @map("user_id")
-  ruleId          Int?      @map("rule_id")
-  confidence      Decimal?  @db.Decimal(5, 2)
+  riskScore       Int           @map("risk_score")
+  status          String        @default("new")
+  entityType      String        @map("entity_type")
+  entityId        String        @map("entity_id")
+  userId          Int?          @map("user_id")
+  ruleId          Int?          @map("rule_id")
+  confidence      Decimal?      @db.Decimal(5, 2)
   summary         String
-  detectedAt      DateTime  @default(now()) @map("detected_at")
-  assignedAdminId Int?      @map("assigned_admin_id")
-  resolvedAt      DateTime? @map("resolved_at")
+  detectedAt      DateTime      @default(now()) @map("detected_at")
+  assignedAdminId Int?          @map("assigned_admin_id")
+  resolvedAt      DateTime?     @map("resolved_at")
   resolution      String?
   signals         FraudSignal[]
   primaryCase     FraudCase?
@@ -1368,16 +1427,16 @@ model FraudAlert {
 }
 
 model FraudSignal {
-  id           Int      @id @default(autoincrement())
-  alertId      Int      @map("alert_id")
-  signalType   String   @map("signal_type")
+  id           Int        @id @default(autoincrement())
+  alertId      Int        @map("alert_id")
+  signalType   String     @map("signal_type")
   weight       Int
-  confidence   Decimal? @db.Decimal(5, 2)
+  confidence   Decimal?   @db.Decimal(5, 2)
   source       String
-  evidenceJson Json?    @map("evidence_json")
-  entityType   String?  @map("entity_type")
-  entityId     String?  @map("entity_id")
-  createdAt    DateTime @default(now()) @map("created_at")
+  evidenceJson Json?      @map("evidence_json")
+  entityType   String?    @map("entity_type")
+  entityId     String?    @map("entity_id")
+  createdAt    DateTime   @default(now()) @map("created_at")
   alert        FraudAlert @relation(fields: [alertId], references: [id], onDelete: Restrict)
 
   @@index([alertId, createdAt])
@@ -1385,19 +1444,19 @@ model FraudSignal {
 }
 
 model FraudCase {
-  id              Int       @id @default(autoincrement())
-  primaryAlertId  Int       @unique @map("primary_alert_id")
-  caseNumber      String    @unique @map("case_number")
-  status          String    @default("new")
+  id              Int               @id @default(autoincrement())
+  primaryAlertId  Int               @unique @map("primary_alert_id")
+  caseNumber      String            @unique @map("case_number")
+  status          String            @default("new")
   severity        String
-  riskScore       Int       @map("risk_score")
-  assignedAdminId Int?      @map("assigned_admin_id")
-  userId          Int?      @map("user_id")
-  openedAt        DateTime  @default(now()) @map("opened_at")
-  closedAt        DateTime? @map("closed_at")
-  resolutionType  String?   @map("resolution_type")
-  resolutionNote  String?   @map("resolution_note")
-  primaryAlert    FraudAlert @relation(fields: [primaryAlertId], references: [id], onDelete: Restrict)
+  riskScore       Int               @map("risk_score")
+  assignedAdminId Int?              @map("assigned_admin_id")
+  userId          Int?              @map("user_id")
+  openedAt        DateTime          @default(now()) @map("opened_at")
+  closedAt        DateTime?         @map("closed_at")
+  resolutionType  String?           @map("resolution_type")
+  resolutionNote  String?           @map("resolution_note")
+  primaryAlert    FraudAlert        @relation(fields: [primaryAlertId], references: [id], onDelete: Restrict)
   evidence        FraudEvidence[]
   notes           FraudCaseNote[]
   links           FraudEntityLink[]
@@ -1409,14 +1468,14 @@ model FraudCase {
 }
 
 model FraudEvidence {
-  id             Int      @id @default(autoincrement())
-  caseId         Int      @map("case_id")
+  id             Int       @id @default(autoincrement())
+  caseId         Int       @map("case_id")
   type           String
   source         String
-  fileAssetId    Int?     @map("file_asset_id")
-  dataJson       Json?    @map("data_json")
-  addedByAdminId Int      @map("added_by_admin_id")
-  createdAt      DateTime @default(now()) @map("created_at")
+  fileAssetId    Int?      @map("file_asset_id")
+  dataJson       Json?     @map("data_json")
+  addedByAdminId Int       @map("added_by_admin_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
   case           FraudCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
 
   @@index([caseId, createdAt])
@@ -1424,12 +1483,12 @@ model FraudEvidence {
 }
 
 model FraudCaseNote {
-  id         Int      @id @default(autoincrement())
-  caseId     Int      @map("case_id")
-  adminId    Int      @map("admin_id")
+  id         Int       @id @default(autoincrement())
+  caseId     Int       @map("case_id")
+  adminId    Int       @map("admin_id")
   note       String
-  visibility String   @default("internal")
-  createdAt  DateTime @default(now()) @map("created_at")
+  visibility String    @default("internal")
+  createdAt  DateTime  @default(now()) @map("created_at")
   case       FraudCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
 
   @@index([caseId, createdAt])
@@ -1437,16 +1496,16 @@ model FraudCaseNote {
 }
 
 model FraudEntityLink {
-  id               Int      @id @default(autoincrement())
-  caseId           Int      @map("case_id")
-  sourceEntityType String   @map("source_entity_type")
-  sourceEntityId   String   @map("source_entity_id")
-  targetEntityType String   @map("target_entity_type")
-  targetEntityId   String   @map("target_entity_id")
-  linkType         String   @map("link_type")
-  confidence       Decimal? @db.Decimal(5, 2)
+  id               Int       @id @default(autoincrement())
+  caseId           Int       @map("case_id")
+  sourceEntityType String    @map("source_entity_type")
+  sourceEntityId   String    @map("source_entity_id")
+  targetEntityType String    @map("target_entity_type")
+  targetEntityId   String    @map("target_entity_id")
+  linkType         String    @map("link_type")
+  confidence       Decimal?  @db.Decimal(5, 2)
   reason           String
-  createdAt        DateTime @default(now()) @map("created_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
   case             FraudCase @relation(fields: [caseId], references: [id], onDelete: Restrict)
 
   @@index([caseId, createdAt])
@@ -1454,29 +1513,29 @@ model FraudEntityLink {
 }
 
 model Referral {
-  id                          Int       @id @default(autoincrement())
-  userId                      Int       @map("user_id")
-  referredUserId              Int?      @unique @map("referred_user_id")
-  referralCode                String    @map("referral_code")
-  signupEmail                 String    @map("signup_email")
-  status                      String    @default("PENDING")
-  purchaseAmount              Int       @default(0) @map("purchase_amount")
-  earnings                    Int       @default(0)
-  referredReward              Int       @default(0) @map("referred_reward")
-  attributedAt                DateTime  @default(now()) @map("attributed_at")
-  registeredAt                DateTime? @map("registered_at")
-  qualifiedAt                 DateTime? @map("qualified_at")
-  rewardedAt                  DateTime? @map("rewarded_at")
-  reversedAt                  DateTime? @map("reversed_at")
-  qualifyingTransactionType   String?   @map("qualifying_transaction_type")
-  qualifyingTransactionId     String?   @map("qualifying_transaction_id")
-  qualifyingPaymentId         String?   @map("qualifying_payment_id")
-  riskStatus                  String    @default("clear") @map("risk_status")
-  rejectionReason             String?   @map("rejection_reason")
-  createdAt                   DateTime  @default(now()) @map("created_at")
-  updatedAt                   DateTime  @updatedAt @map("updated_at")
-  owner                       User      @relation("ReferralOwner", fields: [userId], references: [id], onDelete: Restrict)
-  referredUser                User?     @relation("ReferralRecipient", fields: [referredUserId], references: [id], onDelete: Restrict)
+  id                        Int       @id @default(autoincrement())
+  userId                    Int       @map("user_id")
+  referredUserId            Int?      @unique @map("referred_user_id")
+  referralCode              String    @map("referral_code")
+  signupEmail               String    @map("signup_email")
+  status                    String    @default("PENDING")
+  purchaseAmount            Int       @default(0) @map("purchase_amount")
+  earnings                  Int       @default(0)
+  referredReward            Int       @default(0) @map("referred_reward")
+  attributedAt              DateTime  @default(now()) @map("attributed_at")
+  registeredAt              DateTime? @map("registered_at")
+  qualifiedAt               DateTime? @map("qualified_at")
+  rewardedAt                DateTime? @map("rewarded_at")
+  reversedAt                DateTime? @map("reversed_at")
+  qualifyingTransactionType String?   @map("qualifying_transaction_type")
+  qualifyingTransactionId   String?   @map("qualifying_transaction_id")
+  qualifyingPaymentId       String?   @map("qualifying_payment_id")
+  riskStatus                String    @default("clear") @map("risk_status")
+  rejectionReason           String?   @map("rejection_reason")
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
+  owner                     User      @relation("ReferralOwner", fields: [userId], references: [id], onDelete: Restrict)
+  referredUser              User?     @relation("ReferralRecipient", fields: [referredUserId], references: [id], onDelete: Restrict)
 
   @@unique([qualifyingTransactionType, qualifyingTransactionId])
   @@index([userId, status])
@@ -1730,25 +1789,25 @@ model PaymentWebhookEvent {
 // New models to be added to schema.prisma
 
 model ArtistCard {
-  id                   Int       @id @default(autoincrement())
-  userId               Int       @map("user_id")
-  artistName           String    @map("artist_name")
-  spotifyProfileUrl    String?   @map("spotify_profile_url")
-  spotifyArtistId      String?   @map("spotify_artist_id")
-  appleMusicProfileUrl String?   @map("apple_music_profile_url")
-  appleArtistId        String?   @map("apple_artist_id")
-  instagramUrl         String?   @map("instagram_url")
-  youtubeUrl           String?   @map("youtube_url")
-  imageUrl             String?   @map("image_url")
+  id                   Int                         @id @default(autoincrement())
+  userId               Int                         @map("user_id")
+  artistName           String                      @map("artist_name")
+  spotifyProfileUrl    String?                     @map("spotify_profile_url")
+  spotifyArtistId      String?                     @map("spotify_artist_id")
+  appleMusicProfileUrl String?                     @map("apple_music_profile_url")
+  appleArtistId        String?                     @map("apple_artist_id")
+  instagramUrl         String?                     @map("instagram_url")
+  youtubeUrl           String?                     @map("youtube_url")
+  imageUrl             String?                     @map("image_url")
   followers            Int?
-  isPrimary            Boolean   @default(false) @map("is_primary")
-  archivedAt           DateTime? @map("archived_at")
+  isPrimary            Boolean                     @default(false) @map("is_primary")
+  archivedAt           DateTime?                   @map("archived_at")
   role                 String?
-  direNoteArtistId     String?   @map("direnote_artist_id")
-  direNoteLastSyncedAt DateTime? @map("direnote_last_synced_at")
-  createdAt            DateTime  @default(now()) @map("created_at")
-  updatedAt            DateTime  @updatedAt @map("updated_at")
-  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  direNoteArtistId     String?                     @map("direnote_artist_id")
+  direNoteLastSyncedAt DateTime?                   @map("direnote_last_synced_at")
+  createdAt            DateTime                    @default(now()) @map("created_at")
+  updatedAt            DateTime                    @updatedAt @map("updated_at")
+  user                 User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
   releases             Release[]
   identifierHistory    ExternalIdentifierHistory[]
 
@@ -1780,20 +1839,20 @@ model DireNoteReconciliationDiscrepancy {
 }
 
 model ExternalIdentifierHistory {
-  id            Int       @id @default(autoincrement())
-  releaseId     Int?      @map("release_id")
-  trackId       Int?      @map("track_id")
-  artistCardId  Int?      @map("artist_card_id")
-  provider      String
-  identifierType String   @map("identifier_type")
-  previousValue String?   @map("previous_value")
-  canonicalValue String   @map("canonical_value")
-  source        String
-  reason        String?
-  createdAt     DateTime  @default(now()) @map("created_at")
-  release       Release?  @relation(fields: [releaseId], references: [id], onDelete: Cascade)
-  track         Track?    @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  artistCard    ArtistCard? @relation(fields: [artistCardId], references: [id], onDelete: Cascade)
+  id             Int         @id @default(autoincrement())
+  releaseId      Int?        @map("release_id")
+  trackId        Int?        @map("track_id")
+  artistCardId   Int?        @map("artist_card_id")
+  provider       String
+  identifierType String      @map("identifier_type")
+  previousValue  String?     @map("previous_value")
+  canonicalValue String      @map("canonical_value")
+  source         String
+  reason         String?
+  createdAt      DateTime    @default(now()) @map("created_at")
+  release        Release?    @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  track          Track?      @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  artistCard     ArtistCard? @relation(fields: [artistCardId], references: [id], onDelete: Cascade)
 
   @@index([releaseId, identifierType, createdAt])
   @@index([trackId, identifierType, createdAt])

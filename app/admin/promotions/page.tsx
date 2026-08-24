@@ -1,0 +1,10 @@
+import { redirect } from "next/navigation";
+import { requireAdminPermission } from "@/lib/access";
+import { prisma } from "@/lib/prisma";
+
+export default async function PromotionRedemptionsPage() {
+  const admin = await requireAdminPermission("users.read");
+  if ("error" in admin) redirect("/admin/login");
+  const rows = await prisma.promotionRedemption.findMany({ include: { promotion: true, user: { select: { name: true, email: true } }, release: { select: { title: true } } }, orderBy: { createdAt: "desc" }, take: 250 });
+  return <main className="mx-auto max-w-7xl p-4 sm:p-6"><h1 className="text-3xl font-semibold">Promotion redemptions</h1><p className="mt-2 text-sm text-[var(--text-muted)]">Auditable campaign usage. Redemptions cannot be reset from this screen.</p><div className="mt-6 overflow-x-auto rounded-2xl border border-[var(--border)]"><table className="w-full min-w-[980px] text-left text-sm"><thead><tr>{["User", "Promotion", "Release", "Original", "Discount", "Final", "Status", "Redeemed", "Campaign source"].map((label) => <th key={label} className="border-b border-[var(--border)] p-3">{label}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td className="border-b border-[var(--border)] p-3">{row.user.name}<br/><span className="text-xs text-[var(--text-soft)]">{row.user.email}</span></td><td className="border-b border-[var(--border)] p-3">{row.promotion.name}</td><td className="border-b border-[var(--border)] p-3">{row.release?.title ?? "—"}</td><td className="border-b border-[var(--border)] p-3">₹{Number(row.originalAmount)}</td><td className="border-b border-[var(--border)] p-3">-₹{Number(row.discountAmount)}</td><td className="border-b border-[var(--border)] p-3">₹{Number(row.finalAmount)}</td><td className="border-b border-[var(--border)] p-3">{row.status}</td><td className="border-b border-[var(--border)] p-3">{row.redeemedAt?.toLocaleString("en-IN") ?? "—"}</td><td className="max-w-xs border-b border-[var(--border)] p-3 text-xs">{row.campaignSource ? JSON.stringify(row.campaignSource) : "—"}</td></tr>)}</tbody></table></div></main>;
+}

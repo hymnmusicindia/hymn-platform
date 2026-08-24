@@ -806,9 +806,13 @@ function StepIntro({
 export function ReleaseForm({
   selectedPlan,
   initialRelease,
+  firstReleaseOffer = false,
+  campaignAttribution = {},
 }: {
   selectedPlan: DistributionPlanOption;
   initialRelease?: Release | null;
+  firstReleaseOffer?: boolean;
+  campaignAttribution?: Record<string, string>;
 }) {
   const router = useRouter();
   const today = useMemo(() => new Date(), []);
@@ -820,7 +824,11 @@ export function ReleaseForm({
     () => toDateInputValue(addDays(today, 20)),
     [today],
   );
-  const [step, setStep] = useState(initialRelease ? 7 : 3);
+  const [step, setStep] = useState(initialRelease ? 7 : firstReleaseOffer ? 4 : 3);
+  const trackCampaignEvent = (event: string, metadata?: Record<string, unknown>) => {
+    if (!firstReleaseOffer) return;
+    void fetch("/api/promotions/first-release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event, attribution: campaignAttribution, metadata }) }).catch(() => undefined);
+  };
   const [stepMotion, setStepMotion] = useState("step-adjacent-forward");
   const [mobileStepMenuOpen, setMobileStepMenuOpen] = useState(false);
   const [expandedTrack, setExpandedTrack] = useState(0);
@@ -1022,6 +1030,8 @@ export function ReleaseForm({
     (selectedPlan === "one_time"
       ? trackPricingQuote.finalPrice
       : currentPlan.price) + ugcAddOnAmount;
+  const firstReleaseDiscount = firstReleaseOffer && selectedPlan === "one_time" && releaseType === "single" && tracks.length === 1 ? Math.min(99, distributionAmount - ugcAddOnAmount) : 0;
+  const finalDistributionAmount = Math.max(0, distributionAmount - firstReleaseDiscount);
   const legalComplete = useMemo(
     () => Object.values(legal).every(Boolean),
     [legal],
@@ -1435,6 +1445,7 @@ export function ReleaseForm({
         duration,
         audioUploadStatus: "uploaded",
       });
+      trackCampaignEvent("audio_uploaded", { trackIndex: index });
     } catch (error) {
       updateTrack(index, { audioUploadStatus: "failed", requiresAudioReplacement: true });
       throw error;
@@ -1478,6 +1489,7 @@ export function ReleaseForm({
     setArtworkPreview(await readAsDataUrl(file));
     setArtworkDimensions(`${dimensions.width} x ${dimensions.height}`);
     setArtworkError(null);
+    trackCampaignEvent("artwork_uploaded");
     const qualityWarnings = [
       dimensions.width !== dimensions.height
         ? "This artwork is not square and may be rejected or cropped by music stores."
@@ -1850,6 +1862,8 @@ export function ReleaseForm({
     const direction = nextVisibleIndex > currentVisibleIndex ? "forward" : "back";
     setStepMotion(`step-${kind}-${direction}`);
     setStep(nextStep);
+    if (nextStep === 7) trackCampaignEvent("review_reached");
+    else if (step === 3 && nextStep !== 3) trackCampaignEvent("metadata_completed");
   }
 
   function advanceStep() {
@@ -2167,6 +2181,7 @@ export function ReleaseForm({
       razorpay_order_id: orderId,
       razorpay_payment_id: paymentId,
       razorpay_signature: signature,
+      ...(firstReleaseOffer ? { promotionCode: "FIRST_RELEASE_FREE", attribution: campaignAttribution } : {}),
       metadata: {
         artistName: primaryArtistName,
         releaseTitle: displayedReleaseTitle,
@@ -2276,12 +2291,20 @@ export function ReleaseForm({
             releaseType,
             platforms,
             youtubeContentIdEnabled,
+            ...(firstReleaseOffer ? { promotionCode: "FIRST_RELEASE_FREE" } : {}),
           }),
         },
       );
       const orderData = await orderResponse.json();
       if (!orderResponse.ok)
         throw new Error(orderData.error || "Unable to create payment order.");
+
+      if (orderData.requiresPayment === false) {
+        const data = await submitRelease(orderData.orderId, `free_first_release_${Date.now()}`, "free:first-release");
+        setSubmittedRelease(data.release);
+        setUploadProgress(100);
+        return;
+      }
 
       const RazorpayCheckout = window.Razorpay;
       if (!RazorpayCheckout || String(orderData.key).startsWith("dev_")) {
@@ -2340,7 +2363,7 @@ export function ReleaseForm({
       safeRevokePreviewUrl(track.audioPreviewUrl);
     });
     if (artworkPreview) safeRevokePreviewUrl(artworkPreview);
-    setStep(initialRelease ? 7 : 3);
+    setStep(initialRelease ? 7 : firstReleaseOffer ? 4 : 3);
     setStepMotion("step-adjacent-forward");
     setMobileStepMenuOpen(false);
     setExpandedTrack(0);
@@ -2402,9 +2425,9 @@ export function ReleaseForm({
     return (
       <SuccessState
         release={submittedRelease}
-        onReset={isEditing ? () => router.push("/distribution") : resetForm}
+        onReset={firstReleaseOffer ? () => router.push(`/dashboard/releases?releaseId=${submittedRelease.id}`) : isEditing ? () => router.push("/distribution") : resetForm}
         isResubmission={isEditing}
-        resetLabel={isEditing ? "Back to catalogue" : undefined}
+        resetLabel={firstReleaseOffer ? "Track my release" : isEditing ? "Back to catalogue" : undefined}
       />
     );
   }
@@ -2415,6 +2438,7 @@ export function ReleaseForm({
         className="release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8"
         style={{ borderColor: "var(--border)", background: "var(--card)" }}
       >
+        {firstReleaseOffer ? <div className="flex items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-500">🎁 First release on us</div> : null}
         <div
           className="md:hidden rounded-[1.3rem] border p-3 md:p-4"
           style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}
@@ -5213,6 +5237,9 @@ export function ReleaseForm({
                               ],
                             ]
                           : []),
+                        ...(firstReleaseDiscount > 0
+                          ? [["First Release Offer", `-Rs ${firstReleaseDiscount.toLocaleString("en-IN")}`]]
+                          : []),
                         ...(ugcAddOnAmount > 0
                           ? [
                               [
@@ -5243,7 +5270,7 @@ export function ReleaseForm({
                         className="text-2xl font-semibold"
                         style={{ color: "var(--accent)" }}
                       >
-                        Rs {distributionAmount.toLocaleString("en-IN")}
+                        {finalDistributionAmount === 0 ? "FREE" : `Rs ${finalDistributionAmount.toLocaleString("en-IN")}`}
                       </span>
                     </div>
                   </section>

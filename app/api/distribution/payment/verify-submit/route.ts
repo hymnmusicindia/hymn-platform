@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { submitPaidDistributionRelease } from "@/lib/distribution-db";
+import { getDistributionPricing, submitPaidDistributionRelease } from "@/lib/distribution-db";
 import { createNotification, getSubscriptionByUserId, listArtistProfilesByUser, touchArtistProfiles } from "@/lib/db";
 import { verifyRazorpaySignature } from "@/lib/razorpay";
 import { distributionSubmitSchema } from "@/lib/validation";
@@ -9,6 +9,8 @@ import { emailAppUrl, sendReleaseEmail } from "@/lib/email/email-events";
 import { confirmDistributionPayment } from "@/lib/payment-webhooks";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { assertDireNoteAssetFormat } from "@/lib/distribution-asset-format";
+import { prisma } from "@/lib/prisma";
+import { calculateFirstReleasePrice, FIRST_RELEASE_PROMOTION_CODE, redeemFirstRelease, releaseFirstReleaseReservation, reserveFirstRelease, trackFirstReleaseEvent } from "@/lib/first-release-promotion";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -20,6 +22,9 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const payload = JSON.parse(String(formData.get("payload") || "{}"));
     const parsed = distributionSubmitSchema.parse(payload);
+    const isFirstReleaseOffer = parsed.promotionCode === FIRST_RELEASE_PROMOTION_CODE;
+    const promotionOrder = isFirstReleaseOffer ? await prisma.distributionOrder.findUnique({ where: { razorpayOrderId: parsed.razorpay_order_id } }) : null;
+    if (isFirstReleaseOffer && (!promotionOrder || promotionOrder.userId !== session.sub || promotionOrder.plan !== "one_time")) return NextResponse.json({ error: "First-release order not found." }, { status: 404 });
     const savedArtistIds = new Set((await listArtistProfilesByUser(session.sub)).map((profile) => profile.id));
     const invalidPrimaryArtist = parsed.metadata.tracks.some((track) =>
       track.artistProfileIds.some((id) => !savedArtistIds.has(id)),
@@ -41,7 +46,7 @@ export async function POST(request: Request) {
     } else if (parsed.razorpay_order_id === "sub_active") {
       const sub = await getSubscriptionByUserId(session.sub);
       if (!sub) return NextResponse.json({ error: "No active subscription found." }, { status: 400 });
-    } else {
+    } else if (!isFirstReleaseOffer || Number(promotionOrder?.amount ?? 0) > 0) {
       const valid = verifyRazorpaySignature(parsed.razorpay_order_id, parsed.razorpay_payment_id, parsed.razorpay_signature);
       if (!valid) return NextResponse.json({ error: "Invalid Razorpay signature." }, { status: 400 });
     }
@@ -91,7 +96,7 @@ export async function POST(request: Request) {
       });
     }
 
-    if (parsed.razorpay_order_id !== "sub_active") {
+    if (parsed.razorpay_order_id !== "sub_active" && (!isFirstReleaseOffer || Number(promotionOrder?.amount ?? 0) > 0)) {
       await confirmDistributionPayment({ razorpayOrderId: parsed.razorpay_order_id, paymentId: parsed.razorpay_payment_id, userId: session.sub, source: "browser" });
     }
     const artistProfileIds = [...new Set(parsed.metadata.tracks.flatMap((track) => [
@@ -102,7 +107,16 @@ export async function POST(request: Request) {
     await touchArtistProfiles(session.sub, artistProfileIds);
 
     const resolvedReleaseTitle = parsed.metadata.releaseTitle?.trim() || parsed.metadata.tracks[0]?.trackTitle || "Untitled release";
-    const release = await submitPaidDistributionRelease({
+    let promotionRedemption: Awaited<ReturnType<typeof reserveFirstRelease>> | null = null;
+    if (isFirstReleaseOffer) {
+      const normalAmount = getDistributionPricing(parsed.metadata.plan, parsed.metadata.tracks.length, parsed.metadata.releaseType, parsed.metadata.platforms, { youtubeContentIdEnabled: parsed.metadata.youtubeContentIdEnabled });
+      const quote = calculateFirstReleasePrice({ plan: parsed.metadata.plan, releaseType: parsed.metadata.releaseType, trackCount: parsed.metadata.tracks.length, normalAmount });
+      if (Number(promotionOrder?.amount) !== quote.finalAmount) throw new Error("First-release order amount is invalid. Please restart checkout.");
+      promotionRedemption = await reserveFirstRelease({ userId: session.sub, ...quote, attribution: parsed.attribution });
+    }
+    let release;
+    try {
+      release = await submitPaidDistributionRelease({
       userId: session.sub,
       razorpayOrderId: parsed.razorpay_order_id,
       razorpayPaymentId: parsed.razorpay_payment_id,
@@ -140,7 +154,19 @@ export async function POST(request: Request) {
         distributionPlan: parsed.metadata.plan,
         tracks
       }
-    });
+      });
+      if (!release?.id) throw new Error("Release submission did not create a release.");
+      if (promotionRedemption) {
+        await redeemFirstRelease(promotionRedemption.id, release.id);
+        await Promise.all([
+          trackFirstReleaseEvent({ event: "promotion_redeemed", userId: session.sub, attribution: parsed.attribution, metadata: { releaseId: release.id } }),
+          trackFirstReleaseEvent({ event: "release_submitted", userId: session.sub, attribution: parsed.attribution, metadata: { releaseId: release.id } })
+        ]).catch((error) => console.error("First-release analytics failed:", error));
+      }
+    } catch (error) {
+      if (promotionRedemption) await releaseFirstReleaseReservation(promotionRedemption.id).catch(() => undefined);
+      throw error;
+    }
 
     await createNotification({
       userId: session.sub,

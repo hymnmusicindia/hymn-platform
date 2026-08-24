@@ -4,12 +4,13 @@ import { getCurrentUserForPage } from "@/lib/access";
 import { listDetailedReleasesByUser } from "@/lib/distribution-db";
 import { ReleaseForm } from "@/components/release-form";
 import { ReleaseOnboardingGate } from "@/components/release-onboarding-gate";
+import { getFirstReleaseEligibility } from "@/lib/first-release-promotion";
 
 function firstValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function DistributionStartPage({ searchParams }: { searchParams?: Promise<{ edit?: string | string[]; resume?: string | string[]; manage?: string | string[]; onboarding?: string | string[] }> }) {
+export default async function DistributionStartPage({ searchParams }: { searchParams?: Promise<{ edit?: string | string[]; resume?: string | string[]; manage?: string | string[]; onboarding?: string | string[]; campaign?: string | string[]; utm_source?: string | string[]; utm_medium?: string | string[]; utm_campaign?: string | string[]; utm_content?: string | string[]; utm_term?: string | string[] }> }) {
   const user = await getCurrentUserForPage();
   const params = (await searchParams) ?? {};
   const requestedId = Number(firstValue(params.edit) ?? firstValue(params.resume) ?? firstValue(params.manage) ?? "");
@@ -22,6 +23,9 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
   }
   const hasRequestedRelease = Boolean(firstValue(params.edit) || firstValue(params.resume) || firstValue(params.manage));
   const isEditing = Boolean(editingRelease);
+  const campaignRequested = firstValue(params.campaign) === "first-release";
+  const campaignEligibility = user && campaignRequested ? await getFirstReleaseEligibility(user.id) : null;
+  const attribution = Object.fromEntries(["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"].map((key) => [key, firstValue(params[key as keyof typeof params])]).filter(([, value]) => Boolean(value))) as Record<string, string>;
 
   return (
     <main className="distribution-start-page pb-20">
@@ -57,7 +61,7 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
 
           {user ? (
             <div className="mx-auto w-full max-w-[1440px]">
-              <ReleaseForm selectedPlan={selectedPlan} initialRelease={editingRelease} />
+              <ReleaseForm selectedPlan={selectedPlan} initialRelease={editingRelease} firstReleaseOffer={Boolean(campaignEligibility?.eligible && !isEditing)} campaignAttribution={attribution} />
             </div>
           ) : firstValue(params.onboarding) === "release" ? <ReleaseOnboardingGate /> : (
             <div className="surface-card p-6 text-center sm:p-8">

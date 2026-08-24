@@ -6174,3 +6174,11 @@ html[data-theme="light"] .store-platform-option img[alt="Apple Music"] {
   .workspace-switcher-thumb,
   .workspace-switcher-track button { transition: none; }
 }
+@keyframes first-release-free-enter { from { opacity: 0; transform: translateY(12px) scale(.97); filter: blur(8px); } to { opacity: 1; transform: none; filter: none; } }
+.first-release-free-enter { animation: first-release-free-enter .7s cubic-bezier(.2,.8,.2,1) both; }
+.first-release-strike { position: relative; }
+.first-release-strike::after { content: ""; position: absolute; left: -3%; right: -3%; top: 52%; height: 1px; background: currentColor; transform-origin: left; animation: first-release-strike .55s .45s ease-out both; }
+@keyframes first-release-strike { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .first-release-free-enter, .first-release-strike::after { animation: none; } }
+body:has(.first-release-page) > header,
+body:has(.first-release-page) > footer { display: none; }

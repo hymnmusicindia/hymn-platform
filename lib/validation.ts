@@ -228,13 +228,16 @@ export const distributionOrderCreateSchema = z.object({
   trackCount: z.number().int().min(1),
   releaseType: z.enum(["single", "ep", "album"]),
   platforms: z.array(z.string().min(1)).min(1),
-  youtubeContentIdEnabled: z.boolean().optional()
+  youtubeContentIdEnabled: z.boolean().optional(),
+  promotionCode: z.literal("FIRST_RELEASE_FREE").optional()
 });
 
 export const distributionSubmitSchema = z.object({
   razorpay_order_id: z.string().min(1),
   razorpay_payment_id: z.string().min(1),
   razorpay_signature: z.string().min(1),
+  promotionCode: z.literal("FIRST_RELEASE_FREE").optional(),
+  attribution: z.record(z.string(), z.string().max(200)).optional(),
   metadata: distributionMetadataSchema
 });
 
