@@ -1981,6 +1981,31 @@ export function ReleaseForm({
     goToStep(visibleStepIndexes[Math.min(currentIndex + 1, visibleStepIndexes.length - 1)]);
   }
 
+  function continueFromArtists() {
+    if (stepTransitionRef.current) return;
+    if (!primaryArtistComplete) {
+      const issue = { step: 1, key: "release-primary-artists", message: "Select at least one saved primary artist profile." };
+      setAttemptedStep(1);
+      setValidationErrorKeys((current) => new Set([...current, issue.key]));
+      setStatus(issue.message);
+      triggerFieldFocus(issue);
+      return;
+    }
+    stepTransitionRef.current = true;
+    setStepTransitioning(true);
+    setAttemptedStep(null);
+    setStatus(null);
+    setVisitedSteps((current) => new Set([...current, 1]));
+    setStepMotion("step-adjacent-forward");
+    setStep(0);
+    if (stepTransitionTimerRef.current != null) window.clearTimeout(stepTransitionTimerRef.current);
+    stepTransitionTimerRef.current = window.setTimeout(() => {
+      stepTransitionRef.current = false;
+      setStepTransitioning(false);
+      stepTransitionTimerRef.current = null;
+    }, 750);
+  }
+
   async function uploadFilesDirectly() {
     const filesToUpload: {
       name: string;
@@ -2706,6 +2731,9 @@ export function ReleaseForm({
               />
               <div className="release-artist-stage-count"><span>{tracks[0]?.primaryArtistIds.length ?? 0} of 3 selected</span><span>Artist order is used for store delivery</span></div>
             </div>
+            <button type="button" onClick={continueFromArtists} disabled={stepTransitioning} className="release-artist-continue">
+              {stepTransitioning ? "Opening add music…" : "Continue to add music →"}
+            </button>
           </section>
         ) : null}
         {step === 5 ? (
@@ -5566,7 +5594,7 @@ export function ReleaseForm({
             </div>
           </section>
         ) : null}
-        {step !== 7 ? (
+        {step !== 7 && step !== 1 ? (
           <div
             className={(step === 0 || step === 1)
               ? "release-focused-actions"

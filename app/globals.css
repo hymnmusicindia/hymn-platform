@@ -4688,6 +4688,9 @@ body:has(.release-workflow.is-focused-step) > footer { display:none; }
 .release-workflow.is-artist-step .release-workspace-quit { border:0; background:var(--bg-elevated); }
 .release-workflow.is-artist-step .release-footer-mobile-actions { position:static; margin-top:-5rem; }
 .release-workflow.is-artist-step .release-footer-action.is-primary { min-width:auto !important; border-radius:999px !important; padding-inline:1.2rem; background:var(--accent) !important; color:var(--accent-foreground) !important; }
+.release-artist-continue { display:inline-flex; min-height:3.5rem; align-items:center; justify-content:center; justify-self:center; border:0; border-radius:999px; padding:.8rem 1.35rem; background:var(--accent); color:var(--accent-foreground); font-size:.86rem; font-weight:750; box-shadow:0 12px 30px color-mix(in srgb,var(--accent) 18%,transparent); transition:transform .18s ease,box-shadow .18s ease,opacity .18s ease; }
+.release-artist-continue:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 16px 36px color-mix(in srgb,var(--accent) 24%,transparent); }
+.release-artist-continue:disabled { cursor:wait; opacity:.62; }
 .release-workspace-quit { min-height:2.5rem; border:1px solid var(--border); border-radius:999px; padding:.55rem .9rem; background:var(--bg-elevated); color:var(--text); font-size:.75rem; font-weight:700; }
 .release-workspace-state { display:flex; align-items:center; gap:.75rem; color:var(--text-soft); font-size:.72rem; }
 .release-workspace-state .is-saved { color:var(--success); }
