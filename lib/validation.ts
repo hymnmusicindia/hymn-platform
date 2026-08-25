@@ -56,7 +56,7 @@ const spotifyArtistUrlPattern = /^(?:https?:\/\/)?open\.spotify\.com\/artist\/[A
 const instagramProfilePattern = /^(?:https?:\/\/)?(?:www\.)?instagram\.com\/[A-Za-z0-9._]+\/?(?:[?#].*)?$|^@[A-Za-z0-9._]+$/i;
 const appleArtistUrlPattern = /^(?:https?:\/\/)?music\.apple\.com\/[a-z]{2}\/artist\/[^/]+\/\d+(?:[/?#].*)?$/i;
 
-export const artistProfileCreateSchema = z.object({
+const artistProfileFields = z.object({
   name: z.string().min(1),
   hasLiveMusic: z.boolean().optional().default(true),
   spotifyUrl: z.string().min(1).refine((value) => spotifyArtistUrlPattern.test(value.trim()), { message: "Please paste a valid Spotify artist profile link." }),
@@ -67,8 +67,16 @@ export const artistProfileCreateSchema = z.object({
   appleArtistId: z.string().optional(),
   imageUrl: z.string().optional(),
   followers: z.number().int().nonnegative().nullable().optional(),
-  confirmedSpotifyName: z.string().optional()
+  confirmedSpotifyName: z.string().optional(),
+  isProducer: z.boolean().optional().default(false),
+  producerLegalName: z.string().trim().max(150).optional()
 });
+
+function requireProducerLegalName(value: { isProducer?: boolean; producerLegalName?: string }, context: z.RefinementCtx) {
+  if (value.isProducer && !value.producerLegalName?.trim()) context.addIssue({ code: z.ZodIssueCode.custom, path: ["producerLegalName"], message: "Complete legal name is required for a producer profile." });
+}
+
+export const artistProfileCreateSchema = artistProfileFields.superRefine(requireProducerLegalName);
 
 export const spotifySearchSchema = z.object({ q: z.string().min(1) });
 export const spotifyResolveSchema = z.object({ spotifyUrl: z.string().min(1) });
@@ -87,9 +95,9 @@ export const paymentVerifySchema = z.object({
   items: z.array(orderItemSchema).min(1)
 });
 
-export const artistProfileUpdateSchema = artistProfileCreateSchema.partial().extend({
+export const artistProfileUpdateSchema = artistProfileFields.partial().extend({
   instagramUrl: z.string().min(1).refine((value) => instagramProfilePattern.test(value.trim()), { message: "Instagram profile link is required for artist verification." }).optional()
-});
+}).superRefine(requireProducerLegalName);
 
 export function normalizeInstagramUrl(value: string) {
   const normalized = value.trim();

@@ -2341,7 +2341,18 @@ const portalArtistCardSelect = {
 } satisfies Prisma.ArtistCardSelect;
 
 function mapPrismaArtistCard(card: any): ArtistProfile {
-  return { id: card.id, userId: card.userId, name: card.artistName, spotifyArtistId: card.spotifyArtistId ?? null, spotifyUrl: card.spotifyProfileUrl ?? null, appleArtistId: card.appleArtistId ?? null, appleUrl: card.appleMusicProfileUrl ?? null, instagramUrl: card.instagramUrl ?? null, youtubeUrl: card.youtubeUrl ?? null, imageUrl: card.imageUrl ?? null, followers: card.followers ?? null, isLinked: Boolean(card.spotifyProfileUrl || card.appleMusicProfileUrl), isPrimary: Boolean(card.isPrimary), archivedAt: card.archivedAt?.toISOString?.() ?? null, lastUsedAt: null, createdAt: card.createdAt.toISOString(), updatedAt: card.updatedAt.toISOString() };
+  let producerLegalName: string | null = null;
+  try {
+    const role = card.role ? JSON.parse(card.role) : null;
+    if (role?.type === "producer" && typeof role.legalName === "string") producerLegalName = role.legalName.trim() || null;
+  } catch {
+    producerLegalName = null;
+  }
+  return { id: card.id, userId: card.userId, name: card.artistName, spotifyArtistId: card.spotifyArtistId ?? null, spotifyUrl: card.spotifyProfileUrl ?? null, appleArtistId: card.appleArtistId ?? null, appleUrl: card.appleMusicProfileUrl ?? null, instagramUrl: card.instagramUrl ?? null, youtubeUrl: card.youtubeUrl ?? null, imageUrl: card.imageUrl ?? null, followers: card.followers ?? null, isLinked: Boolean(card.spotifyProfileUrl || card.appleMusicProfileUrl), isPrimary: Boolean(card.isPrimary), isProducer: Boolean(producerLegalName), producerLegalName, archivedAt: card.archivedAt?.toISOString?.() ?? null, lastUsedAt: null, createdAt: card.createdAt.toISOString(), updatedAt: card.updatedAt.toISOString() };
+}
+
+function artistProducerRole(input: Pick<ArtistProfile, "isProducer" | "producerLegalName">) {
+  return input.isProducer && input.producerLegalName?.trim() ? JSON.stringify({ type: "producer", legalName: input.producerLegalName.trim() }) : null;
 }
 
 async function listPostgresArtistCards(input: { userId?: number; query?: string; take?: number } = {}) {
@@ -2431,7 +2442,7 @@ export async function listRecentArtistProfilesByUser(userId: number, limit = 6) 
 export async function createArtistProfile(input: Omit<ArtistProfile, "id" | "createdAt" | "updatedAt" | "lastUsedAt">) {
   if (usesPostgresPrisma()) {
     const card = await prisma.artistCard.create({
-      data: { userId: input.userId, artistName: input.name, spotifyProfileUrl: input.spotifyUrl, spotifyArtistId: input.spotifyArtistId, appleMusicProfileUrl: input.appleUrl, appleArtistId: input.appleArtistId, instagramUrl: input.instagramUrl!, youtubeUrl: input.youtubeUrl, imageUrl: input.imageUrl, followers: input.followers, isPrimary: input.isPrimary ?? false },
+      data: { userId: input.userId, artistName: input.name, spotifyProfileUrl: input.spotifyUrl, spotifyArtistId: input.spotifyArtistId, appleMusicProfileUrl: input.appleUrl, appleArtistId: input.appleArtistId, instagramUrl: input.instagramUrl!, youtubeUrl: input.youtubeUrl, imageUrl: input.imageUrl, followers: input.followers, isPrimary: input.isPrimary ?? false, role: artistProducerRole(input) },
       select: portalArtistCardSelect,
     });
     return mapPrismaArtistCard(card);
@@ -2486,7 +2497,7 @@ export async function updateArtistProfile(userId: number, id: number, patch: Par
   if (!existing) return null;
   const next = { ...existing, ...patch, updatedAt: new Date().toISOString() };
   if (usesPostgresPrisma()) {
-    const result = await prisma.artistCard.updateMany({ where: { id, userId, archivedAt: null }, data: { artistName: next.name, spotifyProfileUrl: next.spotifyUrl, spotifyArtistId: next.spotifyArtistId, appleMusicProfileUrl: next.appleUrl, appleArtistId: next.appleArtistId, instagramUrl: next.instagramUrl!, youtubeUrl: next.youtubeUrl, imageUrl: next.imageUrl, followers: next.followers } });
+    const result = await prisma.artistCard.updateMany({ where: { id, userId, archivedAt: null }, data: { artistName: next.name, spotifyProfileUrl: next.spotifyUrl, spotifyArtistId: next.spotifyArtistId, appleMusicProfileUrl: next.appleUrl, appleArtistId: next.appleArtistId, instagramUrl: next.instagramUrl!, youtubeUrl: next.youtubeUrl, imageUrl: next.imageUrl, followers: next.followers, role: artistProducerRole(next) } });
     if (!result.count) return null;
     const card = await prisma.artistCard.findUnique({ where: { id }, select: portalArtistCardSelect });
     return card ? mapPrismaArtistCard(card) : null;

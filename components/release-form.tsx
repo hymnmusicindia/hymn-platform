@@ -1456,6 +1456,19 @@ export function ReleaseForm({
       primaryArtistIds,
       primaryArtistQuery: "",
     })));
+  const withProfileProducerCredit = (producers: ContributorDraft[], profile: ArtistProfile) => {
+    const legalName = profile.isProducer ? profile.producerLegalName?.trim() : "";
+    if (!legalName || producers.some((producer) => producer.legalName.trim().toLowerCase() === legalName.toLowerCase())) return producers;
+    const credit = { ...createContributor(), legalName, artistName: profile.name };
+    return producers.length === 1 && !producers[0].legalName.trim() && !producers[0].artistName.trim() ? [credit] : [...producers, credit];
+  };
+  const selectPrimaryArtistForAllTracks = (profile: ArtistProfile) =>
+    setTracks((current) => current.map((track) => ({
+      ...track,
+      primaryArtistIds: track.primaryArtistIds.includes(profile.id) ? track.primaryArtistIds : [...track.primaryArtistIds, profile.id],
+      primaryArtistQuery: "",
+      producers: withProfileProducerCredit(track.producers, profile),
+    })));
   const setTrackList = (updater: (current: TrackDraft[]) => TrackDraft[]) =>
     setTracks((current) =>
       updater(current).map((track, index) => ({
@@ -2869,7 +2882,7 @@ export function ReleaseForm({
                 focused
                 required={showErrors && !primaryArtistComplete}
                 onQueryChange={(value) => updateTrack(0, { primaryArtistQuery: value })}
-                onSelect={(profile) => { if (tracks[0].primaryArtistIds.length >= 3) return; upsertKnownProfile(profile); updatePrimaryArtistsForAllTracks(tracks[0].primaryArtistIds.includes(profile.id) ? tracks[0].primaryArtistIds : [...tracks[0].primaryArtistIds, profile.id]); }}
+                onSelect={(profile) => { if (tracks[0].primaryArtistIds.length >= 3) return; upsertKnownProfile(profile); selectPrimaryArtistForAllTracks(profile); }}
                 onRemove={() => undefined}
               />
               </div>
@@ -3309,6 +3322,7 @@ export function ReleaseForm({
                                     updateTrack(index, {
                                       primaryArtistIds: track.primaryArtistIds.includes(profile.id) ? track.primaryArtistIds : [...track.primaryArtistIds, profile.id],
                                       primaryArtistQuery: "",
+                                      producers: withProfileProducerCredit(track.producers, profile),
                                     });
                                   }}
                                   onRemove={() => undefined}

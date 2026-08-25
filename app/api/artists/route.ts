@@ -66,7 +66,9 @@ export async function POST(request: Request) {
       youtubeUrl: payload.youtubeUrl?.trim() || null,
       imageUrl: payload.imageUrl?.trim() || avatarDataUrl(name),
       followers: spotifyUrl ? payload.followers ?? null : null,
-      isLinked
+      isLinked,
+      isProducer: payload.isProducer,
+      producerLegalName: payload.isProducer ? payload.producerLegalName?.trim() || null : null,
     });
 
     return NextResponse.json({ profile, ...(await usage(result.user.id)) }, { status: 201 });

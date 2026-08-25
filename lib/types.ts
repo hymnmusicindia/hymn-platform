@@ -76,6 +76,8 @@ export interface ArtistProfile {
   followers?: number | null;
   isLinked: boolean;
   isPrimary?: boolean;
+  isProducer?: boolean;
+  producerLegalName?: string | null;
   archivedAt?: string | null;
   lastUsedAt?: string | null;
   createdAt: string;
@@ -384,6 +386,8 @@ export interface ArtistCard {
   spotifyProfileUrl?: string | null;
   appleMusicProfileUrl?: string | null;
   role?: string;
+  isProducer?: boolean;
+  producerLegalName?: string | null;
   createdAt: string;
   updatedAt: string;
 }

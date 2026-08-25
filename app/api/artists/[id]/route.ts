@@ -21,7 +21,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       ...(payload.spotifyUrl !== undefined ? { spotifyUrl: payload.spotifyUrl.trim(), spotifyArtistId: payload.spotifyArtistId ?? parseSpotifyArtistId(payload.spotifyUrl) } : {}),
       ...(payload.appleUrl !== undefined ? { appleUrl: payload.appleUrl.trim() || null, appleArtistId: payload.appleUrl ? (payload.appleArtistId ?? parseAppleArtistId(payload.appleUrl)) : null } : {}),
       ...(payload.instagramUrl !== undefined ? { instagramUrl: normalizeInstagramUrl(payload.instagramUrl) } : {}),
-      ...(payload.youtubeUrl !== undefined ? { youtubeUrl: payload.youtubeUrl.trim() || null } : {})
+      ...(payload.youtubeUrl !== undefined ? { youtubeUrl: payload.youtubeUrl.trim() || null } : {}),
+      ...(payload.isProducer !== undefined ? { isProducer: payload.isProducer, producerLegalName: payload.isProducer ? payload.producerLegalName?.trim() || null : null } : {})
     };
     const profile = await updateArtistProfile(result.user.id, id, patch);
     if (!profile) return NextResponse.json({ error: "Artist profile not found." }, { status: 404 });

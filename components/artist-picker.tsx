@@ -77,6 +77,8 @@ export function ArtistPicker({
   const [instagramUrl, setInstagramUrl] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [appleUrl, setAppleUrl] = useState("");
+  const [isProducer, setIsProducer] = useState(false);
+  const [producerLegalName, setProducerLegalName] = useState("");
   const [saving, setSaving] = useState(false);
   const [editingProfile, setEditingProfile] = useState<ArtistProfile | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -206,6 +208,8 @@ export function ArtistPicker({
     appleUrl?: string;
     instagramUrl: string;
     youtubeUrl?: string;
+    isProducer: boolean;
+    producerLegalName?: string;
   }) {
     const response = await fetch("/api/artists", {
       method: "POST",
@@ -221,6 +225,8 @@ export function ArtistPicker({
         appleUrl: input.appleUrl
         ,instagramUrl: input.instagramUrl
         ,youtubeUrl: input.youtubeUrl
+        ,isProducer: input.isProducer
+        ,producerLegalName: input.producerLegalName
       })
     });
     const data = await response.json();
@@ -246,6 +252,8 @@ export function ArtistPicker({
     setShowManualSpotify(false);
     setInstagramUrl("");
     setYoutubeUrl("");
+    setIsProducer(false);
+    setProducerLegalName("");
     setEditingProfile(null);
     setAppleUrl("");
     setSpotifyResults([]);
@@ -264,6 +272,8 @@ export function ArtistPicker({
     setInstagramUrl(profile.instagramUrl ?? "");
     setAppleUrl(profile.appleUrl ?? "");
     setYoutubeUrl(profile.youtubeUrl ?? "");
+    setIsProducer(Boolean(profile.isProducer));
+    setProducerLegalName(profile.producerLegalName ?? "");
     setSpotifyResults([]);
     setSpotifyError(null);
     setCreateOpen(true);
@@ -297,13 +307,17 @@ export function ArtistPicker({
       setSpotifyError("Select a Spotify artist or paste a valid Spotify artist profile link.");
       return;
     }
+    if (isProducer && !producerLegalName.trim()) {
+      setSpotifyError("Complete legal name is required for a producer profile.");
+      return;
+    }
 
     setSaving(true);
     setSpotifyError(null);
 
     try {
       if (editingProfile) {
-        const response = await fetch(`/api/artists/${editingProfile.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, spotifyUrl: manualSpotifyUrl.trim(), instagramUrl: instagramUrl.trim(), appleUrl: appleUrl.trim(), youtubeUrl: youtubeUrl.trim() }) });
+        const response = await fetch(`/api/artists/${editingProfile.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, spotifyUrl: manualSpotifyUrl.trim(), instagramUrl: instagramUrl.trim(), appleUrl: appleUrl.trim(), youtubeUrl: youtubeUrl.trim(), isProducer, producerLegalName: isProducer ? producerLegalName.trim() : undefined }) });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Could not update artist profile.");
         const updated = data.profile as ArtistProfile;
@@ -329,6 +343,8 @@ export function ArtistPicker({
         appleUrl: appleUrl.trim() || undefined
         ,instagramUrl: instagramUrl.trim()
         ,youtubeUrl: youtubeUrl.trim() || undefined
+        ,isProducer
+        ,producerLegalName: isProducer ? producerLegalName.trim() : undefined
       });
       onSelect(profile);
       setRecent((current) => [profile, ...current.filter((item) => item.id !== profile.id)].slice(0, 6));
@@ -492,6 +508,13 @@ export function ArtistPicker({
                 <input className="field" value={appleUrl} onChange={(event) => setAppleUrl(event.target.value)} placeholder="Optional Apple Music artist link" />
               </div>
               <div><label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-muted)" }}>YouTube Link</label><input className="field" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} placeholder="Optional YouTube artist link" /></div>
+              <div className="rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
+                <label className="flex cursor-pointer items-center justify-between gap-4">
+                  <span><strong className="block text-sm" style={{ color: "var(--text)" }}>This artist is also a producer</strong><small className="mt-1 block" style={{ color: "var(--text-soft)" }}>Automatically add their producer credit when used as a primary artist.</small></span>
+                  <input type="checkbox" checked={isProducer} onChange={(event) => { setIsProducer(event.target.checked); if (!event.target.checked) setProducerLegalName(""); }} />
+                </label>
+                {isProducer ? <div className="mt-4"><label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-muted)" }}>Complete legal name *</label><input className="field" required value={producerLegalName} onChange={(event) => setProducerLegalName(event.target.value)} placeholder="Legal name used in producer credits" /></div> : null}
+              </div>
             </div>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
