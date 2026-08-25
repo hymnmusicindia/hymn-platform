@@ -1482,13 +1482,12 @@ export function ReleaseForm({
     setExpandedTrack(tracks.length);
   };
 
-  function movePrimaryArtist(from: number, direction: -1 | 1) {
-    const target = from + direction;
-    const ids = tracks[0]?.primaryArtistIds ?? [];
-    if (target < 0 || target >= ids.length) return;
+  function reorderPrimaryArtists(ids: number[], from: number, target: number) {
+    if (from === target || from < 0 || target < 0 || from >= ids.length || target >= ids.length) return ids;
     const reordered = [...ids];
-    [reordered[from], reordered[target]] = [reordered[target], reordered[from]];
-    updatePrimaryArtistsForAllTracks(reordered);
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(target, 0, moved);
+    return reordered;
   }
 
   function resolvePrefill(field: ReleasePrefillSuggestion["field"], keep: boolean) {
@@ -2861,14 +2860,18 @@ export function ReleaseForm({
             <div ref={registerField("release-primary-artists")} className="release-focused-card">
               <div className="release-artist-avatar-picker">
               {(tracks[0]?.primaryArtistIds ?? []).length > 0 ? <div className="release-selected-artists" aria-label="Selected primary artists">
-                {(tracks[0]?.primaryArtistIds ?? []).map((profileId) => {
+                {(tracks[0]?.primaryArtistIds ?? []).map((profileId, artistIndex) => {
                   const profile = knownProfiles[profileId];
                   if (!profile) return null;
                   const removalArmed = artistRemovalCandidateId === profileId;
-                  return <button type="button" key={profileId} className={clsx("release-selected-artist", removalArmed && "is-removal-armed")} title={removalArmed ? `Remove ${profile.name}` : profile.name} aria-label={removalArmed ? `Confirm removal of ${profile.name}` : `${profile.name}. Click to remove.`} onClick={() => { if (removalArmed) { updatePrimaryArtistsForAllTracks(tracks[0].primaryArtistIds.filter((id) => id !== profileId)); setArtistRemovalCandidateId(null); } else setArtistRemovalCandidateId(profileId); }}>
-                    {profile.imageUrl ? <img src={profile.imageUrl} alt="" /> : <span className="release-selected-artist-avatar">{profile.name.slice(0, 1).toUpperCase()}</span>}
-                    <span className="release-selected-artist-remove" aria-hidden="true"><X /></span>
-                  </button>;
+                  return <div key={profileId} className="release-primary-artist-sort-item" data-primary-artist-index={artistIndex} data-primary-artist-scope="release">
+                    <span className="release-primary-artist-position" aria-hidden="true">{artistIndex + 1}</span>
+                    <button type="button" className={clsx("release-selected-artist", removalArmed && "is-removal-armed")} title={removalArmed ? `Remove ${profile.name}` : profile.name} aria-label={removalArmed ? `Confirm removal of ${profile.name}` : `${profile.name}, primary artist ${artistIndex + 1}. Click to remove.`} onClick={() => { if (removalArmed) { updatePrimaryArtistsForAllTracks(tracks[0].primaryArtistIds.filter((id) => id !== profileId)); setArtistRemovalCandidateId(null); } else setArtistRemovalCandidateId(profileId); }}>
+                      {profile.imageUrl ? <img src={profile.imageUrl} alt="" /> : <span className="release-selected-artist-avatar">{profile.name.slice(0, 1).toUpperCase()}</span>}
+                      <span className="release-selected-artist-remove" aria-hidden="true"><X /></span>
+                    </button>
+                    <button type="button" className="release-primary-artist-drag-handle" aria-label={`Drag ${profile.name} to change primary artist order`} title="Drag to reorder" onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerUp={(event) => { const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-primary-artist-scope="release"]'); const targetIndex = Number(target?.dataset.primaryArtistIndex); if (Number.isInteger(targetIndex)) updatePrimaryArtistsForAllTracks(reorderPrimaryArtists(tracks[0].primaryArtistIds, artistIndex, targetIndex)); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}><GripVertical /></button>
+                  </div>;
                 })}
               </div> : null}
               <ArtistPicker
@@ -2886,7 +2889,7 @@ export function ReleaseForm({
                 onRemove={() => undefined}
               />
               </div>
-              <div className="release-artist-stage-count"><span>{tracks[0]?.primaryArtistIds.length ?? 0} of 3 selected</span><span>Artist order is used for store delivery</span></div>
+              <div className="release-artist-stage-count"><span>{tracks[0]?.primaryArtistIds.length ?? 0} of 3 selected</span><span>Drag artists to set their store delivery order</span></div>
             </div>
             <button type="button" onClick={continueFromArtists} disabled={stepTransitioning} className="release-artist-continue">
               {stepTransitioning ? "Opening add music…" : "Continue to add music →"}
@@ -3297,15 +3300,20 @@ export function ReleaseForm({
                             <div className="release-track-artist-field">
                               <span className="release-track-artist-label">Primary Artist</span>
                               <div className="release-track-artist-avatar-picker">
-                                {track.primaryArtistIds.map((profileId) => {
+                                {track.primaryArtistIds.map((profileId, artistIndex) => {
                                   const profile = knownProfiles[profileId];
                                   if (!profile) return null;
                                   const removalKey = `${track.id}:${profileId}`;
                                   const removalArmed = trackArtistRemovalCandidate === removalKey;
-                                  return <button type="button" key={profileId} className={clsx("release-track-selected-artist", removalArmed && "is-removal-armed")} title={removalArmed ? `Remove ${profile.name}` : profile.name} aria-label={removalArmed ? `Confirm removal of ${profile.name}` : `${profile.name}. Click twice to remove.`} onClick={() => { if (removalArmed) { updateTrack(index, { primaryArtistIds: track.primaryArtistIds.filter((id) => id !== profileId) }); setTrackArtistRemovalCandidate(null); } else setTrackArtistRemovalCandidate(removalKey); }}>
-                                    {profile.imageUrl ? <img src={profile.imageUrl} alt="" /> : <span className="release-selected-artist-avatar">{profile.name.slice(0, 1).toUpperCase()}</span>}
-                                    <span className="release-selected-artist-remove" aria-hidden="true"><X /></span>
-                                  </button>;
+                                  const scope = `track-${track.id}`;
+                                  return <div key={profileId} className="release-primary-artist-sort-item is-track-artist" data-primary-artist-index={artistIndex} data-primary-artist-scope={scope}>
+                                    <span className="release-primary-artist-position" aria-hidden="true">{artistIndex + 1}</span>
+                                    <button type="button" className={clsx("release-track-selected-artist", removalArmed && "is-removal-armed")} title={removalArmed ? `Remove ${profile.name}` : profile.name} aria-label={removalArmed ? `Confirm removal of ${profile.name}` : `${profile.name}, primary artist ${artistIndex + 1}. Click twice to remove.`} onClick={() => { if (removalArmed) { updateTrack(index, { primaryArtistIds: track.primaryArtistIds.filter((id) => id !== profileId) }); setTrackArtistRemovalCandidate(null); } else setTrackArtistRemovalCandidate(removalKey); }}>
+                                      {profile.imageUrl ? <img src={profile.imageUrl} alt="" /> : <span className="release-selected-artist-avatar">{profile.name.slice(0, 1).toUpperCase()}</span>}
+                                      <span className="release-selected-artist-remove" aria-hidden="true"><X /></span>
+                                    </button>
+                                    <button type="button" className="release-primary-artist-drag-handle" aria-label={`Drag ${profile.name} to change primary artist order`} title="Drag to reorder" onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerUp={(event) => { const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>(`[data-primary-artist-scope="${scope}"]`); const targetIndex = Number(target?.dataset.primaryArtistIndex); if (Number.isInteger(targetIndex)) updateTrack(index, { primaryArtistIds: reorderPrimaryArtists(track.primaryArtistIds, artistIndex, targetIndex) }); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}><GripVertical /></button>
+                                  </div>;
                                 })}
                                 <ArtistPicker
                                   label="Add primary artist"
