@@ -23,7 +23,7 @@ export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   if (pathname.startsWith("/api/") && !pathname.startsWith("/api/webhooks/") && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
     const origin = request.headers.get("origin"); const fetchSite = request.headers.get("sec-fetch-site");
-    if ((origin && origin !== request.nextUrl.origin) || fetchSite === "cross-site") return NextResponse.json({ error: "Cross-site mutation rejected." }, { status: 403 });
+    if ((origin && !trustedMutationOrigins(request).has(normalizeOrigin(origin))) || fetchSite === "cross-site") return NextResponse.json({ error: "Cross-site mutation rejected." }, { status: 403 });
   }
   const rule = [...protectedApis, ...protectedRoutes].find((item) => pathname === item.prefix || pathname.startsWith(`${item.prefix}/`));
   if (!rule || pathname === "/admin/login" || pathname === "/api/admin/auth/login") return NextResponse.next();
@@ -63,6 +63,22 @@ export async function proxy(request: NextRequest) {
   }
 
   return NextResponse.next();
+}
+
+function trustedMutationOrigins(request: NextRequest) {
+  const origins = new Set<string>([normalizeOrigin(request.nextUrl.origin)]);
+  for (const value of [process.env.NEXT_PUBLIC_APP_URL, process.env.APP_URL, process.env.PUBLIC_SITE_URL]) {
+    if (value?.trim()) origins.add(normalizeOrigin(value));
+  }
+  return origins;
+}
+
+function normalizeOrigin(value: string) {
+  try {
+    return new URL(value).origin.toLowerCase();
+  } catch {
+    return "";
+  }
 }
 
 async function readSession(request: NextRequest) {
