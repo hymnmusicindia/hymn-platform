@@ -5629,7 +5629,7 @@ export function ReleaseForm({
                   ? "Processing…"
                   : firstReleaseOffer
                     ? finalDistributionAmount === 0
-                      ? "FREE"
+                      ? "Submit"
                       : `Pay Rs ${finalDistributionAmount.toLocaleString("en-IN")} for add-ons & Submit`
                     : `Pay Rs ${distributionAmount.toLocaleString("en-IN")} & Submit`}
               </button>
