@@ -349,7 +349,7 @@ export function ArtistPicker({
         </label>
       </div>
 
-      <input
+      {focused ? <button type="button" className="artist-picker-add-trigger" disabled={reachedMax} onClick={() => setOpen((current) => !current)} aria-label={reachedMax ? "Maximum primary artists selected" : "Add primary artist"} aria-expanded={open}>+</button> : <input
         className="field"
         value={query}
         disabled={reachedMax}
@@ -359,13 +359,13 @@ export function ArtistPicker({
           onQueryChange(event.target.value);
           setOpen(true);
         }}
-      />
+      />}
 
       <p className="px-[.8rem] text-xs leading-5" style={{ color: "var(--text-soft)" }}>
         {helper === "Max 3 artists" ? "Max 3 primary artists per release" : helper}
       </p>
 
-      {showRecentQuickAdd && recent.length > 0 ? <div className="artist-picker-quick-add">
+      {showRecentQuickAdd && recent.length > 0 && !focused ? <div className="artist-picker-quick-add">
         <p>{focused ? "Last used" : "Recently used"}</p>
         <div>{recent.filter((profile) => !valueIds.some((selected) => selected.id === profile.id)).slice(0, 5).map((profile) => <button key={`quick-${profile.id}`} type="button" onClick={() => selectSaved(profile)}><ArtistAvatar name={profile.name} imageUrl={profile.imageUrl} /><span>{profile.name}</span><b aria-hidden="true">+</b></button>)}</div>
       </div> : null}
@@ -388,6 +388,7 @@ export function ArtistPicker({
 
       {open ? (
         <div className="absolute top-full z-30 mt-2 w-full min-w-0 rounded-2xl border p-3 shadow-2xl sm:min-w-[32rem]" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
+          {focused ? <input className="field mb-3" autoFocus value={query} placeholder="Search saved artist profiles" onChange={(event) => onQueryChange(event.target.value)} /> : null}
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
             <div><p className="text-sm font-semibold" style={{ color: "var(--text)" }}>Saved artist profiles</p><p className="mt-0.5 text-xs" style={{ color: "var(--text-soft)" }}>{hasQuery ? "Matches first - all saved profiles remain available" : "Choose a profile for this release"}</p></div>
             <span className="shrink-0 rounded-full border px-2.5 py-1 text-xs" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>{`${usage.currentCount} of ${usage.allowedLimit} used`}</span>

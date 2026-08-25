@@ -4832,7 +4832,14 @@ body:has(.release-workflow.is-focused-step) > footer { display:none; }
   .release-workflow.is-artist-step .release-artist-stage { min-height:calc(100dvh - 4.5rem); box-sizing:border-box; padding:4.5rem 0 1rem; }
 }
 .release-focused-card { display:grid; gap:.5rem; border:0; border-radius:0; padding:0; background:transparent; box-shadow:none; }
-.release-selected-artists { display:grid; gap:.5rem; }
+.release-artist-avatar-picker { display:flex; align-items:center; justify-content:center; gap:.65rem; }
+.release-selected-artists { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:.65rem; }
+.release-workflow.is-artist-step .release-selected-artist { position:relative; display:grid; width:3.4rem; height:3.4rem; min-height:0; place-items:center; overflow:hidden; border:2px solid var(--card); border-radius:50%; padding:0; background:var(--bg-elevated); box-shadow:0 0 0 1px var(--border),0 8px 22px color-mix(in srgb,var(--shadow) 12%,transparent); transition:transform .18s ease,box-shadow .18s ease; }
+.release-workflow.is-artist-step .release-selected-artist:hover { transform:translateY(-2px); box-shadow:0 0 0 1px var(--border-strong),0 12px 26px color-mix(in srgb,var(--shadow) 16%,transparent); }
+.release-workflow.is-artist-step .release-selected-artist > img,.release-workflow.is-artist-step .release-selected-artist-avatar { width:100%; height:100%; border-radius:50%; object-fit:cover; }
+.release-selected-artist-remove { position:absolute; inset:0; display:grid; place-items:center; border-radius:50%; background:rgba(10,10,10,.52); color:white; opacity:0; transition:opacity .16s ease; }
+.release-selected-artist-remove svg { width:1.15rem; height:1.15rem; }
+.release-selected-artist.is-removal-armed .release-selected-artist-remove { opacity:1; }
 .release-selected-artist { display:flex; min-height:3.9rem; align-items:center; gap:.65rem; border:1px solid var(--border); border-radius:.45rem; padding:.55rem .75rem; background:var(--bg-elevated); }
 .release-selected-artist > img,.release-selected-artist-avatar { width:2rem; height:2rem; flex:none; border-radius:50%; object-fit:cover; }
 .release-selected-artist-avatar { display:grid; place-items:center; background:var(--accent-soft); font-size:.72rem; font-weight:800; }
@@ -4847,6 +4854,10 @@ body:has(.release-workflow.is-focused-step) > footer { display:none; }
 .release-artist-stage-count { display:flex; flex-wrap:wrap; justify-content:space-between; gap:.5rem; border-top:1px solid var(--border); padding-top:.8rem; color:var(--text-soft); font-size:.66rem; }
 .release-workflow.is-artist-step .release-artist-stage-count { display:none; }
 .artist-picker-focused { gap:.6rem; }
+.release-artist-avatar-picker .artist-picker-focused { width:auto; }
+.artist-picker-add-trigger { display:grid; width:3.4rem; height:3.4rem; min-height:0 !important; place-items:center; border:1px dashed var(--border-strong); border-radius:50%; padding:0; background:transparent; color:var(--text); font-size:1.55rem; font-weight:400; transition:transform .18s ease,border-color .18s ease,background .18s ease; }
+.artist-picker-add-trigger:hover:not(:disabled),.artist-picker-add-trigger[aria-expanded="true"] { transform:translateY(-2px); border-color:var(--accent); background:var(--accent-soft); color:var(--accent); }
+.artist-picker-add-trigger:disabled { cursor:not-allowed; opacity:.35; }
 .artist-picker-focused > div:first-child,.artist-picker-focused > p { display:none; }
 .artist-picker-focused > input { min-height:3.1rem; border-radius:.4rem !important; background:var(--bg-elevated) !important; }
 .artist-picker-focused > input::placeholder { color:var(--text-muted); }

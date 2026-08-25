@@ -844,6 +844,7 @@ export function ReleaseForm({
   const stepTransitionTimerRef = useRef<number | null>(null);
   const [mobileStepMenuOpen, setMobileStepMenuOpen] = useState(false);
   const [expandedTrack, setExpandedTrack] = useState(0);
+  const [artistRemovalCandidateId, setArtistRemovalCandidateId] = useState<number | null>(null);
   const audioPreviewObjectUrlsRef = useRef<Set<string>>(new Set());
   const [draggedTrackIndex, setDraggedTrackIndex] = useState<number | null>(null);
   const [versionPickerTrack, setVersionPickerTrack] = useState<number | null>(null);
@@ -2724,16 +2725,16 @@ export function ReleaseForm({
               <h2>Who are the primary artists on this release?</h2>
             </div>
             <div ref={registerField("release-primary-artists")} className="release-focused-card">
+              <div className="release-artist-avatar-picker">
               {(tracks[0]?.primaryArtistIds ?? []).length > 0 ? <div className="release-selected-artists" aria-label="Selected primary artists">
-                {(tracks[0]?.primaryArtistIds ?? []).map((profileId, index) => {
+                {(tracks[0]?.primaryArtistIds ?? []).map((profileId) => {
                   const profile = knownProfiles[profileId];
                   if (!profile) return null;
-                  return <div key={profileId} className="release-selected-artist">
-                    <span className="release-selected-artist-order"><GripVertical /></span>
+                  const removalArmed = artistRemovalCandidateId === profileId;
+                  return <button type="button" key={profileId} className={clsx("release-selected-artist", removalArmed && "is-removal-armed")} title={removalArmed ? `Remove ${profile.name}` : profile.name} aria-label={removalArmed ? `Confirm removal of ${profile.name}` : `${profile.name}. Click to remove.`} onClick={() => { if (removalArmed) { updatePrimaryArtistsForAllTracks(tracks[0].primaryArtistIds.filter((id) => id !== profileId)); setArtistRemovalCandidateId(null); } else setArtistRemovalCandidateId(profileId); }}>
                     {profile.imageUrl ? <img src={profile.imageUrl} alt="" /> : <span className="release-selected-artist-avatar">{profile.name.slice(0, 1).toUpperCase()}</span>}
-                    <span className="min-w-0 flex-1 truncate font-semibold">{profile.name}</span>
-                    <span className="release-selected-artist-actions"><button type="button" onClick={() => movePrimaryArtist(index, -1)} disabled={index === 0} aria-label={`Move ${profile.name} earlier`}><ChevronUp /></button><button type="button" onClick={() => movePrimaryArtist(index, 1)} disabled={index === tracks[0].primaryArtistIds.length - 1} aria-label={`Move ${profile.name} later`}><ChevronDown /></button><button type="button" onClick={() => updatePrimaryArtistsForAllTracks(tracks[0].primaryArtistIds.filter((id) => id !== profileId))} aria-label={`Remove ${profile.name}`}><X /></button></span>
-                  </div>;
+                    <span className="release-selected-artist-remove" aria-hidden="true"><X /></span>
+                  </button>;
                 })}
               </div> : null}
               <ArtistPicker
@@ -2750,6 +2751,7 @@ export function ReleaseForm({
                 onSelect={(profile) => { if (tracks[0].primaryArtistIds.length >= 3) return; upsertKnownProfile(profile); updatePrimaryArtistsForAllTracks(tracks[0].primaryArtistIds.includes(profile.id) ? tracks[0].primaryArtistIds : [...tracks[0].primaryArtistIds, profile.id]); }}
                 onRemove={() => undefined}
               />
+              </div>
               <div className="release-artist-stage-count"><span>{tracks[0]?.primaryArtistIds.length ?? 0} of 3 selected</span><span>Artist order is used for store delivery</span></div>
             </div>
             <button type="button" onClick={continueFromArtists} disabled={stepTransitioning} className="release-artist-continue">
