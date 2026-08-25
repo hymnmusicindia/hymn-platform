@@ -65,6 +65,7 @@ export function ArtistPicker({
   const [loading, setLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [profileStep, setProfileStep] = useState(0);
   const artistDialogRef = useAccessibleDialog(createOpen, () => setCreateOpen(false));
   const [createName, setCreateName] = useState("");
   const [spotifySearch, setSpotifySearch] = useState("");
@@ -84,6 +85,9 @@ export function ArtistPicker({
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const reachedMax = Boolean(max && valueIds.length >= max);
+  const profileSteps = ["name", "spotify", "instagram", "apple", "youtube", "producer", ...(isProducer ? ["legal"] : [])] as const;
+  const activeProfileStep = profileSteps[Math.min(profileStep, profileSteps.length - 1)];
+  const isFinalProfileStep = profileStep === profileSteps.length - 1;
   const hasQuery = Boolean(query.trim());
   const visibleSavedProfiles = hasQuery
     ? [...savedMatches, ...recent.filter((profile) => !savedMatches.some((match) => match.id === profile.id))]
@@ -258,6 +262,7 @@ export function ArtistPicker({
     setAppleUrl("");
     setSpotifyResults([]);
     setSpotifyError(null);
+    setProfileStep(0);
     setCreateOpen(true);
     setOpen(false);
   }
@@ -276,6 +281,7 @@ export function ArtistPicker({
     setProducerLegalName(profile.producerLegalName ?? "");
     setSpotifyResults([]);
     setSpotifyError(null);
+    setProfileStep(0);
     setCreateOpen(true);
     setOpen(false);
   }
@@ -356,6 +362,15 @@ export function ArtistPicker({
     } finally {
       setSaving(false);
     }
+  }
+
+  function advanceProfileStep() {
+    setSpotifyError(null);
+    if (activeProfileStep === "name" && !createName.trim()) return setSpotifyError("Artist name is required.");
+    if (activeProfileStep === "spotify" && !selectedSpotify && !manualSpotifyUrl.trim()) return setSpotifyError("Select a Spotify artist or paste a valid Spotify artist profile link.");
+    if (activeProfileStep === "instagram" && !instagramUrl.trim()) return setSpotifyError("Instagram profile link is required for artist verification.");
+    if (activeProfileStep === "legal" && !producerLegalName.trim()) return setSpotifyError("Complete legal name is required for a producer profile.");
+    setProfileStep((current) => Math.min(current + 1, profileSteps.length - 1));
   }
 
   return (
@@ -459,67 +474,28 @@ export function ArtistPicker({
               <button type="button" className="btn-outline pressable" onClick={() => setCreateOpen(false)}>Close</button>
             </div>
 
-            <div className="mt-5 grid gap-4">
-              <div>
-                <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-muted)" }}>Artist Name</label>
-                <input className="field" value={createName} onChange={(event) => setCreateName(event.target.value)} placeholder="Artist name" />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-muted)" }}>Spotify search</label>
-                <input className="field" value={spotifySearch} onChange={(event) => { setSpotifySearch(event.target.value); setSelectedSpotify(null); }} placeholder="Search Spotify artists" />
-              </div>
-
-              {spotifyLoading ? <p className="text-sm" style={{ color: "var(--text-soft)" }}>Searching Spotify...</p> : null}
-              {spotifyError ? <p className="text-sm" style={{ color: "var(--danger)" }}>{spotifyError}</p> : null}
-
-              {selectedSpotify ? (
-                <div className="selection-chip w-full justify-between">
-                  <span className="flex items-center gap-2">
-                    <ArtistAvatar name={selectedSpotify.name} imageUrl={selectedSpotify.imageUrl} />
-                    <span className="min-w-0 truncate">{selectedSpotify.name}</span>
-                  </span>
-                  <button type="button" className="text-xs" style={{ color: "var(--text-soft)" }} onClick={() => setSelectedSpotify(null)}>Clear</button>
-                </div>
-              ) : null}
-
-              {spotifyResults.length > 0 ? (
-                <div className="grid gap-2">
-                  {spotifyResults.map((artist) => (
-                    <button key={artist.id} type="button" onClick={() => { setSelectedSpotify(artist); setCreateName(artist.name); setManualSpotifyUrl(artist.spotifyUrl); setSpotifySearch(artist.name); setSpotifyResults([]); setSpotifyError(null); }} className="flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}>
-                      <ArtistAvatar name={artist.name} imageUrl={artist.imageUrl} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium">{artist.name}</p>
-                        <p className="truncate text-xs" style={{ color: "var(--text-soft)" }}>{artist.followers ? `${artist.followers.toLocaleString("en-IN")} followers` : "Spotify artist"}</p>
-                      </div>
-                      <span className="text-xs" style={{ color: "var(--text-soft)" }}>Select</span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-
-              <div><button type="button" className="text-sm underline underline-offset-4" style={{ color: "var(--text-muted)" }} onClick={() => setShowManualSpotify((value) => !value)}>Not showing? Paste Spotify link</button></div>
-              {showManualSpotify ? <div><label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-muted)" }}>Spotify Artist Profile Link</label><input className="field" value={manualSpotifyUrl} onChange={(event) => setManualSpotifyUrl(event.target.value)} placeholder="https://open.spotify.com/artist/..." /></div> : null}
-
-              <div><label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-muted)" }}>Instagram Profile Link *</label><input className="field" required value={instagramUrl} onChange={(event) => setInstagramUrl(event.target.value)} placeholder="https://instagram.com/yourartistname" /><p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>Instagram is required so HYMN and distribution partners can verify or create the artist profile if needed.</p></div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-muted)" }}>Apple Music link</label>
-                <input className="field" value={appleUrl} onChange={(event) => setAppleUrl(event.target.value)} placeholder="Optional Apple Music artist link" />
-              </div>
-              <div><label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-muted)" }}>YouTube Link</label><input className="field" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} placeholder="Optional YouTube artist link" /></div>
-              <div className="rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
-                <label className="flex cursor-pointer items-center justify-between gap-4">
-                  <span><strong className="block text-sm" style={{ color: "var(--text)" }}>This artist is also a producer</strong><small className="mt-1 block" style={{ color: "var(--text-soft)" }}>Automatically add their producer credit when used as a primary artist.</small></span>
-                  <input type="checkbox" checked={isProducer} onChange={(event) => { setIsProducer(event.target.checked); if (!event.target.checked) setProducerLegalName(""); }} />
-                </label>
-                {isProducer ? <div className="mt-4"><label className="mb-2 block text-sm font-medium" style={{ color: "var(--text-muted)" }}>Complete legal name *</label><input className="field" required value={producerLegalName} onChange={(event) => setProducerLegalName(event.target.value)} placeholder="Legal name used in producer credits" /></div> : null}
-              </div>
+            <div className="mt-6">
+              <div className="flex items-center justify-between text-xs" style={{ color: "var(--text-soft)" }}><span>Step {profileStep + 1} of {profileSteps.length}</span><span>{Math.round(((profileStep + 1) / profileSteps.length) * 100)}%</span></div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--bg-soft)" }}><div className="h-full rounded-full transition-all duration-300" style={{ width: `${((profileStep + 1) / profileSteps.length) * 100}%`, background: "var(--accent)" }} /></div>
             </div>
 
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <button type="button" className="btn-outline pressable" onClick={() => setCreateOpen(false)}>Cancel</button>
-              <button type="button" className="btn-primary pressable" onClick={() => void saveArtist()} disabled={saving}>{saving ? "Saving..." : "Save Artist Card"}</button>
+            <div className="mt-8 min-h-[15rem]">
+              {activeProfileStep === "name" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Identity</p><label className="mt-3 block text-xl font-semibold" style={{ color: "var(--text)" }}>What is the artist name?</label><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Use the exact public name shown on music services.</p><input autoFocus className="field mt-6" value={createName} onChange={(event) => setCreateName(event.target.value)} placeholder="Artist name" /></div> : null}
+
+              {activeProfileStep === "spotify" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Spotify identity</p><label className="mt-3 block text-xl font-semibold" style={{ color: "var(--text)" }}>Find the Spotify artist profile</label><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Search and select the correct profile to prevent delivery to the wrong artist page.</p><input autoFocus className="field mt-6" value={spotifySearch} onChange={(event) => { setSpotifySearch(event.target.value); setSelectedSpotify(null); }} placeholder="Search Spotify artists" />{spotifyLoading ? <p className="mt-3 text-sm" style={{ color: "var(--text-soft)" }}>Searching Spotify...</p> : null}{selectedSpotify ? <div className="selection-chip mt-4 w-full justify-between"><span className="flex items-center gap-2"><ArtistAvatar name={selectedSpotify.name} imageUrl={selectedSpotify.imageUrl} /><span className="min-w-0 truncate">{selectedSpotify.name}</span></span><button type="button" className="text-xs" style={{ color: "var(--text-soft)" }} onClick={() => setSelectedSpotify(null)}>Clear</button></div> : null}{spotifyResults.length > 0 ? <div className="mt-3 grid max-h-48 gap-2 overflow-y-auto">{spotifyResults.map((artist) => <button key={artist.id} type="button" onClick={() => { setSelectedSpotify(artist); setCreateName(artist.name); setManualSpotifyUrl(artist.spotifyUrl); setSpotifySearch(artist.name); setSpotifyResults([]); setSpotifyError(null); }} className="flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}><ArtistAvatar name={artist.name} imageUrl={artist.imageUrl} /><div className="min-w-0 flex-1"><p className="truncate font-medium">{artist.name}</p><p className="truncate text-xs" style={{ color: "var(--text-soft)" }}>{artist.followers ? `${artist.followers.toLocaleString("en-IN")} followers` : "Spotify artist"}</p></div><span className="text-xs" style={{ color: "var(--text-soft)" }}>Select</span></button>)}</div> : null}<button type="button" className="mt-4 text-sm underline underline-offset-4" style={{ color: "var(--text-muted)" }} onClick={() => setShowManualSpotify((value) => !value)}>Not showing? Paste Spotify link</button>{showManualSpotify ? <input className="field mt-3" value={manualSpotifyUrl} onChange={(event) => setManualSpotifyUrl(event.target.value)} placeholder="https://open.spotify.com/artist/..." /> : null}</div> : null}
+
+              {activeProfileStep === "instagram" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Verification</p><label className="mt-3 block text-xl font-semibold" style={{ color: "var(--text)" }}>Add the Instagram profile</label><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Required so HYMN and distribution partners can verify the artist identity.</p><input autoFocus className="field mt-6" required value={instagramUrl} onChange={(event) => setInstagramUrl(event.target.value)} placeholder="https://instagram.com/yourartistname" /></div> : null}
+              {activeProfileStep === "apple" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Optional link</p><label className="mt-3 block text-xl font-semibold" style={{ color: "var(--text)" }}>Add the Apple Music profile</label><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Leave this blank if the artist does not have an Apple Music page yet.</p><input autoFocus className="field mt-6" value={appleUrl} onChange={(event) => setAppleUrl(event.target.value)} placeholder="https://music.apple.com/..." /></div> : null}
+              {activeProfileStep === "youtube" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Optional link</p><label className="mt-3 block text-xl font-semibold" style={{ color: "var(--text)" }}>Add the YouTube channel</label><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Use the artist’s official channel when available.</p><input autoFocus className="field mt-6" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} placeholder="https://youtube.com/@artist" /></div> : null}
+              {activeProfileStep === "producer" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Credits automation</p><h4 className="mt-3 text-xl font-semibold" style={{ color: "var(--text)" }}>Is this artist also a producer?</h4><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>When enabled, selecting this profile as a primary artist automatically adds its producer credit.</p><div className="mt-6 grid grid-cols-2 gap-3"><button type="button" className={isProducer ? "btn-primary pressable" : "btn-outline pressable"} onClick={() => setIsProducer(true)}>Yes</button><button type="button" className={!isProducer ? "btn-primary pressable" : "btn-outline pressable"} onClick={() => { setIsProducer(false); setProducerLegalName(""); }}>No</button></div></div> : null}
+              {activeProfileStep === "legal" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Producer credit</p><label className="mt-3 block text-xl font-semibold" style={{ color: "var(--text)" }}>What is the producer’s complete legal name?</label><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>This name will be inserted into contribution credits, not displayed as the public artist name.</p><input autoFocus className="field mt-6" required value={producerLegalName} onChange={(event) => setProducerLegalName(event.target.value)} placeholder="Complete legal name" /></div> : null}
+
+              {spotifyError ? <p className="mt-5 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "color-mix(in srgb, var(--danger) 45%, var(--border))", color: "var(--danger)" }}>{spotifyError}</p> : null}
+            </div>
+
+            <div className="mt-6 flex items-center justify-between gap-3 border-t pt-5" style={{ borderColor: "var(--border)" }}>
+              <button type="button" className="btn-outline pressable" onClick={() => profileStep > 0 ? setProfileStep((current) => current - 1) : setCreateOpen(false)}>{profileStep > 0 ? "Back" : "Cancel"}</button>
+              {isFinalProfileStep ? <button type="button" className="btn-primary pressable" onClick={() => void saveArtist()} disabled={saving}>{saving ? "Saving..." : editingProfile ? "Save changes" : "Create profile"}</button> : <button type="button" className="btn-primary pressable" onClick={advanceProfileStep}>{activeProfileStep === "apple" || activeProfileStep === "youtube" ? (activeProfileStep === "apple" && appleUrl.trim()) || (activeProfileStep === "youtube" && youtubeUrl.trim()) ? "Continue" : "Skip" : "Continue"}</button>}
             </div>
           </div>
         </div>
