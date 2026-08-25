@@ -4848,18 +4848,36 @@ body:has(.release-workflow.is-focused-step) > footer { display:none; }
     background:transparent !important;
     box-shadow:none !important;
   }
-  .release-workflow.is-audio-upload-step { min-height:100svh; }
-  .release-audio-stage { min-height:calc(100dvh - 4.5rem); box-sizing:border-box; gap:1.5rem; padding:4.5rem 0 2rem; }
-  .release-onboarding-assets { grid-template-columns:minmax(0,1fr) 7.5rem; align-items:center; gap:.65rem; }
-  .release-onboarding-audio,.release-onboarding-artwork { border:0; border-radius:0; padding:0; background:transparent; box-shadow:none; }
-  .release-onboarding-artwork-heading span { display:none; }
-  .release-onboarding-artwork > div { gap:.35rem; }
-  .release-onboarding-artwork > div > button { max-height:7.5rem; }
-  .release-audio-empty-state > span { height:3.75rem; }
-  .release-audio-queue-item { padding:.4rem .5rem; }
-  .release-add-audio-track { font-size:.7rem; }
-  .release-workflow.is-audio-upload-step .release-footer-mobile-actions { margin-top:-4.5rem; }
-  .release-workflow.is-audio-upload-step .release-focused-actions { margin-top:-4.5rem; }
+  .release-workflow.is-audio-upload-step { min-height:100svh; padding-inline:1rem !important; }
+  .release-audio-stage { min-height:calc(100dvh - 4.5rem); box-sizing:border-box; align-content:start; gap:1rem; padding:6rem 0 1.25rem; }
+  .release-audio-stage .release-focused-intro { padding-inline:.25rem; }
+  .release-audio-stage .release-focused-intro h2 { font-size:clamp(1.65rem,8vw,2rem); line-height:1.05; }
+  .release-audio-stage .release-focused-intro h2 + p { margin-top:.6rem; font-size:.72rem; line-height:1.45; }
+  .release-onboarding-assets { grid-template-columns:minmax(0,1fr); align-items:start; gap:.8rem; }
+  .release-onboarding-audio,.release-onboarding-artwork { border:1px solid color-mix(in srgb,var(--border) 86%,transparent); border-radius:1rem; padding:.9rem; background:color-mix(in srgb,var(--card) 88%,var(--bg-soft)); box-shadow:0 10px 28px color-mix(in srgb,var(--shadow) 7%,transparent); }
+  .release-onboarding-asset-heading,.release-onboarding-artwork-heading { margin-bottom:.65rem; }
+  .release-onboarding-asset-heading strong,.release-onboarding-artwork-heading strong { font-size:.78rem; }
+  .release-onboarding-asset-heading span,.release-onboarding-artwork-heading span { display:block; font-size:.6rem; }
+  .release-audio-empty-state > span { height:3rem; }
+  .release-audio-queue-item { align-items:start; gap:.35rem; border:1px solid var(--border); border-radius:.85rem; padding:.75rem; background:var(--bg-elevated); }
+  .release-audio-inline-details { gap:.7rem; }
+  .release-onboarding-audio .audio-waveform-inline { grid-template-columns:2.5rem minmax(0,1fr); grid-template-rows:auto auto; gap:.45rem .65rem; padding:0; }
+  .release-onboarding-audio .audio-waveform-inline-play { grid-column:1; grid-row:1; width:2.5rem; height:2.5rem; }
+  .release-onboarding-audio .audio-waveform-inline-copy { grid-column:2; grid-row:1; align-self:center; }
+  .release-onboarding-audio .audio-waveform-inline-copy strong { font-size:.78rem; }
+  .release-onboarding-audio .audio-waveform-inline-track { grid-column:1 / -1; grid-row:2; height:1.8rem; }
+  .release-onboarding-audio .audio-waveform-inline-time { display:none; }
+  .release-audio-title-field { grid-template-columns:1fr; gap:.25rem; }
+  .release-audio-title-field input { padding:.4rem 0 .5rem; font-size:.8rem; }
+  .release-audio-row-actions button,.release-audio-remove { width:2rem; height:2rem; }
+  .release-add-audio-track { min-height:2.25rem; font-size:.7rem; }
+  .release-onboarding-artwork { display:grid; grid-template-columns:minmax(0,1fr) minmax(8.5rem,10rem); align-items:center; column-gap:.85rem; }
+  .release-onboarding-artwork-heading { margin:0; }
+  .release-onboarding-artwork > div { min-width:0; gap:.35rem; }
+  .release-onboarding-artwork > div > button { width:100%; max-height:none; border-radius:.8rem !important; }
+  .release-onboarding-artwork-note,.release-onboarding-artwork > .inline-error { grid-column:1 / -1; }
+  .release-workflow.is-audio-upload-step .release-footer-mobile-actions { position:static; margin-top:0; }
+  .release-workflow.is-audio-upload-step .release-focused-actions { margin-top:0; }
   .release-workflow.is-artist-step .release-artist-stage { min-height:calc(100dvh - 4.5rem); box-sizing:border-box; padding:4.5rem 0 1rem; }
 }
 .release-focused-card { display:grid; gap:.5rem; border:0; border-radius:0; padding:0; background:transparent; box-shadow:none; }
