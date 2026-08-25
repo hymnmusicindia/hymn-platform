@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Copy, Disc3, MoreHorizontal, Pencil, Settings, Trash2, X } from "lucide-react";
+import { Copy, Disc3, Gift, MoreHorizontal, Pencil, Settings, Trash2, X } from "lucide-react";
 import type { Release } from "@/lib/types";
 import {
   getReleasePortalBadgeStyle,
@@ -37,6 +37,8 @@ export function ReleaseSummaryCard({
   const [busy, setBusy] = useState<"duplicate" | "delete" | null>(null);
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const canDelete = release.status === "draft";
+  const releaseMetadata = release.metadata && typeof release.metadata === "object" ? release.metadata as Record<string, unknown> : {};
+  const isFreeReleaseDraft = release.status === "draft" && releaseMetadata.promotionCode === "FIRST_RELEASE_FREE";
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -111,6 +113,8 @@ export function ReleaseSummaryCard({
           </div> : null}
         </div>
       </div>
+
+      {isFreeReleaseDraft ? <div className="mt-3 inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.09em] text-emerald-600 dark:text-emerald-400"><Gift className="h-3 w-3" />One-time free release</div> : null}
 
       <div className="mt-3 flex min-w-0 items-center justify-between gap-3">
         <span

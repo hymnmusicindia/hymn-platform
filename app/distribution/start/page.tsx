@@ -24,7 +24,8 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
   }
   const hasRequestedRelease = Boolean(firstValue(params.edit) || firstValue(params.resume) || firstValue(params.manage));
   const isEditing = Boolean(editingRelease);
-  const campaignRequested = firstValue(params.campaign) === "first-release";
+  const editingMetadata = editingRelease?.metadata && typeof editingRelease.metadata === "object" ? editingRelease.metadata as Record<string, unknown> : {};
+  const campaignRequested = firstValue(params.campaign) === "first-release" || editingMetadata.promotionCode === "FIRST_RELEASE_FREE";
   const campaignEligibility = user && campaignRequested ? await getFirstReleaseEligibility(user.id) : null;
   const campaignDraftEligible = !editingRelease || (
     ["draft", "awaiting_payment"].includes(editingRelease.status) &&

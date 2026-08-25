@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import NextImage from "next/image";
 import { useRouter } from "next/navigation";
 import { ArtistPicker } from "@/components/artist-picker";
 import { AudioWaveform } from "@/components/audio-waveform";
@@ -149,8 +150,8 @@ const steps = [
   "",
   "Review & payment",
 ] as const;
-const visibleStepIndexes = [1, 0, 3, 2, 4, 5, 7] as const;
-const menuStepIndexes = [3, 2, 4, 5, 7] as const;
+const visibleStepIndexes = [1, 0, 3, 2, 5, 7] as const;
+const menuStepIndexes = [3, 2, 5, 7] as const;
 const COPYRIGHT_OWNER_PREFERENCES_KEY = "hymn:copyright-owner-preferences";
 const defaultLegalState: LegalState = {
   ownershipConfirmation: false,
@@ -843,6 +844,7 @@ export function ReleaseForm({
   const stepTransitionTimerRef = useRef<number | null>(null);
   const [mobileStepMenuOpen, setMobileStepMenuOpen] = useState(false);
   const [expandedTrack, setExpandedTrack] = useState(0);
+  const audioPreviewObjectUrlsRef = useRef<Set<string>>(new Set());
   const [draggedTrackIndex, setDraggedTrackIndex] = useState<number | null>(null);
   const [versionPickerTrack, setVersionPickerTrack] = useState<number | null>(null);
   const [legalDetailsOpen, setLegalDetailsOpen] = useState(
@@ -1275,14 +1277,10 @@ export function ReleaseForm({
     document.body.appendChild(script);
   }, []);
 
-  useEffect(
-    () => () => {
-      tracks.forEach((track) => {
-        if (track.audioPreviewUrl) URL.revokeObjectURL(track.audioPreviewUrl);
-      });
-    },
-    [tracks],
-  );
+  useEffect(() => () => {
+    audioPreviewObjectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    audioPreviewObjectUrlsRef.current.clear();
+  }, []);
 
   useEffect(() => {
     setMobileStepMenuOpen(false);
@@ -1397,7 +1395,10 @@ export function ReleaseForm({
   function removeTrack(index: number) {
     setTrackList((current) => {
       const target = current[index];
-      if (target?.audioPreviewUrl) URL.revokeObjectURL(target.audioPreviewUrl);
+      if (target?.audioPreviewUrl) {
+        safeRevokePreviewUrl(target.audioPreviewUrl);
+        audioPreviewObjectUrlsRef.current.delete(target.audioPreviewUrl);
+      }
       return current.filter((_, trackIndex) => trackIndex !== index);
     });
     setExpandedTrack((value) =>
@@ -1407,7 +1408,10 @@ export function ReleaseForm({
 
   function clearTrackAudio(index: number) {
     const target = tracks[index];
-    if (target?.audioPreviewUrl) safeRevokePreviewUrl(target.audioPreviewUrl);
+    if (target?.audioPreviewUrl) {
+      safeRevokePreviewUrl(target.audioPreviewUrl);
+      audioPreviewObjectUrlsRef.current.delete(target.audioPreviewUrl);
+    }
     updateTrack(index, {
       audioFile: null,
       audioFileName: "",
@@ -1485,9 +1489,12 @@ export function ReleaseForm({
       throw new Error("DireNote requires WAV or MP3 audio. FLAC and other formats are not accepted.");
     }
     const currentTrack = tracks[index];
-    if (currentTrack?.audioPreviewUrl)
+    if (currentTrack?.audioPreviewUrl) {
       safeRevokePreviewUrl(currentTrack.audioPreviewUrl);
+      audioPreviewObjectUrlsRef.current.delete(currentTrack.audioPreviewUrl);
+    }
     const previewUrl = URL.createObjectURL(file);
+    audioPreviewObjectUrlsRef.current.add(previewUrl);
     const duration = await getAudioDuration(file).catch(() => {
       throw new Error("Could not read the uploaded audio.");
     });
@@ -1765,7 +1772,7 @@ export function ReleaseForm({
   const artworkIssue = (): ValidationIssue | null =>
     !artworkPreview || artworkError
       ? {
-          step: 4,
+          step: 0,
           key: "artwork-upload",
           message: artworkError || "Upload cover artwork before continuing.",
         }
@@ -1833,7 +1840,7 @@ export function ReleaseForm({
   const primaryArtistComplete = Boolean(tracks[0]?.primaryArtistIds.length);
   const audioAssetsComplete = tracks.every((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl));
   const stepChecks = [
-    audioAssetsComplete,
+    audioAssetsComplete && Boolean(artworkPreview) && !artworkError,
     primaryArtistComplete,
     !releaseInfoIssue(),
     tracks.every((track, index) => !trackIssue(track, index)),
@@ -1863,7 +1870,7 @@ export function ReleaseForm({
   );
 
   function firstIssueForStep(stepIndex: number): ValidationIssue | null {
-    if (stepIndex === 0) return null;
+    if (stepIndex === 0) return artworkIssue();
     if (stepIndex === 1 && !primaryArtistComplete) return { step: 1, key: "release-primary-artists", message: "Select at least one saved primary artist profile." };
     if (stepIndex === 2) return releaseInfoIssue();
     if (stepIndex === 3)
@@ -2004,6 +2011,17 @@ export function ReleaseForm({
       setStepTransitioning(false);
       stepTransitionTimerRef.current = null;
     }, 750);
+  }
+
+  function continueFromMusic() {
+    if (stepTransitionTimerRef.current != null) window.clearTimeout(stepTransitionTimerRef.current);
+    stepTransitionRef.current = false;
+    setStepTransitioning(false);
+    setAttemptedStep(null);
+    setStatus(null);
+    setVisitedSteps((current) => new Set([...current, 0]));
+    setStepMotion("step-adjacent-forward");
+    setStep(3);
   }
 
   async function uploadFilesDirectly() {
@@ -2218,6 +2236,7 @@ export function ReleaseForm({
           paymentModel:
             selectedPlan === "one_time" ? "one_time" : "subscription",
           plan: selectedPlan,
+          ...(firstReleaseOffer ? { promotionCode: "FIRST_RELEASE_FREE", attribution: campaignAttribution } : {}),
           artworkFileKey: "artwork",
           existingArtworkUrl: initialRelease?.artworkUrl ?? undefined,
           uploadedArtworkUrl: uploaded.artworkUrl,
@@ -2484,6 +2503,7 @@ export function ReleaseForm({
   function resetForm() {
     tracks.forEach((track) => {
       safeRevokePreviewUrl(track.audioPreviewUrl);
+      audioPreviewObjectUrlsRef.current.delete(track.audioPreviewUrl);
     });
     if (artworkPreview) safeRevokePreviewUrl(artworkPreview);
     setStep(initialRelease ? 7 : 1);
@@ -2563,6 +2583,7 @@ export function ReleaseForm({
       >
         <header className="release-workspace-header">
           <button type="button" onClick={saveDraftRelease} disabled={submitting} className="release-workspace-quit">Save &amp; Quit</button>
+          <NextImage src="/assets/hymnlogowhite.png" alt="HYMN Music" width={116} height={38} priority className="release-workspace-logo" />
           <div className="release-workspace-state" aria-live="polite">
             <span className={autosaveStatus === "saved" ? "is-saved" : ""}>{autosaveStatus === "saving" ? "Saving…" : autosaveStatus === "error" ? "Save failed" : autosaveStatus === "saved" ? "Saved ✓" : "Changes pending"}</span>
             {step !== 7 ? <button type="button" onClick={() => goToStep(7)} className="release-workspace-review">Review</button> : null}
@@ -2766,9 +2787,10 @@ export function ReleaseForm({
         {step === 0 ? (
           <section className={clsx("release-audio-stage", stepMotion)}>
             <div className="release-focused-intro">
-              <h2>What are we releasing today?</h2>
+              <h2>Add your music and cover</h2>
               <p>{firstReleaseOffer ? "Upload 1 track for your free Single release" : "Add up to 30 tracks for a maximum length of 1 hour"}<br /><span className="release-dolby-note"><span className="release-dolby-mark" aria-hidden="true"><i /><i /></span> Add Dolby Atmos™ files directly in track information.</span></p>
             </div>
+            <div className="release-onboarding-assets">
             <div className="release-audio-queue">
               {!tracks.some((track) => track.audioPreviewUrl && track.audioUploadStatus === "uploaded") ? (
                 <div className="release-audio-empty-state">
@@ -2783,7 +2805,13 @@ export function ReleaseForm({
                   <article key={track.id} className={clsx("release-audio-queue-item", hasAudio && "is-ready")}>
                     <div className="release-audio-queue-main">
                       {hasAudio ? (
-                        <AudioWaveform src={track.audioPreviewUrl} title={track.audioFileName || track.trackTitle || `Track ${index + 1}`} subtitle={[track.duration, fileFormat(track.audioFile, track.audioFileName)].filter(Boolean).join(" • ")} compact />
+                        <div className="release-audio-inline-details">
+                          <AudioWaveform src={track.audioPreviewUrl} title={track.audioFileName || track.trackTitle || `Track ${index + 1}`} subtitle={[track.duration, fileFormat(track.audioFile, track.audioFileName)].filter(Boolean).join(" • ")} compact />
+                          <label className="release-audio-title-field">
+                            <span>Track title</span>
+                            <input ref={registerField(`track-${index}-title`) as (node: HTMLInputElement | null) => void} value={track.trackTitle} onChange={(event) => updateTrack(index, { trackTitle: event.target.value })} placeholder="Enter the official track title" aria-label={`Track ${index + 1} title`} />
+                          </label>
+                        </div>
                       ) : (
                         <UploadDropzone accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" iconOnly compact ctaLabel="Add track" title={`Track ${index + 1} audio`} description="Choose a WAV or MP3 master" helperLines={[]} fileName={track.audioFile?.name || track.audioFileName} fileFormat={fileFormat(track.audioFile, track.audioFileName)} onSelect={async (file, controls) => handleAudioFile(index, file, controls)} />
                       )}
@@ -2800,6 +2828,13 @@ export function ReleaseForm({
                 {firstReleaseOffer ? <LockKeyhole /> : <Plus />}
                 <span>{firstReleaseOffer ? "Add another track — locked for this FREE release" : "Add track"}</span>
               </button> : null}
+            </div>
+            <div ref={registerField("artwork-upload")} className="release-onboarding-artwork">
+              <div className="release-onboarding-artwork-heading"><strong>Cover artwork</strong><span>JPG · square · minimum 3000 × 3000 px</span></div>
+              <ArtworkSquareDropzone previewUrl={artworkPreview} fileName={artworkFile?.name} fileType={fileFormat(artworkFile)} dimensions={artworkDimensions} error={showErrors && artworkIssue() ? artworkIssue()?.message ?? null : artworkError} onSelect={handleArtwork} />
+              {artworkScanning ? <p className="release-onboarding-artwork-note"><LoaderCircle className="animate-spin" />Checking artwork…</p> : null}
+              {artworkWarning ? <ArtworkWarning warning={artworkWarning} /> : null}
+            </div>
             </div>
           </section>
         ) : null}
@@ -5581,13 +5616,13 @@ export function ReleaseForm({
               <button
                 type="submit"
                 disabled={submitting || !legalComplete}
-                className="release-footer-action is-primary w-full disabled:opacity-60 sm:w-auto"
+                className={clsx("release-footer-action is-primary w-full disabled:opacity-60 sm:w-auto", firstReleaseOffer && finalDistributionAmount === 0 && "is-free-release")}
               >
                 {submitting
                   ? "Processing…"
                   : firstReleaseOffer
                     ? finalDistributionAmount === 0
-                      ? "Release for free"
+                      ? "FREE"
                       : `Pay Rs ${finalDistributionAmount.toLocaleString("en-IN")} for add-ons & Submit`
                     : `Pay Rs ${distributionAmount.toLocaleString("en-IN")} & Submit`}
               </button>
@@ -5628,12 +5663,12 @@ export function ReleaseForm({
             {step < steps.length - 1 ? (
               <button
                 type="button"
-                onClick={advanceStep}
-                disabled={submitting || stepTransitioning}
-                aria-busy={stepTransitioning}
+                onClick={step === 0 ? continueFromMusic : advanceStep}
+                disabled={submitting || (step !== 0 && stepTransitioning)}
+                aria-busy={step !== 0 && stepTransitioning}
                 className={clsx("release-footer-action is-primary w-full whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-45 md:w-auto", step === 0 && !audioAssetsComplete && "is-skip")}
               >
-                {stepTransitioning
+                {step !== 0 && stepTransitioning
                   ? step === 0 ? "Add music ready" : "Opening add music…"
                   : step === 1
                   ? `Continue with ${tracks[0]?.primaryArtistIds.length ?? 0} artist${(tracks[0]?.primaryArtistIds.length ?? 0) === 1 ? "" : "s"} →`

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getDetailedReleaseByUserId, saveDraftDistributionRelease } from "@/lib/distribution-db";
+import { FIRST_RELEASE_PROMOTION_CODE, getFirstReleaseEligibility } from "@/lib/first-release-promotion";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -25,6 +26,16 @@ export async function POST(request: Request) {
     };
 
     const artworkUrl = rejectPublicDeliverable(metadata.uploadedArtworkUrl ?? metadata.existingArtworkUrl ?? existingRelease?.artworkUrl ?? "");
+    const requestedFirstReleaseOffer = metadata.promotionCode === FIRST_RELEASE_PROMOTION_CODE;
+    const existingMetadata = existingRelease?.metadata && typeof existingRelease.metadata === "object" ? existingRelease.metadata as Record<string, unknown> : {};
+    const existingFirstReleaseOffer = existingMetadata.promotionCode === FIRST_RELEASE_PROMOTION_CODE;
+    const promotionEligibility = requestedFirstReleaseOffer || existingFirstReleaseOffer ? await getFirstReleaseEligibility(session.sub) : null;
+    const preserveFirstReleaseOffer = Boolean(
+      (requestedFirstReleaseOffer || existingFirstReleaseOffer) &&
+      promotionEligibility?.eligible &&
+      metadata.releaseType === "single" &&
+      (metadata.tracks?.length ?? 0) === 1
+    );
 
     const tracks = [];
     for (const track of metadata.tracks ?? []) {
@@ -99,6 +110,7 @@ export async function POST(request: Request) {
         publishingRights: metadata.publishingRights ?? "",
         paymentModel: metadata.paymentModel ?? "one_time",
         distributionPlan: metadata.plan ?? "one_time",
+        ...(preserveFirstReleaseOffer ? { promotionCode: FIRST_RELEASE_PROMOTION_CODE, campaignAttribution: metadata.attribution ?? existingMetadata.campaignAttribution ?? {} } : {}),
         ownershipConfirmed: Boolean(metadata.legal?.ownershipConfirmation),
         noUnauthorizedSamples: Boolean(metadata.legal?.noInfringement),
         collaboratorsCredited: Boolean(metadata.legal?.collaboratorsCredited),
