@@ -24,7 +24,15 @@ export async function POST(request: Request) {
     const asset = await localPrivateStorage.upload({ ownerUserId: result.user.id, releaseId, assetType, fileName: file.name, mimeType: file.type, bytes: Buffer.from(await file.arrayBuffer()) });
     return NextResponse.json({ asset }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Private upload failed." }, { status: 400 });
+    const message = error instanceof Error
+      ? error.message
+      : error && typeof error === "object" && "message" in error && typeof error.message === "string"
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : "Private upload failed due to an unknown storage error.";
+    console.error("Private asset upload failed", error);
+    return NextResponse.json({ error: message }, { status: 500, headers: { "Cache-Control": "no-store" } });
   }
 }
 // vercel trigger 9
