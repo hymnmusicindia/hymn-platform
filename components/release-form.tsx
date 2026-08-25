@@ -51,9 +51,11 @@ function uploadPrivateAsset(file: File, assetType: PrivateUploadType, options: {
     request.onerror = () => reject(new Error("Could not reach the upload service."));
     request.onabort = () => reject(new DOMException("Upload cancelled.", "AbortError"));
     request.onload = () => {
-      const body = request.response || {};
+      const body = typeof request.response === "string"
+        ? (() => { try { return JSON.parse(request.response); } catch { return {}; } })()
+        : request.response || {};
       if (request.status < 200 || request.status >= 300) {
-        reject(new Error(body.error || "Private upload failed."));
+        reject(new Error(body.error || `Private upload failed (HTTP ${request.status || "unknown"}).`));
         return;
       }
       if (!body.asset?.downloadPath) {
