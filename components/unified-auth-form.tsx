@@ -47,7 +47,7 @@ export function UnifiedAuthForm({
           <div className="mt-3 flex gap-2"><input className="field min-w-0 flex-1 uppercase" value={code} onChange={event => { setCode(event.target.value); setAppliedCode(""); setReferralState(null); }} placeholder="Enter code" maxLength={24} /><button type="button" className="btn-outline pressable" onClick={applyReferralCode}>Apply</button></div>
           {referralState ? <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: appliedCode ? "var(--success)" : "var(--danger)" }}>{appliedCode ? <Check className="h-3.5 w-3.5" /> : null}{referralState}</p> : null}
         </details> : null}
-        <GoogleAuthButton label="Continue with Google" className="w-full" appearance="quiet" expectedRole={initialRole} referralCode={appliedCode || undefined} />
+        <GoogleAuthButton label="Continue with Google" className="w-full" appearance="quiet" expectedRole={initialRole} referralCode={appliedCode || undefined} autoPrompt />
       </div>
     </section>
   );

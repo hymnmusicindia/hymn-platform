@@ -18,6 +18,7 @@ interface GoogleAuthButtonProps {
   loginContext?: "admin";
   onAuthenticated?: (data: { redirectPath?: string }) => Promise<void> | void;
   appearance?: "default" | "quiet";
+  autoPrompt?: boolean;
 }
 
 export function GoogleAuthButton({
@@ -27,7 +28,8 @@ export function GoogleAuthButton({
   referralCode,
   loginContext,
   onAuthenticated,
-  appearance = "default"
+  appearance = "default",
+  autoPrompt = false
 }: GoogleAuthButtonProps) {
   const router = useRouter();
   const [scriptReady, setScriptReady] = useState(false);
@@ -35,6 +37,7 @@ export function GoogleAuthButton({
   const [processing, setProcessing] = useState(false);
   const [buttonError, setButtonError] = useState<string | null>(null);
   const initializedRef = useRef(false);
+  const autoPromptedRef = useRef(false);
   const useLocalGoogleDemo = !GOOGLE_CLIENT_ID && process.env.NODE_ENV !== "production";
 
   const handleCredentialResponse = useCallback(
@@ -151,12 +154,18 @@ export function GoogleAuthButton({
     accountsId.initialize({
       client_id: GOOGLE_CLIENT_ID,
       callback: handleCredentialResponse,
-      ux_mode: "popup"
+      ux_mode: "popup",
+      itp_support: true,
+      context: "signin"
     });
     accountsId.disableAutoSelect();
 
     initializedRef.current = true;
-  }, [handleCredentialResponse, scriptReady]);
+    if (autoPrompt && !autoPromptedRef.current) {
+      autoPromptedRef.current = true;
+      accountsId.prompt();
+    }
+  }, [autoPrompt, handleCredentialResponse, scriptReady]);
 
   const handleButtonClick = useCallback(() => {
     if (processing || typeof window === "undefined") return;
@@ -254,6 +263,8 @@ type GoogleAccountsId = {
     callback: (response: GoogleCredentialResponse) => void;
     ux_mode?: "popup" | "redirect";
     auto_select?: boolean;
+    itp_support?: boolean;
+    context?: "signin" | "signup" | "use";
   }) => void;
   prompt: () => void;
   disableAutoSelect: () => void;
