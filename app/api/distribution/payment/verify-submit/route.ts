@@ -45,7 +45,8 @@ export async function POST(request: Request) {
       // Continue the normal submission flow
     } else if (parsed.razorpay_order_id === "sub_active") {
       const sub = await getSubscriptionByUserId(session.sub);
-      if (!sub) return NextResponse.json({ error: "No active subscription found." }, { status: 400 });
+      if (!sub || sub.plan === "one_time" || sub.status !== "active" || sub.daysRemaining <= 0) return NextResponse.json({ error: "No active subscription found." }, { status: 400 });
+      if (parsed.metadata.paymentModel !== "subscription" || parsed.metadata.plan !== sub.plan) return NextResponse.json({ error: "The submitted plan does not match your active subscription." }, { status: 400 });
     } else if (!isFirstReleaseOffer || Number(promotionOrder?.amount ?? 0) > 0) {
       const valid = verifyRazorpaySignature(parsed.razorpay_order_id, parsed.razorpay_payment_id, parsed.razorpay_signature);
       if (!valid) return NextResponse.json({ error: "Invalid Razorpay signature." }, { status: 400 });

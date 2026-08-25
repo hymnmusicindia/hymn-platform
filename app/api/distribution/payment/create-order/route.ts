@@ -6,6 +6,7 @@ import { createDistributionOrder, getDistributionPricing } from "@/lib/distribut
 import { distributionOrderCreateSchema } from "@/lib/validation";
 import { isProductionPaymentBypassEnabled } from "@/lib/env";
 import { calculateFirstReleasePrice, FIRST_RELEASE_PROMOTION_CODE, getFirstReleaseEligibility } from "@/lib/first-release-promotion";
+import { getSubscriptionByUserId } from "@/lib/db";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -13,6 +14,18 @@ export async function POST(request: Request) {
 
   try {
     const payload = distributionOrderCreateSchema.parse(await request.json());
+    const subscription = await getSubscriptionByUserId(session.sub);
+    const hasActiveSubscription = Boolean(subscription && subscription.plan !== "one_time" && subscription.status === "active" && subscription.daysRemaining > 0);
+    if (hasActiveSubscription) {
+      return NextResponse.json({
+        orderId: "sub_active",
+        amount: 0,
+        currency: "INR",
+        displayAmount: 0,
+        requiresPayment: false,
+        subscriptionCovered: true,
+      });
+    }
     const normalAmount = getDistributionPricing(payload.plan, payload.trackCount, payload.releaseType, payload.platforms, { youtubeContentIdEnabled: payload.youtubeContentIdEnabled });
     let amount = normalAmount;
     let promotion = null;

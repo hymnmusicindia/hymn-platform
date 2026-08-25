@@ -245,7 +245,7 @@ const steps = [
   "Artwork & audio",
   "Delivery",
   "",
-  "Review & payment",
+  "Review & submit",
 ] as const;
 const visibleStepIndexes = [1, 0, 3, 2, 4, 5, 7] as const;
 const menuStepIndexes = [3, 2, 4, 5, 7] as const;
@@ -909,12 +909,14 @@ function StepIntro({
 
 export function ReleaseForm({
   selectedPlan,
+  hasActiveSubscription = false,
   initialRelease,
   firstReleaseOffer = false,
   campaignAttribution = {},
   prefillSuggestions = [],
 }: {
   selectedPlan: DistributionPlanOption;
+  hasActiveSubscription?: boolean;
   initialRelease?: Release | null;
   firstReleaseOffer?: boolean;
   campaignAttribution?: Record<string, string>;
@@ -1088,6 +1090,7 @@ export function ReleaseForm({
     (Boolean(release.scheduledReleaseDate) &&
       release.scheduledReleaseDate >= minimumScheduledDate);
   const currentPlan = findDistributionPlan(selectedPlan);
+  const subscriptionCovered = hasActiveSubscription && selectedPlan !== "one_time";
   const customLabelAllowed = selectedPlan === "yearly_plus";
   const trackPricingQuote = useMemo(
     () => getTrackPricingQuote(tracks.length),
@@ -2506,7 +2509,7 @@ export function ReleaseForm({
       setValidationErrorKeys(new Set(validationIssues.map((item) => item.key)));
       setAttemptedStep(issue.step);
       setStatus(
-        `${validationIssues.length} validation issue${validationIssues.length === 1 ? "" : "s"} found. Fix the highlighted fields before paying.`,
+        `${validationIssues.length} validation issue${validationIssues.length === 1 ? "" : "s"} found. Fix the highlighted fields before submitting.`,
       );
       triggerFieldFocus(issue);
       return;
@@ -2545,7 +2548,12 @@ export function ReleaseForm({
         throw new Error(orderData.error || "Unable to create payment order.");
 
       if (orderData.requiresPayment === false) {
-        const data = await submitRelease(orderData.orderId, `free_first_release_${Date.now()}`, "free:first-release");
+        const coveredBySubscription = orderData.subscriptionCovered === true;
+        const data = await submitRelease(
+          orderData.orderId,
+          coveredBySubscription ? `subscription_${Date.now()}` : `free_first_release_${Date.now()}`,
+          coveredBySubscription ? "subscription:active" : "free:first-release",
+        );
         setSubmittedRelease(data.release);
         setUploadProgress(100);
         return;
@@ -2811,7 +2819,7 @@ export function ReleaseForm({
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Plan</dt><dd className="text-right">{currentPlan.title}</dd></div>
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Artists</dt><dd>{artistCount}</dd></div>
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Tracks</dt><dd>{tracks.length}</dd></div>
-              <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>{selectedPlan === "one_time" ? "Price" : "Plan coverage"}</dt><dd className="text-right">{selectedPlan === "one_time" ? (firstReleaseOffer && finalDistributionAmount === 0 ? "FREE" : `₹${finalDistributionAmount.toLocaleString("en-IN")}`) : `${currentPlan.cadence} · ₹${distributionAmount.toLocaleString("en-IN")}`}</dd></div>
+              <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>{subscriptionCovered ? "Active subscription" : selectedPlan === "one_time" ? "Price" : "Plan coverage"}</dt><dd className="text-right">{subscriptionCovered ? currentPlan.title : selectedPlan === "one_time" ? (firstReleaseOffer && finalDistributionAmount === 0 ? "FREE" : `₹${finalDistributionAmount.toLocaleString("en-IN")}`) : `${currentPlan.cadence} · ₹${distributionAmount.toLocaleString("en-IN")}`}</dd></div>
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Save state</dt><dd aria-live="polite" style={{ color: autosaveStatus === "error" ? "var(--danger)" : autosaveStatus === "saved" ? "var(--success)" : "var(--text-muted)" }}>{autosaveStatus === "waiting" ? "Changes pending" : autosaveStatus === "saving" ? "Saving…" : autosaveStatus === "saved" ? "Saved" : "Save failed"}</dd></div>
             </dl>
             {validationIssueCount > 0 ? <div className="release-summary-tasks mt-5 border-t pt-4" style={{ borderColor: "var(--border)" }}><p className="text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Next up</p><ul className="mt-3 grid gap-1">{validationIssues.slice(0, 5).map((issue) => <li key={`${issue.key}-${issue.trackIndex ?? "release"}`}><button type="button" onClick={() => triggerFieldFocus(issue)} className="group flex w-full items-start justify-between gap-3 py-2 text-left text-xs leading-5 transition" style={{ color: "var(--text-muted)" }}><span>{issue.message}</span><span className="shrink-0 text-[var(--text-soft)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" aria-hidden="true">→</span></button></li>)}</ul></div> : null}
@@ -4955,7 +4963,7 @@ export function ReleaseForm({
                       {currentPlan.title}
                     </p>
                   </div>
-                  <div
+                  {!subscriptionCovered ? <div
                     className="grid grid-cols-2 gap-px border-b"
                     style={{
                       borderColor: "var(--border)",
@@ -5000,7 +5008,7 @@ export function ReleaseForm({
                           : "0"}
                       </p>
                     </div>
-                  </div>
+                  </div> : null}
                   <div className="p-5">
                     <p
                       className="text-[10px] font-semibold uppercase tracking-[0.18em]"
@@ -5575,7 +5583,7 @@ export function ReleaseForm({
                     </div>
                   </section>
 
-                  <section className="payment-summary p-5 md:p-7">
+                  {!subscriptionCovered ? <section className="payment-summary p-5 md:p-7">
                     <div className="flex items-end justify-between gap-4 border-b pb-4" style={{ borderColor: "var(--border)" }}>
                       <h3 className="text-lg font-semibold">Payment summary</h3>
                       <span className="text-[10px] uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Invoice</span>
@@ -5631,7 +5639,7 @@ export function ReleaseForm({
                         {finalDistributionAmount === 0 ? "FREE" : `Rs ${finalDistributionAmount.toLocaleString("en-IN")}`}
                       </span>
                     </div>
-                  </section>
+                  </section> : null}
 
                   <section className="p-5 md:p-7">
                     <div className="flex items-center gap-3">
@@ -5747,7 +5755,9 @@ export function ReleaseForm({
               >
                 {submitting
                   ? "Processing…"
-                  : firstReleaseOffer
+                  : subscriptionCovered
+                    ? "Submit your release"
+                    : firstReleaseOffer
                     ? finalDistributionAmount === 0
                       ? "Submit"
                       : `Pay Rs ${finalDistributionAmount.toLocaleString("en-IN")} for add-ons & Submit`

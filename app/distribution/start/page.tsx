@@ -6,6 +6,7 @@ import { ReleaseForm } from "@/components/release-form";
 import { ReleaseOnboardingGate } from "@/components/release-onboarding-gate";
 import { getFirstReleaseEligibility } from "@/lib/first-release-promotion";
 import { getReleasePrefill } from "@/lib/release-prefill";
+import { getSubscriptionByUserId } from "@/lib/db";
 
 function firstValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
@@ -16,8 +17,10 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
   const params = (await searchParams) ?? {};
   const requestedId = Number(firstValue(params.edit) ?? firstValue(params.resume) ?? firstValue(params.manage) ?? "");
   const editingRelease = user && Number.isFinite(requestedId) && requestedId > 0 ? (await listDetailedReleasesByUser(user.id)).find((release) => release.id === requestedId) ?? null : null;
-  let selectedPlan: any = "one_time";
-  if (editingRelease?.distributionPlan) {
+  const subscription = user ? await getSubscriptionByUserId(user.id) : null;
+  const hasActiveSubscription = Boolean(subscription && subscription.plan !== "one_time" && subscription.status === "active" && subscription.daysRemaining > 0);
+  let selectedPlan: any = hasActiveSubscription ? subscription?.plan : "one_time";
+  if (!hasActiveSubscription && editingRelease?.distributionPlan) {
     if (editingRelease.distributionPlan === "yearly_plus") selectedPlan = "yearly_plus";
     else if (editingRelease.distributionPlan === "yearly" || editingRelease.distributionPlan === "pro") selectedPlan = "yearly";
     else if (editingRelease.distributionPlan === "half_yearly" || editingRelease.distributionPlan === "basic") selectedPlan = "half_yearly";
@@ -69,7 +72,7 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
 
           {user ? (
             <div className="mx-auto w-full max-w-[1440px]">
-              <ReleaseForm selectedPlan={selectedPlan} initialRelease={editingRelease} firstReleaseOffer={Boolean(campaignEligibility?.eligible && campaignDraftEligible)} campaignAttribution={attribution} prefillSuggestions={releasePrefill.suggestions} />
+              <ReleaseForm selectedPlan={selectedPlan} hasActiveSubscription={hasActiveSubscription} initialRelease={editingRelease} firstReleaseOffer={Boolean(campaignEligibility?.eligible && campaignDraftEligible)} campaignAttribution={attribution} prefillSuggestions={releasePrefill.suggestions} />
             </div>
           ) : firstValue(params.onboarding) === "release" ? <ReleaseOnboardingGate /> : (
             <div className="surface-card p-6 text-center sm:p-8">
