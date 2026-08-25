@@ -387,8 +387,10 @@ export function ArtistPicker({
 
       {required && valueIds.length === 0 ? <p className="inline-error">Select at least one artist profile.</p> : null}
 
+      {open && focused ? <button type="button" className="fixed inset-0 z-[90] cursor-default bg-black/65 backdrop-blur-sm" onClick={() => setOpen(false)} aria-label="Close artist profile popup" /> : null}
       {open ? (
-        <div className="absolute top-full z-30 mt-2 w-full min-w-0 rounded-2xl border p-3 shadow-2xl sm:min-w-[32rem]" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
+        <div role={focused ? "dialog" : undefined} aria-modal={focused ? "true" : undefined} aria-label={focused ? "Add artist profile" : undefined} className={`rounded-2xl border p-3 shadow-2xl ${focused ? "fixed left-1/2 top-1/2 z-[100] max-h-[min(42rem,86dvh)] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto" : "absolute top-full z-30 mt-2 w-full min-w-0 sm:min-w-[32rem]"}`} style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
+          {focused ? <div className="mb-3 flex items-center justify-between px-1"><div><p className="font-semibold" style={{ color: "var(--text)" }}>Add artist profile</p><p className="mt-0.5 text-xs" style={{ color: "var(--text-soft)" }}>Choose a saved profile or create a new one.</p></div><button type="button" className="rounded-full px-3 py-2 text-sm" onClick={() => setOpen(false)} aria-label="Close artist profile popup">×</button></div> : null}
           {focused ? <input className="field mb-3" autoFocus value={query} placeholder="Search saved artist profiles" onChange={(event) => onQueryChange(event.target.value)} /> : null}
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
             <div><p className="text-sm font-semibold" style={{ color: "var(--text)" }}>Saved artist profiles</p><p className="mt-0.5 text-xs" style={{ color: "var(--text-soft)" }}>{hasQuery ? "Matches first - all saved profiles remain available" : "Choose a profile for this release"}</p></div>

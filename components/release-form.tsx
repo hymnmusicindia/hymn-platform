@@ -2831,7 +2831,7 @@ export function ReleaseForm({
           <section className={clsx("release-audio-stage", stepMotion)}>
             <div className="release-focused-intro">
               <h2>Add your music and cover</h2>
-              <p>{firstReleaseOffer ? "Upload 1 track for your free Single release" : "Add up to 30 tracks for a maximum length of 1 hour"}<br /><span className="release-dolby-note"><NextImage src="/assets/dolby-double-d.svg" alt="Dolby" width={22} height={13} className="release-dolby-logo" /> Add Dolby Atmos™ files directly in track information.</span></p>
+              <p>{firstReleaseOffer ? "Upload 1 track for your free Single release" : "Add up to 30 tracks for a maximum length of 1 hour"}<br /><span className="release-dolby-note"><img src="https://d21buns5ku92am.cloudfront.net/68644/images/413934-Dolby%20Atmos%20Horizontal-015e44-medium-1641853769.png" alt="Dolby Atmos" className="release-dolby-logo" /> Add Dolby Atmos™ files directly in track information.</span></p>
             </div>
             <div className="release-onboarding-assets">
             <div className="release-onboarding-audio">
@@ -2877,6 +2877,9 @@ export function ReleaseForm({
                   </article>
                 );
               })}
+              {tracks.some((track) => track.audioPreviewUrl && track.audioUploadStatus === "uploaded")
+                ? Array.from({ length: Math.max(0, 4 - tracks.length) }, (_, slot) => <span key={`available-audio-slot-${slot}`} className="release-audio-placeholder" aria-hidden="true" />)
+                : null}
               {firstReleaseOffer ? (
                 <button type="button" disabled className="release-add-audio-track" title="Locked for this FREE one-time Single release" aria-label="Add another track locked for this free one-time Single release">
                   <LockKeyhole />
