@@ -4665,7 +4665,7 @@ html[data-theme="light"] .release-step-button.is-current:hover {
 
   .release-workflow-nav {
     grid-column: 1;
-    grid-row: 2;
+    grid-row: 3;
     position: sticky;
     top: 1.5rem;
     align-self: start;
@@ -4673,16 +4673,22 @@ html[data-theme="light"] .release-step-button.is-current:hover {
 
   .release-workflow-summary {
     grid-column: 3;
-    grid-row: 2;
+    grid-row: 3;
     position: sticky;
     top: 1.5rem;
     align-self: start;
   }
 
-  .release-tracklist-stage {
+  .release-workflow-content {
     grid-column: 2;
-    grid-row: 2;
+    grid-row: 3;
     align-self: start;
+  }
+
+  .release-free-offer-banner {
+    grid-column:2;
+    grid-row:2;
+    margin-bottom:0;
   }
 
   .release-workflow.is-tracklist-step .release-free-offer-banner { display:none; }
