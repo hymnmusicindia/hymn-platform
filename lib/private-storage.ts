@@ -148,7 +148,8 @@ export const localPrivateStorage: PrivateStorageAdapter = {
     }
     if (asset.storageProvider === "vercel_blob" || asset.objectKey.startsWith("http://") || asset.objectKey.startsWith("https://")) {
       const blob = await get(asset.objectKey, { access: "private", headers: input.range ? { Range: input.range } : undefined });
-      if (!blob || blob.statusCode !== 200 || !blob.stream) throw new Error("Could not fetch remote private asset.");
+      const statusCode = Number(blob?.statusCode);
+      if (!blob || ![200, 206].includes(statusCode) || !blob.stream) throw new Error("Could not fetch remote private asset.");
       const buf = Buffer.from(await new Response(blob.stream).arrayBuffer());
       return { bytes: buf, mimeType: asset.mimeType, fileName: asset.safeFilename, contentRange: blob.headers.get("content-range"), contentLength: blob.headers.get("content-length") };
     }
