@@ -1243,6 +1243,16 @@ export function ReleaseForm({
       readinessItems.length) *
       100,
   );
+  const autosaveEligible = readinessScore >= 70;
+  const autosaveLabel = !autosaveEligible
+    ? "Manual save only"
+    : autosaveStatus === "saving"
+      ? "Saving…"
+      : autosaveStatus === "error"
+        ? "Save failed"
+        : autosaveStatus === "saved"
+          ? "Saved"
+          : "Changes pending";
   const autosaveSnapshot = useMemo(
     () => ({
       title: displayedReleaseTitle,
@@ -1317,7 +1327,7 @@ export function ReleaseForm({
   }, []);
 
   useEffect(() => {
-    if (initialRelease || draftReleaseId || draftCreationRef.current) return;
+    if (!autosaveEligible || initialRelease || draftReleaseId || draftCreationRef.current) return;
     draftCreationRef.current = true;
     fetch("/api/distribution/drafts", {
       method: "POST",
@@ -1343,10 +1353,10 @@ export function ReleaseForm({
       .catch(() => {
         draftCreationRef.current = false;
       });
-  }, [campaignAttribution, displayedReleaseTitle, draftReleaseId, firstReleaseOffer, initialRelease, router]);
+  }, [autosaveEligible, campaignAttribution, displayedReleaseTitle, draftReleaseId, firstReleaseOffer, initialRelease, router]);
 
   useEffect(() => {
-    if (!draftReleaseId || submitting || submittedRelease) return;
+    if (!autosaveEligible || !draftReleaseId || submitting || submittedRelease) return;
     setAutosaveStatus("waiting");
     const timer = window.setTimeout(() => {
       setAutosaveStatus("saving");
@@ -1362,7 +1372,7 @@ export function ReleaseForm({
         .catch(() => setAutosaveStatus("error"));
     }, 1200);
     return () => window.clearTimeout(timer);
-  }, [autosaveSnapshot, draftReleaseId, submittedRelease, submitting]);
+  }, [autosaveEligible, autosaveSnapshot, draftReleaseId, submittedRelease, submitting]);
 
   useEffect(() => {
     if (customLabelAllowed) return;
@@ -2697,7 +2707,7 @@ export function ReleaseForm({
           <button type="button" onClick={saveDraftRelease} disabled={submitting} className="release-workspace-quit">Save &amp; Quit</button>
           <NextImage src="/assets/hymnlogowhite.png" alt="HYMN Music" width={116} height={38} priority className="release-workspace-logo" />
           <div className="release-workspace-state" aria-live="polite">
-            <span className={autosaveStatus === "saved" ? "is-saved" : ""}>{autosaveStatus === "saving" ? "Saving…" : autosaveStatus === "error" ? "Save failed" : autosaveStatus === "saved" ? "Saved ✓" : "Changes pending"}</span>
+            <span className={autosaveEligible && autosaveStatus === "saved" ? "is-saved" : ""}>{autosaveEligible && autosaveStatus === "saved" ? "Saved ✓" : autosaveLabel}</span>
             {step !== 7 ? <button type="button" onClick={() => goToStep(7)} className="release-workspace-review">Review</button> : null}
           </div>
         </header>
@@ -2820,7 +2830,7 @@ export function ReleaseForm({
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Artists</dt><dd>{artistCount}</dd></div>
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Tracks</dt><dd>{tracks.length}</dd></div>
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>{subscriptionCovered ? "Active subscription" : selectedPlan === "one_time" ? "Price" : "Plan coverage"}</dt><dd className="text-right">{subscriptionCovered ? currentPlan.title : selectedPlan === "one_time" ? (firstReleaseOffer && finalDistributionAmount === 0 ? "FREE" : `₹${finalDistributionAmount.toLocaleString("en-IN")}`) : `${currentPlan.cadence} · ₹${distributionAmount.toLocaleString("en-IN")}`}</dd></div>
-              <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Save state</dt><dd aria-live="polite" style={{ color: autosaveStatus === "error" ? "var(--danger)" : autosaveStatus === "saved" ? "var(--success)" : "var(--text-muted)" }}>{autosaveStatus === "waiting" ? "Changes pending" : autosaveStatus === "saving" ? "Saving…" : autosaveStatus === "saved" ? "Saved" : "Save failed"}</dd></div>
+              <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Save state</dt><dd aria-live="polite" style={{ color: autosaveEligible && autosaveStatus === "error" ? "var(--danger)" : autosaveEligible && autosaveStatus === "saved" ? "var(--success)" : "var(--text-muted)" }}>{autosaveLabel}</dd></div>
             </dl>
             {validationIssueCount > 0 ? <div className="release-summary-tasks mt-5 border-t pt-4" style={{ borderColor: "var(--border)" }}><p className="text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Next up</p><ul className="mt-3 grid gap-1">{validationIssues.slice(0, 5).map((issue) => <li key={`${issue.key}-${issue.trackIndex ?? "release"}`}><button type="button" onClick={() => triggerFieldFocus(issue)} className="group flex w-full items-start justify-between gap-3 py-2 text-left text-xs leading-5 transition" style={{ color: "var(--text-muted)" }}><span>{issue.message}</span><span className="shrink-0 text-[var(--text-soft)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" aria-hidden="true">→</span></button></li>)}</ul></div> : null}
           </div>
@@ -2828,7 +2838,7 @@ export function ReleaseForm({
         <div className="release-workflow-content grid min-w-0 gap-6">
         <details className="release-mobile-summary rounded-xl border p-3 lg:hidden" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
           <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between text-sm font-semibold">Release summary <span>{completion}% complete</span></summary>
-          <div className="mt-3 grid grid-cols-2 gap-3 border-t pt-3 text-sm" style={{ borderColor: "var(--border)" }}><p style={{ color: "var(--text-muted)" }}>Missing required</p><p className="text-right">{validationIssueCount}</p><p style={{ color: "var(--text-muted)" }}>Plan</p><p className="text-right">{currentPlan.title}</p><p style={{ color: "var(--text-muted)" }}>Artists / tracks</p><p className="text-right">{artistCount} / {tracks.length}</p><p style={{ color: "var(--text-muted)" }}>Save state</p><p className="text-right" aria-live="polite">{autosaveStatus === "waiting" ? "Changes pending" : autosaveStatus === "saving" ? "Saving…" : autosaveStatus === "saved" ? "Saved" : "Save failed"}</p></div>
+          <div className="mt-3 grid grid-cols-2 gap-3 border-t pt-3 text-sm" style={{ borderColor: "var(--border)" }}><p style={{ color: "var(--text-muted)" }}>Missing required</p><p className="text-right">{validationIssueCount}</p><p style={{ color: "var(--text-muted)" }}>Plan</p><p className="text-right">{currentPlan.title}</p><p style={{ color: "var(--text-muted)" }}>Artists / tracks</p><p className="text-right">{artistCount} / {tracks.length}</p><p style={{ color: "var(--text-muted)" }}>Save state</p><p className="text-right" aria-live="polite">{autosaveLabel}</p></div>
         </details>
         {step === 1 ? (
           <section className={clsx("release-artist-stage", stepMotion)}>
