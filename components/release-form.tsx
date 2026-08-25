@@ -72,6 +72,50 @@ function uploadPrivateAsset(file: File, assetType: PrivateUploadType, options: {
     request.send(form);
   });
 }
+
+async function uploadPrivateAudio(file: File, options: { releaseId?: number; signal?: AbortSignal; onProgress?: (loaded: number, total: number) => void } = {}) {
+  const size = 8 * 1024 * 1024;
+  const total = Math.ceil(file.size / size);
+  const uploadId = crypto.randomUUID();
+  let downloadPath = "";
+
+  for (let index = 0; index < total; index += 1) {
+    const start = index * size;
+    const chunk = file.slice(start, Math.min(start + size, file.size));
+    downloadPath = await new Promise<string>((resolve, reject) => {
+      const request = new XMLHttpRequest();
+      request.open("POST", "/api/assets/chunk");
+      request.responseType = "json";
+      request.upload.onprogress = (event) => options.onProgress?.(Math.min(start + event.loaded, file.size), file.size);
+      request.onerror = () => reject(new Error("Could not reach the chunk upload service."));
+      request.onabort = () => reject(new DOMException("Upload cancelled.", "AbortError"));
+      request.onload = () => {
+        const body = typeof request.response === "string"
+          ? (() => { try { return JSON.parse(request.response); } catch { return {}; } })()
+          : request.response || {};
+        if (request.status < 200 || request.status >= 300) {
+          reject(new Error(body.error || `Audio upload failed (HTTP ${request.status || "unknown"}).`));
+          return;
+        }
+        resolve(body.asset?.downloadPath || "");
+      };
+      options.signal?.addEventListener("abort", () => request.abort(), { once: true });
+      const form = new FormData();
+      form.set("chunk", chunk, `${index}.part`);
+      form.set("uploadId", uploadId);
+      form.set("fileName", file.name);
+      form.set("mimeType", file.type);
+      form.set("byteSize", String(file.size));
+      form.set("index", String(index));
+      form.set("total", String(total));
+      if (options.releaseId) form.set("releaseId", String(options.releaseId));
+      request.send(form);
+    });
+  }
+
+  if (!downloadPath) throw new Error("Hostinger received the audio but did not finalize it.");
+  return downloadPath;
+}
 import { ArtworkSquareDropzone } from "@/components/artwork-square-dropzone";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { ContextualHelp } from "@/components/contextual-help";
@@ -1544,7 +1588,7 @@ export function ReleaseForm({
       requiresAudioReplacement: false,
     });
     try {
-      const downloadPath = await uploadPrivateAsset(file, "private_audio_master", {
+      const downloadPath = await uploadPrivateAudio(file, {
         signal: controls.signal,
         onProgress: controls.reportProgress,
       });
@@ -2110,7 +2154,9 @@ export function ReleaseForm({
 
     let completedFiles = 0;
     for (const item of filesToUpload) {
-      const downloadPath = await uploadPrivateAsset(item.file, item.assetType, { releaseId: initialRelease?.id });
+      const downloadPath = item.assetType === "private_audio_master"
+        ? await uploadPrivateAudio(item.file, { releaseId: initialRelease?.id })
+        : await uploadPrivateAsset(item.file, item.assetType, { releaseId: initialRelease?.id });
       item.setter(downloadPath);
       completedFiles++;
       setUploadProgress(Math.round((completedFiles / filesToUpload.length) * 100));

@@ -29,7 +29,7 @@ const policies: Record<PrivateAssetType, { max: number; mime: string[] }> = {
   private_kyc_document: { max: 20 * 1024 * 1024, mime: ["application/pdf", "image/jpeg", "image/png"] }
 };
 
-function rootPath() {
+export function privateStorageRootPath() {
   if (process.env.VERCEL === "1" || process.env.NEXT_PUBLIC_VERCEL_ENV) {
     return path.resolve("/tmp/.private-storage");
   }
@@ -129,8 +129,8 @@ export const localPrivateStorage: PrivateStorageAdapter = {
     }
 
     const objectKey = `${input.ownerUserId}/${crypto.randomUUID()}`;
-    const fullPath = path.resolve(rootPath(), objectKey);
-    if (!fullPath.startsWith(`${rootPath()}${path.sep}`)) throw new Error("Unsafe storage path.");
+    const fullPath = path.resolve(privateStorageRootPath(), objectKey);
+    if (!fullPath.startsWith(`${privateStorageRootPath()}${path.sep}`)) throw new Error("Unsafe storage path.");
     await fs.mkdir(path.dirname(fullPath), { recursive: true });
     await fs.writeFile(fullPath, input.bytes, { flag: "wx" });
     const asset = await prisma.storedAsset.create({ data: { ownerUserId: input.ownerUserId, releaseId: input.releaseId, beatPurchaseId: input.beatPurchaseId, beatId: input.beatId, assetType: input.assetType, storageProvider: "private_local", objectKey, originalFilename: input.fileName, safeFilename, mimeType: input.mimeType, byteSize: input.bytes.length, checksum, accessClassification: "private", retentionUntil: input.retentionUntil } }).catch(async error => {
@@ -153,7 +153,7 @@ export const localPrivateStorage: PrivateStorageAdapter = {
       const buf = Buffer.from(await new Response(blob.stream).arrayBuffer());
       return { bytes: buf, mimeType: asset.mimeType, fileName: asset.safeFilename, contentRange: blob.headers.get("content-range"), contentLength: blob.headers.get("content-length") };
     }
-    return { bytes: await fs.readFile(path.resolve(rootPath(), asset.objectKey)), mimeType: asset.mimeType, fileName: asset.safeFilename };
+    return { bytes: await fs.readFile(path.resolve(privateStorageRootPath(), asset.objectKey)), mimeType: asset.mimeType, fileName: asset.safeFilename };
   },
   async delete(input) {
     const asset = await prisma.storedAsset.findUnique({ where: { id: input.assetId } });
