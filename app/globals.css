@@ -4695,8 +4695,8 @@ html[data-theme="light"] .release-step-button.is-current:hover {
   }
 
   .release-workflow.is-tracklist-step .release-tracklist-stage {
-    grid-column:2;
-    grid-row:2;
+    grid-column:1;
+    grid-row:1;
     width:100%;
     max-width:none;
     margin-top:0;
@@ -4705,8 +4705,8 @@ html[data-theme="light"] .release-step-button.is-current:hover {
   .release-workflow.is-tracklist-step .release-footer-mobile-actions {
     position:sticky;
     bottom:1rem;
-    grid-column:2;
-    grid-row:3;
+    grid-column:1;
+    grid-row:2;
     width:100%;
     margin-top:.75rem;
   }
