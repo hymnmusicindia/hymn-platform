@@ -4,6 +4,9 @@ const developmentCspScriptSources = process.env.NODE_ENV === "development" ? " '
 
 const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR?.trim() || ".next",
+  experimental: {
+    proxyClientMaxBodySize: "510mb"
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**" },
