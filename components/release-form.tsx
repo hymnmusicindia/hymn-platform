@@ -1,7 +1,5 @@
 "use client";
 
-import { uploadPresigned } from "@vercel/blob/client";
-
 import clsx from "clsx";
 import {
   AlertCircle,
@@ -41,6 +39,37 @@ import {
   type MonetisationClauseState,
   ArtworkWarning,
 } from "@/components/release-form-support";
+
+type PrivateUploadType = "private_audio_master" | "private_unreleased_artwork" | "private_cover_licence";
+
+function uploadPrivateAsset(file: File, assetType: PrivateUploadType, options: { releaseId?: number; signal?: AbortSignal; onProgress?: (loaded: number, total: number) => void } = {}) {
+  return new Promise<string>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", "/api/assets");
+    request.responseType = "json";
+    request.upload.onprogress = (event) => options.onProgress?.(event.loaded, event.total || file.size);
+    request.onerror = () => reject(new Error("Could not reach the upload service."));
+    request.onabort = () => reject(new DOMException("Upload cancelled.", "AbortError"));
+    request.onload = () => {
+      const body = request.response || {};
+      if (request.status < 200 || request.status >= 300) {
+        reject(new Error(body.error || "Private upload failed."));
+        return;
+      }
+      if (!body.asset?.downloadPath) {
+        reject(new Error("The upload completed without a download path."));
+        return;
+      }
+      resolve(body.asset.downloadPath);
+    };
+    options.signal?.addEventListener("abort", () => request.abort(), { once: true });
+    const form = new FormData();
+    form.set("file", file);
+    form.set("assetType", assetType);
+    if (options.releaseId) form.set("releaseId", String(options.releaseId));
+    request.send(form);
+  });
+}
 import { ArtworkSquareDropzone } from "@/components/artwork-square-dropzone";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { ContextualHelp } from "@/components/contextual-help";
@@ -1513,24 +1542,14 @@ export function ReleaseForm({
       requiresAudioReplacement: false,
     });
     try {
-      const safeName = `audio-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
-      const newBlob = await uploadPresigned(safeName, file, {
-        access: 'private',
-        handleUploadUrl: '/api/assets/client-upload',
-        clientPayload: JSON.stringify({ assetType: 'private_audio_master', mimeType: file.type, originalFilename: file.name, byteSize: file.size }),
-        onUploadProgress: ({ loaded, total }) => controls.reportProgress(loaded, total),
+      const downloadPath = await uploadPrivateAsset(file, "private_audio_master", {
+        signal: controls.signal,
+        onProgress: controls.reportProgress,
       });
-      const completedResponse = await fetch('/api/assets/client-upload/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: newBlob.url }),
-      });
-      const completed = await completedResponse.json();
-      if (!completedResponse.ok) throw new Error(completed.error || 'Could not finalize the private upload.');
       updateTrack(index, {
         audioFile: null,
         audioFileName: file.name,
-        existingAudioUrl: completed.downloadPath,
+        existingAudioUrl: downloadPath,
         audioPreviewUrl: previewUrl,
         duration,
         audioUploadStatus: "uploaded",
@@ -1599,31 +1618,11 @@ export function ReleaseForm({
     });
 
     try {
-      const uploaded = await uploadPresigned(
-        `artwork-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "")}`,
-        file,
-        {
-          access: "private",
-          handleUploadUrl: "/api/assets/client-upload",
-          clientPayload: JSON.stringify({
-            assetType: "private_unreleased_artwork",
-            releaseId: draftReleaseId ?? initialRelease?.id,
-            mimeType: file.type,
-            originalFilename: file.name,
-            byteSize: file.size,
-          }),
-        },
-      );
-      const completedResponse = await fetch("/api/assets/client-upload/complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: uploaded.url }),
+      const downloadPath = await uploadPrivateAsset(file, "private_unreleased_artwork", {
+        releaseId: draftReleaseId ?? initialRelease?.id,
       });
-      const completed = await completedResponse.json();
-      if (!completedResponse.ok)
-        throw new Error(completed.error || "Could not save cover artwork.");
-      setPersistedArtworkUrl(completed.downloadPath);
-      setArtworkPreview(completed.downloadPath);
+      setPersistedArtworkUrl(downloadPath);
+      setArtworkPreview(downloadPath);
     } catch (error) {
       setStatus(
         error instanceof Error
@@ -2109,15 +2108,8 @@ export function ReleaseForm({
 
     let completedFiles = 0;
     for (const item of filesToUpload) {
-      const newBlob = await uploadPresigned(item.name, item.file, {
-        access: 'private',
-        handleUploadUrl: '/api/assets/client-upload',
-        clientPayload: JSON.stringify({ assetType: item.assetType, releaseId: initialRelease?.id, mimeType: item.file.type, originalFilename: item.file.name, byteSize: item.file.size })
-      });
-      const completedResponse = await fetch('/api/assets/client-upload/complete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: newBlob.url }) });
-      const completed = await completedResponse.json();
-      if (!completedResponse.ok) throw new Error(completed.error || 'Could not finalize the private upload.');
-      item.setter(completed.downloadPath);
+      const downloadPath = await uploadPrivateAsset(item.file, item.assetType, { releaseId: initialRelease?.id });
+      item.setter(downloadPath);
       completedFiles++;
       setUploadProgress(Math.round((completedFiles / filesToUpload.length) * 100));
     }
