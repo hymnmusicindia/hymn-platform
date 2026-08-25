@@ -2869,10 +2869,17 @@ export function ReleaseForm({
                   </article>
                 );
               })}
-              {tracks.some((track) => track.audioPreviewUrl && track.audioUploadStatus === "uploaded") ? <button type="button" onClick={addTrack} disabled={firstReleaseOffer} className="release-add-audio-track" title={firstReleaseOffer ? "Locked for this FREE Single release" : "Add another audio master"}>
-                {firstReleaseOffer ? <LockKeyhole /> : <Plus />}
-                <span>{firstReleaseOffer ? "Add another track — locked for this FREE release" : "Add track"}</span>
-              </button> : null}
+              {firstReleaseOffer ? (
+                <button type="button" disabled className="release-add-audio-track" title="Locked for this FREE one-time Single release" aria-label="Add another track locked for this free one-time Single release">
+                  <LockKeyhole />
+                  <span>Add track — locked for this FREE release</span>
+                </button>
+              ) : tracks.some((track) => track.audioPreviewUrl && track.audioUploadStatus === "uploaded") ? (
+                <button type="button" onClick={addTrack} className="release-add-audio-track" title="Add another audio master">
+                  <Plus />
+                  <span>Add track</span>
+                </button>
+              ) : null}
             </div>
             </div>
             <div ref={registerField("artwork-upload")} className="release-onboarding-artwork">
