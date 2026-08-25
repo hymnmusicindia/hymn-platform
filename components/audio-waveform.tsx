@@ -1,6 +1,6 @@
 "use client";
 
-import { Pause, Play, RotateCcw, Waves } from "lucide-react";
+import { Pause, Pencil, Play, RotateCcw, Waves } from "lucide-react";
 import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 
@@ -9,6 +9,13 @@ type AudioWaveformProps = {
   title: string;
   subtitle?: string;
   compact?: boolean;
+  editableTitle?: {
+    value: string;
+    placeholder: string;
+    ariaLabel: string;
+    inputRef?: (node: HTMLInputElement | null) => void;
+    onChange: (value: string) => void;
+  };
 };
 
 function formatTime(seconds: number) {
@@ -25,7 +32,7 @@ function fallbackBars(count: number) {
   return Array.from({ length: count }, (_, index) => 0.35 + ((index % 6) / 12));
 }
 
-export function AudioWaveform({ src, title, subtitle, compact = false }: AudioWaveformProps) {
+export function AudioWaveform({ src, title, subtitle, compact = false, editableTitle }: AudioWaveformProps) {
   const validSrc = typeof src === "string" && src.trim() !== "";
   const barCount = compact ? 40 : 64;
   const [bars, setBars] = useState<number[]>(() => fallbackBars(barCount));
@@ -182,7 +189,18 @@ export function AudioWaveform({ src, title, subtitle, compact = false }: AudioWa
           {playbackError ? <RotateCcw /> : playing ? <Pause /> : <Play />}
         </button>
         <div className="audio-waveform-inline-copy">
-          <strong title={title}>{title}</strong>
+          {editableTitle ? (
+            <label className="audio-waveform-inline-name">
+              <Pencil aria-hidden="true" />
+              <input
+                ref={editableTitle.inputRef}
+                value={editableTitle.value}
+                onChange={(event) => editableTitle.onChange(event.target.value)}
+                placeholder={editableTitle.placeholder}
+                aria-label={editableTitle.ariaLabel}
+              />
+            </label>
+          ) : <strong title={title}>{title}</strong>}
           <span>{playbackError ? "Preview unavailable · tap retry" : subtitle || "Audio master"}</span>
         </div>
         <div role="slider" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-label={`Seek ${title}`} onClick={seek} className="audio-waveform-inline-track">

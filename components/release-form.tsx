@@ -2851,11 +2851,19 @@ export function ReleaseForm({
                     <div className="release-audio-queue-main">
                       {hasAudio ? (
                         <div className="release-audio-inline-details">
-                          <AudioWaveform src={track.audioPreviewUrl} title={track.audioFileName || track.trackTitle || `Track ${index + 1}`} subtitle={[track.duration, fileFormat(track.audioFile, track.audioFileName)].filter(Boolean).join(" • ")} compact />
-                          <label className="release-audio-title-field">
-                            <span>Track title</span>
-                            <input ref={registerField(`track-${index}-title`) as (node: HTMLInputElement | null) => void} value={track.trackTitle} onChange={(event) => updateTrack(index, { trackTitle: event.target.value })} placeholder="Enter the official track title" aria-label={`Track ${index + 1} title`} />
-                          </label>
+                          <AudioWaveform
+                            src={track.audioPreviewUrl}
+                            title={track.trackTitle || `Track ${index + 1}`}
+                            subtitle={[track.audioFileName, track.duration, fileFormat(track.audioFile, track.audioFileName)].filter(Boolean).join(" • ")}
+                            compact
+                            editableTitle={{
+                              value: track.trackTitle,
+                              placeholder: "Add track name",
+                              ariaLabel: `Track ${index + 1} name`,
+                              inputRef: registerField(`track-${index}-title`) as (node: HTMLInputElement | null) => void,
+                              onChange: (value) => updateTrack(index, { trackTitle: value }),
+                            }}
+                          />
                         </div>
                       ) : (
                         <UploadDropzone accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" iconOnly compact ctaLabel="Add track" title={`Track ${index + 1} audio`} description="Choose a WAV or MP3 master" helperLines={[]} fileName={track.audioFile?.name || track.audioFileName} fileFormat={fileFormat(track.audioFile, track.audioFileName)} onSelect={async (file, controls) => handleAudioFile(index, file, controls)} />

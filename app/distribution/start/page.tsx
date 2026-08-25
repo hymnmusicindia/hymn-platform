@@ -25,13 +25,13 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
   const hasRequestedRelease = Boolean(firstValue(params.edit) || firstValue(params.resume) || firstValue(params.manage));
   const isEditing = Boolean(editingRelease);
   const editingMetadata = editingRelease?.metadata && typeof editingRelease.metadata === "object" ? editingRelease.metadata as Record<string, unknown> : {};
-  const campaignRequested = firstValue(params.campaign) === "first-release" || editingMetadata.promotionCode === "FIRST_RELEASE_FREE";
-  const campaignEligibility = user && campaignRequested ? await getFirstReleaseEligibility(user.id) : null;
   const campaignDraftEligible = !editingRelease || (
     ["draft", "awaiting_payment"].includes(editingRelease.status) &&
     editingRelease.releaseType === "single" &&
     (editingRelease.tracks?.length ?? 1) === 1
   );
+  const campaignRequested = firstValue(params.campaign) === "first-release" || editingMetadata.promotionCode === "FIRST_RELEASE_FREE" || (selectedPlan === "one_time" && campaignDraftEligible);
+  const campaignEligibility = user && campaignRequested ? await getFirstReleaseEligibility(user.id) : null;
   const attribution = Object.fromEntries(["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"].map((key) => [key, firstValue(params[key as keyof typeof params])]).filter(([, value]) => Boolean(value))) as Record<string, string>;
   const releasePrefill = user && !editingRelease ? await getReleasePrefill(user.id) : { suggestions: [], preferences: {} };
 

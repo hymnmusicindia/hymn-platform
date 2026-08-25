@@ -4082,6 +4082,12 @@ button:disabled, [aria-disabled="true"] { cursor: not-allowed; opacity: 0.52; }
 .audio-waveform-inline-copy strong,.audio-waveform-inline-copy span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .audio-waveform-inline-copy strong { color:var(--text); font-size:.86rem; font-weight:700; }
 .audio-waveform-inline-copy span { color:var(--text-soft); font-size:.68rem; text-transform:uppercase; letter-spacing:.07em; }
+.audio-waveform-inline-name { display:grid; grid-template-columns:.9rem minmax(0,1fr); align-items:center; gap:.4rem; min-width:0; }
+.audio-waveform-inline-name svg { width:.8rem; height:.8rem; color:var(--text-soft); }
+.audio-waveform-inline-name input { width:100%; min-width:0; border:0; border-bottom:1px solid transparent; border-radius:0; padding:.12rem 0; outline:0; background:transparent; color:var(--text); font-size:.86rem; font-weight:700; }
+.audio-waveform-inline-name input::placeholder { color:var(--text-muted); font-weight:650; opacity:1; }
+.audio-waveform-inline-name:focus-within svg { color:var(--accent); }
+.audio-waveform-inline-name:focus-within input { border-bottom-color:var(--accent); }
 .audio-waveform-inline.has-error .audio-waveform-inline-copy span { color:var(--danger); text-transform:none; letter-spacing:0; }
 .audio-waveform-inline-time { color:var(--text-soft); font-size:.68rem; font-variant-numeric:tabular-nums; white-space:nowrap; }
 
@@ -4789,7 +4795,7 @@ body:has(.release-workflow.is-focused-step) > footer { display:none; }
 .release-audio-queue-item { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:.7rem; min-height:4rem; border:0; border-radius:.35rem; padding:.45rem .65rem; background:var(--bg-elevated); box-shadow:none; }
 .release-audio-queue-item.is-ready { border:0; }
 .release-audio-queue-main { min-width:0; }
-.release-audio-inline-details { display:grid; gap:.55rem; }
+.release-audio-inline-details { display:grid; gap:0; }
 .release-audio-title-field { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:.65rem; }
 .release-audio-title-field > span { color:var(--text-soft); font-size:.64rem; font-weight:700; text-transform:uppercase; letter-spacing:.09em; }
 .release-audio-title-field input { width:100%; min-width:0; border:0; border-bottom:1px solid var(--border); border-radius:0; padding:.35rem 0; outline:0; background:transparent; color:var(--text); font-size:.82rem; font-weight:650; }
