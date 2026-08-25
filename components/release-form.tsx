@@ -845,6 +845,7 @@ export function ReleaseForm({
   const [mobileStepMenuOpen, setMobileStepMenuOpen] = useState(false);
   const [expandedTrack, setExpandedTrack] = useState(0);
   const [artistRemovalCandidateId, setArtistRemovalCandidateId] = useState<number | null>(null);
+  const [trackArtistRemovalCandidate, setTrackArtistRemovalCandidate] = useState<string | null>(null);
   const audioPreviewObjectUrlsRef = useRef<Set<string>>(new Set());
   const [draggedTrackIndex, setDraggedTrackIndex] = useState<number | null>(null);
   const [versionPickerTrack, setVersionPickerTrack] = useState<number | null>(null);
@@ -905,7 +906,7 @@ export function ReleaseForm({
       initialRelease?.monetisationAccepted ??
       (initialRelease?.platforms?.length
         ? socialPlatformSelected(initialRelease.platforms)
-        : true),
+        : false),
   );
   const [monetisationClauses, setMonetisationClauses] =
     useState<MonetisationClauseState>(() => {
@@ -939,8 +940,8 @@ export function ReleaseForm({
   );
   const defaultStorePlatforms = useMemo(
     () =>
-      (firstReleaseOffer ? storePlatforms : [...storePlatforms, ...socialPlatforms]).map((platform) => platform.name),
-    [firstReleaseOffer],
+      storePlatforms.map((platform) => platform.name),
+    [],
   );
   const [platforms, setPlatforms] = useState<string[]>(
     initialRelease?.platforms?.length
@@ -3142,40 +3143,41 @@ export function ReleaseForm({
                           )}
                         >
                           <div className="grid gap-3 md:gap-4 lg:grid-cols-3">
-                            <ArtistPicker
-                              label="Primary Artist"
-                              helper="Max 3 artists"
-                              valueIds={profilesFor(track.primaryArtistIds)}
-                              query={track.primaryArtistQuery}
-                              max={3}
-                              required={
-                                showErrors &&
-                                issue?.key === `track-${index}-artists`
-                              }
-                              onQueryChange={(value) =>
-                                updateTrack(index, {
-                                  primaryArtistQuery: value,
-                                })
-                              }
-                              onSelect={(profile) => {
-                                upsertKnownProfile(profile);
-                                updateTrack(index, {
-                                  primaryArtistIds:
-                                    track.primaryArtistIds.includes(profile.id)
-                                      ? track.primaryArtistIds
-                                      : [...track.primaryArtistIds, profile.id],
-                                  primaryArtistQuery: "",
-                                });
-                              }}
-                              onRemove={(profileId) =>
-                                updateTrack(index, {
-                                  primaryArtistIds:
-                                    track.primaryArtistIds.filter(
-                                      (id) => id !== profileId,
-                                    ),
-                                })
-                              }
-                            />
+                            <div className="release-track-artist-field">
+                              <span className="release-track-artist-label">Primary Artist</span>
+                              <div className="release-track-artist-avatar-picker">
+                                {track.primaryArtistIds.map((profileId) => {
+                                  const profile = knownProfiles[profileId];
+                                  if (!profile) return null;
+                                  const removalKey = `${track.id}:${profileId}`;
+                                  const removalArmed = trackArtistRemovalCandidate === removalKey;
+                                  return <button type="button" key={profileId} className={clsx("release-track-selected-artist", removalArmed && "is-removal-armed")} title={removalArmed ? `Remove ${profile.name}` : profile.name} aria-label={removalArmed ? `Confirm removal of ${profile.name}` : `${profile.name}. Click twice to remove.`} onClick={() => { if (removalArmed) { updateTrack(index, { primaryArtistIds: track.primaryArtistIds.filter((id) => id !== profileId) }); setTrackArtistRemovalCandidate(null); } else setTrackArtistRemovalCandidate(removalKey); }}>
+                                    {profile.imageUrl ? <img src={profile.imageUrl} alt="" /> : <span className="release-selected-artist-avatar">{profile.name.slice(0, 1).toUpperCase()}</span>}
+                                    <span className="release-selected-artist-remove" aria-hidden="true"><X /></span>
+                                  </button>;
+                                })}
+                                <ArtistPicker
+                                  label="Add primary artist"
+                                  helper="Max 3 artists"
+                                  valueIds={profilesFor(track.primaryArtistIds)}
+                                  query={track.primaryArtistQuery}
+                                  max={3}
+                                  hideSelectionChips
+                                  focused
+                                  required={showErrors && issue?.key === `track-${index}-artists`}
+                                  onQueryChange={(value) => updateTrack(index, { primaryArtistQuery: value })}
+                                  onSelect={(profile) => {
+                                    upsertKnownProfile(profile);
+                                    updateTrack(index, {
+                                      primaryArtistIds: track.primaryArtistIds.includes(profile.id) ? track.primaryArtistIds : [...track.primaryArtistIds, profile.id],
+                                      primaryArtistQuery: "",
+                                    });
+                                  }}
+                                  onRemove={() => undefined}
+                                />
+                              </div>
+                              <small>Up to 3 artist profiles</small>
+                            </div>
                             <div>
                               <label
                                 className="mb-2 block px-[.8rem] text-xs font-medium md:text-sm"

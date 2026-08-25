@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Plus } from "lucide-react";
 import type { ArtistProfile, SpotifyArtistResult } from "@/lib/types";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 
@@ -349,7 +350,7 @@ export function ArtistPicker({
         </label>
       </div>
 
-      {focused ? <button type="button" className="artist-picker-add-trigger" disabled={reachedMax} onClick={() => setOpen((current) => !current)} aria-label={reachedMax ? "Maximum primary artists selected" : "Add primary artist"} aria-expanded={open}>+</button> : <input
+      {focused ? <button type="button" className="artist-picker-add-trigger" disabled={reachedMax} onClick={() => setOpen((current) => !current)} aria-label={reachedMax ? "Maximum primary artists selected" : "Add primary artist"} aria-expanded={open}><Plus aria-hidden="true" /></button> : <input
         className="field"
         value={query}
         disabled={reachedMax}
