@@ -77,16 +77,20 @@ async function uploadPrivateAudio(file: File, options: { releaseId?: number; sig
   const size = 8 * 1024 * 1024;
   const total = Math.ceil(file.size / size);
   const uploadId = crypto.randomUUID();
-  let downloadPath = "";
+  const uploaded = new Array<number>(total).fill(0);
+  let nextIndex = 0;
 
-  for (let index = 0; index < total; index += 1) {
+  const uploadChunk = async (index: number) => {
     const start = index * size;
     const chunk = file.slice(start, Math.min(start + size, file.size));
-    downloadPath = await new Promise<string>((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const request = new XMLHttpRequest();
       request.open("POST", "/api/assets/chunk");
       request.responseType = "json";
-      request.upload.onprogress = (event) => options.onProgress?.(Math.min(start + event.loaded, file.size), file.size);
+      request.upload.onprogress = (event) => {
+        uploaded[index] = Math.min(event.loaded, chunk.size);
+        options.onProgress?.(uploaded.reduce((sum, value) => sum + value, 0), file.size);
+      };
       request.onerror = () => reject(new Error("Could not reach the chunk upload service."));
       request.onabort = () => reject(new DOMException("Upload cancelled.", "AbortError"));
       request.onload = () => {
@@ -97,7 +101,9 @@ async function uploadPrivateAudio(file: File, options: { releaseId?: number; sig
           reject(new Error(body.error || `Audio upload failed (HTTP ${request.status || "unknown"}).`));
           return;
         }
-        resolve(body.asset?.downloadPath || "");
+        uploaded[index] = chunk.size;
+        options.onProgress?.(uploaded.reduce((sum, value) => sum + value, 0), file.size);
+        resolve();
       };
       options.signal?.addEventListener("abort", () => request.abort(), { once: true });
       const form = new FormData();
@@ -111,10 +117,26 @@ async function uploadPrivateAudio(file: File, options: { releaseId?: number; sig
       if (options.releaseId) form.set("releaseId", String(options.releaseId));
       request.send(form);
     });
-  }
+  };
 
-  if (!downloadPath) throw new Error("Hostinger received the audio but did not finalize it.");
-  return downloadPath;
+  const workers = Array.from({ length: Math.min(3, total) }, async () => {
+    while (nextIndex < total) {
+      const index = nextIndex++;
+      await uploadChunk(index);
+    }
+  });
+  await Promise.all(workers);
+
+  const response = await fetch("/api/assets/chunk/complete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    signal: options.signal,
+    body: JSON.stringify({ uploadId, fileName: file.name, mimeType: file.type, byteSize: file.size, total, releaseId: options.releaseId }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || `Could not finalize audio upload (HTTP ${response.status}).`);
+  if (!body.asset?.downloadPath) throw new Error("Hostinger received the audio but did not finalize it.");
+  return body.asset.downloadPath as string;
 }
 import { ArtworkSquareDropzone } from "@/components/artwork-square-dropzone";
 import { UploadDropzone } from "@/components/upload-dropzone";
