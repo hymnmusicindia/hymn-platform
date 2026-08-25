@@ -150,8 +150,8 @@ const steps = [
   "",
   "Review & payment",
 ] as const;
-const visibleStepIndexes = [1, 0, 3, 2, 5, 7] as const;
-const menuStepIndexes = [3, 2, 5, 7] as const;
+const visibleStepIndexes = [1, 0, 3, 2, 4, 5, 7] as const;
+const menuStepIndexes = [3, 2, 4, 5, 7] as const;
 const COPYRIGHT_OWNER_PREFERENCES_KEY = "hymn:copyright-owner-preferences";
 const defaultLegalState: LegalState = {
   ownershipConfirmation: false,
@@ -877,6 +877,9 @@ export function ReleaseForm({
   const [artworkPreview, setArtworkPreview] = useState<string | null>(
     initialRelease?.artworkUrl ?? null,
   );
+  const [persistedArtworkUrl, setPersistedArtworkUrl] = useState<string | null>(
+    initialRelease?.artworkUrl ?? null,
+  );
   const [artworkDimensions, setArtworkDimensions] = useState<string | null>(
     null,
   );
@@ -1572,6 +1575,7 @@ export function ReleaseForm({
       throw error;
     }
     if (artworkPreview) safeRevokePreviewUrl(artworkPreview);
+    setPersistedArtworkUrl(null);
     setArtworkFile(file);
     setArtworkPreview(await readAsDataUrl(file));
     setArtworkDimensions(`${dimensions.width} x ${dimensions.height}`);
@@ -1593,6 +1597,40 @@ export function ReleaseForm({
       );
       setArtworkScanning(false);
     });
+
+    try {
+      const uploaded = await uploadPresigned(
+        `artwork-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "")}`,
+        file,
+        {
+          access: "private",
+          handleUploadUrl: "/api/assets/client-upload",
+          clientPayload: JSON.stringify({
+            assetType: "private_unreleased_artwork",
+            releaseId: draftReleaseId ?? initialRelease?.id,
+            mimeType: file.type,
+            originalFilename: file.name,
+            byteSize: file.size,
+          }),
+        },
+      );
+      const completedResponse = await fetch("/api/assets/client-upload/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: uploaded.url }),
+      });
+      const completed = await completedResponse.json();
+      if (!completedResponse.ok)
+        throw new Error(completed.error || "Could not save cover artwork.");
+      setPersistedArtworkUrl(completed.downloadPath);
+      setArtworkPreview(completed.downloadPath);
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? `${error.message} The local preview is still available; please try selecting the artwork again before leaving.`
+          : "Could not save cover artwork. Please try selecting it again before leaving.",
+      );
+    }
   }
 
   function openContributors(index: number) {
@@ -2034,7 +2072,7 @@ export function ReleaseForm({
       setter: (url: string) => void;
     }[] = [];
     let artworkUrl: string | undefined;
-    if (artworkFile)
+    if (artworkFile && !persistedArtworkUrl)
       filesToUpload.push({
         name: `artwork-${Date.now()}-${artworkFile.name.replace(/[^a-zA-Z0-9.-]/g, "")}`,
         file: artworkFile,
@@ -2135,7 +2173,7 @@ export function ReleaseForm({
         paymentModel: selectedPlan === "one_time" ? "one_time" : "subscription",
         plan: selectedPlan,
         artworkFileKey: "artwork",
-        existingArtworkUrl: initialRelease?.artworkUrl ?? undefined,
+        existingArtworkUrl: persistedArtworkUrl ?? initialRelease?.artworkUrl ?? undefined,
         uploadedArtworkUrl: uploaded.artworkUrl,
         tracks: tracks.map((track, index) => ({
           trackTitle: track.trackTitle,
@@ -2240,7 +2278,7 @@ export function ReleaseForm({
           plan: selectedPlan,
           ...(firstReleaseOffer ? { promotionCode: "FIRST_RELEASE_FREE", attribution: campaignAttribution } : {}),
           artworkFileKey: "artwork",
-          existingArtworkUrl: initialRelease?.artworkUrl ?? undefined,
+          existingArtworkUrl: persistedArtworkUrl ?? initialRelease?.artworkUrl ?? undefined,
           uploadedArtworkUrl: uploaded.artworkUrl,
           tracks: tracks.map((track, index) => ({
             trackTitle: track.trackTitle,
@@ -2353,6 +2391,7 @@ export function ReleaseForm({
         paymentModel: selectedPlan === "one_time" ? "one_time" : "subscription",
         plan: selectedPlan,
         artworkFileKey: "artwork",
+        existingArtworkUrl: persistedArtworkUrl ?? initialRelease?.artworkUrl ?? undefined,
         uploadedArtworkUrl: uploaded.artworkUrl,
         tracks: tracks.map((track, index) => ({
           trackTitle: track.trackTitle,
@@ -2518,6 +2557,7 @@ export function ReleaseForm({
     setAttemptedStep(null);
     setArtworkFile(null);
     setArtworkPreview(initialRelease?.artworkUrl ?? null);
+    setPersistedArtworkUrl(initialRelease?.artworkUrl ?? null);
     setArtworkDimensions(null);
     setArtworkError(
       correctionMentions(initialRelease, /artwork|cover_art_url/i)
