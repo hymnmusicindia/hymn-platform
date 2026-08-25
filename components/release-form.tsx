@@ -2578,7 +2578,7 @@ export function ReleaseForm({
     <>
       <form
         onSubmit={handleFinalSubmit}
-        className={clsx("release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", (step === 0 || step === 1) && "is-focused-step", step === 0 && "is-audio-upload-step", step === 1 && "is-artist-step")}
+        className={clsx("release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", (step === 0 || step === 1) && "is-focused-step", step === 0 && "is-audio-upload-step", step === 1 && "is-artist-step", step === 3 && "is-tracklist-step")}
         style={{ borderColor: "var(--border)", background: "var(--card)" }}
       >
         <header className="release-workspace-header">
@@ -2791,6 +2791,8 @@ export function ReleaseForm({
               <p>{firstReleaseOffer ? "Upload 1 track for your free Single release" : "Add up to 30 tracks for a maximum length of 1 hour"}<br /><span className="release-dolby-note"><span className="release-dolby-mark" aria-hidden="true"><i /><i /></span> Add Dolby Atmos™ files directly in track information.</span></p>
             </div>
             <div className="release-onboarding-assets">
+            <div className="release-onboarding-audio">
+              <div className="release-onboarding-asset-heading"><strong>Audio masters</strong><span>WAV or MP3 · upload the final mastered file</span></div>
             <div className="release-audio-queue">
               {!tracks.some((track) => track.audioPreviewUrl && track.audioUploadStatus === "uploaded") ? (
                 <div className="release-audio-empty-state">
@@ -2829,9 +2831,10 @@ export function ReleaseForm({
                 <span>{firstReleaseOffer ? "Add another track — locked for this FREE release" : "Add track"}</span>
               </button> : null}
             </div>
+            </div>
             <div ref={registerField("artwork-upload")} className="release-onboarding-artwork">
               <div className="release-onboarding-artwork-heading"><strong>Cover artwork</strong><span>JPG · square · minimum 3000 × 3000 px</span></div>
-              <ArtworkSquareDropzone previewUrl={artworkPreview} fileName={artworkFile?.name} fileType={fileFormat(artworkFile)} dimensions={artworkDimensions} error={showErrors && artworkIssue() ? artworkIssue()?.message ?? null : artworkError} onSelect={handleArtwork} />
+              <ArtworkSquareDropzone previewUrl={artworkPreview} fileName={artworkFile?.name} fileType={fileFormat(artworkFile)} dimensions={artworkDimensions} error={showErrors && artworkIssue() ? artworkIssue()?.message ?? null : artworkError} minimalFeedback onSelect={handleArtwork} />
               {artworkScanning ? <p className="release-onboarding-artwork-note"><LoaderCircle className="animate-spin" />Checking artwork…</p> : null}
               {artworkWarning ? <ArtworkWarning warning={artworkWarning} /> : null}
             </div>
