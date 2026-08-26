@@ -1079,6 +1079,7 @@ export function ReleaseForm({
   );
   const [shakingField, setShakingField] = useState<string | null>(null);
   const isEditing = Boolean(initialRelease);
+  const isCorrectionResubmission = Boolean(initialRelease && ["changes_requested", "rejected"].includes(initialRelease.status) && initialRelease.paymentStatus === "paid");
   useEffect(() => () => {
     if (stepTransitionTimerRef.current != null) window.clearTimeout(stepTransitionTimerRef.current);
   }, []);
@@ -2324,6 +2325,7 @@ export function ReleaseForm({
     return await verifyAndUpdateRelease(payload);
   }
   async function verifyAndSubmitRelease(payload: any) {
+    setStatus("Verifying payment and submitting release...");
     const formData = new FormData();
     formData.append("payload", JSON.stringify(payload));
     const response = await fetch("/api/distribution/payment/verify-submit", {
@@ -2458,13 +2460,16 @@ export function ReleaseForm({
   ) {
     setStatus("Uploading files...");
     const uploaded = await uploadFilesDirectly();
-    setStatus("Submitting release...");
+    setStatus("Preparing secure submission...");
 
     const payload = {
       razorpay_order_id: orderId,
       razorpay_payment_id: paymentId,
       razorpay_signature: signature,
       ...(firstReleaseOffer ? { promotionCode: "FIRST_RELEASE_FREE", attribution: campaignAttribution } : {}),
+      ...((draftReleaseId ?? (["draft", "awaiting_payment"].includes(initialRelease?.status ?? "") ? initialRelease?.id : undefined))
+        ? { draftReleaseId: draftReleaseId ?? initialRelease?.id }
+        : {}),
       metadata: {
         artistName: primaryArtistName,
         releaseTitle: displayedReleaseTitle,
@@ -2555,28 +2560,28 @@ export function ReleaseForm({
     setUploadProgress(0);
     setStatus(null);
     try {
-      if (isEditing) {
+      if (isCorrectionResubmission) {
         const data = await submitEditedRelease();
         setSubmittedRelease(data.release);
         setUploadProgress(100);
         return;
       }
 
+      const orderRequestPayload = {
+        plan: selectedPlan,
+        paymentModel: selectedPlan === "one_time" ? "one_time" : "subscription",
+        trackCount: tracks.length,
+        releaseType,
+        platforms,
+        youtubeContentIdEnabled,
+        ...(firstReleaseOffer ? { promotionCode: "FIRST_RELEASE_FREE" } : {}),
+      };
       const orderResponse = await fetch(
         "/api/distribution/payment/create-order",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            plan: selectedPlan,
-            paymentModel:
-              selectedPlan === "one_time" ? "one_time" : "subscription",
-            trackCount: tracks.length,
-            releaseType,
-            platforms,
-            youtubeContentIdEnabled,
-            ...(firstReleaseOffer ? { promotionCode: "FIRST_RELEASE_FREE" } : {}),
-          }),
+          body: JSON.stringify(orderRequestPayload),
         },
       );
       const orderData = await orderResponse.json();
@@ -2596,6 +2601,7 @@ export function ReleaseForm({
       }
 
       if (!orderData.key) throw new Error("Razorpay key is not configured on the server.");
+      setStatus("Opening Razorpay...");
       await loadRazorpayCheckout();
       const RazorpayCheckout = window.Razorpay;
       if (!RazorpayCheckout) throw new Error("Razorpay checkout is unavailable. Please refresh and try again.");
@@ -2614,6 +2620,7 @@ export function ReleaseForm({
             razorpay_subscription_id?: string;
           }) => {
             try {
+              setStatus("Verifying payment...");
               if (orderData.billingType === "subscription") {
                 let authorization: any = null;
                 for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -2624,7 +2631,10 @@ export function ReleaseForm({
                   await new Promise((wait) => window.setTimeout(wait, 1500));
                 }
                 if (!authorization?.active) throw new Error("Subscription authorised. Razorpay activation is still processing; your release data is retained, so submit again shortly.");
-                const data = await submitRelease("sub_active", response.razorpay_payment_id, "subscription:active");
+                const entitlementResponse = await fetch("/api/distribution/payment/create-order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(orderRequestPayload) });
+                const entitlement = await entitlementResponse.json();
+                if (!entitlementResponse.ok || entitlement.requiresPayment !== false || !entitlement.subscriptionCovered) throw new Error(entitlement.error || "Could not create the subscription release entitlement.");
+                const data = await submitRelease(entitlement.orderId, `subscription_${Date.now()}`, "subscription:active");
                 setSubmittedRelease(data.release);
                 setUploadProgress(100);
                 resolve();
@@ -2726,9 +2736,9 @@ export function ReleaseForm({
     return (
       <SuccessState
         release={submittedRelease}
-        onReset={firstReleaseOffer ? () => router.push(`/dashboard/releases?releaseId=${submittedRelease.id}`) : isEditing ? () => router.push("/distribution") : resetForm}
-        isResubmission={isEditing}
-        resetLabel={firstReleaseOffer ? "Track my release" : isEditing ? "Back to catalogue" : undefined}
+        onReset={firstReleaseOffer ? () => router.push(`/dashboard/releases?releaseId=${submittedRelease.id}`) : isCorrectionResubmission ? () => router.push("/distribution") : resetForm}
+        isResubmission={isCorrectionResubmission}
+        resetLabel={firstReleaseOffer ? "Track my release" : isCorrectionResubmission ? "Back to catalogue" : undefined}
       />
     );
   }

@@ -453,7 +453,9 @@ main {
 
   .hymn-success-artwork {
     aspect-ratio: 1;
-    max-height: 17rem;
+    width: min(100%, 17rem);
+    height: auto;
+    margin-inline: auto;
     object-fit: cover;
   }
 
@@ -467,6 +469,90 @@ main {
 
   .hymn-release-summary-meta > div {
     padding-block: 0.6rem;
+  }
+}
+
+.hymn-success-faq-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  font-size: 0.72rem;
+}
+
+.hymn-success-faq-links {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  gap: 0.35rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.hymn-success-faq-links::-webkit-scrollbar { display: none; }
+
+.hymn-success-faq-links button {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text-muted);
+  padding: 0.42rem 0.7rem;
+  transition: border-color 180ms ease, color 180ms ease, background 180ms ease;
+}
+
+.hymn-success-faq-links button:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-soft);
+  color: var(--text);
+}
+
+.hymn-success-faq-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: color-mix(in srgb, black 62%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.hymn-success-faq-dialog {
+  position: relative;
+  width: min(30rem, 100%);
+  border: 1px solid var(--border);
+  border-radius: 1.25rem;
+  background: var(--card-strong);
+  padding: 1.4rem;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.3);
+}
+
+.hymn-success-faq-close {
+  position: absolute;
+  right: 0.8rem;
+  top: 0.8rem;
+  display: grid;
+  height: 2rem;
+  width: 2rem;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 640px) {
+  .hymn-success-faq-strip {
+    align-items: flex-start;
+  }
+
+  .hymn-success-faq-strip > strong {
+    padding-top: 0.45rem;
+  }
+
+  .hymn-success-faq-strip > a {
+    padding-top: 0.45rem;
   }
 }
 

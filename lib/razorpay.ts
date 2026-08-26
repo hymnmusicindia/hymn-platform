@@ -18,6 +18,16 @@ export function verifyRazorpaySignature(orderId: string, paymentId: string, sign
   return constantTimeHexEqual(expected, signature);
 }
 
+export async function verifyCapturedRazorpayPayment(input: { orderId: string; paymentId: string; amountMinor: number; currency: string }) {
+  if (!razorpay) throw new Error("Razorpay is not configured.");
+  const payment = await razorpay.payments.fetch(input.paymentId);
+  if (String(payment.order_id || "") !== input.orderId) throw new Error("Razorpay payment does not belong to this order.");
+  if (Number(payment.amount) !== input.amountMinor) throw new Error("Razorpay payment amount does not match this order.");
+  if (String(payment.currency || "").toUpperCase() !== input.currency.toUpperCase()) throw new Error("Razorpay payment currency does not match this order.");
+  if (String(payment.status || "").toLowerCase() !== "captured") throw new Error("Razorpay payment has not been captured.");
+  return payment;
+}
+
 export function verifyRazorpayWebhookSignature(rawBody: Buffer, signature: string) {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET?.trim();
   if (!secret) throw new Error("RAZORPAY_WEBHOOK_SECRET is not configured.");

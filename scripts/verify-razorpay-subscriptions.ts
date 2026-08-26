@@ -24,10 +24,10 @@ assert.equal(verifySubscriptionCheckoutSignature(paymentId, subscriptionId, "not
 const future = new Date(Date.now() + 86_400_000);
 const past = new Date(Date.now() - 86_400_000);
 assert.equal(subscriptionHasEntitlement({ status: "active", currentPeriodEnd: future }), true);
-assert.equal(subscriptionHasEntitlement({ status: "pending", currentPeriodEnd: future }), true);
+assert.equal(subscriptionHasEntitlement({ status: "pending", currentPeriodEnd: future }), false);
 assert.equal(subscriptionHasEntitlement({ status: "halted", currentPeriodEnd: future }), false);
 assert.equal(subscriptionHasEntitlement({ status: "paused", currentPeriodEnd: future }), false);
-assert.equal(subscriptionHasEntitlement({ status: "cancelled", currentPeriodEnd: future, cancelAtPeriodEnd: true }), true);
+assert.equal(subscriptionHasEntitlement({ status: "cancelled", currentPeriodEnd: future, cancelAtPeriodEnd: true }), false);
 assert.equal(subscriptionHasEntitlement({ status: "cancelled", currentPeriodEnd: past, cancelAtPeriodEnd: true }), false);
 
 const createOrderSource = fs.readFileSync("app/api/distribution/payment/create-order/route.ts", "utf8");

@@ -291,6 +291,7 @@ model Release {
   reconciliationDiscrepancies DireNoteReconciliationDiscrepancy[]
   promotionRedemptions        PromotionRedemption[]
   subscriptionUsage           SubscriptionReleaseUsage?
+  distributionOrder          DistributionOrder?
   identifierHistory           ExternalIdentifierHistory[]
 
   @@index([ownerUserId, status])
@@ -1831,6 +1832,7 @@ model CouponRedemption {
 model DistributionOrder {
   id                Int                   @id @default(autoincrement())
   userId            Int                   @map("user_id")
+  releaseId         Int?                  @unique @map("release_id")
   plan              String
   amount            Int
   razorpayOrderId   String                @unique @map("razorpay_order_id")
@@ -1840,6 +1842,7 @@ model DistributionOrder {
   fulfilledAt       DateTime?             @map("fulfilled_at")
   webhookEvents     PaymentWebhookEvent[]
   user              User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  release           Release?              @relation(fields: [releaseId], references: [id], onDelete: Restrict)
   createdAt         DateTime              @default(now()) @map("created_at")
 
   @@index([userId, paymentStatus])

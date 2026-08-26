@@ -101,13 +101,38 @@ export async function confirmDistributionPayment(input: { razorpayOrderId: strin
     const alreadyPaid = order.paymentStatus === "paid";
     if (alreadyPaid && order.razorpayPaymentId && order.razorpayPaymentId !== input.paymentId) throw new Error("Order was already paid with a different payment.");
     if (!alreadyPaid && !["created", "authorized"].includes(order.paymentStatus)) throw new Error(`Order cannot be fulfilled from ${order.paymentStatus}.`);
-    const updated = alreadyPaid ? order : await tx.distributionOrder.update({ where: { id: order.id }, data: { paymentStatus: "paid", razorpayPaymentId: input.paymentId, fulfilledAt: new Date() } });
+    const updated = alreadyPaid ? order : await tx.distributionOrder.update({ where: { id: order.id }, data: { paymentStatus: "paid", razorpayPaymentId: input.paymentId } });
     if (!alreadyPaid) await tx.auditLog.create({ data: { actorId: input.userId ?? null, action: "DISTRIBUTION_PAYMENT_CONFIRMED", entity: "distribution_order", entityId: String(order.id), metadata: { source: input.source, paymentId: input.paymentId } } });
     const qualification = !alreadyPaid ? await qualifyReferralInTransaction(tx, { referredUserId: order.userId, transactionType: "distribution_order", transactionId: order.id, paymentId: input.paymentId, paidAmountInr: order.amount, source: input.source }) : { qualified: false as const, reason: "already_paid" as const };
     return { updated, qualification };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   if (result.qualification.qualified) await sendReferralRewardEmails(result.qualification.referralId).catch(() => undefined);
   return result.updated;
+}
+
+export async function confirmDistributionEntitlement(input: { razorpayOrderId: string; userId: number; paymentId: string }) {
+  return prisma.$transaction(async (tx) => {
+    const order = await tx.distributionOrder.findUnique({ where: { razorpayOrderId: input.razorpayOrderId } });
+    if (!order || order.userId !== input.userId) throw new Error("Distribution entitlement order was not found.");
+    if (order.amount !== 0 || order.currency !== "INR") throw new Error("A paid order cannot use an entitlement checkout.");
+    if (order.fulfilledAt) throw new Error("This distribution entitlement has already been used.");
+    return tx.distributionOrder.update({ where: { id: order.id }, data: { paymentStatus: "paid", razorpayPaymentId: input.paymentId } });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function claimDistributionOrderForSubmission(input: { razorpayOrderId: string; userId: number }) {
+  const claimed = await prisma.distributionOrder.updateMany({ where: { razorpayOrderId: input.razorpayOrderId, userId: input.userId, paymentStatus: "paid", fulfilledAt: null }, data: { fulfilledAt: new Date() } });
+  if (claimed.count !== 1) throw new Error("This payment or entitlement has already been used for a release.");
+}
+
+export async function releaseDistributionOrderClaim(input: { razorpayOrderId: string; userId: number }) {
+  await prisma.distributionOrder.updateMany({ where: { razorpayOrderId: input.razorpayOrderId, userId: input.userId }, data: { fulfilledAt: null } });
+}
+
+export async function attachDistributionOrderRelease(input: { razorpayOrderId: string; userId: number; releaseId: number }) {
+  const attached = await prisma.distributionOrder.updateMany({ where: { razorpayOrderId: input.razorpayOrderId, userId: input.userId, fulfilledAt: { not: null }, releaseId: null }, data: { releaseId: input.releaseId } });
+  if (attached.count !== 1) throw new Error("The distribution order could not be linked to this release.");
+  await prisma.auditLog.create({ data: { actorId: input.userId, action: "DISTRIBUTION_RELEASE_FULFILLED", entity: "distribution_order", entityId: input.razorpayOrderId, metadata: { releaseId: input.releaseId } } });
 }
 
 export async function confirmCheckoutPayment(input: { razorpayOrderId: string; paymentId: string; userId?: number; amountMinor?: number; currency?: string; source: "browser" | "webhook" | "reconciliation" | "admin_replay" }) {

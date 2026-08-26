@@ -30,9 +30,25 @@ export function isSubscriptionProduct(value: unknown): value is SubscriptionProd
 
 export function subscriptionHasEntitlement(subscription: { status: string; currentPeriodEnd?: Date | string | null; expiryDate?: Date | string | null; cancelAtPeriodEnd?: boolean } | null, now = new Date()) {
   if (!subscription) return false;
-  if (["active", "pending"].includes(subscription.status)) return new Date(subscription.currentPeriodEnd || subscription.expiryDate || 0) > now;
-  if (subscription.status === "cancelled" && subscription.cancelAtPeriodEnd) return new Date(subscription.currentPeriodEnd || subscription.expiryDate || 0) > now;
-  return false;
+  return subscription.status === "active" && new Date(subscription.currentPeriodEnd || subscription.expiryDate || 0) > now;
+}
+
+export async function reserveSubscriptionReleaseSlot(userId: number) {
+  return prisma.$transaction(async tx => {
+    const sub = await tx.subscription.findUnique({ where: { userId } });
+    if (!sub || !subscriptionHasEntitlement(sub)) throw new Error("No active subscription entitlement is available.");
+    const updated = await tx.subscription.updateMany({ where: { id: sub.id, ...(sub.releaseLimit == null ? { releasesUsed: sub.releasesUsed } : { releasesUsed: { equals: sub.releasesUsed, lt: sub.releaseLimit } }) }, data: sub.releaseLimit == null ? {} : { releasesUsed: { increment: 1 } } });
+    if (updated.count !== 1) throw new Error("Your subscription release allowance has been used.");
+    return { subscriptionId: sub.id, counted: sub.releaseLimit != null };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function attachReservedSubscriptionRelease(subscriptionId: number, releaseId: number) {
+  return prisma.subscriptionReleaseUsage.create({ data: { subscriptionId, releaseId } });
+}
+
+export async function releaseReservedSubscriptionSlot(subscriptionId: number, counted: boolean) {
+  if (counted) await prisma.subscription.update({ where: { id: subscriptionId }, data: { releasesUsed: { decrement: 1 } } });
 }
 
 export function verifySubscriptionCheckoutSignature(paymentId: string, subscriptionId: string, signature: string) {

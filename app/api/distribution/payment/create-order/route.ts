@@ -17,8 +17,12 @@ export async function POST(request: Request) {
     const subscription = await getSubscriptionByUserId(session.sub);
     const hasActiveSubscription = subscriptionHasEntitlement(subscription);
     if (hasActiveSubscription) {
+      if (payload.paymentModel !== "subscription" || payload.plan !== subscription!.plan) return NextResponse.json({ error: "The selected plan does not match your active subscription." }, { status: 400 });
+      if (subscription!.releaseLimit != null && subscription!.releasesUsed >= subscription!.releaseLimit) return NextResponse.json({ error: "Your subscription release allowance has been used." }, { status: 409 });
+      const entitlementOrderId = `sub_entitlement_${session.sub}_${Date.now()}`;
+      await createDistributionOrder({ userId: session.sub, plan: payload.plan, amount: 0, razorpayOrderId: entitlementOrderId });
       return NextResponse.json({
-        orderId: "sub_active",
+        orderId: entitlementOrderId,
         amount: 0,
         currency: "INR",
         displayAmount: 0,
@@ -56,9 +60,7 @@ export async function POST(request: Request) {
 
     const order = amountPaise === 0
       ? { id: `free_first_release_${session.sub}_${Date.now()}`, amount: 0, currency: "INR" }
-      : razorpay
-      ? await razorpay.orders.create({ amount: amountPaise, currency: "INR", receipt: `hymn-dist-${Date.now()}` })
-      : { id: `dev_dist_order_${Date.now()}`, amount: amountPaise, currency: "INR" };
+      : await razorpay!.orders.create({ amount: amountPaise, currency: "INR", receipt: `hymn-dist-${Date.now()}` });
 
     await createDistributionOrder({
       userId: session.sub,

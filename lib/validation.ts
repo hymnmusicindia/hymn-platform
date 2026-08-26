@@ -246,6 +246,7 @@ export const distributionSubmitSchema = z.object({
   razorpay_signature: z.string().min(1),
   promotionCode: z.literal("FIRST_RELEASE_FREE").optional(),
   attribution: z.record(z.string(), z.string().max(200)).optional(),
+  draftReleaseId: z.number().int().positive().optional(),
   metadata: distributionMetadataSchema
 });
 

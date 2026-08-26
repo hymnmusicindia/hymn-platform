@@ -552,6 +552,15 @@ export function SuccessState({ release, onReset, isResubmission = false, resetLa
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
+  useEffect(() => {
+    if (openFaq < 0) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenFaq(-1);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [openFaq]);
+
   const releaseTitle = release.releaseTitle || release.trackName || "GULLAK SAMBHAL";
   const artistName = release.artistName || "HYMN Artist";
   const artworkUrl = release.artworkUrl || "/uploads/site/home-hero/380d946e-e499-4860-a0cd-2f19ba1b258b.png";
@@ -654,32 +663,26 @@ export function SuccessState({ release, onReset, isResubmission = false, resetLa
           </aside>
         </div>
 
-        <div className="hymn-success-divider border-t pt-6">
-          <div>
-            <h2 className="hymn-success-heading text-2xl font-semibold tracking-[-0.025em] sm:text-3xl">Frequently asked questions</h2>
-            <p className="hymn-success-muted mt-2 text-sm">Everything you need to know after submitting your release.</p>
+        <div className="hymn-success-faq-strip hymn-success-divider border-t" aria-label="Frequently asked questions">
+          <strong className="hymn-success-heading">FAQ</strong>
+          <div className="hymn-success-faq-links">
+            {faqs.map((faq, index) => (
+              <button key={faq.question} type="button" onClick={() => setOpenFaq(index)}>{faq.question}</button>
+            ))}
           </div>
-          <div className="mt-5 grid gap-2 lg:grid-cols-2 lg:items-start">
-            {faqs.map((faq, index) => {
-              const open = openFaq === index;
-              return (
-                <div key={faq.question} className={clsx("hymn-success-faq", open && "hymn-success-faq-open")}>
-                  <button type="button" onClick={() => setOpenFaq(open ? -1 : index)} className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left">
-                    <span className="hymn-success-heading text-sm font-semibold">{faq.question}</span>
-                    <ChevronDown className="hymn-success-accent h-5 w-5 shrink-0 transition duration-300" />
-                  </button>
-                  <div className="hymn-success-faq-answer px-4">
-                    <p className="hymn-success-muted pb-4 text-sm leading-6">{faq.answer}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <Link href="/faq" className="hymn-success-help-link shrink-0">Help center</Link>
         </div>
 
-        <p className="hymn-success-divider hymn-success-muted mt-6 border-t pt-5 text-sm">
-          Need help? Visit the <Link href="/faq" className="hymn-success-help-link">help center</Link> or contact the HYMN team.
-        </p>
+        {openFaq >= 0 ? (
+          <div className="hymn-success-faq-modal" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setOpenFaq(-1)}>
+            <div role="dialog" aria-modal="true" aria-labelledby="success-faq-title" className="hymn-success-faq-dialog">
+              <button type="button" className="hymn-success-faq-close" onClick={() => setOpenFaq(-1)} aria-label="Close FAQ"><X className="h-4 w-4" /></button>
+              <p className="hymn-success-accent text-xs font-semibold uppercase tracking-[0.18em]">Frequently asked question</p>
+              <h2 id="success-faq-title" className="hymn-success-heading mt-2 text-xl font-semibold">{faqs[openFaq].question}</h2>
+              <p className="hymn-success-muted mt-3 text-sm leading-6">{faqs[openFaq].answer}</p>
+            </div>
+          </div>
+        ) : null}
       </div>
     </section>
   );
