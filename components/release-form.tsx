@@ -2111,15 +2111,15 @@ export function ReleaseForm({
 
   function jumpToStep(index: number) {
     const issue = visitedSteps.has(index) ? firstIssueForStep(index) : null;
+    goToStep(index);
     if (issue) {
       setAttemptedStep(index);
       setValidationErrorKeys((current) => new Set([...current, issue.key]));
       setStatus(issue.message);
-      triggerFieldFocus(issue);
+      window.setTimeout(() => triggerFieldFocus(issue), 50);
     } else {
       setAttemptedStep(null);
       setStatus(null);
-      goToStep(index);
     }
     setMobileStepMenuOpen(false);
   }
@@ -2175,6 +2175,18 @@ export function ReleaseForm({
       step as (typeof visibleStepIndexes)[number],
     );
     goToStep(visibleStepIndexes[Math.min(currentIndex + 1, visibleStepIndexes.length - 1)]);
+  }
+
+  function enterReviewMode() {
+    const issue = validationIssues[0];
+    if (issue) {
+      setVisitedSteps((current) => new Set([...current, issue.step]));
+      jumpToStep(issue.step);
+      setValidationErrorKeys((current) => new Set([...current, issue.key]));
+      setStatus(issue.message);
+      return;
+    }
+    goToStep(7);
   }
 
   function continueFromArtists() {
@@ -2803,7 +2815,7 @@ export function ReleaseForm({
           <NextImage src="/assets/hymnlogowhite.png" alt="HYMN Music" width={116} height={38} priority className="release-workspace-logo" />
           <div className="release-workspace-state" aria-live="polite">
             <span className={autosaveEligible && autosaveStatus === "saved" ? "is-saved" : ""}>{autosaveEligible && autosaveStatus === "saved" ? "Saved ✓" : autosaveLabel}</span>
-            {step !== 7 ? <button type="button" onClick={() => goToStep(7)} className="release-workspace-review">Review</button> : null}
+            {step !== 7 ? <button type="button" onClick={enterReviewMode} className="release-workspace-review">Review</button> : null}
           </div>
         </header>
         {firstReleaseOffer ? <div className="release-free-offer-banner flex items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-500">🎁 First release on us</div> : null}
