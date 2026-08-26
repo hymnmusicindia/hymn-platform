@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { get, put } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
+import { finalRelativePath, localStorageProvider } from "@/lib/storage-service";
 
 export type PrivateAssetType = "private_audio_master" | "private_beat_deliverable" | "private_beat_license" | "private_cover_licence" | "private_ownership_proof" | "private_ai_receipt" | "private_royalty_statement" | "private_payout_report" | "private_payout_proof" | "private_kyc_document" | "private_unreleased_artwork";
 export type PrivateUploadInput = { ownerUserId: number; releaseId?: number; beatPurchaseId?: number; beatId?: number; assetType: PrivateAssetType; fileName: string; mimeType: string; bytes: Buffer; retentionUntil?: Date };
@@ -33,7 +34,7 @@ export function privateStorageRootPath() {
   if (process.env.VERCEL === "1" || process.env.NEXT_PUBLIC_VERCEL_ENV) {
     return path.resolve("/tmp/.private-storage");
   }
-  const configured = process.env.PRIVATE_STORAGE_ROOT?.trim();
+  const configured = process.env.HYMN_STORAGE_ROOT?.trim() || process.env.PRIVATE_STORAGE_ROOT?.trim();
   if (process.env.NODE_ENV === "production" && !configured) throw new Error("PRIVATE_STORAGE_ROOT is required for private assets in production.");
   const root = path.resolve(configured || path.join(/* turbopackIgnore: true */ process.cwd(), ".private-storage"));
   const publicRoot = path.resolve(/* turbopackIgnore: true */ process.cwd(), "public");
@@ -128,12 +129,25 @@ export const localPrivateStorage: PrivateStorageAdapter = {
       return { id: asset.id, downloadPath: `/api/assets/${asset.id}/download?filename=${encodeURIComponent(safeFilename)}`, checksum, byteSize: input.bytes.length };
     }
 
-    const objectKey = `${input.ownerUserId}/${crypto.randomUUID()}`;
+    const category = input.assetType === "private_unreleased_artwork" ? "RELEASE_COVER_ART" : input.assetType === "private_audio_master" ? "TRACK_AUDIO_MASTER" : input.releaseId ? "RELEASE_DOCUMENT" : null;
+    const canonicalRelativePath = input.releaseId && category
+      ? await finalRelativePath({ releaseId: input.releaseId, trackId: null, clientTrackId: null, assetCategory: category, originalFilename: input.fileName, mimeType: input.mimeType })
+      : null;
+    let objectKey = canonicalRelativePath || `${input.ownerUserId}/${crypto.randomUUID()}`;
+    if (canonicalRelativePath) {
+      const extension = path.extname(canonicalRelativePath);
+      const base = canonicalRelativePath.slice(0, -extension.length);
+      try { await localStorageProvider.write(objectKey, input.bytes); }
+      catch (error) {
+        if (!(error && typeof error === "object" && "code" in error && error.code === "EEXIST")) throw error;
+        objectKey = `${base}-${crypto.randomUUID()}${extension}`;
+        await localStorageProvider.write(objectKey, input.bytes);
+      }
+    }
     const fullPath = path.resolve(privateStorageRootPath(), objectKey);
     if (!fullPath.startsWith(`${privateStorageRootPath()}${path.sep}`)) throw new Error("Unsafe storage path.");
-    await fs.mkdir(path.dirname(fullPath), { recursive: true });
-    await fs.writeFile(fullPath, input.bytes, { flag: "wx" });
-    const asset = await prisma.storedAsset.create({ data: { ownerUserId: input.ownerUserId, releaseId: input.releaseId, beatPurchaseId: input.beatPurchaseId, beatId: input.beatId, assetType: input.assetType, storageProvider: "private_local", objectKey, originalFilename: input.fileName, safeFilename, mimeType: input.mimeType, byteSize: input.bytes.length, checksum, accessClassification: "private", retentionUntil: input.retentionUntil } }).catch(async error => {
+    if (!canonicalRelativePath) { await fs.mkdir(path.dirname(fullPath), { recursive: true }); await fs.writeFile(fullPath, input.bytes, { flag: "wx" }); }
+    const asset = await prisma.storedAsset.create({ data: { ownerUserId: input.ownerUserId, releaseId: input.releaseId, beatPurchaseId: input.beatPurchaseId, beatId: input.beatId, assetType: input.assetType, storageProvider: canonicalRelativePath ? "LOCAL" : "private_local", storageRoot: canonicalRelativePath ? "HYMN_STORAGE_ROOT" : null, relativePath: canonicalRelativePath ? objectKey : null, storedFilename: canonicalRelativePath ? path.basename(objectKey) : null, category, entityType: input.releaseId ? "RELEASE" : input.beatId ? "BEAT" : null, entityId: String(input.releaseId || input.beatId || input.beatPurchaseId || input.ownerUserId), objectKey, originalFilename: input.fileName, safeFilename, mimeType: input.mimeType, byteSize: input.bytes.length, checksum, accessClassification: "private", retentionUntil: input.retentionUntil } }).catch(async error => {
       await fs.unlink(fullPath).catch(() => undefined);
       throw error;
     });

@@ -163,6 +163,7 @@ model User {
   purchasedBeatSales            BeatSale[]                          @relation("BuyerBeatSales")
   quarterCarryForwards          QuarterCarryForward[]
   storedAssets                  StoredAsset[]
+  uploadSessions                UploadSession[]
   royaltyStatements             RoyaltyStatement[]
   royaltyImportJobs             RoyaltyImportJob[]
   royaltyAllocations            RoyaltyAllocation[]
@@ -264,6 +265,9 @@ model Release {
   draftCompletionPercent      Int                                 @default(0) @map("draft_completion_percent")
   lastEditedAt                DateTime?                           @map("last_edited_at")
   missingFields               Json?                               @map("missing_fields")
+  reviewConfirmedAt           DateTime?                           @map("review_confirmed_at")
+  reviewConfirmedBy           Int?                                @map("review_confirmed_by")
+  reviewMetadataHash          String?                             @map("review_metadata_hash")
   createdAt                   DateTime                            @default(now()) @map("created_at")
   updatedAt                   DateTime                            @updatedAt @map("updated_at")
   version                     Int                                 @default(1)
@@ -283,6 +287,7 @@ model Release {
   splitEarnings               SplitEarningLineItem[]
   direNoteLogs                DireNoteLog[]
   storedAssets                StoredAsset[]
+  uploadSessions              UploadSession[]
   statusTransitions           ReleaseStatusTransition[]
   distributionSubmissions     DistributionSubmissionAttempt[]
   changeRequests              ReleaseChangeRequest[]
@@ -291,7 +296,7 @@ model Release {
   reconciliationDiscrepancies DireNoteReconciliationDiscrepancy[]
   promotionRedemptions        PromotionRedemption[]
   subscriptionUsage           SubscriptionReleaseUsage?
-  distributionOrder          DistributionOrder?
+  distributionOrder           DistributionOrder?
   identifierHistory           ExternalIdentifierHistory[]
 
   @@index([ownerUserId, status])
@@ -397,6 +402,8 @@ model Track {
   unmatchedRoyaltyRows        UnmatchedRoyaltyRow[]
   reconciliationDiscrepancies DireNoteReconciliationDiscrepancy[]
   identifierHistory           ExternalIdentifierHistory[]
+  storedAssets                StoredAsset[]
+  uploadSessions              UploadSession[]
 
   @@index([isrc])
   @@map("tracks")
@@ -968,11 +975,18 @@ model StoredAsset {
   id                      Int                      @id @default(autoincrement())
   ownerUserId             Int                      @map("owner_user_id")
   releaseId               Int?                     @map("release_id")
+  trackId                 Int?                     @map("track_id")
   beatId                  Int?                     @unique @map("beat_id")
   beatPurchaseId          Int?                     @unique @map("beat_purchase_id")
   assetType               String                   @map("asset_type")
   storageProvider         String                   @map("storage_provider")
   objectKey               String                   @unique @map("object_key")
+  storageRoot             String?                  @map("storage_root")
+  relativePath            String?                  @map("relative_path")
+  storedFilename          String?                  @map("stored_filename")
+  category                String?                  @map("category")
+  entityType              String?                  @map("entity_type")
+  entityId                String?                  @map("entity_id")
   originalFilename        String                   @map("original_filename")
   safeFilename            String                   @map("safe_filename")
   mimeType                String                   @map("mime_type")
@@ -981,20 +995,57 @@ model StoredAsset {
   accessClassification    String                   @map("access_classification")
   uploadStatus            String                   @default("ready") @map("upload_status")
   createdAt               DateTime                 @default(now()) @map("created_at")
+  updatedAt               DateTime                 @updatedAt @map("updated_at")
   deletedAt               DateTime?                @map("deleted_at")
   retentionUntil          DateTime?                @map("retention_until")
   owner                   User                     @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
   release                 Release?                 @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+  track                   Track?                   @relation(fields: [trackId], references: [id], onDelete: SetNull)
   beatDeliverable         Beat?                    @relation(fields: [beatId], references: [id], onDelete: SetNull)
   beatPurchase            BeatPurchase?            @relation(fields: [beatPurchaseId], references: [id], onDelete: SetNull)
   royaltyStatement        RoyaltyStatement?
   managedServiceDocuments ManagedServiceDocument[]
   payoutProofs            PayoutRequest[]          @relation("PayoutProof")
+  uploadSessions          UploadSession[]
 
   @@index([ownerUserId, assetType, createdAt])
   @@index([releaseId, assetType])
+  @@index([trackId, category])
   @@index([deletedAt, retentionUntil])
   @@map("stored_assets")
+}
+
+model UploadSession {
+  id               String       @id @default(uuid())
+  userId           Int          @map("user_id")
+  releaseId        Int          @map("release_id")
+  trackId          Int?         @map("track_id")
+  clientTrackId    String?      @map("client_track_id")
+  assetCategory    String       @map("asset_category")
+  originalFilename String       @map("original_filename")
+  mimeType         String       @map("mime_type")
+  totalSize        Int          @map("total_size")
+  chunkSize        Int          @map("chunk_size")
+  totalChunks      Int          @map("total_chunks")
+  uploadedChunks   Json         @default("[]") @map("uploaded_chunks")
+  bytesUploaded    Int          @default(0) @map("bytes_uploaded")
+  status           String       @default("CREATED")
+  tempPath         String       @unique @map("temp_path")
+  finalAssetId     Int?         @map("final_asset_id")
+  errorMessage     String?      @map("error_message")
+  expiresAt        DateTime     @map("expires_at")
+  completedAt      DateTime?    @map("completed_at")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  release          Release      @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  track            Track?       @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  finalAsset       StoredAsset? @relation(fields: [finalAssetId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status, updatedAt])
+  @@index([releaseId, status])
+  @@index([expiresAt, status])
+  @@map("upload_sessions")
 }
 
 model SplitRecord {

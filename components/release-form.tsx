@@ -73,19 +73,26 @@ function uploadPrivateAsset(file: File, assetType: PrivateUploadType, options: {
   });
 }
 
-async function uploadPrivateAudio(file: File, options: { releaseId?: number; signal?: AbortSignal; onProgress?: (loaded: number, total: number) => void } = {}) {
-  const size = 8 * 1024 * 1024;
-  const total = Math.ceil(file.size / size);
-  const uploadId = crypto.randomUUID();
-  const uploaded = new Array<number>(total).fill(0);
+async function uploadPrivateAudio(file: File, options: { releaseId: number; trackId?: number; clientTrackId?: string; signal?: AbortSignal; onProgress?: (loaded: number, total: number) => void } ) {
+  const createResponse = await fetch("/api/uploads/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, signal: options.signal, body: JSON.stringify({ releaseId: options.releaseId, trackId: options.trackId, clientTrackId: options.clientTrackId, assetCategory: "TRACK_AUDIO_MASTER", originalFilename: file.name, mimeType: file.type, totalSize: file.size }) });
+  const created = await createResponse.json().catch(() => ({}));
+  if (!createResponse.ok) throw new Error(created.error || "Could not start resumable upload.");
+  const uploadId = String(created.session.id);
+  const size = Number(created.session.chunkSize);
+  const total = Number(created.session.totalChunks);
+  const existing = new Set<number>(Array.isArray(created.session.uploadedChunks) ? created.session.uploadedChunks : []);
+  const uploaded = new Array<number>(total).fill(0).map((_, index) => existing.has(index) ? Math.min(size, file.size - index * size) : 0);
   let nextIndex = 0;
 
   const uploadChunk = async (index: number) => {
     const start = index * size;
     const chunk = file.slice(start, Math.min(start + size, file.size));
-    await new Promise<void>((resolve, reject) => {
+    if (existing.has(index)) return;
+    let attempt = 0;
+    while (true) try {
+      await new Promise<void>((resolve, reject) => {
       const request = new XMLHttpRequest();
-      request.open("POST", "/api/assets/chunk");
+      request.open("PUT", `/api/uploads/sessions/${uploadId}/chunks/${index}`);
       request.responseType = "json";
       request.upload.onprogress = (event) => {
         uploaded[index] = Math.min(event.loaded, chunk.size);
@@ -106,17 +113,15 @@ async function uploadPrivateAudio(file: File, options: { releaseId?: number; sig
         resolve();
       };
       options.signal?.addEventListener("abort", () => request.abort(), { once: true });
-      const form = new FormData();
-      form.set("chunk", chunk, `${index}.part`);
-      form.set("uploadId", uploadId);
-      form.set("fileName", file.name);
-      form.set("mimeType", file.type);
-      form.set("byteSize", String(file.size));
-      form.set("index", String(index));
-      form.set("total", String(total));
-      if (options.releaseId) form.set("releaseId", String(options.releaseId));
-      request.send(form);
+      request.setRequestHeader("Content-Type", "application/octet-stream");
+      request.send(chunk);
     });
+      break;
+    } catch (error) {
+      attempt += 1;
+      if (attempt >= Number(created.config?.retryLimit || 3) || options.signal?.aborted) throw error;
+      await new Promise(resolve => window.setTimeout(resolve, 500 * (2 ** (attempt - 1))));
+    }
   };
 
   const workers = Array.from({ length: Math.min(3, total) }, async () => {
@@ -127,14 +132,14 @@ async function uploadPrivateAudio(file: File, options: { releaseId?: number; sig
   });
   await Promise.all(workers);
 
-  const response = await fetch("/api/assets/chunk/complete", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    signal: options.signal,
-    body: JSON.stringify({ uploadId, fileName: file.name, mimeType: file.type, byteSize: file.size, total, releaseId: options.releaseId }),
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error || `Could not finalize audio upload (HTTP ${response.status}).`);
+  let body: any = {};
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const response = await fetch(`/api/uploads/sessions/${uploadId}/complete`, { method: "POST", signal: options.signal });
+    body = await response.json().catch(() => ({}));
+    if (response.ok && body.asset?.downloadPath) break;
+    if (response.status !== 202 && response.status !== 504) throw new Error(body.error || `Could not finalize audio upload (HTTP ${response.status}).`);
+    await new Promise(resolve => window.setTimeout(resolve, 1500));
+  }
   if (!body.asset?.downloadPath) throw new Error("Hostinger received the audio but did not finalize it.");
   return body.asset.downloadPath as string;
 }
@@ -187,6 +192,9 @@ type TrackDraft = {
   audioFileName: string;
   existingAudioUrl: string;
   audioUploadStatus: "idle" | "uploading" | "uploaded" | "failed";
+  audioUploadProgress: number;
+  audioBytesUploaded: number;
+  audioTotalBytes: number;
   requiresAudioReplacement: boolean;
   audioPreviewUrl: string;
   duration: string;
@@ -269,7 +277,7 @@ const steps = [
   "Review & submit",
 ] as const;
 const visibleStepIndexes = [1, 0, 3, 2, 4, 5, 7] as const;
-const menuStepIndexes = [3, 2, 4, 5, 7] as const;
+const menuStepIndexes = [3, 2, 4, 5] as const;
 const COPYRIGHT_OWNER_PREFERENCES_KEY = "hymn:copyright-owner-preferences";
 const defaultLegalState: LegalState = {
   ownershipConfirmation: false,
@@ -325,6 +333,9 @@ function createTrack(trackNumber = 1): TrackDraft {
     audioFileName: "",
     existingAudioUrl: "",
     audioUploadStatus: "idle",
+    audioUploadProgress: 0,
+    audioBytesUploaded: 0,
+    audioTotalBytes: 0,
     requiresAudioReplacement: false,
     audioPreviewUrl: "",
     duration: "",
@@ -655,6 +666,9 @@ function createTracksFromRelease(
       existingAudioUrl: track?.audioUrl || initialRelease?.audioUrl || "",
       audioUploadStatus:
         track?.audioUrl || initialRelease?.audioUrl ? "uploaded" : "idle",
+      audioUploadProgress: track?.audioUrl || initialRelease?.audioUrl ? 100 : 0,
+      audioBytesUploaded: 0,
+      audioTotalBytes: 0,
       requiresAudioReplacement: correctionMentions(initialRelease, new RegExp(`audio|tracks\\.${index}\\.audio_url`, "i")),
       audioPreviewUrl: track?.audioUrl || initialRelease?.audioUrl || "",
       duration: track?.duration?.trim() || "",
@@ -1077,6 +1091,7 @@ export function ReleaseForm({
   const [submittedRelease, setSubmittedRelease] = useState<Release | null>(
     null,
   );
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [shakingField, setShakingField] = useState<string | null>(null);
   const isEditing = Boolean(initialRelease);
   const isCorrectionResubmission = Boolean(initialRelease && ["changes_requested", "rejected"].includes(initialRelease.status) && initialRelease.paymentStatus === "paid");
@@ -1089,6 +1104,7 @@ export function ReleaseForm({
       initialRelease.releaseDate.slice(0, 10) < minimumScheduledDate,
   );
   const draftCreationRef = useRef(false);
+  const draftCreationPromiseRef = useRef<Promise<number> | null>(null);
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
   const releaseType = useMemo(
     () => releaseTypeFromCount(tracks.length),
@@ -1103,6 +1119,18 @@ export function ReleaseForm({
           (releaseType === "ep" ? "Untitled EP" : "Untitled Album"),
     [release.releaseTitle, releaseType, tracks],
   );
+  async function ensureUploadDraft() {
+    if (draftReleaseId) return draftReleaseId;
+    if (initialRelease?.id) return initialRelease.id;
+    if (!draftCreationPromiseRef.current) {
+      draftCreationRef.current = true;
+      draftCreationPromiseRef.current = fetch("/api/distribution/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: displayedReleaseTitle }) })
+        .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not start draft."); return Number(data.draft?.id); })
+        .then(id => { if (!Number.isInteger(id) || id < 1) throw new Error("Draft creation returned an invalid identifier."); setDraftReleaseId(id); return id; })
+        .catch(error => { draftCreationRef.current = false; draftCreationPromiseRef.current = null; throw error; });
+    }
+    return draftCreationPromiseRef.current;
+  }
   const selectedReleaseDate =
     release.releaseTiming === "schedule_release"
       ? release.scheduledReleaseDate
@@ -1341,6 +1369,14 @@ export function ReleaseForm({
       youtubeContentIdEnabled,
     ],
   );
+  const reviewMetadataFingerprint = useMemo(() => JSON.stringify(autosaveSnapshot), [autosaveSnapshot]);
+  const confirmedReviewFingerprintRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (confirmedReviewFingerprintRef.current && confirmedReviewFingerprintRef.current !== reviewMetadataFingerprint) {
+      confirmedReviewFingerprintRef.current = null;
+      setReviewConfirmed(false);
+    }
+  }, [reviewMetadataFingerprint]);
   useEffect(() => {
     fetch("/api/distribution/queue")
       .then((response) => response.json())
@@ -1351,21 +1387,9 @@ export function ReleaseForm({
   useEffect(() => {
     if (!autosaveEligible || initialRelease || draftReleaseId || draftCreationRef.current) return;
     draftCreationRef.current = true;
-    fetch("/api/distribution/drafts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: displayedReleaseTitle }),
-    })
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok)
-          throw new Error(data.error || "Could not start draft.");
-        return data;
-      })
-      .then((data) => {
-        const id = Number(data.draft?.id);
+    void ensureUploadDraft()
+      .then((id) => {
         if (id > 0) {
-          setDraftReleaseId(id);
           const campaignQuery = firstReleaseOffer
             ? `&campaign=first-release${Object.entries(campaignAttribution).map(([key, value]) => `&${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join("")}`
             : "";
@@ -1560,6 +1584,9 @@ export function ReleaseForm({
       existingAudioUrl: "",
       audioPreviewUrl: "",
       audioUploadStatus: "idle",
+      audioUploadProgress: 0,
+      audioBytesUploaded: 0,
+      audioTotalBytes: 0,
       duration: "",
       requiresAudioReplacement: false,
     });
@@ -1647,12 +1674,21 @@ export function ReleaseForm({
       audioPreviewUrl: previewUrl,
       duration,
       audioUploadStatus: "uploading",
+      audioUploadProgress: 0,
+      audioBytesUploaded: 0,
+      audioTotalBytes: file.size,
       requiresAudioReplacement: false,
     });
     try {
+      const releaseId = await ensureUploadDraft();
       const downloadPath = await uploadPrivateAudio(file, {
+        releaseId,
+        clientTrackId: currentTrack.id,
         signal: controls.signal,
-        onProgress: controls.reportProgress,
+        onProgress: (loaded, total) => {
+          controls.reportProgress(loaded, total);
+          updateTrack(index, { audioUploadProgress: Math.min(99, Math.round(loaded / Math.max(total, 1) * 100)), audioBytesUploaded: loaded, audioTotalBytes: total });
+        },
       });
       updateTrack(index, {
         audioFile: null,
@@ -1661,6 +1697,9 @@ export function ReleaseForm({
         audioPreviewUrl: previewUrl,
         duration,
         audioUploadStatus: "uploaded",
+        audioUploadProgress: 100,
+        audioBytesUploaded: file.size,
+        audioTotalBytes: file.size,
       });
       trackCampaignEvent("audio_uploaded", { trackIndex: index });
     } catch (error) {
@@ -1726,8 +1765,9 @@ export function ReleaseForm({
     });
 
     try {
+      const releaseId = await ensureUploadDraft();
       const downloadPath = await uploadPrivateAsset(file, "private_unreleased_artwork", {
-        releaseId: draftReleaseId ?? initialRelease?.id,
+        releaseId,
       });
       setPersistedArtworkUrl(downloadPath);
       setArtworkPreview(downloadPath);
@@ -2106,17 +2146,19 @@ export function ReleaseForm({
     const direction = nextVisibleIndex > currentVisibleIndex ? "forward" : "back";
     setStepMotion(`step-${kind}-${direction}`);
     setStep(nextStep);
+    if (nextStep !== 7) setReviewConfirmed(false);
     if (nextStep === 7) trackCampaignEvent("review_reached");
     else if (step === 3 && nextStep !== 3) trackCampaignEvent("metadata_completed");
   }
 
   function advanceStep() {
-    const issue = firstIssueForStep(step);
+    const issue = step === 5 ? validationIssues[0] : firstIssueForStep(step);
     if (issue) {
-      setAttemptedStep(step);
+      setAttemptedStep(issue.step);
       setValidationErrorKeys((current) => new Set([...current, issue.key]));
       setStatus(issue.message);
       triggerFieldFocus(issue);
+      if (step === 5 && issue.step !== 5) goToStep(issue.step);
       return;
     }
     setAttemptedStep(null);
@@ -2214,11 +2256,12 @@ export function ReleaseForm({
     if (filesToUpload.length === 0)
       return { artworkUrl, trackAudioUrls, trackLicenseUrls };
 
+    const uploadReleaseId = await ensureUploadDraft();
     let completedFiles = 0;
     for (const item of filesToUpload) {
       const downloadPath = item.assetType === "private_audio_master"
-        ? await uploadPrivateAudio(item.file, { releaseId: initialRelease?.id })
-        : await uploadPrivateAsset(item.file, item.assetType, { releaseId: initialRelease?.id });
+        ? await uploadPrivateAudio(item.file, { releaseId: uploadReleaseId })
+        : await uploadPrivateAsset(item.file, item.assetType, { releaseId: uploadReleaseId });
       item.setter(downloadPath);
       completedFiles++;
       setUploadProgress(Math.round((completedFiles / filesToUpload.length) * 100));
@@ -2567,6 +2610,12 @@ export function ReleaseForm({
         return;
       }
 
+      if (!reviewConfirmed || confirmedReviewFingerprintRef.current !== reviewMetadataFingerprint) throw new Error("Confirm the reviewed release information before continuing.");
+      const reviewReleaseId = await ensureUploadDraft();
+      const confirmationResponse = await fetch("/api/distribution/review-confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ releaseId: reviewReleaseId, metadataSnapshot: autosaveSnapshot }) });
+      const confirmation = await confirmationResponse.json().catch(() => ({}));
+      if (!confirmationResponse.ok) throw new Error(confirmation.error || "Could not save review confirmation.");
+
       const orderRequestPayload = {
         plan: selectedPlan,
         paymentModel: selectedPlan === "one_time" ? "one_time" : "subscription",
@@ -2746,7 +2795,7 @@ export function ReleaseForm({
     <>
       <form
         onSubmit={handleFinalSubmit}
-        className={clsx("release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", (step === 0 || step === 1) && "is-focused-step", step === 0 && "is-audio-upload-step", step === 1 && "is-artist-step", step === 3 && "is-tracklist-step")}
+        className={clsx("release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", (step === 0 || step === 1) && "is-focused-step", step === 0 && "is-audio-upload-step", step === 1 && "is-artist-step", step === 3 && "is-tracklist-step", step === 7 && "is-review-mode")}
         style={{ borderColor: "var(--border)", background: "var(--card)" }}
       >
         <header className="release-workspace-header">
@@ -2758,6 +2807,12 @@ export function ReleaseForm({
           </div>
         </header>
         {firstReleaseOffer ? <div className="release-free-offer-banner flex items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-500">🎁 First release on us</div> : null}
+        {tracks.some(track => track.audioUploadStatus === "uploading" || track.audioUploadStatus === "failed") ? (
+          <aside className="grid gap-2 rounded-xl border px-3 py-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} aria-live="polite">
+            <div className="flex items-center justify-between gap-3 text-xs font-semibold"><span>Uploads</span><span>{tracks.filter(track => track.audioUploadStatus === "uploaded").length} / {tracks.length} audio ready</span></div>
+            {tracks.filter(track => track.audioUploadStatus === "uploading" || track.audioUploadStatus === "failed").map(track => <div key={track.id} className="grid gap-1.5"><div className="flex min-w-0 items-center justify-between gap-3 text-xs"><span className="truncate">{track.audioUploadStatus === "failed" ? "! Upload paused" : "↑ Uploading"} {track.audioFileName}</span><strong>{track.audioUploadProgress}%</strong></div><div className="h-1.5 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,.08)" }}><span className="block h-full rounded-full bg-[var(--accent)] transition-[width]" style={{ width: `${track.audioUploadProgress}%` }} /></div><span className="text-[11px]" style={{ color: "var(--text-soft)" }}>{track.audioUploadStatus === "failed" ? "Select the same file to resume from the uploaded chunks." : `${(track.audioBytesUploaded / 1048576).toFixed(1)} MB / ${(track.audioTotalBytes / 1048576).toFixed(1)} MB · You can continue filling in the other release details.`}</span></div>)}
+          </aside>
+        ) : null}
         <div
           className="release-mobile-step-menu md:hidden rounded-[1.3rem] border p-3 md:p-4"
           style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}
@@ -5291,9 +5346,12 @@ export function ReleaseForm({
         ) : null}
         {step === 7 ? (
           <section className={clsx("grid gap-5", stepMotion)}>
-            <StepIntro
-              title="Review your release"
-            />
+            <div className="relative grid gap-3 py-3 text-center md:py-6">
+              <button type="button" onClick={() => goToStep(5)} className="text-sm font-semibold md:absolute md:left-0 md:top-7" style={{ color: "var(--text-muted)" }}>← Back to release</button>
+              <p className="text-[11px] font-semibold uppercase tracking-[.22em]" style={{ color: "var(--accent)" }}>Final confirmation</p>
+              <h2 className="text-3xl font-semibold tracking-[-.035em] md:text-5xl">Review your release</h2>
+              <p className="mx-auto max-w-xl text-sm leading-6 md:text-base" style={{ color: "var(--text-muted)" }}>Take one final look before we prepare it for distribution.</p>
+            </div>
 
             <div
               className="release-review overflow-hidden rounded-[1.75rem] border"
@@ -5791,6 +5849,15 @@ export function ReleaseForm({
               ) : null}
             </div>
 
+            <div className="rounded-[1.5rem] border p-5 md:p-7" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
+              <p className="text-xl font-semibold">Everything look correct?</p>
+              <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }}>Confirm that the metadata, credits, ownership information, legal declarations, and delivery details shown above are accurate.</p>
+              <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border p-4 text-sm font-medium" style={{ borderColor: reviewConfirmed ? "var(--accent)" : "var(--border)", background: "var(--bg-soft)" }}>
+                <input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0" checked={reviewConfirmed} onChange={(event) => { setReviewConfirmed(event.target.checked); confirmedReviewFingerprintRef.current = event.target.checked ? reviewMetadataFingerprint : null; }} />
+                <span>I confirm that the release information above is correct and that I have authority to distribute this content.</span>
+              </label>
+            </div>
+
             <div
               className="review-submit-bar sticky bottom-3 z-20 grid gap-3 py-3 backdrop-blur-xl sm:grid-cols-[auto,1fr,auto]"
               style={{
@@ -5804,7 +5871,7 @@ export function ReleaseForm({
                 onClick={() => goToStep(5)}
                 className="release-footer-action is-muted w-full sm:w-auto"
               >
-                Previous
+                ← Back to release
               </button>
               <button
                 type="button"
@@ -5816,18 +5883,18 @@ export function ReleaseForm({
               </button>
               <button
                 type="submit"
-                disabled={submitting || !legalComplete}
+                disabled={submitting || !legalComplete || !reviewConfirmed || validationIssues.length > 0}
                 className={clsx("release-footer-action is-primary w-full disabled:opacity-60 sm:w-auto", firstReleaseOffer && finalDistributionAmount === 0 && "is-free-release")}
               >
                 {submitting
                   ? "Processing…"
                   : subscriptionCovered
-                    ? "Submit your release"
+                    ? "Confirm & Submit Release →"
                     : firstReleaseOffer
                     ? finalDistributionAmount === 0
-                      ? "Submit"
-                      : `Pay Rs ${finalDistributionAmount.toLocaleString("en-IN")} for add-ons & Submit`
-                    : `Pay Rs ${distributionAmount.toLocaleString("en-IN")} & Submit`}
+                      ? "Confirm & Submit Release →"
+                      : `Continue to Checkout · Rs ${finalDistributionAmount.toLocaleString("en-IN")} →`
+                    : `Continue to Checkout · Rs ${distributionAmount.toLocaleString("en-IN")} →`}
               </button>
             </div>
           </section>

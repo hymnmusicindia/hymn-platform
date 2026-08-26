@@ -28,7 +28,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     missingFields: Array.isArray((metadata as any).missingFields) ? (metadata as any).missingFields : undefined,
     lastEditedAt: new Date(),
     artworkUrl: typeof body.artworkUrl === "string" ? body.artworkUrl : undefined,
-    audioUrl: typeof body.audioUrl === "string" ? body.audioUrl : undefined
+    audioUrl: typeof body.audioUrl === "string" ? body.audioUrl : undefined,
+    reviewConfirmedAt: null,
+    reviewConfirmedBy: null,
+    reviewMetadataHash: null
   }, select: { id: true, updatedAt: true } });
   if (Array.isArray((metadata as any).tracks)) {
     await prisma.$transaction([
