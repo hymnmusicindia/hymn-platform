@@ -4,7 +4,6 @@ import { razorpay } from "@/lib/razorpay";
 import { getTrackPricingQuote, getUgcAddonPrice } from "@/lib/distribution-pricing";
 import { createDistributionOrder, getDistributionPricing } from "@/lib/distribution-db";
 import { distributionOrderCreateSchema } from "@/lib/validation";
-import { isProductionPaymentBypassEnabled } from "@/lib/env";
 import { calculateFirstReleasePrice, FIRST_RELEASE_PROMOTION_CODE, getFirstReleaseEligibility } from "@/lib/first-release-promotion";
 import { getSubscriptionByUserId } from "@/lib/db";
 import { createProviderSubscription, isSubscriptionProduct, subscriptionHasEntitlement } from "@/lib/subscription-billing";
@@ -51,9 +50,7 @@ export async function POST(request: Request) {
       amount = promotion.finalAmount;
     }
     const amountPaise = Math.round(amount * 100);
-    const isBypassEnabled = isProductionPaymentBypassEnabled();
-
-    if (amountPaise > 0 && !isBypassEnabled && process.env.NODE_ENV === "production" && !razorpay) {
+    if (amountPaise > 0 && !razorpay) {
       return NextResponse.json({ error: "Payment service is not configured." }, { status: 503 });
     }
 
@@ -79,7 +76,7 @@ export async function POST(request: Request) {
       promotion,
       ugcAddOnAmount: getUgcAddonPrice(payload.platforms, payload.plan, { youtubeContentIdEnabled: payload.youtubeContentIdEnabled }),
       trackPricing: payload.plan === "one_time" ? getTrackPricingQuote(payload.trackCount) : null,
-      key: isBypassEnabled ? "dev_bypass_payment" : (process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || (process.env.NODE_ENV !== "production" ? "dev_razorpay_key" : ""))
+      key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || ""
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not create distribution payment order.";

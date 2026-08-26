@@ -16,10 +16,6 @@ export function getAdminSessionSecret() {
   return requiredProductionValue("ADMIN_JWT_SECRET", process.env.ADMIN_JWT_SECRET, DEVELOPMENT_ADMIN_SECRET);
 }
 
-export function isProductionPaymentBypassEnabled() {
-  return process.env.NODE_ENV !== "production" && process.env.BYPASS_DISTRIBUTION_PAYMENT === "true";
-}
-
 export function requireRazorpayConfiguration() {
   const keyId = requiredProductionValue("RAZORPAY_KEY_ID", process.env.RAZORPAY_KEY_ID);
   const keySecret = requiredProductionValue("RAZORPAY_KEY_SECRET", process.env.RAZORPAY_KEY_SECRET);
@@ -43,7 +39,6 @@ export function getProductionReadinessIssues() {
     "PAYOUT_ENCRYPTION_KEY"
   ];
   const issues = required.filter((name) => !process.env[name]?.trim()).map((name) => `${name} is missing.`);
-  if (process.env.BYPASS_DISTRIBUTION_PAYMENT === "true") issues.push("BYPASS_DISTRIBUTION_PAYMENT must not be enabled in production.");
   if (process.env.ENABLE_MOCK_LOGIN === "true" || process.env.NEXT_PUBLIC_ENABLE_MOCK_LOGIN === "true") issues.push("Mock login must not be enabled in production.");
   if (process.env.VERCEL !== "1" && !process.env.PRIVATE_STORAGE_ROOT?.trim()) issues.push("PRIVATE_STORAGE_ROOT is missing; private asset features must remain disabled locally.");
   return issues;

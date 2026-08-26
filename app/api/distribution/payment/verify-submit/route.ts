@@ -4,7 +4,6 @@ import { getDistributionPricing, submitPaidDistributionRelease } from "@/lib/dis
 import { createNotification, getSubscriptionByUserId, listArtistProfilesByUser, touchArtistProfiles } from "@/lib/db";
 import { verifyRazorpaySignature } from "@/lib/razorpay";
 import { distributionSubmitSchema } from "@/lib/validation";
-import { isProductionPaymentBypassEnabled } from "@/lib/env";
 import { emailAppUrl, sendReleaseEmail } from "@/lib/email/email-events";
 import { confirmDistributionPayment } from "@/lib/payment-webhooks";
 import { consumeRateLimit } from "@/lib/rate-limit";
@@ -39,12 +38,7 @@ export async function POST(request: Request) {
       return value;
     };
 
-    const paymentBypassEnabled = isProductionPaymentBypassEnabled();
-
-    if (paymentBypassEnabled) {
-      // Skip payment verification
-      // Continue the normal submission flow
-    } else if (parsed.razorpay_order_id === "sub_active") {
+    if (parsed.razorpay_order_id === "sub_active") {
       const sub = await getSubscriptionByUserId(session.sub);
       if (!subscriptionHasEntitlement(sub)) return NextResponse.json({ error: "No active subscription entitlement found." }, { status: 400 });
       if (sub!.releaseLimit != null && sub!.releasesUsed >= sub!.releaseLimit) return NextResponse.json({ error: "Your subscription release allowance has been used." }, { status: 409 });

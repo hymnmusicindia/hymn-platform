@@ -2595,18 +2595,6 @@ export function ReleaseForm({
         return;
       }
 
-      if (String(orderData.key).startsWith("dev_")) {
-        const paymentId = `dev_dist_payment_${Date.now()}`;
-        const data = await submitRelease(
-          orderData.orderId,
-          paymentId,
-          `dev:${orderData.orderId}:${paymentId}`,
-        );
-        setSubmittedRelease(data.release);
-        setUploadProgress(100);
-        return;
-      }
-
       if (!orderData.key) throw new Error("Razorpay key is not configured on the server.");
       await loadRazorpayCheckout();
       const RazorpayCheckout = window.Razorpay;
