@@ -67,6 +67,73 @@
   --motion-snap: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Beat detail: editorial hierarchy with fewer nested surfaces. */
+.beat-detail-hero {
+  border: 1px solid var(--border);
+  border-radius: 1.6rem;
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  padding: .55rem;
+  box-shadow: 0 18px 55px rgba(0, 0, 0, .1);
+}
+
+.beat-detail-meta span + span {
+  position: relative;
+}
+
+.beat-detail-meta span + span::before {
+  content: "";
+  position: absolute;
+  left: -0.7rem;
+  top: 50%;
+  width: 2px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--text-soft);
+}
+
+.beat-detail-audio {
+  height: 2.6rem;
+  opacity: .88;
+}
+
+.beat-license-button {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--text);
+  background: var(--text);
+  color: var(--bg);
+  padding: .7rem 1rem;
+  font-size: .82rem;
+  font-weight: 700;
+  transition: transform .18s ease, opacity .18s ease;
+}
+
+.beat-license-button:hover:not(:disabled) { transform: translateY(-1px); }
+.beat-license-button:disabled { cursor: not-allowed; opacity: .45; }
+
+.beat-license-comparison table th,
+.beat-license-comparison table td {
+  background: transparent;
+}
+
+@media (max-width: 1023px) {
+  .beat-detail-hero { padding: .5rem; }
+}
+
+@media (max-width: 639px) {
+  .beat-detail-hero {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+    box-shadow: none;
+  }
+  .beat-detail-page { padding-bottom: 6rem; }
+}
+
 html[data-theme="light"] {
   color-scheme: light;
   --bg: #faf8f4;

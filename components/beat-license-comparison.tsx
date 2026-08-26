@@ -3,7 +3,7 @@ import { beatLicenseCatalog } from "@/lib/beat-store";
 
 export function BeatLicenseComparison() {
   return (
-    <section className="surface-card overflow-hidden p-5 sm:p-7" aria-labelledby="license-comparison-title">
+    <section className="beat-license-comparison border-y border-[var(--border)] py-8 sm:py-10" aria-labelledby="license-comparison-title">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">Rights, before payment</p>
@@ -13,7 +13,7 @@ export function BeatLicenseComparison() {
       </div>
       <div className="mt-4 grid gap-3 sm:hidden">
         {beatLicenseCatalog.map((tier) => (
-          <article key={`mobile-${tier.id}`} className="rounded-xl border p-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+          <article key={`mobile-${tier.id}`} className="border-b border-[var(--border)] py-4 last:border-0">
             <div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold text-[var(--text)]">{tier.title}</h3><p className="mt-1 text-xs text-[var(--text-soft)]">{tier.bestFor}</p></div><span className="shrink-0 rounded-full border border-[var(--border)] px-2 py-1 text-[10px] font-semibold">{tier.purchasableKey ? "Available" : "Coming soon"}</span></div>
             <dl className="mt-3 grid grid-cols-2 gap-2 text-xs"><div><dt className="text-[var(--text-soft)]">Files</dt><dd className="mt-1 font-semibold">{tier.delivery}</dd></div><div><dt className="text-[var(--text-soft)]">Streams</dt><dd className="mt-1 font-semibold">{tier.streamLimit}</dd></div></dl>
             <div className="mt-3 flex flex-wrap gap-2 text-[11px]">{[["Distribution", tier.distributionAllowed], ["Monetization", tier.monetizationAllowed], ["Stems", tier.includesStems]].map(([label, enabled]) => <span key={String(label)} className="inline-flex items-center gap-1 rounded-full border px-2 py-1" style={{ borderColor: "var(--border)", color: enabled ? "var(--success)" : "var(--text-soft)" }}>{enabled ? <Check className="h-3 w-3" /> : <Minus className="h-3 w-3" />}{label}</span>)}</div>
