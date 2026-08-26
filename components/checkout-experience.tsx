@@ -27,7 +27,10 @@ type RazorpayResponse = {
   razorpay_signature: string;
 };
 
-type RazorpayInstance = { open: () => void };
+type RazorpayInstance = {
+  open: () => void;
+  on: (event: string, handler: (response: { error?: { description?: string } }) => void) => void;
+};
 
 type RazorpayConstructor = new (options: Record<string, unknown>) => RazorpayInstance;
 
@@ -170,19 +173,29 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
         description: "Secure HYMN checkout",
         order_id: data.orderId,
         handler: async (payment: RazorpayResponse) => {
-          const verifyResponse = await fetch("/api/checkout/verify-payment", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payment)
-          });
-          const verifyData = await verifyResponse.json();
-          if (!verifyResponse.ok) throw new Error(verifyData.error || "Payment verification failed.");
-          setSuccess(true);
-          if (product === "beatstore") window.localStorage.removeItem("hymn-beat-cart");
+          try {
+            const verifyResponse = await fetch("/api/checkout/verify-payment", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payment)
+            });
+            const verifyData = await verifyResponse.json();
+            if (!verifyResponse.ok) throw new Error(verifyData.error || "Payment verification failed.");
+            setSuccess(true);
+            if (product === "beatstore") window.localStorage.removeItem("hymn-beat-cart");
+          } catch (error) {
+            setFeedback(error instanceof Error ? error.message : "Payment verification failed.");
+          } finally {
+            setPaying(false);
+          }
         },
         modal: {
           ondismiss: () => setPaying(false)
         }
+      });
+      checkout.on("payment.failed", (response) => {
+        setFeedback(response.error?.description || "Payment failed. Please try again.");
+        setPaying(false);
       });
       checkout.open();
     } catch (error) {

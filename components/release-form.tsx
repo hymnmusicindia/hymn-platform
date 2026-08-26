@@ -233,8 +233,29 @@ type ValidationIssue = {
 
 declare global {
   interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
+    Razorpay?: new (options: Record<string, unknown>) => {
+      open: () => void;
+      on: (event: string, handler: (response: { error?: { description?: string } }) => void) => void;
+    };
   }
+}
+
+function loadRazorpayCheckout() {
+  return new Promise<void>((resolve, reject) => {
+    if (window.Razorpay) return resolve();
+    const src = "https://checkout.razorpay.com/v1/checkout.js";
+    const existing = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);
+    const script = existing ?? document.createElement("script");
+    const onLoad = () => window.Razorpay ? resolve() : reject(new Error("Razorpay checkout could not be initialized."));
+    const onError = () => reject(new Error("Razorpay checkout could not be loaded. Check your connection and try again."));
+    script.addEventListener("load", onLoad, { once: true });
+    script.addEventListener("error", onError, { once: true });
+    if (!existing) {
+      script.src = src;
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  });
 }
 
 const steps = [
@@ -1383,14 +1404,7 @@ export function ReleaseForm({
     );
   }, [customLabelAllowed]);
 
-  useEffect(() => {
-    const src = "https://checkout.razorpay.com/v1/checkout.js";
-    if (document.querySelector(`script[src="${src}"]`)) return;
-    const script = document.createElement("script");
-    script.src = src;
-    script.async = true;
-    document.body.appendChild(script);
-  }, []);
+  useEffect(() => { void loadRazorpayCheckout().catch(() => undefined); }, []);
 
   useEffect(() => () => {
     audioPreviewObjectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
@@ -2581,8 +2595,7 @@ export function ReleaseForm({
         return;
       }
 
-      const RazorpayCheckout = window.Razorpay;
-      if (!RazorpayCheckout || String(orderData.key).startsWith("dev_")) {
+      if (String(orderData.key).startsWith("dev_")) {
         const paymentId = `dev_dist_payment_${Date.now()}`;
         const data = await submitRelease(
           orderData.orderId,
@@ -2593,6 +2606,11 @@ export function ReleaseForm({
         setUploadProgress(100);
         return;
       }
+
+      if (!orderData.key) throw new Error("Razorpay key is not configured on the server.");
+      await loadRazorpayCheckout();
+      const RazorpayCheckout = window.Razorpay;
+      if (!RazorpayCheckout) throw new Error("Razorpay checkout is unavailable. Please refresh and try again.");
 
       await new Promise<void>((resolve, reject) => {
         const razorpay = new RazorpayCheckout({
@@ -2622,6 +2640,7 @@ export function ReleaseForm({
           modal: { ondismiss: () => reject(new Error("Checkout cancelled.")) },
           theme: { color: "#7db7ff" },
         });
+        razorpay.on("payment.failed", (response) => reject(new Error(response.error?.description || "Payment failed. Please try again.")));
         razorpay.open();
       });
     } catch (error) {
