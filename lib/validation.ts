@@ -83,7 +83,7 @@ export const spotifyResolveSchema = z.object({ spotifyUrl: z.string().min(1) });
 
 export const orderItemSchema = z.object({
   beatId: z.number().int().positive(),
-  licenseType: z.enum(["basic", "premium", "exclusive"]),
+  licenseType: z.enum(["general", "exclusive"]),
   price: z.number().positive()
 });
 
@@ -110,7 +110,7 @@ export const checkoutItemSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("beat"),
     beatId: z.number().int().positive(),
-    licenseType: z.enum(["basic", "exclusive"])
+    licenseType: z.enum(["general", "exclusive"])
   }),
   z.object({
     type: z.literal("distribution"),
@@ -273,8 +273,19 @@ export const beatMutationSchema = z.object({
   bpm: z.coerce.number().int().positive().optional(),
   genre: z.string().min(2).optional(),
   mood: z.string().min(2).optional(),
+  keySignature: z.string().min(1).max(40).optional(),
   price: z.coerce.number().positive().optional(),
+  generalPrice: z.coerce.number().positive().optional(),
+  exclusivePrice: z.coerce.number().positive().optional(),
+  description: z.string().max(2000).optional(),
+  subgenre: z.string().max(80).optional(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+  sampleDeclaration: z.enum(["NO_UNCONTROLLED_SAMPLES", "CONTAINS_UNCONTROLLED_SAMPLES"]).optional(),
+  sampleDisclosure: z.string().max(2000).nullable().optional(),
   enabled: z.boolean().optional()
+}).superRefine((value, context) => {
+  if (value.generalPrice && value.exclusivePrice && value.exclusivePrice <= value.generalPrice) context.addIssue({ code: z.ZodIssueCode.custom, path: ["exclusivePrice"], message: "Exclusive price must be higher than General price." });
+  if (value.sampleDeclaration === "CONTAINS_UNCONTROLLED_SAMPLES" && !value.sampleDisclosure?.trim()) context.addIssue({ code: z.ZodIssueCode.custom, path: ["sampleDisclosure"], message: "Sample disclosure is required." });
 });
 
 

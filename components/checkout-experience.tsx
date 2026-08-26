@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowRight, BadgePercent, CheckCircle2, Gift, Loader2, ShieldCheck, X } from "lucide-react";
 
 type CheckoutItem =
-  | { type: "beat"; beatId: number; licenseType: "basic" | "exclusive" }
+  | { type: "beat"; beatId: number; licenseType: "general" | "exclusive" }
   | { type: "distribution"; plan: "one_time" | "half_yearly" | "yearly" | "yearly_plus"; trackCount: number; platforms: string[]; youtubeContentIdEnabled?: boolean };
 
 type CheckoutQuote = {
@@ -63,8 +63,8 @@ function readBeatCart(): CheckoutItem[] {
     const raw = window.localStorage.getItem("hymn-beat-cart");
     const items = raw ? JSON.parse(raw) as Array<{ beatId?: number; licenseType?: string }> : [];
     return items
-      .filter((item): item is { beatId: number; licenseType: "basic" | "exclusive" } => Boolean(item.beatId) && (item.licenseType === "basic" || item.licenseType === "exclusive"))
-      .map((item) => ({ type: "beat", beatId: item.beatId, licenseType: item.licenseType }));
+      .filter((item): item is { beatId: number; licenseType: "general" | "exclusive" | "basic" } => Boolean(item.beatId) && (["general", "basic", "exclusive"] as string[]).includes(String(item.licenseType)))
+      .map((item) => ({ type: "beat", beatId: item.beatId, licenseType: item.licenseType === "basic" ? "general" : item.licenseType }));
   } catch {
     return [];
   }

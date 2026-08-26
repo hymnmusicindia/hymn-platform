@@ -27,6 +27,22 @@ type CustomerPayoutSummary = {
 };
 type SmartNextAction = { key: string; title: string; reason: string; cta: string; href: string; priority: "critical" | "high" | "normal" };
 
+function SubscriptionActions({ status, cancelAtPeriodEnd }: { status: string; cancelAtPeriodEnd?: boolean }) {
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState("");
+  async function run(action: "cancel_period_end" | "pause" | "resume") {
+    if (action === "cancel_period_end" && !window.confirm("Stop renewal at the end of the paid billing period?")) return;
+    setPending(true); setMessage("");
+    try {
+      const response = await fetch("/api/subscriptions/actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Subscription action failed.");
+      window.location.reload();
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Subscription action failed."); setPending(false); }
+  }
+  return <div className="mt-5 flex flex-wrap items-center gap-3">{status === "active" ? <button className="btn-outline" disabled={pending} onClick={() => run("pause")}>Pause billing</button> : null}{status === "paused" ? <button className="btn-outline" disabled={pending} onClick={() => run("resume")}>Resume billing</button> : null}{!["cancelled", "completed", "expired"].includes(status) && !cancelAtPeriodEnd ? <button className="btn-outline" disabled={pending} onClick={() => run("cancel_period_end")}>Cancel renewal</button> : null}{message ? <span className="text-sm text-red-500">{message}</span> : null}</div>;
+}
+
 const RELEASE_PIPELINE_STAGES = [
   { key: "draft", label: "Draft", statuses: ["draft"] },
   { key: "payment", label: "Payment", statuses: [] },
@@ -411,9 +427,14 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       {activeTab === "subscription" ? <Panel title="Subscription" description="Review your active plan, release allowance, and renewal status.">
         <div className="grid gap-3 md:grid-cols-2">
           <div className="summary-card"><span>Current plan</span><span className="capitalize">{subscription?.plan ?? "No active subscription"}</span></div>
-          <div className="summary-card"><span>Valid until</span><span>{subscription ? formatDate(subscriptionExpiry) : "Not applicable"}</span></div>
+          <div className="summary-card"><span>Status</span><span className="capitalize">{subscription?.cancelAtPeriodEnd ? "Cancelled · access until period end" : subscription?.status ?? "Not subscribed"}</span></div>
+          <div className="summary-card"><span>{subscription?.autoRenewal ? "Renews on" : "Access until"}</span><span>{subscription ? formatDate(subscription?.nextRenewalDate || subscription?.currentPeriodEnd || subscriptionExpiry) : "Not applicable"}</span></div>
+          <div className="summary-card"><span>Price and frequency</span><span>{subscription?.amount != null ? `${subscription.currency || "INR"} ${subscription.amount} · ${subscription.billingInterval || "Provider billing cycle"}` : "Legacy/manual entitlement"}</span></div>
+          <div className="summary-card"><span>Started</span><span>{subscription?.startedAt || subscription?.purchasedAt ? formatDate(subscription.startedAt || subscription.purchasedAt) : "Not available"}</span></div>
           <div className="summary-card"><span>Releases used</span><span>{subscription ? `${subscription.releasesUsed ?? 0} / ${releaseLimit ?? "Unlimited"}` : "No plan allowance"}</span></div>
         </div>
+        {subscription?.razorpaySubscriptionId ? <SubscriptionActions status={subscription.status} cancelAtPeriodEnd={subscription.cancelAtPeriodEnd} /> : null}
+        {subscription?.billingHistory?.length ? <div className="mt-6"><h3 className="font-semibold">Billing history</h3><div className="mt-3 grid gap-2">{subscription.billingHistory.map((payment: any) => <div key={payment.id} className="summary-card"><span>{formatDate(payment.createdAt)} · {payment.status}</span><span>{payment.currency} {payment.amount}{payment.invoiceId ? ` · Invoice ${payment.invoiceId}` : ""}</span></div>)}</div></div> : null}
         <Link href="/distribution#distribution-pricing" className="btn-primary pressable mt-5 inline-flex">View plans</Link>
       </Panel> : null}
 
@@ -793,6 +814,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
   const [catalogStatusFilter, setCatalogStatusFilter] = useState("all");
   const [catalogGenreFilter, setCatalogGenreFilter] = useState("all");
   const [selectedAudioFile, setSelectedAudioFile] = useState<File | null>(null);
+  const [beatUploadStep, setBeatUploadStep] = useState(1);
   const [producerProfile, setProducerProfile] = useState(finance.profile ?? null);
   const [producerNotifications, setProducerNotifications] = useState<Notification[]>([]);
   const enabledBeats = catalog.filter((beat) => beat.enabled);
@@ -806,8 +828,8 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
   }), [catalog, catalogGenreFilter, catalogStatusFilter, dashboardSearch]);
   const filteredLicenseRows = useMemo(() => licenseRows.filter(({ order, item }) => matchesQuery([order.id, order.buyerName, order.buyerEmail, order.paymentStatus, item.beatTitle, item.licenseType], dashboardSearch)), [dashboardSearch, licenseRows]);
   const licenseCounts = useMemo(() => {
-    const counts = { basic: 0, premium: 0, exclusive: 0 };
-    filteredLicenseRows.forEach(({ item }) => { counts[item.licenseType] += 1; });
+    const counts: Record<string, number> = { general: 0, basic: 0, premium: 0, exclusive: 0 };
+    filteredLicenseRows.forEach(({ item }) => { counts[item.licenseType] = (counts[item.licenseType] ?? 0) + 1; });
     return counts;
   }, [filteredLicenseRows]);
 
@@ -860,6 +882,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
       form.reset();
       setSelectedAudioFile(null);
       setAudioFormat("");
+      setBeatUploadStep(1);
     });
   }
 
@@ -891,7 +914,9 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
       genre: String(formData.get("genre") || ""),
       mood: String(formData.get("mood") || ""),
       keySignature: String(formData.get("keySignature") || ""),
-      price: Number(formData.get("price")),
+      generalPrice: Number(formData.get("generalPrice")),
+      exclusivePrice: Number(formData.get("exclusivePrice")),
+      description: String(formData.get("description") || ""),
     };
     handleBeatUpdate(editingBeat, patch);
     setEditingBeat(null);
@@ -941,7 +966,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
       notificationCount={producerNotifications.filter((notification) => !notification.readAt).length}
       compactOverview
     >
-      {activeTab === "overview" ? <ProducerHome user={user} beats={catalog} orders={orders} finance={finance} notifications={producerNotifications} onTab={(tab) => setActiveTab(tab)} /> : null}
+      {activeTab === "overview" ? <ProducerHome user={user} beats={catalog} finance={finance} notifications={producerNotifications} onTab={(tab) => setActiveTab(tab)} /> : null}
       {false && activeTab === "overview" ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Catalog size" value={catalog.length} />
         <StatCard label="Enabled beats" value={enabledBeats.length} />
@@ -982,40 +1007,16 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
       {activeTab === "profile" ? <ProducerProfileWorkspace user={user} profile={producerProfile} onSubmit={saveProducerProfile} pending={isPending} feedback={feedback} /> : null}
 
       {activeTab === "upload" ? (
-        <Panel title="Upload beats" description="Add your beat file, select its format, and provide optional artwork in a mobile-friendly layout.">
-          <form onSubmit={handleBeatUpload} className="grid gap-4 lg:grid-cols-2">
-            <input name="title" required className="field" placeholder="Beat title" />
-            <input name="bpm" required type="number" min="1" className="field" placeholder="BPM" />
-            <input name="genre" required className="field" placeholder="Genre" />
-            <input name="mood" required className="field" placeholder="Mood" />
-            <input name="keySignature" className="field" placeholder="Musical key (for example, A minor)" />
-            <input name="price" required type="number" min="1" className="field" placeholder="Price" />
-            
-            <div className="lg:col-span-1">
-              <select name="audioFormat" required className="field w-full" value={audioFormat} onChange={(e) => setAudioFormat(e.target.value)}>
-                <option value="">Select audio format...</option>
-                <option value="MP3">High-Quality MP3</option>
-                <option value="WAV">Lossless WAV</option>
-              </select>
-            </div>
-            
-            <div className="lg:col-span-2">
-              <label className="text-sm font-medium mb-1 block">Beat Audio File</label>
-              <input name="file" required type="file" accept={audioFormat === "MP3" ? ".mp3,audio/mpeg" : audioFormat === "WAV" ? ".wav,audio/wav" : "audio/*,.wav,.mp3"} className="field" onChange={(event) => setSelectedAudioFile(event.target.files?.[0] ?? null)} />
-              {audioFormat && <p className="mt-1 text-xs" style={{ color: "var(--text-soft)" }}>Only {audioFormat} uploads are accepted.</p>}
-              {selectedAudioFile ? <p className="mt-2 rounded-xl border px-3 py-2 text-xs" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>{selectedAudioFile.name} / {selectedAudioFile.type || "unknown type"} / {(selectedAudioFile.size / (1024 * 1024)).toFixed(2)} MB</p> : null}
-            </div>
-            
-            <div className="lg:col-span-2">
-              <label className="text-sm font-medium mb-1 block">Artwork (Optional)</label>
-              <input name="artwork" type="file" accept="image/*" className="field" />
-            </div>
-            
-            <div className="lg:col-span-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm" style={{ color: "var(--text-soft)" }}>Uploads go directly into the producer catalog and storefront database.</p>
-              <button type="submit" disabled={isPending} className="btn-primary pressable">{isPending ? "Uploading..." : "Upload beat"}</button>
-            </div>
-            {feedback ? <p className="lg:col-span-2 text-sm" style={{ color: "var(--text)" }}>{feedback}</p> : null}
+        <Panel title="Upload Beat" description="Complete five short steps. Your master stays private; only an optional preview is public.">
+          <form onSubmit={handleBeatUpload} className="mx-auto grid max-w-2xl gap-5">
+            <div><div className="flex justify-between text-xs"><span>Step {beatUploadStep} of 5</span><span>{["Audio", "Beat information", "Artwork", "Pricing & licences", "Review"][beatUploadStep - 1]}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--border)]"><span className="block h-full bg-[var(--accent)] transition-all" style={{ width: `${beatUploadStep * 20}%` }} /></div></div>
+            <fieldset hidden={beatUploadStep !== 1} className="grid gap-4"><legend className="mb-4 text-xl font-semibold">Audio</legend><select name="audioFormat" required className="field w-full" value={audioFormat} onChange={(e) => setAudioFormat(e.target.value)}><option value="">Master format</option><option value="MP3">High-quality MP3</option><option value="WAV">Lossless WAV</option></select><label className="text-sm font-medium">Private master / delivery file<input name="file" required type="file" accept={audioFormat === "MP3" ? ".mp3,audio/mpeg" : audioFormat === "WAV" ? ".wav,audio/wav" : "audio/*,.wav,.mp3"} className="field mt-2" onChange={(event) => setSelectedAudioFile(event.target.files?.[0] ?? null)} /></label>{selectedAudioFile ? <p className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: "var(--border)" }}>{selectedAudioFile.name} · {(selectedAudioFile.size / 1048576).toFixed(2)} MB</p> : null}<label className="text-sm font-medium">Public preview (optional)<input name="preview" type="file" accept="audio/mpeg,.mp3" className="field mt-2" /></label><p className="text-xs text-[var(--text-soft)]">If no preview is supplied, the private master is never exposed. You can add a preview later.</p></fieldset>
+            <fieldset hidden={beatUploadStep !== 2} className="grid gap-4 sm:grid-cols-2"><legend className="mb-4 text-xl font-semibold">Beat information</legend><input name="title" required className="field sm:col-span-2" placeholder="Beat title" /><input name="bpm" required type="number" min="40" max="300" className="field" placeholder="BPM" /><input name="keySignature" required className="field" placeholder="Key (for example F# Minor)" /><input name="genre" required className="field" placeholder="Genre" /><input name="subgenre" className="field" placeholder="Subgenre" /><input name="mood" required className="field" placeholder="Mood" /><input name="tags" className="field" placeholder="Tags, separated by commas" /><textarea name="description" className="field min-h-28 sm:col-span-2" placeholder="Description" /><label className="sm:col-span-2 text-sm font-medium">Does this beat contain samples you do not own or control?<select name="sampleDeclaration" required className="field mt-2"><option value="">Choose an answer</option><option value="NO_UNCONTROLLED_SAMPLES">No</option><option value="CONTAINS_UNCONTROLLED_SAMPLES">Yes — I will disclose them below</option></select></label><textarea name="sampleDisclosure" className="field min-h-24 sm:col-span-2" placeholder="Required when you answered Yes: identify the samples and clearance status" /></fieldset>
+            <fieldset hidden={beatUploadStep !== 3} className="grid gap-4"><legend className="mb-4 text-xl font-semibold">Artwork</legend><label className="text-sm font-medium">Beat artwork (optional)<input name="artwork" type="file" accept="image/jpeg,image/png,image/webp" className="field mt-2" /></label><p className="text-xs text-[var(--text-soft)]">JPEG, PNG or WebP. HYMN uses a clean fallback if you skip artwork.</p></fieldset>
+            <fieldset hidden={beatUploadStep !== 4} className="grid gap-4 sm:grid-cols-2"><legend className="mb-4 text-xl font-semibold">Pricing & licences</legend><label className="text-sm font-medium">General Licence price<input name="generalPrice" required type="number" min="1" className="field mt-2" placeholder="₹500" /></label><label className="text-sm font-medium">Exclusive Licence price<input name="exclusivePrice" required type="number" min="2" className="field mt-2" placeholder="₹5000" /></label><input name="price" type="hidden" value="1" /><p className="sm:col-span-2 text-xs text-[var(--text-soft)]">Exclusive must cost more than General. HYMN receives 30%; you receive 70% of the net sale amount. Exclusive defaults to an exclusive licence, not copyright assignment.</p></fieldset>
+            <fieldset hidden={beatUploadStep !== 5} className="grid gap-3"><legend className="mb-4 text-xl font-semibold">Review</legend><div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><p className="font-semibold">Ready to submit for HYMN review</p><p className="mt-2 text-[var(--text-muted)]">We will validate the audio, artwork, metadata, prices, and sample declaration. The beat is not public until approved.</p></div></fieldset>
+            <div className="flex items-center justify-between gap-3 border-t pt-4" style={{ borderColor: "var(--border)" }}><button type="button" className="btn-outline" disabled={beatUploadStep === 1 || isPending} onClick={() => setBeatUploadStep((step) => Math.max(1, step - 1))}>Back</button>{beatUploadStep < 5 ? <button type="button" className="btn-primary" onClick={(event) => { const current = event.currentTarget.form?.querySelector<HTMLFieldSetElement>(`fieldset:not([hidden])`); const invalid = current ? Array.from(current.elements).find((element): element is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement => "checkValidity" in element && !(element as HTMLInputElement).checkValidity()) : null; if (invalid) return invalid.reportValidity(); setBeatUploadStep((step) => Math.min(5, step + 1)); }}>Continue</button> : <button type="submit" disabled={isPending} className="btn-primary pressable">{isPending ? "Uploading..." : "Submit for review"}</button>}</div>
+            {feedback ? <p className="text-sm" style={{ color: "var(--text)" }}>{feedback}</p> : null}
           </form>
         </Panel>
       ) : null}
@@ -1041,7 +1042,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
                 <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
                   <div className="w-full max-w-[280px]">
                     <BeatCard beat={beat} />
-                    <div className="mt-3"><StatusPill label={(beat.status ?? (beat.enabled ? "APPROVED" : "PENDING_REVIEW")).replace(/_/g, " ")} active={beat.status === "APPROVED"} /></div>
+                    <div className="mt-3"><StatusPill label={(beat.status ?? (beat.enabled ? "PUBLISHED" : "PENDING_REVIEW")).replace(/_/g, " ")} active={beat.status === "PUBLISHED"} /></div>
                     {beat.reviewIssues?.reason ? <div className="mt-3 rounded-xl border p-3 text-sm" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}><p className="font-semibold">Corrections requested</p><p className="mt-1">{beat.reviewIssues.reason}</p></div> : null}
                   </div>
                   <div className="grid gap-2 sm:grid-cols-5">
@@ -1167,11 +1168,12 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
                 </div>
                 <p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>Buyer: {order.buyerName ?? `User #${order.userId}`}</p>
                 <div className="mt-4 grid gap-2">
-                  {order.items.filter((item) => matchesQuery([order.id, order.buyerName, order.buyerEmail, item.beatTitle, item.licenseType], dashboardSearch)).map((item, index) => (
-                    <div key={`${order.id}-${item.beatId}-${index}`} className="rounded-xl border px-3 py-2 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
-                      <div className="flex flex-wrap items-center justify-between gap-2"><span>{item.beatTitle ?? `Beat #${item.beatId}`} · {item.licenseType}</span><span>Gross {formatMoney(item.price)} · Your 70% {formatMoney(Math.round(item.price * 0.7 * 100) / 100)} · HYMN 30% {formatMoney(Math.round(item.price * 0.3 * 100) / 100)}</span></div>
-                    </div>
-                  ))}
+                  {order.items.filter((item) => matchesQuery([order.id, order.buyerName, order.buyerEmail, item.beatTitle, item.licenseType], dashboardSearch)).map((item, index) => {
+                    const sale = finance.sales?.find((entry: any) => entry.orderId === order.id && entry.beatId === item.beatId && entry.licenseType === item.licenseType);
+                    return <div key={`${order.id}-${item.beatId}-${index}`} className="rounded-xl border px-3 py-2 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
+                      <div className="flex flex-wrap items-center justify-between gap-2"><span>{item.beatTitle ?? `Beat #${item.beatId}`} · {item.licenseType}</span>{sale ? <span>Net {formatMoney(Number(sale.netSaleAmount))} · Producer {formatMoney(Number(sale.producerEarningAmount))} · HYMN {formatMoney(Number(sale.hymnCommissionAmount))}</span> : <span>Sale ledger pending</span>}</div>
+                    </div>;
+                  })}
                 </div>
               </article>
             ))}
@@ -1208,7 +1210,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
                   <input name="mood" defaultValue={editingBeat.mood} required className="field" />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="text-sm font-medium mb-1 block">BPM</label>
                   <input name="bpm" type="number" defaultValue={editingBeat.bpm} required className="field" />
@@ -1218,10 +1220,12 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
                   <input name="keySignature" defaultValue={editingBeat.keySignature} className="field" />
                 </div>
                 <div>
-                  <label className="text-sm font-medium mb-1 block">Price (Rs)</label>
-                  <input name="price" type="number" defaultValue={editingBeat.price} required className="field" />
+                  <label className="text-sm font-medium mb-1 block">General Licence price (Rs)</label>
+                  <input name="generalPrice" type="number" defaultValue={editingBeat.generalPrice ?? editingBeat.price} required className="field" />
                 </div>
+                <div><label className="text-sm font-medium mb-1 block">Exclusive Licence price (Rs)</label><input name="exclusivePrice" type="number" defaultValue={editingBeat.exclusivePrice} required className="field" /></div>
               </div>
+              <div><label className="text-sm font-medium mb-1 block">Description</label><textarea name="description" defaultValue={editingBeat.description} className="field min-h-24" /></div>
               <div className="mt-4 flex justify-end gap-3">
                 <button type="button" onClick={() => setEditingBeat(null)} className="btn-outline pressable">Cancel</button>
                 <button type="submit" className="btn-primary pressable">Save Changes</button>

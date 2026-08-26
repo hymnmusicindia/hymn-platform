@@ -147,15 +147,12 @@ export function BeatCard({
             </span>
           </div>
 
-          <div className="flex items-end justify-between gap-3 border-t border-[var(--border)] pt-3">
-            <div>
-              <p className="text-[8px] sm:text-[9px] uppercase tracking-[0.2em] text-[var(--text-soft)]">Starting at</p>
-              <p className="mt-1 text-xs font-semibold tracking-[-0.01em] text-[var(--text)] sm:text-sm">{formatMoney(beat.price || (beat as any).startingPrice || 0)}</p>
-            </div>
-            <span className="rounded-full border border-[var(--border)] bg-[var(--bg-soft)] px-2.5 py-1.5 text-[9px] font-semibold text-[var(--text)] sm:text-[10px]">
-              {beat.bpm} BPM
-            </span>
+          <p className="text-xs text-[var(--text-soft)]">{beat.bpm} BPM · {beat.keySignature || "Key not supplied"}</p>
+          <div className="grid grid-cols-2 gap-2 border-t border-[var(--border)] pt-3 text-xs">
+            <div><p className="text-[9px] uppercase tracking-[0.12em] text-[var(--text-soft)]">General Licence</p><p className="mt-1 font-semibold">{formatMoney(beat.generalPrice ?? beat.price ?? 0)}</p></div>
+            <div><p className="text-[9px] uppercase tracking-[0.12em] text-[var(--text-soft)]">Exclusive Licence</p><p className="mt-1 font-semibold">{formatMoney(beat.exclusivePrice ?? 0)}</p></div>
           </div>
+          <Link href={`/beat-store/beats/${beatStoreSlug(beat)}`} onClick={(event) => event.stopPropagation()} className="btn-outline flex w-full justify-center text-xs">View Beat</Link>
         </div>
       </div>
     </article>

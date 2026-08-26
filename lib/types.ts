@@ -1,6 +1,6 @@
 export type ReleaseStatus = "draft" | "awaiting_payment" | "submitted" | "in_queue" | "in_qc_queue" | "under_review" | "changes_requested" | "resubmitted" | "approved" | "queued_for_distribution" | "submitting_to_distributor" | "sent_to_distributor" | "distributor_processing" | "distributor_changes_required" | "scheduled" | "processing" | "awaiting_live_confirmation" | "partially_live" | "delivered" | "sent" | "live" | "delivery_failed" | "takedown_requested" | "takedown_processing" | "taken_down" | "archived" | "rejected" | "failed";
 
-export type LicenseType = "basic" | "premium" | "exclusive";
+export type LicenseType = "general" | "exclusive" | "basic" | "premium";
 
 export type UserRole = "customer" | "producer" | "admin";
 
@@ -367,7 +367,7 @@ export interface Subscription {
   planName?: string;
   purchasedAt?: string;
   expiryDate: string;
-  status: "active" | "expired" | "cancelled";
+  status: "created" | "authenticated" | "active" | "pending" | "halted" | "paused" | "resumed" | "completed" | "expired" | "cancelled";
   releasesUsed: number;
   releaseLimit: number | null;
   artistLimit: number;
@@ -375,6 +375,16 @@ export interface Subscription {
   daysRemaining: number;
   autoRenewal?: boolean;
   nextRenewalDate?: string | null;
+  razorpaySubscriptionId?: string;
+  currentPeriodStart?: string | null;
+  currentPeriodEnd?: string | null;
+  startedAt?: string | null;
+  cancelledAt?: string | null;
+  cancelAtPeriodEnd?: boolean;
+  amount?: number;
+  currency?: string;
+  billingInterval?: string;
+  billingHistory?: Array<{ id: number; paymentId: string; invoiceId?: string | null; amount: number; currency: string; status: string; billingPeriodStart?: string; billingPeriodEnd?: string; createdAt: string }>;
   createdAt: string;
   updatedAt: string;
 }
@@ -396,7 +406,7 @@ export interface BeatPurchase {
   id: number;
   userId: number;
   beatId: number;
-  licenseType: "basic" | "premium" | "exclusive";
+  licenseType: LicenseType;
   purchasedAt: string;
   licenseUploadedAt?: string | null;
   licenseUrl?: string | null;
@@ -445,10 +455,30 @@ export interface Beat {
   mood: string;
   keySignature?: string;
   price: number;
+  generalPrice?: number;
+  exclusivePrice?: number;
+  description?: string;
+  subgenre?: string;
+  tags?: string[];
+  previewUrl?: string;
+  sampleDeclaration?: "NO_UNCONTROLLED_SAMPLES" | "CONTAINS_UNCONTROLLED_SAMPLES";
+  sampleDisclosure?: string | null;
+  generalMaxCommercialReleases?: number;
+  generalStreamingLimit?: number | null;
+  generalVideoLimit?: number | null;
+  generalPerformanceRights?: boolean;
+  generalMonetizationAllowed?: boolean;
+  generalCreditRequired?: boolean;
+  generalContentIdPolicy?: string;
+  generalTermDurationMonths?: number | null;
+  generalTerritory?: string;
+  exclusiveLegalMode?: "EXCLUSIVE_LICENSE" | "RIGHTS_ASSIGNMENT";
+  generalLicensesSold?: number;
+  exclusiveReservationExpiresAt?: string | null;
   fileUrl: string;
   artworkUrl?: string;
   enabled: boolean;
-  status?: "PENDING_REVIEW" | "APPROVED" | "CHANGES_REQUESTED" | string;
+  status?: "DRAFT" | "PENDING_REVIEW" | "PUBLISHED" | "CHANGES_REQUESTED" | "SUSPENDED" | "EXCLUSIVE_RESERVED" | "EXCLUSIVELY_SOLD" | "ARCHIVED" | string;
   reviewIssues?: { reason?: string; issues?: Array<{ field: string; message: string }> } | null;
   createdAt: string;
 }

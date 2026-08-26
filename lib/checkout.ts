@@ -1,4 +1,3 @@
-import { beatLicenseOptions } from "@/lib/beat-store";
 import { findCouponByCode, findUserById, getCouponUsage, listBeats } from "@/lib/db";
 import { distributionPlanCards } from "@/lib/distribution-plans";
 import { getTrackPricingQuote, getUgcAddonPrice } from "@/lib/distribution-pricing";
@@ -44,12 +43,6 @@ function normalizeCoupon(code?: string | null) {
   return code?.trim().toUpperCase() || null;
 }
 
-function getBeatLicensePrice(licenseType: Extract<LicenseType, "basic" | "exclusive">) {
-  const option = beatLicenseOptions.find((entry) => entry.key === licenseType);
-  if (!option) throw new Error("Invalid license selected.");
-  return option.price;
-}
-
 async function buildLineItems(input: CheckoutInput): Promise<CheckoutLineItem[]> {
   const beats = await listBeats();
 
@@ -57,11 +50,14 @@ async function buildLineItems(input: CheckoutInput): Promise<CheckoutLineItem[]>
     if (item.type === "beat") {
       const beat = beats.find((entry) => entry.id === item.beatId);
       if (!beat || !beat.enabled) throw new Error("One of the selected beats is unavailable.");
-      const unitPrice = getBeatLicensePrice(item.licenseType);
+      const reservationActive = beat.status === "EXCLUSIVE_RESERVED" && (!beat.exclusiveReservationExpiresAt || new Date(beat.exclusiveReservationExpiresAt).getTime() > Date.now());
+      if (!beat.enabled || (!["PUBLISHED", "EXCLUSIVE_RESERVED"].includes(String(beat.status))) || reservationActive) throw new Error("This beat is not available for licensing.");
+      const unitPrice = item.licenseType === "general" ? (beat.generalPrice ?? beat.price) : (beat.exclusivePrice ?? 0);
+      if (!Number.isFinite(unitPrice) || unitPrice <= 0) throw new Error("This licence is not available.");
       return {
         productId: `beat:${beat.id}:${item.licenseType}`,
         label: beat.title,
-        description: item.licenseType === "exclusive" ? "Exclusive beat license" : "Non-exclusive beat license",
+        description: item.licenseType === "exclusive" ? "Exclusive rights to use this beat" : `General commercial licence for up to ${beat.generalMaxCommercialReleases ?? 1} release${(beat.generalMaxCommercialReleases ?? 1) === 1 ? "" : "s"}`,
         quantity: 1,
         unitPrice,
         total: unitPrice,
@@ -146,7 +142,7 @@ export function quoteToOrderItems(quote: CheckoutQuote) {
     .filter((item) => item.beatId && item.licenseType)
     .map((item) => ({
       beatId: item.beatId as number,
-      licenseType: item.licenseType as Extract<LicenseType, "basic" | "exclusive">,
+      licenseType: item.licenseType as Extract<LicenseType, "general" | "exclusive">,
       price: item.total
     }));
 }

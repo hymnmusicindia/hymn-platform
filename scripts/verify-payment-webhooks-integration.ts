@@ -15,7 +15,7 @@ async function receive(payload: EventPayload) {
 }
 
 async function makeOrder(userId: number, beatId: number, orderId: string, options: { referralCreditsUsed?: number } = {}) {
-  return createOrder({ userId, productId: "beatstore", originalPrice: 10, discountApplied: 0, referralCreditsUsed: options.referralCreditsUsed ?? 0, finalAmount: 10, couponCode: null, razorpayOrderId: orderId, amount: 10, paymentStatus: "created", items: [{ beatId, licenseType: "basic", price: 10 }] });
+  return createOrder({ userId, productId: "beatstore", originalPrice: 10, discountApplied: 0, referralCreditsUsed: options.referralCreditsUsed ?? 0, finalAmount: 10, couponCode: null, razorpayOrderId: orderId, amount: 10, paymentStatus: "created", items: [{ beatId, licenseType: "general", price: 10 }] });
 }
 
 async function main() {
@@ -24,7 +24,7 @@ async function main() {
   const producer = await prisma.user.create({ data: { googleId: `pay-producer-${suffix}`, name: "Payment Producer", email: `producer-${suffix}@payments.invalid`, referralCode: `P${suffix}`.slice(0, 20) } });
   const buyer = await prisma.user.create({ data: { googleId: `pay-buyer-${suffix}`, name: "Payment Buyer", email: `buyer-${suffix}@payments.invalid`, referralCode: `B${suffix}`.slice(0, 20) } });
   const upload = await prisma.upload.create({ data: { userId: producer.id, kind: "AUDIO", storageKey: `payments/${suffix}`, fileName: "beat.mp3", mimeType: "audio/mpeg", sizeBytes: 1 } });
-  const beat = await prisma.beat.create({ data: { userId: producer.id, title: "Payment Beat", bpm: 100, genre: "test", mood: "test", keySignature: "C", priceCents: 1000, audioUploadId: upload.id } });
+  const beat = await prisma.beat.create({ data: { userId: producer.id, title: "Payment Beat", bpm: 100, genre: "test", mood: "test", keySignature: "C", priceCents: 1000, generalPriceCents: 1000, exclusivePriceCents: 5000, status: "PUBLISHED", enabled: true, audioUploadId: upload.id } });
 
   const webhookFirstId = `checkout_webhook_first_${suffix}`;
   await makeOrder(buyer.id, beat.id, webhookFirstId);
@@ -90,6 +90,18 @@ async function main() {
   const failed = await receive({ id: `evt_failed_${suffix}`, event: "payment.failed", payload: { payment: { entity: { id: `pay_failed_${suffix}`, order_id: failureId, amount: 1000, currency: "INR", status: "failed" } } } });
   await processRazorpayEvent(failed.id);
   assert.equal((await prisma.checkoutOrder.findUniqueOrThrow({ where: { razorpayOrderId: failureId } })).paymentStatus, "failed");
+
+  const exclusiveBeat = await prisma.beat.create({ data: { userId: producer.id, title: "Exclusive Race Beat", bpm: 110, genre: "test", mood: "test", keySignature: "D", priceCents: 500, generalPriceCents: 500, exclusivePriceCents: 5000, status: "PUBLISHED", enabled: true, audioUploadId: upload.id } });
+  const exclusiveInput = (orderId: string) => ({ userId: buyer.id, productId: "beatstore", originalPrice: 50, discountApplied: 0, referralCreditsUsed: 0, finalAmount: 50, couponCode: null, razorpayOrderId: orderId, amount: 50, paymentStatus: "created" as const, items: [{ beatId: exclusiveBeat.id, licenseType: "exclusive" as const, price: 50 }] });
+  const race = await Promise.allSettled([createOrder(exclusiveInput(`exclusive_a_${suffix}`)), createOrder(exclusiveInput(`exclusive_b_${suffix}`))]);
+  assert.equal(race.filter((result) => result.status === "fulfilled").length, 1, "Exactly one exclusive reservation must succeed.");
+  const winner = race.find((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof createOrder>>> => result.status === "fulfilled");
+  assert.ok(winner);
+  await confirmCheckoutPayment({ razorpayOrderId: winner.value.razorpayOrderId, paymentId: `pay_exclusive_${suffix}`, userId: buyer.id, source: "browser" });
+  assert.equal((await prisma.beat.findUniqueOrThrow({ where: { id: exclusiveBeat.id } })).status, "EXCLUSIVELY_SOLD");
+  assert.equal(await prisma.beatSale.count({ where: { beatId: exclusiveBeat.id, licenseType: "exclusive" } }), 1);
+  const exclusivePurchase = await prisma.beatPurchase.findFirstOrThrow({ where: { beatId: exclusiveBeat.id, licenseType: "exclusive" } });
+  assert.ok(exclusivePurchase.licenseTermsSnapshot, "Exclusive licence terms must be snapshotted.");
 
   const distributionId = `distribution_${suffix}`;
   await prisma.distributionOrder.create({ data: { userId: buyer.id, plan: "basic", amount: 700, razorpayOrderId: distributionId, currency: "INR" } });

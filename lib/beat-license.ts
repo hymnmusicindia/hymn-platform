@@ -25,7 +25,40 @@ export async function generateBeatLicense(purchaseId: number, actorId: number, i
     return { purchaseId: purchase.id, licenseUrl: existingUrl };
   }
   const producer = await prisma.user.findUnique({ where: { id: beat.userId } });
-  const lines = ["HYMN BEAT LICENSE", `Purchase ID: ${purchase.id}`, `Buyer: ${buyer.name} (${buyer.email})`, `Producer: ${producer?.name ?? `User ${beat.userId}`}`, `Beat: ${beat.title}`, `License type: ${purchase.licenseType}`, `Payment ID: ${purchase.paymentId ?? "Verified checkout"}`, `Issued: ${new Date().toISOString()}`, "Terms: This license grants the buyer usage rights according to the selected HYMN license tier.", "Ownership of the underlying composition remains subject to the producer's listed terms."];
+  let snapshot = purchase.licenseTermsSnapshot as Record<string, any> | null;
+  if (!snapshot) {
+    snapshot = { version: "legacy-snapshot-2026-08-26", licenseType: purchase.licenseType === "exclusive" ? "exclusive" : "general", beat: { id: beat.id, title: beat.title }, buyer: { id: buyer.id, name: buyer.name, email: buyer.email }, producer: { id: beat.userId }, purchaseDate: purchase.purchasedAt.toISOString(), currency: "INR", legalMode: "EXCLUSIVE_LICENSE", existingGeneralLicenses: 0, rights: purchase.licenseType === "exclusive" ? { commercialUse: true, exclusiveUse: true, copyrightAssigned: false } : { commercialUse: true, maxCommercialReleases: 1, monetizationAllowed: true, creditRequired: true, contentIdPolicy: "NOT_ALLOWED", territory: "Worldwide" }, restrictions: { samplesSubjectToProducerDisclosure: true, priorGeneralLicensesRemainValid: true } };
+    await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { licenseVersion: String(snapshot.version), licenseTermsSnapshot: snapshot } });
+  }
+  const rights = (snapshot.rights ?? {}) as Record<string, unknown>;
+  const restrictions = (snapshot.restrictions ?? {}) as Record<string, unknown>;
+  const lines = [
+    "HYMN BEAT LICENCE",
+    `Licence version: ${purchase.licenseVersion ?? snapshot.version ?? "legacy"}`,
+    `Purchase ID: ${purchase.id}`,
+    `Buyer: ${buyer.name} (${buyer.email})`,
+    `Producer: ${producer?.name ?? `User ${beat.userId}`}`,
+    `Beat: ${String((snapshot.beat as any)?.title ?? beat.title)}`,
+    `Licence type: ${purchase.licenseType === "exclusive" ? "EXCLUSIVE" : "GENERAL"}`,
+    `Purchase date: ${String(snapshot.purchaseDate ?? purchase.purchasedAt.toISOString())}`,
+    `Price: ${snapshot.currency ?? "INR"} ${snapshot.price ?? "Recorded in order"}`,
+    ...(purchase.licenseType === "exclusive" ? [
+      `Legal mode: ${snapshot.legalMode === "RIGHTS_ASSIGNMENT" ? "RIGHTS ASSIGNMENT" : "EXCLUSIVE LICENCE"}`,
+      snapshot.legalMode === "RIGHTS_ASSIGNMENT" ? "Copyright assignment applies only under the written assignment terms in this snapshot." : "Exclusive exploitation rights are granted; underlying copyright is not assigned.",
+      `Previous General licences: ${snapshot.existingGeneralLicenses ?? 0} (remain valid)`
+    ] : [
+      `Permitted commercial releases: ${rights.maxCommercialReleases ?? 1}`,
+      `Streaming limit: ${rights.streamingLimit ?? "Not limited"}`,
+      `Video limit: ${rights.videoLimit ?? "Not limited"}`,
+      `Monetisation: ${rights.monetizationAllowed ? "Allowed" : "Not allowed"}`,
+      `Producer credit: ${rights.creditRequired ? "Required" : "Not required"}`,
+      `Content ID: ${rights.contentIdPolicy ?? "Not allowed"}`,
+      `Territory: ${rights.territory ?? "Worldwide"}`,
+      `Term: ${rights.termDurationMonths ? `${rights.termDurationMonths} months` : "No fixed term"}`
+    ]),
+    `Sample disclaimer: ${restrictions.samplesSubjectToProducerDisclosure ? "Rights in uncleared third-party samples are not guaranteed by HYMN." : "See agreement."}`,
+    "The immutable terms snapshot stored at purchase controls this licence."
+  ];
   const bytes = buildPdf(lines);
   let asset;
   try {

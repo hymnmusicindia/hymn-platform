@@ -39,7 +39,7 @@ export type StorefrontBeat = Beat & {
 
 
 export const beatLicenseOptions: Array<{
-  key: Extract<LicenseType, "basic" | "exclusive">;
+  key: Extract<LicenseType, "general" | "exclusive">;
   label: string;
   price: number;
   note: string;
@@ -47,24 +47,24 @@ export const beatLicenseOptions: Array<{
   badge?: string;
 }> = [
   {
-    key: "basic",
-    label: "Non-exclusive",
+    key: "general",
+    label: "General Licence",
     price: 250,
     note: "Instant download after purchase",
     badge: "Most Popular",
-    bullets: ["Commercial use", "Unlimited distribution", "Non-exclusive rights", "MP3 + WAV"]
+    bullets: ["Commercial use", "Limited releases", "Beat remains available", "Producer credit required"]
   },
   {
     key: "exclusive",
     label: "Exclusive",
     price: 2100,
     note: "Instant download after purchase",
-    bullets: ["Full ownership", "Removed from store", "MP3 + WAV + stems", "Priority license"]
+    bullets: ["Exclusive rights to use", "Removed from sale", "Existing General licences remain valid", "Copyright is not assigned by default"]
   }
 ];
 
 export type BeatLicenseTierDefinition = {
-  id: "mp3" | "wav" | "trackout" | "unlimited" | "exclusive";
+  id: "general" | "exclusive";
   title: string;
   delivery: string;
   streamLimit: string;
@@ -76,15 +76,12 @@ export type BeatLicenseTierDefinition = {
   exclusive: boolean;
   beatRemainsForSale: boolean;
   bestFor: string;
-  purchasableKey?: Extract<LicenseType, "basic" | "exclusive">;
+  purchasableKey: Extract<LicenseType, "general" | "exclusive">;
 };
 
 export const beatLicenseCatalog: BeatLicenseTierDefinition[] = [
-  { id: "mp3", title: "Basic MP3 Lease", delivery: "MP3", streamLimit: "50,000", commercialUse: true, distributionAllowed: true, monetizationAllowed: true, contentIdAllowed: false, includesStems: false, exclusive: false, beatRemainsForSale: true, bestFor: "First releases", purchasableKey: "basic" },
-  { id: "wav", title: "WAV Lease", delivery: "MP3 + WAV", streamLimit: "150,000", commercialUse: true, distributionAllowed: true, monetizationAllowed: true, contentIdAllowed: false, includesStems: false, exclusive: false, beatRemainsForSale: true, bestFor: "Commercial singles" },
-  { id: "trackout", title: "Premium Trackout", delivery: "MP3 + WAV + stems", streamLimit: "500,000", commercialUse: true, distributionAllowed: true, monetizationAllowed: true, contentIdAllowed: false, includesStems: true, exclusive: false, beatRemainsForSale: true, bestFor: "Professional mixing" },
-  { id: "unlimited", title: "Unlimited Lease", delivery: "MP3 + WAV + stems", streamLimit: "Unlimited", commercialUse: true, distributionAllowed: true, monetizationAllowed: true, contentIdAllowed: false, includesStems: true, exclusive: false, beatRemainsForSale: true, bestFor: "Campaign releases" },
-  { id: "exclusive", title: "Exclusive Rights", delivery: "All available files", streamLimit: "Unlimited", commercialUse: true, distributionAllowed: true, monetizationAllowed: true, contentIdAllowed: true, includesStems: true, exclusive: true, beatRemainsForSale: false, bestFor: "Full ownership", purchasableKey: "exclusive" }
+  { id: "general", title: "General Licence", delivery: "Master file", streamLimit: "Configured per beat", commercialUse: true, distributionAllowed: true, monetizationAllowed: true, contentIdAllowed: false, includesStems: false, exclusive: false, beatRemainsForSale: true, bestFor: "Affordable commercial use", purchasableKey: "general" },
+  { id: "exclusive", title: "Exclusive Licence", delivery: "All available files", streamLimit: "As stated in the agreement", commercialUse: true, distributionAllowed: true, monetizationAllowed: true, contentIdAllowed: false, includesStems: true, exclusive: true, beatRemainsForSale: false, bestFor: "Exclusive rights to use", purchasableKey: "exclusive" }
 ];
 
 export function beatStoreSlug(beat: Pick<Beat, "id" | "title">) {
@@ -202,7 +199,7 @@ export function buildBeatStorefront(beats: Beat[], producerProfiles: ProducerPro
     
     return {
       ...beat,
-      fileUrl: resolvePreviewUrl(beat.fileUrl),
+      fileUrl: resolvePreviewUrl(beat.previewUrl),
       producer,
       coverImage,
       vibeTag,
@@ -215,7 +212,7 @@ export function buildBeatStorefront(beats: Beat[], producerProfiles: ProducerPro
       cartsNow: 0,
       weeklySales: 0,
       plays: 0,
-      startingPrice: beat.price,
+      startingPrice: beat.generalPrice ?? beat.price,
       shortHook: `${beat.genre} · ${beat.mood} · ${beat.bpm} BPM`,
       producerName: producer.name,
       producerId: beat.producerId

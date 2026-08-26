@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/access";
-import { listAllBeats, updateBeat, deleteBeat } from "@/lib/db";
+import { updateBeat, deleteBeat } from "@/lib/db";
 import { prisma } from "@/lib/prisma";
 import { beatMutationSchema } from "@/lib/validation";
 import { createAdminTaskOnce } from "@/lib/task-queue";
@@ -21,12 +21,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   try {
     const payload = beatMutationSchema.parse(await request.json());
-    if (result.user.role === "producer" && payload.enabled === true && prismaBeat.status !== "APPROVED") return NextResponse.json({ error: "This beat must be approved before it can be enabled." }, { status: 409 });
+    if (result.user.role === "producer" && payload.enabled === true && prismaBeat.status !== "PUBLISHED") return NextResponse.json({ error: "This beat must be approved before it can be enabled." }, { status: 409 });
     const updated = await updateBeat(beatId, payload);
     if (!updated) {
       return NextResponse.json({ error: "Failed to update beat in database." }, { status: 500 });
     }
-    const metadataChanged = result.user.role === "producer" && [payload.title, payload.bpm, payload.genre, payload.mood, payload.price].some((value) => value !== undefined);
+    const metadataChanged = result.user.role === "producer" && [payload.title, payload.bpm, payload.genre, payload.mood, payload.price, payload.generalPrice, payload.exclusivePrice, payload.description, payload.subgenre, payload.tags, payload.sampleDeclaration, payload.sampleDisclosure].some((value) => value !== undefined);
     if (metadataChanged) {
       await prisma.beat.update({ where: { id: beatId }, data: { status: "PENDING_REVIEW", enabled: false, reviewIssues: undefined } });
       await createAdminTaskOnce({ eventKey: `producer:${result.user.id}:beat:${beatId}:review`, type: "Beat Awaiting Approval", priority: "normal", title: `Updated beat ready for review: ${updated.title}`, body: "Producer updated beat metadata. Review the current files and fields.", href: `/admin?tab=beats&beatId=${beatId}`, entityType: "beat", entityId: beatId });

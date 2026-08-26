@@ -3,6 +3,7 @@
 import { getSubscriptionByUserId } from "@/lib/db";
 import { artistProfileLimitForPlan } from "@/lib/artist-profile-limits";
 import { listPaidDistributionPlansByUser } from "@/lib/distribution-db";
+import { subscriptionHasEntitlement } from "@/lib/subscription-billing";
 
 export async function getSubscriptionStatus(userId: number) {
   const subscription = await getSubscriptionByUserId(userId);
@@ -16,7 +17,7 @@ export async function getSubscriptionStatus(userId: number) {
     };
   }
 
-  const isActive = subscription.status === "active" && subscription.daysRemaining > 0;
+  const isActive = subscriptionHasEntitlement(subscription);
   
   return {
     hasActiveSubscription: isActive,
@@ -57,7 +58,7 @@ export function getReleaseSubmissionRequirements(plan: string, hasActiveSubscrip
  */
 export async function checkArtistLimitReached(userId: number, newArtistCount: number): Promise<boolean> {
   const [subscription, paidPlans] = await Promise.all([getSubscriptionByUserId(userId), listPaidDistributionPlansByUser(userId)]);
-  const subscriptionLimit = subscription?.status === "active" && subscription.daysRemaining > 0 ? artistProfileLimitForPlan(subscription.plan) : 0;
+  const subscriptionLimit = subscriptionHasEntitlement(subscription) ? artistProfileLimitForPlan(subscription!.plan) : 0;
   const oneTimeLimit = paidPlans.some((plan) => ["one_time", "pay_per_release"].includes(plan)) ? 5 : 0;
   return newArtistCount > Math.max(subscriptionLimit, oneTimeLimit);
 }

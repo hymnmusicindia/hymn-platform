@@ -1224,7 +1224,7 @@ export async function listAllBeats(): Promise<Beat[]> {
     try {
       const prismaBeats = await prisma.beat.findMany({
         where: { enabled: true },
-        include: { user: true, audio: true, artwork: true },
+        include: { user: true, audio: true, preview: true, artwork: true },
         orderBy: { createdAt: 'desc' }
       });
       if (prismaBeats.length > 0) return prismaBeats.map(mapPrismaBeat);
@@ -1251,7 +1251,7 @@ export async function listBeatsByProducer(producerId: number): Promise<Beat[]> {
     try {
       const prismaBeats = await prisma.beat.findMany({
         where: { userId: producerId },
-        include: { user: true, audio: true, artwork: true },
+        include: { user: true, audio: true, preview: true, artwork: true },
         orderBy: { createdAt: 'desc' }
       });
       return prismaBeats.map(mapPrismaBeat);
@@ -1271,6 +1271,7 @@ export async function createBeat(input: Omit<Beat, "id" | "createdAt" | "produce
     console.log("Entered Prisma branch in createBeat()");
     try {
       let audioUploadId = null;
+      let previewUploadId = null;
       let artworkUploadId = null;
       
       if (input.fileUrl) {
@@ -1287,6 +1288,11 @@ export async function createBeat(input: Omit<Beat, "id" | "createdAt" | "produce
           }
         });
         audioUploadId = audioUpload.id;
+      }
+
+      if (input.previewUrl) {
+        const previewUpload = await prisma.upload.create({ data: { userId: input.producerId, kind: "AUDIO", storageKey: `beats/previews/${Date.now()}`, fileName: "preview.mp3", mimeType: "audio/mpeg", sizeBytes: 0, publicUrl: input.previewUrl } });
+        previewUploadId = previewUpload.id;
       }
       
       if (input.artworkUrl) {
@@ -1314,11 +1320,21 @@ export async function createBeat(input: Omit<Beat, "id" | "createdAt" | "produce
           mood: input.mood,
           keySignature: input.keySignature ?? "Cm",
           priceCents: Math.round(input.price * 100),
+          generalPriceCents: Math.round((input.generalPrice ?? input.price) * 100),
+          exclusivePriceCents: Math.round((input.exclusivePrice ?? Math.max(input.price * 8, input.price + 100)) * 100),
+          description: input.description ?? "",
+          subgenre: input.subgenre ?? "",
+          tags: input.tags ?? undefined,
+          sampleDeclaration: input.sampleDeclaration ?? "NO_UNCONTROLLED_SAMPLES",
+          sampleDisclosure: input.sampleDisclosure ?? null,
+          sampleDeclaredAt: new Date(),
           enabled: input.enabled ?? true,
+          status: input.enabled ? "PUBLISHED" : "PENDING_REVIEW",
           audioUploadId,
+          previewUploadId,
           artworkUploadId
         },
-        include: { user: true, audio: true, artwork: true }
+        include: { user: true, audio: true, preview: true, artwork: true }
       });
       console.log("Prisma beat creation successful! Beat ID:", beat.id);
       return mapPrismaBeat(beat);
@@ -1355,7 +1371,7 @@ export async function createBeat(input: Omit<Beat, "id" | "createdAt" | "produce
   };
 }
 
-export async function updateBeat(id: number, input: Partial<Pick<Beat, "title" | "bpm" | "genre" | "mood" | "price" | "fileUrl" | "artworkUrl" | "enabled" | "keySignature">>) {
+export async function updateBeat(id: number, input: Partial<Pick<Beat, "title" | "bpm" | "genre" | "mood" | "price" | "generalPrice" | "exclusivePrice" | "description" | "subgenre" | "tags" | "sampleDeclaration" | "sampleDisclosure" | "fileUrl" | "artworkUrl" | "enabled" | "keySignature">>) {
   if (usesPostgresPrisma()) {
     try {
       const data: any = {};
@@ -1365,12 +1381,19 @@ export async function updateBeat(id: number, input: Partial<Pick<Beat, "title" |
       if (input.mood !== undefined) data.mood = input.mood;
       if (input.keySignature !== undefined) data.keySignature = input.keySignature;
       if (input.price !== undefined) data.priceCents = Math.round(input.price * 100);
+      if (input.generalPrice !== undefined) data.generalPriceCents = Math.round(input.generalPrice * 100);
+      if (input.exclusivePrice !== undefined) data.exclusivePriceCents = Math.round(input.exclusivePrice * 100);
+      if (input.description !== undefined) data.description = input.description;
+      if (input.subgenre !== undefined) data.subgenre = input.subgenre;
+      if (input.tags !== undefined) data.tags = input.tags;
+      if (input.sampleDeclaration !== undefined) { data.sampleDeclaration = input.sampleDeclaration; data.sampleDeclaredAt = new Date(); }
+      if (input.sampleDisclosure !== undefined) data.sampleDisclosure = input.sampleDisclosure;
       if (input.enabled !== undefined) data.enabled = input.enabled;
       
       const updated = await prisma.beat.update({
         where: { id },
         data,
-        include: { user: true, audio: true, artwork: true }
+        include: { user: true, audio: true, preview: true, artwork: true }
       });
       return mapPrismaBeat(updated);
     } catch (err) {
@@ -1507,9 +1530,26 @@ export async function updateReleaseStatus(releaseId: number, status: ReleaseStat
 export async function createOrder(input: Omit<Order, "id" | "createdAt" | "buyerName" | "buyerEmail">) {
   if (usesPostgresPrisma()) {
     return prisma.$transaction(async tx => {
+      await tx.beat.updateMany({ where: { status: "EXCLUSIVE_RESERVED", exclusiveReservationExpiresAt: { lt: new Date() } }, data: { status: "PUBLISHED", exclusiveReservedByUserId: null, exclusiveReservationOrderId: null, exclusiveReservationExpiresAt: null } });
       const beatIds = [...new Set(input.items.map(item => item.beatId))];
-      const beats = await tx.beat.findMany({ where: { id: { in: beatIds }, enabled: true }, select: { id: true } });
+      const beats = await tx.beat.findMany({ where: { id: { in: beatIds }, enabled: true }, select: { id: true, status: true, exclusiveReservationExpiresAt: true } });
       if (beats.length !== beatIds.length) throw new Error("One or more selected beats are unavailable.");
+      const now = new Date();
+      const reservationExpiresAt = new Date(now.getTime() + 15 * 60 * 1000);
+      for (const item of input.items) {
+        const beat = beats.find((entry) => entry.id === item.beatId);
+        if (!beat) throw new Error("One or more selected beats are unavailable.");
+        if (item.licenseType === "exclusive") {
+          const reserved = await tx.beat.updateMany({
+            where: { id: beat.id, enabled: true, OR: [{ status: "PUBLISHED" }, { status: "EXCLUSIVE_RESERVED", exclusiveReservationExpiresAt: { lt: now } }] },
+            data: { status: "EXCLUSIVE_RESERVED", exclusiveReservedByUserId: input.userId, exclusiveReservationOrderId: input.razorpayOrderId, exclusiveReservationExpiresAt: reservationExpiresAt }
+          });
+          if (reserved.count !== 1) throw new Error("This beat is no longer available for exclusive licensing.");
+          await tx.auditLog.create({ data: { actorId: input.userId, actorRole: "customer", action: "BEAT_EXCLUSIVE_RESERVED", entity: "beat", entityId: String(beat.id), newValue: { status: "EXCLUSIVE_RESERVED", expiresAt: reservationExpiresAt }, metadata: { razorpayOrderId: input.razorpayOrderId } } });
+        } else if (beat.status !== "PUBLISHED") {
+          throw new Error("This beat is temporarily unavailable for licensing.");
+        }
+      }
       const order = await tx.checkoutOrder.create({
         data: {
           userId: input.userId,
@@ -1755,7 +1795,7 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
     const qualification = await prisma.$transaction(async tx => {
       const order = await tx.checkoutOrder.findUnique({
         where: { razorpayOrderId },
-        include: { user: true, items: { include: { beat: { select: { id: true, userId: true, title: true } } } } }
+        include: { user: true, items: { include: { beat: true } } }
       });
       if (!order) throw new Error("Order not found.");
       const alreadyPaid = order.paymentStatus === "paid";
@@ -1792,19 +1832,57 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
         await tx.couponRedemption.create({ data: { couponId: coupon.id, userId: order.userId, orderId: order.id } });
       }
       for (const item of order.items) {
+        if (item.licenseType === "exclusive") {
+          const sold = await tx.beat.updateMany({ where: { id: item.beatId, status: "EXCLUSIVE_RESERVED", exclusiveReservationOrderId: razorpayOrderId }, data: { status: "EXCLUSIVELY_SOLD", enabled: false, exclusiveReservedByUserId: null, exclusiveReservationOrderId: null, exclusiveReservationExpiresAt: null } });
+          if (sold.count !== 1 && !alreadyPaid) throw new Error("Exclusive reservation is no longer valid; payment requires manual reconciliation.");
+          if (!alreadyPaid) await tx.auditLog.create({ data: { actorId: order.userId, actorRole: "customer", action: "BEAT_EXCLUSIVELY_SOLD", entity: "beat", entityId: String(item.beatId), newValue: { status: "EXCLUSIVELY_SOLD" }, metadata: { orderId: order.id, paymentId, priorGeneralLicenses: item.beat.generalLicensesSold } } });
+        } else if (!alreadyPaid) {
+          const available = await tx.beat.updateMany({ where: { id: item.beatId, status: "PUBLISHED", enabled: true }, data: { generalLicensesSold: { increment: 1 } } });
+          if (available.count !== 1) throw new Error("This beat became unavailable before payment completion.");
+        }
+      }
+      for (const item of order.items) {
+        const normalizedLicenseType = item.licenseType === "basic" || item.licenseType === "premium" ? "general" : item.licenseType;
+        const licenceSnapshot = normalizedLicenseType === "exclusive" ? {
+          version: "2026-08-26",
+          licenseType: "exclusive",
+          legalMode: item.beat.exclusiveLegalMode,
+          beat: { id: item.beat.id, title: item.beat.title },
+          buyer: { id: order.user.id, name: order.user.name, email: order.user.email },
+          producer: { id: item.beat.userId },
+          purchaseDate: new Date().toISOString(),
+          price: Number(item.price),
+          currency: order.currency,
+          existingGeneralLicenses: item.beat.generalLicensesSold,
+          rights: { commercialUse: true, exclusiveUse: true, copyrightAssigned: item.beat.exclusiveLegalMode === "RIGHTS_ASSIGNMENT" },
+          restrictions: { samplesSubjectToProducerDisclosure: true, priorGeneralLicensesRemainValid: true }
+        } : {
+          version: "2026-08-26",
+          licenseType: "general",
+          beat: { id: item.beat.id, title: item.beat.title },
+          buyer: { id: order.user.id, name: order.user.name, email: order.user.email },
+          producer: { id: item.beat.userId },
+          purchaseDate: new Date().toISOString(),
+          price: Number(item.price),
+          currency: order.currency,
+          rights: { commercialUse: true, maxCommercialReleases: item.beat.generalMaxCommercialReleases, streamingLimit: item.beat.generalStreamingLimit, videoLimit: item.beat.generalVideoLimit, performanceRights: item.beat.generalPerformanceRights, monetizationAllowed: item.beat.generalMonetizationAllowed, creditRequired: item.beat.generalCreditRequired, contentIdPolicy: item.beat.generalContentIdPolicy, territory: item.beat.generalTerritory, termDurationMonths: item.beat.generalTermDurationMonths },
+          restrictions: { nonExclusive: true, samplesSubjectToProducerDisclosure: true }
+        };
         await tx.beatPurchase.upsert({
           where: { checkoutOrderItemId: item.id },
-          create: { userId: order.userId, beatId: item.beatId, licenseType: item.licenseType, paymentId, checkoutOrderItemId: item.id, hasAccess: true },
+          create: { userId: order.userId, beatId: item.beatId, licenseType: normalizedLicenseType, paymentId, checkoutOrderItemId: item.id, hasAccess: true, licenseVersion: "2026-08-26", licenseTermsSnapshot: licenceSnapshot },
           update: { paymentId, hasAccess: true }
         });
         const existingSale = await tx.beatSale.findUnique({ where: { orderId_beatId_licenseType: { orderId: order.id, beatId: item.beatId, licenseType: item.licenseType } } });
         if (!existingSale) {
           const grossAmount = new Prisma.Decimal(item.price);
-          const hymnCommissionAmount = grossAmount.mul(PRODUCER_COMMISSION_CONFIG.hymnCommissionPercent).div(100).toDecimalPlaces(2);
-          const producerEarningAmount = grossAmount.sub(hymnCommissionAmount);
+          const netSaleAmount = Number(order.originalPrice) > 0 ? grossAmount.mul(order.finalAmount).div(order.originalPrice).toDecimalPlaces(2) : new Prisma.Decimal(0);
+          const discountAmount = grossAmount.sub(netSaleAmount);
+          const hymnCommissionAmount = netSaleAmount.mul(PRODUCER_COMMISSION_CONFIG.hymnCommissionPercent).div(100).toDecimalPlaces(2);
+          const producerEarningAmount = netSaleAmount.sub(hymnCommissionAmount);
           const latest = await tx.walletTransaction.findFirst({ where: { userId: item.beat.userId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
           const balanceAfter = new Prisma.Decimal(latest?.balanceAfter ?? 0).add(producerEarningAmount);
-          const sale = await tx.beatSale.create({ data: { beatId: item.beatId, producerUserId: item.beat.userId, buyerUserId: order.userId, orderId: order.id, paymentId, grossAmount, hymnCommissionAmount, producerEarningAmount, licenseType: item.licenseType, status: "paid" } });
+          const sale = await tx.beatSale.create({ data: { beatId: item.beatId, producerUserId: item.beat.userId, buyerUserId: order.userId, orderId: order.id, paymentId, grossAmount, discountAmount, netSaleAmount, hymnCommissionAmount, producerEarningAmount, producerRateApplied: PRODUCER_COMMISSION_CONFIG.producerSharePercent / 100, platformRateApplied: PRODUCER_COMMISSION_CONFIG.hymnCommissionPercent / 100, licenseType: normalizedLicenseType, status: "paid" } });
           await tx.walletTransaction.create({ data: { userId: item.beat.userId, type: "beat_sale_credit", amount: producerEarningAmount, referenceType: "beat_sale", referenceId: String(sale.id), idempotencyKey: `beat-sale:${sale.id}:producer-credit`, direction: "credit", balanceAfter, note: `${item.beat.title} sale producer share.` } });
           await tx.artistPayoutBalance.upsert({ where: { userId: item.beat.userId }, create: { userId: item.beat.userId, availableBalance: producerEarningAmount, lifetimeEarnings: producerEarningAmount }, update: { availableBalance: { increment: producerEarningAmount }, lifetimeEarnings: { increment: producerEarningAmount } } });
           await tx.notification.upsert({ where: { eventKey: `beat-sale:${sale.id}:producer-credit` }, create: { userId: item.beat.userId, title: "Beat sold", body: `Your beat “${item.beat.title}” was purchased and your producer share was credited.`, type: "beat", href: "/producer/dashboard?module=sales", actionLabel: "View sale", eventKey: `beat-sale:${sale.id}:producer-credit`, metadata: { saleId: sale.id, beatId: item.beatId, orderId: order.id } }, update: {} });
@@ -3137,15 +3215,13 @@ export async function removeTimedPlaylistTrack(trackId: number) {
 
 export async function getSubscriptionByUserId(userId: number) {
   if (usesPostgresPrisma()) {
-    const sub = await prisma.subscription.findUnique({
-      where: { userId }
-    });
+    const sub = await prisma.subscription.findUnique({ where: { userId }, include: { planVersion: true, payments: { orderBy: { createdAt: "desc" }, take: 50 } } });
     if (!sub) return null;
     
     const now = new Date();
-    const expiryDate = new Date(sub.expiryDate || sub.updatedAt);
+    const expiryDate = new Date(sub.currentPeriodEnd || sub.expiryDate || sub.updatedAt);
     const daysRemaining = Math.max(0, Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
-    const status = daysRemaining > 0 ? "active" : "expired";
+    const status = sub.razorpaySubscriptionId ? sub.status : (daysRemaining > 0 ? sub.status : "expired");
     
     return {
       id: sub.id,
@@ -3162,6 +3238,17 @@ export async function getSubscriptionByUserId(userId: number) {
       daysRemaining: daysRemaining,
       autoRenewal: sub.autoRenewal ?? true,
       nextRenewalDate: sub.nextRenewalDate?.toISOString() || undefined,
+      razorpaySubscriptionId: sub.razorpaySubscriptionId || undefined,
+      razorpayPlanId: sub.razorpayPlanId || undefined,
+      currentPeriodStart: sub.currentPeriodStart?.toISOString() || undefined,
+      currentPeriodEnd: sub.currentPeriodEnd?.toISOString() || undefined,
+      startedAt: sub.startedAt?.toISOString() || undefined,
+      cancelledAt: sub.cancelledAt?.toISOString() || undefined,
+      cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+      amount: sub.planVersion ? sub.planVersion.amount / 100 : undefined,
+      currency: sub.planVersion?.currency || "INR",
+      billingInterval: sub.planVersion?.billingInterval,
+      billingHistory: sub.payments.map((payment) => ({ id: payment.id, paymentId: payment.razorpayPaymentId, invoiceId: payment.razorpayInvoiceId, amount: payment.amount / 100, currency: payment.currency, status: payment.status, billingPeriodStart: payment.billingPeriodStart?.toISOString(), billingPeriodEnd: payment.billingPeriodEnd?.toISOString(), createdAt: payment.createdAt.toISOString() })),
       createdAt: sub.createdAt.toISOString(),
       updatedAt: sub.updatedAt.toISOString()
     };
@@ -3386,7 +3473,7 @@ export async function listArtistCardsByUser(userId: number) {
   return [];
 }
 
-export async function createBeatPurchase(userId: number, beatId: number, licenseType: "basic" | "premium" | "exclusive", paymentId?: string | null) {
+export async function createBeatPurchase(userId: number, beatId: number, licenseType: "general" | "basic" | "premium" | "exclusive", paymentId?: string | null) {
   if (usesPostgresPrisma()) {
     const existing = await prisma.beatPurchase.findFirst({ where: paymentId ? { userId, beatId, licenseType, paymentId } : { userId, beatId, licenseType, paymentId: null } });
     const purchase = existing
@@ -3518,8 +3605,29 @@ export function mapPrismaBeat(prismaBeat: any): Beat {
     bpm: prismaBeat.bpm,
     genre: prismaBeat.genre,
     mood: prismaBeat.mood,
+    keySignature: prismaBeat.keySignature,
     price: prismaBeat.priceCents / 100,
-    fileUrl: prismaBeat.audio?.publicUrl ?? "",
+    generalPrice: prismaBeat.generalPriceCents / 100,
+    exclusivePrice: prismaBeat.exclusivePriceCents / 100,
+    description: prismaBeat.description,
+    subgenre: prismaBeat.subgenre,
+    tags: Array.isArray(prismaBeat.tags) ? prismaBeat.tags : [],
+    sampleDeclaration: prismaBeat.sampleDeclaration,
+    sampleDisclosure: prismaBeat.sampleDisclosure,
+    generalMaxCommercialReleases: prismaBeat.generalMaxCommercialReleases,
+    generalStreamingLimit: prismaBeat.generalStreamingLimit,
+    generalVideoLimit: prismaBeat.generalVideoLimit,
+    generalPerformanceRights: prismaBeat.generalPerformanceRights,
+    generalMonetizationAllowed: prismaBeat.generalMonetizationAllowed,
+    generalCreditRequired: prismaBeat.generalCreditRequired,
+    generalContentIdPolicy: prismaBeat.generalContentIdPolicy,
+    generalTermDurationMonths: prismaBeat.generalTermDurationMonths,
+    generalTerritory: prismaBeat.generalTerritory,
+    exclusiveLegalMode: prismaBeat.exclusiveLegalMode,
+    generalLicensesSold: prismaBeat.generalLicensesSold,
+    exclusiveReservationExpiresAt: prismaBeat.exclusiveReservationExpiresAt?.toISOString() ?? null,
+    fileUrl: "",
+    previewUrl: prismaBeat.preview?.publicUrl ?? "",
     artworkUrl: prismaBeat.artwork?.publicUrl ?? undefined,
     enabled: prismaBeat.enabled,
     status: prismaBeat.status,

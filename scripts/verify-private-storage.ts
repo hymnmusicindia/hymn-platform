@@ -22,7 +22,7 @@ assert.equal(validatePrivateUpload({ ownerUserId: 1, assetType: "private_unrelea
 const releaseForm = readFileSync("components/release-form.tsx", "utf8");
 const clientUploadRoute = readFileSync("app/api/assets/client-upload/route.ts", "utf8");
 const privateStorage = readFileSync("lib/private-storage.ts", "utf8");
-assert(releaseForm.includes("uploadPresigned") && releaseForm.includes("access: 'private'"), "Release files must use private presigned Blob uploads.");
+assert(releaseForm.includes('request.open("POST", "/api/assets")') && releaseForm.includes('request.open("POST", "/api/assets/chunk")'), "Release files must use authenticated private Hostinger upload routes.");
 assert(!releaseForm.includes("access: 'public'"), "Release files must never be uploaded to public Blob storage.");
 assert(clientUploadRoute.includes("handleUploadPresigned") && clientUploadRoute.includes("issueSignedToken"), "Client upload authorization must support Vercel OIDC.");
 assert(privateStorage.includes("get(asset.objectKey, { access: \"private\"") && privateStorage.includes("Range: input.range"), "Private Blob downloads must use authenticated, range-aware SDK reads.");

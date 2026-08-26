@@ -39,8 +39,11 @@ export async function creditVerifiedBeatSale(input: {
         orderId: input.orderId,
         paymentId: input.paymentId,
         grossAmount,
+        netSaleAmount: grossAmount,
         hymnCommissionAmount,
         producerEarningAmount,
+        producerRateApplied: PRODUCER_COMMISSION_CONFIG.producerSharePercent / 100,
+        platformRateApplied: PRODUCER_COMMISSION_CONFIG.hymnCommissionPercent / 100,
         licenseType: input.licenseType,
         status: "paid"
       }

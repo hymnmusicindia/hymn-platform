@@ -71,6 +71,8 @@ export async function POST(request: Request) {
     const current = await getSubscriptionByUserId(userId);
     let subscription: unknown = null;
 
+    if (current?.razorpaySubscriptionId) return NextResponse.json({ error: "Provider-backed subscriptions must be changed through Razorpay lifecycle actions; local mutation is blocked." }, { status: 409 });
+
     if (action === "remove") {
       if (!usesPostgresPrisma()) {
         return NextResponse.json({ error: "Subscription removal requires the database-backed runtime." }, { status: 501 });

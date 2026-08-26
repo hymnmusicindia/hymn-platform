@@ -1,6 +1,7 @@
 import { countArtistProfilesByUser, getSubscriptionByUserId } from "@/lib/db";
 import { listPaidDistributionPlansByUser } from "@/lib/distribution-db";
 import { artistProfileLimitForPlan } from "@/lib/artist-profile-limits";
+import { subscriptionHasEntitlement } from "@/lib/subscription-billing";
 
 export type UserEntitlements = {
   plan: string | null;
@@ -20,7 +21,7 @@ export async function getUserEntitlements(userId: number): Promise<UserEntitleme
     listPaidDistributionPlansByUser(userId),
     countArtistProfilesByUser(userId)
   ]);
-  const activePlan = subscription?.status === "active" && Number(subscription.daysRemaining) > 0 ? subscription.plan : null;
+  const activePlan = subscriptionHasEntitlement(subscription) ? subscription!.plan : null;
   const plans = [activePlan, ...paidPlans].filter((plan): plan is string => Boolean(plan));
   const artistProfileLimit = Math.max(artistProfileLimitForPlan("basic"), ...plans.map(artistProfileLimitForPlan));
   const customLabelAllowed = plans.some((plan) => ["yearly_plus", "elite"].includes(plan));

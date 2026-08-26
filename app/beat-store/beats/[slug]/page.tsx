@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Gauge, KeyRound, ShieldCheck } from "lucide-react";
 import { BeatCard } from "@/components/beat-card";
 import { BeatLicenseComparison } from "@/components/beat-license-comparison";
+import { BeatLicenseChoices } from "@/components/beat-license-choices";
 import { findBeatByStoreSlug } from "@/lib/beat-store";
 import { listAllBeats, listProducerProfiles } from "@/lib/db";
 
@@ -40,7 +41,7 @@ export default async function BeatDetailPage({ params }: Props) {
         <p className="mt-4 max-w-xl leading-7 text-[var(--text-muted)]">{beat.shortHook}</p>
         <div className="mt-6 flex flex-wrap gap-2"><span className="rounded-full border border-[var(--border)] px-3 py-2 text-sm"><Gauge className="mr-2 inline h-4 w-4" />{beat.bpm} BPM</span><span className="rounded-full border border-[var(--border)] px-3 py-2 text-sm"><KeyRound className="mr-2 inline h-4 w-4" />{beat.keySignature}</span><span className="rounded-full border border-[var(--border)] px-3 py-2 text-sm">{beat.genre}</span><span className="rounded-full border border-[var(--border)] px-3 py-2 text-sm">{beat.mood}</span></div>
         <audio controls preload="none" src={beat.fileUrl} className="mt-7 w-full" aria-label={`Preview ${beat.title}`} />
-        <div className="mt-7 flex flex-wrap items-center gap-3"><Link href={`/beat-store?beat=${beat.id}#beat-catalog`} className="btn-primary inline-flex">License from ₹{beat.startingPrice.toLocaleString("en-IN")}</Link><a href="#compare-licenses" className="btn-outline inline-flex">Compare licenses</a></div>
+        <BeatLicenseChoices beat={beat} />
         <p className="mt-4 flex items-center gap-2 text-xs text-[var(--text-soft)]"><ShieldCheck className="h-4 w-4 text-emerald-500" /> Secure Razorpay checkout. License access appears only when delivery is ready.</p>
       </div>
     </section>

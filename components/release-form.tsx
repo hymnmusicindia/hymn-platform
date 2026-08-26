@@ -2613,18 +2613,35 @@ export function ReleaseForm({
       if (!RazorpayCheckout) throw new Error("Razorpay checkout is unavailable. Please refresh and try again.");
 
       await new Promise<void>((resolve, reject) => {
-        const razorpay = new RazorpayCheckout({
-          key: orderData.key,
-          amount: orderData.amount,
-          currency: orderData.currency,
-          order_id: orderData.orderId,
+          const razorpay = new RazorpayCheckout({
+            key: orderData.key,
+            amount: orderData.amount,
+            currency: orderData.currency,
+            ...(orderData.billingType === "subscription" ? { subscription_id: orderData.subscriptionId } : { order_id: orderData.orderId }),
           name: "HYMN Distribution",
           description: `Distribution checkout - Rs ${orderData.displayAmount}`,
           handler: async (response: {
             razorpay_payment_id: string;
             razorpay_signature: string;
+            razorpay_subscription_id?: string;
           }) => {
             try {
+              if (orderData.billingType === "subscription") {
+                let authorization: any = null;
+                for (let attempt = 0; attempt < 8; attempt += 1) {
+                  const authorizationResponse = await fetch("/api/subscriptions/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(response) });
+                  authorization = await authorizationResponse.json();
+                  if (!authorizationResponse.ok) throw new Error(authorization.error || "Subscription authorization failed.");
+                  if (authorization.active) break;
+                  await new Promise((wait) => window.setTimeout(wait, 1500));
+                }
+                if (!authorization?.active) throw new Error("Subscription authorised. Razorpay activation is still processing; your release data is retained, so submit again shortly.");
+                const data = await submitRelease("sub_active", response.razorpay_payment_id, "subscription:active");
+                setSubmittedRelease(data.release);
+                setUploadProgress(100);
+                resolve();
+                return;
+              }
               const data = await submitRelease(
                 orderData.orderId,
                 response.razorpay_payment_id,

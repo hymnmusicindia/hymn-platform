@@ -290,6 +290,7 @@ model Release {
   unmatchedRoyaltyRows        UnmatchedRoyaltyRow[]
   reconciliationDiscrepancies DireNoteReconciliationDiscrepancy[]
   promotionRedemptions        PromotionRedemption[]
+  subscriptionUsage           SubscriptionReleaseUsage?
   identifierHistory           ExternalIdentifierHistory[]
 
   @@index([ownerUserId, status])
@@ -668,6 +669,7 @@ model Upload {
   user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   release      Release?   @relation(fields: [releaseId], references: [id], onDelete: SetNull)
   audioBeats   Beat[]     @relation("BeatAudio")
+  previewBeats Beat[]     @relation("BeatPreview")
   artworkBeats Beat[]     @relation("BeatArtwork")
 
   @@index([userId, kind])
@@ -1307,26 +1309,83 @@ model EmailLog {
 }
 
 model Subscription {
-  id                Int       @id @default(autoincrement())
-  userId            Int       @unique @map("user_id")
-  plan              String
-  planName          String?   @map("plan_name")
-  expiryDate        DateTime  @map("expiry")
-  status            String    @default("active")
-  purchasedAt       DateTime  @default(now()) @map("purchased_at")
-  releasesUsed      Int       @default(0) @map("releases_used")
-  releaseLimit      Int?      @map("release_limit")
-  artistLimit       Int       @default(5) @map("artist_limit")
-  availableFeatures String    @default("[]") @map("available_features")
-  daysRemaining     Int       @default(0) @map("days_remaining")
-  autoRenewal       Boolean   @default(true) @map("auto_renewal")
-  nextRenewalDate   DateTime? @map("next_renewal_date")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                     Int                        @id @default(autoincrement())
+  userId                 Int                        @unique @map("user_id")
+  plan                   String
+  planName               String?                    @map("plan_name")
+  expiryDate             DateTime                   @map("expiry")
+  status                 String                     @default("active")
+  purchasedAt            DateTime                   @default(now()) @map("purchased_at")
+  releasesUsed           Int                        @default(0) @map("releases_used")
+  releaseLimit           Int?                       @map("release_limit")
+  artistLimit            Int                        @default(5) @map("artist_limit")
+  availableFeatures      String                     @default("[]") @map("available_features")
+  daysRemaining          Int                        @default(0) @map("days_remaining")
+  autoRenewal            Boolean                    @default(true) @map("auto_renewal")
+  nextRenewalDate        DateTime?                  @map("next_renewal_date")
+  planVersionId          Int?                       @map("plan_version_id")
+  razorpayPlanId         String?                    @map("razorpay_plan_id")
+  razorpaySubscriptionId String?                    @unique @map("razorpay_subscription_id")
+  currentPeriodStart     DateTime?                  @map("current_period_start")
+  currentPeriodEnd       DateTime?                  @map("current_period_end")
+  startedAt              DateTime?                  @map("started_at")
+  cancelledAt            DateTime?                  @map("cancelled_at")
+  cancelAtPeriodEnd      Boolean                    @default(false) @map("cancel_at_period_end")
+  providerSyncedAt       DateTime?                  @map("provider_synced_at")
+  createdAt              DateTime                   @default(now()) @map("created_at")
+  updatedAt              DateTime                   @updatedAt @map("updated_at")
+  user                   User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planVersion            SubscriptionPlanVersion?   @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
+  payments               SubscriptionPayment[]
+  releaseUsages          SubscriptionReleaseUsage[]
 
   @@index([status, expiryDate])
   @@map("subscriptions")
+}
+
+model SubscriptionPlanVersion {
+  id              Int            @id @default(autoincrement())
+  product         String
+  razorpayPlanId  String         @unique @map("razorpay_plan_id")
+  amount          Int
+  currency        String         @default("INR")
+  billingInterval String         @map("billing_interval")
+  active          Boolean        @default(true)
+  createdAt       DateTime       @default(now()) @map("created_at")
+  subscriptions   Subscription[]
+
+  @@index([product, active, createdAt])
+  @@map("subscription_plan_versions")
+}
+
+model SubscriptionPayment {
+  id                 Int          @id @default(autoincrement())
+  subscriptionId     Int          @map("subscription_id")
+  razorpayPaymentId  String       @unique @map("razorpay_payment_id")
+  razorpayInvoiceId  String?      @map("razorpay_invoice_id")
+  amount             Int
+  currency           String       @default("INR")
+  status             String
+  billingPeriodStart DateTime?    @map("billing_period_start")
+  billingPeriodEnd   DateTime?    @map("billing_period_end")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  subscription       Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  @@index([subscriptionId, createdAt])
+  @@index([razorpayInvoiceId])
+  @@map("subscription_payments")
+}
+
+model SubscriptionReleaseUsage {
+  id             Int          @id @default(autoincrement())
+  subscriptionId Int          @map("subscription_id")
+  releaseId      Int          @unique @map("release_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  release        Release      @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+
+  @@index([subscriptionId, createdAt])
+  @@map("subscription_release_usages")
 }
 
 model SupportTicket {
@@ -1580,25 +1639,49 @@ model ReferralVisit {
 }
 
 model Beat {
-  id              Int      @id @default(autoincrement())
-  userId          Int      @map("user_id")
-  title           String
-  bpm             Int
-  genre           String
-  mood            String
-  keySignature    String   @map("key_signature")
-  priceCents      Int      @map("price_cents")
-  audioUploadId   Int?     @map("audio_upload_id")
-  artworkUploadId Int?     @map("artwork_upload_id")
-  enabled         Boolean  @default(true)
-  status          String   @default("PENDING_REVIEW")
-  reviewIssues    Json?    @map("review_issues")
-  sortOrder       Int      @default(0) @map("sort_order")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id                            Int       @id @default(autoincrement())
+  userId                        Int       @map("user_id")
+  title                         String
+  bpm                           Int
+  genre                         String
+  mood                          String
+  keySignature                  String    @map("key_signature")
+  priceCents                    Int       @map("price_cents")
+  generalPriceCents             Int       @default(25000) @map("general_price_cents")
+  exclusivePriceCents           Int       @default(210000) @map("exclusive_price_cents")
+  description                   String    @default("")
+  subgenre                      String    @default("")
+  tags                          Json?
+  sampleDeclaration             String    @default("NO_UNCONTROLLED_SAMPLES") @map("sample_declaration")
+  sampleDisclosure              String?   @map("sample_disclosure")
+  sampleDeclaredAt              DateTime? @map("sample_declared_at")
+  generalMaxCommercialReleases  Int       @default(1) @map("general_max_commercial_releases")
+  generalStreamingLimit         Int?      @map("general_streaming_limit")
+  generalVideoLimit             Int?      @map("general_video_limit")
+  generalPerformanceRights      Boolean   @default(true) @map("general_performance_rights")
+  generalMonetizationAllowed    Boolean   @default(true) @map("general_monetization_allowed")
+  generalCreditRequired         Boolean   @default(true) @map("general_credit_required")
+  generalContentIdPolicy        String    @default("NOT_ALLOWED") @map("general_content_id_policy")
+  generalTermDurationMonths     Int?      @map("general_term_duration_months")
+  generalTerritory              String    @default("Worldwide") @map("general_territory")
+  exclusiveLegalMode            String    @default("EXCLUSIVE_LICENSE") @map("exclusive_legal_mode")
+  generalLicensesSold           Int       @default(0) @map("general_licenses_sold")
+  exclusiveReservedByUserId     Int?      @map("exclusive_reserved_by_user_id")
+  exclusiveReservationOrderId   String?   @map("exclusive_reservation_order_id")
+  exclusiveReservationExpiresAt DateTime? @map("exclusive_reservation_expires_at")
+  audioUploadId                 Int?      @map("audio_upload_id")
+  previewUploadId               Int?      @map("preview_upload_id")
+  artworkUploadId               Int?      @map("artwork_upload_id")
+  enabled                       Boolean   @default(true)
+  status                        String    @default("PENDING_REVIEW")
+  reviewIssues                  Json?     @map("review_issues")
+  sortOrder                     Int       @default(0) @map("sort_order")
+  createdAt                     DateTime  @default(now()) @map("created_at")
+  updatedAt                     DateTime  @updatedAt @map("updated_at")
 
   user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   audio            Upload?             @relation("BeatAudio", fields: [audioUploadId], references: [id])
+  preview          Upload?             @relation("BeatPreview", fields: [previewUploadId], references: [id])
   artwork          Upload?             @relation("BeatArtwork", fields: [artworkUploadId], references: [id])
   sales            BeatSale[]
   checkoutItems    CheckoutOrderItem[]
@@ -1607,6 +1690,8 @@ model Beat {
 
   @@index([userId, enabled])
   @@index([genre, mood])
+  @@index([status, enabled])
+  @@index([exclusiveReservationExpiresAt])
   @@map("beats")
 }
 
@@ -1646,8 +1731,13 @@ model BeatSale {
   orderId               Int      @map("order_id")
   paymentId             String   @map("payment_id")
   grossAmount           Decimal  @map("gross_amount") @db.Decimal(12, 2)
+  discountAmount        Decimal  @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  netSaleAmount         Decimal  @map("net_sale_amount") @db.Decimal(12, 2)
   hymnCommissionAmount  Decimal  @map("hymn_commission_amount") @db.Decimal(12, 2)
   producerEarningAmount Decimal  @map("producer_earning_amount") @db.Decimal(12, 2)
+  producerRateApplied   Decimal  @default(0.70) @map("producer_rate_applied") @db.Decimal(5, 4)
+  platformRateApplied   Decimal  @default(0.30) @map("platform_rate_applied") @db.Decimal(5, 4)
+  refundedAmount        Decimal  @default(0) @map("refunded_amount") @db.Decimal(12, 2)
   currency              String   @default("INR")
   licenseType           String   @map("license_type")
   status                String   @default("paid")
@@ -1757,31 +1847,33 @@ model DistributionOrder {
 }
 
 model PaymentWebhookEvent {
-  id                  Int                @id @default(autoincrement())
-  provider            String             @default("razorpay")
-  providerEventId     String?            @unique @map("provider_event_id")
-  eventType           String             @map("event_type")
-  payloadHash         String             @unique @map("payload_hash")
-  signatureValid      Boolean            @map("signature_valid")
-  processingState     String             @default("received") @map("processing_state")
-  attemptCount        Int                @default(0) @map("attempt_count")
-  distributionOrderId Int?               @map("distribution_order_id")
-  checkoutOrderId     Int?               @map("checkout_order_id")
-  razorpayOrderId     String?            @map("razorpay_order_id")
-  paymentId           String?            @map("payment_id")
-  amountMinor         Int?               @map("amount_minor")
-  currency            String?
-  errorCode           String?            @map("error_code")
-  errorMessage        String?            @map("error_message")
-  payloadRedacted     Json?              @map("payload_redacted")
-  receivedAt          DateTime           @default(now()) @map("received_at")
-  processedAt         DateTime?          @map("processed_at")
-  updatedAt           DateTime           @updatedAt @map("updated_at")
-  distributionOrder   DistributionOrder? @relation(fields: [distributionOrderId], references: [id], onDelete: SetNull)
-  checkoutOrder       CheckoutOrder?     @relation(fields: [checkoutOrderId], references: [id], onDelete: SetNull)
+  id                     Int                @id @default(autoincrement())
+  provider               String             @default("razorpay")
+  providerEventId        String?            @unique @map("provider_event_id")
+  eventType              String             @map("event_type")
+  payloadHash            String             @unique @map("payload_hash")
+  signatureValid         Boolean            @map("signature_valid")
+  processingState        String             @default("received") @map("processing_state")
+  attemptCount           Int                @default(0) @map("attempt_count")
+  distributionOrderId    Int?               @map("distribution_order_id")
+  checkoutOrderId        Int?               @map("checkout_order_id")
+  razorpayOrderId        String?            @map("razorpay_order_id")
+  razorpaySubscriptionId String?            @map("razorpay_subscription_id")
+  paymentId              String?            @map("payment_id")
+  amountMinor            Int?               @map("amount_minor")
+  currency               String?
+  errorCode              String?            @map("error_code")
+  errorMessage           String?            @map("error_message")
+  payloadRedacted        Json?              @map("payload_redacted")
+  receivedAt             DateTime           @default(now()) @map("received_at")
+  processedAt            DateTime?          @map("processed_at")
+  updatedAt              DateTime           @updatedAt @map("updated_at")
+  distributionOrder      DistributionOrder? @relation(fields: [distributionOrderId], references: [id], onDelete: SetNull)
+  checkoutOrder          CheckoutOrder?     @relation(fields: [checkoutOrderId], references: [id], onDelete: SetNull)
 
   @@index([processingState, receivedAt])
   @@index([razorpayOrderId])
+  @@index([razorpaySubscriptionId])
   @@index([checkoutOrderId])
   @@map("payment_webhook_events")
 }
@@ -1860,19 +1952,23 @@ model ExternalIdentifierHistory {
 }
 
 model BeatPurchase {
-  id                  Int       @id @default(autoincrement())
-  userId              Int       @map("user_id")
-  beatId              Int       @map("beat_id")
-  licenseType         String    @map("license_type")
-  purchasedAt         DateTime  @default(now()) @map("purchased_at")
-  licenseUploadedAt   DateTime? @map("license_uploaded_at")
-  licenseUrl          String?   @map("license_url")
-  releaseId           Int?      @unique @map("release_id")
-  paymentId           String?   @map("payment_id")
-  checkoutOrderItemId Int?      @unique @map("checkout_order_item_id")
-  hasAccess           Boolean   @default(true) @map("has_access")
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
+  id                   Int       @id @default(autoincrement())
+  userId               Int       @map("user_id")
+  beatId               Int       @map("beat_id")
+  licenseType          String    @map("license_type")
+  purchasedAt          DateTime  @default(now()) @map("purchased_at")
+  licenseUploadedAt    DateTime? @map("license_uploaded_at")
+  licenseUrl           String?   @map("license_url")
+  releaseId            Int?      @unique @map("release_id")
+  paymentId            String?   @map("payment_id")
+  checkoutOrderItemId  Int?      @unique @map("checkout_order_item_id")
+  hasAccess            Boolean   @default(true) @map("has_access")
+  licenseVersion       String?   @map("license_version")
+  licenseTermsSnapshot Json?     @map("license_terms_snapshot")
+  downloadedAt         DateTime? @map("downloaded_at")
+  downloadCount        Int       @default(0) @map("download_count")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
 
   user              User               @relation(fields: [userId], references: [id], onDelete: Restrict)
   beat              Beat               @relation(fields: [beatId], references: [id], onDelete: Restrict)

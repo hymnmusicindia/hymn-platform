@@ -11,10 +11,7 @@ export async function POST(request: Request) {
 
   try {
     const payload = paymentCreateSchema.parse(await request.json());
-    const checkoutItems = payload.items.map((item) => {
-      if (item.licenseType === "premium") throw new Error("Premium legacy licenses are no longer available for checkout.");
-      return { type: "beat" as const, beatId: item.beatId, licenseType: item.licenseType };
-    });
+    const checkoutItems = payload.items.map((item) => ({ type: "beat" as const, beatId: item.beatId, licenseType: item.licenseType }));
     const quote = await buildCheckoutQuote(session.sub, { items: checkoutItems, useReferralCredits: false });
     const amountPaise = Math.round(quote.finalAmount * 100);
 

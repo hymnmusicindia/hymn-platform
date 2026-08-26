@@ -10,7 +10,7 @@ import type { Beat, ProducerProfile } from "@/lib/types";
 import { BeatCard } from "@/components/beat-card";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 
-type LicenseChoice = "basic" | "exclusive";
+type LicenseChoice = "general" | "exclusive";
 
 type CartItem = {
   beatId: number;
@@ -27,8 +27,7 @@ function formatMoney(value: number) {
 }
 
 function licensePrice(beat: StorefrontBeat, licenseType: LicenseChoice) {
-  if (licenseType === 'basic') return beat.startingPrice;
-  return beatLicenseOptions.find((option) => option.key === licenseType)?.price ?? beat.startingPrice;
+  return licenseType === "general" ? beat.startingPrice : (beat.exclusivePrice ?? beatLicenseOptions.find((option) => option.key === licenseType)?.price ?? beat.startingPrice);
 }
 
 function toggleSelection(values: string[], value: string) {
@@ -153,7 +152,7 @@ function CartDrawer({
                   <p className="truncate text-sm font-semibold text-[var(--text)]">{beat.title}</p>
                   <p className="truncate text-xs text-[var(--text-soft)]">{beat.producer.name}</p>
                   <div className="mt-2 flex items-center gap-2 text-xs text-[var(--text-soft)]">
-                    <span className="rounded-full border border-[var(--border)] px-2 py-0.5">{item.licenseType === "basic" ? "Non-exclusive" : "Exclusive"}</span>
+                    <span className="rounded-full border border-[var(--border)] px-2 py-0.5">{item.licenseType === "general" ? "General Licence" : "Exclusive Licence"}</span>
                     <span>{formatMoney(item.price)}</span>
                   </div>
                 </div>
@@ -335,7 +334,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
       return;
     }
     try {
-      setCart(JSON.parse(raw));
+      setCart((JSON.parse(raw) as Array<{ beatId: number; licenseType: string; price?: number }>).filter((item) => item.licenseType === "general" || item.licenseType === "basic" || item.licenseType === "exclusive").map((item) => ({ beatId: item.beatId, licenseType: item.licenseType === "exclusive" ? "exclusive" : "general", price: Number(item.price ?? 0) })));
     } catch {
       setCart([]);
     } finally {
@@ -438,7 +437,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
     setPlayingBeatId(beat.id);
   };
 
-  const toggleCart = (beat: StorefrontBeat, licenseType: LicenseChoice = "basic") => {
+  const toggleCart = (beat: StorefrontBeat, licenseType: LicenseChoice = "general") => {
     const price = licensePrice(beat, licenseType);
     setCart((current) => {
       const exists = current.some((item) => item.beatId === beat.id && item.licenseType === licenseType);
@@ -719,7 +718,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
                   }}
                   onPlay={() => playPreview(beat)}
                   onAdd={() => toggleCart(beat)}
-                  inCart={cart.some((item) => item.beatId === beat.id && item.licenseType === "basic")}
+                  inCart={cart.some((item) => item.beatId === beat.id && item.licenseType === "general")}
                 />
               ))}
             </div>

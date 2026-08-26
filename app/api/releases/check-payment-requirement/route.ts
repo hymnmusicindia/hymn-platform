@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSubscriptionByUserId } from "@/lib/db";
 import { requireUser } from "@/lib/access";
+import { subscriptionHasEntitlement } from "@/lib/subscription-billing";
 
 export const runtime = "nodejs";
 
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
       });
     }
 
-    if (subscription.status !== "active") {
+    if (!subscriptionHasEntitlement(subscription)) {
       return NextResponse.json({
         requiresPayment: true,
         canSubmitWithoutPayment: false,
@@ -53,11 +54,11 @@ export async function GET(request: Request) {
       });
     }
 
-    if (subscription.daysRemaining <= 0) {
+    if (subscription.releaseLimit != null && subscription.releasesUsed >= subscription.releaseLimit) {
       return NextResponse.json({
         requiresPayment: true,
         canSubmitWithoutPayment: false,
-        reason: "Subscription has expired. Please renew."
+        reason: "Your subscription release allowance has been used."
       });
     }
 

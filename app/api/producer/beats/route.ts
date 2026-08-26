@@ -30,13 +30,19 @@ export async function POST(request: Request) {
     const mood = String(formData.get("mood") || "").trim();
     const keySignature = String(formData.get("keySignature") || "").trim();
     const price = Number(formData.get("price"));
+    const generalPrice = Number(formData.get("generalPrice") || price);
+    const exclusivePrice = Number(formData.get("exclusivePrice"));
     const file = formData.get("file");
+    const preview = formData.get("preview");
     const artwork = formData.get("artwork");
     const audioFormat = String(formData.get("audioFormat") || "").trim();
 
-    if (!title || !genre || !mood || !Number.isFinite(bpm) || !Number.isFinite(price) || !(file instanceof File)) {
+    const sampleDeclaration = String(formData.get("sampleDeclaration") || "");
+    const sampleDisclosure = String(formData.get("sampleDisclosure") || "").trim();
+    if (!title || !genre || !mood || !Number.isFinite(bpm) || bpm < 40 || bpm > 300 || !Number.isFinite(generalPrice) || !Number.isFinite(exclusivePrice) || exclusivePrice <= generalPrice || !(file instanceof File)) {
       return NextResponse.json({ error: "Missing required beat fields." }, { status: 400 });
     }
+    if (!['NO_UNCONTROLLED_SAMPLES', 'CONTAINS_UNCONTROLLED_SAMPLES'].includes(sampleDeclaration) || (sampleDeclaration === 'CONTAINS_UNCONTROLLED_SAMPLES' && !sampleDisclosure)) return NextResponse.json({ error: "Complete the sample declaration and disclosure." }, { status: 400 });
 
     if (audioFormat === "MP3" && !file.name.toLowerCase().endsWith(".mp3")) {
       return NextResponse.json({ error: "Invalid file format. MP3 expected." }, { status: 400 });
@@ -47,6 +53,7 @@ export async function POST(request: Request) {
 
     const privateAudio = await localPrivateStorage.upload({ ownerUserId: result.user.id, assetType: "private_beat_deliverable", fileName: file.name, mimeType: file.type, bytes: Buffer.from(await file.arrayBuffer()) });
     const fileUrl = privateAudio.downloadPath;
+    const previewUrl = preview instanceof File && preview.size ? await saveUploadedFile(preview, "beats/previews", "audio") : undefined;
     const artworkUrl = artwork instanceof File && artwork.size ? await saveUploadedFile(artwork, "beats/artwork", "image") : undefined;
 
     const beat = await createBeat({
@@ -57,13 +64,21 @@ export async function POST(request: Request) {
       mood,
       keySignature,
       price,
+      generalPrice,
+      exclusivePrice,
+      description: String(formData.get("description") || "").trim(),
+      subgenre: String(formData.get("subgenre") || "").trim(),
+      tags: String(formData.get("tags") || "").split(",").map((value) => value.trim()).filter(Boolean).slice(0, 20),
+      sampleDeclaration: sampleDeclaration as "NO_UNCONTROLLED_SAMPLES" | "CONTAINS_UNCONTROLLED_SAMPLES",
+      sampleDisclosure: sampleDisclosure || null,
       fileUrl,
+      previewUrl,
       artworkUrl,
       enabled: false
     });
     await prisma.storedAsset.update({ where: { id: privateAudio.id }, data: { beatId: beat.id } });
 
-    const readiness = validateBeatReadiness({ title, bpm, genre, mood, keySignature, price, audioUrl: fileUrl, artworkUrl });
+    const readiness = validateBeatReadiness({ title, bpm, genre, mood, keySignature, price, generalPrice, exclusivePrice, sampleDeclaration, sampleDisclosure, audioUrl: fileUrl, artworkUrl });
     await createAdminTaskOnce({ eventKey: `producer:${result.user.id}:beat:${beat.id}:review`, type: "Beat Awaiting Approval", priority: readiness.ready ? "normal" : "high", title: readiness.ready ? `Beat ready for review: ${title}` : `Beat needs corrections: ${title}`, body: readiness.ready ? "All required beat fields are present." : readiness.issues.map((issue) => issue.message).join(" "), href: `/admin?tab=beats&beatId=${beat.id}`, entityType: "beat", entityId: beat.id });
 
     return NextResponse.json({ beat, readiness, status: readiness.ready ? "pending_review" : "changes_requested" }, { status: 201 });

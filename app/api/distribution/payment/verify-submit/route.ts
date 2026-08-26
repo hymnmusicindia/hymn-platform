@@ -11,6 +11,7 @@ import { consumeRateLimit } from "@/lib/rate-limit";
 import { assertDireNoteAssetFormat } from "@/lib/distribution-asset-format";
 import { prisma } from "@/lib/prisma";
 import { calculateFirstReleasePrice, FIRST_RELEASE_PROMOTION_CODE, redeemFirstRelease, releaseFirstReleaseReservation, reserveFirstRelease, trackFirstReleaseEvent } from "@/lib/first-release-promotion";
+import { consumeSubscriptionRelease, subscriptionHasEntitlement } from "@/lib/subscription-billing";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -45,8 +46,9 @@ export async function POST(request: Request) {
       // Continue the normal submission flow
     } else if (parsed.razorpay_order_id === "sub_active") {
       const sub = await getSubscriptionByUserId(session.sub);
-      if (!sub || sub.plan === "one_time" || sub.status !== "active" || sub.daysRemaining <= 0) return NextResponse.json({ error: "No active subscription found." }, { status: 400 });
-      if (parsed.metadata.paymentModel !== "subscription" || parsed.metadata.plan !== sub.plan) return NextResponse.json({ error: "The submitted plan does not match your active subscription." }, { status: 400 });
+      if (!subscriptionHasEntitlement(sub)) return NextResponse.json({ error: "No active subscription entitlement found." }, { status: 400 });
+      if (sub!.releaseLimit != null && sub!.releasesUsed >= sub!.releaseLimit) return NextResponse.json({ error: "Your subscription release allowance has been used." }, { status: 409 });
+      if (parsed.metadata.paymentModel !== "subscription" || parsed.metadata.plan !== sub!.plan) return NextResponse.json({ error: "The submitted plan does not match your active subscription." }, { status: 400 });
     } else if (!isFirstReleaseOffer || Number(promotionOrder?.amount ?? 0) > 0) {
       const valid = verifyRazorpaySignature(parsed.razorpay_order_id, parsed.razorpay_payment_id, parsed.razorpay_signature);
       if (!valid) return NextResponse.json({ error: "Invalid Razorpay signature." }, { status: 400 });
@@ -157,6 +159,7 @@ export async function POST(request: Request) {
       }
       });
       if (!release?.id) throw new Error("Release submission did not create a release.");
+      if (parsed.razorpay_order_id === "sub_active") await consumeSubscriptionRelease(session.sub, release.id);
       if (promotionRedemption) {
         await redeemFirstRelease(promotionRedemption.id, release.id);
         await Promise.all([
