@@ -7,7 +7,7 @@
     "build": "prisma generate && next build",
     "vercel-build": "prisma generate && next build",
     "deploy:release": "prisma migrate deploy",
-    "start": "next start",
+    "start": "prisma migrate deploy && next start",
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
     "db:migrate:dev": "prisma migrate dev",
