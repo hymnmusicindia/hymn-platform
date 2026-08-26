@@ -542,6 +542,16 @@ export function YoutubeContentIdModal({
 
 export function SuccessState({ release, onReset, isResubmission = false, resetLabel = "Submit another release" }: { release: Release; onReset: () => void; isResubmission?: boolean; resetLabel?: string }) {
   const [openFaq, setOpenFaq] = useState(-1);
+  const pageRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    const frame = window.requestAnimationFrame(() => {
+      pageRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
   const releaseTitle = release.releaseTitle || release.trackName || "GULLAK SAMBHAL";
   const artistName = release.artistName || "HYMN Artist";
   const artworkUrl = release.artworkUrl || "/uploads/site/home-hero/380d946e-e499-4860-a0cd-2f19ba1b258b.png";
@@ -575,10 +585,10 @@ export function SuccessState({ release, onReset, isResubmission = false, resetLa
   ];
 
   return (
-    <section className="hymn-success-page relative isolate overflow-hidden rounded-[1.75rem] border px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
+    <section ref={pageRef} className="hymn-success-page relative isolate scroll-mt-3 overflow-hidden rounded-[1.75rem] border px-4 py-5 sm:px-6 sm:py-6 lg:px-8">
       <div className="relative z-10 mx-auto max-w-6xl">
         <div className="grid items-stretch gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.75fr)]">
-          <div className="hymn-success-surface hymn-success-enter flex h-full flex-col rounded-[1.4rem] border p-5 sm:p-7">
+          <div className="hymn-success-main hymn-success-surface hymn-success-enter flex h-full flex-col rounded-[1.4rem] border p-5 sm:p-7">
             <h1 className="hymn-success-heading max-w-3xl text-3xl font-semibold leading-tight tracking-[-0.035em] sm:text-4xl">{isResubmission ? "Your changes are back in review" : "Your release is under review"}</h1>
             <p className="hymn-success-muted mt-3 max-w-2xl text-sm leading-6 sm:text-base">
               {isResubmission ? "We’ve received your updates and returned this release to HYMN review. We’ll check the revised metadata, artwork, audio, and rights before moving it forward." : "We’ve received your release and it is now in HYMN review. We’ll verify the metadata, artwork, audio, and rights before moving it forward."}
@@ -626,9 +636,9 @@ export function SuccessState({ release, onReset, isResubmission = false, resetLa
             </div>
           </div>
 
-          <aside className="hymn-success-surface hymn-success-enter-delayed h-full rounded-[1.4rem] border p-4">
+          <aside className="hymn-success-summary hymn-success-surface hymn-success-enter-delayed h-full rounded-[1.4rem] border p-4">
             <div className="flex gap-4 lg:block">
-              <img src={artworkUrl} alt={`${releaseTitle} artwork`} loading="lazy" decoding="async" className="h-24 w-24 shrink-0 rounded-xl border object-cover lg:h-auto lg:w-full lg:aspect-square" style={{ borderColor: "var(--border)" }} />
+              <img src={artworkUrl} alt={`${releaseTitle} artwork`} loading="lazy" decoding="async" className="hymn-success-artwork h-24 w-24 shrink-0 rounded-xl border object-cover lg:h-auto lg:w-full lg:aspect-square" style={{ borderColor: "var(--border)" }} />
               <div className="hymn-release-summary-copy min-w-0 lg:mt-5">
                 <h2 className="hymn-success-heading truncate text-2xl font-semibold tracking-[-0.035em]">{releaseTitle}</h2>
                 <p className="hymn-success-muted mt-1.5 truncate text-sm">by <strong>{artistName}</strong></p>

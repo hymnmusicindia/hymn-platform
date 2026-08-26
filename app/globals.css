@@ -399,6 +399,77 @@ main {
   box-shadow: 0 18px 48px color-mix(in srgb, var(--text) 8%, transparent);
 }
 
+@media (min-width: 1024px) and (min-height: 700px) {
+  .hymn-success-page {
+    padding: 1rem 1.25rem;
+  }
+
+  .hymn-success-page > div > div:first-child {
+    gap: 1rem;
+  }
+
+  .hymn-success-main {
+    padding: 1.25rem 1.5rem;
+  }
+
+  .hymn-success-main > h1 {
+    font-size: 2rem;
+  }
+
+  .hymn-success-main > p {
+    margin-top: 0.5rem;
+    line-height: 1.45;
+  }
+
+  .hymn-success-main > .hymn-success-divider {
+    margin-top: 1rem;
+    padding-top: 0.9rem;
+  }
+
+  .hymn-success-main ol {
+    margin-top: 0.75rem;
+  }
+
+  .hymn-success-main ol p {
+    line-height: 1.35;
+  }
+
+  .hymn-review-details {
+    margin-block: 1rem;
+    padding: 0.8rem 1rem;
+  }
+
+  .hymn-review-detail-grid {
+    margin: 0.65rem 0 0.55rem;
+  }
+
+  .hymn-review-detail-grid > div {
+    padding-block: 0.55rem;
+  }
+
+  .hymn-success-summary {
+    padding: 0.8rem;
+  }
+
+  .hymn-success-artwork {
+    aspect-ratio: 1;
+    max-height: 17rem;
+    object-fit: cover;
+  }
+
+  .hymn-success-summary .hymn-release-summary-copy {
+    margin-top: 0.8rem;
+  }
+
+  .hymn-release-summary-meta {
+    margin-top: 0.8rem;
+  }
+
+  .hymn-release-summary-meta > div {
+    padding-block: 0.6rem;
+  }
+}
+
 .hymn-success-heading { color: var(--text); }
 .hymn-success-muted { color: var(--text-muted); }
 .hymn-success-soft { color: var(--text-soft); }
