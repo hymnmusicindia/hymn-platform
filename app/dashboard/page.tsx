@@ -3,7 +3,7 @@ import { CustomerDashboardShell } from "@/components/workspace-shells";
 import { getCurrentUserForPage } from "@/lib/access";
 import { listOrdersByUser, listReleasesByUser, getSubscriptionByUserId } from "@/lib/db";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams?: Promise<{ producerAccess?: string }> }) {
   const user = await getCurrentUserForPage();
 
   if (!user) {
@@ -19,7 +19,13 @@ export default async function DashboardPage() {
 
   return (
     <main className="customer-panel-shell py-6 sm:py-8">
-      <CustomerDashboardShell user={user} releases={releases} orders={orders} subscription={subscription} />
+      <CustomerDashboardShell
+        user={user}
+        releases={releases}
+        orders={orders}
+        subscription={subscription}
+        producerAccessDisabled={(await searchParams)?.producerAccess === "disabled"}
+      />
     </main>
   );
 }

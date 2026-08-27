@@ -142,7 +142,7 @@ function ProducerProfileWorkspace({ user, profile, onSubmit, pending, feedback }
   return <div className="grid gap-6 xl:grid-cols-[0.75fr,1.25fr]"><Panel title="Producer identity" description="This profile powers your public identity across the HYMN Beat Store."><div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{profile?.coverPhotoUrl ? <img src={profile.coverPhotoUrl} alt="Producer cover" className="aspect-[16/7] w-full object-cover" /> : <div className="flex aspect-[16/7] items-center justify-center text-sm" style={{ color: "var(--text-muted)" }}>Add a cover photo</div>}<div className="p-5"><h3 className="text-2xl font-semibold">{profile?.displayName || user.name}</h3><p className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }}>{profile?.bio || "Complete your producer profile before publishing beats."}</p><div className="mt-4"><StatusPill label={profile?.status || "pending setup"} active={profile?.status === "active"} /></div></div></div></Panel><Panel title="Edit producer profile" description="Display name is required. Images are validated and stored through HYMN uploads."><form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2"><label className="grid gap-2 text-sm">Display name<input name="displayName" required minLength={2} defaultValue={profile?.displayName || user.name} className="field" /></label><label className="grid gap-2 text-sm">Location<input name="location" defaultValue={profile?.location || ""} className="field" /></label><label className="grid gap-2 text-sm sm:col-span-2">Bio<textarea name="bio" defaultValue={profile?.bio || ""} className="field min-h-28" /></label><label className="grid gap-2 text-sm sm:col-span-2">Genre tags<input name="producerTags" defaultValue={Array.isArray(profile?.tags) ? profile.tags.join(", ") : profile?.specialty || ""} className="field" placeholder="Hip-Hop, Trap, R&B" /></label><label className="grid gap-2 text-sm">Cover photo<input name="coverPhoto" type="file" accept="image/jpeg,image/png,image/webp" className="field" /></label><label className="grid gap-2 text-sm">Profile image<input name="avatar" type="file" accept="image/jpeg,image/png,image/webp" className="field" /></label>{[["instagramUrl","Instagram"],["youtubeUrl","YouTube"],["spotifyUrl","Spotify"],["websiteUrl","Website"]].map(([name,label])=><label key={name} className="grid gap-2 text-sm">{label}<input name={name} type="url" defaultValue={profile?.[name] || ""} className="field" /></label>)}<button type="submit" disabled={pending} className="btn-primary pressable sm:col-span-2">{pending ? "Saving..." : "Save producer profile"}</button>{feedback ? <p className="text-sm sm:col-span-2" style={{ color: "var(--text-muted)" }}>{feedback}</p> : null}</form></Panel></div>;
 }
 
-export function CustomerDashboardShell({ user, releases, orders, subscription, analytics = [] }: { user: User; releases: Release[]; orders: Order[]; subscription?: any | null; analytics?: any[] }) {
+export function CustomerDashboardShell({ user, releases, orders, subscription, analytics = [], producerAccessDisabled = false }: { user: User; releases: Release[]; orders: Order[]; subscription?: any | null; analytics?: any[]; producerAccessDisabled?: boolean }) {
   const [activeTab, setActiveTab] = useState<"overview" | "releases" | "upload" | "analytics" | "earnings" | "promotions" | "collaborators" | "distribution" | "content-id" | "messages" | "support" | "settings" | "purchases" | "subscription" | "referral" | "account">("overview");
   const [dashboardSearch, setDashboardSearch] = useState("");
   const [releaseStatusFilter, setReleaseStatusFilter] = useState("all");
@@ -293,6 +293,11 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
     }
   }
 
+  async function switchProducerAccount() {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
+    window.location.assign("/login?role=producer&next=/producer/dashboard");
+  }
+
   async function submitSupportTicket(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -352,6 +357,15 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       }
       workspaceAction={user.role === "producer" ? <WorkspaceSwitcher current="customer" /> : undefined}
     >
+      {producerAccessDisabled ? (
+        <section role="alert" className="flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "color-mix(in srgb, var(--danger) 45%, var(--border))", background: "color-mix(in srgb, var(--danger-soft) 72%, var(--card))" }}>
+          <div>
+            <p className="font-semibold" style={{ color: "var(--text)" }}>This signed-in account does not have Producer access.</p>
+            <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Currently signed in as {user.email}. Sign in with the exact Google account that was granted the Producer role.</p>
+          </div>
+          <button type="button" onClick={switchProducerAccount} className="btn-primary pressable shrink-0">Switch Google account</button>
+        </section>
+      ) : null}
       {activeTab === "overview" ? <CustomerHome user={user} releases={releases} attention={actionItems.map(item => ({ title: item.title, detail: item.detail, cta: item.cta, href: `/dashboard?tab=${item.tab}` }))} earnings={payoutSummary} notifications={notifications} tickets={supportTickets} onEarnings={() => selectCustomerTab("earnings")} /> : null}
       {false && subscription && activeTab === "overview" ? (
         <section className="surface-card p-5 sm:p-6 mb-6">
