@@ -10,9 +10,9 @@ export const metadata: Metadata = {
   description:
     "HYMN full-stack platform for distribution, beats, services, payments, dashboard and admin operations.",
   icons: {
-    icon: "/assets/hymnlogowhite.png",
-    shortcut: "/assets/hymnlogowhite.png",
-    apple: "/assets/hymnlogowhite.png"
+    icon: [{ url: "/assets/hymn-favicon.png?v=2", type: "image/png", sizes: "1024x1024" }],
+    shortcut: "/assets/hymn-favicon.png?v=2",
+    apple: [{ url: "/assets/hymn-favicon.png?v=2", type: "image/png", sizes: "1024x1024" }]
   }
 };
 
