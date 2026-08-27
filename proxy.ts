@@ -6,8 +6,11 @@ const protectedRoutes: Array<{ prefix: string; roles: Role[] }> = [
   { prefix: "/dashboard/customer", roles: ["customer", "producer", "admin"] },
   { prefix: "/dashboard/releases", roles: ["customer", "producer", "admin"] },
   { prefix: "/dashboard", roles: ["customer", "producer", "admin"] },
-  { prefix: "/producer/dashboard", roles: ["producer", "admin"] },
-  { prefix: "/producer-dashboard", roles: ["producer", "admin"] },
+  // A user's role can be promoted while their signed session still contains the
+  // previous role. Let authenticated users reach the server page, which checks
+  // the current database role before rendering any producer data.
+  { prefix: "/producer/dashboard", roles: ["customer", "producer", "admin"] },
+  { prefix: "/producer-dashboard", roles: ["customer", "producer", "admin"] },
   { prefix: "/admin", roles: ["admin"] }
 ];
 
