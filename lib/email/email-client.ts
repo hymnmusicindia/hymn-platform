@@ -18,7 +18,7 @@ export function getEmailConfig() {
     enabled: emailConfigured,
     provider: "resend",
     from: process.env.EMAIL_FROM?.trim() || "HYMN Music <updates@hymnmusic.in>",
-    replyTo: process.env.EMAIL_REPLY_TO?.trim() || undefined,
+    replyTo: process.env.EMAIL_REPLY_TO?.trim() || "hello@hymnmusic.fun",
     appUrl: (process.env.APP_URL?.trim() || "http://localhost:3000").replace(/\/$/, "")
   };
 }
