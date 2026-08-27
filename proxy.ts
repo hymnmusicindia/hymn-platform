@@ -21,9 +21,12 @@ const protectedApis: Array<{ prefix: string; roles: Role[] }> = [
 
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/") || pathname === "/api/admin" || pathname.startsWith("/api/admin/");
   if (pathname.startsWith("/api/") && !pathname.startsWith("/api/webhooks/") && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
     const origin = request.headers.get("origin"); const fetchSite = request.headers.get("sec-fetch-site");
-    if ((origin && !trustedMutationOrigins(request).has(normalizeOrigin(origin))) || fetchSite === "cross-site") return NextResponse.json({ error: "Cross-site mutation rejected." }, { status: 403 });
+    const normalizedOrigin = origin ? normalizeOrigin(origin) : "";
+    const originTrusted = Boolean(normalizedOrigin && trustedMutationOrigins(request).has(normalizedOrigin));
+    if ((origin && !originTrusted) || (fetchSite === "cross-site" && !originTrusted)) return NextResponse.json({ error: "Cross-site mutation rejected." }, { status: 403 });
   }
   const rule = [...protectedApis, ...protectedRoutes].find((item) => pathname === item.prefix || pathname.startsWith(`${item.prefix}/`));
   if (!rule || pathname === "/admin/login" || pathname === "/api/admin/auth/login") return NextResponse.next();
@@ -38,7 +41,7 @@ export async function proxy(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
     const url = request.nextUrl.clone();
-    url.pathname = rule.roles.includes("admin") ? "/admin/login" : "/login";
+    url.pathname = isAdminRoute ? "/admin/login" : "/login";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
@@ -52,7 +55,7 @@ export async function proxy(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden." }, { status: 403 });
     }
     const url = request.nextUrl.clone();
-    if (rule.roles.includes("admin")) {
+    if (isAdminRoute) {
       url.pathname = "/admin/login";
       url.searchParams.set("next", pathname);
       return NextResponse.redirect(url);
@@ -67,6 +70,11 @@ export async function proxy(request: NextRequest) {
 
 function trustedMutationOrigins(request: NextRequest) {
   const origins = new Set<string>([normalizeOrigin(request.nextUrl.origin)]);
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || request.headers.get("host")?.trim();
+  const forwardedProtocol = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
+  const protocol = forwardedProtocol === "http" || forwardedProtocol === "https" ? forwardedProtocol : request.nextUrl.protocol.replace(":", "");
+  if (host && /^[a-z0-9.-]+(?::\d+)?$/i.test(host)) origins.add(normalizeOrigin(`${protocol}://${host}`));
   for (const value of [process.env.NEXT_PUBLIC_APP_URL, process.env.APP_URL, process.env.PUBLIC_SITE_URL]) {
     if (value?.trim()) origins.add(normalizeOrigin(value));
   }
