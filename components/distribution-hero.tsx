@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 
 type StoreLogo = {
@@ -81,7 +82,7 @@ export function DistributionHero() {
               <div className="marquee-row music-store-marquee items-center gap-10 px-6 py-4">
                 {marqueeItems.map((item, index) => (
                   <div key={`${item.name}-${index}`} className="inline-flex h-12 w-32 shrink-0 items-center justify-center" title={item.name}>
-                    <img src={item.src} alt={item.name} className={`distribution-store-logo ${item.className}`} loading="lazy" decoding="async" />
+                    <Image src={item.src} alt={item.name} width={144} height={48} className={`distribution-store-logo ${item.className}`} />
                   </div>
                 ))}
               </div>

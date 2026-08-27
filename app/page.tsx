@@ -3,24 +3,13 @@ import Link from "next/link";
 import {
   ArrowRight,
   BadgeCheck,
-  BarChart3,
-  Building2,
-  CalendarCheck2,
   Clapperboard,
-  Disc3,
   DollarSign,
   FileAudio,
   Globe2,
   Headphones,
   LineChart,
-  Megaphone,
-  Music2,
-  Play,
-  Radio,
-  ShieldCheck,
   Sparkles,
-  Users2,
-  Wand2
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { FloatingAssistant } from "@/components/floating-assistant";
@@ -102,14 +91,14 @@ export default async function HomePage() {
     <main className="overflow-hidden bg-background pb-20 text-foreground">
       <section className="relative -mt-[73px] min-h-[96vh] overflow-hidden pt-[73px]">
         <div className="absolute inset-0">
-          <Image src={images.hero.src} alt={images.hero.alt} fill priority sizes="100vw" className="scale-105 object-cover object-center opacity-52" />
+          <Image src={images.hero.src} alt={images.hero.alt} fill priority sizes="100vw" className="scale-105 object-cover object-center opacity-52" unoptimized />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_68%_32%,rgba(255,255,255,0.16),transparent_26%),linear-gradient(90deg,rgba(9,11,16,0.96)_0%,rgba(9,11,16,0.76)_46%,rgba(9,11,16,0.5)_100%)]" />
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(9,11,16,0.22)_0%,rgba(9,11,16,0.18)_46%,#090b10_100%)]" />
           <div className="absolute inset-0 opacity-35 [background-image:radial-gradient(circle_at_20%_30%,rgba(255,255,255,0.25)_0_1px,transparent_1px),radial-gradient(circle_at_80%_45%,rgba(255,255,255,0.34)_0_1px,transparent_1px)] [background-size:90px_90px,140px_140px] motion-safe:animate-[hymn-grid-float_22s_linear_infinite]" />
         </div>
 
-        <div className={`shell relative grid min-h-[calc(96vh-73px)] items-center gap-10 py-12 sm:py-14 ${session ? "" : "lg:grid-cols-[minmax(0,1fr)_minmax(330px,410px)] lg:gap-12"}`}>
-          <div className="max-w-4xl">
+        <div className={`shell relative grid min-h-[calc(96vh-73px)] min-w-0 grid-cols-[minmax(0,1fr)] items-center gap-10 py-12 sm:py-14 ${session ? "" : "lg:grid-cols-[minmax(0,1fr)_minmax(330px,410px)] lg:gap-12"}`}>
+          <div className="min-w-0 max-w-4xl">
             <h1 className="text-4xl font-semibold leading-[1.02] tracking-[-0.035em] text-white sm:text-5xl sm:leading-[0.96] lg:text-7xl xl:text-[5.8rem]">
               Where Artists Become Movements.
             </h1>
@@ -126,7 +115,7 @@ export default async function HomePage() {
                   <span className="flex shrink-0 -space-x-2.5" aria-hidden="true">
                     {googleAvatarUrls.map((src, index) => (
                       <span key={`${src}-${index}`} className="relative h-9 w-9 overflow-hidden rounded-full border-2 border-[#11141b] bg-[#1b1f28] sm:h-10 sm:w-10" style={{ zIndex: googleAvatarUrls.length - index }}>
-                        <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+                        <Image src={src} alt="" fill sizes="40px" className="object-cover" unoptimized />
                       </span>
                     ))}
                   </span>
@@ -141,7 +130,7 @@ export default async function HomePage() {
               </Link>
           </div>
           {!session ? (
-            <aside className="force-dark relative mx-auto w-full max-w-[410px] overflow-hidden rounded-[1.65rem] border border-white/15 bg-black/[0.12] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-lg sm:p-6 lg:p-7">
+            <aside className="force-dark relative mx-auto min-w-0 w-full max-w-[410px] overflow-hidden rounded-[1.65rem] border border-white/15 bg-black/[0.12] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-lg sm:p-6 lg:p-7">
               <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(255,255,255,0.1),transparent_38%),linear-gradient(145deg,rgba(255,255,255,0.035),transparent_62%)]" />
               <div className="relative">
                 <h2 className="max-w-sm text-[clamp(2.15rem,3.2vw,3.35rem)] font-bold leading-[0.94] tracking-[-0.05em] text-white">
@@ -151,7 +140,7 @@ export default async function HomePage() {
                 </h2>
                 <div className="my-5 h-px bg-gradient-to-r from-white/20 via-white/8 to-transparent" />
                 <GoogleAuthButton label="Continue with Google" expectedRole="customer" appearance="quiet" className="w-full" />
-                <p className="mt-5 whitespace-nowrap text-center text-[8px] leading-5 tracking-tight text-white/45 sm:text-[10px]">
+                <p className="mt-5 text-center text-[8px] leading-5 tracking-tight text-white/45 sm:whitespace-nowrap sm:text-[10px]">
                   By continuing, you agree to our{" "}
                   <Link href="/terms-of-service" className="text-white/75 underline decoration-white/25 underline-offset-4 transition hover:text-white">Terms of Service</Link>
                   {" "}and{" "}
@@ -166,7 +155,7 @@ export default async function HomePage() {
       <section className="shell py-10 sm:py-14">
         <div className="rounded-[2rem] border border-border bg-surface/72 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.3)] backdrop-blur-2xl sm:p-7">
           <div className="flex justify-center py-2 text-center sm:py-4">
-            <h2 className="whitespace-nowrap text-[clamp(1.05rem,3vw,2.25rem)] font-bold leading-none tracking-[-0.04em] text-[var(--text)]" style={{ fontFamily: '"Avenir Next", "Century Gothic", "Segoe UI Variable Display", "Segoe UI", sans-serif' }}>
+            <h2 className="text-balance text-[clamp(1.05rem,3vw,2.25rem)] font-bold leading-tight tracking-[-0.04em] text-[var(--text)] sm:whitespace-nowrap sm:leading-none" style={{ fontFamily: '"Avenir Next", "Century Gothic", "Segoe UI Variable Display", "Segoe UI", sans-serif' }}>
               Connected To The Global Music Ecosystem
             </h2>
           </div>
@@ -179,7 +168,7 @@ export default async function HomePage() {
             <div className="marquee-row music-store-marquee items-center gap-12 px-8 py-5 sm:gap-16">
               {storeLogoMarquee.map((item, index) => (
                 <div key={`${item.name}-${index}`} className="inline-flex h-12 w-36 shrink-0 items-center justify-center" title={item.name}>
-                  <img src={item.src} alt={item.name} className={`distribution-store-logo ${item.className}`} loading="lazy" decoding="async" />
+                  <Image src={item.src} alt={item.name} width={144} height={48} className={`distribution-store-logo ${item.className}`} />
                 </div>
               ))}
             </div>
@@ -189,7 +178,7 @@ export default async function HomePage() {
 
       <section id="label" className="relative py-16 sm:py-24">
         <div className="absolute inset-0">
-          <Image src={images.crowd.src} alt={images.crowd.alt} fill sizes="100vw" className="object-cover opacity-24" />
+          <Image src={images.crowd.src} alt={images.crowd.alt} fill sizes="100vw" className="object-cover opacity-24" unoptimized />
           <div className="absolute inset-0 bg-[linear-gradient(90deg,#090b10_0%,rgba(9,11,16,0.88)_48%,#090b10_100%)]" />
         </div>
         <div className="shell relative grid gap-10 lg:grid-cols-[1.05fr,0.95fr] lg:items-center">
@@ -279,7 +268,7 @@ export default async function HomePage() {
       <section className="shell py-10 sm:py-16">
         <div className="relative overflow-hidden rounded-[1.75rem] border border-border bg-surface p-6 shadow-[0_34px_130px_rgba(0,0,0,0.42)] sm:rounded-[2.5rem] sm:p-10 lg:p-14">
           <div className="absolute inset-0">
-            <Image src={images.backstage.src} alt={images.backstage.alt} fill sizes="100vw" className="object-cover opacity-18" />
+            <Image src={images.backstage.src} alt={images.backstage.alt} fill sizes="100vw" className="object-cover opacity-18" unoptimized />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_20%,rgba(255,255,255,0.16),transparent_28%),linear-gradient(90deg,#12151d_0%,rgba(18,21,29,0.88)_52%,rgba(18,21,29,0.68)_100%)]" />
           </div>
           <div className="relative max-w-3xl">

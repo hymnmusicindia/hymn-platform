@@ -6,7 +6,6 @@ import {
   BookmarkPlus,
   Check,
   CheckCircle2,
-  Clock3,
   Crown,
   Disc3,
   LoaderCircle,
@@ -19,7 +18,7 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import NextImage from "next/image";
 import { useRouter } from "next/navigation";
@@ -1094,7 +1093,6 @@ export function ReleaseForm({
   );
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [shakingField, setShakingField] = useState<string | null>(null);
-  const isEditing = Boolean(initialRelease);
   const isCorrectionResubmission = Boolean(initialRelease && ["changes_requested", "rejected"].includes(initialRelease.status) && initialRelease.paymentStatus === "paid");
   useEffect(() => () => {
     if (stepTransitionTimerRef.current != null) window.clearTimeout(stepTransitionTimerRef.current);
@@ -1120,7 +1118,7 @@ export function ReleaseForm({
           (releaseType === "ep" ? "Untitled EP" : "Untitled Album"),
     [release.releaseTitle, releaseType, tracks],
   );
-  async function ensureUploadDraft() {
+  const ensureUploadDraft = useCallback(async () => {
     if (draftReleaseId) return draftReleaseId;
     if (initialRelease?.id) return initialRelease.id;
     if (!draftCreationPromiseRef.current) {
@@ -1131,7 +1129,7 @@ export function ReleaseForm({
         .catch(error => { draftCreationRef.current = false; draftCreationPromiseRef.current = null; throw error; });
     }
     return draftCreationPromiseRef.current;
-  }
+  }, [displayedReleaseTitle, draftReleaseId, initialRelease]);
   const selectedReleaseDate =
     release.releaseTiming === "schedule_release"
       ? release.scheduledReleaseDate
@@ -1256,7 +1254,7 @@ export function ReleaseForm({
       contributorsValid(track.composers) &&
       contributorsValid(track.producers),
   );
-  const readinessItems = [
+  const readinessItems = useMemo(() => [
     {
       label: "Artwork Uploaded",
       shortLabel: "Artwork",
@@ -1288,7 +1286,7 @@ export function ReleaseForm({
         legalComplete &&
         Boolean(artworkFile || artworkPreview),
     },
-  ];
+  ], [artworkFile, artworkPreview, audioComplete, creditsComplete, legalComplete, metadataComplete]);
   const readinessScore = Math.round(
     (readinessItems.filter((item) => item.complete).length /
       readinessItems.length) *
@@ -1361,6 +1359,7 @@ export function ReleaseForm({
       knownProfiles,
       legal,
       platforms,
+      readinessItems,
       readinessScore,
       release,
       releaseType,
@@ -1400,7 +1399,7 @@ export function ReleaseForm({
       .catch(() => {
         draftCreationRef.current = false;
       });
-  }, [autosaveEligible, campaignAttribution, displayedReleaseTitle, draftReleaseId, firstReleaseOffer, initialRelease, router]);
+  }, [autosaveEligible, campaignAttribution, displayedReleaseTitle, draftReleaseId, ensureUploadDraft, firstReleaseOffer, initialRelease, router]);
 
   useEffect(() => {
     if (!autosaveEligible || !draftReleaseId || submitting || submittedRelease) return;

@@ -2,8 +2,9 @@
 
 import clsx from "clsx";
 import Link from "next/link";
+import Image from "next/image";
 import { AlertTriangle, ArrowRight, Check, ChevronDown, Clock3, Disc3, Globe2, Search, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { contributorRoles, legalGroups } from "@/lib/release-config";
 import type { Release } from "@/lib/types";
@@ -451,7 +452,7 @@ export function LegalConsentModal({
       if (area.scrollHeight <= area.clientHeight + 4) setReachedBottom(true);
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [open]);
+  }, [allAccepted, open]);
 
   function setAcknowledged(checked: boolean) {
     onChange(Object.fromEntries(legalGroups.flatMap((group) => group.items.map(([key]) => [key, checked]))));
@@ -647,7 +648,7 @@ export function SuccessState({ release, onReset, isResubmission = false, resetLa
 
           <aside className="hymn-success-summary hymn-success-surface hymn-success-enter-delayed h-full rounded-[1.4rem] border p-4">
             <div className="flex gap-4 lg:block">
-              <img src={artworkUrl} alt={`${releaseTitle} artwork`} loading="lazy" decoding="async" className="hymn-success-artwork h-24 w-24 shrink-0 rounded-xl border object-cover lg:h-auto lg:w-full lg:aspect-square" style={{ borderColor: "var(--border)" }} />
+              <Image src={artworkUrl} alt={`${releaseTitle} artwork`} width={480} height={480} className="hymn-success-artwork h-24 w-24 shrink-0 rounded-xl border object-cover lg:h-auto lg:w-full lg:aspect-square" style={{ borderColor: "var(--border)" }} unoptimized />
               <div className="hymn-release-summary-copy min-w-0 lg:mt-5">
                 <h2 className="hymn-success-heading truncate text-2xl font-semibold tracking-[-0.035em]">{releaseTitle}</h2>
                 <p className="hymn-success-muted mt-1.5 truncate text-sm">by <strong>{artistName}</strong></p>

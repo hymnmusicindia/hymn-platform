@@ -53,6 +53,10 @@ const nextConfig: NextConfig = {
       "node_modules/prisma/**/*",
       "node_modules/typescript/**/*",
       "public/uploads/**/*",
+      ".private-storage/**/*",
+      ".hymn-storage/**/*",
+      "Customer Assets/**/*",
+      "Temp Uploads/**/*",
 
       ".git/**/*",
       "node_modules/.prisma/client/libquery_engine-darwin-arm64.dylib.node",

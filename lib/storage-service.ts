@@ -17,8 +17,9 @@ export type AssetCategory = "RELEASE_COVER_ART" | "TRACK_AUDIO_MASTER" | "TRACK_
 
 export function storageRootPath() {
   const configured = process.env.HYMN_STORAGE_ROOT?.trim() || process.env.PRIVATE_STORAGE_ROOT?.trim();
-  if (process.env.NODE_ENV === "production" && !configured) throw new Error("HYMN_STORAGE_ROOT is required in production.");
-  return path.resolve(configured || path.join(/* turbopackIgnore: true */ process.cwd(), ".hymn-storage"));
+  if (configured) return path.resolve(/* turbopackIgnore: true */ configured);
+  if (process.env.NODE_ENV === "production") throw new Error("HYMN_STORAGE_ROOT is required in production.");
+  return path.resolve(".hymn-storage");
 }
 
 export function createSafeAssetFolderName(title: string, stableId: string) {

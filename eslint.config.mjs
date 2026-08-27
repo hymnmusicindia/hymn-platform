@@ -22,7 +22,6 @@ export default defineConfig([
     ".next/**",
     ".next-*/**",
     "node_modules/**",
-    "client-updates/**",
     "public/uploads/**",
     "next-env.d.ts"
   ])

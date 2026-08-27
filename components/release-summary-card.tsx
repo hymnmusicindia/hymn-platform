@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -90,12 +91,13 @@ export function ReleaseSummaryCard({
       <div className="relative aspect-square w-full rounded-[6px] bg-[var(--bg-soft)]">
         <div className="h-full w-full overflow-hidden rounded-[6px]">
         {release.artworkUrl ? (
-          <img
+          <Image
             src={release.artworkUrl}
             alt={`${title} artwork`}
-            loading="lazy"
-            decoding="async"
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.015]"
+            fill
+            sizes="(max-width: 640px) 46vw, (max-width: 1280px) 25vw, 240px"
+            className="object-cover transition duration-300 group-hover:scale-[1.015]"
+            unoptimized
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center" style={{ color: "var(--text-soft)" }}>
@@ -109,7 +111,7 @@ export function ReleaseSummaryCard({
           </button>
           {menuOpen ? <div role="menu" className="absolute right-0 top-11 z-30 w-48 overflow-hidden rounded-xl border border-white/10 bg-[#171a20]/95 p-1.5 text-sm text-white shadow-2xl backdrop-blur-xl">
             <button role="menuitem" type="button" disabled={busy !== null} onClick={duplicateRelease} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition hover:bg-white/10 disabled:opacity-50"><Copy className="h-4 w-4" />{busy === "duplicate" ? "Duplicating…" : "Duplicate release"}</button>
-            <button role="menuitem" type="button" aria-disabled={!canDelete} onClick={() => { setMenuOpen(false); canDelete ? setDeleteOpen(true) : setNotice({ text: "This release cannot be deleted after submission.", error: true }); }} className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition ${canDelete ? "text-red-400 hover:bg-red-500/10" : "cursor-not-allowed text-white/35"}`} title={canDelete ? undefined : "Only drafts can be deleted."}><Trash2 className="h-4 w-4" />Delete release</button>
+            <button role="menuitem" type="button" aria-disabled={!canDelete} onClick={() => { setMenuOpen(false); if (canDelete) setDeleteOpen(true); else setNotice({ text: "This release cannot be deleted after submission.", error: true }); }} className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition ${canDelete ? "text-red-400 hover:bg-red-500/10" : "cursor-not-allowed text-white/35"}`} title={canDelete ? undefined : "Only drafts can be deleted."}><Trash2 className="h-4 w-4" />Delete release</button>
           </div> : null}
         </div>
       </div>

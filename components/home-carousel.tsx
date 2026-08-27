@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from "react";
 import Link from "next/link";
-import clsx from "clsx";
 import { ChevronLeft, ChevronRight, SkipForward } from "lucide-react";
 
 export type HomeCarouselSlide = {

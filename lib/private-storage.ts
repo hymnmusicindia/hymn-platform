@@ -35,9 +35,9 @@ export function privateStorageRootPath() {
     return path.resolve("/tmp/.private-storage");
   }
   const configured = process.env.HYMN_STORAGE_ROOT?.trim() || process.env.PRIVATE_STORAGE_ROOT?.trim();
-  if (process.env.NODE_ENV === "production" && !configured) throw new Error("PRIVATE_STORAGE_ROOT is required for private assets in production.");
-  const root = path.resolve(configured || path.join(/* turbopackIgnore: true */ process.cwd(), ".private-storage"));
-  const publicRoot = path.resolve(/* turbopackIgnore: true */ process.cwd(), "public");
+  if (!configured && process.env.NODE_ENV === "production") throw new Error("PRIVATE_STORAGE_ROOT is required for private assets in production.");
+  const root = configured ? path.resolve(/* turbopackIgnore: true */ configured) : path.resolve(".private-storage");
+  const publicRoot = path.resolve("public");
   if (root === publicRoot || root.startsWith(`${publicRoot}${path.sep}`)) throw new Error("Private storage must not be inside the public directory.");
   return root;
 }
@@ -144,7 +144,7 @@ export const localPrivateStorage: PrivateStorageAdapter = {
         await localStorageProvider.write(objectKey, input.bytes);
       }
     }
-    const fullPath = path.resolve(privateStorageRootPath(), objectKey);
+    const fullPath = path.resolve(/* turbopackIgnore: true */ privateStorageRootPath(), objectKey);
     if (!fullPath.startsWith(`${privateStorageRootPath()}${path.sep}`)) throw new Error("Unsafe storage path.");
     if (!canonicalRelativePath) { await fs.mkdir(path.dirname(fullPath), { recursive: true }); await fs.writeFile(fullPath, input.bytes, { flag: "wx" }); }
     const asset = await prisma.storedAsset.create({ data: { ownerUserId: input.ownerUserId, releaseId: input.releaseId, beatPurchaseId: input.beatPurchaseId, beatId: input.beatId, assetType: input.assetType, storageProvider: canonicalRelativePath ? "LOCAL" : "private_local", storageRoot: canonicalRelativePath ? "HYMN_STORAGE_ROOT" : null, relativePath: canonicalRelativePath ? objectKey : null, storedFilename: canonicalRelativePath ? path.basename(objectKey) : null, category, entityType: input.releaseId ? "RELEASE" : input.beatId ? "BEAT" : null, entityId: String(input.releaseId || input.beatId || input.beatPurchaseId || input.ownerUserId), objectKey, originalFilename: input.fileName, safeFilename, mimeType: input.mimeType, byteSize: input.bytes.length, checksum, accessClassification: "private", retentionUntil: input.retentionUntil } }).catch(async error => {
@@ -167,7 +167,7 @@ export const localPrivateStorage: PrivateStorageAdapter = {
       const buf = Buffer.from(await new Response(blob.stream).arrayBuffer());
       return { bytes: buf, mimeType: asset.mimeType, fileName: asset.safeFilename, contentRange: blob.headers.get("content-range"), contentLength: blob.headers.get("content-length") };
     }
-    return { bytes: await fs.readFile(path.resolve(privateStorageRootPath(), asset.objectKey)), mimeType: asset.mimeType, fileName: asset.safeFilename };
+    return { bytes: await fs.readFile(path.resolve(/* turbopackIgnore: true */ privateStorageRootPath(), asset.objectKey)), mimeType: asset.mimeType, fileName: asset.safeFilename };
   },
   async delete(input) {
     const asset = await prisma.storedAsset.findUnique({ where: { id: input.assetId } });

@@ -65,7 +65,6 @@ const PLAYLIST_OPTIONS = [
     url: "https://open.spotify.com/playlist/6SMKwPUHU0T7HKiaz4Qcvv?si=87c364ebcade434d"
   }
 ];
-const DEFAULT_PLAYLISTS = PLAYLIST_OPTIONS.map((playlist) => playlist.name);
 const SPOTIFY_TRACK_PATTERN = /^https?:\/\/(?:open\.)?spotify\.com\/track\/[A-Za-z0-9]+(?:[/?#].*)?$/i;
 const SPOTIFY_TRACK_URI_PATTERN = /^spotify:track:[A-Za-z0-9]+$/i;
 
@@ -85,7 +84,7 @@ function isSpotifyTrackUrl(value: string) {
 
 function isSpotifyInputLike(value: string) {
   const trimmed = value.trim();
-  return /^https?:///i.test(trimmed) || /^spotify:/i.test(trimmed);
+  return /^https?:\/\//i.test(trimmed) || /^spotify:/i.test(trimmed);
 }
 
 function formatLocalDateTime(value?: string | null) {

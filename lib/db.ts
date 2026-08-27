@@ -37,6 +37,7 @@ import { createUniqueReferralCode, qualifyReferralInTransaction, registerReferra
 import { sampleBeats, sampleReleases } from "@/lib/site";
 import { searchSpotifyTracks } from "@/lib/spotify";
 import { PRODUCER_COMMISSION_CONFIG } from "@/lib/finance-config";
+import { resolveGoogleAccountRole } from "@/lib/auth-role";
 
 type MemoryState = {
   users: User[];
@@ -82,22 +83,6 @@ function assertNoProductionMemoryStore(feature: string) {
   if (process.env.NODE_ENV === "production") {
     console.warn(`${feature} requires a persistent database table; currently using fallback in-memory storage.`);
   }
-}
-
-function adminEmailSet() {
-  return new Set((process.env.ADMIN_GOOGLE_EMAILS ?? "")
-    .split(",")
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean));
-}
-
-function resolveGoogleRole(email: string, expectedRole?: AuthAccountRole, existingRole?: string | null): AuthAccountRole | "admin" {
-  if (adminEmailSet().has(email.trim().toLowerCase())) return "admin";
-  if (existingRole === "ADMIN" || existingRole === "admin") return "admin";
-  // The selected login surface is only a hint. Never let a normal customer
-  // login overwrite producer access that an administrator already granted.
-  if (existingRole === "PRODUCER" || existingRole === "producer") return "producer";
-  return expectedRole ?? "customer";
 }
 
 function toPrismaRole(role: UserRole) {
@@ -1133,7 +1118,7 @@ export async function upsertGoogleUser(input: Pick<User, "name" | "email" | "goo
     return prisma.$transaction(async tx => {
       const normalizedEmail = input.email.trim().toLowerCase();
       const existing = await tx.user.findFirst({ where: { OR: [{ googleId: input.googleId }, { email: { equals: normalizedEmail, mode: "insensitive" } }] } });
-      const role = resolveGoogleRole(normalizedEmail, input.expectedRole, existing?.role);
+      const role = resolveGoogleAccountRole(normalizedEmail, existing?.role);
       const permanentReferralCode = existing?.referralCode || await createUniqueReferralCode(tx, input.name);
       const user = existing
         ? await tx.user.update({ where: { id: existing.id }, data: { googleId: input.googleId, name: input.name.trim(), email: normalizedEmail, avatar: input.avatarUrl || existing.avatar, role: toPrismaRole(role) } })
@@ -1146,7 +1131,7 @@ export async function upsertGoogleUser(input: Pick<User, "name" | "email" | "goo
 
   const pool = getPool();
   const existing = await findUserByEmail(input.email);
-  const resolvedRole = resolveGoogleRole(input.email, input.expectedRole, existing?.role);
+  const resolvedRole = resolveGoogleAccountRole(input.email, existing?.role);
   const referrer = existing ? null : await resolveReferrer(input.referralCode);
   rejectSelfReferral(referrer, input.email);
 

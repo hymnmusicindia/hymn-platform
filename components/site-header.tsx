@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { AlertCircle, Bell, CheckCircle2, Disc3, HelpCircle, LayoutDashboard, LogOut, Menu, PackageCheck, ShieldCheck, ShoppingCart, UserRound, WalletCards, X } from "lucide-react";
 import clsx from "clsx";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { mainNav } from "@/lib/site";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { SessionPayload } from "@/lib/types";
@@ -90,7 +90,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
     return () => window.removeEventListener("mousedown", onPointerDown);
   }, [profileOpen]);
 
-  async function loadNotifications() {
+  const loadNotifications = useCallback(async () => {
     if (!isAuthenticated) return;
     if (markAllPendingRef.current || notificationMutationsRef.current.size > 0) return;
     setNotificationsLoading(true);
@@ -103,7 +103,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
     } finally {
       setNotificationsLoading(false);
     }
-  }
+  }, [isAuthenticated]);
 
   async function markNotificationRead(notificationId: number) {
     if (!isAuthenticated || notificationMutationsRef.current.has(notificationId)) return true;
@@ -180,12 +180,12 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, loadNotifications, notificationsOpen]);
 
   useEffect(() => {
     if (!notificationsOpen || !isAuthenticated) return;
     void loadNotifications();
-  }, [isAuthenticated, notificationsOpen]);
+  }, [isAuthenticated, loadNotifications, notificationsOpen]);
 
   useEffect(() => {
     if (!notificationsOpen) return;
@@ -408,10 +408,13 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
         >
           <span className="relative inline-flex h-10 w-10 shrink-0">
             <span className="inline-flex h-full w-full items-center justify-center overflow-hidden rounded-full border text-xs font-bold" style={{ borderColor: "var(--border-strong)", background: "var(--bg-soft)" }}>
-              <img
+              <Image
                 src={user.avatarUrl || fallbackAvatar}
                 alt={user.name}
-                className="h-full w-full object-cover"
+                fill
+                sizes="40px"
+                className="object-cover"
+                unoptimized
                 referrerPolicy="no-referrer"
                 onError={(event) => {
                   event.currentTarget.src = fallbackAvatar;

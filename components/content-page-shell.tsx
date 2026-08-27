@@ -10,7 +10,7 @@ export type ContentPageSection = {
 };
 
 export function ContentPageShell({
-  eyebrow: _eyebrow,
+  eyebrow,
   title,
   intro,
   lastUpdated,
@@ -31,6 +31,7 @@ export function ContentPageShell({
       <div className="mx-auto w-full max-w-[900px]">
         <header className="space-y-5">
           <div className="space-y-4">
+            <p className="eyebrow">{eyebrow}</p>
             <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl" style={{ color: "var(--text)" }}>
               {title}
             </h1>

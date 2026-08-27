@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { ReleasePortal } from "@/components/release-portal";
-import { destinationForRole, getCurrentUserForPage } from "@/lib/access";
+import { getCurrentUserForPage } from "@/lib/access";
 import { listDetailedReleasesByUser } from "@/lib/distribution-db";
 
 export default async function ReleasePortalPage({ searchParams }: { searchParams?: Promise<{ releaseId?: string; panel?: string; tab?: string; view?: string }> }) {

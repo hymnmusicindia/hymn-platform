@@ -13,6 +13,8 @@ import type { AdminPermissionKey } from "@/lib/access";
 import type { AdminStoreStatus, ArtistProfile, Beat, DistributionOrder, Notification, Order, PartnershipLead, ProducerApplication, ProducerProfile, Release, SiteSettings, StoreStatus, StoreStatusHistoryEntry, SupportTicket, User, UserRole } from "@/lib/types";
 
 type PersistedAdminTask = { id: number; type: string; priority: string; title: string; body: string; href: string; status: string; createdAt: string };
+const REVIEW_QUEUE_STATUSES = ["submitted", "in_queue", "under_review", "changes_requested", "approved", "failed"] as const;
+const CATALOG_STATUSES = ["sent", "sent_to_distributor", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered", "live"] as const;
 
 function formatMoney(amount: number) {
   return `Rs ${amount.toLocaleString("en-IN")}`;
@@ -597,11 +599,9 @@ export function AdminControlCenter({
     { label: "Failed payment events", count: initialDistributionOrders.filter((order) => order.paymentStatus === "failed").length, urgency: initialDistributionOrders.some((order) => order.paymentStatus === "failed") ? "Critical" : "Clear", oldest: oldestWaiting(initialDistributionOrders.filter((order) => order.paymentStatus === "failed").map((order) => order.createdAt)), tab: "payments" as AdminTab },
     { label: "Overdue support tickets", count: openSupportTickets, urgency: openSupportTickets ? "Attention" : "Clear", oldest: oldestWaiting(supportTickets.filter((ticket) => ["open", "in_progress"].includes(ticket.status)).map((ticket) => ticket.createdAt)), tab: "support" as AdminTab },
   ];
-  const reviewQueueStatuses = ["submitted", "in_queue", "under_review", "changes_requested", "approved", "failed"];
-  const catalogStatuses = ["sent", "sent_to_distributor", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered", "live"];
   const requestedSelectedRelease = releases.find((release) => release.id === selectedReleaseId) ?? null;
   const selectedRelease = activeTab === "distribution-queue"
-    ? (requestedSelectedRelease && reviewQueueStatuses.includes(requestedSelectedRelease.status) ? requestedSelectedRelease : releases.find((release) => reviewQueueStatuses.includes(release.status)) ?? null)
+    ? (requestedSelectedRelease && REVIEW_QUEUE_STATUSES.includes(requestedSelectedRelease.status as typeof REVIEW_QUEUE_STATUSES[number]) ? requestedSelectedRelease : releases.find((release) => REVIEW_QUEUE_STATUSES.includes(release.status as typeof REVIEW_QUEUE_STATUSES[number])) ?? null)
     : requestedSelectedRelease ?? releases[0] ?? null;
   const direNoteCooldownSeconds = selectedRelease
     ? Math.max(0, Math.ceil(((direNoteCooldowns[selectedRelease.id] ?? 0) - cooldownClock) / 1000))
@@ -610,10 +610,10 @@ export function AdminControlCenter({
   const queueReleases = useMemo(() => releases.filter((release) => {
     const query = queueSearch.trim().toLowerCase();
     const searchable = [release.releaseTitle, release.trackName, release.artistName, release.upcCode, release.ownerEmail, ...(release.tracks ?? []).map((track) => track.isrc)].filter(Boolean).join(" ").toLowerCase();
-    const belongsToModule = activeTab === "distribution-queue" ? reviewQueueStatuses.includes(release.status) : true;
+    const belongsToModule = activeTab === "distribution-queue" ? REVIEW_QUEUE_STATUSES.includes(release.status as typeof REVIEW_QUEUE_STATUSES[number]) : true;
     return belongsToModule && (!query || searchable.includes(query)) && (queueStatus === "all" || release.status === queueStatus) && (queueType === "all" || release.releaseType === queueType);
   }), [activeTab, queueSearch, queueStatus, queueType, releases]);
-  const catalogReleases = useMemo(() => releases.filter((release) => catalogStatuses.includes(release.status)), [releases]);
+  const catalogReleases = useMemo(() => releases.filter((release) => CATALOG_STATUSES.includes(release.status as typeof CATALOG_STATUSES[number])), [releases]);
   const selectedCatalogRelease = catalogReleases.find((release) => release.id === selectedReleaseId) ?? catalogReleases[0] ?? null;
   const today = new Date();
   const todayLabel = `${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][today.getUTCDay()]}, ${today.getUTCDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][today.getUTCMonth()]} ${today.getUTCFullYear()}`;

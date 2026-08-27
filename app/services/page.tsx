@@ -114,38 +114,6 @@ const playlistCovers = [
   }
 ] as const;
 
-function MarketingVisual() {
-  return (
-    <div className="relative min-h-[290px] overflow-hidden rounded-[1.75rem] border border-border bg-background/72 p-5">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_18%,rgba(255,255,255,0.12),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.045),transparent)]" />
-      <div className="relative grid gap-4 sm:grid-cols-[0.82fr,1fr]">
-        <div className="space-y-3">
-          {["Teaser", "Hook", "Behind The Song"].map((item, index) => (
-            <div key={item} className="rounded-[1.2rem] border border-border bg-card/78 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.22)] transition duration-500 group-hover/service:-translate-y-1" style={{ transitionDelay: `${index * 60}ms` }}>
-              <div className="aspect-[4/3] rounded-2xl bg-[var(--bg-soft)]" />
-              <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-soft)]">{item}</p>
-            </div>
-          ))}
-        </div>
-        <div className="flex flex-col justify-end rounded-[1.4rem] border border-border bg-card p-4 backdrop-blur-xl">
-          <div className="mt-8 flex h-40 items-end gap-3">
-            {[34, 48, 62, 78, 88].map((height, index) => (
-              <div key={height} className="flex flex-1 flex-col items-center gap-2">
-                <div className="w-full rounded-t-full bg-gradient-to-t from-white/16 to-[#f4f7fb] shadow-[0_0_22px_rgba(244,247,251,0.14)] transition-all duration-700 group-hover/service:opacity-100" style={{ height: `${height}%` }} />
-                <span className="text-[10px] text-[var(--text-soft)]">W{index + 1}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 flex items-center justify-between rounded-full border border-border bg-surface/82 px-3 py-2 text-xs text-[var(--text-soft)]">
-            <span>Engagement</span>
-            <span className="font-semibold text-[var(--text)] transition duration-500 group-hover/service:text-[#f5c16c]">+42%</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function PlaylistVisual() {
   return (
     <div className="relative min-h-[380px] overflow-hidden rounded-[1.75rem] border border-white/[0.07] bg-background p-5 lg:h-full">

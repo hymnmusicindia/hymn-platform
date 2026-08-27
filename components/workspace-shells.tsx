@@ -367,22 +367,6 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         </section>
       ) : null}
       {activeTab === "overview" ? <CustomerHome user={user} releases={releases} attention={actionItems.map(item => ({ title: item.title, detail: item.detail, cta: item.cta, href: `/dashboard?tab=${item.tab}` }))} earnings={payoutSummary} notifications={notifications} tickets={supportTickets} onEarnings={() => selectCustomerTab("earnings")} /> : null}
-      {false && subscription && activeTab === "overview" ? (
-        <section className="surface-card p-5 sm:p-6 mb-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h2 className="text-2xl font-semibold capitalize" style={{ color: "var(--text)" }}>{subscription.plan} Plan</h2>
-              <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-                Valid until: {formatDate(subscriptionExpiry)} | Releases used: {subscription.releasesUsed ?? 0} / {releaseLimit ?? "Unlimited"}
-              </p>
-            </div>
-            <Link href="/distribution" className="btn-primary pressable">
-              Release Music
-            </Link>
-          </div>
-        </section>
-      ) : null}
-
       {false && activeTab === "overview" ? (
         <div className="grid gap-6">
           <Panel title="Action centre" description="Items backed by your account, releases and HYMN notifications that need a decision or correction.">
