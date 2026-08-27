@@ -38,6 +38,7 @@ export function GoogleAuthButton({
   const [buttonError, setButtonError] = useState<string | null>(null);
   const initializedRef = useRef(false);
   const autoPromptedRef = useRef(false);
+  const googleButtonRef = useRef<HTMLDivElement>(null);
   const useLocalGoogleDemo = !GOOGLE_CLIENT_ID && process.env.NODE_ENV !== "production";
 
   const handleCredentialResponse = useCallback(
@@ -151,21 +152,39 @@ export function GoogleAuthButton({
     const accountsId = googleWindow.google?.accounts?.id;
     if (!accountsId) return;
 
-    accountsId.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      callback: handleCredentialResponse,
-      ux_mode: "popup",
-      itp_support: true,
-      context: "signin"
-    });
-    accountsId.disableAutoSelect();
+    const buttonHost = googleButtonRef.current;
+    if (!buttonHost) return;
+
+    try {
+      accountsId.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleCredentialResponse,
+        ux_mode: "popup",
+        itp_support: true,
+        context: "signin"
+      });
+      accountsId.disableAutoSelect();
+      buttonHost.replaceChildren();
+      accountsId.renderButton(buttonHost, {
+        type: "standard",
+        theme: "outline",
+        size: "large",
+        text: "continue_with",
+        shape: appearance === "quiet" ? "rectangular" : "pill",
+        logo_alignment: "left",
+        width: Math.max(240, Math.min(400, Math.floor(buttonHost.getBoundingClientRect().width || 320)))
+      });
+    } catch {
+      setButtonError("Google sign-in could not be initialized for this website origin.");
+      return;
+    }
 
     initializedRef.current = true;
     if (autoPrompt && !autoPromptedRef.current) {
       autoPromptedRef.current = true;
       accountsId.prompt();
     }
-  }, [autoPrompt, handleCredentialResponse, scriptReady]);
+  }, [appearance, autoPrompt, handleCredentialResponse, scriptReady]);
 
   const handleButtonClick = useCallback(() => {
     if (processing || typeof window === "undefined") return;
@@ -189,18 +208,7 @@ export function GoogleAuthButton({
       return;
     }
 
-    if (!scriptReady) return;
-
-    const googleWindow = window as Window & GoogleGlobal;
-    const accountsId = googleWindow.google?.accounts?.id;
-    if (!accountsId) {
-      setButtonError("Google authentication is still loading. Please try again in a moment.");
-      return;
-    }
-
-    setButtonError(null);
-    accountsId.prompt();
-  }, [expectedRole, handleCredentialResponse, loginContext, processing, scriptReady, useLocalGoogleDemo]);
+  }, [expectedRole, handleCredentialResponse, loginContext, processing, useLocalGoogleDemo]);
 
   const helperText = buttonError || scriptError || (useLocalGoogleDemo ? "Local Google demo mode is active. Add Google client IDs for the real popup." : null);
   const helperTone = buttonError || scriptError ? "error" : "info";
@@ -208,7 +216,13 @@ export function GoogleAuthButton({
 
   return (
     <div className="flex flex-col gap-3 text-center">
-      <button
+      {GOOGLE_CLIENT_ID && scriptReady && !scriptError ? (
+        <div
+          ref={googleButtonRef}
+          className={clsx("flex min-h-11 w-full items-center justify-center overflow-hidden", className)}
+          aria-label={label}
+        />
+      ) : <button
         type="button"
         className={clsx(
           "group relative inline-flex w-full items-center justify-center gap-3 overflow-hidden border text-sm font-semibold transition duration-300 focus:outline-none focus:ring-2 focus:ring-[#59dfe0]/45 focus:ring-offset-2 focus:ring-offset-transparent disabled:cursor-not-allowed disabled:opacity-70",
@@ -229,7 +243,7 @@ export function GoogleAuthButton({
           </svg>
         </span>
         <span className="relative">{processing ? "Signing in..." : label}</span>
-      </button>
+      </button>}
       {helperText ? (
         <p
           className={clsx(
@@ -266,8 +280,17 @@ type GoogleAccountsId = {
     itp_support?: boolean;
     context?: "signin" | "signup" | "use";
   }) => void;
-  prompt: () => void;
+  prompt: (callback?: (notification: unknown) => void) => void;
   disableAutoSelect: () => void;
+  renderButton: (parent: HTMLElement, options: {
+    type?: "standard" | "icon";
+    theme?: "outline" | "filled_blue" | "filled_black";
+    size?: "large" | "medium" | "small";
+    text?: "signin_with" | "signup_with" | "continue_with" | "signin";
+    shape?: "rectangular" | "pill" | "circle" | "square";
+    logo_alignment?: "left" | "center";
+    width?: number;
+  }) => void;
 };
 
 interface GoogleGlobal {

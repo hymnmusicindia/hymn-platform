@@ -30,6 +30,7 @@ export function getProductionReadinessIssues() {
     "ADMIN_JWT_SECRET",
     "NEXT_PUBLIC_APP_URL",
     "GOOGLE_CLIENT_ID",
+    "NEXT_PUBLIC_GOOGLE_CLIENT_ID",
     "RAZORPAY_KEY_ID",
     "RAZORPAY_KEY_SECRET",
     "RAZORPAY_WEBHOOK_SECRET",
@@ -39,6 +40,9 @@ export function getProductionReadinessIssues() {
     "PAYOUT_ENCRYPTION_KEY"
   ];
   const issues = required.filter((name) => !process.env[name]?.trim()).map((name) => `${name} is missing.`);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (appUrl && !/^https:\/\//i.test(appUrl)) issues.push("NEXT_PUBLIC_APP_URL must use HTTPS in production.");
+  if (process.env.GOOGLE_CLIENT_ID?.trim() && process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_ID.trim() !== process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID.trim()) issues.push("GOOGLE_CLIENT_ID and NEXT_PUBLIC_GOOGLE_CLIENT_ID must match.");
   if (process.env.ENABLE_MOCK_LOGIN === "true" || process.env.NEXT_PUBLIC_ENABLE_MOCK_LOGIN === "true") issues.push("Mock login must not be enabled in production.");
   if (process.env.VERCEL !== "1" && !process.env.PRIVATE_STORAGE_ROOT?.trim()) issues.push("PRIVATE_STORAGE_ROOT is missing; private asset features must remain disabled locally.");
   return issues;

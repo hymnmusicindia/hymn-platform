@@ -4,6 +4,9 @@ const client = process.env.GOOGLE_CLIENT_ID ? new OAuth2Client(process.env.GOOGL
 
 export async function verifyGoogleCredential(credential: string) {
   if (!client) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Google authentication is not configured on the server.");
+    }
     try {
       const decoded = JSON.parse(Buffer.from(credential, "base64url").toString("utf8"));
       return {
@@ -22,7 +25,7 @@ export async function verifyGoogleCredential(credential: string) {
     audience: process.env.GOOGLE_CLIENT_ID
   });
   const payload = ticket.getPayload();
-  if (!payload?.email || !payload.sub) throw new Error("Invalid Google account payload.");
+  if (!payload?.email || !payload.sub || payload.email_verified !== true) throw new Error("Google account email is not verified.");
 
   return {
     sub: payload.sub,
