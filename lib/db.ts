@@ -94,7 +94,10 @@ function adminEmailSet() {
 function resolveGoogleRole(email: string, expectedRole?: AuthAccountRole, existingRole?: string | null): AuthAccountRole | "admin" {
   if (adminEmailSet().has(email.trim().toLowerCase())) return "admin";
   if (existingRole === "ADMIN" || existingRole === "admin") return "admin";
-  return expectedRole ?? (existingRole === "PRODUCER" || existingRole === "producer" ? "producer" : "customer");
+  // The selected login surface is only a hint. Never let a normal customer
+  // login overwrite producer access that an administrator already granted.
+  if (existingRole === "PRODUCER" || existingRole === "producer") return "producer";
+  return expectedRole ?? "customer";
 }
 
 function toPrismaRole(role: UserRole) {
