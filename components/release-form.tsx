@@ -124,7 +124,8 @@ async function uploadPrivateAudio(file: File, options: { releaseId: number; trac
     }
   };
 
-  const workers = Array.from({ length: Math.min(3, total) }, async () => {
+  const concurrency = Math.max(1, Math.min(Number(created.config?.maxConcurrency || 3), total));
+  const workers = Array.from({ length: concurrency }, async () => {
     while (nextIndex < total) {
       const index = nextIndex++;
       await uploadChunk(index);
