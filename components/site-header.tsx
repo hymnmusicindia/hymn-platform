@@ -515,7 +515,11 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
             {isAuthenticated ? <ProfileMenu /> : null}
           </div>
 
-          {isAuthenticated ? <div className="lg:hidden"><NotificationBell /></div> : null}
+          <div className="flex items-center gap-0 lg:hidden">
+            {isAuthenticated ? <NotificationBell /> : null}
+            <ThemeToggle />
+            {isAuthenticated ? <ProfileMenu /> : null}
+          </div>
 
           <button
             type="button"
@@ -552,14 +556,10 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
                 {item.label}
               </Link>
             ))}
-            <ThemeToggle compact />
             {isAuthenticated ? (
-              <>
-                <Link href={user?.role === "producer" ? "/producer/dashboard" : "/dashboard"} className="w-full rounded-full border px-4 py-3 text-center text-sm font-semibold" style={{ borderColor: "rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.06)", color: "var(--text)" }} onClick={() => setOpen(false)}>
-                  Dashboard
-                </Link>
-                <ProfileMenu mobile />
-              </>
+              <Link href={user?.role === "producer" ? "/producer/dashboard" : "/dashboard"} className="w-full rounded-full border px-4 py-3 text-center text-sm font-semibold" style={{ borderColor: "rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.06)", color: "var(--text)" }} onClick={() => setOpen(false)}>
+                Dashboard
+              </Link>
             ) : (
               <Link href="/login" className="site-header-cta w-full rounded-full border px-4 py-3 text-center text-sm font-semibold" style={{ borderColor: "color-mix(in srgb, var(--accent) 42%, var(--border))", background: "linear-gradient(180deg, var(--accent-strong), var(--accent))", color: "var(--accent-foreground)" }} onClick={() => setOpen(false)}>
                 Login
