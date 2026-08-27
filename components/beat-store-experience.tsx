@@ -240,7 +240,6 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const [touchMode, setTouchMode] = useState(false);
   const [hoveredBeatId, setHoveredBeatId] = useState<number | null>(null);
-  const [revealedBeatId, setRevealedBeatId] = useState<number | null>(null);
   const [playingBeatId, setPlayingBeatId] = useState<number | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -697,10 +696,9 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
                   beat={beat}
                   touchMode={touchMode}
                   active={playingBeatId === beat.id}
-                  hovered={hoveredBeatId === beat.id || revealedBeatId === beat.id}
+                  hovered={hoveredBeatId === beat.id}
                   onHover={() => {
                     setHoveredBeatId(beat.id);
-                    setRevealedBeatId(null);
                     playPreview(beat);
                   }}
                   onLeave={() => {
@@ -709,16 +707,10 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
                       stopPreview();
                     }
                   }}
-                  onReveal={() => {
-                    if (revealedBeatId !== beat.id) {
-                      setRevealedBeatId(beat.id);
-                      return;
-                    }
-                    playPreview(beat);
-                  }}
                   onPlay={() => playPreview(beat)}
-                  onAdd={() => toggleCart(beat)}
-                  inCart={cart.some((item) => item.beatId === beat.id && item.licenseType === "general")}
+                  onAdd={(licenseType) => toggleCart(beat, licenseType)}
+                  generalInCart={cart.some((item) => item.beatId === beat.id && item.licenseType === "general")}
+                  exclusiveInCart={cart.some((item) => item.beatId === beat.id && item.licenseType === "exclusive")}
                 />
               ))}
             </div>

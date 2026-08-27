@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Check, Pause, Play, ShoppingCart, Disc3 } from "lucide-react";
+import { Check, Pause, Play, Disc3 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import type { Beat } from "@/lib/types";
 import { beatStoreSlug } from "@/lib/beat-store";
 
@@ -21,10 +22,10 @@ export function BeatCard({
   hovered = false,
   onHover,
   onLeave,
-  onReveal,
   onPlay,
   onAdd,
-  inCart = false
+  generalInCart = false,
+  exclusiveInCart = false
 }: {
   beat: ExtendedBeatCardData;
   touchMode?: boolean;
@@ -32,12 +33,14 @@ export function BeatCard({
   hovered?: boolean;
   onHover?: () => void;
   onLeave?: () => void;
-  onReveal?: () => void;
   onPlay?: () => void;
-  onAdd?: () => void;
-  inCart?: boolean;
+  onAdd?: (licenseType: "general" | "exclusive") => void;
+  generalInCart?: boolean;
+  exclusiveInCart?: boolean;
 }) {
+  const router = useRouter();
   const showOverlay = touchMode ? active : hovered;
+  const beatHref = `/beat-store/beats/${beatStoreSlug(beat)}`;
 
   // Fallbacks for standard beats missing storefront metadata
   const coverImage = beat.coverImage;
@@ -56,7 +59,16 @@ export function BeatCard({
       className="group relative w-full overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-[var(--card)] shadow-[0_18px_48px_rgba(0,0,0,0.12)] transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-[color-mix(in_srgb,var(--accent)_28%,var(--border))] hover:shadow-[0_28px_70px_rgba(0,0,0,0.2)]"
       onMouseEnter={touchMode ? undefined : onHover}
       onMouseLeave={touchMode ? undefined : onLeave}
-      onClick={touchMode ? onReveal : undefined}
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest("a,button")) return;
+        router.push(beatHref);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" && event.target === event.currentTarget) router.push(beatHref);
+      }}
+      role="link"
+      tabIndex={0}
+      aria-label={`View ${beat.title}`}
     >
       <div className="pointer-events-none absolute inset-x-8 top-0 z-20 h-px bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 transition duration-300 group-hover:opacity-60" />
       <div className="relative p-2.5 sm:p-3">
@@ -104,20 +116,6 @@ export function BeatCard({
                   Play
                 </button>
               )}
-              {onAdd && (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onAdd();
-                  }}
-                  className={`inline-flex h-9 sm:h-11 w-full sm:w-auto items-center justify-center rounded-full border px-4 sm:px-5 text-xs sm:text-sm font-semibold backdrop-blur-md transition hover:-translate-y-0.5 ${inCart ? "border-emerald-300/80 bg-emerald-400 text-black hover:bg-emerald-300" : "border-white/25 bg-black/25 text-white hover:border-white/45 hover:bg-black/40"}`}
-                  aria-pressed={inCart}
-                >
-                  {inCart ? <Check className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <ShoppingCart className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />}
-                  {inCart ? "Added" : "Add"}
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -134,7 +132,7 @@ export function BeatCard({
               </span>
             )}
             <h3 className="mt-1.5 line-clamp-1 text-base font-semibold leading-tight tracking-[-0.025em] text-[var(--text)] sm:text-xl">
-              <Link href={`/beat-store/beats/${beatStoreSlug(beat)}`} onClick={(event) => event.stopPropagation()} className="transition hover:text-[var(--accent)]">{beat.title}</Link>
+              <span className="transition group-hover:text-[var(--accent)]">{beat.title}</span>
             </h3>
           </div>
 
@@ -149,10 +147,13 @@ export function BeatCard({
 
           <p className="text-xs text-[var(--text-soft)]">{beat.bpm} BPM · {beat.keySignature || "Key not supplied"}</p>
           <div className="grid grid-cols-2 gap-2 border-t border-[var(--border)] pt-3 text-xs">
-            <div><p className="text-[9px] uppercase tracking-[0.12em] text-[var(--text-soft)]">General Licence</p><p className="mt-1 font-semibold">{formatMoney(beat.generalPrice ?? beat.price ?? 0)}</p></div>
-            <div><p className="text-[9px] uppercase tracking-[0.12em] text-[var(--text-soft)]">Exclusive Licence</p><p className="mt-1 font-semibold">{formatMoney(beat.exclusivePrice ?? 0)}</p></div>
+            <button type="button" onClick={(event) => { event.stopPropagation(); onAdd?.("general"); }} disabled={!onAdd} aria-pressed={generalInCart} className={`rounded-xl p-2 text-left transition disabled:cursor-default ${generalInCart ? "bg-[var(--accent-soft)] ring-1 ring-[var(--accent)]" : "hover:bg-[var(--bg-soft)]"}`}>
+              <p className="flex items-center gap-1 text-[9px] uppercase tracking-[0.12em] text-[var(--text-soft)]">General Licence {generalInCart ? <Check className="h-3 w-3 text-[var(--accent)]" /> : null}</p><p className="mt-1 font-semibold">{formatMoney(beat.generalPrice ?? beat.price ?? 0)}</p>
+            </button>
+            <button type="button" onClick={(event) => { event.stopPropagation(); onAdd?.("exclusive"); }} disabled={!onAdd || exclusiveRemaining === 0} aria-pressed={exclusiveInCart} className={`rounded-xl p-2 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${exclusiveInCart ? "bg-[var(--accent-soft)] ring-1 ring-[var(--accent)]" : "hover:bg-[var(--bg-soft)]"}`}>
+              <p className="flex items-center gap-1 text-[9px] uppercase tracking-[0.12em] text-[var(--text-soft)]">Exclusive Licence {exclusiveInCart ? <Check className="h-3 w-3 text-[var(--accent)]" /> : null}</p><p className="mt-1 font-semibold">{formatMoney(beat.exclusivePrice ?? 0)}</p>
+            </button>
           </div>
-          <Link href={`/beat-store/beats/${beatStoreSlug(beat)}`} onClick={(event) => event.stopPropagation()} className="btn-outline flex w-full justify-center text-xs">View Beat</Link>
         </div>
       </div>
     </article>
