@@ -445,7 +445,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
         return current.filter((item) => !(item.beatId === beat.id && item.licenseType === licenseType));
       }
       setCartNotice({ beatTitle: beat.title, action: "added" });
-      return [...current, { beatId: beat.id, licenseType, price }];
+      return [...current.filter((item) => item.beatId !== beat.id), { beatId: beat.id, licenseType, price }];
     });
   };
 

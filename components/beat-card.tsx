@@ -120,7 +120,7 @@ export function BeatCard({
           </div>
         </div>
 
-        <div className="space-y-3.5 px-1.5 pb-1 pt-4 sm:px-2">
+        <div className="space-y-3 px-1.5 pb-1 pt-4 sm:px-2">
           <div>
             {producerSlug !== "#" ? (
               <Link href={`/beat-store/producers/${producerSlug}`} className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--text-soft)] transition hover:text-[var(--accent)]">
@@ -131,28 +131,38 @@ export function BeatCard({
                 {producerName}
               </span>
             )}
-            <h3 className="mt-1.5 line-clamp-1 text-base font-semibold leading-tight tracking-[-0.025em] text-[var(--text)] sm:text-xl">
+            <h3 className="mt-2 line-clamp-1 text-lg font-semibold leading-tight tracking-[-0.025em] text-[var(--text)] sm:text-xl">
               <span className="transition group-hover:text-[var(--accent)]">{beat.title}</span>
             </h3>
           </div>
 
-          <div className="flex flex-wrap gap-1 sm:gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <span className="inline-flex items-center rounded-full border border-[color-mix(in_srgb,var(--accent)_22%,var(--border))] bg-[var(--accent-soft)] px-2.5 py-1 text-[9px] sm:text-[10px] font-medium text-[var(--text)]">
               {vibeTag}
             </span>
-            <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--bg-soft)] px-2.5 py-1 text-[9px] sm:text-[10px] font-medium text-[var(--text-soft)]">
-              {beat.keySignature || "Auto Key"}
-            </span>
+            {beat.keySignature ? <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--bg-soft)] px-2.5 py-1 text-[9px] sm:text-[10px] font-medium text-[var(--text-soft)]">Key {beat.keySignature}</span> : null}
           </div>
 
-          <p className="text-xs text-[var(--text-soft)]">{beat.bpm} BPM · {beat.keySignature || "Key not supplied"}</p>
-          <div className="grid grid-cols-2 gap-2 border-t border-[var(--border)] pt-3 text-xs">
-            <button type="button" onClick={(event) => { event.stopPropagation(); onAdd?.("general"); }} disabled={!onAdd} aria-pressed={generalInCart} className={`rounded-xl p-2 text-left transition disabled:cursor-default ${generalInCart ? "bg-[var(--accent-soft)] ring-1 ring-[var(--accent)]" : "hover:bg-[var(--bg-soft)]"}`}>
-              <p className="flex items-center gap-1 text-[9px] uppercase tracking-[0.12em] text-[var(--text-soft)]">General Licence {generalInCart ? <Check className="h-3 w-3 text-[var(--accent)]" /> : null}</p><p className="mt-1 font-semibold">{formatMoney(beat.generalPrice ?? beat.price ?? 0)}</p>
-            </button>
-            <button type="button" onClick={(event) => { event.stopPropagation(); onAdd?.("exclusive"); }} disabled={!onAdd || exclusiveRemaining === 0} aria-pressed={exclusiveInCart} className={`rounded-xl p-2 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${exclusiveInCart ? "bg-[var(--accent-soft)] ring-1 ring-[var(--accent)]" : "hover:bg-[var(--bg-soft)]"}`}>
-              <p className="flex items-center gap-1 text-[9px] uppercase tracking-[0.12em] text-[var(--text-soft)]">Exclusive Licence {exclusiveInCart ? <Check className="h-3 w-3 text-[var(--accent)]" /> : null}</p><p className="mt-1 font-semibold">{formatMoney(beat.exclusivePrice ?? 0)}</p>
-            </button>
+          <p className="text-[11px] font-medium text-[var(--text-soft)]">{beat.bpm} BPM{beat.keySignature ? ` · ${beat.keySignature}` : ""}</p>
+          <div className="border-t border-[var(--border)] pt-3">
+            <div className="mb-2.5 flex items-end justify-between gap-2">
+              <div><p className="text-xs font-semibold text-[var(--text)]">Choose a licence</p><p className="mt-0.5 text-[9px] text-[var(--text-soft)]">Tap an option to add it</p></div>
+              {(generalInCart || exclusiveInCart) ? <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--accent)]">Selected</span> : null}
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button type="button" onClick={(event) => { event.stopPropagation(); onAdd?.("general"); }} disabled={!onAdd} aria-pressed={generalInCart} className={`relative min-h-[5.25rem] rounded-xl border p-3 text-left transition duration-200 disabled:cursor-default ${generalInCart ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[0_8px_24px_color-mix(in_srgb,var(--accent)_12%,transparent)]" : "border-[var(--border)] bg-[var(--bg-soft)] hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--accent)_42%,var(--border))] hover:bg-[var(--card)]"}`}>
+                <span className={`absolute right-2.5 top-2.5 inline-flex h-4 w-4 items-center justify-center rounded-full border ${generalInCart ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--bg)]" : "border-[var(--text-soft)]"}`}>{generalInCart ? <Check className="h-2.5 w-2.5" strokeWidth={3} /> : null}</span>
+                <span className="block pr-5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">General</span>
+                <strong className="mt-1 block text-base leading-none text-[var(--text)]">{formatMoney(beat.generalPrice ?? beat.price ?? 0)}</strong>
+                <span className="mt-2 block text-[9px] leading-4 text-[var(--text-soft)]">Non-exclusive use</span>
+              </button>
+              <button type="button" onClick={(event) => { event.stopPropagation(); onAdd?.("exclusive"); }} disabled={!onAdd || exclusiveRemaining === 0} aria-pressed={exclusiveInCart} className={`relative min-h-[5.25rem] rounded-xl border p-3 text-left transition duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${exclusiveInCart ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[0_8px_24px_color-mix(in_srgb,var(--accent)_12%,transparent)]" : "border-[var(--border)] bg-[var(--bg-soft)] hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--accent)_42%,var(--border))] hover:bg-[var(--card)]"}`}>
+                <span className={`absolute right-2.5 top-2.5 inline-flex h-4 w-4 items-center justify-center rounded-full border ${exclusiveInCart ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--bg)]" : "border-[var(--text-soft)]"}`}>{exclusiveInCart ? <Check className="h-2.5 w-2.5" strokeWidth={3} /> : null}</span>
+                <span className="block pr-5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">Exclusive</span>
+                <strong className="mt-1 block text-base leading-none text-[var(--text)]">{formatMoney(beat.exclusivePrice ?? 0)}</strong>
+                <span className="mt-2 block text-[9px] leading-4 text-[var(--text-soft)]">{exclusiveRemaining === 0 ? "Sold out" : "One buyer only"}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
