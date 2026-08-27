@@ -170,7 +170,7 @@ export function GoogleAuthButton({
         theme: "outline",
         size: "large",
         text: "continue_with",
-        shape: appearance === "quiet" ? "rectangular" : "pill",
+        shape: "pill",
         logo_alignment: "left",
         width: Math.max(240, Math.min(400, Math.floor(buttonHost.getBoundingClientRect().width || 320)))
       });
@@ -219,7 +219,10 @@ export function GoogleAuthButton({
       {GOOGLE_CLIENT_ID && scriptReady && !scriptError ? (
         <div
           ref={googleButtonRef}
-          className={clsx("flex min-h-11 w-full items-center justify-center overflow-hidden", className)}
+          className={clsx(
+            "flex min-h-11 w-full items-center justify-center overflow-hidden rounded-full bg-white shadow-[0_8px_24px_rgba(0,0,0,.16)] ring-1 ring-black/10",
+            className
+          )}
           aria-label={label}
         />
       ) : <button
