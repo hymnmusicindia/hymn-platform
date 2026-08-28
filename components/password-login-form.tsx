@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
-import { destinationForRole } from "@/lib/routes";
+import { destinationAfterLogin } from "@/lib/routes";
 import type { UserRole } from "@/lib/types";
 
 interface PasswordLoginFormProps {
@@ -32,7 +32,7 @@ export function PasswordLoginForm({ role, title, description }: PasswordLoginFor
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error ?? "Login failed.");
-      router.push(data.redirectPath ?? destinationForRole(role));
+      router.push(data.redirectPath ?? destinationAfterLogin(role));
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed.");

@@ -1,6 +1,6 @@
 ﻿import bcrypt from "bcrypt";
 import { NextResponse } from "next/server";
-import { destinationForRole } from "@/lib/access";
+import { destinationAfterLogin } from "@/lib/routes";
 import { profileAvatarDataUrl } from "@/lib/avatar";
 import { createPasswordUser } from "@/lib/db";
 import { createSession } from "@/lib/session";
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
 
     await createSession({ sub: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: profileAvatarDataUrl(user.name, user.role) });
     cookieStore.delete(REFERRAL_ATTRIBUTION_COOKIE);
-    return NextResponse.json({ user, redirectPath: destinationForRole(user.role) }, { status: 201 });
+    return NextResponse.json({ user, redirectPath: destinationAfterLogin(user.role) }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Sign up failed.";
     return NextResponse.json({ error: message }, { status: 400 });

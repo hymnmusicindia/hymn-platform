@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { destinationForRole } from "@/lib/access";
+import { destinationAfterLogin } from "@/lib/routes";
 import { profileAvatarDataUrl } from "@/lib/avatar";
 import { createSession } from "@/lib/session";
 import { upsertGoogleUser } from "@/lib/db";
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     await createSession({ sub: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: profile.picture || profileAvatarDataUrl(user.name, user.role) });
     cookieStore.delete(REFERRAL_ATTRIBUTION_COOKIE);
     await createBirthdayNotificationForUser(user.id).catch((error) => console.error("Birthday notification check failed", error));
-    const redirectPath = payload.loginContext === "admin" ? "/admin" : destinationForRole(user.role);
+    const redirectPath = payload.loginContext === "admin" ? "/admin" : destinationAfterLogin(user.role);
     return NextResponse.json({ user, redirectPath });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Google authentication failed.";

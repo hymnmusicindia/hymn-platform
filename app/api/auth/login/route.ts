@@ -1,6 +1,6 @@
 ﻿import bcrypt from "bcrypt";
 import { NextResponse } from "next/server";
-import { destinationForRole } from "@/lib/access";
+import { destinationAfterLogin } from "@/lib/routes";
 import { profileAvatarDataUrl } from "@/lib/avatar";
 import { findUserByEmail } from "@/lib/db";
 import { createSession } from "@/lib/session";
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     await createSession({ sub: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: profileAvatarDataUrl(user.name, user.role) }, { ipAddress, userAgent, requestId });
     await logAuditEvent({ actorType: user.role === "admin" ? "admin" : "user", actorId: user.id, actorRole: user.role, entityType: "authentication", entityId: user.id, action: "login.succeeded", requestId, ipAddress, userAgent, riskLevel: "low" });
 
-    return NextResponse.json({ user, redirectPath: destinationForRole(user.role) });
+    return NextResponse.json({ user, redirectPath: destinationAfterLogin(user.role) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Authentication failed.";
     return NextResponse.json({ error: message }, { status: 400 });
