@@ -10,6 +10,46 @@ function getUploadRoot() {
   return process.env.STORAGE_ROOT || "./public/uploads";
 }
 
+const publicUploadDirectories = ["producers", "beats", "site"] as const;
+
+function normalizedPublicPath(value: string) {
+  const normalized = value.replace(/\\/g, "/").replace(/^\/+/, "");
+  if (!normalized || normalized.split("/").some((part) => !part || part === "." || part === "..")) {
+    throw new Error("Invalid public upload path.");
+  }
+  if (!publicUploadDirectories.some((directory) => normalized === directory || normalized.startsWith(`${directory}/`))) {
+    throw new Error("This upload is not publicly accessible.");
+  }
+  return normalized;
+}
+
+export function publicUploadUrl(relativePath: string) {
+  return `/api/public-uploads/${normalizedPublicPath(relativePath).split("/").map(encodeURIComponent).join("/")}`;
+}
+
+export function resolvePublicUploadPath(relativePath: string) {
+  const root = path.resolve(/* turbopackIgnore: true */ process.cwd(), getUploadRoot());
+  const resolved = path.resolve(root, normalizedPublicPath(relativePath));
+  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) throw new Error("Invalid public upload path.");
+  return resolved;
+}
+
+/** Converts legacy absolute Hostinger paths into the public media endpoint. */
+export function normalizePublicUploadUrl(value: string | null | undefined) {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/^(?:https?:|data:|blob:)/i.test(trimmed) || trimmed.startsWith("/api/public-uploads/")) return trimmed;
+
+  const normalized = trimmed.replace(/\\/g, "/");
+  for (const directory of publicUploadDirectories) {
+    const marker = `/${directory}/`;
+    const index = normalized.lastIndexOf(marker);
+    if (index >= 0) return publicUploadUrl(normalized.slice(index + 1));
+  }
+  return trimmed;
+}
+
 export async function saveUploadedFile(file: File, directory: string, kind: "audio" | "image" | "file") {
   const allowedAudio = [
     "audio/mpeg",
@@ -54,5 +94,5 @@ export async function saveUploadedFile(file: File, directory: string, kind: "aud
   const bytes = Buffer.from(await file.arrayBuffer());
   await fs.writeFile(filePath, bytes);
 
-  return `${root.replace("./public", "")}/${directory}/${fileName}`;
+  return publicUploadUrl(`${directory}/${fileName}`);
 }

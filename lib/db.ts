@@ -38,6 +38,7 @@ import { sampleBeats, sampleReleases } from "@/lib/site";
 import { searchSpotifyTracks } from "@/lib/spotify";
 import { PRODUCER_COMMISSION_CONFIG } from "@/lib/finance-config";
 import { resolveGoogleAccountRole } from "@/lib/auth-role";
+import { normalizePublicUploadUrl } from "@/lib/storage";
 
 type MemoryState = {
   users: User[];
@@ -3625,6 +3626,8 @@ export function mapPrismaBeat(prismaBeat: any): Beat {
 }
 
 export function mapPrismaProducerProfile(prismaProfile: any): ProducerProfile {
+  const coverPhotoUrl = normalizePublicUploadUrl(prismaProfile.coverPhotoUrl);
+  const avatarUrl = normalizePublicUploadUrl(prismaProfile.avatarUrl);
   return {
     id: prismaProfile.id,
     userId: prismaProfile.userId,
@@ -3632,9 +3635,9 @@ export function mapPrismaProducerProfile(prismaProfile: any): ProducerProfile {
     name: prismaProfile.displayName,
     description: prismaProfile.bio ?? "",
     specialty: prismaProfile.specialty ?? "",
-    imageUrl: prismaProfile.coverPhotoUrl ?? prismaProfile.avatarUrl ?? null,
-    coverPhotoUrl: prismaProfile.coverPhotoUrl ?? null,
-    avatarUrl: prismaProfile.avatarUrl ?? null,
+    imageUrl: coverPhotoUrl ?? avatarUrl,
+    coverPhotoUrl,
+    avatarUrl,
     instagramUrl: prismaProfile.instagramUrl ?? null,
     youtubeUrl: prismaProfile.youtubeUrl ?? null,
     spotifyUrl: prismaProfile.spotifyUrl ?? null,
