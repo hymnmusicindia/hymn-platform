@@ -668,7 +668,9 @@ export function AdminControlCenter({
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   }, [initialNotifications]);
   const highPriorityNotifications = useMemo(() => initialNotifications.filter((notification) => notification.priority === "high"), [initialNotifications]);
-  const searchMatch = (...values: unknown[]) => !moduleSearch.trim() || values.filter(Boolean).join(" ").toLowerCase().includes(moduleSearch.trim().toLowerCase());
+  function searchMatch(...values: unknown[]) {
+    return !moduleSearch.trim() || values.filter(Boolean).join(" ").toLowerCase().includes(moduleSearch.trim().toLowerCase());
+  }
 
   const releaseCountByUser = useMemo(() => {
     const counts = new Map<number, number>();
