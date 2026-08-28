@@ -406,14 +406,18 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           aria-expanded={profileOpen}
           aria-haspopup="menu"
         >
-          <span className="relative inline-flex h-10 w-10 shrink-0">
-            <span className="inline-flex h-full w-full items-center justify-center overflow-hidden rounded-full border text-xs font-bold" style={{ borderColor: "var(--border-strong)", background: "var(--bg-soft)" }}>
+          <span className="relative inline-flex h-10 w-10 shrink-0 rounded-full">
+            <span
+              className="inline-flex h-full w-full items-center justify-center overflow-hidden rounded-full border text-xs font-bold"
+              style={{ borderColor: "var(--border-strong)", background: "var(--bg-soft)", borderRadius: "50%", clipPath: "circle(50%)" }}
+            >
               <Image
                 src={user.avatarUrl || fallbackAvatar}
                 alt={user.name}
                 fill
                 sizes="40px"
-                className="object-cover"
+                className="rounded-full object-cover"
+                style={{ borderRadius: "50%" }}
                 unoptimized
                 referrerPolicy="no-referrer"
                 onError={(event) => {
