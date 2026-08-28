@@ -154,7 +154,6 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   const [payoutSummary, setPayoutSummary] = useState<CustomerPayoutSummary | null>(null);
   const [workspaceAnalytics, setWorkspaceAnalytics] = useState<any[]>(analytics);
   const [supportFeedback, setSupportFeedback] = useState<string | null>(null);
-  const [sidebarSummaryOpen, setSidebarSummaryOpen] = useState(true);
   const paidOrders = orders.filter((order) => order.paymentStatus === "paid");
   const releaseLimit = subscription?.releaseLimit ?? subscription?.release_limit ?? null;
   const subscriptionExpiry = subscription?.expiryDate ?? subscription?.expiry ?? null;
@@ -168,11 +167,6 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       const requested = params.get("tab");
       if (requested && ["overview", "releases", "upload", "analytics", "earnings", "promotions", "collaborators", "distribution", "content-id", "messages", "support", "settings", "purchases", "subscription", "referral", "account"].includes(requested)) setActiveTab(requested as typeof activeTab);
     }
-  }, []);
-
-  useEffect(() => {
-    const saved = window.localStorage.getItem("hymn-artist-sidebar-summary");
-    if (saved === "hidden") setSidebarSummaryOpen(false);
   }, []);
 
   useEffect(() => {
@@ -321,11 +315,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   return (
     <DashboardFrame
       title={`Welcome back, ${user.name}`}
-      subtitle={<div className="artist-sidebar-summary"><button type="button" className="artist-sidebar-summary-toggle" aria-expanded={sidebarSummaryOpen} onClick={() => setSidebarSummaryOpen((current) => { const next = !current; window.localStorage.setItem("hymn-artist-sidebar-summary", next ? "shown" : "hidden"); return next; })}><span className="artist-sidebar-summary-title"><span className="artist-sidebar-summary-mark" aria-hidden="true" />Workspace summary</span><span className="artist-sidebar-summary-action"><span>{sidebarSummaryOpen ? "Collapse" : "Expand"}</span><span className="artist-sidebar-summary-chevron" aria-hidden="true" /></span></button>{sidebarSummaryOpen ? <div className="artist-sidebar-utility">
-        <button type="button" onClick={() => { setReleaseStatusFilter(releasesNeedingAttention ? "needs_attention" : "all"); selectCustomerTab("releases"); }}><span>Catalogue</span><strong>{releases.length} release{releases.length === 1 ? "" : "s"}{releasesNeedingAttention ? ` · ${releasesNeedingAttention} need attention` : " · clear"}</strong></button>
-        {subscription ? <button type="button" onClick={() => selectCustomerTab("subscription")}><span>Plan</span><strong>{`${String(subscription.plan).replace(/_/g, " ")} · ${planDaysRemaining} days left`}</strong></button> : <div className="artist-sidebar-plan-row"><span>Plan</span><span className="artist-sidebar-plan-empty"><strong>No active plan</strong><Link href="/distribution#distribution-pricing">compare plans</Link></span></div>}
-        <button type="button" onClick={() => selectCustomerTab("referral")}><span>Checkout wallet</span><strong>Rs {Number(user.referralCredits || 0).toLocaleString("en-IN")}</strong></button>
-      </div> : null}</div>}
+      subtitle={user.email}
       overviewSubtitle={actionItems.length > 0 ? <button type="button" className="text-left font-medium transition-opacity hover:opacity-70" style={{ color: "var(--accent)" }} onClick={() => selectCustomerTab(actionItems[0].tab)}>{actionItems.length} item{actionItems.length === 1 ? "" : "s"} need your attention <span aria-hidden="true">→</span></button> : <span>Your workspace is clear.</span>}
       navItems={[
         { key: "overview", label: "Overview", description: "What matters now", group: "Home" },
@@ -366,7 +356,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
           <button type="button" onClick={switchProducerAccount} className="btn-primary pressable shrink-0">Switch Google account</button>
         </section>
       ) : null}
-      {activeTab === "overview" ? <CustomerHome user={user} releases={releases} attention={actionItems.map(item => ({ title: item.title, detail: item.detail, cta: item.cta, href: `/dashboard?tab=${item.tab}` }))} earnings={payoutSummary} notifications={notifications} tickets={supportTickets} onEarnings={() => selectCustomerTab("earnings")} /> : null}
+      {activeTab === "overview" ? <CustomerHome user={user} releases={releases} attention={actionItems.map(item => ({ title: item.title, detail: item.detail, cta: item.cta, href: `/dashboard?tab=${item.tab}` }))} earnings={payoutSummary} notifications={notifications} tickets={supportTickets} onEarnings={() => selectCustomerTab("earnings")} workspaceSummary={{ releaseCount: releases.length, needsAttention: releasesNeedingAttention, plan: subscription ? String(subscription.plan).replace(/_/g, " ") : "No active plan", planDaysRemaining: subscription ? planDaysRemaining : null, credit: Number(user.referralCredits || 0) }} /> : null}
       {false && activeTab === "overview" ? (
         <div className="grid gap-6">
           <Panel title="Action centre" description="Items backed by your account, releases and HYMN notifications that need a decision or correction.">

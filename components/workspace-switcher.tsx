@@ -1,6 +1,6 @@
 "use client";
 
-import { Disc3, Music2 } from "lucide-react";
+import { ArrowRight, Disc3, Music2 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -11,13 +11,13 @@ export function WorkspaceSwitcher({ current }: { current: "customer" | "producer
     setSwitching(target);
     window.setTimeout(() => router.push(target === "producer" ? "/producer/dashboard" : "/dashboard"), 170);
   }
-  return <div className={`workspace-switcher ${switching ? "is-switching" : ""}`} data-current={current} aria-label="Choose workspace">
-    <span className="workspace-switcher-label">Viewing as</span>
-    <div className="workspace-switcher-track" role="group">
-      <span className="workspace-switcher-thumb" aria-hidden="true" />
-      <button type="button" className={current === "customer" ? "is-active" : ""} aria-pressed={current === "customer"} onClick={() => choose("customer")} title="Music distribution workspace"><Music2 /> <span>Artist</span></button>
-      <button type="button" className={current === "producer" ? "is-active" : ""} aria-pressed={current === "producer"} onClick={() => choose("producer")} title="Beat selling workspace"><Disc3 /> <span>Producer</span></button>
-    </div>
+  const CurrentIcon = current === "customer" ? Music2 : Disc3;
+  const destination = current === "customer" ? "producer" : "customer";
+  return <div className={`workspace-switcher ${switching ? "is-switching" : ""}`} aria-label="Workspace switcher">
+    <span className="workspace-switcher-current"><CurrentIcon aria-hidden="true" /><span><small>Current workspace</small><strong>{current === "customer" ? "Artist" : "Producer"}</strong></span></span>
+    <button type="button" className="workspace-switcher-action" onClick={() => choose(destination)} disabled={Boolean(switching)}>
+      <span>{switching ? "Opening…" : `Switch to ${destination === "customer" ? "Artist" : "Producer"}`}</span><ArrowRight aria-hidden="true" />
+    </button>
     <span className="sr-only" aria-live="polite">{switching ? `Opening ${switching} workspace` : `${current} workspace selected on ${pathname}`}</span>
   </div>;
 }
