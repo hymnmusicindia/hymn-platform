@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowDown, Check, ChevronDown, Disc3, Filter, Gauge, Music2, Search, ShoppingBag, Sparkles, Users2, X } from "lucide-react";
+import { ArrowDown, Check, ChevronDown, Disc3, ExternalLink, Filter, Gauge, Globe2, Instagram, Music2, Search, ShoppingBag, Sparkles, Users2, X, Youtube } from "lucide-react";
 import { beatLicenseOptions, buildBeatStorefront, type StorefrontBeat } from "@/lib/beat-store";
 import type { Beat, ProducerProfile } from "@/lib/types";
 import { BeatCard } from "@/components/beat-card";
@@ -231,6 +231,10 @@ function getFallbackImage(id: number | string) {
   return `/assets/producers/placeholder-${index}.jpg`;
 }
 
+function SpotifyMark({ className = "h-4 w-4" }: { className?: string }) {
+  return <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true"><path d="M12 1.8A10.2 10.2 0 1 0 12 22.2 10.2 10.2 0 0 0 12 1.8Zm4.68 14.7a.64.64 0 0 1-.88.21c-2.4-1.47-5.43-1.8-8.99-.99a.64.64 0 1 1-.28-1.25c3.9-.89 7.25-.51 9.94 1.13.3.18.4.58.21.9Zm1.25-2.77a.8.8 0 0 1-1.1.26c-2.75-1.69-6.95-2.18-10.2-1.19a.8.8 0 1 1-.47-1.53c3.72-1.13 8.35-.59 11.5 1.35.38.23.5.73.27 1.11Zm.11-2.89C14.74 8.88 9.3 8.7 6.15 9.66a.96.96 0 1 1-.56-1.84c3.62-1.1 9.63-.89 13.43 1.36a.96.96 0 0 1-.98 1.66Z" /></svg>;
+}
+
 export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: Beat[]; producerProfiles?: ProducerProfile[] }) {
   const searchParams = useSearchParams();
   const displayProducerProfiles = producerProfiles;
@@ -256,6 +260,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("newest");
   const [previewProducerIndex, setPreviewProducerIndex] = useState(0);
+  const [producerDetailsOpen, setProducerDetailsOpen] = useState(false);
   const [sectionState, setSectionState] = useState<Record<SectionKey, boolean>>({ genre: true, mood: true, bpm: true, key: true });
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
@@ -290,6 +295,13 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
   const selectedProducer = useMemo(() => displayProducerProfiles.find((producer) => producer.slug === selectedProducerSlug) ?? null, [displayProducerProfiles, selectedProducerSlug]);
   const previewProducer = displayProducerProfiles[previewProducerIndex % Math.max(displayProducerProfiles.length, 1)] ?? null;
   const spotlightProducer = selectedProducer ?? previewProducer;
+  const otherProducers = useMemo(() => displayProducerProfiles.filter((producer) => producer.slug !== spotlightProducer?.slug).slice(0, 5), [displayProducerProfiles, spotlightProducer?.slug]);
+  const producerSocials = spotlightProducer ? [
+    { label: "Instagram", href: spotlightProducer.instagramUrl, icon: <Instagram className="h-4 w-4" /> },
+    { label: "YouTube", href: spotlightProducer.youtubeUrl, icon: <Youtube className="h-4 w-4" /> },
+    { label: "Spotify", href: spotlightProducer.spotifyUrl, icon: <SpotifyMark /> },
+    { label: "Website", href: spotlightProducer.websiteUrl, icon: <Globe2 className="h-4 w-4" /> }
+  ].filter((item) => Boolean(item.href)) : [];
   useEffect(() => {
     if (selectedProducerSlug !== null || displayProducerProfiles.length < 2) return;
     const timer = window.setInterval(() => {
@@ -591,9 +603,13 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
                 <p className="mt-4 max-w-xl text-sm leading-6 text-[var(--text-muted)] sm:text-base sm:leading-7">
                   {spotlightProducer ? spotlightProducer.description || `${spotlightProducer.specialty || "Distinctive sounds"}, shaped for artists building their next release.` : "Move across distinct sounds, moods, and creative perspectives to find the right foundation for your next record."}
                 </p>
-                <div className="mt-7 flex flex-wrap items-center gap-3">
-                  <a href="#beat-catalog" onClick={() => { if (!selectedProducer && spotlightProducer) setSelectedProducerSlug(spotlightProducer.slug); }} className="btn-primary inline-flex">{spotlightProducer ? `Explore ${spotlightProducer.name || "producer"} beats` : "Explore all beats"}<ArrowDown className="ml-2 h-4 w-4" /></a>
-                </div>
+                 <div className="mt-7">
+                   {!producerDetailsOpen ? <button type="button" onClick={() => { if (spotlightProducer) setSelectedProducerSlug(spotlightProducer.slug); setProducerDetailsOpen(true); }} className="btn-primary inline-flex">{spotlightProducer ? `Explore ${spotlightProducer.name || "producer"} beats` : "Explore all beats"}<ArrowDown className="ml-2 h-4 w-4" /></button> : <div className="producer-connect-panel rounded-[1.35rem] border border-[var(--border)] bg-[var(--bg-soft)] p-4 sm:p-5">
+                     <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-[var(--text-soft)]">Connect with {spotlightProducer?.name || "producer"}</p><a href="#beat-catalog" className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--text)] transition hover:text-[var(--accent)]">View beats <ArrowDown className="h-3.5 w-3.5" /></a></div>
+                     {producerSocials.length ? <div className="mt-3 flex flex-wrap gap-2">{producerSocials.map((social) => <a key={social.label} href={social.href!} target="_blank" rel="noreferrer" className="group inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--card)] px-3.5 py-2 text-xs font-semibold text-[var(--text)] shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-md" aria-label={`Open ${spotlightProducer?.name || "producer"} on ${social.label}`}>{social.icon}<span>{social.label}</span><ExternalLink className="h-3 w-3 text-[var(--text-soft)] transition group-hover:text-[var(--text)]" /></a>)}</div> : <p className="mt-3 text-xs leading-5 text-[var(--text-muted)]">This producer has not added public social links yet.</p>}
+                     {otherProducers.length ? <div className="mt-4 border-t border-[var(--border)] pt-4"><p className="text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-[var(--text-soft)]">Discover another producer</p><div className="mt-2.5 flex flex-wrap gap-2">{otherProducers.map((producer) => <button key={producer.slug} type="button" onClick={() => { setSelectedProducerSlug(producer.slug); setPreviewProducerIndex(Math.max(0, displayProducerProfiles.findIndex((item) => item.slug === producer.slug))); }} className="group inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--card)] py-1.5 pl-1.5 pr-3 text-left transition hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-md" aria-label={`Show ${producer.name || "producer"}`}><span className="relative h-7 w-7 shrink-0 overflow-hidden rounded-full bg-[var(--surface)] ring-1 ring-[var(--border)]"><Image src={producer.avatarUrl || producer.imageUrl || getFallbackImage(producer.id)} alt="" fill sizes="28px" className="object-cover" /></span><span className="max-w-28 truncate text-xs font-semibold text-[var(--text)]">{producer.name || "Producer"}</span></button>)}</div></div> : null}
+                   </div>}
+                 </div>
               </div>
               <div className="flex min-h-[390px] flex-col overflow-hidden border-t border-[var(--border)] bg-[var(--bg-soft)] md:min-h-0 md:border-l md:border-t-0">
                 <div className="relative min-h-[320px] flex-1 overflow-hidden bg-[radial-gradient(circle_at_60%_32%,color-mix(in_srgb,var(--accent)_16%,var(--bg-soft)),var(--bg-soft)_65%)]">
