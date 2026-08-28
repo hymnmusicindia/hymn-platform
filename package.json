@@ -19,6 +19,7 @@
     "test:payout": "tsx scripts/verify-payout-domain.ts",
     "test:analytics": "tsx scripts/verify-analytics-domain.ts",
     "test:migration-safety": "tsx scripts/verify-migration-safety.ts",
+    "test:audit-log-schema": "tsx scripts/verify-audit-log-schema.ts",
     "test:postgres-canonical": "tsx scripts/verify-postgres-canonical.ts",
     "test:razorpay": "tsx scripts/verify-razorpay-signatures.ts",
     "test:subscriptions": "tsx scripts/verify-razorpay-subscriptions.ts",
