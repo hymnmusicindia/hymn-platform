@@ -28,6 +28,7 @@
     "test:referrals-integration": "tsx scripts/verify-referral-integration.ts",
     "test:storage": "tsx scripts/verify-private-storage.ts && tsx scripts/verify-upload-storage.ts",
     "test:storage-integration": "tsx scripts/verify-private-storage-integration.ts",
+    "test:admin-marketplace": "tsx scripts/verify-admin-marketplace.ts",
     "test:release-status": "tsx scripts/verify-release-status.ts",
     "test:release-status-integration": "tsx scripts/verify-release-status-integration.ts",
     "test:change-requests-integration": "tsx scripts/verify-release-change-requests-integration.ts",

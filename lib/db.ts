@@ -1194,7 +1194,14 @@ export async function upsertGoogleUser(input: Pick<User, "name" | "email" | "goo
 }
 
 export async function listBeats() {
-  if (usesPostgresPrisma()) return listAllBeats();
+  if (usesPostgresPrisma()) {
+    const prismaBeats = await prisma.beat.findMany({
+      where: { enabled: true },
+      include: { user: true, audio: true, preview: true, artwork: true },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }]
+    });
+    return prismaBeats.map(mapPrismaBeat);
+  }
   const pool = getPool();
   if (!pool) return memory.beats.filter((beat) => beat.enabled).sort((a, b) => b.id - a.id);
   const [rows] = await pool.query(
@@ -1213,7 +1220,6 @@ export async function listAllBeats(limit?: number): Promise<Beat[]> {
   if (usesPostgresPrisma()) {
     try {
       const prismaBeats = await prisma.beat.findMany({
-        where: { enabled: true },
         include: { user: true, audio: true, preview: true, artwork: true },
         orderBy: { createdAt: 'desc' },
         ...(take ? { take } : {})

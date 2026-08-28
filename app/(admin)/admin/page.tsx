@@ -46,6 +46,7 @@ type AdminPageProps = {
   searchParams?: Promise<{
     tab?: string;
     spotify?: string;
+    beatId?: string;
   }>;
 };
 
@@ -85,6 +86,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         currentAdmin={currentAdmin}
         adminAccess={adminAccess ?? { role: "admin", permissions: [] }}
         initialTab={requestedTab}
+        initialBeatId={Number.isInteger(Number(resolvedSearchParams?.beatId)) ? Number(resolvedSearchParams?.beatId) : undefined}
         initialReleases={releases}
         initialBeats={beats}
         initialOrders={orders}

@@ -462,6 +462,7 @@ export function AdminControlCenter({
   currentAdmin,
   adminAccess,
   initialTab,
+  initialBeatId,
   initialReleases,
   initialBeats,
   initialOrders,
@@ -478,6 +479,7 @@ export function AdminControlCenter({
   currentAdmin: User;
   adminAccess: { role: string; permissions: AdminPermissionKey[] };
   initialTab?: AdminTab;
+  initialBeatId?: number;
   initialReleases: Release[];
   initialBeats: Beat[];
   initialOrders: Order[];
@@ -495,6 +497,7 @@ export function AdminControlCenter({
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab ?? "overview");
   const [releases, setReleases] = useState(initialReleases);
   const [beats, setBeats] = useState(initialBeats);
+  const [orders] = useState(initialOrders);
   const [users, setUsers] = useState(initialUsers);
   const [applications, setApplications] = useState(initialApplications);
   const [supportTickets, setSupportTickets] = useState(initialSupportTickets);
@@ -536,6 +539,10 @@ export function AdminControlCenter({
   const [catalogTab, setCatalogTab] = useState<"overview" | "tracks" | "distribution" | "identifiers" | "stores" | "promolink" | "earnings" | "activity">(initialTab === "delivery" ? "distribution" : "overview");
   const [moduleSearch, setModuleSearch] = useState("");
   const [producerManagement, setProducerManagement] = useState<any[]>([]);
+  const [beatStatusFilter, setBeatStatusFilter] = useState("pending");
+  const [producerBeatFilter, setProducerBeatFilter] = useState<number | null>(null);
+  const [marketplaceLoading, setMarketplaceLoading] = useState(false);
+  const [reviewingBeatId, setReviewingBeatId] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -557,6 +564,26 @@ export function AdminControlCenter({
     if (activeTab !== "producers") return;
     fetch("/api/admin/producers", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => setProducerManagement(Array.isArray(data?.producers) ? data.producers : [])).catch(() => setProducerManagement([]));
   }, [activeTab, users]);
+  useEffect(() => {
+    if (activeTab !== "operations") return;
+    let active = true;
+    setMarketplaceLoading(true);
+    Promise.all([
+      fetch("/api/admin/beats", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject(new Error("Could not load beats."))),
+      fetch("/api/admin/producers", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject(new Error("Could not load producers.")))
+    ]).then(([beatData, producerData]) => {
+      if (!active) return;
+      setBeats(Array.isArray(beatData.beats) ? beatData.beats : []);
+      setProducerManagement(Array.isArray(producerData.producers) ? producerData.producers : []);
+    }).catch((error) => { if (active) setFeedback(error instanceof Error ? error.message : "Marketplace data could not be refreshed."); }).finally(() => { if (active) setMarketplaceLoading(false); });
+    return () => { active = false; };
+  }, [activeTab]);
+  useEffect(() => {
+    if (!initialBeatId || activeTab !== "operations") return;
+    setBeatStatusFilter("all");
+    const timer = window.setTimeout(() => document.getElementById(`admin-beat-${initialBeatId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 150);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, initialBeatId]);
 
   async function resolvePersistedTask(id: number) {
     const response = await fetch(`/api/admin/tasks/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "resolved", note: "Resolved from Operations Queue." }) });
@@ -571,10 +598,16 @@ export function AdminControlCenter({
   async function reviewBeat(beat: Beat, decision: "approved" | "changes_requested") {
     const reason = decision === "changes_requested" ? window.prompt("Describe exactly what the producer must correct:") : null;
     if (decision === "changes_requested" && !reason?.trim()) return;
-    const response = await fetch(`/api/admin/beats/${beat.id}/review`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision, reason }) });
-    const data = await response.json();
-    if (!response.ok) { setFeedback(data.error || "Could not review beat."); return; }
-    setBeats((items) => items.map((item) => item.id === beat.id ? { ...item, enabled: data.beat.enabled, status: data.beat.status, reviewIssues: data.beat.reviewIssues } : item));
+    setReviewingBeatId(beat.id);
+    try {
+      const response = await fetch(`/api/admin/beats/${beat.id}/review`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision, reason }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) { setFeedback(data.error || "Could not review beat."); return; }
+      setBeats((items) => items.map((item) => item.id === beat.id ? { ...item, enabled: data.beat.enabled, status: data.beat.status, reviewIssues: data.beat.reviewIssues } : item));
+      setFeedback(decision === "approved" ? `${beat.title} is approved and live in the Beat Store.` : `Corrections requested for ${beat.title}.`);
+    } finally {
+      setReviewingBeatId(null);
+    }
   }
 
   const distributionRevenue = initialDistributionOrders.filter((order) => order.paymentStatus === "paid").reduce((sum, order) => sum + order.amount, 0);
@@ -585,6 +618,17 @@ export function AdminControlCenter({
   const sentToDireNote = releases.filter((release) => ["sent", "sent_to_distributor", "processing", "delivered", "live"].includes(release.status.toLowerCase())).length;
   const openSupportTickets = supportTickets.filter((ticket) => ["open", "in_progress"].includes(ticket.status)).length;
   const pendingProducerApplications = applications.filter((application) => application.status === "pending").length;
+  const pendingBeatReviews = beats.filter((beat) => beat.status === "PENDING_REVIEW").length;
+  const publishedBeats = beats.filter((beat) => beat.status === "PUBLISHED" && beat.enabled).length;
+  const correctionBeats = beats.filter((beat) => beat.status === "CHANGES_REQUESTED").length;
+  const filteredMarketplaceBeats = beats.filter((beat) => {
+    const statusMatches = beatStatusFilter === "all"
+      || (beatStatusFilter === "pending" && beat.status === "PENDING_REVIEW")
+      || (beatStatusFilter === "published" && beat.status === "PUBLISHED")
+      || (beatStatusFilter === "corrections" && beat.status === "CHANGES_REQUESTED")
+      || (beatStatusFilter === "hidden" && !beat.enabled && !["PENDING_REVIEW", "CHANGES_REQUESTED"].includes(beat.status ?? ""));
+    return statusMatches && (producerBeatFilter == null || beat.producerId === producerBeatFilter) && searchMatch(beat.title, beat.producerName, beat.genre, beat.mood, beat.status);
+  });
   const oldestWaiting = (dates: Array<string | null | undefined>) => {
     const valid = dates.filter((date): date is string => Boolean(date)).map((date) => new Date(date).getTime()).filter(Number.isFinite);
     if (!valid.length) return "No waiting items";
@@ -598,6 +642,7 @@ export function AdminControlCenter({
     { label: "Awaiting live confirmation", count: releases.filter((release) => ["awaiting_live_confirmation", "partially_live"].includes(release.status)).length, urgency: "Normal", oldest: oldestWaiting(releases.filter((release) => ["awaiting_live_confirmation", "partially_live"].includes(release.status)).map((release) => release.distributedAt || release.createdAt)), tab: "releases" as AdminTab },
     { label: "Failed payment events", count: initialDistributionOrders.filter((order) => order.paymentStatus === "failed").length, urgency: initialDistributionOrders.some((order) => order.paymentStatus === "failed") ? "Critical" : "Clear", oldest: oldestWaiting(initialDistributionOrders.filter((order) => order.paymentStatus === "failed").map((order) => order.createdAt)), tab: "payments" as AdminTab },
     { label: "Overdue support tickets", count: openSupportTickets, urgency: openSupportTickets ? "Attention" : "Clear", oldest: oldestWaiting(supportTickets.filter((ticket) => ["open", "in_progress"].includes(ticket.status)).map((ticket) => ticket.createdAt)), tab: "support" as AdminTab },
+    { label: "Beats awaiting approval", count: pendingBeatReviews, urgency: pendingBeatReviews ? "High" : "Clear", oldest: oldestWaiting(beats.filter((beat) => beat.status === "PENDING_REVIEW").map((beat) => beat.createdAt)), tab: "operations" as AdminTab },
   ];
   const requestedSelectedRelease = releases.find((release) => release.id === selectedReleaseId) ?? null;
   const selectedRelease = activeTab === "distribution-queue"
@@ -792,23 +837,6 @@ export function AdminControlCenter({
         const message = "Distribution sync could not be completed.";
         setFeedback(message); setDireNoteResult({ type: "error", title: "Distribution sync failed", message });
       }
-    });
-  }
-
-  function toggleBeat(beat: Beat) {
-    startTransition(async () => {
-      const response = await fetch(`/api/producer/beats/${beat.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: !beat.enabled })
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setFeedback(data.error || "Could not update beat.");
-        return;
-      }
-      setBeats((items) => items.map((item) => (item.id === beat.id ? data.beat : item)));
-      setFeedback(`Beat updated: ${data.beat.title}`);
     });
   }
 
@@ -1429,27 +1457,37 @@ export function AdminControlCenter({
         </SurfaceSection>
       ) : null}
 
-      {activeTab === "producers" ? <div className="grid gap-6"><section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Producers" value={producerManagement.length} /><StatCard label="Active beats" value={producerManagement.reduce((sum, producer) => sum + producer.activeBeats, 0)} /><StatCard label="Gross sales" value={formatMoney(producerManagement.reduce((sum, producer) => sum + producer.grossRevenue, 0))} /><StatCard label="Producer earnings 70%" value={formatMoney(producerManagement.reduce((sum, producer) => sum + producer.producerEarnings, 0))} /></section><SurfaceSection title="Producer Management" description="Manage producer access, public profiles, beat catalogs, verified 70/30 sales, and payout balances."><div className="grid gap-4">{producerManagement.filter((producer) => searchMatch(producer.name, producer.email, producer.status)).map((producer) => <article key={producer.id} className="surface-list-item p-4"><div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between"><div className="flex gap-4">{producer.profile?.coverPhotoUrl || producer.profile?.avatarUrl ? <img src={producer.profile.coverPhotoUrl || producer.profile.avatarUrl} alt="" className="h-16 w-16 rounded-2xl object-cover" /> : <div className="flex h-16 w-16 items-center justify-center rounded-2xl border font-semibold" style={{ borderColor: "var(--border)" }}>{producer.name.slice(0, 1)}</div>}<div><p className="font-semibold">{producer.profile?.displayName || producer.name}</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{producer.email}</p><div className="mt-2"><StatusPill label={producer.status} active={producer.status === "active"} /></div></div></div><div className="grid gap-2 sm:grid-cols-3"><div className="summary-card"><span>Beats</span><strong>{producer.activeBeats}/{producer.totalBeats}</strong></div><div className="summary-card"><span>Sales</span><strong>{producer.totalSales}</strong></div><div className="summary-card"><span>Available</span><strong>{formatMoney(producer.availableBalance)}</strong></div></div></div><div className="mt-4 grid gap-2 sm:grid-cols-4"><label className="btn-outline pressable text-center cursor-pointer">Change Photo<input type="file" accept="image/*" className="hidden" onChange={(e) => updateProducerPhoto(producer.id, e.target.files?.[0])} /></label><button type="button" onClick={() => selectAdminTab("operations")} className="btn-outline pressable">View Beats</button><button type="button" onClick={() => selectAdminTab("royalties")} className="btn-outline pressable">View Payouts</button><button type="button" onClick={() => { const linked = users.find((user) => user.id === producer.id); if (linked) updateRole(linked, "customer"); }} className="btn-outline pressable" style={{ color: "var(--danger)" }}>Revoke Producer Role</button></div></article>)}{producerManagement.length === 0 ? <EmptyState copy="No producers found. Grant producer access from Admin Portal → Users." /> : null}</div></SurfaceSection></div> : null}
+      {activeTab === "producers" ? <div className="grid gap-6">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Approved producers" value={producerManagement.length} detail="Accounts with producer access" /><StatCard label="Published inventory" value={publishedBeats} detail={`${pendingBeatReviews} awaiting review`} /><StatCard label="Verified gross sales" value={formatMoney(producerManagement.reduce((sum, producer) => sum + producer.grossRevenue, 0))} /><StatCard label="Producer earnings" value={formatMoney(producerManagement.reduce((sum, producer) => sum + producer.producerEarnings, 0))} detail="Contractual 70% share" /></section>
+        <SurfaceSection title="Producer operations" description="Live creator accounts, storefront readiness, catalogue health, verified sales, and payout exposure.">
+          <div className="grid gap-4 lg:grid-cols-2">
+            {producerManagement.filter((producer) => searchMatch(producer.name, producer.email, producer.status, producer.profile?.displayName)).map((producer) => <article key={producer.id} className="surface-list-item p-5">
+              <div className="flex items-start gap-4">{producer.profile?.avatarUrl || producer.profile?.coverPhotoUrl ? <img src={producer.profile.avatarUrl || producer.profile.coverPhotoUrl} alt={`${producer.name} profile`} className="h-16 w-16 shrink-0 rounded-full border object-cover" style={{ borderColor: "var(--border)" }} /> : <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border text-lg font-semibold" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{producer.name.slice(0, 1).toUpperCase()}</div>}<div className="min-w-0 flex-1"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="truncate font-semibold">{producer.profile?.displayName || producer.name}</p><p className="mt-1 truncate text-xs" style={{ color: "var(--text-muted)" }}>{producer.email}</p></div><StatusPill label={producer.status} active={producer.status === "active"} /></div><p className="mt-3 text-xs" style={{ color: "var(--text-soft)" }}>Last activity {new Date(producer.lastActivity).toLocaleDateString("en-IN")}</p></div></div>
+              <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4"><div className="summary-card"><span>Live / total</span><strong>{producer.activeBeats} / {producer.totalBeats}</strong></div><div className="summary-card"><span>Sales</span><strong>{producer.totalSales}</strong></div><div className="summary-card"><span>Gross</span><strong>{formatMoney(producer.grossRevenue)}</strong></div><div className="summary-card"><span>Available</span><strong>{formatMoney(producer.availableBalance)}</strong></div></div>
+              <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => { setProducerBeatFilter(producer.id); setBeatStatusFilter("all"); selectAdminTab("operations"); }} className="btn-primary pressable">Open catalogue</button><button type="button" onClick={() => selectAdminTab("royalties")} className="btn-outline pressable">Payout ledger</button><label className="btn-outline pressable cursor-pointer">Update portrait<input type="file" accept="image/*" className="hidden" onChange={(e) => updateProducerPhoto(producer.id, e.target.files?.[0])} /></label><button type="button" disabled={!hasPermission("users.manage") || isPending} onClick={() => { const linked = users.find((user) => user.id === producer.id); if (linked && window.confirm(`Revoke producer access for ${producer.name}? Their storefront will be disabled.`)) updateRole(linked, "customer"); }} className="btn-outline pressable disabled:opacity-40" style={{ color: "var(--danger)" }}>Revoke access</button></div>
+            </article>)}
+            {producerManagement.length === 0 ? <EmptyState copy="No producers found. Grant producer access from Admin Portal → Users." /> : null}
+          </div>
+        </SurfaceSection>
+      </div> : null}
 
       {activeTab === "operations" ? (
-        <div className="grid gap-6 xl:grid-cols-3">
-          <SurfaceSection title="Beats" description="Enable or disable storefront inventory.">
+        <div className="grid gap-6">
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Awaiting approval" value={pendingBeatReviews} detail="Hidden until reviewed" /><StatCard label="Published beats" value={publishedBeats} detail="Visible in the Beat Store" /><StatCard label="Corrections requested" value={correctionBeats} detail="Waiting on producer" /><StatCard label="Beat orders" value={orders.length} detail={`${orders.filter((order) => order.paymentStatus === "paid").length} paid`} /></section>
+          <SurfaceSection title="Beat review and catalogue" description="Live moderation queue. Review metadata, assets, rights declarations, pricing, and storefront state before publishing.">
+            <div className="mb-5 grid gap-3 border-b pb-5 sm:grid-cols-2 xl:grid-cols-[1fr,1fr,auto]" style={{ borderColor: "var(--border)" }}><select className="field" value={beatStatusFilter} onChange={(event) => setBeatStatusFilter(event.target.value)}><option value="pending">Awaiting approval</option><option value="corrections">Corrections requested</option><option value="published">Published</option><option value="hidden">Hidden / suspended</option><option value="all">All beats</option></select><select className="field" value={producerBeatFilter ?? ""} onChange={(event) => setProducerBeatFilter(event.target.value ? Number(event.target.value) : null)}><option value="">All producers</option>{producerManagement.map((producer) => <option key={producer.id} value={producer.id}>{producer.profile?.displayName || producer.name}</option>)}</select><button type="button" onClick={() => { setBeatStatusFilter("pending"); setProducerBeatFilter(null); setModuleSearch(""); }} className="btn-outline pressable">Reset filters</button></div>
             <div className="grid gap-4">
-              {beats.filter((beat) => searchMatch(beat.title, beat.genre, beat.mood, beat.status)).map((beat) => (
-                <article key={beat.id} className="surface-list-item p-4">
-                  <div className="flex flex-col gap-3">
-                    <div>
-                      <p className="font-semibold" style={{ color: "var(--text)" }}>{beat.title}</p>
-                      <p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>Rs {beat.price} / {beat.genre} / {beat.mood}</p>
-                      <div className="mt-2"><StatusPill label={(beat.status ?? (beat.enabled ? "APPROVED" : "PENDING_REVIEW")).replace(/_/g, " ")} active={beat.status === "PENDING_REVIEW"} /></div>
-                      {beat.reviewIssues?.reason ? <p className="mt-2 text-sm" style={{ color: "var(--danger)" }}>{beat.reviewIssues.reason}</p> : null}
-                    </div>
-                    <div className="grid gap-2"><button type="button" onClick={() => reviewBeat(beat, "approved")} className="btn-primary pressable">Approve beat</button><button type="button" onClick={() => reviewBeat(beat, "changes_requested")} className="btn-outline pressable">Request corrections</button><button type="button" onClick={() => toggleBeat(beat)} className="btn-outline pressable">{beat.enabled ? "Disable storefront" : "Keep hidden"}</button></div>
-                  </div>
+              {filteredMarketplaceBeats.map((beat) => (
+                <article id={`admin-beat-${beat.id}`} key={beat.id} className="surface-list-item overflow-hidden p-0" style={initialBeatId === beat.id ? { outline: "2px solid var(--accent)", outlineOffset: "2px" } : undefined}>
+                  <div className="grid md:grid-cols-[9rem,1fr]">{beat.artworkUrl ? <img src={beat.artworkUrl} alt={`${beat.title} cover`} className="aspect-square h-full min-h-36 w-full object-cover" /> : <div className="flex min-h-36 items-center justify-center border-b text-xs uppercase tracking-[0.18em] md:border-b-0 md:border-r" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text-soft)" }}>No artwork</div>}<div className="p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-lg font-semibold" style={{ color: "var(--text)" }}>{beat.title}</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{beat.producerName || `Producer #${beat.producerId}`} · Submitted {new Date(beat.createdAt).toLocaleDateString("en-IN")}</p></div><StatusPill label={beat.status ?? (beat.enabled ? "PUBLISHED" : "PENDING_REVIEW")} active={beat.status === "PUBLISHED" || beat.status === "PENDING_REVIEW"} /></div><div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 text-sm sm:grid-cols-4"><div><p className="text-xs" style={{ color: "var(--text-soft)" }}>Tempo</p><p className="mt-1 font-medium">{beat.bpm} BPM · {beat.keySignature || "Key missing"}</p></div><div><p className="text-xs" style={{ color: "var(--text-soft)" }}>Style</p><p className="mt-1 font-medium">{beat.genre} · {beat.mood}</p></div><div><p className="text-xs" style={{ color: "var(--text-soft)" }}>General</p><p className="mt-1 font-medium">{formatMoney(beat.generalPrice ?? beat.price)}</p></div><div><p className="text-xs" style={{ color: "var(--text-soft)" }}>Exclusive</p><p className="mt-1 font-medium">{formatMoney(beat.exclusivePrice ?? 0)}</p></div></div>{beat.reviewIssues?.reason ? <div className="mt-4 rounded-xl border px-3 py-2 text-sm" style={{ borderColor: "color-mix(in srgb, var(--danger) 45%, var(--border))", color: "var(--danger)" }}><strong>Corrections:</strong> {beat.reviewIssues.reason}</div> : null}<div className="mt-5 flex flex-wrap gap-2">{beat.previewUrl ? <a href={beat.previewUrl} target="_blank" rel="noreferrer" className="btn-outline pressable">Listen to preview</a> : <span className="btn-outline cursor-not-allowed opacity-50">Preview missing</span>}{beat.status !== "PUBLISHED" ? <button type="button" disabled={reviewingBeatId === beat.id || !hasPermission("users.manage")} onClick={() => reviewBeat(beat, "approved")} className="btn-primary pressable disabled:opacity-40">{reviewingBeatId === beat.id ? "Reviewing…" : "Approve and publish"}</button> : null}{beat.status !== "PUBLISHED" ? <button type="button" disabled={reviewingBeatId === beat.id || !hasPermission("users.manage")} onClick={() => reviewBeat(beat, "changes_requested")} className="btn-outline pressable disabled:opacity-40">Request corrections</button> : null}<button type="button" onClick={() => { setProducerBeatFilter(beat.producerId); setBeatStatusFilter("all"); }} className="btn-outline pressable">Producer catalogue</button></div></div></div>
                 </article>
               ))}
+              {!marketplaceLoading && filteredMarketplaceBeats.length === 0 ? <EmptyState copy={beats.length ? "No beats match these filters." : "No beats have been submitted yet."} /> : null}
+              {marketplaceLoading ? <p className="py-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>Refreshing marketplace records…</p> : null}
             </div>
           </SurfaceSection>
+
+          <div className="grid gap-6 xl:grid-cols-2"><SurfaceSection title="Beat-store orders" description="Buyer, licence, payment, and fulfilment records from live checkout data."><div className="grid gap-3">{orders.filter((order) => searchMatch(order.id, order.buyerName, order.buyerEmail, order.paymentStatus, ...order.items.map((item) => item.beatTitle))).map((order) => <article key={order.id} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">Order #{order.id}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{order.buyerName || order.buyerEmail || `Customer #${order.userId}`} · {new Date(order.createdAt).toLocaleString("en-IN")}</p></div><StatusPill label={order.paymentStatus} active={order.paymentStatus === "paid"} /></div><div className="mt-3 space-y-2">{order.items.map((item) => <div key={`${order.id}-${item.beatId}-${item.licenseType}`} className="flex justify-between gap-3 text-sm"><span>{item.beatTitle || `Beat #${item.beatId}`} · {item.licenseType.replace(/_/g, " ")}</span><strong>{formatMoney(item.price)}</strong></div>)}</div><div className="mt-3 flex justify-between border-t pt-3 text-sm" style={{ borderColor: "var(--border)" }}><span style={{ color: "var(--text-muted)" }}>{order.razorpayPaymentId ? "Payment verified" : "Awaiting payment verification"}</span><strong>{formatMoney(order.amount)}</strong></div></article>)}{orders.length === 0 ? <EmptyState copy="No Beat Store orders yet." /> : null}</div></SurfaceSection>
 
           <SurfaceSection title="Producer applications" description="Approve or reject producer onboarding.">
             <div className="grid gap-4">
@@ -1464,8 +1502,7 @@ export function AdminControlCenter({
               {applications.length === 0 ? <EmptyState copy="No producer applications yet." /> : null}
             </div>
           </SurfaceSection>
-
-          <SurfaceSection title="Partnership leads" description="Inbound business development and partnership requests.">
+          </div><SurfaceSection title="Partnership leads" description="Inbound business development and partnership requests.">
             <div className="grid gap-4">
               {initialLeads.filter((lead) => searchMatch(lead.name, lead.email, lead.collaborationType)).map((lead) => (
                 <article key={lead.id} className="surface-list-item p-4">
