@@ -4,6 +4,9 @@ import { updateBeat, deleteBeat } from "@/lib/db";
 import { prisma } from "@/lib/prisma";
 import { beatMutationSchema } from "@/lib/validation";
 import { createAdminTaskOnce } from "@/lib/task-queue";
+import { Prisma } from "@prisma/client";
+import { localPrivateStorage } from "@/lib/private-storage";
+import { deleteUploadedFileByUrl } from "@/lib/storage";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const result = await requireRole(["producer", "admin"]);
@@ -12,6 +15,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const { id } = await params;
   const beatId = Number(id);
   
+  if (!Number.isInteger(beatId) || beatId <= 0) return NextResponse.json({ error: "Invalid beat identifier." }, { status: 400 });
   const prismaBeat = await prisma.beat.findUnique({ where: { id: beatId } });
   if (!prismaBeat) return NextResponse.json({ error: "Beat not found." }, { status: 404 });
   
@@ -28,7 +32,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     const metadataChanged = result.user.role === "producer" && [payload.title, payload.bpm, payload.genre, payload.mood, payload.price, payload.generalPrice, payload.exclusivePrice, payload.description, payload.subgenre, payload.tags, payload.sampleDeclaration, payload.sampleDisclosure].some((value) => value !== undefined);
     if (metadataChanged) {
-      await prisma.beat.update({ where: { id: beatId }, data: { status: "PENDING_REVIEW", enabled: false, reviewIssues: undefined } });
+      await prisma.beat.update({ where: { id: beatId }, data: { status: "PENDING_REVIEW", enabled: false, reviewIssues: Prisma.JsonNull } });
       await createAdminTaskOnce({ eventKey: `producer:${result.user.id}:beat:${beatId}:review`, type: "Beat Awaiting Approval", priority: "normal", title: `Updated beat ready for review: ${updated.title}`, body: "Producer updated beat metadata. Review the current files and fields.", href: `/admin?tab=beats&beatId=${beatId}`, entityType: "beat", entityId: beatId });
       return NextResponse.json({ beat: { ...updated, status: "PENDING_REVIEW", enabled: false, reviewIssues: null } });
     }
@@ -46,7 +50,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const { id } = await params;
   const beatId = Number(id);
   
-  const prismaBeat = await prisma.beat.findUnique({ where: { id: beatId } });
+  if (!Number.isInteger(beatId) || beatId <= 0) return NextResponse.json({ error: "Invalid beat identifier." }, { status: 400 });
+  const prismaBeat = await prisma.beat.findUnique({ where: { id: beatId }, include: { audio: true, preview: true, artwork: true, deliverableAsset: true } });
   if (!prismaBeat) return NextResponse.json({ error: "Beat not found." }, { status: 404 });
   
   if (result.user.role === "producer" && prismaBeat.userId !== result.user.id) {
@@ -63,7 +68,11 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       await prisma.auditLog.create({ data: { actorId: result.user.id, action: "BEAT_ARCHIVED", entity: "beat", entityId: String(beatId), metadata: { purchaseCount, saleCount } } });
       return NextResponse.json({ success: true, archived: true, beat: archived });
     }
+    if (prismaBeat.deliverableAsset) await localPrivateStorage.delete({ assetId: prismaBeat.deliverableAsset.id, requesterUserId: result.user.id, isAdmin: result.user.role === "admin" });
+    await Promise.all([deleteUploadedFileByUrl(prismaBeat.preview?.publicUrl), deleteUploadedFileByUrl(prismaBeat.artwork?.publicUrl)]);
+    const uploadIds = [prismaBeat.audioUploadId, prismaBeat.previewUploadId, prismaBeat.artworkUploadId].filter((value): value is number => Number.isInteger(value));
     await deleteBeat(beatId);
+    if (uploadIds.length) await prisma.upload.deleteMany({ where: { id: { in: uploadIds } } });
     await prisma.auditLog.create({ data: { actorId: result.user.id, action: "BEAT_DRAFT_DELETED", entity: "beat", entityId: String(beatId) } });
     return NextResponse.json({ success: true });
   } catch (error) {

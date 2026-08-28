@@ -46,6 +46,13 @@ function extensionFor(name: string, mime: string) {
   return /^\.[a-z0-9]{1,8}$/.test(ext) ? ext : ".bin";
 }
 
+export function beatAssetRelativePath(input: { producerName: string; producerId: number; beatTitle: string; beatId: number; assetName: "Master Audio" | "Preview Audio" | "Cover Art"; originalFilename: string; mimeType: string }) {
+  const producerFolder = createSafeAssetFolderName(input.producerName, `producer_${input.producerId}`);
+  const beatFolder = createSafeAssetFolderName(input.beatTitle, `beat_${input.beatId}`);
+  const fileBase = input.assetName === "Master Audio" ? "master" : input.assetName === "Preview Audio" ? "preview" : "cover-art";
+  return `Beatstore/${producerFolder}/${beatFolder}/${input.assetName}/${fileBase}${extensionFor(input.originalFilename, input.mimeType)}`;
+}
+
 function hasValidHeader(mime: string, bytes: Buffer) {
   if (mime === "audio/wav" || mime === "audio/x-wav") return bytes.subarray(0, 4).toString() === "RIFF" && bytes.subarray(8, 12).toString() === "WAVE";
   if (mime === "audio/mpeg") return bytes.subarray(0, 3).toString() === "ID3" || (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0);

@@ -1,12 +1,12 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { get, put } from "@vercel/blob";
+import { del, get, put } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
-import { finalRelativePath, localStorageProvider } from "@/lib/storage-service";
+import { beatAssetRelativePath, finalRelativePath, localStorageProvider } from "@/lib/storage-service";
 
 export type PrivateAssetType = "private_audio_master" | "private_beat_deliverable" | "private_beat_license" | "private_cover_licence" | "private_ownership_proof" | "private_ai_receipt" | "private_royalty_statement" | "private_payout_report" | "private_payout_proof" | "private_kyc_document" | "private_unreleased_artwork";
-export type PrivateUploadInput = { ownerUserId: number; releaseId?: number; beatPurchaseId?: number; beatId?: number; assetType: PrivateAssetType; fileName: string; mimeType: string; bytes: Buffer; retentionUntil?: Date };
+export type PrivateUploadInput = { ownerUserId: number; ownerName?: string; releaseId?: number; beatPurchaseId?: number; beatId?: number; beatTitle?: string; assetType: PrivateAssetType; fileName: string; mimeType: string; bytes: Buffer; retentionUntil?: Date };
 export type AuthorizedReadInput = { assetId: number; requesterUserId: number; isAdmin: boolean; range?: string | null };
 export type StoredPrivateAsset = { id: number; downloadPath: string; checksum: string; byteSize: number };
 
@@ -106,8 +106,11 @@ export const localPrivateStorage: PrivateStorageAdapter = {
     const checksum = crypto.createHash("sha256").update(input.bytes).digest("hex");
     
     if (isVercel) {
-      const objectKey = `${input.ownerUserId}/${crypto.randomUUID()}-${safeFilename}`;
-      const blob = await put(`private/${objectKey}`, input.bytes, { access: 'private' });
+      const organizedKey = input.assetType === "private_beat_deliverable" && input.beatId && input.beatTitle
+        ? beatAssetRelativePath({ producerName: input.ownerName || `Producer ${input.ownerUserId}`, producerId: input.ownerUserId, beatTitle: input.beatTitle, beatId: input.beatId, assetName: "Master Audio", originalFilename: input.fileName, mimeType: input.mimeType })
+        : `${input.ownerUserId}/${crypto.randomUUID()}-${safeFilename}`;
+      const objectKey = `private/${organizedKey}`;
+      const blob = await put(objectKey, input.bytes, { access: 'private' });
       const asset = await prisma.storedAsset.create({
         data: {
           ownerUserId: input.ownerUserId,
@@ -130,9 +133,11 @@ export const localPrivateStorage: PrivateStorageAdapter = {
     }
 
     const category = input.assetType === "private_unreleased_artwork" ? "RELEASE_COVER_ART" : input.assetType === "private_audio_master" ? "TRACK_AUDIO_MASTER" : input.releaseId ? "RELEASE_DOCUMENT" : null;
-    const canonicalRelativePath = input.releaseId && category
-      ? await finalRelativePath({ releaseId: input.releaseId, trackId: null, clientTrackId: null, assetCategory: category, originalFilename: input.fileName, mimeType: input.mimeType })
-      : null;
+    const canonicalRelativePath = input.assetType === "private_beat_deliverable" && input.beatId && input.beatTitle
+      ? beatAssetRelativePath({ producerName: input.ownerName || `Producer ${input.ownerUserId}`, producerId: input.ownerUserId, beatTitle: input.beatTitle, beatId: input.beatId, assetName: "Master Audio", originalFilename: input.fileName, mimeType: input.mimeType })
+      : input.releaseId && category
+        ? await finalRelativePath({ releaseId: input.releaseId, trackId: null, clientTrackId: null, assetCategory: category, originalFilename: input.fileName, mimeType: input.mimeType })
+        : null;
     let objectKey = canonicalRelativePath || `${input.ownerUserId}/${crypto.randomUUID()}`;
     if (canonicalRelativePath) {
       const extension = path.extname(canonicalRelativePath);
@@ -147,7 +152,7 @@ export const localPrivateStorage: PrivateStorageAdapter = {
     const fullPath = path.resolve(/* turbopackIgnore: true */ privateStorageRootPath(), objectKey);
     if (!fullPath.startsWith(`${privateStorageRootPath()}${path.sep}`)) throw new Error("Unsafe storage path.");
     if (!canonicalRelativePath) { await fs.mkdir(path.dirname(fullPath), { recursive: true }); await fs.writeFile(fullPath, input.bytes, { flag: "wx" }); }
-    const asset = await prisma.storedAsset.create({ data: { ownerUserId: input.ownerUserId, releaseId: input.releaseId, beatPurchaseId: input.beatPurchaseId, beatId: input.beatId, assetType: input.assetType, storageProvider: canonicalRelativePath ? "LOCAL" : "private_local", storageRoot: canonicalRelativePath ? "HYMN_STORAGE_ROOT" : null, relativePath: canonicalRelativePath ? objectKey : null, storedFilename: canonicalRelativePath ? path.basename(objectKey) : null, category, entityType: input.releaseId ? "RELEASE" : input.beatId ? "BEAT" : null, entityId: String(input.releaseId || input.beatId || input.beatPurchaseId || input.ownerUserId), objectKey, originalFilename: input.fileName, safeFilename, mimeType: input.mimeType, byteSize: input.bytes.length, checksum, accessClassification: "private", retentionUntil: input.retentionUntil } }).catch(async error => {
+    const asset = await prisma.storedAsset.create({ data: { ownerUserId: input.ownerUserId, releaseId: input.releaseId, beatPurchaseId: input.beatPurchaseId, beatId: input.beatId, assetType: input.assetType, storageProvider: canonicalRelativePath ? "LOCAL" : "private_local", storageRoot: canonicalRelativePath ? "HYMN_STORAGE_ROOT" : null, relativePath: canonicalRelativePath ? objectKey : null, storedFilename: canonicalRelativePath ? path.basename(objectKey) : null, category: input.beatId ? "BEAT_MASTER_AUDIO" : category, entityType: input.releaseId ? "RELEASE" : input.beatId ? "BEAT" : null, entityId: String(input.releaseId || input.beatId || input.beatPurchaseId || input.ownerUserId), objectKey, originalFilename: input.fileName, safeFilename, mimeType: input.mimeType, byteSize: input.bytes.length, checksum, accessClassification: "private", retentionUntil: input.retentionUntil } }).catch(async error => {
       await fs.unlink(fullPath).catch(() => undefined);
       throw error;
     });
@@ -173,6 +178,13 @@ export const localPrivateStorage: PrivateStorageAdapter = {
     const asset = await prisma.storedAsset.findUnique({ where: { id: input.assetId } });
     if (!asset || (!input.isAdmin && asset.ownerUserId !== input.requesterUserId)) throw new Error("Forbidden.");
     await prisma.storedAsset.update({ where: { id: asset.id }, data: { deletedAt: new Date(), uploadStatus: "deleted" } });
+    if (asset.storageProvider === "vercel_blob" || asset.objectKey.startsWith("http://") || asset.objectKey.startsWith("https://")) {
+      await del(asset.objectKey).catch(() => undefined);
+      return;
+    }
+    const root = privateStorageRootPath();
+    const target = path.resolve(/* turbopackIgnore: true */ root, asset.objectKey);
+    if (target.startsWith(`${root}${path.sep}`)) await fs.unlink(target).catch(() => undefined);
   }
 };
 // vercel trigger 10

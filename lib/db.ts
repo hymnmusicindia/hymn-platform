@@ -1363,6 +1363,33 @@ export async function createBeat(input: Omit<Beat, "id" | "createdAt" | "produce
   };
 }
 
+export async function attachBeatAssets(input: {
+  beatId: number;
+  producerId: number;
+  audio: { url: string; storageKey: string; fileName: string; mimeType: string; sizeBytes: number; checksum?: string | null };
+  preview?: { url: string; storageKey: string; fileName: string; mimeType: string; sizeBytes: number };
+  artwork?: { url: string; storageKey: string; fileName: string; mimeType: string; sizeBytes: number };
+}) {
+  if (!usesPostgresPrisma()) {
+    const beat = memory.beats.find((item) => item.id === input.beatId && item.producerId === input.producerId);
+    if (!beat) return null;
+    beat.fileUrl = input.audio.url;
+    beat.previewUrl = input.preview?.url;
+    beat.artworkUrl = input.artwork?.url;
+    return beat;
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const ownedBeat = await tx.beat.findFirst({ where: { id: input.beatId, userId: input.producerId }, select: { id: true } });
+    if (!ownedBeat) return null;
+    const audio = await tx.upload.create({ data: { userId: input.producerId, kind: "AUDIO", storageKey: input.audio.storageKey, fileName: input.audio.fileName, mimeType: input.audio.mimeType, sizeBytes: input.audio.sizeBytes, checksum: input.audio.checksum || null, publicUrl: input.audio.url } });
+    const preview = input.preview ? await tx.upload.create({ data: { userId: input.producerId, kind: "AUDIO", storageKey: input.preview.storageKey, fileName: input.preview.fileName, mimeType: input.preview.mimeType, sizeBytes: input.preview.sizeBytes, publicUrl: input.preview.url } }) : null;
+    const artwork = input.artwork ? await tx.upload.create({ data: { userId: input.producerId, kind: "ARTWORK", storageKey: input.artwork.storageKey, fileName: input.artwork.fileName, mimeType: input.artwork.mimeType, sizeBytes: input.artwork.sizeBytes, publicUrl: input.artwork.url } }) : null;
+    const updated = await tx.beat.update({ where: { id: input.beatId }, data: { audioUploadId: audio.id, previewUploadId: preview?.id ?? null, artworkUploadId: artwork?.id ?? null }, include: { user: true, audio: true, preview: true, artwork: true } });
+    return mapPrismaBeat(updated);
+  });
+}
+
 export async function updateBeat(id: number, input: Partial<Pick<Beat, "title" | "bpm" | "genre" | "mood" | "price" | "generalPrice" | "exclusivePrice" | "description" | "subgenre" | "tags" | "sampleDeclaration" | "sampleDisclosure" | "fileUrl" | "artworkUrl" | "enabled" | "keySignature">>) {
   if (usesPostgresPrisma()) {
     try {

@@ -164,18 +164,21 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
     }
 
     startTransition(async () => {
-      const response = await fetch("/api/producer/beats", { method: "POST", body: formData });
-      const data = await response.json();
-      if (!response.ok) {
-        setFeedback(data.error || "Could not upload beat.");
-        return;
+      try {
+        setFeedback("Uploading and securely organizing beat assets…");
+        const response = await fetch("/api/producer/beats", { method: "POST", body: formData });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || `Beat upload failed (HTTP ${response.status}).`);
+        if (!data.beat?.id) throw new Error("The server did not return the finalized beat. Please retry; no duplicate was added to this page.");
+        setCatalog((items) => [data.beat, ...items.filter((item) => item.id !== data.beat.id)]);
+        setFeedback(`Beat uploaded and submitted for review: ${data.beat.title}`);
+        form.reset();
+        setSelectedAudioFile(null);
+        setAudioFormat("");
+        setBeatUploadStep(1);
+      } catch (error) {
+        setFeedback(error instanceof Error ? error.message : "Could not upload beat. Please retry.");
       }
-      setCatalog((items) => [data.beat, ...items]);
-      setFeedback(`Beat uploaded: ${data.beat.title}`);
-      form.reset();
-      setSelectedAudioFile(null);
-      setAudioFormat("");
-      setBeatUploadStep(1);
     });
   }
 

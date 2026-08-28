@@ -10,7 +10,7 @@ function getUploadRoot() {
   return process.env.STORAGE_ROOT || "./public/uploads";
 }
 
-const publicUploadDirectories = ["producers", "beats", "site"] as const;
+const publicUploadDirectories = ["producers", "beats", "Beatstore", "site"] as const;
 
 function normalizedPublicPath(value: string) {
   const normalized = value.replace(/\\/g, "/").replace(/^\/+/, "");
@@ -95,4 +95,11 @@ export async function saveUploadedFile(file: File, directory: string, kind: "aud
   await fs.writeFile(filePath, bytes);
 
   return publicUploadUrl(`${directory}/${fileName}`);
+}
+
+export async function deleteUploadedFileByUrl(value: string | null | undefined) {
+  if (!value?.startsWith("/api/public-uploads/")) return;
+  const encoded = value.slice("/api/public-uploads/".length).split("/");
+  const relativePath = encoded.map((part) => decodeURIComponent(part)).join("/");
+  await fs.unlink(resolvePublicUploadPath(relativePath)).catch(() => undefined);
 }
