@@ -55,8 +55,6 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   const [notifications, setNotifications] = useState<HeaderNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
-  const profileMenuRef = useRef<HTMLDivElement>(null);
-  const notificationMenuRef = useRef<HTMLDivElement>(null);
   const notificationMutationsRef = useRef<Set<number>>(new Set());
   const markAllPendingRef = useRef(false);
   const isAuthenticated = Boolean(user);
@@ -80,14 +78,18 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   useEffect(() => {
     if (!profileOpen) return;
 
-    const onPointerDown = (event: MouseEvent) => {
-      if (!profileMenuRef.current?.contains(event.target as Node)) {
-        setProfileOpen(false);
-      }
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || !target.closest("[data-profile-menu-root]")) setProfileOpen(false);
     };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setProfileOpen(false); };
 
-    window.addEventListener("mousedown", onPointerDown);
-    return () => window.removeEventListener("mousedown", onPointerDown);
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
   }, [profileOpen]);
 
   const loadNotifications = useCallback(async () => {
@@ -198,14 +200,18 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   useEffect(() => {
     if (!notificationsOpen) return;
 
-    const onPointerDown = (event: MouseEvent) => {
-      if (!notificationMenuRef.current?.contains(event.target as Node)) {
-        setNotificationsOpen(false);
-      }
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || !target.closest("[data-notification-menu-root]")) setNotificationsOpen(false);
     };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setNotificationsOpen(false); };
 
-    window.addEventListener("mousedown", onPointerDown);
-    return () => window.removeEventListener("mousedown", onPointerDown);
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
   }, [notificationsOpen]);
 
   useEffect(() => {
@@ -307,7 +313,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
   const NotificationBell = ({ mobile = false }: { mobile?: boolean }) =>
     isAuthenticated ? (
-      <div ref={notificationMenuRef} className={clsx("relative", mobile ? "w-full" : "")}>
+      <div data-notification-menu-root className={clsx("relative", mobile ? "w-full" : "")}>
         <button
           type="button"
           onClick={() => { setNotificationsOpen((value) => !value); setProfileOpen(false); }}
@@ -402,7 +408,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
   const ProfileMenu = ({ mobile = false }: { mobile?: boolean }) =>
     user ? (
-      <div ref={profileMenuRef} className={clsx("relative", mobile ? "w-full" : "")}>
+      <div data-profile-menu-root className={clsx("relative", mobile ? "w-full" : "")}>
         <button
           type="button"
           onClick={() => setProfileOpen((value) => !value)}
