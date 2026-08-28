@@ -12,7 +12,9 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "**" },
       { protocol: "http", hostname: "**" }
     ],
-    unoptimized: process.env.NEXT_IMAGE_UNOPTIMIZED === "true"
+    // Hostinger's Node runtime currently returns HTTP 400 from /_next/image.
+    // Serve original image URLs so public assets and user uploads remain reliable.
+    unoptimized: true
   },
   serverExternalPackages: ["@prisma/client", "mysql2", "bcrypt"],
   async headers() {

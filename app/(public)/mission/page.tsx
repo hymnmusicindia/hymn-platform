@@ -49,7 +49,7 @@ export default function MissionPage() {
           <div className="grid gap-8 lg:grid-cols-[0.82fr,1.18fr] lg:gap-14">
             <div>
               <div className="relative aspect-[4/5] max-w-lg overflow-hidden rounded-[2rem] border shadow-2xl" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-                <Image src="/assets/aditya-ujjain-founder.png" alt="Aditya Ujjain, founder of HYMN Music" fill priority sizes="(min-width: 1024px) 38vw, 100vw" className="object-cover object-top" />
+                <Image src="/assets/aditya-ujjain-founder.jpeg" alt="Aditya Ujjain, founder of HYMN Music" fill priority sizes="(min-width: 1024px) 38vw, 100vw" className="object-cover object-top" />
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent p-6 pt-24 text-white">
                   <p className="text-2xl font-semibold">Aditya Ujjain</p>
                   <p className="mt-1 text-sm text-white/70">Founder, HYMN Music</p>
