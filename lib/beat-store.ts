@@ -84,15 +84,6 @@ export const beatLicenseCatalog: BeatLicenseTierDefinition[] = [
   { id: "exclusive", title: "Exclusive Licence", delivery: "All available files", streamLimit: "As stated in the agreement", commercialUse: true, distributionAllowed: true, monetizationAllowed: true, contentIdAllowed: false, includesStems: true, exclusive: true, beatRemainsForSale: false, bestFor: "Exclusive rights to use", purchasableKey: "exclusive" }
 ];
 
-export function beatStoreSlug(beat: Pick<Beat, "id" | "title">) {
-  const title = beat.title.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  return `${title || "beat"}-${beat.id}`;
-}
-
-export function findBeatByStoreSlug(beats: Beat[], slug: string, producerProfiles: ProducerProfile[] = []) {
-  return buildBeatStorefront(beats, producerProfiles).catalog.find((beat) => beatStoreSlug(beat) === slug) ?? null;
-}
-
 export const beatStoreReviews: Array<{ name: string; role: string; review: string }> = [];
 
 function svgDataUri(svg: string) {

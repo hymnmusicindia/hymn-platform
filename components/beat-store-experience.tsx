@@ -249,8 +249,6 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
   const { catalog } = useMemo(() => buildBeatStorefront(displayBeats, displayProducerProfiles), [displayBeats, displayProducerProfiles]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
-  const [touchMode, setTouchMode] = useState(false);
-  const [hoveredBeatId, setHoveredBeatId] = useState<number | null>(null);
   const [playingBeatId, setPlayingBeatId] = useState<number | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -337,15 +335,6 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const media = window.matchMedia("(hover: none), (pointer: coarse)");
-    const sync = () => setTouchMode(media.matches);
-    sync();
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
     const raw = window.localStorage.getItem("hymn-beat-cart");
     if (!raw) {
       setCartHydrated(true);
@@ -425,14 +414,6 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
     },
     []
   );
-
-  const stopPreview = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.pause();
-    audio.currentTime = 0;
-    setPlayingBeatId(null);
-  };
 
   const playPreview = (beat: StorefrontBeat) => {
     if (!audioRef.current) {
@@ -718,19 +699,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
                 <BeatCard
                   key={beat.id}
                   beat={beat}
-                  touchMode={touchMode}
                   active={playingBeatId === beat.id}
-                  hovered={hoveredBeatId === beat.id}
-                  onHover={() => {
-                    setHoveredBeatId(beat.id);
-                    playPreview(beat);
-                  }}
-                  onLeave={() => {
-                    setHoveredBeatId((current) => (current === beat.id ? null : current));
-                    if (playingBeatId === beat.id) {
-                      stopPreview();
-                    }
-                  }}
                   onPlay={() => playPreview(beat)}
                   onAdd={(licenseType) => toggleCart(beat, licenseType)}
                   generalInCart={cart.some((item) => item.beatId === beat.id && item.licenseType === "general")}
