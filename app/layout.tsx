@@ -1,24 +1,23 @@
 ﻿import type { Metadata } from "next";
 import "./globals.css";
-import { SiteHeader } from "@/components/site-header";
-import { SiteFooter } from "@/components/site-footer";
-import { getSession } from "@/lib/session";
-import { OnboardingEntryRedirect } from "@/components/onboarding-entry-redirect";
+import "./styles/dashboard.css";
+import "./styles/distribution.css";
+import "./styles/product-ui.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.APP_URL?.trim() || "https://hymnmusic.fun"),
   title: "HYMN Music - Hitting Your Music Notes",
   description:
     "HYMN full-stack platform for distribution, beats, services, payments, dashboard and admin operations.",
   icons: {
-    icon: [{ url: "/assets/hymn-favicon.png?v=3", type: "image/png", sizes: "1024x1024" }],
-    shortcut: "/assets/hymn-favicon.png?v=3",
-    apple: [{ url: "/assets/hymn-favicon.png?v=3", type: "image/png", sizes: "1024x1024" }]
-  }
+    icon: [{ url: "/assets/hymn-favicon.png?v=4", type: "image/png", sizes: "180x180" }],
+    shortcut: "/assets/hymn-favicon.png?v=4",
+    apple: [{ url: "/assets/hymn-favicon.png?v=4", type: "image/png", sizes: "180x180" }]
+  },
+  alternates: { canonical: "/" }
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const session = await getSession();
-
   return (
     <html lang="en" data-theme="light" suppressHydrationWarning>
       <head>
@@ -39,12 +38,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           }}
         />
       </head>
-      <body suppressHydrationWarning>
-        <SiteHeader user={session} />
-        <OnboardingEntryRedirect isAuthenticated={Boolean(session)} />
-        {children}
-        <SiteFooter />
-      </body>
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }

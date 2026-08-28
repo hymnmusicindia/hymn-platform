@@ -26,6 +26,6 @@ const releaseFormSource = fs.readFileSync(path.join(process.cwd(), "components/r
 assert.match(releaseFormSource, /edit=\$\{id\}\$\{campaignQuery\}/, "Autosave must preserve the first-release campaign on the draft URL.");
 assert.match(releaseFormSource, /storePlatforms\.map\(\(platform\) => platform\.name\)/, "Default delivery must contain store platforms only and must not preselect paid social add-ons.");
 assert.match(releaseFormSource, /if \(firstReleaseOffer\) return;/, "The free funnel must prevent adding tracks beyond one Single.");
-const distributionStartSource = fs.readFileSync(path.join(process.cwd(), "app/distribution/start/page.tsx"), "utf8");
+const distributionStartSource = fs.readFileSync(path.join(process.cwd(), "app/(authenticated)/distribution/start/page.tsx"), "utf8");
 assert.match(distributionStartSource, /campaignDraftEligible/, "An eligible campaign draft must retain its offer while being edited.");
 console.log("First Release Free pricing, add-on, qualification, and database uniqueness guards passed.");

@@ -105,6 +105,14 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
     }
   }, [isAuthenticated]);
 
+  const loadNotificationSummary = useCallback(async () => {
+    if (!isAuthenticated || notificationsOpen) return;
+    const response = await fetch("/api/notifications?summary=1", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json();
+    setUnreadCount(Number(data.unreadCount ?? 0));
+  }, [isAuthenticated, notificationsOpen]);
+
   async function markNotificationRead(notificationId: number) {
     if (!isAuthenticated || notificationMutationsRef.current.has(notificationId)) return true;
     const target = notifications.find((item) => item.id === notificationId);
@@ -168,9 +176,9 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
     // Keep the unread badge current, but avoid waking every authenticated page more
     // often than necessary. Manual opening still refreshes immediately below.
-    void loadNotifications();
+    void loadNotificationSummary();
     const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") void loadNotifications();
+      if (document.visibilityState === "visible") void loadNotificationSummary();
     }, 120_000);
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible" && notificationsOpen) void loadNotifications();
@@ -180,7 +188,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [isAuthenticated, loadNotifications, notificationsOpen]);
+  }, [isAuthenticated, loadNotificationSummary, notificationsOpen]);
 
   useEffect(() => {
     if (!notificationsOpen || !isAuthenticated) return;

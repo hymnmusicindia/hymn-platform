@@ -1208,13 +1208,15 @@ export async function listBeats() {
   return rows as Beat[];
 }
 
-export async function listAllBeats(): Promise<Beat[]> {
+export async function listAllBeats(limit?: number): Promise<Beat[]> {
+  const take = limit == null ? undefined : Math.max(1, Math.min(limit, 48));
   if (usesPostgresPrisma()) {
     try {
       const prismaBeats = await prisma.beat.findMany({
         where: { enabled: true },
         include: { user: true, audio: true, preview: true, artwork: true },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        ...(take ? { take } : {})
       });
       if (prismaBeats.length > 0) return prismaBeats.map(mapPrismaBeat);
     } catch (e) {
@@ -1224,13 +1226,14 @@ export async function listAllBeats(): Promise<Beat[]> {
   }
 
   const pool = getPool();
-  if (!pool) return [...memory.beats].sort((a, b) => b.id - a.id);
+  if (!pool) return [...memory.beats].sort((a, b) => b.id - a.id).slice(0, take);
   const [rows] = await pool.query(
     `SELECT b.id, b.producer_id AS producerId, u.name AS producerName, b.title, b.bpm, b.genre, b.mood, b.price,
             b.audio_preview_url AS audioPreviewUrl, b.file_url AS fileUrl, b.artwork_url AS artworkUrl, b.enabled, b.created_at AS createdAt
      FROM beats b
      LEFT JOIN users u ON u.id = b.producer_id
-     ORDER BY b.created_at DESC`
+     ORDER BY b.created_at DESC${take ? " LIMIT ?" : ""}`,
+    take ? [take] : []
   );
   return rows as Beat[];
 }
@@ -2665,11 +2668,13 @@ async function ensureSiteSettingsRow(pool: mysql.Pool) {
   await pool.query("INSERT INTO site_settings (id, home_hero_image_url) VALUES (1, NULL)");
 }
 
-export async function listProducerProfiles(): Promise<ProducerProfile[]> {
+export async function listProducerProfiles(limit?: number): Promise<ProducerProfile[]> {
+  const take = limit == null ? undefined : Math.max(1, Math.min(limit, 48));
   if (usesPostgresPrisma()) {
     try {
       const profiles = await prisma.producerProfile.findMany({
-        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }]
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        ...(take ? { take } : {})
       });
       if (profiles.length > 0) return profiles.map(mapPrismaProducerProfile);
     } catch (e) {
@@ -2679,13 +2684,14 @@ export async function listProducerProfiles(): Promise<ProducerProfile[]> {
   }
 
   const pool = getPool();
-  if (!pool) return [...memory.producerProfiles].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+  if (!pool) return [...memory.producerProfiles].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)).slice(0, take);
 
   await ensureProducerProfileSeeds(pool);
   const [rows] = await pool.query(
     `SELECT id, slug, name, description, specialty, image_url AS imageUrl, active, sort_order AS sortOrder, created_at AS createdAt, updated_at AS updatedAt
      FROM producer_profiles
-     ORDER BY sort_order ASC, created_at ASC`
+     ORDER BY sort_order ASC, created_at ASC${take ? " LIMIT ?" : ""}`,
+    take ? [take] : []
   );
   return (rows as Array<Record<string, any>>).map(normalizeProducerProfile);
 }

@@ -14,6 +14,9 @@ export async function GET(request: Request) {
   if (!session) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
+  if (searchParams.get("summary") === "1") {
+    return NextResponse.json({ unreadCount: await getUnreadNotificationCount(session.sub) });
+  }
   const limit = Number(searchParams.get("limit") ?? 20);
   const [notifications, unreadCount] = await Promise.all([
     listNotificationsByUser(session.sub, Number.isFinite(limit) ? limit : 20),

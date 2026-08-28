@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 type Role = "customer" | "producer" | "admin";
+const canonicalHostname = process.env.CANONICAL_HOST?.trim().toLowerCase() || "hymnmusic.fun";
 
 const protectedRoutes: Array<{ prefix: string; roles: Role[] }> = [
   { prefix: "/dashboard/customer", roles: ["customer", "producer", "admin"] },
@@ -23,6 +24,17 @@ const protectedApis: Array<{ prefix: string; roles: Role[] }> = [
 ];
 
 export async function proxy(request: NextRequest) {
+  if (process.env.NODE_ENV === "production") {
+    const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+    const requestHost = (forwardedHost || request.headers.get("host") || "").split(":")[0].toLowerCase();
+    const forwardedProtocol = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+    if (requestHost !== canonicalHostname || forwardedProtocol === "http") {
+      const destination = request.nextUrl.clone();
+      destination.protocol = "https:";
+      destination.host = canonicalHostname;
+      return NextResponse.redirect(destination, 308);
+    }
+  }
   const pathname = request.nextUrl.pathname;
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/") || pathname === "/api/admin" || pathname.startsWith("/api/admin/");
   if (pathname.startsWith("/api/") && !pathname.startsWith("/api/webhooks/") && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
@@ -170,7 +182,7 @@ function requiredProxySecret(name: "JWT_SECRET" | "ADMIN_JWT_SECRET") {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/producer-dashboard/:path*", "/producer/dashboard/:path*", "/admin/:path*", "/api/:path*"]
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"]
 };
 
 // vercel trigger

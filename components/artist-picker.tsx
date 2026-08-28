@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { Plus } from "lucide-react";
 import type { ArtistProfile, SpotifyArtistResult } from "@/lib/types";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
@@ -33,7 +34,7 @@ function initials(name: string) {
 
 function ArtistAvatar({ name, imageUrl }: { name: string; imageUrl?: string | null }) {
   if (imageUrl) {
-    return <img src={imageUrl} alt={name} loading="lazy" decoding="async" className="h-10 w-10 rounded-full object-cover" />;
+    return <Image src={imageUrl} alt={name} width={40} height={40} sizes="40px" className="h-10 w-10 rounded-full object-cover" />;
   }
 
   return (

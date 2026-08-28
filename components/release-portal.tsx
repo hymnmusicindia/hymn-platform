@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
@@ -255,7 +257,7 @@ export function ReleaseManage({ release, initialTab }: { release: Release; initi
         <p>{releaseStatusMessage(release)}</p>
       </div>
       <div className="grid gap-6 md:grid-cols-[220px,1fr] md:items-center">
-        <div className="aspect-square overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{release.artworkUrl ? <img src={release.artworkUrl} alt={title} loading="lazy" decoding="async" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center"><Sparkles className="h-10 w-10" /></div>}</div>
+        <div className="relative aspect-square overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{release.artworkUrl ? <Image src={release.artworkUrl} alt={title} fill sizes="(max-width: 767px) 100vw, 220px" className="object-cover" /> : <div className="flex h-full items-center justify-center"><Sparkles className="h-10 w-10" /></div>}</div>
         <div className="min-w-0">
           <div className="flex flex-wrap gap-2"><span className="status-pill status-pill-active">{release.status.replace(/_/g, " ")}</span><span className="status-pill capitalize">{release.releaseType}</span></div>
           <h1 className="mt-4 truncate text-3xl font-semibold sm:text-4xl" style={{ color: "var(--text)" }}>{title}</h1>
@@ -589,7 +591,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
                   const liveStores = release.distributionStores?.filter((store) => store.status === "Live").length ?? 0;
                   const storeTotal = release.distributionStores?.length ?? 0;
                   return <tr key={release.id} className="border-b last:border-b-0" style={{ borderColor: "var(--border)" }}>
-                    <td className="px-4 py-3"><div className="h-11 w-11 overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{release.artworkUrl ? <img src={release.artworkUrl} alt="" className="h-full w-full object-cover" /> : null}</div></td>
+                    <td className="px-4 py-3"><div className="relative h-11 w-11 overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{release.artworkUrl ? <Image src={release.artworkUrl} alt="" fill sizes="44px" className="object-cover" /> : null}</div></td>
                     <td className="max-w-[220px] px-4 py-3"><Link href={`/dashboard/releases/${release.id}`} className="block truncate font-semibold hover:underline">{release.releaseTitle || release.trackName}</Link></td>
                     <td className="max-w-[160px] truncate px-4 py-3" style={{ color: "var(--text-muted)" }}>{release.artistName}</td>
                     <td className="px-4 py-3 capitalize" style={{ color: "var(--text-muted)" }}>{release.releaseType}</td>
