@@ -178,12 +178,9 @@ export function buildBeatStorefront(beats: Beat[], producerProfiles: ProducerPro
       return createPoster(beat.title, vibeTag, producer.palette, "square");
     }
     try {
-      if (url.startsWith("/") || url.startsWith("data:")) return url;
+      if (url.startsWith("/") || url.startsWith("data:") || url.startsWith("blob:")) return url;
       const parsed = new URL(url);
-      if (parsed.hostname !== "images.unsplash.com") {
-        return createPoster(beat.title, vibeTag, producer.palette, "square");
-      }
-      return url;
+      return parsed.protocol === "https:" || parsed.protocol === "http:" ? url : createPoster(beat.title, vibeTag, producer.palette, "square");
     } catch {
       return createPoster(beat.title, vibeTag, producer.palette, "square");
     }

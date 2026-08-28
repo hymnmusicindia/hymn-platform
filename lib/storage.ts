@@ -7,7 +7,13 @@ const maxAudioBytes = 50 * 1024 * 1024;
 const maxImageBytes = 10 * 1024 * 1024;
 
 function getUploadRoot() {
-  return process.env.STORAGE_ROOT || "./public/uploads";
+  const configured = process.env.STORAGE_ROOT?.trim();
+  const durableRoot = process.env.HYMN_STORAGE_ROOT?.trim() || process.env.PRIVATE_STORAGE_ROOT?.trim();
+  if (configured && (process.env.NODE_ENV !== "production" || path.isAbsolute(configured))) return configured;
+  if (durableRoot) return path.join(durableRoot, "Public");
+  if (configured) throw new Error("STORAGE_ROOT must be an absolute persistent path in production.");
+  if (process.env.NODE_ENV === "production") throw new Error("STORAGE_ROOT or HYMN_STORAGE_ROOT is required for durable public uploads in production.");
+  return "./public/uploads";
 }
 
 const publicUploadDirectories = ["producers", "beats", "Beatstore", "site"] as const;

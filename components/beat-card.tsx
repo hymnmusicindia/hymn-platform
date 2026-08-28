@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { Check, Pause, Play, Disc3 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import type { Beat } from "@/lib/types";
 import { beatStoreSlug } from "@/lib/beat-store";
 
@@ -44,11 +44,14 @@ export function BeatCard({
 
   // Fallbacks for standard beats missing storefront metadata
   const coverImage = beat.coverImage;
+  const [coverFailed, setCoverFailed] = useState(false);
   const vibeTag = beat.vibeTag || beat.genre || "Beats";
   const activityLabel = beat.activityLabel || (beat.enabled ? "Live" : "Disabled");
   const producerName = beat.producer?.name || "Producer";
   const producerSlug = beat.producer?.slug || "#";
   const exclusiveRemaining = beat.exclusiveRemaining;
+
+  useEffect(() => setCoverFailed(false), [coverImage]);
 
   function formatMoney(value: number) {
     return `\u20B9${value.toLocaleString("en-IN")}`;
@@ -73,18 +76,19 @@ export function BeatCard({
       <div className="pointer-events-none absolute inset-x-8 top-0 z-20 h-px bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 transition duration-300 group-hover:opacity-60" />
       <div className="relative p-2.5 sm:p-3">
         <div className="relative aspect-square overflow-hidden rounded-[1rem] border border-[var(--border)] bg-[var(--surface)]">
-          {coverImage ? (
-            <Image
+          {coverImage && !coverFailed ? (
+            <img
               src={coverImage}
               alt={`${beat.title} cover artwork`}
-              fill
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 260px, 300px"
-              className="object-cover transition duration-700 ease-out group-hover:scale-[1.035] group-hover:saturate-[1.08]"
-              priority={false}
+              loading="lazy"
+              decoding="async"
+              className="absolute inset-0 h-full w-full object-cover transition duration-700 ease-out group-hover:scale-[1.035] group-hover:saturate-[1.08]"
+              onError={() => setCoverFailed(true)}
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-zinc-800">
-              <Disc3 className="h-10 w-10 text-zinc-500 opacity-50" />
+            <div className="flex h-full w-full flex-col items-center justify-center bg-[linear-gradient(145deg,#17191d,#30343b)] px-4 text-center">
+              <Disc3 className="h-10 w-10 text-white/45" />
+              <span className="mt-3 line-clamp-2 text-xs font-semibold text-white/70">{beat.title}</span>
             </div>
           )}
 
