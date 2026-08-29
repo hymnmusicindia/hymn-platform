@@ -38,8 +38,9 @@ const ADMIN_TABS = [
   "payments",
   "content",
   "timed-playlists",
-  "operations"
-  ,"activity"
+  "operations",
+  "reviews",
+  "activity"
 ] as const;
 
 type AdminPageProps = {

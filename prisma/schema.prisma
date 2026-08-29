@@ -178,6 +178,8 @@ model User {
   approvedFinancialAdjustments  FinancialAdjustment[]               @relation("FinancialAdjustmentApprover")
   direNoteDiscrepanciesResolved DireNoteReconciliationDiscrepancy[] @relation("DireNoteDiscrepancyResolver")
   promotionRedemptions          PromotionRedemption[]
+  purchaseReviews               PurchaseReview[]                    @relation("ReviewAuthor")
+  moderatedPurchaseReviews      PurchaseReview[]                    @relation("ReviewModerator")
 
   @@index([role])
   @@index([email])
@@ -1411,17 +1413,18 @@ model SubscriptionPlanVersion {
 }
 
 model SubscriptionPayment {
-  id                 Int          @id @default(autoincrement())
-  subscriptionId     Int          @map("subscription_id")
-  razorpayPaymentId  String       @unique @map("razorpay_payment_id")
-  razorpayInvoiceId  String?      @map("razorpay_invoice_id")
+  id                 Int             @id @default(autoincrement())
+  subscriptionId     Int             @map("subscription_id")
+  razorpayPaymentId  String          @unique @map("razorpay_payment_id")
+  razorpayInvoiceId  String?         @map("razorpay_invoice_id")
   amount             Int
-  currency           String       @default("INR")
+  currency           String          @default("INR")
   status             String
-  billingPeriodStart DateTime?    @map("billing_period_start")
-  billingPeriodEnd   DateTime?    @map("billing_period_end")
-  createdAt          DateTime     @default(now()) @map("created_at")
-  subscription       Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  billingPeriodStart DateTime?       @map("billing_period_start")
+  billingPeriodEnd   DateTime?       @map("billing_period_end")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  subscription       Subscription    @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  review             PurchaseReview?
 
   @@index([subscriptionId, createdAt])
   @@index([razorpayInvoiceId])
@@ -1843,6 +1846,7 @@ model CheckoutOrder {
   items               CheckoutOrderItem[]
   couponRedemptions   CouponRedemption[]
   webhookEvents       PaymentWebhookEvent[]
+  review              PurchaseReview?
 
   @@index([userId, paymentStatus, createdAt])
   @@index([paymentStatus, createdAt])
@@ -1894,10 +1898,39 @@ model DistributionOrder {
   webhookEvents     PaymentWebhookEvent[]
   user              User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
   release           Release?              @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+  review            PurchaseReview?
   createdAt         DateTime              @default(now()) @map("created_at")
 
   @@index([userId, paymentStatus])
   @@map("distribution_orders")
+}
+
+model PurchaseReview {
+  id                    Int                  @id @default(autoincrement())
+  userId                Int                  @map("user_id")
+  checkoutOrderId       Int?                 @unique @map("checkout_order_id")
+  distributionOrderId   Int?                 @unique @map("distribution_order_id")
+  subscriptionPaymentId Int?                 @unique @map("subscription_payment_id")
+  purchaseType          String               @map("purchase_type")
+  purchaseLabel         String               @map("purchase_label")
+  rating                Int
+  body                  String?
+  status                String               @default("pending")
+  featured              Boolean              @default(false)
+  featuredOrder         Int                  @default(0) @map("featured_order")
+  moderatedById         Int?                 @map("moderated_by_id")
+  moderatedAt           DateTime?            @map("moderated_at")
+  createdAt             DateTime             @default(now()) @map("created_at")
+  updatedAt             DateTime             @updatedAt @map("updated_at")
+  user                  User                 @relation("ReviewAuthor", fields: [userId], references: [id], onDelete: Restrict)
+  moderatedBy           User?                @relation("ReviewModerator", fields: [moderatedById], references: [id], onDelete: SetNull)
+  checkoutOrder         CheckoutOrder?       @relation(fields: [checkoutOrderId], references: [id], onDelete: Restrict)
+  distributionOrder     DistributionOrder?   @relation(fields: [distributionOrderId], references: [id], onDelete: Restrict)
+  subscriptionPayment   SubscriptionPayment? @relation(fields: [subscriptionPaymentId], references: [id], onDelete: Restrict)
+
+  @@index([status, featured, featuredOrder])
+  @@index([userId, createdAt])
+  @@map("purchase_reviews")
 }
 
 model PaymentWebhookEvent {

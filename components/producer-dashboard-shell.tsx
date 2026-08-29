@@ -204,6 +204,8 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
     if (!editingBeat) return;
     const form = event.currentTarget;
     const formData = new FormData(form);
+    const targetBeat = editingBeat;
+    const replacementArtwork = formData.get("artwork");
     const patch = {
       title: String(formData.get("title") || ""),
       bpm: Number(formData.get("bpm")),
@@ -214,8 +216,28 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
       exclusivePrice: Number(formData.get("exclusivePrice")),
       description: String(formData.get("description") || ""),
     };
-    handleBeatUpdate(editingBeat, patch);
-    setEditingBeat(null);
+    startTransition(async () => {
+      try {
+        const metadataResponse = await fetch(`/api/producer/beats/${targetBeat.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+        const metadataData = await metadataResponse.json().catch(() => ({}));
+        if (!metadataResponse.ok) throw new Error(metadataData.error || "Could not update beat details.");
+        let updatedBeat = metadataData.beat as Beat;
+        setCatalog((items) => items.map((item) => item.id === targetBeat.id ? updatedBeat : item));
+        if (replacementArtwork instanceof File && replacementArtwork.size > 0) {
+          const artworkForm = new FormData();
+          artworkForm.set("artwork", replacementArtwork);
+          const artworkResponse = await fetch(`/api/producer/beats/${targetBeat.id}/artwork`, { method: "PATCH", body: artworkForm });
+          const artworkData = await artworkResponse.json().catch(() => ({}));
+          if (!artworkResponse.ok) throw new Error(artworkData.error || "Beat details were saved, but the cover could not be replaced.");
+          updatedBeat = artworkData.beat as Beat;
+        }
+        setCatalog((items) => items.map((item) => item.id === targetBeat.id ? updatedBeat : item));
+        setEditingBeat(null);
+        setFeedback(replacementArtwork instanceof File && replacementArtwork.size > 0 ? `Beat and cover updated: ${updatedBeat.title}. The previous cover was permanently deleted.` : `Beat updated: ${updatedBeat.title}`);
+      } catch (error) {
+        setFeedback(error instanceof Error ? error.message : "Could not update beat.");
+      }
+    });
   }
 
   function handleBeatDelete() {
@@ -522,9 +544,10 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
                 <div><label className="text-sm font-medium mb-1 block">Exclusive Licence price (Rs)</label><input name="exclusivePrice" type="number" defaultValue={editingBeat.exclusivePrice} required className="field" /></div>
               </div>
               <div><label className="text-sm font-medium mb-1 block">Description</label><textarea name="description" defaultValue={editingBeat.description} className="field min-h-24" /></div>
+              <label className="grid gap-2 text-sm"><span className="font-medium">Replace cover artwork <span style={{ color: "var(--text-soft)" }}>(optional)</span></span><input name="artwork" type="file" accept="image/jpeg,image/png,image/webp" className="field" /><span className="text-xs leading-5" style={{ color: "var(--text-soft)" }}>JPEG, PNG, or WebP up to 10 MB. After a successful replacement, the previous cover is permanently deleted from storage with no backup.</span></label>
               <div className="mt-4 flex justify-end gap-3">
                 <button type="button" onClick={() => setEditingBeat(null)} className="btn-outline pressable">Cancel</button>
-                <button type="submit" className="btn-primary pressable">Save Changes</button>
+                <button type="submit" disabled={isPending} className="btn-primary pressable disabled:opacity-50">{isPending ? "Saving…" : "Save Changes"}</button>
               </div>
             </form>
           </div>

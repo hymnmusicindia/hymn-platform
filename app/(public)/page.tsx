@@ -85,7 +85,7 @@ const howItWorks: Array<[string, string, string, LucideIcon]> = [
 ];
 
 export default async function HomePage() {
-  const [{ beats, producerProfiles, googleAvatarUrls }, session] = await Promise.all([getPublicHomePreview(), getSession()]);
+  const [{ beats, producerProfiles, googleAvatarUrls, featuredReviews }, session] = await Promise.all([getPublicHomePreview(), getSession()]);
   const { catalog } = buildBeatStorefront(beats, producerProfiles);
   return (
     <main className="overflow-hidden bg-background pb-20 text-foreground">
@@ -245,7 +245,7 @@ export default async function HomePage() {
         </div>
         <div className="overflow-hidden rounded-[2rem] border border-border bg-surface/72 p-4">
           <div className="marquee-row gap-4">
-            {[...testimonials, ...beatStoreReviews.map((review) => [review.review, review.name, review.role, "Verified creator"]), ...testimonials].map(([quote, name, role, milestone], index) => (
+            {[...testimonials, ...featuredReviews.map((review) => [review.body || "", review.user.name, review.purchaseType === "beat" ? "Beat Store customer" : "HYMN distribution customer", `${review.rating}/5 verified purchase`]), ...beatStoreReviews.map((review) => [review.review, review.name, review.role, "Verified creator"]), ...testimonials].map(([quote, name, role, milestone], index) => (
               <article key={`${name}-${index}`} className="w-[320px] shrink-0 rounded-[1.5rem] border border-white/[0.07] bg-card p-5 sm:w-[390px]">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">

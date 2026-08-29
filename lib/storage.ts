@@ -109,3 +109,15 @@ export async function deleteUploadedFileByUrl(value: string | null | undefined) 
   const relativePath = encoded.map((part) => decodeURIComponent(part)).join("/");
   await fs.unlink(resolvePublicUploadPath(relativePath)).catch(() => undefined);
 }
+
+/** Permanently removes a public local asset after its database reference has been replaced. */
+export async function deleteUploadedFileByUrlPermanently(value: string | null | undefined) {
+  if (!value?.startsWith("/api/public-uploads/")) return;
+  const encoded = value.slice("/api/public-uploads/".length).split("/");
+  const relativePath = encoded.map((part) => decodeURIComponent(part)).join("/");
+  try {
+    await fs.unlink(resolvePublicUploadPath(relativePath));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}

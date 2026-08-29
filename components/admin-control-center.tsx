@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { CheckCircle2, X, XCircle } from "lucide-react";
 import { AdminContentManager } from "@/components/admin-content-manager";
+import { AdminReviewManager } from "@/components/admin-review-manager";
 import { AdminTimedPlaylistManager } from "@/components/admin-timed-playlist-manager";
 import { AdminActivityAndLogs } from "@/components/admin-activity-and-logs";
 import { AdminUserBenefits } from "@/components/admin-user-benefits";
@@ -456,6 +457,7 @@ type AdminTab =
   | "content"
   | "timed-playlists"
   | "operations"
+  | "reviews"
   | "activity";
 
 export function AdminControlCenter({
@@ -1013,6 +1015,7 @@ export function AdminControlCenter({
         { key: "content", label: "Content Settings", description: "Site and producer content", group: "Growth / Content" },
         { key: "producers", label: "Producers", description: "Applications and catalog", group: "Marketplace" },
         { key: "operations", label: "Beats / Orders", description: "Inventory and leads", group: "Marketplace" },
+        { key: "reviews", label: "Reviews", description: "Moderate customer feedback", group: "Marketplace" },
         { key: "contracts", label: "Contracts", description: "Agreements and splits", group: "Support / Legal" },
         { key: "support", label: "Support Tickets", description: "Inbound help", group: "Support / Legal" },
         { key: "users", label: "Users", description: "Role management", group: "Platform" },
@@ -1518,6 +1521,7 @@ export function AdminControlCenter({
           </SurfaceSection>
         </div>
       ) : null}
+      {activeTab === "reviews" ? <AdminReviewManager /> : null}
       {(activeTab === "analytics" || activeTab === "contracts" || activeTab === "promotions" || activeTab === "fraud" || activeTab === "team") ? (
         <div className="grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
           <SurfaceSection title={activeTab === "analytics" ? "Platform analytics" : activeTab === "contracts" ? "Contracts" : activeTab === "promotions" ? "Promotion operations" : activeTab === "fraud" ? "Fraud detection" : "Team management"} description="Executive module view using live HYMN platform signals while preserving the existing backend operations.">
