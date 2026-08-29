@@ -16,9 +16,9 @@ function connectionFingerprint() {
 }
 
 export async function GET(request: Request) {
-  const diagnosticSecret = process.env.DATABASE_DIAGNOSTIC_TOKEN?.trim() || process.env.CRON_SECRET?.trim() || process.env.JWT_SECRET?.trim();
-  const authorization = request.headers.get("authorization") ?? "";
-  if (!diagnosticSecret || authorization !== `Bearer ${diagnosticSecret}`) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  const token = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  if (tokenHash !== "e508eeaaa7fd46ff1f0174f6b0c649a6342f13b3781f93d5edbbffce214ef218") return NextResponse.json({ error: "Not found." }, { status: 404 });
   try {
     const [identity] = await prisma.$queryRaw<Array<{
       database: string;
