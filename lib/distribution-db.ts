@@ -764,8 +764,22 @@ export async function createDistributionOrder(input: { userId: number; plan: Sub
   const pool = getPool();
   if (!pool) {
     if (isPostgresPrisma()) {
-      const dbOrder = await prisma.distributionOrder.create({
-        data: { userId: input.userId, plan: input.plan, amount: input.amount, creditsUsed: input.creditsUsed ?? 0, paymentStatus: 'created', razorpayOrderId: input.razorpayOrderId, releaseId: input.releaseId }
+      const dbOrder = await prisma.$transaction(async (tx) => {
+        if (input.releaseId) {
+          const bound = await tx.distributionOrder.findUnique({ where: { releaseId: input.releaseId } });
+          if (bound) {
+            if (bound.userId !== input.userId) throw new Error("This release draft is attached to another customer's checkout.");
+            if (bound.fulfilledAt || bound.paymentStatus === "paid" || bound.razorpayPaymentId) throw new Error("A captured payment is already attached to this release. Retry submission instead of creating another payment.");
+            const detached = await tx.distributionOrder.updateMany({
+              where: { id: bound.id, releaseId: input.releaseId, fulfilledAt: null, paymentStatus: { in: ["created", "authorized"] }, razorpayPaymentId: null },
+              data: { releaseId: null },
+            });
+            if (detached.count !== 1) throw new Error("The release checkout changed while the order was being prepared. Please retry.");
+          }
+        }
+        return tx.distributionOrder.create({
+          data: { userId: input.userId, plan: input.plan, amount: input.amount, creditsUsed: input.creditsUsed ?? 0, paymentStatus: 'created', razorpayOrderId: input.razorpayOrderId, releaseId: input.releaseId }
+        });
       });
       return { id: dbOrder.id, userId: input.userId, plan: input.plan, amount: input.amount, paymentStatus: dbOrder.paymentStatus, razorpayOrderId: dbOrder.razorpayOrderId } as any;
     }

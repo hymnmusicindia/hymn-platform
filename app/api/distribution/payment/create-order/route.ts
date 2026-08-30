@@ -25,6 +25,20 @@ export async function POST(request: Request) {
     if (hasActiveSubscription) {
       if (payload.paymentModel !== "subscription" || payload.plan !== subscription!.plan) return NextResponse.json({ error: "The selected plan does not match your active subscription." }, { status: 400 });
       if (subscription!.releaseLimit != null && subscription!.releasesUsed >= subscription!.releaseLimit) return NextResponse.json({ error: "Your subscription release allowance has been used." }, { status: 409 });
+      const existingEntitlement = payload.draftReleaseId
+        ? await prisma.distributionOrder.findUnique({ where: { releaseId: payload.draftReleaseId } })
+        : null;
+      if (existingEntitlement?.userId === session.sub && existingEntitlement.fulfilledAt == null && existingEntitlement.plan === payload.plan && existingEntitlement.amount === 0 && existingEntitlement.creditsUsed === 0 && existingEntitlement.razorpayOrderId.startsWith("sub_entitlement_")) {
+        return NextResponse.json({
+          orderId: existingEntitlement.razorpayOrderId,
+          amount: 0,
+          currency: existingEntitlement.currency,
+          displayAmount: 0,
+          requiresPayment: false,
+          subscriptionCovered: true,
+          resumedOrder: true,
+        });
+      }
       const entitlementOrderId = `sub_entitlement_${session.sub}_${Date.now()}`;
       await createDistributionOrder({ userId: session.sub, plan: payload.plan, amount: 0, razorpayOrderId: entitlementOrderId, releaseId: payload.draftReleaseId });
       return NextResponse.json({
