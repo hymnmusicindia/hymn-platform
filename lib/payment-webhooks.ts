@@ -101,6 +101,12 @@ export async function confirmDistributionPayment(input: { razorpayOrderId: strin
     const alreadyPaid = order.paymentStatus === "paid";
     if (alreadyPaid && order.razorpayPaymentId && order.razorpayPaymentId !== input.paymentId) throw new Error("Order was already paid with a different payment.");
     if (!alreadyPaid && !["created", "authorized"].includes(order.paymentStatus)) throw new Error(`Order cannot be fulfilled from ${order.paymentStatus}.`);
+    if (!alreadyPaid && order.creditsUsed > 0) {
+      const debited = await tx.user.updateMany({ where: { id: order.userId, referralCredits: { gte: order.creditsUsed } }, data: { referralCredits: { decrement: order.creditsUsed } } });
+      if (debited.count !== 1) throw new Error("HYMN credit balance changed. Please recreate checkout; no additional payment was requested.");
+      const balance = await tx.user.findUniqueOrThrow({ where: { id: order.userId }, select: { referralCredits: true } });
+      await tx.creditLedgerEntry.create({ data: { userId: order.userId, type: "DISTRIBUTION_PURCHASE", bucket: "HYMN_CREDIT", amount: order.creditsUsed, direction: "debit", sourceType: "distribution_order", sourceId: String(order.id), description: "HYMN credits applied to distribution", idempotencyKey: `distribution-order:${order.id}:credit-debit`, balanceAfter: balance.referralCredits, metadata: { razorpayOrderId: order.razorpayOrderId, plan: order.plan } } });
+    }
     const updated = alreadyPaid ? order : await tx.distributionOrder.update({ where: { id: order.id }, data: { paymentStatus: "paid", razorpayPaymentId: input.paymentId } });
     if (!alreadyPaid) await tx.auditLog.create({ data: { actorId: input.userId ?? null, action: "DISTRIBUTION_PAYMENT_CONFIRMED", entity: "distribution_order", entityId: String(order.id), metadata: { source: input.source, paymentId: input.paymentId } } });
     const qualification = !alreadyPaid ? await qualifyReferralInTransaction(tx, { referredUserId: order.userId, transactionType: "distribution_order", transactionId: order.id, paymentId: input.paymentId, paidAmountInr: order.amount, source: input.source }) : { qualified: false as const, reason: "already_paid" as const };
@@ -130,7 +136,7 @@ export async function releaseDistributionOrderClaim(input: { razorpayOrderId: st
 }
 
 export async function attachDistributionOrderRelease(input: { razorpayOrderId: string; userId: number; releaseId: number }) {
-  const attached = await prisma.distributionOrder.updateMany({ where: { razorpayOrderId: input.razorpayOrderId, userId: input.userId, fulfilledAt: { not: null }, releaseId: null }, data: { releaseId: input.releaseId } });
+  const attached = await prisma.distributionOrder.updateMany({ where: { razorpayOrderId: input.razorpayOrderId, userId: input.userId, fulfilledAt: { not: null }, OR: [{ releaseId: null }, { releaseId: input.releaseId }] }, data: { releaseId: input.releaseId } });
   if (attached.count !== 1) throw new Error("The distribution order could not be linked to this release.");
   await prisma.auditLog.create({ data: { actorId: input.userId, action: "DISTRIBUTION_RELEASE_FULFILLED", entity: "distribution_order", entityId: input.razorpayOrderId, metadata: { releaseId: input.releaseId } } });
 }

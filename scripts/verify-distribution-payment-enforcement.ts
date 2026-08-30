@@ -14,17 +14,27 @@ assert.match(form, /if \(isCorrectionResubmission\)/);
 assert.match(form, /modal: \{ ondismiss: \(\) => reject\(new Error\("Checkout cancelled\."\)\) \}/);
 assert.match(form, /payment\.failed/);
 assert.doesNotMatch(form, /dev_dist_payment|dev_bypass_payment|sub_active/);
+assert.match(form, /existingAudioUrl: track\.existingAudioUrl \|\| undefined/);
+assert.match(form, /draftReleaseId: reviewReleaseId/);
+assert.match(form, /paidOrderReusable/);
+assert.match(form, /useHymnCredits/);
+assert.match(form, /HYMN credits/);
 
 assert.match(createOrder, /if \(amountPaise > 0 && !razorpay\)/);
+assert.match(createOrder, /fetchPayments/);
+assert.match(createOrder, /Multiple captured payments are waiting/);
+assert.match(createOrder, /No new charge was created/);
+assert.match(createOrder, /creditsUsed/);
 assert.doesNotMatch(createOrder, /dev_dist_order|dev_razorpay_key|BYPASS_DISTRIBUTION_PAYMENT/);
 
 assert.match(verifySubmit, /verifyRazorpaySignature/);
 assert.match(verifySubmit, /verifyCapturedRazorpayPayment/);
 assert.match(verifySubmit, /persistedOrder\.userId !== session\.sub/);
-assert.match(verifySubmit, /persistedOrder\.amount !== expectedAmount/);
+assert.match(verifySubmit, /persistedOrder\.amount \+ persistedOrder\.creditsUsed !== expectedAmount/);
 assert.match(verifySubmit, /claimDistributionOrderForSubmission/);
 assert.match(verifySubmit, /attachDistributionOrderRelease/);
 assert.match(verifySubmit, /reserveSubscriptionReleaseSlot/);
+assert.ok(verifySubmit.indexOf("await confirmDistributionPayment") < verifySubmit.indexOf("Artwork upload missing"), "Captured payment must be persisted before fallible asset validation.");
 
 assert.match(editRoute, /\["changes_requested", "rejected"\]/);
 assert.match(editRoute, /existingRelease\.paymentStatus !== "paid"/);
@@ -32,5 +42,6 @@ assert.doesNotMatch(editRoute, /\["draft", "changes_requested", "rejected", "und
 
 assert.match(payment, /paymentStatus: "paid", fulfilledAt: null/);
 assert.match(payment, /This payment or entitlement has already been used for a release/);
+assert.match(payment, /distribution-order:\$\{order\.id\}:credit-debit/);
 
 console.log("Distribution payment enforcement contracts passed: no draft/edit bypass, no fallback checkout, provider verification, entitlement validation, and replay claim are present.");

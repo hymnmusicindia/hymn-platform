@@ -31,12 +31,13 @@ export async function POST(request: Request) {
     const persistedOrder = await prisma.distributionOrder.findUnique({ where: { razorpayOrderId: parsed.razorpay_order_id } });
     if (!persistedOrder || persistedOrder.userId !== session.sub) return NextResponse.json({ error: "Distribution order not found." }, { status: 404 });
     if (persistedOrder.fulfilledAt) return NextResponse.json({ error: "This payment or entitlement has already been used for a release." }, { status: 409 });
+    if (persistedOrder.releaseId && persistedOrder.releaseId !== parsed.draftReleaseId) return NextResponse.json({ error: "This payment belongs to a different release draft." }, { status: 409 });
     if (persistedOrder.plan !== parsed.metadata.plan) return NextResponse.json({ error: "The submitted plan does not match the persisted order." }, { status: 400 });
     if ((persistedOrder.plan === "one_time") !== (parsed.metadata.paymentModel === "one_time")) return NextResponse.json({ error: "The submitted payment model does not match the persisted order." }, { status: 400 });
     const normalAmount = getDistributionPricing(parsed.metadata.plan, parsed.metadata.tracks.length, parsed.metadata.releaseType, parsed.metadata.platforms, { youtubeContentIdEnabled: parsed.metadata.youtubeContentIdEnabled });
     const promotionQuote = isFirstReleaseOffer ? calculateFirstReleasePrice({ plan: parsed.metadata.plan, releaseType: parsed.metadata.releaseType, trackCount: parsed.metadata.tracks.length, normalAmount }) : null;
     const expectedAmount = promotionQuote?.finalAmount ?? normalAmount;
-    if (persistedOrder.amount !== expectedAmount || persistedOrder.currency !== "INR") return NextResponse.json({ error: "The submitted release price does not match the persisted order." }, { status: 400 });
+    if (persistedOrder.amount + persistedOrder.creditsUsed !== expectedAmount || persistedOrder.currency !== "INR") return NextResponse.json({ error: "The submitted release price does not match the persisted order." }, { status: 400 });
     const isSubscriptionEntitlement = parsed.razorpay_order_id.startsWith("sub_entitlement_");
     if (isFirstReleaseOffer && persistedOrder.plan !== "one_time") return NextResponse.json({ error: "First-release order is invalid." }, { status: 400 });
     const savedArtistIds = new Set((await listArtistProfilesByUser(session.sub)).map((profile) => profile.id));
@@ -58,10 +59,15 @@ export async function POST(request: Request) {
       if (sub!.releaseLimit != null && sub!.releasesUsed >= sub!.releaseLimit) return NextResponse.json({ error: "Your subscription release allowance has been used." }, { status: 409 });
       if (parsed.metadata.paymentModel !== "subscription" || parsed.metadata.plan !== sub!.plan) return NextResponse.json({ error: "The submitted plan does not match your active subscription." }, { status: 400 });
     } else if (persistedOrder.amount > 0) {
-      const valid = verifyRazorpaySignature(parsed.razorpay_order_id, parsed.razorpay_payment_id, parsed.razorpay_signature);
-      if (!valid) return NextResponse.json({ error: "Invalid Razorpay signature." }, { status: 400 });
-      await verifyCapturedRazorpayPayment({ orderId: parsed.razorpay_order_id, paymentId: parsed.razorpay_payment_id, amountMinor: persistedOrder.amount * 100, currency: persistedOrder.currency });
-    } else if (!isFirstReleaseOffer) {
+      if (persistedOrder.paymentStatus === "paid") {
+        if (!persistedOrder.razorpayPaymentId || persistedOrder.razorpayPaymentId !== parsed.razorpay_payment_id) return NextResponse.json({ error: "The stored payment reference does not match this release." }, { status: 409 });
+      } else {
+        const valid = verifyRazorpaySignature(parsed.razorpay_order_id, parsed.razorpay_payment_id, parsed.razorpay_signature);
+        if (!valid) return NextResponse.json({ error: "Invalid Razorpay signature." }, { status: 400 });
+        await verifyCapturedRazorpayPayment({ orderId: parsed.razorpay_order_id, paymentId: parsed.razorpay_payment_id, amountMinor: persistedOrder.amount * 100, currency: persistedOrder.currency });
+        await confirmDistributionPayment({ razorpayOrderId: parsed.razorpay_order_id, paymentId: parsed.razorpay_payment_id, userId: session.sub, source: "browser" });
+      }
+    } else if (!(persistedOrder.paymentStatus === "paid" && persistedOrder.creditsUsed > 0 && persistedOrder.razorpayPaymentId === parsed.razorpay_payment_id)) {
       return NextResponse.json({ error: "This zero-value order has no valid release entitlement." }, { status: 400 });
     }
 
@@ -110,9 +116,7 @@ export async function POST(request: Request) {
       });
     }
 
-    if (persistedOrder.amount > 0) {
-      await confirmDistributionPayment({ razorpayOrderId: parsed.razorpay_order_id, paymentId: parsed.razorpay_payment_id, userId: session.sub, source: "browser" });
-    } else {
+    if (persistedOrder.amount === 0 && persistedOrder.creditsUsed === 0) {
       await confirmDistributionEntitlement({ razorpayOrderId: parsed.razorpay_order_id, userId: session.sub, paymentId: parsed.razorpay_payment_id });
     }
     const artistProfileIds = [...new Set(parsed.metadata.tracks.flatMap((track) => [

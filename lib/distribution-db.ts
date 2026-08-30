@@ -771,12 +771,12 @@ export async function updateDetailedReleaseStatus(releaseId: number, status: Rel
   return release;
 }
 
-export async function createDistributionOrder(input: { userId: number; plan: SubscriptionPlan; amount: number; razorpayOrderId: string; }) {
+export async function createDistributionOrder(input: { userId: number; plan: SubscriptionPlan; amount: number; creditsUsed?: number; razorpayOrderId: string; releaseId?: number; }) {
   const pool = getPool();
   if (!pool) {
     if (isPostgresPrisma()) {
       const dbOrder = await prisma.distributionOrder.create({
-        data: { userId: input.userId, plan: input.plan, amount: input.amount, paymentStatus: 'created', razorpayOrderId: input.razorpayOrderId }
+        data: { userId: input.userId, plan: input.plan, amount: input.amount, creditsUsed: input.creditsUsed ?? 0, paymentStatus: 'created', razorpayOrderId: input.razorpayOrderId, releaseId: input.releaseId }
       });
       return { id: dbOrder.id, userId: input.userId, plan: input.plan, amount: input.amount, paymentStatus: dbOrder.paymentStatus, razorpayOrderId: dbOrder.razorpayOrderId } as any;
     }
@@ -795,8 +795,8 @@ export async function createDistributionOrder(input: { userId: number; plan: Sub
     return order;
   }
   const [result] = await pool.query(
-    "INSERT INTO distribution_orders (user_id, plan, amount, razorpay_order_id, payment_status) VALUES (?, ?, ?, ?, 'created')",
-    [input.userId, input.plan, input.amount, input.razorpayOrderId]
+    "INSERT INTO distribution_orders (user_id, release_id, plan, amount, credits_used, razorpay_order_id, payment_status) VALUES (?, ?, ?, ?, ?, ?, 'created')",
+    [input.userId, input.releaseId ?? null, input.plan, input.amount, input.creditsUsed ?? 0, input.razorpayOrderId]
   );
   return {
     id: Number((result as mysql.ResultSetHeader).insertId),

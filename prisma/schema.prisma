@@ -1890,6 +1890,7 @@ model DistributionOrder {
   releaseId         Int?                  @unique @map("release_id")
   plan              String
   amount            Int
+  creditsUsed       Int                   @default(0) @map("credits_used")
   razorpayOrderId   String                @unique @map("razorpay_order_id")
   razorpayPaymentId String?               @unique @map("razorpay_payment_id")
   paymentStatus     String                @default("created") @map("payment_status")

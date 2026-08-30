@@ -73,7 +73,7 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
 
           {user ? (
             <div className="mx-auto w-full max-w-[1440px]">
-              <ReleaseForm selectedPlan={selectedPlan} hasActiveSubscription={hasActiveSubscription} initialRelease={editingRelease} firstReleaseOffer={Boolean(campaignEligibility?.eligible && campaignDraftEligible)} campaignAttribution={attribution} prefillSuggestions={releasePrefill.suggestions} />
+              <ReleaseForm selectedPlan={selectedPlan} hasActiveSubscription={hasActiveSubscription} hymnCreditBalance={Number(user.referralCredits || 0)} initialRelease={editingRelease} firstReleaseOffer={Boolean(campaignEligibility?.eligible && campaignDraftEligible)} campaignAttribution={attribution} prefillSuggestions={releasePrefill.suggestions} />
             </div>
           ) : firstValue(params.onboarding) === "release" ? <ReleaseOnboardingGate /> : (
             <div className="surface-card p-6 text-center sm:p-8">

@@ -945,6 +945,7 @@ function StepIntro({
 export function ReleaseForm({
   selectedPlan,
   hasActiveSubscription = false,
+  hymnCreditBalance = 0,
   initialRelease,
   firstReleaseOffer = false,
   campaignAttribution = {},
@@ -952,6 +953,7 @@ export function ReleaseForm({
 }: {
   selectedPlan: DistributionPlanOption;
   hasActiveSubscription?: boolean;
+  hymnCreditBalance?: number;
   initialRelease?: Release | null;
   firstReleaseOffer?: boolean;
   campaignAttribution?: Record<string, string>;
@@ -988,6 +990,7 @@ export function ReleaseForm({
   );
   const [queue, setQueue] = useState<DistributionQueueSummary | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [useHymnCredits, setUseHymnCredits] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [status, setStatus] = useState<string | null>(null);
   const [autosaveStatus, setAutosaveStatus] = useState<"waiting" | "saving" | "saved" | "error">(
@@ -1204,6 +1207,8 @@ export function ReleaseForm({
       : currentPlan.price) + ugcAddOnAmount;
   const firstReleaseDiscount = firstReleaseOffer && selectedPlan === "one_time" && releaseType === "single" && tracks.length === 1 ? Math.min(99, distributionAmount - ugcAddOnAmount) : 0;
   const finalDistributionAmount = Math.max(0, distributionAmount - firstReleaseDiscount);
+  const hymnCreditsApplied = useHymnCredits && !subscriptionCovered && selectedPlan === "one_time" ? Math.min(Math.max(0, hymnCreditBalance), finalDistributionAmount) : 0;
+  const distributionCheckoutAmount = Math.max(0, finalDistributionAmount - hymnCreditsApplied);
   const legalComplete = useMemo(
     () => Object.values(legal).every(Boolean),
     [legal],
@@ -2584,6 +2589,8 @@ export function ReleaseForm({
             ? `cover-license-${index}`
             : undefined,
           audioFileKey: `audio-${index}`,
+          existingAudioUrl: track.existingAudioUrl || undefined,
+          existingCoverLicenseConfirmed: track.existingCoverLicenseConfirmed,
           duration: track.duration,
           explicitContent: track.explicitContent,
           dolbyAtmos: track.dolbyAtmos,
@@ -2635,6 +2642,8 @@ export function ReleaseForm({
         releaseType,
         platforms,
         youtubeContentIdEnabled,
+        draftReleaseId: reviewReleaseId,
+        useHymnCredits,
         ...(firstReleaseOffer ? { promotionCode: "FIRST_RELEASE_FREE" } : {}),
       };
       const orderResponse = await fetch(
@@ -2650,6 +2659,14 @@ export function ReleaseForm({
         throw new Error(orderData.error || "Unable to create payment order.");
 
       if (orderData.requiresPayment === false) {
+        if (orderData.paidOrderReusable === true) {
+          if (!orderData.paymentId) throw new Error("The captured payment reference is unavailable. Contact HYMN support; do not pay again.");
+          setStatus("Resuming your paid release submission...");
+          const data = await submitRelease(orderData.orderId, orderData.paymentId, `stored-payment:${orderData.orderId}`);
+          setSubmittedRelease(data.release);
+          setUploadProgress(100);
+          return;
+        }
         const coveredBySubscription = orderData.subscriptionCovered === true;
         const data = await submitRelease(
           orderData.orderId,
@@ -2819,12 +2836,6 @@ export function ReleaseForm({
           </div>
         </header>
         {firstReleaseOffer ? <div className="release-free-offer-banner flex items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-500">🎁 First release on us</div> : null}
-        {tracks.some(track => track.audioUploadStatus === "uploading" || track.audioUploadStatus === "failed") ? (
-          <aside className="grid gap-2 rounded-xl border px-3 py-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} aria-live="polite">
-            <div className="flex items-center justify-between gap-3 text-xs font-semibold"><span>Uploads</span><span>{tracks.filter(track => track.audioUploadStatus === "uploaded").length} / {tracks.length} audio ready</span></div>
-            {tracks.filter(track => track.audioUploadStatus === "uploading" || track.audioUploadStatus === "failed").map(track => <div key={track.id} className="grid gap-1.5"><div className="flex min-w-0 items-center justify-between gap-3 text-xs"><span className="truncate">{track.audioUploadStatus === "failed" ? "! Upload paused" : "↑ Uploading"} {track.audioFileName}</span><strong>{track.audioUploadProgress}%</strong></div><div className="h-1.5 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,.08)" }}><span className="block h-full rounded-full bg-[var(--accent)] transition-[width]" style={{ width: `${track.audioUploadProgress}%` }} /></div><span className="text-[11px]" style={{ color: "var(--text-soft)" }}>{track.audioUploadStatus === "failed" ? "Select the same file to resume from the uploaded chunks." : `${(track.audioBytesUploaded / 1048576).toFixed(1)} MB / ${(track.audioTotalBytes / 1048576).toFixed(1)} MB · You can continue filling in the other release details.`}</span></div>)}
-          </aside>
-        ) : null}
         <div
           className="release-mobile-step-menu md:hidden rounded-[1.3rem] border p-3 md:p-4"
           style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}
@@ -2942,7 +2953,7 @@ export function ReleaseForm({
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Plan</dt><dd className="text-right">{currentPlan.title}</dd></div>
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Artists</dt><dd>{artistCount}</dd></div>
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Tracks</dt><dd>{tracks.length}</dd></div>
-              <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>{subscriptionCovered ? "Active subscription" : selectedPlan === "one_time" ? "Price" : "Plan coverage"}</dt><dd className="text-right">{subscriptionCovered ? currentPlan.title : selectedPlan === "one_time" ? (firstReleaseOffer && finalDistributionAmount === 0 ? "FREE" : `₹${finalDistributionAmount.toLocaleString("en-IN")}`) : `${currentPlan.cadence} · ₹${distributionAmount.toLocaleString("en-IN")}`}</dd></div>
+              <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>{subscriptionCovered ? "Active subscription" : selectedPlan === "one_time" ? "Price" : "Plan coverage"}</dt><dd className="text-right">{subscriptionCovered ? currentPlan.title : selectedPlan === "one_time" ? (distributionCheckoutAmount === 0 ? (firstReleaseDiscount > 0 ? "FREE" : "HYMN credits") : `₹${distributionCheckoutAmount.toLocaleString("en-IN")}`) : `${currentPlan.cadence} · ₹${distributionAmount.toLocaleString("en-IN")}`}</dd></div>
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Save state</dt><dd aria-live="polite" style={{ color: autosaveEligible && autosaveStatus === "error" ? "var(--danger)" : autosaveEligible && autosaveStatus === "saved" ? "var(--success)" : "var(--text-muted)" }}>{autosaveLabel}</dd></div>
             </dl>
             {validationIssueCount > 0 ? <div className="release-summary-tasks mt-5 border-t pt-4" style={{ borderColor: "var(--border)" }}><p className="text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Next up</p><ul className="mt-3 grid gap-1">{validationIssues.slice(0, 5).map((issue) => <li key={`${issue.key}-${issue.trackIndex ?? "release"}`}><button type="button" onClick={() => triggerFieldFocus(issue)} className="group flex w-full items-start justify-between gap-3 py-2 text-left text-xs leading-5 transition" style={{ color: "var(--text-muted)" }}><span>{issue.message}</span><span className="shrink-0 text-[var(--text-soft)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" aria-hidden="true">→</span></button></li>)}</ul></div> : null}
@@ -3225,8 +3236,15 @@ export function ReleaseForm({
               const expanded = expandedTrack === index;
               const issue = showErrors ? trackIssue(track, index) : null;
               const metadataReady = Boolean(track.trackTitle.trim() && !isPlaceholderTrackTitle(track.trackTitle) && track.primaryArtistIds.length && contributorsValid(track.songwriters) && contributorsValid(track.composers) && contributorsValid(track.producers));
-              const audioReady = Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl);
+              const audioReady = Boolean(track.existingAudioUrl || (track.audioPreviewUrl && track.audioUploadStatus === "uploaded"));
               const trackReady = metadataReady && audioReady;
+              const audioStatusLabel = track.audioUploadStatus === "uploading"
+                ? `Uploading ${track.audioUploadProgress}%`
+                : track.audioUploadStatus === "failed"
+                  ? "Upload paused"
+                  : audioReady
+                    ? "Audio ready"
+                    : "Audio required";
               return (
                 <div
                   key={track.id}
@@ -3278,7 +3296,7 @@ export function ReleaseForm({
                       >
                         {[fileFormat(track.audioFile, track.audioFileName), namesFor(track.primaryArtistIds) || track.primaryArtistQuery || "Primary artist required"].filter(Boolean).join(" • ")}
                       </p>
-                      <div className="release-track-status mt-2 flex flex-wrap gap-2 text-[11px] font-medium"><span style={{ color: audioReady ? "var(--success)" : "var(--danger)" }}>{audioReady ? "Audio ready" : "Audio required"}</span><span aria-hidden="true" style={{ color: trackReady ? "var(--success)" : "var(--danger)", opacity: .45 }}>·</span><span style={{ color: metadataReady ? "var(--success)" : "var(--danger)" }}>{metadataReady ? "Metadata ready" : "Metadata required"}</span>{issue ? <><span aria-hidden="true" style={{ color: "var(--danger)", opacity: .45 }}>·</span><span style={{ color: "var(--danger)" }}>Action required</span></> : null}</div>
+                      <div className="release-track-status mt-2 flex flex-wrap gap-2 text-[11px] font-medium"><span style={{ color: audioReady ? "var(--success)" : track.audioUploadStatus === "uploading" ? "var(--accent)" : "var(--danger)" }}>{audioStatusLabel}</span><span aria-hidden="true" style={{ color: trackReady ? "var(--success)" : "var(--danger)", opacity: .45 }}>·</span><span style={{ color: metadataReady ? "var(--success)" : "var(--danger)" }}>{metadataReady ? "Metadata ready" : "Metadata required"}</span>{issue ? <><span aria-hidden="true" style={{ color: "var(--danger)", opacity: .45 }}>·</span><span style={{ color: "var(--danger)" }}>Action required</span></> : null}</div>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
                     <span
@@ -3620,6 +3638,22 @@ export function ReleaseForm({
                               await handleAudioFile(index, file, controls);
                             }}
                           />
+                          {track.audioUploadStatus === "uploading" || track.audioUploadStatus === "failed" ? (
+                            <div className="grid gap-2 rounded-[1rem] border px-3 py-3" style={{ borderColor: track.audioUploadStatus === "failed" ? "color-mix(in srgb,var(--danger) 38%,var(--border))" : "var(--border)", background: "var(--card)" }} aria-live="polite">
+                              <div className="flex min-w-0 items-center justify-between gap-3 text-xs font-semibold">
+                                <span className="truncate">{track.audioUploadStatus === "failed" ? "Upload paused" : "Uploading"} {track.audioFileName}</span>
+                                <strong>{track.audioUploadProgress}%</strong>
+                              </div>
+                              <div className="h-1.5 overflow-hidden rounded-full" style={{ background: "var(--border)" }}>
+                                <span className="block h-full rounded-full bg-[var(--accent)] transition-[width]" style={{ width: `${track.audioUploadProgress}%` }} />
+                              </div>
+                              <span className="text-[11px]" style={{ color: track.audioUploadStatus === "failed" ? "var(--danger)" : "var(--text-soft)" }}>
+                                {track.audioUploadStatus === "failed"
+                                  ? "Select the same file to resume from the uploaded chunks."
+                                  : `${(track.audioBytesUploaded / 1048576).toFixed(1)} MB / ${(track.audioTotalBytes / 1048576).toFixed(1)} MB uploaded`}
+                              </span>
+                            </div>
+                          ) : null}
                           {track.audioPreviewUrl && track.audioUploadStatus === "uploaded" ? <div
                             className="audio-preview-reveal rounded-[1.1rem] border p-3"
                             style={{
@@ -5750,7 +5784,8 @@ export function ReleaseForm({
                               ],
                             ]
                           : []),
-                        ["Payment status", firstReleaseOffer && finalDistributionAmount === 0 ? "No payment required" : "Pending"],
+                        ...(hymnCreditsApplied > 0 ? [["HYMN credits", `-Rs ${hymnCreditsApplied.toLocaleString("en-IN")}`]] : []),
+                        ["Payment status", distributionCheckoutAmount === 0 ? "No Razorpay payment required" : "Pending"],
                       ].map(([label, value]) => (
                         <div
                           key={label}
@@ -5763,6 +5798,12 @@ export function ReleaseForm({
                         </div>
                       ))}
                     </div>
+                    {selectedPlan === "one_time" && finalDistributionAmount > 0 && hymnCreditBalance > 0 ? (
+                      <label className="mt-4 flex cursor-pointer items-center justify-between gap-4 rounded-xl border px-4 py-3" style={{ borderColor: useHymnCredits ? "var(--accent)" : "var(--border)", background: useHymnCredits ? "color-mix(in srgb,var(--accent) 8%,var(--card))" : "var(--bg-soft)" }}>
+                        <span className="grid gap-1"><strong className="text-sm">Use HYMN credits</strong><span className="text-xs" style={{ color: "var(--text-muted)" }}>Available balance: Rs {hymnCreditBalance.toLocaleString("en-IN")}</span></span>
+                        <input type="checkbox" checked={useHymnCredits} onChange={(event) => setUseHymnCredits(event.target.checked)} className="h-5 w-5 accent-[var(--accent)]" />
+                      </label>
+                    ) : null}
                     <div
                       className="payment-total flex items-end justify-between border-t pt-5"
                       style={{ borderColor: "var(--border)" }}
@@ -5772,7 +5813,7 @@ export function ReleaseForm({
                         className="text-2xl font-semibold"
                         style={{ color: "var(--accent)" }}
                       >
-                        {finalDistributionAmount === 0 ? "FREE" : `Rs ${finalDistributionAmount.toLocaleString("en-IN")}`}
+                        {distributionCheckoutAmount === 0 ? (firstReleaseDiscount > 0 ? "FREE" : "CREDITS") : `Rs ${distributionCheckoutAmount.toLocaleString("en-IN")}`}
                       </span>
                     </div>
                   </section> : null}
@@ -5896,17 +5937,15 @@ export function ReleaseForm({
               <button
                 type="submit"
                 disabled={submitting || !legalComplete || !reviewConfirmed || validationIssues.length > 0}
-                className={clsx("release-footer-action is-primary w-full disabled:opacity-60 sm:w-auto", firstReleaseOffer && finalDistributionAmount === 0 && "is-free-release")}
+                className={clsx("release-footer-action is-primary w-full disabled:opacity-60 sm:w-auto", distributionCheckoutAmount === 0 && "is-free-release")}
               >
                 {submitting
                   ? "Processing…"
                   : subscriptionCovered
                     ? "Confirm & Submit Release →"
-                    : firstReleaseOffer
-                    ? finalDistributionAmount === 0
+                    : distributionCheckoutAmount === 0
                       ? "Confirm & Submit Release →"
-                      : `Continue to Checkout · Rs ${finalDistributionAmount.toLocaleString("en-IN")} →`
-                    : `Continue to Checkout · Rs ${distributionAmount.toLocaleString("en-IN")} →`}
+                      : `Continue to Checkout · Rs ${distributionCheckoutAmount.toLocaleString("en-IN")} →`}
               </button>
             </div>
           </section>

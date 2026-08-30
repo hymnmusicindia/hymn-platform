@@ -237,7 +237,9 @@ export const distributionOrderCreateSchema = z.object({
   releaseType: z.enum(["single", "ep", "album"]),
   platforms: z.array(z.string().min(1)).min(1),
   youtubeContentIdEnabled: z.boolean().optional(),
-  promotionCode: z.literal("FIRST_RELEASE_FREE").optional()
+  promotionCode: z.literal("FIRST_RELEASE_FREE").optional(),
+  draftReleaseId: z.number().int().positive().optional(),
+  useHymnCredits: z.boolean().optional()
 });
 
 export const distributionSubmitSchema = z.object({
