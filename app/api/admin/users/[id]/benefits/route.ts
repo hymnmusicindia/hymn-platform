@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { artistProfileLimitForPlan } from "@/lib/artist-profile-limits";
 import { createNotification } from "@/lib/db";
 import { logAuditEvent } from "@/lib/audit-log";
+import { manageProviderSubscription, subscriptionHasEntitlement } from "@/lib/subscription-billing";
 
 const grantSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("subscription"), plan: z.enum(["half_yearly", "yearly", "yearly_plus"]), durationDays: z.coerce.number().int().min(1).max(1095), note: z.string().trim().min(3).max(300) }),
@@ -17,7 +18,34 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const userId = Number((await params).id);
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, referralCredits: true, subscription: true } });
   if (!user) return NextResponse.json({ error: "User not found." }, { status: 404 });
-  return NextResponse.json({ benefits: { checkoutCredit: user.referralCredits, subscription: user.subscription } });
+  return NextResponse.json({ benefits: { checkoutCredit: user.referralCredits, subscription: subscriptionHasEntitlement(user.subscription) ? user.subscription : null } });
+}
+
+const revokeSchema = z.object({ note: z.string().trim().min(3).max(300) });
+
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await requireAdminPermission("users.manage");
+  if ("error" in admin) return admin.error;
+  const userId = Number((await params).id);
+  if (!Number.isInteger(userId) || userId <= 0) return NextResponse.json({ error: "Invalid user." }, { status: 400 });
+  const parsed = revokeSchema.safeParse(await request.json().catch(() => ({})));
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "A removal reason is required." }, { status: 400 });
+  const actorId = "sub" in admin ? Number(admin.sub) || null : null;
+
+  try {
+    const subscription = await prisma.subscription.findUnique({ where: { userId } });
+    if (!subscription || !subscriptionHasEntitlement(subscription)) return NextResponse.json({ error: "This account has no active subscription to remove." }, { status: 409 });
+    if (subscription.razorpaySubscriptionId) await manageProviderSubscription(userId, "cancel_now");
+    const revokedAt = new Date();
+    await prisma.subscription.update({ where: { id: subscription.id }, data: { status: "cancelled", expiryDate: revokedAt, currentPeriodEnd: revokedAt, daysRemaining: 0, autoRenewal: false, cancelAtPeriodEnd: false, cancelledAt: revokedAt, nextRenewalDate: null } });
+    await Promise.all([
+      logAuditEvent({ actorType: "admin", actorId, actorRole: "admin", entityType: "subscription", entityId: subscription.id, action: "subscription.admin_revoked", oldValue: { userId, plan: subscription.plan, status: subscription.status, expiryDate: subscription.expiryDate }, newValue: { status: "cancelled", revokedAt }, reason: parsed.data.note, sessionId: "sid" in admin ? String(admin.sid || "") : undefined, riskLevel: "high" }),
+      createNotification({ userId, title: "Subscription access removed", body: "Your HYMN subscription access has been removed by an administrator. Contact support if you believe this was unexpected.", type: "account", href: "/dashboard", eventKey: `admin-subscription-revoked:${subscription.id}:${revokedAt.toISOString()}` })
+    ]);
+    return NextResponse.json({ benefits: { subscription: null }, message: "Subscription access removed. Payment and usage history were retained." });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not remove subscription access." }, { status: 400 });
+  }
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {

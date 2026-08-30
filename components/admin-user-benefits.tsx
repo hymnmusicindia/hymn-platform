@@ -25,6 +25,7 @@ export function AdminUserBenefits({ user, onCreditChange }: { user: User; onCred
   const [plan, setPlan] = useState("half_yearly");
   const [expiryDate, setExpiryDate] = useState(() => dateAfter(180));
   const [credit, setCredit] = useState("");
+  const [removalReason, setRemovalReason] = useState("");
   const [feedback, setFeedback] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -48,6 +49,19 @@ export function AdminUserBenefits({ user, onCreditChange }: { user: User; onCred
       if (result.benefits.subscription) setBenefits((current) => ({ ...current, subscription: result.benefits.subscription }));
     });
   }
+  function removeSubscription() {
+    if (!benefits.subscription || removalReason.trim().length < 3) return setFeedback("Enter a clear reason before removing subscription access.");
+    if (!window.confirm(`Remove ${benefits.subscription.planName || benefits.subscription.plan} access from ${user.name}?\n\nAccess and renewal will stop immediately. Payment, release usage, and audit history will be retained.`)) return;
+    setFeedback("");
+    startTransition(async () => {
+      const response = await fetch(`/api/admin/users/${user.id}/benefits`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note: removalReason }) });
+      const result = await response.json();
+      if (!response.ok) return setFeedback(result.error || "Could not remove subscription access.");
+      setBenefits((current) => ({ ...current, subscription: null }));
+      setRemovalReason("");
+      setFeedback(result.message);
+    });
+  }
 
   return <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--border)" }}>
     <button type="button" onClick={openManager} className="text-sm font-semibold" style={{ color: "var(--accent)" }}>{open ? "Close benefits" : "Manage plan and checkout wallet"}</button>
@@ -57,7 +71,8 @@ export function AdminUserBenefits({ user, onCreditChange }: { user: User; onCred
         <div className="grid gap-3 sm:grid-cols-2"><select className="field" value={plan} onChange={(event) => { const next = event.target.value; setPlan(next); setExpiryDate(dateAfter(next === "half_yearly" ? 180 : 365)); }}><option value="half_yearly">Half-Yearly</option><option value="yearly">Yearly</option><option value="yearly_plus">Yearly+</option></select><label className="grid gap-1"><span className="text-xs" style={{ color: "var(--text-muted)" }}>Access until</span><input className="field" type="date" min={dateAfter(1)} max={dateAfter(1095)} value={expiryDate} onChange={(event) => setExpiryDate(event.target.value)} required aria-label="Subscription expiry date" /></label></div>
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>{daysUntil(expiryDate).toLocaleString("en-IN")} days of access · expires {new Date(`${expiryDate}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>
         <input name="note" className="field" required minLength={3} placeholder="Reason for granting access" />
-        <button disabled={pending} className="btn-primary">Grant subscription</button>
+        <button disabled={pending} className="btn-primary">{benefits.subscription ? "Replace subscription" : "Grant subscription"}</button>
+        {benefits.subscription ? <div className="grid gap-2 rounded-xl border p-3" style={{ borderColor: "color-mix(in srgb, var(--danger) 35%, var(--border))" }}><div><p className="text-sm font-semibold" style={{ color: "var(--danger)" }}>Remove subscription access</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Stops access and renewal now. Financial, release-usage, and audit records remain intact.</p></div><input className="field" value={removalReason} onChange={(event) => setRemovalReason(event.target.value)} minLength={3} maxLength={300} placeholder="Reason for removing access" aria-label="Reason for removing subscription access" /><button type="button" disabled={pending || removalReason.trim().length < 3} onClick={removeSubscription} className="btn-outline" style={{ color: "var(--danger)", borderColor: "color-mix(in srgb, var(--danger) 45%, var(--border))" }}>Remove subscription</button></div> : null}
       </form>
       <form onSubmit={(event) => grant(event, "checkout_credit")} className="grid gap-3">
         <div><p className="font-semibold">Checkout wallet</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Available discount credit: Rs {benefits.checkoutCredit.toLocaleString("en-IN")}</p></div>
