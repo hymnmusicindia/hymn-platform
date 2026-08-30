@@ -1,11 +1,12 @@
 ﻿import type { Metadata } from "next";
 import "./globals.css";
 import "./styles/dashboard.css";
+import { getPublicAppUrl } from "@/lib/public-app-url";
 import "./styles/distribution.css";
 import "./styles/product-ui.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.APP_URL?.trim() || "https://hymnmusic.fun"),
+  metadataBase: new URL(getPublicAppUrl()),
   title: "HYMN Music - Hitting Your Music Notes",
   description:
     "HYMN full-stack platform for distribution, beats, services, payments, dashboard and admin operations.",

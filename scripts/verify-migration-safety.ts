@@ -9,12 +9,23 @@ const build = scripts.build ?? "";
 
 assert.match(build, /prisma generate/);
 assert.doesNotMatch(build, /db\s+push|accept-data-loss|migrate\s+(dev|reset)/i);
-assert.equal(scripts["db:migrate:deploy"], "prisma migrate deploy");
-assert.equal(scripts["deploy:release"], "prisma migrate deploy");
+assert.equal(scripts["db:migrate:deploy"], "tsx scripts/deploy-production-migrations.ts");
+assert.equal(scripts["deploy:release"], "tsx scripts/deploy-production-migrations.ts");
 assert.equal(scripts["db:push"], undefined, "Unsafe db:push shortcut must not be present.");
+assert.equal(scripts["db:migrate:fresh"], undefined, "Fresh baseline must not be exposed as an npm production command.");
+assert.equal(scripts["db:verify:production"], "tsx scripts/verify-production-database-target.ts");
+
+const deploymentScript = readFileSync(path.join(root, "scripts", "deploy-production-migrations.ts"), "utf8");
+const startupScript = readFileSync(path.join(root, "scripts", "start-production.ts"), "utf8");
+const databaseSafety = readFileSync(path.join(root, "lib", "production-database-safety.ts"), "utf8");
+assert.match(deploymentScript, /assertProductionDatabaseReady/);
+assert.match(startupScript, /assertProductionDatabaseReady/);
+assert.match(databaseSafety, /EXPECTED_NEON_BRANCH_ID/);
+assert.match(databaseSafety, /_prisma_migrations/);
 
 const freshScript = readFileSync(path.join(root, "scripts", "migrate-fresh-database.ts"), "utf8");
 assert.match(freshScript, /CONFIRM_EMPTY_DATABASE_BASELINE/);
+assert.match(freshScript, /NODE_ENV === "production"/);
 assert.match(freshScript, /pg_tables/);
 assert.match(freshScript, /Refusing fresh baseline/);
 assert.match(freshScript, /"--schema", "prisma\/schema\.prisma"/);

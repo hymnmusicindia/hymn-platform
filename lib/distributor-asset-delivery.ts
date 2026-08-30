@@ -3,6 +3,7 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { getUserSessionSecret } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import { getPublicAppUrl } from "@/lib/public-app-url";
 
 function signingSecret() {
   return process.env.DISTRIBUTION_ASSET_SIGNING_SECRET?.trim() || getUserSessionSecret();
@@ -34,8 +35,7 @@ export async function createDistributorAssetUrl(value: string | null | undefined
   if (!assetId) return value ?? "";
   const asset = await prisma.storedAsset.findFirst({ where: { id: assetId, deletedAt: null, uploadStatus: "ready" }, select: { safeFilename: true } });
   if (!asset) throw new Error("A release asset is unavailable for distributor delivery.");
-  const base = siteUrl?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim() || process.env.PUBLIC_SITE_URL?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (!base) throw new Error("Public site URL is not configured for distributor asset delivery.");
+  const base = getPublicAppUrl(siteUrl);
   const filename = encodeURIComponent(asset.safeFilename);
   return new URL(`/api/distribution-assets/${assetId}/${distributorAssetToken(assetId)}/${filename}`, base).toString();
 }

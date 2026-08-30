@@ -6,9 +6,9 @@ export function getReleasePortalStage(release: Release): ReleasePortalStage {
   const s = release.status.toLowerCase();
   if (s === "draft") return "draft";
   if (s === "rejected") return "rejected";
-  if (s === "changes_requested") return "changes_requested";
-  if (s === "under_review" || s === "submitted" || s === "in_queue") return "review";
-  if (s === "processing" || s === "awaiting_live_confirmation" || s === "sent_to_distributor") return "processing";
+  if (s === "changes_requested" || s === "distributor_changes_required") return "changes_requested";
+  if (["under_review", "submitted", "in_queue", "in_qc_queue", "approved", "queued_for_distribution", "submitting_to_distributor", "sent", "sent_to_distributor", "distributor_processing", "processing"].includes(s)) return "review";
+  if (s === "awaiting_live_confirmation" || s === "delivered") return "processing";
   if (s === "partially_live") return "partially_live";
   if (s === "scheduled") return "scheduled";
   if (s === "live" || s === "released") return "released";
@@ -117,7 +117,7 @@ export function getReleasePortalBadgeStyle(stage: ReleasePortalStage) {
 
 export function getReleasePortalFilterLabel(status: ReleaseStatus) {
   if (status === "live") return "Released";
-  if (status === "approved" || status === "sent") return "Scheduled";
+  if (["approved", "sent", "sent_to_distributor", "distributor_processing"].includes(status)) return "Under Review";
   return "Draft";
 }
 

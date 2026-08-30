@@ -8,8 +8,8 @@ const RECENT_RELEASE_SYNC_MS = 30 * 60 * 1000;
 const ESTABLISHED_RELEASE_SYNC_MS = 6 * 60 * 60 * 1000;
 const MATURE_RELEASE_SYNC_MS = 24 * 60 * 60 * 1000;
 
-function nextStatusCheckDelay(releaseUpdatedAt: Date) {
-  const age = Date.now() - releaseUpdatedAt.getTime();
+function nextStatusCheckDelay(releaseCreatedAt: Date) {
+  const age = Date.now() - releaseCreatedAt.getTime();
   if (age < 24 * 60 * 60 * 1000) return RECENT_RELEASE_SYNC_MS;
   if (age < 7 * 24 * 60 * 60 * 1000) return ESTABLISHED_RELEASE_SYNC_MS;
   return MATURE_RELEASE_SYNC_MS;
@@ -24,8 +24,8 @@ export async function GET(request: Request) {
   // projection remains compatible with the legacy production schema while the
   // optional DireNote columns are awaiting migration.
   const candidates = await prisma.release.findMany({
-    where: { upc: { not: null }, status: { in: ["SENT_TO_DISTRIBUTOR", "PROCESSING", "DELIVERED", "LIVE"] } },
-    select: { id: true, updatedAt: true },
+    where: { upc: { not: null }, status: { in: ["SENT_TO_DISTRIBUTOR", "DISTRIBUTOR_PROCESSING", "PROCESSING", "SCHEDULED", "AWAITING_LIVE_CONFIRMATION", "PARTIALLY_LIVE", "DELIVERED", "LIVE"] } },
+    select: { id: true, createdAt: true, updatedAt: true },
     take: 100,
     orderBy: { updatedAt: "asc" }
   });
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
   const releases = candidates
     .filter((release) => {
       const lastCheck = lastCheckByRelease.get(release.id);
-      return !lastCheck || Date.now() - lastCheck.getTime() >= nextStatusCheckDelay(release.updatedAt);
+      return !lastCheck || Date.now() - lastCheck.getTime() >= nextStatusCheckDelay(release.createdAt);
     })
     .slice(0, 10);
   const results: Array<{ releaseId: number; success: boolean; error?: string }> = [];

@@ -1,5 +1,6 @@
 import "server-only";
 import { Resend } from "resend";
+import { getPublicAppUrl } from "@/lib/public-app-url";
 
 export const emailConfigured = process.env.EMAIL_PROVIDER?.toLowerCase() === "resend"
   && process.env.EMAIL_ENABLED === "true"
@@ -19,7 +20,7 @@ export function getEmailConfig() {
     provider: "resend",
     from: process.env.EMAIL_FROM?.trim() || "HYMN Music <updates@hymnmusic.in>",
     replyTo: process.env.EMAIL_REPLY_TO?.trim() || "hello@hymnmusic.fun",
-    appUrl: (process.env.APP_URL?.trim() || "http://localhost:3000").replace(/\/$/, "")
+    appUrl: getPublicAppUrl()
   };
 }
 // vercel trigger 6

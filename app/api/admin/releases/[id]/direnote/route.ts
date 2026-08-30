@@ -9,6 +9,7 @@ import {
 import { buildDireNotePayloadForRelease, retrySubmission, submitRelease } from "@/lib/distribution-service";
 import { redactDireNotePayload, validateDireNotePayload } from "@/lib/direnote";
 import type { DistributionQueueStage } from "@/lib/types";
+import { getPublicAppUrl } from "@/lib/public-app-url";
 
 export const runtime = "nodejs";
 
@@ -44,7 +45,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { searchParams } = new URL(request.url);
   const adminConfirmedExistingArtists = searchParams.get("adminConfirmedExistingArtists") === "true";
   const payload = await buildDireNotePayloadForRelease(resolved.release, {
-    siteUrl: new URL(request.url).origin,
+    siteUrl: getPublicAppUrl(request.url),
     adminConfirmedExistingArtists
   });
   const validation = validateDireNotePayload(payload, { adminConfirmedExistingArtists });
@@ -67,7 +68,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const body = await request.json().catch(() => ({}));
   const action = String(body.action ?? "submit");
   const actorId = "sub" in admin ? admin.sub : null;
-  const siteUrl = new URL(request.url).origin;
+  const siteUrl = getPublicAppUrl(request.url);
   const adminConfirmedExistingArtists = Boolean(body.adminConfirmedExistingArtists);
 
   if (action !== "retry") {

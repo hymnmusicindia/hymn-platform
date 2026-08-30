@@ -16,7 +16,7 @@ import {
   listDistributionQueueEntries,
   updateDetailedReleaseStatus
 } from "@/lib/distribution-db";
-import { createNotification, findUserById, listArtistProfilesByUser } from "@/lib/db";
+import { findUserById, listArtistProfilesByUser } from "@/lib/db";
 import type { Release } from "@/lib/types";
 import { createAdminTaskOnce, resolveAdminTask } from "@/lib/task-queue";
 import { getDireNoteConfig } from "@/lib/direnote/direnote-config";
@@ -33,33 +33,6 @@ export type DistributorPayload = DireNotePayload;
 
 function displayName(release: Release) {
   return release.releaseTitle || release.trackName || "Untitled release";
-}
-
-async function notifyRelease(release: Release | null, input: { title: string; body: string; priority?: "low" | "normal" | "high"; eventKey?: string; metadata?: Record<string, unknown> }) {
-  if (!release) return;
-  await createNotification({
-    userId: release.userId,
-    title: input.title,
-    body: input.body,
-    type: "release",
-    href: `/dashboard/releases?releaseId=${release.id}`,
-    actionLabel: "View release",
-    priority: input.priority ?? "normal",
-    eventKey: input.eventKey,
-    metadata: { releaseId: release.id, ...(input.metadata ?? {}) }
-  });
-}
-
-async function notifyReleaseSafely(release: Release | null, input: { title: string; body: string; priority?: "low" | "normal" | "high"; eventKey?: string; metadata?: Record<string, unknown> }) {
-  try {
-    await notifyRelease(release, input);
-  } catch (error) {
-    console.error("[DireNote] Customer notification failed after provider acceptance", {
-      releaseId: release?.id ?? null,
-      eventKey: input.eventKey ?? null,
-      message: error instanceof Error ? error.message : "Notification persistence failed."
-    });
-  }
 }
 
 async function moveQueue(releaseId: number, nextStage: "sent_to_direnote" | "processing" | "rejected", actorId?: number | null, notes?: string, metadata?: Record<string, unknown>) {
@@ -113,6 +86,18 @@ function retryCountFromRelease(release: Release) {
   return Number.isFinite(Number(value)) ? Number(value) : 0;
 }
 
+function correctionReview(issues: DistributionValidationIssue[], reason: string, source: string) {
+  const normalized = issues.length ? issues : [{ field: "direnote", message: reason }];
+  return {
+    reason,
+    issueType: "other" as const,
+    severity: "required_correction" as const,
+    fields: normalized.slice(0, 20).map((issue, index) => ({ field: issue.field || `direnote.${index + 1}`, label: issue.field ? issue.field.replace(/[._]/g, " ") : `DireNote correction ${index + 1}`, note: issue.message })),
+    adminInternalNote: `Automatically halted by ${source}.`,
+    reviewedBy: "DireNote automation"
+  };
+}
+
 function httpErrorMode(status: number, providerReason?: string) {
   if (providerReason === "storageQuotaExceeded") return { retryable: true, releaseStatus: "delivery_failed" as const, queueStage: null, action: "DIRENOTE_STORAGE_QUOTA_EXCEEDED" };
   if (status === 400) return { retryable: false, releaseStatus: "changes_requested" as const, queueStage: "rejected" as const, action: "DIRENOTE_VALIDATION_REJECTED" };
@@ -139,7 +124,8 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
   });
 
   if (!validation.ok) {
-    await updateDetailedReleaseStatus(releaseId, "changes_requested", "DireNote validation failed.");
+    const reason = validation.issues.map((issue) => issue.message).join(" ") || "DireNote validation failed.";
+    await updateDetailedReleaseStatus(releaseId, "changes_requested", reason, correctionReview(validation.issues, reason, "DireNote preflight validation"), { manualOverride: true, actorType: "system" });
     await logDistributionEvent({
       releaseId,
       requestPayload: redactedPayload,
@@ -151,13 +137,6 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
     await moveQueue(releaseId, "rejected", options.actorId, "DireNote validation failed.", { issues: validation.issues, warnings: validation.warnings });
     await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: "DIRENOTE_VALIDATION_FAILED", details: { issues: validation.issues, warnings: validation.warnings } });
     await createAdminTaskOnce({ eventKey: `release:${releaseId}:direnote:validation`, type: "DireNote Failed", priority: "high", title: `DireNote validation failed: ${displayName(release)}`, body: validation.issues[0]?.message ?? "Release needs corrections before DireNote submission.", href: `/admin?tab=releases&releaseId=${releaseId}`, entityType: "release", entityId: releaseId });
-    await notifyRelease(release, {
-      title: `DireNote validation failed: ${displayName(release)}`,
-      body: validation.issues[0]?.message ?? "HYMN needs corrections before this release can be submitted to DireNote.",
-      priority: "high",
-      eventKey: `release:${release.id}:direnote:validation-failed`,
-      metadata: { issues: validation.issues }
-    });
     return { release: await getDetailedReleaseById(releaseId), validation, submitted: false, retryable: false, payload: redactedPayload };
   }
 
@@ -194,22 +173,19 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
           ? "DireNote cannot accept uploads because its Google Drive storage quota is full. The release is safe and was not rejected; free or increase storage on the DireNote account, then retry sending."
         : response.error || parsed.message || `DireNote API returned ${status}.`;
       console.error("[DireNote] Provider rejected submission", { releaseId, httpStatus: response.httpStatus, message, response: redactDireNoteDiagnostic(data) });
-      await updateDetailedReleaseStatus(releaseId, mode.releaseStatus, message);
+      await updateDetailedReleaseStatus(
+        releaseId,
+        mode.releaseStatus,
+        message,
+        response.httpStatus === 400 ? correctionReview([{ field: "direnote", message }], message, "DireNote provider review") : undefined,
+        { manualOverride: response.httpStatus === 400, actorType: "system" }
+      );
       await finishDistributionSubmission(claim.attempt.id, { state: mode.retryable ? "retryable" : "failed", httpStatus: response.httpStatus, safeError: message.slice(0, 500), responseRedacted: { message, warnings: parsed.warnings } });
       await logDistributionEvent({ releaseId, action: options.retry ? "retry_submission" : "release_submission", httpStatus: response.httpStatus, createdByAdminId: options.actorId, requestPayload: redactedPayload, responsePayload: data, responseRaw: response.raw, warnings: parsed.warnings, errors: [message], success: false });
       if (mode.queueStage) await moveQueue(releaseId, mode.queueStage, options.actorId, message, { status: response.httpStatus, response: data });
       await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: mode.action, details: { status: response.httpStatus, message } });
       if (response.httpStatus !== 400) {
         await createAdminTaskOnce({ eventKey: `release:${releaseId}:direnote:provider:${response.providerReason ?? response.httpStatus ?? "unknown"}`, type: "DireNote Failed", priority: "critical", title: `DireNote provider failure: ${displayName(release)}`, body: message, href: `/admin?tab=releases&releaseId=${releaseId}`, entityType: "release", entityId: releaseId });
-      }
-      if (response.httpStatus === 400) {
-        await notifyRelease(release, {
-          title: `DireNote needs fixes: ${displayName(release)}`,
-          body: message,
-          priority: "high",
-          eventKey: `release:${release.id}:direnote:http-400`,
-          metadata: { status: response.httpStatus }
-        });
       }
       return { release: await getDetailedReleaseById(releaseId), validation, submitted: false, retryable: mode.retryable, retryCount: retryCountFromRelease(release) + 1, error: message, direnoteResponse: data };
     }
@@ -232,28 +208,6 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
     await resolveAdminTask(`release:${releaseId}:direnote:validation`, "DireNote submission accepted.");
     await resolveAdminTask(`release:${releaseId}:direnote:network`, "DireNote submission accepted.");
     await finishDistributionSubmission(claim.attempt.id, { state: "submitted", httpStatus: response.httpStatus, providerReference: parsed.distributorReleaseId ?? parsed.upc ?? null, responseRedacted: { distributorReleaseId: parsed.distributorReleaseId ?? null, upc: parsed.upc ?? null, trackIsrcs: parsed.trackIsrcs, warnings: parsed.warnings } });
-    await notifyReleaseSafely(updatedRelease ?? release, {
-      title: `Release sent to DireNote: ${displayName(updatedRelease ?? release)}`,
-      body: "Your release has cleared HYMN review and has been submitted to DireNote for distribution.",
-      eventKey: `release:${releaseId}:status:sent_to_direnote`,
-      metadata: { upc: parsed.upc ?? null, warnings: parsed.warnings }
-    });
-    if (parsed.upc) {
-      await notifyReleaseSafely(updatedRelease ?? release, {
-        title: `UPC generated: ${displayName(updatedRelease ?? release)}`,
-        body: `DireNote returned UPC ${parsed.upc}.`,
-        eventKey: `release:${releaseId}:upc:${parsed.upc}`,
-        metadata: { upc: parsed.upc }
-      });
-    }
-    for (const track of parsed.trackIsrcs.filter((item) => item.isrc)) {
-      await notifyReleaseSafely(updatedRelease ?? release, {
-        title: `ISRC generated: ${track.trackTitle ?? displayName(updatedRelease ?? release)}`,
-        body: `DireNote returned ISRC ${track.isrc}.`,
-        eventKey: `release:${releaseId}:isrc:${track.isrc}`,
-        metadata: { isrc: track.isrc, trackTitle: track.trackTitle ?? null }
-      });
-    }
     return { release: updatedRelease, validation, submitted: true, retryable: false, warnings: parsed.warnings };
   } catch (error) {
     const message = error instanceof Error ? error.message : "DireNote submission failed.";

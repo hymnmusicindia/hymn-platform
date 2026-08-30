@@ -4,8 +4,7 @@ import { localPrivateStorage } from "@/lib/private-storage";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
-  const user = await getSession();
-  const admin = user ? null : await getAdminSession();
+  const [user, admin] = await Promise.all([getSession(), getAdminSession()]);
   if (!user && !admin) return NextResponse.json({ error: "Unauthorized." }, { status: 401, headers: { "X-Robots-Tag": "noindex, nofollow" } });
   try {
     const assetId = Number((await context.params).id);

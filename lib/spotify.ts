@@ -1,5 +1,7 @@
 ﻿import { SpotifyArtistResult, SpotifyTrackSearchResult } from "@/lib/types";
 
+import { getPublicAppUrl } from "@/lib/public-app-url";
+
 type SpotifyTokenCache = {
   value: string;
   expiresAt: number;
@@ -221,7 +223,7 @@ export function buildSpotifyRedirectUri() {
   const configured = process.env.SPOTIFY_REDIRECT_URI?.trim();
   if (configured) return configured;
 
-  const base = process.env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3000";
+  const base = getPublicAppUrl();
   return new URL("/api/admin/spotify/callback", base).toString();
 }
 

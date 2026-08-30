@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { createUniqueReferralCode, REFERRED_USER_REWARD_INR, REFERRER_REWARD_INR } from "@/lib/referrals";
+import { getPublicAppUrl } from "@/lib/public-app-url";
 
 function maskEmail(value: string) {
   const [name, domain = ""] = value.split("@");
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({ referral: {
     referralCode: user.referralCode,
-    referralLink: `${new URL(request.url).origin}/join?ref=${encodeURIComponent(user.referralCode)}`,
+    referralLink: `${getPublicAppUrl(request.url)}/join?ref=${encodeURIComponent(user.referralCode)}`,
     availableCredit: Number(user.referralCredits),
     referrerReward: REFERRER_REWARD_INR,
     referredReward: REFERRED_USER_REWARD_INR,

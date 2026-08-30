@@ -8,6 +8,7 @@ import {
   type DireNoteContentType
 } from "@/lib/direnote-config";
 import { getDireNoteConfig } from "@/lib/direnote/direnote-config";
+import { getPublicAppUrl } from "@/lib/public-app-url";
 export { submitToDireNote, getDireNoteReleaseInformation, getDireNoteRevenueReport } from "@/lib/direnote/direnote-client";
 
 export type DireNoteArtist = {
@@ -160,12 +161,7 @@ function publicUrl(value: string | undefined | null, siteUrl?: string) {
   const trimmed = value?.trim() ?? "";
   if (!trimmed || /^(blob:|file:|data:)/i.test(trimmed)) return "";
   if (isPublicHttpUrl(trimmed)) return trimmed;
-  // Check all possible site URL env vars; NEXT_PUBLIC_APP_URL is the one used in this project
-  const base = siteUrl?.trim()
-    || process.env.NEXT_PUBLIC_APP_URL?.trim()
-    || process.env.PUBLIC_SITE_URL?.trim()
-    || process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (!base) return "";
+  const base = getPublicAppUrl(siteUrl);
   return new URL(trimmed.startsWith("/") ? trimmed : `/${trimmed}`, base).toString();
 }
 

@@ -87,9 +87,10 @@ function releaseStatusMessage(release: Release) {
   if (automaticCopy) return automaticCopy;
   if (release.status === "draft") return "This release is still in drafts. Complete and submit it for review.";
   if (release.status === "under_review" || release.status === "submitted" || release.status === "in_queue") return "Your release is currently under HYMN review. Our team is checking metadata, artwork, audio, and rights.";
-  if (release.status === "changes_requested") return "HYMN requested changes for this release. Review the marked fields and resubmit.";
+  if (release.status === "changes_requested") return "Corrections are required for this release. Review each marked field and resubmit.";
+  if (release.status === "distributor_changes_required") return "DireNote requires corrections before distribution can continue. Review the exact requested fixes and resubmit.";
   if (release.status === "rejected") return "This release was rejected. Check the reason and correction notes.";
-  if (["sent", "sent_to_distributor", "processing", "delivered"].includes(release.status)) return "Your release has cleared HYMN review and has been sent for distribution.";
+  if (["approved", "queued_for_distribution", "submitting_to_distributor", "sent", "sent_to_distributor", "distributor_processing", "processing"].includes(release.status)) return "Your release is under review. No action is needed unless a correction request appears.";
   if (release.status === "scheduled") return `Your release is accepted for distribution and scheduled for ${getReleasePortalDateLabel(release)}.`;
   if (release.status === "awaiting_live_confirmation") return "Your release date has arrived. HYMN is waiting for platform availability confirmation.";
   if (release.status === "partially_live") return "Your release is live on selected platforms while remaining stores are still processing.";
@@ -257,7 +258,7 @@ export function ReleaseManage({ release, initialTab }: { release: Release; initi
         <p>{releaseStatusMessage(release)}</p>
       </div>
       <div className="grid gap-6 md:grid-cols-[220px,1fr] md:items-center">
-        <div className="relative aspect-square overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{release.artworkUrl ? <Image src={release.artworkUrl} alt={title} fill sizes="(max-width: 767px) 100vw, 220px" className="object-cover" /> : <div className="flex h-full items-center justify-center"><Sparkles className="h-10 w-10" /></div>}</div>
+        <div className="relative aspect-square overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{release.artworkUrl ? <Image src={release.artworkUrl} alt={title} fill sizes="(max-width: 767px) 100vw, 220px" className="object-cover" unoptimized /> : <div className="flex h-full items-center justify-center"><Sparkles className="h-10 w-10" /></div>}</div>
         <div className="min-w-0">
           <div className="flex flex-wrap gap-2"><span className="status-pill status-pill-active">{release.status.replace(/_/g, " ")}</span><span className="status-pill capitalize">{release.releaseType}</span></div>
           <h1 className="mt-4 truncate text-3xl font-semibold sm:text-4xl" style={{ color: "var(--text)" }}>{title}</h1>
@@ -591,7 +592,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
                   const liveStores = release.distributionStores?.filter((store) => store.status === "Live").length ?? 0;
                   const storeTotal = release.distributionStores?.length ?? 0;
                   return <tr key={release.id} className="border-b last:border-b-0" style={{ borderColor: "var(--border)" }}>
-                    <td className="px-4 py-3"><div className="relative h-11 w-11 overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{release.artworkUrl ? <Image src={release.artworkUrl} alt="" fill sizes="44px" className="object-cover" /> : null}</div></td>
+                    <td className="px-4 py-3"><div className="relative h-11 w-11 overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{release.artworkUrl ? <Image src={release.artworkUrl} alt="" fill sizes="44px" className="object-cover" unoptimized /> : null}</div></td>
                     <td className="max-w-[220px] px-4 py-3"><Link href={`/dashboard/releases/${release.id}`} className="block truncate font-semibold hover:underline">{release.releaseTitle || release.trackName}</Link></td>
                     <td className="max-w-[160px] truncate px-4 py-3" style={{ color: "var(--text-muted)" }}>{release.artistName}</td>
                     <td className="px-4 py-3 capitalize" style={{ color: "var(--text-muted)" }}>{release.releaseType}</td>

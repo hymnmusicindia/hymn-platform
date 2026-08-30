@@ -347,8 +347,8 @@ function releaseDisplayName(release: Release) {
 
 async function notifyReleaseStatusChange(release: Release, status: ReleaseStatus, note?: string | null) {
   const releaseName = releaseDisplayName(release);
-  const redressalHref = `/dashboard/releases?releaseId=${release.id}&panel=redressal`;
-  const releaseHref = `/dashboard/releases?releaseId=${release.id}`;
+  const redressalHref = `/dashboard/releases/${release.id}?tab=corrections`;
+  const releaseHref = `/dashboard/releases/${release.id}`;
   const reason = status === "rejected" ? release.rejectionReason : status === "changes_requested" ? release.correctionReason : note;
   const baseMetadata = {
     releaseId: release.id,
@@ -396,11 +396,11 @@ async function notifyReleaseStatusChange(release: Release, status: ReleaseStatus
   if (status === "changes_requested") {
     await createNotification({
       userId: release.userId,
-      title: `Metadata changes requested: ${releaseName}`,
-      body: "HYMN found issues in your release metadata. Review the marked fields and submit corrections.",
+      title: `Fix required: ${releaseName}`,
+      body: reason || "Corrections are required before distribution can continue. Review the marked fields and resubmit.",
       type: "release",
       href: redressalHref,
-      actionLabel: "Fix metadata",
+      actionLabel: "Fix release",
       priority: "high",
       eventKey: `release:${release.id}:status:changes_requested:${release.reviewedAt ?? "status"}`,
       metadata: baseMetadata
@@ -409,20 +409,9 @@ async function notifyReleaseStatusChange(release: Release, status: ReleaseStatus
     return;
   }
 
-  if (status === "approved" || status === "sent_to_distributor" || status === "sent") {
-    await createNotification({
-      userId: release.userId,
-      title: `Release approved: ${releaseName}`,
-      body: "Your release has cleared HYMN review and is moving to distribution.",
-      type: "release",
-      href: releaseHref,
-      actionLabel: "View release",
-      eventKey: `release:${release.id}:status:${status}`,
-      metadata: baseMetadata
-    });
-    await sendStatusEmail(status === "approved" ? "release_approved_by_hymn" : "release_sent_to_distributor");
-    return;
-  }
+  // Approval and hand-off are internal workflow transitions. Customers continue
+  // to see Under Review and are contacted only for action, scheduling, or go-live.
+  if (status === "approved" || status === "sent_to_distributor" || status === "sent") return;
 
   if (status === "live") {
     await createNotification({

@@ -47,7 +47,8 @@ export function isDireNoteAccepted(release: Release) {
 
 export function automaticStatusCopy(release: Release) {
   if (release.status === "under_review" || release.status === "submitted" || release.status === "in_queue") return "HYMN is reviewing your metadata, artwork, audio, and rights.";
-  if (release.status === "sent_to_distributor") return "Your release has cleared HYMN review and has been submitted for distribution.";
+  if (["approved", "queued_for_distribution", "submitting_to_distributor", "sent_to_distributor", "distributor_processing", "processing"].includes(release.status)) return "Your release is under review. HYMN and DireNote processing continues automatically.";
+  if (release.status === "distributor_changes_required") return "DireNote requires corrections before this release can continue. Open Fix Required for the exact requested changes.";
   if (release.status === "scheduled") return `Your release is accepted for distribution and scheduled for ${release.releaseDate}.`;
   if (release.status === "processing") return "Your release has cleared distribution submission. Platform availability may still take time depending on DSP processing.";
   if (release.status === "awaiting_live_confirmation") return "Your release date has arrived. HYMN is waiting for platform availability confirmation.";

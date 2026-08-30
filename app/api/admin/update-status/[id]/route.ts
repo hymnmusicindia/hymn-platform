@@ -5,6 +5,7 @@ import { createDistributionQueueEntry, createReleaseAuditLog, getDetailedRelease
 import type { DistributionQueueStage, ReleaseStatus } from "@/lib/types";
 
 import { submitRelease } from "@/lib/distribution-service";
+import { getPublicAppUrl } from "@/lib/public-app-url";
 
 const statusStageMap: Partial<Record<ReleaseStatus, DistributionQueueStage>> = {
   submitted: "draft_submitted",
@@ -44,7 +45,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ release, queueEntry });
     }
     if (payload.status === "sent") {
-      const origin = new URL(request.url).origin;
+      const origin = getPublicAppUrl(request.url);
       const currentRelease = await getDetailedReleaseById(Number(id));
       if (!currentRelease) return NextResponse.json({ error: "Release not found." }, { status: 404 });
       const retry = ["failed", "delivery_failed", "queued_for_distribution"].includes(currentRelease.status);

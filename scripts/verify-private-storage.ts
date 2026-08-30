@@ -22,9 +22,16 @@ assert.equal(validatePrivateUpload({ ownerUserId: 1, assetType: "private_unrelea
 const releaseForm = readFileSync("components/release-form.tsx", "utf8");
 const clientUploadRoute = readFileSync("app/api/assets/client-upload/route.ts", "utf8");
 const privateStorage = readFileSync("lib/private-storage.ts", "utf8");
+const distributorDelivery = readFileSync("lib/distributor-asset-delivery.ts", "utf8");
+const publicAppUrl = readFileSync("lib/public-app-url.ts", "utf8");
+const assetDownloadRoute = readFileSync("app/api/assets/[id]/download/route.ts", "utf8");
 assert(releaseForm.includes('request.open("POST", "/api/assets")') && releaseForm.includes('/api/uploads/sessions'), "Release files must use authenticated private Hostinger upload routes.");
 assert(!releaseForm.includes("access: 'public'"), "Release files must never be uploaded to public Blob storage.");
 assert(clientUploadRoute.includes("handleUploadPresigned") && clientUploadRoute.includes("issueSignedToken"), "Client upload authorization must support Vercel OIDC.");
 assert(privateStorage.includes("get(asset.objectKey, { access: \"private\"") && privateStorage.includes("Range: input.range"), "Private Blob downloads must use authenticated, range-aware SDK reads.");
+assert(distributorDelivery.includes("getPublicAppUrl(siteUrl)"), "Distributor delivery must use the canonical public URL resolver.");
+assert(/const candidates = \[\s*process\.env\.NEXT_PUBLIC_APP_URL,[\s\S]*?requestUrl,/.test(publicAppUrl), "Configured public hostname must take precedence over Hostinger's internal request origin.");
+assert(publicAppUrl.includes('"0.0.0.0"') && publicAppUrl.includes('hostname.endsWith(".local")'), "Internal origins must not be emitted as public production URLs.");
+assert(assetDownloadRoute.includes("Promise.all([getSession(), getAdminSession()])"), "Asset downloads must honor admin authorization even when a customer cookie is also present.");
 console.log("Private storage validation passed.");
 // vercel trigger 9

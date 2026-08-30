@@ -11,6 +11,7 @@ function run(args: string[]) {
 }
 
 async function main() {
+  if (process.env.NODE_ENV === "production") throw new Error("Fresh database baseline is permanently disabled when NODE_ENV=production.");
   if (process.env.CONFIRM_EMPTY_DATABASE_BASELINE !== "yes") throw new Error("Set CONFIRM_EMPTY_DATABASE_BASELINE=yes only for a new, disposable empty PostgreSQL database.");
   const tables = await prisma.$queryRaw<Array<{ tableName: string }>>`SELECT tablename AS "tableName" FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;
   if (tables.length) throw new Error(`Refusing fresh baseline: target database already contains ${tables.length} public table(s).`);

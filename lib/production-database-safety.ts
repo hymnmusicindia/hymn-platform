@@ -1,0 +1,48 @@
+import { PrismaClient } from "@prisma/client";
+
+const REQUIRED_TABLES = ["_prisma_migrations", "users", "releases", "tracks", "sessions", "audit_logs"] as const;
+
+export type ProductionDatabaseIdentity = {
+  database: string;
+  schema: string | null;
+  branchId: string | null;
+  host: string;
+  tables: string[];
+  restrictedRole: boolean;
+};
+
+function configuredUrl() {
+  const value = process.env.DATABASE_URL?.trim();
+  if (!value || !/^postgres(?:ql)?:\/\//i.test(value)) throw new Error("DATABASE_URL must be a PostgreSQL URL.");
+  return new URL(value);
+}
+
+export async function assertProductionDatabaseReady(client = new PrismaClient(), options: { enforceRestrictedRole?: boolean } = {}): Promise<ProductionDatabaseIdentity> {
+  const url = configuredUrl();
+  const expectedHost = process.env.EXPECTED_DATABASE_HOST?.trim().toLowerCase();
+  const expectedDatabase = process.env.EXPECTED_DATABASE_NAME?.trim();
+  const expectedBranchId = process.env.EXPECTED_NEON_BRANCH_ID?.trim();
+  if (expectedHost && url.hostname.toLowerCase() !== expectedHost) throw new Error(`Database safety check failed: connected host does not match EXPECTED_DATABASE_HOST.`);
+  if (expectedDatabase && url.pathname.replace(/^\//, "") !== expectedDatabase) throw new Error("Database safety check failed: database name does not match EXPECTED_DATABASE_NAME.");
+
+  try {
+    const [identity] = await client.$queryRawUnsafe<Array<{ database: string; schema: string | null; branchId: string | null; canCreateSchemaObjects: boolean; superuser: boolean }>>(
+      `SELECT current_database() AS database, current_schema() AS schema, current_setting('neon.branch_id', true) AS "branchId", has_schema_privilege(current_user, 'public', 'CREATE') AS "canCreateSchemaObjects", (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) AS superuser`
+    );
+    const tableRows = await client.$queryRawUnsafe<Array<{ tableName: string }>>(
+      `SELECT "tableName" FROM (VALUES ('_prisma_migrations'), ('users'), ('releases'), ('tracks'), ('sessions'), ('audit_logs')) AS required("tableName") WHERE to_regclass(format('public.%I', "tableName")) IS NOT NULL`
+    );
+    const tables = tableRows.map((row) => row.tableName);
+    const missing = REQUIRED_TABLES.filter((table) => !tables.includes(table));
+    if (identity?.schema !== "public" || missing.length) {
+      throw new Error(`Database safety check failed: expected production schema is incomplete (missing: ${missing.join(", ") || "public schema"}). Refusing to continue.`);
+    }
+    if (expectedBranchId && identity.branchId !== expectedBranchId) throw new Error("Database safety check failed: Neon branch does not match EXPECTED_NEON_BRANCH_ID.");
+    const restrictedRole = !identity.canCreateSchemaObjects && !identity.superuser;
+    const enforceRestrictedRole = options.enforceRestrictedRole ?? process.env.REQUIRE_RESTRICTED_DATABASE_ROLE === "true";
+    if (enforceRestrictedRole && !restrictedRole) throw new Error("Database safety check failed: runtime DATABASE_URL can modify schema objects. Configure a restricted Neon application role.");
+    return { database: identity.database, schema: identity.schema, branchId: identity.branchId, host: url.hostname, tables, restrictedRole };
+  } finally {
+    await client.$disconnect();
+  }
+}

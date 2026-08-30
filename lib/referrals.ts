@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { getPublicAppUrl } from "@/lib/public-app-url";
 
 export const REFERRER_REWARD_INR = 5;
 export const REFERRED_USER_REWARD_INR = 3;
@@ -101,7 +102,7 @@ export async function sendReferralRewardEmails(referralId: number) {
   const { sendTransactionalEmail } = await import("@/lib/email/send-transactional-email");
   const referral = await prisma.referral.findUnique({ where: { id: referralId }, include: { owner: { select: { id: true, name: true, email: true } }, referredUser: { select: { id: true, name: true, email: true } } } });
   if (!referral?.referredUser || referral.status !== "REWARDED") return;
-  const url = new URL("/dashboard?tab=referral", process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").toString();
+  const url = new URL("/dashboard?tab=referral", getPublicAppUrl()).toString();
   await Promise.all([
     sendTransactionalEmail({ to: referral.owner.email, userId: referral.owner.id, subject: "Your HYMN referral reward is ready", template: "referral_reward_earned", eventKey: `referral:${referral.id}:referrer-reward:email`, entityType: "referral", entityId: referral.id, html: `<p>Hi ${referral.owner.name},</p><p>Your referral qualified and Rs ${REFERRER_REWARD_INR} HYMN referral credit was added to your account.</p><p><a href="${url}">View referrals</a></p>`, text: `Your referral qualified. Rs ${REFERRER_REWARD_INR} HYMN referral credit was added. ${url}` }),
     sendTransactionalEmail({ to: referral.referredUser.email, userId: referral.referredUser.id, subject: "Your HYMN release credit is active", template: "referred_user_bonus", eventKey: `referral:${referral.id}:referred-reward:email`, entityType: "referral", entityId: referral.id, html: `<p>Hi ${referral.referredUser.name},</p><p>Rs ${REFERRED_USER_REWARD_INR} HYMN release credit was added to your account.</p><p><a href="${url}">View credits</a></p>`, text: `Rs ${REFERRED_USER_REWARD_INR} HYMN release credit was added to your account. ${url}` })
