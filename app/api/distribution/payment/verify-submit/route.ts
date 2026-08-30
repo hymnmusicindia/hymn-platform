@@ -11,6 +11,7 @@ import { assertDireNoteAssetFormat } from "@/lib/distribution-asset-format";
 import { prisma } from "@/lib/prisma";
 import { calculateFirstReleasePrice, FIRST_RELEASE_PROMOTION_CODE, redeemFirstRelease, releaseFirstReleaseReservation, reserveFirstRelease, trackFirstReleaseEvent } from "@/lib/first-release-promotion";
 import { attachReservedSubscriptionRelease, releaseReservedSubscriptionSlot, reserveSubscriptionReleaseSlot, subscriptionHasEntitlement } from "@/lib/subscription-billing";
+import { distributionOrderPriceMatches } from "@/lib/distribution-order-price";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -34,11 +35,11 @@ export async function POST(request: Request) {
     if (persistedOrder.releaseId && persistedOrder.releaseId !== parsed.draftReleaseId) return NextResponse.json({ error: "This payment belongs to a different release draft." }, { status: 409 });
     if (persistedOrder.plan !== parsed.metadata.plan) return NextResponse.json({ error: "The submitted plan does not match the persisted order." }, { status: 400 });
     if ((persistedOrder.plan === "one_time") !== (parsed.metadata.paymentModel === "one_time")) return NextResponse.json({ error: "The submitted payment model does not match the persisted order." }, { status: 400 });
+    const isSubscriptionEntitlement = parsed.razorpay_order_id.startsWith("sub_entitlement_");
     const normalAmount = getDistributionPricing(parsed.metadata.plan, parsed.metadata.tracks.length, parsed.metadata.releaseType, parsed.metadata.platforms, { youtubeContentIdEnabled: parsed.metadata.youtubeContentIdEnabled });
     const promotionQuote = isFirstReleaseOffer ? calculateFirstReleasePrice({ plan: parsed.metadata.plan, releaseType: parsed.metadata.releaseType, trackCount: parsed.metadata.tracks.length, normalAmount }) : null;
     const expectedAmount = promotionQuote?.finalAmount ?? normalAmount;
-    if (persistedOrder.amount + persistedOrder.creditsUsed !== expectedAmount || persistedOrder.currency !== "INR") return NextResponse.json({ error: "The submitted release price does not match the persisted order." }, { status: 400 });
-    const isSubscriptionEntitlement = parsed.razorpay_order_id.startsWith("sub_entitlement_");
+    if (!distributionOrderPriceMatches({ amount: persistedOrder.amount, creditsUsed: persistedOrder.creditsUsed, expectedAmount, currency: persistedOrder.currency, subscriptionEntitlement: isSubscriptionEntitlement })) return NextResponse.json({ error: "The submitted release price does not match the persisted order." }, { status: 400 });
     if (isFirstReleaseOffer && persistedOrder.plan !== "one_time") return NextResponse.json({ error: "First-release order is invalid." }, { status: 400 });
     const savedArtistIds = new Set((await listArtistProfilesByUser(session.sub)).map((profile) => profile.id));
     const invalidPrimaryArtist = parsed.metadata.tracks.some((track) =>

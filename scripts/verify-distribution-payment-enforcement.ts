@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { distributionOrderPriceMatches } from "../lib/distribution-order-price";
 
 const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 const form = source("components/release-form.tsx");
@@ -30,7 +31,7 @@ assert.doesNotMatch(createOrder, /dev_dist_order|dev_razorpay_key|BYPASS_DISTRIB
 assert.match(verifySubmit, /verifyRazorpaySignature/);
 assert.match(verifySubmit, /verifyCapturedRazorpayPayment/);
 assert.match(verifySubmit, /persistedOrder\.userId !== session\.sub/);
-assert.match(verifySubmit, /persistedOrder\.amount \+ persistedOrder\.creditsUsed !== expectedAmount/);
+assert.match(verifySubmit, /distributionOrderPriceMatches/);
 assert.match(verifySubmit, /claimDistributionOrderForSubmission/);
 assert.match(verifySubmit, /attachDistributionOrderRelease/);
 assert.match(verifySubmit, /reserveSubscriptionReleaseSlot/);
@@ -43,5 +44,13 @@ assert.doesNotMatch(editRoute, /\["draft", "changes_requested", "rejected", "und
 assert.match(payment, /paymentStatus: "paid", fulfilledAt: null/);
 assert.match(payment, /This payment or entitlement has already been used for a release/);
 assert.match(payment, /distribution-order:\$\{order\.id\}:credit-debit/);
+
+assert.equal(distributionOrderPriceMatches({ amount: 0, creditsUsed: 0, expectedAmount: 4999, currency: "INR", subscriptionEntitlement: true }), true, "Yearly+ and other active subscriptions must use their zero-value release entitlement.");
+assert.equal(distributionOrderPriceMatches({ amount: 0, creditsUsed: 99, expectedAmount: 99, currency: "INR", subscriptionEntitlement: false }), true, "A release fully covered by HYMN credits must remain valid.");
+assert.equal(distributionOrderPriceMatches({ amount: 49, creditsUsed: 50, expectedAmount: 99, currency: "INR", subscriptionEntitlement: false }), true, "Partial credits plus Razorpay must remain valid.");
+assert.equal(distributionOrderPriceMatches({ amount: 99, creditsUsed: 0, expectedAmount: 99, currency: "INR", subscriptionEntitlement: false }), true, "A standard Razorpay order must remain valid.");
+assert.equal(distributionOrderPriceMatches({ amount: 0, creditsUsed: 0, expectedAmount: 0, currency: "INR", subscriptionEntitlement: false }), true, "A valid first-release promotion must remain valid.");
+assert.equal(distributionOrderPriceMatches({ amount: 0, creditsUsed: 0, expectedAmount: 99, currency: "INR", subscriptionEntitlement: false }), false, "A zero-value one-time order without entitlement must not bypass payment.");
+assert.equal(distributionOrderPriceMatches({ amount: 1, creditsUsed: 0, expectedAmount: 4999, currency: "INR", subscriptionEntitlement: true }), false, "Subscription entitlements must never carry an unexplained charge.");
 
 console.log("Distribution payment enforcement contracts passed: no draft/edit bypass, no fallback checkout, provider verification, entitlement validation, and replay claim are present.");
