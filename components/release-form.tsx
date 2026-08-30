@@ -3044,8 +3044,8 @@ export function ReleaseForm({
             <div className="release-onboarding-assets">
             <div className="release-onboarding-audio">
               <div className="release-onboarding-asset-heading"><strong>Audio masters</strong><span>WAV or MP3 · upload the final mastered file</span></div>
-            <div className="release-audio-queue">
-              {!tracks.some((track) => track.audioPreviewUrl && track.audioUploadStatus === "uploaded") ? (
+            <div className={clsx("release-audio-queue", tracks.length > 4 && "is-scrollable")}>
+              {!tracks.some((track) => track.audioUploadStatus !== "idle" || track.audioPreviewUrl || track.existingAudioUrl) ? (
                 <div className="release-audio-empty-state">
                   {[0, 1, 2, 3].map((slot) => <span key={slot} />)}
                   <div className="release-audio-empty-action">
@@ -3054,10 +3054,17 @@ export function ReleaseForm({
                 </div>
               ) : tracks.map((track, index) => {
                 const hasAudio = Boolean(track.audioPreviewUrl && track.audioUploadStatus === "uploaded");
+                const isUploading = track.audioUploadStatus === "uploading";
                 return (
-                  <article key={track.id} className={clsx("release-audio-queue-item", hasAudio && "is-ready")}>
+                  <article key={track.id} className={clsx("release-audio-queue-item", hasAudio && "is-ready", isUploading && "is-uploading")}>
+                    {isUploading ? <span className="release-audio-queue-progress" style={{ width: `${track.audioUploadProgress}%` }} aria-hidden="true" /> : null}
                     <div className="release-audio-queue-main">
-                      {hasAudio ? (
+                      {isUploading ? (
+                        <div className="release-audio-uploading-copy" role="status" aria-live="polite">
+                          <span className="truncate">{track.audioFileName || `Track ${index + 1}`}</span>
+                          <strong>{track.audioUploadProgress}%</strong>
+                        </div>
+                      ) : hasAudio ? (
                         <div className="release-audio-inline-details">
                           <AudioWaveform
                             src={track.audioPreviewUrl}
@@ -3085,7 +3092,7 @@ export function ReleaseForm({
                   </article>
                 );
               })}
-              {tracks.some((track) => track.audioPreviewUrl && track.audioUploadStatus === "uploaded")
+              {tracks.some((track) => track.audioUploadStatus !== "idle" || track.audioPreviewUrl || track.existingAudioUrl)
                 ? Array.from({ length: Math.max(0, 4 - tracks.length) }, (_, slot) => <span key={`available-audio-slot-${slot}`} className="release-audio-placeholder" aria-hidden="true" />)
                 : null}
               {firstReleaseOffer ? (
@@ -3093,7 +3100,7 @@ export function ReleaseForm({
                   <LockKeyhole />
                   <span>Add track — locked for this FREE release</span>
                 </button>
-              ) : tracks.some((track) => track.audioPreviewUrl && track.audioUploadStatus === "uploaded") ? (
+              ) : tracks.some((track) => track.audioUploadStatus !== "idle" || track.audioPreviewUrl || track.existingAudioUrl) ? (
                 <button type="button" onClick={addTrack} className="release-add-audio-track" title="Add another audio master">
                   <Plus />
                   <span>Add track</span>
