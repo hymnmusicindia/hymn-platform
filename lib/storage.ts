@@ -16,6 +16,14 @@ function getUploadRoot() {
   return "./public/uploads";
 }
 
+export function shouldUseManagedBlobStorage(env: NodeJS.ProcessEnv = process.env) {
+  const configured = env.STORAGE_ROOT?.trim();
+  const durableRoot = env.HYMN_STORAGE_ROOT?.trim() || env.PRIVATE_STORAGE_ROOT?.trim();
+  const hasAbsolutePersistentRoot = Boolean((configured && path.isAbsolute(configured)) || (durableRoot && path.isAbsolute(durableRoot)));
+  const isVercel = env.VERCEL === "1" || Boolean(env.VERCEL_ENV || env.NEXT_PUBLIC_VERCEL_ENV);
+  return isVercel || (env.NODE_ENV === "production" && !hasAbsolutePersistentRoot);
+}
+
 const publicUploadDirectories = ["producers", "beats", "Beatstore", "site"] as const;
 
 function normalizedPublicPath(value: string) {
@@ -82,13 +90,19 @@ export async function saveUploadedFile(file: File, directory: string, kind: "aud
     throw new Error("Artwork file is too large.");
   }
 
-  const isVercel = process.env.VERCEL === '1' || process.env.NEXT_PUBLIC_VERCEL_ENV;
-  const ext = path.extname(file.name) || "";
+  const canonicalImageExtension: Record<string, string> = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp" };
+  const ext = kind === "image" ? canonicalImageExtension[file.type] : path.extname(file.name).toLowerCase();
   const fileName = `${randomUUID()}${ext}`;
   
-  if (isVercel) {
+  if (shouldUseManagedBlobStorage()) {
     const blobPath = `${directory}/${fileName}`;
-    const blob = await put(blobPath, file, { access: 'public' });
+    let blob;
+    try {
+      blob = await put(blobPath, file, { access: "public", addRandomSuffix: false });
+    } catch (error) {
+      console.error("Durable public upload failed", { directory, fileType: file.type, fileSize: file.size, message: error instanceof Error ? error.message : "Blob upload failed" });
+      throw new Error("Durable image storage is not configured. Configure Vercel Blob or an absolute persistent STORAGE_ROOT before uploading.");
+    }
     return blob.url;
   }
 

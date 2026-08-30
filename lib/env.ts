@@ -48,6 +48,9 @@ export function getProductionReadinessIssues() {
   if (process.env.GOOGLE_CLIENT_ID?.trim() && process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_ID.trim() !== process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID.trim()) issues.push("GOOGLE_CLIENT_ID and NEXT_PUBLIC_GOOGLE_CLIENT_ID must match.");
   if (process.env.ENABLE_MOCK_LOGIN === "true" || process.env.NEXT_PUBLIC_ENABLE_MOCK_LOGIN === "true") issues.push("Mock login must not be enabled in production.");
   if (process.env.VERCEL !== "1" && !(process.env.HYMN_STORAGE_ROOT?.trim() || process.env.PRIVATE_STORAGE_ROOT?.trim())) issues.push("HYMN_STORAGE_ROOT or PRIVATE_STORAGE_ROOT is missing; private asset features must remain disabled.");
+  const publicStorageRoot = process.env.STORAGE_ROOT?.trim();
+  const isVercel = process.env.VERCEL === "1" || Boolean(process.env.VERCEL_ENV || process.env.NEXT_PUBLIC_VERCEL_ENV);
+  if (!isVercel && publicStorageRoot && !/^(?:[A-Za-z]:[\\/]|\/)/.test(publicStorageRoot)) issues.push("STORAGE_ROOT must be an absolute persistent path in production; relative upload storage can lose files between requests.");
   return issues;
 }
 // vercel trigger 5

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { beatAssetRelativePath, createSafeAssetFolderName, uploadConfig } from "../lib/storage-service";
-import { normalizePublicUploadUrl } from "../lib/storage";
+import { normalizePublicUploadUrl, shouldUseManagedBlobStorage } from "../lib/storage";
 
 const safe = createSafeAssetFolderName(" My Song / Final ❤️ ", "rel_123");
 assert(safe.endsWith("rel_123"));
@@ -11,6 +11,10 @@ const beatMaster = beatAssetRelativePath({ producerName: "Aditya / Producer", pr
 assert.equal(beatMaster, "Beatstore/Aditya - Producer - producer_7/Night - Drive - beat_42/Master Audio/master.wav");
 assert(!beatMaster.includes("..") && !beatMaster.includes("\\"));
 assert.equal(normalizePublicUploadUrl("/home/account/hymn-storage/Public/Beatstore/Producer/Beat/Cover Art/cover.png"), "/api/public-uploads/Beatstore/Producer/Beat/Cover%20Art/cover.png");
+assert.equal(shouldUseManagedBlobStorage({ NODE_ENV: "production", STORAGE_ROOT: "./public/uploads" }), true, "Relative production upload paths must use durable managed storage.");
+assert.equal(shouldUseManagedBlobStorage({ NODE_ENV: "production", STORAGE_ROOT: "D:\\hymn-storage\\Public" }), false, "An absolute Windows storage root may use local persistent storage.");
+assert.equal(shouldUseManagedBlobStorage({ NODE_ENV: "production", STORAGE_ROOT: "/srv/hymn-storage/Public" }), false, "An absolute POSIX storage root may use local persistent storage.");
+assert.equal(shouldUseManagedBlobStorage({ NODE_ENV: "production", VERCEL: "1", STORAGE_ROOT: "/srv/hymn-storage/Public" }), true, "Vercel deployments must always use managed blob storage.");
 for (const malicious of ["../../test.wav", "..\\..\\test.wav", "/test.wav", "C:\\test.wav", "%2e%2e/test.wav"]) {
   const result = createSafeAssetFolderName(decodeURIComponent(malicious), "trk_1");
   assert(!result.includes("/") && !result.includes("\\") && !result.includes(".."));

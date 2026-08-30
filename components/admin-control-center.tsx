@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
-import { CheckCircle2, X, XCircle } from "lucide-react";
+import { CheckCircle2, CreditCard, RotateCcw, Search, X, XCircle } from "lucide-react";
 import { AdminContentManager } from "@/components/admin-content-manager";
 import { AdminReviewManager } from "@/components/admin-review-manager";
 import { AdminTimedPlaylistManager } from "@/components/admin-timed-playlist-manager";
@@ -571,6 +571,9 @@ export function AdminControlCenter({
   const [paymentPlanFilter, setPaymentPlanFilter] = useState("all");
   const [paymentPeriodFilter, setPaymentPeriodFilter] = useState("all");
   const [paymentSort, setPaymentSort] = useState("newest");
+  const [paymentSearchDraft, setPaymentSearchDraft] = useState("");
+  const [paymentSearch, setPaymentSearch] = useState("");
+  const [paymentChannelFilter, setPaymentChannelFilter] = useState("all");
   const [activityTypeFilter, setActivityTypeFilter] = useState("all");
   const [activityStatusFilter, setActivityStatusFilter] = useState("all");
   const [activitySort, setActivitySort] = useState("newest");
@@ -751,6 +754,21 @@ export function AdminControlCenter({
     const cutoff = periodDays ? Date.now() - periodDays * 86_400_000 : 0;
     return initialDistributionOrders.filter((order) => (paymentStatusFilter === "all" || order.paymentStatus === paymentStatusFilter) && (paymentPlanFilter === "all" || order.plan === paymentPlanFilter) && (!cutoff || new Date(order.createdAt).getTime() >= cutoff)).sort((a, b) => paymentSort === "amount-high" ? b.amount - a.amount : paymentSort === "amount-low" ? a.amount - b.amount : paymentSort === "oldest" ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [initialDistributionOrders, paymentPeriodFilter, paymentPlanFilter, paymentSort, paymentStatusFilter]);
+  const userById = useMemo(() => new Map(users.map((user) => [user.id, user])), [users]);
+  const paymentQuery = paymentSearch.trim().toLowerCase();
+  const paymentPeriodDays = paymentPeriodFilter === "7d" ? 7 : paymentPeriodFilter === "30d" ? 30 : paymentPeriodFilter === "90d" ? 90 : 0;
+  const paymentCutoff = paymentPeriodDays ? Date.now() - paymentPeriodDays * 86_400_000 : 0;
+  const visibleDistributionPayments = useMemo(() => initialDistributionOrders.filter((order) => {
+    const account = userById.get(order.userId);
+    const release = releases.find((item) => item.id === order.releaseId);
+    const searchable = [order.id, order.userId, order.releaseId, order.plan, order.paymentStatus, order.razorpayOrderId, order.razorpayPaymentId, account?.name, account?.email, release?.releaseTitle].filter(Boolean).join(" ").toLowerCase();
+    return (paymentChannelFilter === "all" || paymentChannelFilter === "distribution") && (!paymentQuery || searchable.includes(paymentQuery)) && (paymentStatusFilter === "all" || order.paymentStatus === paymentStatusFilter) && (paymentPlanFilter === "all" || order.plan === paymentPlanFilter) && (!paymentCutoff || new Date(order.createdAt).getTime() >= paymentCutoff);
+  }).sort((a, b) => paymentSort === "amount-high" ? b.amount - a.amount : paymentSort === "amount-low" ? a.amount - b.amount : paymentSort === "oldest" ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), [initialDistributionOrders, paymentChannelFilter, paymentPlanFilter, paymentQuery, paymentSort, paymentStatusFilter, paymentCutoff, releases, userById]);
+  const visibleBeatStorePayments = useMemo(() => initialOrders.filter((order) => {
+    const account = userById.get(order.userId);
+    const searchable = [order.id, order.userId, order.buyerName, order.buyerEmail, order.paymentStatus, order.razorpayOrderId, order.razorpayPaymentId, order.couponCode, account?.name, account?.email, ...order.items.map((item) => item.beatTitle)].filter(Boolean).join(" ").toLowerCase();
+    return (paymentChannelFilter === "all" || paymentChannelFilter === "beat-store") && (!paymentQuery || searchable.includes(paymentQuery)) && (paymentStatusFilter === "all" || order.paymentStatus === paymentStatusFilter) && paymentPlanFilter === "all" && (!paymentCutoff || new Date(order.createdAt).getTime() >= paymentCutoff);
+  }).sort((a, b) => paymentSort === "amount-high" ? b.amount - a.amount : paymentSort === "amount-low" ? a.amount - b.amount : paymentSort === "oldest" ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), [initialOrders, paymentChannelFilter, paymentPlanFilter, paymentQuery, paymentSort, paymentStatusFilter, paymentCutoff, userById]);
   const recentActivityItems = useMemo(() => [...releases.map((release) => ({ type: "release", status: release.status, title: adminReleaseTitle(release), detail: `${release.artistName} / ${release.status.replace(/_/g, " ")}`, time: release.createdAt })), ...initialOrders.map((order) => ({ type: "commerce", status: order.paymentStatus, title: `Beat store order #${order.id}`, detail: `${order.paymentStatus} / ${formatMoney(order.amount)}`, time: order.createdAt }))].filter((item) => (activityTypeFilter === "all" || item.type === activityTypeFilter) && (activityStatusFilter === "all" || item.status === activityStatusFilter)).sort((a, b) => activitySort === "oldest" ? new Date(a.time).getTime() - new Date(b.time).getTime() : new Date(b.time).getTime() - new Date(a.time).getTime()), [activitySort, activityStatusFilter, activityTypeFilter, initialOrders, releases]);
   const actionQueue = useMemo(() => {
     const releaseItems = releases
@@ -1334,45 +1352,69 @@ export function AdminControlCenter({
       {activeTab === "royalties" ? <div className="grid gap-6"><AdminPayoutManager /><AdminPayoutReports /></div> : null}
 
       {(activeTab === "payments" || activeTab === "revenue") ? (
-        <div className="grid gap-6 xl:grid-cols-2">
+        <div className="grid gap-6">
+          <section className="surface-card admin-module-section fade-up p-5 sm:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Payment operations</p><h2 className="mt-2 text-xl font-semibold" style={{ color: "var(--text)" }}>Transaction intelligence</h2><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Find a payment by customer, logged-in ID, order, release, or gateway reference.</p></div>
+              <div className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}><CreditCard className="h-4 w-4" />{visibleDistributionPayments.length + visibleBeatStorePayments.length} results</div>
+            </div>
+            <form className="mt-5 flex flex-col gap-2 lg:flex-row" onSubmit={(event) => { event.preventDefault(); setPaymentSearch(paymentSearchDraft); }}>
+              <label className="relative min-w-0 flex-1"><span className="sr-only">Search payments</span><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--text-soft)" }} /><input className="field w-full pl-10" value={paymentSearchDraft} onChange={(event) => setPaymentSearchDraft(event.target.value)} placeholder="Name, email, logged-in ID, order, payment ID, release…" /></label>
+              <button className="btn-primary inline-flex items-center justify-center gap-2 px-5" type="submit"><Search className="h-4 w-4" />Search</button>
+              <button className="btn-outline inline-flex items-center justify-center gap-2 px-4" type="button" onClick={() => { setPaymentSearchDraft(""); setPaymentSearch(""); setPaymentChannelFilter("all"); setPaymentStatusFilter("all"); setPaymentPlanFilter("all"); setPaymentPeriodFilter("all"); setPaymentSort("newest"); }}><RotateCcw className="h-4 w-4" />Reset</button>
+            </form>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+              <select className="field" value={paymentChannelFilter} onChange={(event) => setPaymentChannelFilter(event.target.value)} aria-label="Payment channel"><option value="all">All channels</option><option value="distribution">Distribution</option><option value="beat-store">Beat Store</option></select>
+              <select className="field" value={paymentStatusFilter} onChange={(event) => setPaymentStatusFilter(event.target.value)} aria-label="Payment status"><option value="all">All statuses</option><option value="paid">Paid</option><option value="created">Created</option><option value="failed">Failed</option></select>
+              <select className="field" value={paymentPlanFilter} onChange={(event) => setPaymentPlanFilter(event.target.value)} aria-label="Distribution plan"><option value="all">All plans</option>{Array.from(new Set(initialDistributionOrders.map((order) => order.plan))).sort().map((plan) => <option key={plan} value={plan}>{plan.replace(/_/g, " ")}</option>)}</select>
+              <select className="field" value={paymentPeriodFilter} onChange={(event) => setPaymentPeriodFilter(event.target.value)} aria-label="Payment period"><option value="all">Any date</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="90d">Last 90 days</option></select>
+              <select className="field" value={paymentSort} onChange={(event) => setPaymentSort(event.target.value)} aria-label="Sort payments"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="amount-high">Highest amount</option><option value="amount-low">Lowest amount</option></select>
+            </div>
+          </section>
+
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Total captured" value={formatMoney([...initialDistributionOrders, ...initialOrders].filter((order) => order.paymentStatus === "paid").reduce((sum, order) => sum + order.amount, 0))} detail="Across distribution and Beat Store" /><StatCard label="Paid transactions" value={[...initialDistributionOrders, ...initialOrders].filter((order) => order.paymentStatus === "paid").length} detail="Gateway-confirmed records" /><StatCard label="Awaiting payment" value={[...initialDistributionOrders, ...initialOrders].filter((order) => order.paymentStatus === "created").length} detail="Orders created, not captured" /><StatCard label="Failed" value={[...initialDistributionOrders, ...initialOrders].filter((order) => order.paymentStatus === "failed").length} detail="Requires investigation" /></section>
+
+          <div className="grid gap-6 2xl:grid-cols-2">
           <SurfaceSection title="Distribution payments" description="Track Rs 99 submissions, subscriptions, and payment outcomes.">
             <div className="grid gap-4">
-              {initialDistributionOrders.filter((order) => searchMatch(order.id, order.plan, order.paymentStatus, order.releaseId)).map((order) => {
+              {visibleDistributionPayments.map((order) => {
                 const linkedRelease = releases.find((release) => release.id === order.releaseId);
+                const account = userById.get(order.userId);
                 return (
                   <article key={order.id} className="surface-list-item p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="font-semibold" style={{ color: "var(--text)" }}>Distribution order #{order.id}</p>
-                        <p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>{order.plan} / {formatMoney(order.amount)}</p>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border text-sm font-semibold" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text)" }}>{account?.avatarUrl ? <img src={account.avatarUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : (account?.name || "U").slice(0, 1).toUpperCase()}</span>
+                        <div className="min-w-0"><p className="truncate font-semibold" style={{ color: "var(--text)" }}>{account?.name || "Unknown account"}</p><p className="truncate text-xs" style={{ color: "var(--text-muted)" }}>{account?.email || "Email unavailable"}</p><p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: "var(--text-soft)" }}>Logged-in ID #{order.userId}</p></div>
                       </div>
                       <StatusPill label={order.paymentStatus} active={order.paymentStatus === "paid"} />
                     </div>
-                    <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>{linkedRelease ? linkedRelease.releaseTitle : "Release not linked yet"}</p>
+                    <div className="mt-4 grid gap-3 border-t pt-4 text-xs sm:grid-cols-2" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}><div><span className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Order / plan</span><strong className="mt-1 block font-semibold" style={{ color: "var(--text)" }}>#{order.id} · {order.plan.replace(/_/g, " ")}</strong></div><div><span className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Amount</span><strong className="mt-1 block font-semibold" style={{ color: "var(--text)" }}>{formatMoney(order.amount)}</strong></div><div><span className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Release</span><strong className="mt-1 block truncate font-semibold" style={{ color: "var(--text)" }}>{linkedRelease?.releaseTitle || "Not linked yet"}{order.releaseId ? ` · #${order.releaseId}` : ""}</strong></div><div><span className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Created</span><strong className="mt-1 block font-semibold" style={{ color: "var(--text)" }}>{new Date(order.createdAt).toLocaleString("en-IN")}</strong></div></div>
+                    <div className="mt-3 rounded-lg border px-3 py-2 font-mono text-[11px] break-all" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>Gateway order: {order.razorpayOrderId || "Not assigned"}{order.razorpayPaymentId ? ` · Payment: ${order.razorpayPaymentId}` : ""}</div>
                   </article>
                 );
               })}
-              {initialDistributionOrders.length === 0 ? <EmptyState copy="No distribution orders yet." /> : null}
+              {visibleDistributionPayments.length === 0 ? <EmptyState copy="No distribution payments match these filters." /> : null}
             </div>
           </SurfaceSection>
 
           <SurfaceSection title="Beat store payments" description="Verified storefront orders and payment state.">
             <div className="grid gap-4">
-              {initialOrders.filter((order) => searchMatch(order.id, order.buyerEmail, order.paymentStatus, order.razorpayOrderId)).map((order) => (
-                <article key={order.id} className="surface-list-item p-4">
+              {visibleBeatStorePayments.map((order) => {
+                const account = userById.get(order.userId);
+                return <article key={order.id} className="surface-list-item p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="font-semibold" style={{ color: "var(--text)" }}>Order #{order.id}</p>
-                      <p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>{order.buyerEmail ?? `User #${order.userId}`}</p>
-                    </div>
+                    <div className="flex min-w-0 items-center gap-3"><span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border text-sm font-semibold" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text)" }}>{account?.avatarUrl ? <img src={account.avatarUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : (order.buyerName || account?.name || "U").slice(0, 1).toUpperCase()}</span><div className="min-w-0"><p className="truncate font-semibold" style={{ color: "var(--text)" }}>{order.buyerName || account?.name || "Unknown customer"}</p><p className="truncate text-xs" style={{ color: "var(--text-muted)" }}>{order.buyerEmail || account?.email || "Email unavailable"}</p><p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: "var(--text-soft)" }}>Logged-in ID #{order.userId}</p></div></div>
                     <StatusPill label={order.paymentStatus} active={order.paymentStatus === "paid"} />
                   </div>
-                  <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>{formatMoney(order.amount)} / {order.razorpayOrderId}</p>
-                </article>
-              ))}
-              {initialOrders.length === 0 ? <EmptyState copy="No beat store orders yet." /> : null}
+                  <div className="mt-4 grid gap-3 border-t pt-4 text-xs sm:grid-cols-2" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}><div><span className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Order</span><strong className="mt-1 block" style={{ color: "var(--text)" }}>#{order.id} · {order.items.length} item{order.items.length === 1 ? "" : "s"}</strong></div><div><span className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Amount</span><strong className="mt-1 block" style={{ color: "var(--text)" }}>{formatMoney(order.amount)}</strong></div><div><span className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Purchase</span><strong className="mt-1 block truncate" style={{ color: "var(--text)" }}>{order.items.map((item) => item.beatTitle || `Beat #${item.beatId}`).join(", ") || "No items"}</strong></div><div><span className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Created</span><strong className="mt-1 block" style={{ color: "var(--text)" }}>{new Date(order.createdAt).toLocaleString("en-IN")}</strong></div></div>
+                  <div className="mt-3 rounded-lg border px-3 py-2 font-mono text-[11px] break-all" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>Gateway order: {order.razorpayOrderId || "Not assigned"}{order.razorpayPaymentId ? ` · Payment: ${order.razorpayPaymentId}` : ""}</div>
+                </article>;
+              })}
+              {visibleBeatStorePayments.length === 0 ? <EmptyState copy="No Beat Store payments match these filters." /> : null}
             </div>
           </SurfaceSection>
+          </div>
         </div>
       ) : null}
 
