@@ -110,6 +110,12 @@ export interface User {
   avatarUrl?: string | null;
   passwordHash?: string | null;
   role: UserRole;
+  status?: "active" | "paused" | "under_review" | "suspended" | "deletion_scheduled" | "banned";
+  statusReason?: string | null;
+  statusChangedAt?: string | null;
+  deletionScheduledAt?: string | null;
+  appealRequestedAt?: string | null;
+  appealMessage?: string | null;
   referralCode: string;
   referralCredits: number;
   referredBy?: number | null;

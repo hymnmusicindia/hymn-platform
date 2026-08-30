@@ -27,6 +27,7 @@ assert.match(createOrder, /Multiple captured payments are waiting/);
 assert.match(createOrder, /No new charge was created/);
 assert.match(createOrder, /creditsUsed/);
 assert.match(createOrder, /existingEntitlement/);
+assert.match(createOrder, /hasActiveSubscription && payload\.paymentModel === "subscription"/);
 assert.match(createOrder, /resumedOrder: true/);
 assert.doesNotMatch(createOrder, /dev_dist_order|dev_razorpay_key|BYPASS_DISTRIBUTION_PAYMENT/);
 

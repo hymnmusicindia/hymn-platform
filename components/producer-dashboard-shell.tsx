@@ -9,6 +9,7 @@ import { BeatCard } from "@/components/beat-card";
 import { Beat, BeatPurchase, Notification, Order, Release, SupportTicket, User } from "@/lib/types";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { CustomerHome, ProducerHome } from "@/components/simplified-dashboard-home";
+import { FirstLoginReferralPrompt } from "@/components/first-login-referral-prompt";
 
 const AnalyticsDashboard = dynamic(() => import("@/components/analytics-dashboard").then((module) => module.AnalyticsDashboard));
 const ReferralPanel = dynamic(() => import("@/components/referral-panel").then((module) => module.ReferralPanel));
@@ -284,6 +285,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
       notificationCount={producerNotifications.filter((notification) => !notification.readAt).length}
       compactOverview
     >
+      <FirstLoginReferralPrompt />
       {activeTab === "overview" ? <ProducerHome user={user} beats={catalog} finance={finance} notifications={producerNotifications} onTab={(tab) => setActiveTab(tab)} /> : null}
       {false && activeTab === "overview" ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Catalog size" value={catalog.length} />

@@ -7,6 +7,7 @@ import { AdminReviewManager } from "@/components/admin-review-manager";
 import { AdminTimedPlaylistManager } from "@/components/admin-timed-playlist-manager";
 import { AdminActivityAndLogs } from "@/components/admin-activity-and-logs";
 import { AdminUserBenefits } from "@/components/admin-user-benefits";
+import { AdminTeamAccessManager } from "@/components/admin-team-access-manager";
 import { DashboardFrame } from "@/components/dashboard-frame";
 import { DireNoteDiagnostics } from "@/components/direnote-diagnostics";
 import type { AdminPayoutRequest } from "@/lib/payout";
@@ -133,6 +134,44 @@ function readinessIssueLabel(issue: ReadinessIssue) {
     [/platform|destination/, "Platform destinations"], [/licen[cs]e/, "License receipt"], [/suno|\bai\b/, "AI proof / Suno receipt"],
   ];
   return mappings.find(([pattern]) => pattern.test(field))?.[1] ?? "Other metadata";
+}
+
+function AccountStatusBadge({ status = "active" }: { status?: User["status"] }) {
+  const healthy = status === "active";
+  const caution = ["paused", "under_review", "suspended", "deletion_scheduled"].includes(status || "");
+  return <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize" style={{ borderColor: healthy ? "color-mix(in srgb, #22c55e 45%, var(--border))" : caution ? "color-mix(in srgb, #eab308 50%, var(--border))" : "color-mix(in srgb, var(--danger) 50%, var(--border))", color: healthy ? "#22c55e" : caution ? "#eab308" : "var(--danger)" }}><span aria-hidden>{healthy ? "✓" : caution ? "⚠" : "×"}</span>{String(status).replaceAll("_", " ")}</span>;
+}
+
+function ProducerManagementCard({ producer, pending, canManage, onOpenCatalogue, onOpenLedger, onSave, onRevoke }: { producer: any; pending: boolean; canManage: boolean; onOpenCatalogue: () => void; onOpenLedger: () => void; onSave: (producerId: number, form: HTMLFormElement) => void; onRevoke: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const profile = producer.profile ?? {};
+  const displayName = profile.displayName || producer.name;
+  const portrait = profile.avatarUrl || null;
+  const cover = profile.coverPhotoUrl || null;
+  return <article className="surface-list-item overflow-hidden p-0">
+    <div className="relative h-28 border-b" style={{ borderColor: "var(--border)", background: "linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, var(--bg-soft)), var(--bg-soft))" }}>
+      {cover ? <img src={cover} alt={`${displayName} Beat Store cover`} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-end p-4 text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Public cover not added</div>}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/35 to-transparent" />
+    </div>
+    <div className="p-5 pt-0">
+      <div className="relative flex items-end justify-between gap-4">
+        <div className="flex min-w-0 items-end gap-4">
+          {portrait ? <img src={portrait} alt={`${displayName} portrait`} className="-mt-9 h-20 w-20 shrink-0 rounded-2xl border-4 object-cover shadow-lg" style={{ borderColor: "var(--card)" }} /> : <div className="-mt-9 flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border-4 text-2xl font-semibold shadow-lg" style={{ borderColor: "var(--card)", background: "var(--bg-soft)" }}>{displayName.slice(0, 1).toUpperCase()}</div>}
+          <div className="min-w-0 pb-1"><h3 className="truncate text-lg font-semibold">{displayName}</h3><p className="truncate text-xs" style={{ color: "var(--text-muted)" }}>{producer.email}</p></div>
+        </div>
+        <div className="pb-1"><StatusPill label={producer.status} active={producer.status === "active"} /></div>
+      </div>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs" style={{ color: "var(--text-soft)" }}><span>Last activity {new Date(producer.lastActivity).toLocaleDateString("en-IN")}</span><span>{portrait && cover ? "Storefront media complete" : "Storefront media incomplete"}</span></div>
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">{[["Live beats", `${producer.activeBeats} / ${producer.totalBeats}`], ["Sales", producer.totalSales], ["Gross", formatMoney(producer.grossRevenue)], ["Available", formatMoney(producer.availableBalance)]].map(([label, value]) => <div key={label} className="rounded-xl border p-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><span className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>{label}</span><strong className="mt-1 block text-sm">{value}</strong></div>)}</div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2"><button type="button" onClick={onOpenCatalogue} className="btn-primary pressable">Open catalogue</button><button type="button" disabled={!canManage} onClick={() => setEditing((value) => !value)} className="btn-outline pressable disabled:opacity-40">{editing ? "Close profile editor" : "Edit public profile"}</button><button type="button" onClick={onOpenLedger} className="btn-outline pressable">Payout ledger</button><button type="button" disabled={!canManage || pending} onClick={onRevoke} className="btn-outline pressable disabled:opacity-40" style={{ color: "var(--danger)" }}>Revoke access</button></div>
+      {editing ? <form className="mt-5 grid gap-4 rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} onSubmit={(event) => { event.preventDefault(); onSave(producer.id, event.currentTarget); }}>
+        <div><p className="font-semibold">Beat Store identity</p><p className="mt-1 text-xs leading-5" style={{ color: "var(--text-muted)" }}>Changes update the producer name and images shown publicly on the Beat Store.</p></div>
+        <label className="grid gap-2 text-xs font-medium">Display producer name<input name="displayName" required minLength={2} maxLength={80} defaultValue={displayName} className="field" /></label>
+        <div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-2 text-xs font-medium">Portrait image<span className="font-normal" style={{ color: "var(--text-soft)" }}>Square image, JPG/PNG/WebP</span><input name="avatar" type="file" accept="image/jpeg,image/png,image/webp" className="field" /></label><label className="grid gap-2 text-xs font-medium">Public display image<span className="font-normal" style={{ color: "var(--text-soft)" }}>Wide Beat Store cover, JPG/PNG/WebP</span><input name="coverPhoto" type="file" accept="image/jpeg,image/png,image/webp" className="field" /></label></div>
+        <button type="submit" disabled={pending} className="btn-primary pressable disabled:opacity-50">{pending ? "Saving profile…" : "Save Beat Store profile"}</button>
+      </form> : null}
+    </div>
+  </article>;
 }
 
 function correctionDefaults(issues: ReadinessIssue[]) {
@@ -861,19 +900,30 @@ export function AdminControlCenter({
     });
   }
 
-  function updateProducerPhoto(producerId: number, file?: File | null) {
-    if (!file) return;
+  function updateProducerProfile(producerId: number, form: HTMLFormElement) {
     startTransition(async () => {
-      const formData = new FormData();
-      formData.append("avatar", file);
-      const response = await fetch(`/api/admin/producers/${producerId}/photo`, { method: "PATCH", body: formData });
+      const response = await fetch(`/api/admin/producers/${producerId}/profile`, { method: "PATCH", body: new FormData(form) });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setFeedback(data.error || "Could not update producer photo.");
+        setFeedback(data.error || "Could not update producer profile.");
         return;
       }
-      setProducerManagement((items) => items.map((prod) => prod.id === producerId ? { ...prod, profile: { ...prod.profile, avatarUrl: data.avatarUrl, coverPhotoUrl: data.avatarUrl } } : prod));
-      setFeedback("Producer profile photo updated successfully.");
+      setProducerManagement((items) => items.map((prod) => prod.id === producerId ? { ...prod, status: data.profile.status, profile: data.profile } : prod));
+      setFeedback("Producer name and Beat Store images updated successfully.");
+    });
+  }
+
+  function updateAccountStatus(user: User, accountStatus: NonNullable<User["status"]>) {
+    const destructive = accountStatus === "deletion_scheduled";
+    const reason = accountStatus === "active" ? "Review completed; account is in good standing." : window.prompt(destructive ? "Reason for scheduling deletion in 20 days (the user can appeal):" : `Reason for marking this account ${accountStatus.replaceAll("_", " ")}:`, user.statusReason || "");
+    if (reason == null || (accountStatus !== "active" && reason.trim().length < 3)) return;
+    if (destructive && !window.confirm(`Schedule account #${user.id} for deletion in 20 days? Access will be suspended immediately and the user may appeal.`)) return;
+    startTransition(async () => {
+      const response = await fetch(`/api/admin/users/${user.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accountStatus, reason }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return setFeedback(data.error || "Could not update account status.");
+      setUsers((items) => items.map((item) => item.id === user.id ? { ...item, ...data.user } : item));
+      setFeedback(accountStatus === "active" ? `${user.name}'s account is back in good standing.` : `${user.name}'s account is now ${accountStatus.replaceAll("_", " ")}.`);
     });
   }
 
@@ -1167,7 +1217,7 @@ export function AdminControlCenter({
                   <div className="flex gap-3">
                     {release.artworkUrl ? <img src={release.artworkUrl} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" /> : <div className="h-16 w-16 shrink-0 rounded-xl border border-dashed" style={{ borderColor: "var(--border)" }} />}
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold" style={{ color: "var(--text)" }}>{release.releaseTitle || release.trackName}</p><p className="mt-1 truncate text-sm" style={{ color: "var(--text-soft)" }}>{release.artistName} · {release.tracks?.length ?? 0} track{release.tracks?.length === 1 ? "" : "s"} · {release.releaseType.toUpperCase()}</p></div><StatusPill label={release.status.replace(/_/g, " ")} active /></div>
+                      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold" style={{ color: "var(--text)" }}>{release.releaseTitle || release.trackName}</p><div className="mt-1 flex flex-wrap items-center gap-2"><p className="truncate text-sm" style={{ color: "var(--text-soft)" }}>{release.artistName} · {release.tracks?.length ?? 0} track{release.tracks?.length === 1 ? "" : "s"} · {release.releaseType.toUpperCase()}</p><AccountStatusBadge status={users.find((user) => user.id === release.userId)?.status} /></div></div><StatusPill label={release.status.replace(/_/g, " ")} active /></div>
                       <div className="mt-3 grid gap-1 text-xs sm:grid-cols-2" style={{ color: "var(--text-muted)" }}><span>Submitted {release.submittedAt ? new Date(release.submittedAt).toLocaleDateString("en-IN") : "Not submitted"}</span><span>Release {release.releaseDate ? new Date(release.releaseDate).toLocaleDateString("en-IN") : "—"}</span><span>Payment {release.paymentStatus === "paid" ? "Verified" : release.paymentStatus ?? "Pending"}</span><span style={{ color: assetReady ? "var(--success)" : "var(--danger)" }}>Distribution {assetReady ? "Ready to check" : "Issues found"}</span></div>
                     </div>
                   </div>
@@ -1180,7 +1230,7 @@ export function AdminControlCenter({
           <SurfaceSection title="Selected Release Review" description="Inspect metadata, files, rights, readiness, and the complete activity record.">
             {selectedRelease ? (
               <div className="grid gap-5">
-                <div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>{selectedRelease.releaseTitle || selectedRelease.trackName}</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{selectedRelease.releaseType.toUpperCase()} · {selectedRelease.tracks?.length ?? 0} track{selectedRelease.tracks?.length === 1 ? "" : "s"} · {selectedRelease.artistName}</p><p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>Submitted {selectedRelease.submittedAt ? new Date(selectedRelease.submittedAt).toLocaleString("en-IN") : "—"} · Release {selectedRelease.releaseDate || "—"} · {selectedRelease.ownerEmail || "Account email unavailable"}</p></div><StatusPill label={selectedRelease.status.replace(/_/g, " ")} active /></div>
+                <div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>{selectedRelease.releaseTitle || selectedRelease.trackName}</h3><div className="mt-2 flex flex-wrap items-center gap-2"><p className="text-sm" style={{ color: "var(--text-muted)" }}>{selectedRelease.releaseType.toUpperCase()} · {selectedRelease.tracks?.length ?? 0} track{selectedRelease.tracks?.length === 1 ? "" : "s"} · {selectedRelease.artistName}</p><AccountStatusBadge status={users.find((user) => user.id === selectedRelease.userId)?.status} /></div><p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>Submitted {selectedRelease.submittedAt ? new Date(selectedRelease.submittedAt).toLocaleString("en-IN") : "—"} · Release {selectedRelease.releaseDate || "—"} · {selectedRelease.ownerEmail || "Account email unavailable"}</p></div><StatusPill label={selectedRelease.status.replace(/_/g, " ")} active /></div>
                 <nav className="flex gap-1 overflow-x-auto rounded-2xl border p-1.5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} aria-label="Release review sections">{(["overview", "metadata", "tracks", "assets", "rights", "direnote", "activity"] as const).map((tab) => <button key={tab} type="button" onClick={() => setReviewTab(tab)} className={reviewTab === tab ? "btn-primary pressable shrink-0 px-3 py-2 text-xs capitalize" : "pressable shrink-0 rounded-full px-3 py-2 text-xs font-semibold capitalize"} style={reviewTab === tab ? undefined : { color: "var(--text-muted)" }}>{tab === "assets" ? "Artwork & Audio" : tab === "direnote" ? "Distribution readiness" : tab}</button>)}</nav>
                 {reviewTab === "overview" ? <div className="grid gap-5 rounded-[1.4rem] border p-5 sm:grid-cols-[9rem,1fr] sm:items-start" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
                   <div>
@@ -1256,7 +1306,7 @@ export function AdminControlCenter({
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                    <div className="flex min-w-0 items-start gap-3">
                      <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-semibold" style={{ background: "var(--bg-soft)", color: "var(--text)" }}>{user.avatarUrl ? <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : user.name.slice(0, 1).toUpperCase()}</span>
-                     <div className="min-w-0"><p className="truncate font-semibold" style={{ color: "var(--text)" }}>{user.name}</p>
+                      <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-semibold" style={{ color: "var(--text)" }}>{user.name}</p><AccountStatusBadge status={user.status} /></div>
                      <p className="mt-1 truncate text-sm" style={{ color: "var(--text-soft)" }}>{user.email}</p>
                     <div className="mt-3 flex flex-wrap gap-3 text-xs" style={{ color: "var(--text-muted)" }}>
                       <span>{releaseCountByUser.get(user.id) ?? 0} releases</span>
@@ -1269,8 +1319,9 @@ export function AdminControlCenter({
                       <button key={role} type="button" onClick={() => updateRole(user, role)} className={user.role === role ? "btn-primary pressable" : "btn-outline pressable"}>{role}</button>
                     ))}
                    </div>
-                 </div>
-                 <AdminUserBenefits user={user} onCreditChange={(balance) => setUsers((items) => items.map((item) => item.id === user.id ? { ...item, referralCredits: balance } : item))} />
+                  </div>
+                  <div className="mt-4 grid gap-3 border-t pt-4 md:grid-cols-[minmax(0,1fr),auto]" style={{ borderColor: "var(--border)" }}><div><p className="text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Account safety</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{user.statusReason || "No restrictions or review flags."}{user.deletionScheduledAt ? ` Scheduled cleanup: ${new Date(user.deletionScheduledAt).toLocaleDateString("en-IN")}.` : ""}{user.appealRequestedAt ? ` Appeal received ${new Date(user.appealRequestedAt).toLocaleDateString("en-IN")}.` : ""}</p></div><select className="field min-w-52" value={user.status || "active"} disabled={isPending || !hasPermission("users.manage")} onChange={(event) => updateAccountStatus(user, event.target.value as NonNullable<User["status"]>)} aria-label={`Change account status for ${user.name}`}><option value="active">✓ Good standing</option><option value="paused">⚠ Account paused</option><option value="under_review">⚠ Flagged for review</option><option value="suspended">⚠ Suspended</option><option value="deletion_scheduled">⚠ Schedule deletion (20 days)</option><option value="banned">× Permanently banned</option></select></div>
+                  <AdminUserBenefits user={user} onCreditChange={(balance) => setUsers((items) => items.map((item) => item.id === user.id ? { ...item, referralCredits: balance } : item))} />
                </article>
             ))}
             {filteredUsers.length === 0 ? <EmptyState copy="No users match the selected search and filters." /> : null}
@@ -1465,12 +1516,8 @@ export function AdminControlCenter({
       {activeTab === "producers" ? <div className="grid gap-6">
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Approved producers" value={producerManagement.length} detail="Accounts with producer access" /><StatCard label="Published inventory" value={publishedBeats} detail={`${pendingBeatReviews} awaiting review`} /><StatCard label="Verified gross sales" value={formatMoney(producerManagement.reduce((sum, producer) => sum + producer.grossRevenue, 0))} /><StatCard label="Producer earnings" value={formatMoney(producerManagement.reduce((sum, producer) => sum + producer.producerEarnings, 0))} detail="Contractual 70% share" /></section>
         <SurfaceSection title="Producer operations" description="Live creator accounts, storefront readiness, catalogue health, verified sales, and payout exposure.">
-          <div className="grid gap-4 lg:grid-cols-2">
-            {producerManagement.filter((producer) => searchMatch(producer.name, producer.email, producer.status, producer.profile?.displayName)).map((producer) => <article key={producer.id} className="surface-list-item p-5">
-              <div className="flex items-start gap-4">{producer.profile?.avatarUrl || producer.profile?.coverPhotoUrl ? <img src={producer.profile.avatarUrl || producer.profile.coverPhotoUrl} alt={`${producer.name} profile`} className="h-16 w-16 shrink-0 rounded-full border object-cover" style={{ borderColor: "var(--border)" }} /> : <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border text-lg font-semibold" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{producer.name.slice(0, 1).toUpperCase()}</div>}<div className="min-w-0 flex-1"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="truncate font-semibold">{producer.profile?.displayName || producer.name}</p><p className="mt-1 truncate text-xs" style={{ color: "var(--text-muted)" }}>{producer.email}</p></div><StatusPill label={producer.status} active={producer.status === "active"} /></div><p className="mt-3 text-xs" style={{ color: "var(--text-soft)" }}>Last activity {new Date(producer.lastActivity).toLocaleDateString("en-IN")}</p></div></div>
-              <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4"><div className="summary-card"><span>Live / total</span><strong>{producer.activeBeats} / {producer.totalBeats}</strong></div><div className="summary-card"><span>Sales</span><strong>{producer.totalSales}</strong></div><div className="summary-card"><span>Gross</span><strong>{formatMoney(producer.grossRevenue)}</strong></div><div className="summary-card"><span>Available</span><strong>{formatMoney(producer.availableBalance)}</strong></div></div>
-              <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => { setProducerBeatFilter(producer.id); setBeatStatusFilter("all"); selectAdminTab("operations"); }} className="btn-primary pressable">Open catalogue</button><button type="button" onClick={() => selectAdminTab("royalties")} className="btn-outline pressable">Payout ledger</button><label className="btn-outline pressable cursor-pointer">Update portrait<input type="file" accept="image/*" className="hidden" onChange={(e) => updateProducerPhoto(producer.id, e.target.files?.[0])} /></label><button type="button" disabled={!hasPermission("users.manage") || isPending} onClick={() => { const linked = users.find((user) => user.id === producer.id); if (linked && window.confirm(`Revoke producer access for ${producer.name}? Their storefront will be disabled.`)) updateRole(linked, "customer"); }} className="btn-outline pressable disabled:opacity-40" style={{ color: "var(--danger)" }}>Revoke access</button></div>
-            </article>)}
+          <div className="grid gap-5 xl:grid-cols-2">
+            {producerManagement.filter((producer) => searchMatch(producer.name, producer.email, producer.status, producer.profile?.displayName)).map((producer) => <ProducerManagementCard key={producer.id} producer={producer} pending={isPending} canManage={hasPermission("users.manage")} onOpenCatalogue={() => { setProducerBeatFilter(producer.id); setBeatStatusFilter("all"); selectAdminTab("operations"); }} onOpenLedger={() => selectAdminTab("royalties")} onSave={updateProducerProfile} onRevoke={() => { const linked = users.find((user) => user.id === producer.id); if (linked && window.confirm(`Revoke producer access for ${producer.name}? Their storefront will be disabled.`)) updateRole(linked, "customer"); }} />)}
             {producerManagement.length === 0 ? <EmptyState copy="No producers found. Grant producer access from Admin Portal → Users." /> : null}
           </div>
         </SurfaceSection>
@@ -1522,7 +1569,8 @@ export function AdminControlCenter({
         </div>
       ) : null}
       {activeTab === "reviews" ? <AdminReviewManager /> : null}
-      {(activeTab === "analytics" || activeTab === "contracts" || activeTab === "promotions" || activeTab === "fraud" || activeTab === "team") ? (
+      {activeTab === "team" ? <AdminTeamAccessManager users={users} canManage={hasPermission("system.manage")} /> : null}
+      {(activeTab === "analytics" || activeTab === "contracts" || activeTab === "promotions" || activeTab === "fraud") ? (
         <div className="grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
           <SurfaceSection title={activeTab === "analytics" ? "Platform analytics" : activeTab === "contracts" ? "Contracts" : activeTab === "promotions" ? "Promotion operations" : activeTab === "fraud" ? "Fraud detection" : "Team management"} description="Executive module view using live HYMN platform signals while preserving the existing backend operations.">
             <div className="grid gap-4 sm:grid-cols-2">

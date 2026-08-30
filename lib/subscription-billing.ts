@@ -33,11 +33,20 @@ export function subscriptionHasEntitlement(subscription: { status: string; curre
   return subscription.status === "active" && new Date(subscription.currentPeriodEnd || subscription.expiryDate || 0) > now;
 }
 
+export function subscriptionPeriodAdvanced(previousStart: Date | string | null | undefined, nextStart: Date | string | null | undefined) {
+  if (!previousStart || !nextStart) return false;
+  const previous = new Date(previousStart).getTime();
+  const next = new Date(nextStart).getTime();
+  return Number.isFinite(previous) && Number.isFinite(next) && next > previous;
+}
+
 export async function reserveSubscriptionReleaseSlot(userId: number) {
   return prisma.$transaction(async tx => {
     const sub = await tx.subscription.findUnique({ where: { userId } });
     if (!sub || !subscriptionHasEntitlement(sub)) throw new Error("No active subscription entitlement is available.");
-    const updated = await tx.subscription.updateMany({ where: { id: sub.id, ...(sub.releaseLimit == null ? { releasesUsed: sub.releasesUsed } : { releasesUsed: { equals: sub.releasesUsed, lt: sub.releaseLimit } }) }, data: sub.releaseLimit == null ? {} : { releasesUsed: { increment: 1 } } });
+    const ledgerCount = await tx.subscriptionReleaseUsage.count({ where: { subscriptionId: sub.id, ...(sub.currentPeriodStart ? { createdAt: { gte: sub.currentPeriodStart } } : {}) } });
+    if (sub.releasesUsed !== ledgerCount) await tx.subscription.update({ where: { id: sub.id }, data: { releasesUsed: ledgerCount } });
+    const updated = await tx.subscription.updateMany({ where: { id: sub.id, ...(sub.releaseLimit == null ? { releasesUsed: ledgerCount } : { releasesUsed: { equals: ledgerCount, lt: sub.releaseLimit } }) }, data: sub.releaseLimit == null ? {} : { releasesUsed: { increment: 1 } } });
     if (updated.count !== 1) throw new Error("Your subscription release allowance has been used.");
     return { subscriptionId: sub.id, counted: sub.releaseLimit != null };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -86,7 +95,7 @@ export async function createProviderSubscription(userId: number, product: Subscr
   const local = await prisma.subscription.upsert({
     where: { userId },
     create: { userId, plan: product, planName: policy.name, planVersionId: version.id, razorpayPlanId: version.razorpayPlanId, razorpaySubscriptionId: provider.id, expiryDate: now, status: String(provider.status || "created"), releaseLimit: policy.releaseLimit, artistLimit: artistProfileLimitForPlan(product), availableFeatures: JSON.stringify(policy.features), daysRemaining: 0, autoRenewal: true, providerSyncedAt: now },
-    update: { plan: product, planName: policy.name, planVersionId: version.id, razorpayPlanId: version.razorpayPlanId, razorpaySubscriptionId: provider.id, expiryDate: now, status: String(provider.status || "created"), releaseLimit: policy.releaseLimit, artistLimit: artistProfileLimitForPlan(product), availableFeatures: JSON.stringify(policy.features), daysRemaining: 0, autoRenewal: true, cancelAtPeriodEnd: false, cancelledAt: null, currentPeriodStart: null, currentPeriodEnd: null, providerSyncedAt: now }
+    update: { plan: product, planName: policy.name, planVersionId: version.id, razorpayPlanId: version.razorpayPlanId, razorpaySubscriptionId: provider.id, expiryDate: now, status: String(provider.status || "created"), releasesUsed: 0, releaseLimit: policy.releaseLimit, artistLimit: artistProfileLimitForPlan(product), availableFeatures: JSON.stringify(policy.features), daysRemaining: 0, autoRenewal: true, cancelAtPeriodEnd: false, cancelledAt: null, currentPeriodStart: null, currentPeriodEnd: null, providerSyncedAt: now }
   });
   await prisma.auditLog.create({ data: { actorId: userId, action: "SUBSCRIPTION_PROVIDER_CREATED", entity: "subscriptions", entityId: String(local.id), metadata: { product, planVersionId: version.id, razorpaySubscriptionId: provider.id } } });
   return { local, provider, policy, version };
@@ -107,10 +116,11 @@ export async function synchronizeProviderSubscription(entity: ProviderSubscripti
   const now = new Date();
   const daysRemaining = Math.max(0, Math.ceil((expiryDate.getTime() - now.getTime()) / 86_400_000));
   const cancelledAt = status === "cancelled" ? (fromUnix(entity.ended_at) || now) : existing.cancelledAt;
+  const billingPeriodRenewed = subscriptionPeriodAdvanced(existing.currentPeriodStart, currentStart);
   const subscription = await prisma.$transaction(async tx => {
-    const updated = await tx.subscription.update({ where: { id: existing.id }, data: { status, currentPeriodStart: currentStart, currentPeriodEnd: currentEnd, expiryDate, nextRenewalDate: ["active", "pending"].includes(status) ? (fromUnix(entity.charge_at) || currentEnd) : null, startedAt: existing.startedAt || fromUnix(entity.start_at) || currentStart, cancelledAt, daysRemaining, autoRenewal: !["cancelled", "completed", "expired"].includes(status) && !existing.cancelAtPeriodEnd, providerSyncedAt: now } });
+    const updated = await tx.subscription.update({ where: { id: existing.id }, data: { status, currentPeriodStart: currentStart, currentPeriodEnd: currentEnd, expiryDate, nextRenewalDate: ["active", "pending"].includes(status) ? (fromUnix(entity.charge_at) || currentEnd) : null, startedAt: existing.startedAt || fromUnix(entity.start_at) || currentStart, cancelledAt, daysRemaining, ...(billingPeriodRenewed ? { releasesUsed: 0 } : {}), autoRenewal: !["cancelled", "completed", "expired"].includes(status) && !existing.cancelAtPeriodEnd, providerSyncedAt: now } });
     if (payment?.id) await tx.subscriptionPayment.upsert({ where: { razorpayPaymentId: payment.id }, create: { subscriptionId: existing.id, razorpayPaymentId: payment.id, razorpayInvoiceId: payment.invoice_id || null, amount: Number(payment.amount || 0), currency: String(payment.currency || "INR").toUpperCase(), status: String(payment.status || "captured"), billingPeriodStart: currentStart, billingPeriodEnd: currentEnd, createdAt: fromUnix(payment.created_at) || now }, update: { status: String(payment.status || "captured"), razorpayInvoiceId: payment.invoice_id || undefined } });
-    await tx.auditLog.create({ data: { action: "SUBSCRIPTION_PROVIDER_SYNCHRONIZED", entity: "subscriptions", entityId: String(existing.id), metadata: { providerStatus: status, paymentId: payment?.id || null } as Prisma.InputJsonObject } });
+    await tx.auditLog.create({ data: { action: "SUBSCRIPTION_PROVIDER_SYNCHRONIZED", entity: "subscriptions", entityId: String(existing.id), metadata: { providerStatus: status, paymentId: payment?.id || null, billingPeriodRenewed, releaseAllowanceReset: billingPeriodRenewed } as Prisma.InputJsonObject } });
     return updated;
   });
   return subscription;
@@ -151,7 +161,9 @@ export async function consumeSubscriptionRelease(userId: number, releaseId: numb
       if (existing.subscriptionId !== sub.id) throw new Error("Release usage belongs to a different subscription.");
       return sub;
     }
-    const updated = await tx.subscription.updateMany({ where: { id: sub.id, ...(sub.releaseLimit == null ? { releasesUsed: sub.releasesUsed } : { releasesUsed: { equals: sub.releasesUsed, lt: sub.releaseLimit } }) }, data: { releasesUsed: { increment: 1 } } });
+    const ledgerCount = await tx.subscriptionReleaseUsage.count({ where: { subscriptionId: sub.id, ...(sub.currentPeriodStart ? { createdAt: { gte: sub.currentPeriodStart } } : {}) } });
+    if (sub.releasesUsed !== ledgerCount) await tx.subscription.update({ where: { id: sub.id }, data: { releasesUsed: ledgerCount } });
+    const updated = await tx.subscription.updateMany({ where: { id: sub.id, ...(sub.releaseLimit == null ? { releasesUsed: ledgerCount } : { releasesUsed: { equals: ledgerCount, lt: sub.releaseLimit } }) }, data: sub.releaseLimit == null ? {} : { releasesUsed: { increment: 1 } } });
     if (updated.count !== 1) throw new Error("Your subscription release allowance has been used.");
     await tx.subscriptionReleaseUsage.create({ data: { subscriptionId: sub.id, releaseId } });
     return tx.subscription.findUniqueOrThrow({ where: { id: sub.id } });

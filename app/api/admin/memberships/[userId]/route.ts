@@ -13,6 +13,7 @@ export async function PUT(request: Request, context: { params: Promise<{ userId:
     const role = await prisma.adminRole.findUnique({ where: { key: body.role } }); if (!role) return NextResponse.json({ error: "Role is not configured." }, { status: 409 });
     const existing = await prisma.adminMembership.findUnique({ where: { userId }, include: { role: true } });
     const membership = await prisma.adminMembership.upsert({ where: { userId }, create: { userId, roleId: role.id, active: body.active, createdBy: actorId, revokedAt: body.active ? null : new Date() }, update: { roleId: role.id, active: body.active, revokedAt: body.active ? null : new Date() }, include: { role: true } });
+    if (body.active) await prisma.user.update({ where: { id: userId }, data: { role: "ADMIN" } });
     await logAuditEvent({ actorType: "admin", actorId, entityType: "admin_membership", entityId: membership.id, action: "admin.membership.changed", oldValue: existing ? { role: existing.role.key, active: existing.active } : null, newValue: { role: role.key, active: body.active }, metadata: { reason: body.reason, riskLevel: "high" } });
     return NextResponse.json({ membership: { userId, role: membership.role.key, active: membership.active } });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Membership update failed." }, { status: 400 }); }

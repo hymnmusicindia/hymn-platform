@@ -22,8 +22,8 @@ export async function POST(request: Request) {
     }
     const subscription = await getSubscriptionByUserId(session.sub);
     const hasActiveSubscription = subscriptionHasEntitlement(subscription);
-    if (hasActiveSubscription) {
-      if (payload.paymentModel !== "subscription" || payload.plan !== subscription!.plan) return NextResponse.json({ error: "The selected plan does not match your active subscription." }, { status: 400 });
+    if (hasActiveSubscription && payload.paymentModel === "subscription") {
+      if (payload.plan !== subscription!.plan) return NextResponse.json({ error: "The selected plan does not match your active subscription." }, { status: 400 });
       if (subscription!.releaseLimit != null && subscription!.releasesUsed >= subscription!.releaseLimit) return NextResponse.json({ error: "Your subscription release allowance has been used." }, { status: 409 });
       const existingEntitlement = payload.draftReleaseId
         ? await prisma.distributionOrder.findUnique({ where: { releaseId: payload.draftReleaseId } })

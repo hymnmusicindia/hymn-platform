@@ -16,6 +16,10 @@ enum UserRole {
 
 enum AccountStatus {
   ACTIVE
+  PAUSED
+  UNDER_REVIEW
+  SUSPENDED
+  DELETION_SCHEDULED
   BANNED
 }
 
@@ -111,6 +115,11 @@ model User {
   avatar                        String?
   role                          UserRole                            @default(CUSTOMER)
   status                        AccountStatus                       @default(ACTIVE)
+  statusReason                  String?                             @map("status_reason")
+  statusChangedAt               DateTime?                           @map("status_changed_at")
+  deletionScheduledAt           DateTime?                           @map("deletion_scheduled_at")
+  appealRequestedAt             DateTime?                           @map("appeal_requested_at")
+  appealMessage                 String?                             @map("appeal_message")
   onboardingDone                Boolean                             @default(false) @map("onboarding_done")
   mobile                        String?
   contactEmail                  String?                             @map("contact_email")
@@ -120,6 +129,7 @@ model User {
   onboardingUserType            String?                             @map("onboarding_user_type")
   referralSource                String?                             @map("referral_source")
   onboardingReferralCode        String?                             @map("onboarding_referral_code")
+  referralPromptCompletedAt     DateTime?                           @map("referral_prompt_completed_at")
   onboardingCompletedAt         DateTime?                           @map("onboarding_completed_at")
   onboardingPreferences         Json?                               @map("onboarding_preferences")
   referralCode                  String?                             @unique @map("referral_code")

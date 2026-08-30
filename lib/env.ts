@@ -34,17 +34,20 @@ export function getProductionReadinessIssues() {
     "RAZORPAY_KEY_ID",
     "RAZORPAY_KEY_SECRET",
     "RAZORPAY_WEBHOOK_SECRET",
-    "DIRENOTE_CLIENT_ID",
-    "DIRENOTE_API_PIN",
+    "RAZORPAY_PLAN_HALF_YEARLY",
+    "RAZORPAY_PLAN_YEARLY",
+    "RAZORPAY_PLAN_YEARLY_PLUS",
     "CRON_SECRET",
     "PAYOUT_ENCRYPTION_KEY"
   ];
   const issues = required.filter((name) => !process.env[name]?.trim()).map((name) => `${name} is missing.`);
+  if (!(process.env.DIRENOTE_CLIENT_ID?.trim() || process.env.DISTRIBUTOR_CLIENT_ID?.trim())) issues.push("DIRENOTE_CLIENT_ID or DISTRIBUTOR_CLIENT_ID is missing.");
+  if (!(process.env.DIRENOTE_API_PIN?.trim() || process.env.DISTRIBUTOR_API_PIN?.trim())) issues.push("DIRENOTE_API_PIN or DISTRIBUTOR_API_PIN is missing.");
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
   if (appUrl && !/^https:\/\//i.test(appUrl)) issues.push("NEXT_PUBLIC_APP_URL must use HTTPS in production.");
   if (process.env.GOOGLE_CLIENT_ID?.trim() && process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_ID.trim() !== process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID.trim()) issues.push("GOOGLE_CLIENT_ID and NEXT_PUBLIC_GOOGLE_CLIENT_ID must match.");
   if (process.env.ENABLE_MOCK_LOGIN === "true" || process.env.NEXT_PUBLIC_ENABLE_MOCK_LOGIN === "true") issues.push("Mock login must not be enabled in production.");
-  if (process.env.VERCEL !== "1" && !process.env.PRIVATE_STORAGE_ROOT?.trim()) issues.push("PRIVATE_STORAGE_ROOT is missing; private asset features must remain disabled locally.");
+  if (process.env.VERCEL !== "1" && !(process.env.HYMN_STORAGE_ROOT?.trim() || process.env.PRIVATE_STORAGE_ROOT?.trim())) issues.push("HYMN_STORAGE_ROOT or PRIVATE_STORAGE_ROOT is missing; private asset features must remain disabled.");
   return issues;
 }
 // vercel trigger 5

@@ -20,6 +20,7 @@ export async function POST(request: Request) {
       if (Date.now() - account.createdAt.getTime() > 24 * 60 * 60 * 1000) throw new Error("Referral codes can only be applied during new-account onboarding.");
       const attached = await registerReferralForNewUser(tx, { referredUserId: account.id, referredEmail: account.email, referralCode: body.referralCode });
       if (!attached) throw new Error("Enter a referral code.");
+      await tx.user.update({ where: { id: account.id }, data: { referralPromptCompletedAt: new Date() } });
       await tx.auditLog.create({ data: { actorType: "user", actorId: account.id, actorRole: session.role, action: "REFERRAL_MANUALLY_APPLIED", entity: "referral", entityId: String(attached.id), metadata: { source: "onboarding" } } });
       return attached;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });

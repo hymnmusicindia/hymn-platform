@@ -5,7 +5,7 @@ import fs from "node:fs";
 process.env.RAZORPAY_KEY_SECRET = "subscription-test-secret";
 
 async function main() {
-const { isSubscriptionProduct, subscriptionHasEntitlement, verifySubscriptionCheckoutSignature } = await import("../lib/subscription-billing");
+const { isSubscriptionProduct, subscriptionHasEntitlement, subscriptionPeriodAdvanced, verifySubscriptionCheckoutSignature } = await import("../lib/subscription-billing");
 
 assert.equal(isSubscriptionProduct("half_yearly"), true);
 assert.equal(isSubscriptionProduct("yearly"), true);
@@ -29,12 +29,19 @@ assert.equal(subscriptionHasEntitlement({ status: "halted", currentPeriodEnd: fu
 assert.equal(subscriptionHasEntitlement({ status: "paused", currentPeriodEnd: future }), false);
 assert.equal(subscriptionHasEntitlement({ status: "cancelled", currentPeriodEnd: future, cancelAtPeriodEnd: true }), false);
 assert.equal(subscriptionHasEntitlement({ status: "cancelled", currentPeriodEnd: past, cancelAtPeriodEnd: true }), false);
+assert.equal(subscriptionPeriodAdvanced(new Date("2026-01-01"), new Date("2026-02-01")), true);
+assert.equal(subscriptionPeriodAdvanced(new Date("2026-02-01"), new Date("2026-02-01")), false);
+assert.equal(subscriptionPeriodAdvanced(null, new Date("2026-02-01")), false);
 
 const createOrderSource = fs.readFileSync("app/api/distribution/payment/create-order/route.ts", "utf8");
 assert.match(createOrderSource, /createProviderSubscription\(session\.sub, payload\.plan\)/);
+assert.match(createOrderSource, /hasActiveSubscription && payload\.paymentModel === "subscription"/);
 assert.doesNotMatch(createOrderSource, /body\.price|payload\.price|body\.planId|payload\.planId/);
 const actionSource = fs.readFileSync("app/api/subscriptions/actions/route.ts", "utf8");
 assert.match(actionSource, /manageProviderSubscription\(session\.sub, action\)/);
+const billingSource = fs.readFileSync("lib/subscription-billing.ts", "utf8");
+assert.match(billingSource, /subscriptionReleaseUsage\.count/);
+assert.match(billingSource, /sub\.currentPeriodStart \? \{ createdAt: \{ gte: sub\.currentPeriodStart \} \}/);
 const oneTimeSource = fs.readFileSync("app/api/checkout/create-order/route.ts", "utf8");
 assert.match(oneTimeSource, /razorpay\.orders\.create/);
 assert.doesNotMatch(oneTimeSource, /subscriptions\.create/);

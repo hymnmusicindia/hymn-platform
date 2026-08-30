@@ -104,6 +104,12 @@ function mapPrismaUser(user: {
   avatar?: string | null;
   passwordHash?: string | null;
   role: string;
+  status?: string;
+  statusReason?: string | null;
+  statusChangedAt?: Date | null;
+  deletionScheduledAt?: Date | null;
+  appealRequestedAt?: Date | null;
+  appealMessage?: string | null;
   referralCode: string | null;
   referralCredits: number;
   referredById: number | null;
@@ -126,6 +132,12 @@ function mapPrismaUser(user: {
     avatarUrl: user.avatar ?? null,
     passwordHash: user.passwordHash ?? undefined,
     role: fromPrismaRole(user.role),
+    status: String(user.status || "ACTIVE").toLowerCase() as User["status"],
+    statusReason: user.statusReason ?? null,
+    statusChangedAt: user.statusChangedAt?.toISOString() ?? null,
+    deletionScheduledAt: user.deletionScheduledAt?.toISOString() ?? null,
+    appealRequestedAt: user.appealRequestedAt?.toISOString() ?? null,
+    appealMessage: user.appealMessage ?? null,
     referralCode: user.referralCode ?? "",
     referralCredits: user.referralCredits ?? 0,
     referredBy: user.referredById ?? null,
@@ -3245,6 +3257,7 @@ export async function getSubscriptionByUserId(userId: number) {
   if (usesPostgresPrisma()) {
     const sub = await prisma.subscription.findUnique({ where: { userId }, include: { planVersion: true, payments: { orderBy: { createdAt: "desc" }, take: 50 } } });
     if (!sub) return null;
+    const releasesUsed = await prisma.subscriptionReleaseUsage.count({ where: { subscriptionId: sub.id, ...(sub.currentPeriodStart ? { createdAt: { gte: sub.currentPeriodStart } } : {}) } });
     
     const now = new Date();
     const expiryDate = new Date(sub.currentPeriodEnd || sub.expiryDate || sub.updatedAt);
@@ -3259,8 +3272,8 @@ export async function getSubscriptionByUserId(userId: number) {
       purchasedAt: sub.purchasedAt?.toISOString() || undefined,
       expiryDate: (sub.expiryDate || sub.updatedAt).toISOString(),
       status: status,
-      releasesUsed: sub.releasesUsed || 0,
-      releaseLimit: sub.releaseLimit || null,
+      releasesUsed,
+      releaseLimit: sub.releaseLimit ?? null,
       artistLimit: sub.artistLimit || 5,
       availableFeatures: sub.availableFeatures ? JSON.parse(sub.availableFeatures) : [],
       daysRemaining: daysRemaining,

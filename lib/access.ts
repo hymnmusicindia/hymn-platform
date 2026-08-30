@@ -46,11 +46,12 @@ export async function getAdminAccessForPage() {
   if ("error" in admin) return null;
   if (!("sub" in admin)) return { role: "super_admin", permissions: ALL_ADMIN_PERMISSIONS };
   try {
-    const membership = await prisma.adminMembership.findFirst({ where: { userId: Number(admin.sub), active: true, revokedAt: null }, include: { role: { include: { permissions: { include: { permission: true } } } } } });
+    const membership = await prisma.adminMembership.findUnique({ where: { userId: Number(admin.sub) }, include: { role: { include: { permissions: { include: { permission: true } } } } } });
     if (!membership) return { role: "admin", permissions: ALL_ADMIN_PERMISSIONS };
+    if (!membership.active || membership.revokedAt) return { role: "revoked", permissions: [] as AdminPermissionKey[] };
     return { role: membership.role.key, permissions: membership.role.permissions.map((row) => row.permission.key as AdminPermissionKey) };
   } catch {
-    return { role: "admin", permissions: ALL_ADMIN_PERMISSIONS };
+    return { role: "unavailable", permissions: [] as AdminPermissionKey[] };
   }
 }
 
@@ -61,16 +62,17 @@ export async function requireAdminPermission(permission: AdminPermissionKey) {
     return Object.assign(admin, { adminRole: "super_admin", permissions: [permission] });
   }
   try {
-    const membership = await prisma.adminMembership.findFirst({ where: { userId: Number(admin.sub), active: true, revokedAt: null }, include: { role: { include: { permissions: { include: { permission: true } } } } } });
+    const membership = await prisma.adminMembership.findUnique({ where: { userId: Number(admin.sub) }, include: { role: { include: { permissions: { include: { permission: true } } } } } });
     if (!membership) {
       return Object.assign(admin, { adminRole: "admin", permissions: [permission] });
     }
+    if (!membership.active || membership.revokedAt) return { error: NextResponse.json({ error: "Forbidden: administrator access has been revoked." }, { status: 403 }) };
     if (!membership.role.permissions.some(row => row.permission.key === permission)) {
       return { error: NextResponse.json({ error: "Forbidden: missing administrator permission." }, { status: 403 }) };
     }
     return Object.assign(admin, { adminRole: membership.role.key, permissions: membership.role.permissions.map(row => row.permission.key) });
   } catch {
-    return Object.assign(admin, { adminRole: "admin", permissions: [permission] });
+    return { error: NextResponse.json({ error: "Administrator permissions are temporarily unavailable." }, { status: 503 }) };
   }
 }
 

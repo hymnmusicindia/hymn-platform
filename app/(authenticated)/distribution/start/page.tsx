@@ -20,7 +20,8 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
   const editingRelease = user && Number.isFinite(requestedId) && requestedId > 0 ? (await listDetailedReleasesByUser(user.id)).find((release) => release.id === requestedId) ?? null : null;
   const subscription = user ? await getSubscriptionByUserId(user.id) : null;
   const hasActiveSubscription = subscriptionHasEntitlement(subscription);
-  let selectedPlan: any = hasActiveSubscription ? subscription?.plan : "one_time";
+  const hasReleaseAllowance = hasActiveSubscription && (subscription?.releaseLimit == null || subscription.releasesUsed < subscription.releaseLimit);
+  let selectedPlan: any = hasReleaseAllowance ? subscription?.plan : "one_time";
   if (!hasActiveSubscription && editingRelease?.distributionPlan) {
     if (editingRelease.distributionPlan === "yearly_plus") selectedPlan = "yearly_plus";
     else if (editingRelease.distributionPlan === "yearly" || editingRelease.distributionPlan === "pro") selectedPlan = "yearly";

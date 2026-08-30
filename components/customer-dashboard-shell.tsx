@@ -9,6 +9,7 @@ import { BeatCard } from "@/components/beat-card";
 import { Beat, BeatPurchase, Notification, Order, Release, SupportTicket, User } from "@/lib/types";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { CustomerHome, ProducerHome } from "@/components/simplified-dashboard-home";
+import { FirstLoginReferralPrompt } from "@/components/first-login-referral-prompt";
 
 const AnalyticsDashboard = dynamic(() => import("@/components/analytics-dashboard").then((module) => module.AnalyticsDashboard));
 const ReferralPanel = dynamic(() => import("@/components/referral-panel").then((module) => module.ReferralPanel));
@@ -94,6 +95,23 @@ function StatusPill({ label, active = true }: { label: string; active?: boolean 
 
 function EmptyState({ copy }: { copy: string }) {
   return <div className="rounded-2xl border border-dashed px-5 py-8 text-center text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text-soft)" }}>{copy}</div>;
+}
+
+function AccountRestrictionNotice({ user }: { user: User }) {
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState("");
+  if (!user.status || user.status === "active") return null;
+  const appealAllowed = ["paused", "under_review", "suspended", "deletion_scheduled"].includes(user.status);
+  async function appeal() {
+    const appealMessage = window.prompt("Explain why this account should be reviewed and restored:");
+    if (!appealMessage) return;
+    setPending(true);
+    const response = await fetch("/api/account/appeal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: appealMessage }) });
+    const data = await response.json().catch(() => ({}));
+    setMessage(response.ok ? "Appeal submitted. Your account is now under review." : data.error || "Could not submit appeal.");
+    setPending(false);
+  }
+  return <section role="alert" className="mb-5 rounded-2xl border p-4" style={{ borderColor: "color-mix(in srgb, #eab308 55%, var(--border))", background: "color-mix(in srgb, #eab308 10%, var(--card))" }}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">⚠ Account {user.status.replaceAll("_", " ")}</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{user.statusReason || "This account currently requires administrator review."}{user.deletionScheduledAt ? ` Account data is scheduled for cleanup on ${new Date(user.deletionScheduledAt).toLocaleDateString("en-IN")}.` : ""}</p></div>{appealAllowed && !user.appealRequestedAt ? <button type="button" disabled={pending} onClick={appeal} className="btn-outline pressable">{pending ? "Submitting…" : "Appeal for review"}</button> : null}</div>{user.appealRequestedAt ? <p className="mt-3 text-sm font-medium">Appeal submitted {new Date(user.appealRequestedAt).toLocaleDateString("en-IN")}.</p> : null}{message ? <p className="mt-3 text-sm">{message}</p> : null}</section>;
 }
 
 function formatMoney(amount: number) {
@@ -343,6 +361,8 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       }
       workspaceAction={user.role === "producer" ? <WorkspaceSwitcher current="customer" /> : undefined}
     >
+      <FirstLoginReferralPrompt />
+      <AccountRestrictionNotice user={user} />
       {producerAccessDisabled ? (
         <section role="alert" className="flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "color-mix(in srgb, var(--danger) 45%, var(--border))", background: "color-mix(in srgb, var(--danger-soft) 72%, var(--card))" }}>
           <div>
