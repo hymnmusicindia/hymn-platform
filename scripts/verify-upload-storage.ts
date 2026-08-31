@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { beatAssetRelativePath, createSafeAssetFolderName, uploadConfig } from "../lib/storage-service";
-import { normalizePublicUploadUrl, shouldUseManagedBlobStorage } from "../lib/storage";
+import { normalizePublicUploadUrl, publicStorageRootPath, resolvePublicUploadPaths } from "../lib/storage";
 
 const safe = createSafeAssetFolderName(" My Song / Final ❤️ ", "rel_123");
 assert(safe.endsWith("rel_123"));
@@ -11,10 +12,20 @@ const beatMaster = beatAssetRelativePath({ producerName: "Aditya / Producer", pr
 assert.equal(beatMaster, "Beatstore/Aditya - Producer - producer_7/Night - Drive - beat_42/Master Audio/master.wav");
 assert(!beatMaster.includes("..") && !beatMaster.includes("\\"));
 assert.equal(normalizePublicUploadUrl("/home/account/hymn-storage/Public/Beatstore/Producer/Beat/Cover Art/cover.png"), "/api/public-uploads/Beatstore/Producer/Beat/Cover%20Art/cover.png");
-assert.equal(shouldUseManagedBlobStorage({ NODE_ENV: "production", STORAGE_ROOT: "./public/uploads" }), true, "Relative production upload paths must use durable managed storage.");
-assert.equal(shouldUseManagedBlobStorage({ NODE_ENV: "production", STORAGE_ROOT: "D:\\hymn-storage\\Public" }), false, "An absolute Windows storage root may use local persistent storage.");
-assert.equal(shouldUseManagedBlobStorage({ NODE_ENV: "production", STORAGE_ROOT: "/srv/hymn-storage/Public" }), false, "An absolute POSIX storage root may use local persistent storage.");
-assert.equal(shouldUseManagedBlobStorage({ NODE_ENV: "production", VERCEL: "1", STORAGE_ROOT: "/srv/hymn-storage/Public" }), true, "Vercel deployments must always use managed blob storage.");
+assert.throws(() => publicStorageRootPath({ NODE_ENV: "production", STORAGE_ROOT: "./public/uploads" }), /absolute persistent Linux path/, "Relative production paths must be rejected instead of creating disposable uploads.");
+assert.equal(publicStorageRootPath({ NODE_ENV: "production", STORAGE_ROOT: "D:\\hymn-storage\\Public" }), "D:\\hymn-storage\\Public");
+assert.equal(publicStorageRootPath({ NODE_ENV: "production", STORAGE_ROOT: "/srv/hymn-storage/Public" }), "/srv/hymn-storage/Public");
+assert.equal(publicStorageRootPath({ NODE_ENV: "production", HYMN_STORAGE_ROOT: "/home/account/hymn-storage" }), "/home/account/hymn-storage/Public");
+assert.deepEqual(resolvePublicUploadPaths("producers/avatars/example.jpg", { NODE_ENV: "production", STORAGE_ROOT: "/home/account/public-media", HYMN_STORAGE_ROOT: "/home/account/current", PRIVATE_STORAGE_ROOT: "/home/account/legacy", HYMN_LEGACY_STORAGE_ROOTS: "/home/account/old-one;/home/account/old-two" }, "/app"), [
+  "/home/account/public-media/producers/avatars/example.jpg",
+  "/home/account/current/Public/producers/avatars/example.jpg",
+  "/home/account/legacy/Public/producers/avatars/example.jpg",
+  "/home/account/old-one/producers/avatars/example.jpg",
+  "/home/account/old-one/Public/producers/avatars/example.jpg",
+  "/home/account/old-two/producers/avatars/example.jpg",
+  "/home/account/old-two/Public/producers/avatars/example.jpg",
+  path.resolve("/app", "public/uploads/producers/avatars/example.jpg")
+]);
 for (const malicious of ["../../test.wav", "..\\..\\test.wav", "/test.wav", "C:\\test.wav", "%2e%2e/test.wav"]) {
   const result = createSafeAssetFolderName(decodeURIComponent(malicious), "trk_1");
   assert(!result.includes("/") && !result.includes("\\") && !result.includes(".."));

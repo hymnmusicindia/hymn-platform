@@ -148,20 +148,24 @@ function ProducerManagementCard({ producer, pending, canManage, onOpenCatalogue,
   const displayName = profile.displayName || producer.name;
   const portrait = profile.avatarUrl || null;
   const cover = profile.coverPhotoUrl || null;
+  const [portraitFailed, setPortraitFailed] = useState(false);
+  const [coverFailed, setCoverFailed] = useState(false);
+  useEffect(() => { setPortraitFailed(false); }, [portrait]);
+  useEffect(() => { setCoverFailed(false); }, [cover]);
   return <article className="surface-list-item overflow-hidden p-0">
     <div className="relative h-28 border-b" style={{ borderColor: "var(--border)", background: "linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, var(--bg-soft)), var(--bg-soft))" }}>
-      {cover ? <img src={cover} alt={`${displayName} Beat Store cover`} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-end p-4 text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Public cover not added</div>}
+      {cover && !coverFailed ? <img src={cover} alt={`${displayName} Beat Store cover`} className="h-full w-full object-cover" onError={() => setCoverFailed(true)} /> : <div className="flex h-full items-center justify-end p-4 text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>{coverFailed ? "Cover unavailable · upload a replacement" : "Public cover not added"}</div>}
       <div className="absolute inset-0 bg-gradient-to-t from-black/35 to-transparent" />
     </div>
     <div className="p-5 pt-0">
       <div className="relative flex items-end justify-between gap-4">
         <div className="flex min-w-0 items-end gap-4">
-          {portrait ? <img src={portrait} alt={`${displayName} portrait`} className="-mt-9 h-20 w-20 shrink-0 rounded-2xl border-4 object-cover shadow-lg" style={{ borderColor: "var(--card)" }} /> : <div className="-mt-9 flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border-4 text-2xl font-semibold shadow-lg" style={{ borderColor: "var(--card)", background: "var(--bg-soft)" }}>{displayName.slice(0, 1).toUpperCase()}</div>}
+          {portrait && !portraitFailed ? <img src={portrait} alt={`${displayName} portrait`} className="-mt-9 h-20 w-20 shrink-0 rounded-2xl border-4 object-cover shadow-lg" style={{ borderColor: "var(--card)" }} onError={() => setPortraitFailed(true)} /> : <div className="-mt-9 flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border-4 text-2xl font-semibold shadow-lg" style={{ borderColor: "var(--card)", background: "var(--bg-soft)" }}>{displayName.slice(0, 1).toUpperCase()}</div>}
           <div className="min-w-0 pb-1"><h3 className="truncate text-lg font-semibold">{displayName}</h3><p className="truncate text-xs" style={{ color: "var(--text-muted)" }}>{producer.email}</p></div>
         </div>
         <div className="pb-1"><StatusPill label={producer.status} active={producer.status === "active"} /></div>
       </div>
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs" style={{ color: "var(--text-soft)" }}><span>Last activity {new Date(producer.lastActivity).toLocaleDateString("en-IN")}</span><span>{portrait && cover ? "Storefront media complete" : "Storefront media incomplete"}</span></div>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs" style={{ color: "var(--text-soft)" }}><span>Last activity {new Date(producer.lastActivity).toLocaleDateString("en-IN")}</span><span>{portrait && cover && !portraitFailed && !coverFailed ? "Storefront media complete" : "Storefront media incomplete"}</span></div>
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">{[["Live beats", `${producer.activeBeats} / ${producer.totalBeats}`], ["Sales", producer.totalSales], ["Gross", formatMoney(producer.grossRevenue)], ["Available", formatMoney(producer.availableBalance)]].map(([label, value]) => <div key={label} className="rounded-xl border p-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><span className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>{label}</span><strong className="mt-1 block text-sm">{value}</strong></div>)}</div>
       <div className="mt-4 grid gap-2 sm:grid-cols-2"><button type="button" onClick={onOpenCatalogue} className="btn-primary pressable">Open catalogue</button><button type="button" disabled={!canManage} onClick={() => setEditing((value) => !value)} className="btn-outline pressable disabled:opacity-40">{editing ? "Close profile editor" : "Edit public profile"}</button><button type="button" onClick={onOpenLedger} className="btn-outline pressable">Payout ledger</button><button type="button" disabled={!canManage || pending} onClick={onRevoke} className="btn-outline pressable disabled:opacity-40" style={{ color: "var(--danger)" }}>Revoke access</button></div>
       {editing ? <form className="mt-5 grid gap-4 rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} onSubmit={(event) => { event.preventDefault(); onSave(producer.id, event.currentTarget); }}>

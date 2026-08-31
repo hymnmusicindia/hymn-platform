@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { del, get, put } from "@vercel/blob";
+import { del, get } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { beatAssetRelativePath, finalRelativePath, localStorageProvider } from "@/lib/storage-service";
 
@@ -31,15 +31,37 @@ const policies: Record<PrivateAssetType, { max: number; mime: string[] }> = {
 };
 
 export function privateStorageRootPath() {
-  if (process.env.VERCEL === "1" || process.env.NEXT_PUBLIC_VERCEL_ENV) {
-    return path.resolve("/tmp/.private-storage");
-  }
   const configured = process.env.HYMN_STORAGE_ROOT?.trim() || process.env.PRIVATE_STORAGE_ROOT?.trim();
   if (!configured && process.env.NODE_ENV === "production") throw new Error("PRIVATE_STORAGE_ROOT is required for private assets in production.");
   const root = configured ? path.resolve(/* turbopackIgnore: true */ configured) : path.resolve(".private-storage");
   const publicRoot = path.resolve("public");
   if (root === publicRoot || root.startsWith(`${publicRoot}${path.sep}`)) throw new Error("Private storage must not be inside the public directory.");
   return root;
+}
+
+function privateStorageCandidateRoots() {
+  const configured = [process.env.HYMN_STORAGE_ROOT, process.env.PRIVATE_STORAGE_ROOT]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+  const legacy = (process.env.HYMN_LEGACY_STORAGE_ROOTS || "").split(";").map((value) => value.trim()).filter(Boolean);
+  return [...new Set([...configured, ...legacy].map((value) => path.resolve(/* turbopackIgnore: true */ value)))];
+}
+
+async function readLocalAsset(objectKey: string, relativePath?: string | null) {
+  const keys = [...new Set([objectKey, relativePath].filter((value): value is string => Boolean(value)))];
+  let missing: NodeJS.ErrnoException | null = null;
+  for (const root of privateStorageCandidateRoots()) {
+    for (const key of keys) {
+      const target = path.resolve(/* turbopackIgnore: true */ root, key);
+      if (target === root || !target.startsWith(`${root}${path.sep}`)) continue;
+      try { return await fs.readFile(target); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        missing = error as NodeJS.ErrnoException;
+      }
+    }
+  }
+  throw missing ?? Object.assign(new Error("Stored asset file is missing."), { code: "ENOENT" });
 }
 
 function hasValidAudioMagic(mime: string, bytes: Buffer) {
@@ -101,36 +123,8 @@ export function validatePrivateUpload(input: PrivateUploadInput) {
 
 export const localPrivateStorage: PrivateStorageAdapter = {
   async upload(input) {
-    const isVercel = process.env.VERCEL === '1' || Boolean(process.env.NEXT_PUBLIC_VERCEL_ENV);
     const safeFilename = validatePrivateUpload(input);
     const checksum = crypto.createHash("sha256").update(input.bytes).digest("hex");
-    
-    if (isVercel) {
-      const organizedKey = input.assetType === "private_beat_deliverable" && input.beatId && input.beatTitle
-        ? beatAssetRelativePath({ producerName: input.ownerName || `Producer ${input.ownerUserId}`, producerId: input.ownerUserId, beatTitle: input.beatTitle, beatId: input.beatId, assetName: "Master Audio", originalFilename: input.fileName, mimeType: input.mimeType })
-        : `${input.ownerUserId}/${crypto.randomUUID()}-${safeFilename}`;
-      const objectKey = `private/${organizedKey}`;
-      const blob = await put(objectKey, input.bytes, { access: 'private' });
-      const asset = await prisma.storedAsset.create({
-        data: {
-          ownerUserId: input.ownerUserId,
-          releaseId: input.releaseId,
-          beatPurchaseId: input.beatPurchaseId,
-          beatId: input.beatId,
-          assetType: input.assetType,
-          storageProvider: "vercel_blob",
-          objectKey: blob.url,
-          originalFilename: input.fileName,
-          safeFilename,
-          mimeType: input.mimeType,
-          byteSize: input.bytes.length,
-          checksum,
-          accessClassification: "private",
-          retentionUntil: input.retentionUntil
-        }
-      });
-      return { id: asset.id, downloadPath: `/api/assets/${asset.id}/download?filename=${encodeURIComponent(safeFilename)}`, checksum, byteSize: input.bytes.length };
-    }
 
     const category = input.assetType === "private_unreleased_artwork" ? "RELEASE_COVER_ART" : input.assetType === "private_audio_master" ? "TRACK_AUDIO_MASTER" : input.releaseId ? "RELEASE_DOCUMENT" : null;
     const canonicalRelativePath = input.assetType === "private_beat_deliverable" && input.beatId && input.beatTitle
@@ -172,7 +166,7 @@ export const localPrivateStorage: PrivateStorageAdapter = {
       const buf = Buffer.from(await new Response(blob.stream).arrayBuffer());
       return { bytes: buf, mimeType: asset.mimeType, fileName: asset.safeFilename, contentRange: blob.headers.get("content-range"), contentLength: blob.headers.get("content-length") };
     }
-    return { bytes: await fs.readFile(path.resolve(/* turbopackIgnore: true */ privateStorageRootPath(), asset.objectKey)), mimeType: asset.mimeType, fileName: asset.safeFilename };
+    return { bytes: await readLocalAsset(asset.objectKey, asset.relativePath), mimeType: asset.mimeType, fileName: asset.safeFilename };
   },
   async delete(input) {
     const asset = await prisma.storedAsset.findUnique({ where: { id: input.assetId } });

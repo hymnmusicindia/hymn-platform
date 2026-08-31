@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminSession, getSession } from "@/lib/session";
 import { localPrivateStorage } from "@/lib/private-storage";
 import { prisma } from "@/lib/prisma";
+import { missingImageResponseHeaders, missingImageSvg } from "@/lib/media-placeholder";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const [user, admin] = await Promise.all([getSession(), getAdminSession()]);
@@ -18,6 +19,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     return new NextResponse(new Uint8Array(asset.bytes), { status: asset.contentRange ? 206 : 200, headers: { "Content-Type": asset.mimeType, "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${asset.fileName.replace(/["\\]/g, "_")}"`, "Content-Length": asset.contentLength || String(asset.bytes.length), ...(asset.contentRange ? { "Content-Range": asset.contentRange } : {}), "Accept-Ranges": "bytes", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "X-Robots-Tag": "noindex, nofollow" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Asset is unavailable.";
+    const assetId = Number((await context.params).id);
+    const missingImage = Number.isInteger(assetId) ? await prisma.storedAsset.findUnique({ where: { id: assetId }, select: { mimeType: true, deletedAt: true } }).catch(() => null) : null;
+    if (missingImage?.mimeType.startsWith("image/") && !missingImage.deletedAt && message !== "Forbidden.") {
+      return new NextResponse(missingImageSvg(), { status: 200, headers: { ...missingImageResponseHeaders(), "X-Robots-Tag": "noindex, nofollow" } });
+    }
     return NextResponse.json({ error: message }, { status: message === "Forbidden." ? 403 : 404, headers: { "X-Robots-Tag": "noindex, nofollow" } });
   }
 }

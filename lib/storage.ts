@@ -1,27 +1,54 @@
 import fs from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
-import { put } from "@vercel/blob";
 
 const maxAudioBytes = 50 * 1024 * 1024;
 const maxImageBytes = 10 * 1024 * 1024;
 
-function getUploadRoot() {
-  const configured = process.env.STORAGE_ROOT?.trim();
-  const durableRoot = process.env.HYMN_STORAGE_ROOT?.trim() || process.env.PRIVATE_STORAGE_ROOT?.trim();
-  if (configured && (process.env.NODE_ENV !== "production" || path.isAbsolute(configured))) return configured;
-  if (durableRoot) return path.join(durableRoot, "Public");
-  if (configured) throw new Error("STORAGE_ROOT must be an absolute persistent path in production.");
-  if (process.env.NODE_ENV === "production") throw new Error("STORAGE_ROOT or HYMN_STORAGE_ROOT is required for durable public uploads in production.");
-  return "./public/uploads";
+function isAbsoluteStoragePath(value: string) {
+  return /^(?:[A-Za-z]:[\\/]|\/)/.test(value);
 }
 
-export function shouldUseManagedBlobStorage(env: NodeJS.ProcessEnv = process.env) {
+function resolveConfiguredStoragePath(value: string, cwd: string) {
+  return value.startsWith("/") ? value : path.resolve(cwd, value);
+}
+
+function joinStoragePath(root: string, ...segments: string[]) {
+  return root.startsWith("/") ? path.posix.join(root, ...segments.map((value) => value.replace(/\\/g, "/"))) : path.join(root, ...segments);
+}
+
+function resolveStoragePath(root: string, relativePath: string) {
+  const api = root.startsWith("/") ? path.posix : path;
+  const resolved = api.resolve(root, relativePath);
+  if (resolved === root || !resolved.startsWith(`${root}${api.sep}`)) throw new Error("Invalid public upload path.");
+  return resolved;
+}
+
+function unique(values: Array<string | null | undefined>) {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))];
+}
+
+function legacyRoots(env: NodeJS.ProcessEnv, cwd: string) {
+  return (env.HYMN_LEGACY_STORAGE_ROOTS || "")
+    .split(";")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => resolveConfiguredStoragePath(value, cwd));
+}
+
+export function publicStorageRootPath(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()) {
   const configured = env.STORAGE_ROOT?.trim();
   const durableRoot = env.HYMN_STORAGE_ROOT?.trim() || env.PRIVATE_STORAGE_ROOT?.trim();
-  const hasAbsolutePersistentRoot = Boolean((configured && path.isAbsolute(configured)) || (durableRoot && path.isAbsolute(durableRoot)));
-  const isVercel = env.VERCEL === "1" || Boolean(env.VERCEL_ENV || env.NEXT_PUBLIC_VERCEL_ENV);
-  return isVercel || (env.NODE_ENV === "production" && !hasAbsolutePersistentRoot);
+  if (configured) {
+    if (env.NODE_ENV === "production" && !isAbsoluteStoragePath(configured)) throw new Error("Hostinger STORAGE_ROOT must be an absolute persistent Linux path.");
+    return resolveConfiguredStoragePath(configured, cwd);
+  }
+  if (durableRoot) {
+    if (env.NODE_ENV === "production" && !isAbsoluteStoragePath(durableRoot)) throw new Error("Hostinger HYMN_STORAGE_ROOT must be an absolute persistent Linux path.");
+    return durableRoot.startsWith("/") ? `${durableRoot.replace(/\/+$/, "")}/Public` : path.join(resolveConfiguredStoragePath(durableRoot, cwd), "Public");
+  }
+  if (env.NODE_ENV === "production") throw new Error("HYMN_STORAGE_ROOT is required for persistent Hostinger uploads.");
+  return path.resolve(cwd, "public/uploads");
 }
 
 const publicUploadDirectories = ["producers", "beats", "Beatstore", "site"] as const;
@@ -42,10 +69,20 @@ export function publicUploadUrl(relativePath: string) {
 }
 
 export function resolvePublicUploadPath(relativePath: string) {
-  const root = path.resolve(/* turbopackIgnore: true */ process.cwd(), getUploadRoot());
-  const resolved = path.resolve(root, normalizedPublicPath(relativePath));
-  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) throw new Error("Invalid public upload path.");
-  return resolved;
+  const root = publicStorageRootPath();
+  return resolveStoragePath(root, normalizedPublicPath(relativePath));
+}
+
+export function resolvePublicUploadPaths(relativePath: string, env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()) {
+  const safeRelativePath = normalizedPublicPath(relativePath);
+  const managedRoots = unique([
+    env.STORAGE_ROOT?.trim() ? resolveConfiguredStoragePath(env.STORAGE_ROOT.trim(), cwd) : null,
+    env.HYMN_STORAGE_ROOT?.trim() ? joinStoragePath(resolveConfiguredStoragePath(env.HYMN_STORAGE_ROOT.trim(), cwd), "Public") : null,
+    env.PRIVATE_STORAGE_ROOT?.trim() ? joinStoragePath(resolveConfiguredStoragePath(env.PRIVATE_STORAGE_ROOT.trim(), cwd), "Public") : null,
+    ...legacyRoots(env, cwd).flatMap((root) => [root, joinStoragePath(root, "Public")]),
+    path.resolve(cwd, "public/uploads")
+  ]);
+  return managedRoots.map((root) => resolveStoragePath(root, safeRelativePath));
 }
 
 /** Converts legacy absolute Hostinger paths into the public media endpoint. */
@@ -94,25 +131,18 @@ export async function saveUploadedFile(file: File, directory: string, kind: "aud
   const ext = kind === "image" ? canonicalImageExtension[file.type] : path.extname(file.name).toLowerCase();
   const fileName = `${randomUUID()}${ext}`;
   
-  if (shouldUseManagedBlobStorage()) {
-    const blobPath = `${directory}/${fileName}`;
-    let blob;
-    try {
-      blob = await put(blobPath, file, { access: "public", addRandomSuffix: false });
-    } catch (error) {
-      console.error("Durable public upload failed", { directory, fileType: file.type, fileSize: file.size, message: error instanceof Error ? error.message : "Blob upload failed" });
-      throw new Error("Durable image storage is not configured. Configure Vercel Blob or an absolute persistent STORAGE_ROOT before uploading.");
-    }
-    return blob.url;
-  }
-
-  const root = getUploadRoot();
-  const folder = path.join(/* turbopackIgnore: true */ process.cwd(), root, directory);
+  const root = publicStorageRootPath();
+  const folder = path.join(/* turbopackIgnore: true */ root, directory);
   await fs.mkdir(folder, { recursive: true });
 
   const filePath = path.join(folder, fileName);
+  const temporaryPath = `${filePath}.${randomUUID()}.pending`;
   const bytes = Buffer.from(await file.arrayBuffer());
-  await fs.writeFile(filePath, bytes);
+  await fs.writeFile(temporaryPath, bytes, { flag: "wx" });
+  await fs.rename(temporaryPath, filePath).catch(async (error) => {
+    await fs.unlink(temporaryPath).catch(() => undefined);
+    throw error;
+  });
 
   return publicUploadUrl(`${directory}/${fileName}`);
 }

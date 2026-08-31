@@ -49,8 +49,13 @@ export function getProductionReadinessIssues() {
   if (process.env.ENABLE_MOCK_LOGIN === "true" || process.env.NEXT_PUBLIC_ENABLE_MOCK_LOGIN === "true") issues.push("Mock login must not be enabled in production.");
   if (process.env.VERCEL !== "1" && !(process.env.HYMN_STORAGE_ROOT?.trim() || process.env.PRIVATE_STORAGE_ROOT?.trim())) issues.push("HYMN_STORAGE_ROOT or PRIVATE_STORAGE_ROOT is missing; private asset features must remain disabled.");
   const publicStorageRoot = process.env.STORAGE_ROOT?.trim();
-  const isVercel = process.env.VERCEL === "1" || Boolean(process.env.VERCEL_ENV || process.env.NEXT_PUBLIC_VERCEL_ENV);
-  if (!isVercel && publicStorageRoot && !/^(?:[A-Za-z]:[\\/]|\/)/.test(publicStorageRoot)) issues.push("STORAGE_ROOT must be an absolute persistent path in production; relative upload storage can lose files between requests.");
+  const managedStorageRoot = process.env.HYMN_STORAGE_ROOT?.trim() || process.env.PRIVATE_STORAGE_ROOT?.trim();
+  if (publicStorageRoot && !/^(?:[A-Za-z]:[\\/]|\/)/.test(publicStorageRoot)) issues.push("STORAGE_ROOT must be an absolute persistent Hostinger path; relative upload storage can lose files between deployments.");
+  if (managedStorageRoot && !/^(?:[A-Za-z]:[\\/]|\/)/.test(managedStorageRoot)) issues.push("HYMN_STORAGE_ROOT must be an absolute persistent Hostinger path.");
+  for (const [name, value] of [["HYMN_STORAGE_ROOT", managedStorageRoot], ["STORAGE_ROOT", publicStorageRoot]] as const) {
+    if (value && /(?:^|[\\/])(?:tmp|hbuilds|public_html)(?:[\\/]|$)/i.test(value)) issues.push(`${name} must be outside temporary and deployment directories so images survive deployments.`);
+  }
+  if (process.env.VERCEL === "1" || process.env.VERCEL_ENV || process.env.NEXT_PUBLIC_VERCEL_ENV) issues.push("Obsolete Vercel environment flags must be removed from Hostinger to prevent storage-provider drift.");
   return issues;
 }
 // vercel trigger 5
