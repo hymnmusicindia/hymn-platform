@@ -842,6 +842,7 @@ function SearchableSelect({
   options,
   placeholder,
   invalid,
+  correctionRequired,
   onChange,
 }: {
   label: string;
@@ -849,6 +850,7 @@ function SearchableSelect({
   options: string[];
   placeholder: string;
   invalid?: boolean;
+  correctionRequired?: boolean;
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -896,6 +898,7 @@ function SearchableSelect({
         style={{ color: "var(--text-muted)" }}
       >
         {label}
+        {correctionRequired ? <span className="release-correction-required" aria-label="Correction required">*</span> : null}
       </label>
       <button
         type="button"
@@ -1040,11 +1043,8 @@ export function ReleaseForm({
   const [artworkDimensions, setArtworkDimensions] = useState<string | null>(
     null,
   );
-  const [artworkError, setArtworkError] = useState<string | null>(() =>
-    correctionMentions(initialRelease, /artwork|cover_art_url/i)
-      ? "Replace the artwork with a DireNote-compliant JPG/JPEG file (square and at least 3000 x 3000 pixels)."
-      : null,
-  );
+  const [artworkError, setArtworkError] = useState<string | null>(null);
+  const [clearedCorrectionFields, setClearedCorrectionFields] = useState<Set<string>>(() => new Set());
   const [artworkWarning, setArtworkWarning] = useState<string | null>(null);
   const [artworkScanning, setArtworkScanning] = useState(false);
   const [contributorsModal, setContributorsModal] =
@@ -1468,16 +1468,24 @@ export function ReleaseForm({
   const registerField = (key: string) => (node: HTMLElement | null) => {
     fieldRefs.current[key] = node;
   };
+  const clearCorrectionField = (...keys: string[]) => {
+    if (!keys.length) return;
+    setClearedCorrectionFields((current) => {
+      const next = new Set(current);
+      keys.forEach((key) => next.add(key));
+      return next;
+    });
+  };
   const fieldClass = (key: string, invalid: boolean) =>
     clsx(
       "field",
       invalid || validationErrorKeys.has(key) ? "field-invalid" : "",
-      correctionFieldActive(key) ? "field-correction" : "",
       shakingField === key ? "field-shake" : "",
     );
 
   const correctionFieldActive = (key: string) => {
     if (!initialRelease?.reviewIssues?.fields?.length) return false;
+    if (clearedCorrectionFields.has(key)) return false;
     const patterns: Record<string, RegExp> = {
       "release-title": /release.*title|albumname|album name|track.*title|trackname/i,
       "record-label": /label|labelname/i,
@@ -1495,6 +1503,16 @@ export function ReleaseForm({
     const pattern = patterns[key] ?? new RegExp(key.replace(/[-_]/g, ".*"), "i");
     return correctionMentions(initialRelease, pattern);
   };
+  const CorrectionRequiredMark = ({ field }: { field: string }) =>
+    correctionFieldActive(field) ? (
+      <span className="release-correction-required" aria-label="Correction required">*</span>
+    ) : null;
+  const correctionLabel = (label: string, field: string) => (
+    <>
+      {label}
+      <CorrectionRequiredMark field={field} />
+    </>
+  );
 
   function triggerFieldFocus(issue: ValidationIssue) {
     if (issue.trackIndex != null) setExpandedTrack(issue.trackIndex);
@@ -1703,6 +1721,7 @@ export function ReleaseForm({
     if (!supportedMime || !/\.(wav|mp3)$/i.test(file.name)) {
       throw new Error("DireNote requires WAV or MP3 audio. FLAC and other formats are not accepted.");
     }
+    clearCorrectionField("audio-upload", `track-${index}-audio`);
     const currentTrack = tracks[index];
     if (currentTrack?.audioPreviewUrl) {
       safeRevokePreviewUrl(currentTrack.audioPreviewUrl);
@@ -1787,6 +1806,7 @@ export function ReleaseForm({
       throw error;
     }
     if (artworkPreview) safeRevokePreviewUrl(artworkPreview);
+    clearCorrectionField("artwork-upload");
     setPersistedArtworkUrl(null);
     setArtworkFile(file);
     setArtworkPreview(await readAsDataUrl(file));
@@ -2119,9 +2139,21 @@ export function ReleaseForm({
     );
   }
 
+  function stepHasCorrection(stepIndex: number) {
+    const correctionKeysByStep: Record<number, string[]> = {
+      1: ["primary-artist"],
+      2: ["release-title", "record-label", "genre-picker", "mood", "language", "release-date"],
+      3: ["audio-upload"],
+      4: ["artwork-upload", "audio-upload"],
+      5: ["ownership-rights", "copyright-owner", "publishing-rights", "content-type"],
+    };
+    return (correctionKeysByStep[stepIndex] ?? []).some((key) => correctionFieldActive(key));
+  }
+
   function stepButtonStyles(index: number) {
-    const rawValidity = stepValidity[index];
-    const validity = rawValidity === "invalid" && !visitedSteps.has(index) ? "neutral" : rawValidity;
+    const hasCorrection = stepHasCorrection(index);
+    const rawValidity = hasCorrection ? "invalid" : stepValidity[index];
+    const validity = rawValidity === "invalid" && !visitedSteps.has(index) && !hasCorrection ? "neutral" : rawValidity;
     const isCurrent = step === index;
     const style =
       validity === "complete"
@@ -2152,7 +2184,7 @@ export function ReleaseForm({
         ? ""
         : "border",
     );
-    return { className, style, validity, isCurrent };
+    return { className, style, validity, isCurrent, hasCorrection };
   }
 
   function jumpToStep(index: number) {
@@ -2809,11 +2841,8 @@ export function ReleaseForm({
     setArtworkPreview(initialRelease?.artworkUrl ?? null);
     setPersistedArtworkUrl(initialRelease?.artworkUrl ?? null);
     setArtworkDimensions(null);
-    setArtworkError(
-      correctionMentions(initialRelease, /artwork|cover_art_url/i)
-        ? "Replace the artwork with a DireNote-compliant JPG/JPEG file (square and at least 3000 x 3000 pixels)."
-        : null,
-    );
+    setArtworkError(null);
+    setClearedCorrectionFields(new Set());
     setArtworkWarning(null);
     setArtworkScanning(false);
     setMonetisationModalOpen(false);
@@ -2961,7 +2990,7 @@ export function ReleaseForm({
                       style={buttonState.style}
                     >
                       <span className="flex items-center gap-2">
-                        {buttonState.validity === "invalid" ? (
+                        {buttonState.hasCorrection || buttonState.validity === "invalid" ? (
                           <AlertCircle
                             className="h-4 w-4 shrink-0"
                             aria-hidden="true"
@@ -2990,7 +3019,7 @@ export function ReleaseForm({
                 style={buttonState.style}
               >
                 <span className="flex items-center justify-center gap-2">
-                  {buttonState.validity === "invalid" ? (
+                  {buttonState.hasCorrection || buttonState.validity === "invalid" ? (
                     <AlertCircle
                       className="h-4 w-4 shrink-0"
                       aria-hidden="true"
@@ -3101,8 +3130,8 @@ export function ReleaseForm({
               <p>{firstReleaseOffer ? "Upload 1 track for your free Single release" : "Add up to 30 tracks for a maximum length of 1 hour"}<br /><span className="release-dolby-note"><img src="https://d21buns5ku92am.cloudfront.net/68644/images/413934-Dolby%20Atmos%20Horizontal-015e44-medium-1641853769.png" alt="Dolby Atmos" className="release-dolby-logo" /> Add Dolby Atmos™ files directly in track information.</span></p>
             </div>
             <div className="release-onboarding-assets">
-            <div className={clsx("release-onboarding-audio", correctionFieldActive("audio-upload") && "release-correction-target")}>
-              <div className="release-onboarding-asset-heading"><strong>Audio masters</strong><span>WAV or MP3 · upload the final mastered file</span></div>
+            <div className="release-onboarding-audio">
+              <div className="release-onboarding-asset-heading"><strong>{correctionLabel("Audio masters", "audio-upload")}</strong><span>WAV or MP3 · upload the final mastered file</span></div>
             <div className={clsx("release-audio-queue", tracks.length > 4 && "is-scrollable")}>
               {!tracks.some((track) => track.audioUploadStatus !== "idle" || track.audioPreviewUrl || track.existingAudioUrl) ? (
                 <div className="release-audio-empty-state">
@@ -3167,8 +3196,8 @@ export function ReleaseForm({
               ) : null}
             </div>
             </div>
-            <div ref={registerField("artwork-upload")} className={clsx("release-onboarding-artwork", correctionFieldActive("artwork-upload") && "release-correction-target")}>
-              <div className="release-onboarding-artwork-heading"><strong>Cover artwork</strong><span>JPG · square · minimum 3000 × 3000 px</span></div>
+            <div ref={registerField("artwork-upload")} className="release-onboarding-artwork">
+              <div className="release-onboarding-artwork-heading"><strong>{correctionLabel("Cover artwork", "artwork-upload")}</strong><span>JPG · square · minimum 3000 × 3000 px</span></div>
               <ArtworkSquareDropzone previewUrl={artworkPreview} fileName={artworkFile?.name} fileType={fileFormat(artworkFile)} dimensions={artworkDimensions} error={showErrors && artworkIssue() ? artworkIssue()?.message ?? null : artworkError} minimalFeedback onSelect={handleArtwork} />
               {artworkScanning ? <p className="release-onboarding-artwork-note"><LoaderCircle className="animate-spin" />Checking artwork…</p> : null}
               {artworkWarning ? <ArtworkWarning warning={artworkWarning} /> : null}
@@ -3957,7 +3986,7 @@ export function ReleaseForm({
                     className="mb-2 block text-sm font-medium"
                     style={{ color: "var(--text-muted)" }}
                   >
-                    {releaseType === "ep" ? "EP Name" : "Album Name"}
+                    {correctionLabel(releaseType === "ep" ? "EP Name" : "Album Name", "release-title")}
                   </label>
                   <input
                     ref={registerField("release-title")}
@@ -3969,12 +3998,13 @@ export function ReleaseForm({
                       ),
                     )}
                     value={release.releaseTitle}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      clearCorrectionField("release-title");
                       setRelease((current) => ({
                         ...current,
                         releaseTitle: event.target.value,
-                      }))
-                    }
+                      }));
+                    }}
                     placeholder={
                       releaseType === "ep"
                         ? "Enter EP name"
@@ -3992,7 +4022,7 @@ export function ReleaseForm({
                   className="mb-2 flex items-center gap-2 text-sm font-medium"
                   style={{ color: "var(--text-muted)" }}
                 >
-                  Label
+                  {correctionLabel("Label", "record-label")}
                   {!customLabelAllowed ? (
                     <span
                       className="group relative inline-flex"
@@ -4023,12 +4053,13 @@ export function ReleaseForm({
                     ),
                   )}
                   value={release.recordLabelName}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    clearCorrectionField("record-label");
                     setRelease((current) => ({
                       ...current,
                       recordLabelName: event.target.value,
-                    }))
-                  }
+                    }));
+                  }}
                   placeholder="HYMN Music or your imprint"
                 />
               </div>
@@ -4038,29 +4069,25 @@ export function ReleaseForm({
                     node: HTMLDivElement | null,
                   ) => void
                 }
-                className={clsx(
-                  correctionFieldActive("genre-picker") ? "release-correction-target" : "",
-                  showErrors && releaseInfoIssue()?.key === "genre-picker"
-                    ? "field-shake"
-                    : "",
-                )}
+                className={clsx(showErrors && releaseInfoIssue()?.key === "genre-picker" ? "field-shake" : "")}
               >
                 <label
                   className="mb-2 block text-sm font-medium"
                   style={{ color: "var(--text-muted)" }}
                 >
-                  Genre + subgenre
+                  {correctionLabel("Genre + subgenre", "genre-picker")}
                 </label>
                 <GenreSelector
                   genre={release.primaryGenre}
                   subgenre={release.secondaryGenre}
-                  onChange={(genre, subgenre) =>
+                  onChange={(genre, subgenre) => {
+                    clearCorrectionField("genre-picker");
                     setRelease((current) => ({
                       ...current,
                       primaryGenre: genre,
                       secondaryGenre: subgenre,
-                    }))
-                  }
+                    }));
+                  }}
                   error={Boolean(
                     showErrors && releaseInfoIssue()?.key === "genre-picker",
                   )}
@@ -4070,22 +4097,20 @@ export function ReleaseForm({
                 ref={
                   registerField("mood") as (node: HTMLDivElement | null) => void
                 }
-                className={clsx(correctionFieldActive("mood") && "release-correction-target")}
               >
                 <label
                   className="mb-2 block text-sm font-medium"
                   style={{ color: "var(--text-muted)" }}
                 >
-                  Mood
+                  {correctionLabel("Mood", "mood")}
                 </label>
                 <MoodSelector
                   value={release.mood}
-                  error={Boolean(
-                    (showErrors && releaseInfoIssue()?.key === "mood") || correctionFieldActive("mood"),
-                  )}
-                  onChange={(mood) =>
-                    setRelease((current) => ({ ...current, mood }))
-                  }
+                  error={Boolean(showErrors && releaseInfoIssue()?.key === "mood")}
+                  onChange={(mood) => {
+                    clearCorrectionField("mood");
+                    setRelease((current) => ({ ...current, mood }));
+                  }}
                 />
               </div>
               <div
@@ -4094,19 +4119,18 @@ export function ReleaseForm({
                     node: HTMLDivElement | null,
                   ) => void
                 }
-                className={clsx(correctionFieldActive("language") && "release-correction-target")}
               >
                 <SearchableSelect
                   label="Language"
+                  correctionRequired={correctionFieldActive("language")}
                   value={release.language}
                   options={languageOptions}
                   placeholder="Select release language"
-                  invalid={Boolean(
-                    (showErrors && releaseInfoIssue()?.key === "language") || correctionFieldActive("language"),
-                  )}
-                  onChange={(value) =>
-                    setRelease((current) => ({ ...current, language: value }))
-                  }
+                  invalid={Boolean(showErrors && releaseInfoIssue()?.key === "language")}
+                  onChange={(value) => {
+                    clearCorrectionField("language");
+                    setRelease((current) => ({ ...current, language: value }));
+                  }}
                 />
               </div>
             </div>
@@ -4119,12 +4143,13 @@ export function ReleaseForm({
                     type="button"
                     aria-pressed={release.releaseTiming === "quick_release"}
                     className="release-timing-option relative min-w-0 px-3 py-4 text-left"
-                    onClick={() =>
+                    onClick={() => {
+                      clearCorrectionField("release-date");
                       setRelease((current) => ({
                         ...current,
                         releaseTiming: "quick_release",
-                      }))
-                    }
+                      }));
+                    }}
                   >
                     <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold" style={{ color: "var(--text)" }}>As soon as possible</p><span className="release-timing-indicator" aria-hidden="true">{release.releaseTiming === "quick_release" ? <Check className="h-3.5 w-3.5" /> : null}</span></div>
                     <p
@@ -4138,12 +4163,13 @@ export function ReleaseForm({
                     type="button"
                     aria-pressed={release.releaseTiming === "schedule_release"}
                     className="release-timing-option relative min-w-0 px-3 py-4 text-left"
-                    onClick={() =>
+                    onClick={() => {
+                      clearCorrectionField("release-date");
                       setRelease((current) => ({
                         ...current,
                         releaseTiming: "schedule_release",
-                      }))
-                    }
+                      }));
+                    }}
                   >
                     <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold" style={{ color: "var(--text)" }}>Schedule a date</p><span className="release-timing-indicator" aria-hidden="true">{release.releaseTiming === "schedule_release" ? <Check className="h-3.5 w-3.5" /> : null}</span></div>
                     <p
@@ -4161,7 +4187,7 @@ export function ReleaseForm({
                       className="mb-2 block text-sm font-medium"
                       style={{ color: "var(--text-muted)" }}
                     >
-                      Scheduled release date
+                      {correctionLabel("Scheduled release date", "release-date")}
                     </label>
                     <input
                       ref={registerField("release-date")}
@@ -4175,12 +4201,13 @@ export function ReleaseForm({
                       type="date"
                       min={minimumScheduledDate}
                       value={release.scheduledReleaseDate}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        clearCorrectionField("release-date");
                         setRelease((current) => ({
                           ...current,
                           scheduledReleaseDate: event.target.value,
-                        }))
-                      }
+                        }));
+                      }}
                     />
                   </div>
                 ) : null}
@@ -4814,7 +4841,7 @@ export function ReleaseForm({
                         className="mb-2 block text-sm font-medium"
                         style={{ color: "var(--text-muted)" }}
                       >
-                        C-Line
+                        {correctionLabel("C-Line", "copyright-owner")}
                       </span>
                       <div className="flex flex-col gap-2 sm:flex-row">
                         <input
@@ -4827,12 +4854,13 @@ export function ReleaseForm({
                             ),
                           )}
                           value={release.copyrightOwner}
-                          onChange={(event) =>
+                          onChange={(event) => {
+                            clearCorrectionField("copyright-owner", "ownership-rights");
                             setRelease((current) => ({
                               ...current,
                               copyrightOwner: event.target.value,
-                            }))
-                          }
+                            }));
+                          }}
                           placeholder="Enter the copyright line exactly as it should be delivered"
                         />
                         <button
@@ -4859,7 +4887,7 @@ export function ReleaseForm({
                       </div>
                     </label>
                     <label className="mt-4 block">
-                      <span className="mb-2 block text-sm font-medium" style={{ color: "var(--text-muted)" }}>P-Line</span>
+                      <span className="mb-2 block text-sm font-medium" style={{ color: "var(--text-muted)" }}>{correctionLabel("P-Line", "publishing-rights")}</span>
                       <input
                         ref={registerField("publishing-rights")}
                         className={fieldClass(
@@ -4867,7 +4895,10 @@ export function ReleaseForm({
                           Boolean(showErrors && destinationsIssue()?.key === "publishing-rights"),
                         )}
                         value={release.publishingRights}
-                        onChange={(event) => setRelease((current) => ({ ...current, publishingRights: event.target.value }))}
+                        onChange={(event) => {
+                          clearCorrectionField("publishing-rights", "ownership-rights");
+                          setRelease((current) => ({ ...current, publishingRights: event.target.value }));
+                        }}
                         placeholder="Enter the phonographic rights line exactly as it should be delivered"
                       />
                     </label>

@@ -33,14 +33,15 @@ export async function validateReleaseForDireNote(release: Release, options: { si
   };
   const issues = result.issues.map((issue: any) => normalize(issue, "error"));
   const warnings = result.warnings.map((issue: any) => normalize(typeof issue === "string" ? { message: issue, field: "release" } : issue, "warning"));
+  const hasIssueMatching = (pattern: RegExp) => issues.some((issue) => pattern.test(issue.field) || pattern.test(issue.message));
   const checklist = [
-    { label: "Artwork URL", ready: Boolean(payload.cover_art_url && !issues.some((issue) => issue.field === "cover_art_url")) },
-    { label: "Audio URLs", ready: payload.tracks.length > 0 && payload.tracks.every((track, index) => Boolean(track.audio_url) && !issues.some((issue) => issue.field === `tracks.${index}.audio_url`)) },
-    { label: "Release date", ready: Boolean(payload.trackReleaseDate && !issues.some((issue) => issue.field === "trackReleaseDate")) },
-    { label: "Genre / language", ready: Boolean(payload.albumGenre && payload.albumLanguage && !issues.some((issue) => ["albumGenre", "albumSubgenre", "albumLanguage"].includes(issue.field))) },
-    { label: "Mood", ready: Boolean(payload.albumMood?.trim()) && !issues.some((issue) => issue.field === "albumMood") },
-    { label: "Writer/composer names", ready: payload.tracks.length > 0 && payload.tracks.every((track) => track.songwriters.length > 0 && track.composers.length > 0) && !issues.some((issue) => /songwriters|composers/.test(issue.field)) },
-    { label: "Rights confirmation", ready: Boolean(payload.cLine && payload.pLine && !issues.some((issue) => ["cLine", "pLine", "contenttype", "suno_receipt_url", "sunoLink", "license_receipt_url"].includes(issue.field))) }
+    { label: "Artwork URL", ready: Boolean(payload.cover_art_url) && !hasIssueMatching(/cover_art_url|cover artwork|artwork|jpeg|jpg/i) },
+    { label: "Audio URLs", ready: payload.tracks.length > 0 && payload.tracks.every((track, index) => Boolean(track.audio_url) && !issues.some((issue) => issue.field === `tracks.${index}.audio_url` || /audio/i.test(issue.field))) },
+    { label: "Release date", ready: Boolean(payload.trackReleaseDate) && !hasIssueMatching(/trackReleaseDate|release date/i) },
+    { label: "Genre / language", ready: Boolean(payload.albumGenre && payload.albumLanguage) && !hasIssueMatching(/albumGenre|albumSubgenre|albumLanguage|genre|subgenre|language/i) },
+    { label: "Mood", ready: Boolean(payload.albumMood?.trim()) && !hasIssueMatching(/albumMood|mood/i) },
+    { label: "Writer/composer names", ready: payload.tracks.length > 0 && payload.tracks.every((track) => track.songwriters.length > 0 && track.composers.length > 0) && !hasIssueMatching(/songwriters|composers|writer|composer/i) },
+    { label: "Rights confirmation", ready: Boolean(payload.cLine && payload.pLine) && !hasIssueMatching(/cLine|pLine|contenttype|suno_receipt_url|sunoLink|license_receipt_url|rights|copyright|publishing|license/i) }
   ];
   return { ready: issues.length === 0, issues, warnings, payload, checklist };
 }

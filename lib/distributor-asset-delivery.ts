@@ -30,12 +30,27 @@ function privateAssetId(value?: string | null) {
   }
 }
 
+function expectedExtensionForMime(mimeType: string) {
+  const normalized = mimeType.toLowerCase();
+  if (normalized === "image/jpeg") return { extension: ".jpg", pattern: /\.jpe?g$/i };
+  if (normalized === "audio/mpeg") return { extension: ".mp3", pattern: /\.mp3$/i };
+  if (normalized === "audio/wav" || normalized === "audio/x-wav" || normalized === "audio/wave") return { extension: ".wav", pattern: /\.wav$/i };
+  return null;
+}
+
+function distributorSafeFilename(filename: string, mimeType: string) {
+  const trimmed = filename.trim() || "asset";
+  const expected = expectedExtensionForMime(mimeType);
+  if (!expected || expected.pattern.test(trimmed)) return trimmed;
+  return `${trimmed.replace(/\.[a-z0-9]{1,8}$/i, "")}${expected.extension}`;
+}
+
 export async function createDistributorAssetUrl(value: string | null | undefined, siteUrl?: string) {
   const assetId = privateAssetId(value);
   if (!assetId) return value ?? "";
-  const asset = await prisma.storedAsset.findFirst({ where: { id: assetId, deletedAt: null, uploadStatus: "ready" }, select: { safeFilename: true } });
+  const asset = await prisma.storedAsset.findFirst({ where: { id: assetId, deletedAt: null, uploadStatus: "ready" }, select: { safeFilename: true, mimeType: true } });
   if (!asset) throw new Error("A release asset is unavailable for distributor delivery.");
   const base = getPublicAppUrl(siteUrl);
-  const filename = encodeURIComponent(asset.safeFilename);
+  const filename = encodeURIComponent(distributorSafeFilename(asset.safeFilename, asset.mimeType));
   return new URL(`/api/distribution-assets/${assetId}/${distributorAssetToken(assetId)}/${filename}`, base).toString();
 }
