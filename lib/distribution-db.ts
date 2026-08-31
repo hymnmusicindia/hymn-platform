@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { createNotification, findUserById } from "@/lib/db";
 import { emailAppUrl, sendReleaseEmail } from "@/lib/email/email-events";
 import { transitionReleaseStatus } from "@/lib/release-status-engine";
+import { canonicalReleaseArtworkUrl } from "@/lib/release-media";
 
 export function isPostgresPrisma() {
   return /^postgres(?:ql)?:\/\//i.test(process.env.DATABASE_URL?.trim() || "");
@@ -75,7 +76,7 @@ export function deserializeRelease(dbData: any): Release {
     artistName: dbData.artistName,
     primaryGenre: dbData.genre,
     releaseType: dbData.releaseType || metadata.releaseType || "single",
-    artworkUrl: dbData.artworkUrl || metadata.artworkUrl || "",
+    artworkUrl: canonicalReleaseArtworkUrl(Number(dbData.id), dbData.artworkUrl || metadata.artworkUrl),
     audioUrl: dbData.audioUrl || metadata.audioUrl || "",
     paymentStatus: dbData.paymentStatus || "pending",
     status: String(dbData.status || "draft").toLowerCase() as ReleaseStatus,

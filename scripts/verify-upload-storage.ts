@@ -4,6 +4,7 @@ import path from "node:path";
 import { beatAssetRelativePath, createSafeAssetFolderName, uploadConfig } from "../lib/storage-service";
 import { normalizePublicUploadUrl, publicStorageRootPath, resolvePublicUploadPaths } from "../lib/storage";
 import { CANONICAL_HOSTINGER_PUBLIC_STORAGE_ROOT } from "../lib/hostinger-storage";
+import { canonicalReleaseArtworkUrl, storedAssetIdFromUrl } from "../lib/release-media";
 
 const safe = createSafeAssetFolderName(" My Song / Final ❤️ ", "rel_123");
 assert(safe.endsWith("rel_123"));
@@ -13,6 +14,9 @@ const beatMaster = beatAssetRelativePath({ producerName: "Aditya / Producer", pr
 assert.equal(beatMaster, "Beatstore/Aditya - Producer - producer_7/Night - Drive - beat_42/Master Audio/master.wav");
 assert(!beatMaster.includes("..") && !beatMaster.includes("\\"));
 assert.equal(normalizePublicUploadUrl("/home/account/hymn-storage/Public/Beatstore/Producer/Beat/Cover Art/cover.png"), "/api/public-uploads/Beatstore/Producer/Beat/Cover%20Art/cover.png");
+assert.equal(canonicalReleaseArtworkUrl(20, "/api/assets/51/download?filename=cover.jpg"), "/api/releases/20/artwork");
+assert.equal(storedAssetIdFromUrl("/api/assets/51/download?filename=cover.jpg"), 51);
+assert.equal(storedAssetIdFromUrl("https://example.com/cover.jpg"), null);
 assert.equal(publicStorageRootPath({ NODE_ENV: "production", STORAGE_ROOT: "./public/uploads" }), CANONICAL_HOSTINGER_PUBLIC_STORAGE_ROOT, "Production ignores disposable relative paths.");
 assert.equal(publicStorageRootPath({ NODE_ENV: "production", STORAGE_ROOT: "D:\\hymn-storage\\Public" }), CANONICAL_HOSTINGER_PUBLIC_STORAGE_ROOT);
 assert.equal(publicStorageRootPath({ NODE_ENV: "production", STORAGE_ROOT: "/srv/hymn-storage/Public" }), CANONICAL_HOSTINGER_PUBLIC_STORAGE_ROOT);
