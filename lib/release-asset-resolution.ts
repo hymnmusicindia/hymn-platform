@@ -21,7 +21,14 @@ function assetDownloadPath(asset: { id: number; safeFilename: string }) {
 export async function resolvePrivateReleaseArtworkUrl(input: { userId: number; releaseId?: number | null; value?: string | null }) {
   const value = input.value?.trim();
   if (!value) return "";
-  if (storedAssetIdFromUrl(value)) return value;
+  const existingAssetId = storedAssetIdFromUrl(value);
+  if (existingAssetId) {
+    const existing = await prisma.storedAsset.findFirst({
+      where: { id: existingAssetId, ownerUserId: input.userId, deletedAt: null, uploadStatus: "ready" },
+      select: { id: true, safeFilename: true },
+    });
+    return existing ? assetDownloadPath(existing) : value;
+  }
 
   const routedReleaseId = releaseArtworkRouteId(value);
   const releaseId = input.releaseId ?? routedReleaseId;
