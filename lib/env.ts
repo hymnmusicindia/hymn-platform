@@ -1,3 +1,5 @@
+import { CANONICAL_HOSTINGER_PUBLIC_STORAGE_ROOT, CANONICAL_HOSTINGER_STORAGE_ROOT } from "@/lib/hostinger-storage";
+
 const DEVELOPMENT_USER_SECRET = "hymn-development-user-secret-not-for-production";
 const DEVELOPMENT_ADMIN_SECRET = "hymn-development-admin-secret-not-for-production";
 
@@ -50,6 +52,8 @@ export function getProductionReadinessIssues() {
   if (process.env.VERCEL !== "1" && !(process.env.HYMN_STORAGE_ROOT?.trim() || process.env.PRIVATE_STORAGE_ROOT?.trim())) issues.push("HYMN_STORAGE_ROOT or PRIVATE_STORAGE_ROOT is missing; private asset features must remain disabled.");
   const publicStorageRoot = process.env.STORAGE_ROOT?.trim();
   const managedStorageRoot = process.env.HYMN_STORAGE_ROOT?.trim() || process.env.PRIVATE_STORAGE_ROOT?.trim();
+  if (managedStorageRoot && managedStorageRoot !== CANONICAL_HOSTINGER_STORAGE_ROOT) issues.push(`HYMN_STORAGE_ROOT differs from the canonical Hostinger path ${CANONICAL_HOSTINGER_STORAGE_ROOT}. Production writes use the canonical path.`);
+  if (publicStorageRoot && publicStorageRoot !== CANONICAL_HOSTINGER_PUBLIC_STORAGE_ROOT) issues.push(`STORAGE_ROOT differs from the canonical Hostinger path ${CANONICAL_HOSTINGER_PUBLIC_STORAGE_ROOT}. Production writes use the canonical path.`);
   if (publicStorageRoot && !/^(?:[A-Za-z]:[\\/]|\/)/.test(publicStorageRoot)) issues.push("STORAGE_ROOT must be an absolute persistent Hostinger path; relative upload storage can lose files between deployments.");
   if (managedStorageRoot && !/^(?:[A-Za-z]:[\\/]|\/)/.test(managedStorageRoot)) issues.push("HYMN_STORAGE_ROOT must be an absolute persistent Hostinger path.");
   for (const [name, value] of [["HYMN_STORAGE_ROOT", managedStorageRoot], ["STORAGE_ROOT", publicStorageRoot]] as const) {

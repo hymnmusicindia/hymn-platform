@@ -5,7 +5,7 @@ HYMN release masters now use database-backed resumable upload sessions and a sin
 ## Storage tree
 
 ```text
-HYMN_STORAGE_ROOT/
+/home/u390865851/private-storage/
 ├── Customer Assets/
 │   ├── Single Title - rel_123/
 │   │   ├── Cover Art/cover-original.jpg
@@ -25,8 +25,8 @@ Titles are presentation only. Every managed folder includes a stable release, tr
 
 ## Hostinger deployment
 
-1. Create a persistent directory outside `public_html`, readable and writable by the Node.js application.
-2. Set `HYMN_STORAGE_ROOT` to its absolute Linux path. Keep `PRIVATE_STORAGE_ROOT` temporarily for legacy assets if it differs.
+1. Use the verified persistent directory `/home/u390865851/private-storage`, which is outside both `hbuilds` and `public_html`.
+2. Set `HYMN_STORAGE_ROOT=/home/u390865851/private-storage`, `PRIVATE_STORAGE_ROOT=/home/u390865851/private-storage`, and `STORAGE_ROOT=/home/u390865851/private-storage/Public`. Production writes are locked to these paths; configured older roots remain read-only recovery candidates.
 3. Set upload tuning values from `.env.example` and optionally `HOSTINGER_STORAGE_CAPACITY_GB`.
 4. Both the Hostinger `npm run build` and production `npm start` commands run `prisma migrate deploy`. A failed migration intentionally prevents deployment with a mismatched schema. The separate `vercel-build` command remains migration-free.
 5. Schedule an authenticated POST to `/api/cron/storage-cleanup` every hour with `Authorization: Bearer $CRON_SECRET`.

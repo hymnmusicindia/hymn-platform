@@ -1,13 +1,10 @@
 import fs from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
+import { CANONICAL_HOSTINGER_PUBLIC_STORAGE_ROOT, publicMediaStorageRoot } from "@/lib/hostinger-storage";
 
 const maxAudioBytes = 50 * 1024 * 1024;
 const maxImageBytes = 10 * 1024 * 1024;
-
-function isAbsoluteStoragePath(value: string) {
-  return /^(?:[A-Za-z]:[\\/]|\/)/.test(value);
-}
 
 function resolveConfiguredStoragePath(value: string, cwd: string) {
   return value.startsWith("/") ? value : path.resolve(cwd, value);
@@ -37,17 +34,15 @@ function legacyRoots(env: NodeJS.ProcessEnv, cwd: string) {
 }
 
 export function publicStorageRootPath(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()) {
+  if (env.NODE_ENV === "production") return CANONICAL_HOSTINGER_PUBLIC_STORAGE_ROOT;
   const configured = env.STORAGE_ROOT?.trim();
   const durableRoot = env.HYMN_STORAGE_ROOT?.trim() || env.PRIVATE_STORAGE_ROOT?.trim();
   if (configured) {
-    if (env.NODE_ENV === "production" && !isAbsoluteStoragePath(configured)) throw new Error("Hostinger STORAGE_ROOT must be an absolute persistent Linux path.");
     return resolveConfiguredStoragePath(configured, cwd);
   }
   if (durableRoot) {
-    if (env.NODE_ENV === "production" && !isAbsoluteStoragePath(durableRoot)) throw new Error("Hostinger HYMN_STORAGE_ROOT must be an absolute persistent Linux path.");
     return durableRoot.startsWith("/") ? `${durableRoot.replace(/\/+$/, "")}/Public` : path.join(resolveConfiguredStoragePath(durableRoot, cwd), "Public");
   }
-  if (env.NODE_ENV === "production") throw new Error("HYMN_STORAGE_ROOT is required for persistent Hostinger uploads.");
   return path.resolve(cwd, "public/uploads");
 }
 
@@ -76,6 +71,7 @@ export function resolvePublicUploadPath(relativePath: string) {
 export function resolvePublicUploadPaths(relativePath: string, env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()) {
   const safeRelativePath = normalizedPublicPath(relativePath);
   const managedRoots = unique([
+    env.NODE_ENV === "production" ? CANONICAL_HOSTINGER_PUBLIC_STORAGE_ROOT : null,
     env.STORAGE_ROOT?.trim() ? resolveConfiguredStoragePath(env.STORAGE_ROOT.trim(), cwd) : null,
     env.HYMN_STORAGE_ROOT?.trim() ? joinStoragePath(resolveConfiguredStoragePath(env.HYMN_STORAGE_ROOT.trim(), cwd), "Public") : null,
     env.PRIVATE_STORAGE_ROOT?.trim() ? joinStoragePath(resolveConfiguredStoragePath(env.PRIVATE_STORAGE_ROOT.trim(), cwd), "Public") : null,
@@ -131,7 +127,7 @@ export async function saveUploadedFile(file: File, directory: string, kind: "aud
   const ext = kind === "image" ? canonicalImageExtension[file.type] : path.extname(file.name).toLowerCase();
   const fileName = `${randomUUID()}${ext}`;
   
-  const root = publicStorageRootPath();
+  const root = publicMediaStorageRoot();
   const folder = path.join(/* turbopackIgnore: true */ root, directory);
   await fs.mkdir(folder, { recursive: true });
 

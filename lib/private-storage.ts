@@ -4,6 +4,7 @@ import path from "node:path";
 import { del, get } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { beatAssetRelativePath, finalRelativePath, localStorageProvider } from "@/lib/storage-service";
+import { CANONICAL_HOSTINGER_STORAGE_ROOT, managedStorageRoot } from "@/lib/hostinger-storage";
 
 export type PrivateAssetType = "private_audio_master" | "private_beat_deliverable" | "private_beat_license" | "private_cover_licence" | "private_ownership_proof" | "private_ai_receipt" | "private_royalty_statement" | "private_payout_report" | "private_payout_proof" | "private_kyc_document" | "private_unreleased_artwork";
 export type PrivateUploadInput = { ownerUserId: number; ownerName?: string; releaseId?: number; beatPurchaseId?: number; beatId?: number; beatTitle?: string; assetType: PrivateAssetType; fileName: string; mimeType: string; bytes: Buffer; retentionUntil?: Date };
@@ -31,16 +32,14 @@ const policies: Record<PrivateAssetType, { max: number; mime: string[] }> = {
 };
 
 export function privateStorageRootPath() {
-  const configured = process.env.HYMN_STORAGE_ROOT?.trim() || process.env.PRIVATE_STORAGE_ROOT?.trim();
-  if (!configured && process.env.NODE_ENV === "production") throw new Error("PRIVATE_STORAGE_ROOT is required for private assets in production.");
-  const root = configured ? path.resolve(/* turbopackIgnore: true */ configured) : path.resolve(".private-storage");
+  const root = managedStorageRoot();
   const publicRoot = path.resolve("public");
   if (root === publicRoot || root.startsWith(`${publicRoot}${path.sep}`)) throw new Error("Private storage must not be inside the public directory.");
   return root;
 }
 
 function privateStorageCandidateRoots() {
-  const configured = [process.env.HYMN_STORAGE_ROOT, process.env.PRIVATE_STORAGE_ROOT]
+  const configured = [CANONICAL_HOSTINGER_STORAGE_ROOT, process.env.HYMN_STORAGE_ROOT, process.env.PRIVATE_STORAGE_ROOT]
     .map((value) => value?.trim())
     .filter((value): value is string => Boolean(value));
   const legacy = (process.env.HYMN_LEGACY_STORAGE_ROOTS || "").split(";").map((value) => value.trim()).filter(Boolean);

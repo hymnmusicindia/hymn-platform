@@ -5,6 +5,7 @@ import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { Transform } from "node:stream";
 import { prisma } from "@/lib/prisma";
+import { managedStorageRoot } from "@/lib/hostinger-storage";
 
 export const uploadConfig = {
   chunkSize: Math.max(5, Math.min(10, Number(process.env.UPLOAD_CHUNK_SIZE_MB || 8))) * 1024 * 1024,
@@ -16,10 +17,7 @@ export const uploadConfig = {
 export type AssetCategory = "RELEASE_COVER_ART" | "TRACK_AUDIO_MASTER" | "TRACK_AUDIO_PREVIEW" | "RELEASE_DOCUMENT" | "TRACK_DOCUMENT" | "OTHER_RELEASE_ASSET" | "OTHER_TRACK_ASSET";
 
 export function storageRootPath() {
-  const configured = process.env.HYMN_STORAGE_ROOT?.trim() || process.env.PRIVATE_STORAGE_ROOT?.trim();
-  if (configured) return path.resolve(/* turbopackIgnore: true */ configured);
-  if (process.env.NODE_ENV === "production") throw new Error("HYMN_STORAGE_ROOT is required in production.");
-  return path.resolve(".hymn-storage");
+  return managedStorageRoot();
 }
 
 export function createSafeAssetFolderName(title: string, stableId: string) {

@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { beatAssetRelativePath, createSafeAssetFolderName, uploadConfig } from "../lib/storage-service";
 import { normalizePublicUploadUrl, publicStorageRootPath, resolvePublicUploadPaths } from "../lib/storage";
+import { CANONICAL_HOSTINGER_PUBLIC_STORAGE_ROOT } from "../lib/hostinger-storage";
 
 const safe = createSafeAssetFolderName(" My Song / Final ❤️ ", "rel_123");
 assert(safe.endsWith("rel_123"));
@@ -12,11 +13,12 @@ const beatMaster = beatAssetRelativePath({ producerName: "Aditya / Producer", pr
 assert.equal(beatMaster, "Beatstore/Aditya - Producer - producer_7/Night - Drive - beat_42/Master Audio/master.wav");
 assert(!beatMaster.includes("..") && !beatMaster.includes("\\"));
 assert.equal(normalizePublicUploadUrl("/home/account/hymn-storage/Public/Beatstore/Producer/Beat/Cover Art/cover.png"), "/api/public-uploads/Beatstore/Producer/Beat/Cover%20Art/cover.png");
-assert.throws(() => publicStorageRootPath({ NODE_ENV: "production", STORAGE_ROOT: "./public/uploads" }), /absolute persistent Linux path/, "Relative production paths must be rejected instead of creating disposable uploads.");
-assert.equal(publicStorageRootPath({ NODE_ENV: "production", STORAGE_ROOT: "D:\\hymn-storage\\Public" }), "D:\\hymn-storage\\Public");
-assert.equal(publicStorageRootPath({ NODE_ENV: "production", STORAGE_ROOT: "/srv/hymn-storage/Public" }), "/srv/hymn-storage/Public");
-assert.equal(publicStorageRootPath({ NODE_ENV: "production", HYMN_STORAGE_ROOT: "/home/account/hymn-storage" }), "/home/account/hymn-storage/Public");
+assert.equal(publicStorageRootPath({ NODE_ENV: "production", STORAGE_ROOT: "./public/uploads" }), CANONICAL_HOSTINGER_PUBLIC_STORAGE_ROOT, "Production ignores disposable relative paths.");
+assert.equal(publicStorageRootPath({ NODE_ENV: "production", STORAGE_ROOT: "D:\\hymn-storage\\Public" }), CANONICAL_HOSTINGER_PUBLIC_STORAGE_ROOT);
+assert.equal(publicStorageRootPath({ NODE_ENV: "production", STORAGE_ROOT: "/srv/hymn-storage/Public" }), CANONICAL_HOSTINGER_PUBLIC_STORAGE_ROOT);
+assert.equal(publicStorageRootPath({ NODE_ENV: "production", HYMN_STORAGE_ROOT: "/home/account/hymn-storage" }), CANONICAL_HOSTINGER_PUBLIC_STORAGE_ROOT);
 assert.deepEqual(resolvePublicUploadPaths("producers/avatars/example.jpg", { NODE_ENV: "production", STORAGE_ROOT: "/home/account/public-media", HYMN_STORAGE_ROOT: "/home/account/current", PRIVATE_STORAGE_ROOT: "/home/account/legacy", HYMN_LEGACY_STORAGE_ROOTS: "/home/account/old-one;/home/account/old-two" }, "/app"), [
+  "/home/u390865851/private-storage/Public/producers/avatars/example.jpg",
   "/home/account/public-media/producers/avatars/example.jpg",
   "/home/account/current/Public/producers/avatars/example.jpg",
   "/home/account/legacy/Public/producers/avatars/example.jpg",
