@@ -15,6 +15,8 @@ assert.equal(beatMaster, "Beatstore/Aditya - Producer - producer_7/Night - Drive
 assert(!beatMaster.includes("..") && !beatMaster.includes("\\"));
 assert.equal(normalizePublicUploadUrl("/home/account/hymn-storage/Public/Beatstore/Producer/Beat/Cover Art/cover.png"), "/api/public-uploads/Beatstore/Producer/Beat/Cover%20Art/cover.png");
 assert.equal(canonicalReleaseArtworkUrl(20, "/api/assets/51/download?filename=cover.jpg"), "/api/releases/20/artwork");
+assert.equal(canonicalReleaseArtworkUrl(20, "/api/public-uploads/releases/cover.jpg"), "/api/public-uploads/releases/cover.jpg");
+assert.equal(canonicalReleaseArtworkUrl(20, "https://cdn.example.test/cover.jpg"), "https://cdn.example.test/cover.jpg");
 assert.equal(storedAssetIdFromUrl("/api/assets/51/download?filename=cover.jpg"), 51);
 assert.equal(storedAssetIdFromUrl("https://example.com/cover.jpg"), null);
 assert.equal(publicStorageRootPath({ NODE_ENV: "production", STORAGE_ROOT: "./public/uploads" }), CANONICAL_HOSTINGER_PUBLIC_STORAGE_ROOT, "Production ignores disposable relative paths.");
@@ -46,6 +48,9 @@ assert(chunkRoute.includes("userId: auth.user.id"));
 const beatUploadRoute = readFileSync("app/api/producer/beats/route.ts", "utf8");
 assert(beatUploadRoute.includes("attachBeatAssets") && beatUploadRoute.includes("beatId: beatDraft.id"), "Beat assets must attach to a stable database draft rather than a placeholder record.");
 assert(beatUploadRoute.includes("deleteUploadedFileByUrl") && beatUploadRoute.includes("deleteBeat(createdBeatId)"), "Failed beat uploads must clean up public assets and the incomplete draft.");
+const releaseArtworkRoute = readFileSync("app/api/releases/[id]/artwork/route.ts", "utf8");
+assert(releaseArtworkRoute.includes('assetType: "private_unreleased_artwork"') && releaseArtworkRoute.includes("linkedAsset"), "Release artwork must prefer the exact private cover art asset before legacy image fallbacks.");
+assert(releaseArtworkRoute.includes('"X-HYMN-Release-Asset": "unauthorized"') && releaseArtworkRoute.includes("releaseAsset.releaseId === releaseId"), "Release artwork image requests must return an image fallback and allow authorized release-linked assets.");
 const beatArtworkRoute = readFileSync("app/api/producer/beats/[id]/artwork/route.ts", "utf8");
 assert(beatArtworkRoute.includes("deleteUploadedFileByUrlPermanently") && beatArtworkRoute.includes("current.artworkUploadId"), "Artwork replacement must permanently delete the previous file and obsolete upload record.");
 assert(beatArtworkRoute.includes("databaseCommitted") && beatArtworkRoute.includes("No changes were kept"), "Artwork replacement must compensate safely when old-file deletion fails.");

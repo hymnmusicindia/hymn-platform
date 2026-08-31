@@ -9,22 +9,41 @@ export const runtime = "nodejs";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const [user, admin] = await Promise.all([getSession(), getAdminSession()]);
-  if (!user && !admin) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  if (!user && !admin) return new NextResponse(missingImageSvg(), { status: 200, headers: { ...missingImageResponseHeaders(), "X-HYMN-Release-Asset": "unauthorized" } });
   const releaseId = Number((await context.params).id);
-  if (!Number.isInteger(releaseId) || releaseId <= 0) return NextResponse.json({ error: "Invalid release." }, { status: 400 });
+  if (!Number.isInteger(releaseId) || releaseId <= 0) return new NextResponse(missingImageSvg(), { status: 200, headers: { ...missingImageResponseHeaders(), "X-HYMN-Release-Asset": "invalid-release" } });
 
   const release = await prisma.release.findUnique({ where: { id: releaseId }, select: { id: true, userId: true, ownerUserId: true, artworkUrl: true } });
-  if (!release) return NextResponse.json({ error: "Release not found." }, { status: 404 });
+  if (!release) return new NextResponse(missingImageSvg(), { status: 200, headers: { ...missingImageResponseHeaders(), "X-HYMN-Release-Asset": "missing-release" } });
   const ownerUserId = release.ownerUserId ?? release.userId;
-  if (!admin && user?.sub !== ownerUserId && user?.sub !== release.userId) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  if (!admin && user?.sub !== ownerUserId && user?.sub !== release.userId) return new NextResponse(missingImageSvg(), { status: 200, headers: { ...missingImageResponseHeaders(), "X-HYMN-Release-Asset": "forbidden" } });
 
   const linkedAssetId = storedAssetIdFromUrl(release.artworkUrl);
-  const linkedAsset = linkedAssetId ? await prisma.storedAsset.findFirst({ where: { id: linkedAssetId, ownerUserId, mimeType: { startsWith: "image/" }, deletedAt: null }, select: { id: true } }) : null;
-  const releaseAsset = linkedAsset ?? await prisma.storedAsset.findFirst({ where: { releaseId, ownerUserId, mimeType: { startsWith: "image/" }, deletedAt: null }, select: { id: true }, orderBy: { createdAt: "desc" } });
+  const releaseCoverAsset = await prisma.storedAsset.findFirst({
+    where: { releaseId, ownerUserId, assetType: "private_unreleased_artwork", mimeType: { startsWith: "image/" }, deletedAt: null, uploadStatus: "ready" },
+    select: { id: true, releaseId: true, ownerUserId: true },
+    orderBy: { createdAt: "desc" }
+  });
+  const linkedAsset = linkedAssetId ? await prisma.storedAsset.findFirst({
+    where: {
+      id: linkedAssetId,
+      mimeType: { startsWith: "image/" },
+      deletedAt: null,
+      uploadStatus: "ready",
+      OR: [{ releaseId }, { ownerUserId }]
+    },
+    select: { id: true, releaseId: true, ownerUserId: true }
+  }) : null;
+  const legacyReleaseAsset = await prisma.storedAsset.findFirst({
+    where: { releaseId, ownerUserId, mimeType: { startsWith: "image/" }, deletedAt: null, uploadStatus: "ready" },
+    select: { id: true, releaseId: true, ownerUserId: true },
+    orderBy: [{ assetType: "asc" }, { createdAt: "desc" }]
+  });
+  const releaseAsset = releaseCoverAsset ?? linkedAsset ?? legacyReleaseAsset;
 
   if (releaseAsset) {
     try {
-      const asset = await localPrivateStorage.createAuthorizedRead({ assetId: releaseAsset.id, requesterUserId: user?.sub ?? 0, isAdmin: Boolean(admin) });
+      const asset = await localPrivateStorage.createAuthorizedRead({ assetId: releaseAsset.id, requesterUserId: user?.sub ?? 0, isAdmin: Boolean(admin) || releaseAsset.releaseId === releaseId });
       return new NextResponse(new Uint8Array(asset.bytes), { headers: { "Content-Type": asset.mimeType, "Content-Length": String(asset.bytes.length), "Cache-Control": "private, max-age=300", "X-Content-Type-Options": "nosniff", "X-HYMN-Release-Asset": String(releaseAsset.id) } });
     } catch (error) {
       console.error("Release artwork source could not be read", { releaseId, assetId: releaseAsset.id, error: error instanceof Error ? error.message : "Unknown storage error" });

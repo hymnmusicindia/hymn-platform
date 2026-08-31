@@ -1,5 +1,8 @@
 export function canonicalReleaseArtworkUrl(releaseId: number, storedUrl: unknown) {
-  return storedUrl && Number.isInteger(releaseId) && releaseId > 0 ? `/api/releases/${releaseId}/artwork` : "";
+  if (typeof storedUrl !== "string" || !storedUrl.trim()) return "";
+  const value = storedUrl.trim();
+  if (/^\/api\/assets\/\d+\/download(?:\?|$)/.test(value) && Number.isInteger(releaseId) && releaseId > 0) return `/api/releases/${releaseId}/artwork`;
+  return value;
 }
 
 export function storedAssetIdFromUrl(value: unknown) {

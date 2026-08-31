@@ -626,9 +626,18 @@ function createTracksFromRelease(
     const trackMetadata = track?.metadata && typeof track.metadata === "object"
       ? track.metadata as Record<string, unknown>
       : {};
-    const savedPrimaryArtistIds = Array.isArray(trackMetadata.artistProfileIds)
-      ? trackMetadata.artistProfileIds.filter((id): id is number => Number.isInteger(id) && Number(id) > 0)
-      : [];
+    const nestedTrackMetadata = trackMetadata.metadata && typeof trackMetadata.metadata === "object"
+      ? trackMetadata.metadata as Record<string, unknown>
+      : {};
+    const savedArtistProfileIds = Array.isArray(trackMetadata.artistProfileIds)
+      ? trackMetadata.artistProfileIds
+      : Array.isArray(nestedTrackMetadata.artistProfileIds)
+        ? nestedTrackMetadata.artistProfileIds
+        : [];
+    const savedPrimaryArtistIds = savedArtistProfileIds
+      .map((id) => Number(id))
+      .filter((id): id is number => Number.isInteger(id) && id > 0)
+      .slice(0, 3);
     return {
       id: createId(),
       trackNumber: track?.trackNumber ?? index + 1,
@@ -1107,7 +1116,7 @@ export function ReleaseForm({
   );
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [shakingField, setShakingField] = useState<string | null>(null);
-  const isCorrectionResubmission = Boolean(initialRelease && ["changes_requested", "rejected"].includes(initialRelease.status) && initialRelease.paymentStatus === "paid");
+  const isPaidReleaseResubmission = Boolean(initialRelease && ["draft", "changes_requested", "rejected"].includes(initialRelease.status) && initialRelease.paymentStatus === "paid");
   useEffect(() => () => {
     if (stepTransitionTimerRef.current != null) window.clearTimeout(stepTransitionTimerRef.current);
   }, []);
@@ -2283,7 +2292,7 @@ export function ReleaseForm({
 
     if (filesToUpload.length === 0) {
       setUploadProgress(100);
-      return { artworkUrl, trackAudioUrls, trackLicenseUrls };
+      return { releaseId: draftReleaseId ?? initialRelease?.id ?? null, artworkUrl, trackAudioUrls, trackLicenseUrls };
     }
 
     const uploadReleaseId = await ensureUploadDraft();
@@ -2299,7 +2308,7 @@ export function ReleaseForm({
       setUploadProgress(Math.min(99, Math.round((completedBytes / totalBytes) * 100)));
     }
     setUploadProgress(100);
-    return { artworkUrl, trackAudioUrls, trackLicenseUrls };
+    return { releaseId: uploadReleaseId, artworkUrl, trackAudioUrls, trackLicenseUrls };
   }
 
   async function verifyAndUpdateRelease(payload: any) {
@@ -2363,7 +2372,7 @@ export function ReleaseForm({
               : track.versionPreset,
           trackNumber: index + 1,
           primaryArtist:
-            namesFor(track.primaryArtistIds.slice(0, 1)),
+            namesFor(track.primaryArtistIds),
           featuredArtists: track.featuredArtists.trim() || undefined,
           additionalPrimaryArtists: track.remixers.trim() || undefined,
           songwriters: contributorNames(track.songwriters),
@@ -2422,7 +2431,7 @@ export function ReleaseForm({
       setStatus("Saving draft...");
 
       const payload = {
-        draftReleaseId,
+        draftReleaseId: uploaded.releaseId ?? draftReleaseId,
         metadata: {
           artistName: primaryArtistName,
           trackName: tracks[0]?.trackTitle.trim() || displayedReleaseTitle,
@@ -2470,7 +2479,7 @@ export function ReleaseForm({
                 : track.versionPreset,
             trackNumber: index + 1,
             primaryArtist:
-              namesFor(track.primaryArtistIds.slice(0, 1)),
+              namesFor(track.primaryArtistIds),
             featuredArtists: track.featuredArtists.trim() || undefined,
             additionalPrimaryArtists: track.remixers.trim() || undefined,
             songwriters: contributorNames(track.songwriters),
@@ -2543,8 +2552,8 @@ export function ReleaseForm({
       razorpay_payment_id: paymentId,
       razorpay_signature: signature,
       ...(firstReleaseOffer ? { promotionCode: "FIRST_RELEASE_FREE", attribution: campaignAttribution } : {}),
-      ...((draftReleaseId ?? (["draft", "awaiting_payment"].includes(initialRelease?.status ?? "") ? initialRelease?.id : undefined))
-        ? { draftReleaseId: draftReleaseId ?? initialRelease?.id }
+      ...((uploaded.releaseId ?? draftReleaseId ?? (["draft", "awaiting_payment"].includes(initialRelease?.status ?? "") ? initialRelease?.id : undefined))
+        ? { draftReleaseId: uploaded.releaseId ?? draftReleaseId ?? initialRelease?.id }
         : {}),
       metadata: {
         artistName: primaryArtistName,
@@ -2586,7 +2595,7 @@ export function ReleaseForm({
               : track.versionPreset,
           trackNumber: index + 1,
           primaryArtist:
-            namesFor(track.primaryArtistIds.slice(0, 1)),
+            namesFor(track.primaryArtistIds),
           featuredArtists: track.featuredArtists.trim() || undefined,
           additionalPrimaryArtists: track.remixers.trim() || undefined,
           songwriters: contributorNames(track.songwriters),
@@ -2638,7 +2647,7 @@ export function ReleaseForm({
     setUploadProgress(0);
     setStatus(null);
     try {
-      if (isCorrectionResubmission) {
+      if (isPaidReleaseResubmission) {
         const data = await submitEditedRelease();
         setSubmittedRelease(data.release);
         setUploadProgress(100);
@@ -2830,9 +2839,9 @@ export function ReleaseForm({
     return (
       <SuccessState
         release={submittedRelease}
-        onReset={firstReleaseOffer ? () => router.push(`/dashboard/releases?releaseId=${submittedRelease.id}`) : isCorrectionResubmission ? () => router.push("/distribution") : resetForm}
-        isResubmission={isCorrectionResubmission}
-        resetLabel={firstReleaseOffer ? "Track my release" : isCorrectionResubmission ? "Back to catalogue" : undefined}
+        onReset={firstReleaseOffer ? () => router.push(`/dashboard/releases?releaseId=${submittedRelease.id}`) : isPaidReleaseResubmission ? () => router.push("/distribution") : resetForm}
+        isResubmission={isPaidReleaseResubmission}
+        resetLabel={firstReleaseOffer ? "Track my release" : isPaidReleaseResubmission ? "Back to catalogue" : undefined}
       />
     );
   }
