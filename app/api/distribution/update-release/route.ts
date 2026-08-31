@@ -27,7 +27,9 @@ export async function POST(request: Request) {
     if (!existingRelease || (existingRelease.userId !== session.sub && session.role !== "admin" && session.role !== "producer")) {
       return NextResponse.json({ error: "Release not found." }, { status: 404 });
     }
-    if (!["draft", "changes_requested", "rejected"].includes(existingRelease.status) || existingRelease.paymentStatus !== "paid") {
+    const existingStatus = String(existingRelease.status ?? "").trim().toLowerCase();
+    const existingPaymentStatus = String(existingRelease.paymentStatus ?? "").trim().toLowerCase();
+    if (!["draft", "awaiting_payment", "changes_requested", "rejected", "resubmitted"].includes(existingStatus) || existingPaymentStatus !== "paid") {
       return NextResponse.json({ error: "Only a previously paid release opened for editing can be resubmitted here." }, { status: 409 });
     }
     const savedArtistIds = new Set((await listArtistProfilesByUser(existingRelease.userId)).map((profile) => profile.id));

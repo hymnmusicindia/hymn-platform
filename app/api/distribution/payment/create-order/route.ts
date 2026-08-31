@@ -17,8 +17,15 @@ export async function POST(request: Request) {
   try {
     const payload = distributionOrderCreateSchema.parse(await request.json());
     if (payload.draftReleaseId) {
-      const draft = await prisma.release.findFirst({ where: { id: payload.draftReleaseId, userId: session.sub }, select: { id: true, status: true } });
-      if (!draft || !["DRAFT", "AWAITING_PAYMENT"].includes(draft.status)) return NextResponse.json({ error: "The checkout draft is no longer available." }, { status: 409 });
+      const draft = await prisma.release.findFirst({ where: { id: payload.draftReleaseId, userId: session.sub }, select: { id: true, status: true, paymentStatus: true } });
+      const draftStatus = String(draft?.status ?? "").trim().toLowerCase();
+      const draftPaymentStatus = String(draft?.paymentStatus ?? "").trim().toLowerCase();
+      const paidCorrectionStatuses = new Set(["changes_requested", "rejected", "resubmitted"]);
+      if (!draft) return NextResponse.json({ error: "The checkout draft is no longer available." }, { status: 409 });
+      if (paidCorrectionStatuses.has(draftStatus) && draftPaymentStatus === "paid") {
+        return NextResponse.json({ error: "This release is already paid. Submit the corrections again instead of creating another payment." }, { status: 409 });
+      }
+      if (!["draft", "awaiting_payment"].includes(draftStatus)) return NextResponse.json({ error: "The checkout draft is no longer available." }, { status: 409 });
     }
     const subscription = await getSubscriptionByUserId(session.sub);
     const hasActiveSubscription = subscriptionHasEntitlement(subscription);

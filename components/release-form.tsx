@@ -836,6 +836,21 @@ function socialPlatformSelected(platforms: string[]) {
 
 const languageOptions = [...DIRENOTE_LANGUAGES];
 
+function normalizeWorkflowStatus(status?: string | null) {
+  return String(status ?? "").trim().toLowerCase();
+}
+
+function normalizePaymentStatus(status?: string | null) {
+  return String(status ?? "").trim().toLowerCase();
+}
+
+function isPaidCorrectionRelease(release?: Release | null) {
+  if (!release?.id) return false;
+  const status = normalizeWorkflowStatus(release.status);
+  const paymentStatus = normalizePaymentStatus(release.paymentStatus);
+  return paymentStatus === "paid" && ["draft", "awaiting_payment", "changes_requested", "rejected", "resubmitted"].includes(status);
+}
+
 function SearchableSelect({
   label,
   value,
@@ -1116,7 +1131,7 @@ export function ReleaseForm({
   );
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [shakingField, setShakingField] = useState<string | null>(null);
-  const isPaidReleaseResubmission = Boolean(initialRelease && ["draft", "changes_requested", "rejected"].includes(initialRelease.status) && initialRelease.paymentStatus === "paid");
+  const isPaidReleaseResubmission = isPaidCorrectionRelease(initialRelease);
   useEffect(() => () => {
     if (stepTransitionTimerRef.current != null) window.clearTimeout(stepTransitionTimerRef.current);
   }, []);
@@ -6017,11 +6032,13 @@ export function ReleaseForm({
               </button>
               <button
                 type="submit"
-                disabled={submitting || !legalComplete || !reviewConfirmed || validationIssues.length > 0}
+                disabled={submitting || !legalComplete || (!isPaidReleaseResubmission && !reviewConfirmed) || validationIssues.length > 0}
                 className={clsx("release-footer-action is-primary w-full disabled:opacity-60 sm:w-auto", distributionCheckoutAmount === 0 && "is-free-release")}
               >
                 {submitting
                   ? "Processing…"
+                  : isPaidReleaseResubmission
+                    ? "Submit corrections →"
                   : subscriptionCovered
                     ? "Confirm & Submit Release →"
                     : distributionCheckoutAmount === 0

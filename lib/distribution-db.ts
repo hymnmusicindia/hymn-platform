@@ -1375,7 +1375,7 @@ export async function updatePaidDistributionRelease(input: {
         }
       });
       const reviewReason = "Paid release metadata was submitted for review.";
-      const currentStatus = existingRelease.status;
+      const currentStatus = String(existingRelease.status ?? "").trim().toLowerCase();
       if (currentStatus === "changes_requested" || currentStatus === "rejected") await updateDetailedReleaseStatus(input.releaseId, "resubmitted", reviewReason);
       else if (currentStatus === "draft") await updateDetailedReleaseStatus(input.releaseId, "submitted", reviewReason);
       await updateDetailedReleaseStatus(input.releaseId, "under_review", reviewReason);
