@@ -206,6 +206,11 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not create distribution payment order.";
+    const missingRazorpayPlan = message.match(/^RAZORPAY_PLAN_(HALF_YEARLY|YEARLY|YEARLY_PLUS) is not configured\.$/);
+    if (missingRazorpayPlan) {
+      console.error("Distribution subscription checkout is missing a Razorpay plan id.", { planEnv: `RAZORPAY_PLAN_${missingRazorpayPlan[1]}` });
+      return NextResponse.json({ error: "This subscription checkout is temporarily unavailable. HYMN support has been notified; please choose One-Time Review or try again after the plan is configured." }, { status: 503 });
+    }
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
