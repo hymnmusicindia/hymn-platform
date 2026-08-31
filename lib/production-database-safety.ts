@@ -2,6 +2,12 @@ import { PrismaClient } from "@prisma/client";
 
 const REQUIRED_TABLES = ["_prisma_migrations", "users", "releases", "tracks", "sessions", "audit_logs"] as const;
 
+// HYMN has one canonical production database. Keep this identity in source control so
+// a missing or overwritten Hostinger environment variable cannot silently point the
+// application at a fresh Neon branch and make production data appear to disappear.
+const CANONICAL_PRODUCTION_DATABASE = "neondb";
+const CANONICAL_PRODUCTION_NEON_BRANCH_ID = "br-dry-fog-aym0quvm";
+
 export type ProductionDatabaseIdentity = {
   database: string;
   schema: string | null;
@@ -20,10 +26,16 @@ function configuredUrl() {
 export async function assertProductionDatabaseReady(client = new PrismaClient(), options: { enforceRestrictedRole?: boolean } = {}): Promise<ProductionDatabaseIdentity> {
   const url = configuredUrl();
   const expectedHost = process.env.EXPECTED_DATABASE_HOST?.trim().toLowerCase();
-  const expectedDatabase = process.env.EXPECTED_DATABASE_NAME?.trim();
-  const expectedBranchId = process.env.EXPECTED_NEON_BRANCH_ID?.trim();
+  const configuredExpectedDatabase = process.env.EXPECTED_DATABASE_NAME?.trim();
+  const configuredExpectedBranchId = process.env.EXPECTED_NEON_BRANCH_ID?.trim();
+  if (configuredExpectedDatabase && configuredExpectedDatabase !== CANONICAL_PRODUCTION_DATABASE) {
+    throw new Error("Database safety check failed: EXPECTED_DATABASE_NAME conflicts with HYMN's canonical production database.");
+  }
+  if (configuredExpectedBranchId && configuredExpectedBranchId !== CANONICAL_PRODUCTION_NEON_BRANCH_ID) {
+    throw new Error("Database safety check failed: EXPECTED_NEON_BRANCH_ID conflicts with HYMN's canonical production branch.");
+  }
   if (expectedHost && url.hostname.toLowerCase() !== expectedHost) throw new Error(`Database safety check failed: connected host does not match EXPECTED_DATABASE_HOST.`);
-  if (expectedDatabase && url.pathname.replace(/^\//, "") !== expectedDatabase) throw new Error("Database safety check failed: database name does not match EXPECTED_DATABASE_NAME.");
+  if (url.pathname.replace(/^\//, "") !== CANONICAL_PRODUCTION_DATABASE) throw new Error("Database safety check failed: DATABASE_URL does not target HYMN's canonical production database.");
 
   try {
     const [identity] = await client.$queryRawUnsafe<Array<{ database: string; schema: string | null; branchId: string | null; canCreateSchemaObjects: boolean; superuser: boolean }>>(
@@ -37,7 +49,7 @@ export async function assertProductionDatabaseReady(client = new PrismaClient(),
     if (identity?.schema !== "public" || missing.length) {
       throw new Error(`Database safety check failed: expected production schema is incomplete (missing: ${missing.join(", ") || "public schema"}). Refusing to continue.`);
     }
-    if (expectedBranchId && identity.branchId !== expectedBranchId) throw new Error("Database safety check failed: Neon branch does not match EXPECTED_NEON_BRANCH_ID.");
+    if (identity.branchId !== CANONICAL_PRODUCTION_NEON_BRANCH_ID) throw new Error("Database safety check failed: connection does not target HYMN's canonical production Neon branch.");
     const restrictedRole = !identity.canCreateSchemaObjects && !identity.superuser;
     const enforceRestrictedRole = options.enforceRestrictedRole ?? process.env.REQUIRE_RESTRICTED_DATABASE_ROLE === "true";
     if (enforceRestrictedRole && !restrictedRole) throw new Error("Database safety check failed: runtime DATABASE_URL can modify schema objects. Configure a restricted Neon application role.");

@@ -21,6 +21,8 @@ const databaseSafety = readFileSync(path.join(root, "lib", "production-database-
 assert.match(deploymentScript, /assertProductionDatabaseReady/);
 assert.match(startupScript, /assertProductionDatabaseReady/);
 assert.match(databaseSafety, /EXPECTED_NEON_BRANCH_ID/);
+assert.match(databaseSafety, /CANONICAL_PRODUCTION_NEON_BRANCH_ID/);
+assert.match(databaseSafety, /identity\.branchId !== CANONICAL_PRODUCTION_NEON_BRANCH_ID/);
 assert.match(databaseSafety, /_prisma_migrations/);
 
 const freshScript = readFileSync(path.join(root, "scripts", "migrate-fresh-database.ts"), "utf8");
