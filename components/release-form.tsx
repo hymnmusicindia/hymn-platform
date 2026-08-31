@@ -3140,6 +3140,14 @@ export function ReleaseForm({
         ) : null}
         {step === 0 ? (
           <section className={clsx("release-audio-stage", stepMotion)}>
+            <nav className="release-focused-side-nav" aria-label="Music upload step navigation">
+              <button type="button" className="release-focused-side-arrow is-left" onClick={() => goToStep(1)} disabled={stepTransitioning || submitting} aria-label="Back to primary artists">
+                <span aria-hidden="true">←</span>
+              </button>
+              <button type="button" className="release-focused-side-arrow is-right" onClick={advanceStep} disabled={stepTransitioning || submitting} aria-label="Continue to track details">
+                <span aria-hidden="true">→</span>
+              </button>
+            </nav>
             <div className="release-focused-intro">
               <h2>Add your music and cover</h2>
               <p>{firstReleaseOffer ? "Upload 1 track for your free Single release" : "Add up to 30 tracks for a maximum length of 1 hour"}<br /><span className="release-dolby-note"><img src="https://d21buns5ku92am.cloudfront.net/68644/images/413934-Dolby%20Atmos%20Horizontal-015e44-medium-1641853769.png" alt="Dolby Atmos" className="release-dolby-logo" /> Add Dolby Atmos™ files directly in track information.</span></p>
