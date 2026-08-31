@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getDetailedReleaseByUserId, saveDraftDistributionRelease } from "@/lib/distribution-db";
 import { FIRST_RELEASE_PROMOTION_CODE, getFirstReleaseEligibility } from "@/lib/first-release-promotion";
+import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -25,7 +26,11 @@ export async function POST(request: Request) {
       return url;
     };
 
-    const artworkUrl = rejectPublicDeliverable(metadata.uploadedArtworkUrl ?? metadata.existingArtworkUrl ?? existingRelease?.artworkUrl ?? "");
+    const artworkUrl = await resolvePrivateReleaseArtworkUrl({
+      userId: session.sub,
+      releaseId: draftReleaseId,
+      value: rejectPublicDeliverable(metadata.uploadedArtworkUrl ?? metadata.existingArtworkUrl ?? existingRelease?.artworkUrl ?? "")
+    });
     const requestedFirstReleaseOffer = metadata.promotionCode === FIRST_RELEASE_PROMOTION_CODE;
     const existingMetadata = existingRelease?.metadata && typeof existingRelease.metadata === "object" ? existingRelease.metadata as Record<string, unknown> : {};
     const existingFirstReleaseOffer = existingMetadata.promotionCode === FIRST_RELEASE_PROMOTION_CODE;

@@ -6,6 +6,7 @@ import { getDetailedReleaseById, updatePaidDistributionRelease } from "@/lib/dis
 import type { ReleaseTrack } from "@/lib/types";
 import { distributionEditSchema } from "@/lib/validation";
 import { assertDireNoteAssetFormat } from "@/lib/distribution-asset-format";
+import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution";
 
 type EditTrackPayload = Omit<ReleaseTrack, "id" | "releaseId" | "createdAt"> & {
   coverLicenseUrl?: string;
@@ -52,9 +53,14 @@ export async function POST(request: Request) {
 
     const savePrivate = async (file: File, assetType: PrivateAssetType) => (await localPrivateStorage.upload({ ownerUserId: session.sub, releaseId: existingRelease.id, assetType, fileName: file.name, mimeType: file.type, bytes: Buffer.from(await file.arrayBuffer()) })).downloadPath;
     const artworkUpload = formData.get(parsed.metadata.artworkFileKey);
-    const artworkUrl = artworkUpload instanceof File
+    const rawArtworkUrl = artworkUpload instanceof File
       ? await savePrivate(artworkUpload, "private_unreleased_artwork")
       : parsed.metadata.uploadedArtworkUrl ?? parsed.metadata.existingArtworkUrl ?? existingRelease.artworkUrl;
+    const artworkUrl = await resolvePrivateReleaseArtworkUrl({
+      userId: existingRelease.userId,
+      releaseId: existingRelease.id,
+      value: rawArtworkUrl
+    });
 
     if (!artworkUrl) {
       return NextResponse.json({ error: "Artwork upload missing." }, { status: 400 });

@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { calculateFirstReleasePrice, FIRST_RELEASE_PROMOTION_CODE, redeemFirstRelease, releaseFirstReleaseReservation, reserveFirstRelease, trackFirstReleaseEvent } from "@/lib/first-release-promotion";
 import { attachReservedSubscriptionRelease, releaseReservedSubscriptionSlot, reserveSubscriptionReleaseSlot, subscriptionHasEntitlement, subscriptionHasReleaseAllowance } from "@/lib/subscription-billing";
 import { distributionOrderPriceMatches } from "@/lib/distribution-order-price";
+import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -72,7 +73,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "This zero-value order has no valid release entitlement." }, { status: 400 });
     }
 
-    const artworkUrl = requirePrivateAsset(parsed.metadata.uploadedArtworkUrl || parsed.metadata.existingArtworkUrl, "Artwork");
+    const artworkUrl = requirePrivateAsset(await resolvePrivateReleaseArtworkUrl({
+      userId: session.sub,
+      releaseId: parsed.draftReleaseId,
+      value: parsed.metadata.uploadedArtworkUrl || parsed.metadata.existingArtworkUrl
+    }), "Artwork");
     if (!artworkUrl) {
       return NextResponse.json({ error: "Artwork upload missing." }, { status: 400 });
     }
