@@ -317,7 +317,9 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
 }
 
 function pushMissing(issues: DireNoteValidationIssue[], field: string, value: unknown, message: string) {
-  if (value == null || String(value).trim() === "") issues.push({ field, message, severity: "error" });
+  const missing = value == null || String(value).trim() === "";
+  if (missing) issues.push({ field, message, severity: "error" });
+  return missing;
 }
 
 function validatePublicPdf(issues: DireNoteValidationIssue[], field: string, value?: string) {
@@ -367,15 +369,18 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
   pushMissing(issues, "typeOfRelease", payload.typeOfRelease, "Release type is required.");
   pushMissing(issues, "albumGenre", payload.albumGenre, "Album genre is required.");
   pushMissing(issues, "albumLanguage", payload.albumLanguage, "Album language is required.");
-  pushMissing(issues, "albumMood", payload.albumMood, "Mood is missing. Select a mood before sending to DireNote.");
+  if (pushMissing(issues, "albumMood", payload.albumMood, "Mood is missing. Select a mood before sending to DireNote.")) {
+    issues[issues.length - 1].suggestion = "Select a mood in the release metadata.";
+  }
   pushMissing(issues, "contenttype", payload.contenttype, "Content type is required.");
   pushMissing(issues, "trackReleaseDate", payload.trackReleaseDate, "Release date is required.");
   pushMissing(issues, "labelName", payload.labelName, "Label name is required.");
   pushMissing(issues, "cLine", payload.cLine, "Copyright line is required.");
   pushMissing(issues, "pLine", payload.pLine, "Publishing line is required.");
-  pushMissing(issues, "cover_art_url", payload.cover_art_url, "Cover artwork must resolve to a public URL.");
-  if (!isPublicHttpUrl(payload.cover_art_url)) issues.push({ field: "cover_art_url", message: "Cover artwork must be a public HTTP(S) URL." });
-  if (!/\.jpe?g$/i.test(assetFileName(payload.cover_art_url))) issues.push({ field: "cover_art_url", message: "DireNote cover artwork must be JPEG. Convert PNG to JPEG before submission." });
+  if (!pushMissing(issues, "cover_art_url", payload.cover_art_url, "Cover artwork must resolve to a public URL.")) {
+    if (!isPublicHttpUrl(payload.cover_art_url)) issues.push({ field: "cover_art_url", message: "Cover artwork must be a public HTTP(S) URL." });
+    else if (!/\.jpe?g$/i.test(assetFileName(payload.cover_art_url))) issues.push({ field: "cover_art_url", message: "DireNote cover artwork must be JPEG. Convert PNG to JPEG before submission." });
+  }
 
   if (!DIRENOTE_GENRES.includes(payload.albumGenre as any)) issues.push({ field: "albumGenre", message: `Genre "${payload.albumGenre}" is not in DireNote allowed values.` });
   if (!DIRENOTE_SUBGENRES_BY_GENRE[payload.albumGenre]?.includes(payload.albumSubgenre)) issues.push({ field: "albumSubgenre", message: `Subgenre "${payload.albumSubgenre}" is not valid for ${payload.albumGenre}.` });
@@ -426,11 +431,13 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
   payload.tracks.forEach((track, index) => {
     const number = index + 1;
     pushMissing(issues, `tracks.${index}.trackName`, track.trackName, `Track ${number} requires a title.`);
-    pushMissing(issues, `tracks.${index}.audio_url`, track.audio_url, `Track ${number} audio URL is required.`);
+    const missingAudioUrl = pushMissing(issues, `tracks.${index}.audio_url`, track.audio_url, `Track ${number} audio URL is required.`);
     if (!track.songwriters.length) issues.push({ field: `tracks.${index}.songwriters`, message: `Track ${number} requires at least one songwriter.` });
     if (!track.composers.length) issues.push({ field: `tracks.${index}.composers`, message: `Track ${number} requires at least one composer.` });
-    if (!isPublicHttpUrl(track.audio_url)) issues.push({ field: `tracks.${index}.audio_url`, message: `Track ${number} audio must be a public HTTP(S) URL.` });
-    if (!/\.(wav|mp3)$/i.test(assetFileName(track.audio_url))) issues.push({ field: `tracks.${index}.audio_url`, message: `Track ${number} audio must be WAV or MP3.` });
+    if (!missingAudioUrl) {
+      if (!isPublicHttpUrl(track.audio_url)) issues.push({ field: `tracks.${index}.audio_url`, message: `Track ${number} audio must be a public HTTP(S) URL.` });
+      else if (!/\.(wav|mp3)$/i.test(assetFileName(track.audio_url))) issues.push({ field: `tracks.${index}.audio_url`, message: `Track ${number} audio must be WAV or MP3.` });
+    }
     if (track.explicitLyrics === "Yes" && !track.trackLyrics?.trim()) issues.push({ field: `tracks.${index}.trackLyrics`, message: "Explicit tracks require lyrics before DireNote submission." });
     if (track.trackGenre && !DIRENOTE_GENRES.includes(track.trackGenre as any)) issues.push({ field: `tracks.${index}.trackGenre`, message: `Track ${number} genre is not DireNote-compatible.` });
     if (track.trackSubgenre && track.trackGenre && !DIRENOTE_SUBGENRES_BY_GENRE[track.trackGenre]?.includes(track.trackSubgenre)) issues.push({ field: `tracks.${index}.trackSubgenre`, message: `Track ${number} subgenre is not valid for ${track.trackGenre}.` });
@@ -442,7 +449,9 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
     }
   });
 
-  return { ok: issues.length === 0, issues: issues.map((issue) => ({ ...issue, severity: "error" as const })), warnings: warnings.map((issue) => ({ ...issue, severity: "warning" as const })) };
+  const uniqueIssues = Array.from(new Map(issues.map((issue) => [`${issue.field}:${issue.message}`, issue])).values());
+  const uniqueWarnings = Array.from(new Map(warnings.map((issue) => [`${issue.field}:${issue.message}`, issue])).values());
+  return { ok: uniqueIssues.length === 0, issues: uniqueIssues.map((issue) => ({ ...issue, severity: "error" as const })), warnings: uniqueWarnings.map((issue) => ({ ...issue, severity: "warning" as const })) };
 }
 
 export function parseDireNoteResponse(response: unknown): DireNoteParsedResponse {

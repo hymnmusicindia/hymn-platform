@@ -29,7 +29,7 @@ export async function validateReleaseForDireNote(release: Release, options: { si
   const normalize = (issue: any, severity: "error" | "warning"): DireNoteReadinessIssue => {
     const field = String(issue.field ?? issue.path ?? "release");
     const message = String(issue.message ?? "Review this field.");
-    return { field, label: field.split(".").pop()?.replace(/_/g, " ") ?? field, message, severity, category: categoryFor(field), fixSuggestion: issue.fixSuggestion ?? `Correct ${field} in the release metadata and validate again.`, userFacing: issue.userFacing !== false };
+    return { field, label: field.split(".").pop()?.replace(/_/g, " ") ?? field, message, severity, category: categoryFor(field), fixSuggestion: issue.fixSuggestion ?? issue.suggestion ?? `Correct ${field} in the release metadata and validate again.`, userFacing: issue.userFacing !== false };
   };
   const issues = result.issues.map((issue: any) => normalize(issue, "error"));
   const warnings = result.warnings.map((issue: any) => normalize(typeof issue === "string" ? { message: issue, field: "release" } : issue, "warning"));
