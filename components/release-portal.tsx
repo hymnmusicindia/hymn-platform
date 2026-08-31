@@ -371,9 +371,9 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
   };
   const activeView = ["promotion", "trends", "earnings"].includes(initialView || "") ? initialView! : "releases";
   const dashboardNav = (
-    <nav aria-label="Release dashboard sections" className="flex flex-wrap items-center gap-2 border-b pb-4 text-sm" style={{ borderColor: "var(--border)" }}>
+    <nav aria-label="Release dashboard sections" className="release-dashboard-tabs flex flex-wrap items-center gap-2 border-b pb-4 text-sm" style={{ borderColor: "var(--border)" }}>
       {[{ key: "releases", label: "My releases" }, { key: "promotion", label: "Promotion" }, { key: "trends", label: "Trends" }, { key: "earnings", label: "Earnings" }].map((item) => (
-        <Link key={item.key} href={item.key === "releases" ? "/dashboard/releases" : `/dashboard/releases?view=${item.key}`} aria-current={activeView === item.key ? "page" : undefined} className="rounded-full border px-4 py-2 font-semibold transition hover:-translate-y-0.5" style={{ borderColor: activeView === item.key ? "var(--accent)" : "var(--border)", background: activeView === item.key ? "var(--accent)" : "var(--card)", color: activeView === item.key ? "var(--accent-foreground)" : "var(--text-muted)" }}>{item.label}</Link>
+        <Link key={item.key} href={item.key === "releases" ? "/dashboard/releases" : `/dashboard/releases?view=${item.key}`} aria-current={activeView === item.key ? "page" : undefined} className="release-dashboard-tab rounded-full border px-4 py-2 font-semibold transition hover:-translate-y-0.5" style={{ borderColor: activeView === item.key ? "var(--accent)" : "var(--border)", background: activeView === item.key ? "var(--accent)" : "var(--card)", color: activeView === item.key ? "var(--accent-foreground)" : "var(--text-muted)" }}>{item.label}</Link>
       ))}
     </nav>
   );
@@ -389,17 +389,17 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
   }
   const statsChips = (
     <>
-      <span className="inline-flex items-center gap-2 rounded-full border px-3 py-2" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+      <span className="release-dashboard-stat-chip inline-flex items-center gap-2 rounded-full border px-3 py-2" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
         <Clock3 className="h-4 w-4" />
         {sortedReleases.length} total releases
       </span>
-      <span className="inline-flex items-center gap-2 rounded-full border px-3 py-2" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+      <span className="release-dashboard-stat-chip inline-flex items-center gap-2 rounded-full border px-3 py-2" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
         Draft {stats.draft}
       </span>
-      <span className="inline-flex items-center gap-2 rounded-full border px-3 py-2" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+      <span className="release-dashboard-stat-chip inline-flex items-center gap-2 rounded-full border px-3 py-2" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
         Scheduled {stats.scheduled}
       </span>
-      <span className="inline-flex items-center gap-2 rounded-full border px-3 py-2" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+      <span className="release-dashboard-stat-chip inline-flex items-center gap-2 rounded-full border px-3 py-2" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
         Released {stats.released}
       </span>
     </>
@@ -409,8 +409,8 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
 
   const filtersGrid = (
     <>
-      <label className="grid gap-2 text-sm">
-        <span className="flex items-center gap-2 uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>
+      <label className="release-filter-control grid gap-2 text-sm">
+        <span className="release-filter-label flex items-center gap-2 uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>
           <Filter className="h-3.5 w-3.5" />
           Status
         </span>
@@ -421,8 +421,8 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
         </select>
       </label>
 
-      <label className="grid gap-2 text-sm">
-        <span className="flex items-center gap-2 uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>
+      <label className="release-filter-control grid gap-2 text-sm">
+        <span className="release-filter-label flex items-center gap-2 uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>
           <Filter className="h-3.5 w-3.5" />
           Release date
         </span>
@@ -434,8 +434,8 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
         </select>
       </label>
 
-      <label className="grid gap-2 text-sm">
-        <span className="flex items-center gap-2 uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>
+      <label className="release-filter-control grid gap-2 text-sm">
+        <span className="release-filter-label flex items-center gap-2 uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>
           <Filter className="h-3.5 w-3.5" />
           Release type
         </span>
@@ -445,8 +445,8 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
         </select>
       </label>
 
-      <label className="grid gap-2 text-sm">
-        <span className="flex items-center gap-2 uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>
+      <label className="release-filter-control grid gap-2 text-sm">
+        <span className="release-filter-label flex items-center gap-2 uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>
           <Filter className="h-3.5 w-3.5" />
           Sort
         </span>
@@ -458,8 +458,8 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
         </select>
       </label>
 
-      <label className="grid gap-2 text-sm">
-        <span className="flex items-center gap-2 uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>
+      <label className="release-filter-control grid gap-2 text-sm">
+        <span className="release-filter-label flex items-center gap-2 uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>
           <Filter className="h-3.5 w-3.5" />
           Artist
         </span>
@@ -471,7 +471,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
         </select>
       </label>
 
-      <div className="rounded-2xl border px-4 py-4 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+      <div className="release-visible-meter rounded-2xl border px-4 py-4 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
         <p className="text-xs uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>Visible now</p>
         <p className="mt-2 text-lg font-semibold" style={{ color: "var(--text)" }}>{Math.min(visibleCount, filteredReleases.length)} / {filteredReleases.length}</p>
       </div>
@@ -494,14 +494,15 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
   return (
     <div className="release-portal-page grid gap-6 xl:gap-8">
       {draftRelease ? (
-        <section className="surface-card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <section className="release-draft-resume-card surface-card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div>
+            <p className="release-dashboard-kicker">Draft in progress</p>
             <h2 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>Continue your draft release</h2>
             <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
               Pick up {draftRelease.releaseTitle?.trim() || draftRelease.trackName} from where you left off.
             </p>
           </div>
-          <Link href={getReleasePortalAction(draftRelease).href} className="inline-flex w-full items-center justify-center rounded-full px-5 py-3 font-semibold transition hover:-translate-y-0.5 sm:w-auto" style={{ background: "var(--money)", color: "var(--money-foreground)", boxShadow: "0 16px 38px rgba(245,193,108,0.16)" }}>
+          <Link href={getReleasePortalAction(draftRelease).href} className="release-draft-resume-action inline-flex w-full items-center justify-center rounded-full px-5 py-3 font-semibold transition hover:-translate-y-0.5 sm:w-auto" style={{ background: "var(--money)", color: "var(--money-foreground)", boxShadow: "0 16px 38px rgba(245,193,108,0.16)" }}>
             Finish your release
           </Link>
         </section>
@@ -509,13 +510,13 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
 
       {dashboardNav}
 
-      <section className="surface-card p-5 sm:p-6">
+      <section className="release-library-panel surface-card p-5 sm:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-2xl">
             <h1 className="text-4xl font-semibold tracking-tight" style={{ color: "var(--text)" }}>My releases</h1>
             <p className="mt-3 text-base" style={{ color: "var(--text-muted)" }}>Manage and track all your music releases.</p>
           </div>
-          <div className="flex w-full flex-col gap-2 sm:flex-row lg:max-w-2xl lg:justify-end"><label className="relative min-w-0 flex-1">
+          <div className="release-library-toolbar flex w-full flex-col gap-2 sm:flex-row lg:max-w-2xl lg:justify-end"><label className="release-search-control relative min-w-0 flex-1">
             <span className="sr-only">Search by title or artist</span>
             <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--text-soft)" }} />
             <input
@@ -524,7 +525,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search title, artist, UPC or ISRC"
             />
-          </label><div className="inline-flex rounded-xl border p-1" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><button type="button" aria-label="Grid view" onClick={() => setViewMode("grid")} className="inline-flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: viewMode === "grid" ? "var(--card)" : "transparent", color: viewMode === "grid" ? "var(--text)" : "var(--text-soft)" }}><Grid2X2 className="h-4 w-4" /></button><button type="button" aria-label="List view" onClick={() => setViewMode("list")} className="inline-flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: viewMode === "list" ? "var(--card)" : "transparent", color: viewMode === "list" ? "var(--text)" : "var(--text-soft)" }}><List className="h-4 w-4" /></button></div><Link href="/distribution/start" className="btn-primary pressable whitespace-nowrap">Add release</Link></div>
+          </label><div className="release-view-toggle inline-flex rounded-xl border p-1" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><button type="button" aria-label="Grid view" onClick={() => setViewMode("grid")} className="inline-flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: viewMode === "grid" ? "var(--card)" : "transparent", color: viewMode === "grid" ? "var(--text)" : "var(--text-soft)" }}><Grid2X2 className="h-4 w-4" /></button><button type="button" aria-label="List view" onClick={() => setViewMode("list")} className="inline-flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: viewMode === "list" ? "var(--card)" : "transparent", color: viewMode === "list" ? "var(--text)" : "var(--text-soft)" }}><List className="h-4 w-4" /></button></div><Link href="/distribution/start" className="release-add-button btn-primary pressable whitespace-nowrap">Add release</Link></div>
         </div>
 
         {selectedRelease ? (
@@ -608,7 +609,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
             </div>
           </>
         ) : (
-          <div className="grid grid-cols-1 justify-items-center gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="release-library-grid grid grid-cols-1 justify-items-center gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {visibleReleases.map((release) => <ReleaseCard key={release.id} release={release} selected={release.id === selectedReleaseId} />)}
           </div>
         )}

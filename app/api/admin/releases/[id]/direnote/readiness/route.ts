@@ -8,6 +8,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const release = await getDetailedReleaseById(Number((await params).id));
   if (!release) return NextResponse.json({ error: "Release not found." }, { status: 404 });
   const result = await validateReleaseForDireNote(release, { siteUrl: getPublicAppUrl(request.url) });
-  return NextResponse.json({ ready: result.ready, issues: result.issues, warnings: result.warnings });
+  return NextResponse.json({ ready: result.ready, issues: result.issues, warnings: result.warnings, checklist: result.checklist });
 }
 // vercel trigger 9

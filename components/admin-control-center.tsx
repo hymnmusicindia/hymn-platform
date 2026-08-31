@@ -123,6 +123,12 @@ const METADATA_REVIEW_FIELDS = ["Release title", "Track title", "Artist name", "
 function reviewFieldKey(label: string) { return label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, ""); }
 type ReadinessIssue = { field: string; category: string; message: string; fixSuggestion: string };
 
+function resolvedReleaseMood(release?: Release | null) {
+  const metadata = release?.metadata && typeof release.metadata === "object" ? release.metadata as Record<string, any> : {};
+  const formData = metadata.formData && typeof metadata.formData === "object" ? metadata.formData as Record<string, any> : {};
+  return String(release?.mood || metadata.mood || formData.mood || "").trim();
+}
+
 function readinessIssueLabel(issue: ReadinessIssue) {
   const field = `${issue.category} ${issue.field}`.toLowerCase();
   const mappings: Array<[RegExp, string]> = [
@@ -551,7 +557,7 @@ export function AdminControlCenter({
   const [notificationFeedback, setNotificationFeedback] = useState<string | null>(null);
   const [persistedTasks, setPersistedTasks] = useState<PersistedAdminTask[]>([]);
   const [releaseAudit, setReleaseAudit] = useState<Array<{ id: number; action: string; createdAt: string; metadata?: Record<string, unknown> | null }>>([]);
-  const [direNoteReadiness, setDireNoteReadiness] = useState<{ ready: boolean; issues: Array<{ field: string; category: string; message: string; fixSuggestion: string }>; warnings: Array<{ field: string; category: string; message: string }> } | null>(null);
+  const [direNoteReadiness, setDireNoteReadiness] = useState<{ ready: boolean; issues: Array<{ field: string; category: string; message: string; fixSuggestion: string }>; warnings: Array<{ field: string; category: string; message: string }>; checklist?: Array<{ label: string; ready: boolean }> } | null>(null);
   const [reviewAction, setReviewAction] = useState<"rejected" | "changes_requested" | null>(null);
   const [reviewReason, setReviewReason] = useState("");
   const [reviewIssueType, setReviewIssueType] = useState("");
@@ -1266,7 +1272,31 @@ export function AdminControlCenter({
                     </div>
                   </div>
                 </div> : null}
-                {reviewTab === "metadata" ? <div className="grid gap-3 sm:grid-cols-2">{[["Release title", selectedRelease.releaseTitle], ["Release type", selectedRelease.releaseType], ["Primary artist", selectedRelease.artistName], ["Genre", selectedRelease.primaryGenre], ["Subgenre", selectedRelease.secondaryGenre], ["Mood", selectedRelease.mood], ["Language", selectedRelease.language], ["Label", selectedRelease.labelName || selectedRelease.labelDisplayName], ["Release date", selectedRelease.releaseDate], ["Original release date", selectedRelease.originalReleaseDate], ["UPC", selectedRelease.upcCode || (selectedRelease.releasePreviouslyReleased ? "Missing" : "Pending")], ["YouTube Content ID", selectedRelease.youtubeContentIdEnabled ? "Enabled" : "Disabled"], ["Previously released", selectedRelease.releasePreviouslyReleased ? "Yes" : "No"], ["Additional request", selectedRelease.adminInstructions]].map(([label, value]) => <div key={String(label)} className="summary-card"><span>{label}</span><strong>{value || "—"}</strong></div>)}</div> : null}
+                {reviewTab === "metadata" ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {[
+                      ["Release title", selectedRelease.releaseTitle],
+                      ["Release type", selectedRelease.releaseType],
+                      ["Primary artist", selectedRelease.artistName],
+                      ["Genre", selectedRelease.primaryGenre],
+                      ["Subgenre", selectedRelease.secondaryGenre],
+                      ["Mood", resolvedReleaseMood(selectedRelease)],
+                      ["Language", selectedRelease.language],
+                      ["Label", selectedRelease.labelName || selectedRelease.labelDisplayName],
+                      ["Release date", selectedRelease.releaseDate],
+                      ["Original release date", selectedRelease.originalReleaseDate],
+                      ["UPC", selectedRelease.upcCode || (selectedRelease.releasePreviouslyReleased ? "Missing" : "Pending")],
+                      ["YouTube Content ID", selectedRelease.youtubeContentIdEnabled ? "Enabled" : "Disabled"],
+                      ["Previously released", selectedRelease.releasePreviouslyReleased ? "Yes" : "No"],
+                      ["Additional request", selectedRelease.adminInstructions]
+                    ].map(([label, value]) => (
+                      <div key={String(label)} className="summary-card">
+                        <span>{label}</span>
+                        <strong>{value || "—"}</strong>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
                 {reviewTab === "assets" ? <div className="grid gap-4"><div className="grid gap-4 sm:grid-cols-2"><div className="rounded-2xl border p-4" style={{ borderColor: "var(--border)" }}>{selectedRelease.artworkUrl ? <><img src={selectedRelease.artworkUrl} alt={selectedRelease.releaseTitle} className="aspect-square w-full rounded-xl object-cover" /><a href={selectedRelease.artworkUrl} target="_blank" rel="noreferrer" className="btn-outline mt-3 inline-flex text-xs">Open artwork file</a></> : <EmptyState copy="Artwork file is missing." />}</div><div className="grid gap-3">{(selectedRelease.tracks ?? []).map((track) => <article key={track.id} className="surface-list-item p-4"><p className="font-semibold">{track.trackNumber}. {track.trackTitle}</p>{track.audioUrl ? <audio controls preload="none" className="mt-3 w-full" src={track.audioUrl} /> : <p className="mt-2 text-sm" style={{ color: "var(--danger)" }}>Audio file missing</p>}</article>)}</div></div><AdminStoreStatusEditor release={selectedRelease} /></div> : null}
                 {reviewTab === "rights" ? <div className="grid gap-3 sm:grid-cols-2">{[["Content type", selectedRelease.contentType], ["Copyright owner", selectedRelease.copyrightOwner], ["Publishing rights", selectedRelease.publishingRights], ["Ownership confirmed", selectedRelease.ownershipConfirmed ? "Yes" : "No"], ["Terms accepted", selectedRelease.agreedToTerms ? "Yes" : "No"], ["License proof", selectedRelease.licenseReceiptUrl || selectedRelease.license_receipt_url || selectedRelease.licenseDocumentUrl || selectedRelease.beatLicenseUrl], ["AI / Suno proof", selectedRelease.sunoReceiptUrl || selectedRelease.suno_receipt_url || selectedRelease.sunoLink], ["Unauthorised samples", selectedRelease.noUnauthorizedSamples ? "Confirmed none" : "Not confirmed"]].map(([label, value]) => <div key={String(label)} className="summary-card"><span>{label}</span>{typeof value === "string" && /^https?:/.test(value) ? <a className="font-semibold underline" href={value} target="_blank" rel="noreferrer">Open proof</a> : <strong>{value || "—"}</strong>}</div>)}</div> : null}
                 {reviewTab === "activity" ? <div className="rounded-[1.4rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><h3 className="font-semibold">Activity &amp; Audit Timeline ({releaseAudit.length})</h3><div className="mt-4 grid gap-2">{releaseAudit.map((event) => <div key={event.id} className="summary-card"><span><strong>{event.action.replace(/_/g, " ")}</strong><br /><small>{new Date(event.createdAt).toLocaleString("en-IN")}</small></span><span className="max-w-[50%] truncate text-xs">{event.metadata ? JSON.stringify(event.metadata) : "Recorded"}</span></div>)}{releaseAudit.length === 0 ? <EmptyState copy="No activity has been recorded yet." /> : null}</div></div> : null}
@@ -1274,21 +1304,21 @@ export function AdminControlCenter({
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold" style={{ color: "var(--text)" }}>DireNote readiness</p>
-                      <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Checklist uses saved release assets and metadata. Failed items should be fixed before distributor handoff.</p>
-                      {!selectedRelease.mood?.trim() ? <p className="mt-2 text-sm" style={{ color: "var(--danger)" }}>Missing mood. DireNote requires metadata.mood as a string.</p> : null}
+                      <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Checklist uses the exact DireNote payload that will be submitted. Failed items should be fixed before distributor handoff.</p>
+                      {direNoteReadiness?.issues?.some((issue) => issue.field === "albumMood") ? <p className="mt-2 text-sm" style={{ color: "var(--danger)" }}>Missing mood. DireNote requires albumMood in the outgoing payload.</p> : null}
                     </div>
                     <StatusPill label={selectedRelease.artworkUrl && (selectedRelease.tracks ?? []).every((track) => track.audioUrl) ? "Assets ready" : "Fix assets"} active={Boolean(selectedRelease.artworkUrl && (selectedRelease.tracks ?? []).every((track) => track.audioUrl))} />
                   </div>
                   <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                    {[
-                      ["Artwork URL", Boolean(selectedRelease.artworkUrl)],
-                      ["Audio URLs", (selectedRelease.tracks ?? []).length > 0 && (selectedRelease.tracks ?? []).every((track) => Boolean(track.audioUrl))],
-                      ["Release date", Boolean(selectedRelease.releaseDate)],
-                      ["Genre / language", Boolean(selectedRelease.primaryGenre && selectedRelease.language)],
-                      ["Mood", Boolean(typeof selectedRelease.mood === "string" && selectedRelease.mood.trim())],
-                      ["Writer/composer names", (selectedRelease.tracks ?? []).every((track) => Boolean(track.songwriters && track.composers))],
-                      ["Rights confirmation", Boolean(selectedRelease.ownershipConfirmed && selectedRelease.agreedToTerms)]
-                    ].map(([label, ready]) => (
+                    {(direNoteReadiness?.checklist ?? [
+                      { label: "Artwork URL", ready: Boolean(selectedRelease.artworkUrl) },
+                      { label: "Audio URLs", ready: (selectedRelease.tracks ?? []).length > 0 && (selectedRelease.tracks ?? []).every((track) => Boolean(track.audioUrl)) },
+                      { label: "Release date", ready: Boolean(selectedRelease.releaseDate) },
+                      { label: "Genre / language", ready: Boolean(selectedRelease.primaryGenre && selectedRelease.language) },
+                      { label: "Mood", ready: Boolean(resolvedReleaseMood(selectedRelease)) },
+                      { label: "Writer/composer names", ready: (selectedRelease.tracks ?? []).every((track) => Boolean(track.songwriters && track.composers)) },
+                      { label: "Rights confirmation", ready: Boolean(selectedRelease.ownershipConfirmed && selectedRelease.agreedToTerms) }
+                    ]).map(({ label, ready }) => (
                       <div key={String(label)} className="summary-card"><span>{label}</span><span>{ready ? "Ready" : "Needs fix"}</span></div>
                     ))}
                   </div>

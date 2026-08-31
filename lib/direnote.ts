@@ -367,6 +367,7 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
   pushMissing(issues, "typeOfRelease", payload.typeOfRelease, "Release type is required.");
   pushMissing(issues, "albumGenre", payload.albumGenre, "Album genre is required.");
   pushMissing(issues, "albumLanguage", payload.albumLanguage, "Album language is required.");
+  pushMissing(issues, "albumMood", payload.albumMood, "Mood is missing. Select a mood before sending to DireNote.");
   pushMissing(issues, "contenttype", payload.contenttype, "Content type is required.");
   pushMissing(issues, "trackReleaseDate", payload.trackReleaseDate, "Release date is required.");
   pushMissing(issues, "labelName", payload.labelName, "Label name is required.");

@@ -88,7 +88,7 @@ export function ReleaseSummaryCard({
         boxShadow: selected ? "0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent)" : undefined
       }}
     >
-      <div className="relative aspect-square w-full rounded-[6px] bg-[var(--bg-soft)]">
+      <div className="release-summary-artwork relative aspect-square w-full rounded-[6px] bg-[var(--bg-soft)]">
         <div className="h-full w-full overflow-hidden rounded-[6px]">
         {release.artworkUrl ? (
           <Image
@@ -118,29 +118,29 @@ export function ReleaseSummaryCard({
 
       {isFreeReleaseDraft ? <div className="mt-3 inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.09em] text-emerald-600 dark:text-emerald-400"><Gift className="h-3 w-3" />One-time free release</div> : null}
 
-      <div className="mt-3 flex min-w-0 items-center justify-between gap-3">
+      <div className="release-summary-meta-row mt-3 flex min-w-0 items-center justify-between gap-3">
         <span
-          className="inline-flex max-w-[62%] truncate rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]"
+          className="release-summary-badge inline-flex max-w-[62%] truncate rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]"
           style={getReleasePortalBadgeStyle(stage)}
         >
           {getReleasePortalStageLabel(stage)}
         </span>
-        <span className="truncate text-xs" style={{ color: "var(--text-muted)" }}>
+        <span className="release-summary-date truncate text-xs" style={{ color: "var(--text-muted)" }}>
           {getReleasePortalDateLabel(release)}
         </span>
       </div>
 
-      <h3 className="mt-3 truncate text-[17px] font-semibold leading-tight" style={{ color: "var(--text)" }}>
+      <h3 className="release-summary-title mt-3 truncate text-[17px] font-semibold leading-tight" style={{ color: "var(--text)" }}>
         {title}
       </h3>
-      <p className="mt-1 truncate text-sm" style={{ color: "var(--text-muted)" }}>
+      <p className="release-summary-subtitle mt-1 truncate text-sm" style={{ color: "var(--text-muted)" }}>
         <span className="capitalize">{release.releaseType}</span> · {trackCount} Track{trackCount === 1 ? "" : "s"} · {release.artistName || "Unknown artist"}
       </p>
 
-      <div className="mt-4">
+      <div className="release-summary-actions mt-4">
         <Link
           href={href}
-          className="pressable inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-semibold"
+          className="release-summary-action-button pressable inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-semibold"
           style={{ borderColor: "var(--border)", background: "var(--text)", color: "var(--bg)" }}
           aria-label={`${primaryActionLabel} ${title}`}
         >
