@@ -32,7 +32,7 @@ export async function POST(request: Request) {
         if (purchase && beat) await sendBeatEmailEvent({ event: "beat_purchase_success", to: session.email, userId: session.sub, purchaseId: purchase.id, userName: session.name, beatTitle: beat.title, url: emailAppUrl("/dashboard?module=purchases") });
       }
     }
-    return NextResponse.json({ success: true, order });
+    return NextResponse.json({ success: true, order, reviewEligibility: order?.paymentStatus === "paid" ? { purchaseType: "beat", purchaseId: order.id, label: "Beat Store purchase" } : null });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Payment verification failed.";
     return NextResponse.json({ error: message }, { status: 400 });

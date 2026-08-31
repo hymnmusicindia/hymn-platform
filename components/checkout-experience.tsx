@@ -159,6 +159,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
       if (!data.requiresPayment) {
         setSuccess(true);
         setQuote(data.quote);
+        if (data.reviewEligibility) window.dispatchEvent(new CustomEvent("hymn:purchase-review-eligible", { detail: data.reviewEligibility }));
         return;
       }
 
@@ -182,6 +183,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
             const verifyData = await verifyResponse.json();
             if (!verifyResponse.ok) throw new Error(verifyData.error || "Payment verification failed.");
             setSuccess(true);
+            if (verifyData.reviewEligibility) window.dispatchEvent(new CustomEvent("hymn:purchase-review-eligible", { detail: verifyData.reviewEligibility }));
             if (product === "beatstore") window.localStorage.removeItem("hymn-beat-cart");
           } catch (error) {
             setFeedback(error instanceof Error ? error.message : "Payment verification failed.");

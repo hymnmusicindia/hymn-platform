@@ -14,16 +14,28 @@ export function PostPurchaseReviewPrompt() {
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    const timer = window.setTimeout(async () => {
+    let active = true;
+    const showEligible = (eligible: EligiblePurchase | null, respectSnooze = true) => {
+      if (!active || !eligible) return;
+      const snoozedUntil = Number(window.localStorage.getItem(`hymn-review-snooze:${eligible.purchaseType}:${eligible.purchaseId}`) || 0);
+      if (!respectSnooze || snoozedUntil <= Date.now()) {
+        setRating(0);
+        setReviewId(null);
+        setText("");
+        setError("");
+        setPurchase(eligible);
+      }
+    };
+    const loadEligible = async () => {
       const response = await fetch("/api/reviews/eligible", { cache: "no-store" }).catch(() => null);
       if (!response?.ok) return;
       const data = await response.json();
-      const eligible = data.eligible as EligiblePurchase | null;
-      if (!eligible) return;
-      const snoozedUntil = Number(window.localStorage.getItem(`hymn-review-snooze:${eligible.purchaseType}:${eligible.purchaseId}`) || 0);
-      if (snoozedUntil <= Date.now()) setPurchase(eligible);
-    }, 1400);
-    return () => window.clearTimeout(timer);
+      showEligible(data.eligible as EligiblePurchase | null);
+    };
+    const handlePurchaseCompleted = (event: Event) => showEligible((event as CustomEvent<EligiblePurchase>).detail, false);
+    window.addEventListener("hymn:purchase-review-eligible", handlePurchaseCompleted);
+    void loadEligible();
+    return () => { active = false; window.removeEventListener("hymn:purchase-review-eligible", handlePurchaseCompleted); };
   }, []);
 
   function dismiss() {

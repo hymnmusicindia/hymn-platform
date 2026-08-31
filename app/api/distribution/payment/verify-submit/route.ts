@@ -237,7 +237,7 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({ release }, { status: 201 });
+    return NextResponse.json({ release, reviewEligibility: { purchaseType: "service", purchaseId: persistedOrder.id, label: `${parsed.metadata.plan} · ${release.releaseTitle || release.trackName || resolvedReleaseTitle}` } }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not submit distribution release.";
     return NextResponse.json({ error: message }, { status: 400 });

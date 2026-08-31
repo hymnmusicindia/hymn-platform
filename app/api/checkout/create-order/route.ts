@@ -69,7 +69,8 @@ export async function POST(request: Request) {
         requiresPayment: false,
         success: true,
         order,
-        quote
+        quote,
+        reviewEligibility: order?.paymentStatus === "paid" ? { purchaseType: "beat", purchaseId: order.id, label: "Beat Store purchase" } : null
       });
     }
 

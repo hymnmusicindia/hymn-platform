@@ -1010,6 +1010,17 @@ export function ReleaseForm({
       .then((data) => setKnownProfiles(Object.fromEntries(((data.artists ?? []) as ArtistProfile[]).map((profile) => [profile.id, profile]))))
       .catch(() => undefined);
   }, []);
+  useEffect(() => {
+    if (!submitting) return;
+    const previousOverflow = document.body.style.overflow;
+    const guardNavigation = (event: BeforeUnloadEvent) => event.preventDefault();
+    document.body.style.overflow = "hidden";
+    window.addEventListener("beforeunload", guardNavigation);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("beforeunload", guardNavigation);
+    };
+  }, [submitting]);
   const [artworkFile, setArtworkFile] = useState<File | null>(null);
   const [artworkPreview, setArtworkPreview] = useState<string | null>(
     initialRelease?.artworkUrl ?? null,
@@ -2270,18 +2281,22 @@ export function ReleaseForm({
         });
     });
 
-    if (filesToUpload.length === 0)
+    if (filesToUpload.length === 0) {
+      setUploadProgress(100);
       return { artworkUrl, trackAudioUrls, trackLicenseUrls };
+    }
 
     const uploadReleaseId = await ensureUploadDraft();
-    let completedFiles = 0;
+    const totalBytes = filesToUpload.reduce((sum, item) => sum + item.file.size, 0);
+    let completedBytes = 0;
     for (const item of filesToUpload) {
+      const reportProgress = (loaded: number) => setUploadProgress(Math.min(99, Math.round(((completedBytes + Math.min(loaded, item.file.size)) / totalBytes) * 100)));
       const downloadPath = item.assetType === "private_audio_master"
-        ? await uploadPrivateAudio(item.file, { releaseId: uploadReleaseId })
-        : await uploadPrivateAsset(item.file, item.assetType, { releaseId: uploadReleaseId });
+        ? await uploadPrivateAudio(item.file, { releaseId: uploadReleaseId, onProgress: reportProgress })
+        : await uploadPrivateAsset(item.file, item.assetType, { releaseId: uploadReleaseId, onProgress: reportProgress });
       item.setter(downloadPath);
-      completedFiles++;
-      setUploadProgress(Math.round((completedFiles / filesToUpload.length) * 100));
+      completedBytes += item.file.size;
+      setUploadProgress(Math.min(99, Math.round((completedBytes / totalBytes) * 100)));
     }
     setUploadProgress(100);
     return { artworkUrl, trackAudioUrls, trackLicenseUrls };
@@ -2394,6 +2409,7 @@ export function ReleaseForm({
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Submission failed.");
+    if (data.reviewEligibility) window.dispatchEvent(new CustomEvent("hymn:purchase-review-eligible", { detail: data.reviewEligibility }));
     return data;
   }
 
@@ -2822,6 +2838,19 @@ export function ReleaseForm({
   }
   return (
     <>
+      {submitting && status !== "Opening Razorpay..." ? (
+        <div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/50 p-5 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="release-upload-title" aria-describedby="release-upload-status">
+          <section className="w-full max-w-sm rounded-[2rem] border p-6 text-center shadow-[0_30px_100px_rgba(0,0,0,.55)] sm:p-8" style={{ borderColor: "var(--border)", background: "color-mix(in srgb, var(--card) 94%, transparent)", color: "var(--text)" }}>
+            <div className="relative mx-auto flex h-40 w-40 items-center justify-center rounded-full p-2 transition-[background] duration-300" style={{ background: `conic-gradient(var(--accent) ${Math.max(0, Math.min(100, uploadProgress))}%, rgba(255,255,255,0.09) 0)` }} aria-label={`${uploadProgress}% complete`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress}>
+              <div className="flex h-full w-full flex-col items-center justify-center rounded-full border" style={{ borderColor: "var(--border)", background: "var(--card)" }}><strong className="text-4xl font-semibold tabular-nums">{uploadProgress}%</strong><span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-soft)" }}>Complete</span></div>
+            </div>
+            <h2 id="release-upload-title" className="mt-6 text-xl font-semibold">{uploadProgress < 100 ? "Uploading release…" : "Finalising submission…"}</h2>
+            <p id="release-upload-status" className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }} aria-live="polite">{status || "Preparing your secure release submission…"}</p>
+            <div className="mt-5 h-1.5 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}><span className="shimmer-track block h-full rounded-full transition-[width] duration-300" style={{ width: `${Math.max(0, Math.min(100, uploadProgress))}%` }} /></div>
+            <p className="mt-4 text-xs" style={{ color: "var(--text-soft)" }}>Keep this window open. Large audio masters can take a few minutes.</p>
+          </section>
+        </div>
+      ) : null}
       <form
         onSubmit={handleFinalSubmit}
         className={clsx("release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", (step === 0 || step === 1) && "is-focused-step", step === 0 && "is-audio-upload-step", step === 1 && "is-artist-step", step === 3 && "is-tracklist-step", step === 7 && "is-review-mode")}
@@ -5884,29 +5913,6 @@ export function ReleaseForm({
                 </div>
               </div>
 
-              {submitting ? (
-                <div
-                  className="border-t p-5"
-                  style={{ borderColor: "var(--border)" }}
-                >
-                  <div
-                    className="flex items-center justify-between text-sm"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    <span>Uploading release…</span>
-                    <span>{uploadProgress}%</span>
-                  </div>
-                  <div
-                    className="mt-3 h-2 overflow-hidden rounded-full"
-                    style={{ background: "rgba(255,255,255,0.08)" }}
-                  >
-                    <div
-                      className="shimmer-track h-full rounded-full"
-                      style={{ width: `${uploadProgress}%` }}
-                    />
-                  </div>
-                </div>
-              ) : null}
             </div>
 
             <div className="rounded-[1.5rem] border p-5 md:p-7" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
