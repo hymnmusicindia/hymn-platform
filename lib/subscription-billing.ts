@@ -30,7 +30,20 @@ export function isSubscriptionProduct(value: unknown): value is SubscriptionProd
 
 export function subscriptionHasEntitlement(subscription: { status: string; currentPeriodEnd?: Date | string | null; expiryDate?: Date | string | null; cancelAtPeriodEnd?: boolean } | null, now = new Date()) {
   if (!subscription) return false;
-  return subscription.status === "active" && new Date(subscription.currentPeriodEnd || subscription.expiryDate || 0) > now;
+  return String(subscription.status ?? "").trim().toLowerCase() === "active" && new Date(subscription.currentPeriodEnd || subscription.expiryDate || 0) > now;
+}
+
+export function effectiveSubscriptionReleaseLimit(subscription: { plan?: string | null; releaseLimit?: number | null } | null | undefined) {
+  if (!subscription) return null;
+  const plan = String(subscription.plan ?? "").trim().toLowerCase();
+  if (plan === "yearly_plus" || plan === "elite") return null;
+  return subscription.releaseLimit ?? SUBSCRIPTION_POLICIES[plan as SubscriptionProduct]?.releaseLimit ?? null;
+}
+
+export function subscriptionHasReleaseAllowance(subscription: { plan?: string | null; releaseLimit?: number | null; releasesUsed?: number | null } | null | undefined) {
+  if (!subscription) return false;
+  const limit = effectiveSubscriptionReleaseLimit(subscription);
+  return limit == null || Number(subscription.releasesUsed ?? 0) < limit;
 }
 
 export function subscriptionPeriodAdvanced(previousStart: Date | string | null | undefined, nextStart: Date | string | null | undefined) {
@@ -45,10 +58,12 @@ export async function reserveSubscriptionReleaseSlot(userId: number) {
     const sub = await tx.subscription.findUnique({ where: { userId } });
     if (!sub || !subscriptionHasEntitlement(sub)) throw new Error("No active subscription entitlement is available.");
     const ledgerCount = await tx.subscriptionReleaseUsage.count({ where: { subscriptionId: sub.id, ...(sub.currentPeriodStart ? { createdAt: { gte: sub.currentPeriodStart } } : {}) } });
-    if (sub.releasesUsed !== ledgerCount) await tx.subscription.update({ where: { id: sub.id }, data: { releasesUsed: ledgerCount } });
-    const updated = await tx.subscription.updateMany({ where: { id: sub.id, ...(sub.releaseLimit == null ? { releasesUsed: ledgerCount } : { releasesUsed: { equals: ledgerCount, lt: sub.releaseLimit } }) }, data: sub.releaseLimit == null ? {} : { releasesUsed: { increment: 1 } } });
+    const releaseLimit = effectiveSubscriptionReleaseLimit(sub);
+    if (sub.releaseLimit !== releaseLimit || sub.releasesUsed !== ledgerCount) await tx.subscription.update({ where: { id: sub.id }, data: { releaseLimit, releasesUsed: ledgerCount } });
+    if (releaseLimit == null) return { subscriptionId: sub.id, counted: false };
+    const updated = await tx.subscription.updateMany({ where: { id: sub.id, releasesUsed: { equals: ledgerCount, lt: releaseLimit } }, data: { releasesUsed: { increment: 1 } } });
     if (updated.count !== 1) throw new Error("Your subscription release allowance has been used.");
-    return { subscriptionId: sub.id, counted: sub.releaseLimit != null };
+    return { subscriptionId: sub.id, counted: true };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
@@ -162,8 +177,13 @@ export async function consumeSubscriptionRelease(userId: number, releaseId: numb
       return sub;
     }
     const ledgerCount = await tx.subscriptionReleaseUsage.count({ where: { subscriptionId: sub.id, ...(sub.currentPeriodStart ? { createdAt: { gte: sub.currentPeriodStart } } : {}) } });
-    if (sub.releasesUsed !== ledgerCount) await tx.subscription.update({ where: { id: sub.id }, data: { releasesUsed: ledgerCount } });
-    const updated = await tx.subscription.updateMany({ where: { id: sub.id, ...(sub.releaseLimit == null ? { releasesUsed: ledgerCount } : { releasesUsed: { equals: ledgerCount, lt: sub.releaseLimit } }) }, data: sub.releaseLimit == null ? {} : { releasesUsed: { increment: 1 } } });
+    const releaseLimit = effectiveSubscriptionReleaseLimit(sub);
+    if (sub.releaseLimit !== releaseLimit || sub.releasesUsed !== ledgerCount) await tx.subscription.update({ where: { id: sub.id }, data: { releaseLimit, releasesUsed: ledgerCount } });
+    if (releaseLimit == null) {
+      await tx.subscriptionReleaseUsage.create({ data: { subscriptionId: sub.id, releaseId } });
+      return tx.subscription.findUniqueOrThrow({ where: { id: sub.id } });
+    }
+    const updated = await tx.subscription.updateMany({ where: { id: sub.id, releasesUsed: { equals: ledgerCount, lt: releaseLimit } }, data: { releasesUsed: { increment: 1 } } });
     if (updated.count !== 1) throw new Error("Your subscription release allowance has been used.");
     await tx.subscriptionReleaseUsage.create({ data: { subscriptionId: sub.id, releaseId } });
     return tx.subscription.findUniqueOrThrow({ where: { id: sub.id } });

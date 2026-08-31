@@ -502,6 +502,9 @@ function nextId(items: { id: number }[]) {
 }
 
 function planLimits(plan: SubscriptionPlan) {
+  if (plan === "half_yearly") return { amount: 700, limit: 6, expiryDays: 180 };
+  if (plan === "yearly") return { amount: 1600, limit: 18, expiryDays: 365 };
+  if (plan === "yearly_plus") return { amount: 2500, limit: null, expiryDays: 365 };
   if (plan === "basic") return { amount: 700, limit: 4, expiryDays: 180 };
   if (plan === "pro") return { amount: 1600, limit: 18, expiryDays: 365 };
   if (plan === "elite") return { amount: 7999, limit: null, expiryDays: 365 };

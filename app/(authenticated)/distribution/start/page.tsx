@@ -7,7 +7,7 @@ import { ReleaseOnboardingGate } from "@/components/release-onboarding-gate";
 import { getFirstReleaseEligibility } from "@/lib/first-release-promotion";
 import { getReleasePrefill } from "@/lib/release-prefill";
 import { getSubscriptionByUserId } from "@/lib/db";
-import { subscriptionHasEntitlement } from "@/lib/subscription-billing";
+import { subscriptionHasEntitlement, subscriptionHasReleaseAllowance } from "@/lib/subscription-billing";
 
 function firstValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
@@ -20,7 +20,7 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
   const editingRelease = user && Number.isFinite(requestedId) && requestedId > 0 ? (await listDetailedReleasesByUser(user.id)).find((release) => release.id === requestedId) ?? null : null;
   const subscription = user ? await getSubscriptionByUserId(user.id) : null;
   const hasActiveSubscription = subscriptionHasEntitlement(subscription);
-  const hasReleaseAllowance = hasActiveSubscription && (subscription?.releaseLimit == null || subscription.releasesUsed < subscription.releaseLimit);
+  const hasReleaseAllowance = hasActiveSubscription && subscriptionHasReleaseAllowance(subscription);
   let selectedPlan: any = hasReleaseAllowance ? subscription?.plan : "one_time";
   if (!hasActiveSubscription && editingRelease?.distributionPlan) {
     if (editingRelease.distributionPlan === "yearly_plus") selectedPlan = "yearly_plus";

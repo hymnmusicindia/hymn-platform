@@ -40,6 +40,7 @@ import { PRODUCER_COMMISSION_CONFIG } from "@/lib/finance-config";
 import { resolveGoogleAccountRole } from "@/lib/auth-role";
 import { normalizePublicUploadUrl } from "@/lib/storage";
 import { canonicalReleaseArtworkUrl } from "@/lib/release-media";
+import { effectiveSubscriptionReleaseLimit } from "@/lib/subscription-billing";
 
 type MemoryState = {
   users: User[];
@@ -1616,6 +1617,7 @@ export async function createOrder(input: Omit<Order, "id" | "createdAt" | "buyer
   const user = await findUserById(input.userId);
   const mappedItems = input.items.map((item) => {
     const beat = memory.beats.find((entry) => entry.id === item.beatId);
+
     return {
       ...item,
       beatTitle: beat?.title ?? item.beatTitle,
@@ -3270,6 +3272,7 @@ export async function getSubscriptionByUserId(userId: number) {
     const expiryDate = new Date(sub.currentPeriodEnd || sub.expiryDate || sub.updatedAt);
     const daysRemaining = Math.max(0, Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
     const status = sub.razorpaySubscriptionId ? sub.status : (daysRemaining > 0 ? sub.status : "expired");
+    const effectiveReleaseLimit = effectiveSubscriptionReleaseLimit(sub);
     
     return {
       id: sub.id,
@@ -3280,7 +3283,7 @@ export async function getSubscriptionByUserId(userId: number) {
       expiryDate: (sub.expiryDate || sub.updatedAt).toISOString(),
       status: status,
       releasesUsed,
-      releaseLimit: sub.releaseLimit ?? null,
+      releaseLimit: effectiveReleaseLimit,
       artistLimit: sub.artistLimit || 5,
       availableFeatures: sub.availableFeatures ? JSON.parse(sub.availableFeatures) : [],
       daysRemaining: daysRemaining,

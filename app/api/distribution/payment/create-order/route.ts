@@ -6,7 +6,7 @@ import { createDistributionOrder, getDistributionPricing } from "@/lib/distribut
 import { distributionOrderCreateSchema } from "@/lib/validation";
 import { calculateFirstReleasePrice, FIRST_RELEASE_PROMOTION_CODE, getFirstReleaseEligibility } from "@/lib/first-release-promotion";
 import { getSubscriptionByUserId } from "@/lib/db";
-import { createProviderSubscription, isSubscriptionProduct, subscriptionHasEntitlement } from "@/lib/subscription-billing";
+import { createProviderSubscription, isSubscriptionProduct, subscriptionHasEntitlement, subscriptionHasReleaseAllowance } from "@/lib/subscription-billing";
 import { prisma } from "@/lib/prisma";
 import { confirmDistributionPayment } from "@/lib/payment-webhooks";
 
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     const hasActiveSubscription = subscriptionHasEntitlement(subscription);
     if (hasActiveSubscription && payload.paymentModel === "subscription") {
       if (payload.plan !== subscription!.plan) return NextResponse.json({ error: "The selected plan does not match your active subscription." }, { status: 400 });
-      if (subscription!.releaseLimit != null && subscription!.releasesUsed >= subscription!.releaseLimit) return NextResponse.json({ error: "Your subscription release allowance has been used." }, { status: 409 });
+      if (!subscriptionHasReleaseAllowance(subscription)) return NextResponse.json({ error: "Your subscription release allowance has been used." }, { status: 409 });
       const existingEntitlement = payload.draftReleaseId
         ? await prisma.distributionOrder.findUnique({ where: { releaseId: payload.draftReleaseId } })
         : null;

@@ -10,7 +10,7 @@ import { consumeRateLimit } from "@/lib/rate-limit";
 import { assertDireNoteAssetFormat } from "@/lib/distribution-asset-format";
 import { prisma } from "@/lib/prisma";
 import { calculateFirstReleasePrice, FIRST_RELEASE_PROMOTION_CODE, redeemFirstRelease, releaseFirstReleaseReservation, reserveFirstRelease, trackFirstReleaseEvent } from "@/lib/first-release-promotion";
-import { attachReservedSubscriptionRelease, releaseReservedSubscriptionSlot, reserveSubscriptionReleaseSlot, subscriptionHasEntitlement } from "@/lib/subscription-billing";
+import { attachReservedSubscriptionRelease, releaseReservedSubscriptionSlot, reserveSubscriptionReleaseSlot, subscriptionHasEntitlement, subscriptionHasReleaseAllowance } from "@/lib/subscription-billing";
 import { distributionOrderPriceMatches } from "@/lib/distribution-order-price";
 
 export async function POST(request: Request) {
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     if (isSubscriptionEntitlement) {
       const sub = await getSubscriptionByUserId(session.sub);
       if (!subscriptionHasEntitlement(sub)) return NextResponse.json({ error: "No active subscription entitlement found." }, { status: 400 });
-      if (sub!.releaseLimit != null && sub!.releasesUsed >= sub!.releaseLimit) return NextResponse.json({ error: "Your subscription release allowance has been used." }, { status: 409 });
+      if (!subscriptionHasReleaseAllowance(sub)) return NextResponse.json({ error: "Your subscription release allowance has been used." }, { status: 409 });
       if (parsed.metadata.paymentModel !== "subscription" || parsed.metadata.plan !== sub!.plan) return NextResponse.json({ error: "The submitted plan does not match your active subscription." }, { status: 400 });
     } else if (persistedOrder.amount > 0) {
       if (persistedOrder.paymentStatus === "paid") {

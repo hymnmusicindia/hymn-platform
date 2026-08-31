@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSubscriptionByUserId } from "@/lib/db";
 import { requireUser } from "@/lib/access";
-import { subscriptionHasEntitlement } from "@/lib/subscription-billing";
+import { subscriptionHasEntitlement, subscriptionHasReleaseAllowance } from "@/lib/subscription-billing";
 
 export const runtime = "nodejs";
 
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
       });
     }
 
-    if (subscription.releaseLimit != null && subscription.releasesUsed >= subscription.releaseLimit) {
+    if (!subscriptionHasReleaseAllowance(subscription)) {
       return NextResponse.json({
         requiresPayment: true,
         canSubmitWithoutPayment: false,
