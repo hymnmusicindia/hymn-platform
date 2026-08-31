@@ -1000,9 +1000,22 @@ body:has(.auth-standalone-page) > footer {
 }
 
 .release-workflow .field-invalid,
-.release-workflow .field-shake {
+.release-workflow .field-shake,
+.release-workflow .field-correction {
   border-bottom-color: var(--danger) !important;
   box-shadow: 0 1px 0 var(--danger) !important;
+}
+
+.release-workflow .field-correction {
+  border-color: color-mix(in srgb, var(--danger) 68%, var(--border)) !important;
+  background: color-mix(in srgb, var(--danger-soft) 64%, transparent) !important;
+}
+
+.release-correction-target {
+  border-color: color-mix(in srgb, var(--danger) 62%, var(--border)) !important;
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--danger-soft) 54%, transparent) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 24%, transparent), 0 12px 34px color-mix(in srgb, var(--danger) 8%, transparent) !important;
 }
 
 

@@ -139,6 +139,7 @@ function readinessIssueLabel(issue: ReadinessIssue) {
     [/cover|artwork/, "Artwork"], [/audio/, "Audio file"], [/release.*title/, "Release title"], [/track.*title/, "Track title"],
     [/spotify/, "Spotify artist URL"], [/apple/, "Apple Music artist URL"], [/instagram/, "Instagram URL"], [/primary.*artist|artist.*name/, "Artist name"],
     [/subgenre/, "Subgenre"], [/genre/, "Genre"], [/mood/, "Mood"], [/language/, "Language"], [/label/, "Label name"],
+    [/cline|c-line|copyright/, "C-Line"], [/pline|p-line|publishing/, "P-Line"], [/contenttype|content type/, "Content type"],
     [/original.*date/, "Original release date"], [/release.*date/, "Release date"], [/upc/, "UPC"], [/isrc/, "ISRC"],
     [/songwriter/, "Songwriters"], [/composer/, "Composers"], [/producer/, "Producers"], [/lyric/, "Lyrics"],
     [/platform|destination/, "Platform destinations"], [/licen[cs]e/, "License receipt"], [/suno|\bai\b/, "AI proof / Suno receipt"],
@@ -197,10 +198,9 @@ function correctionDefaults(issues: ReadinessIssue[]) {
     const note = issue.fixSuggestion?.trim() || issue.message.trim();
     fields[key] = { label, note: fields[key]?.note ? `${fields[key].note} ${note}` : note };
   }
-  const details = source.map((issue) => `â€¢ ${readinessIssueLabel(issue)}: ${issue.message}`).join("\n");
   return {
     fields,
-    reason: `HYMN found metadata that needs correction before this release can be delivered. Please update the highlighted fields and resubmit the release for review.\n\n${details}`,
+    reason: "HYMN found details that need correction before this release can be delivered. Please update the highlighted fields and resubmit the release for review.",
   };
 }
 

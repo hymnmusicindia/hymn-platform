@@ -395,10 +395,13 @@ async function notifyReleaseStatusChange(release: Release, status: ReleaseStatus
   }
 
   if (status === "changes_requested") {
+    const correctionCount = release.reviewIssues?.fields?.length ?? 0;
     await createNotification({
       userId: release.userId,
       title: `Fix required: ${releaseName}`,
-      body: reason || "Corrections are required before distribution can continue. Review the marked fields and resubmit.",
+      body: correctionCount > 0
+        ? `${correctionCount} release detail${correctionCount === 1 ? "" : "s"} need${correctionCount === 1 ? "s" : ""} correction. Open redressal to fix the highlighted fields.`
+        : "Corrections are required before distribution can continue. Open redressal to review and resubmit.",
       type: "release",
       href: redressalHref,
       actionLabel: "Fix release",

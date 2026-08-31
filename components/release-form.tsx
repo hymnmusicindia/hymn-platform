@@ -1472,8 +1472,29 @@ export function ReleaseForm({
     clsx(
       "field",
       invalid || validationErrorKeys.has(key) ? "field-invalid" : "",
+      correctionFieldActive(key) ? "field-correction" : "",
       shakingField === key ? "field-shake" : "",
     );
+
+  const correctionFieldActive = (key: string) => {
+    if (!initialRelease?.reviewIssues?.fields?.length) return false;
+    const patterns: Record<string, RegExp> = {
+      "release-title": /release.*title|albumname|album name|track.*title|trackname/i,
+      "record-label": /label|labelname/i,
+      "genre-picker": /genre|subgenre|albumgenre|albumsubgenre/i,
+      mood: /mood|albummood/i,
+      language: /language|albumlanguage/i,
+      "release-date": /release.*date|trackreleasedate|date/i,
+      "artwork-upload": /artwork|cover|cover_art_url/i,
+      "audio-upload": /audio|audio_url|track.*audio/i,
+      "ownership-rights": /rights|copyright|publishing|cline|pline|contenttype|license|suno|ai/i,
+      "copyright-owner": /copyright|c\s*-?line|cline|rights/i,
+      "publishing-rights": /publishing|p\s*-?line|pline|rights/i,
+      "content-type": /contenttype|content type|ownership|rights|license|suno|ai/i,
+    };
+    const pattern = patterns[key] ?? new RegExp(key.replace(/[-_]/g, ".*"), "i");
+    return correctionMentions(initialRelease, pattern);
+  };
 
   function triggerFieldFocus(issue: ValidationIssue) {
     if (issue.trackIndex != null) setExpandedTrack(issue.trackIndex);
@@ -3080,7 +3101,7 @@ export function ReleaseForm({
               <p>{firstReleaseOffer ? "Upload 1 track for your free Single release" : "Add up to 30 tracks for a maximum length of 1 hour"}<br /><span className="release-dolby-note"><img src="https://d21buns5ku92am.cloudfront.net/68644/images/413934-Dolby%20Atmos%20Horizontal-015e44-medium-1641853769.png" alt="Dolby Atmos" className="release-dolby-logo" /> Add Dolby Atmos™ files directly in track information.</span></p>
             </div>
             <div className="release-onboarding-assets">
-            <div className="release-onboarding-audio">
+            <div className={clsx("release-onboarding-audio", correctionFieldActive("audio-upload") && "release-correction-target")}>
               <div className="release-onboarding-asset-heading"><strong>Audio masters</strong><span>WAV or MP3 · upload the final mastered file</span></div>
             <div className={clsx("release-audio-queue", tracks.length > 4 && "is-scrollable")}>
               {!tracks.some((track) => track.audioUploadStatus !== "idle" || track.audioPreviewUrl || track.existingAudioUrl) ? (
@@ -3146,7 +3167,7 @@ export function ReleaseForm({
               ) : null}
             </div>
             </div>
-            <div ref={registerField("artwork-upload")} className="release-onboarding-artwork">
+            <div ref={registerField("artwork-upload")} className={clsx("release-onboarding-artwork", correctionFieldActive("artwork-upload") && "release-correction-target")}>
               <div className="release-onboarding-artwork-heading"><strong>Cover artwork</strong><span>JPG · square · minimum 3000 × 3000 px</span></div>
               <ArtworkSquareDropzone previewUrl={artworkPreview} fileName={artworkFile?.name} fileType={fileFormat(artworkFile)} dimensions={artworkDimensions} error={showErrors && artworkIssue() ? artworkIssue()?.message ?? null : artworkError} minimalFeedback onSelect={handleArtwork} />
               {artworkScanning ? <p className="release-onboarding-artwork-note"><LoaderCircle className="animate-spin" />Checking artwork…</p> : null}
@@ -4018,6 +4039,7 @@ export function ReleaseForm({
                   ) => void
                 }
                 className={clsx(
+                  correctionFieldActive("genre-picker") ? "release-correction-target" : "",
                   showErrors && releaseInfoIssue()?.key === "genre-picker"
                     ? "field-shake"
                     : "",
@@ -4048,6 +4070,7 @@ export function ReleaseForm({
                 ref={
                   registerField("mood") as (node: HTMLDivElement | null) => void
                 }
+                className={clsx(correctionFieldActive("mood") && "release-correction-target")}
               >
                 <label
                   className="mb-2 block text-sm font-medium"
@@ -4058,7 +4081,7 @@ export function ReleaseForm({
                 <MoodSelector
                   value={release.mood}
                   error={Boolean(
-                    showErrors && releaseInfoIssue()?.key === "mood",
+                    (showErrors && releaseInfoIssue()?.key === "mood") || correctionFieldActive("mood"),
                   )}
                   onChange={(mood) =>
                     setRelease((current) => ({ ...current, mood }))
@@ -4071,6 +4094,7 @@ export function ReleaseForm({
                     node: HTMLDivElement | null,
                   ) => void
                 }
+                className={clsx(correctionFieldActive("language") && "release-correction-target")}
               >
                 <SearchableSelect
                   label="Language"
@@ -4078,7 +4102,7 @@ export function ReleaseForm({
                   options={languageOptions}
                   placeholder="Select release language"
                   invalid={Boolean(
-                    showErrors && releaseInfoIssue()?.key === "language",
+                    (showErrors && releaseInfoIssue()?.key === "language") || correctionFieldActive("language"),
                   )}
                   onChange={(value) =>
                     setRelease((current) => ({ ...current, language: value }))
@@ -4837,7 +4861,11 @@ export function ReleaseForm({
                     <label className="mt-4 block">
                       <span className="mb-2 block text-sm font-medium" style={{ color: "var(--text-muted)" }}>P-Line</span>
                       <input
-                        className="field"
+                        ref={registerField("publishing-rights")}
+                        className={fieldClass(
+                          "publishing-rights",
+                          Boolean(showErrors && destinationsIssue()?.key === "publishing-rights"),
+                        )}
                         value={release.publishingRights}
                         onChange={(event) => setRelease((current) => ({ ...current, publishingRights: event.target.value }))}
                         placeholder="Enter the phonographic rights line exactly as it should be delivered"

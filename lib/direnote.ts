@@ -365,15 +365,15 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
   pushMissing(issues, "pin", payload.pin, "DireNote API PIN is not configured.");
   pushMissing(issues, "client_id", payload.client_id, "DireNote client ID is not configured.");
   if (!payload.owner_email?.trim()) warnings.push({ field: "owner_email", message: "Owner email is missing. DireNote can still process the release, but HYMN recommends attaching the user email for processing communication.", severity: "warning", suggestion: "Attach the HYMN account email before submission." });
-  pushMissing(issues, "albumname", payload.albumname, "Album name is required.");
-  pushMissing(issues, "typeOfRelease", payload.typeOfRelease, "Release type is required.");
-  pushMissing(issues, "albumGenre", payload.albumGenre, "Album genre is required.");
-  pushMissing(issues, "albumLanguage", payload.albumLanguage, "Album language is required.");
+  const missingAlbumName = pushMissing(issues, "albumname", payload.albumname, "Album name is required.");
+  const missingReleaseType = pushMissing(issues, "typeOfRelease", payload.typeOfRelease, "Release type is required.");
+  const missingAlbumGenre = pushMissing(issues, "albumGenre", payload.albumGenre, "Album genre is required.");
+  const missingAlbumLanguage = pushMissing(issues, "albumLanguage", payload.albumLanguage, "Album language is required.");
   if (pushMissing(issues, "albumMood", payload.albumMood, "Mood is missing. Select a mood before sending to DireNote.")) {
     issues[issues.length - 1].suggestion = "Select a mood in the release metadata.";
   }
-  pushMissing(issues, "contenttype", payload.contenttype, "Content type is required.");
-  pushMissing(issues, "trackReleaseDate", payload.trackReleaseDate, "Release date is required.");
+  const missingContentType = pushMissing(issues, "contenttype", payload.contenttype, "Content type is required.");
+  const missingReleaseDate = pushMissing(issues, "trackReleaseDate", payload.trackReleaseDate, "Release date is required.");
   pushMissing(issues, "labelName", payload.labelName, "Label name is required.");
   pushMissing(issues, "cLine", payload.cLine, "Copyright line is required.");
   pushMissing(issues, "pLine", payload.pLine, "Publishing line is required.");
@@ -382,25 +382,25 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
     else if (!/\.jpe?g$/i.test(assetFileName(payload.cover_art_url))) issues.push({ field: "cover_art_url", message: "DireNote cover artwork must be JPEG. Convert PNG to JPEG before submission." });
   }
 
-  if (!DIRENOTE_GENRES.includes(payload.albumGenre as any)) issues.push({ field: "albumGenre", message: `Genre "${payload.albumGenre}" is not in DireNote allowed values.` });
-  if (!DIRENOTE_SUBGENRES_BY_GENRE[payload.albumGenre]?.includes(payload.albumSubgenre)) issues.push({ field: "albumSubgenre", message: `Subgenre "${payload.albumSubgenre}" is not valid for ${payload.albumGenre}.` });
-  if (!DIRENOTE_LANGUAGES.includes(payload.albumLanguage as any)) issues.push({ field: "albumLanguage", message: `Language "${payload.albumLanguage}" is not in DireNote allowed values.` });
-  if (!DIRENOTE_CONTENT_TYPES.includes(payload.contenttype)) issues.push({ field: "contenttype", message: "DireNote content type is invalid." });
+  if (!missingAlbumGenre && !DIRENOTE_GENRES.includes(payload.albumGenre as any)) issues.push({ field: "albumGenre", message: `Genre "${payload.albumGenre}" is not in DireNote allowed values.` });
+  if (!missingAlbumGenre && payload.albumSubgenre && !DIRENOTE_SUBGENRES_BY_GENRE[payload.albumGenre]?.includes(payload.albumSubgenre)) issues.push({ field: "albumSubgenre", message: `Subgenre "${payload.albumSubgenre}" is not valid for ${payload.albumGenre}.` });
+  if (!missingAlbumLanguage && !DIRENOTE_LANGUAGES.includes(payload.albumLanguage as any)) issues.push({ field: "albumLanguage", message: `Language "${payload.albumLanguage}" is not in DireNote allowed values.` });
+  if (!missingContentType && !DIRENOTE_CONTENT_TYPES.includes(payload.contenttype)) issues.push({ field: "contenttype", message: "DireNote content type is invalid." });
   if (!payload.artists.length) issues.push({ field: "artists", message: "At least one primary artist is required." });
 
-  if (payload.typeOfRelease === "Single") {
+  if (!missingReleaseType && payload.typeOfRelease === "Single") {
     if (payload.tracks.length !== 1) issues.push({ field: "tracks", message: "Singles must have exactly 1 track." });
-    if (payload.tracks[0]?.trackName !== payload.albumname) issues.push({ field: "albumname", message: "For Singles, albumname must exactly match the only track's trackName." });
+    if (!missingAlbumName && payload.tracks[0]?.trackName && payload.tracks[0].trackName !== payload.albumname) issues.push({ field: "albumname", message: "For Singles, albumname must exactly match the only track's trackName." });
   }
-  if ((payload.typeOfRelease === "EP" || payload.typeOfRelease === "Album") && payload.tracks.length < 2) issues.push({ field: "tracks", message: `${payload.typeOfRelease}s must have at least 2 tracks.` });
+  if (!missingReleaseType && (payload.typeOfRelease === "EP" || payload.typeOfRelease === "Album") && payload.tracks.length < 2) issues.push({ field: "tracks", message: `${payload.typeOfRelease}s must have at least 2 tracks.` });
   if (payload.releasePreviouslyReleased === "Yes") {
     pushMissing(issues, "upc", payload.upc, "Previously released releases require their existing UPC.");
     payload.tracks.forEach((track, index) => pushMissing(issues, `tracks.${index}.isrc`, track.isrc, `Previously released track ${index + 1} requires its existing ISRC.`));
   }
 
-  const releaseDays = daysFromToday(payload.trackReleaseDate);
-  if (releaseDays == null) issues.push({ field: "trackReleaseDate", message: "Release date is invalid." });
-  else if (releaseDays < 2) issues.push({ field: "trackReleaseDate", message: "DireNote requires trackReleaseDate to be at least 2 days from today." });
+  const releaseDays = missingReleaseDate ? null : daysFromToday(payload.trackReleaseDate);
+  if (!missingReleaseDate && releaseDays == null) issues.push({ field: "trackReleaseDate", message: "Release date is invalid." });
+  else if (releaseDays != null && releaseDays < 2) issues.push({ field: "trackReleaseDate", message: "DireNote requires trackReleaseDate to be at least 2 days from today." });
 
   if (payload.presaveSpotify && !isBefore(payload.presaveSpotify, payload.trackReleaseDate)) issues.push({ field: "presaveSpotify", message: "Spotify presave date must be before trackReleaseDate." });
   if (payload.presaveApple && !isBefore(payload.presaveApple, payload.trackReleaseDate)) issues.push({ field: "presaveApple", message: "Apple presave date must be before trackReleaseDate." });
