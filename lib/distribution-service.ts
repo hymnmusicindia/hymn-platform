@@ -23,6 +23,7 @@ import { getDireNoteConfig } from "@/lib/direnote/direnote-config";
 import { claimDistributionSubmission, finishDistributionSubmission } from "@/lib/distribution-idempotency";
 import { reserveDireNoteRequest } from "@/lib/direnote-rate-limit";
 import { createDistributorAssetUrl } from "@/lib/distributor-asset-delivery";
+import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution";
 
 export type DistributionValidationIssue = {
   field: string;
@@ -57,10 +58,15 @@ function validationResult(payload: DireNotePayload, options: { adminConfirmedExi
 }
 
 export async function buildDireNotePayloadForRelease(release: Release, options: { siteUrl?: string; adminConfirmedExistingArtists?: boolean } = {}) {
+  const privateArtworkUrl = await resolvePrivateReleaseArtworkUrl({
+    userId: release.userId,
+    releaseId: release.id,
+    value: release.artworkUrl
+  });
   const [owner, artistProfiles, artworkUrl, tracks] = await Promise.all([
     findUserById(release.userId),
     listArtistProfilesByUser(release.userId),
-    createDistributorAssetUrl(release.artworkUrl, options.siteUrl),
+    createDistributorAssetUrl(privateArtworkUrl || release.artworkUrl, options.siteUrl),
     Promise.all((release.tracks ?? []).map(async (track) => ({ ...track, audioUrl: await createDistributorAssetUrl(track.audioUrl, options.siteUrl) }))),
   ]);
 

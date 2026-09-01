@@ -1,8 +1,10 @@
 import path from "node:path";
+import fs from "node:fs/promises";
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { finalRelativePath, localStorageProvider, validateSessionHeader } from "@/lib/storage-service";
+import { validatePrivateUpload, type PrivateAssetType } from "@/lib/private-storage";
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireUser(); if ("error" in auth) return auth.error;
@@ -19,6 +21,17 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const assembled = await localStorageProvider.assemble(session.tempPath, session.totalChunks, session.totalSize);
     await prisma.uploadSession.update({ where: { id }, data: { status: "VERIFYING" } });
     validateSessionHeader(session.mimeType, assembled.header);
+    if (session.assetCategory === "RELEASE_COVER_ART") {
+      const bytes = await fs.readFile(assembled.path);
+      validatePrivateUpload({
+        ownerUserId: session.userId,
+        releaseId: session.releaseId,
+        assetType: "private_unreleased_artwork" as PrivateAssetType,
+        fileName: session.originalFilename,
+        mimeType: session.mimeType,
+        bytes
+      });
+    }
     const relativePath = await finalRelativePath(session);
     await localStorageProvider.moveAssembled(assembled.path, relativePath);
     const safeFilename = path.basename(relativePath);

@@ -5,6 +5,7 @@ import { createSafeAssetFolderName, uploadConfig, type AssetCategory } from "@/l
 
 const categories = new Set<AssetCategory>(["RELEASE_COVER_ART", "TRACK_AUDIO_MASTER", "TRACK_AUDIO_PREVIEW", "RELEASE_DOCUMENT", "TRACK_DOCUMENT", "OTHER_RELEASE_ASSET", "OTHER_TRACK_ASSET"]);
 const mimeTypes = new Set(["audio/wav", "audio/x-wav", "audio/mpeg", "image/jpeg", "image/png", "application/pdf"]);
+const releaseCoverMaximumSize = 20 * 1024 * 1024;
 
 export async function GET(request: Request) {
   const auth = await requireUser(); if ("error" in auth) return auth.error;
@@ -24,6 +25,8 @@ export async function POST(request: Request) {
     const category = String(body.assetCategory || "") as AssetCategory;
     const originalFilename = String(body.originalFilename || ""), mimeType = String(body.mimeType || ""), totalSize = Number(body.totalSize);
     if (!Number.isInteger(releaseId) || !categories.has(category) || !mimeTypes.has(mimeType)) throw new Error("Invalid upload session metadata.");
+    if (category === "RELEASE_COVER_ART" && (mimeType !== "image/jpeg" || !/\.(jpe?g)$/i.test(originalFilename))) throw new Error("Cover artwork must be a JPG/JPEG file.");
+    if (category === "RELEASE_COVER_ART" && totalSize > releaseCoverMaximumSize) throw new Error("Cover artwork must be 20 MB or smaller.");
     if (!Number.isSafeInteger(totalSize) || totalSize < 1 || totalSize > 500 * 1024 * 1024) throw new Error("Upload size is invalid.");
     createSafeAssetFolderName(originalFilename, "file");
     const release = await prisma.release.findFirst({ where: { id: releaseId, userId: auth.user.id }, select: { id: true } });

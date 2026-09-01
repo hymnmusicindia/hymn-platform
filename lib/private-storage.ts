@@ -112,6 +112,7 @@ export function validatePrivateUpload(input: PrivateUploadInput) {
   const validMagic = input.mimeType === "application/pdf" ? magic.subarray(0, 4).toString() === "%PDF" : input.mimeType === "image/png" ? magic.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")) : input.mimeType === "image/jpeg" ? magic.subarray(0, 3).equals(Buffer.from("ffd8ff", "hex")) : input.mimeType === "image/webp" ? magic.subarray(0, 4).toString() === "RIFF" && input.bytes.subarray(8, 12).toString() === "WEBP" : input.mimeType === "application/zip" || input.mimeType.includes("spreadsheetml") ? magic.subarray(0, 2).toString() === "PK" : hasValidAudioMagic(input.mimeType, input.bytes);
   if (!validMagic) throw new Error("File content does not match its MIME type.");
   if (input.assetType === "private_unreleased_artwork") {
+    if (input.mimeType !== "image/jpeg" || !/\.(jpe?g)$/i.test(input.fileName)) throw new Error("Artwork must be a JPG/JPEG file.");
     const dimensions = readImageDimensions(input.mimeType, input.bytes);
     if (!dimensions) throw new Error("Artwork dimensions could not be verified.");
     if (dimensions.width !== dimensions.height) throw new Error("Artwork must be a perfect square.");
