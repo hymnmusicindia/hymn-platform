@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { requireAdminPermission } from "@/lib/access";
+import { requireRecentAdminPermission } from "@/lib/access";
 import { createNotification, updateUserRole } from "@/lib/db";
 import { userRoleUpdateSchema } from "@/lib/validation";
 import { prisma } from "@/lib/prisma";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const result = await requireAdminPermission("users.manage");
+  const result = await requireRecentAdminPermission("users.manage");
   if ("error" in result) return result.error;
 
   const { id } = await params;

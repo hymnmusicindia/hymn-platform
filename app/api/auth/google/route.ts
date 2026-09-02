@@ -8,8 +8,13 @@ import { googleAuthSchema } from "@/lib/validation";
 import { createBirthdayNotificationForUser } from "@/lib/onboarding";
 import { cookies } from "next/headers";
 import { REFERRAL_ATTRIBUTION_COOKIE } from "@/lib/referrals";
+import { apiRequestId } from "@/lib/api-response";
+import { requestIdentity } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
+  const requestId = apiRequestId(request);
+  const ipAddress = requestIdentity(request);
+  const userAgent = request.headers.get("user-agent")?.slice(0, 1000) || undefined;
   try {
     const payload = googleAuthSchema.parse(await request.json());
     const cookieStore = await cookies();
@@ -35,7 +40,7 @@ export async function POST(request: Request) {
       );
     }
 
-    await createSession({ sub: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: profile.picture || profileAvatarDataUrl(user.name, user.role) });
+    await createSession({ sub: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: profile.picture || profileAvatarDataUrl(user.name, user.role) }, { ipAddress, userAgent, requestId });
     cookieStore.delete(REFERRAL_ATTRIBUTION_COOKIE);
     await createBirthdayNotificationForUser(user.id).catch((error) => console.error("Birthday notification check failed", error));
     const redirectPath = payload.loginContext === "admin" ? "/admin" : destinationAfterLogin(user.role);

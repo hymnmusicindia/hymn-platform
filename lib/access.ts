@@ -4,6 +4,7 @@ import { findUserById } from "@/lib/db";
 import { SessionPayload, User, UserRole } from "@/lib/types";
 import { destinationForRole } from "@/lib/routes";
 import { prisma } from "@/lib/prisma";
+import { isConfiguredAdminEmail } from "@/lib/auth-role";
 
 export { destinationForRole };
 
@@ -47,7 +48,8 @@ export async function getAdminAccessForPage() {
   if (!("sub" in admin)) return { role: "super_admin", permissions: ALL_ADMIN_PERMISSIONS };
   try {
     const membership = await prisma.adminMembership.findUnique({ where: { userId: Number(admin.sub) }, include: { role: { include: { permissions: { include: { permission: true } } } } } });
-    if (!membership) return { role: "admin", permissions: ALL_ADMIN_PERMISSIONS };
+    if (!membership && "email" in admin && isConfiguredAdminEmail(admin.email)) return { role: "owner", permissions: ALL_ADMIN_PERMISSIONS };
+    if (!membership) return { role: "unassigned", permissions: [] as AdminPermissionKey[] };
     if (!membership.active || membership.revokedAt) return { role: "revoked", permissions: [] as AdminPermissionKey[] };
     return { role: membership.role.key, permissions: membership.role.permissions.map((row) => row.permission.key as AdminPermissionKey) };
   } catch {
@@ -63,9 +65,8 @@ export async function requireAdminPermission(permission: AdminPermissionKey) {
   }
   try {
     const membership = await prisma.adminMembership.findUnique({ where: { userId: Number(admin.sub) }, include: { role: { include: { permissions: { include: { permission: true } } } } } });
-    if (!membership) {
-      return Object.assign(admin, { adminRole: "admin", permissions: [permission] });
-    }
+    if (!membership && "email" in admin && isConfiguredAdminEmail(admin.email)) return Object.assign(admin, { adminRole: "owner", permissions: ALL_ADMIN_PERMISSIONS });
+    if (!membership) return { error: NextResponse.json({ error: "Forbidden: explicit administrator membership is required." }, { status: 403 }) };
     if (!membership.active || membership.revokedAt) return { error: NextResponse.json({ error: "Forbidden: administrator access has been revoked." }, { status: 403 }) };
     if (!membership.role.permissions.some(row => row.permission.key === permission)) {
       return { error: NextResponse.json({ error: "Forbidden: missing administrator permission." }, { status: 403 }) };

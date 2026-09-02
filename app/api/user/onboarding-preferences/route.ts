@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { saveOnboardingPreferences, validateOnboardingPreferences } from "@/lib/onboarding";
 import { languageCodes } from "@/lib/i18n/languages";
+import { logAuditEvent } from "@/lib/audit-log";
 
 export async function GET() {
   const session = await getSession();
@@ -27,6 +28,7 @@ export async function PATCH(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+  const existing = await prisma.user.findUnique({ where: { id: session.sub }, select: { name: true } });
   const data: Record<string, unknown> = {};
   if (typeof body.name === "string" && body.name.trim()) data.name = body.name.trim().slice(0, 120);
   if (typeof body.mobile === "string") data.mobile = body.mobile.trim().slice(0, 30) || null;
@@ -42,6 +44,8 @@ export async function PATCH(request: Request) {
     data.dateOfBirth = dob;
   }
   await prisma.user.update({ where: { id: session.sub }, data });
+  if (typeof data.name === "string" && existing?.name !== data.name) {
+    await logAuditEvent({ actorType: "user", actorId: session.sub, actorRole: session.role, entityType: "user", entityId: session.sub, action: "account.name.changed", oldValue: { name: existing?.name ?? null }, newValue: { name: data.name }, riskLevel: "normal" });
+  }
   return NextResponse.json({ success: true });
 }
-
