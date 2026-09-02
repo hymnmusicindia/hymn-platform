@@ -5,8 +5,13 @@ const REQUIRED_TABLES = ["_prisma_migrations", "users", "releases", "tracks", "s
 // HYMN has one canonical production database. Keep this identity in source control so
 // a missing or overwritten Hostinger environment variable cannot silently point the
 // application at a fresh Neon branch and make production data appear to disappear.
+// Updated 2026-09-03. Production was rebuilt onto a new Neon branch on 2026-09-02
+// after the previous branch (br-dry-fog-aym0quvm) was destroyed; that branch is
+// retained read-only as incident evidence. Update this constant and
+// EXPECTED_NEON_BRANCH_ID together whenever production moves branch, or startup
+// will fail closed.
 const CANONICAL_PRODUCTION_DATABASE = "neondb";
-const CANONICAL_PRODUCTION_NEON_BRANCH_ID = "br-dry-fog-aym0quvm";
+const CANONICAL_PRODUCTION_NEON_BRANCH_ID = "br-flat-leaf-ayqnxxeg";
 
 export type ProductionDatabaseIdentity = {
   database: string;
