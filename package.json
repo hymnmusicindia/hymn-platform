@@ -73,7 +73,7 @@
     "autoprefixer": "^10.4.21",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.2.11",
-    "postcss": "8.5.12",
+    "postcss": "8.5.18",
     "prisma": "^6.19.3",
     "tailwindcss": "^3.4.17",
     "ts-api-utils": "^2.5.0",
