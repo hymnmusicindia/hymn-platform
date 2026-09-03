@@ -41,6 +41,8 @@ process.env.DIRENOTE_CLIENT_ID = "contract-client";
 process.env.DIRENOTE_API_PIN = "contract-pin";
 process.env.DIRENOTE_INGEST_ENDPOINT = "https://dashboard.direnotemedia.com/ingest_content";
 assert.equal(getDireNoteConfig().endpoint, "https://api.direnotemedia.com/ingest_content");
+process.env.DIRENOTE_INGEST_ENDPOINT = "DIRENOTE_INGEST_ENDPOINT=[https://api.direnotemedia.com/ingest\\_content](https://api.direnotemedia.com/ingest_content)";
+assert.equal(getDireNoteConfig().endpoint, "https://api.direnotemedia.com/ingest_content");
 process.env.DIRENOTE_INGEST_ENDPOINT = "https://direnote.invalid/ingest";
 process.env.DIRENOTE_RELEASE_INFORMATION_ENDPOINT = "https://direnote.invalid/status";
 process.env.DIRENOTE_REVENUE_REPORT_ENDPOINT = "https://direnote.invalid/revenue";
