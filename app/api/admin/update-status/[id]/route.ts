@@ -17,12 +17,12 @@ const statusStageMap: Partial<Record<ReleaseStatus, DistributionQueueStage>> = {
   rejected: "rejected"
 };
 
-async function syncQueueStage(releaseId: number, nextStage: DistributionQueueStage, actorId: number | null, note?: string) {
+async function syncQueueStage(releaseId: number, nextStage: DistributionQueueStage, actorId: number | null, note?: string, options?: { syncReleaseStatus?: boolean }) {
   const queueEntry = (await listDistributionQueueEntries()).find((item) => item.releaseId === releaseId);
   if (!queueEntry) {
     return createDistributionQueueEntry({ releaseId, initialStage: nextStage, operatorId: actorId, notes: note ?? "Admin status update." });
   }
-  return transitionDistributionQueueEntry({ entryId: queueEntry.id, nextStage, operatorId: actorId, notes: note ?? "Admin status update." });
+  return transitionDistributionQueueEntry({ entryId: queueEntry.id, nextStage, operatorId: actorId, notes: note ?? "Admin status update.", syncReleaseStatus: options?.syncReleaseStatus });
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -48,11 +48,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const origin = getPublicAppUrl(request.url);
       const currentRelease = await getDetailedReleaseById(Number(id));
       if (!currentRelease) return NextResponse.json({ error: "Release not found." }, { status: 404 });
-      const retry = ["failed", "delivery_failed", "queued_for_distribution"].includes(currentRelease.status);
+      const retry = ["failed", "delivery_failed", "queued_for_distribution", "submitting_to_distributor"].includes(currentRelease.status);
       const distributionPermission = await requireAdminPermission(retry ? "distribution.retry" : "distribution.submit");
       if ("error" in distributionPermission) return distributionPermission.error;
       if (!retry) {
-        await syncQueueStage(Number(id), "approved", actorId, payload.note || "HYMN review approved; DireNote submission started.");
+        await syncQueueStage(Number(id), "approved", actorId, payload.note || "HYMN review approved; DireNote submission started.", { syncReleaseStatus: currentRelease.status !== "approved" });
         await createReleaseAuditLog({ releaseId: Number(id), userId: actorId, action: "RELEASE_APPROVED_AND_DIRENOTE_STARTED", details: { previousStatus: currentRelease.status, note: payload.note ?? null } });
       }
       const submission = await submitRelease(Number(id), { actorId, siteUrl: origin, retry });
