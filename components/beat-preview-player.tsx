@@ -98,7 +98,12 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
     const handleKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
     window.addEventListener("keydown", handleKey);
     window.setTimeout(() => panelRef.current?.focus(), 0);
-    return () => window.removeEventListener("keydown", handleKey);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = originalOverflow;
+    };
   }, [onClose, open]);
 
   if (!beat) return null;
@@ -127,7 +132,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
   };
 
   return (
-    <div className={`fixed inset-0 z-[95] transition ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
+    <div className={`fixed inset-0 z-[2147483605] transition ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
       <button type="button" className={`absolute inset-0 bg-black/64 backdrop-blur-sm transition-opacity ${open ? "opacity-100" : "opacity-0"}`} onClick={onClose} aria-label="Close licensing options" />
       <div
         ref={panelRef}
@@ -135,7 +140,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
         aria-modal="true"
         aria-label={`Licence ${beat.title}`}
         tabIndex={-1}
-        className={`absolute inset-x-0 bottom-0 mx-auto max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-t-[2rem] border border-white/10 bg-[var(--bg)] p-4 shadow-[0_-24px_90px_rgba(0,0,0,0.45)] outline-none transition-transform duration-300 sm:bottom-6 sm:rounded-[2rem] sm:p-6 ${open ? "translate-y-0" : "translate-y-full sm:translate-y-8"}`}
+        className={`absolute inset-x-0 bottom-0 mx-auto max-h-[92svh] w-full max-w-5xl overflow-y-auto overscroll-contain rounded-t-[2rem] border border-white/10 bg-[var(--bg)] p-4 pb-28 shadow-[0_-24px_90px_rgba(0,0,0,0.45)] outline-none transition-transform duration-300 sm:bottom-6 sm:max-h-[min(820px,88svh)] sm:rounded-[2rem] sm:p-6 sm:pb-28 ${open ? "translate-y-0" : "translate-y-full sm:translate-y-8"}`}
       >
         <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-white/18 sm:hidden" />
         <div className="flex items-start justify-between gap-3">
@@ -147,7 +152,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
               <p className="mt-1 truncate text-sm text-[var(--text-muted)]">{beat.producer.name} · {beat.bpm} BPM · {beat.keySignature || "Key not supplied"}</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--text)]" aria-label="Close licensing options"><X className="h-4 w-4" /></button>
+          <button type="button" onClick={onClose} className="sticky top-0 z-20 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--text)] shadow-lg" aria-label="Close licensing options"><X className="h-4 w-4" /></button>
         </div>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -192,7 +197,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
           </div>
         </section>
 
-        <div className="sticky bottom-0 -mx-4 mt-5 border-t border-[var(--border)] bg-[var(--bg)] p-4 sm:-mx-6 sm:flex sm:items-center sm:justify-between sm:gap-4 sm:px-6">
+        <div className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-5xl border-t border-[var(--border)] bg-[var(--bg)] p-4 shadow-[0_-18px_48px_rgba(0,0,0,0.32)] sm:bottom-6 sm:flex sm:items-center sm:justify-between sm:gap-4 sm:rounded-b-[2rem] sm:px-6">
           <p className="mb-3 text-sm text-[var(--text-muted)] sm:mb-0">Selected: <span className="font-semibold text-[var(--text)]">{selectedOption.title}</span> · {formatMoney(selectedOption.price)}</p>
           <div className="grid gap-2 sm:flex">
             <button type="button" onClick={addToCart} className="btn-outline pressable"><ShoppingBag className="mr-2 h-4 w-4" />Add to Cart</button>
@@ -207,13 +212,35 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
 function BottomPlayer({ value }: { value: BeatPreviewContextValue }) {
   const beat = value.activeBeat;
   const [menuOpen, setMenuOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const lastScrollYRef = useRef(0);
+  useEffect(() => {
+    lastScrollYRef.current = window.scrollY;
+    let frame = 0;
+    const onScroll = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const current = window.scrollY;
+        const delta = current - lastScrollYRef.current;
+        if (current < 80 || delta < -10) setCollapsed(false);
+        else if (delta > 14 && current > 180) setCollapsed(true);
+        lastScrollYRef.current = current;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, []);
   if (!beat) return null;
   const progress = value.duration > 0 ? Math.min(100, Math.max(0, (value.currentTime / value.duration) * 100)) : 0;
   const canUseQueue = true;
   const fromPrice = licensePrice(beat, "general");
 
   return (
-    <aside className="fixed inset-x-0 bottom-0 z-[90] border-t border-white/10 bg-[color-mix(in_srgb,var(--bg)_92%,black)] shadow-[0_-24px_70px_rgba(0,0,0,0.34)] backdrop-blur-xl">
+    <aside className={`fixed inset-x-0 bottom-0 z-[2147483590] border-t border-white/10 bg-[color-mix(in_srgb,var(--bg)_92%,black)] shadow-[0_-24px_70px_rgba(0,0,0,0.34)] backdrop-blur-xl transition-transform duration-300 ${collapsed && !menuOpen ? "translate-y-[calc(100%-0.55rem-env(safe-area-inset-bottom))]" : "translate-y-0"}`} onPointerEnter={() => setCollapsed(false)} onFocus={() => setCollapsed(false)}>
+      <button type="button" onClick={() => setCollapsed((current) => !current)} className="absolute left-1/2 top-0 h-4 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-[var(--card-strong)] shadow-lg" aria-label={collapsed ? "Expand preview player" : "Collapse preview player"} />
       <div className="mx-auto max-w-[1700px] px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 sm:px-5">
         <div className="flex items-center gap-2 text-[11px] font-semibold text-[var(--text-soft)]">
           <span>{formatTime(value.currentTime)}</span>
