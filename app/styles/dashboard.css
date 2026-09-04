@@ -761,6 +761,30 @@ html[data-theme="light"] .dashboard-os-icon-button {
   backface-visibility: hidden;
 }
 
+.home-release-showcase-viewport {
+  mask-image: linear-gradient(180deg, transparent 0%, #000 13%, #000 87%, transparent 100%);
+}
+
+.home-release-showcase-track {
+  display: grid;
+  gap: 1rem;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+.home-release-showcase-track-up {
+  animation: hymn-release-showcase-up 28s linear infinite;
+}
+
+.home-release-showcase-track-down {
+  animation: hymn-release-showcase-down 32s linear infinite;
+  transform: translateY(-50%);
+}
+
+.home-release-showcase-viewport:hover .home-release-showcase-track {
+  animation-play-state: paused;
+}
+
 .home-workspace-shell,
 .home-workspace-card,
 .home-step-card {
@@ -1473,6 +1497,24 @@ body:has(.auth-standalone-page) > footer {
   }
 }
 
+@keyframes hymn-release-showcase-up {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+
+@keyframes hymn-release-showcase-down {
+  from {
+    transform: translateY(-50%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
 @keyframes hymn-success-enter {
   from {
     opacity: 0;
@@ -1756,7 +1798,8 @@ html[data-theme="dark"] .distribution-store-logo {
   .distribution-platform-chip,
   .distribution-map-grid path,
   .distribution-stream-line,
-  .distribution-node {
+  .distribution-node,
+  .home-release-showcase-track {
     animation: none !important;
   }
 

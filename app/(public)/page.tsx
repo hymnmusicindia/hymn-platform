@@ -79,6 +79,20 @@ const platformPanels: Array<[string, string, LucideIcon]> = [
 export default async function HomePage() {
   const [{ beats, producerProfiles, googleAvatarUrls, featuredReviews, featuredReleases }, session] = await Promise.all([getPublicHomePreview(), getSession()]);
   const { catalog } = buildBeatStorefront(beats, producerProfiles);
+  const homepageShowcaseReleases = featuredReleases.length ? featuredReleases : catalog.slice(0, 9).map((beat) => ({
+    id: beat.id,
+    title: beat.title,
+    artistName: beat.producerName,
+    artworkUrl: beat.coverImage,
+    releaseType: "single",
+    status: "live"
+  }));
+  const showcaseLeftColumn = homepageShowcaseReleases.filter((_, index) => index % 2 === 0);
+  const showcaseRightColumn = homepageShowcaseReleases.filter((_, index) => index % 2 === 1);
+  const showcaseColumns = [
+    { key: "left", items: showcaseLeftColumn.length ? showcaseLeftColumn : homepageShowcaseReleases, direction: "up" },
+    { key: "right", items: showcaseRightColumn.length ? showcaseRightColumn : homepageShowcaseReleases, direction: "down" }
+  ] as const;
   return (
     <main className="overflow-hidden bg-background pb-20 text-foreground">
       <section className="relative -mt-[73px] min-h-[96vh] overflow-hidden pt-[73px]">
@@ -227,24 +241,23 @@ export default async function HomePage() {
               </Link>
             </div>
 
-            <div className="grid max-h-[560px] grid-cols-2 gap-4 overflow-hidden pr-1 sm:grid-cols-3 lg:-my-20 lg:max-h-[640px]">
-              {(featuredReleases.length ? featuredReleases : catalog.slice(0, 9).map((beat) => ({
-                id: beat.id,
-                title: beat.title,
-                artistName: beat.producerName,
-                artworkUrl: beat.coverImage,
-                releaseType: "single",
-                status: "live"
-              }))).map((release, index) => (
-                <article key={`${release.id}-${index}`} className={`group relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.06] shadow-[0_18px_60px_rgba(0,0,0,0.32)] ${index % 3 === 0 ? "sm:translate-y-[-36px]" : index % 3 === 2 ? "sm:translate-y-10" : ""}`}>
-                  <div className="aspect-square overflow-hidden">
-                    <img src={release.artworkUrl} alt={`${release.title} artwork`} loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
+            <div className="home-release-showcase-viewport relative grid max-h-[560px] grid-cols-2 gap-4 overflow-hidden pr-1 lg:-my-20 lg:max-h-[640px]">
+              {showcaseColumns.map((column) => (
+                <div key={column.key} className="home-release-showcase-column overflow-hidden">
+                  <div className={`home-release-showcase-track ${column.direction === "up" ? "home-release-showcase-track-up" : "home-release-showcase-track-down"}`}>
+                    {[...column.items, ...column.items].map((release, index) => (
+                      <article key={`${column.key}-${release.id}-${index}`} className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.06] shadow-[0_18px_60px_rgba(0,0,0,0.32)]">
+                        <div className="aspect-square overflow-hidden">
+                          <img src={release.artworkUrl} alt={`${release.title} artwork`} loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
+                        </div>
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/88 via-black/42 to-transparent p-3 text-white">
+                          <p className="line-clamp-1 text-xs font-extrabold uppercase tracking-[-0.02em]">{release.title}</p>
+                          <p className="line-clamp-1 text-[11px] font-semibold text-white/72">{release.artistName}</p>
+                        </div>
+                      </article>
+                    ))}
                   </div>
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/88 via-black/42 to-transparent p-3 text-white">
-                    <p className="line-clamp-1 text-xs font-extrabold uppercase tracking-[-0.02em]">{release.title}</p>
-                    <p className="line-clamp-1 text-[11px] font-semibold text-white/72">{release.artistName}</p>
-                  </div>
-                </article>
+                </div>
               ))}
             </div>
           </div>
