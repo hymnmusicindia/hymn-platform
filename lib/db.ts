@@ -254,7 +254,8 @@ const defaultUsers: User[] = [
 const defaultProducerProfiles: ProducerProfile[] = [];
 
 const defaultSiteSettings: SiteSettings = {
-  homeHeroImageUrl: null
+  homeHeroImageUrl: null,
+  homeFeaturedReleaseIds: []
 };
 
 const defaultTimedPlaylistOptions = [
@@ -2861,18 +2862,61 @@ export async function deleteProducerProfile(id: number) {
 }
 
 export async function getSiteSettings() {
-  if (usesPostgresPrisma()) assertNoProductionMemoryStore("Legacy site settings");
+  if (usesPostgresPrisma()) {
+    try {
+      const [{ tableName } = { tableName: null }] = await prisma.$queryRaw<Array<{ tableName: string | null }>>(Prisma.sql`SELECT to_regclass('public.site_settings')::text AS "tableName"`);
+      if (!tableName) return memory.siteSettings;
+      const rows = await prisma.$queryRaw<Array<{ homeHeroImageUrl?: string | null; homeFeaturedReleaseIds?: number[] | null }>>(Prisma.sql`
+        SELECT "home_hero_image_url" AS "homeHeroImageUrl", "home_featured_release_ids" AS "homeFeaturedReleaseIds"
+        FROM "site_settings"
+        WHERE "id" = 1
+        LIMIT 1
+      `);
+      const row = rows[0];
+      return {
+        homeHeroImageUrl: row?.homeHeroImageUrl ?? null,
+        homeFeaturedReleaseIds: Array.isArray(row?.homeFeaturedReleaseIds) ? row.homeFeaturedReleaseIds.map(Number).filter(Number.isInteger) : []
+      };
+    } catch (error) {
+      rethrowProductionPersistenceFailure(error);
+      console.error("Prisma site settings read failed; using fallback defaults:", error);
+      return memory.siteSettings;
+    }
+  }
   const pool = getPool();
   if (!pool) return memory.siteSettings;
 
   await ensureSiteSettingsRow(pool);
   const [rows] = await pool.query("SELECT home_hero_image_url AS homeHeroImageUrl FROM site_settings WHERE id = 1 LIMIT 1");
   const row = (rows as Array<Record<string, any>>)[0];
-  return { homeHeroImageUrl: row?.homeHeroImageUrl ?? null };
+  return { homeHeroImageUrl: row?.homeHeroImageUrl ?? null, homeFeaturedReleaseIds: [] };
 }
 
 export async function updateSiteSettings(input: Partial<SiteSettings>) {
-  if (usesPostgresPrisma()) assertNoProductionMemoryStore("Legacy site settings");
+  if (usesPostgresPrisma()) {
+    const [{ tableName } = { tableName: null }] = await prisma.$queryRaw<Array<{ tableName: string | null }>>(Prisma.sql`SELECT to_regclass('public.site_settings')::text AS "tableName"`);
+    if (!tableName) throw new Error("Persistent site settings table is missing. Run the Prisma database update with the owner Neon URL before saving homepage release selections.");
+    const current = await getSiteSettings();
+    const next: SiteSettings = {
+      homeHeroImageUrl: typeof input.homeHeroImageUrl === "undefined" ? current.homeHeroImageUrl ?? null : input.homeHeroImageUrl ?? null,
+      homeFeaturedReleaseIds: Array.isArray(input.homeFeaturedReleaseIds)
+        ? input.homeFeaturedReleaseIds.map(Number).filter(Number.isInteger).slice(0, 12)
+        : current.homeFeaturedReleaseIds ?? []
+    };
+    const releaseIdsSql = next.homeFeaturedReleaseIds?.length
+      ? Prisma.sql`ARRAY[${Prisma.join(next.homeFeaturedReleaseIds)}]::integer[]`
+      : Prisma.sql`ARRAY[]::integer[]`;
+
+    await prisma.$executeRaw(Prisma.sql`
+      INSERT INTO "site_settings" ("id", "home_hero_image_url", "home_featured_release_ids")
+      VALUES (1, ${next.homeHeroImageUrl}, ${releaseIdsSql})
+      ON CONFLICT ("id") DO UPDATE SET
+        "home_hero_image_url" = EXCLUDED."home_hero_image_url",
+        "home_featured_release_ids" = EXCLUDED."home_featured_release_ids",
+        "updated_at" = now()
+    `);
+    return getSiteSettings();
+  }
   const pool = getPool();
   if (!pool) {
     memory.siteSettings = { ...memory.siteSettings, ...input };

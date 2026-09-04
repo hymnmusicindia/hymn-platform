@@ -6,10 +6,8 @@ import {
   Clapperboard,
   DollarSign,
   FileAudio,
-  Globe2,
   Headphones,
   LineChart,
-  Sparkles,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { FloatingAssistant } from "@/components/floating-assistant";
@@ -78,14 +76,8 @@ const platformPanels: Array<[string, string, LucideIcon]> = [
   ["Royalty Insights", "Credits, earnings, payout readiness", DollarSign]
 ];
 
-const howItWorks: Array<[string, string, string, LucideIcon]> = [
-  ["01", "Join The Platform", "Create your account, choose your path, and enter the release ecosystem.", BadgeCheck],
-  ["02", "Release & Grow", "Launch music with distribution, campaign support, analytics, and monetization systems.", Globe2],
-  ["03", "Build Your Brand", "Turn audience signals into visual identity, strategy, content, and long-term career value.", Sparkles]
-];
-
 export default async function HomePage() {
-  const [{ beats, producerProfiles, googleAvatarUrls, featuredReviews }, session] = await Promise.all([getPublicHomePreview(), getSession()]);
+  const [{ beats, producerProfiles, googleAvatarUrls, featuredReviews, featuredReleases }, session] = await Promise.all([getPublicHomePreview(), getSession()]);
   const { catalog } = buildBeatStorefront(beats, producerProfiles);
   return (
     <main className="overflow-hidden bg-background pb-20 text-foreground">
@@ -218,19 +210,44 @@ export default async function HomePage() {
       </section>
 
       <section className="shell py-10 sm:py-16">
-        <div className="grid gap-3 sm:gap-4 sm:grid-cols-3">
-          {howItWorks.map(([step, title, body, Icon]) => (
-            <article key={title} className="home-step-card rounded-[1.5rem] border border-border bg-card p-5 shadow-[0_20px_70px_rgba(0,0,0,0.26)] sm:rounded-[2rem] sm:p-6">
-              <div className="flex items-center justify-between gap-4">
-                <span className="text-4xl font-semibold tracking-[-0.04em] text-[var(--text)] opacity-20 sm:text-5xl">{step}</span>
-                <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[#f4f7fb]/12 text-foreground sm:h-12 sm:w-12">
-                  <Icon className="h-5 w-5" />
-                </span>
-              </div>
-              <h3 className="mt-5 text-xl font-semibold text-[var(--text)] sm:mt-7 sm:text-2xl">{title}</h3>
-              <p className="mt-2 text-sm leading-6 text-[var(--text-soft)] sm:mt-3 sm:leading-7">{body}</p>
-            </article>
-          ))}
+        <div className="relative overflow-hidden rounded-[2rem] border border-border bg-black px-5 py-10 shadow-[0_32px_120px_rgba(0,0,0,0.42)] sm:px-8 lg:min-h-[470px] lg:px-14 lg:py-16">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_18%,rgba(255,255,255,0.1),transparent_25%),linear-gradient(90deg,rgba(0,0,0,1)_0%,rgba(0,0,0,0.92)_44%,rgba(0,0,0,0.54)_100%)]" />
+          <div className="relative grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+            <div className="max-w-xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/50">#releasedonhymn</p>
+              <h2 className="mt-6 text-4xl font-extrabold uppercase leading-[0.98] tracking-[-0.05em] text-white sm:text-5xl lg:text-6xl">
+                Yes, this release moved through HYMN.
+              </h2>
+              <p className="mt-6 max-w-md text-sm font-medium leading-7 text-white/72 sm:text-base">
+                Spotlight real releases from your HYMN database and turn the homepage into living proof of the platform.
+              </p>
+              <Link href={session ? "/distribution/start" : "/login?mode=signup"} className="mt-7 inline-flex items-center gap-3 rounded-xl border border-white/12 bg-white/[0.08] px-5 py-3 text-sm font-semibold text-white transition hover:border-white/28 hover:bg-white/[0.14]">
+                Your next release is waiting
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+
+            <div className="grid max-h-[560px] grid-cols-2 gap-4 overflow-hidden pr-1 sm:grid-cols-3 lg:-my-20 lg:max-h-[640px]">
+              {(featuredReleases.length ? featuredReleases : catalog.slice(0, 9).map((beat) => ({
+                id: beat.id,
+                title: beat.title,
+                artistName: beat.producerName,
+                artworkUrl: beat.coverImage,
+                releaseType: "single",
+                status: "live"
+              }))).map((release, index) => (
+                <article key={`${release.id}-${index}`} className={`group relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.06] shadow-[0_18px_60px_rgba(0,0,0,0.32)] ${index % 3 === 0 ? "sm:translate-y-[-36px]" : index % 3 === 2 ? "sm:translate-y-10" : ""}`}>
+                  <div className="aspect-square overflow-hidden">
+                    <img src={release.artworkUrl} alt={`${release.title} artwork`} loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
+                  </div>
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/88 via-black/42 to-transparent p-3 text-white">
+                    <p className="line-clamp-1 text-xs font-extrabold uppercase tracking-[-0.02em]">{release.title}</p>
+                    <p className="line-clamp-1 text-[11px] font-semibold text-white/72">{release.artistName}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 

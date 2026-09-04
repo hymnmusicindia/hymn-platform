@@ -20,8 +20,15 @@ export async function PATCH(request: Request) {
   try {
     const formData = await request.formData();
     const image = formData.get("homeHeroImage");
+    const releaseIdsRaw = String(formData.get("homeFeaturedReleaseIds") || "").trim();
+    const featuredReleaseIds = releaseIdsRaw
+      ? JSON.parse(releaseIdsRaw)
+      : undefined;
     const heroImageUrl = image instanceof File && image.size ? await saveUploadedFile(image, "site/home-hero", "image") : String(formData.get("homeHeroImageUrl") || "").trim() || null;
-    const siteSettings = await updateSiteSettings({ homeHeroImageUrl: heroImageUrl });
+    const siteSettings = await updateSiteSettings({
+      homeHeroImageUrl: heroImageUrl,
+      ...(Array.isArray(featuredReleaseIds) ? { homeFeaturedReleaseIds: featuredReleaseIds.map(Number).filter(Number.isInteger) } : {})
+    });
     return NextResponse.json({ siteSettings });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not update site settings.";

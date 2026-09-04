@@ -678,6 +678,7 @@ export interface ProducerProfile {
 
 export interface SiteSettings {
   homeHeroImageUrl?: string | null;
+  homeFeaturedReleaseIds?: number[];
 }
 
 export interface ProducerEarning {

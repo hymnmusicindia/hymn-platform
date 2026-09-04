@@ -1944,6 +1944,15 @@ model PurchaseReview {
   @@map("purchase_reviews")
 }
 
+model SiteSettings {
+  id                     Int      @id @default(1)
+  homeHeroImageUrl       String?  @map("home_hero_image_url")
+  homeFeaturedReleaseIds Int[]    @default([]) @map("home_featured_release_ids")
+  updatedAt              DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("site_settings")
+}
+
 model PaymentWebhookEvent {
   id                     Int                @id @default(autoincrement())
   provider               String             @default("razorpay")

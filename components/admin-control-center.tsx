@@ -1492,7 +1492,7 @@ export function AdminControlCenter({
         <div className="grid gap-6">
           {activeTab === "settings" ? <DireNoteDiagnostics /> : null}
           {activeTab === "settings" ? <SurfaceSection title="Transactional email" description="Resend delivery configuration, attempts, failures, and retries."><div className="flex flex-col gap-4 rounded-2xl border p-5 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div><p className="font-semibold">Email logs</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Review every transactional email attempt and retry failed deliveries safely.</p></div><a href="/admin/email-logs" className="btn-primary w-fit">Open email logs</a></div></SurfaceSection> : null}
-          <AdminContentManager initialProducerProfiles={initialProducerProfiles} initialSiteSettings={initialSiteSettings} />
+          <AdminContentManager initialProducerProfiles={initialProducerProfiles} initialReleases={initialReleases} initialSiteSettings={initialSiteSettings} />
         </div>
       ) : null}
 
