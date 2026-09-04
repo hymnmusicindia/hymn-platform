@@ -111,7 +111,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
     };
   }, [close, open]);
 
-  if (!beat) return null;
+  if (!beat || !open) return null;
   const options = beatLicenseCatalog.map((entry) => ({
     ...entry,
     price: licensePrice(beat, entry.purchasableKey),
@@ -137,15 +137,15 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
   };
 
   return (
-    <div className={`fixed inset-0 z-[2147483500] transition ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
-      <button type="button" className={`absolute inset-0 bg-black/64 backdrop-blur-sm transition-opacity ${open ? "opacity-100" : "opacity-0"}`} onClick={(event) => close(event)} aria-label="Close licensing options" />
+    <div className="fixed inset-0 z-[2147483500]">
+      <button type="button" className="absolute inset-0 bg-black/64 backdrop-blur-sm" onClick={(event) => close(event)} aria-label="Close licensing options" />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={`Licence ${beat.title}`}
         tabIndex={-1}
-        className={`absolute inset-x-0 bottom-0 mx-auto max-h-[92svh] w-full max-w-5xl overflow-y-auto overscroll-contain rounded-t-[2rem] border border-white/10 bg-[var(--bg)] p-4 pb-28 shadow-[0_-24px_90px_rgba(0,0,0,0.45)] outline-none transition-transform duration-300 sm:bottom-6 sm:max-h-[min(820px,88svh)] sm:rounded-[2rem] sm:p-6 sm:pb-28 ${open ? "translate-y-0" : "translate-y-full sm:translate-y-8"}`}
+        className="absolute inset-x-0 bottom-0 mx-auto max-h-[92svh] w-full max-w-5xl overflow-y-auto overscroll-contain rounded-t-[2rem] border border-white/10 bg-[var(--bg)] p-4 pb-28 shadow-[0_-24px_90px_rgba(0,0,0,0.45)] outline-none sm:bottom-6 sm:max-h-[min(820px,88svh)] sm:rounded-[2rem] sm:p-6 sm:pb-28"
       >
         <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-white/18 sm:hidden" />
         <div className="flex items-start justify-between gap-3">
@@ -247,6 +247,11 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
   const progress = value.duration > 0 ? Math.min(100, Math.max(0, (value.currentTime / value.duration) * 100)) : 0;
   const canUseQueue = true;
   const fromPrice = licensePrice(beat, "general");
+  const addToCart = () => writeCartItem(beat, "general");
+  const buyNow = () => {
+    writeCartItem(beat, "general");
+    window.location.href = "/checkout?product=beatstore";
+  };
 
   return (
     <aside className={`fixed inset-x-0 bottom-0 z-[2147483640] border-t border-white/10 bg-[color-mix(in_srgb,var(--bg)_92%,black)] shadow-[0_-24px_70px_rgba(0,0,0,0.34)] backdrop-blur-xl transition-transform duration-300 ${collapsed && !menuOpen && !licensingOpen ? "translate-y-[calc(100%-0.55rem-env(safe-area-inset-bottom))]" : "translate-y-0"}`} onPointerEnter={() => setCollapsed(false)} onFocus={() => setCollapsed(false)}>
@@ -291,9 +296,34 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
             <div className="relative">
               <button type="button" onClick={() => setMenuOpen((current) => !current)} className="grid h-10 w-10 place-items-center rounded-full text-[var(--text-soft)] transition hover:bg-white/8 hover:text-[var(--text)]" aria-label="More beat actions"><ListMusic className="h-4 w-4" /></button>
               {menuOpen ? (
-                <div className="absolute bottom-12 right-0 w-52 rounded-2xl border border-[var(--border)] bg-[var(--card-strong)] p-2 shadow-2xl">
-                  <button type="button" onClick={() => { value.openLicensing(beat); setMenuOpen(false); }} className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-[var(--text)] hover:bg-[var(--bg-soft)]">Licence options</button>
-                  <Link href={`/beat-store/producers/${beat.producer.slug}`} className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold text-[var(--text)] hover:bg-[var(--bg-soft)]">View producer <ExternalLink className="h-3.5 w-3.5" /></Link>
+                <div className="absolute bottom-12 right-0 w-[min(92vw,560px)] overflow-hidden rounded-[1.4rem] border border-white/10 bg-[color-mix(in_srgb,var(--bg)_94%,black)] shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+                  <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <PlayerArtwork beat={beat} />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-[var(--text)]">{beat.title}</p>
+                        <p className="truncate text-xs text-[var(--text-soft)]">{beat.producer.name} · {beat.bpm} BPM</p>
+                      </div>
+                    </div>
+                    <button type="button" onClick={() => setMenuOpen(false)} className="grid h-9 w-9 place-items-center rounded-full bg-white/8 text-[var(--text-soft)] transition hover:bg-white/12 hover:text-[var(--text)]" aria-label="Close beat menu"><X className="h-4 w-4" /></button>
+                  </div>
+                  <div className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <button type="button" onClick={() => { value.openLicensing(beat); setMenuOpen(false); }} className="rounded-2xl border border-[var(--border)] bg-white/[0.04] p-4 text-left transition hover:border-[var(--border-strong)] hover:bg-white/[0.06]">
+                      <span className="block text-xs font-semibold uppercase tracking-[0.22em] text-[var(--text-soft)]">Licensing</span>
+                      <span className="mt-1 block text-2xl font-bold tracking-[-0.04em] text-[var(--text)]">From {formatMoney(fromPrice)}</span>
+                      <span className="mt-1 block text-xs text-[var(--text-muted)]">Choose General or Exclusive terms</span>
+                    </button>
+                    <div className="grid grid-cols-2 gap-2 sm:w-56">
+                      <button type="button" onClick={addToCart} className="btn-outline pressable min-h-11 text-xs"><ShoppingBag className="mr-2 h-4 w-4" />Cart</button>
+                      <button type="button" onClick={buyNow} className="btn-primary pressable min-h-11 text-xs">Buy</button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 border-t border-white/10 p-2 text-xs font-semibold text-[var(--text)] sm:grid-cols-4">
+                    <Link href={`/beat-store/producers/${beat.producer.slug}`} className="flex items-center justify-center gap-2 rounded-xl px-3 py-2 hover:bg-white/8">Producer <ExternalLink className="h-3.5 w-3.5" /></Link>
+                    <button type="button" onClick={() => value.setLoop(!value.loop)} className={`rounded-xl px-3 py-2 transition hover:bg-white/8 ${value.loop ? "text-[var(--accent)]" : ""}`}>{value.loop ? "Loop On" : "Loop"}</button>
+                    <button type="button" onClick={() => value.setMuted(!value.muted)} className="rounded-xl px-3 py-2 transition hover:bg-white/8">{value.muted ? "Unmute" : "Mute"}</button>
+                    <button type="button" onClick={() => { value.openLicensing(beat); setMenuOpen(false); }} className="rounded-xl px-3 py-2 text-[var(--accent)] transition hover:bg-white/8">Terms</button>
+                  </div>
                 </div>
               ) : null}
             </div>
