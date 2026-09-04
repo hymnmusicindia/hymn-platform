@@ -93,9 +93,14 @@ function PlayerArtwork({ beat, size = "small" }: { beat: StorefrontBeat; size?: 
 
 function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: StorefrontBeat | null; open: boolean; selected: LicenseChoice; onSelect: (value: LicenseChoice) => void; onClose: () => void }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const close = useCallback((event?: { preventDefault?: () => void; stopPropagation?: () => void }) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    onClose();
+  }, [onClose]);
   useEffect(() => {
     if (!open) return;
-    const handleKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    const handleKey = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
     window.addEventListener("keydown", handleKey);
     window.setTimeout(() => panelRef.current?.focus(), 0);
     const originalOverflow = document.body.style.overflow;
@@ -104,7 +109,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
       window.removeEventListener("keydown", handleKey);
       document.body.style.overflow = originalOverflow;
     };
-  }, [onClose, open]);
+  }, [close, open]);
 
   if (!beat) return null;
   const options = beatLicenseCatalog.map((entry) => ({
@@ -132,8 +137,8 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
   };
 
   return (
-    <div className={`fixed inset-0 z-[2147483605] transition ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
-      <button type="button" className={`absolute inset-0 bg-black/64 backdrop-blur-sm transition-opacity ${open ? "opacity-100" : "opacity-0"}`} onClick={onClose} aria-label="Close licensing options" />
+    <div className={`fixed inset-0 z-[2147483500] transition ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
+      <button type="button" className={`absolute inset-0 bg-black/64 backdrop-blur-sm transition-opacity ${open ? "opacity-100" : "opacity-0"}`} onClick={(event) => close(event)} aria-label="Close licensing options" />
       <div
         ref={panelRef}
         role="dialog"
@@ -152,7 +157,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
               <p className="mt-1 truncate text-sm text-[var(--text-muted)]">{beat.producer.name} · {beat.bpm} BPM · {beat.keySignature || "Key not supplied"}</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="sticky top-0 z-20 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--text)] shadow-lg" aria-label="Close licensing options"><X className="h-4 w-4" /></button>
+          <button type="button" onClick={(event) => close(event)} className="sticky top-0 z-20 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--text)] shadow-lg" aria-label="Close licensing options"><X className="h-4 w-4" /></button>
         </div>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -209,7 +214,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
   );
 }
 
-function BottomPlayer({ value }: { value: BeatPreviewContextValue }) {
+function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue; licensingOpen: boolean }) {
   const beat = value.activeBeat;
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -218,6 +223,11 @@ function BottomPlayer({ value }: { value: BeatPreviewContextValue }) {
     lastScrollYRef.current = window.scrollY;
     let frame = 0;
     const onScroll = () => {
+      if (licensingOpen) {
+        setCollapsed(false);
+        lastScrollYRef.current = window.scrollY;
+        return;
+      }
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
         const current = window.scrollY;
@@ -232,14 +242,14 @@ function BottomPlayer({ value }: { value: BeatPreviewContextValue }) {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("scroll", onScroll);
     };
-  }, []);
+  }, [licensingOpen]);
   if (!beat) return null;
   const progress = value.duration > 0 ? Math.min(100, Math.max(0, (value.currentTime / value.duration) * 100)) : 0;
   const canUseQueue = true;
   const fromPrice = licensePrice(beat, "general");
 
   return (
-    <aside className={`fixed inset-x-0 bottom-0 z-[2147483590] border-t border-white/10 bg-[color-mix(in_srgb,var(--bg)_92%,black)] shadow-[0_-24px_70px_rgba(0,0,0,0.34)] backdrop-blur-xl transition-transform duration-300 ${collapsed && !menuOpen ? "translate-y-[calc(100%-0.55rem-env(safe-area-inset-bottom))]" : "translate-y-0"}`} onPointerEnter={() => setCollapsed(false)} onFocus={() => setCollapsed(false)}>
+    <aside className={`fixed inset-x-0 bottom-0 z-[2147483640] border-t border-white/10 bg-[color-mix(in_srgb,var(--bg)_92%,black)] shadow-[0_-24px_70px_rgba(0,0,0,0.34)] backdrop-blur-xl transition-transform duration-300 ${collapsed && !menuOpen && !licensingOpen ? "translate-y-[calc(100%-0.55rem-env(safe-area-inset-bottom))]" : "translate-y-0"}`} onPointerEnter={() => setCollapsed(false)} onFocus={() => setCollapsed(false)}>
       <button type="button" onClick={() => setCollapsed((current) => !current)} className="absolute left-1/2 top-0 h-4 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-[var(--card-strong)] shadow-lg" aria-label={collapsed ? "Expand preview player" : "Collapse preview player"} />
       <div className="mx-auto max-w-[1700px] px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 sm:px-5">
         <div className="flex items-center gap-2 text-[11px] font-semibold text-[var(--text-soft)]">
@@ -437,7 +447,7 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
       <div className={activeBeat ? "pb-[calc(7.5rem+env(safe-area-inset-bottom))] sm:pb-[7.25rem]" : undefined}>
         {children}
       </div>
-      <BottomPlayer value={value} />
+      <BottomPlayer value={value} licensingOpen={licensingOpen} />
       <LicensingSurface beat={activeBeat} open={licensingOpen} selected={selectedLicense} onSelect={setSelectedLicense} onClose={() => setLicensingOpen(false)} />
     </BeatPreviewContext.Provider>
   );
