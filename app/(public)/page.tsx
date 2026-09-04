@@ -250,9 +250,9 @@ export default async function HomePage() {
                         <div className="aspect-square overflow-hidden">
                           <img src={release.artworkUrl} alt={`${release.title} artwork`} loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
                         </div>
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/88 via-black/42 to-transparent p-3 text-white">
-                          <p className="line-clamp-1 text-xs font-extrabold uppercase tracking-[-0.02em]">{release.title}</p>
-                          <p className="line-clamp-1 text-[11px] font-semibold text-white/72">{release.artistName}</p>
+                        <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,transparent_0%,rgba(0,0,0,0.58)_30%,rgba(0,0,0,0.94)_100%)] px-3 pb-3 pt-12 text-white">
+                          <p className="line-clamp-1 text-xs font-extrabold uppercase tracking-[-0.02em] drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)]">{release.title}</p>
+                          <p className="line-clamp-1 text-[11px] font-semibold text-white/82 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">{release.artistName}</p>
                         </div>
                       </article>
                     ))}
