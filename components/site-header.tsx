@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { mainNav } from "@/lib/site";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { SessionPayload } from "@/lib/types";
+import { beatLicenseLabel, type BeatStoreLicenseType } from "@/lib/beat-store";
 
 type SiteHeaderProps = {
   user?: SessionPayload | null;
@@ -26,7 +27,7 @@ type HeaderNotification = {
   createdAt: string;
 };
 
-type HeaderCartItem = { beatId: number; licenseType: "basic" | "exclusive"; price: number };
+type HeaderCartItem = { beatId: number; licenseType: BeatStoreLicenseType | "general" | "basic" | "premium"; price: number };
 type HeaderCartBeat = { id: number; title: string; producerName?: string; artworkUrl?: string };
 
 function notificationTimeAgo(value: string) {
@@ -603,7 +604,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
               const beat = cartBeats.find((entry) => entry.id === item.beatId);
               return <div key={`${item.beatId}-${item.licenseType}`} className="flex items-center gap-3 border-b border-[var(--border)] py-3">
                 <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-[var(--bg-soft)]">{beat?.artworkUrl ? <Image src={beat.artworkUrl} alt="" fill sizes="56px" className="object-cover" /> : <Disc3 className="absolute inset-0 m-auto h-5 w-5 text-[var(--text-soft)]" />}</div>
-                <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-[var(--text)]">{beat?.title ?? `Beat ${item.beatId}`}</p><p className="mt-1 truncate text-xs text-[var(--text-soft)]">{beat?.producerName ?? (item.licenseType === "exclusive" ? "Exclusive licence" : "Non-exclusive licence")}</p></div>
+                <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-[var(--text)]">{beat?.title ?? `Beat ${item.beatId}`}</p><p className="mt-1 truncate text-xs text-[var(--text-soft)]">{beat?.producerName ?? beatLicenseLabel(item.licenseType)}</p></div>
                 <div className="text-right"><p className="text-sm font-semibold text-[var(--text)]">₹{Number(item.price).toLocaleString("en-IN")}</p><button type="button" onClick={() => removeCartItem(item.beatId, item.licenseType)} className="mt-1 text-xs text-[var(--danger)]">Remove</button></div>
               </div>;
             }) : <div className="py-12 text-center text-sm text-[var(--text-soft)]">Your cart is empty.</div>}

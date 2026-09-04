@@ -1,6 +1,6 @@
 export type ReleaseStatus = "draft" | "awaiting_payment" | "submitted" | "in_queue" | "in_qc_queue" | "under_review" | "changes_requested" | "resubmitted" | "approved" | "queued_for_distribution" | "submitting_to_distributor" | "sent_to_distributor" | "distributor_processing" | "distributor_changes_required" | "scheduled" | "processing" | "awaiting_live_confirmation" | "partially_live" | "delivered" | "sent" | "live" | "delivery_failed" | "takedown_requested" | "takedown_processing" | "taken_down" | "archived" | "rejected" | "failed";
 
-export type LicenseType = "general" | "exclusive" | "basic" | "premium";
+export type LicenseType = "mp3" | "wav" | "stems" | "exclusive" | "general" | "basic" | "premium";
 
 export type UserRole = "customer" | "producer" | "admin";
 
@@ -462,6 +462,7 @@ export interface Beat {
   keySignature?: string;
   price: number;
   generalPrice?: number;
+  stemPrice?: number;
   exclusivePrice?: number;
   description?: string;
   subgenre?: string;

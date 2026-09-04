@@ -38,6 +38,7 @@ import { sampleBeats, sampleReleases } from "@/lib/site";
 import { searchSpotifyTracks } from "@/lib/spotify";
 import { PRODUCER_COMMISSION_CONFIG } from "@/lib/finance-config";
 import { resolveGoogleAccountRole } from "@/lib/auth-role";
+import { normalizeBeatLicenseType } from "@/lib/beat-store";
 import { normalizePublicUploadUrl } from "@/lib/storage";
 import { canonicalReleaseArtworkUrl } from "@/lib/release-media";
 import { effectiveSubscriptionReleaseLimit } from "@/lib/subscription-billing";
@@ -1331,7 +1332,7 @@ export async function createBeat(input: Omit<Beat, "id" | "createdAt" | "produce
           genre: input.genre,
           mood: input.mood,
           keySignature: input.keySignature ?? "Cm",
-          priceCents: Math.round(input.price * 100),
+          priceCents: Math.round((input.stemPrice ?? input.price) * 100),
           generalPriceCents: Math.round((input.generalPrice ?? input.price) * 100),
           exclusivePriceCents: Math.round((input.exclusivePrice ?? Math.max(input.price * 8, input.price + 100)) * 100),
           description: input.description ?? "",
@@ -1410,7 +1411,7 @@ export async function attachBeatAssets(input: {
   });
 }
 
-export async function updateBeat(id: number, input: Partial<Pick<Beat, "title" | "bpm" | "genre" | "mood" | "price" | "generalPrice" | "exclusivePrice" | "description" | "subgenre" | "tags" | "sampleDeclaration" | "sampleDisclosure" | "fileUrl" | "artworkUrl" | "enabled" | "keySignature">>) {
+export async function updateBeat(id: number, input: Partial<Pick<Beat, "title" | "bpm" | "genre" | "mood" | "price" | "generalPrice" | "stemPrice" | "exclusivePrice" | "description" | "subgenre" | "tags" | "sampleDeclaration" | "sampleDisclosure" | "fileUrl" | "artworkUrl" | "enabled" | "keySignature">>) {
   if (usesPostgresPrisma()) {
     try {
       const data: any = {};
@@ -1421,6 +1422,7 @@ export async function updateBeat(id: number, input: Partial<Pick<Beat, "title" |
       if (input.keySignature !== undefined) data.keySignature = input.keySignature;
       if (input.price !== undefined) data.priceCents = Math.round(input.price * 100);
       if (input.generalPrice !== undefined) data.generalPriceCents = Math.round(input.generalPrice * 100);
+      if (input.stemPrice !== undefined) data.priceCents = Math.round(input.stemPrice * 100);
       if (input.exclusivePrice !== undefined) data.exclusivePriceCents = Math.round(input.exclusivePrice * 100);
       if (input.description !== undefined) data.description = input.description;
       if (input.subgenre !== undefined) data.subgenre = input.subgenre;
@@ -1584,7 +1586,7 @@ export async function createOrder(input: Omit<Order, "id" | "createdAt" | "buyer
       for (const item of input.items) {
         const beat = beats.find((entry) => entry.id === item.beatId);
         if (!beat) throw new Error("One or more selected beats are unavailable.");
-        if (item.licenseType === "exclusive") {
+        if (normalizeBeatLicenseType(item.licenseType) === "exclusive") {
           const reserved = await tx.beat.updateMany({
             where: { id: beat.id, enabled: true, OR: [{ status: "PUBLISHED" }, { status: "EXCLUSIVE_RESERVED", exclusiveReservationExpiresAt: { lt: now } }] },
             data: { status: "EXCLUSIVE_RESERVED", exclusiveReservedByUserId: input.userId, exclusiveReservationOrderId: input.razorpayOrderId, exclusiveReservationExpiresAt: reservationExpiresAt }
@@ -1878,7 +1880,8 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
         await tx.couponRedemption.create({ data: { couponId: coupon.id, userId: order.userId, orderId: order.id } });
       }
       for (const item of order.items) {
-        if (item.licenseType === "exclusive") {
+        const normalizedLicenseType = normalizeBeatLicenseType(item.licenseType);
+        if (normalizedLicenseType === "exclusive") {
           const sold = await tx.beat.updateMany({ where: { id: item.beatId, status: "EXCLUSIVE_RESERVED", exclusiveReservationOrderId: razorpayOrderId }, data: { status: "EXCLUSIVELY_SOLD", enabled: false, exclusiveReservedByUserId: null, exclusiveReservationOrderId: null, exclusiveReservationExpiresAt: null } });
           if (sold.count !== 1 && !alreadyPaid) throw new Error("Exclusive reservation is no longer valid; payment requires manual reconciliation.");
           if (!alreadyPaid) await tx.auditLog.create({ data: { actorId: order.userId, actorRole: "customer", action: "BEAT_EXCLUSIVELY_SOLD", entity: "beat", entityId: String(item.beatId), newValue: { status: "EXCLUSIVELY_SOLD" }, metadata: { orderId: order.id, paymentId, priorGeneralLicenses: item.beat.generalLicensesSold } } });
@@ -1888,9 +1891,9 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
         }
       }
       for (const item of order.items) {
-        const normalizedLicenseType = item.licenseType === "basic" || item.licenseType === "premium" ? "general" : item.licenseType;
+        const normalizedLicenseType = normalizeBeatLicenseType(item.licenseType);
         const licenceSnapshot = normalizedLicenseType === "exclusive" ? {
-          version: "2026-08-26",
+          version: "2026-09-05",
           licenseType: "exclusive",
           legalMode: item.beat.exclusiveLegalMode,
           beat: { id: item.beat.id, title: item.beat.title },
@@ -1900,23 +1903,23 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
           price: Number(item.price),
           currency: order.currency,
           existingGeneralLicenses: item.beat.generalLicensesSold,
-          rights: { commercialUse: true, exclusiveUse: true, copyrightAssigned: item.beat.exclusiveLegalMode === "RIGHTS_ASSIGNMENT" },
+          rights: { commercialUse: true, exclusiveUse: true, copyrightAssigned: item.beat.exclusiveLegalMode === "RIGHTS_ASSIGNMENT", contentIdPolicy: "ALLOWED", includesWav: true, includesStems: true },
           restrictions: { samplesSubjectToProducerDisclosure: true, priorGeneralLicensesRemainValid: true }
         } : {
-          version: "2026-08-26",
-          licenseType: "general",
+          version: "2026-09-05",
+          licenseType: normalizedLicenseType,
           beat: { id: item.beat.id, title: item.beat.title },
           buyer: { id: order.user.id, name: order.user.name, email: order.user.email },
           producer: { id: item.beat.userId },
           purchaseDate: new Date().toISOString(),
           price: Number(item.price),
           currency: order.currency,
-          rights: { commercialUse: true, maxCommercialReleases: item.beat.generalMaxCommercialReleases, streamingLimit: item.beat.generalStreamingLimit, videoLimit: item.beat.generalVideoLimit, performanceRights: item.beat.generalPerformanceRights, monetizationAllowed: item.beat.generalMonetizationAllowed, creditRequired: item.beat.generalCreditRequired, contentIdPolicy: item.beat.generalContentIdPolicy, territory: item.beat.generalTerritory, termDurationMonths: item.beat.generalTermDurationMonths },
+          rights: { commercialUse: true, maxCommercialReleases: item.beat.generalMaxCommercialReleases, streamingLimit: item.beat.generalStreamingLimit, videoLimit: item.beat.generalVideoLimit, performanceRights: item.beat.generalPerformanceRights, monetizationAllowed: item.beat.generalMonetizationAllowed, creditRequired: item.beat.generalCreditRequired, contentIdPolicy: "NOT_ALLOWED", territory: item.beat.generalTerritory, termDurationMonths: item.beat.generalTermDurationMonths, includesMp3: normalizedLicenseType === "mp3", includesWav: normalizedLicenseType === "wav", includesStems: normalizedLicenseType === "stems" },
           restrictions: { nonExclusive: true, samplesSubjectToProducerDisclosure: true }
         };
         await tx.beatPurchase.upsert({
           where: { checkoutOrderItemId: item.id },
-          create: { userId: order.userId, beatId: item.beatId, licenseType: normalizedLicenseType, paymentId, checkoutOrderItemId: item.id, hasAccess: true, licenseVersion: "2026-08-26", licenseTermsSnapshot: licenceSnapshot },
+          create: { userId: order.userId, beatId: item.beatId, licenseType: normalizedLicenseType, paymentId, checkoutOrderItemId: item.id, hasAccess: true, licenseVersion: "2026-09-05", licenseTermsSnapshot: licenceSnapshot },
           update: { paymentId, hasAccess: true }
         });
         const existingSale = await tx.beatSale.findUnique({ where: { orderId_beatId_licenseType: { orderId: order.id, beatId: item.beatId, licenseType: item.licenseType } } });
@@ -3524,7 +3527,7 @@ export async function listArtistCardsByUser(userId: number) {
   return [];
 }
 
-export async function createBeatPurchase(userId: number, beatId: number, licenseType: "general" | "basic" | "premium" | "exclusive", paymentId?: string | null) {
+export async function createBeatPurchase(userId: number, beatId: number, licenseType: "mp3" | "wav" | "stems" | "general" | "basic" | "premium" | "exclusive", paymentId?: string | null) {
   if (usesPostgresPrisma()) {
     const existing = await prisma.beatPurchase.findFirst({ where: paymentId ? { userId, beatId, licenseType, paymentId } : { userId, beatId, licenseType, paymentId: null } });
     const purchase = existing
@@ -3657,8 +3660,9 @@ export function mapPrismaBeat(prismaBeat: any): Beat {
     genre: prismaBeat.genre,
     mood: prismaBeat.mood,
     keySignature: prismaBeat.keySignature,
-    price: prismaBeat.priceCents / 100,
+    price: 120,
     generalPrice: prismaBeat.generalPriceCents / 100,
+    stemPrice: prismaBeat.priceCents / 100,
     exclusivePrice: prismaBeat.exclusivePriceCents / 100,
     description: prismaBeat.description,
     subgenre: prismaBeat.subgenre,

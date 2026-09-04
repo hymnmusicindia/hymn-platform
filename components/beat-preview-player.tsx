@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronLeft, ChevronRight, Disc3, ExternalLink, ListMusic, Pause, Play, Repeat, ShoppingBag, Volume2, VolumeX, X } from "lucide-react";
-import { beatLicenseCatalog, type StorefrontBeat } from "@/lib/beat-store";
+import { beatLicenseCatalog, beatLicensePrice, normalizeBeatLicenseType, type BeatStoreLicenseType, type StorefrontBeat } from "@/lib/beat-store";
 
-type LicenseChoice = "general" | "exclusive";
+type LicenseChoice = BeatStoreLicenseType;
 
 type BeatPreviewContextValue = {
   activeBeat: StorefrontBeat | null;
@@ -52,7 +52,7 @@ function safePreviewUrl(beat: StorefrontBeat | null) {
 }
 
 function licensePrice(beat: StorefrontBeat, licenseType: LicenseChoice) {
-  return licenseType === "exclusive" ? Number(beat.exclusivePrice ?? 0) : Number(beat.generalPrice ?? beat.price ?? beat.startingPrice ?? 0);
+  return beatLicensePrice(beat, licenseType);
 }
 
 function cartItemsFromStorage() {
@@ -118,15 +118,16 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
     disabled: entry.purchasableKey === "exclusive" && (beat.exclusiveRemaining === 0 || licensePrice(beat, "exclusive") <= 0)
   }));
   const selectedOption = options.find((option) => option.purchasableKey === selected) ?? options[0];
+  const normalizedSelected = normalizeBeatLicenseType(selectedOption.purchasableKey);
   const terms = [
-    ["Files Included", selected === "exclusive" ? "All producer-provided deliverables after payment. Stems only if uploaded by producer." : "Master preview purchase deliverables configured for General Licence."],
+    ["Files Included", normalizedSelected === "mp3" ? "MP3 deliverable only." : normalizedSelected === "wav" ? "WAV/master deliverable." : normalizedSelected === "stems" ? "Stem files if supplied by the producer." : "Stem files plus WAV/master deliverable."],
     ["Commercial Usage", selectedOption.commercialUse ? "Commercial use is allowed under the stored licence snapshot." : "Commercial use is not enabled for this licence."],
-    ["Release Limit", selected === "exclusive" ? "Unlimited releases unless the agreement snapshot states otherwise." : `${beat.generalMaxCommercialReleases ?? 1} commercial release${(beat.generalMaxCommercialReleases ?? 1) === 1 ? "" : "s"}.`],
-    ["Streams / Views", beat.generalStreamingLimit ? `${beat.generalStreamingLimit.toLocaleString("en-IN")} streams/views for General Licence.` : selected === "exclusive" ? "As stated in the exclusive agreement snapshot." : "Configured per beat/licence snapshot."],
-    ["Monetisation", (selected === "exclusive" || beat.generalMonetizationAllowed !== false) ? "Monetisation is allowed." : "Monetisation is not allowed."],
-    ["Credit Requirement", selected === "exclusive" ? "Credit terms follow the exclusive agreement." : beat.generalCreditRequired === false ? "Producer credit is optional." : "Producer credit is required."],
-    ["Content ID", "Content ID claims are not allowed unless HYMN explicitly grants them in writing."],
-    ["Exclusivity", selected === "exclusive" ? "Beat is removed from future marketplace sales after successful exclusive purchase. Prior General licences remain valid." : "Non-exclusive. The beat remains available to other customers."],
+    ["Release Limit", normalizedSelected === "exclusive" ? "Complete exclusive right after successful purchase." : `${beat.generalMaxCommercialReleases ?? 1} commercial release${(beat.generalMaxCommercialReleases ?? 1) === 1 ? "" : "s"}.`],
+    ["Streams / Views", beat.generalStreamingLimit ? `${beat.generalStreamingLimit.toLocaleString("en-IN")} streams/views for General Licence.` : normalizedSelected === "exclusive" ? "As stated in the exclusive agreement snapshot." : "Configured per beat/licence snapshot."],
+    ["Monetisation", (normalizedSelected === "exclusive" || beat.generalMonetizationAllowed !== false) ? "Monetisation is allowed." : "Monetisation is not allowed."],
+    ["Credit Requirement", normalizedSelected === "exclusive" ? "Credit terms follow the exclusive agreement." : beat.generalCreditRequired === false ? "Producer credit is optional." : "Producer credit is required."],
+    ["Content ID", normalizedSelected === "exclusive" ? "Content ID is included for the exclusive buyer." : "Content ID is not allowed for this general licence."],
+    ["Exclusivity", normalizedSelected === "exclusive" ? "Beat is removed from future marketplace sales after successful exclusive purchase. Prior General licences remain valid." : "Non-exclusive. The beat remains available to other customers."],
     ["Refund Policy", "Checkout and licence delivery use HYMN's existing verified purchase flow."]
   ];
 
@@ -246,10 +247,10 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
   if (!beat) return null;
   const progress = value.duration > 0 ? Math.min(100, Math.max(0, (value.currentTime / value.duration) * 100)) : 0;
   const canUseQueue = true;
-  const fromPrice = licensePrice(beat, "general");
-  const addToCart = () => writeCartItem(beat, "general");
+  const fromPrice = licensePrice(beat, "mp3");
+  const addToCart = () => writeCartItem(beat, "mp3");
   const buyNow = () => {
-    writeCartItem(beat, "general");
+    writeCartItem(beat, "mp3");
     window.location.href = "/checkout?product=beatstore";
   };
 
@@ -348,7 +349,7 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
   const [muted, setMutedState] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [licensingOpen, setLicensingOpen] = useState(false);
-  const [selectedLicense, setSelectedLicense] = useState<LicenseChoice>("general");
+  const [selectedLicense, setSelectedLicense] = useState<LicenseChoice>("mp3");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -464,9 +465,9 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
     setLoop: setLoopState,
     setVolume: (next) => setVolumeState(Math.max(0, Math.min(1, next))),
     setMuted: setMutedState,
-    openLicensing: (beat, licenseType = "general") => {
+    openLicensing: (beat, licenseType = "mp3") => {
       if (beat) setActiveBeat(beat);
-      setSelectedLicense(licenseType);
+      setSelectedLicense(normalizeBeatLicenseType(licenseType));
       setLicensingOpen(true);
     },
     closeLicensing: () => setLicensingOpen(false)

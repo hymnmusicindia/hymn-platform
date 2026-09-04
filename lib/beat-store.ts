@@ -38,8 +38,32 @@ export type StorefrontBeat = Beat & {
 };
 
 
+export type BeatStoreLicenseType = Extract<LicenseType, "mp3" | "wav" | "stems" | "exclusive">;
+
+export const MP3_LICENSE_PRICE = 120;
+
+export function normalizeBeatLicenseType(value?: string | null): BeatStoreLicenseType {
+  if (value === "mp3" || value === "wav" || value === "stems" || value === "exclusive") return value;
+  return value === "exclusive" ? "exclusive" : "wav";
+}
+
+export function beatLicenseLabel(value?: string | null) {
+  const normalized = normalizeBeatLicenseType(value);
+  if (normalized === "mp3") return "MP3 Licence";
+  if (normalized === "wav") return "WAV Licence";
+  if (normalized === "stems") return "Stem Files Licence";
+  return "Stems Exclusive Licence";
+}
+
+export function beatLicensePrice(beat: Pick<Beat, "price" | "generalPrice" | "stemPrice" | "exclusivePrice"> & { startingPrice?: number }, licenseType: BeatStoreLicenseType) {
+  if (licenseType === "mp3") return MP3_LICENSE_PRICE;
+  if (licenseType === "wav") return Number(beat.generalPrice ?? beat.startingPrice ?? beat.price ?? 0);
+  if (licenseType === "stems") return Number(beat.stemPrice ?? beat.generalPrice ?? beat.startingPrice ?? beat.price ?? 0);
+  return Number(beat.exclusivePrice ?? 0);
+}
+
 export const beatLicenseOptions: Array<{
-  key: Extract<LicenseType, "general" | "exclusive">;
+  key: BeatStoreLicenseType;
   label: string;
   price: number;
   note: string;
@@ -47,24 +71,39 @@ export const beatLicenseOptions: Array<{
   badge?: string;
 }> = [
   {
-    key: "general",
-    label: "General Licence",
+    key: "mp3",
+    label: "MP3 Licence",
+    price: MP3_LICENSE_PRICE,
+    note: "Fixed HYMN standard price",
+    badge: "Standard",
+    bullets: ["MP3 file", "General licence", "No Content ID", "Beat remains available"]
+  },
+  {
+    key: "wav",
+    label: "WAV Licence",
     price: 250,
     note: "Instant download after purchase",
     badge: "Most Popular",
-    bullets: ["Commercial use", "Limited releases", "Beat remains available", "Producer credit required"]
+    bullets: ["WAV file", "General licence", "No Content ID", "Price set by producer/admin"]
+  },
+  {
+    key: "stems",
+    label: "Stem Files Licence",
+    price: 999,
+    note: "Instant download after purchase",
+    bullets: ["Stem files", "General licence", "No Content ID", "Price set by producer/admin"]
   },
   {
     key: "exclusive",
-    label: "Exclusive",
+    label: "Stems Exclusive Licence",
     price: 2100,
     note: "Instant download after purchase",
-    bullets: ["Exclusive rights to use", "Removed from sale", "Existing General licences remain valid", "Copyright is not assigned by default"]
+    bullets: ["Stems + WAV", "Complete exclusive right", "Content ID included", "Removed from sale"]
   }
 ];
 
 export type BeatLicenseTierDefinition = {
-  id: "general" | "exclusive";
+  id: BeatStoreLicenseType;
   title: string;
   delivery: string;
   streamLimit: string;
@@ -76,12 +115,14 @@ export type BeatLicenseTierDefinition = {
   exclusive: boolean;
   beatRemainsForSale: boolean;
   bestFor: string;
-  purchasableKey: Extract<LicenseType, "general" | "exclusive">;
+  purchasableKey: BeatStoreLicenseType;
 };
 
 export const beatLicenseCatalog: BeatLicenseTierDefinition[] = [
-  { id: "general", title: "General Licence", delivery: "Master file", streamLimit: "Configured per beat", commercialUse: true, distributionAllowed: true, monetizationAllowed: true, contentIdAllowed: false, includesStems: false, exclusive: false, beatRemainsForSale: true, bestFor: "Affordable commercial use", purchasableKey: "general" },
-  { id: "exclusive", title: "Exclusive Licence", delivery: "All available files", streamLimit: "As stated in the agreement", commercialUse: true, distributionAllowed: true, monetizationAllowed: true, contentIdAllowed: false, includesStems: true, exclusive: true, beatRemainsForSale: false, bestFor: "Exclusive rights to use", purchasableKey: "exclusive" }
+  { id: "mp3", title: "MP3 Licence", delivery: "MP3 file", streamLimit: "Configured per beat", commercialUse: true, distributionAllowed: true, monetizationAllowed: true, contentIdAllowed: false, includesStems: false, exclusive: false, beatRemainsForSale: true, bestFor: "Standard non-exclusive MP3 use", purchasableKey: "mp3" },
+  { id: "wav", title: "WAV Licence", delivery: "WAV file", streamLimit: "Configured per beat", commercialUse: true, distributionAllowed: true, monetizationAllowed: true, contentIdAllowed: false, includesStems: false, exclusive: false, beatRemainsForSale: true, bestFor: "Higher quality general licence", purchasableKey: "wav" },
+  { id: "stems", title: "Stem Files Licence", delivery: "Stem files", streamLimit: "Configured per beat", commercialUse: true, distributionAllowed: true, monetizationAllowed: true, contentIdAllowed: false, includesStems: true, exclusive: false, beatRemainsForSale: true, bestFor: "General licence with stems", purchasableKey: "stems" },
+  { id: "exclusive", title: "Stems Exclusive Licence", delivery: "Stems + WAV", streamLimit: "Complete exclusive right", commercialUse: true, distributionAllowed: true, monetizationAllowed: true, contentIdAllowed: true, includesStems: true, exclusive: true, beatRemainsForSale: false, bestFor: "Exclusive rights with Content ID", purchasableKey: "exclusive" }
 ];
 
 export const beatStoreReviews: Array<{ name: string; role: string; review: string }> = [];
@@ -200,7 +241,7 @@ export function buildBeatStorefront(beats: Beat[], producerProfiles: ProducerPro
       cartsNow: 0,
       weeklySales: 0,
       plays: 0,
-      startingPrice: beat.generalPrice ?? beat.price,
+      startingPrice: MP3_LICENSE_PRICE,
       shortHook: `${beat.genre} · ${beat.mood} · ${beat.bpm} BPM`,
       producerName: producer.name,
       producerId: beat.producerId

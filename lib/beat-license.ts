@@ -3,6 +3,7 @@ import { localPrivateStorage } from "@/lib/private-storage";
 import { createNotificationOnce } from "@/lib/notifications";
 import { emailAppUrl, sendBeatEmailEvent } from "@/lib/email/email-events";
 import { logAuditEvent } from "@/lib/audit-log";
+import { beatLicenseLabel, normalizeBeatLicenseType } from "@/lib/beat-store";
 
 function pdfEscape(value: string) { return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)").replace(/[^\x20-\x7E]/g, "?"); }
 function buildPdf(lines: string[]) {
@@ -26,8 +27,9 @@ export async function generateBeatLicense(purchaseId: number, actorId: number, i
   }
   const producer = await prisma.user.findUnique({ where: { id: beat.userId } });
   let snapshot = purchase.licenseTermsSnapshot as Record<string, any> | null;
+  const licenseType = normalizeBeatLicenseType(purchase.licenseType);
   if (!snapshot) {
-    snapshot = { version: "legacy-snapshot-2026-08-26", licenseType: purchase.licenseType === "exclusive" ? "exclusive" : "general", beat: { id: beat.id, title: beat.title }, buyer: { id: buyer.id, name: buyer.name, email: buyer.email }, producer: { id: beat.userId }, purchaseDate: purchase.purchasedAt.toISOString(), currency: "INR", legalMode: "EXCLUSIVE_LICENSE", existingGeneralLicenses: 0, rights: purchase.licenseType === "exclusive" ? { commercialUse: true, exclusiveUse: true, copyrightAssigned: false } : { commercialUse: true, maxCommercialReleases: 1, monetizationAllowed: true, creditRequired: true, contentIdPolicy: "NOT_ALLOWED", territory: "Worldwide" }, restrictions: { samplesSubjectToProducerDisclosure: true, priorGeneralLicensesRemainValid: true } };
+    snapshot = { version: "legacy-snapshot-2026-09-05", licenseType, beat: { id: beat.id, title: beat.title }, buyer: { id: buyer.id, name: buyer.name, email: buyer.email }, producer: { id: beat.userId }, purchaseDate: purchase.purchasedAt.toISOString(), currency: "INR", legalMode: "EXCLUSIVE_LICENSE", existingGeneralLicenses: 0, rights: licenseType === "exclusive" ? { commercialUse: true, exclusiveUse: true, copyrightAssigned: false, contentIdPolicy: "ALLOWED", includesWav: true, includesStems: true } : { commercialUse: true, maxCommercialReleases: 1, monetizationAllowed: true, creditRequired: true, contentIdPolicy: "NOT_ALLOWED", territory: "Worldwide", includesMp3: licenseType === "mp3", includesWav: licenseType === "wav", includesStems: licenseType === "stems" }, restrictions: { samplesSubjectToProducerDisclosure: true, priorGeneralLicensesRemainValid: true } };
     await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { licenseVersion: String(snapshot.version), licenseTermsSnapshot: snapshot } });
   }
   const rights = (snapshot.rights ?? {}) as Record<string, unknown>;
@@ -39,10 +41,10 @@ export async function generateBeatLicense(purchaseId: number, actorId: number, i
     `Buyer: ${buyer.name} (${buyer.email})`,
     `Producer: ${producer?.name ?? `User ${beat.userId}`}`,
     `Beat: ${String((snapshot.beat as any)?.title ?? beat.title)}`,
-    `Licence type: ${purchase.licenseType === "exclusive" ? "EXCLUSIVE" : "GENERAL"}`,
+    `Licence type: ${beatLicenseLabel(licenseType)}`,
     `Purchase date: ${String(snapshot.purchaseDate ?? purchase.purchasedAt.toISOString())}`,
     `Price: ${snapshot.currency ?? "INR"} ${snapshot.price ?? "Recorded in order"}`,
-    ...(purchase.licenseType === "exclusive" ? [
+    ...(licenseType === "exclusive" ? [
       `Legal mode: ${snapshot.legalMode === "RIGHTS_ASSIGNMENT" ? "RIGHTS ASSIGNMENT" : "EXCLUSIVE LICENCE"}`,
       snapshot.legalMode === "RIGHTS_ASSIGNMENT" ? "Copyright assignment applies only under the written assignment terms in this snapshot." : "Exclusive exploitation rights are granted; underlying copyright is not assigned.",
       `Previous General licences: ${snapshot.existingGeneralLicenses ?? 0} (remain valid)`
@@ -53,6 +55,7 @@ export async function generateBeatLicense(purchaseId: number, actorId: number, i
       `Monetisation: ${rights.monetizationAllowed ? "Allowed" : "Not allowed"}`,
       `Producer credit: ${rights.creditRequired ? "Required" : "Not required"}`,
       `Content ID: ${rights.contentIdPolicy ?? "Not allowed"}`,
+      `Files: ${rights.includesStems ? "Stem files" : rights.includesWav ? "WAV/master" : "MP3"}`,
       `Territory: ${rights.territory ?? "Worldwide"}`,
       `Term: ${rights.termDurationMonths ? `${rights.termDurationMonths} months` : "No fixed term"}`
     ]),

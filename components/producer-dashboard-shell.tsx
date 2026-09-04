@@ -10,6 +10,7 @@ import { Beat, BeatPurchase, Notification, Order, Release, SupportTicket, User }
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { CustomerHome, ProducerHome } from "@/components/simplified-dashboard-home";
 import { FirstLoginReferralPrompt } from "@/components/first-login-referral-prompt";
+import { normalizeBeatLicenseType } from "@/lib/beat-store";
 
 const AnalyticsDashboard = dynamic(() => import("@/components/analytics-dashboard").then((module) => module.AnalyticsDashboard));
 const ReferralPanel = dynamic(() => import("@/components/referral-panel").then((module) => module.ReferralPanel));
@@ -122,8 +123,8 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
   }), [catalog, catalogGenreFilter, catalogStatusFilter, dashboardSearch]);
   const filteredLicenseRows = useMemo(() => licenseRows.filter(({ order, item }) => matchesQuery([order.id, order.buyerName, order.buyerEmail, order.paymentStatus, item.beatTitle, item.licenseType], dashboardSearch)), [dashboardSearch, licenseRows]);
   const licenseCounts = useMemo(() => {
-    const counts: Record<string, number> = { general: 0, basic: 0, premium: 0, exclusive: 0 };
-    filteredLicenseRows.forEach(({ item }) => { counts[item.licenseType] = (counts[item.licenseType] ?? 0) + 1; });
+    const counts: Record<string, number> = { mp3: 0, wav: 0, stems: 0, exclusive: 0 };
+    filteredLicenseRows.forEach(({ item }) => { const type = normalizeBeatLicenseType(item.licenseType); counts[type] = (counts[type] ?? 0) + 1; });
     return counts;
   }, [filteredLicenseRows]);
 
@@ -214,6 +215,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
       mood: String(formData.get("mood") || ""),
       keySignature: String(formData.get("keySignature") || ""),
       generalPrice: Number(formData.get("generalPrice")),
+      stemPrice: Number(formData.get("stemPrice")),
       exclusivePrice: Number(formData.get("exclusivePrice")),
       description: String(formData.get("description") || ""),
     };
@@ -333,7 +335,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
             <fieldset hidden={beatUploadStep !== 1} className="grid gap-4"><legend className="mb-4 text-xl font-semibold">Audio</legend><select name="audioFormat" required className="field w-full" value={audioFormat} onChange={(e) => setAudioFormat(e.target.value)}><option value="">Master format</option><option value="MP3">High-quality MP3</option><option value="WAV">Lossless WAV</option></select><label className="text-sm font-medium">Private master / delivery file<input name="file" required type="file" accept={audioFormat === "MP3" ? ".mp3,audio/mpeg" : audioFormat === "WAV" ? ".wav,audio/wav" : "audio/*,.wav,.mp3"} className="field mt-2" onChange={(event) => setSelectedAudioFile(event.target.files?.[0] ?? null)} /></label>{selectedAudioFile ? <p className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: "var(--border)" }}>{selectedAudioFile.name} · {(selectedAudioFile.size / 1048576).toFixed(2)} MB</p> : null}<label className="text-sm font-medium">Public preview (optional)<input name="preview" type="file" accept="audio/mpeg,.mp3" className="field mt-2" /></label><p className="text-xs text-[var(--text-soft)]">If no preview is supplied, the private master is never exposed. You can add a preview later.</p></fieldset>
             <fieldset hidden={beatUploadStep !== 2} className="grid gap-4 sm:grid-cols-2"><legend className="mb-4 text-xl font-semibold">Beat information</legend><input name="title" required className="field sm:col-span-2" placeholder="Beat title" /><input name="bpm" required type="number" min="40" max="300" className="field" placeholder="BPM" /><input name="keySignature" required className="field" placeholder="Key (for example F# Minor)" /><input name="genre" required className="field" placeholder="Genre" /><input name="subgenre" className="field" placeholder="Subgenre" /><input name="mood" required className="field" placeholder="Mood" /><input name="tags" className="field" placeholder="Tags, separated by commas" /><textarea name="description" className="field min-h-28 sm:col-span-2" placeholder="Description" /><label className="sm:col-span-2 text-sm font-medium">Does this beat contain samples you do not own or control?<select name="sampleDeclaration" required className="field mt-2"><option value="">Choose an answer</option><option value="NO_UNCONTROLLED_SAMPLES">No</option><option value="CONTAINS_UNCONTROLLED_SAMPLES">Yes — I will disclose them below</option></select></label><textarea name="sampleDisclosure" className="field min-h-24 sm:col-span-2" placeholder="Required when you answered Yes: identify the samples and clearance status" /></fieldset>
             <fieldset hidden={beatUploadStep !== 3} className="grid gap-4"><legend className="mb-4 text-xl font-semibold">Artwork</legend><label className="text-sm font-medium">Beat artwork (optional)<input name="artwork" type="file" accept="image/jpeg,image/png,image/webp" className="field mt-2" /></label><p className="text-xs text-[var(--text-soft)]">JPEG, PNG or WebP. HYMN uses a clean fallback if you skip artwork.</p></fieldset>
-            <fieldset hidden={beatUploadStep !== 4} className="grid gap-4 sm:grid-cols-2"><legend className="mb-4 text-xl font-semibold">Pricing & licences</legend><label className="text-sm font-medium">General Licence price<input name="generalPrice" required type="number" min="1" className="field mt-2" placeholder="₹500" /></label><label className="text-sm font-medium">Exclusive Licence price<input name="exclusivePrice" required type="number" min="2" className="field mt-2" placeholder="₹5000" /></label><input name="price" type="hidden" value="1" /><p className="sm:col-span-2 text-xs text-[var(--text-soft)]">Exclusive must cost more than General. HYMN receives 30%; you receive 70% of the net sale amount. Exclusive defaults to an exclusive licence, not copyright assignment.</p></fieldset>
+            <fieldset hidden={beatUploadStep !== 4} className="grid gap-4 sm:grid-cols-2"><legend className="mb-4 text-xl font-semibold">Pricing & licences</legend><div className="rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2 text-sm"><span className="block font-medium">MP3 Licence</span><span className="text-xs text-[var(--text-soft)]">Fixed HYMN standard: ₹120 · General · No Content ID</span></div><label className="text-sm font-medium">WAV Licence price<input name="generalPrice" required type="number" min="1" className="field mt-2" placeholder="₹500" /></label><label className="text-sm font-medium">Stem Files Licence price<input name="stemPrice" required type="number" min="1" className="field mt-2" placeholder="₹999" /></label><label className="text-sm font-medium">Stems Exclusive Licence price<input name="exclusivePrice" required type="number" min="2" className="field mt-2" placeholder="₹5000" /></label><input name="price" type="hidden" value="120" /><p className="sm:col-span-2 text-xs text-[var(--text-soft)]">MP3 is fixed at ₹120. WAV, Stem Files, and Stems Exclusive prices can be changed. General licences do not include Content ID; Stems Exclusive includes WAV and Content ID.</p></fieldset>
             <fieldset hidden={beatUploadStep !== 5} className="grid gap-3"><legend className="mb-4 text-xl font-semibold">Review</legend><div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><p className="font-semibold">Ready to submit for HYMN review</p><p className="mt-2 text-[var(--text-muted)]">We will validate the audio, artwork, metadata, prices, and sample declaration. The beat is not public until approved.</p></div></fieldset>
             <div className="flex items-center justify-between gap-3 border-t pt-4" style={{ borderColor: "var(--border)" }}><button type="button" className="btn-outline" disabled={beatUploadStep === 1 || isPending} onClick={() => setBeatUploadStep((step) => Math.max(1, step - 1))}>Back</button>{beatUploadStep < 5 ? <button type="button" className="btn-primary" onClick={(event) => { const current = event.currentTarget.form?.querySelector<HTMLFieldSetElement>(`fieldset:not([hidden])`); const invalid = current ? Array.from(current.elements).find((element): element is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement => "checkValidity" in element && !(element as HTMLInputElement).checkValidity()) : null; if (invalid) return invalid.reportValidity(); setBeatUploadStep((step) => Math.min(5, step + 1)); }}>Continue</button> : <button type="submit" disabled={isPending} className="btn-primary pressable">{isPending ? "Uploading..." : "Submit for review"}</button>}</div>
             {feedback ? <p className="text-sm" style={{ color: "var(--text)" }}>{feedback}</p> : null}
@@ -388,9 +390,10 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
 
       {activeTab === "licensing" ? (
         <Panel title="Licensing system" description="License tier sales and available license documents from real orders.">
-          <div className="mb-5 grid gap-4 sm:grid-cols-3">
-            <StatCard label="Basic" value={licenseCounts.basic} />
-            <StatCard label="Premium" value={licenseCounts.premium} />
+          <div className="mb-5 grid gap-4 sm:grid-cols-4">
+            <StatCard label="MP3" value={licenseCounts.mp3} />
+            <StatCard label="WAV" value={licenseCounts.wav} />
+            <StatCard label="Stems" value={licenseCounts.stems} />
             <StatCard label="Exclusive" value={licenseCounts.exclusive} />
           </div>
           <div className="grid gap-3">
@@ -540,10 +543,11 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
                   <input name="keySignature" defaultValue={editingBeat.keySignature} className="field" />
                 </div>
                 <div>
-                  <label className="text-sm font-medium mb-1 block">General Licence price (Rs)</label>
+                  <label className="text-sm font-medium mb-1 block">WAV Licence price (Rs)</label>
                   <input name="generalPrice" type="number" defaultValue={editingBeat.generalPrice ?? editingBeat.price} required className="field" />
                 </div>
-                <div><label className="text-sm font-medium mb-1 block">Exclusive Licence price (Rs)</label><input name="exclusivePrice" type="number" defaultValue={editingBeat.exclusivePrice} required className="field" /></div>
+                <div><label className="text-sm font-medium mb-1 block">Stem Files Licence price (Rs)</label><input name="stemPrice" type="number" defaultValue={editingBeat.stemPrice ?? editingBeat.generalPrice ?? editingBeat.price} required className="field" /></div>
+                <div><label className="text-sm font-medium mb-1 block">Stems Exclusive Licence price (Rs)</label><input name="exclusivePrice" type="number" defaultValue={editingBeat.exclusivePrice} required className="field" /></div>
               </div>
               <div><label className="text-sm font-medium mb-1 block">Description</label><textarea name="description" defaultValue={editingBeat.description} className="field min-h-24" /></div>
               <label className="grid gap-2 text-sm"><span className="font-medium">Replace cover artwork <span style={{ color: "var(--text-soft)" }}>(optional)</span></span><input name="artwork" type="file" accept="image/jpeg,image/png,image/webp" className="field" /><span className="text-xs leading-5" style={{ color: "var(--text-soft)" }}>JPEG, PNG, or WebP up to 10 MB. After a successful replacement, the previous cover is permanently deleted from storage with no backup.</span></label>

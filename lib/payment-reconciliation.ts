@@ -4,6 +4,7 @@ import { createAdminTaskOnce, resolveAdminTask } from "@/lib/task-queue";
 import { logAuditEvent } from "@/lib/audit-log";
 import { generateBeatLicense } from "@/lib/beat-license";
 import { confirmCheckoutPayment, confirmDistributionPayment } from "@/lib/payment-webhooks";
+import { normalizeBeatLicenseType } from "@/lib/beat-store";
 
 export type PaymentReconciliationIssue = { key: string; type: "beat" | "distribution" | "subscription" | "duplicate"; message: string; autoRepaired: boolean };
 
@@ -16,9 +17,10 @@ export async function reconcilePayments() {
     if (order.razorpayPaymentId) await confirmCheckoutPayment({ razorpayOrderId: order.razorpayOrderId, paymentId: order.razorpayPaymentId, source: "reconciliation" });
     if (order.razorpayPaymentId) paymentIds.set(order.razorpayPaymentId, [...(paymentIds.get(order.razorpayPaymentId) ?? []), order.id]);
     for (const item of order.items) {
-      const purchase = await prisma.beatPurchase.findFirst({ where: { userId: order.userId, beatId: item.beatId, licenseType: item.licenseType, paymentId: order.razorpayPaymentId ?? null } });
+      const licenseType = normalizeBeatLicenseType(item.licenseType);
+      const purchase = await prisma.beatPurchase.findFirst({ where: { userId: order.userId, beatId: item.beatId, licenseType, paymentId: order.razorpayPaymentId ?? null } });
       if (!purchase) {
-        const created = await prisma.beatPurchase.create({ data: { userId: order.userId, beatId: item.beatId, licenseType: item.licenseType, paymentId: order.razorpayPaymentId ?? null, hasAccess: true } });
+        const created = await prisma.beatPurchase.create({ data: { userId: order.userId, beatId: item.beatId, licenseType, paymentId: order.razorpayPaymentId ?? null, hasAccess: true } });
         const license = await generateBeatLicense(created.id, order.userId).catch(() => null);
         issues.push({ key: `beat-order:${order.id}:${item.beatId}`, type: "beat", message: `Created missing beat purchase #${created.id}${license ? " and generated its license" : "; license generation still needs attention"}.`, autoRepaired: Boolean(license) });
         if (!license) await createAdminTaskOnce({ eventKey: `license:${created.id}:missing`, type: "License Missing", priority: "high", title: `License missing for purchase #${created.id}`, body: "Payment reconciliation restored the purchase, but license generation failed.", href: `/admin?tab=orders&purchaseId=${created.id}`, entityType: "beat_purchase", entityId: created.id });

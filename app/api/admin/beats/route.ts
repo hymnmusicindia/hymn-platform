@@ -26,6 +26,9 @@ export async function POST(request: Request) {
     const genre = String(formData.get("genre") || "").trim();
     const mood = String(formData.get("mood" ) || "").trim();
     const price = Number(formData.get("price"));
+    const generalPrice = Number(formData.get("generalPrice") || price);
+    const stemPrice = Number(formData.get("stemPrice") || generalPrice);
+    const exclusivePrice = Number(formData.get("exclusivePrice") || Math.max(stemPrice, generalPrice) * 4);
     const file = formData.get("file");
     const artwork = formData.get("artwork");
     const producerIdValue = Number(formData.get("producerId"));
@@ -45,6 +48,9 @@ export async function POST(request: Request) {
       genre,
       mood,
       price,
+      generalPrice,
+      stemPrice,
+      exclusivePrice,
       fileUrl,
       artworkUrl,
       enabled: true

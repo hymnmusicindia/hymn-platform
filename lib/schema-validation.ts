@@ -82,7 +82,7 @@ export function validateBeatPurchase(purchase: Partial<BeatPurchase>): string[] 
   if (purchase.beatId === undefined) errors.push("beatId is required");
   if (!purchase.licenseType) errors.push("licenseType is required");
 
-  const validLicenses = ["basic", "premium", "exclusive"];
+  const validLicenses = ["mp3", "wav", "stems", "exclusive", "general", "basic", "premium"];
   if (purchase.licenseType && !validLicenses.includes(purchase.licenseType)) {
     errors.push(`Invalid licenseType: ${purchase.licenseType}`);
   }

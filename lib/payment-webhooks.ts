@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { completeCheckoutOrder } from "@/lib/db";
 import { qualifyReferralInTransaction, reverseReferralForTransactionInTransaction, sendReferralRewardEmails } from "@/lib/referrals";
 import { synchronizeProviderSubscription, synchronizeSubscriptionPayment } from "@/lib/subscription-billing";
+import { normalizeBeatLicenseType } from "@/lib/beat-store";
 
 type RazorpayEntity = { id?: string; order_id?: string; payment_id?: string; subscription_id?: string; invoice_id?: string; plan_id?: string; amount?: number; currency?: string; status?: string; error_code?: string; error_description?: string; current_start?: number | null; current_end?: number | null; start_at?: number | null; ended_at?: number | null; charge_at?: number | null; created_at?: number; notes?: Record<string, unknown> };
 type RazorpayPayload = { event?: string; id?: string; payload?: { payment?: { entity?: RazorpayEntity }; order?: { entity?: RazorpayEntity }; refund?: { entity?: RazorpayEntity }; subscription?: { entity?: RazorpayEntity } } };
@@ -182,7 +183,7 @@ async function applyPaymentState(input: { razorpayOrderId: string; paymentId: st
     }
     if (!checkout) return;
     if (input.state === "failed") {
-      for (const item of checkout.items.filter((entry) => entry.licenseType === "exclusive")) {
+      for (const item of checkout.items.filter((entry) => normalizeBeatLicenseType(entry.licenseType) === "exclusive")) {
         await tx.beat.updateMany({ where: { id: item.beatId, status: "EXCLUSIVE_RESERVED", exclusiveReservationOrderId: checkout.razorpayOrderId }, data: { status: "PUBLISHED", exclusiveReservedByUserId: null, exclusiveReservationOrderId: null, exclusiveReservationExpiresAt: null } });
       }
     }

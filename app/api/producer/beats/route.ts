@@ -43,6 +43,7 @@ export async function POST(request: Request) {
     const keySignature = String(formData.get("keySignature") || "").trim();
     const price = Number(formData.get("price"));
     const generalPrice = Number(formData.get("generalPrice") || price);
+    const stemPrice = Number(formData.get("stemPrice") || generalPrice);
     const exclusivePrice = Number(formData.get("exclusivePrice"));
     const file = formData.get("file");
     const preview = formData.get("preview");
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
 
     const sampleDeclaration = String(formData.get("sampleDeclaration") || "");
     const sampleDisclosure = String(formData.get("sampleDisclosure") || "").trim();
-    if (!title || !genre || !mood || !Number.isFinite(bpm) || bpm < 40 || bpm > 300 || !Number.isFinite(generalPrice) || !Number.isFinite(exclusivePrice) || exclusivePrice <= generalPrice || !(file instanceof File)) {
+    if (!title || !genre || !mood || !Number.isFinite(bpm) || bpm < 40 || bpm > 300 || !Number.isFinite(generalPrice) || !Number.isFinite(stemPrice) || !Number.isFinite(exclusivePrice) || exclusivePrice <= Math.max(generalPrice, stemPrice) || !(file instanceof File)) {
       return NextResponse.json({ error: "Missing required beat fields." }, { status: 400 });
     }
     if (!['NO_UNCONTROLLED_SAMPLES', 'CONTAINS_UNCONTROLLED_SAMPLES'].includes(sampleDeclaration) || (sampleDeclaration === 'CONTAINS_UNCONTROLLED_SAMPLES' && !sampleDisclosure)) return NextResponse.json({ error: "Complete the sample declaration and disclosure." }, { status: 400 });
@@ -75,6 +76,7 @@ export async function POST(request: Request) {
       keySignature,
       price,
       generalPrice,
+      stemPrice,
       exclusivePrice,
       description: String(formData.get("description") || "").trim(),
       subgenre: String(formData.get("subgenre") || "").trim(),
@@ -104,7 +106,7 @@ export async function POST(request: Request) {
     if (!beat) throw new Error("The beat draft could not be finalized. No incomplete beat was kept.");
     finalized = true;
 
-    const readiness = validateBeatReadiness({ title, bpm, genre, mood, keySignature, price, generalPrice, exclusivePrice, sampleDeclaration, sampleDisclosure, audioUrl: privateAudio.downloadPath, artworkUrl });
+    const readiness = validateBeatReadiness({ title, bpm, genre, mood, keySignature, price, generalPrice, stemPrice, exclusivePrice, sampleDeclaration, sampleDisclosure, audioUrl: privateAudio.downloadPath, artworkUrl });
     await createAdminTaskOnce({ eventKey: `producer:${result.user.id}:beat:${beat.id}:review`, type: "Beat Awaiting Approval", priority: readiness.ready ? "normal" : "high", title: readiness.ready ? `Beat ready for review: ${title}` : `Beat needs corrections: ${title}`, body: readiness.ready ? "All required beat fields are present." : readiness.issues.map((issue) => issue.message).join(" "), href: `/admin?tab=beats&beatId=${beat.id}`, entityType: "beat", entityId: beat.id }).catch((taskError) => console.error("Beat review task creation failed", { beatId: beat.id, taskError }));
 
     return NextResponse.json({ beat, readiness, status: readiness.ready ? "pending_review" : "changes_requested" }, { status: 201 });

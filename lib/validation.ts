@@ -83,7 +83,7 @@ export const spotifyResolveSchema = z.object({ spotifyUrl: z.string().min(1) });
 
 export const orderItemSchema = z.object({
   beatId: z.number().int().positive(),
-  licenseType: z.enum(["general", "exclusive"]),
+  licenseType: z.enum(["mp3", "wav", "stems", "exclusive", "general", "basic", "premium"]),
   price: z.number().positive()
 });
 
@@ -110,7 +110,7 @@ export const checkoutItemSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("beat"),
     beatId: z.number().int().positive(),
-    licenseType: z.enum(["general", "exclusive"])
+    licenseType: z.enum(["mp3", "wav", "stems", "exclusive", "general", "basic", "premium"])
   }),
   z.object({
     type: z.literal("distribution"),
@@ -279,6 +279,7 @@ export const beatMutationSchema = z.object({
   keySignature: z.string().min(1).max(40).optional(),
   price: z.coerce.number().positive().optional(),
   generalPrice: z.coerce.number().positive().optional(),
+  stemPrice: z.coerce.number().positive().optional(),
   exclusivePrice: z.coerce.number().positive().optional(),
   description: z.string().max(2000).optional(),
   subgenre: z.string().max(80).optional(),
@@ -287,7 +288,7 @@ export const beatMutationSchema = z.object({
   sampleDisclosure: z.string().max(2000).nullable().optional(),
   enabled: z.boolean().optional()
 }).superRefine((value, context) => {
-  if (value.generalPrice && value.exclusivePrice && value.exclusivePrice <= value.generalPrice) context.addIssue({ code: z.ZodIssueCode.custom, path: ["exclusivePrice"], message: "Exclusive price must be higher than General price." });
+  if (value.exclusivePrice && value.exclusivePrice <= Math.max(value.generalPrice ?? 0, value.stemPrice ?? 0)) context.addIssue({ code: z.ZodIssueCode.custom, path: ["exclusivePrice"], message: "Stems Exclusive price must be higher than WAV and Stem Files prices." });
   if (value.sampleDeclaration === "CONTAINS_UNCONTROLLED_SAMPLES" && !value.sampleDisclosure?.trim()) context.addIssue({ code: z.ZodIssueCode.custom, path: ["sampleDisclosure"], message: "Sample disclosure is required." });
 });
 

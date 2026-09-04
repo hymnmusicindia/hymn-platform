@@ -7,7 +7,7 @@ import { emailAppUrl, sendBeatEmailEvent } from "@/lib/email/email-events";
 export const runtime = "nodejs";
 
 function parseLicenseType(value: unknown) {
-  if (value === "basic" || value === "premium" || value === "exclusive") return value;
+  if (value === "mp3" || value === "wav" || value === "stems" || value === "general" || value === "basic" || value === "premium" || value === "exclusive") return value;
   return null;
 }
 
