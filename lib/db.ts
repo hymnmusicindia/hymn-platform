@@ -1067,8 +1067,23 @@ export async function listUsers() {
   return rows as User[];
 }
 
-export async function listRecentGoogleAvatarUrls(limit = 4) {
+function isRealUserAvatarUrl(value?: string | null) {
+  if (!value) return false;
+  const url = value.trim();
+  if (!/^https?:\/\//i.test(url)) return false;
+  const lower = url.toLowerCase();
+  if (lower.startsWith("data:") || lower.startsWith("blob:")) return false;
+  if (lower.includes("ui-avatars") || lower.includes("dicebear") || lower.includes("placeholder")) return false;
+  return true;
+}
+
+function realUserAvatarUrl(value?: string | null) {
+  return isRealUserAvatarUrl(value) ? value!.trim() : null;
+}
+
+export async function listRecentGoogleAvatarUrls(limit = 4): Promise<string[]> {
   const take = Math.max(1, Math.min(limit, 8));
+  const scanLimit = take * 5;
 
   if (usesPostgresPrisma()) {
     const users = await prisma.user.findMany({
@@ -1079,24 +1094,33 @@ export async function listRecentGoogleAvatarUrls(limit = 4) {
       },
       select: { avatar: true },
       orderBy: { createdAt: "desc" },
-      take
+      take: scanLimit
     });
-    return users.flatMap((user) => user.avatar ? [user.avatar] : []);
+    return users.flatMap((user): string[] => {
+      const avatar = realUserAvatarUrl(user.avatar);
+      return avatar ? [avatar] : [];
+    }).slice(0, take);
   }
 
   const pool = getPool();
   if (!pool) {
     return memory.users
-      .filter((user) => Boolean(user.googleId && user.avatarUrl && user.role !== "admin"))
+      .filter((user) => Boolean(user.googleId && isRealUserAvatarUrl(user.avatarUrl) && user.role !== "admin"))
       .slice(0, take)
-      .flatMap((user) => user.avatarUrl ? [user.avatarUrl] : []);
+      .flatMap((user): string[] => {
+        const avatar = realUserAvatarUrl(user.avatarUrl);
+        return avatar ? [avatar] : [];
+      });
   }
 
   const [rows] = await pool.query(
     "SELECT avatar AS avatarUrl FROM users WHERE google_id IS NOT NULL AND google_id <> '' AND avatar IS NOT NULL AND role IN ('customer', 'producer') ORDER BY created_at DESC LIMIT ?",
-    [take]
+    [scanLimit]
   );
-  return (rows as Array<{ avatarUrl?: string | null }>).flatMap((user) => user.avatarUrl ? [user.avatarUrl] : []);
+  return (rows as Array<{ avatarUrl?: string | null }>).flatMap((user): string[] => {
+    const avatar = realUserAvatarUrl(user.avatarUrl);
+    return avatar ? [avatar] : [];
+  }).slice(0, take);
 }
 
 export async function updateUserRole(userId: number, role: UserRole) {

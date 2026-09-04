@@ -3031,6 +3031,15 @@ html[data-theme="light"] .store-platform-option img[alt="Apple Music"] {
 
 .field:focus { border-color: var(--border-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
 
+.relative > svg.absolute[class*="left-"] + input.field,
+.relative > svg.absolute[class*="left-"] + textarea.field {
+  padding-left: 3rem !important;
+}
+
+.relative > svg.absolute.left-4.h-5 + input.field {
+  padding-left: 3.25rem !important;
+}
+
 .customer-panel-shell .dashboard-os-sidebar,
 .customer-panel-shell .dashboard-os-topbar,
 .producer-panel-shell .dashboard-os-sidebar,
