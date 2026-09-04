@@ -2,10 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { findProducerBySlug } from "@/lib/beat-store";
 import { listAllBeats, listProducerProfiles } from "@/lib/db";
-
-function formatCurrency(amount: number) {
-  return `\u20B9${amount.toLocaleString("en-IN")}`;
-}
+import { ProducerBeatGrid } from "@/components/producer-beat-grid";
 
 export default async function ProducerProfilePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -59,35 +56,7 @@ export default async function ProducerProfilePage({ params }: { params: Promise<
           <h2 className="text-3xl font-semibold sm:text-4xl">Every beat from {producer.name}</h2>
           <p className="mt-3 text-soft">Each available beat keeps its genre, mood, tempo, key and current licensing path visible.</p>
         </div>
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {producerBeats.map((beat) => (
-            <article key={beat.id} className="surface-card overflow-hidden p-4 sm:p-5">
-              <div className="aspect-square rounded-[1.5rem] bg-cover bg-center" style={{ backgroundImage: `url("${beat.coverImage}")` }} />
-              <div className="mt-5 space-y-4">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-soft">
-                  <span className="rounded-full border px-2.5 py-1" style={{ borderColor: "var(--border)" }}>{beat.genre}</span>
-                  <span className="rounded-full border px-2.5 py-1" style={{ borderColor: "var(--border)" }}>{beat.bpm} BPM</span>
-                  <span className="rounded-full border px-2.5 py-1" style={{ borderColor: "var(--border)" }}>{beat.keySignature}</span>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.24em]" style={{ color: "var(--money)" }}>{beat.vibeTag}</p>
-                  <h3 className="mt-2 text-2xl font-semibold">{beat.title}</h3>
-                  <p className="mt-2 text-sm text-soft">{beat.typeBeat}</p>
-                </div>
-                <p className="text-sm leading-7 text-soft">{beat.shortHook}</p>
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-soft">Starting from</p>
-                    <p className="mt-1 text-xl font-semibold">{formatCurrency(beat.startingPrice)}</p>
-                  </div>
-                  <Link href={`/beat-store#beat-${beat.id}`} className="btn-money pressable">
-                    Listen and license
-                  </Link>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
+        <ProducerBeatGrid beats={producerBeats} />
       </section>
     </main>
   );

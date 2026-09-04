@@ -8,6 +8,7 @@ import { beatLicenseOptions, buildBeatStorefront, type StorefrontBeat } from "@/
 import type { Beat, ProducerProfile } from "@/lib/types";
 import { BeatCard } from "@/components/beat-card";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
+import { useBeatPreviewPlayer } from "@/components/beat-preview-player";
 
 type LicenseChoice = "general" | "exclusive";
 
@@ -247,9 +248,8 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
   const displayProducerProfiles = producerProfiles;
   const displayBeats = beats;
   const { catalog } = useMemo(() => buildBeatStorefront(displayBeats, displayProducerProfiles), [displayBeats, displayProducerProfiles]);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
-  const [playingBeatId, setPlayingBeatId] = useState<number | null>(null);
+  const beatPlayer = useBeatPreviewPlayer();
   const [cartOpen, setCartOpen] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [visibleCount, setVisibleCount] = useState(initialVisibleCount);
@@ -358,6 +358,26 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const syncCart = (event?: Event) => {
+      const detailItems = event instanceof CustomEvent && Array.isArray(event.detail?.items) ? event.detail.items : null;
+      const rawItems = detailItems ?? JSON.parse(window.localStorage.getItem("hymn-beat-cart") || "[]");
+      if (!Array.isArray(rawItems)) return;
+      const normalized: CartItem[] = rawItems
+        .filter((item) => item.licenseType === "general" || item.licenseType === "basic" || item.licenseType === "exclusive")
+        .map((item) => ({ beatId: Number(item.beatId), licenseType: item.licenseType === "exclusive" ? "exclusive" : "general", price: Number(item.price ?? 0) }))
+        .filter((item): item is CartItem => Number.isInteger(item.beatId) && item.beatId > 0 && (item.licenseType === "general" || item.licenseType === "exclusive"));
+      setCart(normalized);
+    };
+    window.addEventListener("hymn-cart-updated", syncCart);
+    window.addEventListener("storage", syncCart);
+    return () => {
+      window.removeEventListener("hymn-cart-updated", syncCart);
+      window.removeEventListener("storage", syncCart);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
     const openCart = () => setCartOpen(true);
     window.addEventListener("hymn-open-cart", openCart);
@@ -407,33 +427,8 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
     return () => observer.disconnect();
   }, [filteredBeats.length]);
 
-  useEffect(
-    () => () => {
-      audioRef.current?.pause();
-      audioRef.current = null;
-    },
-    []
-  );
-
   const playPreview = (beat: StorefrontBeat) => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio();
-    }
-    const audio = audioRef.current;
-    if (playingBeatId === beat.id && !audio.paused) {
-      audio.pause();
-      audio.currentTime = 0;
-      setPlayingBeatId(null);
-      return;
-    }
-    audio.pause();
-    audio.src = beat.fileUrl;
-    audio.currentTime = 0;
-    audio.loop = false;
-    audio.volume = 1;
-    audio.onended = () => setPlayingBeatId((current) => (current === beat.id ? null : current));
-    void audio.play().catch(() => undefined);
-    setPlayingBeatId(beat.id);
+    beatPlayer.playBeat(beat, filteredBeats);
   };
 
   const toggleCart = (beat: StorefrontBeat, licenseType: LicenseChoice = "general") => {
@@ -699,8 +694,10 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
                 <BeatCard
                   key={beat.id}
                   beat={beat}
-                  active={playingBeatId === beat.id}
+                  active={beatPlayer.activeBeatId === beat.id}
+                  playing={beatPlayer.activeBeatId === beat.id && beatPlayer.playing}
                   onPlay={() => playPreview(beat)}
+                  onLicense={(licenseType) => beatPlayer.openLicensing(beat, licenseType)}
                   onAdd={(licenseType) => toggleCart(beat, licenseType)}
                   generalInCart={cart.some((item) => item.beatId === beat.id && item.licenseType === "general")}
                   exclusiveInCart={cart.some((item) => item.beatId === beat.id && item.licenseType === "exclusive")}
