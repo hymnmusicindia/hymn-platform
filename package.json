@@ -30,6 +30,7 @@
     "test:storage-integration": "tsx scripts/verify-private-storage-integration.ts",
     "test:admin-marketplace": "tsx scripts/verify-admin-marketplace.ts",
     "test:release-status": "tsx scripts/verify-release-status.ts",
+    "test:draft-deletion": "node --conditions=react-server --import tsx scripts/verify-draft-deletion.ts",
     "test:release-status-integration": "tsx scripts/verify-release-status-integration.ts",
     "test:change-requests-integration": "tsx scripts/verify-release-change-requests-integration.ts",
     "test:royalty-integration": "tsx scripts/verify-royalty-ledger-integration.ts",

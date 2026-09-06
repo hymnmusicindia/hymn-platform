@@ -73,10 +73,18 @@ export function ReleaseSummaryCard({
 
   async function deleteRelease() {
     setBusy("delete");
-    const response = await fetch(`/api/releases/${release.id}`, { method: "DELETE" });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) { setNotice({ text: data.error || "Something went wrong. Please try again.", error: true }); setBusy(null); setDeleteOpen(false); return; }
-    setDeleteOpen(false); setNotice({ text: "Draft deleted successfully." }); router.refresh();
+    try {
+      const response = await fetch(`/api/releases/${release.id}`, { method: "DELETE" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) { setNotice({ text: data.error || "Something went wrong. Please try again.", error: true }); return; }
+      setNotice({ text: "Draft deleted successfully." });
+      router.refresh();
+    } catch {
+      setNotice({ text: "Could not reach the server. Please try again.", error: true });
+    } finally {
+      setBusy(null);
+      setDeleteOpen(false);
+    }
   }
 
   return (
@@ -150,7 +158,7 @@ export function ReleaseSummaryCard({
       </div>
       {deleteOpen && typeof document !== "undefined" ? createPortal(<div role="dialog" aria-modal="true" aria-labelledby={`delete-title-${release.id}`} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onKeyDown={(event) => { if (event.key === "Escape" && !busy) setDeleteOpen(false); }}>
         <div className="w-full max-w-md rounded-2xl border p-5 shadow-2xl sm:p-6" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
-          <div className="flex items-start justify-between gap-4"><div><h2 id={`delete-title-${release.id}`} className="text-xl font-semibold">Delete this draft?</h2><p className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }}>This draft release will be permanently removed. This action cannot be undone.</p></div><button type="button" onClick={() => setDeleteOpen(false)} disabled={busy !== null} aria-label="Close dialog" className="rounded-full p-1.5 hover:bg-white/10"><X className="h-5 w-5" /></button></div>
+          <div className="flex items-start justify-between gap-4"><div><h2 id={`delete-title-${release.id}`} className="text-xl font-semibold">Delete this draft?</h2><p className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }}>This draft will be removed from your releases and can no longer be edited.</p></div><button type="button" onClick={() => setDeleteOpen(false)} disabled={busy !== null} aria-label="Close dialog" className="rounded-full p-1.5 hover:bg-white/10"><X className="h-5 w-5" /></button></div>
           <div className="mt-6 flex justify-end gap-3"><button type="button" onClick={() => setDeleteOpen(false)} disabled={busy !== null} className="btn-outline pressable">Cancel</button><button type="button" onClick={deleteRelease} disabled={busy !== null} className="pressable rounded-full bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-60">{busy === "delete" ? "Deleting…" : "Delete"}</button></div>
         </div>
       </div>, document.body) : null}

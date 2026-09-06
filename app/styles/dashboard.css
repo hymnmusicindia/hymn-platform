@@ -762,23 +762,29 @@ html[data-theme="light"] .dashboard-os-icon-button {
 }
 
 .home-release-showcase-viewport {
-  mask-image: linear-gradient(180deg, transparent 0%, #000 13%, #000 87%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 4%, #000 96%, transparent 100%);
 }
 
 .home-release-showcase-track {
-  display: grid;
+  display: flex;
+  width: max-content;
   gap: 1rem;
-  will-change: transform;
   backface-visibility: hidden;
 }
 
-.home-release-showcase-track-up {
-  animation: hymn-release-showcase-up 28s linear infinite;
+.home-release-showcase-track-left {
+  animation: hymn-release-showcase-left 100s linear infinite;
+  will-change: transform;
 }
 
-.home-release-showcase-track-down {
-  animation: hymn-release-showcase-down 32s linear infinite;
-  transform: translateY(-50%);
+.home-release-showcase-track-right {
+  animation: hymn-release-showcase-left 110s linear infinite reverse;
+  will-change: transform;
+}
+
+.home-release-showcase-track-static {
+  animation: none;
+  transform: none;
 }
 
 .home-release-showcase-viewport:hover .home-release-showcase-track {
@@ -1497,21 +1503,12 @@ body:has(.auth-standalone-page) > footer {
   }
 }
 
-@keyframes hymn-release-showcase-up {
+@keyframes hymn-release-showcase-left {
   from {
-    transform: translateY(0);
+    transform: translateX(0);
   }
   to {
-    transform: translateY(-50%);
-  }
-}
-
-@keyframes hymn-release-showcase-down {
-  from {
-    transform: translateY(-50%);
-  }
-  to {
-    transform: translateY(0);
+    transform: translateX(calc(-50% - 0.5rem));
   }
 }
 

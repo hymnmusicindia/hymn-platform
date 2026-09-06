@@ -79,20 +79,21 @@ const platformPanels: Array<[string, string, LucideIcon]> = [
 export default async function HomePage() {
   const [{ beats, producerProfiles, googleAvatarUrls, featuredReviews, featuredReleases }, session] = await Promise.all([getPublicHomePreview(), getSession()]);
   const { catalog } = buildBeatStorefront(beats, producerProfiles);
-  const homepageShowcaseReleases = featuredReleases.length ? featuredReleases : catalog.slice(0, 9).map((beat) => ({
-    id: beat.id,
-    title: beat.title,
-    artistName: beat.producerName,
-    artworkUrl: beat.coverImage,
-    releaseType: "single",
-    status: "live"
-  }));
-  const showcaseLeftColumn = homepageShowcaseReleases.filter((_, index) => index % 2 === 0);
-  const showcaseRightColumn = homepageShowcaseReleases.filter((_, index) => index % 2 === 1);
-  const showcaseColumns = [
-    { key: "left", items: showcaseLeftColumn.length ? showcaseLeftColumn : homepageShowcaseReleases, direction: "up" },
-    { key: "right", items: showcaseRightColumn.length ? showcaseRightColumn : homepageShowcaseReleases, direction: "down" }
-  ] as const;
+  const homepageShowcaseReleases = [...featuredReleases];
+  for (let index = homepageShowcaseReleases.length - 1; index > 0; index--) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [homepageShowcaseReleases[index], homepageShowcaseReleases[randomIndex]] = [homepageShowcaseReleases[randomIndex], homepageShowcaseReleases[index]];
+  }
+  const showcaseRows = ["left", "static", "right"].map((direction, rowIndex) => {
+    const items = homepageShowcaseReleases.filter((_, index) => index % 3 === rowIndex);
+    const source = items.length ? items : homepageShowcaseReleases;
+    return {
+      direction,
+      items: direction !== "static" && source.length
+        ? Array.from({ length: Math.max(8, source.length) }, (_, index) => source[index % source.length])
+        : source
+    };
+  });
   return (
     <main className="overflow-hidden bg-background pb-20 text-foreground">
       <section className="relative -mt-[73px] min-h-[96vh] overflow-hidden pt-[73px]">
@@ -232,7 +233,7 @@ export default async function HomePage() {
               <h2 className="mt-6 text-4xl font-extrabold uppercase leading-[0.98] tracking-[-0.05em] text-white sm:text-5xl lg:text-6xl">
                 Yes, this release moved through HYMN.
               </h2>
-              <p className="mt-6 max-w-md text-sm font-medium leading-7 text-white/72 sm:text-base">
+              <p className="mt-6 max-w-md text-sm font-medium leading-7 sm:text-base" style={{ color: "#d4d4d8" }}>
                 Spotlight real releases from your HYMN database and turn the homepage into living proof of the platform.
               </p>
               <Link href={session ? "/distribution/start" : "/login?mode=signup"} className="mt-7 inline-flex items-center gap-3 rounded-xl border border-white/12 bg-white/[0.08] px-5 py-3 text-sm font-semibold text-white transition hover:border-white/28 hover:bg-white/[0.14]">
@@ -241,18 +242,19 @@ export default async function HomePage() {
               </Link>
             </div>
 
-            <div className="home-release-showcase-viewport relative grid max-h-[560px] grid-cols-2 gap-4 overflow-hidden pr-1 lg:-my-20 lg:max-h-[640px]">
-              {showcaseColumns.map((column) => (
-                <div key={column.key} className="home-release-showcase-column overflow-hidden">
-                  <div className={`home-release-showcase-track ${column.direction === "up" ? "home-release-showcase-track-up" : "home-release-showcase-track-down"}`}>
-                    {[...column.items, ...column.items].map((release, index) => (
-                      <article key={`${column.key}-${release.id}-${index}`} className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.06] shadow-[0_18px_60px_rgba(0,0,0,0.32)]">
+            <div className="home-release-showcase-viewport relative grid min-w-0 gap-4 overflow-hidden">
+              {!homepageShowcaseReleases.length ? <p className="py-12 text-center text-sm" style={{ color: "#d4d4d8" }}>Released music will appear here soon.</p> : null}
+              {showcaseRows.map((row) => (
+                <div key={row.direction} className="overflow-hidden">
+                  <div className={`home-release-showcase-track home-release-showcase-track-${row.direction}`}>
+                    {(row.direction === "static" ? row.items : [...row.items, ...row.items]).map((release, index) => (
+                      <article key={`${row.direction}-${release.id}-${index}`} aria-hidden={index >= row.items.length ? true : undefined} className="group relative w-[140px] shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/[0.06] shadow-[0_18px_60px_rgba(0,0,0,0.32)] sm:w-[170px]">
                         <div className="aspect-square overflow-hidden">
                           <img src={release.artworkUrl} alt={`${release.title} artwork`} loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
                         </div>
                         <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,transparent_0%,rgba(0,0,0,0.58)_30%,rgba(0,0,0,0.94)_100%)] px-3 pb-3 pt-12 text-white">
                           <p className="line-clamp-1 text-xs font-extrabold uppercase tracking-[-0.02em] drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)]">{release.title}</p>
-                          <p className="line-clamp-1 text-[11px] font-semibold text-white/82 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">{release.artistName}</p>
+                          <p className="line-clamp-1 text-[11px] font-semibold text-white/[0.82] drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">{release.artistName}</p>
                         </div>
                       </article>
                     ))}

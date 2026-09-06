@@ -22,7 +22,7 @@ export const getPublicHomePreview = unstable_cache(
       ? allReleases.filter((release) => selectedOrder.has(release.id)).sort((a, b) => (selectedOrder.get(a.id) ?? 0) - (selectedOrder.get(b.id) ?? 0))
       : allReleases;
     const featuredReleases = releaseSource
-      .filter((release) => Boolean(release.artworkUrl))
+      .filter((release) => Boolean(release.artworkUrl) && (release.status === "live" || release.status === "partially_live"))
       .slice(0, HOME_RELEASE_SHOWCASE_LIMIT)
       .map((release) => ({
         id: release.id,
@@ -34,6 +34,6 @@ export const getPublicHomePreview = unstable_cache(
       }));
     return { beats, producerProfiles, googleAvatarUrls, featuredReviews, featuredReleases };
   },
-  ["public-home-preview-v3"],
+  ["public-home-preview-v4"],
   { revalidate: 300, tags: ["public-home-preview"] }
 );

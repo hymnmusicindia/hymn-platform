@@ -629,7 +629,24 @@ export async function deleteDraftReleaseForUser(userId: number, releaseId: numbe
   if (source.status !== "draft") return "blocked";
   const pool = getPool();
   if (!pool) {
-    if (isPostgresPrisma()) await prisma.release.delete({ where: { id: releaseId }, select: { id: true } });
+    if (isPostgresPrisma()) {
+      // Preserve linked assets, orders, and audit records whose foreign keys
+      // prohibit hard deletion. Customer release reads exclude archived rows.
+      // Recheck ownership and status atomically in case submission raced deletion.
+      const result = await prisma.release.updateMany({
+        where: {
+          id: releaseId,
+          status: "DRAFT",
+          archivedAt: null,
+          OR: [
+            { ownerUserId: userId },
+            { ownerUserId: null, userId, releaseSource: { not: "ADMIN_MANUAL" } }
+          ]
+        },
+        data: { status: "ARCHIVED", archivedAt: new Date() }
+      });
+      if (result.count !== 1) return "blocked";
+    }
     else {
       const index = memory.releases.findIndex((release) => release.id === releaseId && release.userId === userId);
       if (index < 0) return "not_found";
