@@ -13,7 +13,7 @@ function firstValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function DistributionStartPage({ searchParams }: { searchParams?: Promise<{ edit?: string | string[]; resume?: string | string[]; manage?: string | string[]; onboarding?: string | string[]; campaign?: string | string[]; utm_source?: string | string[]; utm_medium?: string | string[]; utm_campaign?: string | string[]; utm_content?: string | string[]; utm_term?: string | string[] }> }) {
+export default async function DistributionStartPage({ searchParams }: { searchParams?: Promise<{ edit?: string | string[]; correctionField?: string | string[]; resume?: string | string[]; manage?: string | string[]; onboarding?: string | string[]; campaign?: string | string[]; utm_source?: string | string[]; utm_medium?: string | string[]; utm_campaign?: string | string[]; utm_content?: string | string[]; utm_term?: string | string[] }> }) {
   const user = await getCurrentUserForPage();
   const params = (await searchParams) ?? {};
   const requestedId = Number(firstValue(params.edit) ?? firstValue(params.resume) ?? firstValue(params.manage) ?? "");
@@ -74,7 +74,7 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
 
           {user ? (
             <div className="mx-auto w-full max-w-[1440px]">
-              <ReleaseForm selectedPlan={selectedPlan} hasActiveSubscription={hasActiveSubscription} hymnCreditBalance={Number(user.referralCredits || 0)} initialRelease={editingRelease} firstReleaseOffer={Boolean(campaignEligibility?.eligible && campaignDraftEligible)} campaignAttribution={attribution} prefillSuggestions={releasePrefill.suggestions} />
+              <ReleaseForm selectedPlan={selectedPlan} hasActiveSubscription={hasActiveSubscription} hymnCreditBalance={Number(user.referralCredits || 0)} initialRelease={editingRelease} initialCorrectionField={firstValue(params.correctionField)} firstReleaseOffer={Boolean(campaignEligibility?.eligible && campaignDraftEligible)} campaignAttribution={attribution} prefillSuggestions={releasePrefill.suggestions} />
             </div>
           ) : firstValue(params.onboarding) === "release" ? <ReleaseOnboardingGate /> : (
             <div className="surface-card p-6 text-center sm:p-8">

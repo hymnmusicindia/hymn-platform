@@ -977,6 +977,7 @@ export function ReleaseForm({
   firstReleaseOffer = false,
   campaignAttribution = {},
   prefillSuggestions = [],
+  initialCorrectionField,
 }: {
   selectedPlan: DistributionPlanOption;
   hasActiveSubscription?: boolean;
@@ -985,6 +986,7 @@ export function ReleaseForm({
   firstReleaseOffer?: boolean;
   campaignAttribution?: Record<string, string>;
   prefillSuggestions?: ReleasePrefillSuggestion[];
+  initialCorrectionField?: string;
 }) {
   const router = useRouter();
   const today = useMemo(() => new Date(), []);
@@ -996,7 +998,10 @@ export function ReleaseForm({
     () => toDateInputValue(addDays(today, 20)),
     [today],
   );
-  const [step, setStep] = useState(initialRelease ? 7 : 1);
+  const correctionTrackMatch = initialRelease?.reviewIssues?.fields.some(issue => issue.field === initialCorrectionField)
+    ? initialCorrectionField?.match(/^tracks\.(\d+)\./) : null;
+  const correctionTrackIndex = correctionTrackMatch ? Number(correctionTrackMatch[1]) : null;
+  const [step, setStep] = useState(correctionTrackIndex !== null ? 3 : initialRelease ? 7 : 1);
   const trackCampaignEvent = (event: string, metadata?: Record<string, unknown>) => {
     if (!firstReleaseOffer) return;
     void fetch("/api/promotions/first-release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event, attribution: campaignAttribution, metadata }) }).catch(() => undefined);
@@ -1006,7 +1011,7 @@ export function ReleaseForm({
   const stepTransitionRef = useRef(false);
   const stepTransitionTimerRef = useRef<number | null>(null);
   const [mobileStepMenuOpen, setMobileStepMenuOpen] = useState(false);
-  const [expandedTrack, setExpandedTrack] = useState(0);
+  const [expandedTrack, setExpandedTrack] = useState(correctionTrackIndex ?? 0);
   const [artistRemovalCandidateId, setArtistRemovalCandidateId] = useState<number | null>(null);
   const [trackArtistRemovalCandidate, setTrackArtistRemovalCandidate] = useState<string | null>(null);
   const audioPreviewObjectUrlsRef = useRef<Set<string>>(new Set());

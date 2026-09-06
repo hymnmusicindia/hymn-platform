@@ -39,6 +39,7 @@
     "test:distribution-idempotency": "tsx scripts/verify-distribution-idempotency.ts",
     "test:direnote-integration": "node --conditions=react-server --import tsx scripts/verify-direnote-integration.ts",
     "test:direnote-contract": "tsx scripts/verify-direnote-contract.ts",
+    "test:direnote-corrections": "node --conditions=react-server --import tsx scripts/verify-direnote-corrections.ts",
     "test:managed-services": "tsx scripts/verify-managed-services.ts",
     "test:performance-execution": "tsx scripts/verify-performance-execution.ts",
     "test:managed-services-integration": "tsx scripts/verify-managed-services-integration.ts",

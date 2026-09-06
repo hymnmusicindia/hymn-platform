@@ -1,4 +1,5 @@
 import type { ArtistProfile, Release } from "@/lib/types";
+import { normalizeDireNoteUpc } from "@/lib/direnote-upc";
 import {
   DIRENOTE_CONTENT_TYPES,
   DIRENOTE_GENRES,
@@ -464,7 +465,7 @@ export function parseDireNoteResponse(response: unknown): DireNoteParsedResponse
     raw: response,
     success,
     message: String(record.message ?? record.error ?? (success ? "DireNote accepted release." : "DireNote rejected release.")),
-    upc: typeof upc === "string" || typeof upc === "number" ? String(upc).trim() || null : null,
+    upc: normalizeDireNoteUpc(upc),
     distributorReleaseId: typeof nested.distributor_release_id === "string" ? nested.distributor_release_id : typeof nested.release_id === "string" ? nested.release_id : null,
     warnings: Array.isArray(record.warnings) ? record.warnings.map(String) : [],
     trackIsrcs: tracks.map((track: any, index: number) => ({

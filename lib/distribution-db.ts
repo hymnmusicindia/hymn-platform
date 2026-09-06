@@ -739,12 +739,12 @@ export async function updateDetailedReleaseStatus(releaseId: number, status: Rel
   if (!pool) {
     if (isPostgresPrisma()) {
       const reviewIssues = review ? { type: review.issueType, severity: review.severity, fields: review.fields } : undefined;
-      await prisma.$transaction(async (tx) => {
+      const didTransition = await prisma.$transaction(async (tx) => {
         const current = await tx.release.findUnique({ where: { id: releaseId }, select: { status: true, version: true } });
         if (!current) throw new Error("Release not found.");
         const previousStatus = current.status.toLowerCase() as ReleaseStatus;
         transitionReleaseStatus({ currentStatus: previousStatus, nextStatus: status, reason: note, manualOverride: options?.manualOverride });
-        if (previousStatus === status) return;
+        if (previousStatus === status) return false;
         const changed = await tx.release.updateMany({ where: { id: releaseId, version: current.version }, data: {
           status: status.toUpperCase() as any, version: { increment: 1 },
           ...(review ? { rejectionReason: status === "rejected" ? review.reason : undefined, correctionReason: status === "changes_requested" ? review.reason : undefined, reviewIssues: reviewIssues as any, adminInternalNote: review.adminInternalNote || null, reviewedAt: new Date(), reviewedBy: review.reviewedBy ?? null } : {})
@@ -752,9 +752,10 @@ export async function updateDetailedReleaseStatus(releaseId: number, status: Rel
         if (changed.count !== 1) throw new Error("Release changed concurrently. Refresh and retry.");
         await tx.releaseStatusTransition.create({ data: { releaseId, previousStatus: current.status, newStatus: status.toUpperCase() as any, actorType: options?.actorType ?? (review?.reviewedBy ? "admin" : "system"), actorId: options?.actorId ?? null, reason: note?.trim() || null, metadata: { manualOverride: Boolean(options?.manualOverride) } } });
         await tx.auditLog.create({ data: { actorId: options?.actorId ?? null, action: "RELEASE_STATUS_TRANSITION", entity: "release", entityId: String(releaseId), metadata: { previousStatus, newStatus: status, reason: note?.trim() || null, version: current.version + 1, manualOverride: Boolean(options?.manualOverride) } } });
+        return true;
       });
       const release = await getDetailedReleaseById(releaseId);
-      if (release) await notifyReleaseStatusChange(release, status, note);
+      if (release && didTransition) await notifyReleaseStatusChange(release, status, note);
       return release;
     }
     const release = memory.releases.find((item) => item.id === releaseId);
