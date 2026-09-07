@@ -592,7 +592,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
         </div>
       ) : null}
 
-      <div className={clsx("fixed inset-0 z-[100] transition", cartOpen ? "pointer-events-auto" : "pointer-events-none")} aria-hidden={!cartOpen}>
+      <div className={clsx("fixed inset-0 z-[100] overflow-hidden transition", cartOpen ? "pointer-events-auto" : "pointer-events-none")} aria-hidden={!cartOpen} inert={!cartOpen}>
         <button type="button" className={clsx("absolute inset-0 bg-black/45 transition-opacity", cartOpen ? "opacity-100" : "opacity-0")} onClick={() => setCartOpen(false)} aria-label="Close cart" />
         <aside className={clsx("absolute right-0 top-0 flex h-[100dvh] w-full max-w-[410px] flex-col border-l p-5 shadow-2xl transition-transform duration-300", cartOpen ? "translate-x-0" : "translate-x-full")} style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)", opacity: 1 }} role="dialog" aria-modal="true" aria-label="Shopping cart">
           <div className="flex items-center justify-between border-b border-[var(--border)] pb-4">

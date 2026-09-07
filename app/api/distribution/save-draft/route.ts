@@ -54,6 +54,8 @@ export async function POST(request: Request) {
 
       tracks.push({
         trackTitle: track.trackTitle ?? "",
+        language: track.language,
+        lyrics: track.lyrics,
         version: track.version ?? undefined,
         trackNumber: track.trackNumber ?? tracks.length + 1,
         primaryArtist: track.primaryArtist ?? metadata.artistName ?? "",
@@ -95,6 +97,11 @@ export async function POST(request: Request) {
         trackName: metadata.tracks?.[0]?.trackTitle ?? metadata.trackName ?? metadata.releaseTitle ?? "",
         releaseTitle: metadata.releaseTitle ?? metadata.tracks?.[0]?.trackTitle ?? "Untitled release",
         releaseType: metadata.releaseType ?? "single",
+        contentType: metadata.contentType,
+        sunoReceiptUrl: metadata.sunoReceiptUrl,
+        sunoLink: metadata.sunoLink,
+        licenseReceiptUrl: metadata.licenseReceiptUrl,
+        releasePreviouslyReleased: metadata.releasePreviouslyReleased,
         audioUrl: tracks[0]?.audioUrl ?? "",
         artworkUrl,
         releaseDate: metadata.releaseDate ?? "",

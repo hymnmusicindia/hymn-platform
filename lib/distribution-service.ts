@@ -20,10 +20,12 @@ import { findUserById, listArtistProfilesByUser } from "@/lib/db";
 import type { Release } from "@/lib/types";
 import { createAdminTaskOnce, resolveAdminTask } from "@/lib/task-queue";
 import { getDireNoteConfig } from "@/lib/direnote/direnote-config";
-import { claimDistributionSubmission, finishDistributionSubmission } from "@/lib/distribution-idempotency";
+import { activateDireNoteAttempt, claimDistributionSubmission, currentDireNoteAttempt, finishDistributionSubmission } from "@/lib/distribution-idempotency";
 import { reserveDireNoteRequest } from "@/lib/direnote-rate-limit";
 import { createDistributorAssetUrl } from "@/lib/distributor-asset-delivery";
 import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution";
+import { prisma } from "@/lib/prisma";
+import { diffDireNotePayload } from "@/lib/direnote-payload-diff";
 
 export type DistributionValidationIssue = {
   field: string;
@@ -70,7 +72,13 @@ export async function buildDireNotePayloadForRelease(release: Release, options: 
     Promise.all((release.tracks ?? []).map(async (track) => ({ ...track, audioUrl: await createDistributorAssetUrl(track.audioUrl, options.siteUrl) }))),
   ]);
 
-  return buildDireNotePayload({ ...release, artworkUrl, tracks }, {
+  const sunoReceiptUrl = release.sunoReceiptUrl ?? release.suno_receipt_url;
+  const licenseReceiptUrl = release.licenseReceiptUrl ?? release.license_receipt_url ?? release.licenseDocumentUrl ?? release.beatLicenseUrl;
+  const proofs = {
+    sunoReceiptUrl: sunoReceiptUrl ? await createDistributorAssetUrl(sunoReceiptUrl, options.siteUrl) : sunoReceiptUrl,
+    licenseReceiptUrl: licenseReceiptUrl ? await createDistributorAssetUrl(licenseReceiptUrl, options.siteUrl) : licenseReceiptUrl
+  };
+  return buildDireNotePayload({ ...release, ...proofs, artworkUrl, tracks }, {
     siteUrl: options.siteUrl,
     ownerEmail: owner?.email ?? null,
     artistProfiles,
@@ -113,21 +121,28 @@ function httpErrorMode(status: number, providerReason?: string) {
   return { retryable: false, releaseStatus: "delivery_failed" as const, queueStage: "rejected" as const, action: "DIRENOTE_FAILED" };
 }
 
-export async function submitRelease(releaseId: number, options: { actorId?: number | null; siteUrl?: string; retry?: boolean; adminConfirmedExistingArtists?: boolean } = {}) {
+export async function submitRelease(releaseId: number, options: { actorId?: number | null; siteUrl?: string; retry?: boolean; adminConfirmedExistingArtists?: boolean; correctionReingest?: boolean } = {}) {
+  return prisma.$transaction(async lock => {
+    const rows = await lock.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(81422028, ${releaseId}::integer) AS locked`;
+    if (!rows[0]?.locked) throw new Error("DireNote release is already being synchronized or submitted.");
+    return submitLockedRelease(releaseId, options);
+  }, { timeout: 180_000, maxWait: 5000 });
+}
+
+async function submitLockedRelease(releaseId: number, options: { actorId?: number | null; siteUrl?: string; retry?: boolean; adminConfirmedExistingArtists?: boolean; correctionReingest?: boolean }) {
   const release = await getDetailedReleaseById(releaseId);
   if (!release) throw new Error("Release not found.");
 
   await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: options.retry ? "DIRENOTE_RETRY_STARTED" : "APPROVE_RELEASE_STARTED" });
 
   const payload = await buildDireNotePayloadForRelease(release, options);
+  const previousAttempt = options.correctionReingest ? await currentDireNoteAttempt(releaseId) : null;
+  if (options.correctionReingest && payload.releasePreviouslyReleased !== "Yes") {
+    delete payload.upc;
+    for (const track of payload.tracks) delete track.isrc;
+  }
   const validation = validationResult(payload, options);
   const redactedPayload = redactDireNotePayload(payload);
-
-  console.info("[DireNote] Final rights lines", {
-    releaseId,
-    cLine: redactedPayload.cLine,
-    pLine: redactedPayload.pLine
-  });
 
   if (!validation.ok) {
     const reason = validation.issues.map((issue) => issue.message).join(" ") || "DireNote validation failed.";
@@ -146,7 +161,7 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
     return { release: await getDetailedReleaseById(releaseId), validation, submitted: false, retryable: false, payload: redactedPayload };
   }
 
-  const claim = await claimDistributionSubmission(releaseId, payload);
+  const claim = await claimDistributionSubmission(releaseId, payload, previousAttempt?.id);
   if (claim.alreadySubmitted) return { release, validation, submitted: true, duplicate: true, retryable: false };
   if (!claim.claimed) return {
     release,
@@ -163,10 +178,15 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
   await updateDetailedReleaseStatus(releaseId, "queued_for_distribution", "Validated and queued for DireNote API.");
   await updateDetailedReleaseStatus(releaseId, "submitting_to_distributor", "DireNote submission claimed and started.");
 
+  let providerAccepted = false;
   try {
     await reserveDireNoteRequest("content_ingestion", releaseId, options.actorId);
+    await prisma.distributionSubmissionAttempt.update({ where: { id: claim.attempt.id }, data: {
+      payloadRedacted: JSON.parse(JSON.stringify(redactedPayload)),
+      payloadDiff: previousAttempt?.payloadRedacted ? JSON.parse(JSON.stringify(diffDireNotePayload(previousAttempt.payloadRedacted, redactedPayload))) : undefined
+    } });
     const response = await submitToDireNote(payload);
-    const data = response.data ?? (response.error ? { error: response.error } : {});
+    const data = redactDireNoteDiagnostic(response.data ?? (response.error ? { error: response.error } : {}));
     if (!response.success) {
       const status = response.httpStatus ?? 503;
       const mode = httpErrorMode(status, response.providerReason);
@@ -197,14 +217,28 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
     }
 
     const parsed = parseDireNoteResponse(data);
+    providerAccepted = true;
     const automaticStatus = "sent_to_distributor" as const;
+    const assignedTrackIsrcs = parsed.trackIsrcs.map(remote => {
+      const local = release.tracks?.find(track => track.trackNumber === remote.trackNumber || track.trackTitle === remote.trackTitle);
+      return payload.releasePreviouslyReleased === "Yes" && local?.isrc ? { ...remote, isrc: local.isrc } : remote;
+    });
+    await activateDireNoteAttempt(claim.attempt.id, {
+      upc: parsed.upc ?? null,
+      trackIdentifiers: (release.tracks ?? []).map(track => ({
+        id: track.id, title: track.trackTitle, trackNumber: track.trackNumber,
+        isrc: assignedTrackIsrcs.find(remote => remote.trackNumber === track.trackNumber || remote.trackTitle === track.trackTitle)?.isrc
+          ?? (payload.releasePreviouslyReleased === "Yes" ? track.isrc ?? null : null)
+      })),
+      responseRedacted: redactDireNoteDiagnostic(data) as never
+    });
     const updatedRelease = await markReleaseDistributionSuccess({
       releaseId,
       status: automaticStatus,
       distributorReleaseId: parsed.distributorReleaseId,
       upc: parsed.upc,
-      trackIsrcs: parsed.trackIsrcs,
-      responsePayload: data,
+      trackIsrcs: assignedTrackIsrcs,
+      responsePayload: redactDireNoteDiagnostic(data),
       warnings: parsed.warnings
     });
 
@@ -217,6 +251,10 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
     return { release: updatedRelease, validation, submitted: true, retryable: false, warnings: parsed.warnings };
   } catch (error) {
     const message = error instanceof Error ? error.message : "DireNote submission failed.";
+    if (providerAccepted) {
+      await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: "DIRENOTE_ACCEPTED_RECONCILIATION_REQUIRED", details: { attemptId: claim.attempt.id } });
+      return { release: await getDetailedReleaseById(releaseId), validation, submitted: true, retryable: false, error: "DireNote accepted this submission. HYMN needs to reconcile the result; do not submit again." };
+    }
     console.error("[DireNote] Submission pipeline failed", { releaseId, message });
     await updateDetailedReleaseStatus(releaseId, "queued_for_distribution", message);
     await finishDistributionSubmission(claim.attempt.id, { state: "retryable", safeError: message.slice(0, 500) });

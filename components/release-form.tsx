@@ -165,7 +165,8 @@ import type {
   DistributionQueueSummary,
   Release,
 } from "@/lib/types";
-import { DIRENOTE_LANGUAGES } from "@/lib/direnote-config";
+import { DIRENOTE_LANGUAGES, DIRENOTE_CONTENT_TYPES, normalizeDireNoteContentType } from "@/lib/direnote-config";
+import { readTrackLanguage } from "@/lib/track-language";
 import type { ReleasePrefillSuggestion } from "@/lib/release-prefill";
 
 type TrackDraft = {
@@ -199,11 +200,16 @@ type TrackDraft = {
   audioPreviewUrl: string;
   duration: string;
   titleLanguage: string;
+  lyrics: string;
   explicitContent: boolean;
   dolbyAtmos: boolean;
 };
 
 type ReleaseDraft = {
+  contentType: string;
+  sunoReceiptUrl: string;
+  sunoLink: string;
+  licenseReceiptUrl: string;
   releasePreviouslyReleased: boolean;
   upcCode: string;
   existingIsrcCode: string;
@@ -217,6 +223,7 @@ type ReleaseDraft = {
   selectedCountries: string[];
   releaseTiming: "quick_release" | "schedule_release";
   scheduledReleaseDate: string;
+  originalReleaseDate: string;
   copyrightOwner: string;
   publishingRights: string;
 };
@@ -339,7 +346,8 @@ function createTrack(trackNumber = 1): TrackDraft {
     requiresAudioReplacement: false,
     audioPreviewUrl: "",
     duration: "",
-    titleLanguage: "English",
+    titleLanguage: "",
+    lyrics: "",
     explicitContent: false,
     dolbyAtmos: false,
   };
@@ -385,6 +393,7 @@ function createInitialReleaseDraft(
     const suggested = Object.fromEntries(prefillSuggestions.map((item) => [item.field, item.value]));
     return {
       releasePreviouslyReleased: false,
+      contentType: "", sunoReceiptUrl: "", sunoLink: "", licenseReceiptUrl: "",
       upcCode: "",
       existingIsrcCode: "",
       releaseTitle: "",
@@ -397,6 +406,7 @@ function createInitialReleaseDraft(
       selectedCountries: [],
       releaseTiming: "quick_release",
       scheduledReleaseDate: minimumScheduledDate,
+      originalReleaseDate: "",
       copyrightOwner: suggested.copyrightOwner ?? "",
       publishingRights: suggested.publishingRights ?? "",
     };
@@ -411,7 +421,12 @@ function createInitialReleaseDraft(
     releasePreviouslyReleased: Boolean(
       initialRelease.releasePreviouslyReleased,
     ),
+    contentType: normalizeDireNoteContentType(initialRelease.contentType),
+    sunoReceiptUrl: initialRelease.sunoReceiptUrl ?? initialRelease.suno_receipt_url ?? "",
+    sunoLink: initialRelease.sunoLink ?? "",
+    licenseReceiptUrl: initialRelease.licenseReceiptUrl ?? initialRelease.license_receipt_url ?? initialRelease.licenseDocumentUrl ?? initialRelease.beatLicenseUrl ?? "",
     upcCode: initialRelease.upcCode ?? "",
+    originalReleaseDate: initialRelease.originalReleaseDate?.slice(0, 10) ?? "",
     existingIsrcCode: initialRelease.tracks?.[0]?.isrc ?? "",
     releaseTitle: initialRelease.releaseTitle?.trim() || "",
     recordLabelName:
@@ -629,7 +644,7 @@ function createTracksFromRelease(
     const nestedTrackMetadata = trackMetadata.metadata && typeof trackMetadata.metadata === "object"
       ? trackMetadata.metadata as Record<string, unknown>
       : {};
-    const savedArtistProfileIds = Array.isArray(trackMetadata.artistProfileIds)
+    const savedArtistProfileIds = Array.isArray(track?.artistProfileIds) ? track.artistProfileIds : Array.isArray(trackMetadata.artistProfileIds)
       ? trackMetadata.artistProfileIds
       : Array.isArray(nestedTrackMetadata.artistProfileIds)
         ? nestedTrackMetadata.artistProfileIds
@@ -681,15 +696,8 @@ function createTracksFromRelease(
       requiresAudioReplacement: correctionMentions(initialRelease, new RegExp(`audio|tracks\\.${index}\\.audio_url`, "i")),
       audioPreviewUrl: track?.audioUrl || initialRelease?.audioUrl || "",
       duration: track?.duration?.trim() || "",
-      titleLanguage:
-        typeof track?.metadata === "object" &&
-        track?.metadata &&
-        "titleLanguage" in track.metadata
-          ? String(
-              (track.metadata as Record<string, unknown>).titleLanguage ||
-                "English",
-            )
-          : "English",
+      titleLanguage: readTrackLanguage(track),
+      lyrics: track?.lyrics ?? track?.trackLyrics ?? "",
       explicitContent: Boolean(track?.explicitContent) || legacyExplicitVersion,
       dolbyAtmos: Boolean(track?.dolbyAtmos),
     };
@@ -1374,6 +1382,9 @@ export function ReleaseForm({
           .map((item) => item.label),
         tracks: tracks.map((track, index) => ({
           trackTitle: track.trackTitle,
+          language: track.titleLanguage,
+          lyrics: track.lyrics,
+          version: track.versionPreset === "Other" ? track.customVersion : track.versionPreset,
           trackNumber: index + 1,
           primaryArtist: track.primaryArtistIds
             .map((id) => knownProfiles[id]?.name)
@@ -1488,6 +1499,15 @@ export function ReleaseForm({
   const registerField = (key: string) => (node: HTMLElement | null) => {
     fieldRefs.current[key] = node;
   };
+  useEffect(() => {
+    if (correctionTrackIndex === null || !initialCorrectionField?.endsWith(".trackLanguage")) return;
+    const timer = window.setTimeout(() => {
+      const field = fieldRefs.current[`track-${correctionTrackIndex}-title-language`];
+      field?.scrollIntoView({ block: "center", behavior: "smooth" });
+      field?.querySelector("button")?.focus({ preventScroll: true });
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [correctionTrackIndex, initialCorrectionField]);
   const clearCorrectionField = (...keys: string[]) => {
     if (!keys.length) return;
     setClearedCorrectionFields((current) => {
@@ -1889,6 +1909,12 @@ export function ReleaseForm({
     track: TrackDraft,
     index: number,
   ): ValidationIssue | null {
+    if (!(DIRENOTE_LANGUAGES as readonly string[]).includes(track.titleLanguage))
+      return { step: 3, key: `track-${index}-title-language`, trackIndex: index, message: `Select a language for Track ${index + 1}.` };
+    if (track.versionPreset === "Instrumental" && track.titleLanguage !== "Instrumental")
+      return { step: 3, key: `track-${index}-title-language`, trackIndex: index, message: `Track ${index + 1} is instrumental. Review its track language.` };
+    if (track.explicitContent && !track.lyrics.trim())
+      return { step: 3, key: `track-${index}-lyrics`, trackIndex: index, message: `Track ${index + 1} requires lyrics because it contains explicit content.` };
     if (!track.trackTitle.trim() || isPlaceholderTrackTitle(track.trackTitle))
       return {
         step: 3,
@@ -2053,6 +2079,12 @@ export function ReleaseForm({
 
   const destinationsIssues = (): ValidationIssue[] =>
     [
+      !(DIRENOTE_CONTENT_TYPES as readonly string[]).includes(release.contentType)
+        ? { step: 5, key: "content-type", message: "Select the content ownership for this release." } : null,
+      release.contentType === "AI Generated" && (!release.sunoReceiptUrl.trim() || !release.sunoLink.trim())
+        ? { step: 5, key: "content-type", message: "AI-generated releases require a Suno receipt PDF and song URL." } : null,
+      release.contentType === "Non-Exclusive Licensed" && !release.licenseReceiptUrl.trim()
+        ? { step: 5, key: "content-type", message: "Non-exclusive releases require a licence receipt PDF." } : null,
       platforms.length === 0
         ? {
             step: 6,
@@ -2412,13 +2444,14 @@ export function ReleaseForm({
           ? release.upcCode.trim()
           : undefined,
         releaseDate: selectedReleaseDate,
-        originalReleaseDate: release.scheduledReleaseDate,
+        originalReleaseDate: release.releasePreviouslyReleased ? release.originalReleaseDate : undefined,
         recordLabelName: release.recordLabelName,
         labelName: release.recordLabelName,
         primaryGenre: release.primaryGenre,
         secondaryGenre: release.secondaryGenre,
         mood: release.mood,
         language: release.language,
+        contentType: release.contentType, sunoReceiptUrl: release.sunoReceiptUrl, sunoLink: release.sunoLink, licenseReceiptUrl: release.licenseReceiptUrl,
         territory: territoryValue,
         releaseTiming: release.releaseTiming,
         platforms,
@@ -2471,7 +2504,8 @@ export function ReleaseForm({
           duration: track.duration,
           explicitContent: track.explicitContent,
           dolbyAtmos: track.dolbyAtmos,
-          metadata: { titleLanguage: track.titleLanguage },
+          language: track.titleLanguage,
+          lyrics: track.lyrics,
           artistProfileIds: track.primaryArtistIds,
           uploadedAudioUrl: uploaded.trackAudioUrls[index],
           uploadedCoverLicenseUrl: uploaded.trackLicenseUrls[index],
@@ -2515,7 +2549,7 @@ export function ReleaseForm({
             ? release.upcCode.trim()
             : undefined,
           releaseDate: selectedReleaseDate,
-          originalReleaseDate: initialRelease?.originalReleaseDate ?? null,
+          originalReleaseDate: release.releasePreviouslyReleased ? release.originalReleaseDate : undefined,
           recordLabelName: release.recordLabelName,
           labelName: release.recordLabelName,
           labelDisplayName: release.recordLabelName,
@@ -2524,6 +2558,7 @@ export function ReleaseForm({
           genre: release.primaryGenre,
           mood: release.mood,
           language: release.language,
+          contentType: release.contentType, sunoReceiptUrl: release.sunoReceiptUrl, sunoLink: release.sunoLink, licenseReceiptUrl: release.licenseReceiptUrl,
           territory: territoryValue,
           releaseTiming: release.releaseTiming,
           platforms,
@@ -2578,7 +2613,8 @@ export function ReleaseForm({
             duration: track.duration,
             explicitContent: track.explicitContent,
             dolbyAtmos: track.dolbyAtmos,
-            metadata: { titleLanguage: track.titleLanguage },
+            language: track.titleLanguage,
+            lyrics: track.lyrics,
             artistProfileIds: track.primaryArtistIds,
             uploadedAudioUrl: uploaded.trackAudioUrls[index],
             uploadedCoverLicenseUrl: uploaded.trackLicenseUrls[index],
@@ -2633,6 +2669,7 @@ export function ReleaseForm({
         releaseTitle: displayedReleaseTitle,
         releaseType,
         releasePreviouslyReleased: release.releasePreviouslyReleased,
+        originalReleaseDate: release.releasePreviouslyReleased ? release.originalReleaseDate : undefined,
         upcCode: release.releasePreviouslyReleased
           ? release.upcCode.trim()
           : undefined,
@@ -2642,6 +2679,7 @@ export function ReleaseForm({
         secondaryGenre: release.secondaryGenre,
         mood: release.mood,
         language: release.language,
+        contentType: release.contentType, sunoReceiptUrl: release.sunoReceiptUrl, sunoLink: release.sunoLink, licenseReceiptUrl: release.licenseReceiptUrl,
         territory: territoryValue,
         releaseTiming: release.releaseTiming,
         platforms,
@@ -2692,7 +2730,8 @@ export function ReleaseForm({
           duration: track.duration,
           explicitContent: track.explicitContent,
           dolbyAtmos: track.dolbyAtmos,
-          metadata: { titleLanguage: track.titleLanguage },
+          language: track.titleLanguage,
+          lyrics: track.lyrics,
           artistProfileIds: track.primaryArtistIds,
           uploadedAudioUrl: uploaded.trackAudioUrls[index],
           uploadedCoverLicenseUrl: uploaded.trackLicenseUrls[index],
@@ -2722,6 +2761,11 @@ export function ReleaseForm({
     try {
       if (isPaidReleaseResubmission) {
         const data = await submitEditedRelease();
+        if (data.release?.status === "changes_requested" && data.release?.direNoteStatus) {
+          router.push(`/dashboard/releases/${data.release.id}?tab=corrections`);
+          router.refresh();
+          return;
+        }
         setSubmittedRelease(data.release);
         setUploadProgress(100);
         return;
@@ -3810,10 +3854,10 @@ export function ReleaseForm({
                             ref={registerField(`track-${index}-title-language`)}
                           >
                             <SearchableSelect
-                              label="Track Title Language"
+                              label="Track Language"
                               value={track.titleLanguage}
-                              options={languageOptions}
-                              placeholder="Select title language"
+                              options={track.versionPreset === "Instrumental" ? languageOptions.filter(value => value === "Instrumental") : languageOptions}
+                              placeholder="Select track language"
                               onChange={(value) =>
                                 updateTrack(index, { titleLanguage: value })
                               }
@@ -3852,6 +3896,10 @@ export function ReleaseForm({
                             <span className="track-attribute-switch" aria-hidden="true" />
                           </label>
                         </div>
+                        <label className="block text-sm" ref={registerField(`track-${index}-lyrics`)}>
+                          Lyrics
+                          <textarea className="field mt-2 min-h-28" value={track.lyrics} onChange={event => updateTrack(index, { lyrics: event.target.value })} aria-label={`Track ${index + 1} lyrics`} />
+                        </label>
                         <label
                           className="track-attribute-toggle cover-song-toggle"
                         >
@@ -4165,6 +4213,10 @@ export function ReleaseForm({
             <div className="grid gap-5">
               <div className="border-t pt-5" style={{ borderColor: "var(--border)" }}>
                 <div className="mb-4"><h3 className="text-lg font-semibold" style={{ color: "var(--text)" }}>Release timing</h3></div>
+                {release.releasePreviouslyReleased ? <label className="mb-4 block text-sm" ref={registerField("original-release-date")}>
+                  Original release date
+                  <input type="date" className="field mt-2" value={release.originalReleaseDate} max={toDateInputValue(addDays(today, -1))} onChange={event => setRelease(current => ({ ...current, originalReleaseDate: event.target.value }))} />
+                </label> : null}
                 <div>
                 <div className="release-timing-selector grid sm:grid-cols-2">
                   <button
@@ -4937,6 +4989,14 @@ export function ReleaseForm({
                       Use the exact legal or label name that should appear in
                       the master ownership line.
                     </p>
+                    <div className="mt-5" ref={registerField("content-type")}>
+                      <SearchableSelect label="Content ownership" value={release.contentType} options={[...DIRENOTE_CONTENT_TYPES]} placeholder="Select content ownership" onChange={value => setRelease(current => ({ ...current, contentType: value }))} />
+                    </div>
+                    {release.contentType === "AI Generated" ? <div className="mt-4 grid gap-4">
+                      <label className="text-sm">Suno receipt PDF<input className="field mt-2" value={release.sunoReceiptUrl} onChange={event => setRelease(current => ({ ...current, sunoReceiptUrl: event.target.value }))} /></label>
+                      <label className="text-sm">Suno song URL<input type="url" className="field mt-2" value={release.sunoLink} onChange={event => setRelease(current => ({ ...current, sunoLink: event.target.value }))} /></label>
+                    </div> : null}
+                    {release.contentType === "Non-Exclusive Licensed" ? <label className="mt-4 block text-sm">Licence receipt PDF<input className="field mt-2" value={release.licenseReceiptUrl} onChange={event => setRelease(current => ({ ...current, licenseReceiptUrl: event.target.value }))} /></label> : null}
                   </div>
                 </div>
               </div>

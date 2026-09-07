@@ -21,7 +21,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   if (access?.releaseSource === "ADMIN_MANUAL" && !access.customerEditable) return NextResponse.json({ error: "This imported catalog release is view-only. Contact HYMN support to request a metadata change." }, { status: 403 });
   if (!["draft", "changes_requested", "rejected", "under_review"].includes(release.status)) return NextResponse.json({ error: "This release cannot be edited in its current status." }, { status: 409 });
 
-  const updated = release.status === "draft"
+  const updated = release.status === "draft" || (release.status === "changes_requested" && Boolean(release.direNoteStatus))
     ? release
     : await updateDetailedReleaseStatus(releaseId, "draft", "User reopened the release for metadata editing.");
   return NextResponse.json({ release: updated });

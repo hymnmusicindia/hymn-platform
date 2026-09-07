@@ -135,6 +135,10 @@ export interface ReleaseTrack {
   id: number;
   releaseId: number;
   trackTitle: string;
+  language?: string;
+  artistProfileIds?: number[];
+  featuredArtistProfileIds?: number[];
+  remixerProfileIds?: number[];
   version?: string;
   trackNumber: number;
   primaryArtist: string;

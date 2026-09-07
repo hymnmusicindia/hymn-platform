@@ -155,6 +155,8 @@ export const distributionTrackSchema = z.object({
     "Replace the placeholder with the actual track title.",
   ),
   version: z.string().optional(),
+  language: z.string().trim().optional(),
+  lyrics: z.string().optional(),
   trackNumber: z.number().int().min(1),
   primaryArtist: z.string().min(1),
   featuredArtists: z.string().optional(),
@@ -186,6 +188,10 @@ export const distributionTrackSchema = z.object({
 });
 
 export const distributionMetadataSchema = z.object({
+  contentType: z.string().trim().optional(),
+  sunoReceiptUrl: z.string().trim().optional(),
+  sunoLink: z.string().trim().optional(),
+  licenseReceiptUrl: z.string().trim().optional(),
   artistName: z.string().min(1),
   releaseTitle: z.string().optional(),
   releaseType: z.enum(["single", "ep", "album"]),

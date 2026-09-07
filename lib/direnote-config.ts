@@ -5,6 +5,16 @@ export const DIRENOTE_INGEST_ENDPOINT = "https://api.direnotemedia.com/ingest_co
 export const DIRENOTE_CONTENT_TYPES = ["Original/Exclusive Licensed", "AI Generated", "Non-Exclusive Licensed"] as const;
 export type DireNoteContentType = typeof DIRENOTE_CONTENT_TYPES[number];
 
+export function normalizeDireNoteContentType(value: unknown): string {
+  const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
+  const aliases: Record<string, DireNoteContentType> = {
+    original: "Original/Exclusive Licensed", exclusive: "Original/Exclusive Licensed", original_exclusive_licensed: "Original/Exclusive Licensed", "original/exclusive licensed": "Original/Exclusive Licensed",
+    ai: "AI Generated", ai_generated: "AI Generated", "ai generated": "AI Generated",
+    non_exclusive: "Non-Exclusive Licensed", non_exclusive_licensed: "Non-Exclusive Licensed", "non-exclusive licensed": "Non-Exclusive Licensed", beat_license: "Non-Exclusive Licensed", licensed: "Non-Exclusive Licensed"
+  };
+  return aliases[raw] ?? raw;
+}
+
 export const DIRENOTE_GENRE_CATALOG = {
   Pop: ["Mainstream Pop", "Indie Pop", "Synth Pop", "Electropop", "Dance Pop", "Teen Pop", "Pop Rock", "Dream Pop", "Art Pop", "Chamber Pop", "Baroque Pop", "Power Pop", "Hyperpop", "K-Pop", "J-Pop", "C-Pop", "Latin Pop", "Other Pop"],
   "Hip-Hop": ["Trap", "Drill", "Boom Bap", "Old School Hip-Hop", "Underground Hip-Hop", "Conscious Hip-Hop", "Gangsta Rap", "Alternative Hip-Hop", "Cloud Rap", "Emo Rap", "Jazz Rap", "Lo-Fi Hip-Hop", "Hardcore Hip-Hop", "Mumble Rap", "Phonk", "Other Hip-Hop"],
@@ -44,5 +54,5 @@ const FRIENDLY_GENRES: Record<string, [string, string]> = {
 
 export function normalizeDireNoteGenre(genre?: string | null, subgenre?: string | null) {
   const mapped = FRIENDLY_GENRES[genre?.trim() ?? ""];
-  return mapped ? { genre: mapped[0], subgenre: subgenre?.trim() || mapped[1] } : { genre: genre?.trim() || "", subgenre: subgenre?.trim() || "Other" };
+  return mapped ? { genre: mapped[0], subgenre: subgenre?.trim() || mapped[1] } : { genre: genre?.trim() || "", subgenre: subgenre?.trim() || "" };
 }

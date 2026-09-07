@@ -498,6 +498,15 @@ model DistributionSubmissionAttempt {
   httpStatus        Int?      @map("http_status")
   safeError         String?   @map("safe_error")
   responseRedacted  Json?     @map("response_redacted")
+  payloadRedacted   Json?     @map("payload_redacted")
+  payloadDiff       Json?     @map("payload_diff")
+  isCurrent         Boolean   @default(false) @map("is_current")
+  upc               String?
+  trackIdentifiers  Json?     @map("track_identifiers")
+  providerStatus    String?   @map("provider_status")
+  lastCheckedAt     DateTime? @map("last_checked_at")
+  rawStatusPayload  Json?     @map("raw_status_payload")
+  corrections       Json?
   startedAt         DateTime  @default(now()) @map("started_at")
   completedAt       DateTime? @map("completed_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
@@ -505,6 +514,7 @@ model DistributionSubmissionAttempt {
 
   @@index([releaseId, state, updatedAt])
   @@index([provider, state, updatedAt])
+  @@index([provider, isCurrent, lastCheckedAt])
   @@map("distribution_submission_attempts")
 }
 

@@ -18,6 +18,7 @@ assert.equal(upcFromDireNoteIsrcReport({ track: { isrc: tracks[0].isrc, release_
 assert.equal(upcFromDireNoteIsrcReport({ track: { isrc: tracks[1].isrc, release_title: "Magenta", upc: "8901234567890" } }, tracks[0].isrc, "Magenta"), null);
 const payload = { success: true, release: { status: "Pending" }, tracks: tracks.map((track, index) => ({ track_name: track.title, isrc: track.isrc, status: "Pending", remarks: index ? remark : "NONE" })) };
 const issues = extractDireNoteCorrections(payload, tracks, 19);
+assert.equal(extractDireNoteCorrections({ remarks: "TRACK 2 SEEMS LIKE AN INSTRUMENTAL. PLEASE SELECT RELEVANT TRACK LANGUAGE" }, tracks, 19)[0].field, "tracks.1.trackLanguage");
 assert.equal(issues.length, 1);
 assert.match(issues[0].field, /^tracks\.1\.providerCorrection\./);
 assert.equal(issues[0].label, "Track 2 · DireNote correction");
@@ -44,15 +45,20 @@ async function main() {
   let transitions = 0;
   let notificationWrites = 0;
   const db = prisma as any;
+  const attempts: any[] = [];
+  db.distributionSubmissionAttempt.findFirst = async ({ where }: any) => structuredClone(attempts.find(item => (!where.id || item.id === where.id) && (!where.isCurrent || item.isCurrent) && (!where.state || item.state === where.state)) ?? null);
+  db.distributionSubmissionAttempt.create = async ({ data }: any) => { const row = { id: attempts.length + 1, ...data }; attempts.push(row); return structuredClone(row); };
+  db.distributionSubmissionAttempt.update = async ({ where, data }: any) => { const row = attempts.find(item => item.id === where.id); Object.assign(row, data); return structuredClone(row); };
   db.$transaction = async (fn: any) => fn(db);
   db.$executeRaw = async () => 1;
-  db.$queryRaw = async () => [structuredClone(release)];
+  db.$queryRaw = async (query: any) => String(query).includes("pg_try_advisory") ? [{ locked: true }] : [structuredClone(release)];
   db.release.findUnique = db.release.findUniqueOrThrow = async () => structuredClone(release);
   db.release.update = async ({ data }: any) => { Object.assign(release, data); return structuredClone(release); };
   db.release.updateMany = async ({ data }: any) => { const { version, ...rest } = data; Object.assign(release, rest); if (version) release.version++; return { count: 1 }; };
   db.track.findMany = async () => structuredClone(release.tracks);
   db.track.update = async ({ where, data }: any) => Object.assign(release.tracks.find((track: any) => track.id === where.id), data);
   db.direNoteLog.count = async () => 0;
+  db.direNoteLog.findFirst = async () => null;
   db.direNoteLog.create = async () => ({});
   db.direNoteReconciliationDiscrepancy.findFirst = async () => null;
   db.direNoteReconciliationDiscrepancy.create = async () => ({});
@@ -77,7 +83,7 @@ async function main() {
     assert.equal(release.tracks[0].title, "purple");
     assert.equal(notifications.length, 1);
     assert.equal(notifications[0].href, "/dashboard/releases/19?tab=corrections");
-    await syncDireNoteRelease(19);
+    for (let cycle = 0; cycle < 10; cycle++) await syncDireNoteRelease(19);
     assert.equal(notifications.length, 1);
     assert.equal(tasks.size, 1);
     assert.equal(transitions, 1);
@@ -95,6 +101,7 @@ async function main() {
     await syncDireNoteRelease(19);
     assert.equal(release.status, "CHANGES_REQUESTED", "Pending must not clear unresolved corrections");
     release.upc = "auto-generated";
+    attempts[0].upc = null;
     await assert.rejects(() => syncDireNoteRelease(19), /Awaiting UPC/);
     assert.equal(release.upc, "auto-generated");
     const requested: string[] = [];
@@ -110,9 +117,11 @@ async function main() {
     assert.deepEqual(requested, ["isrc", "upc"]);
     assert.equal(release.upc, "8901234567890", "Verified UPC must be persisted without resubmitting the album");
     release.upc = null;
+    attempts[0].upc = null;
     await syncDireNoteRelease(19);
     assert.equal(release.upc, "8901234567890", "New submissions with no UPC must recover too");
     release.upc = null;
+    attempts[0].upc = null;
     globalThis.fetch = async () => new Response(JSON.stringify({ success: false, error: "Invalid PIN or client_id" }), { status: 401 });
     await assert.rejects(() => syncDireNoteRelease(19), /HTTP 401/);
     assert.equal(release.upc, null);

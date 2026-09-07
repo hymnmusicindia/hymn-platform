@@ -22,7 +22,8 @@ async function lastTest() {
 
 export async function GET() {
   const admin = await requireAdminPermission("system.manage"); if ("error" in admin) return admin.error;
-  return NextResponse.json({ ...status(), lastTest: await lastTest() });
+  const lastSync = await prisma.direNoteLog.findFirst({ where: { action: "hourly_status_sync" }, orderBy: { createdAt: "desc" }, select: { createdAt: true, success: true, responseJson: true } });
+  return NextResponse.json({ ...status(), lastTest: await lastTest(), lastSync: lastSync ? { ...lastSync, responseJson: redactDireNoteDiagnostic(lastSync.responseJson) } : null });
 }
 
 export async function POST() {

@@ -11,6 +11,9 @@ export async function reserveDireNoteRequest(action: string, releaseId?: number 
     // PostgreSQL advisory locking serializes this narrow reservation path
     // across app instances without locking the release or royalty tables.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422026)`;
+    const cooldown = await tx.direNoteLog.findFirst({ where: { action: "provider_rate_limit" }, orderBy: { createdAt: "desc" }, select: { responseJson: true } });
+    const retryAt = (cooldown?.responseJson as { retryAt?: string } | null)?.retryAt;
+    if (retryAt && Date.parse(retryAt) > Date.now()) throw new Error("DireNote hourly request capacity is exhausted during the provider Retry-After period.");
     const since = new Date(Date.now() - 60 * 60 * 1000);
     const used = await tx.direNoteLog.count({
       where: { action: "rate_limit_reservation", createdAt: { gte: since } }
@@ -19,7 +22,8 @@ export async function reserveDireNoteRequest(action: string, releaseId?: number 
     // Keep five requests available for an administrator to diagnose or submit
     // a release while scheduled work is active.
     if (used >= 95) {
-      const retryAfterSeconds = Math.max(1, Math.ceil((since.getTime() + 60 * 60 * 1000 - Date.now()) / 1000));
+      const oldest = await tx.direNoteLog.findFirst({ where: { action: "rate_limit_reservation", createdAt: { gte: since } }, orderBy: { createdAt: "asc" }, select: { createdAt: true } });
+      const retryAfterSeconds = Math.max(1, Math.ceil(((oldest?.createdAt.getTime() ?? Date.now()) + 60 * 60 * 1000 - Date.now()) / 1000));
       const error = new Error(`DireNote hourly request capacity is exhausted. Retry in ${Math.ceil(retryAfterSeconds / 60)} minute(s).`);
       Object.assign(error, { code: "DIRENOTE_RATE_LIMIT", retryAfterSeconds });
       throw error;

@@ -7,13 +7,15 @@ import { createNotification, findUserById } from "@/lib/db";
 import { emailAppUrl, sendReleaseEmail } from "@/lib/email/email-events";
 import { transitionReleaseStatus } from "@/lib/release-status-engine";
 import { canonicalReleaseArtworkUrl } from "@/lib/release-media";
+import type { Prisma } from "@prisma/client";
+import { redactDireNoteDiagnostic } from "@/lib/direnote";
 
 export function isPostgresPrisma() {
   return /^postgres(?:ql)?:\/\//i.test(process.env.DATABASE_URL?.trim() || "");
 }
 
 function camelCaseDatabaseRow(row: Record<string, any>) {
-  return Object.fromEntries(Object.entries(row).map(([key, value]) => [key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase()), value]));
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => [key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase()).replace(/^direnote(?=[A-Z])/, "direNote"), value]));
 }
 
 async function legacyCompatibleReleaseRows(where: "user" | "all", userId?: number) {
@@ -85,7 +87,7 @@ export function deserializeRelease(dbData: any): Release {
     direNoteLastSyncedAt: dbData.direNoteLastSyncedAt?.toISOString?.() ?? null,
     direNoteLastAttemptedAt: dbData.direNoteLastAttemptedAt?.toISOString?.() ?? null,
     direNoteSyncError: dbData.direNoteSyncError ?? null,
-    upcCode: dbData.upc,
+    upcCode: dbData.upc ?? dbData.upcCode ?? null,
     rejectionReason: dbData.rejectionReason ?? metadata.rejectionReason ?? null,
     correctionReason: dbData.correctionReason ?? metadata.correctionReason ?? null,
     reviewIssues: dbData.reviewIssues ?? metadata.reviewIssues ?? null,
@@ -346,8 +348,10 @@ function releaseDisplayName(release: Release) {
   return release.releaseTitle || release.trackName || "Untitled release";
 }
 
-async function notifyReleaseStatusChange(release: Release, status: ReleaseStatus, note?: string | null) {
+export async function notifyReleaseStatusChange(release: Release, status: ReleaseStatus, note?: string | null) {
   const releaseName = releaseDisplayName(release);
+  const providerReview = release.metadata?.direNote as { correctionEventKey?: string } | undefined;
+  const correctionEventKey = providerReview?.correctionEventKey ?? release.reviewedAt ?? "status";
   const redressalHref = `/dashboard/releases/${release.id}?tab=corrections`;
   const releaseHref = `/dashboard/releases/${release.id}`;
   const reason = status === "rejected" ? release.rejectionReason : status === "changes_requested" ? release.correctionReason : note;
@@ -361,7 +365,7 @@ async function notifyReleaseStatusChange(release: Release, status: ReleaseStatus
   const sendStatusEmail = async (event: "release_approved_by_hymn" | "release_changes_requested" | "release_rejected" | "release_sent_to_distributor" | "release_scheduled" | "release_live" | "release_distribution_failed") => {
     const user = await findUserById(release.userId);
     if (!user) return;
-    await sendReleaseEmail(event, { to: user.email, userId: user.id, userName: user.name, releaseTitle: releaseName, artistName: release.artistName, releaseId: release.id, releaseStatus: status, releaseDate: release.releaseDate, manageReleaseUrl: emailAppUrl(`/dashboard/releases/${release.id}`), correctionUrl: emailAppUrl(`/dashboard/releases/${release.id}?tab=corrections`), rejectionReason: reason ?? undefined });
+    await sendReleaseEmail(event, { to: user.email, userId: user.id, userName: user.name, releaseTitle: releaseName, artistName: release.artistName, releaseId: release.id, releaseStatus: status, releaseDate: release.releaseDate, manageReleaseUrl: emailAppUrl(`/dashboard/releases/${release.id}`), correctionUrl: emailAppUrl(`/dashboard/releases/${release.id}?tab=corrections`), rejectionReason: reason ?? undefined, correctionEventKey: status === "changes_requested" ? correctionEventKey : undefined });
   };
 
   if (status === "under_review") {
@@ -406,7 +410,7 @@ async function notifyReleaseStatusChange(release: Release, status: ReleaseStatus
       href: redressalHref,
       actionLabel: "Fix release",
       priority: "high",
-      eventKey: `release:${release.id}:status:changes_requested:${release.reviewedAt ?? "status"}`,
+      eventKey: `release:${release.id}:status:changes_requested:${correctionEventKey}`,
       metadata: baseMetadata
     });
     await sendStatusEmail("release_changes_requested");
@@ -734,7 +738,7 @@ export async function updateDetailedReleaseStatus(releaseId: number, status: Rel
   fields: NonNullable<Release["reviewIssues"]>["fields"];
   adminInternalNote?: string;
   reviewedBy?: string | null;
-}, options?: { manualOverride?: boolean; actorType?: string; actorId?: number | null }) {
+}, options?: { manualOverride?: boolean; actorType?: string; actorId?: number | null; persist?: (tx: Prisma.TransactionClient) => Promise<void>; reviewChanged?: boolean; notify?: boolean }) {
   const pool = getPool();
   if (!pool) {
     if (isPostgresPrisma()) {
@@ -744,7 +748,8 @@ export async function updateDetailedReleaseStatus(releaseId: number, status: Rel
         if (!current) throw new Error("Release not found.");
         const previousStatus = current.status.toLowerCase() as ReleaseStatus;
         transitionReleaseStatus({ currentStatus: previousStatus, nextStatus: status, reason: note, manualOverride: options?.manualOverride });
-        if (previousStatus === status) return false;
+        if (options?.persist) await options.persist(tx);
+        if (previousStatus === status && !options?.reviewChanged) return false;
         const changed = await tx.release.updateMany({ where: { id: releaseId, version: current.version }, data: {
           status: status.toUpperCase() as any, version: { increment: 1 },
           ...(review ? { rejectionReason: status === "rejected" ? review.reason : undefined, correctionReason: status === "changes_requested" ? review.reason : undefined, reviewIssues: reviewIssues as any, adminInternalNote: review.adminInternalNote || null, reviewedAt: new Date(), reviewedBy: review.reviewedBy ?? null } : {})
@@ -755,7 +760,7 @@ export async function updateDetailedReleaseStatus(releaseId: number, status: Rel
         return true;
       });
       const release = await getDetailedReleaseById(releaseId);
-      if (release && didTransition) await notifyReleaseStatusChange(release, status, note);
+      if (release && (didTransition || options?.notify)) await notifyReleaseStatusChange(release, status, note);
       return release;
     }
     const release = memory.releases.find((item) => item.id === releaseId);
@@ -1361,6 +1366,14 @@ export async function updatePaidDistributionRelease(input: {
     if (isPostgresPrisma()) {
       const { tracks, ...rest } = input.metadata;
       await prisma.$transaction(async (tx) => {
+        const lock = await tx.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(81422028, ${input.releaseId}::integer) AS locked`;
+        if (!lock[0]?.locked) throw new Error("This release is being synchronized or submitted. Retry saving shortly.");
+        const saved = await tx.release.findUniqueOrThrow({ where: { id: input.releaseId }, include: { tracks: { orderBy: { trackNumber: "asc" } } } });
+        if (!["DRAFT", "AWAITING_PAYMENT", "CHANGES_REQUESTED", "REJECTED", "RESUBMITTED"].includes(saved.status) || saved.paymentStatus !== "paid") throw new Error("This release is no longer open for paid corrections.");
+        const providerCorrection = saved.status === "CHANGES_REQUESTED" && Boolean(saved.direNoteStatus);
+        if (providerCorrection && (tracks.length !== saved.tracks.length || tracks.some((track, index) => track.trackNumber !== saved.tracks[index].trackNumber))) {
+          throw new Error("Keep the existing track order and count while correcting a provider submission.");
+        }
         await tx.release.update({
           where: { id: input.releaseId },
           data: {
@@ -1372,29 +1385,33 @@ export async function updatePaidDistributionRelease(input: {
             audioUrl: input.metadata.tracks[0]?.audioUrl || existingRelease.audioUrl || null,
             releaseDate: input.metadata.releaseDate ? new Date(input.metadata.releaseDate) : new Date(existingRelease.releaseDate),
             paymentStatus: "paid",
-            metadata: { ...rest, submittedAt: new Date().toISOString() } as any,
+            metadata: { ...(typeof saved.metadata === "object" && saved.metadata ? saved.metadata : {}), ...rest, upcCode: saved.upc, submittedAt: new Date().toISOString() } as any,
             lastEditedAt: new Date()
           },
           select: { id: true }
         });
-        await tx.track.deleteMany({ where: { releaseId: input.releaseId } });
-        if (tracks.length) {
-          await tx.track.createMany({
-            data: tracks.map((track, index) => {
-              const trackMetadata = { ...track } as any;
-              return {
+        for (const [index, track] of tracks.entries()) {
+              const previous = saved.tracks.find(item => item.trackNumber === track.trackNumber);
+              const trackMetadata = { ...(typeof previous?.metadata === "object" && previous.metadata ? previous.metadata : {}), ...track, isrc: previous?.isrc ?? track.isrc } as any;
+              const data = {
                 releaseId: input.releaseId,
                 title: track.trackTitle || `Track ${index + 1}`,
                 trackNumber: track.trackNumber || index + 1,
                 primaryArtist: track.primaryArtist || input.metadata.artistName,
                 audioUrl: track.audioUrl || null,
-                isrc: track.isrc || null,
+                isrc: providerCorrection ? previous?.isrc ?? null : previous?.isrc ?? track.isrc ?? null,
                 metadata: trackMetadata
               };
-            })
-          });
+              if (previous) await tx.track.update({ where: { id: previous.id }, data });
+              else await tx.track.create({ data });
+        }
+        if (!providerCorrection) await tx.track.deleteMany({ where: { releaseId: input.releaseId, trackNumber: { notIn: tracks.map(track => track.trackNumber) } } });
+        if (providerCorrection) {
+          const attempt = await tx.distributionSubmissionAttempt.findFirst({ where: { releaseId: input.releaseId, provider: "direnote", isCurrent: true } });
+          if (attempt) await tx.distributionSubmissionAttempt.update({ where: { id: attempt.id }, data: { corrections: { ...(typeof attempt.corrections === "object" && attempt.corrections ? attempt.corrections : {}), status: "customer_resolved", artistResolvedAt: new Date().toISOString() } } });
         }
       });
+      if (existingRelease.status === "changes_requested" && existingRelease.direNoteStatus) return getDetailedReleaseByUserId(input.userId, input.releaseId);
       const reviewReason = "Paid release metadata was submitted for review.";
       const currentStatus = String(existingRelease.status ?? "").trim().toLowerCase();
       if (currentStatus === "changes_requested" || currentStatus === "rejected") await updateDetailedReleaseStatus(input.releaseId, "resubmitted", reviewReason);
@@ -1820,8 +1837,8 @@ export async function logDistributionEvent(input: {
         httpStatus: input.httpStatus ?? null,
         success: input.success,
         requestPayloadRedacted: (input.requestPayload ?? undefined) as any,
-        responseRaw: input.responseRaw ?? null,
-        responseJson: (input.responsePayload ?? undefined) as any,
+        responseRaw: input.responseRaw ? String(redactDireNoteDiagnostic(input.responseRaw)) : null,
+        responseJson: redactDireNoteDiagnostic(input.responsePayload ?? undefined) as any,
         errorMessage: input.errors?.join("; ") ?? null,
         createdByAdminId: input.createdByAdminId ?? null
       } });

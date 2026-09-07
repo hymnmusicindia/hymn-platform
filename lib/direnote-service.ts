@@ -10,6 +10,7 @@ import { releaseDateReached } from "@/lib/release-status-engine";
 import type { ReleaseStatus } from "@/lib/types";
 import { direNoteCorrectionFingerprint, extractDireNoteCorrections, matchDireNoteTrack, providerRequiresCorrections } from "@/lib/direnote-corrections";
 import { normalizeDireNoteUpc, upcFromDireNoteIsrcReport } from "@/lib/direnote-upc";
+import { currentDireNoteAttempt } from "@/lib/distribution-idempotency";
 
 type RecordValue = Record<string, unknown>;
 
@@ -46,10 +47,10 @@ export function mapDireNoteStatus(value: unknown) {
   const status = text(value).toLowerCase();
   if (status === "live") return "live";
   if (providerRequiresCorrections(status)) return "changes_required";
-  if (/schedul|approved|accepted|ready/.test(status)) return "scheduled";
+  if (/^(scheduled|approved|accepted|ready|ready for distribution)$/.test(status)) return "scheduled";
   if (/deliver|distribut/.test(status)) return "delivered";
   if (/pending|process|review|queue|ingest/.test(status)) return "processing";
-  return status || "unknown";
+  return "unknown";
 }
 
 function aggregateReleaseStatus(tracks: RecordValue[], releaseStatus: unknown, releaseDate: Date) {
@@ -69,11 +70,26 @@ function aggregateReleaseStatus(tracks: RecordValue[], releaseStatus: unknown, r
 
 /** Fetches the documented UPC lookup and caches provider facts without overwriting HYMN metadata. */
 export async function syncDireNoteRelease(releaseId: number, actorId?: number | null) {
+  return prisma.$transaction(async lock => {
+    const rows = await lock.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(81422028, ${releaseId}::integer) AS locked`;
+    if (!rows[0]?.locked) throw new Error("DireNote release is already being synchronized or submitted.");
+    return syncCurrentDireNoteRelease(releaseId, actorId);
+  }, { timeout: 180_000, maxWait: 5000 });
+}
+
+async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | null) {
   const release = await prisma.release.findUnique({ where: { id: releaseId }, include: { tracks: { orderBy: { trackNumber: "asc" } } } });
   if (!release) throw new Error("Release not found.");
-  let lookupUpc = normalizeDireNoteUpc(release.upc);
+  const attempt = await currentDireNoteAttempt(releaseId);
+  const isTransfer = Boolean(record(release.metadata).releasePreviouslyReleased ?? record(release.metadata).previouslyReleased);
+  const attemptTracks = Array.isArray(attempt.trackIdentifiers) ? attempt.trackIdentifiers.map(record) : [];
+  const mappingTracks = release.tracks.map(track => {
+    const snapshot = attemptTracks.find(item => item.id === track.id);
+    return { ...track, isrc: snapshot ? text(snapshot.isrc) || null : track.isrc, providerTrackId: text(snapshot?.providerTrackId) || null };
+  });
+  let lookupUpc = normalizeDireNoteUpc(attempt.upc);
   if (!lookupUpc) {
-    const isrc = release.tracks.map(track => normalized(track.isrc ?? "")).find(value => /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(value));
+    const isrc = mappingTracks.map(track => normalized(track.isrc ?? "")).find(value => /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(value));
     if (!isrc) throw new Error("Awaiting DireNote identifiers: no numeric UPC or assigned track ISRC is available yet.");
     await reserveDireNoteRequest("upc_lookup", releaseId, actorId);
     // Identifier discovery only. Never import this report into the royalty ledger.
@@ -81,7 +97,7 @@ export async function syncDireNoteRelease(releaseId: number, actorId?: number | 
     lookupUpc = report.success ? upcFromDireNoteIsrcReport(report.data, isrc, release.title) : null;
     const lookupError = lookupUpc ? null : report.success
       ? "Awaiting UPC: DireNote has not returned a numeric UPC for this ISRC and release title."
-      : `DireNote UPC lookup failed (HTTP ${report.httpStatus ?? "unavailable"}). Check provider credentials or retry later.`;
+      : report.httpStatus === 401 ? "DIRENOTE_STATUS_AUTH_FAILED (HTTP 401): Identifier discovery authentication failed." : `DireNote UPC lookup failed (HTTP ${report.httpStatus ?? "unavailable"}). Check provider credentials or retry later.`;
     await prisma.direNoteLog.create({ data: {
       releaseId, action: "upc_lookup", httpStatus: report.httpStatus, success: Boolean(lookupUpc),
       requestPayloadRedacted: { isrc }, responseJson: { isrc, upc: lookupUpc },
@@ -94,24 +110,39 @@ export async function syncDireNoteRelease(releaseId: number, actorId?: number | 
   }
   await reserveDireNoteRequest("release_information", releaseId, actorId);
   await prisma.release.update({ where: { id: releaseId }, data: { direNoteLastAttemptedAt: new Date(), direNoteSyncError: null } });
-  const result = await getDireNoteReleaseInformation(lookupUpc);
+  let result = await getDireNoteReleaseInformation(lookupUpc, { timeoutMs: 20_000 });
+  for (let retry = 0; !result.success && retry < 2 && (result.httpStatus === null || result.httpStatus >= 500); retry++) {
+    await new Promise(resolve => setTimeout(resolve, 500 * 2 ** retry));
+    await reserveDireNoteRequest("release_information_retry", releaseId, actorId);
+    result = await getDireNoteReleaseInformation(lookupUpc, { timeoutMs: 20_000 });
+  }
+  if (result.httpStatus === 429) {
+    await prisma.direNoteLog.create({ data: { releaseId, action: "provider_rate_limit", success: false, httpStatus: 429, responseJson: { retryAt: new Date(Date.now() + Math.max(60, result.retryAfterSeconds ?? 3600) * 1000).toISOString() } } });
+  }
   const payload = record(result.data);
   const remoteRelease = record(payload.release);
-  const remoteTracks = Array.isArray(payload.tracks) ? payload.tracks.map(record) : [];
-  const providerCorrections = extractDireNoteCorrections(payload, release.tracks, releaseId);
+  const remoteTracks: Record<string, unknown>[] = (Array.isArray(payload.tracks) ? payload.tracks.map(record) : Array.isArray(remoteRelease.tracks) ? remoteRelease.tracks.map(record) : []).map((track, index) => ({ ...track, track_number: track.track_number ?? index + 1 }));
+  const providerCorrections = extractDireNoteCorrections(redactDireNoteDiagnostic(payload) as RecordValue, mappingTracks, releaseId, attempt.id);
   const lifecycleStatus = aggregateReleaseStatus(remoteTracks, remoteRelease.status ?? payload.status, release.releaseDate);
   const aggregateStatus = providerCorrections.length ? { provider: "changes_required", canonical: "changes_requested" as ReleaseStatus } : lifecycleStatus;
   const correctionMessages = providerCorrections.map(issue => `${issue.label}: ${issue.note}`);
   const correctionFingerprint = direNoteCorrectionFingerprint(providerCorrections);
   const previousDireNote = record(record(release.metadata).direNote);
   const safe = redactDireNoteDiagnostic(payload) as RecordValue;
-  await prisma.direNoteLog.create({ data: { releaseId, action: "release_information", httpStatus: result.httpStatus, success: result.success, responseJson: safe as never, errorMessage: result.error ?? null, createdByAdminId: actorId ?? null } });
+  await prisma.direNoteLog.create({ data: { releaseId, action: "release_information", httpStatus: result.httpStatus, success: result.success, requestPayloadRedacted: { upc: lookupUpc, attemptId: attempt.id }, responseJson: safe as never, errorMessage: result.httpStatus === 401 ? "DIRENOTE_STATUS_AUTH_FAILED" : result.error ?? null, createdByAdminId: actorId ?? null } });
   if (!result.success) {
-    const message = result.error || text(payload.message) || "DireNote release information lookup failed.";
+    const message = result.httpStatus === 401 ? "DIRENOTE_STATUS_AUTH_FAILED: Verify server-side DireNote credentials." : String(redactDireNoteDiagnostic(result.error || "DireNote release information lookup failed."));
     await prisma.release.update({ where: { id: releaseId }, data: { direNoteSyncError: message.slice(0, 1000) } });
+    if (result.httpStatus === 401) await createAdminTaskOnce({ eventKey: "direnote:status:auth-failed", type: "DireNote Failed", priority: "critical", title: "DireNote status authentication failed", body: message, href: "/admin?tab=releases", entityType: "release", entityId: releaseId });
     throw new Error(message);
   }
-  if (!normalizeDireNoteUpc(release.upc)) {
+  if (lifecycleStatus.provider === "unknown" && !providerCorrections.length) {
+    const message = "DIRENOTE_MALFORMED_RESPONSE: No release or track status returned.";
+    await prisma.release.update({ where: { id: releaseId }, data: { direNoteSyncError: message } });
+    throw new Error(message);
+  }
+  if (normalizeDireNoteUpc(remoteRelease.upc_code) && normalizeDireNoteUpc(remoteRelease.upc_code) !== lookupUpc) throw new Error("DireNote returned a different UPC from the current lookup. No release identifiers were changed.");
+  if (!normalizeDireNoteUpc(attempt.upc)) {
     const confirmedUpc = normalizeDireNoteUpc(remoteRelease.upc_code);
     const matchingTrack = remoteTracks.some(remote => release.tracks.some(track => track.isrc && normalized(track.isrc) === normalized(text(remote.isrc))));
     if (confirmedUpc !== lookupUpc || !matchingTrack) {
@@ -120,10 +151,21 @@ export async function syncDireNoteRelease(releaseId: number, actorId?: number | 
   }
 
   await prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422027, ${releaseId}::integer)`;
+    const stillCurrent = await tx.distributionSubmissionAttempt.findFirst({ where: { id: attempt.id, isCurrent: true } });
+    if (!stillCurrent) throw new Error("DireNote attempt was superseded during status lookup. Retry the current attempt.");
+    await tx.distributionSubmissionAttempt.update({ where: { id: attempt.id }, data: {
+      lastCheckedAt: new Date(), providerStatus: aggregateStatus.provider, rawStatusPayload: safe as never,
+      upc: normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc,
+      trackIdentifiers: mappingTracks.map(track => {
+        const remote = remoteTracks.find(item => matchDireNoteTrack(item, mappingTracks)?.id === track.id);
+        return { id: track.id, title: track.title, trackNumber: track.trackNumber, isrc: isTransfer && track.isrc ? track.isrc : text(remote?.isrc) || track.isrc, providerTrackId: text(remote?.track_id ?? remote?.id) || track.providerTrackId };
+      })
+    } });
     for (const track of release.tracks) {
-      const external = remoteTracks.find(remote => matchDireNoteTrack(remote, release.tracks)?.id === track.id);
+      const external = remoteTracks.find(remote => matchDireNoteTrack(remote, mappingTracks)?.id === track.id);
       if (!external) continue;
-      const externalIsrc = text(external.isrc);
+      const externalIsrc = isTransfer && track.isrc ? track.isrc : text(external.isrc);
       if (externalIsrc && normalized(externalIsrc) !== normalized(track.isrc ?? "")) await tx.externalIdentifierHistory.create({ data: { releaseId, trackId: track.id, provider: "direnote", identifierType: "isrc", previousValue: track.isrc, canonicalValue: externalIsrc, source: "release_information_sync" } });
       await tx.track.update({ where: { id: track.id }, data: { isrc: externalIsrc || track.isrc, distributorStatus: mapDireNoteStatus(external.status), metadata: json({ ...(record(track.metadata)), direNote: { ...(record(record(track.metadata).direNote)), lastSyncedAt: new Date().toISOString(), external: redactDireNoteDiagnostic(external) } }) } });
       await persistArtistLinks(tx, releaseId, release.userId, external);
@@ -142,7 +184,8 @@ export async function syncDireNoteRelease(releaseId: number, actorId?: number | 
     await tx.release.update({ where: { id: releaseId }, data: { upc: remoteUpc, direNoteStatus: aggregateStatus.provider, direNoteLastSyncedAt: new Date(), direNoteSyncError: null, metadata: json({ ...(record(release.metadata)), direNote: { ...previousDireNote, lastSyncedAt: new Date().toISOString(), status: aggregateStatus.provider, release: redactDireNoteDiagnostic(remoteRelease), correctionMessages } }) } });
   });
   const previousStatus = release.status.toLowerCase() as ReleaseStatus;
-  const customerWorkflow = ["changes_requested", "resubmitted", "under_review", "in_qc_queue", "in_queue", "submitted", "approved", "queued_for_distribution"].includes(previousStatus);
+  const providerAccepted = ["scheduled", "awaiting_live_confirmation", "partially_live", "live"].includes(aggregateStatus.provider);
+  const customerWorkflow = !providerAccepted && ["changes_requested", "resubmitted", "under_review", "in_qc_queue", "in_queue", "submitted", "approved", "queued_for_distribution"].includes(previousStatus);
   const repeatCorrection = previousDireNote.appliedCorrectionFingerprint === correctionFingerprint;
   if (aggregateStatus.canonical && (aggregateStatus.canonical !== previousStatus || (aggregateStatus.canonical === "changes_requested" && !repeatCorrection))
     && !(aggregateStatus.canonical === "changes_requested" && repeatCorrection)
@@ -157,13 +200,20 @@ export async function syncDireNoteRelease(releaseId: number, actorId?: number | 
         adminInternalNote: "Automatically halted from DireNote release-information sync.",
         reviewedBy: "DireNote automation"
       };
-      if (previousStatus === "changes_requested") {
-        // Refresh changed reviewer instructions without sending another status notification.
-        await prisma.release.updateMany({ where: { id: releaseId, status: "CHANGES_REQUESTED" }, data: { correctionReason: reason, reviewIssues: json({ type: review.issueType, severity: review.severity, fields: review.fields }) } });
-      } else {
-        await updateDetailedReleaseStatus(releaseId, "changes_requested", reason, review, { manualOverride: true, actorType: "system" });
-      }
-      await createAdminTaskOnce({ eventKey: `release:${releaseId}:direnote:correction`, type: "DireNote Correction", priority: "high", title: `DireNote correction required: ${release.title}`, body: reason, href: `/admin?tab=releases&releaseId=${releaseId}`, entityType: "release", entityId: releaseId });
+      await updateDetailedReleaseStatus(releaseId, "changes_requested", reason, review, {
+        manualOverride: true, actorType: "system", notify: true, reviewChanged: record(attempt.corrections).fingerprint !== correctionFingerprint,
+        persist: async tx => {
+          if (record(attempt.corrections).fingerprint === correctionFingerprint) return;
+          const currentRelease = await tx.release.findUniqueOrThrow({ where: { id: releaseId }, select: { metadata: true } });
+          await tx.release.update({ where: { id: releaseId }, data: { metadata: json({ ...record(currentRelease.metadata), direNote: { ...record(record(currentRelease.metadata).direNote), correctionEventKey: correctionFingerprint } }) } });
+          await tx.distributionSubmissionAttempt.update({ where: { id: attempt.id }, data: { corrections: json({
+            ...record(attempt.corrections), status: "customer_action_required", fingerprint: correctionFingerprint,
+            detectedAt: new Date().toISOString(), fields: providerCorrections,
+            history: [...(Array.isArray(record(attempt.corrections).history) ? record(attempt.corrections).history as unknown[] : []), { detectedAt: new Date().toISOString(), fields: providerCorrections }]
+          }) } });
+        }
+      });
+      await createAdminTaskOnce({ eventKey: `release:${releaseId}:direnote:correction:${attempt.id}:${correctionFingerprint}`, type: "DireNote Correction", priority: "high", title: `DireNote correction required: ${release.title}`, body: reason, href: `/admin?tab=releases&releaseId=${releaseId}`, entityType: "release", entityId: releaseId });
       // Mark applied only after the correction workspace and task are persisted.
       await prisma.$transaction(async tx => {
         const current = await tx.release.findUniqueOrThrow({ where: { id: releaseId }, select: { metadata: true } });
@@ -171,7 +221,10 @@ export async function syncDireNoteRelease(releaseId: number, actorId?: number | 
       });
     } else {
       await updateDetailedReleaseStatus(releaseId, aggregateStatus.canonical, `DireNote status confirmed: ${aggregateStatus.provider}.`, undefined, { manualOverride: true, actorType: "system" });
-      await resolveAdminTask(`release:${releaseId}:direnote:correction`, "DireNote no longer reports a correction requirement.");
+      if (providerAccepted) {
+        await prisma.distributionSubmissionAttempt.update({ where: { id: attempt.id }, data: { corrections: json({ ...record(attempt.corrections), status: "closed", providerClearedAt: new Date().toISOString() }) } });
+      }
+      await resolveAdminTask(`release:${releaseId}:direnote:correction:${attempt.id}:${record(attempt.corrections).fingerprint}`, "DireNote no longer reports a correction requirement.");
     }
   }
   if (!customerWorkflow && aggregateStatus.canonical && aggregateStatus.canonical !== previousStatus && ["partially_live", "awaiting_live_confirmation"].includes(aggregateStatus.canonical)) {

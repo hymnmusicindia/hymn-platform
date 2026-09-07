@@ -11,7 +11,8 @@ const editRoute = source("app/api/distribution/update-release/route.ts");
 const payment = source("lib/payment-webhooks.ts");
 
 assert.doesNotMatch(form, /if \(isEditing\)\s*\{\s*const data = await submitEditedRelease/);
-assert.match(form, /const isPaidReleaseResubmission = Boolean\(initialRelease && \["draft", "changes_requested", "rejected"\]\.includes\(initialRelease\.status\) && initialRelease\.paymentStatus === "paid"\)/);
+assert.ok(form.includes("const isPaidReleaseResubmission = isPaidCorrectionRelease(initialRelease)"));
+assert.ok(form.includes('return paymentStatus === "paid" && ["draft", "awaiting_payment", "changes_requested", "rejected", "resubmitted"].includes(status)'));
 assert.match(form, /if \(isPaidReleaseResubmission\)/);
 assert.match(form, /modal: \{ ondismiss: \(\) => reject\(new Error\("Checkout cancelled\."\)\) \}/);
 assert.match(form, /payment\.failed/);
@@ -41,8 +42,8 @@ assert.match(verifySubmit, /attachDistributionOrderRelease/);
 assert.match(verifySubmit, /reserveSubscriptionReleaseSlot/);
 assert.ok(verifySubmit.indexOf("await confirmDistributionPayment") < verifySubmit.indexOf("Artwork upload missing"), "Captured payment must be persisted before fallible asset validation.");
 
-assert.match(editRoute, /\["draft", "changes_requested", "rejected"\]/);
-assert.match(editRoute, /existingRelease\.paymentStatus !== "paid"/);
+assert.ok(editRoute.includes('["draft", "awaiting_payment", "changes_requested", "rejected", "resubmitted"].includes(existingStatus)'));
+assert.ok(editRoute.includes('existingPaymentStatus !== "paid"'));
 assert.doesNotMatch(editRoute, /\["under_review"/);
 
 assert.match(payment, /paymentStatus: "paid", fulfilledAt: null/);

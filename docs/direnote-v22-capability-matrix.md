@@ -2,6 +2,10 @@
 
 Last audited: 2026-08-23
 
+Superseded connectivity findings: see `direnote-field-mapping-audit.md` (2026-09-07).
+The IMPLEMENTED labels below describe the older mapper surface, not proof that
+every UI selection survives persistence or that every enum is provider-certified.
+
 This is the implementation contract for the three documented DireNote endpoints.
 
 ## Endpoints
@@ -32,7 +36,7 @@ the documented 100/IP/hour ceiling.
 | release `artists`, `featuring_artists` | artist-card/release-credit mapper | IMPLEMENTED |
 | `suno_receipt_url`, `sunoLink`, `license_receipt_url` | conditional rights-proof mapping and validation | IMPLEMENTED |
 | `tracks[].trackName`, `audio_url` | track mapper and public WAV/MP3 validation | IMPLEMENTED |
-| `tracks[].trackGenre`, `trackSubgenre`, `trackLanguage` | inherited taxonomy mapper | IMPLEMENTED |
+| `tracks[].trackGenre`, `trackSubgenre`, `trackLanguage` | genre inherited; language now independently persisted per track | REPAIRED; enum certification pending |
 | `tracks[].isrc`, `trackVersion`, `previewStart`, `vocalist`, `explicitLyrics`, `trackLyrics`, `previouslyReleased` | track metadata mapper/validation | IMPLEMENTED |
 | `tracks[].producers`, `artists`, `featuring_artists`, `contributors` | credits mapper | IMPLEMENTED |
 | `tracks[].songwriters`, `composers` | contributor mapper with multi-word policy | IMPLEMENTED |

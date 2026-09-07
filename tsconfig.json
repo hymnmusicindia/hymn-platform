@@ -44,7 +44,9 @@
     "lib/**/*.tsx",
     "next-env.d.ts",
     ".next-dev-admin-local-test/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    ".next/dev/types/**/*.ts",
+    ".next-direnote-virtual/types/**/*.ts",
+    ".next-direnote-virtual/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

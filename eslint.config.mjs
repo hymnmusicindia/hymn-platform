@@ -21,6 +21,7 @@ export default defineConfig([
   globalIgnores([
     ".next/**",
     ".next-*/**",
+    ".cache/**",
     "node_modules/**",
     "public/uploads/**",
     "next-env.d.ts"

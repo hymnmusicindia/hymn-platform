@@ -4,12 +4,21 @@ import { getDetailedReleaseByUserId, updateDetailedReleaseStatus } from "@/lib/d
 import { logAuditEvent } from "@/lib/audit-log";
 import { createNotificationOnce } from "@/lib/notifications";
 import { createAdminTaskOnce } from "@/lib/task-queue";
+import { submitRelease } from "@/lib/distribution-service";
+import { currentDireNoteAttempt } from "@/lib/distribution-idempotency";
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser(); if ("error" in user) return user.error;
   const id = Number((await params).id);
   const release = await getDetailedReleaseByUserId(user.session.sub, id);
   if (!release) return NextResponse.json({ error: "Release not found." }, { status: 404 });
   if (release.status !== "rejected" && release.status !== "changes_requested") return NextResponse.json({ error: "This release is not awaiting corrections." }, { status: 409 });
+  if (release.direNoteStatus) {
+    const attempt = await currentDireNoteAttempt(id);
+    const correction = attempt.corrections as { status?: string } | null;
+    if (correction?.status !== "customer_resolved") return NextResponse.json({ error: "Save the corrected release metadata before submitting corrections." }, { status: 409 });
+    const result = await submitRelease(id, { actorId: user.session.sub, correctionReingest: true });
+    return NextResponse.json(result, { status: result.submitted ? 200 : 409 });
+  }
   const updated = await updateDetailedReleaseStatus(id, "resubmitted", "User corrected and resubmitted the release.");
   await Promise.all([
     logAuditEvent({ actorType: "user", actorId: user.session.sub, entityType: "release", entityId: id, action: "release.resubmitted", oldValue: { status: release.status }, newValue: { status: "resubmitted" } }),

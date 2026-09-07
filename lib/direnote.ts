@@ -1,9 +1,11 @@
 import type { ArtistProfile, Release } from "@/lib/types";
 import { normalizeDireNoteUpc } from "@/lib/direnote-upc";
+import { readTrackLanguage } from "@/lib/track-language";
 import {
   DIRENOTE_CONTENT_TYPES,
   DIRENOTE_GENRES,
   DIRENOTE_LANGUAGES,
+  normalizeDireNoteContentType,
   DIRENOTE_SUBGENRES_BY_GENRE,
   normalizeDireNoteGenre,
   type DireNoteContentType
@@ -139,7 +141,7 @@ function splitNames(value?: string | null) {
 }
 
 function hasFirstAndLastName(value: string) {
-  return value.trim().split(/\s+/).filter(Boolean).length >= 2;
+  return typeof value === "string" && value.trim().split(/\s+/).filter(Boolean).length >= 2;
 }
 
 function isPublicHttpUrl(value?: string | null) {
@@ -167,28 +169,25 @@ function publicUrl(value: string | undefined | null, siteUrl?: string) {
 }
 
 function releaseMeta(release: ExtendedRelease) {
-  return { ...release, ...(release.metadata && typeof release.metadata === "object" ? release.metadata : {}) } as Record<string, any>;
+  return { ...(release.metadata && typeof release.metadata === "object" ? release.metadata : {}), ...release } as Record<string, any>;
 }
 
 function normalizeType(value: Release["releaseType"]) {
   if (value === "ep") return "EP";
   if (value === "album") return "Album";
-  return "Single";
+  return value === "single" ? "Single" : value as DireNotePayload["typeOfRelease"];
 }
 
 function normalizeContentType(release: ExtendedRelease): DireNoteContentType {
   const meta = releaseMeta(release);
-  const raw = String(meta.contenttype ?? meta.contentType ?? meta.ownershipType ?? meta.rightsType ?? meta.licenseType ?? meta.contentOwnershipType ?? "").toLowerCase();
-  if (raw.includes("ai")) return "AI Generated";
-  if (raw.includes("non") || raw.includes("beat") || raw.includes("license")) return "Non-Exclusive Licensed";
-  return "Original/Exclusive Licensed";
+  const raw = String(meta.contentType ?? meta.contenttype ?? meta.ownershipType ?? meta.rightsType ?? meta.licenseType ?? meta.contentOwnershipType ?? "").toLowerCase();
+  return normalizeDireNoteContentType(raw) as DireNoteContentType;
 }
 
 function getProofUrl(release: ExtendedRelease, keys: string[], siteUrl?: string) {
   const meta = releaseMeta(release);
   for (const key of keys) {
-    const resolved = publicUrl(meta[key], siteUrl);
-    if (resolved) return resolved;
+    if (meta[key] !== undefined) return publicUrl(meta[key], siteUrl) || undefined;
   }
   return undefined;
 }
@@ -218,7 +217,7 @@ function contributors(value?: string | null, structured?: Array<Record<string, a
 }
 
 export function redactDireNotePayload(payload: DireNotePayload) {
-  return { ...payload, pin: "[REDACTED]", client_id: "[REDACTED]" };
+  return redactDireNoteDiagnostic({ ...payload, pin: "[REDACTED]", client_id: "[REDACTED]" }) as DireNotePayload;
 }
 
 const DIRENOTE_SENSITIVE_KEY = /(?:api[_-]?key|client[_-]?secret|client[_-]?id|authorization|bearer|token|password|pin|secret)/i;
@@ -231,9 +230,27 @@ const DIRENOTE_MAX_DIAGNOSTIC_STRING_LENGTH = 4_000;
  */
 export function redactDireNoteDiagnostic(value: unknown): unknown {
   if (typeof value === "string") {
-    return value.length > DIRENOTE_MAX_DIAGNOSTIC_STRING_LENGTH
-      ? `${value.slice(0, DIRENOTE_MAX_DIAGNOSTIC_STRING_LENGTH)}…[TRUNCATED]`
-      : value;
+    if (/^https?:\/\//i.test(value)) {
+      try {
+        const url = new URL(value);
+        const parts = url.pathname.split("/");
+        if (parts[1] === "api" && parts[2] === "distribution-assets" && parts.length >= 6) {
+          parts[4] = "[REDACTED]";
+          url.pathname = parts.join("/");
+        }
+        for (const key of [...url.searchParams.keys()]) if (DIRENOTE_SENSITIVE_KEY.test(key) || /signature|credential/i.test(key)) url.searchParams.set(key, "[REDACTED]");
+        if (url.username || url.password) { url.username = ""; url.password = ""; }
+        value = url.toString();
+      } catch { /* Non-URL diagnostic text is still secret-filtered below. */ }
+    }
+    const config = getDireNoteConfig();
+    for (const secret of [config.pin, config.clientId]) {
+      if (secret) value = (value as string).split(secret).join("[REDACTED]");
+    }
+    const safeValue = value as string;
+    return safeValue.length > DIRENOTE_MAX_DIAGNOSTIC_STRING_LENGTH
+      ? `${safeValue.slice(0, DIRENOTE_MAX_DIAGNOSTIC_STRING_LENGTH)}…[TRUNCATED]`
+      : safeValue;
   }
   if (Array.isArray(value)) return value.map(redactDireNoteDiagnostic);
   if (value && typeof value === "object") {
@@ -289,14 +306,14 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
       audio_url: publicUrl(track.audioUrl, options.siteUrl),
       trackGenre: normalizedGenre.genre || undefined,
       trackSubgenre: normalizedGenre.subgenre || undefined,
-      trackLanguage: release.language || undefined,
+      trackLanguage: readTrackLanguage(track),
       isrc: track.isrc || undefined,
       trackVersion: track.version || "",
-      previewStart: String((track as any).previewStart || 30),
+      previewStart: String((track as any).previewStart ?? 30),
       vocalist: (track as any).vocalist || undefined,
       explicitLyrics: track.explicitContent ? "Yes" : "No",
       trackLyrics: (track as any).lyrics || (track as any).trackLyrics || undefined,
-      previouslyReleased: ((track as any).previouslyReleased || isPreviouslyReleased) ? "Yes" : "No",
+      previouslyReleased: ((track as any).previouslyReleased ?? isPreviouslyReleased) ? "Yes" : "No",
       producers: splitNames((track as any).producers ?? (track as any).producer),
       artists: splitNames(track.primaryArtist || release.artistName).map((name) => toDireNoteArtist(name, options.artistProfiles, extended)),
       featuring_artists: splitNames(track.featuredArtists).map((name) => toDireNoteArtist(name, options.artistProfiles, extended)),
@@ -307,11 +324,11 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
   };
 
   if (contenttype === "AI Generated") {
-    payload.suno_receipt_url = getProofUrl(extended, ["suno_receipt_url", "sunoReceiptUrl"], options.siteUrl);
+    payload.suno_receipt_url = getProofUrl(extended, ["sunoReceiptUrl", "suno_receipt_url"], options.siteUrl);
     payload.sunoLink = meta.sunoLink ?? meta.suno_link ?? undefined;
   }
   if (contenttype === "Non-Exclusive Licensed") {
-    payload.license_receipt_url = getProofUrl(extended, ["license_receipt_url", "licenseReceiptUrl", "licenseDocumentUrl", "beatLicenseUrl"], options.siteUrl);
+    payload.license_receipt_url = getProofUrl(extended, ["licenseReceiptUrl", "license_receipt_url", "licenseDocumentUrl", "beatLicenseUrl"], options.siteUrl);
   }
 
   return payload;
@@ -330,7 +347,15 @@ function validatePublicPdf(issues: DireNoteValidationIssue[], field: string, val
 }
 
 function validateArtists(issues: DireNoteValidationIssue[], artists: DireNoteArtist[] | undefined, path: string, requireInstagram: boolean) {
+  if (artists != null && !Array.isArray(artists)) {
+    issues.push({ field: path, message: "Artists must be an array of artist records." });
+    return;
+  }
   for (const [index, artist] of (artists ?? []).entries()) {
+    if (!artist || typeof artist !== "object") {
+      issues.push({ field: `${path}.${index}`, message: "Artist record is invalid." });
+      continue;
+    }
     pushMissing(issues, `${path}.${index}.name`, artist.name, "Artist name is required.");
     if (requireInstagram) pushMissing(issues, `${path}.${index}.instagram_url`, artist.instagram_url, "Instagram profile link is required for artist verification and DireNote artist provisioning.");
     for (const [field, value] of Object.entries(artist).filter(([field]) => field.endsWith("_url"))) {
@@ -362,6 +387,11 @@ function isBefore(left?: string, right?: string) {
 export function validateDireNotePayload(payload: DireNotePayload, options: { adminConfirmedExistingArtists?: boolean } = {}) {
   const issues: DireNoteValidationIssue[] = [];
   const warnings: DireNoteValidationIssue[] = [];
+  // Check container shape before traversing payloads supplied by diagnostics or tests.
+  if (!payload || typeof payload !== "object" || !Array.isArray(payload.tracks) || !Array.isArray(payload.artists)
+    || payload.tracks.some(track => !track || !Array.isArray(track.songwriters) || !Array.isArray(track.composers))) {
+    return { ok: false, issues: [{ field: "payload", message: "Payload requires track and artist arrays, with songwriter and composer arrays on every track.", severity: "error" as const }], warnings };
+  }
 
   pushMissing(issues, "pin", payload.pin, "DireNote API PIN is not configured.");
   pushMissing(issues, "client_id", payload.client_id, "DireNote client ID is not configured.");
@@ -369,6 +399,7 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
   const missingAlbumName = pushMissing(issues, "albumname", payload.albumname, "Album name is required.");
   const missingReleaseType = pushMissing(issues, "typeOfRelease", payload.typeOfRelease, "Release type is required.");
   const missingAlbumGenre = pushMissing(issues, "albumGenre", payload.albumGenre, "Album genre is required.");
+  pushMissing(issues, "albumSubgenre", payload.albumSubgenre, "Album subgenre is required.");
   const missingAlbumLanguage = pushMissing(issues, "albumLanguage", payload.albumLanguage, "Album language is required.");
   if (pushMissing(issues, "albumMood", payload.albumMood, "Mood is missing. Select a mood before sending to DireNote.")) {
     issues[issues.length - 1].suggestion = "Select a mood in the release metadata.";
@@ -387,6 +418,9 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
   if (!missingAlbumGenre && payload.albumSubgenre && !DIRENOTE_SUBGENRES_BY_GENRE[payload.albumGenre]?.includes(payload.albumSubgenre)) issues.push({ field: "albumSubgenre", message: `Subgenre "${payload.albumSubgenre}" is not valid for ${payload.albumGenre}.` });
   if (!missingAlbumLanguage && !DIRENOTE_LANGUAGES.includes(payload.albumLanguage as any)) issues.push({ field: "albumLanguage", message: `Language "${payload.albumLanguage}" is not in DireNote allowed values.` });
   if (!missingContentType && !DIRENOTE_CONTENT_TYPES.includes(payload.contenttype)) issues.push({ field: "contenttype", message: "DireNote content type is invalid." });
+  if (!["Single", "EP", "Album"].includes(payload.typeOfRelease)) issues.push({ field: "typeOfRelease", message: "Release type must be Single, EP, or Album." });
+  if (!["Yes", "No"].includes(payload.releasePreviouslyReleased)) issues.push({ field: "releasePreviouslyReleased", message: "Previously released must be Yes or No." });
+  if (payload.youtubeContentID !== undefined && !["Yes", "No"].includes(payload.youtubeContentID)) issues.push({ field: "youtubeContentID", message: "YouTube Content ID must be Yes or No." });
   if (!payload.artists.length) issues.push({ field: "artists", message: "At least one primary artist is required." });
 
   if (!missingReleaseType && payload.typeOfRelease === "Single") {
@@ -395,6 +429,7 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
   }
   if (!missingReleaseType && (payload.typeOfRelease === "EP" || payload.typeOfRelease === "Album") && payload.tracks.length < 2) issues.push({ field: "tracks", message: `${payload.typeOfRelease}s must have at least 2 tracks.` });
   if (payload.releasePreviouslyReleased === "Yes") {
+    pushMissing(issues, "originalReleaseDate", payload.originalReleaseDate, "Previously released releases require their original release date.");
     pushMissing(issues, "upc", payload.upc, "Previously released releases require their existing UPC.");
     payload.tracks.forEach((track, index) => pushMissing(issues, `tracks.${index}.isrc`, track.isrc, `Previously released track ${index + 1} requires its existing ISRC.`));
   }
@@ -431,6 +466,9 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
 
   payload.tracks.forEach((track, index) => {
     const number = index + 1;
+    if (!["Yes", "No"].includes(track.explicitLyrics)) issues.push({ field: `tracks.${index}.explicitLyrics`, message: `Track ${number} explicit flag must be Yes or No.` });
+    if (!["Yes", "No"].includes(track.previouslyReleased)) issues.push({ field: `tracks.${index}.previouslyReleased`, message: `Track ${number} previously released flag must be Yes or No.` });
+    if (!track.artists?.length) issues.push({ field: `tracks.${index}.artists`, message: `Track ${number} requires a primary artist.` });
     pushMissing(issues, `tracks.${index}.trackName`, track.trackName, `Track ${number} requires a title.`);
     const missingAudioUrl = pushMissing(issues, `tracks.${index}.audio_url`, track.audio_url, `Track ${number} audio URL is required.`);
     if (!track.songwriters.length) issues.push({ field: `tracks.${index}.songwriters`, message: `Track ${number} requires at least one songwriter.` });
@@ -442,11 +480,13 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
     if (track.explicitLyrics === "Yes" && !track.trackLyrics?.trim()) issues.push({ field: `tracks.${index}.trackLyrics`, message: "Explicit tracks require lyrics before DireNote submission." });
     if (track.trackGenre && !DIRENOTE_GENRES.includes(track.trackGenre as any)) issues.push({ field: `tracks.${index}.trackGenre`, message: `Track ${number} genre is not DireNote-compatible.` });
     if (track.trackSubgenre && track.trackGenre && !DIRENOTE_SUBGENRES_BY_GENRE[track.trackGenre]?.includes(track.trackSubgenre)) issues.push({ field: `tracks.${index}.trackSubgenre`, message: `Track ${number} subgenre is not valid for ${track.trackGenre}.` });
-    if (track.trackLanguage && !DIRENOTE_LANGUAGES.includes(track.trackLanguage as any)) issues.push({ field: `tracks.${index}.trackLanguage`, message: `Track ${number} language is not DireNote-compatible.` });
+    const missingLanguage = pushMissing(issues, `tracks.${index}.trackLanguage`, track.trackLanguage, `Track ${number} requires its own track language. Select it in track metadata.`);
+    if (!missingLanguage && !DIRENOTE_LANGUAGES.includes(track.trackLanguage as any)) issues.push({ field: `tracks.${index}.trackLanguage`, message: `Track ${number} language is not DireNote-compatible.` });
+    if (/^instrumental$/i.test(track.trackVersion?.trim() ?? "") && track.trackLanguage !== "Instrumental") issues.push({ field: `tracks.${index}.trackLanguage`, message: `Track ${number} is marked Instrumental but its language is inconsistent. Confirm the instrumental language required by DireNote.` });
     validateArtists(issues, track.artists, `tracks.${index}.artists`, requireInstagram);
     validateArtists(issues, track.featuring_artists, `tracks.${index}.featuring_artists`, requireInstagram);
     for (const contributor of [...track.songwriters, ...track.composers]) {
-      if (!hasFirstAndLastName(contributor.name)) issues.push({ field: `tracks.${index}.credits`, message: "Songwriter/Composer must include first and last name. Stage names or mononyms are not accepted by DireNote." });
+      if (!hasFirstAndLastName(contributor?.name)) issues.push({ field: `tracks.${index}.credits`, message: "Songwriter/Composer must include first and last name. Stage names or mononyms are not accepted by DireNote." });
     }
   });
 

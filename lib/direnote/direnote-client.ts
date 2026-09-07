@@ -9,6 +9,7 @@ export type DireNoteSubmitResult = {
   error?: string;
   providerCode?: number;
   providerReason?: string;
+  retryAfterSeconds?: number;
   missing?: ReturnType<typeof getDireNoteConfig>["missing"];
 };
 
@@ -42,7 +43,7 @@ async function postToDireNote(endpoint: string, payload: Record<string, unknown>
   const config = getDireNoteConfig();
   if (!config.isConfigured) return { success: false, httpStatus: null, error: "DireNote credentials are not configured.", missing: config.missing };
 
-  const finalPayload = { pin: config.pin, client_id: config.clientId, ...payload };
+    const finalPayload = { ...payload, pin: config.pin, client_id: config.clientId };
   const controller = new AbortController();
   const timeoutMs = options.timeoutMs ?? 60_000;
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -55,10 +56,19 @@ async function postToDireNote(endpoint: string, payload: Record<string, unknown>
     });
     const raw = await response.text();
     let data: any;
-    try { data = JSON.parse(raw); } catch { data = { raw }; }
+    try { data = JSON.parse(raw); } catch {
+      return { success: false, httpStatus: response.status, error: "DIRENOTE_MALFORMED_RESPONSE: Expected JSON." };
+    }
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      return { success: false, httpStatus: response.status, error: "DIRENOTE_MALFORMED_RESPONSE: Expected an object." };
+    }
     const apiRejected = data?.success === false || Boolean(data?.error) || Boolean(data?.errors);
     const providerError = apiRejected || !response.ok ? extractDireNoteProviderError(data) : {};
-    return { success: response.ok && !apiRejected, httpStatus: response.status, ok: response.ok, data, raw, error: providerError.message, providerCode: providerError.code, providerReason: providerError.reason };
+    let safeError = providerError.message;
+    for (const secret of [config.pin, config.clientId]) if (secret) safeError = safeError?.split(secret).join("[REDACTED]");
+    const retryHeader = response.headers.get("retry-after");
+    const retryAfterSeconds = retryHeader ? Math.max(0, /^\d+$/.test(retryHeader) ? Number(retryHeader) : Math.ceil((Date.parse(retryHeader) - Date.now()) / 1000)) : undefined;
+    return { success: response.ok && !apiRejected, httpStatus: response.status, ok: response.ok, data, raw, error: safeError, providerCode: providerError.code, providerReason: providerError.reason, retryAfterSeconds: Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined };
   } catch (error: any) {
     return { success: false, httpStatus: null, error: error?.name === "AbortError" ? `DireNote request timed out after ${timeoutMs} milliseconds.` : error?.message || "DireNote request failed." };
   } finally { clearTimeout(timeout); }

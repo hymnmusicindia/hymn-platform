@@ -17,7 +17,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const redactedPayload = redactDireNotePayload(payload);
   const config = getDireNoteConfig();
   await logDistributionEvent({ releaseId, action: "payload_preview", createdByAdminId: Number((admin as any).sub) || null, requestPayload: redactedPayload, responsePayload: { validation }, success: validation.ok && config.isConfigured });
-  return NextResponse.json({ payload: redactedPayload, validationIssues: validation.issues, missingFields: validation.issues.map((issue) => issue.field), configReady: config.isConfigured, releaseReady: validation.ok && config.isConfigured });
+  const visiblePayload = Object.fromEntries(Object.entries(redactedPayload).filter(([key]) => !["pin", "client_id"].includes(key)));
+  return NextResponse.json({ payload: visiblePayload, validationIssues: validation.issues, missingFields: validation.issues.map((issue) => issue.field), configReady: config.isConfigured, releaseReady: validation.ok && config.isConfigured });
 }
 
 // vercel trigger 9
