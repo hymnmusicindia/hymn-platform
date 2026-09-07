@@ -1019,7 +1019,6 @@ export async function saveDraftDistributionRelease(input: {
           releaseType: input.metadata.releaseType || "single",
           artworkUrl: input.metadata.artworkUrl || null,
           audioUrl: input.metadata.audioUrl || null,
-          paymentStatus: input.metadata.paymentStatus || "pending",
           metadata: rest as any
         },
         select: { id: true }
@@ -1052,7 +1051,7 @@ export async function saveDraftDistributionRelease(input: {
       status: "draft",
       queuePosition: null,
       estimatedReviewTime: null,
-      paymentStatus: "pending",
+      paymentStatus: existingRelease?.paymentStatus ?? "pending",
       trackName: input.metadata.trackName || input.metadata.releaseTitle || "Untitled release",
       audioUrl: input.metadata.audioUrl || "",
       artworkUrl: input.metadata.artworkUrl || "",
@@ -1109,7 +1108,7 @@ export async function saveDraftDistributionRelease(input: {
       `UPDATE releases SET
         artist_name = ?, track_name = ?, release_title = ?, release_type = ?, audio_url = ?, artwork_url = ?, release_date = ?, original_release_date = ?,
         record_label_name = ?, primary_genre = ?, secondary_genre = ?, language = ?, mood = ?, platforms = ?, youtube_content_id_enabled = ?, youtube_content_id_channel_url = ?,
-        monetisation_accepted = ?, monetisation_clauses = ?, territory = ?, upc_code = ?, release_timing = ?, copyright_owner = ?, publishing_rights = ?, payment_model = ?, payment_status = 'pending', distribution_plan = ?, status = 'draft',
+        monetisation_accepted = ?, monetisation_clauses = ?, territory = ?, upc_code = ?, release_timing = ?, copyright_owner = ?, publishing_rights = ?, payment_model = ?, distribution_plan = ?, status = 'draft',
         ownership_confirmed = ?, no_unauthorized_samples = ?, collaborators_credited = ?, platform_compliant = ?, hymn_not_liable = ?,
         agreed_to_terms = ?, false_metadata_acknowledged = ?
        WHERE id = ? AND user_id = ?`,

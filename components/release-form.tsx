@@ -1913,8 +1913,6 @@ export function ReleaseForm({
       return { step: 3, key: `track-${index}-title-language`, trackIndex: index, message: `Select a language for Track ${index + 1}.` };
     if (track.versionPreset === "Instrumental" && track.titleLanguage !== "Instrumental")
       return { step: 3, key: `track-${index}-title-language`, trackIndex: index, message: `Track ${index + 1} is instrumental. Review its track language.` };
-    if (track.explicitContent && !track.lyrics.trim())
-      return { step: 3, key: `track-${index}-lyrics`, trackIndex: index, message: `Track ${index + 1} requires lyrics because it contains explicit content.` };
     if (!track.trackTitle.trim() || isPlaceholderTrackTitle(track.trackTitle))
       return {
         step: 3,
@@ -2435,7 +2433,7 @@ export function ReleaseForm({
 
     const payload = {
       metadata: {
-        editReleaseId: initialRelease?.id ?? 0,
+        editReleaseId: initialRelease?.id ?? draftReleaseId ?? 0,
         artistName: primaryArtistName,
         releaseTitle: displayedReleaseTitle,
         releaseType,
@@ -2799,6 +2797,13 @@ export function ReleaseForm({
       const orderData = await orderResponse.json();
       if (!orderResponse.ok)
         throw new Error(orderData.error || "Unable to create payment order.");
+
+      if (orderData.paidReleaseReusable === true) {
+        const data = await submitEditedRelease();
+        setSubmittedRelease(data.release);
+        setUploadProgress(100);
+        return;
+      }
 
       if (orderData.requiresPayment === false) {
         if (orderData.paidOrderReusable === true) {
@@ -3897,7 +3902,7 @@ export function ReleaseForm({
                           </label>
                         </div>
                         <label className="block text-sm" ref={registerField(`track-${index}-lyrics`)}>
-                          Lyrics
+                          Lyrics (optional)
                           <textarea className="field mt-2 min-h-28" value={track.lyrics} onChange={event => updateTrack(index, { lyrics: event.target.value })} aria-label={`Track ${index + 1} lyrics`} />
                         </label>
                         <label

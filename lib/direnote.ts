@@ -477,7 +477,6 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
       if (!isPublicHttpUrl(track.audio_url)) issues.push({ field: `tracks.${index}.audio_url`, message: `Track ${number} audio must be a public HTTP(S) URL.` });
       else if (!/\.(wav|mp3)$/i.test(assetFileName(track.audio_url))) issues.push({ field: `tracks.${index}.audio_url`, message: `Track ${number} audio must be WAV or MP3.` });
     }
-    if (track.explicitLyrics === "Yes" && !track.trackLyrics?.trim()) issues.push({ field: `tracks.${index}.trackLyrics`, message: "Explicit tracks require lyrics before DireNote submission." });
     if (track.trackGenre && !DIRENOTE_GENRES.includes(track.trackGenre as any)) issues.push({ field: `tracks.${index}.trackGenre`, message: `Track ${number} genre is not DireNote-compatible.` });
     if (track.trackSubgenre && track.trackGenre && !DIRENOTE_SUBGENRES_BY_GENRE[track.trackGenre]?.includes(track.trackSubgenre)) issues.push({ field: `tracks.${index}.trackSubgenre`, message: `Track ${number} subgenre is not valid for ${track.trackGenre}.` });
     const missingLanguage = pushMissing(issues, `tracks.${index}.trackLanguage`, track.trackLanguage, `Track ${number} requires its own track language. Select it in track metadata.`);

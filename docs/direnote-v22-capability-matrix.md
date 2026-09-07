@@ -36,7 +36,7 @@ the documented 100/IP/hour ceiling.
 | release `artists`, `featuring_artists` | artist-card/release-credit mapper | IMPLEMENTED |
 | `suno_receipt_url`, `sunoLink`, `license_receipt_url` | conditional rights-proof mapping and validation | IMPLEMENTED |
 | `tracks[].trackName`, `audio_url` | track mapper and public WAV/MP3 validation | IMPLEMENTED |
-| `tracks[].trackGenre`, `trackSubgenre`, `trackLanguage` | genre inherited; language now independently persisted per track | REPAIRED; enum certification pending |
+| `tracks[].trackGenre`, `trackSubgenre`, `trackLanguage` | genre inherited; language now independently persisted per track | REPAIRED; Instrumental confirmed in official DNM API v2.2 section 6b |
 | `tracks[].isrc`, `trackVersion`, `previewStart`, `vocalist`, `explicitLyrics`, `trackLyrics`, `previouslyReleased` | track metadata mapper/validation | IMPLEMENTED |
 | `tracks[].producers`, `artists`, `featuring_artists`, `contributors` | credits mapper | IMPLEMENTED |
 | `tracks[].songwriters`, `composers` | contributor mapper with multi-word policy | IMPLEMENTED |

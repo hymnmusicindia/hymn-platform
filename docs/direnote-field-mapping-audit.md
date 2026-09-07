@@ -47,11 +47,11 @@ candidate mapped projection reaches the second HTTP request:
 {"trackName":"pink","trackLanguage":"Instrumental","trackVersion":"Instrumental","explicitLyrics":"No"}
 ```
 
-`Instrumental` already appears in `lib/direnote-config.ts`, shared by form and
-validator. No provider-authored enum specification is present in the repository;
-a bounded accepted-catalogue sample returned no evidence, and public search
-returned no matching official contract. **DireNote language enum requires
-provider confirmation.** The mock proves connectivity, not provider acceptance.
+`Instrumental` is confirmed in section 6b of the official
+[DNM API v2.2 documentation](https://distribution.direnotemedia.com/dnm_api)
+(updated August 21, 2026; checked September 8, 2026), matching the shared form
+and validator configuration. Section 5c also confirms that lyrics are optional.
+The mock proves connectivity, not acceptance of a specific production release.
 No commit/push or production re-ingest is authorized by a mock alone.
 
 ## Field Matrix
@@ -72,7 +72,7 @@ reported separately. UNSUPPORTED/UNKNOWN does not mean silently delivered.
 | Genre/subgenre | release selectors -> genre + secondaryGenre | albumGenre/albumSubgenre; trackGenre/trackSubgenre | shared catalog + friendly alias table; valid pair | CONNECTED; missing subgenre no longer invented |
 | Album language | release language selector -> metadata.language | albumLanguage | shared enum | CONNECTED; no longer overwrites tracks |
 | Track language | track selector -> API language -> Track.metadata.language | trackLanguage | shared enum, required, explicit legacy reads | BROKEN -> REPAIRED |
-| Instrumental | existing version + canonical track language | trackVersion / trackLanguage | inconsistent values blocked | STRUCTURAL REPAIR; provider enum confirmation pending |
+| Instrumental | existing version + canonical track language | trackVersion / trackLanguage | inconsistent values blocked | REPAIRED; enum confirmed in official API section 6b |
 | Mood | mood selector -> metadata.mood | albumMood | required | CONNECTED |
 | Release date | releaseTiming / scheduledReleaseDate -> releaseDate | trackReleaseDate | date, minimum lead time | CONNECTED |
 | Original date | dedicated originalReleaseDate input -> API/metadata | originalReleaseDate | required for transfer, past date, re-release only | BROKEN -> REPAIRED; no longer reuses scheduled date |
@@ -99,7 +99,7 @@ reported separately. UNSUPPORTED/UNKNOWN does not mean silently delivered.
 | Producer | producers string + contributor record | producers + contributors | split names / role | CONNECTED |
 | Lyricist/publisher | no dedicated canonical controls | no verified destination | none | UNSUPPORTED |
 | Explicit | checkbox -> explicitContent | explicitLyrics | boolean -> Yes/No | CONNECTED |
-| Lyrics | new lyrics textarea -> API lyrics -> Track.metadata.lyrics | trackLyrics | explicit tracks require lyrics | BROKEN -> REPAIRED |
+| Lyrics | optional lyrics textarea -> API lyrics -> Track.metadata.lyrics | trackLyrics | optional for all tracks, including explicit content | REPAIRED |
 | Audio | upload -> Track.audioUrl / stored asset | audio_url | signed provider delivery; WAV/MP3 | CONNECTED |
 | Duration/BPM/key | metadata / upload results | no current provider destination | HYMN-only; checkout BPM/key preservation fixed | CONNECTED locally; UNSUPPORTED provider |
 | Dolby Atmos | checkbox -> metadata.dolbyAtmos | none | no spatial-audio delivery contract | UNSUPPORTED |
@@ -134,5 +134,5 @@ Signed asset-path tokens and credential query parameters are redacted in
 payload diagnostics. Current canonical fields override legacy metadata aliases.
 The closed cart drawer was also clipped and made inert after the mobile browser
 check proved it doubled the document width.
-Production recovery must wait for contract confirmation, all quality gates,
+Production recovery must wait for all quality gates,
 and controlled deployment of additive schema before application code.

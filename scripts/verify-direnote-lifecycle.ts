@@ -5,7 +5,7 @@ import { redactDireNoteDiagnostic } from "../lib/direnote";
 import { prisma } from "../lib/prisma";
 import { submitRelease } from "../lib/distribution-service";
 import { syncDireNoteRelease } from "../lib/direnote-service";
-import { getDetailedReleaseById, updatePaidDistributionRelease } from "../lib/distribution-db";
+import { getDetailedReleaseById, updatePaidDistributionRelease, saveDraftDistributionRelease } from "../lib/distribution-db";
 import { GET as cron } from "../app/api/cron/direnote-release-sync/route";
 import { startDireNoteBrowser } from "./direnote-browser-fixture";
 import { getDireNoteReleaseInformation } from "../lib/direnote/direnote-client";
@@ -57,9 +57,12 @@ async function main() {
     metadata: { releaseTitle: "Magenta", releaseDate: "2099-01-10", releaseTiming: "schedule_release", language: "Hindi", mood: "Happy", secondaryGenre: "Indie Pop", labelName: "Fixture Records", copyrightOwner: "2026 Fixture Records", publishingRights: "2026 Fixture Artist", contentType: "original", platforms: ["Spotify"], territory: "Worldwide", ownershipConfirmed: true, noUnauthorizedSamples: true, collaboratorsCredited: true, platformCompliant: true, hymnNotLiable: true, agreedToTerms: true, falseMetadataAcknowledged: true },
     tracks: { create: [1, 2].map(n => ({ title: n === 1 ? "purple" : "pink", trackNumber: n, primaryArtist: "gxrry", audioUrl: `https://cdn.example.test/track${n}.wav`, metadata: { metadata: { artistProfileIds: [artist.id] }, language: "Hindi", version: "Original", songwriters: "Fixture Artist", composers: "Fixture Artist", producers: "Fixture Artist", duration: "180", explicitContent: false } })) }
   }, include: { tracks: true } });
+  await prisma.track.update({ where: { id: release.tracks[0].id }, data: { metadata: { ...(release.tracks[0].metadata as object), explicitContent: true } } });
   const initial = await submitRelease(release.id);
   assert.equal(initial.submitted, true, JSON.stringify(initial));
   assert.equal(ingests, 1);
+  assert.equal(ingestPayloads[0].tracks[0].explicitLyrics, "Yes");
+  assert(!ingestPayloads[0].tracks[0].trackLyrics, "Explicit content must submit without lyrics.");
   const firstAttempt = await prisma.distributionSubmissionAttempt.findFirstOrThrow({ where: { releaseId: release.id, isCurrent: true } });
   assert.equal(firstAttempt.upc, oldUpc);
   assert.equal((await currentDireNoteAttempt(release.id)).id, firstAttempt.id);
@@ -158,6 +161,24 @@ async function main() {
   assert.equal(transferred.submitted, true, JSON.stringify(transferred));
   assert.deepEqual(ingestPayloads.at(-1)!.tracks.map((track: any) => track.isrc), oldIsrcs);
   assert.deepEqual((await prisma.track.findMany({ where: { releaseId: transfer.id }, orderBy: { trackNumber: "asc" } })).map(track => track.isrc), oldIsrcs);
-  console.log("Virtual PostgreSQL Magenta lifecycle passed: ingest, ten cron cycles, save, re-ingest, identifier history, new UPC polling, new correction, acceptance, and failure isolation.");
+  const paidDraft = await prisma.release.create({ data: { userId: user.id, title: "Paid draft", artistName: "gxrry", genre: "Pop", releaseDate: new Date("2099-01-10"), status: "DRAFT", paymentStatus: "paid" } });
+  await saveDraftDistributionRelease({ userId: user.id, draftReleaseId: paidDraft.id, metadata: { artistName: "gxrry", trackName: "Paid draft", tracks: [] } as any });
+  assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: paidDraft.id } })).paymentStatus, "paid", "Saving a draft must not erase payment.");
+  const paidOrder = await prisma.distributionOrder.create({ data: { userId: user.id, releaseId: paidDraft.id, plan: "one_time", amount: 99, paymentStatus: "paid", razorpayOrderId: "order_fixture_paid_draft", razorpayPaymentId: "pay_fixture_paid_draft", fulfilledAt: new Date() } });
+  if (browser) {
+    await prisma.release.update({ where: { id: paidDraft.id }, data: { paymentStatus: "pending" } });
+    await browser.paidDraftCheckout(paidDraft.id, true);
+    assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: paidDraft.id } })).paymentStatus, "paid");
+    await prisma.release.update({ where: { id: paidDraft.id }, data: { paymentStatus: "pending" } });
+    await prisma.distributionOrder.update({ where: { id: paidOrder.id }, data: { fulfilledAt: null } });
+    await browser.paidDraftCheckout(paidDraft.id, false);
+    assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: paidDraft.id } })).paymentStatus, "pending", "Unfulfilled capture must still pass verify-submit.");
+    assert.equal(await prisma.distributionOrder.count({ where: { releaseId: paidDraft.id } }), 1);
+    const otherUser = await prisma.user.create({ data: { googleId: "fixture-other-paid-owner", name: "Other owner", email: "other-paid@example.test", role: "CUSTOMER", status: "ACTIVE" } });
+    await prisma.distributionOrder.update({ where: { id: paidOrder.id }, data: { userId: otherUser.id, fulfilledAt: new Date() } });
+    await browser.paidDraftCheckout(paidDraft.id, true, 409);
+    assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: paidDraft.id } })).paymentStatus, "pending", "Another customer's payment must never restore entitlement.");
+  }
+  console.log("Virtual PostgreSQL lifecycle and paid draft preservation/recovery passed.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => { if (browser) await browser.stop(); await prisma.$disconnect(); server.close(); });

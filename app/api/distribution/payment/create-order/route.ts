@@ -26,6 +26,20 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "This release is already paid. Submit the corrections again instead of creating another payment." }, { status: 409 });
       }
       if (!["draft", "awaiting_payment"].includes(draftStatus)) return NextResponse.json({ error: "The checkout draft is no longer available." }, { status: 409 });
+      const attachedOrder = await prisma.distributionOrder.findUnique({ where: { releaseId: draft.id } });
+      if (attachedOrder && attachedOrder.userId !== session.sub) return NextResponse.json({ error: "The checkout payment belongs to another customer." }, { status: 409 });
+      // Older draft saves reset the release payment flag after fulfillment.
+      if (draftPaymentStatus === "paid" || (attachedOrder?.paymentStatus === "paid" && attachedOrder.fulfilledAt)) {
+        if (draftPaymentStatus !== "paid") {
+          const restored = await prisma.release.updateMany({ where: { id: draft.id, userId: session.sub, status: draft.status, paymentStatus: draft.paymentStatus }, data: { paymentStatus: "paid" } });
+          if (restored.count !== 1) return NextResponse.json({ error: "The release changed while checkout was loading. Please retry." }, { status: 409 });
+        }
+        return NextResponse.json({ requiresPayment: false, paidReleaseReusable: true });
+      }
+      if (attachedOrder?.paymentStatus === "paid" && attachedOrder.razorpayPaymentId && !attachedOrder.fulfilledAt) {
+        // verify-submit still checks ownership, price, plan and the stored payment ID.
+        return NextResponse.json({ orderId: attachedOrder.razorpayOrderId, paymentId: attachedOrder.razorpayPaymentId, requiresPayment: false, paidOrderReusable: true, amount: 0, currency: attachedOrder.currency, creditsUsed: attachedOrder.creditsUsed });
+      }
     }
     const subscription = await getSubscriptionByUserId(session.sub);
     const hasActiveSubscription = subscriptionHasEntitlement(subscription);

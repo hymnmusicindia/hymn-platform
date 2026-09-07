@@ -20,6 +20,18 @@ export async function startDireNoteBrowser(userId: number) {
     const page = await context.newPage();
     return {
       page,
+      async paidDraftCheckout(releaseId: number, fulfilled: boolean, expectedStatus = 200) {
+        const response = await context.request.post(`${origin}/api/distribution/payment/create-order`, { data: { draftReleaseId: releaseId, plan: "one_time", paymentModel: "one_time", trackCount: 1, releaseType: "single", platforms: ["Spotify"] } });
+        expect(response.status(), await response.text()).toBe(expectedStatus);
+        if (expectedStatus !== 200) return;
+        const body = await response.json();
+        expect(body.requiresPayment).toBe(false);
+        if (fulfilled) expect(body.paidReleaseReusable).toBe(true);
+        else {
+          expect(body.paidOrderReusable).toBe(true);
+          expect(body.paymentId).toBe("pay_fixture_paid_draft");
+        }
+      },
       async correction(releaseId: number) {
         await page.goto(`${origin}/dashboard/releases/${releaseId}?tab=corrections`);
         await expect(page.getByRole("heading", { name: "Action Required", exact: true })).toBeVisible();
@@ -39,6 +51,8 @@ export async function startDireNoteBrowser(userId: number) {
       async editLanguage(releaseId: number) {
         const panel = page.locator('[data-track-index="1"]');
         await expect(panel).toBeVisible();
+        await expect(panel.getByText("Lyrics (optional)", { exact: true })).toBeVisible();
+        await expect(panel.getByRole("textbox", { name: "Track 2 lyrics" })).not.toHaveAttribute("required");
         await panel.getByRole("button", { name: "Original", exact: true }).click();
         await page.getByRole("button", { name: "Instrumental", exact: true }).last().click();
         await panel.getByRole("button", { name: "Hindi", exact: true }).click();

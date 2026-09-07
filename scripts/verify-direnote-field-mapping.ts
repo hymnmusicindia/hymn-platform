@@ -26,6 +26,12 @@ const release = {
 const payload = buildDireNotePayload(release);
 assert(!JSON.stringify(redactDireNoteDiagnostic({ audio_url: "https://example.test/api/distribution-assets/1/private-token/audio.wav?signature=secret-value" })).match(/private-token|secret-value/));
 assert.equal(validateDireNotePayload(payload).ok, true, JSON.stringify(validateDireNotePayload(payload)));
+for (const lyrics of [undefined, "", "   "]) {
+  const optionalLyrics = structuredClone(payload);
+  optionalLyrics.tracks[2].trackLyrics = lyrics;
+  assert.equal(optionalLyrics.tracks[2].explicitLyrics, "Yes");
+  assert.equal(validateDireNotePayload(optionalLyrics).ok, true, "Lyrics are optional, including explicit tracks.");
+}
 assert.deepEqual(payload.tracks.map(track => track.trackLanguage), ["Hindi", "Instrumental", "English"]);
 assert.equal(payload.tracks[0].previewStart, "0");
 assert.deepEqual(json(payload.tracks[1]), {
