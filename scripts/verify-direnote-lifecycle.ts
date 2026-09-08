@@ -12,6 +12,7 @@ import { getDireNoteReleaseInformation } from "../lib/direnote/direnote-client";
 import { currentDireNoteAttempt } from "../lib/distribution-idempotency";
 import { assertDireNoteSchemaReady } from "../lib/direnote-schema-readiness";
 import { validateReleaseForDireNote } from "../lib/direnote-readiness";
+import { readTrackLanguage } from "../lib/track-language";
 
 assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/fixture:fixture@127\.0\.0\.1:55439\/direnote_virtual/);
 let mode = "pending";
@@ -32,9 +33,10 @@ const server = createServer(async (request, response) => {
   assert.equal(body.client_id, "fixture-client");
   response.setHeader("Content-Type", "application/json");
   if (request.url === "/ingest_content") {
+    assert.equal(request.method, "POST");
     ingestPayloads.push(body);
     ingests++;
-    response.end(JSON.stringify({ success: true, upc: body.releasePreviouslyReleased === "Yes" ? body.upc : ingests === 1 ? oldUpc : newUpc, tracks: [1, 2].map((n, index) => ({ track_name: `Track ${n}`, isrc: body.releasePreviouslyReleased === "Yes" ? body.tracks[index].isrc : (ingests === 1 ? oldIsrcs : newIsrcs)[index], status: "Pending" })) }));
+    response.end(JSON.stringify({ success: true, upc: body.releasePreviouslyReleased === "Yes" ? body.upc : ingests === 1 ? oldUpc : ingests > 3 ? `34736203135${String(ingests + 4).padStart(2, "0")}` : newUpc, tracks: [1, 2].map((n, index) => ({ track_name: `Track ${n}`, isrc: body.releasePreviouslyReleased === "Yes" ? body.tracks[index].isrc : ingests > 3 ? `INTST26${String(ingests).padStart(3, "0")}${String(index).padStart(2, "0")}` : (ingests === 1 ? oldIsrcs : newIsrcs)[index], status: "Pending" })) }));
     return;
   }
   statusUpcs.push(body.upc);
@@ -77,7 +79,9 @@ async function main() {
   assert.equal(firstAttempt.upc, oldUpc);
   assert.equal((await currentDireNoteAttempt(release.id)).id, firstAttempt.id);
   assert.equal((await currentDireNoteAttempt(release.id)).id, firstAttempt.id);
-  await syncDireNoteRelease(release.id);
+  await prisma.release.update({ where: { id: release.id }, data: { direNoteLastAttemptedAt: new Date(0) } });
+  const pendingCycle = await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));
+  assert.equal((await pendingCycle.json()).checked, 1);
   assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: release.id } })).status, "DISTRIBUTOR_PROCESSING");
   mode = "remark";
   for (let cycle = 0; cycle < 10; cycle++) {
@@ -95,10 +99,13 @@ async function main() {
   if (process.argv.includes("--browser")) { browser = await startDireNoteBrowser(user.id); await browser.correction(release.id); }
   const detailed = await getDetailedReleaseById(release.id);
   assert(detailed);
-  const editedTracks = detailed.tracks!.map(track => ({ ...track, language: track.trackNumber === 2 ? "Instrumental" : "Hindi", version: track.trackNumber === 2 ? "Instrumental" : track.version }));
+  const editedTracks = detailed.tracks!.map(track => ({ ...track, language: "Hindi", version: track.trackNumber === 2 ? "Instrumental" : track.version }));
   if (browser) await browser.editLanguage(release.id);
   else await updatePaidDistributionRelease({ userId: user.id, releaseId: release.id, metadata: { ...detailed, tracks: editedTracks } });
-  assert.equal((await getDetailedReleaseById(release.id))?.tracks?.[1].language, "Instrumental");
+  const savedInstrumental = (await getDetailedReleaseById(release.id))?.tracks?.[1];
+  assert.equal(savedInstrumental?.version, "Instrumental");
+  assert.equal(savedInstrumental?.language, "Hindi", "Stale stored language must not control Instrumental delivery.");
+  assert.equal(readTrackLanguage(savedInstrumental), "Instrumental");
   assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: release.id } })).status, "CHANGES_REQUESTED");
   assert.deepEqual((await prisma.track.findMany({ where: { releaseId: release.id }, orderBy: { trackNumber: "asc" } })).map(track => track.id), release.tracks.map(track => track.id));
   assert.equal((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: firstAttempt.id } })).corrections && ((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: firstAttempt.id } })).corrections as any).status, "customer_resolved");
@@ -127,10 +134,13 @@ async function main() {
   assert.equal(attempts[1].upc, newUpc);
   assert.equal((attempts[0].payloadRedacted as any).tracks[1].trackLanguage, "Hindi");
   assert.equal((attempts[1].payloadRedacted as any).tracks[1].trackLanguage, "Instrumental");
+  assert.deepEqual(redactDireNoteDiagnostic(ingestPayloads[1]), attempts[1].payloadRedacted, "The entire HTTP body must match the saved canonical payload snapshot.");
+  await writeFile(".cache/direnote-correction-http-body.json", JSON.stringify(redactDireNoteDiagnostic(ingestPayloads[1]), null, 2));
   assert((attempts[1].payloadDiff as any[]).some(change => change.field === "tracks.1.trackLanguage" && change.before === "Hindi" && change.after === "Instrumental"));
   assert.equal(await prisma.release.count({ where: { userId: user.id } }), 1);
   mode = "pending";
-  await syncDireNoteRelease(release.id);
+  await prisma.release.update({ where: { id: release.id }, data: { direNoteLastAttemptedAt: new Date(0) } });
+  await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));
   assert.equal(statusUpcs.at(-1), newUpc);
   for (const failure of ["401", "500", "malformed"]) {
     mode = failure;
@@ -208,6 +218,17 @@ async function main() {
     } });
     await browser.readinessIsolation(single.id, stale.id);
   }
-  console.log("Virtual PostgreSQL lifecycle, paid draft recovery, one-track JPEG readiness and release isolation passed.");
+  for (const language of [null, "Hindi"]) {
+    const derived = await prisma.release.create({ data: {
+      userId: user.id, title: `Derived ${language ?? "null"}`, artistName: "gxrry", genre: "Pop", releaseType: "ep", releaseDate: new Date("2099-01-10"), status: "APPROVED", paymentStatus: "paid", artworkUrl: "https://cdn.example.test/cover.jpg",
+      metadata: { ...(release.metadata as object), releaseTitle: `Derived ${language ?? "null"}` },
+      tracks: { create: [1, 2].map(n => ({ title: `Derived Track ${n}`, trackNumber: n, primaryArtist: "gxrry", audioUrl: "https://cdn.example.test/track1.wav", metadata: { language: n === 2 ? language : "Hindi", version: n === 2 ? "Instrumental" : "Original", songwriters: "Fixture Artist", composers: "Fixture Artist" } })) }
+    } });
+    const sent = await submitRelease(derived.id);
+    assert.equal(sent.submitted, true, JSON.stringify(sent));
+    assert.equal(ingestPayloads.at(-1)!.tracks[1].trackLanguage, "Instrumental");
+    assert.equal(ingestPayloads.at(-1)!.tracks[0].trackLanguage, "Hindi");
+  }
+  console.log("Virtual PostgreSQL lifecycle, null/stale Instrumental HTTP mapping, paid draft recovery, one-track JPEG readiness and release isolation passed.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => { if (browser) await browser.stop(); await prisma.$disconnect(); server.close(); });

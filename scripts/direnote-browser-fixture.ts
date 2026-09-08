@@ -87,8 +87,8 @@ export async function startDireNoteBrowser(userId: number) {
         await expect(panel.getByRole("textbox", { name: "Track 2 lyrics" })).not.toHaveAttribute("required");
         await panel.getByRole("button", { name: "Original", exact: true }).click();
         await page.getByRole("button", { name: "Instrumental", exact: true }).last().click();
-        await panel.getByRole("button", { name: "Hindi", exact: true }).click();
-        await page.getByRole("dialog", { name: "Choose track language" }).getByRole("button", { name: "Instrumental", exact: true }).click();
+        await expect(panel.getByText("Track Language", { exact: true })).toHaveCount(0);
+        await expect(panel.getByRole("button", { name: "Hindi", exact: true })).toHaveCount(0);
         await page.getByRole("button", { name: /Release info/ }).first().click();
         await page.getByRole("button", { name: "Hindi", exact: true }).click();
         await page.getByRole("dialog", { name: "Choose language" }).getByRole("button", { name: "Tamil", exact: true }).click();
@@ -110,7 +110,8 @@ export async function startDireNoteBrowser(userId: number) {
         const saved = await response;
         expect(saved.status(), await saved.text()).toBe(200);
         await page.goto(`${origin}/distribution/start?edit=${releaseId}&correctionField=tracks.1.trackLanguage`);
-        await expect(page.locator('[data-track-index="1"]').getByRole("button", { name: "Instrumental", exact: true })).toHaveCount(2);
+        await expect(page.locator('[data-track-index="1"]').getByRole("button", { name: "Instrumental", exact: true })).toHaveCount(1);
+        await expect(page.locator('[data-track-index="1"]').getByText("Track Language", { exact: true })).toHaveCount(0);
         await expect(page.locator('[data-track-index="1"] .release-track-selected-artist')).toHaveCount(1);
         await page.screenshot({ path: ".cache/direnote-language-reloaded.png", fullPage: true });
       },

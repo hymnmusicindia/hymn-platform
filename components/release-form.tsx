@@ -1908,10 +1908,8 @@ export function ReleaseForm({
     track: TrackDraft,
     index: number,
   ): ValidationIssue | null {
-    if (!(DIRENOTE_LANGUAGES as readonly string[]).includes(track.titleLanguage))
+    if (track.versionPreset !== "Instrumental" && !(DIRENOTE_LANGUAGES as readonly string[]).includes(track.titleLanguage))
       return { step: 3, key: `track-${index}-title-language`, trackIndex: index, message: `Select a language for Track ${index + 1}.` };
-    if (track.versionPreset === "Instrumental" && track.titleLanguage !== "Instrumental")
-      return { step: 3, key: `track-${index}-title-language`, trackIndex: index, message: `Track ${index + 1} is instrumental. Review its track language.` };
     if (!track.trackTitle.trim() || isPlaceholderTrackTitle(track.trackTitle))
       return {
         step: 3,
@@ -3847,19 +3845,19 @@ export function ReleaseForm({
                           </div> : null}
                         </div>
                         <div className="grid gap-3 md:gap-4 md:grid-cols-3">
-                          <div
+                          {track.versionPreset !== "Instrumental" ? <div
                             ref={registerField(`track-${index}-title-language`)}
                           >
                             <SearchableSelect
                               label="Track Language"
                               value={track.titleLanguage}
-                              options={track.versionPreset === "Instrumental" ? languageOptions.filter(value => value === "Instrumental") : languageOptions}
+                              options={languageOptions}
                               placeholder="Select track language"
                               onChange={(value) =>
                                 updateTrack(index, { titleLanguage: value })
                               }
                             />
-                          </div>
+                          </div> : null}
                           <label
                             className="track-attribute-toggle"
                           >

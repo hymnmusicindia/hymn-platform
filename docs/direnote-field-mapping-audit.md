@@ -72,7 +72,7 @@ reported separately. UNSUPPORTED/UNKNOWN does not mean silently delivered.
 | Genre/subgenre | release selectors -> genre + secondaryGenre | albumGenre/albumSubgenre; trackGenre/trackSubgenre | shared catalog + friendly alias table; valid pair | CONNECTED; missing subgenre no longer invented |
 | Album language | release language selector -> metadata.language | albumLanguage | shared enum | CONNECTED; no longer overwrites tracks |
 | Track language | track selector -> API language -> Track.metadata.language | trackLanguage | shared enum, required, explicit legacy reads | BROKEN -> REPAIRED |
-| Instrumental | existing version + canonical track language | trackVersion / trackLanguage | inconsistent values blocked | REPAIRED; enum confirmed in official API section 6b |
+| Instrumental | version selector, language control hidden | trackVersion / trackLanguage | backend derives Instrumental from version, overriding stale language | REPAIRED; enum confirmed in official API section 6b |
 | Mood | mood selector -> metadata.mood | albumMood | optional free text; no documented mood enum | REPAIRED; unwarranted required checks removed |
 | Release date | releaseTiming / scheduledReleaseDate -> releaseDate | trackReleaseDate | date, minimum lead time | CONNECTED |
 | Original date | dedicated originalReleaseDate input -> API/metadata | originalReleaseDate | required for transfer, past date, re-release only | BROKEN -> REPAIRED; no longer reuses scheduled date |
