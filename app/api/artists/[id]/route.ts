@@ -18,6 +18,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const payload = artistProfileUpdateSchema.parse(await request.json());
     const patch = {
       ...(payload.name !== undefined ? { name: payload.name.trim() } : {}),
+      ...(payload.hasLiveMusic !== undefined ? { isLinked: Boolean(payload.hasLiveMusic) } : {}),
       ...(payload.spotifyUrl !== undefined ? { spotifyUrl: payload.spotifyUrl.trim(), spotifyArtistId: payload.spotifyArtistId ?? parseSpotifyArtistId(payload.spotifyUrl) } : {}),
       ...(payload.appleUrl !== undefined ? { appleUrl: payload.appleUrl.trim() || null, appleArtistId: payload.appleUrl ? (payload.appleArtistId ?? parseAppleArtistId(payload.appleUrl)) : null } : {}),
       ...(payload.instagramUrl !== undefined ? { instagramUrl: normalizeInstagramUrl(payload.instagramUrl) } : {}),

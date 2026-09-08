@@ -59,9 +59,9 @@ const appleArtistUrlPattern = /^(?:https?:\/\/)?music\.apple\.com\/[a-z]{2}\/art
 const artistProfileFields = z.object({
   name: z.string().min(1),
   hasLiveMusic: z.boolean().optional().default(true),
-  spotifyUrl: z.string().min(1).refine((value) => spotifyArtistUrlPattern.test(value.trim()), { message: "Please paste a valid Spotify artist profile link." }),
-  appleUrl: z.string().optional().refine((value) => !value || appleArtistUrlPattern.test(value.trim()), { message: "Please paste a valid Apple Music artist profile link." }),
-  instagramUrl: z.string().min(1).refine((value) => instagramProfilePattern.test(value.trim()), { message: "Instagram profile link is required for artist verification." }),
+  spotifyUrl: z.string().trim().optional().or(z.literal("")).refine((value) => !value || spotifyArtistUrlPattern.test(value.trim()), { message: "Please paste a valid Spotify artist profile link." }),
+  appleUrl: z.string().trim().optional().or(z.literal("")).refine((value) => !value || appleArtistUrlPattern.test(value.trim()), { message: "Please paste a valid Apple Music artist profile link." }),
+  instagramUrl: z.string().trim().min(1).refine((value) => instagramProfilePattern.test(value.trim()), { message: "Instagram profile link is required for artist verification." }),
   youtubeUrl: z.string().url().optional().or(z.literal("")),
   spotifyArtistId: z.string().optional(),
   appleArtistId: z.string().optional(),
@@ -70,6 +70,14 @@ const artistProfileFields = z.object({
   confirmedSpotifyName: z.string().optional(),
   isProducer: z.boolean().optional().default(false),
   producerLegalName: z.string().trim().max(150).optional()
+}).superRefine((value, context) => {
+  if (value.hasLiveMusic !== false) {
+    const spotifyValue = value.spotifyUrl?.trim() ?? "";
+    const appleValue = value.appleUrl?.trim() ?? "";
+    if (!spotifyValue && !appleValue) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["spotifyUrl"], message: "Add at least one store link for an artist that already has music live in stores." });
+    }
+  }
 });
 
 function requireProducerLegalName(value: { isProducer?: boolean; producerLegalName?: string }, context: z.RefinementCtx) {

@@ -76,6 +76,7 @@ export function ArtistPicker({
   const [selectedSpotify, setSelectedSpotify] = useState<SpotifyArtistResult | null>(null);
   const [manualSpotifyUrl, setManualSpotifyUrl] = useState("");
   const [showManualSpotify, setShowManualSpotify] = useState(false);
+  const [hasLiveMusic, setHasLiveMusic] = useState(true);
   const [instagramUrl, setInstagramUrl] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [appleUrl, setAppleUrl] = useState("");
@@ -86,7 +87,7 @@ export function ArtistPicker({
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const reachedMax = Boolean(max && valueIds.length >= max);
-  const profileSteps = ["name", "spotify", "instagram", "apple", "youtube", "producer", ...(isProducer ? ["legal"] : [])] as const;
+  const profileSteps = ["name", "liveMusic", ...(hasLiveMusic ? ["spotify"] : []), "instagram", "apple", "youtube", "producer", ...(isProducer ? ["legal"] : [])] as const;
   const activeProfileStep = profileSteps[Math.min(profileStep, profileSteps.length - 1)];
   const isFinalProfileStep = profileStep === profileSteps.length - 1;
   const hasQuery = Boolean(query.trim());
@@ -255,6 +256,7 @@ export function ArtistPicker({
     setSelectedSpotify(null);
     setManualSpotifyUrl("");
     setShowManualSpotify(false);
+    setHasLiveMusic(true);
     setInstagramUrl("");
     setYoutubeUrl("");
     setIsProducer(false);
@@ -274,7 +276,8 @@ export function ArtistPicker({
     setSpotifySearch(profile.name);
     setSelectedSpotify(null);
     setManualSpotifyUrl(profile.spotifyUrl ?? "");
-    setShowManualSpotify(true);
+    setShowManualSpotify(Boolean(profile.spotifyUrl));
+    setHasLiveMusic(Boolean(profile.isLinked));
     setInstagramUrl(profile.instagramUrl ?? "");
     setAppleUrl(profile.appleUrl ?? "");
     setYoutubeUrl(profile.youtubeUrl ?? "");
@@ -310,8 +313,8 @@ export function ArtistPicker({
       setSpotifyError("Instagram profile link is required for artist verification.");
       return;
     }
-    if (!selectedSpotify && !manualSpotifyUrl.trim()) {
-      setSpotifyError("Select a Spotify artist or paste a valid Spotify artist profile link.");
+    if (hasLiveMusic && !selectedSpotify && !manualSpotifyUrl.trim() && !appleUrl.trim()) {
+      setSpotifyError("Select a Spotify artist, paste a valid Spotify artist profile link, or add an Apple Music profile.");
       return;
     }
     if (isProducer && !producerLegalName.trim()) {
@@ -324,7 +327,7 @@ export function ArtistPicker({
 
     try {
       if (editingProfile) {
-        const response = await fetch(`/api/artists/${editingProfile.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, spotifyUrl: manualSpotifyUrl.trim(), instagramUrl: instagramUrl.trim(), appleUrl: appleUrl.trim(), youtubeUrl: youtubeUrl.trim(), isProducer, producerLegalName: isProducer ? producerLegalName.trim() : undefined }) });
+        const response = await fetch(`/api/artists/${editingProfile.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, hasLiveMusic, spotifyUrl: hasLiveMusic ? manualSpotifyUrl.trim() : "", instagramUrl: instagramUrl.trim(), appleUrl: appleUrl.trim(), youtubeUrl: youtubeUrl.trim(), isProducer, producerLegalName: isProducer ? producerLegalName.trim() : undefined }) });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Could not update artist profile.");
         const updated = data.profile as ArtistProfile;
@@ -334,16 +337,16 @@ export function ArtistPicker({
         return;
       }
       let spotifyArtist = selectedSpotify;
-      if (!spotifyArtist && manualSpotifyUrl.trim()) {
+      if (hasLiveMusic && !spotifyArtist && manualSpotifyUrl.trim()) {
         spotifyArtist = await resolveSpotifyUrl(manualSpotifyUrl);
         setCreateName(spotifyArtist.name);
       }
 
       const profile = await createProfile({
         name,
-        hasLiveMusic: Boolean(spotifyArtist || manualSpotifyUrl.trim() || appleUrl.trim()),
-        spotifyUrl: (spotifyArtist?.spotifyUrl ?? manualSpotifyUrl.trim()) || undefined,
-        spotifyArtistId: spotifyArtist?.id,
+        hasLiveMusic,
+        spotifyUrl: hasLiveMusic ? (spotifyArtist?.spotifyUrl ?? manualSpotifyUrl.trim()) || undefined : undefined,
+        spotifyArtistId: hasLiveMusic ? spotifyArtist?.id : undefined,
         imageUrl: spotifyArtist?.imageUrl ?? null,
         followers: spotifyArtist?.followers ?? null,
         confirmedSpotifyName: spotifyArtist?.name ?? name,
@@ -368,7 +371,8 @@ export function ArtistPicker({
   function advanceProfileStep() {
     setSpotifyError(null);
     if (activeProfileStep === "name" && !createName.trim()) return setSpotifyError("Artist name is required.");
-    if (activeProfileStep === "spotify" && !selectedSpotify && !manualSpotifyUrl.trim()) return setSpotifyError("Select a Spotify artist or paste a valid Spotify artist profile link.");
+    if (activeProfileStep === "liveMusic") return setProfileStep((current) => Math.min(current + 1, profileSteps.length - 1));
+    if (activeProfileStep === "spotify" && hasLiveMusic && !selectedSpotify && !manualSpotifyUrl.trim() && !appleUrl.trim()) return setSpotifyError("Select a Spotify artist, paste a valid Spotify artist profile link, or add an Apple Music profile.");
     if (activeProfileStep === "instagram" && !instagramUrl.trim()) return setSpotifyError("Instagram profile link is required for artist verification.");
     if (activeProfileStep === "legal" && !producerLegalName.trim()) return setSpotifyError("Complete legal name is required for a producer profile.");
     setProfileStep((current) => Math.min(current + 1, profileSteps.length - 1));

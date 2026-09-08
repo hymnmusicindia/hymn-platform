@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   try {
     const payload = artistProfileCreateSchema.parse(await request.json());
     const name = payload.name.trim();
-    const isLinked = payload.hasLiveMusic;
+    const isLinked = Boolean(payload.hasLiveMusic);
     const spotifyUrl = payload.spotifyUrl?.trim() || "";
     const appleUrl = payload.appleUrl?.trim() || "";
     const artistUsage = await usage(result.user.id);
