@@ -1296,7 +1296,6 @@ export function ReleaseForm({
       release.recordLabelName.trim() &&
       release.primaryGenre &&
       release.secondaryGenre &&
-      release.mood.trim() &&
       release.language.trim() &&
       platforms.length > 0 &&
       release.copyrightOwner.trim(),
@@ -2039,13 +2038,6 @@ export function ReleaseForm({
             step: 2,
             key: "genre-picker",
             message: "Choose both a genre and subgenre before continuing.",
-          }
-        : null,
-      !release.mood.trim()
-        ? {
-            step: 2,
-            key: "mood",
-            message: "Please select a mood for this release.",
           }
         : null,
       !release.language.trim()
@@ -4183,7 +4175,7 @@ export function ReleaseForm({
                   className="mb-2 block text-sm font-medium"
                   style={{ color: "var(--text-muted)" }}
                 >
-                  {correctionLabel("Mood", "mood")}
+                  {correctionLabel("Mood (optional)", "mood")}
                 </label>
                 <MoodSelector
                   value={release.mood}

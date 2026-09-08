@@ -26,6 +26,12 @@ const release = {
 const payload = buildDireNotePayload(release);
 assert(!JSON.stringify(redactDireNoteDiagnostic({ audio_url: "https://example.test/api/distribution-assets/1/private-token/audio.wav?signature=secret-value" })).match(/private-token|secret-value/));
 assert.equal(validateDireNotePayload(payload).ok, true, JSON.stringify(validateDireNotePayload(payload)));
+for (const mood of [undefined, "", "Empowering", "Happy", "Sad", "Energetic"]) {
+  assert.equal(validateDireNotePayload({ ...payload, albumMood: mood }).ok, true, "Mood is optional free text, not an undocumented enum.");
+}
+for (const url of ["https://cdn.example.test/cover.JPG", "https://cdn.example.test/cover.jpeg", "https://cdn.example.test/download?filename=cover.jpg"]) {
+  assert.equal(validateDireNotePayload({ ...payload, cover_art_url: url }).ok, true, "Valid JPEG delivery names must pass.");
+}
 for (const lyrics of [undefined, "", "   "]) {
   const optionalLyrics = structuredClone(payload);
   optionalLyrics.tracks[2].trackLyrics = lyrics;
@@ -50,7 +56,7 @@ assert.deepEqual(json({ ...payload, tracks: undefined, pin: undefined, client_id
   youtubeContentID: "No", releasePreviouslyReleased: "No", cover_art_url: "https://cdn.example.test/cover.jpg",
   artists: [{ name: "Fixture Artist", instagram_url: "https://instagram.com/fixture" }], featuring_artists: []
 });
-for (const field of ["albumname", "typeOfRelease", "albumGenre", "albumSubgenre", "albumLanguage", "albumMood", "contenttype", "trackReleaseDate", "labelName", "cLine", "pLine", "cover_art_url", "artists", "tracks"]) {
+for (const field of ["albumname", "typeOfRelease", "albumGenre", "albumSubgenre", "albumLanguage", "contenttype", "trackReleaseDate", "labelName", "cLine", "pLine", "cover_art_url", "artists", "tracks"]) {
   for (const value of [undefined, null, "", "   "]) {
     assert.equal(validateDireNotePayload({ ...payload, [field]: value } as any).ok, false, `${field}: ${JSON.stringify(value)}`);
   }

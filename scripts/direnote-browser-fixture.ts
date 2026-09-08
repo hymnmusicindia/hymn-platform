@@ -20,6 +20,38 @@ export async function startDireNoteBrowser(userId: number) {
     const page = await context.newPage();
     return {
       page,
+      async readinessIsolation(singleId: number, staleId: number) {
+        const actual = await context.request.get(`${origin}/api/admin/releases/${singleId}/direnote/readiness`);
+        expect(actual.status()).toBe(200);
+        const data = await actual.json();
+        expect(data.releaseId).toBe(singleId);
+        expect(data.trackCount).toBe(1);
+        expect(data.ready, JSON.stringify(data.issues)).toBe(true);
+        expect(actual.headers()["cache-control"]).toContain("no-store");
+        // The initial catalog selection is deliberately outside the review queue.
+        const staleRoute = `**/api/admin/releases/${staleId}/direnote/readiness`;
+        await page.route(staleRoute, async route => {
+          const response = await route.fetch();
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          await route.fulfill({ response }).catch(() => undefined);
+        });
+        await page.goto(`${origin}/admin?tab=releases&releaseId=${staleId}`);
+        await page.getByRole("button", { name: /QC Queue/ }).first().click();
+        await page.getByRole("navigation", { name: "Release review sections" }).getByRole("button", { name: "Distribution readiness", exact: true }).click();
+        await expect(page.getByText(/^ready for direnote$/i)).toBeVisible();
+        await page.waitForTimeout(2000);
+        await expect(page.getByText(/^ready for direnote$/i)).toBeVisible();
+        await expect(page.getByText(/Track 2 requires its own/)).toHaveCount(0);
+        await expect(page.getByText(/Convert PNG/)).toHaveCount(0);
+        await page.screenshot({ path: ".cache/harado-readiness-desktop.png", fullPage: true });
+        await page.setViewportSize({ width: 390, height: 844 });
+        const closeNavigation = page.getByRole("button", { name: "Close workspace navigation" });
+        if (await closeNavigation.isVisible()) await closeNavigation.click();
+        await expect(page.getByText(/^ready for direnote$/i)).toBeVisible();
+        await page.screenshot({ path: ".cache/harado-readiness-mobile.png", fullPage: true });
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        await page.unroute(staleRoute);
+      },
       async paidDraftCheckout(releaseId: number, fulfilled: boolean, expectedStatus = 200) {
         const response = await context.request.post(`${origin}/api/distribution/payment/create-order`, { data: { draftReleaseId: releaseId, plan: "one_time", paymentModel: "one_time", trackCount: 1, releaseType: "single", platforms: ["Spotify"] } });
         expect(response.status(), await response.text()).toBe(expectedStatus);

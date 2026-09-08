@@ -140,7 +140,7 @@ function readinessIssueLabel(issue: ReadinessIssue) {
     [/cover|artwork/, "Artwork"], [/audio/, "Audio file"], [/release.*title/, "Release title"], [/track.*title/, "Track title"],
     [/spotify/, "Spotify artist URL"], [/apple/, "Apple Music artist URL"], [/instagram/, "Instagram URL"], [/primary.*artist|artist.*name/, "Artist name"],
     [/subgenre/, "Subgenre"], [/genre/, "Genre"], [/mood/, "Mood"], [/language/, "Language"], [/label/, "Label name"],
-    [/cline|c-line|copyright/, "C-Line"], [/pline|p-line|publishing/, "P-Line"], [/contenttype|content type/, "Content type"],
+    [/cline|c-line|copyright/, "C-Line"], [/pline|p-line|publishing/, "P-Line"], [/contenttype|content type/, "Content ownership"],
     [/original.*date/, "Original release date"], [/release.*date/, "Release date"], [/upc/, "UPC"], [/isrc/, "ISRC"],
     [/songwriter/, "Songwriters"], [/composer/, "Composers"], [/producer/, "Producers"], [/lyric/, "Lyrics"],
     [/platform|destination/, "Platform destinations"], [/licen[cs]e/, "License receipt"], [/suno|\bai\b/, "AI proof / Suno receipt"],
@@ -558,11 +558,17 @@ export function AdminControlCenter({
   const [applications, setApplications] = useState(initialApplications);
   const [supportTickets, setSupportTickets] = useState(initialSupportTickets);
   const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(initialReleases[0]?.id ?? null);
+  const requestedSelectedRelease = releases.find((release) => release.id === selectedReleaseId) ?? null;
+  const selectedRelease = activeTab === "distribution-queue"
+    ? (requestedSelectedRelease && REVIEW_QUEUE_STATUSES.includes(requestedSelectedRelease.status as typeof REVIEW_QUEUE_STATUSES[number]) ? requestedSelectedRelease : releases.find((release) => REVIEW_QUEUE_STATUSES.includes(release.status as typeof REVIEW_QUEUE_STATUSES[number])) ?? null)
+    : requestedSelectedRelease ?? releases[0] ?? null;
+  const readinessReleaseId = selectedRelease?.id ?? null;
   const [feedback, setFeedback] = useState<string | null>(null);
   const [notificationFeedback, setNotificationFeedback] = useState<string | null>(null);
   const [persistedTasks, setPersistedTasks] = useState<PersistedAdminTask[]>([]);
   const [releaseAudit, setReleaseAudit] = useState<Array<{ id: number; action: string; createdAt: string; metadata?: Record<string, unknown> | null }>>([]);
-  const [direNoteReadiness, setDireNoteReadiness] = useState<{ ready: boolean; issues: Array<{ field: string; category: string; message: string; fixSuggestion: string }>; warnings: Array<{ field: string; category: string; message: string }>; checklist?: Array<{ label: string; ready: boolean }> } | null>(null);
+  const [loadedDireNoteReadiness, setDireNoteReadiness] = useState<{ releaseId: number; ready: boolean; issues: Array<{ field: string; category: string; message: string; fixSuggestion: string }>; warnings: Array<{ field: string; category: string; message: string }>; checklist?: Array<{ label: string; ready: boolean }> } | null>(null);
+  const direNoteReadiness = loadedDireNoteReadiness?.releaseId === readinessReleaseId ? loadedDireNoteReadiness : null;
   const [reviewAction, setReviewAction] = useState<"rejected" | "changes_requested" | null>(null);
   const [reviewReason, setReviewReason] = useState("");
   const [reviewIssueType, setReviewIssueType] = useState("");
@@ -615,10 +621,17 @@ export function AdminControlCenter({
     return () => { active = false; };
   }, []);
   useEffect(() => {
-    if (!selectedReleaseId) return;
-    fetch(`/api/admin/releases/${selectedReleaseId}/audit`).then((response) => response.ok ? response.json() : null).then((data) => setReleaseAudit(Array.isArray(data?.logs) ? data.logs : [])).catch(() => setReleaseAudit([]));
-    fetch(`/api/admin/releases/${selectedReleaseId}/direnote/readiness`).then((response) => response.ok ? response.json() : null).then((data) => setDireNoteReadiness(data && Array.isArray(data.issues) ? { ...data, warnings: Array.isArray(data.warnings) ? data.warnings : [] } : null)).catch(() => setDireNoteReadiness(null));
-  }, [selectedReleaseId]);
+    let active = true;
+    const controller = new AbortController();
+    setDireNoteReadiness(null);
+    setReleaseAudit([]);
+    if (!readinessReleaseId) return;
+    fetch(`/api/admin/releases/${readinessReleaseId}/audit`, { signal: controller.signal, cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => { if (active) setReleaseAudit(Array.isArray(data?.logs) ? data.logs : []); }).catch(() => { if (active) setReleaseAudit([]); });
+    fetch(`/api/admin/releases/${readinessReleaseId}/direnote/readiness`, { signal: controller.signal, cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => {
+      if (active) setDireNoteReadiness(data?.releaseId === readinessReleaseId && Array.isArray(data.issues) ? { ...data, warnings: Array.isArray(data.warnings) ? data.warnings : [] } : null);
+    }).catch(() => { if (active) setDireNoteReadiness(null); });
+    return () => { active = false; controller.abort(); };
+  }, [readinessReleaseId, releases]);
   useEffect(() => {
     if (activeTab !== "producers") return;
     fetch("/api/admin/producers", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => setProducerManagement(Array.isArray(data?.producers) ? data.producers : [])).catch(() => setProducerManagement([]));
@@ -703,10 +716,6 @@ export function AdminControlCenter({
     { label: "Overdue support tickets", count: openSupportTickets, urgency: openSupportTickets ? "Attention" : "Clear", oldest: oldestWaiting(supportTickets.filter((ticket) => ["open", "in_progress"].includes(ticket.status)).map((ticket) => ticket.createdAt)), tab: "support" as AdminTab },
     { label: "Beats awaiting approval", count: pendingBeatReviews, urgency: pendingBeatReviews ? "High" : "Clear", oldest: oldestWaiting(beats.filter((beat) => beat.status === "PENDING_REVIEW").map((beat) => beat.createdAt)), tab: "operations" as AdminTab },
   ];
-  const requestedSelectedRelease = releases.find((release) => release.id === selectedReleaseId) ?? null;
-  const selectedRelease = activeTab === "distribution-queue"
-    ? (requestedSelectedRelease && REVIEW_QUEUE_STATUSES.includes(requestedSelectedRelease.status as typeof REVIEW_QUEUE_STATUSES[number]) ? requestedSelectedRelease : releases.find((release) => REVIEW_QUEUE_STATUSES.includes(release.status as typeof REVIEW_QUEUE_STATUSES[number])) ?? null)
-    : requestedSelectedRelease ?? releases[0] ?? null;
   const direNoteCooldownSeconds = selectedRelease
     ? Math.max(0, Math.ceil(((direNoteCooldowns[selectedRelease.id] ?? 0) - cooldownClock) / 1000))
     : 0;
@@ -1311,7 +1320,6 @@ export function AdminControlCenter({
                     <div>
                       <p className="font-semibold" style={{ color: "var(--text)" }}>DireNote readiness</p>
                       <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Checklist uses the exact DireNote payload that will be submitted. Failed items should be fixed before distributor handoff.</p>
-                      {direNoteReadiness?.issues?.some((issue) => issue.field === "albumMood") ? <p className="mt-2 text-sm" style={{ color: "var(--danger)" }}>Missing mood. DireNote requires albumMood in the outgoing payload.</p> : null}
                     </div>
                     <StatusPill label={direNoteReadiness ? direNoteReadiness.ready ? "Ready for DireNote" : "Needs fixes" : "Checking"} active={Boolean(direNoteReadiness?.ready)} />
                   </div>
@@ -1344,8 +1352,8 @@ export function AdminControlCenter({
                 {selectedRelease.direNoteStatus ? <ReleaseSubmissionHistory releaseId={selectedRelease.id} admin /> : null}
                 <div className="sticky bottom-3 z-10 grid gap-3 rounded-2xl border p-3 shadow-xl sm:grid-cols-2 xl:grid-cols-3" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
                   {["submitted", "in_queue", "changes_requested", "failed", "draft"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => updateReleaseStatus(selectedRelease.id, "under_review")} className="btn-outline pressable disabled:opacity-45">Start Review</button> : null}
-                  {selectedRelease.status === "under_review" ? <button type="button" disabled={isPending || isSubmittingToDireNote || direNoteCooldownSeconds > 0 || direNoteReadiness?.ready === false || !hasPermission("releases.review") || !hasPermission("distribution.submit")} title={direNoteCooldownSeconds > 0 ? `DireNote cooldown: ${direNoteCooldownLabel} remaining` : direNoteReadiness?.ready === false ? "Resolve DireNote readiness issues before approval" : !hasPermission("releases.review") || !hasPermission("distribution.submit") ? "Requires release review and distribution submit permissions" : undefined} onClick={() => setConfirmStatusAction("sent")} className="btn-primary pressable disabled:opacity-45">{isSubmittingToDireNote ? "Approving & Sending..." : direNoteCooldownSeconds > 0 ? `Try again in ${direNoteCooldownLabel}` : "Approve & Send to DireNote"}</button> : null}
-                  {["approved", "failed", "delivery_failed", "queued_for_distribution"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || isSubmittingToDireNote || direNoteCooldownSeconds > 0 || direNoteReadiness?.ready === false || !hasPermission(selectedRelease.status === "approved" ? "distribution.submit" : "distribution.retry")} title={direNoteCooldownSeconds > 0 ? `DireNote cooldown: ${direNoteCooldownLabel} remaining` : !hasPermission(selectedRelease.status === "approved" ? "distribution.submit" : "distribution.retry") ? `Requires ${selectedRelease.status === "approved" ? "distribution.submit" : "distribution.retry"} permission` : undefined} onClick={() => setConfirmStatusAction("sent")} className="btn-primary pressable disabled:opacity-45">{isSubmittingToDireNote ? "Submitting to DireNote..." : direNoteCooldownSeconds > 0 ? `Try again in ${direNoteCooldownLabel}` : selectedRelease.status === "approved" ? "Send to DireNote" : "Retry Send"}</button> : null}
+                  {selectedRelease.status === "under_review" ? <button type="button" disabled={isPending || isSubmittingToDireNote || direNoteCooldownSeconds > 0 || direNoteReadiness?.ready !== true || !hasPermission("releases.review") || !hasPermission("distribution.submit")} title={direNoteCooldownSeconds > 0 ? `DireNote cooldown: ${direNoteCooldownLabel} remaining` : direNoteReadiness?.ready !== true ? "Wait for this release's readiness check to pass" : !hasPermission("releases.review") || !hasPermission("distribution.submit") ? "Requires release review and distribution submit permissions" : undefined} onClick={() => setConfirmStatusAction("sent")} className="btn-primary pressable disabled:opacity-45">{isSubmittingToDireNote ? "Approving & Sending..." : direNoteCooldownSeconds > 0 ? `Try again in ${direNoteCooldownLabel}` : "Approve & Send to DireNote"}</button> : null}
+                  {["approved", "failed", "delivery_failed", "queued_for_distribution"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || isSubmittingToDireNote || direNoteCooldownSeconds > 0 || direNoteReadiness?.ready !== true || !hasPermission(selectedRelease.status === "approved" ? "distribution.submit" : "distribution.retry")} title={direNoteCooldownSeconds > 0 ? `DireNote cooldown: ${direNoteCooldownLabel} remaining` : direNoteReadiness?.ready !== true ? "Wait for this release's readiness check to pass" : !hasPermission(selectedRelease.status === "approved" ? "distribution.submit" : "distribution.retry") ? `Requires ${selectedRelease.status === "approved" ? "distribution.submit" : "distribution.retry"} permission` : undefined} onClick={() => setConfirmStatusAction("sent")} className="btn-primary pressable disabled:opacity-45">{isSubmittingToDireNote ? "Submitting to DireNote..." : direNoteCooldownSeconds > 0 ? `Try again in ${direNoteCooldownLabel}` : selectedRelease.status === "approved" ? "Send to DireNote" : "Retry Send"}</button> : null}
                   {selectedRelease.upcCode || selectedRelease.direNoteStatus || selectedRelease.tracks?.some(track => track.isrc) ? <button type="button" disabled={isPending || !hasPermission("releases.read")} title={!hasPermission("releases.read") ? "Requires releases.read permission" : undefined} onClick={() => syncDireNoteRelease(selectedRelease.id)} className="btn-outline pressable disabled:opacity-45">Sync with DireNote</button> : null}
                   {["sent", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("distribution.confirm_status")} title={!hasPermission("distribution.confirm_status") ? "Requires distribution.confirm_status permission" : undefined} onClick={() => setConfirmStatusAction("live")} className="btn-primary pressable disabled:opacity-45">Mark Live</button> : null}
                   {["submitted", "in_queue", "under_review", "approved"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => openReview("changes_requested")} className="btn-outline pressable disabled:opacity-45" style={{ color: "var(--money)" }}>Request Metadata Changes</button> : null}

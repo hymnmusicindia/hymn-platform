@@ -73,7 +73,7 @@ reported separately. UNSUPPORTED/UNKNOWN does not mean silently delivered.
 | Album language | release language selector -> metadata.language | albumLanguage | shared enum | CONNECTED; no longer overwrites tracks |
 | Track language | track selector -> API language -> Track.metadata.language | trackLanguage | shared enum, required, explicit legacy reads | BROKEN -> REPAIRED |
 | Instrumental | existing version + canonical track language | trackVersion / trackLanguage | inconsistent values blocked | REPAIRED; enum confirmed in official API section 6b |
-| Mood | mood selector -> metadata.mood | albumMood | required | CONNECTED |
+| Mood | mood selector -> metadata.mood | albumMood | optional free text; no documented mood enum | REPAIRED; unwarranted required checks removed |
 | Release date | releaseTiming / scheduledReleaseDate -> releaseDate | trackReleaseDate | date, minimum lead time | CONNECTED |
 | Original date | dedicated originalReleaseDate input -> API/metadata | originalReleaseDate | required for transfer, past date, re-release only | BROKEN -> REPAIRED; no longer reuses scheduled date |
 | Previously released | releasePreviouslyReleased | releasePreviouslyReleased + track default | Yes/No, existing UPC/ISRC | BROKEN -> API PERSISTENCE REPAIRED |

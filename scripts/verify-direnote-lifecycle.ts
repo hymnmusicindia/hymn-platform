@@ -11,6 +11,7 @@ import { startDireNoteBrowser } from "./direnote-browser-fixture";
 import { getDireNoteReleaseInformation } from "../lib/direnote/direnote-client";
 import { currentDireNoteAttempt } from "../lib/distribution-idempotency";
 import { assertDireNoteSchemaReady } from "../lib/direnote-schema-readiness";
+import { validateReleaseForDireNote } from "../lib/direnote-readiness";
 
 assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/fixture:fixture@127\.0\.0\.1:55439\/direnote_virtual/);
 let mode = "pending";
@@ -188,6 +189,25 @@ async function main() {
     await browser.paidDraftCheckout(paidDraft.id, true, 409);
     assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: paidDraft.id } })).paymentStatus, "pending", "Another customer's payment must never restore entitlement.");
   }
-  console.log("Virtual PostgreSQL lifecycle and paid draft preservation/recovery passed.");
+  const single = await prisma.release.create({ data: {
+    userId: user.id, title: "HARADO TEST fixture", artistName: "gxrry", genre: "Pop", releaseType: "single", releaseDate: new Date("2099-01-10"), status: "APPROVED", paymentStatus: "paid", artworkUrl: "https://cdn.example.test/cover.jpg",
+    metadata: { ...(release.metadata as object), releaseTitle: "HARADO TEST fixture", language: "English", mood: "" },
+    tracks: { create: [{ title: "HARADO TEST fixture", trackNumber: 1, primaryArtist: "gxrry", audioUrl: "https://cdn.example.test/track1.wav", metadata: { language: "English", version: "Original", songwriters: "Fixture Artist", composers: "Fixture Artist" } }] }
+  } });
+  const singleDetail = await getDetailedReleaseById(single.id);
+  assert(singleDetail);
+  const readiness = await validateReleaseForDireNote(singleDetail);
+  assert.equal(readiness.payload.tracks.length, 1);
+  assert.equal(readiness.ready, true, JSON.stringify(readiness.issues));
+  assert.match(readiness.payload.cover_art_url, /cover\.jpg$/);
+  if (browser) {
+    const stale = await prisma.release.create({ data: {
+      userId: user.id, title: "Stale two-track fixture", artistName: "gxrry", genre: "Pop", releaseType: "ep", releaseDate: new Date("2099-01-10"), status: "LIVE", paymentStatus: "paid", artworkUrl: "https://cdn.example.test/cover.png",
+      metadata: { ...(release.metadata as object), contentType: "", releaseTitle: "Stale two-track fixture" },
+      tracks: { create: [1, 2].map(n => ({ title: `Stale ${n}`, trackNumber: n, primaryArtist: "gxrry", audioUrl: "https://cdn.example.test/track1.wav", metadata: { version: n === 2 ? "Instrumental" : "Original", songwriters: "Fixture Artist", composers: "Fixture Artist" } })) }
+    } });
+    await browser.readinessIsolation(single.id, stale.id);
+  }
+  console.log("Virtual PostgreSQL lifecycle, paid draft recovery, one-track JPEG readiness and release isolation passed.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => { if (browser) await browser.stop(); await prisma.$disconnect(); server.close(); });

@@ -40,6 +40,9 @@ export async function resolvePrivateReleaseArtworkUrl(input: { userId: number; r
   });
   if (!release) return value;
 
+  // The display artwork route can wrap a legacy public JPEG, not only StoredAsset.
+  if (release.artworkUrl && !releaseArtworkRouteId(release.artworkUrl) && !storedAssetIdFromUrl(release.artworkUrl)) return release.artworkUrl;
+
   const linkedAssetId = storedAssetIdFromUrl(release.artworkUrl);
   if (linkedAssetId) {
     const linked = await prisma.storedAsset.findFirst({

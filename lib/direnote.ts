@@ -401,17 +401,14 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
   const missingAlbumGenre = pushMissing(issues, "albumGenre", payload.albumGenre, "Album genre is required.");
   pushMissing(issues, "albumSubgenre", payload.albumSubgenre, "Album subgenre is required.");
   const missingAlbumLanguage = pushMissing(issues, "albumLanguage", payload.albumLanguage, "Album language is required.");
-  if (pushMissing(issues, "albumMood", payload.albumMood, "Mood is missing. Select a mood before sending to DireNote.")) {
-    issues[issues.length - 1].suggestion = "Select a mood in the release metadata.";
-  }
-  const missingContentType = pushMissing(issues, "contenttype", payload.contenttype, "Content type is required.");
+  const missingContentType = pushMissing(issues, "contenttype", payload.contenttype, "Select the release's content ownership: Original/Exclusive Licensed, AI Generated, or Non-Exclusive Licensed.");
   const missingReleaseDate = pushMissing(issues, "trackReleaseDate", payload.trackReleaseDate, "Release date is required.");
   pushMissing(issues, "labelName", payload.labelName, "Label name is required.");
   pushMissing(issues, "cLine", payload.cLine, "Copyright line is required.");
   pushMissing(issues, "pLine", payload.pLine, "Publishing line is required.");
   if (!pushMissing(issues, "cover_art_url", payload.cover_art_url, "Cover artwork must resolve to a public URL.")) {
     if (!isPublicHttpUrl(payload.cover_art_url)) issues.push({ field: "cover_art_url", message: "Cover artwork must be a public HTTP(S) URL." });
-    else if (!/\.jpe?g$/i.test(assetFileName(payload.cover_art_url))) issues.push({ field: "cover_art_url", message: "DireNote cover artwork must be JPEG. Convert PNG to JPEG before submission." });
+    else if (!/\.jpe?g$/i.test(assetFileName(payload.cover_art_url))) issues.push({ field: "cover_art_url", message: /\.png$/i.test(assetFileName(payload.cover_art_url)) ? "The linked artwork is a PNG. Upload a JPEG artwork file." : "The artwork delivery URL does not identify a JPEG file. Check the linked artwork asset and its delivery filename." });
   }
 
   if (!missingAlbumGenre && !DIRENOTE_GENRES.includes(payload.albumGenre as any)) issues.push({ field: "albumGenre", message: `Genre "${payload.albumGenre}" is not in DireNote allowed values.` });
@@ -481,7 +478,7 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
     if (track.trackSubgenre && track.trackGenre && !DIRENOTE_SUBGENRES_BY_GENRE[track.trackGenre]?.includes(track.trackSubgenre)) issues.push({ field: `tracks.${index}.trackSubgenre`, message: `Track ${number} subgenre is not valid for ${track.trackGenre}.` });
     const missingLanguage = pushMissing(issues, `tracks.${index}.trackLanguage`, track.trackLanguage, `Track ${number} requires its own track language. Select it in track metadata.`);
     if (!missingLanguage && !DIRENOTE_LANGUAGES.includes(track.trackLanguage as any)) issues.push({ field: `tracks.${index}.trackLanguage`, message: `Track ${number} language is not DireNote-compatible.` });
-    if (/^instrumental$/i.test(track.trackVersion?.trim() ?? "") && track.trackLanguage !== "Instrumental") issues.push({ field: `tracks.${index}.trackLanguage`, message: `Track ${number} is marked Instrumental but its language is inconsistent. Confirm the instrumental language required by DireNote.` });
+    if (!missingLanguage && /^instrumental$/i.test(track.trackVersion?.trim() ?? "") && track.trackLanguage !== "Instrumental") issues.push({ field: `tracks.${index}.trackLanguage`, message: `Track ${number} is marked Instrumental. Select Instrumental as its track language.` });
     validateArtists(issues, track.artists, `tracks.${index}.artists`, requireInstagram);
     validateArtists(issues, track.featuring_artists, `tracks.${index}.featuring_artists`, requireInstagram);
     for (const contributor of [...track.songwriters, ...track.composers]) {

@@ -201,7 +201,7 @@ export const distributionMetadataSchema = z.object({
   primaryGenre: z.string().min(1),
   secondaryGenre: z.string().min(1),
   language: z.string().min(1),
-  mood: z.string().trim().min(1, "Please select a mood for this release."),
+  mood: z.string().trim().optional(),
   territory: z.string().min(1),
   upcCode: z.string().nullable().optional(),
   releasePreviouslyReleased: z.boolean().optional(),
