@@ -10,6 +10,7 @@ import { GET as cron } from "../app/api/cron/direnote-release-sync/route";
 import { startDireNoteBrowser } from "./direnote-browser-fixture";
 import { getDireNoteReleaseInformation } from "../lib/direnote/direnote-client";
 import { currentDireNoteAttempt } from "../lib/distribution-idempotency";
+import { assertDireNoteSchemaReady } from "../lib/direnote-schema-readiness";
 
 assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/fixture:fixture@127\.0\.0\.1:55439\/direnote_virtual/);
 let mode = "pending";
@@ -48,6 +49,14 @@ const server = createServer(async (request, response) => {
 
 async function main() {
   await new Promise<void>(resolve => server.listen(55440, "127.0.0.1", resolve));
+  // Reproduce a database where the earlier history migration predates snapshots.
+  await prisma.$executeRawUnsafe('ALTER TABLE "distribution_submission_attempts" DROP COLUMN "payload_redacted", DROP COLUMN "payload_diff"');
+  await assert.rejects(() => assertDireNoteSchemaReady(prisma), /payload_redacted, payload_diff/);
+  const snapshots = await readFile("prisma/migrations/20260908000000_direnote_payload_snapshots/migration.sql", "utf8");
+  await prisma.$executeRawUnsafe(snapshots);
+  await prisma.$executeRawUnsafe(snapshots);
+  await assertDireNoteSchemaReady(prisma);
+  assert.equal(await prisma.distributionSubmissionAttempt.findFirst(), null);
   const migration = await readFile("prisma/migrations/20260906000000_direnote_attempt_history/migration.sql", "utf8");
   for (let run = 0; run < 2; run++) for (const statement of migration.split(";").filter(value => value.trim())) await prisma.$executeRawUnsafe(statement);
   const user = await prisma.user.create({ data: { googleId: "fixture-gxrry", name: "gxrry", email: "gxrry@example.test", role: "CUSTOMER", status: "ACTIVE" } });

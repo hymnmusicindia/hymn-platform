@@ -20,6 +20,14 @@ const startupScript = readFileSync(path.join(root, "scripts", "start-production.
 const databaseSafety = readFileSync(path.join(root, "lib", "production-database-safety.ts"), "utf8");
 assert.match(deploymentScript, /assertProductionDatabaseReady/);
 assert.match(startupScript, /assertProductionDatabaseReady/);
+assert.match(startupScript, /assertDireNoteSchemaReady/);
+assert.match(deploymentScript, /assertDireNoteSchemaReady/);
+assert.match(scripts["vercel-build"], /verify-direnote-schema\.ts --production-build/);
+assert.equal(JSON.parse(readFileSync(path.join(root, "vercel.json"), "utf8")).buildCommand, "npm run vercel-build");
+const snapshots = readFileSync(path.join(root, "prisma/migrations/20260908000000_direnote_payload_snapshots/migration.sql"), "utf8");
+assert.match(snapshots, /ADD COLUMN IF NOT EXISTS "payload_redacted" JSONB/);
+assert.match(snapshots, /ADD COLUMN IF NOT EXISTS "payload_diff" JSONB/);
+assert.doesNotMatch(snapshots, /\b(DROP|DELETE|TRUNCATE)\b/i);
 assert.match(databaseSafety, /EXPECTED_NEON_BRANCH_ID/);
 assert.match(databaseSafety, /CANONICAL_PRODUCTION_NEON_BRANCH_ID/);
 assert.match(databaseSafety, /identity\.branchId !== CANONICAL_PRODUCTION_NEON_BRANCH_ID/);
