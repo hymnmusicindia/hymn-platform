@@ -15,7 +15,7 @@
     "db:migrate:deploy": "tsx scripts/deploy-production-migrations.ts",
     "db:verify:production": "tsx scripts/verify-production-database-target.ts",
     "test": "npm run test:performance-execution && npm run test:first-release && npm run test:direnote-contract && npm run test:analytics && npm run test:migration-safety && npm run test:razorpay && npm run test:subscriptions && npm run test:payment-enforcement && npm run test:storage && npm run test:release-status && npm run test:distribution-idempotency && npm run test:payout && npm run test:managed-services",
-    "test:first-release": "tsx scripts/verify-first-release-funnel.ts",
+    "test:first-release": "tsx scripts/verify-first-release-funnel.ts && tsx scripts/verify-artist-profile-validation.ts",
     "test:payout": "tsx scripts/verify-payout-domain.ts",
     "test:analytics": "tsx scripts/verify-analytics-domain.ts",
     "test:migration-safety": "tsx scripts/verify-migration-safety.ts",

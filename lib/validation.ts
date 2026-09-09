@@ -70,7 +70,9 @@ const artistProfileFields = z.object({
   confirmedSpotifyName: z.string().optional(),
   isProducer: z.boolean().optional().default(false),
   producerLegalName: z.string().trim().max(150).optional()
-}).superRefine((value, context) => {
+});
+
+function requireExistingArtistStoreLink(value: { hasLiveMusic?: boolean; spotifyUrl?: string; appleUrl?: string }, context: z.RefinementCtx) {
   if (value.hasLiveMusic !== false) {
     const spotifyValue = value.spotifyUrl?.trim() ?? "";
     const appleValue = value.appleUrl?.trim() ?? "";
@@ -78,13 +80,13 @@ const artistProfileFields = z.object({
       context.addIssue({ code: z.ZodIssueCode.custom, path: ["spotifyUrl"], message: "Add at least one store link for an artist that already has music live in stores." });
     }
   }
-});
+}
 
 function requireProducerLegalName(value: { isProducer?: boolean; producerLegalName?: string }, context: z.RefinementCtx) {
   if (value.isProducer && !value.producerLegalName?.trim()) context.addIssue({ code: z.ZodIssueCode.custom, path: ["producerLegalName"], message: "Complete legal name is required for a producer profile." });
 }
 
-export const artistProfileCreateSchema = artistProfileFields.superRefine(requireProducerLegalName);
+export const artistProfileCreateSchema = artistProfileFields.superRefine(requireExistingArtistStoreLink).superRefine(requireProducerLegalName);
 
 export const spotifySearchSchema = z.object({ q: z.string().min(1) });
 export const spotifyResolveSchema = z.object({ spotifyUrl: z.string().min(1) });
