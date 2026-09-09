@@ -11,6 +11,7 @@ import type { ReleaseStatus } from "@/lib/types";
 import { direNoteCorrectionFingerprint, extractDireNoteCorrections, matchDireNoteTrack, providerRequiresCorrections } from "@/lib/direnote-corrections";
 import { normalizeDireNoteUpc, upcFromDireNoteIsrcReport } from "@/lib/direnote-upc";
 import { currentDireNoteAttempt } from "@/lib/distribution-idempotency";
+import { attachedArtistProfileIds, verifiedArtistStoreLinks } from "@/lib/artist-store-links";
 
 type RecordValue = Record<string, unknown>;
 
@@ -19,28 +20,34 @@ function text(value: unknown) { return typeof value === "string" || typeof value
 function normalized(value: string) { return value.replace(/[\s-]+/g, "").toUpperCase(); }
 function json(value: unknown) { return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue; }
 
-async function persistArtistLinks(tx: Prisma.TransactionClient, releaseId: number, userId: number, external: RecordValue) {
+async function persistArtistLinks(tx: Prisma.TransactionClient, releaseId: number, userId: number, external: RecordValue, trackMetadata: unknown, releaseArtistProfileId: number | null) {
   const artist = record(external.artist);
   const name = text(artist.name);
-  const links = record(artist.links);
+  const links = verifiedArtistStoreLinks(artist.links);
   if (!name || !Object.keys(links).length) return;
-  const card = await tx.artistCard.findFirst({ where: { userId, artistName: name, archivedAt: null } });
-  if (!card) return;
+  const ids = attachedArtistProfileIds(trackMetadata, releaseArtistProfileId);
+  if (!ids.length) return;
+  const candidates = await tx.artistCard.findMany({ where: { id: { in: ids }, userId, archivedAt: null } });
+  const matches = candidates.filter(card => card.artistName.trim().toLocaleLowerCase() === name.toLocaleLowerCase());
+  if (matches.length !== 1) return;
+  const card = matches[0];
   const values = [
-    ["spotify", card.spotifyProfileUrl, text(links.spotify), "spotifyProfileUrl"],
-    ["apple", card.appleMusicProfileUrl, text(links.apple), "appleMusicProfileUrl"],
-    ["youtube", card.youtubeUrl, text(links.youtube), "youtubeUrl"]
+    ["spotify", card.spotifyProfileUrl, links.spotify?.url, "spotifyProfileUrl", "spotifyArtistId", links.spotify?.id],
+    ["apple", card.appleMusicProfileUrl, links.apple?.url, "appleMusicProfileUrl", "appleArtistId", links.apple?.id],
+    ["youtube", card.youtubeUrl, links.youtube?.url, "youtubeUrl", null, null]
   ] as const;
-  const updates: Record<string, unknown> = { direNoteLastSyncedAt: new Date() };
-  for (const [provider, current, received, field] of values) {
+  for (const [provider, current, received, field, idField, providerId] of values) {
     if (!received) continue;
-    if (!current) updates[field] = received;
-    else if (current !== received) {
-      const discrepancy = await tx.direNoteReconciliationDiscrepancy.findFirst({ where: { releaseId, field: `artist_link_${provider}`, status: "open" } });
-      if (!discrepancy) await tx.direNoteReconciliationDiscrepancy.create({ data: { releaseId, field: `artist_link_${provider}`, hymnValue: current, direNoteValue: received, severity: "warning" } });
+    const currentVerified = verifiedArtistStoreLinks({ [provider]: current })[provider];
+    if (!current || current === received || (providerId && currentVerified?.id === providerId)) {
+      // Compare-and-set prevents concurrent releases or a user edit from replacing a link.
+      await tx.artistCard.updateMany({ where: { id: card.id, [field]: current }, data: { [field]: received, ...(idField && providerId ? { [idField]: providerId } : {}), direNoteLastSyncedAt: new Date() } });
+    } else {
+      const fieldName = `artist_${card.id}_link_${provider}`;
+      const discrepancy = await tx.direNoteReconciliationDiscrepancy.findFirst({ where: { releaseId, field: fieldName, status: "open" } });
+      if (!discrepancy) await tx.direNoteReconciliationDiscrepancy.create({ data: { releaseId, field: fieldName, hymnValue: current, direNoteValue: received, severity: "warning" } });
     }
   }
-  await tx.artistCard.update({ where: { id: card.id }, data: updates });
 }
 
 export function mapDireNoteStatus(value: unknown) {
@@ -168,7 +175,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       const externalIsrc = isTransfer && track.isrc ? track.isrc : text(external.isrc);
       if (externalIsrc && normalized(externalIsrc) !== normalized(track.isrc ?? "")) await tx.externalIdentifierHistory.create({ data: { releaseId, trackId: track.id, provider: "direnote", identifierType: "isrc", previousValue: track.isrc, canonicalValue: externalIsrc, source: "release_information_sync" } });
       await tx.track.update({ where: { id: track.id }, data: { isrc: externalIsrc || track.isrc, distributorStatus: mapDireNoteStatus(external.status), metadata: json({ ...(record(track.metadata)), direNote: { ...(record(record(track.metadata).direNote)), lastSyncedAt: new Date().toISOString(), external: redactDireNoteDiagnostic(external) } }) } });
-      await persistArtistLinks(tx, releaseId, release.userId, external);
+      await persistArtistLinks(tx, releaseId, release.userId, external, track.metadata, release.artistProfileId);
     }
     const remoteUpc = normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc!;
     const comparisons = [

@@ -1,0 +1,45 @@
+.artist-profile-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: rgb(3 6 12 / 72%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.artist-profile-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 560px);
+  max-height: calc(100dvh - 48px);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: var(--bg-elevated, #11151b);
+  color: var(--text, #f4f6fa);
+  box-shadow: 0 32px 100px rgb(0 0 0 / 50%);
+}
+.artist-profile-modal-header { padding: 28px 28px 20px; border-bottom: 1px solid var(--border); }
+.artist-profile-modal-body { padding: 28px; overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.artist-profile-modal-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 28px; border-top: 1px solid var(--border); }
+.artist-profile-modal-header, .artist-profile-modal-footer { flex-shrink: 0; }
+.artist-profile-close { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%; border: 1px solid var(--border); color: var(--text-muted); }
+.artist-profile-close:hover { background: var(--bg-soft); color: var(--text); }
+.artist-profile-choice { display: flex; align-items: center; gap: 16px; padding: 18px; border: 1px solid var(--border); border-radius: 16px; text-align: left; background: var(--card); transition: background 160ms, border-color 160ms; }
+.artist-profile-choice:hover { border-color: var(--text-soft); }
+.artist-profile-choice[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.artist-profile-choice-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--bg-soft); flex-shrink: 0; }
+.artist-profile-choice-check { display: grid; place-items: center; width: 20px; height: 20px; border: 1px solid var(--border); border-radius: 50%; flex-shrink: 0; }
+.artist-profile-choice[aria-pressed="true"] .artist-profile-choice-check { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.artist-profile-modal .field { width: 100%; min-height: 48px; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: var(--bg-soft); color: var(--text); }
+.artist-profile-modal :is(button, input, a):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.artist-profile-modal button:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 600px) {
+  .artist-profile-modal { border-radius: 20px; }
+  .artist-profile-modal-header, .artist-profile-modal-body { padding: 20px; }
+  .artist-profile-modal-footer { padding: 16px 20px; }
+  .artist-profile-choice { padding: 14px; gap: 12px; }
+}

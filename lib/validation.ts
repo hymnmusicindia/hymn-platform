@@ -57,11 +57,11 @@ const instagramProfilePattern = /^(?:https?:\/\/)?(?:www\.)?instagram\.com\/[A-Z
 const appleArtistUrlPattern = /^(?:https?:\/\/)?music\.apple\.com\/[a-z]{2}\/artist\/[^/]+\/\d+(?:[/?#].*)?$/i;
 
 const artistProfileFields = z.object({
-  name: z.string().min(1),
+  name: z.string().trim().min(1).max(150),
   hasLiveMusic: z.boolean().optional().default(true),
   spotifyUrl: z.string().trim().optional().or(z.literal("")).refine((value) => !value || spotifyArtistUrlPattern.test(value.trim()), { message: "Please paste a valid Spotify artist profile link." }),
   appleUrl: z.string().trim().optional().or(z.literal("")).refine((value) => !value || appleArtistUrlPattern.test(value.trim()), { message: "Please paste a valid Apple Music artist profile link." }),
-  instagramUrl: z.string().trim().min(1).refine((value) => instagramProfilePattern.test(value.trim()), { message: "Instagram profile link is required for artist verification." }),
+  instagramUrl: z.string().trim().optional().refine((value) => !value || instagramProfilePattern.test(value), { message: "Please enter a valid Instagram profile link." }),
   youtubeUrl: z.string().url().optional().or(z.literal("")),
   spotifyArtistId: z.string().optional(),
   appleArtistId: z.string().optional(),
@@ -72,13 +72,14 @@ const artistProfileFields = z.object({
   producerLegalName: z.string().trim().max(150).optional()
 });
 
-function requireExistingArtistStoreLink(value: { hasLiveMusic?: boolean; spotifyUrl?: string; appleUrl?: string }, context: z.RefinementCtx) {
+function requireExistingArtistStoreLink(value: { hasLiveMusic?: boolean; spotifyUrl?: string; appleUrl?: string; instagramUrl?: string }, context: z.RefinementCtx) {
   if (value.hasLiveMusic !== false) {
     const spotifyValue = value.spotifyUrl?.trim() ?? "";
     const appleValue = value.appleUrl?.trim() ?? "";
     if (!spotifyValue && !appleValue) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ["spotifyUrl"], message: "Add at least one store link for an artist that already has music live in stores." });
     }
+    if (!value.instagramUrl) context.addIssue({ code: z.ZodIssueCode.custom, path: ["instagramUrl"], message: "Instagram profile link is required for artist verification." });
   }
 }
 

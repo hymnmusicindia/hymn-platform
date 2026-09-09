@@ -38,8 +38,8 @@ export async function POST(request: Request) {
     const payload = artistProfileCreateSchema.parse(await request.json());
     const name = payload.name.trim();
     const isLinked = Boolean(payload.hasLiveMusic);
-    const spotifyUrl = payload.spotifyUrl?.trim() || "";
-    const appleUrl = payload.appleUrl?.trim() || "";
+    const spotifyUrl = isLinked ? payload.spotifyUrl?.trim() || "" : "";
+    const appleUrl = isLinked ? payload.appleUrl?.trim() || "" : "";
     const artistUsage = await usage(result.user.id);
     if (!artistUsage.canCreateMore) return NextResponse.json({ error: LIMIT_MESSAGE, ...artistUsage }, { status: 403 });
 
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       spotifyUrl: spotifyUrl || null,
       appleArtistId: appleUrl ? payload.appleArtistId ?? parseAppleArtistId(appleUrl) : null,
       appleUrl: appleUrl || null,
-      instagramUrl: normalizeInstagramUrl(payload.instagramUrl),
+      instagramUrl: payload.instagramUrl ? normalizeInstagramUrl(payload.instagramUrl) : null,
       youtubeUrl: payload.youtubeUrl?.trim() || null,
       imageUrl: payload.imageUrl?.trim() || avatarDataUrl(name),
       followers: spotifyUrl ? payload.followers ?? null : null,

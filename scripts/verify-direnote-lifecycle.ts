@@ -16,6 +16,7 @@ import { readTrackLanguage } from "../lib/track-language";
 
 assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/fixture:fixture@127\.0\.0\.1:55439\/direnote_virtual/);
 let mode = "pending";
+let returnedArtist: { name: string; links: Record<string, string> } | undefined;
 let ingests = 0;
 const statusUpcs: string[] = [];
 const ingestPayloads: Array<Record<string, any>> = [];
@@ -47,7 +48,7 @@ const server = createServer(async (request, response) => {
   }
   if (mode === "malformed") { response.end("not JSON"); return; }
   const ids = body.upc === oldUpc ? oldIsrcs : newIsrcs;
-  response.end(JSON.stringify({ success: true, release: { album_name: "Magenta", upc_code: body.upc, status: mode === "accepted" ? "Accepted" : "Pending" }, tracks: ids.map((isrc, index) => ({ track_number: index + 1, track_name: `Track ${index + 1}`, isrc, status: "Pending", remarks: mode === "remark" && index === 1 ? remark : "NONE" })) }));
+  response.end(JSON.stringify({ success: true, release: { album_name: "Magenta", upc_code: body.upc, status: mode === "accepted" ? "Accepted" : "Pending" }, tracks: ids.map((isrc, index) => ({ track_number: index + 1, track_name: `Track ${index + 1}`, isrc, artist: returnedArtist, status: "Pending", remarks: mode === "remark" && index === 1 ? remark : "NONE" })) }));
 });
 
 async function main() {
@@ -96,7 +97,7 @@ async function main() {
   assert.equal(await prisma.notification.count({ where: { userId: user.id, title: { startsWith: "Fix required" } } }), 1);
   assert.equal(await prisma.emailLog.count({ where: { userId: user.id, template: "release_changes_requested" } }), 1);
   assert.equal(await prisma.adminTask.count({ where: { entityId: String(release.id), type: "DireNote Correction" } }), 1);
-  if (process.argv.includes("--browser")) { browser = await startDireNoteBrowser(user.id); await browser.correction(release.id); }
+  if (process.argv.includes("--browser")) { browser = await startDireNoteBrowser(user.id); await browser.correction(release.id); await browser.artistWizard(); }
   const detailed = await getDetailedReleaseById(release.id);
   assert(detailed);
   const editedTracks = detailed.tracks!.map(track => ({ ...track, language: "Hindi", version: track.trackNumber === 2 ? "Instrumental" : track.version }));
@@ -229,6 +230,38 @@ async function main() {
     assert.equal(ingestPayloads.at(-1)!.tracks[1].trackLanguage, "Instrumental");
     assert.equal(ingestPayloads.at(-1)!.tracks[0].trackLanguage, "Hindi");
   }
+  // Exercise the actual hourly handler against documented artist links returned by the mock.
+  await prisma.release.updateMany({ where: { id: { not: release.id } }, data: { status: "DRAFT" } });
+  const unrelated = await prisma.artistCard.create({ data: { userId: user.id, artistName: "Unattached Artist" } });
+  const pollArtist = async () => {
+    await prisma.release.update({ where: { id: release.id }, data: { direNoteLastAttemptedAt: new Date(0), status: "DISTRIBUTOR_PROCESSING" } });
+    await prisma.direNoteLog.updateMany({ where: { releaseId: release.id }, data: { createdAt: new Date(0) } });
+    const response = await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));
+    assert.equal((await response.json()).checked, 1);
+    return prisma.artistCard.findUniqueOrThrow({ where: { id: artist.id } });
+  };
+  const spotify = "https://open.spotify.com/artist/66x9igCk2Vdjrhm1ULpe6r";
+  returnedArtist = { name: "Unattached Artist", links: { spotify } };
+  await pollArtist();
+  assert.equal((await prisma.artistCard.findUniqueOrThrow({ where: { id: unrelated.id } })).spotifyProfileUrl, null);
+  returnedArtist = { name: artist.artistName, links: { spotify } };
+  const partial = await pollArtist();
+  assert.equal(partial.spotifyProfileUrl, spotify);
+  assert.equal(partial.spotifyArtistId, "66x9igCk2Vdjrhm1ULpe6r");
+  assert.equal(partial.appleMusicProfileUrl, null);
+  returnedArtist.links.apple = "https://music.apple.com/us/artist/test/1800353038";
+  const complete = await pollArtist();
+  assert.equal(complete.appleArtistId, "1800353038");
+  await pollArtist();
+  assert.equal(await prisma.artistCard.count({ where: { userId: user.id, artistName: artist.artistName } }), 1);
+  returnedArtist.links.spotify = "https://open.spotify.com/artist/0123456789012345678901";
+  assert.equal((await pollArtist()).spotifyProfileUrl, spotify);
+  await pollArtist();
+  assert.equal(await prisma.direNoteReconciliationDiscrepancy.count({ where: { releaseId: release.id, field: `artist_${artist.id}_link_spotify`, status: "open" } }), 1);
+  returnedArtist.links = { spotify: "https://evil.test/artist/fake", apple: "https://music.apple.com/us/album/not-an-artist/123" };
+  assert.equal((await pollArtist()).spotifyProfileUrl, spotify);
+  if (browser) await browser.savedArtistLinks(artist.id, spotify, "https://music.apple.com/us/artist/test/1800353038");
+  console.log("Hourly artist enrichment passed: canonical attachment, partial links, IDs, repeated polling, conflict deduplication and invalid-link rejection.");
   console.log("Virtual PostgreSQL lifecycle, null/stale Instrumental HTTP mapping, paid draft recovery, one-track JPEG readiness and release isolation passed.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => { if (browser) await browser.stop(); await prisma.$disconnect(); server.close(); });

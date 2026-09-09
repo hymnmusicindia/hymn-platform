@@ -18,8 +18,86 @@ export async function startDireNoteBrowser(userId: number) {
     await context.route("https://cdn.example.test/cover.jpg", route => route.fulfill({ path: "public/assets/producers/placeholder-1.jpg", contentType: "image/jpeg" }));
     await context.addCookies([{ name: "hymn_session", value: jwt.sign({ sub: userId, email: "gxrry@example.test", name: "gxrry", role: "customer" }, process.env.JWT_SECRET!, { expiresIn: "1h" }), url: origin }]);
     const page = await context.newPage();
+    let artistWizardUrl = "";
     return {
       page,
+      async artistWizard() {
+        artistWizardUrl = page.url();
+        const openWizard = async () => {
+          await page.getByRole("button", { name: "Add primary artist", exact: true }).first().click();
+          await page.getByRole("button", { name: /Add another artist profile/ }).click();
+        };
+        await openWizard();
+        const dialog = page.getByRole("dialog", { name: "Create artist profile", exact: true });
+        await expect(dialog.getByText("Does this artist already have profiles on music platforms?", { exact: true })).toBeVisible();
+        await expect(dialog.getByRole("button", { name: "Continue", exact: true })).toBeDisabled();
+        expect(await dialog.evaluate(element => element.parentElement?.parentElement === document.body)).toBe(true);
+        const box = await dialog.boundingBox();
+        expect(Math.abs(box!.x + box!.width / 2 - 720)).toBeLessThan(2);
+        expect(Math.abs(box!.y + box!.height / 2 - 500)).toBeLessThan(2);
+        await page.screenshot({ path: ".cache/artist-wizard-desktop.png", fullPage: true });
+        await dialog.getByRole("button", { name: /Yes, I have artist profiles/ }).click();
+        await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+        await dialog.getByRole("textbox", { name: "What is the artist name?" }).fill("Browser Existing Artist");
+        await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+        await expect(dialog.getByText("Find the Spotify artist profile", { exact: true })).toBeVisible();
+        await dialog.getByRole("button", { name: "Continue to Apple Music" }).click();
+        await dialog.getByPlaceholder("https://music.apple.com/...").fill("https://music.apple.com/us/artist/browser-existing/1800353038");
+        await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+        await dialog.getByPlaceholder("https://instagram.com/yourartistname").fill("https://instagram.com/browser_existing");
+        await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+        await dialog.getByRole("button", { name: "Skip", exact: true }).click();
+        await dialog.getByRole("button", { name: "No", exact: true }).click();
+        const existingSaved = page.waitForResponse(response => response.url().endsWith("/api/artists") && response.request().method() === "POST");
+        await dialog.getByRole("button", { name: "Create profile", exact: true }).click();
+        expect((await existingSaved).status()).toBe(201);
+        await page.reload();
+        await openWizard();
+        await dialog.getByRole("button", { name: /No, this is my first release/ }).click();
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.screenshot({ path: ".cache/artist-wizard-mobile.png", fullPage: true });
+        await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+        await expect(dialog.getByText("Step 2 of 2", { exact: true })).toBeVisible();
+        await dialog.getByRole("textbox", { name: "What is the artist name?" }).fill("Browser Debut Artist");
+        await expect(dialog.getByRole("textbox")).toHaveCount(1);
+        await dialog.getByRole("button", { name: "Back", exact: true }).click();
+        await dialog.getByRole("button", { name: /Yes, I have artist profiles/ }).click();
+        await dialog.getByRole("button", { name: /No, this is my first release/ }).click();
+        await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+        await expect(dialog.getByRole("textbox")).toHaveValue("Browser Debut Artist");
+        const saved = page.waitForResponse(response => response.url().endsWith("/api/artists") && response.request().method() === "POST");
+        await dialog.getByRole("button", { name: "Create profile", exact: true }).click();
+        const response = await saved;
+        expect(response.status(), await response.text()).toBe(201);
+        const { profile } = await response.json();
+        expect(profile.spotifyUrl).toBeNull();
+        expect(profile.appleUrl).toBeNull();
+        expect(profile.instagramUrl).toBeNull();
+        await page.reload();
+        const persisted = await (await context.request.get(`${origin}/api/artists`)).json();
+        expect(persisted.artists.filter((artist: { id: number }) => artist.id === profile.id)).toHaveLength(1);
+        await page.getByRole("button", { name: "Add primary artist", exact: true }).first().click();
+        await expect(page.getByText("Browser Debut Artist", { exact: true })).toBeVisible();
+        await expect(page.getByText("First release · Store profiles pending", { exact: true }).first()).toBeVisible();
+        await page.keyboard.press("Escape");
+        const close = page.getByRole("button", { name: "Close artist profile popup", exact: true }).last();
+        if (await close.isVisible()) await close.click();
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        await page.reload();
+        console.log("Artist wizard browser checks passed: portal centering, mobile, existing Apple-only artist, name-only creation, back navigation and persistence.");
+      },
+      async savedArtistLinks(artistId: number, spotifyUrl: string, appleUrl: string) {
+        const body = await (await context.request.get(`${origin}/api/artists`)).json();
+        const profile = body.artists.find((artist: { id: number }) => artist.id === artistId);
+        expect(profile.spotifyUrl).toBe(spotifyUrl);
+        expect(profile.appleUrl).toBe(appleUrl);
+        await page.goto(artistWizardUrl);
+        await page.getByRole("button", { name: "Add primary artist", exact: true }).first().click();
+        const picker = page.getByRole("dialog", { name: "Add artist profile", exact: true });
+        await expect(picker.locator(`a[href="${spotifyUrl}"]`)).toBeVisible();
+        await expect(picker.locator(`a[href="${appleUrl}"]`).first()).toBeVisible();
+        await page.screenshot({ path: ".cache/artist-store-links-after-cron.png", fullPage: true });
+      },
       async readinessIsolation(singleId: number, staleId: number) {
         const actual = await context.request.get(`${origin}/api/admin/releases/${singleId}/direnote/readiness`);
         expect(actual.status()).toBe(200);
