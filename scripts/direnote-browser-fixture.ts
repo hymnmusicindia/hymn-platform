@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 
 export async function startDireNoteBrowser(userId: number) {
   const origin = "http://127.0.0.1:55441";
-  const app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", "55441", "-H", "127.0.0.1"], { env: { ...process.env, NODE_ENV: "production" }, stdio: "inherit", windowsHide: true });
+  const app = spawn(process.execPath, ["--import", "./scripts/mock-razorpay-transport.mjs", "node_modules/next/dist/bin/next", "start", "-p", "55441", "-H", "127.0.0.1"], { env: { ...process.env, NODE_ENV: "production" }, stdio: "inherit", windowsHide: true });
   const stopped = new Promise<void>(resolve => app.on("exit", () => resolve()));
   const browser = await chromium.launch({ headless: true });
   try {

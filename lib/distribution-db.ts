@@ -799,9 +799,10 @@ export async function createDistributionOrder(input: { userId: number; plan: Sub
           const bound = await tx.distributionOrder.findUnique({ where: { releaseId: input.releaseId } });
           if (bound) {
             if (bound.userId !== input.userId) throw new Error("This release draft is attached to another customer's checkout.");
-            if (bound.fulfilledAt || bound.paymentStatus === "paid" || bound.razorpayPaymentId) throw new Error("A captured payment is already attached to this release. Retry submission instead of creating another payment.");
+            const unusedSubscriptionEntitlement = bound.razorpayOrderId.startsWith("sub_entitlement_") && bound.amount === 0 && bound.creditsUsed === 0 && !bound.fulfilledAt;
+            if (bound.fulfilledAt || (!unusedSubscriptionEntitlement && (bound.paymentStatus === "paid" || bound.razorpayPaymentId))) throw new Error("A captured payment is already attached to this release. Retry submission instead of creating another payment.");
             const detached = await tx.distributionOrder.updateMany({
-              where: { id: bound.id, releaseId: input.releaseId, fulfilledAt: null, paymentStatus: { in: ["created", "authorized"] }, razorpayPaymentId: null },
+              where: { id: bound.id, releaseId: input.releaseId, fulfilledAt: null, ...(unusedSubscriptionEntitlement ? { amount: 0, creditsUsed: 0, razorpayOrderId: bound.razorpayOrderId } : { paymentStatus: { in: ["created", "authorized"] }, razorpayPaymentId: null }) },
               data: { releaseId: null },
             });
             if (detached.count !== 1) throw new Error("The release checkout changed while the order was being prepared. Please retry.");
@@ -1354,6 +1355,7 @@ export async function submitPaidDistributionRelease(input: {
 export async function updatePaidDistributionRelease(input: {
   userId: number;
   releaseId: number;
+  verifiedOrderId?: string;
   metadata: Omit<Release, "id" | "userId" | "status" | "createdAt" | "queuePosition" | "estimatedReviewTime" | "tracks"> & { recordLabelName?: string; tracks: Omit<ReleaseTrack, "id" | "releaseId" | "createdAt">[] };
 }) {
   const pool = getPool();
@@ -1368,7 +1370,10 @@ export async function updatePaidDistributionRelease(input: {
         const lock = await tx.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(81422028, ${input.releaseId}::integer) AS locked`;
         if (!lock[0]?.locked) throw new Error("This release is being synchronized or submitted. Retry saving shortly.");
         const saved = await tx.release.findUniqueOrThrow({ where: { id: input.releaseId }, include: { tracks: { orderBy: { trackNumber: "asc" } } } });
-        if (!["DRAFT", "AWAITING_PAYMENT", "CHANGES_REQUESTED", "REJECTED", "RESUBMITTED"].includes(saved.status) || saved.paymentStatus !== "paid") throw new Error("This release is no longer open for paid corrections.");
+        const verifiedCheckout = input.verifiedOrderId && ["DRAFT", "AWAITING_PAYMENT"].includes(saved.status)
+          ? await tx.distributionOrder.findFirst({ where: { razorpayOrderId: input.verifiedOrderId, userId: input.userId, paymentStatus: "paid", fulfilledAt: { not: null }, OR: [{ releaseId: input.releaseId }, { releaseId: null }] } })
+          : null;
+        if (saved.userId !== input.userId || !["DRAFT", "AWAITING_PAYMENT", "CHANGES_REQUESTED", "REJECTED", "RESUBMITTED"].includes(saved.status) || (saved.paymentStatus !== "paid" && !verifiedCheckout)) throw new Error("This release is no longer open for paid corrections.");
         const providerCorrection = saved.status === "CHANGES_REQUESTED" && Boolean(saved.direNoteStatus);
         if (providerCorrection && (tracks.length !== saved.tracks.length || tracks.some((track, index) => track.trackNumber !== saved.tracks[index].trackNumber))) {
           throw new Error("Keep the existing track order and count while correcting a provider submission.");
@@ -1414,7 +1419,7 @@ export async function updatePaidDistributionRelease(input: {
       const reviewReason = "Paid release metadata was submitted for review.";
       const currentStatus = String(existingRelease.status ?? "").trim().toLowerCase();
       if (currentStatus === "changes_requested" || currentStatus === "rejected") await updateDetailedReleaseStatus(input.releaseId, "resubmitted", reviewReason);
-      else if (currentStatus === "draft") await updateDetailedReleaseStatus(input.releaseId, "submitted", reviewReason);
+      else if (currentStatus === "draft" || currentStatus === "awaiting_payment") await updateDetailedReleaseStatus(input.releaseId, "submitted", reviewReason);
       await updateDetailedReleaseStatus(input.releaseId, "under_review", reviewReason);
       await createDistributionQueueEntry({ releaseId: input.releaseId, initialStage: "quality_check", notes: "Draft completed and submitted for HYMN review." });
       return getDetailedReleaseByUserId(input.userId, input.releaseId);

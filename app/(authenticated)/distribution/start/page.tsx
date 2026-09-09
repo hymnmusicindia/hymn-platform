@@ -8,6 +8,8 @@ import { getFirstReleaseEligibility } from "@/lib/first-release-promotion";
 import { getReleasePrefill } from "@/lib/release-prefill";
 import { getSubscriptionByUserId } from "@/lib/db";
 import { subscriptionHasEntitlement, subscriptionHasReleaseAllowance } from "@/lib/subscription-billing";
+import { prisma } from "@/lib/prisma";
+import { checkoutPlan } from "@/lib/distribution-checkout-plan";
 
 function firstValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
@@ -21,12 +23,14 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
   const subscription = user ? await getSubscriptionByUserId(user.id) : null;
   const hasActiveSubscription = subscriptionHasEntitlement(subscription);
   const hasReleaseAllowance = hasActiveSubscription && subscriptionHasReleaseAllowance(subscription);
-  let selectedPlan: any = hasReleaseAllowance ? subscription?.plan : "one_time";
-  if (!hasActiveSubscription && editingRelease?.distributionPlan) {
+  let selectedPlan = hasReleaseAllowance ? checkoutPlan(subscription!, "one_time") : "one_time";
+  if (!hasActiveSubscription && editingRelease?.paymentStatus === "paid" && editingRelease.distributionPlan) {
     if (editingRelease.distributionPlan === "yearly_plus") selectedPlan = "yearly_plus";
     else if (editingRelease.distributionPlan === "yearly" || editingRelease.distributionPlan === "pro") selectedPlan = "yearly";
     else if (editingRelease.distributionPlan === "half_yearly" || editingRelease.distributionPlan === "basic") selectedPlan = "half_yearly";
   }
+  const attachedOrder = editingRelease ? await prisma.distributionOrder.findUnique({ where: { releaseId: editingRelease.id } }) : null;
+  if (attachedOrder?.userId === user?.id && attachedOrder?.paymentStatus === "paid" && (!attachedOrder.razorpayOrderId.startsWith("sub_entitlement_") || hasReleaseAllowance)) selectedPlan = checkoutPlan(attachedOrder, selectedPlan);
   const hasRequestedRelease = Boolean(firstValue(params.edit) || firstValue(params.resume) || firstValue(params.manage));
   const isEditing = Boolean(editingRelease);
   const editingMetadata = editingRelease?.metadata && typeof editingRelease.metadata === "object" ? editingRelease.metadata as Record<string, unknown> : {};
@@ -74,6 +78,7 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
 
           {user ? (
             <div className="mx-auto w-full max-w-[1440px]">
+              {hasActiveSubscription && !hasReleaseAllowance && selectedPlan === "one_time" ? <p role="status" className="mb-4 rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>Your subscription release allowance is used up. You can submit this release with a one-time payment and apply any available HYMN credits at checkout.</p> : null}
               <ReleaseForm selectedPlan={selectedPlan} hasActiveSubscription={hasActiveSubscription} hymnCreditBalance={Number(user.referralCredits || 0)} initialRelease={editingRelease} initialCorrectionField={firstValue(params.correctionField)} firstReleaseOffer={Boolean(campaignEligibility?.eligible && campaignDraftEligible)} campaignAttribution={attribution} prefillSuggestions={releasePrefill.suggestions} />
             </div>
           ) : firstValue(params.onboarding) === "release" ? <ReleaseOnboardingGate /> : (

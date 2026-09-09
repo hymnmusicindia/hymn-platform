@@ -9,6 +9,7 @@ import { getSubscriptionByUserId } from "@/lib/db";
 import { createProviderSubscription, isSubscriptionProduct, subscriptionHasEntitlement, subscriptionHasReleaseAllowance } from "@/lib/subscription-billing";
 import { prisma } from "@/lib/prisma";
 import { confirmDistributionPayment } from "@/lib/payment-webhooks";
+import { checkoutPlan } from "@/lib/distribution-checkout-plan";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -36,15 +37,15 @@ export async function POST(request: Request) {
         }
         return NextResponse.json({ requiresPayment: false, paidReleaseReusable: true });
       }
-      if (attachedOrder?.paymentStatus === "paid" && attachedOrder.razorpayPaymentId && !attachedOrder.fulfilledAt) {
+      if (attachedOrder?.paymentStatus === "paid" && attachedOrder.razorpayPaymentId && !attachedOrder.fulfilledAt && (!attachedOrder.razorpayOrderId.startsWith("sub_entitlement_") || payload.paymentModel === "subscription")) {
         // verify-submit still checks ownership, price, plan and the stored payment ID.
-        return NextResponse.json({ orderId: attachedOrder.razorpayOrderId, paymentId: attachedOrder.razorpayPaymentId, requiresPayment: false, paidOrderReusable: true, amount: 0, currency: attachedOrder.currency, creditsUsed: attachedOrder.creditsUsed });
+        return NextResponse.json({ orderId: attachedOrder.razorpayOrderId, paymentId: attachedOrder.razorpayPaymentId, plan: checkoutPlan(attachedOrder, payload.plan), requiresPayment: false, paidOrderReusable: true, amount: 0, currency: attachedOrder.currency, creditsUsed: attachedOrder.creditsUsed });
       }
     }
     const subscription = await getSubscriptionByUserId(session.sub);
     const hasActiveSubscription = subscriptionHasEntitlement(subscription);
     if (hasActiveSubscription && payload.paymentModel === "subscription") {
-      if (payload.plan !== subscription!.plan) return NextResponse.json({ error: "The selected plan does not match your active subscription." }, { status: 400 });
+      if (payload.plan !== checkoutPlan(subscription!, "one_time")) return NextResponse.json({ error: "The selected plan does not match your active subscription." }, { status: 400 });
       if (!subscriptionHasReleaseAllowance(subscription)) return NextResponse.json({ error: "Your subscription release allowance has been used." }, { status: 409 });
       const existingEntitlement = payload.draftReleaseId
         ? await prisma.distributionOrder.findUnique({ where: { releaseId: payload.draftReleaseId } })
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
       if (existingEntitlement?.userId === session.sub && existingEntitlement.fulfilledAt == null && existingEntitlement.plan === payload.plan && existingEntitlement.amount === 0 && existingEntitlement.creditsUsed === 0 && existingEntitlement.razorpayOrderId.startsWith("sub_entitlement_")) {
         return NextResponse.json({
           orderId: existingEntitlement.razorpayOrderId,
+          plan: existingEntitlement.plan,
           amount: 0,
           currency: existingEntitlement.currency,
           displayAmount: 0,
@@ -64,6 +66,7 @@ export async function POST(request: Request) {
       await createDistributionOrder({ userId: session.sub, plan: payload.plan, amount: 0, razorpayOrderId: entitlementOrderId, releaseId: payload.draftReleaseId });
       return NextResponse.json({
         orderId: entitlementOrderId,
+        plan: payload.plan,
         amount: 0,
         currency: "INR",
         displayAmount: 0,
@@ -163,6 +166,7 @@ export async function POST(request: Request) {
         }
         return NextResponse.json({
           orderId: reusable.razorpayOrderId,
+          plan: reusable.plan,
           paymentId: reusable.razorpayPaymentId,
           amount: 0,
           currency: reusable.currency,
@@ -177,6 +181,7 @@ export async function POST(request: Request) {
       if (resumableUnpaidOrder) {
         return NextResponse.json({
           orderId: resumableUnpaidOrder.razorpayOrderId,
+          plan: resumableUnpaidOrder.plan,
           amount: amountPaise,
           currency: resumableUnpaidOrder.currency,
           displayAmount: amount,
@@ -206,6 +211,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       orderId: order.id,
+      plan: payload.plan,
       amount: amountPaise,
       currency: "INR",
       displayAmount: amount,

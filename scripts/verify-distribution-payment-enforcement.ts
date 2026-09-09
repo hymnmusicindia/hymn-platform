@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { distributionOrderPriceMatches } from "../lib/distribution-order-price";
+import { checkoutPlan } from "../lib/distribution-checkout-plan";
 
 const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 const form = source("components/release-form.tsx");
@@ -9,6 +10,9 @@ const createOrder = source("app/api/distribution/payment/create-order/route.ts")
 const verifySubmit = source("app/api/distribution/payment/verify-submit/route.ts");
 const editRoute = source("app/api/distribution/update-release/route.ts");
 const payment = source("lib/payment-webhooks.ts");
+assert.equal(checkoutPlan({ plan: "one_time" }, "yearly"), "one_time");
+assert.equal(checkoutPlan({ plan: "half_yearly" }, "one_time"), "half_yearly");
+assert.equal(checkoutPlan({ plan: "elite" }, "one_time"), "yearly_plus");
 
 assert.doesNotMatch(form, /if \(isEditing\)\s*\{\s*const data = await submitEditedRelease/);
 assert.ok(form.includes("const isPaidReleaseResubmission = isPaidCorrectionRelease(initialRelease)"));

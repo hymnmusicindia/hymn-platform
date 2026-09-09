@@ -53,26 +53,45 @@ export function subscriptionPeriodAdvanced(previousStart: Date | string | null |
   return Number.isFinite(previous) && Number.isFinite(next) && next > previous;
 }
 
-export async function reserveSubscriptionReleaseSlot(userId: number) {
+export async function reserveSubscriptionReleaseSlot(userId: number, releaseId?: number) {
   return prisma.$transaction(async tx => {
     const sub = await tx.subscription.findUnique({ where: { userId } });
     if (!sub || !subscriptionHasEntitlement(sub)) throw new Error("No active subscription entitlement is available.");
+    if (releaseId) {
+      const existing = await tx.subscriptionReleaseUsage.findUnique({ where: { releaseId } });
+      if (existing) throw new Error("This release already has a subscription allowance reservation.");
+    }
     const ledgerCount = await tx.subscriptionReleaseUsage.count({ where: { subscriptionId: sub.id, ...(sub.currentPeriodStart ? { createdAt: { gte: sub.currentPeriodStart } } : {}) } });
     const releaseLimit = effectiveSubscriptionReleaseLimit(sub);
     if (sub.releaseLimit !== releaseLimit || sub.releasesUsed !== ledgerCount) await tx.subscription.update({ where: { id: sub.id }, data: { releaseLimit, releasesUsed: ledgerCount } });
-    if (releaseLimit == null) return { subscriptionId: sub.id, counted: false };
+    if (releaseLimit == null) {
+      if (releaseId) await tx.subscriptionReleaseUsage.create({ data: { subscriptionId: sub.id, releaseId } });
+      return { subscriptionId: sub.id, counted: false };
+    }
     const updated = await tx.subscription.updateMany({ where: { id: sub.id, releasesUsed: { equals: ledgerCount, lt: releaseLimit } }, data: { releasesUsed: { increment: 1 } } });
     if (updated.count !== 1) throw new Error("Your subscription release allowance has been used.");
+    if (releaseId) await tx.subscriptionReleaseUsage.create({ data: { subscriptionId: sub.id, releaseId } });
     return { subscriptionId: sub.id, counted: true };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export async function attachReservedSubscriptionRelease(subscriptionId: number, releaseId: number) {
+  const existing = await prisma.subscriptionReleaseUsage.findUnique({ where: { releaseId } });
+  if (existing) {
+    if (existing.subscriptionId !== subscriptionId) throw new Error("Release allowance belongs to a different subscription.");
+    return existing;
+  }
   return prisma.subscriptionReleaseUsage.create({ data: { subscriptionId, releaseId } });
 }
 
-export async function releaseReservedSubscriptionSlot(subscriptionId: number, counted: boolean) {
-  if (counted) await prisma.subscription.update({ where: { id: subscriptionId }, data: { releasesUsed: { decrement: 1 } } });
+export async function releaseReservedSubscriptionSlot(subscriptionId: number, counted: boolean, releaseId?: number) {
+  await prisma.$transaction(async tx => {
+    if (releaseId) {
+      const removed = await tx.subscriptionReleaseUsage.deleteMany({ where: { subscriptionId, releaseId } });
+      if (!removed.count) return;
+    }
+    if (counted) await tx.subscription.updateMany({ where: { id: subscriptionId, releasesUsed: { gt: 0 } }, data: { releasesUsed: { decrement: 1 } } });
+  });
 }
 
 export function verifySubscriptionCheckoutSignature(paymentId: string, subscriptionId: string, signature: string) {

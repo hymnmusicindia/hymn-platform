@@ -13,6 +13,7 @@ import { calculateFirstReleasePrice, FIRST_RELEASE_PROMOTION_CODE, redeemFirstRe
 import { attachReservedSubscriptionRelease, releaseReservedSubscriptionSlot, reserveSubscriptionReleaseSlot, subscriptionHasEntitlement, subscriptionHasReleaseAllowance } from "@/lib/subscription-billing";
 import { distributionOrderPriceMatches } from "@/lib/distribution-order-price";
 import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution";
+import { checkoutPlan } from "@/lib/distribution-checkout-plan";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const payload = JSON.parse(String(formData.get("payload") || "{}"));
     const parsed = distributionSubmitSchema.parse(payload);
+    if (!parsed.draftReleaseId) return NextResponse.json({ error: "Save and review your release draft before submitting." }, { status: 409 });
     if (parsed.draftReleaseId) {
       const reviewedDraft = await prisma.release.findFirst({ where: { id: parsed.draftReleaseId, userId: session.sub }, select: { status: true, reviewConfirmedAt: true, reviewConfirmedBy: true } });
       if (!reviewedDraft) return NextResponse.json({ error: "Draft release not found." }, { status: 404 });
@@ -32,10 +34,16 @@ export async function POST(request: Request) {
     const isFirstReleaseOffer = parsed.promotionCode === FIRST_RELEASE_PROMOTION_CODE;
     const persistedOrder = await prisma.distributionOrder.findUnique({ where: { razorpayOrderId: parsed.razorpay_order_id } });
     if (!persistedOrder || persistedOrder.userId !== session.sub) return NextResponse.json({ error: "Distribution order not found." }, { status: 404 });
-    if (persistedOrder.fulfilledAt) return NextResponse.json({ error: "This payment or entitlement has already been used for a release." }, { status: 409 });
+    if (persistedOrder.fulfilledAt) {
+      if (persistedOrder.releaseId === parsed.draftReleaseId && persistedOrder.paymentStatus === "paid" && persistedOrder.razorpayPaymentId === parsed.razorpay_payment_id) {
+        const completed = await getDetailedReleaseById(persistedOrder.releaseId!);
+        if (completed && completed.userId === session.sub && !["draft", "awaiting_payment"].includes(completed.status)) return NextResponse.json({ release: completed, replayed: true });
+      }
+      return NextResponse.json({ error: "This payment or entitlement has already been used or is being submitted. Refresh your releases before retrying." }, { status: 409 });
+    }
     if (persistedOrder.releaseId && persistedOrder.releaseId !== parsed.draftReleaseId) return NextResponse.json({ error: "This payment belongs to a different release draft." }, { status: 409 });
-    if (persistedOrder.plan !== parsed.metadata.plan) return NextResponse.json({ error: "The submitted plan does not match the persisted order." }, { status: 400 });
-    if ((persistedOrder.plan === "one_time") !== (parsed.metadata.paymentModel === "one_time")) return NextResponse.json({ error: "The submitted payment model does not match the persisted order." }, { status: 400 });
+    if (checkoutPlan(persistedOrder, "one_time") !== parsed.metadata.plan) return NextResponse.json({ error: "The submitted plan does not match the persisted order. Resume checkout to reload the saved payment plan." }, { status: 400 });
+    if ((checkoutPlan(persistedOrder, "one_time") === "one_time") !== (parsed.metadata.paymentModel === "one_time")) return NextResponse.json({ error: "The submitted payment model does not match the persisted order." }, { status: 400 });
     const isSubscriptionEntitlement = parsed.razorpay_order_id.startsWith("sub_entitlement_");
     const normalAmount = getDistributionPricing(parsed.metadata.plan, parsed.metadata.tracks.length, parsed.metadata.releaseType, parsed.metadata.platforms, { youtubeContentIdEnabled: parsed.metadata.youtubeContentIdEnabled });
     const promotionQuote = isFirstReleaseOffer ? calculateFirstReleasePrice({ plan: parsed.metadata.plan, releaseType: parsed.metadata.releaseType, trackCount: parsed.metadata.tracks.length, normalAmount }) : null;
@@ -59,7 +67,7 @@ export async function POST(request: Request) {
       const sub = await getSubscriptionByUserId(session.sub);
       if (!subscriptionHasEntitlement(sub)) return NextResponse.json({ error: "No active subscription entitlement found." }, { status: 400 });
       if (!subscriptionHasReleaseAllowance(sub)) return NextResponse.json({ error: "Your subscription release allowance has been used." }, { status: 409 });
-      if (parsed.metadata.paymentModel !== "subscription" || parsed.metadata.plan !== sub!.plan) return NextResponse.json({ error: "The submitted plan does not match your active subscription." }, { status: 400 });
+      if (parsed.metadata.paymentModel !== "subscription" || parsed.metadata.plan !== checkoutPlan(sub!, "one_time")) return NextResponse.json({ error: "The submitted plan does not match your active subscription." }, { status: 400 });
     } else if (persistedOrder.amount > 0) {
       if (persistedOrder.paymentStatus === "paid") {
         if (!persistedOrder.razorpayPaymentId || persistedOrder.razorpayPaymentId !== parsed.razorpay_payment_id) return NextResponse.json({ error: "The stored payment reference does not match this release." }, { status: 409 });
@@ -69,7 +77,7 @@ export async function POST(request: Request) {
         await verifyCapturedRazorpayPayment({ orderId: parsed.razorpay_order_id, paymentId: parsed.razorpay_payment_id, amountMinor: persistedOrder.amount * 100, currency: persistedOrder.currency });
         await confirmDistributionPayment({ razorpayOrderId: parsed.razorpay_order_id, paymentId: parsed.razorpay_payment_id, userId: session.sub, source: "browser" });
       }
-    } else if (!(persistedOrder.paymentStatus === "paid" && persistedOrder.creditsUsed > 0 && persistedOrder.razorpayPaymentId === parsed.razorpay_payment_id)) {
+    } else if (!(isFirstReleaseOffer && promotionQuote?.finalAmount === 0 && persistedOrder.creditsUsed === 0 && persistedOrder.razorpayOrderId.startsWith("free_first_release_")) && !(persistedOrder.paymentStatus === "paid" && persistedOrder.creditsUsed > 0 && persistedOrder.razorpayPaymentId === parsed.razorpay_payment_id)) {
       return NextResponse.json({ error: "This zero-value order has no valid release entitlement." }, { status: 400 });
     }
 
@@ -143,10 +151,12 @@ export async function POST(request: Request) {
       promotionRedemption = await reserveFirstRelease({ userId: session.sub, ...promotionQuote!, attribution: parsed.attribution });
     }
     let release;
+    let orderClaimed = false;
     let subscriptionReservation: Awaited<ReturnType<typeof reserveSubscriptionReleaseSlot>> | null = null;
     try {
-      if (isSubscriptionEntitlement) subscriptionReservation = await reserveSubscriptionReleaseSlot(session.sub);
       await claimDistributionOrderForSubmission({ razorpayOrderId: parsed.razorpay_order_id, userId: session.sub });
+      orderClaimed = true;
+      if (isSubscriptionEntitlement) subscriptionReservation = await reserveSubscriptionReleaseSlot(session.sub, parsed.draftReleaseId);
       const releaseMetadata = {
         artistName: parsed.metadata.artistName,
         trackName: parsed.metadata.tracks[0]?.trackTitle ?? resolvedReleaseTitle,
@@ -193,7 +203,7 @@ export async function POST(request: Request) {
       if (parsed.draftReleaseId) {
         const draft = await getDetailedReleaseById(parsed.draftReleaseId);
         if (!draft || draft.userId !== session.sub || !["draft", "awaiting_payment"].includes(draft.status)) throw new Error("The draft attached to this checkout is invalid.");
-        release = await updatePaidDistributionRelease({ userId: session.sub, releaseId: parsed.draftReleaseId, metadata: releaseMetadata });
+        release = await updatePaidDistributionRelease({ userId: session.sub, releaseId: parsed.draftReleaseId, metadata: releaseMetadata, verifiedOrderId: parsed.razorpay_order_id });
       } else release = await submitPaidDistributionRelease({
       userId: session.sub,
       razorpayOrderId: parsed.razorpay_order_id,
@@ -211,8 +221,10 @@ export async function POST(request: Request) {
         ]).catch((error) => console.error("First-release analytics failed:", error));
       }
     } catch (error) {
-      if (!release) await releaseDistributionOrderClaim({ razorpayOrderId: parsed.razorpay_order_id, userId: session.sub }).catch(() => undefined);
-      if (!release && subscriptionReservation) await releaseReservedSubscriptionSlot(subscriptionReservation.subscriptionId, subscriptionReservation.counted).catch(() => undefined);
+      const persistedRelease = !release && parsed.draftReleaseId ? await prisma.release.findUnique({ where: { id: parsed.draftReleaseId }, select: { status: true } }) : null;
+      const submissionPersisted = Boolean(release || (persistedRelease && !["DRAFT", "AWAITING_PAYMENT"].includes(persistedRelease.status)));
+      if (!submissionPersisted && orderClaimed) await releaseDistributionOrderClaim({ razorpayOrderId: parsed.razorpay_order_id, userId: session.sub }).catch(() => undefined);
+      if (!submissionPersisted && subscriptionReservation) await releaseReservedSubscriptionSlot(subscriptionReservation.subscriptionId, subscriptionReservation.counted, parsed.draftReleaseId).catch(() => undefined);
       if (promotionRedemption) await releaseFirstReleaseReservation(promotionRedemption.id).catch(() => undefined);
       throw error;
     }
@@ -229,7 +241,7 @@ export async function POST(request: Request) {
         razorpayOrderId: parsed.razorpay_order_id,
         plan: parsed.metadata.plan
       }
-    });
+    }).catch(() => console.error("Submission notification could not be delivered.", { releaseId: release?.id }));
 
     if (release?.id) {
       await createNotification({
@@ -241,7 +253,7 @@ export async function POST(request: Request) {
         actionLabel: "View release",
         eventKey: `release:${release.id}:status:under_review`,
         metadata: { releaseId: release.id, status: "under_review" }
-      });
+      }).catch(() => console.error("Release notification could not be delivered.", { releaseId: release.id }));
       await sendReleaseEmail("release_submitted", {
         to: session.email,
         userId: session.sub,
@@ -253,7 +265,7 @@ export async function POST(request: Request) {
         releaseDate: parsed.metadata.releaseDate,
         manageReleaseUrl: emailAppUrl(`/dashboard/releases/${release.id}`),
         correctionUrl: emailAppUrl(`/dashboard/releases/${release.id}?tab=corrections`)
-      });
+      }).catch(() => console.error("Release confirmation email could not be delivered.", { releaseId: release.id }));
     }
 
     return NextResponse.json({ release, reviewEligibility: { purchaseType: "service", purchaseId: persistedOrder.id, label: `${parsed.metadata.plan} · ${release.releaseTitle || release.trackName || resolvedReleaseTitle}` } }, { status: 201 });

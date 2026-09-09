@@ -13,6 +13,7 @@ import { currentDireNoteAttempt } from "../lib/distribution-idempotency";
 import { assertDireNoteSchemaReady } from "../lib/direnote-schema-readiness";
 import { validateReleaseForDireNote } from "../lib/direnote-readiness";
 import { readTrackLanguage } from "../lib/track-language";
+import { startCheckoutMock, verifySubmissionCheckout } from "./verify-submission-checkout";
 
 assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/fixture:fixture@127\.0\.0\.1:55439\/direnote_virtual/);
 let mode = "pending";
@@ -21,6 +22,7 @@ let ingests = 0;
 const statusUpcs: string[] = [];
 const ingestPayloads: Array<Record<string, any>> = [];
 let browser: Awaited<ReturnType<typeof startDireNoteBrowser>> | undefined;
+let checkoutMock: Awaited<ReturnType<typeof startCheckoutMock>> | undefined;
 const oldUpc = "3473620313503";
 const newUpc = "3473620313504";
 const oldIsrcs = ["INDN22602442", "INDN22602443"];
@@ -52,6 +54,7 @@ const server = createServer(async (request, response) => {
 });
 
 async function main() {
+  checkoutMock = await startCheckoutMock();
   await new Promise<void>(resolve => server.listen(55440, "127.0.0.1", resolve));
   // Reproduce a database where the earlier history migration predates snapshots.
   await prisma.$executeRawUnsafe('ALTER TABLE "distribution_submission_attempts" DROP COLUMN "payload_redacted", DROP COLUMN "payload_diff"');
@@ -262,6 +265,7 @@ async function main() {
   assert.equal((await pollArtist()).spotifyProfileUrl, spotify);
   if (browser) await browser.savedArtistLinks(artist.id, spotify, "https://music.apple.com/us/artist/test/1800353038");
   console.log("Hourly artist enrichment passed: canonical attachment, partial links, IDs, repeated polling, conflict deduplication and invalid-link rejection.");
+  if (browser) await verifySubmissionCheckout();
   console.log("Virtual PostgreSQL lifecycle, null/stale Instrumental HTTP mapping, paid draft recovery, one-track JPEG readiness and release isolation passed.");
 }
-main().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => { if (browser) await browser.stop(); await prisma.$disconnect(); server.close(); });
+main().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => { if (browser) await browser.stop(); if (checkoutMock) await checkoutMock.stop(); await prisma.$disconnect(); server.close(); });

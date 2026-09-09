@@ -1,4 +1,5 @@
 "use client";
+import { checkoutPlan } from "@/lib/distribution-checkout-plan";
 
 import clsx from "clsx";
 import {
@@ -2639,6 +2640,7 @@ export function ReleaseForm({
     orderId: string,
     paymentId: string,
     signature: string,
+    submissionPlan: DistributionPlanOption = selectedPlan,
   ) {
     setStatus("Uploading files...");
     const uploaded = await uploadFilesDirectly();
@@ -2648,7 +2650,7 @@ export function ReleaseForm({
       razorpay_order_id: orderId,
       razorpay_payment_id: paymentId,
       razorpay_signature: signature,
-      ...(firstReleaseOffer ? { promotionCode: "FIRST_RELEASE_FREE", attribution: campaignAttribution } : {}),
+      ...(firstReleaseOffer && submissionPlan === "one_time" ? { promotionCode: "FIRST_RELEASE_FREE", attribution: campaignAttribution } : {}),
       ...((uploaded.releaseId ?? draftReleaseId ?? (["draft", "awaiting_payment"].includes(initialRelease?.status ?? "") ? initialRelease?.id : undefined))
         ? { draftReleaseId: uploaded.releaseId ?? draftReleaseId ?? initialRelease?.id }
         : {}),
@@ -2678,8 +2680,8 @@ export function ReleaseForm({
         monetisationAccepted: socialConsentAccepted,
         monetisationClauses,
         legal,
-        paymentModel: selectedPlan === "one_time" ? "one_time" : "subscription",
-        plan: selectedPlan,
+        paymentModel: submissionPlan === "one_time" ? "one_time" : "subscription",
+        plan: submissionPlan,
         artworkFileKey: "artwork",
         existingArtworkUrl: persistedArtworkUrl ?? initialRelease?.artworkUrl ?? undefined,
         uploadedArtworkUrl: uploaded.artworkUrl,
@@ -2799,7 +2801,7 @@ export function ReleaseForm({
         if (orderData.paidOrderReusable === true) {
           if (!orderData.paymentId) throw new Error("The captured payment reference is unavailable. Contact HYMN support; do not pay again.");
           setStatus("Resuming your paid release submission...");
-          const data = await submitRelease(orderData.orderId, orderData.paymentId, `stored-payment:${orderData.orderId}`);
+          const data = await submitRelease(orderData.orderId, orderData.paymentId, `stored-payment:${orderData.orderId}`, checkoutPlan(orderData, selectedPlan));
           setSubmittedRelease(data.release);
           setUploadProgress(100);
           return;
@@ -2809,6 +2811,7 @@ export function ReleaseForm({
           orderData.orderId,
           coveredBySubscription ? `subscription_${Date.now()}` : `free_first_release_${Date.now()}`,
           coveredBySubscription ? "subscription:active" : "free:first-release",
+          checkoutPlan(orderData, selectedPlan),
         );
         setSubmittedRelease(data.release);
         setUploadProgress(100);
@@ -2849,7 +2852,7 @@ export function ReleaseForm({
                 const entitlementResponse = await fetch("/api/distribution/payment/create-order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(orderRequestPayload) });
                 const entitlement = await entitlementResponse.json();
                 if (!entitlementResponse.ok || entitlement.requiresPayment !== false || !entitlement.subscriptionCovered) throw new Error(entitlement.error || "Could not create the subscription release entitlement.");
-                const data = await submitRelease(entitlement.orderId, `subscription_${Date.now()}`, "subscription:active");
+                const data = await submitRelease(entitlement.orderId, `subscription_${Date.now()}`, "subscription:active", checkoutPlan(entitlement, selectedPlan));
                 setSubmittedRelease(data.release);
                 setUploadProgress(100);
                 resolve();
@@ -2859,6 +2862,7 @@ export function ReleaseForm({
                 orderData.orderId,
                 response.razorpay_payment_id,
                 response.razorpay_signature,
+                checkoutPlan(orderData, selectedPlan),
               );
               setSubmittedRelease(data.release);
               setUploadProgress(100);
