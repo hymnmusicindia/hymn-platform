@@ -79,10 +79,12 @@ export function MockLoginButton({
       </button>
       {error ? (
         <p className="text-xs" style={{ color: "var(--danger)" }} aria-live="polite">
-          {error}
+          {customerMessage(error)}
         </p>
       ) : null}
     </div>
   );
 }
+
+import { customerMessage } from "@/lib/customer-message";
 // vercel trigger 5

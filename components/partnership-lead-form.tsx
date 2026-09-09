@@ -36,8 +36,10 @@ export function PartnershipLeadForm() {
           {pending ? "Sending..." : "Send partnership request"}
         </button>
       </div>
-      {message ? <p className="md:col-span-2 text-sm text-white">{message}</p> : null}
+      {message ? <p className="md:col-span-2 text-sm text-white">{customerMessage(message)}</p> : null}
     </form>
   );
 }
+
+import { customerMessage } from "@/lib/customer-message";
 

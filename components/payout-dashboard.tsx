@@ -1,5 +1,7 @@
 "use client";
 
+import { customerMessage } from "@/lib/customer-message";
+
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { ArrowUpRight, ShieldCheck, WalletCards, X } from "lucide-react";
 import { ContextualHelp } from "@/components/contextual-help";
@@ -153,7 +155,7 @@ function PayoutModal({ summary, onClose, onSuccess }: { summary: PayoutSummary; 
           </div>
 
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>A 2% HYMN service fee will be deducted from each payout request.</p>
-          {feedback ? <p className="text-sm" style={{ color: "var(--danger)" }}>{feedback}</p> : null}
+          {feedback ? <p className="text-sm" style={{ color: "var(--danger)" }}>{customerMessage(feedback)}</p> : null}
           <button type="submit" disabled={isPending || !summary.payoutEligible} className="btn-primary pressable disabled:opacity-50">{isPending ? "Submitting..." : "Submit payout request"}</button>
         </div>
       </form>

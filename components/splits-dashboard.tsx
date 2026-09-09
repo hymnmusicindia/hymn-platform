@@ -1,5 +1,7 @@
 "use client";
 
+import { customerMessage } from "@/lib/customer-message";
+
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import type { Release } from "@/lib/types";
 
@@ -24,7 +26,7 @@ export function SplitsDashboard({ releases }: { releases: Release[] }) {
   const held = data.earnings.filter((row) => ["held", "pending_payout_details"].includes(row.status)).reduce((sum, row) => sum + Number(row.netShareAmount), 0);
   return <div className="space-y-5">
     <div className="flex flex-wrap gap-2">{tabs.map((item) => <button key={item} type="button" onClick={() => setTab(item)} className={tab === item ? "btn-primary pressable px-3 py-2 text-xs capitalize" : "btn-outline pressable px-3 py-2 text-xs capitalize"}>{item.replace("payout-details", "Payout details")}</button>)}</div>
-    {feedback ? <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>{feedback}</div> : null}
+    {feedback ? <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "var(--border-strong)", color: "var(--text)" }}>{customerMessage(feedback)}</div> : null}
     {tab === "overview" ? <div className="grid gap-4 md:grid-cols-4"><Metric label="Pending requests" value={data.requests.length}/><Metric label="Splits created" value={data.created.length}/><Metric label="Credited earnings" value={money(totalEarned)}/><Metric label="Held earnings" value={money(held)}/></div> : null}
     {tab === "requests" ? <List empty="No pending split requests.">{data.requests.map((row) => <Card key={row.id} title={row.release.title} status="Pending"><p>From: {row.splitRecord.owner.name}</p><p>{row.role} · {Number(row.sharePercent)}% · {row.payoutEligible ? "Payout eligible" : "Credit only"}</p><div className="mt-3 flex gap-2"><button className="btn-primary px-3 py-2 text-xs" onClick={() => respond(row.id, "accept")}>Accept Split</button><button className="btn-outline px-3 py-2 text-xs" onClick={() => respond(row.id, "decline")}>Decline</button></div></Card>)}</List> : null}
     {tab === "join" ? <div className="grid gap-4 lg:grid-cols-2"><form onSubmit={join} className="surface-list-item grid gap-3 p-4"><h3 className="font-semibold">Join with a split code</h3><input name="code" required className="field uppercase" placeholder="HYMN-8F3K2Q"/><button className="btn-primary">Join Split</button></form>{preview ? <Card title={preview.releaseName} status="Code verified"><p>Owner: {preview.ownerName}</p><p>{preview.role} · {preview.sharePercent}%</p><p>Payout eligible: {preview.payoutEligible ? "Yes" : "No"}</p><div className="mt-3 flex gap-2"><button className="btn-primary px-3 py-2 text-xs" onClick={() => respond(preview.id, "accept")}>Accept Split</button><button className="btn-outline px-3 py-2 text-xs" onClick={() => respond(preview.id, "decline")}>Decline</button></div></Card> : null}</div> : null}

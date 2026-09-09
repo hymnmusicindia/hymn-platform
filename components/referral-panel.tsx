@@ -1,5 +1,7 @@
 "use client";
 
+import { customerMessage } from "@/lib/customer-message";
+
 import { useEffect, useMemo, useState } from "react";
 import { Check, Copy, Gift, IndianRupee, Link2, Send, Users } from "lucide-react";
 import { ContextualHelp } from "@/components/contextual-help";
@@ -78,7 +80,7 @@ export function ReferralPanel() {
           <div><h3 className="font-semibold">Referral journey</h3><div className="mt-3 grid gap-2">{data.activities.map(item => <div key={item.id} className="flex items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)" }}><div><p>{item.person ?? "Referred artist"}</p><p className="mt-1 text-xs" style={{ color: "var(--text-soft)" }}>{date(item.createdAt)}</p></div><div className="text-right"><span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: "var(--bg-soft)" }}>{item.status.toLowerCase().replaceAll("_", " ")}</span>{item.earnings > 0 && <p className="mt-1 text-xs">+{money(item.earnings)}</p>}</div></div>)}{!data.activities.length && <p className="rounded-2xl border p-4 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>No invitations yet. Share your link when you are ready.</p>}</div></div>
         <div><h3 className="font-semibold">Credit history</h3><div className="mt-3 grid gap-2">{data.creditHistory.map(item => <div key={item.id} className="flex items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)" }}><div><p>{item.description}</p><p className="mt-1 text-xs" style={{ color: "var(--text-soft)" }}>{date(item.createdAt)}</p></div><strong>{item.direction === "credit" ? "+" : "−"}{money(item.amount)}</strong></div>)}{!data.creditHistory.length && <p className="rounded-2xl border p-4 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>Verified credits and redemptions will appear here.</p>}</div></div>
       </div>
-      {feedback && <p role="status" className="px-5 pb-5 text-sm sm:px-7" style={{ color: "var(--text-soft)" }}>{feedback}</p>}
+      {feedback && <p role="status" className="px-5 pb-5 text-sm sm:px-7" style={{ color: "var(--text-soft)" }}>{customerMessage(feedback)}</p>}
     </section>
   );
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { customerMessage } from "@/lib/customer-message";
+
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, BadgePercent, CheckCircle2, Gift, Loader2, ShieldCheck, X } from "lucide-react";
@@ -291,13 +293,13 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
               {quote.messages.map((message) => (
                 <p key={message} className="flex items-center gap-2 text-sm" style={{ color: "var(--text-muted)" }}>
                   <CheckCircle2 className="h-4 w-4" style={{ color: "var(--money)" }} />
-                  {message}
+                  {customerMessage(message)}
                 </p>
               ))}
             </div>
           ) : null}
 
-          {feedback ? <p className="mt-4 text-sm" style={{ color: "var(--danger)" }}>{feedback}</p> : null}
+          {feedback ? <p className="mt-4 text-sm" style={{ color: "var(--danger)" }}>{customerMessage(feedback)}</p> : null}
           {success ? (
             <div className="mt-5 rounded-[1.2rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
               <p className="font-semibold" style={{ color: "var(--text)" }}>Payment verified.</p>

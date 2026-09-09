@@ -1,5 +1,7 @@
 "use client";
 
+import { customerMessage } from "@/lib/customer-message";
+
 import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronLeft, ChevronRight, Disc3, ExternalLink, ListMusic, Pause, Play, Repeat, ShoppingBag, Volume2, VolumeX, X } from "lucide-react";
@@ -331,7 +333,7 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
             <button type="button" onClick={() => value.openLicensing(beat)} className="btn-primary pressable min-h-10 px-4 text-xs">From {formatMoney(fromPrice)}</button>
           </div>
         </div>
-        {value.error ? <p className="mt-2 text-xs font-semibold text-red-300">{value.error}</p> : null}
+        {value.error ? <p className="mt-2 text-xs font-semibold text-red-300">{customerMessage(value.error)}</p> : null}
       </div>
     </aside>
   );

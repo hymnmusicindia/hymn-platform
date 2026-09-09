@@ -1,5 +1,7 @@
 "use client";
 
+import { customerMessage } from "@/lib/customer-message";
+
 import { Star, X } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
 
@@ -75,7 +77,7 @@ export function PostPurchaseReviewPrompt() {
           <button type="button" onClick={dismiss} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border" style={{ borderColor: "var(--border)" }} aria-label="Review later"><X className="h-4 w-4" /></button>
         </div>
         {!reviewId ? <div className="mt-7"><p className="text-sm font-medium">How would you rate it?</p><div className="mt-3 flex gap-2" role="radiogroup" aria-label="Rating">{[1,2,3,4,5].map(value => <button key={value} type="button" role="radio" aria-checked={rating === value} aria-label={`${value} star${value === 1 ? "" : "s"}`} disabled={isPending} onClick={() => chooseRating(value)} className="inline-flex h-12 w-12 items-center justify-center rounded-full border transition hover:-translate-y-0.5 disabled:opacity-50" style={{ borderColor: rating >= value ? "#e5a72f" : "var(--border)", background: rating >= value ? "color-mix(in srgb, #e5a72f 14%, var(--card))" : "var(--bg-soft)" }}><Star className="h-5 w-5" fill={rating >= value ? "#e5a72f" : "none"} color={rating >= value ? "#e5a72f" : "currentColor"} /></button>)}</div><p className="mt-4 text-xs" style={{ color: "var(--text-soft)" }}>{isPending ? "Saving your rating…" : "Your rating is tied to this purchase and can only be submitted once."}</p></div> : <div className="mt-6"><label className="text-sm font-medium" htmlFor="purchase-review-text">Tell us more <span style={{ color: "var(--text-soft)" }}>(optional)</span></label><textarea id="purchase-review-text" value={text} maxLength={1200} onChange={event => setText(event.target.value)} className="field mt-3 min-h-24 resize-y" placeholder="What worked well? What could we improve?" /><div className="mt-3 flex items-center justify-between gap-3"><span className="text-xs" style={{ color: "var(--text-soft)" }}>{text.length}/1200</span><button type="button" onClick={finish} disabled={isPending} className="btn-primary pressable">{isPending ? "Saving…" : text.trim() ? "Submit review" : "Skip and finish"}</button></div></div>}
-        {error ? <p className="mt-4 text-sm" style={{ color: "var(--danger)" }} role="alert">{error}</p> : null}
+        {error ? <p className="mt-4 text-sm" style={{ color: "var(--danger)" }} role="alert">{customerMessage(error)}</p> : null}
       </section>
     </div>
   );

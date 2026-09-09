@@ -1,5 +1,7 @@
 "use client";
 
+import { customerMessage } from "@/lib/customer-message";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Send } from "lucide-react";
@@ -38,14 +40,14 @@ export function ProviderCorrectionWorkspace({ release, onFix }: { release: Relea
       const trackIndex = issue.field.match(/^tracks\.(\d+)\./)?.[1];
       const track = trackIndex ? release.tracks?.[Number(trackIndex)] : undefined;
       return <article key={issue.field} className="py-5">
-        <h3 className="text-base font-semibold">{issue.label}</h3>
-        <p className="mt-2 whitespace-pre-wrap text-sm">{issue.note}</p>
+        <h3 className="text-base font-semibold">{customerMessage(issue.label)}</h3>
+        <p className="mt-2 whitespace-pre-wrap text-sm">{customerMessage(issue.note)}</p>
         {track ? <p className="mt-2 text-sm">{track.trackTitle} · {track.primaryArtist}</p> : null}
         {issue.field.startsWith("direnote.remoteTrack") ? <p className="mt-2 text-sm">HYMN review needed to identify the affected track.</p> : null}
         {open ? <button type="button" className="btn-outline mt-3" onClick={() => onFix(issue.field)}>{trackIndex ? `Fix Track ${Number(trackIndex) + 1}` : "Fix release"}</button> : null}
       </article>;
     })}</div>
     {open ? <button type="button" className="btn-primary mt-4 inline-flex items-center gap-2 disabled:opacity-50" disabled={!saved || busy} onClick={submit}><Send size={16} />{busy ? "Submitting..." : "Submit Corrections"}</button> : null}
-    {message ? <p role="status" className="mt-3 text-sm">{message}</p> : null}
+    {message ? <p role="status" className="mt-3 text-sm">{customerMessage(message)}</p> : null}
   </section>;
 }

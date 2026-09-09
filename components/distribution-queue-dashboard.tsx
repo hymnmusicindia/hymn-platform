@@ -1,5 +1,7 @@
 "use client";
 
+import { customerMessage } from "@/lib/customer-message";
+
 import { CheckCircle2, Clock, AlertCircle, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -87,7 +89,7 @@ export function DistributionQueueDashboard({ userId }: { userId: number }) {
         <div className="flex items-start gap-3">
           <AlertCircle className="h-5 w-5 flex-shrink-0 text-red-600 dark:text-red-400" />
           <div>
-            <p className="text-sm font-medium text-red-900 dark:text-red-100">{error}</p>
+            <p className="text-sm font-medium text-red-900 dark:text-red-100">{customerMessage(error)}</p>
           </div>
         </div>
       </div>

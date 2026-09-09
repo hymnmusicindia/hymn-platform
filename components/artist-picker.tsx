@@ -1,5 +1,7 @@
 "use client";
 
+import { customerMessage } from "@/lib/customer-message";
+
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
@@ -455,7 +457,7 @@ export function ArtistPicker({
           </div>
           {profilesLoading ? <p className="px-2 py-3 text-sm" style={{ color: "var(--text-soft)" }}>Loading saved profiles...</p> : null}
           {loading ? <p className="px-2 py-2 text-sm" style={{ color: "var(--text-soft)" }}>Searching artists...</p> : null}
-          {searchError ? <p className="px-2 py-2 text-sm" style={{ color: "var(--danger)" }}>{searchError}</p> : null}
+          {searchError ? <p className="px-2 py-2 text-sm" style={{ color: "var(--danger)" }}>{customerMessage(searchError)}</p> : null}
 
           {hasQuery && savedMatches.length === 0 && recent.length > 0 && !loading ? <p className="mb-2 rounded-lg px-2 py-2 text-xs" style={{color:"var(--text-muted)",background:"var(--bg-soft)"}}>No exact match. Showing all your saved profiles.</p> : null}
 
@@ -527,7 +529,7 @@ export function ArtistPicker({
               {activeProfileStep === "producer" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Credits automation</p><h4 className="mt-2 text-lg font-semibold" style={{ color: "var(--text)" }}>Is this artist also a producer?</h4><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>When enabled, selecting this profile as a primary artist automatically adds its producer credit.</p><div className="mt-4 grid grid-cols-2 gap-3"><button type="button" className={isProducer ? "btn-primary pressable" : "btn-outline pressable"} onClick={() => setIsProducer(true)}>Yes</button><button type="button" className={!isProducer ? "btn-primary pressable" : "btn-outline pressable"} onClick={() => { setIsProducer(false); setProducerLegalName(""); }}>No</button></div></div> : null}
               {activeProfileStep === "legal" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Producer credit</p><label className="mt-2 block text-lg font-semibold" style={{ color: "var(--text)" }}>What is the producer’s complete legal name?</label><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>This name will be inserted into contribution credits, not displayed as the public artist name.</p><input autoFocus className="field mt-4" required value={producerLegalName} onChange={(event) => setProducerLegalName(event.target.value)} placeholder="Complete legal name" /></div> : null}
 
-              {spotifyError ? <p role="alert" className="mt-5 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "color-mix(in srgb, var(--danger) 45%, var(--border))", color: "var(--danger)" }}>{spotifyError}</p> : null}
+              {spotifyError ? <p role="alert" className="mt-5 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "color-mix(in srgb, var(--danger) 45%, var(--border))", color: "var(--danger)" }}>{customerMessage(spotifyError)}</p> : null}
             </div>
 
             <div className="artist-profile-modal-footer">

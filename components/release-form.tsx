@@ -1,4 +1,6 @@
 "use client";
+
+import { customerMessage } from "@/lib/customer-message";
 import { checkoutPlan } from "@/lib/distribution-checkout-plan";
 
 import clsx from "clsx";
@@ -3107,7 +3109,7 @@ export function ReleaseForm({
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>{subscriptionCovered ? "Active subscription" : selectedPlan === "one_time" ? "Price" : "Plan coverage"}</dt><dd className="text-right">{subscriptionCovered ? currentPlan.title : selectedPlan === "one_time" ? (distributionCheckoutAmount === 0 ? (firstReleaseDiscount > 0 ? "FREE" : "HYMN credits") : `₹${distributionCheckoutAmount.toLocaleString("en-IN")}`) : `${currentPlan.cadence} · ₹${distributionAmount.toLocaleString("en-IN")}`}</dd></div>
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Save state</dt><dd aria-live="polite" style={{ color: autosaveEligible && autosaveStatus === "error" ? "var(--danger)" : autosaveEligible && autosaveStatus === "saved" ? "var(--success)" : "var(--text-muted)" }}>{autosaveLabel}</dd></div>
             </dl>
-            {validationIssueCount > 0 ? <div className="release-summary-tasks mt-5 border-t pt-4" style={{ borderColor: "var(--border)" }}><p className="text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Next up</p><ul className="mt-3 grid gap-1">{validationIssues.slice(0, 5).map((issue) => <li key={`${issue.key}-${issue.trackIndex ?? "release"}`}><button type="button" onClick={() => triggerFieldFocus(issue)} className="group flex w-full items-start justify-between gap-3 py-2 text-left text-xs leading-5 transition" style={{ color: "var(--text-muted)" }}><span>{issue.message}</span><span className="shrink-0 text-[var(--text-soft)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" aria-hidden="true">→</span></button></li>)}</ul></div> : null}
+            {validationIssueCount > 0 ? <div className="release-summary-tasks mt-5 border-t pt-4" style={{ borderColor: "var(--border)" }}><p className="text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Next up</p><ul className="mt-3 grid gap-1">{validationIssues.slice(0, 5).map((issue) => <li key={`${issue.key}-${issue.trackIndex ?? "release"}`}><button type="button" onClick={() => triggerFieldFocus(issue)} className="group flex w-full items-start justify-between gap-3 py-2 text-left text-xs leading-5 transition" style={{ color: "var(--text-muted)" }}><span>{customerMessage(issue.message)}</span><span className="shrink-0 text-[var(--text-soft)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" aria-hidden="true">→</span></button></li>)}</ul></div> : null}
           </div>
         </aside>
         <div className="release-workflow-content grid min-w-0 gap-6">
@@ -6177,7 +6179,7 @@ export function ReleaseForm({
             className="text-xs md:text-sm"
             style={{ color: "var(--text-muted)" }}
           >
-            {status}
+            {customerMessage(status)}
           </p>
         ) : null}
         </div>

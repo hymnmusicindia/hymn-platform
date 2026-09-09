@@ -58,7 +58,7 @@ export function PasswordLoginForm({ role, title, description }: PasswordLoginFor
           {loading ? "Signing in..." : "Login"}
         </button>
       </form>
-      {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}
+      {error ? <p className="mt-3 text-sm text-red-300">{customerMessage(error)}</p> : null}
       <div className="mt-5 rounded-2xl border border-dashed border-border bg-black/20 p-4 text-sm text-white/60">
         <p className="font-semibold text-white/80">Test credentials</p>
         <p className="mt-1">{role === "producer" ? "producer@test.com / 123456" : "customer@test.com / 123456"}</p>
@@ -66,5 +66,7 @@ export function PasswordLoginForm({ role, title, description }: PasswordLoginFor
     </div>
   );
 }
+
+import { customerMessage } from "@/lib/customer-message";
 
 // vercel trigger 2

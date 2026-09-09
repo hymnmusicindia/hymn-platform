@@ -259,7 +259,7 @@ export function GoogleAuthButton({
             : { borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text-muted)" }}
           aria-live="polite"
         >
-          {helperText}
+          {customerMessage(helperText)}
         </p>
       ) : null}
     </div>
@@ -307,6 +307,8 @@ interface GoogleGlobal {
 declare global {
   interface Window extends GoogleGlobal {}
 }
+
+import { customerMessage } from "@/lib/customer-message";
 
 // vercel trigger 2
 

@@ -1,5 +1,7 @@
 "use client";
 
+import { customerMessage } from "@/lib/customer-message";
+
 import { FormEvent, useState } from "react";
 import { ArrowRight, Send } from "lucide-react";
 
@@ -55,7 +57,7 @@ export function ContactForm({ initialName = "", initialEmail = "" }: { initialNa
       </div>
       {message ? (
         <p className="rounded-xl border px-4 py-3 text-sm md:col-span-2" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text)" }} aria-live="polite">
-          {message}
+          {customerMessage(message)}
         </p>
       ) : null}
     </form>

@@ -213,10 +213,12 @@ export function UploadDropzone({ accept, title, description, helperLines = [], f
         </div>
       ) : null}
 
-      {error || selectionError ? <p className="text-xs font-medium leading-5 text-red-500">{error || selectionError}</p> : null}
+      {error || selectionError ? <p className="text-xs font-medium leading-5 text-red-500">{customerMessage(error || selectionError)}</p> : null}
     </div>
   );
 }
+
+import { customerMessage } from "@/lib/customer-message";
 
 
 // vercel trigger

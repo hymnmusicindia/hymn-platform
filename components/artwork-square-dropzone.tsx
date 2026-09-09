@@ -131,10 +131,12 @@ export function ArtworkSquareDropzone({ previewUrl, fileName, fileType, dimensio
         </div>
       ) : null}
 
-      {error ? <p className="inline-error">{error}</p> : null}
+      {error ? <p className="inline-error">{customerMessage(error)}</p> : null}
     </div>
   );
 }
+
+import { customerMessage } from "@/lib/customer-message";
 
 // vercel trigger
 // vercel trigger 6

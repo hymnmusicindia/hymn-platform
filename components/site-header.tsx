@@ -372,7 +372,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
                           <span className="text-sm font-semibold">{notification.title}</span>
                           {unread ? <span className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{ background: "var(--accent)" }} /> : <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: "var(--text-soft)" }} />}
                         </span>
-                        <span className="mt-1 block text-xs leading-5" style={{ color: "var(--text-muted)" }}>{notification.body}</span>
+                        <span className="mt-1 block text-xs leading-5" style={{ color: "var(--text-muted)" }}>{customerMessage(notification.body)}</span>
                         <span className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px]" style={{ color: "var(--text-soft)" }}>
                           <span>{notificationTimeAgo(notification.createdAt)}</span>
                           {notification.href ? <span className="font-semibold" style={{ color: "var(--accent)" }}>{notification.actionLabel || "Open"}</span> : null}
@@ -618,6 +618,8 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
     </header>
   );
 }
+
+import { customerMessage } from "@/lib/customer-message";
 
 
 // vercel trigger

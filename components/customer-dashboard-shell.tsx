@@ -1,5 +1,7 @@
 "use client";
 
+import { customerMessage } from "@/lib/customer-message";
+
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
@@ -41,7 +43,7 @@ function SubscriptionActions({ status, cancelAtPeriodEnd }: { status: string; ca
       window.location.reload();
     } catch (error) { setMessage(error instanceof Error ? error.message : "Subscription action failed."); setPending(false); }
   }
-  return <div className="mt-5 flex flex-wrap items-center gap-3">{status === "active" ? <button className="btn-outline" disabled={pending} onClick={() => run("pause")}>Pause billing</button> : null}{status === "paused" ? <button className="btn-outline" disabled={pending} onClick={() => run("resume")}>Resume billing</button> : null}{!["cancelled", "completed", "expired"].includes(status) && !cancelAtPeriodEnd ? <button className="btn-outline" disabled={pending} onClick={() => run("cancel_period_end")}>Cancel renewal</button> : null}{message ? <span className="text-sm text-red-500">{message}</span> : null}</div>;
+  return <div className="mt-5 flex flex-wrap items-center gap-3">{status === "active" ? <button className="btn-outline" disabled={pending} onClick={() => run("pause")}>Pause billing</button> : null}{status === "paused" ? <button className="btn-outline" disabled={pending} onClick={() => run("resume")}>Resume billing</button> : null}{!["cancelled", "completed", "expired"].includes(status) && !cancelAtPeriodEnd ? <button className="btn-outline" disabled={pending} onClick={() => run("cancel_period_end")}>Cancel renewal</button> : null}{message ? <span className="text-sm text-red-500">{customerMessage(message)}</span> : null}</div>;
 }
 
 const RELEASE_PIPELINE_STAGES = [
@@ -111,7 +113,7 @@ function AccountRestrictionNotice({ user }: { user: User }) {
     setMessage(response.ok ? "Appeal submitted. Your account is now under review." : data.error || "Could not submit appeal.");
     setPending(false);
   }
-  return <section role="alert" className="mb-5 rounded-2xl border p-4" style={{ borderColor: "color-mix(in srgb, #eab308 55%, var(--border))", background: "color-mix(in srgb, #eab308 10%, var(--card))" }}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">⚠ Account {user.status.replaceAll("_", " ")}</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{user.statusReason || "This account currently requires administrator review."}{user.deletionScheduledAt ? ` Account data is scheduled for cleanup on ${new Date(user.deletionScheduledAt).toLocaleDateString("en-IN")}.` : ""}</p></div>{appealAllowed && !user.appealRequestedAt ? <button type="button" disabled={pending} onClick={appeal} className="btn-outline pressable">{pending ? "Submitting…" : "Appeal for review"}</button> : null}</div>{user.appealRequestedAt ? <p className="mt-3 text-sm font-medium">Appeal submitted {new Date(user.appealRequestedAt).toLocaleDateString("en-IN")}.</p> : null}{message ? <p className="mt-3 text-sm">{message}</p> : null}</section>;
+  return <section role="alert" className="mb-5 rounded-2xl border p-4" style={{ borderColor: "color-mix(in srgb, #eab308 55%, var(--border))", background: "color-mix(in srgb, #eab308 10%, var(--card))" }}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">⚠ Account {user.status.replaceAll("_", " ")}</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{user.statusReason || "This account currently requires administrator review."}{user.deletionScheduledAt ? ` Account data is scheduled for cleanup on ${new Date(user.deletionScheduledAt).toLocaleDateString("en-IN")}.` : ""}</p></div>{appealAllowed && !user.appealRequestedAt ? <button type="button" disabled={pending} onClick={appeal} className="btn-outline pressable">{pending ? "Submitting…" : "Appeal for review"}</button> : null}</div>{user.appealRequestedAt ? <p className="mt-3 text-sm font-medium">Appeal submitted {new Date(user.appealRequestedAt).toLocaleDateString("en-IN")}.</p> : null}{message ? <p className="mt-3 text-sm">{customerMessage(message)}</p> : null}</section>;
 }
 
 function formatMoney(amount: number) {
@@ -612,7 +614,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold" style={{ color: "var(--text)" }}>{notification.title}</p>
-                    <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{notification.body}</p>
+                    <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{customerMessage(notification.body)}</p>
                   </div>
                   <StatusPill label={notification.readAt ? "read" : "unread"} active={!notification.readAt} />
                 </div>
