@@ -31,7 +31,9 @@ are exercised. No live charges or live DireNote ingests are made. Cases include
 active/unlimited subscriptions, last-slot concurrency, exhausted allowances,
 zero/full/partial credit balances, captured one-time payments, stale-plan
 recovery, failed asset validation and retry, invalid signatures, completed
-request replay and free first-release redemption.
+request replay and free first-release redemption. Concurrent first requests also
+verify that rate-limit records use conflict-safe insertion and count every
+request under the row lock.
 
 The HTTP fixtures create ready private-asset records in the isolated database;
 they do not claim to test a new upload's byte transport or live Razorpay service

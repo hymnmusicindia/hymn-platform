@@ -6,7 +6,7 @@ import { DIRENOTE_GENRE_CATALOG, DIRENOTE_LANGUAGES } from "../lib/direnote-conf
 import { readTrackLanguage } from "../lib/track-language";
 import { diffDireNotePayload } from "../lib/direnote-payload-diff";
 import { distributionTrackSchema } from "../lib/validation";
-import type { Release } from "../lib/types";
+import type { ArtistProfile, Release } from "../lib/types";
 import { writeFieldConnectivityReport } from "./direnote-field-connectivity-report";
 
 process.env.DIRENOTE_API_PIN = "mapping-fixture-pin";
@@ -25,6 +25,12 @@ const release = {
   }))
 } as unknown as Release;
 const payload = buildDireNotePayload(release);
+const debutPayload = buildDireNotePayload({ ...release, metadata: {} }, { artistProfiles: [{ name: "Fixture Artist", instagramUrl: "https://instagram.com/debut_artist", spotifyUrl: null, appleUrl: null } as ArtistProfile] });
+assert.equal(debutPayload.artists[0].instagram_url, "https://instagram.com/debut_artist");
+assert(debutPayload.tracks.every(track => track.artists[0].instagram_url === "https://instagram.com/debut_artist"));
+assert.equal(debutPayload.artists[0].spotify_url, undefined);
+assert.equal(debutPayload.artists[0].apple_url, undefined);
+assert.equal(validateDireNotePayload(debutPayload).ok, true, JSON.stringify(validateDireNotePayload(debutPayload)));
 assert(!JSON.stringify(redactDireNoteDiagnostic({ audio_url: "https://example.test/api/distribution-assets/1/private-token/audio.wav?signature=secret-value" })).match(/private-token|secret-value/));
 assert.equal(validateDireNotePayload(payload).ok, true, JSON.stringify(validateDireNotePayload(payload)));
 for (const mood of [undefined, "", "Empowering", "Happy", "Sad", "Energetic"]) {

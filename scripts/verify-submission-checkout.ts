@@ -5,6 +5,7 @@ import { request as playwrightRequest } from "@playwright/test";
 import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma";
 import { checkoutPlan } from "../lib/distribution-checkout-plan";
+import { consumeRateLimit } from "../lib/rate-limit";
 
 const orders = new Map<string, { id: string; amount: number; currency: string; payment?: Record<string, unknown> }>();
 export async function startCheckoutMock() {
@@ -33,6 +34,9 @@ export async function startCheckoutMock() {
 
 export async function verifySubmissionCheckout() {
   assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/fixture:fixture@127\.0\.0\.1:55439\//);
+  const simultaneousLimits = await Promise.all(Array.from({ length: 6 }, () => consumeRateLimit({ scope: "checkout-fixture-race", identity: "new-identity", limit: 3, windowSeconds: 60 })));
+  assert.equal(simultaneousLimits.filter(result => result.allowed).length, 3);
+  assert.equal((await prisma.securityRateLimit.findFirstOrThrow({ where: { scope: "checkout-fixture-race" } })).count, 6);
   const origin = "http://127.0.0.1:55441";
   let sequence = 0;
   async function fixture(credits = 0) {
@@ -116,6 +120,7 @@ export async function verifySubmissionCheckout() {
     const leftOrder = await concurrent.create(left.release.id, "half_yearly"); const rightOrder = await concurrent.create(right.release.id, "half_yearly");
     const attempts = await Promise.all([concurrent.submit(left, leftOrder.body, "half_yearly"), concurrent.submit(right, rightOrder.body, "half_yearly")]);
     assert.equal(attempts.filter(result => result.status === 201).length, 1, JSON.stringify(attempts));
+    assert(attempts.every(result => [201, 400, 409].includes(result.status)), JSON.stringify(attempts));
     assert.equal(await prisma.subscriptionReleaseUsage.count({ where: { subscriptionId: concurrentSub.id } }), 1);
 
     const retry = await make(); const retrySub = await retry.subscription(); const retryDraft = await retry.draft(); const retryOrder = await retry.create(retryDraft.release.id, "half_yearly");

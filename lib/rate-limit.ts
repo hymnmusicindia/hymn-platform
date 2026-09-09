@@ -11,7 +11,8 @@ export async function consumeRateLimit(input: { scope: string; identity: string;
     const row = memory.get(keyHash); const next = !row || row.expiresAt <= now.getTime() ? { count: 1, expiresAt: expiresAt.getTime() } : { ...row, count: row.count + 1 }; memory.set(keyHash, next); return { allowed: next.count <= input.limit, remaining: Math.max(0, input.limit - next.count), retryAfterSeconds: Math.max(1, Math.ceil((next.expiresAt - now.getTime()) / 1000)) };
   }
   return prisma.$transaction(async tx => {
-    await tx.securityRateLimit.upsert({ where: { keyHash }, create: { keyHash, scope: input.scope, count: 0, windowStart: now, expiresAt }, update: {} });
+    // ON CONFLICT DO NOTHING handles simultaneous first requests before the row lock.
+    await tx.securityRateLimit.createMany({ data: [{ keyHash, scope: input.scope, count: 0, windowStart: now, expiresAt }], skipDuplicates: true });
     await tx.$queryRaw`SELECT key_hash FROM security_rate_limits WHERE key_hash = ${keyHash} FOR UPDATE`;
     const current = await tx.securityRateLimit.findUniqueOrThrow({ where: { keyHash } });
     const reset = current.expiresAt <= now; const count = reset ? 1 : current.count + 1; const effectiveExpiry = reset ? expiresAt : current.expiresAt;

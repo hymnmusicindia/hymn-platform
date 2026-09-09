@@ -6,11 +6,14 @@ viewport with a dimmed, blurred backdrop, a scrollable body, persistent actions,
 keyboard focus containment, Escape dismissal and a page scroll lock.
 
 Creation starts with an explicit store-profile choice. First-release artists
-need only their public name: their canonical artist card is persisted with null
-store identities and Instagram. Existing artists continue through name, Spotify,
+provide their public name and Instagram handle or profile URL. Their canonical
+artist card is persisted with Instagram and null store identities. Existing
+artists continue through name, Spotify,
 Apple Music, Instagram, YouTube and optional producer credits. Spotify can be
 skipped to provide an Apple Music identity. Changing paths preserves the name
-and clears unused store selections; first-release requests omit social metadata.
+and clears unused store selections; first-release requests include Instagram.
+Editing a first-release card also
+collects Instagram, allowing previously saved incomplete profiles to be repaired.
 No new artist table or database migration is introduced.
 
 The existing hourly DireNote sync reads the documented `tracks[].artist.links`
@@ -25,9 +28,9 @@ replacing a verified identity. Saved cards expose links when reloaded/opened.
 Provider contract checked: https://distribution.direnotemedia.com/dnm_api
 (v2.2, checked 2026-09-09). The status response documents artist links. Section
 5b also states that Instagram is mandatory when DireNote provisions a new artist.
-Saving a name-only HYMN profile is supported; this does not certify name-only
-DireNote provisioning. The provider submission preflight remains intact pending
-DireNote confirmation. No live ingestion is used for testing.
+Both artist creation paths require Instagram, matching provider provisioning
+requirements. The provider submission preflight remains intact. No live ingestion
+is used for testing.
 
 Verification commands:
 
@@ -38,7 +41,7 @@ npm run test:direnote-e2e
 ```
 
 The browser suite covers both wizard paths, Apple-only existing identities,
-desktop centering, mobile layout, back navigation and name-only API persistence.
+desktop centering, mobile layout, back navigation and Instagram API persistence.
 The isolated PostgreSQL suite executes the actual hourly handler with mock
 artist links and checks attachment boundaries, partial discovery, stored IDs,
 conflicting links, idempotency and malformed URLs. Deployment scheduling still

@@ -79,8 +79,8 @@ function requireExistingArtistStoreLink(value: { hasLiveMusic?: boolean; spotify
     if (!spotifyValue && !appleValue) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ["spotifyUrl"], message: "Add at least one store link for an artist that already has music live in stores." });
     }
-    if (!value.instagramUrl) context.addIssue({ code: z.ZodIssueCode.custom, path: ["instagramUrl"], message: "Instagram profile link is required for artist verification." });
   }
+  if (!value.instagramUrl) context.addIssue({ code: z.ZodIssueCode.custom, path: ["instagramUrl"], message: "Instagram profile link is required for artist verification." });
 }
 
 function requireProducerLegalName(value: { isProducer?: boolean; producerLegalName?: string }, context: z.RefinementCtx) {

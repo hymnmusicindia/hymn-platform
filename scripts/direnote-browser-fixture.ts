@@ -23,6 +23,8 @@ export async function startDireNoteBrowser(userId: number) {
       page,
       async artistWizard() {
         artistWizardUrl = page.url();
+        const missingInstagram = await context.request.post(`${origin}/api/artists`, { data: { name: "Missing Instagram", hasLiveMusic: false } });
+        expect(missingInstagram.status()).toBe(400);
         const openWizard = async () => {
           await page.getByRole("button", { name: "Add primary artist", exact: true }).first().click();
           await page.getByRole("button", { name: /Add another artist profile/ }).click();
@@ -57,7 +59,7 @@ export async function startDireNoteBrowser(userId: number) {
         await page.setViewportSize({ width: 390, height: 844 });
         await page.screenshot({ path: ".cache/artist-wizard-mobile.png", fullPage: true });
         await dialog.getByRole("button", { name: "Continue", exact: true }).click();
-        await expect(dialog.getByText("Step 2 of 2", { exact: true })).toBeVisible();
+        await expect(dialog.getByText("Step 2 of 3", { exact: true })).toBeVisible();
         await dialog.getByRole("textbox", { name: "What is the artist name?" }).fill("Browser Debut Artist");
         await expect(dialog.getByRole("textbox")).toHaveCount(1);
         await dialog.getByRole("button", { name: "Back", exact: true }).click();
@@ -65,6 +67,11 @@ export async function startDireNoteBrowser(userId: number) {
         await dialog.getByRole("button", { name: /No, this is my first release/ }).click();
         await dialog.getByRole("button", { name: "Continue", exact: true }).click();
         await expect(dialog.getByRole("textbox")).toHaveValue("Browser Debut Artist");
+        await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+        await expect(dialog.getByText("Step 3 of 3", { exact: true })).toBeVisible();
+        await dialog.getByRole("button", { name: "Create profile", exact: true }).click();
+        await expect(dialog.getByText("Instagram profile link is required for artist verification.", { exact: true })).toBeVisible();
+        await dialog.getByRole("textbox", { name: "Add the Instagram profile" }).fill("@browser_debut");
         const saved = page.waitForResponse(response => response.url().endsWith("/api/artists") && response.request().method() === "POST");
         await dialog.getByRole("button", { name: "Create profile", exact: true }).click();
         const response = await saved;
@@ -72,19 +79,30 @@ export async function startDireNoteBrowser(userId: number) {
         const { profile } = await response.json();
         expect(profile.spotifyUrl).toBeNull();
         expect(profile.appleUrl).toBeNull();
-        expect(profile.instagramUrl).toBeNull();
+        expect(profile.instagramUrl).toBe("https://instagram.com/browser_debut");
         await page.reload();
         const persisted = await (await context.request.get(`${origin}/api/artists`)).json();
         expect(persisted.artists.filter((artist: { id: number }) => artist.id === profile.id)).toHaveLength(1);
         await page.getByRole("button", { name: "Add primary artist", exact: true }).first().click();
         await expect(page.getByText("Browser Debut Artist", { exact: true })).toBeVisible();
         await expect(page.getByText("First release · Store profiles pending", { exact: true }).first()).toBeVisible();
+        const card = page.locator("div.grid.w-full").filter({ has: page.getByText("Browser Debut Artist", { exact: true }) });
+        await card.getByRole("button", { name: "Edit", exact: true }).click();
+        const editDialog = page.getByRole("dialog", { name: "Edit artist profile", exact: true });
+        await editDialog.getByRole("button", { name: "Continue", exact: true }).click();
+        await editDialog.getByRole("button", { name: "Continue", exact: true }).click();
+        await editDialog.getByRole("textbox", { name: "Add the Instagram profile" }).fill("@browser_debut_updated");
+        const edited = page.waitForResponse(response => response.url().endsWith(`/api/artists/${profile.id}`) && response.request().method() === "PATCH");
+        await editDialog.getByRole("button", { name: "Save changes", exact: true }).click();
+        const editedResponse = await edited;
+        expect(editedResponse.status(), await editedResponse.text()).toBe(200);
+        expect((await editedResponse.json()).profile.instagramUrl).toBe("https://instagram.com/browser_debut_updated");
         await page.keyboard.press("Escape");
         const close = page.getByRole("button", { name: "Close artist profile popup", exact: true }).last();
         if (await close.isVisible()) await close.click();
         await page.setViewportSize({ width: 1440, height: 1000 });
         await page.reload();
-        console.log("Artist wizard browser checks passed: portal centering, mobile, existing Apple-only artist, name-only creation, back navigation and persistence.");
+        console.log("Artist wizard browser checks passed: portal centering, mobile, existing Apple-only artist, first-release Instagram creation, back navigation and persistence.");
       },
       async savedArtistLinks(artistId: number, spotifyUrl: string, appleUrl: string) {
         const body = await (await context.request.get(`${origin}/api/artists`)).json();
@@ -124,7 +142,8 @@ export async function startDireNoteBrowser(userId: number) {
         await page.screenshot({ path: ".cache/harado-readiness-desktop.png", fullPage: true });
         await page.setViewportSize({ width: 390, height: 844 });
         const closeNavigation = page.getByRole("button", { name: "Close workspace navigation" });
-        if (await closeNavigation.isVisible()) await closeNavigation.click();
+        const navigationToggle = page.locator('button[aria-controls="workspace-navigation"]');
+        if (await navigationToggle.getAttribute("aria-expanded") === "true") await closeNavigation.click();
         await expect(page.getByText(/^ready for direnote$/i)).toBeVisible();
         await page.screenshot({ path: ".cache/harado-readiness-mobile.png", fullPage: true });
         await page.setViewportSize({ width: 1440, height: 1000 });
