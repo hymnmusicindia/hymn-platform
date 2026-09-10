@@ -106,11 +106,17 @@ function releaseMetadata(release: Release) {
   return release.metadata && typeof release.metadata === "object" ? release.metadata : {};
 }
 
+function normalizedReleaseUpc(value: unknown) {
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const normalized = String(value).replace(/[\s-]/g, "");
+  return /^\d{12,14}$/.test(normalized) ? normalized : null;
+}
+
 function resolvedUpc(release: Release) {
   const meta = releaseMetadata(release) as Record<string, any>;
-  if (meta.direNote?.currentAttemptId) return release.upcCode || "Awaiting assignment";
-  const value = release.upcCode || meta.direnoteResponse?.upc || meta.upc || meta.upcCode;
-  if (typeof value === "string" && value.trim()) return value.trim();
+  const value = release.upcCode || meta.direnoteResponse?.upc || meta.direnoteResponse?.upc_code || meta.direnoteResponse?.release?.upc || meta.direnoteResponse?.release?.upc_code || meta.direNote?.release?.upc || meta.direNote?.release?.upc_code || meta.upc || meta.upcCode;
+  const normalized = normalizedReleaseUpc(value);
+  if (normalized) return normalized;
   return release.status === "draft" ? "Will be assigned after distribution" : "Awaiting assignment";
 }
 

@@ -35,6 +35,7 @@ assert.equal(validated({ tracks: [{ ...payload.tracks[0], artists: [{ name: "New
 assert.equal(validated({ tracks: [{ ...payload.tracks[0], trackGenre: "Pop", trackSubgenre: "Trap" }] }).issues.some(issue => issue.field === "tracks.0.trackSubgenre"), true);
 assert.equal(validated({ contenttype: "AI Generated", suno_receipt_url: "https://cdn.example.test/receipt.jpg", sunoLink: "https://suno.com/song/example" }).issues.some(issue => issue.field === "suno_receipt_url" && issue.message.includes("PDF")), true);
 assert.equal(parseDireNoteResponse({ success: true, release_id: "dn_1", upc: "890123", tracks: [{ track_name: "TEST", isrc: "IN-TEST-1", status: "Pending" }] }).trackIsrcs[0].isrc, "IN-TEST-1");
+assert.equal(parseDireNoteResponse({ success: true, release: { release_id: "dn_2", upc_code: "8901234567890" }, tracks: [{ track_name: "TEST", isrc: "IN-TEST-2", status: "Pending" }] }).upc, "8901234567890");
 
 async function verifyClientContract() {
 process.env.DIRENOTE_CLIENT_ID = "contract-client";

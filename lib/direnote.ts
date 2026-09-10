@@ -493,10 +493,11 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
 
 export function parseDireNoteResponse(response: unknown): DireNoteParsedResponse {
   const record = (response ?? {}) as DireNoteSuccessResponse | DireNoteErrorResponse;
-  const nested = [record, (record as any).data, (record as any).result, (record as any).release].find((value) => value && typeof value === "object" && (value.upc || value.UPC || value.tracks)) as any ?? record;
+  const nested = [record, (record as any).data, (record as any).result, (record as any).release].find((value) => value && typeof value === "object" && (value.upc || value.UPC || value.upc_code || value.upcCode || value.tracks)) as any ?? record;
+  const releaseRecord = nested.release && typeof nested.release === "object" ? nested.release as any : (record as any).release;
   const success = record.success === true || nested.success === true;
   const tracks = Array.isArray(nested.tracks) ? nested.tracks : Array.isArray((record as any).tracks) ? (record as any).tracks : [];
-  const upc = nested.upc ?? nested.UPC ?? nested.upc_code ?? nested.upcCode ?? (record as any).upc ?? (record as any).UPC;
+  const upc = nested.upc ?? nested.UPC ?? nested.upc_code ?? nested.upcCode ?? releaseRecord?.upc ?? releaseRecord?.UPC ?? releaseRecord?.upc_code ?? releaseRecord?.upcCode ?? (record as any).upc ?? (record as any).UPC;
   return {
     raw: response,
     success,
