@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-import { getDireNoteReleaseInformation, getDireNoteRevenueReport, redactDireNoteDiagnostic } from "@/lib/direnote";
+import { getDireNoteReleaseInformation, getDireNoteReleaseInformationByReference, getDireNoteRevenueReport, redactDireNoteDiagnostic } from "@/lib/direnote";
 import { importDireNoteRevenueReport } from "@/lib/direnote-revenue";
 import { reserveDireNoteRequest } from "@/lib/direnote-rate-limit";
 import { createNotification } from "@/lib/db";
@@ -9,7 +9,7 @@ import { createAdminTaskOnce, resolveAdminTask } from "@/lib/task-queue";
 import { releaseDateReached } from "@/lib/release-status-engine";
 import type { ReleaseStatus } from "@/lib/types";
 import { direNoteCorrectionFingerprint, extractDireNoteCorrections, matchDireNoteTrack, providerRequiresCorrections } from "@/lib/direnote-corrections";
-import { normalizeDireNoteUpc, upcFromDireNoteIsrcReport } from "@/lib/direnote-upc";
+import { normalizeDireNoteUpc, upcFromDireNoteIsrcReport, upcFromDireNoteResponse } from "@/lib/direnote-upc";
 import { currentDireNoteAttempt } from "@/lib/distribution-idempotency";
 import { attachedArtistProfileIds, verifiedArtistStoreLinks } from "@/lib/artist-store-links";
 
@@ -95,6 +95,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     return { ...track, isrc: snapshot ? text(snapshot.isrc) || null : track.isrc, providerTrackId: text(snapshot?.providerTrackId) || null };
   });
   let lookupUpc = normalizeDireNoteUpc(attempt.upc);
+  let result: Awaited<ReturnType<typeof getDireNoteReleaseInformation>> | null = null;
   if (!lookupUpc) {
     const isrc = mappingTracks.map(track => normalized(track.isrc ?? "")).find(value => /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(value));
     if (!isrc) throw new Error("Awaiting DireNote identifiers: no numeric UPC or assigned track ISRC is available yet.");
@@ -110,6 +111,24 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       requestPayloadRedacted: { isrc }, responseJson: { isrc, upc: lookupUpc },
       errorMessage: lookupError, createdByAdminId: actorId ?? null
     } });
+    if (!lookupUpc && attempt.providerReference) {
+      const providerReference = text(attempt.providerReference);
+      for (const key of ["release_id", "distributor_release_id"] as const) {
+        await reserveDireNoteRequest(`release_information_${key}`, releaseId, actorId);
+        const referenceResult = await getDireNoteReleaseInformationByReference(providerReference, key, { timeoutMs: 20_000 });
+        const referenceUpc = referenceResult.success ? upcFromDireNoteResponse(referenceResult.data) : null;
+        await prisma.direNoteLog.create({ data: {
+          releaseId, action: `release_information_${key}`, httpStatus: referenceResult.httpStatus, success: Boolean(referenceUpc),
+          requestPayloadRedacted: { [key]: providerReference, attemptId: attempt.id }, responseJson: redactDireNoteDiagnostic(referenceResult.data) as never,
+          errorMessage: referenceUpc ? null : referenceResult.error ?? "DireNote did not return a numeric UPC for this release reference.", createdByAdminId: actorId ?? null
+        } });
+        if (referenceUpc) {
+          lookupUpc = referenceUpc;
+          result = referenceResult;
+          break;
+        }
+      }
+    }
     if (!lookupUpc) {
       await prisma.release.update({ where: { id: releaseId }, data: { direNoteLastAttemptedAt: new Date(), direNoteSyncError: lookupError } });
       throw new Error(lookupError!);
@@ -117,7 +136,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   }
   await reserveDireNoteRequest("release_information", releaseId, actorId);
   await prisma.release.update({ where: { id: releaseId }, data: { direNoteLastAttemptedAt: new Date(), direNoteSyncError: null } });
-  let result = await getDireNoteReleaseInformation(lookupUpc, { timeoutMs: 20_000 });
+  result ??= await getDireNoteReleaseInformation(lookupUpc, { timeoutMs: 20_000 });
   for (let retry = 0; !result.success && retry < 2 && (result.httpStatus === null || result.httpStatus >= 500); retry++) {
     await new Promise(resolve => setTimeout(resolve, 500 * 2 ** retry));
     await reserveDireNoteRequest("release_information_retry", releaseId, actorId);

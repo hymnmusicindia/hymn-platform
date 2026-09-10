@@ -86,6 +86,10 @@ export function getDireNoteReleaseInformation(upc: string, options: { timeoutMs?
   return postToDireNote(getDireNoteConfig().releaseInformationEndpoint, { upc: normalizeIdentifier(upc) }, options);
 }
 
+export function getDireNoteReleaseInformationByReference(reference: string, key: "release_id" | "distributor_release_id", options: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}) {
+  return postToDireNote(getDireNoteConfig().releaseInformationEndpoint, { [key]: normalizeIdentifier(reference) }, options);
+}
+
 export function getDireNoteRevenueReport(isrc: string, options: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}) {
   return postToDireNote(getDireNoteConfig().revenueReportEndpoint, { isrc: normalizeIdentifier(isrc) }, options);
 }

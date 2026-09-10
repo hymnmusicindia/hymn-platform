@@ -12,7 +12,7 @@ import {
 } from "@/lib/direnote-config";
 import { getDireNoteConfig } from "@/lib/direnote/direnote-config";
 import { getPublicAppUrl } from "@/lib/public-app-url";
-export { submitToDireNote, getDireNoteReleaseInformation, getDireNoteRevenueReport } from "@/lib/direnote/direnote-client";
+export { submitToDireNote, getDireNoteReleaseInformation, getDireNoteReleaseInformationByReference, getDireNoteRevenueReport } from "@/lib/direnote/direnote-client";
 
 export type DireNoteArtist = {
   name: string;
