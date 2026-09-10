@@ -44,10 +44,33 @@ export function upcFromDireNoteResponse(value: unknown): string | null {
 const normalizeText = (value: unknown) => typeof value === "string" ? value.trim().replace(/\s+/g, " ").toLowerCase() : "";
 const normalizeIsrc = (value: unknown) => typeof value === "string" ? value.replace(/[\s-]/g, "").toUpperCase() : "";
 
+function trackRecords(value: unknown): Array<Record<string, unknown>> {
+  const root = record(value);
+  const data = record(root.data);
+  const result = record(root.result);
+  const directTrack = record(root.track);
+  const dataTrack = record(data.track);
+  const resultTrack = record(result.track);
+  const arrays = [root.tracks, data.tracks, result.tracks]
+    .filter(Array.isArray)
+    .flatMap(items => items.map(record));
+  return [directTrack, dataTrack, resultTrack, ...arrays].filter(item => Object.keys(item).length);
+}
+
+function trackReleaseTitle(track: Record<string, unknown>) {
+  return normalizeText(track.release_title ?? track.releaseTitle ?? track.album_name ?? track.albumName ?? track.release_name ?? track.releaseName);
+}
+
 /** The documented ISRC report includes track.upc. Reject unrelated catalog rows. */
 export function upcFromDireNoteIsrcReport(payload: unknown, isrc: string, releaseTitle: string): string | null {
-  const track = (payload as { track?: Record<string, unknown> } | null)?.track;
-  if (!track || normalizeIsrc(track.isrc) !== normalizeIsrc(isrc)) return null;
-  if (!normalizeText(releaseTitle) || normalizeText(track.release_title) !== normalizeText(releaseTitle)) return null;
-  return normalizeDireNoteUpc(track.upc);
+  const expectedIsrc = normalizeIsrc(isrc);
+  if (!expectedIsrc) return null;
+  for (const track of trackRecords(payload)) {
+    if (normalizeIsrc(track.isrc) !== expectedIsrc) continue;
+    const receivedTitle = trackReleaseTitle(track);
+    if (receivedTitle && normalizeText(releaseTitle) && receivedTitle !== normalizeText(releaseTitle)) continue;
+    const upc = normalizeDireNoteUpc(track.upc ?? track.UPC ?? track.upc_code ?? track.upcCode);
+    if (upc) return upc;
+  }
+  return null;
 }
