@@ -1,6 +1,7 @@
 "use client";
 
 import { customerMessage } from "@/lib/customer-message";
+import { upcFromDireNoteResponse } from "@/lib/direnote-upc";
 
 import Image from "next/image";
 import { ReleaseSubmissionHistory } from "@/components/release-submission-history";
@@ -106,16 +107,13 @@ function releaseMetadata(release: Release) {
   return release.metadata && typeof release.metadata === "object" ? release.metadata : {};
 }
 
-function normalizedReleaseUpc(value: unknown) {
-  if (typeof value !== "string" && typeof value !== "number") return null;
-  const normalized = String(value).replace(/[\s-]/g, "");
-  return /^\d{12,14}$/.test(normalized) ? normalized : null;
-}
-
 function resolvedUpc(release: Release) {
   const meta = releaseMetadata(release) as Record<string, any>;
-  const value = release.upcCode || meta.direnoteResponse?.upc || meta.direnoteResponse?.upc_code || meta.direnoteResponse?.release?.upc || meta.direnoteResponse?.release?.upc_code || meta.direNote?.release?.upc || meta.direNote?.release?.upc_code || meta.upc || meta.upcCode;
-  const normalized = normalizedReleaseUpc(value);
+  const normalized = upcFromDireNoteResponse(release.upcCode)
+    ?? upcFromDireNoteResponse(meta.direnoteResponse)
+    ?? upcFromDireNoteResponse(meta.direNote)
+    ?? upcFromDireNoteResponse(meta.upc)
+    ?? upcFromDireNoteResponse(meta.upcCode);
   if (normalized) return normalized;
   return release.status === "draft" ? "Will be assigned after distribution" : "Awaiting assignment";
 }

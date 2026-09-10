@@ -3,6 +3,7 @@ import { buildDireNotePayload, parseDireNoteResponse, validateDireNotePayload } 
 import { extractDireNoteProviderError, getDireNoteReleaseInformation, getDireNoteRevenueReport, submitToDireNote } from "../lib/direnote/direnote-client";
 import { getDireNoteConfig } from "../lib/direnote/direnote-config";
 import { normalizeDireNoteGenre } from "../lib/direnote-config";
+import { upcFromDireNoteResponse } from "../lib/direnote-upc";
 import { royaltyEconomicFingerprint } from "../lib/royalty-fingerprint";
 import type { Release } from "../lib/types";
 
@@ -36,6 +37,9 @@ assert.equal(validated({ tracks: [{ ...payload.tracks[0], trackGenre: "Pop", tra
 assert.equal(validated({ contenttype: "AI Generated", suno_receipt_url: "https://cdn.example.test/receipt.jpg", sunoLink: "https://suno.com/song/example" }).issues.some(issue => issue.field === "suno_receipt_url" && issue.message.includes("PDF")), true);
 assert.equal(parseDireNoteResponse({ success: true, release_id: "dn_1", upc: "890123", tracks: [{ track_name: "TEST", isrc: "IN-TEST-1", status: "Pending" }] }).trackIsrcs[0].isrc, "IN-TEST-1");
 assert.equal(parseDireNoteResponse({ success: true, release: { release_id: "dn_2", upc_code: "8901234567890" }, tracks: [{ track_name: "TEST", isrc: "IN-TEST-2", status: "Pending" }] }).upc, "8901234567890");
+assert.equal(parseDireNoteResponse({ success: true, data: { release: { upc_code: "8901234567891" }, tracks: [{ track_name: "TEST", isrc: "IN-TEST-3" }] } }).upc, "8901234567891");
+assert.equal(upcFromDireNoteResponse({ release: { upc_code: "8901234567892" } }), "8901234567892");
+assert.equal(upcFromDireNoteResponse({ direnoteResponse: { data: { release: { upc_code: "8901234567893" } } } }), "8901234567893");
 
 async function verifyClientContract() {
 process.env.DIRENOTE_CLIENT_ID = "contract-client";

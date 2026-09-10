@@ -1,5 +1,5 @@
 import type { ArtistProfile, Release } from "@/lib/types";
-import { normalizeDireNoteUpc } from "@/lib/direnote-upc";
+import { upcFromDireNoteResponse } from "@/lib/direnote-upc";
 import { readTrackLanguage } from "@/lib/track-language";
 import {
   DIRENOTE_CONTENT_TYPES,
@@ -494,15 +494,13 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
 export function parseDireNoteResponse(response: unknown): DireNoteParsedResponse {
   const record = (response ?? {}) as DireNoteSuccessResponse | DireNoteErrorResponse;
   const nested = [record, (record as any).data, (record as any).result, (record as any).release].find((value) => value && typeof value === "object" && (value.upc || value.UPC || value.upc_code || value.upcCode || value.tracks)) as any ?? record;
-  const releaseRecord = nested.release && typeof nested.release === "object" ? nested.release as any : (record as any).release;
   const success = record.success === true || nested.success === true;
   const tracks = Array.isArray(nested.tracks) ? nested.tracks : Array.isArray((record as any).tracks) ? (record as any).tracks : [];
-  const upc = nested.upc ?? nested.UPC ?? nested.upc_code ?? nested.upcCode ?? releaseRecord?.upc ?? releaseRecord?.UPC ?? releaseRecord?.upc_code ?? releaseRecord?.upcCode ?? (record as any).upc ?? (record as any).UPC;
   return {
     raw: response,
     success,
     message: String(record.message ?? record.error ?? (success ? "DireNote accepted release." : "DireNote rejected release.")),
-    upc: normalizeDireNoteUpc(upc),
+    upc: upcFromDireNoteResponse(response),
     distributorReleaseId: typeof nested.distributor_release_id === "string" ? nested.distributor_release_id : typeof nested.release_id === "string" ? nested.release_id : null,
     warnings: Array.isArray(record.warnings) ? record.warnings.map(String) : [],
     trackIsrcs: tracks.map((track: any, index: number) => ({

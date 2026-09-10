@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { upcFromDireNoteResponse } from "@/lib/direnote-upc";
 
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -53,16 +54,26 @@ export async function currentDireNoteAttempt(releaseId: number) {
   return prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422027, ${releaseId}::integer)`;
     const current = await tx.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: "direnote", isCurrent: true } });
-    if (current) return current;
     const release = await tx.release.findUniqueOrThrow({ where: { id: releaseId }, include: { tracks: true } });
+    if (current) {
+      const recoveredUpc = normalizeDireNoteAttemptUpc(current.responseRedacted) ?? normalizeDireNoteAttemptUpc(current.rawStatusPayload) ?? normalizeDireNoteAttemptUpc(release.metadata) ?? release.upc;
+      if (recoveredUpc && current.upc !== recoveredUpc) {
+        if (release.upc !== recoveredUpc) await tx.release.update({ where: { id: release.id }, data: { upc: recoveredUpc } });
+        return tx.distributionSubmissionAttempt.update({ where: { id: current.id }, data: { upc: recoveredUpc } });
+      }
+      return current;
+    }
     const latest = await tx.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: "direnote", state: "submitted" }, orderBy: { id: "desc" } });
     if (!latest && !release.direNoteStatus && !["SENT_TO_DISTRIBUTOR", "DISTRIBUTOR_PROCESSING", "PROCESSING", "SCHEDULED", "AWAITING_LIVE_CONFIRMATION", "PARTIALLY_LIVE", "DELIVERED", "LIVE"].includes(release.status)) throw new Error("This release has no submitted DireNote attempt to synchronize.");
     const snapshot = release.tracks.map(track => ({ id: track.id, title: track.title, trackNumber: track.trackNumber, isrc: track.isrc }));
-    const response = latest?.responseRedacted && typeof latest.responseRedacted === "object" && !Array.isArray(latest.responseRedacted) ? latest.responseRedacted : {};
-    const data = { isCurrent: true, upc: "upc" in response ? typeof response.upc === "string" ? response.upc : null : release.upc, trackIdentifiers: snapshot, providerStatus: release.direNoteStatus };
+    const data = { isCurrent: true, upc: normalizeDireNoteAttemptUpc(latest?.responseRedacted) ?? normalizeDireNoteAttemptUpc(latest?.rawStatusPayload) ?? normalizeDireNoteAttemptUpc(release.metadata) ?? release.upc, trackIdentifiers: snapshot, providerStatus: release.direNoteStatus };
     if (latest) return tx.distributionSubmissionAttempt.update({ where: { id: latest.id }, data });
     return tx.distributionSubmissionAttempt.create({ data: { releaseId, ...data, state: "submitted", idempotencyKey: `direnote:legacy:${releaseId}`, payloadHash: "legacy-backfill", completedAt: release.createdAt } });
   });
+}
+
+function normalizeDireNoteAttemptUpc(value: unknown) {
+  return upcFromDireNoteResponse(value);
 }
 
 export async function activateDireNoteAttempt(id: number, input: { upc: string | null; trackIdentifiers: Prisma.InputJsonValue; responseRedacted: Prisma.InputJsonValue }) {
