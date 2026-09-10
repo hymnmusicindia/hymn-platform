@@ -4,18 +4,23 @@ import { getDetailedReleaseByUserId } from "@/lib/distribution-db";
 import { prisma } from "@/lib/prisma";
 import { redactDireNoteDiagnostic } from "@/lib/direnote";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const releaseId = Number((await params).id);
   if (!Number.isInteger(releaseId) || releaseId <= 0) return NextResponse.json({ error: "Release not found." }, { status: 404 });
   const isAdmin = new URL(_request.url).searchParams.get("admin") === "1";
+  let releaseUpc: string | null = null;
   if (isAdmin) {
     const admin = await requireAdminPermission("releases.read");
     if ("error" in admin) return admin.error;
+    releaseUpc = (await prisma.release.findUnique({ where: { id: releaseId }, select: { upc: true } }))?.upc ?? null;
   } else {
     const user = await requireUser();
     if ("error" in user) return user.error;
     const release = await getDetailedReleaseByUserId(user.session.sub, releaseId);
     if (!release) return NextResponse.json({ error: "Release not found." }, { status: 404 });
+    releaseUpc = release.upcCode ?? null;
   }
   const attempts = await prisma.distributionSubmissionAttempt.findMany({
     where: { releaseId, provider: "direnote", state: "submitted" }, orderBy: { id: "asc" },
@@ -24,7 +29,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   return NextResponse.json({ attempts: attempts.map(attempt => {
     const correction = attempt.corrections as { status?: string; artistResolvedAt?: string } | null;
     const payload = isAdmin && attempt.payloadRedacted && typeof attempt.payloadRedacted === "object" ? Object.fromEntries(Object.entries(attempt.payloadRedacted).filter(([key]) => !["pin", "client_id"].includes(key))) : null;
-    return { id: attempt.id, upc: attempt.upc, isCurrent: attempt.isCurrent, status: attempt.providerStatus, tracks: attempt.trackIdentifiers, submittedAt: attempt.completedAt ?? attempt.startedAt, correctionStatus: correction?.status, artistResolvedAt: correction?.artistResolvedAt,
+    return { id: attempt.id, upc: attempt.upc ?? releaseUpc, isCurrent: attempt.isCurrent, status: attempt.providerStatus, tracks: attempt.trackIdentifiers, submittedAt: attempt.completedAt ?? attempt.startedAt, correctionStatus: correction?.status, artistResolvedAt: correction?.artistResolvedAt,
       ...(isAdmin ? { payload: redactDireNoteDiagnostic(payload), payloadDiff: redactDireNoteDiagnostic(attempt.payloadDiff) } : {}) };
   }) });
 }

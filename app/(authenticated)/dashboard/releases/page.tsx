@@ -3,6 +3,9 @@ import { ReleasePortal } from "@/components/release-portal";
 import { getCurrentUserForPage } from "@/lib/access";
 import { listDetailedReleasesByUser } from "@/lib/distribution-db";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function ReleasePortalPage({ searchParams }: { searchParams?: Promise<{ releaseId?: string; panel?: string; tab?: string; view?: string }> }) {
   const user = await getCurrentUserForPage();
 

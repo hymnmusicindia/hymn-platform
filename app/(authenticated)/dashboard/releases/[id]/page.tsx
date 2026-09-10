@@ -4,6 +4,9 @@ import { ReleaseManage } from "@/components/release-portal";
 import { getCurrentUserForPage } from "@/lib/access";
 import { listDetailedReleasesByUser } from "@/lib/distribution-db";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function ReleaseManagePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?: Promise<{ tab?: string }> }) {
   const user = await getCurrentUserForPage();
   if (!user) redirect("/login");
