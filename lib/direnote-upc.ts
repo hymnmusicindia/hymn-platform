@@ -69,7 +69,7 @@ export function upcFromDireNoteIsrcReport(payload: unknown, isrc: string, releas
     if (normalizeIsrc(track.isrc) !== expectedIsrc) continue;
     const receivedTitle = trackReleaseTitle(track);
     if (receivedTitle && normalizeText(releaseTitle) && receivedTitle !== normalizeText(releaseTitle)) continue;
-    const upc = normalizeDireNoteUpc(track.upc ?? track.UPC ?? track.upc_code ?? track.upcCode);
+    const upc = normalizeDireNoteUpc(track.upc ?? track.UPC ?? track.upc_code ?? track.upcCode) ?? upcFromDireNoteResponse(payload);
     if (upc) return upc;
   }
   return null;
