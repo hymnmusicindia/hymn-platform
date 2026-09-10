@@ -253,6 +253,18 @@ export async function startDireNoteBrowser(userId: number) {
         expect(preview.payload.client_id).toBeUndefined();
         await page.screenshot({ path: ".cache/direnote-admin-history.png", fullPage: true });
       },
+      async repeatAcceptedSubmission(releaseId: number) {
+        const attempts = [
+          () => context.request.patch(`${origin}/api/admin/update-status/${releaseId}`, { data: { status: "sent" } }),
+          () => context.request.post(`${origin}/api/admin/releases/${releaseId}/direnote`, { data: { action: "submit" } }),
+          () => context.request.post(`${origin}/api/admin/releases/${releaseId}/direnote`, { data: { action: "retry" } })
+        ];
+        for (const send of attempts) {
+          const response = await send();
+          expect(response.status(), await response.text()).toBe(200);
+          expect((await response.json()).release.status).toBe("sent_to_distributor");
+        }
+      },
       async stop() { await browser.close(); app.kill(); await stopped; }
     };
   } catch (error) { await browser.close(); app.kill(); await stopped; throw error; }

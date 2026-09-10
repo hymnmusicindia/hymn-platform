@@ -77,6 +77,11 @@ async function main() {
   const initial = await submitRelease(release.id);
   assert.equal(initial.submitted, true, JSON.stringify(initial));
   assert.equal(ingests, 1);
+  const replay = await submitRelease(release.id);
+  assert.equal(replay.submitted, true, JSON.stringify(replay));
+  assert.equal(replay.duplicate, true);
+  assert.equal(replay.release?.status, "sent_to_distributor");
+  assert.equal(ingests, 1, "Accepted releases must not be sent twice.");
   assert.equal(ingestPayloads[0].tracks[0].explicitLyrics, "Yes");
   assert(!ingestPayloads[0].tracks[0].trackLyrics, "Explicit content must submit without lyrics.");
   const firstAttempt = await prisma.distributionSubmissionAttempt.findFirstOrThrow({ where: { releaseId: release.id, isCurrent: true } });
@@ -232,6 +237,12 @@ async function main() {
     assert.equal(sent.submitted, true, JSON.stringify(sent));
     assert.equal(ingestPayloads.at(-1)!.tracks[1].trackLanguage, "Instrumental");
     assert.equal(ingestPayloads.at(-1)!.tracks[0].trackLanguage, "Hindi");
+    if (browser) {
+      const beforeReplay = ingests;
+      await browser.repeatAcceptedSubmission(derived.id);
+      assert.equal(ingests, beforeReplay, "Admin send/retry endpoints must not repeat accepted ingestion.");
+      assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: derived.id } })).status, "SENT_TO_DISTRIBUTOR");
+    }
   }
   // Exercise the actual hourly handler against documented artist links returned by the mock.
   await prisma.release.updateMany({ where: { id: { not: release.id } }, data: { status: "DRAFT" } });

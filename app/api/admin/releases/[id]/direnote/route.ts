@@ -1,14 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/access";
-import {
-  createDistributionQueueEntry,
-  getDetailedReleaseById,
-  listDistributionQueueEntries,
-  transitionDistributionQueueEntry
-} from "@/lib/distribution-db";
+import { getDetailedReleaseById } from "@/lib/distribution-db";
 import { buildDireNotePayloadForRelease, retrySubmission, submitRelease } from "@/lib/distribution-service";
 import { redactDireNotePayload, validateDireNotePayload } from "@/lib/direnote";
-import type { DistributionQueueStage } from "@/lib/types";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 
 export const runtime = "nodejs";
@@ -23,15 +17,6 @@ async function getReleaseOrResponse(id: string) {
     return { response: NextResponse.json({ error: "Release not found." }, { status: 404 }) };
   }
   return { releaseId, release };
-}
-
-async function syncQueueStage(releaseId: number, nextStage: DistributionQueueStage, actorId: number | null, notes: string) {
-  const queueEntry = (await listDistributionQueueEntries()).find((item) => item.releaseId === releaseId);
-  if (!queueEntry) {
-    return createDistributionQueueEntry({ releaseId, initialStage: nextStage, operatorId: actorId, notes });
-  }
-  if (queueEntry.currentStage === nextStage) return queueEntry;
-  return transitionDistributionQueueEntry({ entryId: queueEntry.id, nextStage, operatorId: actorId, notes });
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -70,10 +55,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const actorId = "sub" in admin ? admin.sub : null;
   const siteUrl = getPublicAppUrl(request.url);
   const adminConfirmedExistingArtists = Boolean(body.adminConfirmedExistingArtists);
-
-  if (action !== "retry") {
-    await syncQueueStage(resolved.releaseId, "approved", actorId, "Admin approved release for DireNote submission.");
-  }
 
   const result = action === "retry"
     ? await retrySubmission(resolved.releaseId, { actorId, siteUrl })

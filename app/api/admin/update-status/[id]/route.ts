@@ -51,10 +51,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const retry = ["failed", "delivery_failed", "queued_for_distribution", "submitting_to_distributor"].includes(currentRelease.status);
       const distributionPermission = await requireAdminPermission(retry ? "distribution.retry" : "distribution.submit");
       if ("error" in distributionPermission) return distributionPermission.error;
-      if (!retry) {
-        await syncQueueStage(Number(id), "approved", actorId, payload.note || "HYMN review approved; DireNote submission started.", { syncReleaseStatus: currentRelease.status !== "approved" });
-        await createReleaseAuditLog({ releaseId: Number(id), userId: actorId, action: "RELEASE_APPROVED_AND_DIRENOTE_STARTED", details: { previousStatus: currentRelease.status, note: payload.note ?? null } });
-      }
       const submission = await submitRelease(Number(id), { actorId, siteUrl: origin, retry });
       if (!submission.submitted) {
         const messages = submission.validation.issues.map((issue) => issue.message);

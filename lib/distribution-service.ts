@@ -133,6 +133,18 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
   const release = await getDetailedReleaseById(releaseId);
   if (!release) throw new Error("Release not found.");
 
+  // Check acceptance under the submission lock, before validation or approval can
+  // alter a release that the distributor already owns. Corrections use an explicit re-ingest flow.
+  if (!options.correctionReingest) {
+    const accepted = await prisma.distributionSubmissionAttempt.findFirst({
+      where: { releaseId, provider: "direnote", OR: [{ state: "submitted" }, { isCurrent: true }] },
+      select: { id: true }
+    });
+    if (accepted || ["sent", "sent_to_distributor", "distributor_processing", "processing", "scheduled", "awaiting_live_confirmation", "partially_live", "delivered", "live"].includes(release.status)) {
+      return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: true, duplicate: true, retryable: false };
+    }
+  }
+
   await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: options.retry ? "DIRENOTE_RETRY_STARTED" : "APPROVE_RELEASE_STARTED" });
 
   const payload = await buildDireNotePayloadForRelease(release, options);
@@ -159,6 +171,10 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: "DIRENOTE_VALIDATION_FAILED", details: { issues: validation.issues, warnings: validation.warnings } });
     await createAdminTaskOnce({ eventKey: `release:${releaseId}:direnote:validation`, type: "DireNote Failed", priority: "high", title: `DireNote validation failed: ${displayName(release)}`, body: validation.issues[0]?.message ?? "Release needs corrections before DireNote submission.", href: `/admin?tab=releases&releaseId=${releaseId}`, entityType: "release", entityId: releaseId });
     return { release: await getDetailedReleaseById(releaseId), validation, submitted: false, retryable: false, payload: redactedPayload };
+  }
+
+  if (!options.retry && release.status === "under_review") {
+    await updateDetailedReleaseStatus(releaseId, "approved", "HYMN review approved for DireNote submission.");
   }
 
   const claim = await claimDistributionSubmission(releaseId, payload, previousAttempt?.id);
