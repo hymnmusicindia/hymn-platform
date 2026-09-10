@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getContentIdEligibility } from "@/lib/content-id-eligibility";
 
 export const googleAuthSchema = z.object({
   credential: z.string().min(1),
@@ -198,7 +199,7 @@ export const distributionTrackSchema = z.object({
   remixerProfileIds: z.array(z.number().int().positive()).optional()
 });
 
-export const distributionMetadataSchema = z.object({
+const distributionMetadataBaseSchema = z.object({
   contentType: z.string().trim().optional(),
   sunoReceiptUrl: z.string().trim().optional(),
   sunoLink: z.string().trim().optional(),
@@ -243,9 +244,17 @@ export const distributionMetadataSchema = z.object({
   tracks: z.array(distributionTrackSchema).min(1)
 });
 
-export const distributionEditMetadataSchema = distributionMetadataSchema.extend({
+function validateContentIdOwnership(value: z.infer<typeof distributionMetadataBaseSchema>, context: z.RefinementCtx) {
+  if (value.youtubeContentIdEnabled && !getContentIdEligibility(value.contentType).eligible) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["youtubeContentIdEnabled"], message: "Content ID is available only for original or exclusively licensed content." });
+  }
+}
+
+export const distributionMetadataSchema = distributionMetadataBaseSchema.superRefine(validateContentIdOwnership);
+
+export const distributionEditMetadataSchema = distributionMetadataBaseSchema.extend({
   editReleaseId: z.number().int().positive()
-});
+}).superRefine(validateContentIdOwnership);
 
 export const distributionOrderCreateSchema = z.object({
   plan: z.enum(["one_time", "half_yearly", "yearly", "yearly_plus"]),

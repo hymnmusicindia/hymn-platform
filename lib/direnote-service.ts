@@ -220,7 +220,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       const reason = correctionMessages.join(" ") || "DireNote requires corrections before distribution can continue.";
       const review = {
         reason,
-        issueType: "other" as const,
+        issueType: providerCorrections.some(issue => issue.field === "rights.contentId") ? "rights_ownership" as const : "other" as const,
         severity: "required_correction" as const,
         fields: providerCorrections.length ? providerCorrections.map(({ field, label, note }) => ({ field, label, note })) : [{ field: "direnote.correction", label: "DireNote correction", note: reason }],
         adminInternalNote: "Automatically halted from DireNote release-information sync.",

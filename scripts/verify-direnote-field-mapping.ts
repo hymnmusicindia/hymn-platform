@@ -8,6 +8,7 @@ import { diffDireNotePayload } from "../lib/direnote-payload-diff";
 import { distributionTrackSchema } from "../lib/validation";
 import type { ArtistProfile, Release } from "../lib/types";
 import { writeFieldConnectivityReport } from "./direnote-field-connectivity-report";
+import { getReleasePortalDateLabel, getReleasePortalDateTitle } from "../lib/release-portal";
 
 process.env.DIRENOTE_API_PIN = "mapping-fixture-pin";
 process.env.DIRENOTE_CLIENT_ID = "mapping-fixture-client";
@@ -25,6 +26,10 @@ const release = {
   }))
 } as unknown as Release;
 const payload = buildDireNotePayload(release);
+const quickRelease = { ...release, releaseTiming: "quick_release", status: "sent_to_distributor" } as Release;
+assert.equal(getReleasePortalDateTitle(quickRelease), "Expected release date");
+assert.match(getReleasePortalDateLabel(quickRelease), /Tentative/);
+assert.doesNotMatch(getReleasePortalDateLabel({ ...quickRelease, releaseTiming: "schedule_release" }), /Tentative/);
 const debutPayload = buildDireNotePayload({ ...release, metadata: {} }, { artistProfiles: [{ name: "Fixture Artist", instagramUrl: "https://instagram.com/debut_artist", spotifyUrl: null, appleUrl: null } as ArtistProfile] });
 assert.equal(debutPayload.artists[0].instagram_url, "https://instagram.com/debut_artist");
 assert(debutPayload.tracks.every(track => track.artists[0].instagram_url === "https://instagram.com/debut_artist"));
@@ -55,6 +60,11 @@ assert.deepEqual(json(payload.tracks[1]), {
 });
 assert.equal(payload.albumVersion, "Deluxe");
 assert.equal(payload.youtubeContentID, "No");
+assert.equal(buildDireNotePayload({ ...release, youtubeContentIdEnabled: true }).youtubeContentID, "Yes");
+assert.throws(
+  () => buildDireNotePayload({ ...release, contentType: "non_exclusive_licensed", youtubeContentIdEnabled: true }),
+  /original or exclusively licensed/,
+);
 assert.equal(payload.cLine, "2026 Composition Owner");
 assert.equal(payload.pLine, "2026 Master Owner");
 assert.deepEqual(json({ ...payload, tracks: undefined, pin: undefined, client_id: undefined }), {

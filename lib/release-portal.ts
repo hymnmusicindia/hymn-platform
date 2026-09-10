@@ -45,7 +45,17 @@ export function isReleaseUnfinished(release: Release) {
 
 export function getReleasePortalDateLabel(release: Release) {
   const source = release.releaseDate || release.createdAt;
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(source));
+  const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(source));
+  return isTentativeQuickRelease(release) ? `${date} · Tentative` : date;
+}
+
+export function isTentativeQuickRelease(release: Release) {
+  if (release.releaseTiming !== "quick_release") return false;
+  return !["scheduled", "live", "released"].includes(release.status.toLowerCase());
+}
+
+export function getReleasePortalDateTitle(release: Release) {
+  return isTentativeQuickRelease(release) ? "Expected release date" : "Release date";
 }
 
 export function getReleasePortalTrackCount(release: Release) {

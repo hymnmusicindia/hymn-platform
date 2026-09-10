@@ -1,5 +1,6 @@
 import type { ArtistProfile, Release } from "@/lib/types";
 import { upcFromDireNoteResponse } from "@/lib/direnote-upc";
+import { assertContentIdEligibility, getContentIdEligibility } from "@/lib/content-id-eligibility";
 import { readTrackLanguage } from "@/lib/track-language";
 import {
   DIRENOTE_CONTENT_TYPES,
@@ -268,6 +269,7 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
   const primaryArtists = splitNames(release.artistName || release.tracks?.[0]?.primaryArtist).map((name) => toDireNoteArtist(name, options.artistProfiles, extended));
   const featuringArtists = splitNames(release.tracks?.flatMap((track) => splitNames(track.featuredArtists)).join(",")).map((name) => toDireNoteArtist(name, options.artistProfiles, extended));
   const contenttype = normalizeContentType(extended);
+  assertContentIdEligibility(contenttype, release.youtubeContentIdEnabled);
   const normalizedGenre = normalizeDireNoteGenre(release.primaryGenre || release.genre, release.secondaryGenre);
   const isPreviouslyReleased = release.releasePreviouslyReleased !== undefined ? Boolean(release.releasePreviouslyReleased) : meta.releasePreviouslyReleased !== undefined ? Boolean(meta.releasePreviouslyReleased) : Boolean(meta.previouslyReleased);
   const moodCandidate = release.mood || meta.mood || meta.formData?.mood || "";
@@ -418,6 +420,7 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
   if (!["Single", "EP", "Album"].includes(payload.typeOfRelease)) issues.push({ field: "typeOfRelease", message: "Release type must be Single, EP, or Album." });
   if (!["Yes", "No"].includes(payload.releasePreviouslyReleased)) issues.push({ field: "releasePreviouslyReleased", message: "Previously released must be Yes or No." });
   if (payload.youtubeContentID !== undefined && !["Yes", "No"].includes(payload.youtubeContentID)) issues.push({ field: "youtubeContentID", message: "YouTube Content ID must be Yes or No." });
+  if (payload.youtubeContentID === "Yes" && !getContentIdEligibility(payload.contenttype).eligible) issues.push({ field: "youtubeContentID", message: "Content ID is available only for original or exclusively licensed content." });
   if (!payload.artists.length) issues.push({ field: "artists", message: "At least one primary artist is required." });
 
   if (!missingReleaseType && payload.typeOfRelease === "Single") {

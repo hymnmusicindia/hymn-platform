@@ -2,6 +2,7 @@
 
 import { customerMessage } from "@/lib/customer-message";
 import { checkoutPlan } from "@/lib/distribution-checkout-plan";
+import { getContentIdEligibility } from "@/lib/content-id-eligibility";
 
 import clsx from "clsx";
 import {
@@ -42,7 +43,7 @@ import {
   ArtworkWarning,
 } from "@/components/release-form-support";
 
-type PrivateUploadType = "private_audio_master" | "private_unreleased_artwork" | "private_cover_licence";
+type PrivateUploadType = "private_audio_master" | "private_unreleased_artwork" | "private_cover_licence" | "private_ownership_proof";
 
 function uploadPrivateAsset(file: File, assetType: PrivateUploadType, options: { releaseId?: number; signal?: AbortSignal; onProgress?: (loaded: number, total: number) => void } = {}) {
   return new Promise<string>((resolve, reject) => {
@@ -1121,6 +1122,10 @@ export function ReleaseForm({
   const [release, setRelease] = useState<ReleaseDraft>(() =>
     createInitialReleaseDraft(initialRelease, minimumScheduledDate, prefillSuggestions),
   );
+  const contentIdEligibility = useMemo(
+    () => getContentIdEligibility(release.contentType),
+    [release.contentType],
+  );
   const [pendingPrefills, setPendingPrefills] = useState(() => new Set(prefillSuggestions.map((item) => item.field)));
   const [preferencesStatus, setPreferencesStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [legal, setLegal] = useState<LegalState>(() =>
@@ -1139,6 +1144,13 @@ export function ReleaseForm({
       ? initialRelease.platforms
       : defaultStorePlatforms,
   );
+
+  useEffect(() => {
+    if (contentIdEligibility.eligible || !youtubeContentIdEnabled) return;
+    setYoutubeContentIdEnabled(false);
+    setYoutubeContentIdChannelUrl("");
+    setYoutubeContentIdModalOpen(false);
+  }, [contentIdEligibility.eligible, youtubeContentIdEnabled]);
   const [tracks, setTracks] = useState<TrackDraft[]>(() =>
     createTracksFromRelease(initialRelease),
   );
@@ -1188,6 +1200,10 @@ export function ReleaseForm({
     release.releaseTiming === "schedule_release"
       ? release.scheduledReleaseDate
       : quickReleaseDate;
+  const releaseDateSummaryTitle = release.releaseTiming === "quick_release" ? "Expected release date" : "Release date";
+  const releaseDateSummaryValue = selectedReleaseDate
+    ? `${selectedReleaseDate}${release.releaseTiming === "quick_release" ? " · Tentative" : ""}`
+    : "Pending";
   const releaseDateValid =
     release.releaseTiming === "quick_release" ||
     (Boolean(release.scheduledReleaseDate) &&
@@ -1537,10 +1553,10 @@ export function ReleaseForm({
       "release-date": /release.*date|trackreleasedate|date/i,
       "artwork-upload": /artwork|cover|cover_art_url/i,
       "audio-upload": /audio|audio_url|track.*audio/i,
-      "ownership-rights": /rights|copyright|publishing|cline|pline|contenttype|license|suno|ai/i,
+      "ownership-rights": /rights|copyright|publishing|cline|pline|contenttype|content\s*id|license|suno|ai/i,
       "copyright-owner": /copyright|c\s*-?line|cline|rights/i,
       "publishing-rights": /publishing|p\s*-?line|pline|rights/i,
-      "content-type": /contenttype|content type|ownership|rights|license|suno|ai/i,
+      "content-type": /contenttype|content type|content\s*id|ownership|rights|license|suno|ai/i,
     };
     const pattern = patterns[key] ?? new RegExp(key.replace(/[-_]/g, ".*"), "i");
     return correctionMentions(initialRelease, pattern);
@@ -1744,7 +1760,7 @@ export function ReleaseForm({
   }
 
   function openYoutubeContentIdModal() {
-    if (!socialConsentAccepted) return;
+    if (!socialConsentAccepted || !contentIdEligibility.eligible) return;
     if (!platforms.includes("YouTube Music")) {
       setPlatforms((current) => [...current, "YouTube Music"]);
     }
@@ -3165,7 +3181,15 @@ export function ReleaseForm({
           <section className={clsx("grid gap-5", stepMotion)}>
             <StepIntro title="Confirm ownership and delivery" />
             <div className="rounded-xl border p-4 sm:p-5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-              <div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-2 text-sm font-semibold">C-Line<input className="field" value={release.copyrightOwner} onChange={(event) => setRelease((current) => ({ ...current, copyrightOwner: event.target.value }))} /></label><label className="grid gap-2 text-sm font-semibold">P-Line<input className="field" value={release.publishingRights} onChange={(event) => setRelease((current) => ({ ...current, publishingRights: event.target.value }))} /></label></div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-soft)" }}>Master rights</p>
+              <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                <label className="grid gap-2 text-sm font-semibold">{correctionLabel("C-Line", "copyright-owner")}<input ref={registerField("copyright-owner")} className={fieldClass("copyright-owner", Boolean(showErrors && destinationsIssue()?.key === "copyright-owner"))} value={release.copyrightOwner} onChange={(event) => { clearCorrectionField("copyright-owner", "ownership-rights"); setRelease((current) => ({ ...current, copyrightOwner: event.target.value })); }} /><span className="text-xs font-normal" style={{ color: "var(--text-soft)" }}>Composition and release-metadata copyright owner.</span></label>
+                <label className="grid gap-2 text-sm font-semibold">{correctionLabel("P-Line", "publishing-rights")}<input ref={registerField("publishing-rights")} className={fieldClass("publishing-rights", Boolean(showErrors && destinationsIssue()?.key === "publishing-rights"))} value={release.publishingRights} onChange={(event) => { clearCorrectionField("publishing-rights", "ownership-rights"); setRelease((current) => ({ ...current, publishingRights: event.target.value })); }} /><span className="text-xs font-normal" style={{ color: "var(--text-soft)" }}>Owner of the master sound recording.</span></label>
+              </div>
+              <div className="mt-5 border-t pt-5" ref={registerField("content-type")} style={{ borderColor: "var(--border)" }}>
+                <SearchableSelect label="Content ownership" value={release.contentType} options={[...DIRENOTE_CONTENT_TYPES]} placeholder="Select content ownership" onChange={(value) => setRelease((current) => ({ ...current, contentType: value }))} />
+                {release.contentType ? <p className="mt-3 text-sm font-medium" style={{ color: contentIdEligibility.eligible ? "var(--success)" : "var(--text-muted)" }}>{contentIdEligibility.eligible ? "Eligible for YouTube Content ID." : contentIdEligibility.reason}</p> : null}
+              </div>
               <div className="mt-5 border-t pt-5" style={{ borderColor: "var(--border)" }}>
                 <div className="flex items-start justify-between gap-3"><p className="font-semibold">Legal Declaration</p><span className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: legalComplete ? "#22c55e" : "var(--text-soft)" }}>{legalComplete ? "Agreed" : "Required"}</span></div>
                 <details open={legalDetailsOpen} onToggle={(event) => setLegalDetailsOpen(event.currentTarget.open)} className="legal-declaration-details group mt-5 overflow-hidden rounded-xl border px-4 py-1" style={{ borderColor: "var(--border)" }}>
@@ -4704,13 +4728,13 @@ export function ReleaseForm({
                   {platforms.includes("YouTube Music") ? (
                   <div className="ugc-content-id-reveal mt-5 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t pt-4 text-sm" style={{ borderColor: "var(--border)" }}>
                     <span style={{ color: "var(--text-muted)" }}>
-                      {youtubeContentIdEnabled
+                      {!contentIdEligibility.eligible ? contentIdEligibility.reason : youtubeContentIdEnabled
                         ? "YouTube Content ID is enabled."
                         : "Don’t have YouTube Content ID?"}
                     </span>
                     <button
                       type="button"
-                      disabled={!socialConsentAccepted}
+                      disabled={!socialConsentAccepted || !contentIdEligibility.eligible}
                       className="font-semibold text-[var(--accent)] underline-offset-4 transition hover:underline disabled:cursor-not-allowed disabled:opacity-40"
                       onClick={() => openYoutubeContentIdModal()}
                     >
@@ -4806,14 +4830,13 @@ export function ReleaseForm({
                         className="mt-1 text-lg font-semibold"
                         style={{ color: "var(--text)" }}
                       >
-                        Copyright owner
+                        Rights preferences and documentation
                       </h3>
                       <p
                         className="mt-1 text-sm leading-6"
                         style={{ color: "var(--text-muted)" }}
                       >
-                        Enter the person or organization that legally owns this
-                        master recording.
+                        Reuse a saved rights owner or attach optional proof for review.
                       </p>
                     </div>
                   </div>
@@ -4852,6 +4875,7 @@ export function ReleaseForm({
                               setRelease((current) => ({
                                 ...current,
                                 copyrightOwner: owner,
+                                publishingRights: owner,
                               }))
                             }
                             className="rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5"
@@ -4893,6 +4917,7 @@ export function ReleaseForm({
                               setRelease((current) => ({
                                 ...current,
                                 copyrightOwner: owner,
+                                publishingRights: owner,
                               }))
                             }
                             className="px-3 py-1.5 text-xs font-semibold"
@@ -4917,87 +4942,13 @@ export function ReleaseForm({
                         </span>
                       ))}
                     </div>
-                    <label className="mt-4 block">
-                      <span
-                        className="mb-2 block text-sm font-medium"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        {correctionLabel("C-Line", "copyright-owner")}
-                      </span>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <input
-                          ref={registerField("copyright-owner")}
-                          className={fieldClass(
-                            "copyright-owner",
-                            Boolean(
-                              showErrors &&
-                                destinationsIssue()?.key === "copyright-owner",
-                            ),
-                          )}
-                          value={release.copyrightOwner}
-                          onChange={(event) => {
-                            clearCorrectionField("copyright-owner", "ownership-rights");
-                            setRelease((current) => ({
-                              ...current,
-                              copyrightOwner: event.target.value,
-                            }));
-                          }}
-                          placeholder="Enter the copyright line exactly as it should be delivered"
-                        />
-                        <button
-                          type="button"
-                          disabled={
-                            !release.copyrightOwner.trim() ||
-                            savedCopyrightOwners.some(
-                              (owner) =>
-                                owner.toLowerCase() ===
-                                release.copyrightOwner.trim().toLowerCase(),
-                            )
-                          }
-                          onClick={saveCopyrightOwnerPreference}
-                          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-xs font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45"
-                          style={{
-                            borderColor: "var(--border)",
-                            background: "var(--bg-soft)",
-                            color: "var(--text)",
-                          }}
-                        >
-                          <BookmarkPlus className="h-4 w-4" />
-                          Save choice
-                        </button>
-                      </div>
-                    </label>
-                    <label className="mt-4 block">
-                      <span className="mb-2 block text-sm font-medium" style={{ color: "var(--text-muted)" }}>{correctionLabel("P-Line", "publishing-rights")}</span>
-                      <input
-                        ref={registerField("publishing-rights")}
-                        className={fieldClass(
-                          "publishing-rights",
-                          Boolean(showErrors && destinationsIssue()?.key === "publishing-rights"),
-                        )}
-                        value={release.publishingRights}
-                        onChange={(event) => {
-                          clearCorrectionField("publishing-rights", "ownership-rights");
-                          setRelease((current) => ({ ...current, publishingRights: event.target.value }));
-                        }}
-                        placeholder="Enter the phonographic rights line exactly as it should be delivered"
-                      />
-                    </label>
-                    <p
-                      className="mt-2 text-xs leading-5"
-                      style={{ color: "var(--text-soft)" }}
-                    >
-                      Use the exact legal or label name that should appear in
-                      the master ownership line.
-                    </p>
-                    <div className="mt-5" ref={registerField("content-type")}>
-                      <SearchableSelect label="Content ownership" value={release.contentType} options={[...DIRENOTE_CONTENT_TYPES]} placeholder="Select content ownership" onChange={value => setRelease(current => ({ ...current, contentType: value }))} />
-                    </div>
+                    <button type="button" disabled={!release.copyrightOwner.trim() || savedCopyrightOwners.some((owner) => owner.toLowerCase() === release.copyrightOwner.trim().toLowerCase())} onClick={saveCopyrightOwnerPreference} className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-xs font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text)" }}><BookmarkPlus className="h-4 w-4" />Save current C-Line choice</button>
                     {release.contentType === "AI Generated" ? <div className="mt-4 grid gap-4">
                       <label className="text-sm">Suno receipt PDF<input className="field mt-2" value={release.sunoReceiptUrl} onChange={event => setRelease(current => ({ ...current, sunoReceiptUrl: event.target.value }))} /></label>
                       <label className="text-sm">Suno song URL<input type="url" className="field mt-2" value={release.sunoLink} onChange={event => setRelease(current => ({ ...current, sunoLink: event.target.value }))} /></label>
                     </div> : null}
                     {release.contentType === "Non-Exclusive Licensed" ? <label className="mt-4 block text-sm">Licence receipt PDF<input className="field mt-2" value={release.licenseReceiptUrl} onChange={event => setRelease(current => ({ ...current, licenseReceiptUrl: event.target.value }))} /></label> : null}
+                    {contentIdEligibility.eligible ? <div className="mt-5 rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Rights documentation · Optional</p><p className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }}>Recommended: Upload a licence, producer agreement or master-rights agreement to help avoid ownership clarification delays.</p><label className="mt-3 inline-flex cursor-pointer rounded-xl border px-4 py-2.5 text-sm font-semibold" style={{ borderColor: "var(--border)", color: "var(--text)" }}>Add rights proof<input className="sr-only" type="file" accept="application/pdf,image/jpeg,image/png" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const releaseId = await ensureUploadDraft(); const url = await uploadPrivateAsset(file, "private_ownership_proof", { releaseId }); setRelease((current) => ({ ...current, licenseReceiptUrl: url })); setStatus("Rights proof attached."); } catch (error) { setStatus(error instanceof Error ? error.message : "Could not upload rights proof."); } }} /></label>{release.licenseReceiptUrl ? <p className="mt-2 text-xs" style={{ color: "var(--success)" }}>Rights proof attached.</p> : youtubeContentIdEnabled ? <p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>No agreement attached. Adding proof may help prevent ownership clarification requests.</p> : null}</div> : null}
                   </div>
                 </div>
               </div>
@@ -5088,7 +5039,7 @@ export function ReleaseForm({
                     }}
                   >
                     {[
-                      ["Release date", selectedReleaseDate || "Pending"],
+                      [releaseDateSummaryTitle, releaseDateSummaryValue],
                       ["Stores", `${storeSelections.length} selected`],
                       [
                         "Monetization",
@@ -5673,7 +5624,7 @@ export function ReleaseForm({
                     className="mt-3 text-sm"
                     style={{ color: "var(--text-soft)" }}
                   >
-                    Release date: {selectedReleaseDate || "—"}
+                    {releaseDateSummaryTitle}: {releaseDateSummaryValue}
                   </p>
                 </div>
               </div>
@@ -5819,7 +5770,7 @@ export function ReleaseForm({
                         ["Subgenre", release.secondaryGenre],
                         ["Mood", release.mood],
                         ["Language", release.language],
-                        ["Release date", selectedReleaseDate],
+                        [releaseDateSummaryTitle, releaseDateSummaryValue],
                         ["Label", release.recordLabelName],
                         ["Copyright", release.copyrightOwner],
                       ].map(([label, value]) => (
@@ -5907,6 +5858,10 @@ export function ReleaseForm({
                     </div>
                     <div className="mt-4 grid gap-3 text-sm">
                       {[
+                        ["C-Line", release.copyrightOwner],
+                        ["P-Line", release.publishingRights],
+                        ["Ownership", release.contentType],
+                        ["Rights proof", release.licenseReceiptUrl ? "Attached" : "Not attached"],
                         [
                           "Platforms",
                           `${storeSelections.length} platform${storeSelections.length === 1 ? "" : "s"} selected`,

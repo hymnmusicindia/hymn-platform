@@ -56,7 +56,13 @@ export function extractDireNoteCorrections(payload: Row, tracks: LocalTrack[], r
       const namedIndex = namedTrack ? tracks.findIndex((track, index) => (track.trackNumber ?? index + 1) === Number(namedTrack[1])) : -1;
       const target = namedIndex >= 0 ? `tracks.${namedIndex}` : scope;
       const trackLanguage = /^tracks\.\d+$/.test(target) && /\btrack language\b/i.test(message);
-      issues.push({ field: trackLanguage ? `${target}.trackLanguage` : `${target}.providerCorrection.${fingerprint.slice(0, 12)}`, label: namedIndex >= 0 ? `Track ${namedIndex + 1} - DireNote correction` : label, note: `DireNote review: ${message}`, fingerprint });
+      const contentIdRights = /content\s*id|copyright detection|ownership|exclusive rights?|licen[cs]e|rights clarification/i.test(message);
+      issues.push({
+        field: trackLanguage ? `${target}.trackLanguage` : contentIdRights ? "rights.contentId" : `${target}.providerCorrection.${fingerprint.slice(0, 12)}`,
+        label: contentIdRights ? "Rights · Content ID" : namedIndex >= 0 ? `Track ${namedIndex + 1} - DireNote correction` : label,
+        note: `DireNote review: ${message}`,
+        fingerprint
+      });
     }
     for (const [key, input] of Object.entries(row)) {
       if (strongKeys.has(key) || reviewKeys.has(key) || (key === "message" && rejected)) add(input, key, strongKeys.has(key));

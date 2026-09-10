@@ -22,6 +22,9 @@ assert.equal(upcFromDireNoteIsrcReport({ data: { track: { isrc: tracks[0].isrc, 
 assert.equal(upcFromDireNoteIsrcReport({ data: { release: { upc_code: "8901234567890" }, track: { isrc: tracks[0].isrc, release_title: "Magenta" } } }, tracks[0].isrc, "Magenta"), "8901234567890");
 const payload = { success: true, release: { status: "Pending" }, tracks: tracks.map((track, index) => ({ track_name: track.title, isrc: track.isrc, status: "Pending", remarks: index ? remark : "NONE" })) };
 const issues = extractDireNoteCorrections(payload, tracks, 19);
+const contentIdCorrection = extractDireNoteCorrections({ release: { remarks: "PLEASE CLARIFY WHY THE CONTENT ID SET TO 'NO'" } }, tracks, 19)[0];
+assert.equal(contentIdCorrection.field, "rights.contentId");
+assert.equal(contentIdCorrection.label, "Rights · Content ID");
 assert.equal(extractDireNoteCorrections({ remarks: "TRACK 2 SEEMS LIKE AN INSTRUMENTAL. PLEASE SELECT RELEVANT TRACK LANGUAGE" }, tracks, 19)[0].field, "tracks.1.trackLanguage");
 assert.equal(issues.length, 1);
 assert.match(issues[0].field, /^tracks\.1\.providerCorrection\./);

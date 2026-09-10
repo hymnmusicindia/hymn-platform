@@ -16,6 +16,7 @@ import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import {
   getReleasePortalAction,
   getReleasePortalDateLabel,
+  getReleasePortalDateTitle,
   getReleasePortalSortKey,
   getReleasePortalStage,
   getReleasePortalTrackCount,
@@ -274,7 +275,7 @@ export function ReleaseManage({ release, initialTab }: { release: Release; initi
           <div className="flex flex-wrap gap-2"><span className="status-pill status-pill-active">{release.status.replace(/_/g, " ")}</span><span className="status-pill capitalize">{release.releaseType}</span></div>
           <h1 className="mt-4 truncate text-3xl font-semibold sm:text-4xl" style={{ color: "var(--text)" }}>{title}</h1>
           <p className="mt-2" style={{ color: "var(--text-muted)" }}>{release.artistName} · {getReleasePortalTrackCount(release)} track{getReleasePortalTrackCount(release) === 1 ? "" : "s"}</p>
-          <div className="mt-4 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2" style={{ color: "var(--text-muted)" }}><p>Release Date: <strong style={{ color: "var(--text)" }}>{getReleasePortalDateLabel(release)}</strong></p><p>Label: <strong style={{ color: "var(--text)" }}>{display(release.labelDisplayName || release.labelName)}</strong></p><p>Genre: <strong style={{ color: "var(--text)" }}>{display([release.primaryGenre || release.genre, release.secondaryGenre].filter(Boolean).join(" / "))}</strong></p><p>UPC: <strong style={{ color: "var(--text)" }}>{resolvedUpc(release)}</strong></p></div>
+          <div className="mt-4 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2" style={{ color: "var(--text-muted)" }}><p>{getReleasePortalDateTitle(release)}: <strong style={{ color: "var(--text)" }}>{getReleasePortalDateLabel(release)}</strong></p><p>Label: <strong style={{ color: "var(--text)" }}>{display(release.labelDisplayName || release.labelName)}</strong></p><p>Genre: <strong style={{ color: "var(--text)" }}>{display([release.primaryGenre || release.genre, release.secondaryGenre].filter(Boolean).join(" / "))}</strong></p><p>UPC: <strong style={{ color: "var(--text)" }}>{resolvedUpc(release)}</strong></p></div>
           <div className="mt-5 flex flex-wrap gap-2">{canEdit ? <button type="button" onClick={() => release.status === "draft" ? router.push(`/distribution/start?edit=${release.id}`) : setEditWarningOpen(true)} className="btn-primary pressable inline-flex items-center gap-2"><Pencil className="h-4 w-4" />{release.status === "draft" ? "Continue editing" : editingDuringReview ? "Edit metadata" : "Fix release"}</button> : null}{promoLink ? <a href={promoLink} target="_blank" rel="noreferrer" className="btn-outline pressable inline-flex items-center gap-2">Promolink <ExternalLink className="h-4 w-4" /></a> : null}<Link href={`/contact?releaseId=${release.id}`} className="btn-outline pressable">Contact support</Link><button type="button" className="btn-outline pressable" aria-label="Share release"><Share2 className="h-4 w-4" /></button></div>
         </div>
       </div>
