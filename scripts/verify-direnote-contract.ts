@@ -20,8 +20,8 @@ assert.equal(validated({ albumname: "DIFFERENT" }).issues.some(issue => issue.me
 assert.equal(validated({ typeOfRelease: "EP", tracks: [payload.tracks[0]] }).issues.some(issue => issue.message.includes("at least 2 tracks")), true);
 assert.equal(validated({ trackReleaseDate: "2000-01-01" }).issues.some(issue => issue.field === "trackReleaseDate"), true);
 assert.equal(validated({ presaveSpotify: "2099-02-01" }).issues.some(issue => issue.field === "presaveSpotify"), true);
-assert.equal(validated({ contenttype: "AI Generated", suno_receipt_url: undefined, sunoLink: undefined }).issues.filter(issue => issue.field.startsWith("suno")).length, 0);
-assert.equal(validated({ contenttype: "Non-Exclusive Licensed", license_receipt_url: undefined }).issues.some(issue => issue.field === "license_receipt_url"), false);
+assert.equal(validated({ contenttype: "AI Generated", suno_receipt_url: undefined, sunoLink: undefined }).issues.filter(issue => issue.field.startsWith("suno")).length, 2);
+assert.equal(validated({ contenttype: "Non-Exclusive Licensed", license_receipt_url: undefined }).issues.some(issue => issue.field === "license_receipt_url"), true);
 assert.equal(validated({ artists: [{ name: "New Artist" }] }).issues.some(issue => issue.field === "artists.0.instagram_url"), true);
 assert.equal(validateDireNotePayload({ ...payload, pin: "pin", client_id: "client", artists: [{ name: "Existing Artist" }] }, { adminConfirmedExistingArtists: true }).issues.some(issue => issue.field === "artists.0.instagram_url"), false);
 assert.equal(validated({ tracks: [{ ...payload.tracks[0], songwriters: [{ name: "Mononym" }] }] }).issues.some(issue => issue.message.includes("first and last name")), true);

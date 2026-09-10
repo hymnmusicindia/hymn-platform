@@ -156,13 +156,20 @@ async function main() {
     for (const [name, candidate] of [
       ["transfer-dates-identifiers", buildDireNotePayload(extended, { ownerEmail: "fixture@example.test" })],
       ["ai-proof", buildDireNotePayload(proofRelease)],
+      ["non-exclusive-no-proof", buildDireNotePayload({ ...release, contentType: "non_exclusive_licensed", licenseReceiptUrl: "" })],
       ["license-proof", buildDireNotePayload({ ...release, contentType: "non_exclusive_licensed", licenseReceiptUrl: "https://cdn.example.test/license.pdf" })],
       ["credits", credited],
       ...[null, "Hindi"].map(language => [`instrumental-${language}`, buildDireNotePayload({ ...release, tracks: [release.tracks![0], { ...release.tracks![1], language: language as any }] })])
     ] as const) {
+      if (name === "non-exclusive-no-proof") {
+        assert.equal(validateDireNotePayload(candidate).issues.some(issue => issue.field === "license_receipt_url"), true);
+        assert.equal(Object.hasOwn(JSON.parse(JSON.stringify(candidate)), "license_receipt_url"), false);
+        continue;
+      }
       assert.equal(validateDireNotePayload(candidate).ok, true, `${name}: ${JSON.stringify(validateDireNotePayload(candidate).issues)}`);
       assert.equal((await submitToDireNote(candidate)).success, true);
       cases.push({ name: String(name), expected: candidate, received: captured.at(-1) });
+      if (name === "non-exclusive-no-proof") assert.equal(Object.hasOwn(captured.at(-1) as object, "license_receipt_url"), false, "Optional non-exclusive proof must be omitted from the actual HTTP body.");
     }
     await writeFieldConnectivityReport(cases);
     assert(!JSON.stringify(redactDireNotePayload(payload)).includes("mapping-fixture-pin"));

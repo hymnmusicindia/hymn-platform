@@ -27,3 +27,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Asset is unavailable." }, { status: 404, headers: { "X-Robots-Tag": "noindex, nofollow" } });
   }
 }
+
+export async function HEAD(request: Request, context: { params: Promise<{ id: string; token: string; filename: string }> }) {
+  const response = await GET(request, context);
+  return new NextResponse(null, { status: response.status, headers: response.headers });
+}
