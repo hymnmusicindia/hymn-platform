@@ -122,22 +122,25 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
           requestPayloadRedacted: { [key]: providerReference, attemptId: attempt.id }, responseJson: redactDireNoteDiagnostic(referenceResult.data) as never,
           errorMessage: referenceUpc ? null : referenceResult.error ?? "DireNote did not return a numeric UPC for this release reference.", createdByAdminId: actorId ?? null
         } });
-        if (referenceUpc) {
+        const referenceCorrections = referenceResult.success
+          ? extractDireNoteCorrections(redactDireNoteDiagnostic(record(referenceResult.data)) as RecordValue, mappingTracks, releaseId, attempt.id)
+          : [];
+        if (referenceUpc || referenceCorrections.length) {
           lookupUpc = referenceUpc;
           result = referenceResult;
           break;
         }
       }
     }
-    if (!lookupUpc) {
+    if (!lookupUpc && !result) {
       await prisma.release.update({ where: { id: releaseId }, data: { direNoteLastAttemptedAt: new Date(), direNoteSyncError: lookupError } });
       throw new Error(lookupError!);
     }
   }
-  await reserveDireNoteRequest("release_information", releaseId, actorId);
+  if (!result) await reserveDireNoteRequest("release_information", releaseId, actorId);
   await prisma.release.update({ where: { id: releaseId }, data: { direNoteLastAttemptedAt: new Date(), direNoteSyncError: null } });
-  result ??= await getDireNoteReleaseInformation(lookupUpc, { timeoutMs: 20_000 });
-  for (let retry = 0; !result.success && retry < 2 && (result.httpStatus === null || result.httpStatus >= 500); retry++) {
+  result ??= await getDireNoteReleaseInformation(lookupUpc!, { timeoutMs: 20_000 });
+  for (let retry = 0; lookupUpc && !result.success && retry < 2 && (result.httpStatus === null || result.httpStatus >= 500); retry++) {
     await new Promise(resolve => setTimeout(resolve, 500 * 2 ** retry));
     await reserveDireNoteRequest("release_information_retry", releaseId, actorId);
     result = await getDireNoteReleaseInformation(lookupUpc, { timeoutMs: 20_000 });
@@ -167,8 +170,8 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     await prisma.release.update({ where: { id: releaseId }, data: { direNoteSyncError: message } });
     throw new Error(message);
   }
-  if (normalizeDireNoteUpc(remoteRelease.upc_code) && normalizeDireNoteUpc(remoteRelease.upc_code) !== lookupUpc) throw new Error("DireNote returned a different UPC from the current lookup. No release identifiers were changed.");
-  if (!normalizeDireNoteUpc(attempt.upc)) {
+  if (lookupUpc && normalizeDireNoteUpc(remoteRelease.upc_code) && normalizeDireNoteUpc(remoteRelease.upc_code) !== lookupUpc) throw new Error("DireNote returned a different UPC from the current lookup. No release identifiers were changed.");
+  if (!normalizeDireNoteUpc(attempt.upc) && lookupUpc) {
     const confirmedUpc = normalizeDireNoteUpc(remoteRelease.upc_code);
     const matchingTrack = remoteTracks.some(remote => release.tracks.some(track => track.isrc && normalized(track.isrc) === normalized(text(remote.isrc))));
     if (confirmedUpc !== lookupUpc || !matchingTrack) {
@@ -196,7 +199,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       await tx.track.update({ where: { id: track.id }, data: { isrc: externalIsrc || track.isrc, distributorStatus: mapDireNoteStatus(external.status), metadata: json({ ...(record(track.metadata)), direNote: { ...(record(record(track.metadata).direNote)), lastSyncedAt: new Date().toISOString(), external: redactDireNoteDiagnostic(external) } }) } });
       await persistArtistLinks(tx, releaseId, release.userId, external, track.metadata, release.artistProfileId);
     }
-    const remoteUpc = normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc!;
+    const remoteUpc = normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc;
     const comparisons = [
       { field: "upc", hymn: release.upc, external: remoteUpc, severity: "critical" },
       { field: "release_title", hymn: release.title, external: text(remoteRelease.album_name), severity: "warning" },
@@ -206,8 +209,8 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       const existing = await tx.direNoteReconciliationDiscrepancy.findFirst({ where: { releaseId, field: comparison.field, status: "open" } });
       if (!existing) await tx.direNoteReconciliationDiscrepancy.create({ data: { releaseId, field: comparison.field, hymnValue: comparison.hymn ?? Prisma.JsonNull, direNoteValue: comparison.external ?? Prisma.JsonNull, severity: comparison.severity } });
     }
-    if (remoteUpc !== release.upc) await tx.externalIdentifierHistory.create({ data: { releaseId, provider: "direnote", identifierType: "upc", previousValue: release.upc, canonicalValue: remoteUpc, source: "release_information_sync" } });
-    await tx.release.update({ where: { id: releaseId }, data: { upc: remoteUpc, direNoteStatus: aggregateStatus.provider, direNoteLastSyncedAt: new Date(), direNoteSyncError: null, metadata: json({ ...(record(release.metadata)), direNote: { ...previousDireNote, lastSyncedAt: new Date().toISOString(), status: aggregateStatus.provider, release: redactDireNoteDiagnostic(remoteRelease), correctionMessages } }) } });
+    if (remoteUpc && remoteUpc !== release.upc) await tx.externalIdentifierHistory.create({ data: { releaseId, provider: "direnote", identifierType: "upc", previousValue: release.upc, canonicalValue: remoteUpc, source: "release_information_sync" } });
+    await tx.release.update({ where: { id: releaseId }, data: { ...(remoteUpc ? { upc: remoteUpc } : {}), direNoteStatus: aggregateStatus.provider, direNoteLastSyncedAt: new Date(), direNoteSyncError: null, metadata: json({ ...(record(release.metadata)), direNote: { ...previousDireNote, lastSyncedAt: new Date().toISOString(), status: aggregateStatus.provider, release: redactDireNoteDiagnostic(remoteRelease), correctionMessages } }) } });
   });
   const previousStatus = release.status.toLowerCase() as ReleaseStatus;
   const providerAccepted = ["scheduled", "awaiting_live_confirmation", "partially_live", "live"].includes(aggregateStatus.provider);
