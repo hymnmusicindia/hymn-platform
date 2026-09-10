@@ -32,7 +32,27 @@ export async function resolvePrivateReleaseArtworkUrl(input: { userId: number; r
 
   const routedReleaseId = releaseArtworkRouteId(value);
   const releaseId = input.releaseId ?? routedReleaseId;
-  if (!routedReleaseId || !releaseId || routedReleaseId !== releaseId) return value;
+  if (!routedReleaseId || !releaseId || routedReleaseId !== releaseId) {
+    // A legacy/public display URL can remain on an older draft even after the
+    // artist uploads a private replacement. Prefer the owned draft asset so
+    // submit never falls back to an unauthenticated artwork URL.
+    if (input.releaseId) {
+      const latest = await prisma.storedAsset.findFirst({
+        where: {
+          releaseId: input.releaseId,
+          ownerUserId: input.userId,
+          assetType: "private_unreleased_artwork",
+          mimeType: "image/jpeg",
+          deletedAt: null,
+          uploadStatus: "ready",
+        },
+        select: { id: true, safeFilename: true },
+        orderBy: { createdAt: "desc" },
+      });
+      if (latest) return assetDownloadPath(latest);
+    }
+    return value;
+  }
 
   const release = await prisma.release.findFirst({
     where: { id: releaseId, OR: [{ userId: input.userId }, { ownerUserId: input.userId }] },
