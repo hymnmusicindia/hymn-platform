@@ -447,13 +447,8 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
     if (payload.releasePreviouslyReleased !== "Yes") issues.push({ field: "releasePreviouslyReleased", message: "originalReleaseDate should only be used for re-releases." });
   }
 
-  if (payload.contenttype === "AI Generated") {
-    pushMissing(issues, "suno_receipt_url", payload.suno_receipt_url, "AI Generated releases require suno_receipt_url.");
-    pushMissing(issues, "sunoLink", payload.sunoLink, "AI Generated releases require sunoLink.");
-  }
-  if (payload.contenttype === "Non-Exclusive Licensed") {
-    pushMissing(issues, "license_receipt_url", payload.license_receipt_url, "Non-Exclusive Licensed releases require license_receipt_url.");
-  }
+  // Rights documentation is intentionally optional. It can assist review, but
+  // absence of a receipt/link must never prevent distribution readiness.
   validatePublicPdf(issues, "suno_receipt_url", payload.suno_receipt_url);
   validatePublicPdf(issues, "license_receipt_url", payload.license_receipt_url);
 

@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { getDetailedReleaseByUserId, saveDraftDistributionRelease } from "@/lib/distribution-db";
 import { FIRST_RELEASE_PROMOTION_CODE, getFirstReleaseEligibility } from "@/lib/first-release-promotion";
 import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution";
+import { getContentIdEligibility } from "@/lib/content-id-eligibility";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -12,6 +13,11 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const payload = JSON.parse(String(formData.get("payload") || "{}"));
     const metadata = payload.metadata ?? {};
+    const contentIdEligible = getContentIdEligibility(metadata.contentType).eligible;
+    if (typeof metadata.licenseReceiptUrl === "string" && /^https?:/i.test(metadata.licenseReceiptUrl)) {
+      const proofUrl = new URL(metadata.licenseReceiptUrl);
+      if (!/^https?:$/.test(proofUrl.protocol) || metadata.licenseReceiptUrl.length > 2048) throw new Error("Document link must be a valid http or https URL.");
+    }
     const draftReleaseId = payload.draftReleaseId ? Number(payload.draftReleaseId) : undefined;
     const existingRelease = draftReleaseId ? await getDetailedReleaseByUserId(session.sub, draftReleaseId) : null;
     if (draftReleaseId && !existingRelease) {
@@ -114,8 +120,8 @@ export async function POST(request: Request) {
         mood: typeof metadata.mood === "string" ? metadata.mood.trim() : "",
         language: metadata.language ?? "",
         platforms: metadata.platforms ?? [],
-        youtubeContentIdEnabled: Boolean(metadata.youtubeContentIdEnabled),
-        youtubeContentIdChannelUrl: metadata.youtubeContentIdChannelUrl ?? "",
+        youtubeContentIdEnabled: contentIdEligible && Boolean(metadata.youtubeContentIdEnabled),
+        youtubeContentIdChannelUrl: contentIdEligible ? metadata.youtubeContentIdChannelUrl ?? "" : "",
         monetisationAccepted: Boolean(metadata.monetisationAccepted),
         monetisationClauses: metadata.monetisationClauses ?? {},
         territory: metadata.territory ?? "Worldwide",

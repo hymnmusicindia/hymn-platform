@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Crown,
   Disc3,
+  FileUp,
   LoaderCircle,
   Search,
   ShieldCheck,
@@ -1037,6 +1038,8 @@ export function ReleaseForm({
   const [useHymnCredits, setUseHymnCredits] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [status, setStatus] = useState<string | null>(null);
+  const [rightsUploadProgress, setRightsUploadProgress] = useState<number | null>(null);
+  const [rightsUploadError, setRightsUploadError] = useState<string | null>(null);
   const [autosaveStatus, setAutosaveStatus] = useState<"waiting" | "saving" | "saved" | "error">(
     initialRelease ? "saved" : "waiting",
   );
@@ -1151,6 +1154,11 @@ export function ReleaseForm({
     setYoutubeContentIdChannelUrl("");
     setYoutubeContentIdModalOpen(false);
   }, [contentIdEligibility.eligible, youtubeContentIdEnabled]);
+  useEffect(() => {
+    if (contentIdEligibility.eligible) return;
+    setSocialConsentAccepted(false);
+    setPlatforms((current) => current.filter((item) => !socialPlatforms.some((platform) => platform.name === item)));
+  }, [contentIdEligibility.eligible]);
   const [tracks, setTracks] = useState<TrackDraft[]>(() =>
     createTracksFromRelease(initialRelease),
   );
@@ -2088,10 +2096,6 @@ export function ReleaseForm({
     [
       !(DIRENOTE_CONTENT_TYPES as readonly string[]).includes(release.contentType)
         ? { step: 5, key: "content-type", message: "Select the content ownership for this release." } : null,
-      release.contentType === "AI Generated" && (!release.sunoReceiptUrl.trim() || !release.sunoLink.trim())
-        ? { step: 5, key: "content-type", message: "AI-generated releases require a Suno receipt PDF and song URL." } : null,
-      release.contentType === "Non-Exclusive Licensed" && !release.licenseReceiptUrl.trim()
-        ? { step: 5, key: "content-type", message: "Non-exclusive releases require a licence receipt PDF." } : null,
       platforms.length === 0
         ? {
             step: 6,
@@ -4620,8 +4624,9 @@ export function ReleaseForm({
                     </div>
                     <button
                       type="button"
+                      disabled={!contentIdEligibility.eligible}
                       className="group inline-flex min-h-10 items-center gap-3 border-0 bg-transparent px-0 py-2 text-left text-xs font-semibold transition"
-                      style={{ color: socialConsentAccepted ? "var(--text)" : "var(--text-muted)" }}
+                      style={{ color: socialConsentAccepted && contentIdEligibility.eligible ? "var(--text)" : "var(--text-muted)" }}
                       onClick={() => {
                         if (socialConsentAccepted) {
                           setSocialConsentAccepted(false);
@@ -4679,7 +4684,7 @@ export function ReleaseForm({
                   <div className="grid gap-3 sm:grid-cols-2">
                     {socialPlatforms.map((platform) => {
                       const active = platforms.includes(platform.name);
-                      const locked = !socialConsentAccepted;
+                      const locked = !socialConsentAccepted || !contentIdEligibility.eligible;
                       const iconClass = platform.name === "Instagram / Facebook"
                         ? "h-8 w-auto max-w-[96px]"
                         : "max-h-9 w-auto max-w-[96px]";
@@ -4943,11 +4948,14 @@ export function ReleaseForm({
                       ))}
                     </div>
                     <button type="button" disabled={!release.copyrightOwner.trim() || savedCopyrightOwners.some((owner) => owner.toLowerCase() === release.copyrightOwner.trim().toLowerCase())} onClick={saveCopyrightOwnerPreference} className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-xs font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text)" }}><BookmarkPlus className="h-4 w-4" />Save current C-Line choice</button>
-                    {release.contentType === "AI Generated" ? <div className="mt-4 grid gap-4">
-                      <label className="text-sm">Suno receipt PDF<input className="field mt-2" value={release.sunoReceiptUrl} onChange={event => setRelease(current => ({ ...current, sunoReceiptUrl: event.target.value }))} /></label>
-                      <label className="text-sm">Suno song URL<input type="url" className="field mt-2" value={release.sunoLink} onChange={event => setRelease(current => ({ ...current, sunoLink: event.target.value }))} /></label>
-                    </div> : null}
-                    {release.contentType === "Non-Exclusive Licensed" ? <label className="mt-4 block text-sm">Licence receipt PDF<input className="field mt-2" value={release.licenseReceiptUrl} onChange={event => setRelease(current => ({ ...current, licenseReceiptUrl: event.target.value }))} /></label> : null}
+                    <div className="mt-5 rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+                      <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Rights documentation</p><span className="text-[10px]" style={{ color: "var(--text-soft)" }}>Optional</span></div>
+                      <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }}>{release.contentType === "AI Generated" ? "Recommended: Attach your generation receipt, licence or supporting link to help reduce rights-review delays." : release.contentType === "Non-Exclusive Licensed" ? "Recommended: Attach your licence or agreement to help us verify your distribution rights faster. Content ID is unavailable for non-exclusive content." : "Optional: If you have producer agreements or ownership documents, attach them to help speed up review."}</p>
+                      <label className="mt-4 flex cursor-pointer items-center justify-center gap-3 rounded-xl border border-dashed px-4 py-5 text-center" style={{ borderColor: "var(--border)" }} onDragOver={(event) => event.preventDefault()} onDrop={async (event) => { event.preventDefault(); const file = event.dataTransfer.files?.[0]; if (!file) return; if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type) || file.size > 20 * 1024 * 1024) { setRightsUploadError("Choose a PDF, JPG or PNG no larger than 20 MB."); return; } try { setRightsUploadError(null); setRightsUploadProgress(0); const releaseId = await ensureUploadDraft(); const url = await uploadPrivateAsset(file, "private_ownership_proof", { releaseId, onProgress: (loaded, total) => setRightsUploadProgress(Math.round((loaded / total) * 100)) }); setRelease((current) => ({ ...current, licenseReceiptUrl: url })); } catch (error) { setRightsUploadError(error instanceof Error ? error.message : "Could not upload rights document."); } finally { setRightsUploadProgress(null); } }}><FileUp className="h-5 w-5" style={{ color: "var(--accent)" }} /><span><strong className="block text-sm">{rightsUploadProgress != null ? `Uploading ${rightsUploadProgress}%` : "Drag & drop your agreement here"}</strong><span className="mt-1 block text-xs" style={{ color: "var(--text-soft)" }}>PDF, JPG or PNG · max 20 MB · Browse files</span></span><input className="sr-only" type="file" accept="application/pdf,image/jpeg,image/png" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type) || file.size > 20 * 1024 * 1024) { setRightsUploadError("Choose a PDF, JPG or PNG no larger than 20 MB."); return; } try { setRightsUploadError(null); setRightsUploadProgress(0); const releaseId = await ensureUploadDraft(); const url = await uploadPrivateAsset(file, "private_ownership_proof", { releaseId, onProgress: (loaded, total) => setRightsUploadProgress(Math.round((loaded / total) * 100)) }); setRelease((current) => ({ ...current, licenseReceiptUrl: url })); } catch (error) { setRightsUploadError(error instanceof Error ? error.message : "Could not upload rights document."); } finally { setRightsUploadProgress(null); event.target.value = ""; } }} /></label>
+                      {rightsUploadError ? <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>{rightsUploadError}</p> : null}
+                      {release.licenseReceiptUrl && !release.licenseReceiptUrl.startsWith("http") ? <div className="mt-3 flex justify-between gap-3 text-xs" style={{ color: "var(--success)" }}><span>Rights document attached</span><button type="button" onClick={() => setRelease(current => ({ ...current, licenseReceiptUrl: "" }))}>Remove</button></div> : null}
+                      <label className="mt-4 block text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Document link<input type="url" maxLength={2048} placeholder="https://..." className="field mt-2" value={release.licenseReceiptUrl.startsWith("http") ? release.licenseReceiptUrl : ""} onChange={event => setRelease(current => ({ ...current, licenseReceiptUrl: event.target.value }))} /></label>
+                    </div>
                     {contentIdEligibility.eligible ? <div className="mt-5 rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Rights documentation · Optional</p><p className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }}>Recommended: Upload a licence, producer agreement or master-rights agreement to help avoid ownership clarification delays.</p><label className="mt-3 inline-flex cursor-pointer rounded-xl border px-4 py-2.5 text-sm font-semibold" style={{ borderColor: "var(--border)", color: "var(--text)" }}>Add rights proof<input className="sr-only" type="file" accept="application/pdf,image/jpeg,image/png" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const releaseId = await ensureUploadDraft(); const url = await uploadPrivateAsset(file, "private_ownership_proof", { releaseId }); setRelease((current) => ({ ...current, licenseReceiptUrl: url })); setStatus("Rights proof attached."); } catch (error) { setStatus(error instanceof Error ? error.message : "Could not upload rights proof."); } }} /></label>{release.licenseReceiptUrl ? <p className="mt-2 text-xs" style={{ color: "var(--success)" }}>Rights proof attached.</p> : youtubeContentIdEnabled ? <p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>No agreement attached. Adding proof may help prevent ownership clarification requests.</p> : null}</div> : null}
                   </div>
                 </div>
