@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { AlertCircle, Bell, CheckCircle2, Disc3, HelpCircle, LayoutDashboard, LogOut, Menu, PackageCheck, ShieldCheck, ShoppingCart, UserRound, WalletCards, X } from "lucide-react";
 import clsx from "clsx";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -50,6 +51,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   const [scrolled, setScrolled] = useState(false);
   const [cartCount, setCartCount] = useState(0);
   const [cartOpen, setCartOpen] = useState(false);
+  const [cartMounted, setCartMounted] = useState(false);
   const [cartItems, setCartItems] = useState<HeaderCartItem[]>([]);
   const [cartBeats, setCartBeats] = useState<HeaderCartBeat[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -59,6 +61,10 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   const notificationMutationsRef = useRef<Set<number>>(new Set());
   const markAllPendingRef = useRef(false);
   const isAuthenticated = Boolean(user);
+
+  useEffect(() => {
+    setCartMounted(true);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -592,9 +598,9 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
         </div>
       ) : null}
 
-      <div className={clsx("fixed inset-0 z-[100] overflow-hidden transition", cartOpen ? "pointer-events-auto" : "pointer-events-none")} aria-hidden={!cartOpen} inert={!cartOpen}>
-        <button type="button" className={clsx("absolute inset-0 bg-black/45 transition-opacity", cartOpen ? "opacity-100" : "opacity-0")} onClick={() => setCartOpen(false)} aria-label="Close cart" />
-        <aside className={clsx("absolute right-0 top-0 flex h-[100dvh] w-full max-w-[410px] flex-col border-l p-5 shadow-2xl transition-transform duration-300", cartOpen ? "translate-x-0" : "translate-x-full")} style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)", opacity: 1 }} role="dialog" aria-modal="true" aria-label="Shopping cart">
+      {cartMounted ? createPortal(<div className={clsx("fixed inset-0 isolate z-[1000] overflow-hidden transition", cartOpen ? "pointer-events-auto" : "pointer-events-none")} aria-hidden={!cartOpen} inert={!cartOpen}>
+        <button type="button" className={clsx("absolute inset-0 z-0 bg-black/60 transition-opacity", cartOpen ? "opacity-100" : "opacity-0")} onClick={() => setCartOpen(false)} aria-label="Close cart" />
+        <aside className={clsx("fixed right-0 top-0 z-10 flex h-[100dvh] w-full max-w-[410px] flex-col border-l p-5 shadow-2xl transition-transform duration-300", cartOpen ? "translate-x-0" : "translate-x-full")} style={{ borderColor: "var(--border)", background: "linear-gradient(180deg, var(--bg-elevated, #101216), var(--bg, #08090b))", color: "var(--text)", opacity: 1 }} role="dialog" aria-modal="true" aria-label="Shopping cart">
           <div className="flex items-center justify-between border-b border-[var(--border)] pb-4">
             <div><p className="text-xs uppercase tracking-[0.24em] text-[var(--text-soft)]">Cart</p><h2 className="mt-1 text-xl font-semibold text-[var(--text)]">Your beats</h2></div>
             <button type="button" onClick={() => setCartOpen(false)} className="inline-flex h-10 w-10 items-center justify-center text-[var(--text-muted)] transition hover:text-[var(--text)]" aria-label="Close cart"><X className="h-5 w-5" /></button>
@@ -614,7 +620,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
             {cartItems.length ? <Link href="/checkout?product=beatstore" onClick={() => setCartOpen(false)} className="btn-primary mt-4 w-full">Continue to checkout</Link> : <Link href="/beat-store" onClick={() => setCartOpen(false)} className="btn-primary mt-4 w-full">Browse beats</Link>}
           </div>
         </aside>
-      </div>
+      </div>, document.body) : null}
     </header>
   );
 }
