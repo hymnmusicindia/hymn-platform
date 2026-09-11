@@ -863,7 +863,7 @@ export function AdminControlCenter({
 
   function updateReleaseStatus(id: number, status: Release["status"]) {
     startTransition(async () => {
-      const isDireNoteAction = status === "sent";
+      const isDireNoteAction = status === "sent" || status === "approved";
       if (isDireNoteAction) {
         setIsSubmittingToDireNote(true);
         setDireNoteResult(null);
@@ -887,7 +887,7 @@ export function AdminControlCenter({
         }
         setReleases((items) => items.map((item) => (item.id === id ? data.release : item)));
         const releaseName = data.release?.releaseTitle || data.release?.trackName || "Release";
-        setFeedback(status === "approved" ? `${releaseName} was approved by HYMN.` : status === "sent" ? `${releaseName} was sent for distribution successfully.` : `${releaseName} status updated to ${status.replace(/_/g, " ")}.`);
+        setFeedback(status === "approved" ? `${releaseName} was approved and sent to DireNote.` : status === "sent" ? `${releaseName} was sent for distribution successfully.` : `${releaseName} status updated to ${status.replace(/_/g, " ")}.`);
         if (isDireNoteAction) {
           const warningText = Array.isArray(data.warnings) && data.warnings.length
             ? ` HYMN distribution accepted it with ${data.warnings.length} warning${data.warnings.length === 1 ? "" : "s"}.`
@@ -901,6 +901,23 @@ export function AdminControlCenter({
       } finally {
         if (isDireNoteAction) setIsSubmittingToDireNote(false);
       }
+    });
+  }
+
+  function archiveRelease(release: Release) {
+    const delivered = ["sent", "sent_to_distributor", "distributor_processing", "processing", "scheduled", "awaiting_live_confirmation", "partially_live", "delivered", "live"].includes(release.status);
+    const warning = delivered
+      ? "This release has already been delivered to DireNote. Archiving it in HYMN does not cancel DireNote processing."
+      : "This release will be removed from HYMN's active workflow while its audit history is retained.";
+    if (!window.confirm(`${warning}\n\nArchive “${release.releaseTitle || release.trackName || "this release"}”?`)) return;
+    if (window.prompt('Type DELETE to archive this release.') !== "DELETE") return;
+    startTransition(async () => {
+      const response = await fetch(`/api/admin/releases/${release.id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmation: "DELETE" }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return setFeedback(data.error || "Could not archive release.");
+      setReleases(items => items.filter(item => item.id !== release.id));
+      setSelectedReleaseId(null);
+      setFeedback(data.warning || "Release archived. Provider and audit history were retained.");
     });
   }
 
@@ -1352,12 +1369,13 @@ export function AdminControlCenter({
                 {selectedRelease.direNoteStatus ? <ReleaseSubmissionHistory releaseId={selectedRelease.id} admin /> : null}
                 <div className="sticky bottom-3 z-10 grid gap-3 rounded-2xl border p-3 shadow-xl sm:grid-cols-2 xl:grid-cols-3" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
                   {["submitted", "in_queue", "changes_requested", "failed", "draft"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => updateReleaseStatus(selectedRelease.id, "under_review")} className="btn-outline pressable disabled:opacity-45">Start Review</button> : null}
-                  {selectedRelease.status === "under_review" ? <button type="button" disabled={isPending || isSubmittingToDireNote || direNoteCooldownSeconds > 0 || direNoteReadiness?.ready !== true || !hasPermission("releases.review") || !hasPermission("distribution.submit")} title={direNoteCooldownSeconds > 0 ? `DireNote cooldown: ${direNoteCooldownLabel} remaining` : direNoteReadiness?.ready !== true ? "Wait for this release's readiness check to pass" : !hasPermission("releases.review") || !hasPermission("distribution.submit") ? "Requires release review and distribution submit permissions" : undefined} onClick={() => setConfirmStatusAction("sent")} className="btn-primary pressable disabled:opacity-45">{isSubmittingToDireNote ? "Approving & Sending..." : direNoteCooldownSeconds > 0 ? `Try again in ${direNoteCooldownLabel}` : "Approve & Send to DireNote"}</button> : null}
-                  {["approved", "failed", "delivery_failed", "queued_for_distribution"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || isSubmittingToDireNote || direNoteCooldownSeconds > 0 || direNoteReadiness?.ready !== true || !hasPermission(selectedRelease.status === "approved" ? "distribution.submit" : "distribution.retry")} title={direNoteCooldownSeconds > 0 ? `DireNote cooldown: ${direNoteCooldownLabel} remaining` : direNoteReadiness?.ready !== true ? "Wait for this release's readiness check to pass" : !hasPermission(selectedRelease.status === "approved" ? "distribution.submit" : "distribution.retry") ? `Requires ${selectedRelease.status === "approved" ? "distribution.submit" : "distribution.retry"} permission` : undefined} onClick={() => setConfirmStatusAction("sent")} className="btn-primary pressable disabled:opacity-45">{isSubmittingToDireNote ? "Submitting to DireNote..." : direNoteCooldownSeconds > 0 ? `Try again in ${direNoteCooldownLabel}` : selectedRelease.status === "approved" ? "Send to DireNote" : "Retry Send"}</button> : null}
+                  {selectedRelease.status === "under_review" ? <button type="button" disabled={isPending || isSubmittingToDireNote || direNoteCooldownSeconds > 0 || direNoteReadiness?.ready !== true || !hasPermission("releases.review") || !hasPermission("distribution.submit")} title={direNoteCooldownSeconds > 0 ? `DireNote cooldown: ${direNoteCooldownLabel} remaining` : direNoteReadiness?.ready !== true ? "Wait for this release's readiness check to pass" : !hasPermission("releases.review") || !hasPermission("distribution.submit") ? "Requires release review and distribution submit permissions" : undefined} onClick={() => setConfirmStatusAction("approved")} className="btn-primary pressable disabled:opacity-45">{isSubmittingToDireNote ? "Approving & Sending..." : direNoteCooldownSeconds > 0 ? `Try again in ${direNoteCooldownLabel}` : "Approve & Send to DireNote"}</button> : null}
+                  {["failed", "delivery_failed", "queued_for_distribution"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || isSubmittingToDireNote || direNoteCooldownSeconds > 0 || direNoteReadiness?.ready !== true || !hasPermission("distribution.retry")} title={direNoteCooldownSeconds > 0 ? `DireNote cooldown: ${direNoteCooldownLabel} remaining` : direNoteReadiness?.ready !== true ? "Wait for this release's readiness check to pass" : !hasPermission("distribution.retry") ? "Requires distribution.retry permission" : undefined} onClick={() => setConfirmStatusAction("sent")} className="btn-primary pressable disabled:opacity-45">{isSubmittingToDireNote ? "Submitting to DireNote..." : direNoteCooldownSeconds > 0 ? `Try again in ${direNoteCooldownLabel}` : "Retry Send"}</button> : null}
                   {selectedRelease.upcCode || selectedRelease.direNoteStatus || selectedRelease.tracks?.some(track => track.isrc) ? <button type="button" disabled={isPending || !hasPermission("releases.read")} title={!hasPermission("releases.read") ? "Requires releases.read permission" : undefined} onClick={() => syncDireNoteRelease(selectedRelease.id)} className="btn-outline pressable disabled:opacity-45">Sync with DireNote</button> : null}
                   {["sent", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("distribution.confirm_status")} title={!hasPermission("distribution.confirm_status") ? "Requires distribution.confirm_status permission" : undefined} onClick={() => setConfirmStatusAction("live")} className="btn-primary pressable disabled:opacity-45">Mark Live</button> : null}
                   {["submitted", "in_queue", "under_review", "approved"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => openReview("changes_requested")} className="btn-outline pressable disabled:opacity-45" style={{ color: "var(--money)" }}>Request Metadata Changes</button> : null}
                   {["submitted", "in_queue", "under_review", "approved"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => openReview("rejected")} className="btn-outline pressable disabled:opacity-45" style={{ color: "var(--danger)" }}>Reject Release</button> : null}
+                  <button type="button" disabled={isPending || !hasPermission("releases.override")} title={!hasPermission("releases.override") ? "Requires releases.override permission" : undefined} onClick={() => archiveRelease(selectedRelease)} className="btn-outline pressable disabled:opacity-45" style={{ color: "var(--danger)" }}>Archive Release</button>
                   {selectedRelease.status === "changes_requested" ? <div className="rounded-full border px-4 py-2 text-center text-sm font-semibold" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>Awaiting user correction</div> : null}
                 </div>
                 {reviewTab === "tracks" ? <div className="grid gap-3">

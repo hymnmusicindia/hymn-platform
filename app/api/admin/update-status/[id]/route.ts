@@ -38,11 +38,23 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "A reason is required for a manual status override." }, { status: 400 });
     }
     if (payload.status === "approved") {
-      const release = await updateDetailedReleaseStatus(Number(id), "approved", payload.note || "HYMN review approved.");
-      if (!release) return NextResponse.json({ error: "Release not found." }, { status: 404 });
-      const queueEntry = await syncQueueStage(Number(id), "approved", actorId, payload.note || "HYMN review approved.");
-      await createReleaseAuditLog({ releaseId: Number(id), userId: actorId, action: "RELEASE_APPROVED_BY_HYMN", details: { newStatus: "approved", note: payload.note ?? null } });
-      return NextResponse.json({ release, queueEntry });
+      const currentRelease = await getDetailedReleaseById(Number(id));
+      if (!currentRelease) return NextResponse.json({ error: "Release not found." }, { status: 404 });
+      const distributionPermission = await requireAdminPermission("distribution.submit");
+      if ("error" in distributionPermission) return distributionPermission.error;
+      // Approval is the delivery authorization. submitRelease performs a fresh
+      // provider-readiness check under its advisory lock before it creates an attempt.
+      const submission = await submitRelease(Number(id), { actorId, siteUrl: getPublicAppUrl(request.url) });
+      if (!submission.submitted) {
+        const messages = submission.validation.issues.map((issue) => issue.message);
+        return NextResponse.json(
+          { release: submission.release, error: submission.error ?? messages[0] ?? "DireNote delivery did not complete.", validation: submission.validation, retryable: submission.retryable, retryAfterSeconds: submission.retryAfterSeconds },
+          { status: submission.validation.ok ? 502 : 400 }
+        );
+      }
+      const queueEntry = await syncQueueStage(Number(id), "sent_to_direnote", actorId, "HYMN approval automatically delivered this release to DireNote.", { syncReleaseStatus: false });
+      await createReleaseAuditLog({ releaseId: Number(id), userId: actorId, action: "RELEASE_APPROVED_AND_AUTO_DELIVERED", details: { note: payload.note ?? null } });
+      return NextResponse.json({ release: submission.release, queueEntry, validation: submission.validation, warnings: submission.warnings ?? [] });
     }
     if (payload.status === "sent") {
       const origin = getPublicAppUrl(request.url);

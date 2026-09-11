@@ -39,7 +39,7 @@ const server = createServer(async (request, response) => {
     assert.equal(request.method, "POST");
     ingestPayloads.push(body);
     ingests++;
-    response.end(JSON.stringify({ success: true, upc: body.releasePreviouslyReleased === "Yes" ? body.upc : ingests === 1 ? oldUpc : ingests > 3 ? `34736203135${String(ingests + 4).padStart(2, "0")}` : newUpc, tracks: [1, 2].map((n, index) => ({ track_name: `Track ${n}`, isrc: body.releasePreviouslyReleased === "Yes" ? body.tracks[index].isrc : ingests > 3 ? `INTST26${String(ingests).padStart(3, "0")}${String(index).padStart(2, "0")}` : (ingests === 1 ? oldIsrcs : newIsrcs)[index], status: "Pending" })) }));
+    response.end(JSON.stringify({ success: true, upc: ingests === 1 ? oldUpc : newUpc, tracks: [1, 2].map((n, index) => ({ track_name: `Track ${n}`, isrc: (ingests === 1 ? oldIsrcs : newIsrcs)[index], status: "Pending" })) }));
     return;
   }
   statusUpcs.push(body.upc);
@@ -62,6 +62,9 @@ async function main() {
   const snapshots = await readFile("prisma/migrations/20260908000000_direnote_payload_snapshots/migration.sql", "utf8");
   await prisma.$executeRawUnsafe(snapshots);
   await prisma.$executeRawUnsafe(snapshots);
+  const lifecycleMigration = await readFile("prisma/migrations/20260911000000_direnote_attempt_lifecycle/migration.sql", "utf8");
+  await prisma.$executeRawUnsafe(lifecycleMigration);
+  await prisma.$executeRawUnsafe(lifecycleMigration);
   await assertDireNoteSchemaReady(prisma);
   assert.equal(await prisma.distributionSubmissionAttempt.findFirst(), null);
   const migration = await readFile("prisma/migrations/20260906000000_direnote_attempt_history/migration.sql", "utf8");
@@ -188,8 +191,8 @@ async function main() {
   await prisma.distributionSubmissionAttempt.update({ where: { id: transferAttempt.id }, data: { startedAt: new Date(0) } });
   const transferred = await submitRelease(transfer.id, { correctionReingest: true });
   assert.equal(transferred.submitted, true, JSON.stringify(transferred));
-  assert.deepEqual(ingestPayloads.at(-1)!.tracks.map((track: any) => track.isrc), oldIsrcs);
-  assert.deepEqual((await prisma.track.findMany({ where: { releaseId: transfer.id }, orderBy: { trackNumber: "asc" } })).map(track => track.isrc), oldIsrcs);
+  assert(ingestPayloads.at(-1)!.tracks.every((track: any) => !track.isrc), "A correction must never reuse historical ISRC values in its ingest request.");
+  assert.deepEqual((await prisma.track.findMany({ where: { releaseId: transfer.id }, orderBy: { trackNumber: "asc" } })).map(track => track.isrc), newIsrcs, "DireNote's re-ingest identifiers become the current track projection.");
   const paidDraft = await prisma.release.create({ data: { userId: user.id, title: "Paid draft", artistName: "gxrry", genre: "Pop", releaseDate: new Date("2099-01-10"), status: "DRAFT", paymentStatus: "paid" } });
   await saveDraftDistributionRelease({ userId: user.id, draftReleaseId: paidDraft.id, metadata: { artistName: "gxrry", trackName: "Paid draft", tracks: [] } as any });
   assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: paidDraft.id } })).paymentStatus, "paid", "Saving a draft must not erase payment.");

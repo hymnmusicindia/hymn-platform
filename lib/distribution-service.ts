@@ -149,7 +149,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
 
   const payload = await buildDireNotePayloadForRelease(release, options);
   const previousAttempt = options.correctionReingest ? await currentDireNoteAttempt(releaseId) : null;
-  if (options.correctionReingest && payload.releasePreviouslyReleased !== "Yes") {
+  if (options.correctionReingest) {
     delete payload.upc;
     for (const track of payload.tracks) delete track.isrc;
   }
@@ -177,7 +177,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     await updateDetailedReleaseStatus(releaseId, "approved", "HYMN review approved for DireNote submission.");
   }
 
-  const claim = await claimDistributionSubmission(releaseId, payload, previousAttempt?.id);
+  const claim = await claimDistributionSubmission(releaseId, payload, previousAttempt?.id, options.correctionReingest ? "REDRESSAL" : options.retry ? "ADMIN_RESUBMISSION" : "INITIAL_SUBMISSION");
   if (claim.alreadySubmitted) return { release, validation, submitted: true, duplicate: true, retryable: false };
   if (!claim.claimed) return {
     release,
@@ -235,16 +235,13 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     const parsed = parseDireNoteResponse(data);
     providerAccepted = true;
     const automaticStatus = "sent_to_distributor" as const;
-    const assignedTrackIsrcs = parsed.trackIsrcs.map(remote => {
-      const local = release.tracks?.find(track => track.trackNumber === remote.trackNumber || track.trackTitle === remote.trackTitle);
-      return payload.releasePreviouslyReleased === "Yes" && local?.isrc ? { ...remote, isrc: local.isrc } : remote;
-    });
+    const assignedTrackIsrcs = parsed.trackIsrcs;
     await activateDireNoteAttempt(claim.attempt.id, {
       upc: parsed.upc ?? null,
       trackIdentifiers: (release.tracks ?? []).map(track => ({
         id: track.id, title: track.trackTitle, trackNumber: track.trackNumber,
         isrc: assignedTrackIsrcs.find(remote => remote.trackNumber === track.trackNumber || remote.trackTitle === track.trackTitle)?.isrc
-          ?? (payload.releasePreviouslyReleased === "Yes" ? track.isrc ?? null : null)
+          ?? null
       })),
       responseRedacted: redactDireNoteDiagnostic(data) as never
     });

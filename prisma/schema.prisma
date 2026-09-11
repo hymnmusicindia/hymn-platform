@@ -490,6 +490,8 @@ model DistributionSubmissionAttempt {
   id                Int       @id @default(autoincrement())
   releaseId         Int       @map("release_id")
   provider          String    @default("direnote")
+  attemptNumber     Int       @default(1) @map("attempt_number")
+  reason            String    @default("INITIAL_SUBMISSION")
   idempotencyKey    String    @unique @map("idempotency_key")
   payloadHash       String    @map("payload_hash")
   state             String    @default("processing")
@@ -501,6 +503,7 @@ model DistributionSubmissionAttempt {
   payloadRedacted   Json?     @map("payload_redacted")
   payloadDiff       Json?     @map("payload_diff")
   isCurrent         Boolean   @default(false) @map("is_current")
+  supersededAt      DateTime? @map("superseded_at")
   upc               String?
   trackIdentifiers  Json?     @map("track_identifiers")
   providerStatus    String?   @map("provider_status")
@@ -515,6 +518,7 @@ model DistributionSubmissionAttempt {
   @@index([releaseId, state, updatedAt])
   @@index([provider, state, updatedAt])
   @@index([provider, isCurrent, lastCheckedAt])
+  @@unique([releaseId, provider, attemptNumber])
   @@map("distribution_submission_attempts")
 }
 

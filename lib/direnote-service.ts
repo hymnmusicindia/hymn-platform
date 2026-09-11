@@ -88,7 +88,6 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   const release = await prisma.release.findUnique({ where: { id: releaseId }, include: { tracks: { orderBy: { trackNumber: "asc" } } } });
   if (!release) throw new Error("Release not found.");
   const attempt = await currentDireNoteAttempt(releaseId);
-  const isTransfer = Boolean(record(release.metadata).releasePreviouslyReleased ?? record(release.metadata).previouslyReleased);
   const attemptTracks = Array.isArray(attempt.trackIdentifiers) ? attempt.trackIdentifiers.map(record) : [];
   const mappingTracks = release.tracks.map(track => {
     const snapshot = attemptTracks.find(item => item.id === track.id);
@@ -188,13 +187,13 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       upc: normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc,
       trackIdentifiers: mappingTracks.map(track => {
         const remote = remoteTracks.find(item => matchDireNoteTrack(item, mappingTracks)?.id === track.id);
-        return { id: track.id, title: track.title, trackNumber: track.trackNumber, isrc: isTransfer && track.isrc ? track.isrc : text(remote?.isrc) || track.isrc, providerTrackId: text(remote?.track_id ?? remote?.id) || track.providerTrackId };
+        return { id: track.id, title: track.title, trackNumber: track.trackNumber, isrc: text(remote?.isrc) || track.isrc, providerTrackId: text(remote?.track_id ?? remote?.id) || track.providerTrackId };
       })
     } });
     for (const track of release.tracks) {
       const external = remoteTracks.find(remote => matchDireNoteTrack(remote, mappingTracks)?.id === track.id);
       if (!external) continue;
-      const externalIsrc = isTransfer && track.isrc ? track.isrc : text(external.isrc);
+      const externalIsrc = text(external.isrc);
       if (externalIsrc && normalized(externalIsrc) !== normalized(track.isrc ?? "")) await tx.externalIdentifierHistory.create({ data: { releaseId, trackId: track.id, provider: "direnote", identifierType: "isrc", previousValue: track.isrc, canonicalValue: externalIsrc, source: "release_information_sync" } });
       await tx.track.update({ where: { id: track.id }, data: { isrc: externalIsrc || track.isrc, distributorStatus: mapDireNoteStatus(external.status), metadata: json({ ...(record(track.metadata)), direNote: { ...(record(record(track.metadata).direNote)), lastSyncedAt: new Date().toISOString(), external: redactDireNoteDiagnostic(external) } }) } });
       await persistArtistLinks(tx, releaseId, release.userId, external, track.metadata, release.artistProfileId);
