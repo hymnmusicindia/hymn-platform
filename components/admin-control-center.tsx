@@ -17,7 +17,7 @@ import type { AdminStoreStatus, ArtistProfile, Beat, DistributionOrder, Notifica
 
 type PersistedAdminTask = { id: number; type: string; priority: string; title: string; body: string; href: string; status: string; createdAt: string };
 const REVIEW_QUEUE_STATUSES = ["submitted", "in_queue", "under_review", "changes_requested", "approved", "failed"] as const;
-const CATALOG_STATUSES = ["sent", "sent_to_distributor", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered", "live"] as const;
+const CATALOG_STATUSES = ["queued_for_distribution", "submitting_to_distributor", "sent", "sent_to_distributor", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered", "live"] as const;
 
 function formatMoney(amount: number) {
   return `Rs ${amount.toLocaleString("en-IN")}`;
