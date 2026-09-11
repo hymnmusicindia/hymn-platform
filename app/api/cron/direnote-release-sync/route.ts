@@ -13,14 +13,39 @@ export async function GET(request: Request) {
   return prisma.$transaction(async lock => {
     const rows = await lock.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(81422029) AS locked`;
     if (!rows[0]?.locked) return NextResponse.json({ success: true, skipped: "already_running" });
-    const distributionStatuses: ReleaseStatus[] = ["SENT_TO_DISTRIBUTOR", "DISTRIBUTOR_PROCESSING", "PROCESSING", "SCHEDULED", "AWAITING_LIVE_CONFIRMATION", "PARTIALLY_LIVE", "DELIVERED"];
-    const workflowStatuses: ReleaseStatus[] = ["CHANGES_REQUESTED", "RESUBMITTED", "SUBMITTED", "UNDER_REVIEW", "IN_QUEUE", "IN_QC_QUEUE", "APPROVED", "QUEUED_FOR_DISTRIBUTION"];
+
+    const distributionStatuses: ReleaseStatus[] = [
+      "SENT_TO_DISTRIBUTOR",
+      "DISTRIBUTOR_PROCESSING",
+      "PROCESSING",
+      "SCHEDULED",
+      "AWAITING_LIVE_CONFIRMATION",
+      "PARTIALLY_LIVE",
+      "DELIVERED",
+      "LIVE"
+    ];
+    const workflowStatuses: ReleaseStatus[] = [
+      "CHANGES_REQUESTED",
+      "RESUBMITTED",
+      "SUBMITTED",
+      "UNDER_REVIEW",
+      "IN_QUEUE",
+      "IN_QC_QUEUE",
+      "APPROVED",
+      "QUEUED_FOR_DISTRIBUTION",
+      "REJECTED"
+    ];
     const statusFilter: Prisma.ReleaseWhereInput = {
       OR: [
         { status: { in: distributionStatuses } },
-        { direNoteStatus: { not: null }, status: { in: workflowStatuses } }
+        { status: { in: workflowStatuses }, direNoteStatus: { not: null } },
+        { status: { in: workflowStatuses }, upc: null, tracks: { some: { isrc: { not: null } } } }
       ]
     };
+
+    const started = Date.now();
+    const maxRuntimeMs = 280_000;
+    const batchSize = 250;
     const candidates = await prisma.release.findMany({
       where: {
         archivedAt: null,
@@ -33,13 +58,13 @@ export async function GET(request: Request) {
         ]
       },
       select: { id: true, title: true, status: true, upc: true, direNoteStatus: true },
-      take: 50,
+      take: batchSize,
       orderBy: [{ direNoteLastAttemptedAt: { sort: "asc", nulls: "first" } }, { id: "asc" }]
     });
+
     const results: Array<{ releaseId: number; title: string; success: boolean; pending?: boolean; before: { status: string; upc: string | null; direNoteStatus: string | null }; after?: { status: string; upc: string | null; direNoteStatus: string | null }; error?: string }> = [];
-    const started = Date.now();
     for (const release of candidates) {
-      if (Date.now() - started > 180_000) break;
+      if (Date.now() - started > maxRuntimeMs) break;
       const before = { status: release.status, upc: release.upc, direNoteStatus: release.direNoteStatus };
       try {
         await syncDireNoteRelease(release.id);
@@ -49,8 +74,6 @@ export async function GET(request: Request) {
       catch (error) {
         const message = error instanceof Error ? error.message : "Sync failed.";
         const updated = await prisma.release.findUnique({ where: { id: release.id }, select: { status: true, upc: true, direNoteStatus: true } });
-        // DireNote commonly assigns UPCs asynchronously. This is an expected
-        // pending state, not a failed reconciliation run, and stays eligible.
         const pending = /^Awaiting UPC:/.test(message);
         results.push({ releaseId: release.id, title: release.title, success: pending, pending, before, after: updated ?? undefined, error: message });
         if (/DIRENOTE_STATUS_AUTH_FAILED|capacity is exhausted/.test(message)) break;
