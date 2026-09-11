@@ -1832,6 +1832,7 @@ export async function logDistributionEvent(input: {
   responsePayload?: unknown;
   warnings?: string[] | null;
   errors?: string[] | null;
+  correlationId?: string;
   success: boolean;
 }) {
   const pool = getPool();
@@ -1842,7 +1843,7 @@ export async function logDistributionEvent(input: {
         action: input.action ?? "release_submission",
         httpStatus: input.httpStatus ?? null,
         success: input.success,
-        requestPayloadRedacted: (input.requestPayload ?? undefined) as any,
+        requestPayloadRedacted: (input.requestPayload === undefined ? undefined : { correlationId: input.correlationId ?? null, payload: input.requestPayload }) as any,
         responseRaw: input.responseRaw ? String(redactDireNoteDiagnostic(input.responseRaw)) : null,
         responseJson: redactDireNoteDiagnostic(input.responsePayload ?? undefined) as any,
         errorMessage: input.errors?.join("; ") ?? null,

@@ -195,6 +195,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
   await updateDetailedReleaseStatus(releaseId, "submitting_to_distributor", "DireNote submission claimed and started.");
 
   let providerAccepted = false;
+  const correlationId = `DNM_SUB_${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}_${claim.attempt.id}`;
   try {
     await reserveDireNoteRequest("content_ingestion", releaseId, options.actorId);
     await prisma.distributionSubmissionAttempt.update({ where: { id: claim.attempt.id }, data: {
@@ -223,9 +224,9 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
         { manualOverride: response.httpStatus === 400, actorType: "system" }
       );
       await finishDistributionSubmission(claim.attempt.id, { state: mode.retryable ? "retryable" : "failed", httpStatus: response.httpStatus, safeError: message.slice(0, 500), responseRedacted: { message, warnings: parsed.warnings } });
-      await logDistributionEvent({ releaseId, action: options.retry ? "retry_submission" : "release_submission", httpStatus: response.httpStatus, createdByAdminId: options.actorId, requestPayload: redactedPayload, responsePayload: data, responseRaw: response.raw, warnings: parsed.warnings, errors: [message], success: false });
+      await logDistributionEvent({ releaseId, action: options.retry ? "retry_submission" : "release_submission", httpStatus: response.httpStatus, createdByAdminId: options.actorId, correlationId, requestPayload: redactedPayload, responsePayload: data, responseRaw: response.raw, warnings: parsed.warnings, errors: [message], success: false });
       if (mode.queueStage) await moveQueue(releaseId, mode.queueStage, options.actorId, message, { status: response.httpStatus, response: data });
-      await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: mode.action, details: { status: response.httpStatus, message } });
+      await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: mode.action, details: { attemptId: claim.attempt.id, correlationId, status: response.httpStatus, message } });
       if (response.httpStatus !== 400) {
         await createAdminTaskOnce({ eventKey: `release:${releaseId}:direnote:provider:${response.providerReason ?? response.httpStatus ?? "unknown"}`, type: "DireNote Failed", priority: "critical", title: `DireNote provider failure: ${displayName(release)}`, body: message, href: `/admin?tab=releases&releaseId=${releaseId}`, entityType: "release", entityId: releaseId });
       }
@@ -255,9 +256,9 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
       warnings: parsed.warnings
     });
 
-    await logDistributionEvent({ releaseId, action: options.retry ? "retry_submission" : "release_submission", httpStatus: response.httpStatus, createdByAdminId: options.actorId, requestPayload: redactedPayload, responsePayload: data, responseRaw: response.raw, warnings: parsed.warnings, success: true });
+    await logDistributionEvent({ releaseId, action: options.retry ? "retry_submission" : "release_submission", httpStatus: response.httpStatus, createdByAdminId: options.actorId, correlationId, requestPayload: redactedPayload, responsePayload: data, responseRaw: response.raw, warnings: parsed.warnings, success: true });
     await moveQueue(releaseId, "sent_to_direnote", options.actorId, "Release sent to DireNote.", { direnoteResponse: data, warnings: parsed.warnings });
-    await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: "DIRENOTE_ACCEPTED", details: { status: automaticStatus, upc: parsed.upc, warnings: parsed.warnings } });
+    await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: "DIRENOTE_ACCEPTED", details: { attemptId: claim.attempt.id, correlationId, trigger: options.correctionReingest ? "AUTO_AFTER_REDRESSAL_APPROVAL" : "AUTO_AFTER_QC_APPROVAL", status: automaticStatus, upc: parsed.upc, warnings: parsed.warnings } });
     await resolveAdminTask(`release:${releaseId}:direnote:validation`, "DireNote submission accepted.");
     await resolveAdminTask(`release:${releaseId}:direnote:network`, "DireNote submission accepted.");
     await finishDistributionSubmission(claim.attempt.id, { state: "submitted", httpStatus: response.httpStatus, providerReference: parsed.distributorReleaseId ?? parsed.upc ?? null, responseRedacted: { distributorReleaseId: parsed.distributorReleaseId ?? null, upc: parsed.upc ?? null, trackIsrcs: parsed.trackIsrcs, warnings: parsed.warnings } });

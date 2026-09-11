@@ -53,7 +53,16 @@ export async function GET(request: Request) {
         if (/DIRENOTE_STATUS_AUTH_FAILED|capacity is exhausted/.test(message)) break;
       }
     }
-    await prisma.direNoteLog.create({ data: { action: "hourly_status_sync", success: results.every(result => result.success), responseJson: { eligible: candidates.length, checked: results.length, results } } });
-    return NextResponse.json({ success: true, eligible: candidates.length, checked: results.length, results });
+    const summary = {
+      eligible: candidates.length,
+      checked: results.length,
+      updates: results.filter(result => result.success && JSON.stringify(result.before) !== JSON.stringify(result.after)).length,
+      errors: results.filter(result => !result.success).length,
+      rejected: results.filter(result => result.before.status !== "REJECTED" && result.after?.status === "REJECTED").length,
+      durationMs: Date.now() - started,
+      results
+    };
+    await prisma.direNoteLog.create({ data: { action: "hourly_status_sync", success: summary.errors === 0, responseJson: summary } });
+    return NextResponse.json({ success: true, ...summary });
   }, { timeout: 290_000, maxWait: 5000 });
 }
