@@ -195,7 +195,9 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
   await updateDetailedReleaseStatus(releaseId, "submitting_to_distributor", "DireNote submission claimed and started.");
 
   let providerAccepted = false;
-  const correlationId = `DNM_SUB_${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}_${claim.attempt.id}`;
+  // Avoid a bracket character-class literal here: Tailwind's source extractor
+  // can mistake it for an arbitrary CSS utility while scanning TypeScript.
+  const correlationId = `DNM_SUB_${new Date().toISOString().replaceAll("-", "").replaceAll(":", "").replaceAll(".", "").replace("T", "").replace("Z", "").slice(0, 14)}_${claim.attempt.id}`;
   try {
     await reserveDireNoteRequest("content_ingestion", releaseId, options.actorId);
     await prisma.distributionSubmissionAttempt.update({ where: { id: claim.attempt.id }, data: {
