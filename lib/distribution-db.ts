@@ -28,6 +28,7 @@ async function legacyCompatibleReleaseRows(where: "user" | "all", userId?: numbe
     : await prisma.$queryRaw<Array<Record<string, any>>>`
         SELECT r.*, u.email AS owner_email FROM "releases" r
         LEFT JOIN "users" u ON u.id = r.user_id
+        WHERE r."archived_at" IS NULL
         ORDER BY r.created_at DESC
       `;
   const ids = rows.map((row) => Number(row.id)).filter(Number.isInteger);
@@ -695,9 +696,10 @@ export async function listAllDetailedReleases(): Promise<Release[]> {
              r.status, q.position AS queuePosition, q.estimated_review_time AS estimatedReviewTime, r.created_at AS createdAt,
              u.email AS ownerEmail
      FROM releases r
-     LEFT JOIN users u ON u.id = r.user_id
-     LEFT JOIN release_queue q ON q.release_id = r.id
-     ORDER BY r.created_at DESC`
+      LEFT JOIN users u ON u.id = r.user_id
+      LEFT JOIN release_queue q ON q.release_id = r.id
+      WHERE r.archived_at IS NULL
+      ORDER BY r.created_at DESC`
   );
   const releases = (rows as Array<Omit<Release, "platforms" | "tracks"> & { platforms: string }>).map((row) => ({
     ...row,

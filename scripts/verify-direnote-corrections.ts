@@ -41,8 +41,12 @@ assert.equal(direNoteCorrectionFingerprint(issues), direNoteCorrectionFingerprin
 async function main() {
   const { prisma } = await import("../lib/prisma");
   const { syncDireNoteRelease } = await import("../lib/direnote-service");
+  const { mapDireNoteStatus } = await import("../lib/direnote-service");
   const { parseDireNoteResponse } = await import("../lib/direnote");
   assert.equal(parseDireNoteResponse({ success: true, upc: "auto-generated" }).upc, null);
+  assert.equal(mapDireNoteStatus("Rejected"), "rejected");
+  assert.equal(mapDireNoteStatus("Declined by reviewer"), "rejected");
+  assert.equal(mapDireNoteStatus("Provider failed validation"), "rejected");
   let response: unknown = payload;
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify(response), { status: 200 });

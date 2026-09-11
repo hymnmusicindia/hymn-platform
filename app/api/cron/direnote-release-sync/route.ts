@@ -24,6 +24,7 @@ export async function GET(request: Request) {
     const candidates = await prisma.release.findMany({
       where: {
         archivedAt: null,
+        distributionSubmissions: { some: { provider: "direnote", state: "submitted", isCurrent: true } },
         AND: [statusFilter],
         OR: [
           { direNoteLastAttemptedAt: null },

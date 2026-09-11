@@ -53,6 +53,7 @@ async function persistArtistLinks(tx: Prisma.TransactionClient, releaseId: numbe
 export function mapDireNoteStatus(value: unknown) {
   const status = text(value).toLowerCase();
   if (status === "live") return "live";
+  if (/reject|declin|fail|invalid|denied|cancel(?:led|ed)?/.test(status)) return "rejected";
   if (providerRequiresCorrections(status)) return "changes_required";
   if (/^(scheduled|approved|accepted|ready|ready for distribution)$/.test(status)) return "scheduled";
   if (/deliver|distribut/.test(status)) return "delivered";
@@ -64,6 +65,7 @@ function aggregateReleaseStatus(tracks: RecordValue[], releaseStatus: unknown, r
   const statuses = [mapDireNoteStatus(releaseStatus), ...tracks.map((track) => mapDireNoteStatus(track.status))].filter((status) => status !== "unknown");
   if (!statuses.length) return { provider: "unknown", canonical: null } as const;
   if (statuses.some((status) => status === "changes_required")) return { provider: "changes_required", canonical: "changes_requested" as ReleaseStatus } as const;
+  if (statuses.some((status) => status === "rejected")) return { provider: "rejected", canonical: "rejected" as ReleaseStatus } as const;
   const trackStatuses = tracks.map((track) => mapDireNoteStatus(track.status));
   if (trackStatuses.length && trackStatuses.every((status) => status === "live")) return { provider: "live", canonical: "live" as ReleaseStatus } as const;
   if (statuses.some((status) => status === "live")) return { provider: "partially_live", canonical: "partially_live" as ReleaseStatus } as const;
@@ -217,7 +219,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   const repeatCorrection = previousDireNote.appliedCorrectionFingerprint === correctionFingerprint;
   if (aggregateStatus.canonical && (aggregateStatus.canonical !== previousStatus || (aggregateStatus.canonical === "changes_requested" && !repeatCorrection))
     && !(aggregateStatus.canonical === "changes_requested" && repeatCorrection)
-    && !(customerWorkflow && aggregateStatus.canonical !== "changes_requested")) {
+    && !(customerWorkflow && !["changes_requested", "rejected"].includes(aggregateStatus.canonical))) {
     if (aggregateStatus.canonical === "changes_requested") {
       const reason = correctionMessages.join(" ") || "DireNote requires corrections before distribution can continue.";
       const review = {
