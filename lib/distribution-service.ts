@@ -177,7 +177,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     await updateDetailedReleaseStatus(releaseId, "approved", "HYMN review approved for DireNote submission.");
   }
 
-  const claim = await claimDistributionSubmission(releaseId, payload, previousAttempt?.id, options.correctionReingest ? "REDRESSAL" : options.retry ? "ADMIN_RESUBMISSION" : "INITIAL_SUBMISSION");
+  const claim = await claimDistributionSubmission(releaseId, payload, previousAttempt?.id);
   if (claim.alreadySubmitted) return { release, validation, submitted: true, duplicate: true, retryable: false };
   if (!claim.claimed) return {
     release,

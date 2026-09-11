@@ -62,9 +62,6 @@ async function main() {
   const snapshots = await readFile("prisma/migrations/20260908000000_direnote_payload_snapshots/migration.sql", "utf8");
   await prisma.$executeRawUnsafe(snapshots);
   await prisma.$executeRawUnsafe(snapshots);
-  const lifecycleMigration = await readFile("prisma/migrations/20260911000000_direnote_attempt_lifecycle/migration.sql", "utf8");
-  await prisma.$executeRawUnsafe(lifecycleMigration);
-  await prisma.$executeRawUnsafe(lifecycleMigration);
   await assertDireNoteSchemaReady(prisma);
   assert.equal(await prisma.distributionSubmissionAttempt.findFirst(), null);
   const migration = await readFile("prisma/migrations/20260906000000_direnote_attempt_history/migration.sql", "utf8");
