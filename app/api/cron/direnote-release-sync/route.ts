@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       take: 50,
       orderBy: [{ direNoteLastAttemptedAt: { sort: "asc", nulls: "first" } }, { id: "asc" }]
     });
-    const results: Array<{ releaseId: number; title: string; success: boolean; before: { status: string; upc: string | null; direNoteStatus: string | null }; after?: { status: string; upc: string | null; direNoteStatus: string | null }; error?: string }> = [];
+    const results: Array<{ releaseId: number; title: string; success: boolean; pending?: boolean; before: { status: string; upc: string | null; direNoteStatus: string | null }; after?: { status: string; upc: string | null; direNoteStatus: string | null }; error?: string }> = [];
     const started = Date.now();
     for (const release of candidates) {
       if (Date.now() - started > 180_000) break;
@@ -49,7 +49,10 @@ export async function GET(request: Request) {
       catch (error) {
         const message = error instanceof Error ? error.message : "Sync failed.";
         const updated = await prisma.release.findUnique({ where: { id: release.id }, select: { status: true, upc: true, direNoteStatus: true } });
-        results.push({ releaseId: release.id, title: release.title, success: false, before, after: updated ?? undefined, error: message });
+        // DireNote commonly assigns UPCs asynchronously. This is an expected
+        // pending state, not a failed reconciliation run, and stays eligible.
+        const pending = /^Awaiting UPC:/.test(message);
+        results.push({ releaseId: release.id, title: release.title, success: pending, pending, before, after: updated ?? undefined, error: message });
         if (/DIRENOTE_STATUS_AUTH_FAILED|capacity is exhausted/.test(message)) break;
       }
     }
@@ -58,6 +61,7 @@ export async function GET(request: Request) {
       checked: results.length,
       updates: results.filter(result => result.success && JSON.stringify(result.before) !== JSON.stringify(result.after)).length,
       errors: results.filter(result => !result.success).length,
+      pending: results.filter(result => result.pending).length,
       rejected: results.filter(result => result.before.status !== "REJECTED" && result.after?.status === "REJECTED").length,
       durationMs: Date.now() - started,
       results
