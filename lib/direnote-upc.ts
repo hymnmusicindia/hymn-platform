@@ -8,35 +8,28 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+function walkDireNoteObjects(value: unknown, seen = new Set<unknown>()): Array<Record<string, unknown>> {
+  const current = record(value);
+  if (!current || seen.has(value)) return [];
+  seen.add(value);
+  const nested = Object.values(current)
+    .flatMap((child) => {
+      if (!child || typeof child !== "object") return [];
+      if (Array.isArray(child)) return child.flatMap(item => walkDireNoteObjects(item, seen));
+      return walkDireNoteObjects(child, seen);
+    });
+  return [current, ...nested];
+}
+
 export function upcFromDireNoteResponse(value: unknown): string | null {
-  const root = record(value);
-  const data = record(root.data);
-  const result = record(root.result);
-  const response = record(root.direnoteResponse);
-  const direNote = record(root.direNote);
-  const candidates = [
-    root,
-    data,
-    result,
-    record(root.release),
-    record(data.release),
-    record(result.release),
-    response,
-    record(response.data),
-    record(response.result),
-    record(response.release),
-    record(record(response.data).release),
-    record(record(response.result).release),
-    direNote,
-    record(direNote.data),
-    record(direNote.result),
-    record(direNote.release),
-    record(record(direNote.data).release),
-    record(record(direNote.result).release)
-  ];
+  const candidates = walkDireNoteObjects(value);
   for (const candidate of candidates) {
     const upc = normalizeDireNoteUpc(candidate.upc ?? candidate.UPC ?? candidate.upc_code ?? candidate.upcCode);
     if (upc) return upc;
+    for (const key of Object.keys(candidate)) {
+      const nested = normalizeDireNoteUpc(candidate[key]);
+      if (nested) return nested;
+    }
   }
   return null;
 }

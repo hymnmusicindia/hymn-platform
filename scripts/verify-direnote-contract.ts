@@ -40,6 +40,7 @@ assert.equal(parseDireNoteResponse({ success: true, release: { release_id: "dn_2
 assert.equal(parseDireNoteResponse({ success: true, data: { release: { upc_code: "8901234567891" }, tracks: [{ track_name: "TEST", isrc: "IN-TEST-3" }] } }).upc, "8901234567891");
 assert.equal(upcFromDireNoteResponse({ release: { upc_code: "8901234567892" } }), "8901234567892");
 assert.equal(upcFromDireNoteResponse({ direnoteResponse: { data: { release: { upc_code: "8901234567893" } } } }), "8901234567893");
+assert.equal(upcFromDireNoteResponse({ data: { release: { nested: { upc_code: "8901234567894" } } } }), "8901234567894");
 
 async function verifyClientContract() {
 process.env.DIRENOTE_CLIENT_ID = "contract-client";
