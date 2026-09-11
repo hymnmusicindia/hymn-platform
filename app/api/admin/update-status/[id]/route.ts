@@ -42,8 +42,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (!currentRelease) return NextResponse.json({ error: "Release not found." }, { status: 404 });
       const distributionPermission = await requireAdminPermission("distribution.submit");
       if ("error" in distributionPermission) return distributionPermission.error;
-      // Approval is the delivery authorization. submitRelease performs a fresh
-      // provider-readiness check under its advisory lock before it creates an attempt.
+      // Approval is the delivery authorization. We mark the stage as approved before
+      // the provider accepts the actual submission so the queue stays truthful while
+      // the provider-side delivery check and handoff run.
+      const approvalQueueEntry = await syncQueueStage(Number(id), "approved", actorId, "HYMN approval queued this release for DireNote delivery.", { syncReleaseStatus: false });
+      // submitRelease performs a fresh provider-readiness check under its advisory lock
+      // before it creates the provider attempt.
       const submission = await submitRelease(Number(id), { actorId, siteUrl: getPublicAppUrl(request.url) });
       if (!submission.submitted) {
         const messages = submission.validation.issues.map((issue) => issue.message);
@@ -53,7 +57,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         );
       }
       const queueEntry = await syncQueueStage(Number(id), "sent_to_direnote", actorId, "HYMN approval automatically delivered this release to DireNote.", { syncReleaseStatus: false });
-      await createReleaseAuditLog({ releaseId: Number(id), userId: actorId, action: "RELEASE_APPROVED_AND_AUTO_DELIVERED", details: { note: payload.note ?? null } });
+      await createReleaseAuditLog({ releaseId: Number(id), userId: actorId, action: "RELEASE_APPROVED_AND_AUTO_DELIVERED", details: { note: payload.note ?? null, approvalQueueEntryId: approvalQueueEntry?.id ?? null } });
       return NextResponse.json({ release: submission.release, queueEntry, validation: submission.validation, warnings: submission.warnings ?? [] });
     }
     if (payload.status === "sent") {

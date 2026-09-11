@@ -53,7 +53,20 @@ export async function finishDistributionSubmission(id: number, input: { state: "
 export async function currentDireNoteAttempt(releaseId: number) {
   return prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422027, ${releaseId}::integer)`;
-    const current = await tx.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: "direnote", isCurrent: true } });
+    const currentCandidates = await tx.distributionSubmissionAttempt.findMany({
+      where: { releaseId, provider: "direnote", isCurrent: true },
+      orderBy: [{ startedAt: "desc" }, { id: "desc" }]
+    });
+    const current = currentCandidates[0] ?? null;
+    if (currentCandidates.length > 1) {
+      const staleIds = currentCandidates.slice(1).map((item) => item.id);
+      if (staleIds.length) {
+        await tx.distributionSubmissionAttempt.updateMany({
+          where: { id: { in: staleIds } },
+          data: { isCurrent: false, providerStatus: "superseded" }
+        });
+      }
+    }
     const release = await tx.release.findUniqueOrThrow({ where: { id: releaseId }, include: { tracks: true } });
     if (current) {
       const recoveredUpc = normalizeDireNoteAttemptUpc(current.responseRedacted) ?? normalizeDireNoteAttemptUpc(current.rawStatusPayload) ?? normalizeDireNoteAttemptUpc(release.metadata) ?? release.upc;
@@ -92,10 +105,17 @@ export async function activateDireNoteAttempt(id: number, input: { upc: string |
       if (track.isrc !== identifier.isrc) await tx.externalIdentifierHistory.create({ data: { releaseId: release.id, trackId: track.id, provider: "direnote", identifierType: "isrc", previousValue: track.isrc, canonicalValue: identifier.isrc ?? "awaiting_assignment", source: "submission_attempt" } });
       await tx.track.update({ where: { id: track.id }, data: { isrc: identifier.isrc } });
     }
-    const previous = await tx.distributionSubmissionAttempt.findFirst({ where: { releaseId: attempt.releaseId, provider: "direnote", isCurrent: true, id: { not: id } } });
+    const previousCandidates = await tx.distributionSubmissionAttempt.findMany({
+      where: { releaseId: attempt.releaseId, provider: "direnote", isCurrent: true, id: { not: id } },
+      orderBy: [{ startedAt: "desc" }, { id: "desc" }]
+    });
+    const previous = previousCandidates[0] ?? null;
     if (previous) {
       const correction = previous.corrections && typeof previous.corrections === "object" && !Array.isArray(previous.corrections) ? previous.corrections : {};
-      await tx.distributionSubmissionAttempt.update({ where: { id: previous.id }, data: { isCurrent: false, providerStatus: "superseded", corrections: { ...correction, status: "superseded", resubmittedAt: new Date().toISOString(), supersededByAttemptId: id } } });
+      await tx.distributionSubmissionAttempt.updateMany({
+        where: { id: { in: previousCandidates.map(item => item.id) } },
+        data: { isCurrent: false, providerStatus: "superseded", corrections: { ...correction, status: "superseded", resubmittedAt: new Date().toISOString(), supersededByAttemptId: id } }
+      });
       await tx.adminTask.updateMany({ where: { eventKey: { startsWith: `release:${release.id}:direnote:correction:${previous.id}:` }, status: { not: "resolved" } }, data: { status: "resolved", resolvedAt: new Date(), resolutionNote: "Corrections re-ingested; monitoring the new submission attempt." } });
     }
     return tx.distributionSubmissionAttempt.update({ where: { id }, data: { ...input, isCurrent: true, state: "submitted", providerStatus: "processing", completedAt: new Date() } });

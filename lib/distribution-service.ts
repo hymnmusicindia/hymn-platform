@@ -140,7 +140,20 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
       where: { releaseId, provider: "direnote", OR: [{ state: "submitted" }, { isCurrent: true }] },
       select: { id: true }
     });
-    if (accepted || ["sent", "sent_to_distributor", "distributor_processing", "processing", "scheduled", "awaiting_live_confirmation", "partially_live", "delivered", "live"].includes(release.status)) {
+    const activeSubmissionStatus = [
+      "queued_for_distribution",
+      "submitting_to_distributor",
+      "sent",
+      "sent_to_distributor",
+      "distributor_processing",
+      "processing",
+      "scheduled",
+      "awaiting_live_confirmation",
+      "partially_live",
+      "delivered",
+      "live"
+    ];
+    if (accepted || activeSubmissionStatus.includes(release.status)) {
       return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: true, duplicate: true, retryable: false };
     }
   }
