@@ -50,7 +50,10 @@ function distributorSafeFilename(filename: string, mimeType: string) {
 }
 
 function hostingerProofDirectory() {
-  return process.env.DIRENOTE_PUBLIC_PROOFS_ROOT?.trim() || "/home/u390865851/domains/hymnmusic.fun/public_html/direnote-proofs";
+  // Hostinger's account-level public_html is the persistent document root.
+  // Do not use hbuilds (replaced on every Node deployment) or an inferred
+  // nested domain path, which may not be the site's served web root.
+  return process.env.DIRENOTE_PUBLIC_PROOFS_ROOT?.trim() || "/home/u390865851/public_html/direnote-proofs";
 }
 
 function hostingerProofFileName(input: { assetId: number; checksum: string; filename: string }) {
