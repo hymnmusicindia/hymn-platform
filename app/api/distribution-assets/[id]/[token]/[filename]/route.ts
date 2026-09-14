@@ -14,11 +14,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       status: asset.contentRange ? 206 : 200,
       headers: {
         "Content-Type": asset.mimeType,
-        "Content-Disposition": `inline; filename="${asset.fileName.replace(/["\\]/g, "_")}"`,
+        // DireNote downloads evidence as a file; attachment avoids HTML/viewer
+        // negotiation that can make a valid PDF look like a malformed response.
+        "Content-Disposition": `attachment; filename="${asset.fileName.replace(/["\\]/g, "_")}"`,
         "Content-Length": asset.contentLength || String(asset.bytes.length),
         ...(asset.contentRange ? { "Content-Range": asset.contentRange } : {}),
         "Accept-Ranges": "bytes",
-        "Cache-Control": "private, no-store",
+        // The URL contains an unguessable HMAC token, so it can be fetched by
+        // DireNote without a HYMN session. Keep the cache window short so an
+        // asset revoked in HYMN does not remain provider-readable for long.
+        "Cache-Control": "public, max-age=900, s-maxage=900",
         "X-Content-Type-Options": "nosniff",
         "X-Robots-Tag": "noindex, nofollow",
       },

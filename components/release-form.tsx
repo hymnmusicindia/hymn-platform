@@ -1131,6 +1131,9 @@ export function ReleaseForm({
     [release.contentType],
   );
   const requiresAiProof = release.contentType === "AI Generated";
+  // DireNote requires evidence of the third-party licence that gives an artist
+  // the right to distribute non-exclusive content. Original and exclusively
+  // controlled masters are covered by the ownership declaration instead.
   const requiresLicenceProof = release.contentType === "Non-Exclusive Licensed";
   const [pendingPrefills, setPendingPrefills] = useState(() => new Set(prefillSuggestions.map((item) => item.field)));
   const [preferencesStatus, setPreferencesStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");

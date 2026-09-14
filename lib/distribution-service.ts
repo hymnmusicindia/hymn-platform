@@ -76,6 +76,8 @@ export async function buildDireNotePayloadForRelease(release: Release, options: 
   const licenseReceiptUrl = release.licenseReceiptUrl ?? release.license_receipt_url ?? release.licenseDocumentUrl ?? release.beatLicenseUrl;
   const proofs = {
     sunoReceiptUrl: sunoReceiptUrl ? await createDistributorAssetUrl(sunoReceiptUrl, options.siteUrl) : sunoReceiptUrl,
+    // Attached private evidence is converted to an opaque, provider-readable
+    // HTTPS URL. The original private download URL is never disclosed.
     licenseReceiptUrl: licenseReceiptUrl ? await createDistributorAssetUrl(licenseReceiptUrl, options.siteUrl) : licenseReceiptUrl
   };
   return buildDireNotePayload({ ...release, ...proofs, artworkUrl, tracks }, {

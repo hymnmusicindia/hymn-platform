@@ -452,9 +452,11 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
     pushMissing(issues, "sunoLink", payload.sunoLink, "Add the original AI-generation track or project link before submitting this release.");
   }
   if (payload.contenttype === "Non-Exclusive Licensed") {
-    pushMissing(issues, "license_receipt_url", payload.license_receipt_url, "Upload your licence agreement PDF before submitting this release.");
+    pushMissing(issues, "license_receipt_url", payload.license_receipt_url, "Upload the non-exclusive licence agreement PDF before submitting this release.");
   }
   validatePublicPdf(issues, "suno_receipt_url", payload.suno_receipt_url);
+  // HYMN converts an attached agreement into a signed provider-readable PDF
+  // URL before this validation runs.
   validatePublicPdf(issues, "license_receipt_url", payload.license_receipt_url);
 
   // DireNote needs Instagram only when it must provision an artist. A trusted
