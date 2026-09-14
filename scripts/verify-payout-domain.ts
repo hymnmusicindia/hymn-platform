@@ -19,6 +19,12 @@ const split = { recipients: [
 ] };
 assert.deepEqual(validateSplitRecord(split), { valid: true, total: 100, error: null });
 assert.equal(validateSplitRecord({ recipients: split.recipients.slice(0, 2) }).valid, false);
+const pendingSplit = { recipients: [
+  { payoutEligible: true, inviteStatus: "accepted", sharePercent: 80 },
+  { payoutEligible: true, inviteStatus: "pending", sharePercent: 20 }
+] };
+assert.equal(validateSplitRecord(pendingSplit).valid, false, "A pending invitation cannot make an agreement payable.");
+assert.throws(() => calculateSplitEarnings({ netRevenue: 100 }, pendingSplit), /must equal 100%/);
 const calculated = calculateSplitEarnings({ netRevenue: 10000 }, split);
 assert.deepEqual(calculated.map((row) => row.amount), [7000, 2000, 1000]);
 assert.equal(calculated.reduce((sum, row) => sum + row.amount, 0), 10000);

@@ -6,7 +6,9 @@ const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 10
 const number = (value: any) => typeof value?.toNumber === "function" ? value.toNumber() : Number(value ?? 0);
 
 export function validateSplitRecord(splitRecord: any) {
-  const eligible = splitRecord.recipients.filter((row: any) => row.payoutEligible && row.inviteStatus !== "declined" && row.inviteStatus !== "revoked");
+  // A recipient's acceptance is the financial consent boundary. Pending, declined,
+  // revoked, and expired invitations must never participate in a payable allocation.
+  const eligible = splitRecord.recipients.filter((row: any) => row.payoutEligible && row.inviteStatus === "accepted");
   const total = money(eligible.reduce((sum: number, row: any) => sum + number(row.sharePercent), 0));
   return { valid: Math.abs(total - 100) < 0.001, total, error: Math.abs(total - 100) < 0.001 ? null : "Split total must equal 100% before earnings can be distributed." };
 }
@@ -15,7 +17,7 @@ export function calculateSplitEarnings(royalty: any, splitRecord: any) {
   const validation = validateSplitRecord(splitRecord);
   if (!validation.valid) throw new Error(validation.error!);
   const artistPool = number(royalty.netRevenue);
-  return splitRecord.recipients.filter((row: any) => row.payoutEligible && !["declined", "revoked"].includes(row.inviteStatus)).map((row: any, index: number, all: any[]) => {
+  return splitRecord.recipients.filter((row: any) => row.payoutEligible && row.inviteStatus === "accepted").map((row: any, index: number, all: any[]) => {
     const allocatedBefore = all.slice(0, index).reduce((sum, prior) => sum + money(artistPool * number(prior.sharePercent) / 100), 0);
     const amount = index === all.length - 1 ? money(artistPool - allocatedBefore) : money(artistPool * number(row.sharePercent) / 100);
     return { recipient: row, sharePercent: number(row.sharePercent), amount };
@@ -27,7 +29,10 @@ export async function creditSplitRecipients(royaltyLineItemId: number, actorId?:
   if (!royalty?.releaseId) throw new Error("Royalty line item must be linked to a release.");
   const statement = new Date(royalty.statementMonth);
   const split = await (prisma as any).splitRecord.findFirst({ where: {
-    releaseId: royalty.releaseId, trackId: royalty.trackId ?? null, status: { in: ["active", "pending_acceptance", "locked"] },
+    // Pending arrangements remain visible to the parties but are deliberately
+    // excluded from the ledger until every recipient has accepted and the
+    // agreement is active. This prevents unconsented funds from being diverted.
+    releaseId: royalty.releaseId, trackId: royalty.trackId ?? null, status: { in: ["active", "locked"] },
     OR: [{ effectiveFromYear: null }, { effectiveFromYear: { lt: statement.getUTCFullYear() } }, { effectiveFromYear: statement.getUTCFullYear(), effectiveFromMonth: { lte: statement.getUTCMonth() + 1 } }]
   }, include: { recipients: true }, orderBy: { createdAt: "desc" } });
   if (!split) return { applied: false, reason: "No active split record; owner earnings remain on the existing payout path." };
