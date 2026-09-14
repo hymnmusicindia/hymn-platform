@@ -4,6 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { razorpay } from "@/lib/razorpay";
 import { artistProfileLimitForPlan } from "@/lib/artist-profile-limits";
 import { findDistributionPlan } from "@/lib/distribution-plans";
+import { qualifyRecurringReferral } from "@/lib/referral-reward-policy";
+import { qualifyPartnerPayment } from "@/lib/growth-partners";
+import { recordGrowthEvent } from "@/lib/growth";
 
 export const SUBSCRIPTION_PRODUCTS = ["half_yearly", "yearly", "yearly_plus"] as const;
 export type SubscriptionProduct = typeof SUBSCRIPTION_PRODUCTS[number];
@@ -158,6 +161,16 @@ export async function synchronizeProviderSubscription(entity: ProviderSubscripti
     await tx.auditLog.create({ data: { action: "SUBSCRIPTION_PROVIDER_SYNCHRONIZED", entity: "subscriptions", entityId: String(existing.id), metadata: { providerStatus: status, paymentId: payment?.id || null, billingPeriodRenewed, releaseAllowanceReset: billingPeriodRenewed } as Prisma.InputJsonObject } });
     return updated;
   });
+  if (payment?.id && payment.status === "captured") {
+    try {
+      const persisted = await prisma.subscriptionPayment.findUniqueOrThrow({ where: { razorpayPaymentId: payment.id } });
+      await qualifyRecurringReferral(persisted.id);
+      await qualifyPartnerPayment(persisted.id);
+      const earlier = await prisma.subscriptionPayment.count({ where: { subscriptionId: subscription.id, status: "captured", id: { lt: persisted.id } } });
+      await recordGrowthEvent({ event: "payment_success", key: `subscription-payment:${persisted.id}`, userId: subscription.userId, properties: { amount_cents: persisted.amount, currency: persisted.currency, plan_id: subscription.plan } });
+      await recordGrowthEvent({ event: earlier ? "plan_renewed" : "plan_purchased", key: `subscription-conversion:${persisted.id}`, userId: subscription.userId, properties: { plan_id: subscription.plan } });
+    } catch { console.warn(JSON.stringify({ scope: "growth", event: "subscription_observation", status: "retry_required" })); }
+  }
   return subscription;
 }
 

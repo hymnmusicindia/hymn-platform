@@ -1,6 +1,5 @@
 import { ContactForm } from "@/components/contact-form";
-import Link from "next/link";
-import { ArrowRight, LockKeyhole, MessageCircle, Send } from "lucide-react";
+import { ArrowRight, MessageCircle, Send } from "lucide-react";
 import { getSession } from "@/lib/session";
 
 export default async function ContactPage() {
@@ -27,16 +26,7 @@ export default async function ContactPage() {
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-soft)]">Inquiry desk</p>
               <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-[var(--text)] sm:text-3xl">Tell us what you&apos;re building.</h2>
             </div>
-            {session ? (
-              <ContactForm initialName={session.name} initialEmail={session.email} />
-            ) : (
-              <div className="flex min-h-[24rem] flex-col items-center justify-center rounded-2xl border px-5 py-12 text-center" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-                <span className="inline-flex h-14 w-14 items-center justify-center rounded-full border" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}><LockKeyhole className="h-6 w-6" /></span>
-                <h3 className="mt-6 text-2xl font-semibold tracking-[-0.025em] text-[var(--text)]">Log in to send an inquiry</h3>
-                <p className="mt-3 max-w-sm text-sm leading-6 text-[var(--text-muted)]">Signing in keeps your conversation connected to your account and makes follow-up easier.</p>
-                <Link href="/login" className="group mt-7 inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold transition hover:-translate-y-0.5" style={{ background: "var(--text)", color: "var(--bg)" }}>Log in to continue <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></Link>
-              </div>
-            )}
+            <ContactForm initialName={session?.name} initialEmail={session?.email} />
           </section>
         </div>
       </div>

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { REFERRED_USER_REWARD_INR, REFERRER_REWARD_INR } from "@/lib/referrals";
 
 export async function GET() {
   const session = await getSession();
@@ -9,7 +8,8 @@ export async function GET() {
   const user = await prisma.user.findUnique({ where: { id: session.sub }, select: { referredById: true, referralPromptCompletedAt: true, createdAt: true } });
   if (!user) return NextResponse.json({ error: "Account not found." }, { status: 404 });
   const newAccount = Date.now() - user.createdAt.getTime() <= 7 * 86_400_000;
-  return NextResponse.json({ showPrompt: newAccount && !user.referredById && !user.referralPromptCompletedAt, referrerReward: REFERRER_REWARD_INR, referredReward: REFERRED_USER_REWARD_INR });
+  const policy = await prisma.growthRewardPolicy.findUniqueOrThrow({ where: { id: 1 } });
+  return NextResponse.json({ showPrompt: newAccount && !user.referredById && !user.referralPromptCompletedAt, referrerReward: policy.artistCredit, referredReward: 0 });
 }
 
 export async function POST() {

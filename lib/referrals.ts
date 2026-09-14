@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getPublicAppUrl } from "@/lib/public-app-url";
+import { newReferralRewardPolicy } from "@/lib/referral-reward-policy";
 
 export const REFERRER_REWARD_INR = 5;
 export const REFERRED_USER_REWARD_INR = 3;
@@ -41,6 +42,7 @@ export async function registerReferralForNewUser(tx: Tx, input: { referredUserId
   if (!referredUser) throw new Error("Referred account was not found.");
   if (!referrer || referrer.status !== "ACTIVE") throw new Error("This referral code isn't valid.");
   if (existing || referredUser.referredById) throw new Error("A referral has already been associated with this account.");
+  if (await tx.partnerReferral.findUnique({ where: { userId: input.referredUserId } })) throw new Error("A partner referral has already been associated with this account.");
   if (referrer.id === referredUser.id || referrer.email.toLowerCase() === input.referredEmail.toLowerCase()) throw new Error("You can't use your own referral code.");
 
   const reverse = await tx.referral.findFirst({ where: { userId: input.referredUserId, referredUserId: referrer.id }, select: { id: true } });
@@ -52,6 +54,7 @@ export async function registerReferralForNewUser(tx: Tx, input: { referredUserId
     referredUserId: input.referredUserId,
     referralCode: referrer.referralCode || code,
     signupEmail: input.referredEmail.toLowerCase(),
+    rewardPolicy: await newReferralRewardPolicy(tx),
     status: "PENDING",
     registeredAt: new Date()
   } });
@@ -68,6 +71,7 @@ export async function qualifyReferralInTransaction(tx: Tx, input: { referredUser
   if (input.test || input.adminCreated || input.paidAmountInr <= 0 || !input.paymentId.trim()) return { qualified: false as const, reason: "ineligible_transaction" as const };
   const referral = await tx.referral.findUnique({ where: { referredUserId: input.referredUserId } });
   if (!referral || !["PENDING", "REGISTERED"].includes(referral.status)) return { qualified: false as const, reason: "no_pending_referral" as const };
+  if (referral.rewardPolicy) return { qualified: false as const, reason: "recurring_plan_required" as const };
   if (referral.userId === input.referredUserId) throw new Error("Self-referral cannot qualify.");
 
   const claimed = await tx.referral.updateMany({
@@ -109,7 +113,7 @@ export async function sendReferralRewardEmails(referralId: number) {
   ]);
 }
 
-export async function reverseReferralForTransactionInTransaction(tx: Tx, input: { transactionType: "checkout_order" | "distribution_order"; transactionId: string | number; reason: "refunded" | "charged_back" }) {
+export async function reverseReferralForTransactionInTransaction(tx: Tx, input: { transactionType: "checkout_order" | "distribution_order" | "subscription_payment"; transactionId: string | number; reason: "refunded" | "charged_back" }) {
   const referral = await tx.referral.findFirst({ where: { qualifyingTransactionType: input.transactionType, qualifyingTransactionId: String(input.transactionId), status: "REWARDED" } });
   if (!referral || !referral.referredUserId) return { reversed: false as const };
   const [referrer, referred] = await Promise.all([

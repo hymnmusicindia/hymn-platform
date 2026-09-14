@@ -17,6 +17,8 @@
     "test": "npm run test:performance-execution && npm run test:first-release && npm run test:direnote-contract && npm run test:analytics && npm run test:migration-safety && npm run test:razorpay && npm run test:subscriptions && npm run test:payment-enforcement && npm run test:storage && npm run test:release-status && npm run test:distribution-idempotency && npm run test:payout && npm run test:managed-services",
     "test:first-release": "tsx scripts/verify-first-release-funnel.ts && tsx scripts/verify-artist-profile-validation.ts",
     "test:distribution-pricing": "tsx scripts/verify-distribution-pricing.ts",
+    "test:growth": "tsx scripts/verify-growth-domain.ts",
+    "test:growth-integration": "tsx scripts/verify-growth-isolated.ts",
     "test:payout": "tsx scripts/verify-payout-domain.ts",
     "test:analytics": "tsx scripts/verify-analytics-domain.ts",
     "test:migration-safety": "tsx scripts/verify-migration-safety.ts",

@@ -13,8 +13,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const result = await prisma.$transaction(async tx => {
       const referral = await tx.referral.findUnique({ where: { id } });
-      if (!referral?.qualifyingTransactionId || !["checkout_order", "distribution_order"].includes(referral.qualifyingTransactionType || "")) throw new Error("This referral has no reversible qualifying transaction.");
-      const reversal = await reverseReferralForTransactionInTransaction(tx, { transactionType: referral.qualifyingTransactionType as "checkout_order" | "distribution_order", transactionId: referral.qualifyingTransactionId, reason: "refunded" });
+      if (!referral?.qualifyingTransactionId || !["checkout_order", "distribution_order", "subscription_payment"].includes(referral.qualifyingTransactionType || "")) throw new Error("This referral has no reversible qualifying transaction.");
+      const reversal = await reverseReferralForTransactionInTransaction(tx, { transactionType: referral.qualifyingTransactionType as "checkout_order" | "distribution_order" | "subscription_payment", transactionId: referral.qualifyingTransactionId, reason: "refunded" });
       await tx.auditLog.create({ data: { actorType: "admin", actorId, actorRole: "admin", action: "REFERRAL_ADMIN_REVERSAL_REQUESTED", entity: "referral", entityId: String(id), reason: parsed.data.reason, riskLevel: "high", metadata: reversal } });
       return reversal;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });

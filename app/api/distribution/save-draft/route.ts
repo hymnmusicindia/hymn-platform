@@ -4,6 +4,7 @@ import { getDetailedReleaseByUserId, saveDraftDistributionRelease } from "@/lib/
 import { FIRST_RELEASE_PROMOTION_CODE, getFirstReleaseEligibility } from "@/lib/first-release-promotion";
 import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution";
 import { getContentIdEligibility } from "@/lib/content-id-eligibility";
+import { recordGrowthEvent } from "@/lib/growth";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -143,6 +144,9 @@ export async function POST(request: Request) {
       }
     });
 
+    if (!draftReleaseId && release?.id) {
+      await recordGrowthEvent({ event: "release_started", key: `release-start:${release.id}`, userId: session.sub, properties: { release_id: release.id } });
+    }
     return NextResponse.json({ release }, { status: 201 });
   } catch (error) {
     console.error("Save Draft Error:", error);

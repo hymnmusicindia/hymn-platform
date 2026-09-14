@@ -5,6 +5,7 @@ import { customerMessage } from "@/lib/customer-message";
 import { useEffect, useMemo, useState } from "react";
 import { Check, Copy, Gift, IndianRupee, Link2, Send, Users } from "lucide-react";
 import { ContextualHelp } from "@/components/contextual-help";
+import { GrowthReminderPreference } from "@/components/growth-reminder-preference";
 import type { ReferralDashboard } from "@/lib/types";
 
 const money = (value: number) => `₹${Number(value || 0).toLocaleString("en-IN")}`;
@@ -23,7 +24,7 @@ export function ReferralPanel() {
     return () => controller.abort();
   }, []);
 
-  const shareText = useMemo(() => data ? `Join me on HYMN. Use my referral link and, after your first eligible paid purchase, we both receive HYMN credit: ${data.referralLink}` : "", [data]);
+  const shareText = useMemo(() => data ? `I'm using HYMN for music distribution. If you're planning a release, you can check it out here: ${data.referralLink}` : "", [data]);
 
   async function copy(value: string, label: string) {
     await navigator.clipboard.writeText(value);
@@ -48,11 +49,12 @@ export function ReferralPanel() {
 
   return (
     <section className="surface-card overflow-hidden">
+      <GrowthReminderPreference />
       <div className="border-b p-5 sm:p-7" style={{ borderColor: "var(--border)" }}>
         <p className="eyebrow">Refer artists. Earn verified credit.</p>
         <h2 className="mt-2 max-w-3xl text-2xl font-semibold tracking-tight sm:text-3xl" style={{ color: "var(--text)" }}>
-          Earn {money(data.referrerReward)} when a friend completes their first eligible paid purchase.
-          <ContextualHelp faqId="referral-rewards" label="Referral rewards">{`Your friend receives ${money(data.referredReward)} HYMN credit at the same time. Sign-up alone does not unlock credit.`}</ContextualHelp>
+          Earn {money(data.referrerReward)} HYMN credit when a new referral purchases an eligible recurring plan.
+          <ContextualHelp faqId="referral-rewards" label="Referral rewards">Rewards require a verified payment, a verification period and admin approval. Earlier referrals retain their original terms.</ContextualHelp>
         </h2>
         <p className="mt-3 text-sm leading-6" style={{ color: "var(--text-muted)" }}>Attribution is locked to the new account. Rewards are verified server-side and issued once.</p>
       </div>
@@ -66,6 +68,7 @@ export function ReferralPanel() {
           <div className="flex items-center gap-2"><Link2 className="h-4 w-4" /><h3 className="font-semibold">Share your invitation</h3></div>
           <div className="mt-4 rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><p className="text-xs" style={{ color: "var(--text-soft)" }}>Referral link</p><p className="mt-1 truncate text-sm">{data.referralLink}</p></div>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:flex">
+            <a className="btn-outline" href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer">WhatsApp</a>
             <button className="btn-primary pressable" type="button" onClick={share}><Send className="h-4 w-4" /> Share</button>
             <button className="btn-outline pressable" type="button" onClick={() => copy(data.referralLink, "Referral link")}><Copy className="h-4 w-4" /> Copy link</button>
           </div>

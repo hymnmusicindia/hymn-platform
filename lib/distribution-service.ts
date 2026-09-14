@@ -223,10 +223,10 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
       const status = response.httpStatus ?? 503;
       const mode = httpErrorMode(status, response.providerReason);
       const parsed = parseDireNoteResponse(data);
-      const endpointNotFound = status === 404 && typeof response.raw === "string" && /page does not exist|page not found/i.test(response.raw);
+      const endpointNotFound = status === 404 && typeof response.raw === "string" && /page does not exist|page not found|endpoint_not_found/i.test(response.raw);
       const storageQuotaExceeded = response.providerReason === "storageQuotaExceeded";
       const message = endpointNotFound
-        ? "DireNote ingestion endpoint returned 404 (page not found). Verify DIRENOTE_INGEST_ENDPOINT."
+        ? "DireNote ingestion endpoint returned 404. Verify DIRENOTE_INGEST_ENDPOINT."
         : storageQuotaExceeded
           ? "DireNote cannot accept uploads because its Google Drive storage quota is full. The release is safe and was not rejected; free or increase storage on the DireNote account, then retry sending."
         : response.error || parsed.message || `DireNote API returned ${status}.`;

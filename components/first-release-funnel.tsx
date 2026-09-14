@@ -15,7 +15,7 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
   const track = useCallback((event: string) => fetch("/api/promotions/first-release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event, attribution }) }).catch(() => undefined), [attribution]);
   useEffect(() => { void track("landing_view"); }, [track]);
   const startHref = `/distribution/start?campaign=first-release${Object.entries(attribution).map(([key, value]) => `&${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`).join("")}`;
-  const start = () => { void track("release_started"); router.push(startHref); };
+  const start = () => { void track("release_for_free_clicked"); router.push(startHref); };
   const offerUsed = eligibility.authenticated && !eligibility.eligible;
 
   return <main className="first-release-page relative h-[100svh] overflow-hidden">

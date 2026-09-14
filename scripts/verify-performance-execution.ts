@@ -16,7 +16,7 @@ const workspace = source("components/customer-dashboard-shell.tsx");
 assert(workspace.includes('if (activeTab !== "purchases" && activeTab !== "support") return;'), "Beat purchases must be loaded on demand.");
 
 const releaseCron = source("app/api/cron/direnote-release-sync/route.ts");
-assert(releaseCron.includes('"SCHEDULED", "AWAITING_LIVE_CONFIRMATION", "PARTIALLY_LIVE"'), "The DireNote status worker must continue polling every post-review lifecycle state.");
+assert(/"SCHEDULED"\s*,\s*"AWAITING_LIVE_CONFIRMATION"\s*,\s*"PARTIALLY_LIVE"/.test(releaseCron), "The DireNote status worker must continue polling every post-review lifecycle state.");
 assert.equal(JSON.parse(source("vercel.json")).crons.find((cron: { path: string }) => cron.path === "/api/cron/direnote-release-sync").schedule, "0 * * * *", "DireNote review polling must run hourly.");
 
 const revenueCron = source("app/api/cron/direnote-revenue-sync/route.ts");

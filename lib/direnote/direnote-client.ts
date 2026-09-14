@@ -10,6 +10,7 @@ export type DireNoteSubmitResult = {
   providerCode?: number;
   providerReason?: string;
   retryAfterSeconds?: number;
+  contentType?: string | null;
   missing?: ReturnType<typeof getDireNoteConfig>["missing"];
 };
 
@@ -20,6 +21,28 @@ function parsedJson(value: unknown): unknown {
   const trimmed = value.trim();
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return value;
   try { return JSON.parse(trimmed); } catch { return value; }
+}
+
+function safeResponsePreview(value: string, config: ReturnType<typeof getDireNoteConfig>) {
+  const withoutMarkup = value
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 240);
+  let safe = withoutMarkup || "No response body.";
+  for (const secret of [config.pin, config.clientId]) if (secret) safe = safe.split(secret).join("[REDACTED]");
+  return safe;
+}
+
+function malformedResponseError(status: number, contentType: string | null, preview: string) {
+  const type = contentType?.split(";", 1)[0]?.trim().toLowerCase();
+  const received = type ? ` (${type})` : "";
+  if (status === 401 || status === 403) return `DIRENOTE_PROVIDER_AUTH_OR_ACCESS: DireNote returned HTTP ${status}${received}. Verify the API PIN, client ID and provider account access.`;
+  if (status === 404) return `DIRENOTE_PROVIDER_ENDPOINT_NOT_FOUND: DireNote returned HTTP 404${received}. Verify DIRENOTE_INGEST_ENDPOINT.`;
+  if (status >= 500) return `DIRENOTE_PROVIDER_UNAVAILABLE: DireNote returned HTTP ${status}${received}. The release remains queued and can be retried.`;
+  return `DIRENOTE_MALFORMED_RESPONSE: DireNote returned HTTP ${status}${received}, not the required JSON response. Response preview: ${preview}`;
 }
 
 export function extractDireNoteProviderError(value: unknown): ProviderError {
@@ -55,12 +78,14 @@ async function postToDireNote(endpoint: string, payload: Record<string, unknown>
       signal: controller.signal
     });
     const raw = await response.text();
+    const contentType = response.headers.get("content-type");
     let data: any;
     try { data = JSON.parse(raw); } catch {
-      return { success: false, httpStatus: response.status, error: "DIRENOTE_MALFORMED_RESPONSE: Expected JSON." };
+      const preview = safeResponsePreview(raw, config);
+      return { success: false, httpStatus: response.status, contentType, raw: preview, error: malformedResponseError(response.status, contentType, preview) };
     }
     if (!data || typeof data !== "object" || Array.isArray(data)) {
-      return { success: false, httpStatus: response.status, error: "DIRENOTE_MALFORMED_RESPONSE: Expected an object." };
+      return { success: false, httpStatus: response.status, contentType, raw: safeResponsePreview(raw, config), error: "DIRENOTE_MALFORMED_RESPONSE: DireNote returned JSON that was not an object." };
     }
     const apiRejected = data?.success === false || Boolean(data?.error) || Boolean(data?.errors);
     const providerError = apiRejected || !response.ok ? extractDireNoteProviderError(data) : {};
@@ -68,7 +93,7 @@ async function postToDireNote(endpoint: string, payload: Record<string, unknown>
     for (const secret of [config.pin, config.clientId]) if (secret) safeError = safeError?.split(secret).join("[REDACTED]");
     const retryHeader = response.headers.get("retry-after");
     const retryAfterSeconds = retryHeader ? Math.max(0, /^\d+$/.test(retryHeader) ? Number(retryHeader) : Math.ceil((Date.parse(retryHeader) - Date.now()) / 1000)) : undefined;
-    return { success: response.ok && !apiRejected, httpStatus: response.status, ok: response.ok, data, raw, error: safeError, providerCode: providerError.code, providerReason: providerError.reason, retryAfterSeconds: Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined };
+    return { success: response.ok && !apiRejected, httpStatus: response.status, ok: response.ok, data, raw, contentType, error: safeError, providerCode: providerError.code, providerReason: providerError.reason, retryAfterSeconds: Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined };
   } catch (error: any) {
     return { success: false, httpStatus: null, error: error?.name === "AbortError" ? `DireNote request timed out after ${timeoutMs} milliseconds.` : error?.message || "DireNote request failed." };
   } finally { clearTimeout(timeout); }

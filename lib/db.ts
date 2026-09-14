@@ -2202,7 +2202,10 @@ export async function createPartnershipLead(input: Omit<PartnershipLead, "id" | 
 }
 
 export async function listPartnershipLeads() {
-  if (usesPostgresPrisma()) assertNoProductionMemoryStore("Partnership leads");
+  if (usesPostgresPrisma()) {
+    const rows = await prisma.growthLead.findMany({ where: { kind: "partner" }, orderBy: { createdAt: "desc" }, take: 500 });
+    return rows.map(row => ({ id: row.id, name: row.name, email: row.email, company: row.company || undefined, collaborationType: row.interest, message: row.message, createdAt: row.createdAt.toISOString() }));
+  }
   const pool = getPool();
   if (!pool) return [...memory.partnershipLeads].sort((a, b) => b.id - a.id);
   const [rows] = await pool.query(

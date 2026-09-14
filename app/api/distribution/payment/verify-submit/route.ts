@@ -10,6 +10,7 @@ import { consumeRateLimit } from "@/lib/rate-limit";
 import { assertDireNoteAssetFormat } from "@/lib/distribution-asset-format";
 import { prisma } from "@/lib/prisma";
 import { calculateFirstReleasePrice, FIRST_RELEASE_PROMOTION_CODE, redeemFirstRelease, releaseFirstReleaseReservation, reserveFirstRelease, trackFirstReleaseEvent } from "@/lib/first-release-promotion";
+import { recordGrowthEvent } from "@/lib/growth";
 import { attachReservedSubscriptionRelease, releaseReservedSubscriptionSlot, reserveSubscriptionReleaseSlot, subscriptionHasEntitlement, subscriptionHasReleaseAllowance } from "@/lib/subscription-billing";
 import { distributionOrderPriceMatches } from "@/lib/distribution-order-price";
 import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution";
@@ -244,6 +245,7 @@ export async function POST(request: Request) {
     }).catch(() => console.error("Submission notification could not be delivered.", { releaseId: release?.id }));
 
     if (release?.id) {
+      await recordGrowthEvent({ event: "release_submitted", key: `release-submit:${release.id}`, userId: session.sub, properties: { release_id: release.id } });
       await createNotification({
         userId: session.sub,
         title: `Release submitted: ${release.releaseTitle || release.trackName}`,

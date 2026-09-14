@@ -11,7 +11,9 @@ export function PartnershipLeadForm() {
     setPending(true);
     setMessage(null);
 
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    try {
     const response = await fetch("/api/partnership", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -20,11 +22,14 @@ export function PartnershipLeadForm() {
     const data = await response.json();
     setPending(false);
     setMessage(response.ok ? "Partnership lead submitted. HYMN will reach out shortly." : data.error || "Could not submit partnership request.");
-    if (response.ok) event.currentTarget.reset();
+    if (response.ok) formElement.reset();
+    } catch { setMessage("Your request could not be sent. Please try again."); }
+    finally { setPending(false); }
   }
 
   return (
     <form onSubmit={handleSubmit} className="grid gap-5 rounded-[2rem] border border-border bg-white/5 p-6 md:grid-cols-2">
+      <label className="hidden" aria-hidden="true">Website<input name="website" tabIndex={-1} autoComplete="off" /></label>
       <input className="field" name="name" placeholder="Your name" required />
       <input className="field" name="email" type="email" placeholder="Work email" required />
       <input className="field" name="company" placeholder="Company / collective / brand" />

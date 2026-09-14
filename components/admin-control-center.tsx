@@ -1111,6 +1111,7 @@ export function AdminControlCenter({
         { key: "takedowns", label: "Takedowns", description: "Removal requests and outcomes", group: "Distribution Operations", href: "/admin/release-change-requests" },
         { key: "fraud", label: "Fraud Detection", description: "Risk monitoring and investigations", group: "Distribution Operations", href: "/admin/fraud" },
         { key: "referrals-admin", label: "Referrals", description: "Attribution, credits and abuse review", group: "Money Operations", href: "/admin/referrals" },
+        { key: "growth", label: "Growth", description: "Campaigns, inquiries and repeat releases", group: "Money Operations", href: "/admin/growth" },
         { key: "payments", label: "Payments", description: "Checkout records", group: "Money Operations" },
         { key: "revenue", label: "Revenue", description: "Revenue overview", group: "Money Operations" },
         { key: "royalties", label: "Payouts", description: "Withdrawal controls", group: "Money Operations" },

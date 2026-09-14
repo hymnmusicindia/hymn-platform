@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { AdminSessionPayload, SessionPayload } from "@/lib/types";
 import { getAdminSessionSecret, getUserSessionSecret } from "@/lib/env";
 import { logAuditEvent } from "@/lib/audit-log";
+import { identifyGrowthUser } from "@/lib/growth";
+import { attachPartnerReferral } from "@/lib/growth-partners";
 
 const USER_SESSION_COOKIE = "hymn_session";
 const ADMIN_SESSION_COOKIE = "hymn_admin_session";
@@ -45,6 +47,8 @@ export async function createSession(payload: SessionPayload, context: { ipAddres
     });
   }
   await logAuditEvent({ actorType: "user", actorId: payload.sub, actorRole: payload.role, entityType: "session", entityId: sessionId, action: "session.created", requestId: context.requestId, ipAddress: context.ipAddress, userAgent: context.userAgent, sessionId, riskLevel: "low" });
+  if (payload.role === "customer") await identifyGrowthUser(payload.sub, sessionId);
+  if (payload.role === "customer") await attachPartnerReferral(payload.sub);
 }
 
 export async function getSession() {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
-import { createUniqueReferralCode, REFERRED_USER_REWARD_INR, REFERRER_REWARD_INR } from "@/lib/referrals";
+import { createUniqueReferralCode } from "@/lib/referrals";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 
 function maskEmail(value: string) {
@@ -22,23 +22,26 @@ export async function GET(request: Request) {
   });
   if (!user?.referralCode) return NextResponse.json({ error: "User not found." }, { status: 404 });
 
-  const [activities, ledger] = await Promise.all([
+  const [activities, ledger, policy, counts, totals, visits] = await Promise.all([
     prisma.referral.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 100 }),
-    prisma.creditLedgerEntry.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 100 })
+    prisma.creditLedgerEntry.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 100 }),
+    prisma.growthRewardPolicy.findUniqueOrThrow({ where: { id: 1 } }),
+    prisma.referral.groupBy({ by: ["status"], where: { userId: user.id }, _count: true }),
+    prisma.referral.aggregate({ where: { userId: user.id, status: "REWARDED" }, _sum: { earnings: true } }),
+    prisma.referralVisit.count({ where: { referrerId: user.id } })
   ]);
-  const rewarded = activities.filter(item => item.status === "REWARDED");
-  const pending = activities.filter(item => ["ATTRIBUTED", "REGISTERED", "PENDING", "QUALIFIED"].includes(item.status));
 
   return NextResponse.json({ referral: {
     referralCode: user.referralCode,
     referralLink: `${getPublicAppUrl(request.url)}/join?ref=${encodeURIComponent(user.referralCode)}`,
     availableCredit: Number(user.referralCredits),
-    referrerReward: REFERRER_REWARD_INR,
-    referredReward: REFERRED_USER_REWARD_INR,
-    totalReferrals: activities.length,
-    successfulReferrals: rewarded.length,
-    pendingReferrals: pending.length,
-    totalCreditsEarned: rewarded.reduce((sum, item) => sum + item.earnings, 0),
+    referrerReward: policy.artistCredit,
+    referredReward: 0,
+    totalReferrals: counts.reduce((sum, item) => sum + item._count, 0),
+    successfulReferrals: counts.find(item => item.status === "REWARDED")?._count || 0,
+    pendingReferrals: counts.filter(item => ["ATTRIBUTED", "REGISTERED", "PENDING", "QUALIFIED"].includes(item.status)).reduce((sum, item) => sum + item._count, 0),
+    totalCreditsEarned: totals._sum.earnings || 0,
+    visits,
     activities: activities.map(item => ({ id: item.id, person: maskEmail(item.signupEmail), status: item.status, earnings: item.earnings, createdAt: item.createdAt.toISOString(), rewardedAt: item.rewardedAt?.toISOString() ?? null })),
     creditHistory: ledger.map(item => ({ id: item.id, type: item.type, direction: item.direction, amount: Number(item.amount), description: item.description, createdAt: item.createdAt.toISOString() }))
   } });

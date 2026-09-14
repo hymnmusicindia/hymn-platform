@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import { campaignLink, campaignSchema, clientGrowthSchema, growthTouch, hasCampaign } from "../lib/growth-domain";
+const touch = growthTouch("https://hymn.test/?utm_source=instagram&utm_campaign=reel_1&email=private@example.com&token=secret&ref=ARTIST42", "https://search.test/private?q=secret", new Date("2026-09-14T00:00:00Z"));
+assert.equal(touch.utm_source, "instagram"); assert.equal(touch.original_referrer, "search.test");
+assert.equal(touch.landing_page, "/"); assert.equal(touch.ref, "ARTIST42");
+assert.ok(!JSON.stringify(touch).includes("secret")); assert.ok(!JSON.stringify(touch).includes("private"));
+assert.equal(hasCampaign(touch), true); assert.equal(hasCampaign(growthTouch("/distribution")), false);
+const base = { id: "f828d82d-091c-4e9f-a3e6-a1fe7484702a", url: "/" };
+for (const event of ["payment_success", "release_submitted", "signup_completed", "referral_reward_approved", "plan_purchased"]) assert.equal(clientGrowthSchema.safeParse({ ...base, event }).success, false);
+assert.equal(clientGrowthSchema.safeParse({ ...base, event: "landing_viewed", userId: 42 }).success, false);
+assert.equal(clientGrowthSchema.safeParse({ ...base, event: "landing_viewed" }).success, true);
+assert.throws(() => campaignLink({ landingPage: "//evil.test", slug: "test", source: "test", medium: "test", content: "" }, "https://hymn.test"));
+const campaign = { name: "Reel", slug: "reel_1", channel: "Instagram", status: "active", landingPage: "/first-release-free", source: "instagram", medium: "creator", content: "hook_a", budgetCents: 300000, notes: "" };
+assert.equal(campaignSchema.safeParse(campaign).success, true);
+assert.equal(new URL(campaignLink(campaign, "https://hymn.test")).searchParams.get("utm_content"), "hook_a");
+console.log("Growth event trust boundaries, attribution minimization and campaign URL validation passed.");

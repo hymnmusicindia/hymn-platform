@@ -362,6 +362,155 @@ model PromotionRedemption {
   @@map("promotion_redemptions")
 }
 
+model GrowthVisitor {
+  id        String @id
+  userId    Int? @map("user_id")
+  firstTouch Json @map("first_touch")
+  lastTouch Json @map("last_touch")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([userId, createdAt])
+  @@map("growth_visitors")
+}
+
+model GrowthEvent {
+  id String @id @default(uuid())
+  key String @unique
+  event String
+  userId Int? @map("user_id")
+  visitorId String? @map("visitor_id")
+  source String
+  campaign String?
+  properties Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([event, createdAt])
+  @@index([campaign, createdAt])
+  @@index([userId, event])
+  @@map("growth_events")
+}
+
+model MarketingCampaign {
+  id Int @id @default(autoincrement())
+  slug String @unique
+  name String
+  channel String
+  status String @default("draft")
+  landingPage String @map("landing_page")
+  source String
+  medium String
+  content String @default("")
+  budgetCents Int @default(0) @map("budget_cents")
+  notes String @default("")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  spend CampaignSpend[]
+  @@map("marketing_campaigns")
+}
+
+model CampaignSpend {
+  id String @id
+  campaignId Int @map("campaign_id")
+  amountCents Int @map("amount_cents")
+  spentAt DateTime @map("spent_at")
+  note String
+  actorId Int? @map("actor_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  campaign MarketingCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  @@index([campaignId, spentAt])
+  @@map("campaign_spend")
+}
+
+model GrowthLead {
+  id Int @id @default(autoincrement())
+  kind String
+  name String
+  email String
+  phone String?
+  company String?
+  interest String
+  message String
+  status String @default("new")
+  userId Int? @map("user_id")
+  visitorId String? @map("visitor_id")
+  attribution Json?
+  notes String @default("")
+  assignedTo Int? @map("assigned_to")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([kind, status, createdAt])
+  @@map("growth_leads")
+}
+
+model GrowthCommunicationPreference {
+  userId Int @id @map("user_id")
+  reminders Boolean @default(false)
+  @@map("growth_communication_preferences")
+}
+
+model GrowthNudge {
+  key String @id
+  userId Int @map("user_id")
+  releaseId Int @map("release_id")
+  stage Int
+  dueAt DateTime @map("due_at")
+  status String @default("pending")
+  @@index([status, dueAt])
+  @@map("growth_nudges")
+}
+
+model GrowthPartner {
+  id Int @id @default(autoincrement())
+  leadId Int @unique @map("lead_id")
+  code String @unique
+  name String
+  email String
+  status String @default("approved")
+  createdAt DateTime @default(now()) @map("created_at")
+  referrals PartnerReferral[]
+  @@map("growth_partners")
+}
+
+model PartnerReferral {
+  id Int @id @default(autoincrement())
+  partnerId Int @map("partner_id")
+  userId Int @unique @map("user_id")
+  policy Json
+  createdAt DateTime @default(now()) @map("created_at")
+  partner GrowthPartner @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  reward PartnerReward?
+  @@map("partner_referrals")
+}
+
+model PartnerReward {
+  id Int @id @default(autoincrement())
+  referralId Int @unique @map("referral_id")
+  subscriptionPaymentId Int @unique @map("subscription_payment_id")
+  amount Int
+  plan String
+  status String @default("pending")
+  eligibleAt DateTime @map("eligible_at")
+  approvedAt DateTime? @map("approved_at")
+  paidAt DateTime? @map("paid_at")
+  payoutReference String? @map("payout_reference")
+  createdAt DateTime @default(now()) @map("created_at")
+  referral PartnerReferral @relation(fields: [referralId], references: [id], onDelete: Restrict)
+  @@index([status, eligibleAt])
+  @@map("partner_rewards")
+}
+
+model GrowthRewardPolicy {
+  id Int @id @default(1)
+  artistCredit Int @default(100) @map("artist_credit")
+  halfYearlyCommission Int @default(75) @map("half_yearly_commission")
+  annualCommission Int @default(150) @map("annual_commission")
+  labelCommission Int @default(200) @map("label_commission")
+  coolingDays Int @default(7) @map("cooling_days")
+  payoutMinimum Int @default(500) @map("payout_minimum")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@map("growth_reward_policy")
+}
+
 model AcquisitionEvent {
   id          Int      @id @default(autoincrement())
   userId      Int?     @map("user_id")
@@ -1652,6 +1801,7 @@ model Referral {
   referredUserId            Int?      @unique @map("referred_user_id")
   referralCode              String    @map("referral_code")
   signupEmail               String    @map("signup_email")
+  rewardPolicy              Json?     @map("reward_policy")
   status                    String    @default("PENDING")
   purchaseAmount            Int       @default(0) @map("purchase_amount")
   earnings                  Int       @default(0)

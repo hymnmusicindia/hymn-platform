@@ -1,5 +1,6 @@
 ﻿import type { Metadata } from "next";
 import "./globals.css";
+import { GrowthTracker } from "@/components/growth-tracker";
 import "./styles/dashboard.css";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 import "./styles/distribution.css";
@@ -39,7 +40,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           }}
         />
       </head>
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning>{children}{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</body>
     </html>
   );
 }

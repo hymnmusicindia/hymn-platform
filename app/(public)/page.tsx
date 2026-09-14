@@ -115,7 +115,7 @@ export default async function HomePage() {
             <AnimatedHeroMetrics />
             <div className="mt-7 h-px max-w-3xl bg-gradient-to-r from-white/20 via-white/10 to-transparent" aria-hidden="true" />
             <Link
-                href={session ? "/distribution/start" : "/login?mode=signup"}
+                href="/first-release-free"
                 className="group mt-5 inline-flex max-w-full items-center gap-4 text-left transition duration-300 hover:-translate-y-0.5"
               >
                 {googleAvatarUrls.length ? (
@@ -129,10 +129,10 @@ export default async function HomePage() {
                 ) : null}
                 <span className="min-w-0">
                   <span className="flex items-center gap-2 text-sm font-semibold text-white">
-                    {session ? "Ready to release? Start your release." : "Ready to release? Create your account."}
+                    Release your first track free
                     <ArrowRight className="hidden h-4 w-4 shrink-0 transition-transform group-hover:translate-x-1 sm:block" />
                   </span>
-                  <span className="mt-0.5 block text-xs leading-5 text-white/50">Join 2.4K+ artists supported by HYMN.</span>
+                  <span className="mt-0.5 block text-xs leading-5 text-white/50">Music distribution for independent artists.</span>
                 </span>
               </Link>
           </div>
