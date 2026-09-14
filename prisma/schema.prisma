@@ -1163,6 +1163,7 @@ model StoredAsset {
   mimeType                String                   @map("mime_type")
   byteSize                Int                      @map("byte_size")
   checksum                String
+  providerDeliveryToken   String?                  @unique @map("provider_delivery_token")
   accessClassification    String                   @map("access_classification")
   uploadStatus            String                   @default("ready") @map("upload_status")
   createdAt               DateTime                 @default(now()) @map("created_at")

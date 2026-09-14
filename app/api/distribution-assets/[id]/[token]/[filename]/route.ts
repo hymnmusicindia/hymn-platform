@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import { localPrivateStorage } from "@/lib/private-storage";
-import { verifyDistributorAssetToken } from "@/lib/distributor-asset-delivery";
+import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string; token: string; filename: string }> }) {
   const { id, token } = await params;
   const assetId = Number(id);
-  if (!Number.isInteger(assetId) || assetId <= 0 || !verifyDistributorAssetToken(assetId, token)) {
+  if (!Number.isInteger(assetId) || assetId <= 0) {
     return NextResponse.json({ error: "Asset link is invalid." }, { status: 404, headers: { "X-Robots-Tag": "noindex, nofollow" } });
   }
   try {
+    const assetRecord = await prisma.storedAsset.findFirst({ where: { id: assetId, providerDeliveryToken: token, deletedAt: null, uploadStatus: "ready" }, select: { id: true } });
+    if (!assetRecord) return NextResponse.json({ error: "Asset link is invalid." }, { status: 404, headers: { "X-Robots-Tag": "noindex, nofollow" } });
     const asset = await localPrivateStorage.createAuthorizedRead({ assetId, requesterUserId: 0, isAdmin: true, range: request.headers.get("range") });
     return new NextResponse(new Uint8Array(asset.bytes), {
       status: asset.contentRange ? 206 : 200,
