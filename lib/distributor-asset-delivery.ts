@@ -53,16 +53,38 @@ function hostingerProofDirectory() {
   return process.env.DIRENOTE_PUBLIC_PROOFS_ROOT?.trim() || "/home/u390865851/domains/hymnmusic.fun/public_html/direnote-proofs";
 }
 
-async function publishAgreementPdf(input: { assetId: number; checksum: string; filename: string; bytes: Buffer; siteUrl?: string }) {
+function hostingerProofFileName(input: { assetId: number; checksum: string; filename: string }) {
+  return `${input.assetId}-${input.checksum.slice(0, 24)}-${input.filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+}
+
+function hostingerProofTarget(input: { assetId: number; checksum: string; filename: string }) {
   const root = path.resolve(hostingerProofDirectory());
-  const fileName = `${input.assetId}-${input.checksum.slice(0, 24)}-${input.filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-  const target = path.resolve(root, fileName);
+  const target = path.resolve(root, hostingerProofFileName(input));
   if (!target.startsWith(`${root}${path.sep}`)) throw new Error("Unsafe Hostinger agreement proof path.");
+  return { root, target, filename: hostingerProofFileName(input) };
+}
+
+async function publishAgreementPdf(input: { assetId: number; checksum: string; filename: string; bytes: Buffer; siteUrl?: string }) {
+  const { root, target, filename } = hostingerProofTarget(input);
   await fs.mkdir(root, { recursive: true });
   const pending = `${target}.${randomUUID()}.pending`;
   await fs.writeFile(pending, input.bytes, { flag: "wx" });
-  await fs.rename(pending, target).catch(async (error) => { await fs.unlink(pending).catch(() => undefined); throw error; });
-  return new URL(`/direnote-proofs/${encodeURIComponent(fileName)}`, getPublicAppUrl(input.siteUrl)).toString();
+  await fs.rename(pending, target).catch(async (error: NodeJS.ErrnoException) => {
+    await fs.unlink(pending).catch(() => undefined);
+    if (error.code !== "EEXIST") throw error;
+  });
+  return new URL(`/direnote-proofs/${encodeURIComponent(filename)}`, getPublicAppUrl(input.siteUrl)).toString();
+}
+
+async function cachedHostingerProofExists(asset: { id: number; checksum: string; safeFilename: string; providerDeliveryUrl: string | null }, siteUrl?: string) {
+  if (!asset.providerDeliveryUrl) return false;
+  const filename = distributorSafeFilename(asset.safeFilename, "application/pdf");
+  const expected = hostingerProofTarget({ assetId: asset.id, checksum: asset.checksum, filename });
+  const expectedUrl = new URL(`/direnote-proofs/${encodeURIComponent(expected.filename)}`, getPublicAppUrl(siteUrl));
+  let cached: URL;
+  try { cached = new URL(asset.providerDeliveryUrl); } catch { return false; }
+  if (cached.origin !== expectedUrl.origin || cached.pathname !== expectedUrl.pathname) return false;
+  try { await fs.access(expected.target); return true; } catch { return false; }
 }
 
 export async function createDistributorAssetUrl(value: string | null | undefined, siteUrl?: string) {
@@ -71,7 +93,7 @@ export async function createDistributorAssetUrl(value: string | null | undefined
   const asset = await prisma.storedAsset.findFirst({ where: { id: assetId, deletedAt: null, uploadStatus: "ready" }, select: { id: true, safeFilename: true, mimeType: true, checksum: true, providerDeliveryToken: true, providerDeliveryUrl: true } });
   if (!asset) throw new Error("A release asset is unavailable for distributor delivery.");
   if (asset.mimeType === "application/pdf") {
-    if (asset.providerDeliveryUrl) return asset.providerDeliveryUrl;
+    if (await cachedHostingerProofExists(asset, siteUrl)) return asset.providerDeliveryUrl!;
     const read = await localPrivateStorage.createAuthorizedRead({ assetId: asset.id, requesterUserId: 0, isAdmin: true });
     const url = await publishAgreementPdf({ assetId: asset.id, checksum: asset.checksum, filename: distributorSafeFilename(asset.safeFilename, asset.mimeType), bytes: read.bytes, siteUrl });
     await prisma.storedAsset.update({ where: { id: asset.id }, data: { providerDeliveryUrl: url, providerDeliveryAt: new Date() } });
