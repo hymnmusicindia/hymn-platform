@@ -1,0 +1,6 @@
+-- Intentionally no-op.
+--
+-- The original attempt-number lifecycle columns were removed by the
+-- compatibility migration in commit b207335. Keep this migration artifact so
+-- Prisma can retain a complete, deployable migration history without adding
+-- obsolete columns back to production.
