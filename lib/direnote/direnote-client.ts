@@ -69,15 +69,28 @@ async function postToDireNote(endpoint: string, payload: Record<string, unknown>
     const finalPayload = { ...payload, pin: config.pin, client_id: config.clientId };
   const controller = new AbortController();
   const timeoutMs = options.timeoutMs ?? 60_000;
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    const response = await (options.fetchImpl ?? fetch)(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(finalPayload),
-      signal: controller.signal
+    // Some upstream proxies do not promptly honour AbortSignal while their
+    // response body is being streamed. Race the entire request (including
+    // response.text()) so a stalled provider can never leave HYMN's attempt
+    // permanently marked as processing.
+    const request = (async () => {
+      const response = await (options.fetchImpl ?? fetch)(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(finalPayload),
+        signal: controller.signal
+      });
+      return { response, raw: await response.text() };
+    })();
+    const timedOut = new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => {
+        controller.abort();
+        reject(new Error(`DireNote request timed out after ${timeoutMs} milliseconds.`));
+      }, timeoutMs);
     });
-    const raw = await response.text();
+    const { response, raw } = await Promise.race([request, timedOut]);
     const contentType = response.headers.get("content-type");
     let data: any;
     try { data = JSON.parse(raw); } catch {
@@ -96,7 +109,7 @@ async function postToDireNote(endpoint: string, payload: Record<string, unknown>
     return { success: response.ok && !apiRejected, httpStatus: response.status, ok: response.ok, data, raw, contentType, error: safeError, providerCode: providerError.code, providerReason: providerError.reason, retryAfterSeconds: Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined };
   } catch (error: any) {
     return { success: false, httpStatus: null, error: error?.name === "AbortError" ? `DireNote request timed out after ${timeoutMs} milliseconds.` : error?.message || "DireNote request failed." };
-  } finally { clearTimeout(timeout); }
+  } finally { if (timeout) clearTimeout(timeout); }
 }
 
 export function submitToDireNote(payload: Record<string, unknown>, options: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}) {
