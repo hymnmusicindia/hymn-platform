@@ -5,12 +5,12 @@ export type DistributionPlanOption = Extract<DistributionPlan, "one_time" | "hal
 export const distributionPlanCards = [
   {
     key: "one_time",
-    title: "One-Time Review",
+    title: "Quick Release",
     price: 99,
-    cadence: "Per release",
+    cadence: "Per single release",
     tag: "Fast Start",
     description: "Perfect for one release. Includes QC, artwork check, and distributor handoff.",
-    cta: "Pay once",
+    cta: "Choose Quick Release",
     featureList: [
       "Single release submission",
       "5 artist profiles",
@@ -23,12 +23,12 @@ export const distributionPlanCards = [
   },
   {
     key: "half_yearly",
-    title: "Half-Yearly",
-    price: 700,
+    title: "6 Months",
+    price: 699,
     cadence: "6 months",
     tag: "Subscription",
     description: "Built for artists who release often and want a clean, affordable subscription lane.",
-    cta: "Choose half-yearly",
+    cta: "Choose 6 Months",
     featureList: [
       "5 artist profiles",
       "Distribution to all stores",
@@ -42,18 +42,18 @@ export const distributionPlanCards = [
   },
   {
     key: "yearly",
-    title: "Yearly",
-    price: 1600,
+    title: "Annual",
+    price: 1099,
     cadence: "12 months",
-    tag: "Best Value",
+    tag: "Most Popular",
     description: "Made for active artists and labels who need the fullest feature set across the full year.",
-    cta: "Choose yearly",
+    cta: "Choose Annual",
     featureList: [
       "7 artist profiles",
       "Everything in Half-Yearly",
       "Faster support response",
       "Release planning guidance",
-      "Best value for frequent releases"
+      "Save ₹299 versus two 6-month plans"
     ],
     featured: true,
     artistLimit: 7,
@@ -61,12 +61,12 @@ export const distributionPlanCards = [
   },
   {
     key: "yearly_plus",
-    title: "Yearly+",
-    price: 2500,
+    title: "Yearly+ / Label",
+    price: 1999,
     cadence: "12 months",
     tag: "Premium",
     description: "For serious producers and labels. Includes custom labels and the highest artist limits.",
-    cta: "Choose Yearly+",
+    cta: "Choose Yearly+ / Label",
     featureList: [
       "15 artist profiles",
       "Custom Label Name",

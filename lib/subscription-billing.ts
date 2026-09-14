@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { razorpay } from "@/lib/razorpay";
 import { artistProfileLimitForPlan } from "@/lib/artist-profile-limits";
+import { findDistributionPlan } from "@/lib/distribution-plans";
 
 export const SUBSCRIPTION_PRODUCTS = ["half_yearly", "yearly", "yearly_plus"] as const;
 export type SubscriptionProduct = typeof SUBSCRIPTION_PRODUCTS[number];
@@ -19,9 +20,9 @@ type ProductPolicy = {
 };
 
 export const SUBSCRIPTION_POLICIES: Record<SubscriptionProduct, ProductPolicy> = {
-  half_yearly: { name: "Half-Yearly", amount: 70000, currency: "INR", billingInterval: "6 months", releaseLimit: Number(process.env.HALF_YEARLY_RELEASE_LIMIT || 6), features: ["distribution", "quality_check", "5_artist_profiles"], planEnv: "RAZORPAY_PLAN_HALF_YEARLY", totalCount: Number(process.env.RAZORPAY_HALF_YEARLY_TOTAL_COUNT || 20) },
-  yearly: { name: "Yearly", amount: 160000, currency: "INR", billingInterval: "12 months", releaseLimit: Number(process.env.YEARLY_RELEASE_LIMIT || 18), features: ["distribution", "quality_check", "priority_support", "7_artist_profiles"], planEnv: "RAZORPAY_PLAN_YEARLY", totalCount: Number(process.env.RAZORPAY_YEARLY_TOTAL_COUNT || 20) },
-  yearly_plus: { name: "Yearly+", amount: 250000, currency: "INR", billingInterval: "12 months", releaseLimit: null, features: ["distribution", "quality_check", "priority_support", "custom_label", "15_artist_profiles"], planEnv: "RAZORPAY_PLAN_YEARLY_PLUS", totalCount: Number(process.env.RAZORPAY_YEARLY_PLUS_TOTAL_COUNT || 20) }
+  half_yearly: { name: findDistributionPlan("half_yearly").title, amount: findDistributionPlan("half_yearly").price * 100, currency: "INR", billingInterval: "6 months", releaseLimit: Number(process.env.HALF_YEARLY_RELEASE_LIMIT || 6), features: ["distribution", "quality_check", "5_artist_profiles"], planEnv: "RAZORPAY_PLAN_HALF_YEARLY", totalCount: Number(process.env.RAZORPAY_HALF_YEARLY_TOTAL_COUNT || 20) },
+  yearly: { name: findDistributionPlan("yearly").title, amount: findDistributionPlan("yearly").price * 100, currency: "INR", billingInterval: "12 months", releaseLimit: Number(process.env.YEARLY_RELEASE_LIMIT || 18), features: ["distribution", "quality_check", "priority_support", "7_artist_profiles"], planEnv: "RAZORPAY_PLAN_YEARLY", totalCount: Number(process.env.RAZORPAY_YEARLY_TOTAL_COUNT || 20) },
+  yearly_plus: { name: findDistributionPlan("yearly_plus").title, amount: findDistributionPlan("yearly_plus").price * 100, currency: "INR", billingInterval: "12 months", releaseLimit: null, features: ["distribution", "quality_check", "priority_support", "custom_label", "15_artist_profiles"], planEnv: "RAZORPAY_PLAN_YEARLY_PLUS", totalCount: Number(process.env.RAZORPAY_YEARLY_PLUS_TOTAL_COUNT || 20) }
 };
 
 export function isSubscriptionProduct(value: unknown): value is SubscriptionProduct {

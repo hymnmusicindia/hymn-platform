@@ -9,6 +9,7 @@ import { transitionReleaseStatus } from "@/lib/release-status-engine";
 import { canonicalReleaseArtworkUrl } from "@/lib/release-media";
 import type { Prisma } from "@prisma/client";
 import { redactDireNoteDiagnostic } from "@/lib/direnote";
+import { findDistributionPlan } from "@/lib/distribution-plans";
 
 export function isPostgresPrisma() {
   return /^postgres(?:ql)?:\/\//i.test(process.env.DATABASE_URL?.trim() || "");
@@ -507,11 +508,13 @@ function nextId(items: { id: number }[]) {
 }
 
 function planLimits(plan: SubscriptionPlan) {
-  if (plan === "half_yearly") return { amount: 700, limit: 6, expiryDays: 180 };
-  if (plan === "yearly") return { amount: 1600, limit: 18, expiryDays: 365 };
-  if (plan === "yearly_plus") return { amount: 2500, limit: null, expiryDays: 365 };
-  if (plan === "basic") return { amount: 700, limit: 4, expiryDays: 180 };
-  if (plan === "pro") return { amount: 1600, limit: 18, expiryDays: 365 };
+  if (plan === "half_yearly") return { amount: findDistributionPlan("half_yearly").price, limit: 6, expiryDays: 180 };
+  if (plan === "yearly") return { amount: findDistributionPlan("yearly").price, limit: 18, expiryDays: 365 };
+  if (plan === "yearly_plus") return { amount: findDistributionPlan("yearly_plus").price, limit: null, expiryDays: 365 };
+  // Legacy plan keys remain valid for existing customers; new purchases only
+  // use the current public plan keys above.
+  if (plan === "basic") return { amount: findDistributionPlan("half_yearly").price, limit: 4, expiryDays: 180 };
+  if (plan === "pro") return { amount: findDistributionPlan("yearly").price, limit: 18, expiryDays: 365 };
   if (plan === "elite") return { amount: 7999, limit: null, expiryDays: 365 };
   return { amount: 99, limit: 1, expiryDays: 7 };
 }
