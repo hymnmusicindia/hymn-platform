@@ -17,6 +17,7 @@ import type { AdminStoreStatus, ArtistProfile, Beat, DistributionOrder, Notifica
 
 type PersistedAdminTask = { id: number; type: string; priority: string; title: string; body: string; href: string; status: string; createdAt: string };
 const REVIEW_QUEUE_STATUSES = ["submitted", "in_queue", "under_review", "changes_requested", "approved", "failed"] as const;
+const DELIVERY_FAILED_STATUSES = ["delivery_failed"] as const;
 const CATALOG_STATUSES = ["queued_for_distribution", "submitting_to_distributor", "sent", "sent_to_distributor", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered", "live"] as const;
 
 function formatMoney(amount: number) {
@@ -494,6 +495,7 @@ type AdminTab =
   | "producers"
   | "releases"
   | "distribution-queue"
+  | "delivery-failed"
   | "delivery"
   | "analytics"
   | "revenue"
@@ -561,6 +563,8 @@ export function AdminControlCenter({
   const requestedSelectedRelease = releases.find((release) => release.id === selectedReleaseId) ?? null;
   const selectedRelease = activeTab === "distribution-queue"
     ? (requestedSelectedRelease && REVIEW_QUEUE_STATUSES.includes(requestedSelectedRelease.status as typeof REVIEW_QUEUE_STATUSES[number]) ? requestedSelectedRelease : releases.find((release) => REVIEW_QUEUE_STATUSES.includes(release.status as typeof REVIEW_QUEUE_STATUSES[number])) ?? null)
+    : activeTab === "delivery-failed"
+      ? (requestedSelectedRelease && DELIVERY_FAILED_STATUSES.includes(requestedSelectedRelease.status as typeof DELIVERY_FAILED_STATUSES[number]) ? requestedSelectedRelease : releases.find((release) => DELIVERY_FAILED_STATUSES.includes(release.status as typeof DELIVERY_FAILED_STATUSES[number])) ?? null)
     : requestedSelectedRelease ?? releases[0] ?? null;
   const readinessReleaseId = selectedRelease?.id ?? null;
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -723,7 +727,11 @@ export function AdminControlCenter({
   const queueReleases = useMemo(() => releases.filter((release) => {
     const query = queueSearch.trim().toLowerCase();
     const searchable = [release.releaseTitle, release.trackName, release.artistName, release.upcCode, release.ownerEmail, ...(release.tracks ?? []).map((track) => track.isrc)].filter(Boolean).join(" ").toLowerCase();
-    const belongsToModule = activeTab === "distribution-queue" ? REVIEW_QUEUE_STATUSES.includes(release.status as typeof REVIEW_QUEUE_STATUSES[number]) : true;
+    const belongsToModule = activeTab === "distribution-queue"
+      ? REVIEW_QUEUE_STATUSES.includes(release.status as typeof REVIEW_QUEUE_STATUSES[number])
+      : activeTab === "delivery-failed"
+        ? DELIVERY_FAILED_STATUSES.includes(release.status as typeof DELIVERY_FAILED_STATUSES[number])
+        : true;
     return belongsToModule && (!query || searchable.includes(query)) && (queueStatus === "all" || release.status === queueStatus) && (queueType === "all" || release.releaseType === queueType);
   }), [activeTab, queueSearch, queueStatus, queueType, releases]);
   const catalogReleases = useMemo(() => releases.filter((release) => CATALOG_STATUSES.includes(release.status as typeof CATALOG_STATUSES[number])), [releases]);
@@ -1106,6 +1114,7 @@ export function AdminControlCenter({
         { key: "analytics", label: "Operational Reporting", description: "Persisted platform activity", group: "Command Center" },
         { key: "releases", label: "Releases", description: "Manage approved, scheduled, and live catalog releases", group: "Distribution Operations" },
         { key: "distribution-queue", label: "QC Queue", description: "Review and process submissions", group: "Distribution Operations" },
+        { key: "delivery-failed", label: "Delivery Failed", description: "Return failed distributor handoffs to QC", group: "Distribution Operations" },
         { key: "delivery", label: "Distributor Delivery", description: "Distribution and store status", group: "Distribution Operations" },
         { key: "updates", label: "Update Requests", description: "Metadata and delivery changes", group: "Distribution Operations", href: "/admin/release-change-requests" },
         { key: "takedowns", label: "Takedowns", description: "Removal requests and outcomes", group: "Distribution Operations", href: "/admin/release-change-requests" },
@@ -1260,9 +1269,9 @@ export function AdminControlCenter({
         </div>
       ) : null}
 
-      {activeTab === "distribution-queue" ? (
+      {activeTab === "distribution-queue" || activeTab === "delivery-failed" ? (
         <div className="grid gap-6 xl:grid-cols-[0.92fr,1.08fr]">
-          <SurfaceSection title="All Submissions" description="Review submitted releases, inspect readiness, and open the complete operations record.">
+          <SurfaceSection title={activeTab === "delivery-failed" ? "Delivery Failed" : "All Submissions"} description={activeTab === "delivery-failed" ? "Failed DireNote handoffs. Return a release to HYMN QC only after reviewing the recorded failure." : "Review submitted releases, inspect readiness, and open the complete operations record."}>
             <div className="grid gap-4">
               <div className="grid gap-3 rounded-2xl border p-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
                 <input className="field" value={queueSearch} onChange={(event) => setQueueSearch(event.target.value)} placeholder="Search title, artist, UPC, ISRC, or user email" aria-label="Search submissions" />
@@ -1284,11 +1293,11 @@ export function AdminControlCenter({
                   </div>
                 </button>;
               })}
-              {queueReleases.length === 0 ? <EmptyState copy="No submissions match these filters. Submitted releases will appear here for review." /> : null}
+              {queueReleases.length === 0 ? <EmptyState copy={activeTab === "delivery-failed" ? "No releases currently need delivery-failure review." : "No submissions match these filters. Submitted releases will appear here for review."} /> : null}
             </div>
           </SurfaceSection>
 
-          <SurfaceSection title="Selected Release Review" description="Inspect metadata, files, rights, readiness, and the complete activity record.">
+          <SurfaceSection title={activeTab === "delivery-failed" ? "Failed Delivery Review" : "Selected Release Review"} description={activeTab === "delivery-failed" ? "Inspect the failure history before returning this release to the QC workflow." : "Inspect metadata, files, rights, readiness, and the complete activity record."}>
             {selectedRelease ? (
               <div className="grid gap-5">
                 <div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>{selectedRelease.releaseTitle || selectedRelease.trackName}</h3><div className="mt-2 flex flex-wrap items-center gap-2"><p className="text-sm" style={{ color: "var(--text-muted)" }}>{selectedRelease.releaseType.toUpperCase()} · {selectedRelease.tracks?.length ?? 0} track{selectedRelease.tracks?.length === 1 ? "" : "s"} · {selectedRelease.artistName}</p><AccountStatusBadge status={users.find((user) => user.id === selectedRelease.userId)?.status} /></div><p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>Submitted {selectedRelease.submittedAt ? new Date(selectedRelease.submittedAt).toLocaleString("en-IN") : "—"} · Release {selectedRelease.releaseDate || "—"} · {selectedRelease.ownerEmail || "Account email unavailable"}</p></div><StatusPill label={selectedRelease.status.replace(/_/g, " ")} active /></div>
@@ -1372,6 +1381,7 @@ export function AdminControlCenter({
                   {["submitted", "in_queue", "changes_requested", "failed", "draft"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => updateReleaseStatus(selectedRelease.id, "under_review")} className="btn-outline pressable disabled:opacity-45">Start Review</button> : null}
                   {selectedRelease.status === "under_review" ? <button type="button" disabled={isPending || isSubmittingToDireNote || direNoteCooldownSeconds > 0 || direNoteReadiness?.ready !== true || !hasPermission("releases.review") || !hasPermission("distribution.submit")} title={direNoteCooldownSeconds > 0 ? `DireNote cooldown: ${direNoteCooldownLabel} remaining` : direNoteReadiness?.ready !== true ? "Wait for this release's readiness check to pass" : !hasPermission("releases.review") || !hasPermission("distribution.submit") ? "Requires release review and distribution submit permissions" : undefined} onClick={() => setConfirmStatusAction("approved")} className="btn-primary pressable disabled:opacity-45">{isSubmittingToDireNote ? "Approving & Sending..." : direNoteCooldownSeconds > 0 ? `Try again in ${direNoteCooldownLabel}` : "Approve & Send to DireNote"}</button> : null}
                   {["failed", "delivery_failed", "queued_for_distribution"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || isSubmittingToDireNote || direNoteCooldownSeconds > 0 || direNoteReadiness?.ready !== true || !hasPermission("distribution.retry")} title={direNoteCooldownSeconds > 0 ? `DireNote cooldown: ${direNoteCooldownLabel} remaining` : direNoteReadiness?.ready !== true ? "Wait for this release's readiness check to pass" : !hasPermission("distribution.retry") ? "Requires distribution.retry permission" : undefined} onClick={() => setConfirmStatusAction("sent")} className="btn-primary pressable disabled:opacity-45">{isSubmittingToDireNote ? "Submitting to DireNote..." : direNoteCooldownSeconds > 0 ? `Try again in ${direNoteCooldownLabel}` : "Retry Send"}</button> : null}
+                  {selectedRelease.status === "delivery_failed" ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => setConfirmStatusAction("in_qc_queue")} className="btn-outline pressable disabled:opacity-45">Return to QC</button> : null}
                   {selectedRelease.upcCode || selectedRelease.direNoteStatus || selectedRelease.tracks?.some(track => track.isrc) ? <button type="button" disabled={isPending || !hasPermission("releases.read")} title={!hasPermission("releases.read") ? "Requires releases.read permission" : undefined} onClick={() => syncDireNoteRelease(selectedRelease.id)} className="btn-outline pressable disabled:opacity-45">Sync with DireNote</button> : null}
                   {["sent", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("distribution.confirm_status")} title={!hasPermission("distribution.confirm_status") ? "Requires distribution.confirm_status permission" : undefined} onClick={() => setConfirmStatusAction("live")} className="btn-primary pressable disabled:opacity-45">Mark Live</button> : null}
                   {["submitted", "in_queue", "under_review", "approved"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => openReview("changes_requested")} className="btn-outline pressable disabled:opacity-45" style={{ color: "var(--money)" }}>Request Metadata Changes</button> : null}
@@ -1729,8 +1739,10 @@ export function AdminControlCenter({
             <h2 className="text-xl font-semibold text-center" style={{ color: "var(--text)" }}>Are you sure?</h2>
             <p className="mt-3 text-center text-sm" style={{ color: "var(--text-muted)" }}>
               {confirmStatusAction === "live"
-                  ? "Only continue if platform or store availability is confirmed. This does not claim availability on every platform."
-                  : selectedRelease.status === "under_review"
+                ? "Only continue if platform or store availability is confirmed. This does not claim availability on every platform."
+                : confirmStatusAction === "in_qc_queue"
+                  ? "This stops automatic retry for this failed handoff and returns the release to HYMN QC. The DireNote attempt and failure history are retained for review."
+                : selectedRelease.status === "under_review"
                     ? "This approves HYMN's metadata, artwork, audio, and rights review and immediately sends the release to DireNote. The customer is notified only after DireNote accepts it."
                     : "The DireNote readiness check must pass before this release is submitted for distribution."}
             </p>
@@ -1740,7 +1752,7 @@ export function AdminControlCenter({
                 updateReleaseStatus(selectedRelease.id, confirmStatusAction);
                 setConfirmStatusAction(null);
               }} className="btn-primary pressable px-4 py-2">
-                Yes, {confirmStatusAction === "live" ? "Mark live" : selectedRelease.status === "under_review" ? "Approve & Send" : "Send"}
+                Yes, {confirmStatusAction === "live" ? "Mark live" : confirmStatusAction === "in_qc_queue" ? "Return to QC" : selectedRelease.status === "under_review" ? "Approve & Send" : "Send"}
               </button>
             </div>
           </section>

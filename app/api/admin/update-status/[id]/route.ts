@@ -10,6 +10,7 @@ import { getPublicAppUrl } from "@/lib/public-app-url";
 const statusStageMap: Partial<Record<ReleaseStatus, DistributionQueueStage>> = {
   submitted: "draft_submitted",
   in_queue: "quality_check",
+  in_qc_queue: "quality_check",
   under_review: "awaiting_approval",
   approved: "approved",
   sent: "sent_to_direnote",

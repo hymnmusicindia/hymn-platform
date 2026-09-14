@@ -283,7 +283,7 @@ export const distributionEditSchema = z.object({
 });
 
 export const adminStatusSchema = z.object({
-  status: z.enum(["draft", "submitted", "in_queue", "under_review", "changes_requested", "approved", "queued_for_distribution", "sent_to_distributor", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered", "rejected", "sent", "live", "failed"]),
+  status: z.enum(["draft", "submitted", "in_queue", "in_qc_queue", "under_review", "changes_requested", "approved", "queued_for_distribution", "sent_to_distributor", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered", "rejected", "sent", "live", "failed"]),
   note: z.string().optional(),
   reason: z.string().trim().optional(),
   issueType: z.enum(["metadata", "artwork", "audio", "rights_ownership", "contributor_credits", "release_date", "genre_language", "artist_profile", "license_ai_proof", "platform_destination", "other"]).optional(),

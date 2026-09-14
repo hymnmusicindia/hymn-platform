@@ -22,6 +22,7 @@ const ADMIN_TABS = [
   "producers",
   "releases",
   "distribution-queue",
+  "delivery-failed",
   "delivery",
   "analytics",
   "revenue",
