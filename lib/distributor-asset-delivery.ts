@@ -1,7 +1,8 @@
 import "server-only";
 
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
-import { put } from "@vercel/blob";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { getUserSessionSecret } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { getPublicAppUrl } from "@/lib/public-app-url";
@@ -48,6 +49,22 @@ function distributorSafeFilename(filename: string, mimeType: string) {
   return `${trimmed.replace(/\.[a-z0-9]{1,8}$/i, "")}${expected.extension}`;
 }
 
+function hostingerProofDirectory() {
+  return process.env.DIRENOTE_PUBLIC_PROOFS_ROOT?.trim() || "/home/u390865851/domains/hymnmusic.fun/public_html/direnote-proofs";
+}
+
+async function publishAgreementPdf(input: { assetId: number; checksum: string; filename: string; bytes: Buffer; siteUrl?: string }) {
+  const root = path.resolve(hostingerProofDirectory());
+  const fileName = `${input.assetId}-${input.checksum.slice(0, 24)}-${input.filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+  const target = path.resolve(root, fileName);
+  if (!target.startsWith(`${root}${path.sep}`)) throw new Error("Unsafe Hostinger agreement proof path.");
+  await fs.mkdir(root, { recursive: true });
+  const pending = `${target}.${randomUUID()}.pending`;
+  await fs.writeFile(pending, input.bytes, { flag: "wx" });
+  await fs.rename(pending, target).catch(async (error) => { await fs.unlink(pending).catch(() => undefined); throw error; });
+  return new URL(`/direnote-proofs/${encodeURIComponent(fileName)}`, getPublicAppUrl(input.siteUrl)).toString();
+}
+
 export async function createDistributorAssetUrl(value: string | null | undefined, siteUrl?: string) {
   const assetId = privateAssetId(value);
   if (!assetId) return value ?? "";
@@ -55,12 +72,10 @@ export async function createDistributorAssetUrl(value: string | null | undefined
   if (!asset) throw new Error("A release asset is unavailable for distributor delivery.");
   if (asset.mimeType === "application/pdf") {
     if (asset.providerDeliveryUrl) return asset.providerDeliveryUrl;
-    if (!process.env.BLOB_READ_WRITE_TOKEN?.trim()) throw new Error("Public provider storage is not configured for agreement delivery.");
     const read = await localPrivateStorage.createAuthorizedRead({ assetId: asset.id, requesterUserId: 0, isAdmin: true });
-    const objectName = `direnote-rights-proofs/${asset.id}/${asset.checksum}-${distributorSafeFilename(asset.safeFilename, asset.mimeType)}`;
-    const blob = await put(objectName, read.bytes, { access: "public", addRandomSuffix: false, contentType: "application/pdf" });
-    await prisma.storedAsset.update({ where: { id: asset.id }, data: { providerDeliveryUrl: blob.url, providerDeliveryAt: new Date() } });
-    return blob.url;
+    const url = await publishAgreementPdf({ assetId: asset.id, checksum: asset.checksum, filename: distributorSafeFilename(asset.safeFilename, asset.mimeType), bytes: read.bytes, siteUrl });
+    await prisma.storedAsset.update({ where: { id: asset.id }, data: { providerDeliveryUrl: url, providerDeliveryAt: new Date() } });
+    return url;
   }
   const base = getPublicAppUrl(siteUrl);
   const filename = encodeURIComponent(distributorSafeFilename(asset.safeFilename, asset.mimeType));
