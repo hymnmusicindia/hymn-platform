@@ -1164,6 +1164,8 @@ model StoredAsset {
   byteSize                Int                      @map("byte_size")
   checksum                String
   providerDeliveryToken   String?                  @unique @map("provider_delivery_token")
+  providerDeliveryUrl     String?                  @map("provider_delivery_url")
+  providerDeliveryAt      DateTime?                @map("provider_delivery_at")
   accessClassification    String                   @map("access_classification")
   uploadStatus            String                   @default("ready") @map("upload_status")
   createdAt               DateTime                 @default(now()) @map("created_at")

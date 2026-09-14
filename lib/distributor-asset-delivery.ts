@@ -1,9 +1,11 @@
 import "server-only";
 
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { put } from "@vercel/blob";
 import { getUserSessionSecret } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { getPublicAppUrl } from "@/lib/public-app-url";
+import { localPrivateStorage } from "@/lib/private-storage";
 
 function signingSecret() {
   return process.env.DISTRIBUTION_ASSET_SIGNING_SECRET?.trim() || getUserSessionSecret();
@@ -49,8 +51,17 @@ function distributorSafeFilename(filename: string, mimeType: string) {
 export async function createDistributorAssetUrl(value: string | null | undefined, siteUrl?: string) {
   const assetId = privateAssetId(value);
   if (!assetId) return value ?? "";
-  const asset = await prisma.storedAsset.findFirst({ where: { id: assetId, deletedAt: null, uploadStatus: "ready" }, select: { id: true, safeFilename: true, mimeType: true, providerDeliveryToken: true } });
+  const asset = await prisma.storedAsset.findFirst({ where: { id: assetId, deletedAt: null, uploadStatus: "ready" }, select: { id: true, safeFilename: true, mimeType: true, checksum: true, providerDeliveryToken: true, providerDeliveryUrl: true } });
   if (!asset) throw new Error("A release asset is unavailable for distributor delivery.");
+  if (asset.mimeType === "application/pdf") {
+    if (asset.providerDeliveryUrl) return asset.providerDeliveryUrl;
+    if (!process.env.BLOB_READ_WRITE_TOKEN?.trim()) throw new Error("Public provider storage is not configured for agreement delivery.");
+    const read = await localPrivateStorage.createAuthorizedRead({ assetId: asset.id, requesterUserId: 0, isAdmin: true });
+    const objectName = `direnote-rights-proofs/${asset.id}/${asset.checksum}-${distributorSafeFilename(asset.safeFilename, asset.mimeType)}`;
+    const blob = await put(objectName, read.bytes, { access: "public", addRandomSuffix: false, contentType: "application/pdf" });
+    await prisma.storedAsset.update({ where: { id: asset.id }, data: { providerDeliveryUrl: blob.url, providerDeliveryAt: new Date() } });
+    return blob.url;
+  }
   const base = getPublicAppUrl(siteUrl);
   const filename = encodeURIComponent(distributorSafeFilename(asset.safeFilename, asset.mimeType));
   let token = asset.providerDeliveryToken;
@@ -63,31 +74,5 @@ export async function createDistributorAssetUrl(value: string | null | undefined
   }
   if (!token) throw new Error("Could not create a provider delivery link for this asset.");
   const url = new URL(`/api/distribution-assets/${assetId}/${token}/${filename}`, base).toString();
-  if (asset.mimeType === "application/pdf") {
-    // Check the actual public host: a valid local signature does not guarantee
-    // that the deployed host uses the same key or can read the stored file.
-    let response: Response;
-    try {
-      response = await fetch(url, { redirect: "error", cache: "no-store", signal: AbortSignal.timeout(15_000) });
-    } catch {
-      throw new Error("Agreement PDF download could not be verified. Check the public site URL and deployed storage configuration before retrying.");
-    }
-    if (!response.ok || !response.headers.get("content-type")?.toLowerCase().startsWith("application/pdf")) {
-      await response.body?.cancel();
-      throw new Error(`Agreement PDF link is unavailable (HTTP ${response.status}). Check DISTRIBUTION_ASSET_SIGNING_SECRET/JWT_SECRET consistency across deployed instances and that the uploaded PDF exists in persistent storage.`);
-    }
-    const reader = response.body?.getReader();
-    const prefix: number[] = [];
-    try {
-      while (reader && prefix.length < 5) {
-        const chunk = await reader.read();
-        if (chunk.done) break;
-        prefix.push(...chunk.value.subarray(0, 5 - prefix.length));
-      }
-    } finally {
-      await reader?.cancel();
-    }
-    if (Buffer.from(prefix).toString("ascii") !== "%PDF-") throw new Error("Agreement link did not return a PDF file. Upload the original agreement PDF again.");
-  }
   return url;
 }
