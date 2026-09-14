@@ -137,7 +137,11 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
 
   // Check acceptance under the submission lock, before validation or approval can
   // alter a release that the distributor already owns. Corrections use an explicit re-ingest flow.
-  if (!options.correctionReingest) {
+  // A deliberate retry is allowed to reclaim a failed/retryable attempt. The
+  // release itself remains in QUEUED_FOR_DISTRIBUTION between attempts, so
+  // treating that workflow status as an active submission would permanently
+  // block every recovery retry.
+  if (!options.correctionReingest && !options.retry) {
     const accepted = await prisma.distributionSubmissionAttempt.findFirst({
       where: { releaseId, provider: "direnote", OR: [{ state: "submitted" }, { isCurrent: true }] },
       select: { id: true }
