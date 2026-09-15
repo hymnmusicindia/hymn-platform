@@ -1019,6 +1019,12 @@ export function ReleaseForm({
     if (!firstReleaseOffer) return;
     void fetch("/api/promotions/first-release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event, attribution: campaignAttribution, metadata }) }).catch(() => undefined);
   };
+  const firstReleaseStartedRef = useRef(false);
+  useEffect(() => {
+    if (!firstReleaseOffer || firstReleaseStartedRef.current) return;
+    firstReleaseStartedRef.current = true;
+    trackCampaignEvent("first_release_started");
+  }, [firstReleaseOffer]);
   const [stepMotion, setStepMotion] = useState("step-adjacent-forward");
   const [stepTransitioning, setStepTransitioning] = useState(false);
   const stepTransitionRef = useRef(false);
@@ -2785,7 +2791,11 @@ export function ReleaseForm({
       },
     };
 
-    return await verifyAndSubmitRelease(payload);
+    const result = await verifyAndSubmitRelease(payload);
+    if (firstReleaseOffer && submissionPlan === "one_time") {
+      trackCampaignEvent("first_release_submitted", { releaseId: result.release?.id });
+    }
+    return result;
   }
 
   async function handleFinalSubmit(event: FormEvent<HTMLFormElement>) {

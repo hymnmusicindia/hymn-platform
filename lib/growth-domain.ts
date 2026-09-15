@@ -24,7 +24,7 @@ export function growthTouch(rawUrl: string, rawReferrer = "", now = new Date()):
 }
 export function hasCampaign(touch: GrowthTouch) { return Boolean(touch.utm_source || touch.utm_campaign || touch.ref || touch.campaign_id); }
 export function safeCampaignPath(value: string) {
-  return ["/", "/distribution", "/first-release", "/first-release-free", "/contact", "/partnership-program"].includes(value);
+  return ["/", "/distribution", "/first-release", "/contact", "/partnership-program"].includes(value);
 }
 export const campaignSchema = z.object({
   name: z.string().trim().min(2).max(120), channel: z.string().trim().min(1).max(60),

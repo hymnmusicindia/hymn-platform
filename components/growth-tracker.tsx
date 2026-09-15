@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 export function GrowthTracker() {
   const pathname = usePathname();
   useEffect(() => {
-    if (!["/", "/distribution", "/first-release", "/first-release-free", "/contact", "/partnership-program", "/login"].includes(pathname)) return;
+    if (!["/", "/distribution", "/first-release", "/contact", "/partnership-program", "/login"].includes(pathname)) return;
     const track = (event: string, id: string = crypto.randomUUID()) => {
       void fetch("/api/growth/events", { method: "POST", headers: { "Content-Type": "application/json" }, keepalive: true, body: JSON.stringify({ event, id, url: location.href, referrer: document.referrer }) }).catch(() => undefined);
     };

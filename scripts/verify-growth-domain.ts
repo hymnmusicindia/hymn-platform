@@ -10,7 +10,7 @@ for (const event of ["payment_success", "release_submitted", "signup_completed",
 assert.equal(clientGrowthSchema.safeParse({ ...base, event: "landing_viewed", userId: 42 }).success, false);
 assert.equal(clientGrowthSchema.safeParse({ ...base, event: "landing_viewed" }).success, true);
 assert.throws(() => campaignLink({ landingPage: "//evil.test", slug: "test", source: "test", medium: "test", content: "" }, "https://hymn.test"));
-const campaign = { name: "Reel", slug: "reel_1", channel: "Instagram", status: "active", landingPage: "/first-release-free", source: "instagram", medium: "creator", content: "hook_a", budgetCents: 300000, notes: "" };
+const campaign = { name: "Reel", slug: "reel_1", channel: "Instagram", status: "active", landingPage: "/first-release", source: "instagram", medium: "creator", content: "hook_a", budgetCents: 300000, notes: "" };
 assert.equal(campaignSchema.safeParse(campaign).success, true);
 assert.equal(new URL(campaignLink(campaign, "https://hymn.test")).searchParams.get("utm_content"), "hook_a");
 console.log("Growth event trust boundaries, attribution minimization and campaign URL validation passed.");

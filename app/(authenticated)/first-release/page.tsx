@@ -6,7 +6,8 @@ import { FirstReleaseFunnel } from "@/components/first-release-funnel";
 export const metadata: Metadata = {
   title: "Your First Release Is Free | HYMN",
   description: "Distribute your first Single through HYMN with the ₹99 base release fee on us.",
-  robots: { index: false, follow: false },
+  alternates: { canonical: "/first-release" },
+  robots: { index: true, follow: true },
 };
 
 export default async function FirstReleasePage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {

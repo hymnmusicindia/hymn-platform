@@ -115,7 +115,7 @@ export default async function HomePage() {
             <AnimatedHeroMetrics />
             <div className="mt-7 h-px max-w-3xl bg-gradient-to-r from-white/20 via-white/10 to-transparent" aria-hidden="true" />
             <Link
-                href="/first-release-free"
+                href="/first-release"
                 className="group mt-5 inline-flex max-w-full items-center gap-4 text-left transition duration-300 hover:-translate-y-0.5"
               >
                 {googleAvatarUrls.length ? (
