@@ -1,14 +1,12 @@
 "use client";
 
-import Image from "next/image";
-import Link from "next/link";
 import { ArrowRight, Check } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { GoogleAuthButton } from "@/components/google-auth-button";
 import { FirstReleaseReceipt } from "@/components/first-release-receipt";
 
-type Eligibility = { authenticated: boolean; eligible: boolean; reason: string; firstName?: string; avatarUrl?: string };
+type Eligibility = { authenticated: boolean; eligible: boolean; reason: string; firstName?: string };
 type Query = Record<string, string | undefined>;
 
 function releaseState(eligibility: Eligibility) {
@@ -45,19 +43,14 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
 
   return <main className="first-release-page">
     <section className="first-release-shell">
-      <header className="first-release-header">
-        <Image src="/assets/hymnlogowhite.png" alt="HYMN music.in" width={172} height={56} priority className="first-release-logo" />
-        {eligibility.authenticated ? <Link href="/dashboard" className="first-release-profile" aria-label="Open your HYMN dashboard" title="Open dashboard">{eligibility.avatarUrl ? <img src={eligibility.avatarUrl} alt="" referrerPolicy="no-referrer" /> : <span aria-hidden="true">{eligibility.firstName?.slice(0, 1).toUpperCase() || "H"}</span>}</Link> : <Link href="/login" className="first-release-login">Log in</Link>}
-      </header>
-
       <section className="first-release-hero-grid" aria-labelledby="first-release-title">
         <div className="first-release-copy">
           <p className="first-release-eyebrow">MUSIC DISTRIBUTION FOR INDEPENDENT ARTISTS</p>
           <h1 id="first-release-title">YOUR FIRST RELEASE<br />IS ON US.</h1>
           <div className="first-release-price" aria-label="Standard distribution price 99 rupees, today zero rupees">
-            <span className="first-release-price-standard"><small>STANDARD DISTRIBUTION</small><del>₹99</del></span>
-            <i aria-hidden="true" />
-            <strong className="first-release-price-today"><small>TODAY</small>₹0</strong>
+            <span className="first-release-price-standard"><small>REGULAR PRICE</small><del>₹99</del></span>
+            <span className="first-release-price-arrow" aria-hidden="true">→</span>
+            <strong className="first-release-price-today"><small>YOUR FIRST RELEASE</small><em>FREE</em></strong>
           </div>
         </div>
 

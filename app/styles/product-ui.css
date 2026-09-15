@@ -3159,7 +3159,6 @@ html[data-theme="light"] .store-platform-option img[alt="Apple Music"] {
   .first-release-stores { gap:.35rem; font-size:.49rem; letter-spacing:.07em; }
 }
 @media (prefers-reduced-motion: reduce) { .first-release-stamp-old,.first-release-stamp-old i,.first-release-free-word,.first-release-free-caption { animation:none; opacity:1; transform:none; filter:none; } }
-body:has(.first-release-page) > header,
 body:has(.first-release-page) > footer { display: none; }
 
 /* Canonical first-release conversion funnel: deliberately editorial, not a generic dashboard. */
@@ -3212,3 +3211,12 @@ body:has(.first-release-page) > footer { display: none; }
 @keyframes first-release-price-label { from { opacity:0; letter-spacing:.28em; } to { opacity:1; letter-spacing:.1em; } }
 @media (max-width:767px) { .first-release-page { display:block; overflow:auto; }.first-release-shell { width:min(100% - 32px,540px); padding-block:14px; }.first-release-header { padding-bottom:18px; }.first-release-hero-grid { gap:18px; }.first-release-copy h1 { margin:8px 0 14px; font-size:clamp(2.85rem,15vw,4.3rem); line-height:.84; }.first-release-price { min-height:78px; }.first-release-pass { box-shadow:6px 6px 0 #d5d0c4; }.first-release-pass-title { font-size:1.35rem; }.first-release-pass-security { display:none; } }
 @media (prefers-reduced-motion:reduce) { .first-release-price-standard,.first-release-price-today,.first-release-price-today small { animation:none; } }
+
+/* Keep this campaign inside the same navigation system as the rest of HYMN. */
+.first-release-page { min-height:calc(100svh - 72px); }
+.first-release-price { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:clamp(14px,2vw,26px); border-block:1px solid #c9c2b4; }
+.first-release-price i { display:none; }.first-release-price-arrow { color:#167151; font-size:1.4rem; font-weight:900; text-align:center; }
+.first-release-price-standard,.first-release-price-today { display:grid; gap:4px; }.first-release-price-standard small,.first-release-price-today small { color:#746f65; font-size:.55rem; font-weight:900; letter-spacing:.12em; }.first-release-price-standard del { position:relative; width:max-content; color:#736f67; font-size:clamp(1.45rem,2.2vw,1.85rem); text-decoration:none; }.first-release-price-standard del::after { content:""; position:absolute; left:-6%; top:51%; width:112%; height:3px; border-radius:99px; background:#b34730; transform:rotate(-9deg) scaleX(0); transform-origin:left; animation:first-release-price-cut .48s .42s cubic-bezier(.16,1,.3,1) forwards; }.first-release-price-today { justify-items:end; color:#167151; }.first-release-price-today em { font-style:normal; font-size:clamp(2.75rem,5.3vw,4.65rem); font-weight:950; letter-spacing:-.08em; line-height:.78; }.first-release-price-today small { color:#167151; }
+@keyframes first-release-price-cut { to { transform:rotate(-9deg) scaleX(1); } }
+@media (max-width:767px) { .first-release-page { min-height:calc(100svh - 64px); }.first-release-price { grid-template-columns:auto 1fr auto; min-height:76px; gap:10px; }.first-release-price-arrow { font-size:1.1rem; }.first-release-price-standard del { font-size:1.25rem; }.first-release-price-today em { font-size:3rem; }.first-release-price-standard small,.first-release-price-today small { font-size:.45rem; } }
+@media (prefers-reduced-motion:reduce) { .first-release-price-standard del::after { animation:none; transform:rotate(-9deg) scaleX(1); } }
