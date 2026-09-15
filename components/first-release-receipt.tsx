@@ -1,4 +1,4 @@
-import { FIRST_RELEASE_BASE_DISCOUNT } from "@/lib/first-release-promotion";
+import { FIRST_RELEASE_BASE_DISCOUNT } from "@/lib/first-release-pricing";
 import { findDistributionPlan } from "@/lib/distribution-plans";
 
 type ReceiptProps = {

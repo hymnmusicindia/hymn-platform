@@ -1,8 +1,9 @@
 import { Prisma, ReleaseStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { FIRST_RELEASE_BASE_DISCOUNT } from "@/lib/first-release-pricing";
 
 export const FIRST_RELEASE_PROMOTION_CODE = "FIRST_RELEASE_FREE";
-export const FIRST_RELEASE_BASE_DISCOUNT = 99;
+export { FIRST_RELEASE_BASE_DISCOUNT };
 const RESERVATION_TTL_MS = 30 * 60 * 1000;
 
 export type CampaignAttribution = Partial<Record<"utm_source" | "utm_medium" | "utm_campaign" | "utm_content" | "utm_term", string>>;
