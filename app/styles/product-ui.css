@@ -3237,3 +3237,12 @@ body:has(.first-release-page) > footer { display: none; }
 .first-release-price-free { min-width:0; padding:0; border:0; background:transparent; box-shadow:none; color:#167151; justify-items:start; transform:none; opacity:1; animation:none; }.first-release-price-free small { color:#167151; font-size:.54rem; letter-spacing:.14em; }.first-release-price-free em { color:#167151; font-size:clamp(3.2rem,6.2vw,5.1rem); letter-spacing:-.1em; line-height:.76; }
 @media (max-width:767px) { .first-release-price { min-height:68px; gap:11px; }.first-release-price-ticket del { font-size:1.5rem; }.first-release-price-cut { width:22px; }.first-release-price-free em { font-size:3.25rem; } }
 @media (prefers-reduced-motion:reduce) { .first-release-price-ticket del::before { transform:rotate(-11deg) scaleX(1); } }
+
+/* Research-backed discount hierarchy: group the reference and final price as a
+   single unit, make the final price dominant, and leave the explanation to the
+   nearby pass receipt instead of competing labels. */
+.first-release-price { display:flex; width:max-content; min-height:80px; align-items:center; gap:18px; padding:0; background:none; }
+.first-release-price-was { position:relative; color:#24241f; font-size:clamp(2rem,3.5vw,3.05rem); font-weight:850; letter-spacing:-.07em; line-height:1; text-decoration:none; }.first-release-price-was::after { content:""; position:absolute; left:-7%; top:51%; width:114%; height:3px; border-radius:99px; background:#b34730; transform:rotate(-10deg) scaleX(0); transform-origin:left; animation:first-release-price-cut .46s .18s cubic-bezier(.16,1,.3,1) forwards; }
+.first-release-price-divider { width:1px; height:39px; background:#bdb6aa; transform:rotate(18deg); }.first-release-price-free { display:block; min-width:0; padding:0; border:0; background:none; box-shadow:none; color:#167151; opacity:1; transform:none; animation:none; }.first-release-price-free em { display:block; color:#167151; font-size:clamp(3.6rem,6.5vw,5.8rem); font-style:normal; font-weight:950; letter-spacing:-.11em; line-height:.72; text-shadow:3px 3px 0 rgba(22,113,81,.11); }
+@media (max-width:767px) { .first-release-price { min-height:66px; gap:13px; }.first-release-price-was { font-size:2rem; }.first-release-price-divider { height:31px; }.first-release-price-free em { font-size:3.7rem; } }
+@media (prefers-reduced-motion:reduce) { .first-release-price-was::after { animation:none; transform:rotate(-10deg) scaleX(1); } }
