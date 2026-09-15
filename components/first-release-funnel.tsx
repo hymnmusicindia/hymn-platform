@@ -55,9 +55,9 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
           <p className="first-release-eyebrow">MUSIC DISTRIBUTION FOR INDEPENDENT ARTISTS</p>
           <h1 id="first-release-title">YOUR FIRST RELEASE<br />IS ON US.</h1>
           <div className="first-release-price" aria-label="Standard distribution price 99 rupees, today zero rupees">
-            <span><small>STANDARD DISTRIBUTION</small><del>₹99</del></span>
+            <span className="first-release-price-standard"><small>STANDARD DISTRIBUTION</small><del>₹99</del></span>
             <i aria-hidden="true" />
-            <strong><small>TODAY</small>₹0</strong>
+            <strong className="first-release-price-today"><small>TODAY</small>₹0</strong>
           </div>
         </div>
 
@@ -72,7 +72,6 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
         </aside>
       </section>
 
-      <footer className="first-release-footer"><span>© {new Date().getFullYear()} HYMN Music</span><nav aria-label="First release information"><Link href="/terms-of-service">Terms</Link><Link href="/privacy-policy">Privacy</Link><Link href="/policies/distribution">Distribution terms</Link><Link href="/contact">Support</Link></nav></footer>
     </section>
   </main>;
 }
