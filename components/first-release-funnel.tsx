@@ -1,7 +1,6 @@
 "use client";
 
 import { ArrowRight, Check } from "lucide-react";
-import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { GoogleAuthButton } from "@/components/google-auth-button";
@@ -53,7 +52,7 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
         </div>
 
         <div className="first-release-pass-stage">
-          <Image className="first-release-envelope" src="/assets/first-release-envelope-v1.png" alt="" aria-hidden="true" width={1536} height={1024} priority />
+          <div className="first-release-envelope" aria-hidden="true" />
           <aside className="first-release-pass" aria-label="HYMN First Release Pass">
           <div className="first-release-pass-head"><span>HYMN FIRST RELEASE PASS</span><b>01/01</b></div>
           <div className="first-release-pass-title">FIRST SINGLE</div>
