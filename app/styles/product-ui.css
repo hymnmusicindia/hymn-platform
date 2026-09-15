@@ -3262,3 +3262,6 @@ body:has(.first-release-page) > footer { display: none; }
 @keyframes first-release-free-slam { 0% { opacity:0; transform:translateY(-50%) scale(2.1) rotate(-8deg); } 68% { opacity:1; transform:translateY(-50%) scale(.9) rotate(2deg); } 100% { opacity:1; transform:translateY(-50%) scale(1) rotate(-1deg); } }
 @media (max-width:767px) { .first-release-copy h1 { margin-bottom:20px; font-size:clamp(3.45rem,16vw,5.35rem); }.first-release-price { width:100%; height:108px; }.first-release-price-was { font-size:4.2rem; }.first-release-price-free { left:18px; }.first-release-price-free em { font-size:5.8rem; } }
 @media (prefers-reduced-motion:reduce) { .first-release-price-was::after { animation:none; transform:rotate(-9deg) scaleX(1); }.first-release-price-free { animation:none; opacity:1; transform:translateY(-50%) rotate(-1deg); } }
+
+/* Keep the editorial scale while reducing the visual heaviness of the copy. */
+.first-release-copy h1 { font-weight:700; }.first-release-price-free em { font-weight:700; }
