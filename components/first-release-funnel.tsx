@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, Check } from "lucide-react";
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GoogleAuthButton } from "@/components/google-auth-button";
@@ -60,9 +61,9 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
         <div className={`first-release-pass-stage first-release-stage-${revealStep}`}>
           <div className="first-release-envelope" aria-hidden="true" />
           {revealStep < 3 ? <button type="button" className="first-release-envelope-button" onClick={() => { setRevealStep(step => Math.min(step + 1, 3)); void track(`first_release_envelope_step_${revealStep + 1}`); }} aria-describedby="first-release-envelope-prompt">
-            <span className="first-release-envelope-brand">HYMN<small>music.in</small></span>
+            <Image className="first-release-envelope-brand" src="/assets/hymnlogowhite.png" alt="HYMN music.in" width={220} height={75} priority />
             <span className="first-release-envelope-flap" />
-            <span className="first-release-envelope-seal" aria-hidden="true">H</span>
+            <span className="first-release-envelope-seal" aria-hidden="true" />
             <span id="first-release-envelope-prompt" className="first-release-envelope-prompt" aria-live="polite">{revealCopy[revealStep]}</span>
             <span className="first-release-envelope-count" aria-hidden="true">{String(revealStep + 1).padStart(2, "0")} / 03</span>
           </button> : <aside className="first-release-pass" aria-label="HYMN First Release Pass">
