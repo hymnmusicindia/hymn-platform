@@ -69,6 +69,9 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
   };
   const claim = () => { void track("first_release_reward_cta_clicked"); void track(state.event); router.push(isUsed ? "/distribution/start" : startHref); };
   const passRaised = ["passRising", "reward", "revealed"].includes(revealState);
+  // The spring overshoots the pocket while the pass is being pulled free, then
+  // settles in its readable position above the envelope's foreground layer.
+  const passLift = revealState === "passRising" ? -70 : passRaised ? 0 : 178;
   const passVisible = revealState !== "sealed" && revealState !== "pressed" && revealState !== "sealBreaking";
   const actionVisible = revealState === "revealed";
 
@@ -80,7 +83,7 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
         <div className="first-release-envelope-back" aria-hidden="true" />
         <div className="first-release-envelope-cavity" aria-hidden="true" />
         <div className="first-release-interior-glow" aria-hidden="true" />
-        {passVisible && <motion.section className="first-release-live-pass" initial={reduceMotion ? false : { opacity: 0, y: 250, rotate: -1 }} animate={passRaised ? { opacity: 1, y: 0, rotate: 0 } : { opacity: 1, y: 178, rotate: -1 }} transition={{ type: "spring", stiffness: 185, damping: 20 }} aria-labelledby="first-release-pass-title">
+        {passVisible && <motion.section className="first-release-live-pass" initial={reduceMotion ? false : { opacity: 0, y: 250, rotate: -1 }} animate={{ opacity: 1, y: passLift, rotate: passRaised ? 0 : -1 }} transition={{ type: "spring", stiffness: 185, damping: 20 }} aria-labelledby="first-release-pass-title">
           <div className="first-release-pass-head"><span>HYMN FIRST RELEASE PASS</span><b>01/01</b></div>
           <h1 id="first-release-pass-title" className="first-release-pass-title">FIRST SINGLE</h1>
           <FirstReleaseReceipt />
