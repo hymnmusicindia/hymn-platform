@@ -3331,3 +3331,14 @@ body:has(.first-release-page) > footer { display: none; }
 .first-release-envelope-brand { position:absolute; z-index:3; top:clamp(30px,4vw,46px); left:clamp(30px,4vw,48px); display:block; width:clamp(132px,17vw,190px); height:auto; object-fit:contain; }
 .first-release-envelope-flap { background:linear-gradient(152deg,#246c55 0%,#15503e 68%,#0c3428 100%); }.first-release-envelope-seal { background:radial-gradient(circle at 35% 30%,#f6d477,#d5a13f 60%,#9d6b21); border:2px solid #f6d785; box-shadow:0 5px 0 rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.56); }
 @media (max-width:900px) { .first-release-pass-stage { justify-self:center; width:100%; margin-left:0; } }
+
+/* High-definition, purpose-generated physical frames replace the old CSS
+   approximation. They are intentionally full-bleed product shots, so their
+   dark studio surround belongs to the object instead of faking transparency. */
+.first-release-envelope-button { height:auto; aspect-ratio:3 / 2; overflow:hidden; clip-path:none; background:#082c22; box-shadow:0 26px 48px rgba(11,37,28,.3); }
+.first-release-envelope-frame { position:absolute; z-index:0; inset:0; width:100%; height:100%; object-fit:cover; }
+.first-release-envelope-button::before { z-index:1; background:linear-gradient(180deg,rgba(1,14,10,.04) 36%,rgba(1,14,10,.62) 100%); }
+.first-release-envelope-brand { z-index:2; width:clamp(116px,15vw,170px); filter:drop-shadow(0 2px 5px rgba(0,0,0,.45)); }
+.first-release-envelope-prompt,.first-release-envelope-count { z-index:2; text-shadow:0 2px 6px rgba(0,0,0,.62); }.first-release-envelope-prompt { max-width:310px; }.first-release-envelope-prompt::after { background:#e2b14f; }
+.first-release-stage-2 .first-release-envelope-button { background:#082c22; }.first-release-stage-2 .first-release-envelope-flap,.first-release-stage-2 .first-release-envelope-seal { display:none; }
+@media (max-width:767px) { .first-release-envelope-button { width:100%; }.first-release-envelope-brand { left:28px; top:28px; width:125px; }.first-release-envelope-prompt { left:28px; bottom:25px; font-size:.7rem; }.first-release-envelope-count { right:28px; bottom:30px; } }
