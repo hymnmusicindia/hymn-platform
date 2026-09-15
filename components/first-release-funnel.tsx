@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, Check } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GoogleAuthButton } from "@/components/google-auth-button";
 import { FirstReleaseReceipt } from "@/components/first-release-receipt";
@@ -19,6 +19,7 @@ function releaseState(eligibility: Eligibility) {
 
 export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligibility; query: Query }) {
   const router = useRouter();
+  const [revealStep, setRevealStep] = useState(0);
   const viewedRef = useRef(false);
   const attribution = useMemo(() => Object.fromEntries(Object.entries(query).filter(([, value]) => Boolean(value))), [query]);
   const track = useCallback((event: string) => fetch("/api/promotions/first-release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event, attribution }) }).catch(() => undefined), [attribution]);
@@ -41,6 +42,11 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
     router.push(isUsed ? "/distribution/start" : startHref);
   };
   const referralCode = query.referral_code || query.ref;
+  const revealCopy = [
+    "Click the envelope to claim your offer",
+    "Your offer is held. Click once more to break the seal",
+    "Seal broken. Click to open your First Release Pass",
+  ];
 
   return <main className="first-release-page">
     <section className="first-release-shell">
@@ -51,9 +57,15 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
           {freeOfferAvailable ? <div className="first-release-price" aria-label="Standard distribution price 99 rupees, first release free"><del className="first-release-price-was">₹99</del><strong className="first-release-price-free"><em>FREE</em></strong></div> : <div className="first-release-next-price"><small>YOUR NEXT RELEASE</small><strong>₹99</strong></div>}
         </div>
 
-        <div className="first-release-pass-stage">
+        <div className={`first-release-pass-stage first-release-stage-${revealStep}`}>
           <div className="first-release-envelope" aria-hidden="true" />
-          <aside className="first-release-pass" aria-label="HYMN First Release Pass">
+          {revealStep < 3 ? <button type="button" className="first-release-envelope-button" onClick={() => { setRevealStep(step => Math.min(step + 1, 3)); void track(`first_release_envelope_step_${revealStep + 1}`); }} aria-describedby="first-release-envelope-prompt">
+            <span className="first-release-envelope-brand">HYMN<small>music.in</small></span>
+            <span className="first-release-envelope-flap" />
+            <span className="first-release-envelope-seal" aria-hidden="true">H</span>
+            <span id="first-release-envelope-prompt" className="first-release-envelope-prompt" aria-live="polite">{revealCopy[revealStep]}</span>
+            <span className="first-release-envelope-count" aria-hidden="true">{String(revealStep + 1).padStart(2, "0")} / 03</span>
+          </button> : <aside className="first-release-pass" aria-label="HYMN First Release Pass">
           <div className="first-release-pass-head"><span>HYMN FIRST RELEASE PASS</span><b>01/01</b></div>
           <div className="first-release-pass-title">FIRST SINGLE</div>
           <FirstReleaseReceipt />
@@ -61,7 +73,7 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
           <div id="first-release-account" className="first-release-pass-account"><p>YOUR ACCOUNT</p>{eligibility.authenticated ? <button type="button" onClick={begin}>{state.cta}<ArrowRight aria-hidden="true" /></button> : <GoogleAuthButton label="Continue with Google" expectedRole="customer" referralCode={referralCode} appearance="quiet" onAuthenticated={() => { void track("first_release_auth_started"); void track("first_release_auth_completed"); router.push(startHref); router.refresh(); }} />}</div>
           <p className="first-release-pass-security">Secure sign-in · HYMN never receives your Google password</p>
           <div className="first-release-pass-foot">STATUS: <b>{state.status}</b></div>
-          </aside>
+          </aside>}
         </div>
       </section>
 
