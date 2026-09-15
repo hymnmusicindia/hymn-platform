@@ -35,6 +35,7 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
   }, [attribution]);
   const state = releaseState(eligibility);
   const isUsed = state.status === "CLAIMED" || state.status === "MEMBER";
+  const freeOfferAvailable = !isUsed;
   const begin = () => {
     void track(state.event);
     router.push(isUsed ? "/distribution/start" : startHref);
@@ -46,12 +47,9 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
       <section className="first-release-hero-grid" aria-labelledby="first-release-title">
         <div className="first-release-copy">
           <p className="first-release-eyebrow">MUSIC DISTRIBUTION FOR INDEPENDENT ARTISTS</p>
-          <h1 id="first-release-title">YOUR FIRST RELEASE<br />IS ON US.</h1>
-          <div className="first-release-price" aria-label="Standard distribution price 99 rupees, today zero rupees">
-            <del className="first-release-price-was">₹99</del>
-            <span className="first-release-price-divider" aria-hidden="true" />
-            <strong className="first-release-price-free"><em>FREE</em></strong>
-          </div>
+          <h1 id="first-release-title">{freeOfferAvailable ? <>YOUR FIRST RELEASE<br />IS ON US.</> : <>YOUR NEXT RELEASE<br />STARTS HERE.</>}</h1>
+          {freeOfferAvailable ? <div className="first-release-price" aria-label="Standard distribution price 99 rupees, first release free"><del className="first-release-price-was">₹99</del><span className="first-release-price-divider" aria-hidden="true" /><strong className="first-release-price-free"><em>FREE</em></strong></div> : <div className="first-release-next-price"><small>YOUR NEXT RELEASE</small><strong>₹99</strong></div>}
+          <div className="first-release-route" aria-label="Release journey"><p>ONE TRACK. A REAL RELEASE JOURNEY.</p><ol><li><span>01</span>UPLOAD</li><li><span>02</span>REVIEW</li><li><span>03</span>LIVE</li></ol></div>
         </div>
 
         <aside className="first-release-pass" aria-label="HYMN First Release Pass">
