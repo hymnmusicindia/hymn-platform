@@ -15,5 +15,5 @@ export default async function FirstReleasePage({ searchParams }: { searchParams?
   const status = user ? await getFirstReleaseEligibility(user.id) : { eligible: false as const, reason: "authentication_required" };
   const params = (await searchParams) ?? {};
   const query = Object.fromEntries(Object.entries(params).map(([key, value]) => [key, Array.isArray(value) ? value[0] : value]));
-  return <FirstReleaseFunnel eligibility={{ authenticated: Boolean(user), eligible: status.eligible, reason: status.reason, firstName: user?.name.split(/\s+/)[0] }} query={query} />;
+  return <FirstReleaseFunnel eligibility={{ authenticated: Boolean(user), eligible: status.eligible, reason: status.reason, firstName: user?.name.split(/\s+/)[0], avatarUrl: user?.avatarUrl ?? undefined }} query={query} />;
 }

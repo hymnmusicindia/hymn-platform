@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { GoogleAuthButton } from "@/components/google-auth-button";
 import { FirstReleaseReceipt } from "@/components/first-release-receipt";
 
-type Eligibility = { authenticated: boolean; eligible: boolean; reason: string; firstName?: string };
+type Eligibility = { authenticated: boolean; eligible: boolean; reason: string; firstName?: string; avatarUrl?: string };
 type Query = Record<string, string | undefined>;
 
 function releaseState(eligibility: Eligibility) {
@@ -47,7 +47,7 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
     <section className="first-release-shell">
       <header className="first-release-header">
         <Image src="/assets/hymnlogowhite.png" alt="HYMN music.in" width={172} height={56} priority className="first-release-logo" />
-        <Link href="/login" className="first-release-login">Log in</Link>
+        {eligibility.authenticated ? <Link href="/dashboard" className="first-release-profile" aria-label="Open your HYMN dashboard" title="Open dashboard">{eligibility.avatarUrl ? <img src={eligibility.avatarUrl} alt="" referrerPolicy="no-referrer" /> : <span aria-hidden="true">{eligibility.firstName?.slice(0, 1).toUpperCase() || "H"}</span>}</Link> : <Link href="/login" className="first-release-login">Log in</Link>}
       </header>
 
       <section className="first-release-hero-grid" aria-labelledby="first-release-title">
