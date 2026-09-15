@@ -17,6 +17,7 @@ export async function POST(request: Request) {
   const allowedEvents = new Set([
     "landing_view", "release_for_free_clicked", "login_started", "audio_uploaded", "artwork_uploaded", "metadata_completed", "review_reached", "dashboard_entered",
     "first_release_page_viewed", "first_release_primary_cta_clicked", "first_release_auth_started", "first_release_auth_completed", "first_release_started", "first_release_resumed", "first_release_submitted", "first_release_offer_already_used", "first_release_plan_cta_clicked",
+    "first_release_envelope_impression", "first_release_envelope_hovered", "first_release_envelope_open_started", "first_release_envelope_open_completed", "first_release_pass_revealed", "first_release_pass_cta_clicked",
   ]);
   const event = String(body.event || "");
   if (!allowedEvents.has(event)) return NextResponse.json({ error: "Unsupported event." }, { status: 400 });
