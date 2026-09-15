@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, Check } from "lucide-react";
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { GoogleAuthButton } from "@/components/google-auth-button";
@@ -51,7 +52,9 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
           {freeOfferAvailable ? <div className="first-release-price" aria-label="Standard distribution price 99 rupees, first release free"><del className="first-release-price-was">₹99</del><strong className="first-release-price-free"><em>FREE</em></strong></div> : <div className="first-release-next-price"><small>YOUR NEXT RELEASE</small><strong>₹99</strong></div>}
         </div>
 
-        <aside className="first-release-pass" aria-label="HYMN First Release Pass">
+        <div className="first-release-pass-stage">
+          <Image className="first-release-envelope" src="/assets/first-release-envelope-v1.png" alt="" aria-hidden="true" width={1536} height={1024} priority />
+          <aside className="first-release-pass" aria-label="HYMN First Release Pass">
           <div className="first-release-pass-head"><span>HYMN FIRST RELEASE PASS</span><b>01/01</b></div>
           <div className="first-release-pass-title">FIRST SINGLE</div>
           <FirstReleaseReceipt />
@@ -59,7 +62,8 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
           <div id="first-release-account" className="first-release-pass-account"><p>YOUR ACCOUNT</p>{eligibility.authenticated ? <button type="button" onClick={begin}>{state.cta}<ArrowRight aria-hidden="true" /></button> : <GoogleAuthButton label="Continue with Google" expectedRole="customer" referralCode={referralCode} appearance="quiet" onAuthenticated={() => { void track("first_release_auth_started"); void track("first_release_auth_completed"); router.push(startHref); router.refresh(); }} />}</div>
           <p className="first-release-pass-security">Secure sign-in · HYMN never receives your Google password</p>
           <div className="first-release-pass-foot">STATUS: <b>{state.status}</b></div>
-        </aside>
+          </aside>
+        </div>
       </section>
 
     </section>
