@@ -45,6 +45,13 @@ function malformedResponseError(status: number, contentType: string | null, prev
   return `DIRENOTE_MALFORMED_RESPONSE: DireNote returned HTTP ${status}${received}, not the required JSON response. Response preview: ${preview}`;
 }
 
+function nonJsonProviderFailure(status: number, contentType: string | null, preview: string) {
+  if (/failed to upload license receipt/i.test(preview)) {
+    return "DIRENOTE_LICENSE_RECEIPT_IMPORT_FAILED: DireNote could not import the supplied public licence PDF. The provider returned no JSON diagnostic; inspect DireNote's licence-import and storage logs.";
+  }
+  return malformedResponseError(status, contentType, preview);
+}
+
 export function extractDireNoteProviderError(value: unknown): ProviderError {
   const parsed = parsedJson(value);
   if (typeof parsed === "string") return { message: parsed };
@@ -95,7 +102,8 @@ async function postToDireNote(endpoint: string, payload: Record<string, unknown>
     let data: any;
     try { data = JSON.parse(raw); } catch {
       const preview = safeResponsePreview(raw, config);
-      return { success: false, httpStatus: response.status, contentType, raw: preview, error: malformedResponseError(response.status, contentType, preview) };
+      const error = nonJsonProviderFailure(response.status, contentType, preview);
+      return { success: false, httpStatus: response.status, contentType, raw: preview, error, providerReason: error.startsWith("DIRENOTE_LICENSE_RECEIPT_IMPORT_FAILED") ? "licenseReceiptImportFailed" : undefined };
     }
     if (!data || typeof data !== "object" || Array.isArray(data)) {
       return { success: false, httpStatus: response.status, contentType, raw: safeResponsePreview(raw, config), error: "DIRENOTE_MALFORMED_RESPONSE: DireNote returned JSON that was not an object." };
