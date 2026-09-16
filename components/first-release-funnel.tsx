@@ -3,6 +3,7 @@
 import { ArrowRight, Check, ChevronDown } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GoogleAuthButton } from "@/components/google-auth-button";
@@ -75,10 +76,22 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
   const passVisible = revealState !== "sealed" && revealState !== "pressed" && revealState !== "sealBreaking";
   const actionVisible = revealState === "revealed";
 
+  if (isUsed) return <main className="first-release-page first-release-empty-offer">
+    <section className="first-release-empty-offer-shell" aria-labelledby="first-release-empty-offer-title">
+      <Image className="first-release-empty-offer-art" src="/assets/first-release-empty-envelope.png" alt="An empty open envelope with a fly leaving a dotted trail" width={1280} height={1280} priority />
+      <div className="first-release-empty-offer-copy">
+        <p className="first-release-empty-offer-eyebrow">HYMN FIRST RELEASE PASS</p>
+        <h1 id="first-release-empty-offer-title">Oops, it looks like you&apos;ve exhausted your offer :)</h1>
+        <p>If you think this is a mistake, please <Link href="/contact">contact us</Link>.</p>
+      </div>
+    </section>
+  </main>;
+
   return <main className={`first-release-page first-release-scene first-release-scene-${revealState}`}>
     <section className="first-release-scene-shell" aria-label="HYMN First Release Pass reveal">
       <div className="first-release-scene-vignette" aria-hidden="true" />
       <div className="first-release-envelope-stage" data-state={revealState}>
+        {revealState === "sealed" && <p className="first-release-scene-instruction"><ChevronDown aria-hidden="true" /><span className="first-release-desktop-copy">OPEN YOUR FIRST RELEASE PASS</span><span className="first-release-mobile-copy">TAP TO OPEN YOUR GIFT</span></p>}
         <div className="first-release-ground-shadow" aria-hidden="true" />
         <div className="first-release-envelope-back" aria-hidden="true" />
         <div className="first-release-envelope-cavity" aria-hidden="true" />
@@ -104,7 +117,6 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
         </button>
         {passRaised && <div className="first-release-reward-particles" aria-hidden="true">{Array.from({ length: 10 }, (_, index) => <i key={index} style={{ "--particle": index } as React.CSSProperties} />)}</div>}
       </div>
-      {revealState === "sealed" && <p className="first-release-scene-instruction"><ChevronDown aria-hidden="true" /><span className="first-release-desktop-copy">OPEN YOUR FIRST RELEASE PASS</span><span className="first-release-mobile-copy">TAP TO OPEN YOUR GIFT</span></p>}
       {revealState !== "sealed" && revealState !== "revealed" && <p className="first-release-scene-progress" aria-live="polite">{revealState === "sealBreaking" ? "BREAKING THE SEAL" : revealState === "opening" ? "OPENING YOUR GIFT" : "YOUR PASS IS RISING"}</p>}
       {revealState === "revealed" && <p className="sr-only" role="status">Your first release pass is ready. ₹0 due today.</p>}
     </section>

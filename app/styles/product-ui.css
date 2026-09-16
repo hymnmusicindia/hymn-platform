@@ -3389,3 +3389,25 @@ body:has(.first-release-scene) > header,body:has(.first-release-scene) > footer 
 .first-release-scene-passRising .first-release-envelope-front,.first-release-scene-reward .first-release-envelope-front,.first-release-scene-revealed .first-release-envelope-front { z-index:3; }
 .first-release-scene-passRising .first-release-envelope-wordmark,.first-release-scene-reward .first-release-envelope-wordmark,.first-release-scene-revealed .first-release-envelope-wordmark { z-index:4; }
 .first-release-scene-passRising .first-release-envelope-flap,.first-release-scene-reward .first-release-envelope-flap,.first-release-scene-revealed .first-release-envelope-flap { z-index:2; }
+
+/* Compact the unopened reward into one viewport: the instruction leads directly
+   into the envelope, rather than leaving a mostly empty stage above it. */
+.first-release-scene { height:100svh; min-height:100svh; }
+.first-release-scene-shell { display:flex; min-height:100svh; height:100svh; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding-block:max(18px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-bottom)); }
+.first-release-envelope-stage { width:clamp(290px,42vw,560px); height:min(clamp(330px,52vw,640px),calc(100svh - 104px)); flex:none; }
+.first-release-scene-instruction { position:absolute; z-index:11; top:16%; bottom:auto; left:50%; flex:none; margin:0; transform:translateX(-50%); }
+.first-release-scene-progress { position:absolute; bottom:calc(max(24px,env(safe-area-inset-bottom)) - 4px); left:50%; transform:translateX(-50%); }
+.first-release-envelope-back { bottom:7%; height:70%; }.first-release-envelope-cavity { bottom:16%; height:55%; }.first-release-envelope-front { bottom:7%; height:50%; }.first-release-envelope-flap { top:23%; height:45%; }.first-release-envelope-wordmark { bottom:13%; }.first-release-seal-button { top:47%; }
+.first-release-scene-sealed .first-release-envelope-stage { margin-top:-40px; animation:first-release-envelope-invite 5.2s cubic-bezier(.33,1,.68,1) 1s infinite; transform-origin:50% 62%; }
+@keyframes first-release-envelope-invite { 0%,28%,100% { transform:translateX(0) rotate(0); } 32% { transform:translateX(-4px) rotate(-.45deg); } 36% { transform:translateX(5px) rotate(.5deg); } 40% { transform:translateX(-3px) rotate(-.3deg); } 44% { transform:translateX(2px) rotate(.2deg); } 48% { transform:translateX(0) rotate(0); } }
+@media (min-width:768px) and (max-height:700px) { .first-release-live-pass { bottom:1%; } }
+@media (max-width:767px) { .first-release-scene-shell { gap:10px; padding-block:max(14px,env(safe-area-inset-top)) max(18px,env(safe-area-inset-bottom)); }.first-release-envelope-stage { width:clamp(270px,90vw,410px); height:min(clamp(330px,136vw,590px),calc(100svh - 86px)); }.first-release-scene-instruction { font-size:.54rem; letter-spacing:.14em; }.first-release-scene-sealed .first-release-envelope-stage { margin-top:-70px; animation-delay:1s; } }
+
+/* The offer is genuinely single-use.  Give artists a clear, calm end state
+   rather than an unopened pass that can no longer be redeemed. */
+body:has(.first-release-empty-offer) > header,body:has(.first-release-empty-offer) > footer { display:none; }
+.first-release-empty-offer { display:grid; width:100%; min-height:100svh; place-items:center; overflow:hidden; background:radial-gradient(circle at 50% 40%,#fffdf7 0,#f7f2e8 53%,#ede5d7 100%); color:#151612; }
+.first-release-empty-offer-shell { display:grid; width:min(960px,calc(100% - 48px)); grid-template-columns:minmax(260px,430px) minmax(280px,390px); align-items:center; justify-content:center; gap:clamp(28px,6vw,84px); }
+.first-release-empty-offer-art { width:100%; height:auto; object-fit:contain; filter:drop-shadow(0 18px 20px rgba(15,43,32,.16)); }
+.first-release-empty-offer-copy { max-width:390px; }.first-release-empty-offer-eyebrow { margin:0 0 14px; color:#31584a; font-size:.63rem; font-weight:900; letter-spacing:.2em; }.first-release-empty-offer-copy h1 { margin:0; font-size:clamp(2rem,4vw,3.9rem); font-weight:900; letter-spacing:-.07em; line-height:.93; }.first-release-empty-offer-copy > p:last-child { margin:22px 0 0; color:#5b5a52; font-size:1rem; line-height:1.55; }.first-release-empty-offer-copy a { color:#0d7050; font-weight:800; text-decoration-thickness:2px; text-underline-offset:3px; }
+@media (max-width:767px) { .first-release-empty-offer { overflow:auto; }.first-release-empty-offer-shell { width:min(420px,calc(100% - 36px)); grid-template-columns:1fr; gap:10px; padding-block:30px; }.first-release-empty-offer-art { width:min(82vw,360px); justify-self:center; }.first-release-empty-offer-copy { text-align:center; }.first-release-empty-offer-eyebrow { margin-bottom:10px; }.first-release-empty-offer-copy h1 { font-size:clamp(2rem,10vw,3rem); }.first-release-empty-offer-copy > p:last-child { margin-top:16px; } }
