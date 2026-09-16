@@ -2,7 +2,25 @@ import { NextResponse } from "next/server";
 import { localPrivateStorage } from "@/lib/private-storage";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string; token: string; filename: string }> }) {
+export async function GET(request: Request, context: { params: Promise<{ id: string; token: string; filename: string }> }) {
+  const response = await serveAsset(request, context);
+  // Provider fetches are otherwise invisible to HYMN. Log enough to prove
+  // whether DireNote reached the origin, without recording the token.
+  const { id } = await context.params;
+  console.info("[distribution-asset]", JSON.stringify({
+    assetId: id,
+    method: request.method,
+    status: response.status,
+    bytes: response.headers.get("content-length"),
+    ip: request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip"),
+    userAgent: request.headers.get("user-agent"),
+    acceptEncoding: request.headers.get("accept-encoding"),
+    range: request.headers.get("range"),
+  }));
+  return response;
+}
+
+async function serveAsset(request: Request, { params }: { params: Promise<{ id: string; token: string; filename: string }> }) {
   const { id, token } = await params;
   const assetId = Number(id);
   if (!Number.isInteger(assetId) || assetId <= 0) {
