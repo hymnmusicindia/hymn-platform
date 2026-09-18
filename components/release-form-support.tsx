@@ -211,11 +211,11 @@ export function ContributorsModal({
                   {entries.map((entry, entryIndex) => (
                     <div key={entry.id} className="grid gap-2 rounded-xl border p-2.5 sm:grid-cols-[auto,1fr,1fr,auto] sm:items-center" style={{ borderColor: (role.key === "producer" ? entry.artistName : entry.legalName).trim() ? "var(--border)" : "rgba(250,204,21,0.36)", background: "var(--card)" }}>
                       <span className="hidden h-8 w-8 items-center justify-center rounded-lg border text-xs font-semibold sm:inline-flex" style={{ borderColor: "var(--border)", color: "var(--text-soft)" }}>{entryIndex + 1}</span>
-                      <label className="grid gap-1">
+                      <label className={role.key === "producer" ? "order-2 grid gap-1" : "grid gap-1"}>
                         <span className="text-[11px] uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Legal name {role.key === "producer" ? "(optional)" : ""}</span>
                         <input className="field min-h-10 py-2 text-sm" placeholder={role.key === "producer" ? "Optional legal name" : "Full legal name"} value={entry.legalName} onChange={(event) => updateRole(key, entry.id, { legalName: event.target.value })} />
                       </label>
-                      <label className="grid gap-1">
+                      <label className={role.key === "producer" ? "order-1 grid gap-1" : "grid gap-1"}>
                         <span className="text-[11px] uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Artist name {role.key === "producer" ? "(required)" : ""}</span>
                         <input className="field min-h-10 py-2 text-sm" placeholder={role.key === "producer" ? "Producer artist name" : "Optional public credit"} value={entry.artistName} onChange={(event) => updateRole(key, entry.id, { artistName: event.target.value })} />
                       </label>
