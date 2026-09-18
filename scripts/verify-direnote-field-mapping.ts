@@ -94,10 +94,13 @@ assert.equal(buildDireNotePayload({ ...proofRelease, sunoReceiptUrl: "", suno_re
 assert.equal(buildDireNotePayload({ ...release, contentType: "non_exclusive_licensed", licenseReceiptUrl: "https://cdn.example.test/license.pdf" }).license_receipt_url, "https://cdn.example.test/license.pdf");
 const credited = buildDireNotePayload({ ...release, releaseType: "single", releaseTitle: "purple", metadata: { ...(release.metadata as object), artistLinks: { ...(release.metadata as any).artistLinks, "Guest Artist": { instagram_url: "https://instagram.com/guest", spotify_url: "https://open.spotify.com/artist/guest", apple_url: "https://music.apple.com/artist/guest", youtube_url: "https://youtube.com/@guest" } } }, tracks: [{ ...release.tracks![0], featuredArtists: "Guest Artist", contributors: [
   { role: "songwriter", legalName: "Legal Writer", ipi: "123456789", iprsMember: true, instagramUrl: "https://instagram.com/writer", xUrl: "https://x.com/writer" },
-  { role: "composer", legalName: "Legal Composer", ipi: "987654321", iprsMember: false, instagramUrl: "https://instagram.com/composer", xUrl: "https://x.com/composer" }
+  { role: "composer", legalName: "Legal Composer", ipi: "987654321", iprsMember: false, instagramUrl: "https://instagram.com/composer", xUrl: "https://x.com/composer" },
+  { role: "producer", legalName: "Producer Legal Name", artistName: "Producer Stage Name" }
 ] }] });
 assert.deepEqual(credited.tracks[0].songwriters, [{ name: "Legal Writer", ipi: "123456789", iprs_member: "Yes", instagram_url: "https://instagram.com/writer", x_url: "https://x.com/writer" }]);
 assert.equal(credited.tracks[0].composers[0].name, "Legal Composer");
+assert.deepEqual(credited.tracks[0].producers, ["Producer Stage Name"]);
+assert.equal(credited.tracks[0].contributors?.find((contributor) => contributor.role === "producer")?.name, "Producer Stage Name");
 assert.equal(credited.featuring_artists?.[0].name, "Guest Artist");
 assert.equal(credited.tracks[0].featuring_artists?.[0].name, "Guest Artist");
 for (const [genre, subgenres] of Object.entries(DIRENOTE_GENRE_CATALOG)) for (const subgenre of subgenres) {

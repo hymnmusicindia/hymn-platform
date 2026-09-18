@@ -132,13 +132,15 @@ export function ContributorsModal({
   onClose,
   onSave,
   createContributor,
-  contributorsValid
+  contributorsValid,
+  producersValid
 }: {
   state: ContributorModalState;
   onClose: () => void;
   onSave: (value: { songwriters: ContributorDraft[]; composers: ContributorDraft[]; producers: ContributorDraft[] }) => void;
   createContributor: () => ContributorDraft;
   contributorsValid: (entries: ContributorDraft[]) => boolean;
+  producersValid: (entries: ContributorDraft[]) => boolean;
 }) {
   const [local, setLocal] = useState({ songwriters: [createContributor()], composers: [createContributor()], producers: [createContributor()] });
 
@@ -161,7 +163,7 @@ export function ContributorsModal({
     setLocal((current) => ({ ...current, [role]: current[role].length === 1 ? current[role] : current[role].filter((entry) => entry.id !== id) }));
   }
 
-  const valid = [local.songwriters, local.composers, local.producers].every(contributorsValid);
+  const valid = contributorsValid(local.songwriters) && contributorsValid(local.composers) && producersValid(local.producers);
   const totalContributors = local.songwriters.length + local.composers.length + local.producers.length;
 
   return (
@@ -171,7 +173,7 @@ export function ContributorsModal({
           <div>
             <p className="text-xs uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>Credits & rights</p>
             <h3 className="mt-1 text-xl font-semibold sm:text-2xl" style={{ color: "var(--text)" }}>Contributors</h3>
-            <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Add legal names for royalty and rights matching. Artist names can stay optional.</p>
+            <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Use legal names for songwriter and composer rights matching. Producer artist names are sent to DireNote; legal names remain optional for producers.</p>
           </div>
           <div className="flex items-center gap-2">
             <span className="rounded-full border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: valid ? "rgba(34,197,94,0.38)" : "rgba(250,204,21,0.38)", background: valid ? "rgba(34,197,94,0.1)" : "rgba(250,204,21,0.1)", color: valid ? "#86efac" : "#fde68a" }}>
@@ -185,7 +187,7 @@ export function ContributorsModal({
           {contributorRoles.map((role) => {
             const key = `${role.key}s` as "songwriters" | "composers" | "producers";
             const entries = local[key];
-            const complete = contributorsValid(entries);
+            const complete = role.key === "producer" ? producersValid(entries) : contributorsValid(entries);
             const initials = role.label.slice(0, 1);
             return (
               <div key={role.key} className="rounded-[1.15rem] border p-3 sm:p-4" style={{ borderColor: complete ? "color-mix(in srgb, var(--accent) 28%, var(--border))" : "rgba(250,204,21,0.34)", background: "var(--bg-soft)" }}>
@@ -194,6 +196,7 @@ export function ContributorsModal({
                     <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border text-sm font-semibold" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}>{initials}</span>
                     <div>
                       <h4 className="text-base font-semibold" style={{ color: "var(--text)" }}>{role.label}</h4>
+                      <div className="contributor-role-requirement text-xs" style={{ color: "var(--text-soft)" }}>{entries.length} entr{entries.length === 1 ? "y" : "ies"} · {role.key === "producer" ? "artist name required" : "legal name required"}</div>
                       <p className="text-xs" style={{ color: "var(--text-soft)" }}>{entries.length} entr{entries.length === 1 ? "y" : "ies"} · legal name required</p>
                     </div>
                   </div>
@@ -206,15 +209,15 @@ export function ContributorsModal({
                 </div>
                 <div className="mt-3 grid gap-2">
                   {entries.map((entry, entryIndex) => (
-                    <div key={entry.id} className="grid gap-2 rounded-xl border p-2.5 sm:grid-cols-[auto,1fr,1fr,auto] sm:items-center" style={{ borderColor: entry.legalName.trim() ? "var(--border)" : "rgba(250,204,21,0.36)", background: "var(--card)" }}>
+                    <div key={entry.id} className="grid gap-2 rounded-xl border p-2.5 sm:grid-cols-[auto,1fr,1fr,auto] sm:items-center" style={{ borderColor: (role.key === "producer" ? entry.artistName : entry.legalName).trim() ? "var(--border)" : "rgba(250,204,21,0.36)", background: "var(--card)" }}>
                       <span className="hidden h-8 w-8 items-center justify-center rounded-lg border text-xs font-semibold sm:inline-flex" style={{ borderColor: "var(--border)", color: "var(--text-soft)" }}>{entryIndex + 1}</span>
                       <label className="grid gap-1">
-                        <span className="text-[11px] uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Legal name</span>
-                        <input className="field min-h-10 py-2 text-sm" placeholder="Full legal name" value={entry.legalName} onChange={(event) => updateRole(key, entry.id, { legalName: event.target.value })} />
+                        <span className="text-[11px] uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Legal name {role.key === "producer" ? "(optional)" : ""}</span>
+                        <input className="field min-h-10 py-2 text-sm" placeholder={role.key === "producer" ? "Optional legal name" : "Full legal name"} value={entry.legalName} onChange={(event) => updateRole(key, entry.id, { legalName: event.target.value })} />
                       </label>
                       <label className="grid gap-1">
-                        <span className="text-[11px] uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Artist name</span>
-                        <input className="field min-h-10 py-2 text-sm" placeholder="Optional public credit" value={entry.artistName} onChange={(event) => updateRole(key, entry.id, { artistName: event.target.value })} />
+                        <span className="text-[11px] uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Artist name {role.key === "producer" ? "(required)" : ""}</span>
+                        <input className="field min-h-10 py-2 text-sm" placeholder={role.key === "producer" ? "Producer artist name" : "Optional public credit"} value={entry.artistName} onChange={(event) => updateRole(key, entry.id, { artistName: event.target.value })} />
                       </label>
                       {role.key !== "producer" ? <div className="col-span-full grid gap-2 sm:grid-cols-2 lg:grid-cols-4"><label className="grid gap-1"><span className="text-[11px] uppercase tracking-[0.16em]" style={{color:"var(--text-soft)"}}>IPI number</span><input className="field min-h-10 py-2 text-sm" value={entry.ipi ?? ""} onChange={(event)=>updateRole(key,entry.id,{ipi:event.target.value})} placeholder="Optional" /></label><label className="flex items-center gap-2 pt-5 text-sm"><input type="checkbox" checked={Boolean(entry.iprsMember)} onChange={(event)=>updateRole(key,entry.id,{iprsMember:event.target.checked})} />IPRS member</label><label className="grid gap-1"><span className="text-[11px] uppercase tracking-[0.16em]" style={{color:"var(--text-soft)"}}>Instagram</span><input className="field min-h-10 py-2 text-sm" value={entry.instagramUrl ?? ""} onChange={(event)=>updateRole(key,entry.id,{instagramUrl:event.target.value})} placeholder="Optional URL" /></label><label className="grid gap-1"><span className="text-[11px] uppercase tracking-[0.16em]" style={{color:"var(--text-soft)"}}>X / Twitter</span><input className="field min-h-10 py-2 text-sm" value={entry.xUrl ?? ""} onChange={(event)=>updateRole(key,entry.id,{xUrl:event.target.value})} placeholder="Optional URL" /></label></div> : null}
                       <button type="button" className="contributor-remove-action btn-outline pressable px-3 py-2 text-xs" disabled={entries.length === 1} onClick={() => removeRoleEntry(key, entry.id)}>Remove</button>
@@ -226,6 +229,7 @@ export function ContributorsModal({
           })}
         </div>
         {!valid ? <p className="px-4 pb-0 text-sm sm:px-6" style={{ color: "#fca5a5" }}>Each contributor role needs at least one legal name.</p> : null}
+        {!valid ? <p className="contributor-validation-message px-4 pb-0 text-sm sm:px-6" style={{ color: "#fca5a5" }}>Songwriters and composers need legal names. Producers need an artist name.</p> : null}
         <div className="flex flex-col-reverse gap-2 border-t px-4 py-4 sm:flex-row sm:justify-end sm:px-6" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
           <button type="button" className="btn-outline pressable justify-center" onClick={onClose}>Cancel</button>
           <button type="button" className="contributors-save-action pressable justify-center" disabled={!valid} onClick={() => onSave(local)}>Save contributors</button>

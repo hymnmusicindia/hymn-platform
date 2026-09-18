@@ -213,7 +213,7 @@ function toDireNoteArtist(name: string, profiles: ArtistProfile[] = [], release?
 
 function contributors(value?: string | null, structured?: Array<Record<string, any>>, role?: string): DireNoteContributor[] {
   const matching = structured?.filter((item) => !role || item.role === role) ?? [];
-  if (matching.length) return matching.map((item) => ({ name: item.name ?? item.legalName ?? "", ipi: item.ipi || undefined, iprs_member: item.iprsMember === true || item.iprsMember === "Yes" ? "Yes" : "No", instagram_url: item.instagramUrl || item.instagram_url || undefined, x_url: item.xUrl || item.x_url || undefined }));
+  if (matching.length) return matching.map((item) => ({ name: item.name ?? (role === "producer" ? item.artistName : item.legalName) ?? "", ipi: item.ipi || undefined, iprs_member: item.iprsMember === true || item.iprsMember === "Yes" ? "Yes" : "No", instagram_url: item.instagramUrl || item.instagram_url || undefined, x_url: item.xUrl || item.x_url || undefined }));
   return splitNames(value).map((name) => ({ name, iprs_member: "No" }));
 }
 
@@ -316,12 +316,12 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
       explicitLyrics: track.explicitContent ? "Yes" : "No",
       trackLyrics: (track as any).lyrics || (track as any).trackLyrics || undefined,
       previouslyReleased: ((track as any).previouslyReleased ?? isPreviouslyReleased) ? "Yes" : "No",
-      producers: splitNames((track as any).producers ?? (track as any).producer),
+      producers: contributors((track as any).producers ?? (track as any).producer, track.contributors as any, "producer").map((contributor) => contributor.name),
       artists: splitNames(track.primaryArtist || release.artistName).map((name) => toDireNoteArtist(name, options.artistProfiles, extended)),
       featuring_artists: splitNames(track.featuredArtists).map((name) => toDireNoteArtist(name, options.artistProfiles, extended)),
       songwriters: contributors(track.songwriters, track.contributors as any, "songwriter"),
       composers: contributors(track.composers, track.contributors as any, "composer"),
-      contributors: Array.isArray(track.contributors) ? track.contributors.map((contributor: any) => ({ name: String(contributor.name ?? contributor.legalName ?? "").trim(), role: String(contributor.role ?? "").trim() })).filter((contributor) => contributor.name && contributor.role) : undefined
+      contributors: Array.isArray(track.contributors) ? track.contributors.map((contributor: any) => ({ name: String(contributor.name ?? (contributor.role === "producer" ? contributor.artistName : contributor.legalName) ?? "").trim(), role: String(contributor.role ?? "").trim() })).filter((contributor) => contributor.name && contributor.role) : undefined
     }))
   };
 

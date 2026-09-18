@@ -734,9 +734,20 @@ function contributorsValid(entries: ContributorDraft[]) {
   );
 }
 
+function producersValid(entries: ContributorDraft[]) {
+  return entries.length > 0 && entries.every((entry) => entry.artistName.trim().length > 0);
+}
+
 function contributorNames(entries: ContributorDraft[]) {
   return entries
     .map((entry) => entry.legalName.trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+function producerNames(entries: ContributorDraft[]) {
+  return entries
+    .map((entry) => entry.artistName.trim())
     .filter(Boolean)
     .join(", ");
 }
@@ -755,7 +766,7 @@ function contributorCredits(
       instagramUrl: entry.instagramUrl?.trim() || undefined,
       xUrl: entry.xUrl?.trim() || undefined,
     }))
-    .filter((entry) => entry.legalName);
+    .filter((entry) => role === "producer" ? entry.artistName : entry.legalName);
 }
 
 function releaseTypeFromCount(trackCount: number) {
@@ -1343,7 +1354,7 @@ export function ReleaseForm({
     (track) =>
       contributorsValid(track.songwriters) &&
       contributorsValid(track.composers) &&
-      contributorsValid(track.producers),
+      producersValid(track.producers),
   );
   const readinessItems = useMemo(() => [
     {
@@ -1432,7 +1443,7 @@ export function ReleaseForm({
           featuredArtists: track.featuredArtists,
           songwriters: contributorNames(track.songwriters),
           composers: contributorNames(track.composers),
-          producers: contributorNames(track.producers),
+          producers: producerNames(track.producers),
           audioUrl: track.existingAudioUrl,
           audioFileName: track.audioFileName,
           duration: track.duration,
@@ -2009,14 +2020,14 @@ export function ReleaseForm({
     if (
       !contributorsValid(track.songwriters) ||
       !contributorsValid(track.composers) ||
-      !contributorsValid(track.producers)
+      !producersValid(track.producers)
     )
       return {
         step: 3,
         key: `track-${index}-contributors`,
         trackIndex: index,
         message:
-          "Each track needs songwriter, composer, and producer legal names.",
+          "Each track needs songwriter and composer legal names, plus a producer artist name.",
       };
     if (!track.audioFile && !track.existingAudioUrl && !track.audioPreviewUrl)
       return {
@@ -2534,7 +2545,7 @@ export function ReleaseForm({
           additionalPrimaryArtists: track.remixers.trim() || undefined,
           songwriters: contributorNames(track.songwriters),
           composers: contributorNames(track.composers),
-          producers: contributorNames(track.producers),
+          producers: producerNames(track.producers),
           contributors: [
             ...contributorCredits("songwriter", track.songwriters),
             ...contributorCredits("composer", track.composers),
@@ -2643,7 +2654,7 @@ export function ReleaseForm({
             additionalPrimaryArtists: track.remixers.trim() || undefined,
             songwriters: contributorNames(track.songwriters),
             composers: contributorNames(track.composers),
-            producers: contributorNames(track.producers),
+            producers: producerNames(track.producers),
             contributors: [
               ...contributorCredits("songwriter", track.songwriters),
               ...contributorCredits("composer", track.composers),
@@ -2763,7 +2774,7 @@ export function ReleaseForm({
           additionalPrimaryArtists: track.remixers.trim() || undefined,
           songwriters: contributorNames(track.songwriters),
           composers: contributorNames(track.composers),
-          producers: contributorNames(track.producers),
+          producers: producerNames(track.producers),
           contributors: [
             ...contributorCredits("songwriter", track.songwriters),
             ...contributorCredits("composer", track.composers),
@@ -3486,7 +3497,7 @@ export function ReleaseForm({
             {tracks.map((track, index) => {
               const expanded = expandedTrack === index;
               const issue = showErrors ? trackIssue(track, index) : null;
-              const metadataReady = Boolean(track.trackTitle.trim() && !isPlaceholderTrackTitle(track.trackTitle) && track.primaryArtistIds.length && contributorsValid(track.songwriters) && contributorsValid(track.composers) && contributorsValid(track.producers));
+              const metadataReady = Boolean(track.trackTitle.trim() && !isPlaceholderTrackTitle(track.trackTitle) && track.primaryArtistIds.length && contributorsValid(track.songwriters) && contributorsValid(track.composers) && producersValid(track.producers));
               const audioReady = Boolean(track.existingAudioUrl || (track.audioPreviewUrl && track.audioUploadStatus === "uploaded"));
               const trackReady = metadataReady && audioReady;
               const audioStatusLabel = track.audioUploadStatus === "uploading"
@@ -3759,7 +3770,7 @@ export function ReleaseForm({
                             borderColor:
                               contributorsValid(track.songwriters) &&
                               contributorsValid(track.composers) &&
-                              contributorsValid(track.producers)
+                              producersValid(track.producers)
                                 ? "color-mix(in srgb, var(--accent) 24%, var(--border))"
                                 : "rgba(250,204,21,0.38)",
                             background:
@@ -3802,8 +3813,9 @@ export function ReleaseForm({
                                     entries: track.producers,
                                   },
                                 ].map(({ label, short, entries }) => {
-                                  const names = contributorNames(entries);
-                                  const complete = contributorsValid(entries);
+                                  const isProducer = label === "Producers";
+                                  const names = isProducer ? producerNames(entries) : contributorNames(entries);
+                                  const complete = isProducer ? producersValid(entries) : contributorsValid(entries);
                                   return (
                                     <div
                                       key={label}
@@ -3844,7 +3856,7 @@ export function ReleaseForm({
                                             : "var(--text-soft)",
                                         }}
                                       >
-                                        {names || "Pending legal name"}
+                                        {names || (isProducer ? "Pending artist name" : "Pending legal name")}
                                       </p>
                                     </div>
                                   );
@@ -6231,6 +6243,7 @@ export function ReleaseForm({
         }}
         createContributor={createContributor}
         contributorsValid={contributorsValid}
+        producersValid={producersValid}
       />
     </>
   );
