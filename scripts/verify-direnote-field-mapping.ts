@@ -131,6 +131,25 @@ for (const language of [null, undefined, "", "Hindi", "English"]) {
 for (const language of ["Hindi", "English"]) assert.equal(readTrackLanguage({ version: "Original", language }), language);
 const apiTrack = distributionTrackSchema.parse({ ...release.tracks![1], duration: "180", isCover: false, coverLicenseConfirmed: false, dolbyAtmos: false, audioFileKey: "audio-1", artistProfileIds: [1] });
 assert.equal(apiTrack.language, "Instrumental");
+const producerWithoutLegalName = distributionTrackSchema.parse({
+  ...release.tracks![1],
+  duration: "180",
+  isCover: false,
+  coverLicenseConfirmed: false,
+  dolbyAtmos: false,
+  audioFileKey: "audio-1",
+  artistProfileIds: [1],
+  contributors: [{ role: "producer", legalName: "", artistName: "Producer Stage Name" }]
+});
+assert.equal(producerWithoutLegalName.contributors?.[0]?.legalName, "", "Producer legal name must remain optional in API validation.");
+assert.equal(distributionTrackSchema.safeParse({
+  ...producerWithoutLegalName,
+  contributors: [{ role: "songwriter", legalName: "" }]
+}).success, false, "Songwriter legal name must remain required.");
+assert.equal(distributionTrackSchema.safeParse({
+  ...producerWithoutLegalName,
+  contributors: [{ role: "producer", legalName: "", artistName: "" }]
+}).success, false, "Producer artist name must remain required.");
 const bad = json(payload);
 bad.tracks[1].trackLanguage = "Hindi";
 assert.equal(validateDireNotePayload(bad).issues.some(issue => issue.field === "tracks.1.trackLanguage"), true);

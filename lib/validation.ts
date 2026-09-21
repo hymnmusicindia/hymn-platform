@@ -153,12 +153,18 @@ export const referralTrackSchema = z.object({
 
 const contributorSchema = z.object({
   role: z.enum(["songwriter", "composer", "producer"]),
-  legalName: z.string().min(1),
+  legalName: z.string().default(""),
   artistName: z.string().optional(),
   ipi: z.string().optional(),
   iprsMember: z.boolean().optional(),
   instagramUrl: z.string().optional(),
   xUrl: z.string().optional()
+}).superRefine((contributor, context) => {
+  if (contributor.role === "producer") {
+    if (!contributor.artistName?.trim()) context.addIssue({ code: z.ZodIssueCode.custom, path: ["artistName"], message: "Producer artist name is required." });
+    return;
+  }
+  if (!contributor.legalName.trim()) context.addIssue({ code: z.ZodIssueCode.custom, path: ["legalName"], message: "Contributor legal name is required." });
 });
 
 export const distributionTrackSchema = z.object({
