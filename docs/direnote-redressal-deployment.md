@@ -17,9 +17,16 @@ The runner never loads the production database into its fixture.
 
 Use the existing production migration deployment process, including its backup
 and database-target checks. Apply `20260906000000_direnote_attempt_history`
-before deploying application code that reads the new attempt columns. This is
-an additive migration; it preserves the release, track, notification and attempt
-tables. A partial unique index enforces one current attempt per release/provider.
+before deploying application code that reads the new attempt columns, followed
+by `20260921000000_direnote_reconciliation_lease`. The latter creates the durable
+cron lease and bounded `direnote_sync_runs` telemetry table. Before adding its
+partial unique index, it preserves the newest current attempt and marks only
+older duplicate-current rows as superseded. Confirm the read-only audit is clean
+with `npx tsx scripts/audit-direnote-reconciliation.ts` before deployment.
+
+After deployment, verify the migration with `npx prisma migrate status`, then
+verify the first authenticated cron response includes a `runId` and inspect the
+matching `direnote_sync_runs` record in the admin **DireNote Sync** monitor.
 
 Existing submitted releases are adopted idempotently when first synchronized.
 This reuses their existing successful attempt where available. An explicit null
@@ -44,11 +51,18 @@ of the server's timezone; stored timestamps use UTC. Keep
 `DIRENOTE_RELEASE_SYNC_ENABLED=true`, and retain the existing server-only
 DireNote credential and endpoint configuration.
 
-The worker handles at most 50 releases per invocation, oldest checked first,
+The worker defaults to 3 concurrent releases and a batch of 30 (both are
+environment-configurable; the hard batch ceiling is 100), oldest checked first,
 with a bounded runtime and provider-wide request reservations. At higher volume,
 review the hourly capacity against the existing provider limit before expanding
-the batch. Live releases are excluded. PostgreSQL locks serialize overlapping
-cron invocations and per-release sync/ingest/edit operations.
+the batch. Live releases are excluded. The durable lease serializes overlapping
+cron invocations; short per-release transactions protect mutation without
+holding database transactions during provider HTTP calls.
+
+Scheduler proof is separate from route existence: in hPanel, confirm the job's
+last successful execution after deployment and retain its timestamp/exit status.
+The next `direnote_sync_runs.started_at` value must be within two hours of that
+execution; otherwise the admin monitor correctly reports **Delayed**.
 
 ## Controlled production recovery
 
