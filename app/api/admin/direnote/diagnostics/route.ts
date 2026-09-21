@@ -22,10 +22,13 @@ async function lastTest() {
 
 export async function GET() {
   const admin = await requireAdminPermission("system.manage"); if ("error" in admin) return admin.error;
-  const lastSync = await prisma.direNoteLog.findFirst({ where: { action: "hourly_status_sync" }, orderBy: { createdAt: "desc" }, select: { createdAt: true, success: true, responseJson: true } });
-  const lastSyncAt = lastSync?.createdAt?.getTime() ?? 0;
-  const syncHealth = !lastSyncAt ? "unknown" : Date.now() - lastSyncAt > 2 * 60 * 60 * 1000 ? "degraded" : lastSync?.success ? "healthy" : "degraded";
-  return NextResponse.json({ ...status(), lastTest: await lastTest(), syncHealth, lastSync: lastSync ? { ...lastSync, responseJson: redactDireNoteDiagnostic(lastSync.responseJson) } : null });
+  const [lastSync, lastSuccessfulSync] = await Promise.all([
+    prisma.direNoteSyncRun.findFirst({ orderBy: { startedAt: "desc" } }),
+    prisma.direNoteSyncRun.findFirst({ where: { status: "completed" }, orderBy: { completedAt: "desc" } })
+  ]);
+  const lastSyncAt = lastSync?.startedAt.getTime() ?? 0;
+  const syncHealth = !lastSyncAt ? "unknown" : Date.now() - lastSyncAt > 2 * 60 * 60 * 1000 ? "degraded" : lastSync?.status === "completed" ? "healthy" : "degraded";
+  return NextResponse.json({ ...status(), lastTest: await lastTest(), syncHealth, lastSync: lastSync ? { ...lastSync, summary: redactDireNoteDiagnostic(lastSync.summary) } : null, lastSuccessfulSync: lastSuccessfulSync ? { completedAt: lastSuccessfulSync.completedAt, runId: lastSuccessfulSync.runId } : null });
 }
 
 export async function POST() {

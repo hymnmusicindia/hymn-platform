@@ -10,7 +10,7 @@ import { releaseDateReached } from "@/lib/release-status-engine";
 import type { ReleaseStatus } from "@/lib/types";
 import { direNoteCorrectionFingerprint, extractDireNoteCorrections, matchDireNoteTrack, providerRequiresCorrections } from "@/lib/direnote-corrections";
 import { normalizeDireNoteUpc, upcFromDireNoteIsrcReport, upcFromDireNoteResponse } from "@/lib/direnote-upc";
-import { currentDireNoteAttempt } from "@/lib/distribution-idempotency";
+import { ensureCurrentDireNoteAttempt } from "@/lib/distribution-idempotency";
 import { attachedArtistProfileIds, verifiedArtistStoreLinks } from "@/lib/artist-store-links";
 
 type RecordValue = Record<string, unknown>;
@@ -126,7 +126,7 @@ export async function syncDireNoteRelease(releaseId: number, actorId?: number | 
 async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | null) {
   const release = await prisma.release.findUnique({ where: { id: releaseId }, include: { tracks: { orderBy: { trackNumber: "asc" } } } });
   if (!release) throw new Error("Release not found.");
-  const attempt = await currentDireNoteAttempt(releaseId);
+  const attempt = await ensureCurrentDireNoteAttempt(releaseId);
   // A submitted current attempt is authoritative provider-acceptance evidence.
   // Repair a stale local handoff projection before any status lookup, without
   // calling ingest again.
@@ -148,12 +148,15 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     // Identifier discovery only. Never import this report into the royalty ledger.
     const report = await getDireNoteRevenueReport(isrc);
     lookupUpc = report.success ? upcFromDireNoteIsrcReport(report.data, isrc, release.title) : null;
+    const lookupOutcome = lookupUpc ? "UPC_FOUND_AND_VERIFIED" : report.success
+      ? (report.data ? "UPC_NOT_YET_ASSIGNED" : "UPC_RESPONSE_MISSING")
+      : report.httpStatus === 401 ? "PROVIDER_AUTH_FAILED" : "PROVIDER_UNAVAILABLE";
     const lookupError = lookupUpc ? null : report.success
-      ? "Awaiting UPC: DireNote has not returned a numeric UPC for this ISRC and release title."
-      : report.httpStatus === 401 ? "DIRENOTE_STATUS_AUTH_FAILED (HTTP 401): Identifier discovery authentication failed." : `DireNote UPC lookup failed (HTTP ${report.httpStatus ?? "unavailable"}). Check provider credentials or retry later.`;
+      ? `Awaiting UPC (${lookupOutcome}): DireNote has not returned a numeric UPC for this ISRC and release title.`
+      : report.httpStatus === 401 ? "DIRENOTE_STATUS_AUTH_FAILED (PROVIDER_AUTH_FAILED, HTTP 401): Identifier discovery authentication failed." : `PROVIDER_UNAVAILABLE: DireNote UPC lookup failed (HTTP ${report.httpStatus ?? "unavailable"}). Check provider credentials or retry later.`;
     await prisma.direNoteLog.create({ data: {
       releaseId, action: "upc_lookup", httpStatus: report.httpStatus, success: Boolean(lookupUpc),
-      requestPayloadRedacted: { isrc }, responseJson: { isrc, upc: lookupUpc },
+      requestPayloadRedacted: { isrc }, responseJson: { isrc, upc: lookupUpc, outcome: lookupOutcome },
       errorMessage: lookupError, createdByAdminId: actorId ?? null
     } });
     if (!lookupUpc && attempt.providerReference) {
@@ -316,7 +319,9 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       console.error("[DireNote] Status notification failed after sync", { releaseId, status: aggregateStatus.provider, message: error instanceof Error ? error.message : "Notification persistence failed." });
     }
   }
-  return { success: true, releaseId, upc: normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc, status: aggregateStatus.provider, trackCount: remoteTracks.length };
+  const outcome = { success: true, releaseId, attemptId: attempt.id, upc: normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc, status: aggregateStatus.provider, trackCount: remoteTracks.length, diff: { statusChanged: aggregateStatus.canonical !== null && aggregateStatus.canonical !== previousStatus, upcChanged: Boolean((normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc) && (normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc) !== release.upc), isrcChanges: remoteTracks.filter(remote => { const track = mappingTracks.find(candidate => matchDireNoteTrack(remote, mappingTracks)?.id === candidate.id); return Boolean(track && text(remote.isrc) && normalized(text(remote.isrc)) !== normalized(track.isrc ?? "")); }).map(remote => text(remote.isrc)), correctionsChanged: providerCorrections.length > 0, artistLinksChanged: false, anomalies: [] as string[] } };
+  await prisma.direNoteLog.create({ data: { releaseId, action: "reconciliation_sync", success: true, requestPayloadRedacted: { attemptId: attempt.id, upc: lookupUpc }, responseJson: outcome as unknown as Prisma.InputJsonValue } });
+  return outcome;
 }
 
 /** Returns the documented ISRC report. Accounting ingestion remains explicit and admin-controlled. */

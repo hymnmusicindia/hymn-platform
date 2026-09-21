@@ -7,6 +7,28 @@ CREATE TABLE IF NOT EXISTS "cron_leases" (
   "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Bounded run-level observability. Per-release provider diagnostics remain in
+-- DireNoteLog, rather than accumulating an unbounded result array in one row.
+CREATE TABLE IF NOT EXISTS "direnote_sync_runs" (
+  "id" SERIAL PRIMARY KEY,
+  "run_id" TEXT NOT NULL UNIQUE,
+  "status" TEXT NOT NULL DEFAULT 'running',
+  "started_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "completed_at" TIMESTAMPTZ,
+  "candidate_count" INTEGER NOT NULL DEFAULT 0,
+  "provider_request_count" INTEGER NOT NULL DEFAULT 0,
+  "processed_count" INTEGER NOT NULL DEFAULT 0,
+  "changed_count" INTEGER NOT NULL DEFAULT 0,
+  "identifier_repair_count" INTEGER NOT NULL DEFAULT 0,
+  "status_repair_count" INTEGER NOT NULL DEFAULT 0,
+  "correction_count" INTEGER NOT NULL DEFAULT 0,
+  "error_count" INTEGER NOT NULL DEFAULT 0,
+  "deferred_count" INTEGER NOT NULL DEFAULT 0,
+  "duration_ms" INTEGER,
+  "summary" JSONB
+);
+CREATE INDEX IF NOT EXISTS "direnote_sync_runs_started_at_idx" ON "direnote_sync_runs" ("started_at");
+
 -- One current provider attempt per release is the canonical identity used by
 -- reconciliation. Preserve the newest attempt and deterministically supersede
 -- older duplicates before installing the invariant, so deployment is safe even

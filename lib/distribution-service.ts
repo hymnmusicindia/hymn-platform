@@ -20,7 +20,7 @@ import { findUserById, listArtistProfilesByUser } from "@/lib/db";
 import type { Release } from "@/lib/types";
 import { createAdminTaskOnce, resolveAdminTask } from "@/lib/task-queue";
 import { getDireNoteConfig } from "@/lib/direnote/direnote-config";
-import { activateDireNoteAttempt, claimDistributionSubmission, currentDireNoteAttempt, finishDistributionSubmission } from "@/lib/distribution-idempotency";
+import { activateDireNoteAttempt, claimDistributionSubmission, ensureCurrentDireNoteAttempt, finishDistributionSubmission } from "@/lib/distribution-idempotency";
 import { reserveDireNoteRequest } from "@/lib/direnote-rate-limit";
 import { createDistributorAssetUrl } from "@/lib/distributor-asset-delivery";
 import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution";
@@ -167,7 +167,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
   await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: options.retry ? "DIRENOTE_RETRY_STARTED" : "APPROVE_RELEASE_STARTED" });
 
   const payload = await buildDireNotePayloadForRelease(release, options);
-  const previousAttempt = options.correctionReingest ? await currentDireNoteAttempt(releaseId) : null;
+  const previousAttempt = options.correctionReingest ? await ensureCurrentDireNoteAttempt(releaseId) : null;
   if (options.correctionReingest) {
     delete payload.upc;
     for (const track of payload.tracks) delete track.isrc;

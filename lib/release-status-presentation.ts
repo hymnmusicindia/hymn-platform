@@ -22,3 +22,16 @@ const map: Record<string, { label: string; description: string; tone: ReleaseSta
   failed: { label: "Delivery Issue", description: "HYMN needs your attention to continue delivery.", tone: "danger", step: 2, nextAction: "Resolve issue" }
 };
 export function getReleaseStatusPresentation(status?: string | null) { return map[String(status || "draft").toLowerCase()] || { label: String(status || "Status pending").replaceAll("_", " "), description: "Open the release for the latest details.", tone: "neutral" as const, step: 0, nextAction: "Manage release" }; }
+
+/** Human labels for operational release states. Kept client-safe so admin and
+ * customer surfaces cannot drift by each maintaining their own formatter. */
+export function adminReleaseStatusLabel(status: string, providerStatus?: string | null) {
+  const labels: Record<string, string> = {
+    submitting_to_distributor: "Sending to DireNote",
+    sent_to_distributor: "Sent to DireNote",
+    distributor_processing: "DireNote Review",
+    changes_requested: "Changes Required",
+    rejected: providerStatus === "rejected" ? "Rejected by DireNote" : "Rejected"
+  };
+  return labels[status.toLowerCase()] ?? status.replace(/_/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
+}

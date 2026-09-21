@@ -676,6 +676,28 @@ model CronLease {
   @@map("cron_leases")
 }
 
+model DireNoteSyncRun {
+  id                      Int       @id @default(autoincrement())
+  runId                   String    @unique @map("run_id")
+  status                  String    @default("running")
+  startedAt               DateTime  @default(now()) @map("started_at")
+  completedAt             DateTime? @map("completed_at")
+  candidateCount          Int       @default(0) @map("candidate_count")
+  providerRequestCount    Int       @default(0) @map("provider_request_count")
+  processedCount          Int       @default(0) @map("processed_count")
+  changedCount            Int       @default(0) @map("changed_count")
+  identifierRepairCount   Int       @default(0) @map("identifier_repair_count")
+  statusRepairCount       Int       @default(0) @map("status_repair_count")
+  correctionCount         Int       @default(0) @map("correction_count")
+  errorCount              Int       @default(0) @map("error_count")
+  deferredCount           Int       @default(0) @map("deferred_count")
+  durationMs              Int?      @map("duration_ms")
+  summary                 Json?
+
+  @@index([startedAt])
+  @@map("direnote_sync_runs")
+}
+
 model ReleaseChangeRequest {
   id                 Int                         @id @default(autoincrement())
   releaseId          Int                         @map("release_id")

@@ -5,7 +5,7 @@ import { logAuditEvent } from "@/lib/audit-log";
 import { createNotificationOnce } from "@/lib/notifications";
 import { createAdminTaskOnce } from "@/lib/task-queue";
 import { submitRelease } from "@/lib/distribution-service";
-import { currentDireNoteAttempt } from "@/lib/distribution-idempotency";
+import { ensureCurrentDireNoteAttempt } from "@/lib/distribution-idempotency";
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser(); if ("error" in user) return user.error;
   const id = Number((await params).id);
@@ -13,7 +13,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   if (!release) return NextResponse.json({ error: "Release not found." }, { status: 404 });
   if (release.status !== "rejected" && release.status !== "changes_requested") return NextResponse.json({ error: "This release is not awaiting corrections." }, { status: 409 });
   if (release.direNoteStatus) {
-    const attempt = await currentDireNoteAttempt(id);
+    const attempt = await ensureCurrentDireNoteAttempt(id);
     const correction = attempt.corrections as { status?: string } | null;
     if (correction?.status !== "customer_resolved") return NextResponse.json({ error: "Save the corrected release metadata before submitting corrections." }, { status: 409 });
     const result = await submitRelease(id, { actorId: user.session.sub, correctionReingest: true });

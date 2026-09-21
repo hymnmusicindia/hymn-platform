@@ -49,8 +49,18 @@ export async function finishDistributionSubmission(id: number, input: { state: "
   return prisma.distributionSubmissionAttempt.update({ where: { id }, data: { ...input, completedAt: new Date() } });
 }
 
-/** Idempotently adopts the existing submitted catalogue without another ingest. */
-export async function currentDireNoteAttempt(releaseId: number) {
+/** Pure read of the canonical provider identity. This function never backfills
+ * attempts or mutates identifier projections. */
+export async function getCurrentDireNoteAttempt(releaseId: number) {
+  return prisma.distributionSubmissionAttempt.findFirst({
+    where: { releaseId, provider: "direnote", isCurrent: true },
+    orderBy: [{ startedAt: "desc" }, { id: "desc" }]
+  });
+}
+
+/** Controlled migration/backfill for historic releases. Call only from an
+ * explicit reconciliation or correction workflow, never from a display path. */
+export async function ensureCurrentDireNoteAttempt(releaseId: number) {
   return prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422027, ${releaseId}::integer)`;
     const currentCandidates = await tx.distributionSubmissionAttempt.findMany({
@@ -82,6 +92,18 @@ export async function currentDireNoteAttempt(releaseId: number) {
     const data = { isCurrent: true, upc: normalizeDireNoteAttemptUpc(latest?.responseRedacted) ?? normalizeDireNoteAttemptUpc(latest?.rawStatusPayload) ?? normalizeDireNoteAttemptUpc(release.metadata) ?? release.upc, trackIdentifiers: snapshot, providerStatus: release.direNoteStatus };
     if (latest) return tx.distributionSubmissionAttempt.update({ where: { id: latest.id }, data });
     return tx.distributionSubmissionAttempt.create({ data: { releaseId, ...data, state: "submitted", idempotencyKey: `direnote:legacy:${releaseId}`, payloadHash: "legacy-backfill", completedAt: release.createdAt } });
+  });
+}
+
+/** Repairs duplicate current rows deterministically without creating a new
+ * provider attempt. Kept separate so operational repairs are explicit. */
+export async function repairDireNoteAttemptLineage(releaseId: number) {
+  return prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422027, ${releaseId}::integer)`;
+    const rows = await tx.distributionSubmissionAttempt.findMany({ where: { releaseId, provider: "direnote", isCurrent: true }, orderBy: [{ startedAt: "desc" }, { id: "desc" }] });
+    const staleIds = rows.slice(1).map(row => row.id);
+    if (staleIds.length) await tx.distributionSubmissionAttempt.updateMany({ where: { id: { in: staleIds } }, data: { isCurrent: false, providerStatus: "superseded" } });
+    return { currentAttemptId: rows[0]?.id ?? null, supersededAttemptIds: staleIds };
   });
 }
 

@@ -9,7 +9,7 @@ import { getDetailedReleaseById, updatePaidDistributionRelease, saveDraftDistrib
 import { GET as cron } from "../app/api/cron/direnote-release-sync/route";
 import { startDireNoteBrowser } from "./direnote-browser-fixture";
 import { getDireNoteReleaseInformation } from "../lib/direnote/direnote-client";
-import { currentDireNoteAttempt } from "../lib/distribution-idempotency";
+import { ensureCurrentDireNoteAttempt } from "../lib/distribution-idempotency";
 import { assertDireNoteSchemaReady } from "../lib/direnote-schema-readiness";
 import { validateReleaseForDireNote } from "../lib/direnote-readiness";
 import { readTrackLanguage } from "../lib/track-language";
@@ -86,8 +86,8 @@ async function main() {
   assert(!ingestPayloads[0].tracks[0].trackLyrics, "Explicit content must submit without lyrics.");
   const firstAttempt = await prisma.distributionSubmissionAttempt.findFirstOrThrow({ where: { releaseId: release.id, isCurrent: true } });
   assert.equal(firstAttempt.upc, oldUpc);
-  assert.equal((await currentDireNoteAttempt(release.id)).id, firstAttempt.id);
-  assert.equal((await currentDireNoteAttempt(release.id)).id, firstAttempt.id);
+  assert.equal((await ensureCurrentDireNoteAttempt(release.id)).id, firstAttempt.id);
+  assert.equal((await ensureCurrentDireNoteAttempt(release.id)).id, firstAttempt.id);
   await prisma.release.update({ where: { id: release.id }, data: { direNoteLastAttemptedAt: new Date(0) } });
   const pendingCycle = await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));
   assert.equal((await pendingCycle.json()).checked, 1);
@@ -184,7 +184,7 @@ async function main() {
     metadata: { ...(release.metadata as object), releaseTitle: "Transfer fixture", releasePreviouslyReleased: true, originalReleaseDate: "2020-01-01" },
     tracks: { create: [1, 2].map((n, index) => ({ title: `Track ${n}`, trackNumber: n, primaryArtist: "gxrry", audioUrl: `https://cdn.example.test/track${n}.wav`, isrc: oldIsrcs[index], metadata: { language: "English", songwriters: "Fixture Artist", composers: "Fixture Artist", duration: "180" } })) }
   } });
-  const transferAttempt = await currentDireNoteAttempt(transfer.id);
+  const transferAttempt = await ensureCurrentDireNoteAttempt(transfer.id);
   await prisma.distributionSubmissionAttempt.update({ where: { id: transferAttempt.id }, data: { startedAt: new Date(0) } });
   const transferred = await submitRelease(transfer.id, { correctionReingest: true });
   assert.equal(transferred.submitted, true, JSON.stringify(transferred));

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { upcFromDireNoteResponse } from "@/lib/direnote-upc";
+export { adminReleaseStatusLabel } from "@/lib/release-status-presentation";
 
 type Source = "current_attempt" | "canonical_projection" | "attempt_snapshot" | "legacy_metadata" | "missing";
 
@@ -18,9 +19,4 @@ export async function resolveCurrentDireNoteIdentifiers(releaseId: number) {
     const isrc = String(item?.isrc ?? track.isrc ?? "").trim() || null;
     return { trackId: track.id, isrc, isrcSource: item?.isrc ? "current_attempt" as Source : track.isrc ? "canonical_projection" as Source : "missing" as Source };
   }) };
-}
-
-export function adminReleaseStatusLabel(status: string, providerStatus?: string | null) {
-  const labels: Record<string, string> = { submitting_to_distributor: "Sending to DireNote", sent_to_distributor: "Sent to DireNote", distributor_processing: "DireNote Review", changes_requested: "Changes Required", rejected: providerStatus === "rejected" ? "Rejected by DireNote" : "Rejected" };
-  return labels[status.toLowerCase()] ?? status.replace(/_/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
 }
