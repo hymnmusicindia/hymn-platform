@@ -39,7 +39,8 @@ export async function GET(request: Request) {
       OR: [
         { status: { in: distributionStatuses } },
         { status: { in: workflowStatuses }, direNoteStatus: { not: null } },
-        { status: { in: workflowStatuses }, upc: null, tracks: { some: { isrc: { not: null } } } }
+        { status: { in: workflowStatuses }, upc: null, tracks: { some: { isrc: { not: null } } } },
+        { direNoteStatus: { in: ["rejected", "changes_required", "changes_requested", "processing", "scheduled", "awaiting_live_confirmation", "partially_live", "live"] } }
       ]
     };
 
@@ -49,9 +50,10 @@ export async function GET(request: Request) {
     const candidates = await prisma.release.findMany({
       where: {
         archivedAt: null,
-        distributionSubmissions: { some: { provider: "direnote", state: "submitted", isCurrent: true } },
         AND: [statusFilter],
         OR: [
+          { distributionSubmissions: { some: { provider: "direnote", state: "submitted", isCurrent: true } } },
+          { direNoteStatus: { not: null } },
           { direNoteLastAttemptedAt: null },
           { direNoteLastAttemptedAt: { lte: new Date(Date.now() - 60 * 60 * 1000) } },
           { upc: null, tracks: { some: { isrc: { not: null } } } }

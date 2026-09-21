@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { extractDireNoteCorrections, matchDireNoteTrack, direNoteCorrectionFingerprint } from "../lib/direnote-corrections";
 import { normalizeDireNoteUpc, upcFromDireNoteIsrcReport } from "../lib/direnote-upc";
+import { rejectOrCorrectionStatus } from "../lib/direnote-service";
 
 // Isolated stubs only: no real provider, database, email, or customer is contacted.
 process.env.DATABASE_URL = "postgresql://test:test@localhost:1/corrections_test";
@@ -47,6 +48,8 @@ async function main() {
   assert.equal(mapDireNoteStatus("Rejected"), "rejected");
   assert.equal(mapDireNoteStatus("Declined by reviewer"), "rejected");
   assert.equal(mapDireNoteStatus("Provider failed validation"), "rejected");
+  assert.equal(rejectOrCorrectionStatus({ release: { status: "Correction required" } }), "changes_required");
+  assert.equal(rejectOrCorrectionStatus({ tracks: [{ remarks: "Rejected by reviewer" }] }), "rejected");
   let response: unknown = payload;
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify(response), { status: 200 });
@@ -58,6 +61,7 @@ async function main() {
   const db = prisma as any;
   const attempts: any[] = [];
   db.distributionSubmissionAttempt.findFirst = async ({ where }: any) => structuredClone(attempts.find(item => (!where.id || item.id === where.id) && (!where.isCurrent || item.isCurrent) && (!where.state || item.state === where.state)) ?? null);
+  db.distributionSubmissionAttempt.findMany = async ({ where }: any) => structuredClone(attempts.filter(item => (!where.id || item.id === where.id) && (!where.isCurrent || item.isCurrent) && (!where.state || item.state === where.state)));
   db.distributionSubmissionAttempt.create = async ({ data }: any) => { const row = { id: attempts.length + 1, ...data }; attempts.push(row); return structuredClone(row); };
   db.distributionSubmissionAttempt.update = async ({ where, data }: any) => { const row = attempts.find(item => item.id === where.id); Object.assign(row, data); return structuredClone(row); };
   db.$transaction = async (fn: any) => fn(db);

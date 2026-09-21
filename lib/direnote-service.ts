@@ -61,6 +61,39 @@ export function mapDireNoteStatus(value: unknown) {
   return "unknown";
 }
 
+export function rejectOrCorrectionStatus(value: unknown): "rejected" | "changes_required" | null {
+  if (typeof value !== "object" || value === null) return null;
+  const seen = new Set<unknown>();
+  const walk = (node: unknown): "rejected" | "changes_required" | null => {
+    if (node === null || node === undefined) return null;
+    if (seen.has(node)) return null;
+    seen.add(node);
+    if (typeof node === "string") {
+      const status = node.trim();
+      if (!status) return null;
+      const normalized = status.toLowerCase();
+      if (/reject|declin|fail|invalid|denied|cancel(?:led|ed)?/.test(normalized)) return "rejected";
+      if (providerRequiresCorrections(normalized)) return "changes_required";
+      return null;
+    }
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        const detected = walk(item);
+        if (detected) return detected;
+      }
+      return null;
+    }
+    if (typeof node === "object") {
+      for (const key of Object.keys(node as Record<string, unknown>)) {
+        const detected = walk((node as Record<string, unknown>)[key]);
+        if (detected) return detected;
+      }
+    }
+    return null;
+  };
+  return walk(value);
+}
+
 function aggregateReleaseStatus(tracks: RecordValue[], releaseStatus: unknown, releaseDate: Date) {
   const statuses = [mapDireNoteStatus(releaseStatus), ...tracks.map((track) => mapDireNoteStatus(track.status))].filter((status) => status !== "unknown");
   if (!statuses.length) return { provider: "unknown", canonical: null } as const;
@@ -153,8 +186,13 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   const remoteRelease = record(payload.release);
   const remoteTracks: Record<string, unknown>[] = (Array.isArray(payload.tracks) ? payload.tracks.map(record) : Array.isArray(remoteRelease.tracks) ? remoteRelease.tracks.map(record) : []).map((track, index) => ({ ...track, track_number: track.track_number ?? index + 1 }));
   const providerCorrections = extractDireNoteCorrections(redactDireNoteDiagnostic(payload) as RecordValue, mappingTracks, releaseId, attempt.id);
+  const explicitProviderStatus = rejectOrCorrectionStatus(payload) ?? rejectOrCorrectionStatus(remoteRelease) ?? rejectOrCorrectionStatus(remoteTracks);
   const lifecycleStatus = aggregateReleaseStatus(remoteTracks, remoteRelease.status ?? payload.status, release.releaseDate);
-  const aggregateStatus = providerCorrections.length ? { provider: "changes_required", canonical: "changes_requested" as ReleaseStatus } : lifecycleStatus;
+  const aggregateStatus = explicitProviderStatus === "rejected"
+    ? { provider: "rejected", canonical: "rejected" as ReleaseStatus }
+    : explicitProviderStatus === "changes_required" || providerCorrections.length
+      ? { provider: "changes_required", canonical: "changes_requested" as ReleaseStatus }
+      : lifecycleStatus;
   const correctionMessages = providerCorrections.map(issue => `${issue.label}: ${issue.note}`);
   const correctionFingerprint = direNoteCorrectionFingerprint(providerCorrections);
   const previousDireNote = record(record(release.metadata).direNote);
