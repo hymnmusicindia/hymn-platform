@@ -48,11 +48,19 @@ export async function reconcilePayments() {
       const entitlement = await prisma.subscription.findFirst({ where: { userId: order.userId, status: "active", expiryDate: { gt: new Date() } } });
       if (!entitlement) {
         const key = `payment:subscription:${order.id}`;
-        const expiryDate = new Date();
-        expiryDate.setMonth(expiryDate.getMonth() + (order.plan === "half_yearly" ? 6 : 12));
-        await prisma.subscription.upsert({ where: { userId: order.userId }, create: { userId: order.userId, plan: order.plan, planName: order.plan, expiryDate, status: "active", artistLimit: order.plan === "yearly_plus" ? 15 : order.plan === "yearly" ? 7 : 5 }, update: { plan: order.plan, planName: order.plan, expiryDate, status: "active", artistLimit: order.plan === "yearly_plus" ? 15 : order.plan === "yearly" ? 7 : 5 } });
-        issues.push({ key, type: "subscription", message: `Restored missing ${order.plan} entitlement from paid order #${order.id}.`, autoRepaired: true });
-        await resolveAdminTask(key, "Subscription entitlement was restored automatically.");
+        // The term runs from the purchase, never from today. Anchoring to today
+        // cannot tell an unfulfilled order from one whose plan simply expired,
+        // so it renewed lapsed plans for free on every run.
+        const expiryDate = new Date(order.createdAt.getTime() + (order.plan === "half_yearly" ? 180 : 365) * 86_400_000);
+        const artistLimit = order.plan === "yearly_plus" ? 15 : order.plan === "yearly" ? 7 : 5;
+        if (expiryDate > new Date()) {
+          await prisma.subscription.upsert({ where: { userId: order.userId }, create: { userId: order.userId, plan: order.plan, planName: order.plan, expiryDate, status: "active", artistLimit }, update: { plan: order.plan, planName: order.plan, expiryDate, status: "active", artistLimit } });
+          issues.push({ key, type: "subscription", message: `Restored missing ${order.plan} entitlement from paid order #${order.id}, expiring ${expiryDate.toISOString().slice(0, 10)} as originally purchased.`, autoRepaired: true });
+          await resolveAdminTask(key, "Subscription entitlement was restored automatically.");
+        } else {
+          issues.push({ key, type: "subscription", message: `Paid ${order.plan} order #${order.id} has no entitlement and its term ended on ${expiryDate.toISOString().slice(0, 10)}. Grant a new term manually only if the customer never received this plan.`, autoRepaired: false });
+          await createAdminTaskOnce({ eventKey: key, type: "Payment Mismatch", priority: "high", title: "Lapsed paid subscription order has no entitlement", body: issues.at(-1)!.message, href: "/admin?tab=distribution-orders", entityType: "distribution_order", entityId: order.id });
+        }
       }
     }
   }
