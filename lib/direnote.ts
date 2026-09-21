@@ -13,6 +13,7 @@ import {
 } from "@/lib/direnote-config";
 import { getDireNoteConfig } from "@/lib/direnote/direnote-config";
 import { getPublicAppUrl } from "@/lib/public-app-url";
+import { mapContributorToDireNote } from "@/lib/contributor-provider-mapping";
 export { submitToDireNote, getDireNoteReleaseInformation, getDireNoteReleaseInformationByReference, getDireNoteRevenueReport } from "@/lib/direnote/direnote-client";
 
 export type DireNoteArtist = {
@@ -213,7 +214,10 @@ function toDireNoteArtist(name: string, profiles: ArtistProfile[] = [], release?
 
 function contributors(value?: string | null, structured?: Array<Record<string, any>>, role?: string): DireNoteContributor[] {
   const matching = structured?.filter((item) => !role || item.role === role) ?? [];
-  if (matching.length) return matching.map((item) => ({ name: item.name ?? (role === "producer" ? item.artistName : item.legalName) ?? "", ipi: item.ipi || undefined, iprs_member: item.iprsMember === true || item.iprsMember === "Yes" ? "Yes" : "No", instagram_url: item.instagramUrl || item.instagram_url || undefined, x_url: item.xUrl || item.x_url || undefined }));
+  if (matching.length) return matching.flatMap((item) => {
+    const mapped = mapContributorToDireNote(item);
+    return mapped ? [mapped.contributor] : [];
+  });
   return splitNames(value).map((name) => ({ name, iprs_member: "No" }));
 }
 
@@ -321,7 +325,7 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
       featuring_artists: splitNames(track.featuredArtists).map((name) => toDireNoteArtist(name, options.artistProfiles, extended)),
       songwriters: contributors(track.songwriters, track.contributors as any, "songwriter"),
       composers: contributors(track.composers, track.contributors as any, "composer"),
-      contributors: Array.isArray(track.contributors) ? track.contributors.map((contributor: any) => ({ name: String(contributor.name ?? (contributor.role === "producer" ? contributor.artistName : contributor.legalName) ?? "").trim(), role: String(contributor.role ?? "").trim() })).filter((contributor) => contributor.name && contributor.role) : undefined
+      contributors: Array.isArray(track.contributors) ? track.contributors.map((contributor: any) => mapContributorToDireNote(contributor)).filter(Boolean).map((mapped: any) => ({ name: mapped.contributor.name, role: mapped.role })) : undefined
     }))
   };
 

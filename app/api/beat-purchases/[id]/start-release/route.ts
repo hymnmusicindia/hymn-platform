@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { createNotificationOnce } from "@/lib/notifications";
 import { logAuditEvent } from "@/lib/audit-log";
+import { ensureClaimedContributorParty, syncTrackContributions } from "@/lib/contributor-identity";
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser(); if ("error" in user) return user.error;
@@ -11,16 +12,19 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   if (!purchase || purchase.userId !== user.user.id || !purchase.hasAccess) return NextResponse.json({ error: "Beat purchase not found." }, { status: 404 });
   if (!purchase.licenseUrl) return NextResponse.json({ error: "The beat license must be generated before starting a release." }, { status: 409 });
   if (purchase.releaseId) return NextResponse.json({ releaseId: purchase.releaseId, href: `/distribution/start?draft=${purchase.releaseId}` });
-  const beat = await prisma.beat.findUnique({ where: { id: purchase.beatId } });
+  const beat = await prisma.beat.findUnique({ where: { id: purchase.beatId }, include: { producerParty: true } });
   if (!beat) return NextResponse.json({ error: "Beat not found." }, { status: 404 });
   const producer = await prisma.user.findUnique({ where: { id: beat.userId } });
+  const producerParty = beat.producerParty ?? await ensureClaimedContributorParty(beat.userId, producer?.name ?? `Producer #${beat.userId}`);
   const release = await prisma.$transaction(async (tx) => {
     const created = await tx.release.create({ data: {
       userId: user.user.id, title: beat.title, artistName: user.user.name, genre: beat.genre, releaseDate: new Date(), status: "DRAFT", releaseType: "single", paymentStatus: "pending",
-      metadata: { mood: beat.mood, beatPurchaseId: purchase.id, license_receipt_url: purchase.licenseUrl, contentType: purchase.licenseType === "exclusive" ? "Exclusive Licensed" : "Non-Exclusive Licensed", beatTitle: beat.title, bpm: beat.bpm, musicalKey: beat.keySignature, producerCredit: producer?.name ?? `Producer #${beat.userId}`, licenseType: purchase.licenseType }
+      metadata: { mood: beat.mood, beatPurchaseId: purchase.id, license_receipt_url: purchase.licenseUrl, contentType: purchase.licenseType === "exclusive" ? "Exclusive Licensed" : "Non-Exclusive Licensed", beatTitle: beat.title, bpm: beat.bpm, musicalKey: beat.keySignature, producerCredit: producerParty.professionalName, producerPartyId: producerParty.publicId, licenseType: purchase.licenseType }
     } });
-    await tx.track.create({ data: { releaseId: created.id, title: beat.title, trackNumber: 1, primaryArtist: user.user.name, metadata: { producers: producer?.name ?? `Producer #${beat.userId}`, bpm: beat.bpm, musicalKey: beat.keySignature } } });
-    await tx.beatPurchase.update({ where: { id: purchase.id }, data: { releaseId: created.id } });
+    const track = await tx.track.create({ data: { releaseId: created.id, title: beat.title, trackNumber: 1, primaryArtist: user.user.name, metadata: { producers: producerParty.professionalName, bpm: beat.bpm, musicalKey: beat.keySignature } } });
+    await syncTrackContributions(tx, { trackId: track.id, actorUserId: user.user.id, contributions: [{ partyId: producerParty.id, role: "producer", artistName: producerParty.professionalName }] });
+    await tx.releaseTrackBeatLink.create({ data: { trackId: track.id, beatId: beat.id, beatPurchaseId: purchase.id, producerPartyId: producerParty.id } });
+    await tx.beatPurchase.update({ where: { id: purchase.id }, data: { releaseId: created.id, producerPartyId: producerParty.id } });
     return created;
   });
   await Promise.all([

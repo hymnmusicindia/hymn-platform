@@ -41,7 +41,7 @@ export async function getOrCreateSplitRecord(userId: number, releaseId: number, 
 
 export async function createSplitInvite(userId: number, input: {
   splitRecordId: number; method: "registered_email" | "split_code"; recipientEmail?: string; recipientName?: string;
-  role: string; sharePercent: number; payoutEligible: boolean; note?: string;
+  contributorPartyId?: number; role: string; sharePercent: number; payoutEligible: boolean; note?: string;
 }) {
   const record = await (prisma as any).splitRecord.findFirst({ where: { id: input.splitRecordId, ownerUserId: userId }, include: { recipients: true, release: true, owner: true } });
   if (!record) throw new Error("Split record not found or you do not own it.");
@@ -60,6 +60,13 @@ export async function createSplitInvite(userId: number, input: {
     recipientUser = await prisma.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true, name: true, email: true } });
     if (!recipientUser) throw new Error("No HYMN account found with this email. Ask the collaborator to sign up first or use a split code instead.");
   }
+  const claimedParty = recipientUser ? await prisma.contributorParty.findUnique({ where: { claimedByUserId: recipientUser.id } }) : null;
+  const contributorPartyId = input.contributorPartyId ?? claimedParty?.id ?? null;
+  if (input.contributorPartyId) {
+    const selectedParty = await prisma.contributorParty.findFirst({ where: { id: input.contributorPartyId, mergedIntoId: null } });
+    if (!selectedParty) throw new Error("Selected contributor identity was not found.");
+    if (claimedParty && claimedParty.id !== selectedParty.id) throw new Error("The split email belongs to a different claimed contributor identity.");
+  }
 
   let code: string | null = null;
   if (input.method === "split_code") code = createCode();
@@ -68,6 +75,7 @@ export async function createSplitInvite(userId: number, input: {
     const created = await tx.splitRecipient.create({ data: {
       splitRecordId: record.id, releaseId: record.releaseId, trackId: record.trackId,
       recipientUserId: recipientUser?.id ?? null, recipientEmail: recipientUser?.email ?? email,
+      contributorPartyId,
       recipientName: input.recipientName?.trim() || recipientUser?.name || "Collaborator", role: input.role,
       sharePercent, payoutEligible: Boolean(input.payoutEligible), inviteMethod: input.method,
       splitCodeHash: code ? codeHash(code) : null, splitCodeDisplay: code, splitCodeExpiresAt: expiresAt,

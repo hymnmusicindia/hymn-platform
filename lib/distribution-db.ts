@@ -10,6 +10,7 @@ import { canonicalReleaseArtworkUrl } from "@/lib/release-media";
 import type { Prisma } from "@prisma/client";
 import { redactDireNoteDiagnostic } from "@/lib/direnote";
 import { findDistributionPlan } from "@/lib/distribution-plans";
+import { syncTrackContributions } from "@/lib/contributor-identity";
 
 export function isPostgresPrisma() {
   return /^postgres(?:ql)?:\/\//i.test(process.env.DATABASE_URL?.trim() || "");
@@ -33,7 +34,7 @@ async function legacyCompatibleReleaseRows(where: "user" | "all", userId?: numbe
         ORDER BY r.created_at DESC
       `;
   const ids = rows.map((row) => Number(row.id)).filter(Number.isInteger);
-  const tracks = ids.length ? await prisma.track.findMany({ where: { releaseId: { in: ids } }, orderBy: { trackNumber: "asc" } }) : [];
+  const tracks = ids.length ? await prisma.track.findMany({ where: { releaseId: { in: ids } }, include: { contributions: { include: { party: true }, orderBy: { sequence: "asc" } } }, orderBy: { trackNumber: "asc" } }) : [];
   const tracksByRelease = new Map<number, typeof tracks>();
   for (const track of tracks) tracksByRelease.set(track.releaseId, [...(tracksByRelease.get(track.releaseId) ?? []), track]);
   return rows.map((row) => ({ ...camelCaseDatabaseRow(row), tracks: tracksByRelease.get(Number(row.id)) ?? [] }));
@@ -49,7 +50,7 @@ async function legacyCompatibleReleaseForUser(userId: number, releaseId: number)
   `;
   const row = rows[0];
   if (!row) return null;
-  const tracks = await prisma.track.findMany({ where: { releaseId }, orderBy: { trackNumber: "asc" } });
+  const tracks = await prisma.track.findMany({ where: { releaseId }, include: { contributions: { include: { party: true }, orderBy: { sequence: "asc" } } }, orderBy: { trackNumber: "asc" } });
   return { ...camelCaseDatabaseRow(row), tracks };
 }
 
@@ -63,7 +64,7 @@ async function legacyCompatibleReleaseById(releaseId: number) {
   `;
   const row = rows[0];
   if (!row) return null;
-  const tracks = await prisma.track.findMany({ where: { releaseId }, orderBy: { trackNumber: "asc" } });
+  const tracks = await prisma.track.findMany({ where: { releaseId }, include: { contributions: { include: { party: true }, orderBy: { sequence: "asc" } } }, orderBy: { trackNumber: "asc" } });
   return { ...camelCaseDatabaseRow(row), tracks };
 }
 
@@ -104,8 +105,18 @@ export function deserializeRelease(dbData: any): Release {
     createdAt: dbData.createdAt.toISOString(),
     tracks: (dbData.tracks || []).map((track: any) => {
       const trackMeta = typeof track.metadata === "string" ? JSON.parse(track.metadata) : track.metadata || {};
+      const canonicalContributors = Array.isArray(track.contributions) && track.contributions.length
+        ? track.contributions.map((contribution: any) => ({
+            partyId: contribution.partyId,
+            role: contribution.providerRole ?? String(contribution.role).toLowerCase(),
+            legalName: contribution.legalNameSnapshot ?? (contribution.providerRole === "producer" ? "" : contribution.creditedName),
+            artistName: contribution.providerRole === "producer" ? contribution.creditedName : undefined,
+            hymnProducerId: contribution.party?.publicId
+          }))
+        : trackMeta.contributors;
       return {
         ...trackMeta,
+        contributors: canonicalContributors,
         id: track.id,
         releaseId: track.releaseId,
         trackTitle: track.title,
@@ -1035,21 +1046,22 @@ export async function saveDraftDistributionRelease(input: {
       
       if (tracks && tracks.length) {
         await prisma.track.deleteMany({ where: { releaseId: dbRelease.id } });
-        await prisma.track.createMany({
-          data: tracks.map((t, i) => {
-            const trackRest = { ...t } as any;
-            delete trackRest.id;
-            delete trackRest.releaseId;
-            return {
+        for (const [i, t] of tracks.entries()) {
+          const trackRest = { ...t } as any;
+          delete trackRest.id;
+          delete trackRest.releaseId;
+          const savedTrack = await prisma.track.create({
+            data: {
               releaseId: dbRelease.id,
               title: t.trackTitle || "Untitled Track",
               trackNumber: t.trackNumber || i + 1,
               audioUrl: t.audioUrl,
               primaryArtist: t.primaryArtist,
               metadata: trackRest
-            };
-          })
-        });
+            }
+          });
+          await syncTrackContributions(prisma, { trackId: savedTrack.id, actorUserId: input.userId, contributions: t.contributors ?? [] });
+        }
       }
       return (await getDetailedReleaseByUserId(input.userId, dbRelease.id)) as any;
     }
@@ -1204,21 +1216,22 @@ export async function submitPaidDistributionRelease(input: {
       });
       
       if (tracks && tracks.length) {
-        await prisma.track.createMany({
-          data: tracks.map((t, i) => {
-            const trackRest = { ...t } as any;
-            delete trackRest.id;
-            delete trackRest.releaseId;
-            return {
+        for (const [i, t] of tracks.entries()) {
+          const trackRest = { ...t } as any;
+          delete trackRest.id;
+          delete trackRest.releaseId;
+          const savedTrack = await prisma.track.create({
+            data: {
               releaseId: dbRelease.id,
               title: t.trackTitle || "Untitled Track",
               trackNumber: t.trackNumber || i + 1,
               audioUrl: t.audioUrl,
               primaryArtist: t.primaryArtist,
               metadata: trackRest
-            };
-          })
-        });
+            }
+          });
+          await syncTrackContributions(prisma, { trackId: savedTrack.id, actorUserId: input.userId, contributions: t.contributors ?? [] });
+        }
       }
       
       const order = await prisma.distributionOrder.findFirst({ where: { razorpayOrderId: input.razorpayOrderId } });
@@ -1414,8 +1427,10 @@ export async function updatePaidDistributionRelease(input: {
                 isrc: providerCorrection ? previous?.isrc ?? null : previous?.isrc ?? track.isrc ?? null,
                 metadata: trackMetadata
               };
-              if (previous) await tx.track.update({ where: { id: previous.id }, data });
-              else await tx.track.create({ data });
+              const savedTrack = previous
+                ? await tx.track.update({ where: { id: previous.id }, data })
+                : await tx.track.create({ data });
+              await syncTrackContributions(tx, { trackId: savedTrack.id, actorUserId: input.userId, contributions: track.contributors ?? [] });
         }
         if (!providerCorrection) await tx.track.deleteMany({ where: { releaseId: input.releaseId, trackNumber: { notIn: tracks.map(track => track.trackNumber) } } });
         if (providerCorrection) {

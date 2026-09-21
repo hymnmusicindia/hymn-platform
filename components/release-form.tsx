@@ -311,6 +311,7 @@ function createId() {
 function createContributor(): ContributorDraft {
   return {
     id: createId(),
+    partyId: undefined,
     legalName: "",
     artistName: "",
     ipi: "",
@@ -372,7 +373,18 @@ function fileNameFromUrl(value: string) {
   return decodeURIComponent(parts[parts.length - 1] || "");
 }
 
-function splitContributorNames(value?: string | null) {
+function splitContributorNames(value?: string | null, role?: ContributorCredit["role"], structured?: ContributorCredit[]) {
+  const matching = structured?.filter((entry) => entry.role === role) ?? [];
+  if (matching.length) return matching.map((entry) => ({
+    id: entry.clientReference || createId(),
+    partyId: entry.partyId,
+    legalName: entry.legalName || "",
+    artistName: entry.artistName || "",
+    ipi: entry.ipi || "",
+    iprsMember: Boolean(entry.iprsMember),
+    instagramUrl: entry.instagramUrl || "",
+    xUrl: entry.xUrl || ""
+  }));
   const names = (value ?? "")
     .split(",")
     .map((name) => name.trim())
@@ -380,8 +392,8 @@ function splitContributorNames(value?: string | null) {
   if (names.length === 0) return [createContributor()];
   return names.map((name) => ({
     id: createId(),
-    legalName: name,
-    artistName: "",
+    legalName: role === "producer" ? "" : name,
+    artistName: role === "producer" ? name : "",
   }));
 }
 
@@ -677,9 +689,9 @@ function createTracksFromRelease(
       primaryArtistQuery: "",
       featuredArtists: track?.featuredArtists?.trim() || "",
       remixers: track?.additionalPrimaryArtists?.trim() || "",
-      songwriters: splitContributorNames(track?.songwriters),
-      composers: splitContributorNames(track?.composers),
-      producers: splitContributorNames(track?.producers),
+      songwriters: splitContributorNames(track?.songwriters, "songwriter", track?.contributors),
+      composers: splitContributorNames(track?.composers, "composer", track?.contributors),
+      producers: splitContributorNames(track?.producers, "producer", track?.contributors),
       isCover: Boolean(track?.isCover),
       originalArtist: track?.originalArtist?.trim() || "",
       originalTrackLink: track?.originalTrackLink?.trim() || "",
@@ -759,6 +771,8 @@ function contributorCredits(
   return entries
     .map((entry) => ({
       role,
+      partyId: entry.partyId,
+      clientReference: entry.id,
       legalName: entry.legalName.trim(),
       artistName: entry.artistName.trim() || undefined,
       ipi: entry.ipi?.trim() || undefined,
@@ -3255,7 +3269,7 @@ export function ReleaseForm({
               </details> : null}
               {(requiresAiProof || requiresLicenceProof) ? <section ref={registerField("rights-document") as (node: HTMLElement | null) => void} className="mt-4 border-t pt-4" style={{ borderColor: "var(--border)" }}>
                 <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>{requiresAiProof ? "AI-generated content" : "Licence agreement"}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{requiresAiProof ? "Generation receipt and original track/project link are required for distribution." : "DireNote requires your licence or beat agreement for non-exclusive content."}</p></div><span className="text-[10px] font-semibold uppercase" style={{ color: "var(--danger)" }}>Required</span></div>
-                <label className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-3 text-xs" style={{ borderColor: "var(--border)" }}><span className="flex items-center gap-2"><FileUp className="h-4 w-4" style={{ color: "var(--accent)" }} />{rightsUploadProgress != null ? `Uploading ${rightsUploadProgress}%` : requiresAiProof ? "Drop generation receipt PDF or browse" : "Drop licence agreement PDF or browse"}</span><span style={{ color: "var(--text-soft)" }}>PDF · Max 10 MB</span><input className="sr-only" type="file" accept="application/pdf" onChange={async (event) => { const file = event.target.files?.[0]; if (file) await uploadRequiredRightsProof(file); event.target.value = ""; }} /></label>
+                {requiresAiProof ? <p className="mt-3 text-xs font-semibold">Suno receipt PDF</p> : null}<label className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-3 text-xs" style={{ borderColor: "var(--border)" }}><span className="flex items-center gap-2"><FileUp className="h-4 w-4" style={{ color: "var(--accent)" }} />{rightsUploadProgress != null ? `Uploading ${rightsUploadProgress}%` : requiresAiProof ? "Drop generation receipt PDF or browse" : "Drop licence agreement PDF or browse"}</span><span style={{ color: "var(--text-soft)" }}>PDF · Max 10 MB</span><input className="sr-only" type="file" accept="application/pdf" onChange={async (event) => { const file = event.target.files?.[0]; if (file) await uploadRequiredRightsProof(file); event.target.value = ""; }} /></label>
                 {(requiresAiProof ? release.sunoReceiptUrl : release.licenseReceiptUrl) ? <div className="mt-2 flex items-center justify-between text-xs" style={{ color: "var(--success)" }}><span>PDF attached and ready for DireNote.</span><button type="button" onClick={() => setRelease((current) => requiresAiProof ? { ...current, sunoReceiptUrl: "" } : { ...current, licenseReceiptUrl: "" })}>Remove</button></div> : null}
                 {requiresAiProof ? <label className="mt-3 block text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Track / project link<input ref={registerField("ai-generation-link")} type="url" placeholder="https://..." className="field mt-1" value={release.sunoLink} onChange={(event) => setRelease((current) => ({ ...current, sunoLink: event.target.value }))} /></label> : null}
                 {rightsUploadError ? <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>{rightsUploadError}</p> : null}
@@ -6238,7 +6252,9 @@ export function ReleaseForm({
         onClose={closeContributors}
         onSave={(value) => {
           if (contributorsModal.trackIndex == null) return;
-          updateTrack(contributorsModal.trackIndex, value);
+          if (value.applyToAllTracks) {
+            setTracks((current) => current.map((track) => ({ ...track, songwriters: value.songwriters.map((entry) => ({ ...entry })), composers: value.composers.map((entry) => ({ ...entry })), producers: value.producers.map((entry) => ({ ...entry })) })));
+          } else updateTrack(contributorsModal.trackIndex, value);
           closeContributors();
         }}
         createContributor={createContributor}

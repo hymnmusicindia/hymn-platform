@@ -153,6 +153,8 @@ export const referralTrackSchema = z.object({
 
 const contributorSchema = z.object({
   role: z.enum(["songwriter", "composer", "producer"]),
+  partyId: z.number().int().positive().optional(),
+  clientReference: z.string().trim().min(1).max(100).optional(),
   legalName: z.string().default(""),
   artistName: z.string().optional(),
   ipi: z.string().optional(),

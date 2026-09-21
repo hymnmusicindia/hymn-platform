@@ -442,15 +442,16 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
       ) : null}
 
       {(activeTab === "placements" || activeTab === "collaborations") ? (
-        <Panel title={activeTab === "placements" ? "Placement opportunities" : "Collaborations"} description="Uses paid beat orders and buyers as practical collaboration signals.">
+        <Panel title={activeTab === "placements" ? "Placement opportunities" : "Collaborations"} description={activeTab === "collaborations" ? "Tracks connected to your canonical contributor identity, independent of Beat Store sales and payout setup." : "Uses paid beat orders and buyers as practical collaboration signals."}>
           <div className="grid gap-3">
-            {filteredLicenseRows.map(({ order, item }, index) => (
+            {activeTab === "collaborations" ? (finance.creditedTracks ?? []).map((credit: any) => <article key={`credit-${credit.id}`} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold" style={{ color: "var(--text)" }}>{credit.trackTitle}</p><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{credit.releaseTitle} · {credit.artistName} · credited as {String(credit.role).replaceAll("_", " ")}</p></div><StatusPill label={credit.releaseStatus} active /></div></article>) : filteredLicenseRows.map(({ order, item }, index) => (
               <article key={`placement-${order.id}-${index}`} className="surface-list-item p-4">
                 <p className="font-semibold" style={{ color: "var(--text)" }}>{item.beatTitle ?? `Beat #${item.beatId}`}</p>
                 <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Buyer: {order.buyerEmail ?? order.buyerName ?? `User #${order.userId}`} / {item.licenseType}</p>
               </article>
             ))}
-            {filteredLicenseRows.length === 0 ? <EmptyState copy="No paid beat orders yet, so there are no placement signals." /> : null}
+            {activeTab === "collaborations" && !(finance.creditedTracks ?? []).length ? <EmptyState copy="No tracks are linked to your contributor identity yet." /> : null}
+            {activeTab === "placements" && filteredLicenseRows.length === 0 ? <EmptyState copy="No paid beat orders yet, so there are no placement signals." /> : null}
           </div>
         </Panel>
       ) : null}

@@ -18,7 +18,7 @@ function buildPdf(lines: string[]) {
 export async function generateBeatLicense(purchaseId: number, actorId: number, isAdmin = false) {
   const purchase = await prisma.beatPurchase.findUnique({ where: { id: purchaseId }, include: { licenseAsset: true } });
   if (!purchase || (!isAdmin && purchase.userId !== actorId)) throw new Error("Beat purchase not found.");
-  const [buyer, beat] = await Promise.all([prisma.user.findUnique({ where: { id: purchase.userId } }), prisma.beat.findUnique({ where: { id: purchase.beatId } })]);
+  const [buyer, beat] = await Promise.all([prisma.user.findUnique({ where: { id: purchase.userId } }), prisma.beat.findUnique({ where: { id: purchase.beatId }, include: { producerParty: true } })]);
   if (!buyer || !beat) throw new Error("License source data is incomplete.");
   if (purchase.licenseAsset && !purchase.licenseAsset.deletedAt) {
     const existingUrl = `/api/assets/${purchase.licenseAsset.id}/download`;
@@ -29,7 +29,7 @@ export async function generateBeatLicense(purchaseId: number, actorId: number, i
   let snapshot = purchase.licenseTermsSnapshot as Record<string, any> | null;
   const licenseType = normalizeBeatLicenseType(purchase.licenseType);
   if (!snapshot) {
-    snapshot = { version: "legacy-snapshot-2026-09-05", licenseType, beat: { id: beat.id, title: beat.title }, buyer: { id: buyer.id, name: buyer.name, email: buyer.email }, producer: { id: beat.userId }, purchaseDate: purchase.purchasedAt.toISOString(), currency: "INR", legalMode: "EXCLUSIVE_LICENSE", existingGeneralLicenses: 0, rights: licenseType === "exclusive" ? { commercialUse: true, exclusiveUse: true, copyrightAssigned: false, contentIdPolicy: "ALLOWED", includesWav: true, includesStems: true } : { commercialUse: true, maxCommercialReleases: 1, monetizationAllowed: true, creditRequired: true, contentIdPolicy: "NOT_ALLOWED", territory: "Worldwide", includesMp3: licenseType === "mp3", includesWav: licenseType === "wav", includesStems: licenseType === "stems" }, restrictions: { samplesSubjectToProducerDisclosure: true, priorGeneralLicensesRemainValid: true } };
+    snapshot = { version: "legacy-snapshot-2026-09-05", licenseType, beat: { id: beat.id, title: beat.title }, buyer: { id: buyer.id, name: buyer.name, email: buyer.email }, producer: { partyId: beat.producerParty?.publicId ?? null, creditedName: beat.producerParty?.professionalName ?? producer?.name ?? `Producer #${beat.userId}` }, purchaseDate: purchase.purchasedAt.toISOString(), currency: "INR", legalMode: "EXCLUSIVE_LICENSE", existingGeneralLicenses: 0, rights: licenseType === "exclusive" ? { commercialUse: true, exclusiveUse: true, copyrightAssigned: false, contentIdPolicy: "ALLOWED", includesWav: true, includesStems: true } : { commercialUse: true, maxCommercialReleases: 1, monetizationAllowed: true, creditRequired: true, contentIdPolicy: "NOT_ALLOWED", territory: "Worldwide", includesMp3: licenseType === "mp3", includesWav: licenseType === "wav", includesStems: licenseType === "stems" }, restrictions: { samplesSubjectToProducerDisclosure: true, priorGeneralLicensesRemainValid: true } };
     await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { licenseVersion: String(snapshot.version), licenseTermsSnapshot: snapshot } });
   }
   const rights = (snapshot.rights ?? {}) as Record<string, unknown>;
@@ -39,7 +39,7 @@ export async function generateBeatLicense(purchaseId: number, actorId: number, i
     `Licence version: ${purchase.licenseVersion ?? snapshot.version ?? "legacy"}`,
     `Purchase ID: ${purchase.id}`,
     `Buyer: ${buyer.name} (${buyer.email})`,
-    `Producer: ${producer?.name ?? `User ${beat.userId}`}`,
+    `Producer: ${String((snapshot.producer as any)?.creditedName ?? producer?.name ?? `User ${beat.userId}`)}`,
     `Beat: ${String((snapshot.beat as any)?.title ?? beat.title)}`,
     `Licence type: ${beatLicenseLabel(licenseType)}`,
     `Purchase date: ${String(snapshot.purchaseDate ?? purchase.purchasedAt.toISOString())}`,

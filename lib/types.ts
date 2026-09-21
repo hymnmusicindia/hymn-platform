@@ -56,6 +56,8 @@ export interface ContributorCredit {
   role: "songwriter" | "composer" | "producer";
   legalName: string;
   artistName?: string;
+  partyId?: number;
+  clientReference?: string;
   ipi?: string;
   iprsMember?: boolean;
   instagramUrl?: string;

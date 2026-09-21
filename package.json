@@ -14,7 +14,7 @@
     "db:backfill:spotify": "tsx scripts/backfill-legacy-spotify.ts",
     "db:migrate:deploy": "tsx scripts/deploy-production-migrations.ts",
     "db:verify:production": "tsx scripts/verify-production-database-target.ts",
-    "test": "npm run test:performance-execution && npm run test:first-release && npm run test:direnote-contract && npm run test:analytics && npm run test:migration-safety && npm run test:razorpay && npm run test:subscriptions && npm run test:payment-enforcement && npm run test:storage && npm run test:release-status && npm run test:distribution-idempotency && npm run test:payout && npm run test:managed-services",
+    "test": "npm run test:performance-execution && npm run test:first-release && npm run test:direnote-contract && npm run test:producer-lifecycle && npm run test:analytics && npm run test:migration-safety && npm run test:razorpay && npm run test:subscriptions && npm run test:payment-enforcement && npm run test:storage && npm run test:release-status && npm run test:distribution-idempotency && npm run test:payout && npm run test:managed-services",
     "test:first-release": "tsx scripts/verify-first-release-funnel.ts && tsx scripts/verify-artist-profile-validation.ts",
     "test:distribution-pricing": "tsx scripts/verify-distribution-pricing.ts",
     "test:growth": "tsx scripts/verify-growth-domain.ts",
@@ -47,8 +47,10 @@
     "test:direnote-virtual": "node --import tsx scripts/verify-direnote-virtual.ts",
     "test:direnote-e2e": "node --import tsx scripts/verify-direnote-virtual.ts --build",
     "test:managed-services": "tsx scripts/verify-managed-services.ts",
+    "test:producer-lifecycle": "tsx scripts/verify-producer-lifecycle.ts",
     "test:performance-execution": "tsx scripts/verify-performance-execution.ts",
     "test:managed-services-integration": "tsx scripts/verify-managed-services-integration.ts",
+    "audit:producer-identities": "tsx scripts/audit-producer-identity-migration.ts",
     "lint": "eslint ."
   },
   "dependencies": {

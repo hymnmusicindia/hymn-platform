@@ -26,6 +26,7 @@ import { createDistributorAssetUrl } from "@/lib/distributor-asset-delivery";
 import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution";
 import { prisma } from "@/lib/prisma";
 import { diffDireNotePayload } from "@/lib/direnote-payload-diff";
+import { snapshotTrackContributions } from "@/lib/contributor-identity";
 
 export type DistributionValidationIssue = {
   field: string;
@@ -209,6 +210,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
       ? `DireNote submission is cooling down. Try again in ${Math.ceil(claim.retryAfterSeconds / 60)} minute${Math.ceil(claim.retryAfterSeconds / 60) === 1 ? "" : "s"}.`
       : "An identical DireNote submission is already processing.",
   };
+  await snapshotTrackContributions(claim.attempt.id, releaseId);
 
   await updateDetailedReleaseStatus(releaseId, "queued_for_distribution", "Validated and queued for DireNote API.");
   await updateDetailedReleaseStatus(releaseId, "submitting_to_distributor", "DireNote submission claimed and started.");

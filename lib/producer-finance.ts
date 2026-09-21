@@ -16,7 +16,7 @@ export async function creditVerifiedBeatSale(input: {
   grossAmount: number;
   licenseType: string;
 }) {
-  const beat = await prisma.beat.findUnique({ where: { id: input.beatId }, select: { id: true, userId: true, title: true } });
+  const beat = await prisma.beat.findUnique({ where: { id: input.beatId }, select: { id: true, userId: true, producerPartyId: true, title: true } });
   if (!beat) throw new Error(`Beat ${input.beatId} was not found.`);
 
   const grossAmount = currencyAmount(input.grossAmount);
@@ -35,6 +35,7 @@ export async function creditVerifiedBeatSale(input: {
       data: {
         beatId: beat.id,
         producerUserId: beat.userId,
+        producerPartyId: beat.producerPartyId,
         buyerUserId: input.buyerUserId,
         orderId: input.orderId,
         paymentId: input.paymentId,
@@ -86,12 +87,13 @@ export async function creditVerifiedBeatSale(input: {
 }
 
 export async function getProducerFinanceSummary(userId: number) {
-  const [profile, sales, ledger, payoutBalance, payouts] = await Promise.all([
+  const [profile, sales, ledger, payoutBalance, payouts, identity] = await Promise.all([
     prisma.producerProfile.findUnique({ where: { userId } }),
     prisma.beatSale.findMany({ where: { producerUserId: userId }, include: { beat: { select: { title: true } } }, orderBy: { createdAt: "desc" } }),
     prisma.walletTransaction.findMany({ where: { userId, referenceType: "beat_sale" }, orderBy: { createdAt: "desc" } }),
     prisma.artistPayoutBalance.findUnique({ where: { userId } }),
-    prisma.payoutRequest.findMany({ where: { userId, sourceType: { in: ["producer_beat_sales", "mixed"] } }, orderBy: { requestedAt: "desc" } })
+    prisma.payoutRequest.findMany({ where: { userId, sourceType: { in: ["producer_beat_sales", "mixed"] } }, orderBy: { requestedAt: "desc" } }),
+    prisma.contributorParty.findUnique({ where: { claimedByUserId: userId }, include: { contributions: { include: { track: { include: { release: { select: { id: true, title: true, artistName: true, status: true, releaseDate: true } } } } }, orderBy: [{ createdAt: "desc" }] } } })
   ]);
   const paidSales = sales.filter((sale) => sale.status === "paid");
   return {
@@ -99,6 +101,8 @@ export async function getProducerFinanceSummary(userId: number) {
     sales,
     ledger,
     payouts,
+    contributorIdentity: identity ? { publicId: identity.publicId, professionalName: identity.professionalName, identityState: identity.identityState } : null,
+    creditedTracks: identity?.contributions.map((credit) => ({ id: credit.id, role: credit.role, creditedName: credit.creditedName, trackId: credit.trackId, trackTitle: credit.track.title, releaseId: credit.track.release.id, releaseTitle: credit.track.release.title, artistName: credit.track.release.artistName, releaseStatus: credit.track.release.status, releaseDate: credit.track.release.releaseDate })) ?? [],
     totalSales: paidSales.length,
     grossRevenue: paidSales.reduce((sum, sale) => sum + Number(sale.grossAmount), 0),
     hymnCommission: paidSales.reduce((sum, sale) => sum + Number(sale.hymnCommissionAmount), 0),

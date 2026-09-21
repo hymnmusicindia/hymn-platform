@@ -4,6 +4,8 @@ import { createArtistProfile, listArtistProfilesByUser } from "@/lib/db";
 import { parseAppleArtistId } from "@/lib/spotify";
 import { artistProfileCreateSchema, normalizeInstagramUrl } from "@/lib/validation";
 import { getUserEntitlements } from "@/lib/entitlements";
+import { ensureClaimedContributorParty } from "@/lib/contributor-identity";
+import { prisma } from "@/lib/prisma";
 
 const LIMIT_MESSAGE = "You have reached your artist profile limit for your current plan. Upgrade to add more artist profiles.";
 
@@ -70,6 +72,11 @@ export async function POST(request: Request) {
       isProducer: payload.isProducer,
       producerLegalName: payload.isProducer ? payload.producerLegalName?.trim() || null : null,
     });
+
+    if (payload.isProducer) {
+      const party = await ensureClaimedContributorParty(result.user.id, name);
+      await prisma.artistCard.update({ where: { id: profile.id }, data: { contributorPartyId: party.id } });
+    }
 
     return NextResponse.json({ profile, ...(await usage(result.user.id)) }, { status: 201 });
   } catch (error) {

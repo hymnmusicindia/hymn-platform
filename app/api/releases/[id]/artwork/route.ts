@@ -25,7 +25,10 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   const isPublicShowcaseArtwork = !canReadPrivateArtwork && isLive
     ? (await getPublicHomePreview()).featuredReleases.some((featured) => featured.id === releaseId)
     : false;
-  if (!canReadPrivateArtwork && !isPublicShowcaseArtwork) return new NextResponse(missingImageSvg(), { status: 200, headers: { ...missingImageResponseHeaders(), "X-HYMN-Release-Asset": !user && !admin ? "unauthorized" : "forbidden" } });
+  if (!canReadPrivateArtwork && !isPublicShowcaseArtwork) {
+    if (!user && !admin) return new NextResponse(missingImageSvg(), { status: 200, headers: { ...missingImageResponseHeaders(), "X-HYMN-Release-Asset": "unauthorized" } });
+    return new NextResponse(missingImageSvg(), { status: 200, headers: { ...missingImageResponseHeaders(), "X-HYMN-Release-Asset": "forbidden" } });
+  }
 
   const linkedAssetId = storedAssetIdFromUrl(release.artworkUrl);
   const releaseCoverAsset = await prisma.storedAsset.findFirst({

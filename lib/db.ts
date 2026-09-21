@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import mysql from "mysql2/promise";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { ensureClaimedContributorParty } from "@/lib/contributor-identity";
 import {
   AdminNote,
   AnalyticsSummary,
@@ -559,12 +560,12 @@ function mapOrders(rows: OrderRow[]) {
 }
 
 type PrismaCheckoutOrderRow = Prisma.CheckoutOrderGetPayload<{
-  include: { user: true; items: { include: { beat: { include: { user: true; audio: true } } } } };
+  include: { user: true; items: { include: { beat: { include: { user: true; audio: true; producerParty: true } } } } };
 }>;
 
 const checkoutOrderInclude = {
   user: true,
-  items: { include: { beat: { include: { user: true, audio: true } } } }
+  items: { include: { beat: { include: { user: true, audio: true, producerParty: true } } } }
 } as const;
 
 function mapPrismaCheckoutOrder(row: PrismaCheckoutOrderRow): Order {
@@ -1349,9 +1350,12 @@ export async function createBeat(input: Omit<Beat, "id" | "createdAt" | "produce
       }
 
       console.log("Executing prisma.beat.create()...");
+      const producerUser = await prisma.user.findUniqueOrThrow({ where: { id: input.producerId }, select: { name: true } });
+      const contributorParty = await ensureClaimedContributorParty(input.producerId, producerUser.name);
       const beat = await prisma.beat.create({
         data: {
           userId: input.producerId,
+          producerPartyId: contributorParty.id,
           title: input.title,
           bpm: input.bpm,
           genre: input.genre,
@@ -1868,7 +1872,7 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
     const qualification = await prisma.$transaction(async tx => {
       const order = await tx.checkoutOrder.findUnique({
         where: { razorpayOrderId },
-        include: { user: true, items: { include: { beat: true } } }
+        include: { user: true, items: { include: { beat: { include: { producerParty: true } } } } }
       });
       if (!order) throw new Error("Order not found.");
       const alreadyPaid = order.paymentStatus === "paid";
@@ -1923,7 +1927,7 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
           legalMode: item.beat.exclusiveLegalMode,
           beat: { id: item.beat.id, title: item.beat.title },
           buyer: { id: order.user.id, name: order.user.name, email: order.user.email },
-          producer: { id: item.beat.userId },
+          producer: { partyId: item.beat.producerParty?.publicId ?? null, creditedName: item.beat.producerParty?.professionalName ?? `Producer #${item.beat.userId}` },
           purchaseDate: new Date().toISOString(),
           price: Number(item.price),
           currency: order.currency,
@@ -1935,7 +1939,7 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
           licenseType: normalizedLicenseType,
           beat: { id: item.beat.id, title: item.beat.title },
           buyer: { id: order.user.id, name: order.user.name, email: order.user.email },
-          producer: { id: item.beat.userId },
+          producer: { partyId: item.beat.producerParty?.publicId ?? null, creditedName: item.beat.producerParty?.professionalName ?? `Producer #${item.beat.userId}` },
           purchaseDate: new Date().toISOString(),
           price: Number(item.price),
           currency: order.currency,
@@ -1944,8 +1948,8 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
         };
         await tx.beatPurchase.upsert({
           where: { checkoutOrderItemId: item.id },
-          create: { userId: order.userId, beatId: item.beatId, licenseType: normalizedLicenseType, paymentId, checkoutOrderItemId: item.id, hasAccess: true, licenseVersion: "2026-09-05", licenseTermsSnapshot: licenceSnapshot },
-          update: { paymentId, hasAccess: true }
+          create: { userId: order.userId, beatId: item.beatId, producerPartyId: item.beat.producerPartyId, licenseType: normalizedLicenseType, paymentId, checkoutOrderItemId: item.id, hasAccess: true, licenseVersion: "2026-09-05", licenseTermsSnapshot: licenceSnapshot },
+          update: { paymentId, producerPartyId: item.beat.producerPartyId, hasAccess: true }
         });
         const existingSale = await tx.beatSale.findUnique({ where: { orderId_beatId_licenseType: { orderId: order.id, beatId: item.beatId, licenseType: item.licenseType } } });
         if (!existingSale) {
@@ -1956,7 +1960,7 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
           const producerEarningAmount = netSaleAmount.sub(hymnCommissionAmount);
           const latest = await tx.walletTransaction.findFirst({ where: { userId: item.beat.userId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
           const balanceAfter = new Prisma.Decimal(latest?.balanceAfter ?? 0).add(producerEarningAmount);
-          const sale = await tx.beatSale.create({ data: { beatId: item.beatId, producerUserId: item.beat.userId, buyerUserId: order.userId, orderId: order.id, paymentId, grossAmount, discountAmount, netSaleAmount, hymnCommissionAmount, producerEarningAmount, producerRateApplied: PRODUCER_COMMISSION_CONFIG.producerSharePercent / 100, platformRateApplied: PRODUCER_COMMISSION_CONFIG.hymnCommissionPercent / 100, licenseType: normalizedLicenseType, status: "paid" } });
+          const sale = await tx.beatSale.create({ data: { beatId: item.beatId, producerUserId: item.beat.userId, producerPartyId: item.beat.producerPartyId, buyerUserId: order.userId, orderId: order.id, paymentId, grossAmount, discountAmount, netSaleAmount, hymnCommissionAmount, producerEarningAmount, producerRateApplied: PRODUCER_COMMISSION_CONFIG.producerSharePercent / 100, platformRateApplied: PRODUCER_COMMISSION_CONFIG.hymnCommissionPercent / 100, licenseType: normalizedLicenseType, status: "paid" } });
           await tx.walletTransaction.create({ data: { userId: item.beat.userId, type: "beat_sale_credit", amount: producerEarningAmount, referenceType: "beat_sale", referenceId: String(sale.id), idempotencyKey: `beat-sale:${sale.id}:producer-credit`, direction: "credit", balanceAfter, note: `${item.beat.title} sale producer share.` } });
           await tx.artistPayoutBalance.upsert({ where: { userId: item.beat.userId }, create: { userId: item.beat.userId, availableBalance: producerEarningAmount, lifetimeEarnings: producerEarningAmount }, update: { availableBalance: { increment: producerEarningAmount }, lifetimeEarnings: { increment: producerEarningAmount } } });
           await tx.notification.upsert({ where: { eventKey: `beat-sale:${sale.id}:producer-credit` }, create: { userId: item.beat.userId, title: "Beat sold", body: `Your beat “${item.beat.title}” was purchased and your producer share was credited.`, type: "beat", href: "/producer/dashboard?module=sales", actionLabel: "View sale", eventKey: `beat-sale:${sale.id}:producer-credit`, metadata: { saleId: sale.id, beatId: item.beatId, orderId: order.id } }, update: {} });
@@ -3600,12 +3604,14 @@ export async function listArtistCardsByUser(userId: number) {
 
 export async function createBeatPurchase(userId: number, beatId: number, licenseType: "mp3" | "wav" | "stems" | "general" | "basic" | "premium" | "exclusive", paymentId?: string | null) {
   if (usesPostgresPrisma()) {
+    const beat = await prisma.beat.findUniqueOrThrow({ where: { id: beatId }, select: { producerPartyId: true } });
     const existing = await prisma.beatPurchase.findFirst({ where: paymentId ? { userId, beatId, licenseType, paymentId } : { userId, beatId, licenseType, paymentId: null } });
     const purchase = existing
       ? await prisma.beatPurchase.update({ where: { id: existing.id }, data: { hasAccess: true, paymentId: paymentId ?? undefined } })
       : await prisma.beatPurchase.create({ data: {
         userId,
         beatId,
+        producerPartyId: beat.producerPartyId,
         licenseType,
         purchasedAt: new Date(),
         hasAccess: true,
