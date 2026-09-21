@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>HYMN x DireNote - License Receipt Import Failure</title>
+  <style>
+    @page { size: A4; margin: 18mm; }
+    body { color: #18212f; font: 10.5pt/1.45 Arial, Helvetica, sans-serif; }
+    h1 { font-size: 22pt; line-height: 1.15; margin: 0 0 5px; color: #092b4c; }
+    h2 { font-size: 14pt; margin: 20px 0 7px; color: #0d4d7c; border-bottom: 1px solid #d8e5ef; padding-bottom: 4px; }
+    h3 { font-size: 11pt; margin: 14px 0 5px; }
+    p { margin: 5px 0 9px; }
+    .meta { color: #566574; margin-bottom: 18px; }
+    .summary { background: #edf7ff; border-left: 4px solid #2077b7; padding: 11px 13px; margin: 13px 0; }
+    .warning { background: #fff5e7; border-left: 4px solid #d68213; padding: 11px 13px; margin: 13px 0; }
+    code { color: #172b4d; background: #f1f4f6; padding: 1px 3px; font-family: Consolas, monospace; font-size: 9pt; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9.5pt; }
+    th { background: #edf3f7; text-align: left; }
+    th, td { border: 1px solid #cfdce5; padding: 7px; vertical-align: top; }
+    ul, ol { margin: 5px 0 10px; padding-left: 22px; }
+    li { margin: 4px 0; }
+    .small { color: #5f6b75; font-size: 8.5pt; }
+    .page-break { break-before: page; }
+  </style>
+</head>
+<body>
+  <h1>License Receipt Import Failure</h1>
+  <div class="meta">HYMN Music → DireNote Media &nbsp;|&nbsp; Technical handoff &nbsp;|&nbsp; 15 September 2026</div>
+
+  <div class="summary">
+    <strong>Conclusion:</strong> HYMN supplies DireNote with a publicly reachable, unauthenticated PDF URL. The PDF is valid and is served with the expected HTTP headers. DireNote's <code>CONTENT_INGESTION</code> endpoint nevertheless returns an HTTP 200 response containing the text <em>“Failed to upload license receipt”</em>, instead of its documented JSON result. The remaining failure is in DireNote's receipt-import/storage path or an undocumented provider-side URL policy.
+  </div>
+
+  <h2>1. Affected submission</h2>
+  <table>
+    <tr><th>Field</th><th>Value</th></tr>
+    <tr><td>HYMN release</td><td>Internal release #27 — <strong>Jaana Door</strong></td></tr>
+    <tr><td>Primary artist</td><td>DRACK</td></tr>
+    <tr><td>Content type</td><td>Non-Exclusive Licensed</td></tr>
+    <tr><td>Proof asset</td><td>Stored asset #72; non-exclusive beat licence agreement</td></tr>
+    <tr><td>DireNote outcome</td><td>HTTP 200 response body: <code>Validation Error … Failed to upload license receipt</code></td></tr>
+  </table>
+
+  <h2>2. DireNote contract and observed behavior</h2>
+  <p>DireNote API v2.2 documents <code>license_receipt_url</code> as conditionally required for <code>Non-Exclusive Licensed</code> content and describes it as a <strong>public PDF URL</strong>. It does not document a Google Drive-only requirement, a special host requirement, or an authenticated upload flow.</p>
+  <p>The documented successful ingestion response is JSON with <code>success: true</code>, UPC, track information and warnings. The observed response is neither JSON nor a documented error response despite using HTTP 200.</p>
+  <p class="small">Official documentation: https://distribution.direnotemedia.com/dnm_api</p>
+
+  <h2>3. Evidence collected</h2>
+  <table>
+    <tr><th>Check</th><th>Observed result</th><th>Interpretation</th></tr>
+    <tr><td>Public Hostinger PDF download</td><td>HTTP 200; <code>Content-Type: application/pdf</code>; <code>Content-Length: 101348</code></td><td>The source file is publicly retrievable and has the correct MIME type.</td></tr>
+    <tr><td>PDF integrity</td><td>101,348 bytes; first bytes are <code>%PDF-</code></td><td>The served object is a PDF, not an HTML error page or redirect.</td></tr>
+    <tr><td>Public tokenized proof endpoint</td><td>HTTP 200; <code>application/pdf</code>; attachment disposition; public cache headers; no HYMN login/session needed</td><td>Current production delivery URL is durable across Hostinger Node deployments.</td></tr>
+    <tr><td>Older static public_html URL</td><td>Intermittently became HTTP 404 after a Node deployment</td><td>Removed from the active delivery strategy; it is not used for the latest attempt.</td></tr>
+    <tr><td>Latest DireNote attempt</td><td>Sent the tokenized public endpoint; DireNote still returned “Failed to upload license receipt.”</td><td>The failure persists after removal of the static-file 404 condition.</td></tr>
+  </table>
+
+  <h2>4. HYMN implementation safeguards</h2>
+  <ul>
+    <li>Proof links are public to DireNote but unguessable: the URL contains a server-generated provider token and requires no HYMN account session.</li>
+    <li>Asset reads are backed by persistent Hostinger storage, not a deployment directory or Vercel storage.</li>
+    <li>Responses send <code>Content-Type: application/pdf</code>, a PDF filename, byte length, range support, and <code>Cache-Control: public</code>.</li>
+    <li>HYMN preserves failed attempts and prevents duplicate ingestion during an active submission.</li>
+    <li>HYMN now classifies this provider response as <code>DIRENOTE_LICENSE_RECEIPT_IMPORT_FAILED</code>, rather than incorrectly treating it as a generic malformed response.</li>
+  </ul>
+
+  <div class="page-break"></div>
+  <h2>5. Required DireNote investigation</h2>
+  <ol>
+    <li>Locate the ingestion request for the account and release details above in DireNote logs.</li>
+    <li>From the same DireNote worker that imports receipts, fetch the supplied <code>license_receipt_url</code> and record: DNS result, TLS result, HTTP status, final URL after redirects, MIME type, byte count, and body hash.</li>
+    <li>Inspect the subsequent receipt-save/upload operation. The text specifically says <em>“Failed to upload license receipt”</em>, which suggests a failure after URL retrieval (for example provider storage, quota, service-account permissions, or an unhandled upload exception).</li>
+    <li>Check any outbound-host allowlist, WAF, IPv4/IPv6 egress, TLS-certificate validation, maximum file-size, and PDF parser constraints that could reject a valid 101 KB HTTPS PDF.</li>
+    <li>Return a machine-readable JSON error with a non-2xx HTTP status when the receipt import fails. Include a stable error code and safe diagnostic reason.</li>
+  </ol>
+
+  <h2>6. Recommended permanent API improvements</h2>
+  <table>
+    <tr><th>Improvement</th><th>Why it matters</th></tr>
+    <tr><td>Idempotency key or client reference on ingestion</td><td>Prevents duplicate releases when a provider accepts a request but loses its response.</td></tr>
+    <tr><td>Status lookup by external reference</td><td>Current documented release lookup is by UPC; an auto-generated UPC is unavailable if ingestion acknowledgement is lost.</td></tr>
+    <tr><td>Structured error schema</td><td>Allows labels such as HYMN to distinguish URL-download failures, receipt parsing failures, and provider-storage failures.</td></tr>
+    <tr><td>Explicit URL acceptance policy</td><td>If Google Drive or a particular URL pattern is required, document it. The current v2.2 documentation says only “Public PDF URL.”</td></tr>
+  </table>
+
+  <h2>7. Requested response from DireNote</h2>
+  <div class="warning">
+    Please confirm whether DireNote can fetch the exact supplied public PDF URL from its ingestion worker. If yes, provide the internal error from the subsequent license-receipt upload. If no, provide the exact URL/network/TLS/allowlist requirement. Please also confirm whether any release was created for this request before HYMN retries again.
+  </div>
+
+  <h2>Appendix: Relevant HYMN changes</h2>
+  <table>
+    <tr><th>Commit</th><th>Change</th></tr>
+    <tr><td><code>d4698f6</code></td><td>Serves proofs via a durable public tokenized endpoint backed by persistent Hostinger storage.</td></tr>
+    <tr><td><code>10a191b</code></td><td>Allows legitimate retries from queued state while preserving duplicate safeguards.</td></tr>
+    <tr><td><code>4c69ba0</code></td><td>Classifies the known DireNote receipt-import failure precisely and adds regression coverage.</td></tr>
+  </table>
+  <p class="small">Security note: This document intentionally omits credentials, authorization tokens, and the full secretized proof URL.</p>
+</body>
+</html>
