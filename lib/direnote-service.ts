@@ -112,17 +112,28 @@ function aggregateReleaseStatus(tracks: RecordValue[], releaseStatus: unknown, r
 
 /** Fetches the documented UPC lookup and caches provider facts without overwriting HYMN metadata. */
 export async function syncDireNoteRelease(releaseId: number, actorId?: number | null) {
-  return prisma.$transaction(async lock => {
+  // This short transaction only arbitrates entry. Provider HTTP happens after
+  // it commits; holding an xact advisory lock through a network call starves
+  // the connection pool and blocks every other reconciliation.
+  const acquired = await prisma.$transaction(async lock => {
     const rows = await lock.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(81422028, ${releaseId}::integer) AS locked`;
-    if (!rows[0]?.locked) throw new Error("DireNote release is already being synchronized or submitted.");
-    return syncCurrentDireNoteRelease(releaseId, actorId);
-  }, { timeout: 180_000, maxWait: 5000 });
+    return Boolean(rows[0]?.locked);
+  }, { timeout: 10_000, maxWait: 5_000 });
+  if (!acquired) throw new Error("DireNote release is already being synchronized or submitted.");
+  return syncCurrentDireNoteRelease(releaseId, actorId);
 }
 
 async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | null) {
   const release = await prisma.release.findUnique({ where: { id: releaseId }, include: { tracks: { orderBy: { trackNumber: "asc" } } } });
   if (!release) throw new Error("Release not found.");
   const attempt = await currentDireNoteAttempt(releaseId);
+  // A submitted current attempt is authoritative provider-acceptance evidence.
+  // Repair a stale local handoff projection before any status lookup, without
+  // calling ingest again.
+  if (["SUBMITTING_TO_DISTRIBUTOR", "QUEUED_FOR_DISTRIBUTION"].includes(release.status) && attempt.state === "submitted") {
+    await updateDetailedReleaseStatus(releaseId, "sent_to_distributor", "DireNote submission was already accepted; reconciliation repaired the stale handoff status.", undefined, { manualOverride: true, actorType: "system" });
+    release.status = "SENT_TO_DISTRIBUTOR" as typeof release.status;
+  }
   const attemptTracks = Array.isArray(attempt.trackIdentifiers) ? attempt.trackIdentifiers.map(record) : [];
   const mappingTracks = release.tracks.map(track => {
     const snapshot = attemptTracks.find(item => item.id === track.id);

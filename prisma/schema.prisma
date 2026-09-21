@@ -667,6 +667,15 @@ model DistributionSubmissionAttempt {
   @@map("distribution_submission_attempts")
 }
 
+model CronLease {
+  leaseKey     String   @id @map("lease_key")
+  runId        String   @map("run_id")
+  leasedUntil  DateTime @map("leased_until")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("cron_leases")
+}
+
 model ReleaseChangeRequest {
   id                 Int                         @id @default(autoincrement())
   releaseId          Int                         @map("release_id")
