@@ -31,4 +31,6 @@ jobs:
           run_job birthday-notifications GET
           run_job exchange-rate-refresh POST
           run_job quarterly-payout-reset POST
+          run_job draft-nudges GET
+          run_job account-deletion-cleanup GET
           exit $failed
