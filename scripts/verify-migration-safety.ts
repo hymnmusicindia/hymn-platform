@@ -8,6 +8,7 @@ const scripts = packageJson.scripts ?? {};
 const build = scripts.build ?? "";
 
 assert.match(build, /prisma generate/);
+assert.match(build, /tsx scripts\/deploy-production-migrations\.ts/, "Hostinger builds must apply guarded production migrations before Next.js prerendering.");
 assert.doesNotMatch(build, /db\s+push|accept-data-loss|migrate\s+(dev|reset)/i);
 assert.equal(scripts["db:migrate:deploy"], "tsx scripts/deploy-production-migrations.ts");
 assert.equal(scripts["deploy:release"], "tsx scripts/deploy-production-migrations.ts");
@@ -23,6 +24,7 @@ assert.match(startupScript, /assertProductionDatabaseReady/);
 assert.match(startupScript, /assertDireNoteSchemaReady/);
 assert.match(deploymentScript, /assertDireNoteSchemaReady/);
 assert.match(scripts["vercel-build"], /verify-direnote-schema\.ts --production-build/);
+assert.doesNotMatch(scripts["vercel-build"], /deploy-production-migrations/, "Vercel builds remain migration-free; migrations run through the controlled release path.");
 assert.equal(JSON.parse(readFileSync(path.join(root, "vercel.json"), "utf8")).buildCommand, "npm run vercel-build");
 const snapshots = readFileSync(path.join(root, "prisma/migrations/20260908000000_direnote_payload_snapshots/migration.sql"), "utf8");
 assert.match(snapshots, /ADD COLUMN IF NOT EXISTS "payload_redacted" JSONB/);
