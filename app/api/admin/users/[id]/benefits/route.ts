@@ -80,7 +80,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const subscription = await prisma.subscription.upsert({
       where: { userId },
       create: { userId, plan: body.plan, planName, expiryDate, status: "active", purchasedAt: now, releasesUsed: 0, releaseLimit: null, artistLimit: artistProfileLimitForPlan(body.plan), availableFeatures: JSON.stringify(["all"]), daysRemaining: body.durationDays, autoRenewal: false },
-      update: { plan: body.plan, planName, expiryDate, status: "active", artistLimit: artistProfileLimitForPlan(body.plan), availableFeatures: JSON.stringify(["all"]), daysRemaining: body.durationDays, autoRenewal: false }
+      // A granted term has no provider billing cycle, and a prior revocation
+      // leaves currentPeriodEnd in the past. Clear both period fields so the
+      // grant is not immediately read as expired.
+      update: { plan: body.plan, planName, expiryDate, status: "active", artistLimit: artistProfileLimitForPlan(body.plan), availableFeatures: JSON.stringify(["all"]), daysRemaining: body.durationDays, autoRenewal: false, currentPeriodStart: null, currentPeriodEnd: null, cancelledAt: null }
     });
     await Promise.all([
       logAuditEvent({ actorType: "admin", actorId, actorRole: "admin", entityType: "subscription", entityId: subscription.id, action: "subscription.admin_granted", newValue: { userId, plan: body.plan, durationDays: body.durationDays, expiryDate }, reason: body.note, sessionId: "sid" in admin ? String(admin.sid || "") : undefined, riskLevel: "normal" }),

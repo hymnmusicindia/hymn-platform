@@ -54,7 +54,7 @@ export async function reconcilePayments() {
         const expiryDate = new Date(order.createdAt.getTime() + (order.plan === "half_yearly" ? 180 : 365) * 86_400_000);
         const artistLimit = order.plan === "yearly_plus" ? 15 : order.plan === "yearly" ? 7 : 5;
         if (expiryDate > new Date()) {
-          await prisma.subscription.upsert({ where: { userId: order.userId }, create: { userId: order.userId, plan: order.plan, planName: order.plan, expiryDate, status: "active", artistLimit }, update: { plan: order.plan, planName: order.plan, expiryDate, status: "active", artistLimit } });
+          await prisma.subscription.upsert({ where: { userId: order.userId }, create: { userId: order.userId, plan: order.plan, planName: order.plan, expiryDate, status: "active", artistLimit }, update: { plan: order.plan, planName: order.plan, expiryDate, status: "active", artistLimit, currentPeriodStart: null, currentPeriodEnd: null } });
           issues.push({ key, type: "subscription", message: `Restored missing ${order.plan} entitlement from paid order #${order.id}, expiring ${expiryDate.toISOString().slice(0, 10)} as originally purchased.`, autoRepaired: true });
           await resolveAdminTask(key, "Subscription entitlement was restored automatically.");
         } else {

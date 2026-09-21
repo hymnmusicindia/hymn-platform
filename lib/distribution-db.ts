@@ -922,7 +922,10 @@ export async function createOrRefreshSubscription(userId: number, plan: Subscrip
   if (isPostgresPrisma()) {
     return prisma.subscription.upsert({
       where: { userId },
-      update: { plan, expiryDate, releaseLimit: limit, status: "active" },
+      // A directly purchased plan has no provider billing cycle. Leaving a
+      // previous subscription's period end behind would outlive this term and
+      // read as expired, so clear it alongside the new expiry.
+      update: { plan, expiryDate, releaseLimit: limit, status: "active", currentPeriodStart: null, currentPeriodEnd: null },
       create: { userId, plan, expiryDate, releaseLimit: limit, releasesUsed: 0, status: "active" }
     });
   }
