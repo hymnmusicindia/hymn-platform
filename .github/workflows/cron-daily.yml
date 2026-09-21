@@ -16,14 +16,11 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           BASE_URL: https://hymnmusic.fun
-          # Hostinger's CDN serves a bot challenge (403) to GitHub runner IPs,
-          # so connect straight to the origin. Update if the server IP changes.
-          ORIGIN: hymnmusic.fun:443:145.79.57.62
         run: |
           set -u
           failed=0
           run_job() {
-            code=$(curl --silent --show-error --max-time 300 --resolve "$ORIGIN" \
+            code=$(curl --silent --show-error --max-time 300 \
               -o response.json -w '%{http_code}' \
               -X "$2" -H "Authorization: Bearer $CRON_SECRET" \
               "$BASE_URL/api/cron/$1") || code=000
