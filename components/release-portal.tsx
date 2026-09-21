@@ -1,7 +1,6 @@
 "use client";
 
 import { customerMessage } from "@/lib/customer-message";
-import { upcFromDireNoteResponse } from "@/lib/direnote-upc";
 
 import Image from "next/image";
 import { ReleaseSubmissionHistory } from "@/components/release-submission-history";
@@ -109,24 +108,12 @@ function releaseMetadata(release: Release) {
 }
 
 function resolvedUpc(release: Release) {
-  const meta = releaseMetadata(release) as Record<string, any>;
-  const normalized = upcFromDireNoteResponse(release.upcCode)
-    ?? upcFromDireNoteResponse(meta.direnoteResponse)
-    ?? upcFromDireNoteResponse(meta.direNote)
-    ?? upcFromDireNoteResponse(meta.upc)
-    ?? upcFromDireNoteResponse(meta.upcCode);
-  if (normalized) return normalized;
+  if (release.upcCode?.trim()) return release.upcCode.trim();
   return release.status === "draft" ? "Will be assigned after distribution" : "Awaiting assignment";
 }
 
 function resolvedIsrc(release: Release, track: NonNullable<Release["tracks"]>[number], index: number) {
   if (track.isrc?.trim()) return track.isrc.trim();
-  const meta = releaseMetadata(release) as Record<string, any>;
-  if (meta.direNote?.currentAttemptId) return "Awaiting assignment";
-  const responseTracks = Array.isArray(meta.direnoteResponse?.tracks) ? meta.direnoteResponse.tracks : [];
-  const byName = responseTracks.find((item: any) => String(item?.track_name || "").trim().toLowerCase() === track.trackTitle.trim().toLowerCase());
-  const value = byName?.isrc || responseTracks[index]?.isrc || meta.tracks?.[index]?.isrc || track.metadata?.isrc;
-  if (typeof value === "string" && value.trim()) return value.trim();
   return release.status === "draft" ? "Will be assigned after distribution" : "Awaiting assignment";
 }
 

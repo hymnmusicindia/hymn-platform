@@ -2,13 +2,17 @@ import { PrismaClient } from "@prisma/client";
 
 const db = new PrismaClient();
 const apply = process.argv.includes("--apply");
+const verbose = process.argv.includes("--verbose");
+const releaseArgument = process.argv.find(argument => argument.startsWith("--release-id="));
+const releaseId = releaseArgument ? Number(releaseArgument.slice("--release-id=".length)) : null;
+if (releaseArgument && (!Number.isInteger(releaseId) || !releaseId || releaseId < 1)) throw new Error("--release-id must be a positive integer");
 
 function record(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function validUpc(value: unknown) { const valueText = String(value ?? "").replace(/[\s-]/g, ""); return /^\d{12,14}$/.test(valueText) ? valueText : null; }
 
 async function main() {
   const attempts = await db.distributionSubmissionAttempt.findMany({
-    where: { provider: "direnote" }, include: { release: { include: { tracks: { orderBy: { trackNumber: "asc" } } } } }, orderBy: { id: "asc" }
+    where: { provider: "direnote", ...(releaseId ? { releaseId } : {}) }, include: { release: { include: { tracks: { orderBy: { trackNumber: "asc" } } } } }, orderBy: { id: "asc" }
   });
   const grouped = new Map<number, typeof attempts>();
   for (const attempt of attempts) grouped.set(attempt.releaseId, [...(grouped.get(attempt.releaseId) ?? []), attempt]);
@@ -25,7 +29,18 @@ async function main() {
     const staleHandoff = attempt.state === "submitted" && ["SUBMITTING_TO_DISTRIBUTOR", "QUEUED_FOR_DISTRIBUTION"].includes(attempt.release.status);
     if (currentUpc && attempt.release.upc !== currentUpc || missingIsrc.length || staleHandoff || current.length > 1) repairs.push({ releaseId, attemptId: attempt.id, changes: { upc: currentUpc && attempt.release.upc !== currentUpc ? currentUpc : undefined, isrcTrackIds: missingIsrc.map(track => track.id), status: staleHandoff ? "SENT_TO_DISTRIBUTOR" : undefined } });
   }
-  console.log(JSON.stringify({ mode: apply ? "apply" : "dry-run", repairCount: repairs.length, repairs }, null, 2));
+  const summary = {
+    mode: apply ? "apply" : "dry-run",
+    scope: releaseId ? { releaseId } : "all DireNote attempts",
+    releaseCount: grouped.size,
+    repairCount: repairs.length,
+    repairTypes: repairs.reduce<Record<string, number>>((counts, repair) => {
+      for (const key of Object.keys(repair.changes).filter(key => repair.changes[key] !== undefined)) counts[key] = (counts[key] ?? 0) + 1;
+      return counts;
+    }, {}),
+    repairs: verbose ? repairs : repairs.map(repair => ({ releaseId: repair.releaseId, attemptId: repair.attemptId, changeKeys: Object.keys(repair.changes).filter(key => repair.changes[key] !== undefined) }))
+  };
+  console.log(JSON.stringify(summary, null, 2));
   if (!apply) return;
   for (const repair of repairs) {
     await db.$transaction(async tx => {
