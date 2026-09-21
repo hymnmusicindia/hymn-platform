@@ -34,7 +34,15 @@ export function isSubscriptionProduct(value: unknown): value is SubscriptionProd
 
 export function subscriptionHasEntitlement(subscription: { status: string; currentPeriodEnd?: Date | string | null; expiryDate?: Date | string | null; cancelAtPeriodEnd?: boolean } | null, now = new Date()) {
   if (!subscription) return false;
-  return String(subscription.status ?? "").trim().toLowerCase() === "active" && new Date(subscription.currentPeriodEnd || subscription.expiryDate || 0) > now;
+  if (String(subscription.status ?? "").trim().toLowerCase() !== "active") return false;
+  // Provider syncs and revocations write currentPeriodEnd; purchases and admin
+  // grants extend expiryDate only. Preferring either one treats a renewed plan
+  // as expired, so the entitlement runs to whichever date is later. Revocation
+  // sets both, and a cancelled plan is already excluded by the status check.
+  const ends = [subscription.currentPeriodEnd, subscription.expiryDate]
+    .map((value) => (value ? new Date(value).getTime() : 0))
+    .filter((time) => Number.isFinite(time));
+  return Math.max(0, ...ends) > now.getTime();
 }
 
 export function effectiveSubscriptionReleaseLimit(subscription: { plan?: string | null; releaseLimit?: number | null } | null | undefined) {
