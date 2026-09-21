@@ -1428,8 +1428,10 @@ model SecurityRateLimit {
 model PayoutPeriod {
   id                   Int       @id @default(autoincrement())
   type                 String
-  month                Int?
-  quarter              Int?
+  // 0 marks the field this period type does not use. Nullable keys made the
+  // compound lookup unusable and left the unique constraint unenforced.
+  month                Int       @default(0)
+  quarter              Int       @default(0)
   year                 Int
   startDate            DateTime  @map("start_date") @db.Date
   endDate              DateTime  @map("end_date") @db.Date

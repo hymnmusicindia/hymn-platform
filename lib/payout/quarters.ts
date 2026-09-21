@@ -17,7 +17,7 @@ export function getNextQuarter(year: number, quarter: number) { return quarter =
 
 const n = (value: any) => typeof value?.toNumber === "function" ? value.toNumber() : Number(value || 0);
 export async function ensurePayoutPeriod(type: "monthly" | "quarterly", year: number, value: number) {
-  const month = type === "monthly" ? value : null; const quarter = type === "quarterly" ? value : null;
+  const month = type === "monthly" ? value : 0; const quarter = type === "quarterly" ? value : 0;
   const start = type === "monthly" ? new Date(Date.UTC(year, value - 1, 1)) : getQuarterStartEnd(year, value).start;
   const end = type === "monthly" ? new Date(Date.UTC(year, value, 0)) : getQuarterStartEnd(year, value).end;
   return (prisma as any).payoutPeriod.upsert({ where: { type_month_quarter_year: { type, month, quarter, year } }, create: { type, month, quarter, year, startDate: start, endDate: end }, update: {} });
@@ -52,7 +52,7 @@ export async function closeQuarter(quarter: number, year: number, options: { act
     closed = await (prisma as any).$transaction(async (tx: any) => {
       for (const balance of balances) await tx.quarterCarryForward.upsert({ where: { userId_fromQuarter_fromYear_toQuarter_toYear: { userId: balance.userId, fromQuarter: quarter, fromYear: year, toQuarter: next.quarter, toYear: next.year } }, create: { userId: balance.userId, fromQuarter: quarter, fromYear: year, toQuarter: next.quarter, toYear: next.year, amount: balance.availableBalance, reason: `Unpaid available balance carried from Q${quarter} ${year}` }, update: { amount: balance.availableBalance } });
       const updated = await tx.payoutPeriod.update({ where: { id: period.id }, data: { status: "locked", totalGrossRevenue: totals.gross, totalArtistPool: totals.pool, totalSplitEarnings: totals.split, totalHeldAmount: totals.held, totalRequestedPayout: totals.requested, totalPaidAmount: totals.paid, totalCarryForward: totals.carry, closedAt: new Date(), closedByAdminId: options.actorId ?? null, generatedReportUrl: `/api/payout/reports/${report.id}/download` } });
-      await tx.payoutPeriod.upsert({ where: { type_month_quarter_year: { type: "quarterly", month: null, quarter: next.quarter, year: next.year } }, create: { type: "quarterly", quarter: next.quarter, year: next.year, startDate: getQuarterStartEnd(next.year, next.quarter).start, endDate: getQuarterStartEnd(next.year, next.quarter).end }, update: {} });
+      await tx.payoutPeriod.upsert({ where: { type_month_quarter_year: { type: "quarterly", month: 0, quarter: next.quarter, year: next.year } }, create: { type: "quarterly", month: 0, quarter: next.quarter, year: next.year, startDate: getQuarterStartEnd(next.year, next.quarter).start, endDate: getQuarterStartEnd(next.year, next.quarter).end }, update: {} });
       return updated;
     });
   } catch (error) {
