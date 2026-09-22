@@ -8,8 +8,9 @@ const scripts = packageJson.scripts ?? {};
 const build = scripts.build ?? "";
 
 assert.match(build, /prisma generate/);
-assert.match(build, /tsx scripts\/deploy-production-migrations\.ts/, "Hostinger builds must apply guarded production migrations before Next.js prerendering.");
+assert.doesNotMatch(build, /deploy-production-migrations/, "Routine application builds must work with the restricted runtime database credential.");
 assert.doesNotMatch(build, /db\s+push|accept-data-loss|migrate\s+(dev|reset)/i);
+assert.match(scripts["build:release"] ?? "", /tsx scripts\/deploy-production-migrations\.ts/, "Controlled release builds must deploy guarded migrations before Next.js prerendering.");
 assert.equal(scripts["db:migrate:deploy"], "tsx scripts/deploy-production-migrations.ts");
 assert.equal(scripts["deploy:release"], "tsx scripts/deploy-production-migrations.ts");
 assert.equal(scripts["db:push"], undefined, "Unsafe db:push shortcut must not be present.");

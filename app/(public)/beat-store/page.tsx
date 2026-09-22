@@ -2,6 +2,8 @@ import { BeatStoreExperience } from "@/components/beat-store-experience";
 import { listAllBeats, listProducerProfiles } from "@/lib/db";
 import type { Metadata } from "next";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "License Beats from HYMN Producers | HYMN Beat Store",
   description: "Preview, compare rights, and license curated beats from HYMN producers.",

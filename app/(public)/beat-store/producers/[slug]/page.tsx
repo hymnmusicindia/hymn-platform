@@ -4,6 +4,8 @@ import { findProducerBySlug } from "@/lib/beat-store";
 import { listAllBeats, listProducerProfiles } from "@/lib/db";
 import { ProducerBeatGrid } from "@/components/producer-beat-grid";
 
+export const dynamic = "force-dynamic";
+
 export default async function ProducerProfilePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const beats = await listAllBeats();
