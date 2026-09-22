@@ -20,7 +20,7 @@ HYMN now refuses production startup and migration deployment unless the canonica
 Use separate Neon credentials:
 
 - `DATABASE_URL`: a restricted runtime role with `CONNECT`, schema `USAGE`, table `SELECT/INSERT/UPDATE/DELETE`, and sequence `USAGE/SELECT`; it must not own the database/schema and must not have `CREATE` or DDL privileges.
-- `MIGRATION_DATABASE_URL`: the Neon owner credential, available only to the explicit migration command and never to the running web process when the hosting platform supports build-only variables. The runner also recognizes provider-supplied `DIRECT_URL`, `DATABASE_URL_UNPOOLED`, and `POSTGRES_URL_NON_POOLING` aliases. It deliberately refuses to fall back to the restricted `DATABASE_URL`.
+- `MIGRATION_DATABASE_URL`: the Neon owner credential, available only to the explicit migration command and never to the running web process when the hosting platform supports build-only variables. The runner also recognizes provider-supplied `DIRECT_URL`, `DATABASE_URL_UNPOOLED`, and `POSTGRES_URL_NON_POOLING` aliases. As a Hostinger compatibility fallback, it may use `DATABASE_URL` only after PostgreSQL confirms that the connected role owns the migration ledger and every public table and can create schema objects; restricted credentials are rejected.
 
 Revoke schema creation from the runtime role and `PUBLIC`. Configure owner default privileges so new migration-created tables and sequences remain usable by the runtime role. Rotate both credentials after any accidental exposure. The guarded `npm start` and `npm run db:migrate:deploy` commands validate database identity without printing credentials.
 
