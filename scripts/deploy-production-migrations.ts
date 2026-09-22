@@ -6,7 +6,15 @@ import { assertDireNoteSchemaReady } from "../lib/direnote-schema-readiness";
 
 async function main() {
   if (process.env.CONFIRM_EMPTY_DATABASE_BASELINE === "yes") throw new Error("Fresh-baseline confirmation must never be enabled during production migration deployment.");
-  if (process.env.MIGRATION_DATABASE_URL?.trim()) process.env.DATABASE_URL = process.env.MIGRATION_DATABASE_URL.trim();
+  const migrationCredential = [
+    ["MIGRATION_DATABASE_URL", process.env.MIGRATION_DATABASE_URL],
+    ["DIRECT_URL", process.env.DIRECT_URL],
+    ["DATABASE_URL_UNPOOLED", process.env.DATABASE_URL_UNPOOLED],
+    ["POSTGRES_URL_NON_POOLING", process.env.POSTGRES_URL_NON_POOLING]
+  ].find(([, value]) => value?.trim());
+  if (!migrationCredential) throw new Error("Production migration credential is missing. Set MIGRATION_DATABASE_URL to the canonical Neon owner connection URL; DATABASE_URL must remain the restricted runtime credential.");
+  process.env.DATABASE_URL = migrationCredential[1]!.trim();
+  console.log(`Using the protected ${migrationCredential[0]} credential for migration deployment.`);
   const identity = await assertProductionDatabaseReady(undefined, { enforceRestrictedRole: false });
   console.log(`Database preflight passed for ${identity.database} on the configured host; required schema is present.`);
   const prismaCli = path.join(process.cwd(), "node_modules", "prisma", "build", "index.js");

@@ -20,6 +20,12 @@ const deploymentScript = readFileSync(path.join(root, "scripts", "deploy-product
 const startupScript = readFileSync(path.join(root, "scripts", "start-production.ts"), "utf8");
 const databaseSafety = readFileSync(path.join(root, "lib", "production-database-safety.ts"), "utf8");
 assert.match(deploymentScript, /assertProductionDatabaseReady/);
+assert.match(deploymentScript, /MIGRATION_DATABASE_URL/);
+assert.match(deploymentScript, /DIRECT_URL/);
+assert.match(deploymentScript, /DATABASE_URL_UNPOOLED/);
+assert.match(deploymentScript, /POSTGRES_URL_NON_POOLING/);
+assert.match(deploymentScript, /migration credential is missing/i);
+assert.doesNotMatch(deploymentScript, /process\.env\.DATABASE_URL = process\.env\.DATABASE_URL/, "Migration deployment must not silently reuse the restricted runtime credential.");
 assert.match(startupScript, /assertProductionDatabaseReady/);
 assert.match(startupScript, /assertDireNoteSchemaReady/);
 assert.match(deploymentScript, /assertDireNoteSchemaReady/);
