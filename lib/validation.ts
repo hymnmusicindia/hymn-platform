@@ -50,7 +50,7 @@ export const producerApplicationReviewSchema = z.object({
 });
 
 export const userRoleUpdateSchema = z.object({
-  role: z.enum(["customer", "producer", "admin"])
+  role: z.enum(["customer", "producer"])
 });
 
 const spotifyArtistUrlPattern = /^(?:https?:\/\/)?open\.spotify\.com\/artist\/[A-Za-z0-9]+(?:[/?#].*)?$|^spotify:artist:[A-Za-z0-9]+$/i;

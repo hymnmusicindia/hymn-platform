@@ -2615,46 +2615,36 @@ html[data-theme="light"] .store-platform-option img[alt="Apple Music"] {
 
 /* Simplified customer and producer dashboard overview */
 .workspace-switcher {
-  display: flex;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   align-items: center;
-  gap: 0;
-  overflow: hidden;
+  gap: 0.2rem;
+  padding: 0.2rem;
   border: 1px solid var(--border);
-  border-radius: 0.8rem;
-  background: var(--card);
+  border-radius: 0.9rem;
+  background: var(--bg-soft);
 }
 
-.workspace-switcher-current {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.55rem 0.8rem;
-  color: var(--text);
-}
-
-.workspace-switcher-current > svg { width: 1rem; height: 1rem; color: var(--text-muted); }
-.workspace-switcher-current > span { display: grid; line-height: 1.15; }
-.workspace-switcher-current small { color: var(--text-soft); font-size: 0.56rem; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; }
-.workspace-switcher-current strong { margin-top: 0.18rem; font-size: 0.76rem; font-weight: 700; }
-
-.workspace-switcher-action {
+.workspace-switcher-option {
   display: inline-flex;
-  min-height: 3.25rem;
+  min-height: 2.65rem;
+  min-width: 5.5rem;
   align-items: center;
-  gap: 0.5rem;
-  border-left: 1px solid var(--border);
-  padding: 0.55rem 0.8rem;
+  justify-content: center;
+  gap: 0.42rem;
+  border-radius: 0.68rem;
+  padding: 0.5rem 0.65rem;
   color: var(--text-muted);
   font-size: 0.75rem;
-  font-weight: 650;
-  transition: background 160ms ease, color 160ms ease;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
 }
-
-.workspace-switcher-action:hover { background: var(--bg-soft); color: var(--text); }
-.workspace-switcher-action:focus-visible { outline: 2px solid var(--text); outline-offset: -3px; }
-.workspace-switcher-action:disabled { cursor: wait; opacity: 0.58; }
-.workspace-switcher-action svg { width: 0.9rem; height: 0.9rem; transition: transform 160ms ease; }
-.workspace-switcher-action:hover svg { transform: translateX(2px); }
+.workspace-switcher-option svg { width: 0.95rem; height: 0.95rem; flex: 0 0 auto; }
+.workspace-switcher-option:hover { color: var(--text); background: var(--card); }
+.workspace-switcher-option:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.workspace-switcher-option.is-active { color: var(--text); background: var(--card); box-shadow: 0 1px 8px rgba(0,0,0,.16); }
 
 .creator-home {
   display: grid;
@@ -2966,8 +2956,8 @@ html[data-theme="light"] .store-platform-option img[alt="Apple Music"] {
   .creator-workspace-summary dl { grid-template-columns: 1fr; }
   .creator-workspace-summary dl > div { padding: 0.85rem 0; }
   .creator-workspace-summary dl > div + div { border-top: 1px solid var(--border); border-left: 0; padding-left: 0; }
-  .workspace-switcher-current small { display: none; }
-  .workspace-switcher-current strong { margin-top: 0; }
+  .workspace-switcher { width: 100%; }
+  .workspace-switcher-option { min-width: 0; }
 }
 
 @media (max-width: 480px) {
@@ -2982,8 +2972,7 @@ html[data-theme="light"] .store-platform-option img[alt="Apple Music"] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .workspace-switcher-action,
-  .workspace-switcher-action svg { transition: none; }
+  .workspace-switcher-option { transition: none; }
 }
 
 /* Product UI baseline: calm, consistent surfaces for operational interfaces. */

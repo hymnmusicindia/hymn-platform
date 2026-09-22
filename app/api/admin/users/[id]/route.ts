@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { requireRecentAdminPermission } from "@/lib/access";
+import { requireAdminPermission } from "@/lib/access";
 import { createNotification, updateUserRole } from "@/lib/db";
 import { userRoleUpdateSchema } from "@/lib/validation";
 import { prisma } from "@/lib/prisma";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const result = await requireRecentAdminPermission("users.manage");
+  const result = await requireAdminPermission("users.manage");
   if ("error" in result) return result.error;
 
   const { id } = await params;
@@ -33,6 +33,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ user: { ...updated, role: updated.role.toLowerCase(), status: updated.status.toLowerCase(), avatarUrl: updated.avatar, createdAt: updated.createdAt.toISOString(), statusChangedAt: updated.statusChangedAt?.toISOString(), deletionScheduledAt: updated.deletionScheduledAt?.toISOString(), appealRequestedAt: updated.appealRequestedAt?.toISOString() } });
     }
     const payload = userRoleUpdateSchema.parse(body);
+    const activeAdminMembership = await prisma.adminMembership.findFirst({ where: { userId: Number(id), active: true, revokedAt: null }, select: { id: true } });
+    if (activeAdminMembership) return NextResponse.json({ error: "Remove this user's administrator membership before assigning an Artist or Producer workspace." }, { status: 409 });
     const user = await updateUserRole(Number(id), payload.role);
     if (!user) return NextResponse.json({ error: "User not found." }, { status: 404 });
     if (payload.role === "producer") {

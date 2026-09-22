@@ -3,7 +3,7 @@ import { requireAdminPermission } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  const admin = await requireAdminPermission("system.manage");
+  const admin = await requireAdminPermission("users.read");
   if ("error" in admin) return admin.error;
   const [roles, memberships, admins] = await Promise.all([
     prisma.adminRole.findMany({ include: { permissions: { include: { permission: true } }, _count: { select: { memberships: true } } }, orderBy: { name: "asc" } }),

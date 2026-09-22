@@ -284,7 +284,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
       searchValue={dashboardSearch}
       onSearchChange={setDashboardSearch}
       searchPlaceholder={activeTab === "catalog" ? "Search beats, genre, mood, BPM..." : activeTab === "licensing" || activeTab === "sales" ? "Search buyers, orders, licenses..." : "Search catalog and sales..."}
-      workspaceAction={<WorkspaceSwitcher current="producer" />}
+      workspaceAction={<WorkspaceSwitcher current="producer" available={user.role === "admin" ? ["customer", "producer", "admin"] : ["customer", "producer"]} />}
       onNotificationsClick={() => setActiveTab("messages")}
       notificationCount={producerNotifications.filter((notification) => !notification.readAt).length}
       compactOverview

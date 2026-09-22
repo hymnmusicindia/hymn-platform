@@ -8,13 +8,14 @@ import { AdminContentManager } from "@/components/admin-content-manager";
 import { AdminReviewManager } from "@/components/admin-review-manager";
 import { AdminTimedPlaylistManager } from "@/components/admin-timed-playlist-manager";
 import { AdminActivityAndLogs } from "@/components/admin-activity-and-logs";
-import { AdminUserBenefits } from "@/components/admin-user-benefits";
+import { AdminUserManagement } from "@/components/admin-user-management";
 import { AdminTeamAccessManager } from "@/components/admin-team-access-manager";
 import { DashboardFrame } from "@/components/dashboard-frame";
+import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { DireNoteDiagnostics } from "@/components/direnote-diagnostics";
 import type { AdminPayoutRequest } from "@/lib/payout";
 import type { AdminPermissionKey } from "@/lib/access";
-import type { AdminStoreStatus, ArtistProfile, Beat, DistributionOrder, Notification, Order, PartnershipLead, ProducerApplication, ProducerProfile, Release, SiteSettings, StoreStatus, StoreStatusHistoryEntry, SupportTicket, User, UserRole } from "@/lib/types";
+import type { AdminStoreStatus, ArtistProfile, Beat, DistributionOrder, Notification, Order, PartnershipLead, ProducerApplication, ProducerProfile, Release, SiteSettings, StoreStatus, StoreStatusHistoryEntry, SupportTicket, User } from "@/lib/types";
 
 type PersistedAdminTask = { id: number; type: string; priority: string; title: string; body: string; href: string; status: string; createdAt: string };
 const REVIEW_QUEUE_STATUSES = ["submitted", "in_queue", "under_review", "changes_requested", "approved", "failed"] as const;
@@ -591,9 +592,6 @@ export function AdminControlCenter({
   const [queueSearch, setQueueSearch] = useState("");
   const [queueStatus, setQueueStatus] = useState("all");
   const [queueType, setQueueType] = useState("all");
-  const [userSearch, setUserSearch] = useState("");
-  const [userRoleFilter, setUserRoleFilter] = useState("all");
-  const [userActivityFilter, setUserActivityFilter] = useState("all");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
   const [paymentPlanFilter, setPaymentPlanFilter] = useState("all");
   const [paymentPeriodFilter, setPaymentPeriodFilter] = useState("all");
@@ -772,17 +770,6 @@ export function AdminControlCenter({
     });
     return stamps;
   }, [initialOrders, releases]);
-  const filteredUsers = useMemo(() => {
-    const query = userSearch.trim().toLowerCase();
-    const recentCutoff = Date.now() - 30 * 86_400_000;
-    return users.filter((user) => {
-      const activity = latestUserActivity.get(user.id);
-      const matchesSearch = !query || `${user.name} ${user.email} ${user.id}`.toLowerCase().includes(query);
-      const matchesRole = userRoleFilter === "all" || user.role === userRoleFilter;
-      const matchesActivity = userActivityFilter === "all" || (userActivityFilter === "recent" ? Boolean(activity && new Date(activity).getTime() >= recentCutoff) : !activity || new Date(activity).getTime() < recentCutoff);
-      return matchesSearch && matchesRole && matchesActivity;
-    });
-  }, [latestUserActivity, userActivityFilter, userRoleFilter, userSearch, users]);
   const filteredDistributionPayments = useMemo(() => {
     const periodDays = paymentPeriodFilter === "7d" ? 7 : paymentPeriodFilter === "30d" ? 30 : 0;
     const cutoff = periodDays ? Date.now() - periodDays * 86_400_000 : 0;
@@ -952,23 +939,6 @@ export function AdminControlCenter({
     });
   }
 
-  function updateRole(user: User, role: UserRole) {
-    startTransition(async () => {
-      const response = await fetch(`/api/admin/users/${user.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role })
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setFeedback(data.error || "Could not update user role.");
-        return;
-      }
-      setUsers((items) => items.map((item) => (item.id === user.id ? data.user : item)));
-      setFeedback(`Role updated for ${data.user.name}`);
-    });
-  }
-
   function updateProducerProfile(producerId: number, form: HTMLFormElement) {
     startTransition(async () => {
       const response = await fetch(`/api/admin/producers/${producerId}/profile`, { method: "PATCH", body: new FormData(form) });
@@ -982,17 +952,13 @@ export function AdminControlCenter({
     });
   }
 
-  function updateAccountStatus(user: User, accountStatus: NonNullable<User["status"]>) {
-    const destructive = accountStatus === "deletion_scheduled";
-    const reason = accountStatus === "active" ? "Review completed; account is in good standing." : window.prompt(destructive ? "Reason for scheduling deletion in 20 days (the user can appeal):" : `Reason for marking this account ${accountStatus.replaceAll("_", " ")}:`, user.statusReason || "");
-    if (reason == null || (accountStatus !== "active" && reason.trim().length < 3)) return;
-    if (destructive && !window.confirm(`Schedule account #${user.id} for deletion in 20 days? Access will be suspended immediately and the user may appeal.`)) return;
+  function updateWorkspaceRole(user: User, role: "customer" | "producer") {
     startTransition(async () => {
-      const response = await fetch(`/api/admin/users/${user.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accountStatus, reason }) });
+      const response = await fetch(`/api/admin/users/${user.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role }) });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) return setFeedback(data.error || "Could not update account status.");
-      setUsers((items) => items.map((item) => item.id === user.id ? { ...item, ...data.user } : item));
-      setFeedback(accountStatus === "active" ? `${user.name}'s account is back in good standing.` : `${user.name}'s account is now ${accountStatus.replaceAll("_", " ")}.`);
+      if (!response.ok) return setFeedback(data.error || "Could not update workspace access.");
+      setUsers((items) => items.map((item) => item.id === user.id ? data.user : item));
+      setFeedback(`${data.user.name} now has ${role === "producer" ? "Producer" : "Artist"} workspace access.`);
     });
   }
 
@@ -1139,7 +1105,7 @@ export function AdminControlCenter({
         { key: "reviews", label: "Reviews", description: "Moderate customer feedback", group: "Marketplace" },
         { key: "contracts", label: "Contracts", description: "Agreements and splits", group: "Support / Legal" },
         { key: "support", label: "Support Tickets", description: "Inbound help", group: "Support / Legal" },
-        { key: "users", label: "Users", description: "Role management", group: "Platform" },
+        ...(hasPermission("users.read") ? [{ key: "users", label: "Users", description: "Role management", group: "Platform" }] : []),
         { key: "team", label: "Team", description: "Staff operations", group: "Platform" },
         { key: "activity", label: "Activity and Logs", description: "Active admins and session history", group: "Platform" },
         { key: "integrations", label: "Integrations", description: "Provider configuration", group: "Platform", href: "/admin?tab=settings" },
@@ -1160,6 +1126,7 @@ export function AdminControlCenter({
           <button type="button" onClick={() => selectAdminTab("royalties")} className="btn-outline pressable px-4 py-2 text-sm">Manage Payouts</button>
         </>
       }
+      workspaceAction={<WorkspaceSwitcher current="admin" available={["customer", "producer", "admin"]} />}
     >
       <AdminActivityAndLogs currentPage={activeTab} visible={activeTab === "activity"} />
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div><span style={{ color: "var(--text-muted)" }}>Signed in as </span><strong>{currentAdmin.name}</strong><span style={{ color: "var(--text-muted)" }}> · Admin role: </span><strong className="capitalize">{adminAccess.role.replace(/_/g, " ")}</strong></div><span className="status-pill">{adminAccess.permissions.length} permissions</span></div>
@@ -1403,39 +1370,7 @@ export function AdminControlCenter({
       ) : null}
 
       {activeTab === "users" ? (
-        <SurfaceSection title="Users" description="Review email, release counts, activity, and role assignments.">
-          <div className="mb-5 grid gap-3 border-b pb-5 md:grid-cols-[minmax(0,1fr),180px,180px]" style={{ borderColor: "var(--border)" }}>
-            <input className="field" value={userSearch} onChange={(event) => setUserSearch(event.target.value)} placeholder="Search by name, email, or user ID" aria-label="Search users" />
-            <select className="field" value={userRoleFilter} onChange={(event) => setUserRoleFilter(event.target.value)} aria-label="Filter users by role"><option value="all">All roles</option><option value="customer">Artists</option><option value="producer">Producers</option><option value="admin">Admins</option></select>
-            <select className="field" value={userActivityFilter} onChange={(event) => setUserActivityFilter(event.target.value)} aria-label="Filter users by activity"><option value="all">Any activity</option><option value="recent">Active in 30 days</option><option value="inactive">Inactive 30+ days</option></select>
-          </div>
-          <div className="grid gap-4">
-            {filteredUsers.map((user) => (
-              <article key={user.id} className="surface-list-item p-4">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                   <div className="flex min-w-0 items-start gap-3">
-                     <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-semibold" style={{ background: "var(--bg-soft)", color: "var(--text)" }}>{user.avatarUrl ? <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : user.name.slice(0, 1).toUpperCase()}</span>
-                      <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-semibold" style={{ color: "var(--text)" }}>{user.name}</p><AccountStatusBadge status={user.status} /></div>
-                     <p className="mt-1 truncate text-sm" style={{ color: "var(--text-soft)" }}>{user.email}</p>
-                    <div className="mt-3 flex flex-wrap gap-3 text-xs" style={{ color: "var(--text-muted)" }}>
-                      <span>{releaseCountByUser.get(user.id) ?? 0} releases</span>
-                      <span>{latestUserActivity.get(user.id) ? new Date(latestUserActivity.get(user.id) as string).toLocaleDateString() : "No activity yet"}</span>
-                     </div>
-                     </div>
-                  </div>
-                   <div className="grid gap-2 sm:grid-cols-3">
-                    {(["customer", "producer", "admin"] as UserRole[]).map((role) => (
-                      <button key={role} type="button" onClick={() => updateRole(user, role)} className={user.role === role ? "btn-primary pressable" : "btn-outline pressable"}>{role}</button>
-                    ))}
-                   </div>
-                  </div>
-                  <div className="mt-4 grid gap-3 border-t pt-4 md:grid-cols-[minmax(0,1fr),auto]" style={{ borderColor: "var(--border)" }}><div><p className="text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Account safety</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{user.statusReason || "No restrictions or review flags."}{user.deletionScheduledAt ? ` Scheduled cleanup: ${new Date(user.deletionScheduledAt).toLocaleDateString("en-IN")}.` : ""}{user.appealRequestedAt ? ` Appeal received ${new Date(user.appealRequestedAt).toLocaleDateString("en-IN")}.` : ""}</p></div><select className="field min-w-52" value={user.status || "active"} disabled={isPending || !hasPermission("users.manage")} onChange={(event) => updateAccountStatus(user, event.target.value as NonNullable<User["status"]>)} aria-label={`Change account status for ${user.name}`}><option value="active">✓ Good standing</option><option value="paused">⚠ Account paused</option><option value="under_review">⚠ Flagged for review</option><option value="suspended">⚠ Suspended</option><option value="deletion_scheduled">⚠ Schedule deletion (20 days)</option><option value="banned">× Permanently banned</option></select></div>
-                  <AdminUserBenefits user={user} onCreditChange={(balance) => setUsers((items) => items.map((item) => item.id === user.id ? { ...item, referralCredits: balance } : item))} />
-               </article>
-            ))}
-            {filteredUsers.length === 0 ? <EmptyState copy="No users match the selected search and filters." /> : null}
-          </div>
-        </SurfaceSection>
+        <AdminUserManagement initialUsers={users} releaseCounts={Object.fromEntries(releaseCountByUser)} latestActivity={Object.fromEntries(latestUserActivity)} permissions={adminAccess.permissions} onUserChange={(updated) => setUsers((items) => items.map((item) => item.id === updated.id ? { ...item, ...updated } : item))} />
       ) : null}
 
       {activeTab === "earnings-entry" ? <AdminEarningsEntry users={users} releases={releases} /> : null}
@@ -1650,7 +1585,7 @@ export function AdminControlCenter({
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Approved producers" value={producerManagement.length} detail="Accounts with producer access" /><StatCard label="Published inventory" value={publishedBeats} detail={`${pendingBeatReviews} awaiting review`} /><StatCard label="Verified gross sales" value={formatMoney(producerManagement.reduce((sum, producer) => sum + producer.grossRevenue, 0))} /><StatCard label="Producer earnings" value={formatMoney(producerManagement.reduce((sum, producer) => sum + producer.producerEarnings, 0))} detail="Contractual 70% share" /></section>
         <SurfaceSection title="Producer operations" description="Live creator accounts, storefront readiness, catalogue health, verified sales, and payout exposure.">
           <div className="grid gap-5 xl:grid-cols-2">
-            {producerManagement.filter((producer) => searchMatch(producer.name, producer.email, producer.status, producer.profile?.displayName)).map((producer) => <ProducerManagementCard key={producer.id} producer={producer} pending={isPending} canManage={hasPermission("users.manage")} onOpenCatalogue={() => { setProducerBeatFilter(producer.id); setBeatStatusFilter("all"); selectAdminTab("operations"); }} onOpenLedger={() => selectAdminTab("royalties")} onSave={updateProducerProfile} onRevoke={() => { const linked = users.find((user) => user.id === producer.id); if (linked && window.confirm(`Revoke producer access for ${producer.name}? Their storefront will be disabled.`)) updateRole(linked, "customer"); }} />)}
+            {producerManagement.filter((producer) => searchMatch(producer.name, producer.email, producer.status, producer.profile?.displayName)).map((producer) => <ProducerManagementCard key={producer.id} producer={producer} pending={isPending} canManage={hasPermission("users.manage")} onOpenCatalogue={() => { setProducerBeatFilter(producer.id); setBeatStatusFilter("all"); selectAdminTab("operations"); }} onOpenLedger={() => selectAdminTab("royalties")} onSave={updateProducerProfile} onRevoke={() => { const linked = users.find((user) => user.id === producer.id); if (linked && window.confirm(`Revoke producer access for ${producer.name}? Their storefront will be disabled.`)) updateWorkspaceRole(linked, "customer"); }} />)}
             {producerManagement.length === 0 ? <EmptyState copy="No producers found. Grant producer access from Admin Portal → Users." /> : null}
           </div>
         </SurfaceSection>

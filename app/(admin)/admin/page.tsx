@@ -73,13 +73,15 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   if (!currentAdmin) redirect("/admin/login");
   const adminAccess = await getAdminAccessForPage();
+  const canReadUsers = Boolean(adminAccess?.permissions.includes("users.read"));
 
   const resolvedSearchParams = await searchParams;
-  const [users, releases, beats] = await Promise.all([listUsers(), listAllDetailedReleases(), listAllBeats()]);
+  const [users, releases, beats] = await Promise.all([canReadUsers ? listUsers() : Promise.resolve([]), listAllDetailedReleases(), listAllBeats()]);
   const [orders, applications, leads] = await Promise.all([listAllOrders(), listProducerApplications(), listPartnershipLeads()]);
   const [distributionOrders, artistProfiles, producerProfiles] = await Promise.all([listAllDistributionOrders(), listAllArtistProfiles(), listProducerProfiles()]);
   const [siteSettings, notifications, supportTickets] = await Promise.all([getSiteSettings(), listLatestNotifications(50), listAllSupportTickets()]);
-  const requestedTab = resolvedSearchParams?.tab && ADMIN_TABS.includes(resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) ? (resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) : undefined;
+  const requestedTabCandidate = resolvedSearchParams?.tab && ADMIN_TABS.includes(resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) ? (resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) : undefined;
+  const requestedTab = requestedTabCandidate === "users" && !canReadUsers ? "overview" : requestedTabCandidate;
 
   return (
     <main className="admin-panel-shell py-6 sm:py-8">

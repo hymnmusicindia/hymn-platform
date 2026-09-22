@@ -361,7 +361,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
           <Link href="/beat-store" className="btn-outline pressable px-4 py-2 text-sm">Buy Beats</Link>
         </>
       }
-      workspaceAction={user.role === "producer" ? <WorkspaceSwitcher current="customer" /> : undefined}
+      workspaceAction={user.role === "producer" ? <WorkspaceSwitcher current="customer" available={["customer", "producer"]} /> : user.role === "admin" ? <WorkspaceSwitcher current="customer" available={["customer", "producer", "admin"]} /> : undefined}
     >
       <FirstLoginReferralPrompt />
       <AccountRestrictionNotice user={user} />
