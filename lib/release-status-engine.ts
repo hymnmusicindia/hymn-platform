@@ -24,13 +24,14 @@ const allowedTransitions: Partial<Record<ReleaseStatus, ReleaseStatus[]>> = {
 
 export function transitionReleaseStatus(input: { currentStatus: ReleaseStatus; nextStatus: ReleaseStatus; manualOverride?: boolean; reason?: string }) {
   if (input.currentStatus === input.nextStatus) return input.nextStatus;
-  if (input.manualOverride || ["queued_for_distribution", "submitting_to_distributor", "sent_to_distributor", "sent"].includes(input.nextStatus)) {
-    if (input.manualOverride && !input.reason?.trim() && !["queued_for_distribution", "submitting_to_distributor", "sent_to_distributor", "sent", "approved"].includes(input.nextStatus)) {
+  if (input.manualOverride) {
+    if (!input.reason?.trim()) {
       throw new Error("Manual release status override requires a reason.");
     }
     return input.nextStatus;
   }
   if (["changes_requested", "rejected", "failed", "delivery_failed", "takedown_requested", "takedown_processing", "taken_down", "archived"].includes(input.nextStatus) && !input.reason?.trim()) throw new Error(`${input.nextStatus} requires a reason.`);
+  if (input.nextStatus === "takedown_requested" && ["scheduled", "awaiting_live_confirmation", "sent_to_distributor", "distributor_processing"].includes(input.currentStatus)) return input.nextStatus;
   if (!allowedTransitions[input.currentStatus]?.includes(input.nextStatus)) throw new Error(`Release cannot move from ${input.currentStatus} to ${input.nextStatus}.`);
   return input.nextStatus;
 }

@@ -1,21 +1,32 @@
 import { Release, ReleaseStatus } from "@/lib/types";
 
-export type ReleasePortalStage = "draft" | "review" | "changes_requested" | "scheduled" | "processing" | "partially_live" | "released" | "rejected";
+export type ReleasePortalStage = "draft" | "review" | "changes_requested" | "scheduled" | "processing" | "partially_live" | "released" | "rejected" | "queued" | "sending" | "partner_received" | "payment_required" | "delivery_issue" | "takedown_pending" | "taken_down" | "archived" | "unknown";
 
 export function getReleasePortalStage(release: Release): ReleasePortalStage {
   const s = release.status.toLowerCase();
   if (s === "draft") return "draft";
   if (s === "rejected") return "rejected";
   if (s === "changes_requested" || s === "distributor_changes_required") return "changes_requested";
+  if (s === "awaiting_payment") return "payment_required";
+  if (s === "approved" || s === "queued_for_distribution") return "queued";
+  if (s === "submitting_to_distributor") return "sending";
+  if (s === "sent" || s === "sent_to_distributor") return "partner_received";
+  if (s === "distributor_processing" || s === "processing") return "processing";
+  if (s === "failed" || s === "delivery_failed") return "delivery_issue";
+  if (s === "takedown_requested" || s === "takedown_processing") return "takedown_pending";
+  if (s === "taken_down") return "taken_down";
+  if (s === "archived") return "archived";
   if (["under_review", "submitted", "in_queue", "in_qc_queue", "approved", "queued_for_distribution", "submitting_to_distributor", "sent", "sent_to_distributor", "distributor_processing", "processing"].includes(s)) return "review";
   if (s === "awaiting_live_confirmation" || s === "delivered") return "processing";
   if (s === "partially_live") return "partially_live";
   if (s === "scheduled") return "scheduled";
   if (s === "live" || s === "released") return "released";
-  return "scheduled";
+  return "unknown";
 }
 
 export function getReleasePortalStageLabel(stage: ReleasePortalStage) {
+  const operational: Partial<Record<ReleasePortalStage, string>> = { queued: "Queued for Distribution", sending: "Sending to Partner", partner_received: "Received by Partner", payment_required: "Payment Required", delivery_issue: "Delivery Needs Attention", takedown_pending: "Takedown Pending", taken_down: "Taken Down", archived: "Archived", unknown: "Status Pending" };
+  if (operational[stage]) return operational[stage]!;
   if (stage === "scheduled") return "Scheduled";
   if (stage === "released") return "Released";
   if (stage === "rejected") return "Rejected";
@@ -45,7 +56,9 @@ export function isReleaseUnfinished(release: Release) {
 
 export function getReleasePortalDateLabel(release: Release) {
   const source = release.releaseDate || release.createdAt;
-  const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(source));
+  const parsed = new Date(source);
+  if (Number.isNaN(parsed.getTime())) return "Date pending";
+  const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(parsed);
   return isTentativeQuickRelease(release) ? `${date} · Tentative` : date;
 }
 

@@ -1,5 +1,8 @@
 import { z } from "zod";
 import { getContentIdEligibility } from "@/lib/content-id-eligibility";
+import { normalizeReleaseText, safeReleaseText, parseReleaseDate, validIsrc, validReleaseBarcode } from "@/lib/release-input-rules";
+
+const releaseText = z.string().transform(normalizeReleaseText).pipe(z.string().min(1).max(300).refine(safeReleaseText, "Use plain text without control characters or HTML."));
 
 export const googleAuthSchema = z.object({
   credential: z.string().min(1),
@@ -170,7 +173,7 @@ const contributorSchema = z.object({
 });
 
 export const distributionTrackSchema = z.object({
-  trackTitle: z.string().trim().min(1, "Enter a title for every track.").refine(
+  trackTitle: z.string().trim().min(1, "Enter a title for every track.").max(300).refine(safeReleaseText, "Use plain text without control characters or HTML.").refine(
     (value) => !/^(?:track\s*\d+|untitled(?:\s+(?:track|single|release))?)$/i.test(value),
     "Replace the placeholder with the actual track title.",
   ),
@@ -178,14 +181,14 @@ export const distributionTrackSchema = z.object({
   language: z.string().trim().optional(),
   lyrics: z.string().optional(),
   trackNumber: z.number().int().min(1),
-  primaryArtist: z.string().min(1),
+  primaryArtist: releaseText,
   featuredArtists: z.string().optional(),
   additionalPrimaryArtists: z.string().optional(),
   songwriters: z.string().min(1),
   composers: z.string().min(1),
   producers: z.string().min(1),
   contributors: z.array(contributorSchema).optional(),
-  isrc: z.string().optional(),
+  isrc: z.string().trim().toUpperCase().refine(value => !value || validIsrc(value), "Enter a 12-character ISRC without spaces or hyphens.").optional(),
   isCover: z.boolean(),
   originalArtist: z.string().optional(),
   originalTrackLink: z.string().optional(),
@@ -212,18 +215,18 @@ const distributionMetadataBaseSchema = z.object({
   sunoReceiptUrl: z.string().trim().optional(),
   sunoLink: z.string().trim().optional(),
   licenseReceiptUrl: z.string().trim().optional(),
-  artistName: z.string().min(1),
-  releaseTitle: z.string().optional(),
+  artistName: releaseText,
+  releaseTitle: releaseText.optional(),
   releaseType: z.enum(["single", "ep", "album"]),
-  releaseDate: z.string().min(1),
-  originalReleaseDate: z.string().optional(),
+  releaseDate: z.string().refine(value => Boolean(parseReleaseDate(value)), "Enter a valid release date (YYYY-MM-DD)."),
+  originalReleaseDate: z.string().refine(value => !value || Boolean(parseReleaseDate(value)), "Enter a valid original release date.").optional(),
   recordLabelName: z.string().min(1),
   primaryGenre: z.string().min(1),
   secondaryGenre: z.string().min(1),
   language: z.string().min(1),
   mood: z.string().trim().optional(),
   territory: z.string().min(1),
-  upcCode: z.string().nullable().optional(),
+  upcCode: z.string().trim().refine(value => !value || validReleaseBarcode(value), "Enter a valid UPC/EAN with its check digit.").nullable().optional(),
   releasePreviouslyReleased: z.boolean().optional(),
   releaseTiming: z.string().min(1),
   platforms: z.array(z.string()).min(1),
@@ -249,10 +252,22 @@ const distributionMetadataBaseSchema = z.object({
   artworkFileKey: z.string().min(1),
   existingArtworkUrl: z.string().optional(),
   uploadedArtworkUrl: z.string().optional(),
-  tracks: z.array(distributionTrackSchema).min(1)
+  tracks: z.array(distributionTrackSchema).min(1).max(100)
 });
 
 function validateContentIdOwnership(value: z.infer<typeof distributionMetadataBaseSchema>, context: z.RefinementCtx) {
+  const add = (path: (string | number)[], message: string) => context.addIssue({ code: z.ZodIssueCode.custom, path, message });
+  if (value.releaseType === "single" && value.tracks.length !== 1) add(["tracks"], "A Single must contain exactly one track.");
+  if (value.releaseType !== "single" && value.tracks.length < 2) add(["tracks"], "An EP or Album must contain at least two tracks.");
+  const numbers = new Set<number>();
+  const isrcs = new Set<string>();
+  value.tracks.forEach((track, index) => {
+    if (numbers.has(track.trackNumber) || track.trackNumber !== index + 1) add(["tracks", index, "trackNumber"], "Track numbering must be unique and sequential.");
+    numbers.add(track.trackNumber);
+    if (track.isrc && isrcs.has(track.isrc)) add(["tracks", index, "isrc"], "Each recording in this release needs a distinct ISRC.");
+    if (track.isrc) isrcs.add(track.isrc);
+    if (track.isCover && (!track.originalArtist?.trim() || !track.coverLicenseConfirmed)) add(["tracks", index, "coverLicenseConfirmed"], "Provide the original artist and confirm the cover licence.");
+  });
   if (value.youtubeContentIdEnabled && !getContentIdEligibility(value.contentType).eligible) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["youtubeContentIdEnabled"], message: "Content ID is available only for original or exclusively licensed content." });
   }

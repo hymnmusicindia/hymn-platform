@@ -78,7 +78,18 @@ function uploadPrivateAsset(file: File, assetType: PrivateUploadType, options: {
 }
 
 async function uploadPrivateAudio(file: File, options: { releaseId: number; trackId?: number; clientTrackId?: string; signal?: AbortSignal; onProgress?: (loaded: number, total: number) => void } ) {
-  const createResponse = await fetch("/api/uploads/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, signal: options.signal, body: JSON.stringify({ releaseId: options.releaseId, trackId: options.trackId, clientTrackId: options.clientTrackId, assetCategory: "TRACK_AUDIO_MASTER", originalFilename: file.name, mimeType: file.type, totalSize: file.size }) });
+  const configResponse = await fetch(`/api/uploads/sessions?releaseId=${options.releaseId}`, { signal: options.signal });
+  const configBody = await configResponse.json();
+  if (!configResponse.ok) throw new Error(configBody.error || "Could not prepare the upload.");
+  const chunkSize = Number(configBody.config?.chunkSize);
+  if (!Number.isSafeInteger(chunkSize) || chunkSize < 1) throw new Error("Upload configuration is unavailable.");
+  const chunkHashes: string[] = [];
+  for (let offset = 0; offset < file.size; offset += chunkSize) {
+    options.signal?.throwIfAborted();
+    const hash = await crypto.subtle.digest("SHA-256", await file.slice(offset, offset + chunkSize).arrayBuffer());
+    chunkHashes.push(Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, "0")).join(""));
+  }
+  const createResponse = await fetch("/api/uploads/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, signal: options.signal, body: JSON.stringify({ releaseId: options.releaseId, trackId: options.trackId, clientTrackId: options.clientTrackId, assetCategory: "TRACK_AUDIO_MASTER", originalFilename: file.name, mimeType: file.type, totalSize: file.size, chunkHashes }) });
   const created = await createResponse.json().catch(() => ({}));
   if (!createResponse.ok) throw new Error(created.error || "Could not start resumable upload.");
   const uploadId = String(created.session.id);
@@ -2493,8 +2504,11 @@ export function ReleaseForm({
   }
 
   async function verifyAndUpdateRelease(payload: any) {
+    const { distributionEditSchema } = await import("@/lib/validation");
+    const checked = distributionEditSchema.safeParse(payload);
+    if (!checked.success) throw new Error(checked.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`).join("\n"));
     const formData = new FormData();
-    formData.append("payload", JSON.stringify(payload));
+    formData.append("payload", JSON.stringify(checked.data));
     const response = await fetch("/api/distribution/update-release", {
       method: "POST",
       body: formData,
@@ -2592,9 +2606,12 @@ export function ReleaseForm({
     return await verifyAndUpdateRelease(payload);
   }
   async function verifyAndSubmitRelease(payload: any) {
+    const { distributionSubmitSchema } = await import("@/lib/validation");
+    const checked = distributionSubmitSchema.safeParse(payload);
+    if (!checked.success) throw new Error(checked.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`).join("\n"));
     setStatus("Verifying payment and submitting release...");
     const formData = new FormData();
-    formData.append("payload", JSON.stringify(payload));
+    formData.append("payload", JSON.stringify(checked.data));
     const response = await fetch("/api/distribution/payment/verify-submit", {
       method: "POST",
       body: formData,

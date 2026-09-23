@@ -23,13 +23,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     releaseUpc = release.upcCode ?? null;
   }
   const attempts = await prisma.distributionSubmissionAttempt.findMany({
-    where: { releaseId, provider: "direnote", state: "submitted" }, orderBy: { id: "asc" },
-    select: { id: true, upc: true, isCurrent: true, providerStatus: true, trackIdentifiers: true, startedAt: true, completedAt: true, corrections: true, payloadRedacted: isAdmin, payloadDiff: isAdmin }
+    where: { releaseId, provider: "direnote" }, orderBy: { id: "asc" },
+    select: { id: true, state: true, safeError: true, upc: true, isCurrent: true, providerStatus: true, trackIdentifiers: true, startedAt: true, completedAt: true, corrections: true, payloadRedacted: isAdmin, payloadDiff: isAdmin }
   });
   return NextResponse.json({ attempts: attempts.map(attempt => {
     const correction = attempt.corrections as { status?: string; artistResolvedAt?: string } | null;
     const payload = isAdmin && attempt.payloadRedacted && typeof attempt.payloadRedacted === "object" ? Object.fromEntries(Object.entries(attempt.payloadRedacted).filter(([key]) => !["pin", "client_id"].includes(key))) : null;
-    return { id: attempt.id, upc: attempt.upc ?? releaseUpc, isCurrent: attempt.isCurrent, status: attempt.providerStatus, tracks: attempt.trackIdentifiers, submittedAt: attempt.completedAt ?? attempt.startedAt, correctionStatus: correction?.status, artistResolvedAt: correction?.artistResolvedAt,
+    return { id: attempt.id, upc: attempt.upc ?? (attempt.isCurrent ? releaseUpc : null), isCurrent: attempt.isCurrent, state: attempt.state, status: attempt.state === "submitted" ? attempt.providerStatus : attempt.state, safeError: isAdmin ? redactDireNoteDiagnostic(attempt.safeError) : undefined, tracks: attempt.trackIdentifiers, submittedAt: attempt.completedAt ?? attempt.startedAt, correctionStatus: correction?.status, artistResolvedAt: correction?.artistResolvedAt,
       ...(isAdmin ? { payload: redactDireNoteDiagnostic(payload), payloadDiff: redactDireNoteDiagnostic(attempt.payloadDiff) } : {}) };
   }) });
 }

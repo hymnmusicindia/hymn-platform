@@ -21,6 +21,10 @@ export async function claimDistributionSubmission(releaseId: number, payload: un
     where: { releaseId, provider: "direnote" },
     orderBy: { startedAt: "desc" },
   });
+  // A lost response is not proof of rejection. The provider has no documented
+  // ingestion idempotency key, so a new payload hash must not bypass this guard.
+  const unresolved = await prisma.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: "direnote", state: { in: ["processing", "reconciliation_required"] } }, orderBy: { id: "desc" } });
+  if (unresolved) return { attempt: unresolved, claimed: false, alreadySubmitted: false, retryAfterSeconds: undefined };
   if (latestAttempt && latestAttempt.startedAt > new Date(Date.now() - cooldownMs)) {
     const retryAfterSeconds = Math.max(1, Math.ceil((latestAttempt.startedAt.getTime() + cooldownMs - Date.now()) / 1000));
     return {
@@ -41,11 +45,12 @@ export async function claimDistributionSubmission(releaseId: number, payload: un
     }
   }
   if (existing.state === "submitted") return { attempt: existing, claimed: false, alreadySubmitted: true, retryAfterSeconds: undefined };
+  if (existing.attemptCount >= 5 || existing.state !== "retryable") return { attempt: existing, claimed: false, alreadySubmitted: false, retryAfterSeconds: undefined };
   const claimed = await prisma.distributionSubmissionAttempt.updateMany({ where: { id: existing.id, state: { in: ["failed", "retryable"] }, startedAt: existing.startedAt }, data: { state: "processing", attemptCount: { increment: 1 }, safeError: null, startedAt: new Date(), completedAt: null } });
   return { attempt: await prisma.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: existing.id } }), claimed: claimed.count >= 1, alreadySubmitted: false, retryAfterSeconds: undefined };
 }
 
-export async function finishDistributionSubmission(id: number, input: { state: "submitted" | "failed" | "retryable"; httpStatus?: number | null; providerReference?: string | null; safeError?: string | null; responseRedacted?: Prisma.InputJsonValue }) {
+export async function finishDistributionSubmission(id: number, input: { state: "submitted" | "failed" | "retryable" | "reconciliation_required"; httpStatus?: number | null; providerReference?: string | null; safeError?: string | null; responseRedacted?: Prisma.InputJsonValue }) {
   return prisma.distributionSubmissionAttempt.update({ where: { id }, data: { ...input, completedAt: new Date() } });
 }
 
@@ -116,6 +121,7 @@ export async function activateDireNoteAttempt(id: number, input: { upc: string |
     const attempt = await tx.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id } });
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422027, ${attempt.releaseId}::integer)`;
     const release = await tx.release.findUniqueOrThrow({ where: { id: attempt.releaseId }, include: { tracks: true } });
+    if (release.upc && input.upc && release.upc !== input.upc) throw new Error("DireNote returned a conflicting UPC. Reconcile the provider identity before continuing.");
     if (release.upc !== input.upc) await tx.externalIdentifierHistory.create({ data: { releaseId: release.id, provider: "direnote", identifierType: "upc", previousValue: release.upc, canonicalValue: input.upc ?? "awaiting_assignment", source: "submission_attempt" } });
     const metadata = release.metadata && typeof release.metadata === "object" && !Array.isArray(release.metadata) ? release.metadata : {};
     const direNote = metadata.direNote && typeof metadata.direNote === "object" && !Array.isArray(metadata.direNote) ? metadata.direNote : {};
@@ -124,6 +130,7 @@ export async function activateDireNoteAttempt(id: number, input: { upc: string |
       const identifier = item as { id: number; isrc: string | null };
       const track = release.tracks.find(row => row.id === identifier.id);
       if (!track) throw new Error("Submission track identity changed during ingest.");
+      if (track.isrc && identifier.isrc && track.isrc !== identifier.isrc) throw new Error("DireNote returned a conflicting ISRC. Reconcile the recording identity before continuing.");
       if (track.isrc !== identifier.isrc) await tx.externalIdentifierHistory.create({ data: { releaseId: release.id, trackId: track.id, provider: "direnote", identifierType: "isrc", previousValue: track.isrc, canonicalValue: identifier.isrc ?? "awaiting_assignment", source: "submission_attempt" } });
       await tx.track.update({ where: { id: track.id }, data: { isrc: identifier.isrc } });
     }
@@ -141,7 +148,7 @@ export async function activateDireNoteAttempt(id: number, input: { upc: string |
       await tx.adminTask.updateMany({ where: { eventKey: { startsWith: `release:${release.id}:direnote:correction:${previous.id}:` }, status: { not: "resolved" } }, data: { status: "resolved", resolvedAt: new Date(), resolutionNote: "Corrections re-ingested; monitoring the new submission attempt." } });
     }
     return tx.distributionSubmissionAttempt.update({ where: { id }, data: { ...input, isCurrent: true, state: "submitted", providerStatus: "processing", completedAt: new Date() } });
-  });
+  }, { timeout: 30_000 });
 }
 // vercel trigger 9
 

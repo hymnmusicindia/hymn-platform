@@ -17,7 +17,7 @@ const release = {
   id: 1, userId: 1, releaseTitle: "Magenta", artistName: "Fixture Artist", releaseType: "album", releaseDate: "2099-01-10",
   language: "Hindi", primaryGenre: "Pop", secondaryGenre: "Indie Pop", mood: "Happy", labelName: "Fixture Records",
   copyrightOwner: "2026 Composition Owner", publishingRights: "2026 Master Owner", contentType: "original", youtubeContentIdEnabled: false,
-  artworkUrl: "https://cdn.example.test/cover.jpg", metadata: { albumVersion: "Deluxe", artistLinks: { "Fixture Artist": { instagram_url: "https://instagram.com/fixture", spotify_url: "https://open.spotify.com/artist/fixture", apple_url: "https://music.apple.com/artist/fixture", youtube_url: "https://youtube.com/@fixture" } } },
+  artworkUrl: "https://cdn.example.test/cover.jpg", metadata: { albumVersion: "Deluxe", artistLinks: { "Fixture Artist": { instagram_url: "https://instagram.com/fixture", spotify_url: "https://open.spotify.com/artist/0123456789012345678901", apple_url: "https://music.apple.com/artist/123456789", youtube_url: "https://youtube.com/@fixture" } } },
   tracks: ["Hindi", "Instrumental", "English"].map((language, index) => ({
     id: index + 1, releaseId: 1, trackTitle: ["purple", "pink", "blue"][index], trackNumber: index + 1, language,
     version: index === 1 ? "Instrumental" : "Original", primaryArtist: "Fixture Artist", audioUrl: `https://cdn.example.test/${index}.wav`,
@@ -30,7 +30,9 @@ const quickRelease = { ...release, releaseTiming: "quick_release", status: "sent
 assert.equal(getReleasePortalDateTitle(quickRelease), "Expected release date");
 assert.match(getReleasePortalDateLabel(quickRelease), /Tentative/);
 assert.doesNotMatch(getReleasePortalDateLabel({ ...quickRelease, releaseTiming: "schedule_release" }), /Tentative/);
-const debutPayload = buildDireNotePayload({ ...release, metadata: {} }, { artistProfiles: [{ name: "Fixture Artist", instagramUrl: "https://instagram.com/debut_artist", spotifyUrl: null, appleUrl: null } as ArtistProfile] });
+const debutPayload = buildDireNotePayload({ ...release, metadata: { artistProfileId: 1 } }, { artistProfiles: [{ id: 1, name: "Fixture Artist", instagramUrl: "https://instagram.com/debut_artist", spotifyUrl: null, appleUrl: null } as ArtistProfile] });
+const unselectedPayload = buildDireNotePayload({ ...release, metadata: {} }, { artistProfiles: [{ id: 2, name: "Fixture Artist", instagramUrl: "https://instagram.com/wrong_artist" } as ArtistProfile] });
+assert.equal(unselectedPayload.artists[0].instagram_url, undefined, "Matching a name must not select an unassociated artist card");
 assert.equal(debutPayload.artists[0].instagram_url, "https://instagram.com/debut_artist");
 assert(debutPayload.tracks.every(track => track.artists[0].instagram_url === "https://instagram.com/debut_artist"));
 assert.equal(debutPayload.artists[0].spotify_url, undefined);
@@ -55,7 +57,7 @@ assert.equal(payload.tracks[0].previewStart, "0");
 assert.deepEqual(json(payload.tracks[1]), {
   trackName: "pink", audio_url: "https://cdn.example.test/1.wav", trackGenre: "Pop", trackSubgenre: "Indie Pop", trackLanguage: "Instrumental",
   trackVersion: "Instrumental", previewStart: "0", explicitLyrics: "No", previouslyReleased: "No", producers: ["Fixture Producer"],
-  artists: [{ name: "Fixture Artist", instagram_url: "https://instagram.com/fixture", spotify_url: "https://open.spotify.com/artist/fixture", apple_url: "https://music.apple.com/artist/fixture", youtube_url: "https://youtube.com/@fixture" }], featuring_artists: [],
+  artists: [{ name: "Fixture Artist", instagram_url: "https://instagram.com/fixture", spotify_url: "https://open.spotify.com/artist/0123456789012345678901", apple_url: "https://music.apple.com/artist/123456789", youtube_url: "https://youtube.com/@fixture" }], featuring_artists: [],
   songwriters: [{ name: "Fixture Writer", iprs_member: "No" }], composers: [{ name: "Fixture Composer", iprs_member: "No" }]
 });
 assert.equal(payload.albumVersion, "Deluxe");
@@ -71,7 +73,7 @@ assert.deepEqual(json({ ...payload, tracks: undefined, pin: undefined, client_id
   albumname: "Magenta", albumVersion: "Deluxe", typeOfRelease: "Album", albumGenre: "Pop", albumSubgenre: "Indie Pop", albumLanguage: "Hindi", albumMood: "Happy",
   contenttype: "Original/Exclusive Licensed", trackReleaseDate: "2099-01-10", labelName: "Fixture Records", cLine: "2026 Composition Owner", pLine: "2026 Master Owner",
   youtubeContentID: "No", releasePreviouslyReleased: "No", cover_art_url: "https://cdn.example.test/cover.jpg",
-  artists: [{ name: "Fixture Artist", instagram_url: "https://instagram.com/fixture", spotify_url: "https://open.spotify.com/artist/fixture", apple_url: "https://music.apple.com/artist/fixture", youtube_url: "https://youtube.com/@fixture" }], featuring_artists: []
+  artists: [{ name: "Fixture Artist", instagram_url: "https://instagram.com/fixture", spotify_url: "https://open.spotify.com/artist/0123456789012345678901", apple_url: "https://music.apple.com/artist/123456789", youtube_url: "https://youtube.com/@fixture" }], featuring_artists: []
 });
 for (const field of ["albumname", "typeOfRelease", "albumGenre", "albumSubgenre", "albumLanguage", "contenttype", "trackReleaseDate", "labelName", "cLine", "pLine", "cover_art_url", "artists", "tracks"]) {
   for (const value of [undefined, null, "", "   "]) {
@@ -92,7 +94,7 @@ assert.equal(buildDireNotePayload(proofRelease).contenttype, "AI Generated");
 assert.equal(buildDireNotePayload(proofRelease).suno_receipt_url, "https://cdn.example.test/current.pdf");
 assert.equal(buildDireNotePayload({ ...proofRelease, sunoReceiptUrl: "", suno_receipt_url: "https://cdn.example.test/stale.pdf" }).suno_receipt_url, undefined);
 assert.equal(buildDireNotePayload({ ...release, contentType: "non_exclusive_licensed", licenseReceiptUrl: "https://cdn.example.test/license.pdf" }).license_receipt_url, "https://cdn.example.test/license.pdf");
-const credited = buildDireNotePayload({ ...release, releaseType: "single", releaseTitle: "purple", metadata: { ...(release.metadata as object), artistLinks: { ...(release.metadata as any).artistLinks, "Guest Artist": { instagram_url: "https://instagram.com/guest", spotify_url: "https://open.spotify.com/artist/guest", apple_url: "https://music.apple.com/artist/guest", youtube_url: "https://youtube.com/@guest" } } }, tracks: [{ ...release.tracks![0], featuredArtists: "Guest Artist", contributors: [
+const credited = buildDireNotePayload({ ...release, releaseType: "single", releaseTitle: "purple", metadata: { ...(release.metadata as object), artistLinks: { ...(release.metadata as any).artistLinks, "Guest Artist": { instagram_url: "https://instagram.com/guest", spotify_url: "https://open.spotify.com/artist/1123456789012345678901", apple_url: "https://music.apple.com/artist/123456788", youtube_url: "https://youtube.com/@guest" } } }, tracks: [{ ...release.tracks![0], featuredArtists: "Guest Artist", contributors: [
   { role: "songwriter", legalName: "Legal Writer", ipi: "123456789", iprsMember: true, instagramUrl: "https://instagram.com/writer", xUrl: "https://x.com/writer" },
   { role: "composer", legalName: "Legal Composer", ipi: "987654321", iprsMember: false, instagramUrl: "https://instagram.com/composer", xUrl: "https://x.com/composer" },
   { role: "producer", legalName: "Producer Legal Name", artistName: "Producer Stage Name" }

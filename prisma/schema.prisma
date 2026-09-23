@@ -1252,6 +1252,8 @@ model UploadSession {
   chunkSize        Int          @map("chunk_size")
   totalChunks      Int          @map("total_chunks")
   uploadedChunks   Json         @default("[]") @map("uploaded_chunks")
+  chunkHashes      Json?        @map("chunk_hashes")
+  fileFingerprint  String?      @map("file_fingerprint")
   bytesUploaded    Int          @default(0) @map("bytes_uploaded")
   status           String       @default("CREATED")
   tempPath         String       @unique @map("temp_path")

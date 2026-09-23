@@ -24,9 +24,9 @@ const ingestPayloads: Array<Record<string, any>> = [];
 let browser: Awaited<ReturnType<typeof startDireNoteBrowser>> | undefined;
 let checkoutMock: Awaited<ReturnType<typeof startCheckoutMock>> | undefined;
 const oldUpc = "3473620313503";
-const newUpc = "3473620313504";
+const newUpc = oldUpc;
 const oldIsrcs = ["INDN22602442", "INDN22602443"];
-const newIsrcs = ["INTST2600001", "INTST2600002"];
+const newIsrcs = oldIsrcs;
 const remark = "TRACK 2 SEEMS LIKE AN INSTRUMENTAL. PLEASE SELECT RELEVANT TRACK LANGUAGE";
 const server = createServer(async (request, response) => {
   let raw = "";
@@ -39,7 +39,7 @@ const server = createServer(async (request, response) => {
     assert.equal(request.method, "POST");
     ingestPayloads.push(body);
     ingests++;
-    response.end(JSON.stringify({ success: true, upc: ingests === 1 ? oldUpc : newUpc, tracks: [1, 2].map((n, index) => ({ track_name: `Track ${n}`, isrc: (ingests === 1 ? oldIsrcs : newIsrcs)[index], status: "Pending" })) }));
+    response.end(JSON.stringify({ success: true, upc: body.upc || oldUpc, tracks: [1, 2].map((n, index) => ({ track_name: `Track ${n}`, isrc: body.tracks[index].isrc || oldIsrcs[index], status: "Pending" })) }));
     return;
   }
   statusUpcs.push(body.upc);
@@ -63,13 +63,13 @@ async function main() {
   await prisma.$executeRawUnsafe(snapshots);
   await prisma.$executeRawUnsafe(snapshots);
   await assertDireNoteSchemaReady(prisma);
-  assert.equal(await prisma.distributionSubmissionAttempt.findFirst(), null);
+  assert.equal(await prisma.distributionSubmissionAttempt.count({ where: { payloadHash: "legacy-backfill" } }), 0);
   const migration = await readFile("prisma/migrations/20260906000000_direnote_attempt_history/migration.sql", "utf8");
   for (let run = 0; run < 2; run++) for (const statement of migration.split(";").filter(value => value.trim())) await prisma.$executeRawUnsafe(statement);
   const user = await prisma.user.create({ data: { googleId: "fixture-gxrry", name: "gxrry", email: "gxrry@example.test", role: "CUSTOMER", status: "ACTIVE" } });
   const artist = await prisma.artistCard.create({ data: { userId: user.id, artistName: "gxrry", instagramUrl: "https://instagram.com/fixture_gxrry" } });
   const release = await prisma.release.create({ data: {
-    userId: user.id, title: "Magenta", artistName: "gxrry", genre: "Pop", releaseType: "ep", releaseDate: new Date("2099-01-10"), status: "APPROVED", paymentStatus: "paid", artworkUrl: "https://cdn.example.test/cover.jpg",
+    userId: user.id, artistProfileId: artist.id, title: "Magenta", artistName: "gxrry", genre: "Pop", releaseType: "ep", releaseDate: new Date("2099-01-10"), status: "APPROVED", paymentStatus: "paid", artworkUrl: "https://cdn.example.test/cover.jpg",
     metadata: { releaseTitle: "Magenta", releaseDate: "2099-01-10", releaseTiming: "schedule_release", language: "Hindi", mood: "Happy", secondaryGenre: "Indie Pop", labelName: "Fixture Records", copyrightOwner: "2026 Fixture Records", publishingRights: "2026 Fixture Artist", contentType: "original", platforms: ["Spotify"], territory: "Worldwide", ownershipConfirmed: true, noUnauthorizedSamples: true, collaboratorsCredited: true, platformCompliant: true, hymnNotLiable: true, agreedToTerms: true, falseMetadataAcknowledged: true },
     tracks: { create: [1, 2].map(n => ({ title: n === 1 ? "purple" : "pink", trackNumber: n, primaryArtist: "gxrry", audioUrl: `https://cdn.example.test/track${n}.wav`, metadata: { metadata: { artistProfileIds: [artist.id] }, language: "Hindi", version: "Original", songwriters: "Fixture Artist", composers: "Fixture Artist", producers: "Fixture Artist", duration: "180", explicitContent: false } })) }
   }, include: { tracks: true } });
@@ -133,8 +133,8 @@ async function main() {
   assert.equal(ingestPayloads[1].tracks[0].trackLanguage, "Hindi");
   assert.equal(ingestPayloads[1].contenttype, "Original/Exclusive Licensed");
   await writeFile(".cache/direnote-magenta-track2-virtual-after.json", JSON.stringify(redactDireNoteDiagnostic(ingestPayloads[1].tracks[1]), null, 2));
-  assert.equal(ingestPayloads[1].upc, undefined);
-  assert(ingestPayloads[1].tracks.every((track: any) => !track.isrc));
+  assert.equal(ingestPayloads[1].upc, oldUpc);
+  assert.deepEqual(ingestPayloads[1].tracks.map((track: any) => track.isrc), oldIsrcs, "Corrections preserve recording identifiers");
   const attempts = await prisma.distributionSubmissionAttempt.findMany({ where: { releaseId: release.id }, orderBy: { id: "asc" } });
   assert.equal(attempts.length, 2);
   assert.equal(attempts[0].isCurrent, false);
@@ -174,13 +174,15 @@ async function main() {
     await lock.$executeRaw`SELECT pg_advisory_xact_lock(81422028, ${release.id}::integer)`;
     await assert.rejects(() => syncDireNoteRelease(release.id), /already being/);
   });
-  await prisma.$transaction(async lock => {
-    await lock.$executeRaw`SELECT pg_advisory_xact_lock(81422029)`;
+  await prisma.$executeRaw`INSERT INTO "cron_leases" ("lease_key", "run_id", "leased_until", "updated_at") VALUES ('direnote-release-sync', 'fixture-other-worker', NOW() + INTERVAL '5 minutes', NOW()) ON CONFLICT ("lease_key") DO UPDATE SET "run_id" = 'fixture-other-worker', "leased_until" = NOW() + INTERVAL '5 minutes'`;
+  try {
     const response = await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));
     assert.equal((await response.json()).skipped, "already_running");
-  });
+  } finally {
+    await prisma.$executeRaw`UPDATE "cron_leases" SET "leased_until" = NOW() WHERE "run_id" = 'fixture-other-worker'`;
+  }
   const transfer = await prisma.release.create({ data: {
-    userId: user.id, title: "Transfer fixture", artistName: "gxrry", genre: "Pop", releaseType: "ep", releaseDate: new Date("2099-01-10"), status: "CHANGES_REQUESTED", paymentStatus: "paid", artworkUrl: "https://cdn.example.test/cover.jpg", direNoteStatus: "changes_required", upc: "3473620313505",
+    userId: user.id, artistProfileId: artist.id, title: "Transfer fixture", artistName: "gxrry", genre: "Pop", releaseType: "ep", releaseDate: new Date("2099-01-10"), status: "CHANGES_REQUESTED", paymentStatus: "paid", artworkUrl: "https://cdn.example.test/cover.jpg", direNoteStatus: "changes_required", upc: "3473620313510",
     metadata: { ...(release.metadata as object), releaseTitle: "Transfer fixture", releasePreviouslyReleased: true, originalReleaseDate: "2020-01-01" },
     tracks: { create: [1, 2].map((n, index) => ({ title: `Track ${n}`, trackNumber: n, primaryArtist: "gxrry", audioUrl: `https://cdn.example.test/track${n}.wav`, isrc: oldIsrcs[index], metadata: { language: "English", songwriters: "Fixture Artist", composers: "Fixture Artist", duration: "180" } })) }
   } });
@@ -188,9 +190,9 @@ async function main() {
   await prisma.distributionSubmissionAttempt.update({ where: { id: transferAttempt.id }, data: { startedAt: new Date(0) } });
   const transferred = await submitRelease(transfer.id, { correctionReingest: true });
   assert.equal(transferred.submitted, true, JSON.stringify(transferred));
-  assert(ingestPayloads.at(-1)!.tracks.every((track: any) => !track.isrc), "A correction must never reuse historical ISRC values in its ingest request.");
+  assert.deepEqual(ingestPayloads.at(-1)!.tracks.map((track: any) => track.isrc), oldIsrcs, "A correction must preserve existing recording identities.");
   assert.deepEqual((await prisma.track.findMany({ where: { releaseId: transfer.id }, orderBy: { trackNumber: "asc" } })).map(track => track.isrc), newIsrcs, "DireNote's re-ingest identifiers become the current track projection.");
-  const paidDraft = await prisma.release.create({ data: { userId: user.id, title: "Paid draft", artistName: "gxrry", genre: "Pop", releaseDate: new Date("2099-01-10"), status: "DRAFT", paymentStatus: "paid" } });
+  const paidDraft = await prisma.release.create({ data: { userId: user.id, artistProfileId: artist.id, title: "Paid draft", artistName: "gxrry", genre: "Pop", releaseDate: new Date("2099-01-10"), status: "DRAFT", paymentStatus: "paid" } });
   await saveDraftDistributionRelease({ userId: user.id, draftReleaseId: paidDraft.id, metadata: { artistName: "gxrry", trackName: "Paid draft", tracks: [] } as any });
   assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: paidDraft.id } })).paymentStatus, "paid", "Saving a draft must not erase payment.");
   const paidOrder = await prisma.distributionOrder.create({ data: { userId: user.id, releaseId: paidDraft.id, plan: "one_time", amount: 99, paymentStatus: "paid", razorpayOrderId: "order_fixture_paid_draft", razorpayPaymentId: "pay_fixture_paid_draft", fulfilledAt: new Date() } });
@@ -209,7 +211,7 @@ async function main() {
     assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: paidDraft.id } })).paymentStatus, "pending", "Another customer's payment must never restore entitlement.");
   }
   const single = await prisma.release.create({ data: {
-    userId: user.id, title: "HARADO TEST fixture", artistName: "gxrry", genre: "Pop", releaseType: "single", releaseDate: new Date("2099-01-10"), status: "APPROVED", paymentStatus: "paid", artworkUrl: "https://cdn.example.test/cover.jpg",
+    userId: user.id, artistProfileId: artist.id, title: "HARADO TEST fixture", artistName: "gxrry", genre: "Pop", releaseType: "single", releaseDate: new Date("2099-01-10"), status: "APPROVED", paymentStatus: "paid", artworkUrl: "https://cdn.example.test/cover.jpg",
     metadata: { ...(release.metadata as object), releaseTitle: "HARADO TEST fixture", language: "English", mood: "" },
     tracks: { create: [{ title: "HARADO TEST fixture", trackNumber: 1, primaryArtist: "gxrry", audioUrl: "https://cdn.example.test/track1.wav", metadata: { language: "English", version: "Original", songwriters: "Fixture Artist", composers: "Fixture Artist" } }] }
   } });
@@ -221,7 +223,7 @@ async function main() {
   assert.match(readiness.payload.cover_art_url, /cover\.jpg$/);
   if (browser) {
     const stale = await prisma.release.create({ data: {
-      userId: user.id, title: "Stale two-track fixture", artistName: "gxrry", genre: "Pop", releaseType: "ep", releaseDate: new Date("2099-01-10"), status: "LIVE", paymentStatus: "paid", artworkUrl: "https://cdn.example.test/cover.png",
+      userId: user.id, artistProfileId: artist.id, title: "Stale two-track fixture", artistName: "gxrry", genre: "Pop", releaseType: "ep", releaseDate: new Date("2099-01-10"), status: "LIVE", paymentStatus: "paid", artworkUrl: "https://cdn.example.test/cover.png",
       metadata: { ...(release.metadata as object), contentType: "", releaseTitle: "Stale two-track fixture" },
       tracks: { create: [1, 2].map(n => ({ title: `Stale ${n}`, trackNumber: n, primaryArtist: "gxrry", audioUrl: "https://cdn.example.test/track1.wav", metadata: { version: n === 2 ? "Instrumental" : "Original", songwriters: "Fixture Artist", composers: "Fixture Artist" } })) }
     } });
@@ -229,7 +231,7 @@ async function main() {
   }
   for (const language of [null, "Hindi"]) {
     const derived = await prisma.release.create({ data: {
-      userId: user.id, title: `Derived ${language ?? "null"}`, artistName: "gxrry", genre: "Pop", releaseType: "ep", releaseDate: new Date("2099-01-10"), status: "APPROVED", paymentStatus: "paid", artworkUrl: "https://cdn.example.test/cover.jpg",
+      userId: user.id, artistProfileId: artist.id, title: `Derived ${language ?? "null"}`, artistName: "gxrry", genre: "Pop", releaseType: "ep", releaseDate: new Date("2099-01-10"), status: "APPROVED", paymentStatus: "paid", artworkUrl: "https://cdn.example.test/cover.jpg",
       metadata: { ...(release.metadata as object), releaseTitle: `Derived ${language ?? "null"}` },
       tracks: { create: [1, 2].map(n => ({ title: `Derived Track ${n}`, trackNumber: n, primaryArtist: "gxrry", audioUrl: "https://cdn.example.test/track1.wav", metadata: { language: n === 2 ? language : "Hindi", version: n === 2 ? "Instrumental" : "Original", songwriters: "Fixture Artist", composers: "Fixture Artist" } })) }
     } });
@@ -245,7 +247,7 @@ async function main() {
     }
   }
   // Exercise the actual hourly handler against documented artist links returned by the mock.
-  await prisma.release.updateMany({ where: { id: { not: release.id } }, data: { status: "DRAFT" } });
+  await prisma.release.updateMany({ where: { id: { not: release.id } }, data: { archivedAt: new Date() } });
   const unrelated = await prisma.artistCard.create({ data: { userId: user.id, artistName: "Unattached Artist" } });
   const pollArtist = async () => {
     await prisma.release.update({ where: { id: release.id }, data: { direNoteLastAttemptedAt: new Date(0), status: "DISTRIBUTOR_PROCESSING" } });

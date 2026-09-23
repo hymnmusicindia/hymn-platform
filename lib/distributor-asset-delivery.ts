@@ -46,10 +46,10 @@ function distributorSafeFilename(filename: string, mimeType: string) {
   return `${trimmed.replace(/\.[a-z0-9]{1,8}$/i, "")}${expected.extension}`;
 }
 
-export async function createDistributorAssetUrl(value: string | null | undefined, siteUrl?: string) {
+export async function createDistributorAssetUrl(value: string | null | undefined, siteUrl: string | undefined, ownerUserId: number) {
   const assetId = privateAssetId(value);
   if (!assetId) return value ?? "";
-  const asset = await prisma.storedAsset.findFirst({ where: { id: assetId, deletedAt: null, uploadStatus: "ready" }, select: { id: true, safeFilename: true, mimeType: true, providerDeliveryToken: true } });
+  const asset = await prisma.storedAsset.findFirst({ where: { id: assetId, ownerUserId, deletedAt: null, uploadStatus: "ready" }, select: { id: true, safeFilename: true, mimeType: true, providerDeliveryToken: true } });
   if (!asset) throw new Error("A release asset is unavailable for distributor delivery.");
   // The Hostinger Node deployment can route public_html paths back into Next
   // after a release, producing intermittent 404s for static proof copies.

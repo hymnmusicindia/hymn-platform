@@ -49,6 +49,7 @@ async function main() {
   assert.equal(mapDireNoteStatus("Declined by reviewer"), "rejected");
   assert.equal(mapDireNoteStatus("Provider failed validation"), "rejected");
   assert.equal(rejectOrCorrectionStatus({ release: { status: "Correction required" } }), "changes_required");
+  assert.equal(rejectOrCorrectionStatus({ release: { album_name: "Rejected", label_name: "Failed Records", status: "Pending" }, tracks: [{ track_name: "Denied", status: "Pending" }] }), null, "Metadata text cannot change lifecycle status");
   assert.equal(rejectOrCorrectionStatus({ tracks: [{ remarks: "Rejected by reviewer" }] }), "rejected");
   let response: unknown = payload;
   const originalFetch = globalThis.fetch;

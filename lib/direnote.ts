@@ -14,6 +14,8 @@ import {
 import { getDireNoteConfig } from "@/lib/direnote/direnote-config";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 import { mapContributorToDireNote } from "@/lib/contributor-provider-mapping";
+import { attachedArtistProfileIds, verifiedArtistStoreLinks } from "@/lib/artist-store-links";
+import { parseReleaseDate, validIsrc, validReleaseBarcode, safeReleaseText } from "@/lib/release-input-rules";
 export { submitToDireNote, getDireNoteReleaseInformation, getDireNoteReleaseInformationByReference, getDireNoteRevenueReport } from "@/lib/direnote/direnote-client";
 
 export type DireNoteArtist = {
@@ -194,13 +196,15 @@ function getProofUrl(release: ExtendedRelease, keys: string[], siteUrl?: string)
   return undefined;
 }
 
-function pickArtistProfile(name: string, profiles: ArtistProfile[] = []) {
+function pickArtistProfile(name: string, profiles: ArtistProfile[] = [], selectedIds: number[] = []) {
   const normalized = name.trim().toLowerCase();
-  return profiles.find((profile) => profile.name.trim().toLowerCase() === normalized);
+  const matches = profiles.filter(profile => selectedIds.includes(profile.id) && profile.name.trim().toLowerCase() === normalized);
+  if (matches.length > 1) throw new Error(`Multiple selected artist cards share the name ${name}. Select the intended artist identity before delivery.`);
+  return matches[0];
 }
 
-function toDireNoteArtist(name: string, profiles: ArtistProfile[] = [], release?: ExtendedRelease): DireNoteArtist {
-  const profile = pickArtistProfile(name, profiles);
+function toDireNoteArtist(name: string, profiles: ArtistProfile[] = [], release?: ExtendedRelease, selectedIds: number[] = []): DireNoteArtist {
+  const profile = pickArtistProfile(name, profiles, selectedIds);
   const meta = release ? releaseMeta(release) : {};
   const artistMeta = meta.artistLinks?.[name] ?? meta.artistLinks?.[name.trim().toLowerCase()] ?? {};
   return {
@@ -270,8 +274,10 @@ export function redactDireNoteDiagnostic(value: unknown): unknown {
 export function buildDireNotePayload(release: Release, options: BuildOptions = {}): DireNotePayload {
   const extended = release as ExtendedRelease;
   const meta = releaseMeta(extended);
-  const primaryArtists = splitNames(release.artistName || release.tracks?.[0]?.primaryArtist).map((name) => toDireNoteArtist(name, options.artistProfiles, extended));
-  const featuringArtists = splitNames(release.tracks?.flatMap((track) => splitNames(track.featuredArtists)).join(",")).map((name) => toDireNoteArtist(name, options.artistProfiles, extended));
+  const primaryIds = (track: NonNullable<Release["tracks"]>[number]) => attachedArtistProfileIds(track, extended.artistProfileId ?? meta.artistProfileId ?? null);
+  const featuredIds = (track: NonNullable<Release["tracks"]>[number]): number[] => track.featuredArtistProfileIds ?? (track.metadata as any)?.featuredArtistProfileIds ?? [];
+  const primaryArtists = splitNames(release.artistName || release.tracks?.[0]?.primaryArtist).map((name) => toDireNoteArtist(name, options.artistProfiles, extended, (release.tracks ?? []).flatMap(primaryIds)));
+  const featuringArtists = splitNames(release.tracks?.flatMap((track) => splitNames(track.featuredArtists)).join(",")).map((name) => toDireNoteArtist(name, options.artistProfiles, extended, (release.tracks ?? []).flatMap(featuredIds)));
   const contenttype = normalizeContentType(extended);
   assertContentIdEligibility(contenttype, release.youtubeContentIdEnabled);
   const normalizedGenre = normalizeDireNoteGenre(release.primaryGenre || release.genre, release.secondaryGenre);
@@ -300,7 +306,7 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
     cLine: release.copyrightOwner ?? "",
     pLine: release.publishingRights ?? "",
     upc: release.upcCode || undefined,
-    youtubeContentID: typeof release.youtubeContentIdEnabled === "boolean" ? (release.youtubeContentIdEnabled ? "Yes" : "No") : undefined,
+    youtubeContentID: release.youtubeContentIdEnabled === true ? "Yes" : "No",
     releasePreviouslyReleased: isPreviouslyReleased ? "Yes" : "No",
     addrequest: meta.adminInstructions ?? meta.reviewNote ?? meta.addrequest ?? undefined,
     owner_email: options.ownerEmail || meta.ownerEmail || undefined,
@@ -321,8 +327,8 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
       trackLyrics: (track as any).lyrics || (track as any).trackLyrics || undefined,
       previouslyReleased: ((track as any).previouslyReleased ?? isPreviouslyReleased) ? "Yes" : "No",
       producers: contributors((track as any).producers ?? (track as any).producer, track.contributors as any, "producer").map((contributor) => contributor.name),
-      artists: splitNames(track.primaryArtist || release.artistName).map((name) => toDireNoteArtist(name, options.artistProfiles, extended)),
-      featuring_artists: splitNames(track.featuredArtists).map((name) => toDireNoteArtist(name, options.artistProfiles, extended)),
+      artists: splitNames(track.primaryArtist || release.artistName).map((name) => toDireNoteArtist(name, options.artistProfiles, extended, primaryIds(track))),
+      featuring_artists: splitNames(track.featuredArtists).map((name) => toDireNoteArtist(name, options.artistProfiles, extended, featuredIds(track))),
       songwriters: contributors(track.songwriters, track.contributors as any, "songwriter"),
       composers: contributors(track.composers, track.contributors as any, "composer"),
       contributors: Array.isArray(track.contributors) ? track.contributors.map((contributor: any) => mapContributorToDireNote(contributor)).filter(Boolean).map((mapped: any) => ({ name: mapped.contributor.name, role: mapped.role })) : undefined
@@ -367,13 +373,15 @@ function validateArtists(issues: DireNoteValidationIssue[], artists: DireNoteArt
     for (const [field, value] of Object.entries(artist).filter(([field]) => field.endsWith("_url"))) {
       if (value && !isPublicHttpUrl(value)) issues.push({ field: `${path}.${index}.${field}`, message: `${field} must be a public HTTP(S) URL.` });
     }
+    const verified = verifiedArtistStoreLinks({ spotify: artist.spotify_url, apple: artist.apple_url, youtube: artist.youtube_url });
+    for (const provider of ["spotify", "apple", "youtube"] as const) {
+      if (artist[`${provider}_url`] && !verified[provider]) issues.push({ field: `${path}.${index}.${provider}_url`, message: `Enter a valid ${provider} artist profile URL, not a track or album link.` });
+    }
   }
 }
 
 function parseDateOnly(value?: string) {
-  if (!value) return null;
-  const date = new Date(`${value.slice(0, 10)}T00:00:00Z`);
-  return Number.isNaN(date.getTime()) ? null : date;
+  return parseReleaseDate(value);
 }
 
 function daysFromToday(value?: string) {
@@ -400,6 +408,14 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
   }
 
   pushMissing(issues, "pin", payload.pin, "DireNote API PIN is not configured.");
+  if (payload.upc && !validReleaseBarcode(payload.upc)) issues.push({ field: "upc", message: "UPC/EAN must contain 12 or 13 digits and a valid check digit." });
+  const usedIsrcs = new Set<string>();
+  payload.tracks.forEach((track, index) => {
+    if (track.isrc && (!validIsrc(track.isrc) || usedIsrcs.has(track.isrc))) issues.push({ field: `tracks.${index}.isrc`, message: "Enter a valid, unique 12-character ISRC for this recording." });
+    if (track.isrc) usedIsrcs.add(track.isrc);
+    if (typeof track.trackName !== "string" || track.trackName.length > 300 || !safeReleaseText(track.trackName)) issues.push({ field: `tracks.${index}.trackName`, message: "Track titles must be plain text, at most 300 characters, without control characters." });
+  });
+  if (typeof payload.albumname !== "string" || payload.albumname.length > 300 || !safeReleaseText(payload.albumname)) issues.push({ field: "albumname", message: "Release titles must be plain text, at most 300 characters, without control characters." });
   pushMissing(issues, "client_id", payload.client_id, "DireNote client ID is not configured.");
   if (!payload.owner_email?.trim()) warnings.push({ field: "owner_email", message: "Owner email is missing. DireNote can still process the release, but HYMN recommends attaching the user email for processing communication.", severity: "warning", suggestion: "Attach the HYMN account email before submission." });
   const missingAlbumName = pushMissing(issues, "albumname", payload.albumname, "Album name is required.");

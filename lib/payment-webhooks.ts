@@ -175,20 +175,26 @@ async function applyPaymentState(input: { razorpayOrderId: string; paymentId: st
     const checkout = await tx.checkoutOrder.findUnique({ where: { razorpayOrderId: input.razorpayOrderId }, include: { items: true } });
     if (distribution && checkout) throw new Error("Ambiguous persisted Razorpay order identifier.");
     if (distribution) {
-      await tx.distributionOrder.update({ where: { id: distribution.id }, data: { paymentStatus: input.state } });
-      if (["refunded", "charged_back"].includes(input.state) && distribution.plan !== "one_time") await tx.subscription.updateMany({ where: { userId: distribution.userId, status: "active" }, data: { status: "cancelled" } });
-      if (["refunded", "charged_back"].includes(input.state)) await reverseReferralForTransactionInTransaction(tx, { transactionType: "distribution_order", transactionId: distribution.id, reason: input.state as "refunded" | "charged_back" });
+      if (ignoreStalePaymentState(distribution.paymentStatus, input.state)) return;
+      if (distribution.razorpayPaymentId && input.paymentId && distribution.razorpayPaymentId !== input.paymentId) throw new Error("Payment event does not match the captured order payment.");
+      const fullReversal = ["refunded", "charged_back"].includes(input.state) && input.amountMinor === distribution.amount * 100;
+      const state = ["refunded", "charged_back"].includes(input.state) && !fullReversal ? "partial_refund_review" : input.state;
+      await tx.distributionOrder.update({ where: { id: distribution.id }, data: { paymentStatus: state } });
+      if (fullReversal && distribution.plan !== "one_time") await tx.subscription.updateMany({ where: { userId: distribution.userId, status: "active" }, data: { status: "cancelled" } });
+      if (fullReversal) await reverseReferralForTransactionInTransaction(tx, { transactionType: "distribution_order", transactionId: distribution.id, reason: input.state as "refunded" | "charged_back" });
       await tx.auditLog.create({ data: { action: `RAZORPAY_${input.state.toUpperCase()}`, entity: "distribution_order", entityId: String(distribution.id), metadata: { eventId: input.eventId, paymentId: input.paymentId } } });
       return;
     }
     if (!checkout) return;
+    if (ignoreStalePaymentState(checkout.paymentStatus, input.state)) return;
+    if (checkout.razorpayPaymentId && input.paymentId && checkout.razorpayPaymentId !== input.paymentId) throw new Error("Payment event does not match the captured order payment.");
     if (input.state === "failed") {
       for (const item of checkout.items.filter((entry) => normalizeBeatLicenseType(entry.licenseType) === "exclusive")) {
         await tx.beat.updateMany({ where: { id: item.beatId, status: "EXCLUSIVE_RESERVED", exclusiveReservationOrderId: checkout.razorpayOrderId }, data: { status: "PUBLISHED", exclusiveReservedByUserId: null, exclusiveReservationOrderId: null, exclusiveReservationExpiresAt: null } });
       }
     }
     const fullAmountMinor = Number(checkout.finalAmount.mul(100));
-    const isFullReversal = ["refunded", "charged_back"].includes(input.state) && (input.amountMinor == null || input.amountMinor === fullAmountMinor);
+    const isFullReversal = ["refunded", "charged_back"].includes(input.state) && input.amountMinor === fullAmountMinor;
     const state = ["refunded", "charged_back"].includes(input.state) && !isFullReversal ? "partial_refund_review" : input.state;
     await tx.checkoutOrder.update({ where: { id: checkout.id }, data: { paymentStatus: state } });
     if (isFullReversal && input.paymentId) {
@@ -207,5 +213,12 @@ async function applyPaymentState(input: { razorpayOrderId: string; paymentId: st
     }
     await tx.auditLog.create({ data: { action: `RAZORPAY_${state.toUpperCase()}`, entity: "checkout_order", entityId: String(checkout.id), metadata: { eventId: input.eventId, paymentId: input.paymentId, amountMinor: input.amountMinor } } });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export function ignoreStalePaymentState(current: string, incoming: string) {
+  if (["authorized", "failed"].includes(incoming)) return !["created", "authorized", "failed"].includes(current);
+  if (incoming === "refund_pending") return ["refunded", "charged_back", "partial_refund_review"].includes(current);
+  if (incoming === "paid") return current !== "disputed";
+  return current === incoming;
 }
 // vercel trigger 9

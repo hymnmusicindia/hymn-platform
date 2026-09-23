@@ -37,6 +37,8 @@ async function main() {
   try {
     await pg.createDatabase("direnote_virtual");
     await run(["node_modules/prisma/build/index.js", "db", "push", "--skip-generate"]);
+    await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-release-pipeline-integration.ts"]);
+    await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-release-change-requests-integration.ts"]);
     if (process.argv.includes("--build")) await run(["node_modules/next/dist/bin/next", "build", "--webpack"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-direnote-lifecycle.ts", ...(process.argv.includes("--build") || process.argv.includes("--browser") ? ["--browser"] : [])]);
   } finally {

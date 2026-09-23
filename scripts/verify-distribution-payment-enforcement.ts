@@ -28,7 +28,7 @@ assert.match(form, /paidReleaseReusable === true/);
 assert.match(createOrder, /attachedOrder\?\.paymentStatus === "paid" && attachedOrder.fulfilledAt/);
 assert.ok(createOrder.indexOf("paidReleaseReusable: true") < createOrder.indexOf("await getSubscriptionByUserId"), "Recover paid drafts before starting another checkout.");
 const draftSave = source("lib/distribution-db.ts").split("export async function saveDraftDistributionRelease")[1].split("export async function")[0];
-assert.doesNotMatch(draftSave.split("update: {")[1].split("select:")[0], /paymentStatus:/, "Draft updates must preserve the persisted payment status.");
+assert.doesNotMatch(draftSave.split("const data = {")[1].split("const saved =")[0], /paymentStatus:/, "Draft updates must preserve the persisted payment status (also exercised against PostgreSQL).");
 assert.match(form, /Lyrics \(optional\)/);
 assert.doesNotMatch(form, /requires lyrics because/);
 assert.match(form, /useHymnCredits/);

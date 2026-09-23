@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import { requireUser } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { localStorageProvider } from "@/lib/storage-service";
@@ -14,6 +15,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const bytes = Buffer.from(await request.arrayBuffer());
   const expected = index === session.totalChunks - 1 ? session.totalSize - index * session.chunkSize : session.chunkSize;
   if (bytes.length !== expected) return NextResponse.json({ error: "Chunk size does not match the upload session." }, { status: 400 });
+  const expectedHash = Array.isArray(session.chunkHashes) ? session.chunkHashes[index] : null;
+  if (expectedHash && createHash("sha256").update(bytes).digest("hex") !== expectedHash) return NextResponse.json({ error: "Chunk content does not match the selected file. Start a new upload for a replacement file." }, { status: 409 });
   await localStorageProvider.writeChunk(session.tempPath, index, bytes);
   const updated = await prisma.$transaction(async transaction => {
     // Concurrent chunk requests must serialize their read/modify/write cycle.

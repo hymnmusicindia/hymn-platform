@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     const parsed = distributionEditSchema.parse(payload);
 
     const existingRelease = await getDetailedReleaseById(parsed.metadata.editReleaseId);
-    if (!existingRelease || (existingRelease.userId !== session.sub && session.role !== "admin" && session.role !== "producer")) {
+    if (!existingRelease || existingRelease.userId !== session.sub) {
       return NextResponse.json({ error: "Release not found." }, { status: 404 });
     }
     const existingStatus = String(existingRelease.status ?? "").trim().toLowerCase();

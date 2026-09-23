@@ -101,7 +101,7 @@ export function deserializeRelease(dbData: any): Release {
     lastEditedAt: dbData.lastEditedAt?.toISOString?.() ?? metadata.lastEditedAt ?? null,
     missingFields: Array.isArray(dbData.missingFields) ? dbData.missingFields : Array.isArray(metadata.missingFields) ? metadata.missingFields : [],
     distributionStores,
-    metadata: { ...metadata, distributionStores },
+    metadata: { ...metadata, distributionStores, artistProfileId: dbData.artistProfileId ?? metadata.artistProfileId },
     createdAt: dbData.createdAt.toISOString(),
     tracks: (dbData.tracks || []).map((track: any) => {
       const trackMeta = typeof track.metadata === "string" ? JSON.parse(track.metadata) : track.metadata || {};
@@ -1016,53 +1016,51 @@ export async function saveDraftDistributionRelease(input: {
   if (!pool) {
     if (isPostgresPrisma()) {
       const { tracks, ...rest } = input.metadata;
-      const dbRelease = await prisma.release.upsert({
-        where: { id: input.draftReleaseId || -1 },
-        create: {
-          userId: input.userId,
+      const dbRelease = await prisma.$transaction(async tx => {
+        if (input.draftReleaseId) {
+          const locked = await tx.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(81422028, ${input.draftReleaseId}::integer) AS locked`;
+          if (!locked[0]?.locked) throw new Error("This release is being saved or submitted. Retry saving shortly.");
+        }
+        const current = input.draftReleaseId
+          ? await tx.release.findFirst({ where: { id: input.draftReleaseId, userId: input.userId, archivedAt: null }, include: { tracks: true } })
+          : null;
+        if (input.draftReleaseId && !current) throw new Error("Draft release not found.");
+        if (current && current.status !== "DRAFT") throw new Error("This release is no longer a draft. Refresh before editing.");
+        const data = {
           title: input.metadata.releaseTitle || input.metadata.trackName || "Untitled Release",
           artistName: input.metadata.artistName || "",
           genre: input.metadata.primaryGenre || "",
-          status: "DRAFT",
           releaseType: input.metadata.releaseType || "single",
           artworkUrl: input.metadata.artworkUrl || null,
           audioUrl: input.metadata.audioUrl || null,
-          paymentStatus: input.metadata.paymentStatus || "pending",
-          releaseDate: input.metadata.releaseDate ? new Date(input.metadata.releaseDate) : new Date(),
-          metadata: rest as any
-        },
-        update: {
-          title: input.metadata.releaseTitle || input.metadata.trackName || "Untitled Release",
-          artistName: input.metadata.artistName || "",
-          genre: input.metadata.primaryGenre || "",
-          status: "DRAFT",
-          releaseType: input.metadata.releaseType || "single",
-          artworkUrl: input.metadata.artworkUrl || null,
-          audioUrl: input.metadata.audioUrl || null,
-          metadata: rest as any
-        },
-        select: { id: true }
-      });
-      
-      if (tracks && tracks.length) {
-        await prisma.track.deleteMany({ where: { releaseId: dbRelease.id } });
+          releaseDate: input.metadata.releaseDate ? new Date(input.metadata.releaseDate) : current?.releaseDate ?? new Date(),
+          metadata: rest as any,
+          reviewConfirmedAt: null,
+          reviewConfirmedBy: null,
+          upc: input.metadata.upcCode || current?.upc || null
+        };
+        const saved = current
+          ? await tx.release.update({ where: { id: current.id }, data })
+          : await tx.release.create({ data: { ...data, userId: input.userId, status: "DRAFT", paymentStatus: "pending" } });
+        const numbers = tracks.map((track, index) => track.trackNumber || index + 1);
+        if (new Set(numbers).size !== numbers.length) throw new Error("Every track must have a unique track number.");
+        const retainedIds: number[] = [];
         for (const [i, t] of tracks.entries()) {
           const trackRest = { ...t } as any;
           delete trackRest.id;
           delete trackRest.releaseId;
-          const savedTrack = await prisma.track.create({
-            data: {
-              releaseId: dbRelease.id,
-              title: t.trackTitle || "Untitled Track",
-              trackNumber: t.trackNumber || i + 1,
-              audioUrl: t.audioUrl,
-              primaryArtist: t.primaryArtist,
-              metadata: trackRest
-            }
-          });
-          await syncTrackContributions(prisma, { trackId: savedTrack.id, actorUserId: input.userId, contributions: t.contributors ?? [] });
+          const previous = current?.tracks.find(track => track.trackNumber === numbers[i]);
+          const trackData = { releaseId: saved.id, title: t.trackTitle || "Untitled Track", trackNumber: numbers[i], audioUrl: t.audioUrl, primaryArtist: t.primaryArtist, isrc: t.isrc || previous?.isrc || null, metadata: trackRest };
+          const savedTrack = previous
+            ? await tx.track.update({ where: { id: previous.id }, data: trackData })
+            : await tx.track.create({ data: trackData });
+          retainedIds.push(savedTrack.id);
+          await syncTrackContributions(tx, { trackId: savedTrack.id, actorUserId: input.userId, contributions: t.contributors ?? [] });
         }
-      }
+        await tx.track.deleteMany({ where: { releaseId: saved.id, id: { notIn: retainedIds } } });
+        await tx.auditLog.create({ data: { actorId: input.userId, actorType: "user", action: "RELEASE_DRAFT_SAVED", entity: "release", entityId: String(saved.id), metadata: { trackCount: retainedIds.length } } });
+        return saved;
+      }, { timeout: 30_000 });
       return (await getDetailedReleaseByUserId(input.userId, dbRelease.id)) as any;
     }
     const draft: Release = {

@@ -84,8 +84,11 @@ export function rejectOrCorrectionStatus(value: unknown): "rejected" | "changes_
       return null;
     }
     if (typeof node === "object") {
-      for (const key of Object.keys(node as Record<string, unknown>)) {
-        const detected = walk((node as Record<string, unknown>)[key]);
+      for (const [key, child] of Object.entries(node as Record<string, unknown>)) {
+        // Titles, lyrics, artist names and URLs can contain words such as
+        // "Rejected". Only status fields are authoritative lifecycle facts.
+        if (typeof child === "string" && !["status", "release_status", "track_status", "delivery_status", "remarks"].includes(key)) continue;
+        const detected = walk(child);
         if (detected) return detected;
       }
     }
@@ -266,10 +269,15 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     await tx.release.update({ where: { id: releaseId }, data: { ...(remoteUpc ? { upc: remoteUpc } : {}), direNoteStatus: aggregateStatus.provider, direNoteLastSyncedAt: new Date(), direNoteSyncError: null, metadata: json({ ...(record(release.metadata)), direNote: { ...previousDireNote, lastSyncedAt: new Date().toISOString(), status: aggregateStatus.provider, release: redactDireNoteDiagnostic(remoteRelease), correctionMessages } }) } });
   });
   const previousStatus = release.status.toLowerCase() as ReleaseStatus;
+  const staleRegression =
+    ["takedown_requested", "takedown_processing", "taken_down", "archived"].includes(previousStatus) ||
+    (previousStatus === "live" && aggregateStatus.canonical !== "live") ||
+    (previousStatus === "partially_live" && !["live", "partially_live"].includes(aggregateStatus.canonical ?? "")) ||
+    (previousStatus === "rejected" && ["live", "partially_live"].includes(aggregateStatus.canonical ?? ""));
   const providerAccepted = ["scheduled", "awaiting_live_confirmation", "partially_live", "live"].includes(aggregateStatus.provider);
   const customerWorkflow = !providerAccepted && ["changes_requested", "resubmitted", "under_review", "in_qc_queue", "in_queue", "submitted", "approved", "queued_for_distribution"].includes(previousStatus);
   const repeatCorrection = previousDireNote.appliedCorrectionFingerprint === correctionFingerprint;
-  if (aggregateStatus.canonical && (aggregateStatus.canonical !== previousStatus || (aggregateStatus.canonical === "changes_requested" && !repeatCorrection))
+  if (!staleRegression && aggregateStatus.canonical && (aggregateStatus.canonical !== previousStatus || (aggregateStatus.canonical === "changes_requested" && !repeatCorrection))
     && !(aggregateStatus.canonical === "changes_requested" && repeatCorrection)
     && !(customerWorkflow && !["changes_requested", "rejected"].includes(aggregateStatus.canonical))) {
     if (aggregateStatus.canonical === "changes_requested") {

@@ -98,7 +98,9 @@ export class LocalStorageProvider {
   async moveAssembled(source: string, relativePath: string) {
     const destination = safeAbsolute(relativePath);
     await fsp.mkdir(path.dirname(destination), { recursive: true });
-    await fsp.rename(source, destination);
+    // Never overwrite an earlier master/artwork when a customer replaces a file.
+    await fsp.copyFile(source, destination, fs.constants.COPYFILE_EXCL);
+    await fsp.unlink(source);
     return destination;
   }
 

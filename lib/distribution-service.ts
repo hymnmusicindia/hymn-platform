@@ -54,7 +54,7 @@ function validationResult(payload: DireNotePayload, options: { adminConfirmedExi
   const config = getDireNoteConfig();
   if (!config.endpoint) result.issues.unshift({ field: "endpoint", message: "DireNote endpoint is not configured.", severity: "error" });
   return {
-    ok: result.ok,
+    ok: result.issues.length === 0,
     issues: result.issues as DistributionValidationIssue[],
     warnings: result.warnings as DistributionValidationIssue[]
   };
@@ -69,17 +69,17 @@ export async function buildDireNotePayloadForRelease(release: Release, options: 
   const [owner, artistProfiles, artworkUrl, tracks] = await Promise.all([
     findUserById(release.userId),
     listArtistProfilesByUser(release.userId),
-    createDistributorAssetUrl(privateArtworkUrl || release.artworkUrl, options.siteUrl),
-    Promise.all((release.tracks ?? []).map(async (track) => ({ ...track, audioUrl: await createDistributorAssetUrl(track.audioUrl, options.siteUrl) }))),
+    createDistributorAssetUrl(privateArtworkUrl || release.artworkUrl, options.siteUrl, release.userId),
+    Promise.all((release.tracks ?? []).map(async (track) => ({ ...track, audioUrl: await createDistributorAssetUrl(track.audioUrl, options.siteUrl, release.userId) }))),
   ]);
 
   const sunoReceiptUrl = release.sunoReceiptUrl ?? release.suno_receipt_url;
   const licenseReceiptUrl = release.licenseReceiptUrl ?? release.license_receipt_url ?? release.licenseDocumentUrl ?? release.beatLicenseUrl;
   const proofs = {
-    sunoReceiptUrl: sunoReceiptUrl ? await createDistributorAssetUrl(sunoReceiptUrl, options.siteUrl) : sunoReceiptUrl,
+    sunoReceiptUrl: sunoReceiptUrl ? await createDistributorAssetUrl(sunoReceiptUrl, options.siteUrl, release.userId) : sunoReceiptUrl,
     // Attached private evidence is converted to an opaque, provider-readable
     // HTTPS URL. The original private download URL is never disclosed.
-    licenseReceiptUrl: licenseReceiptUrl ? await createDistributorAssetUrl(licenseReceiptUrl, options.siteUrl) : licenseReceiptUrl
+    licenseReceiptUrl: licenseReceiptUrl ? await createDistributorAssetUrl(licenseReceiptUrl, options.siteUrl, release.userId) : licenseReceiptUrl
   };
   return buildDireNotePayload({ ...release, ...proofs, artworkUrl, tracks }, {
     siteUrl: options.siteUrl,
@@ -117,7 +117,7 @@ function correctionReview(issues: DistributionValidationIssue[], reason: string,
 
 function httpErrorMode(status: number, providerReason?: string) {
   if (providerReason === "storageQuotaExceeded") return { retryable: true, releaseStatus: "delivery_failed" as const, queueStage: null, action: "DIRENOTE_STORAGE_QUOTA_EXCEEDED" };
-  if (status === 400) return { retryable: false, releaseStatus: "changes_requested" as const, queueStage: "rejected" as const, action: "DIRENOTE_VALIDATION_REJECTED" };
+  if (status === 400 || status === 422) return { retryable: false, releaseStatus: "changes_requested" as const, queueStage: "rejected" as const, action: "DIRENOTE_VALIDATION_REJECTED" };
   if (status === 401) return { retryable: false, releaseStatus: "delivery_failed" as const, queueStage: "rejected" as const, action: "DIRENOTE_CREDENTIAL_ERROR" };
   if (status === 405) return { retryable: false, releaseStatus: "delivery_failed" as const, queueStage: "rejected" as const, action: "DIRENOTE_METHOD_ERROR" };
   if (status === 429 || status >= 500) return { retryable: true, releaseStatus: "queued_for_distribution" as const, queueStage: null, action: "DIRENOTE_RETRYABLE_ERROR" };
@@ -135,6 +135,10 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
 async function submitLockedRelease(releaseId: number, options: { actorId?: number | null; siteUrl?: string; retry?: boolean; adminConfirmedExistingArtists?: boolean; correctionReingest?: boolean }) {
   const release = await getDetailedReleaseById(releaseId);
   if (!release) throw new Error("Release not found.");
+  if (release.paymentStatus !== "paid") throw new Error("A verified payment or entitlement is required before partner delivery.");
+  const rights = [release.ownershipConfirmed, release.noUnauthorizedSamples, release.collaboratorsCredited, release.platformCompliant, release.hymnNotLiable, release.agreedToTerms, release.falseMetadataAcknowledged];
+  if (rights.some(value => value !== true)) throw new Error("Complete all ownership and legal declarations before partner delivery.");
+  if (options.correctionReingest && !["changes_requested", "distributor_changes_required"].includes(release.status)) throw new Error("Only a release with requested provider corrections can be re-ingested.");
 
   // Check acceptance under the submission lock, before validation or approval can
   // alter a release that the distributor already owns. Corrections use an explicit re-ingest flow.
@@ -142,7 +146,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
   // release itself remains in QUEUED_FOR_DISTRIBUTION between attempts, so
   // treating that workflow status as an active submission would permanently
   // block every recovery retry.
-  if (!options.correctionReingest && !options.retry) {
+  if (!options.correctionReingest) {
     const accepted = await prisma.distributionSubmissionAttempt.findFirst({
       where: { releaseId, provider: "direnote", OR: [{ state: "submitted" }, { isCurrent: true }] },
       select: { id: true }
@@ -160,19 +164,19 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
       "delivered",
       "live"
     ];
-    if (accepted || activeSubmissionStatus.includes(release.status)) {
+    if (accepted) {
       return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: true, duplicate: true, retryable: false };
     }
+    if (!options.retry && activeSubmissionStatus.includes(release.status)) {
+      return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: false, duplicate: true, retryable: false, error: "A distribution attempt is already in progress. Check its status before retrying." };
+    }
   }
+  if (!options.correctionReingest && !["under_review", "approved", "queued_for_distribution", "delivery_failed", "failed"].includes(release.status)) throw new Error("This release is not eligible for partner submission in its current state.");
 
   await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: options.retry ? "DIRENOTE_RETRY_STARTED" : "APPROVE_RELEASE_STARTED" });
 
   const payload = await buildDireNotePayloadForRelease(release, options);
   const previousAttempt = options.correctionReingest ? await ensureCurrentDireNoteAttempt(releaseId) : null;
-  if (options.correctionReingest) {
-    delete payload.upc;
-    for (const track of payload.tracks) delete track.isrc;
-  }
   const validation = validationResult(payload, options);
   const redactedPayload = redactDireNotePayload(payload);
 
@@ -212,10 +216,11 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
   };
   await snapshotTrackContributions(claim.attempt.id, releaseId);
 
-  await updateDetailedReleaseStatus(releaseId, "queued_for_distribution", "Validated and queued for DireNote API.");
+  await updateDetailedReleaseStatus(releaseId, "queued_for_distribution", options.correctionReingest ? "Provider corrections validated for re-ingestion with the existing identifiers." : "Validated and queued for DireNote API.", undefined, { manualOverride: Boolean(options.correctionReingest), actorType: "system" });
   await updateDetailedReleaseStatus(releaseId, "submitting_to_distributor", "DireNote submission claimed and started.");
 
   let providerAccepted = false;
+  let providerRequestStarted = false;
   // Avoid a bracket character-class literal here: Tailwind's source extractor
   // can mistake it for an arbitrary CSS utility while scanning TypeScript.
   const correlationId = `DNM_SUB_${new Date().toISOString().replaceAll("-", "").replaceAll(":", "").replaceAll(".", "").replace("T", "").replace("Z", "").slice(0, 14)}_${claim.attempt.id}`;
@@ -225,15 +230,21 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
       payloadRedacted: JSON.parse(JSON.stringify(redactedPayload)),
       payloadDiff: previousAttempt?.payloadRedacted ? JSON.parse(JSON.stringify(diffDireNotePayload(previousAttempt.payloadRedacted, redactedPayload))) : undefined
     } });
+    providerRequestStarted = true;
     const response = await submitToDireNote(payload);
     const data = redactDireNoteDiagnostic(response.data ?? (response.error ? { error: response.error } : {}));
     if (!response.success) {
       const status = response.httpStatus ?? 503;
-      const mode = httpErrorMode(status, response.providerReason);
+      const uncertain = response.httpStatus === null || status >= 500 || (status >= 200 && status < 300) || status === 409;
+      const mode = uncertain
+        ? { retryable: false, releaseStatus: "delivery_failed" as const, queueStage: null, action: "DIRENOTE_RECONCILIATION_REQUIRED" }
+        : httpErrorMode(status, response.providerReason);
       const parsed = parseDireNoteResponse(data);
       const endpointNotFound = status === 404 && typeof response.raw === "string" && /page does not exist|page not found|endpoint_not_found/i.test(response.raw);
       const storageQuotaExceeded = response.providerReason === "storageQuotaExceeded";
-      const message = endpointNotFound
+      const message = uncertain
+        ? "DireNote's delivery outcome is unconfirmed. HYMN must reconcile this attempt with the partner before resending to prevent duplicate delivery."
+        : endpointNotFound
         ? "DireNote ingestion endpoint returned 404. Verify DIRENOTE_INGEST_ENDPOINT."
         : storageQuotaExceeded
           ? "DireNote cannot accept uploads because its Google Drive storage quota is full. The release is safe and was not rejected; free or increase storage on the DireNote account, then retry sending."
@@ -243,14 +254,14 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
         releaseId,
         mode.releaseStatus,
         message,
-        response.httpStatus === 400 ? correctionReview([{ field: "direnote", message }], message, "DireNote provider review") : undefined,
-        { manualOverride: response.httpStatus === 400, actorType: "system" }
+        [400, 422].includes(status) ? correctionReview([{ field: "direnote", message }], message, "DireNote provider review") : undefined,
+        { manualOverride: [400, 422].includes(status), actorType: "system" }
       );
-      await finishDistributionSubmission(claim.attempt.id, { state: mode.retryable ? "retryable" : "failed", httpStatus: response.httpStatus, safeError: message.slice(0, 500), responseRedacted: { message, warnings: parsed.warnings } });
+      await finishDistributionSubmission(claim.attempt.id, { state: uncertain ? "reconciliation_required" : mode.retryable ? "retryable" : "failed", httpStatus: response.httpStatus, safeError: message.slice(0, 500), responseRedacted: { message, warnings: parsed.warnings } });
       await logDistributionEvent({ releaseId, action: options.retry ? "retry_submission" : "release_submission", httpStatus: response.httpStatus, createdByAdminId: options.actorId, correlationId, requestPayload: redactedPayload, responsePayload: data, responseRaw: response.raw, warnings: parsed.warnings, errors: [message], success: false });
       if (mode.queueStage) await moveQueue(releaseId, mode.queueStage, options.actorId, message, { status: response.httpStatus, response: data });
       await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: mode.action, details: { attemptId: claim.attempt.id, correlationId, status: response.httpStatus, message } });
-      if (response.httpStatus !== 400) {
+      if (![400, 422].includes(status)) {
         await createAdminTaskOnce({ eventKey: `release:${releaseId}:direnote:provider:${response.providerReason ?? response.httpStatus ?? "unknown"}`, type: "DireNote Failed", priority: "critical", title: `DireNote provider failure: ${displayName(release)}`, body: message, href: `/admin?tab=releases&releaseId=${releaseId}`, entityType: "release", entityId: releaseId });
       }
       return { release: await getDetailedReleaseById(releaseId), validation, submitted: false, retryable: mode.retryable, retryCount: retryCountFromRelease(release) + 1, error: message, direnoteResponse: data };
@@ -261,11 +272,11 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     const automaticStatus = "sent_to_distributor" as const;
     const assignedTrackIsrcs = parsed.trackIsrcs;
     await activateDireNoteAttempt(claim.attempt.id, {
-      upc: parsed.upc ?? null,
+      upc: parsed.upc ?? release.upcCode ?? null,
       trackIdentifiers: (release.tracks ?? []).map(track => ({
         id: track.id, title: track.trackTitle, trackNumber: track.trackNumber,
         isrc: assignedTrackIsrcs.find(remote => remote.trackNumber === track.trackNumber || remote.trackTitle === track.trackTitle)?.isrc
-          ?? null
+          ?? track.isrc ?? null
       })),
       responseRedacted: redactDireNoteDiagnostic(data) as never
     });
@@ -289,16 +300,20 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
   } catch (error) {
     const message = error instanceof Error ? error.message : "DireNote submission failed.";
     if (providerAccepted) {
+      await prisma.distributionSubmissionAttempt.updateMany({
+        where: { id: claim.attempt.id, state: { not: "submitted" } },
+        data: { state: "reconciliation_required", safeError: "Provider accepted; local persistence requires reconciliation." }
+      });
       await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: "DIRENOTE_ACCEPTED_RECONCILIATION_REQUIRED", details: { attemptId: claim.attempt.id } });
       return { release: await getDetailedReleaseById(releaseId), validation, submitted: true, retryable: false, error: "DireNote accepted this submission. HYMN needs to reconcile the result; do not submit again." };
     }
     console.error("[DireNote] Submission pipeline failed", { releaseId, message });
-    await updateDetailedReleaseStatus(releaseId, "queued_for_distribution", message);
-    await finishDistributionSubmission(claim.attempt.id, { state: "retryable", safeError: message.slice(0, 500) });
+    await finishDistributionSubmission(claim.attempt.id, { state: providerRequestStarted ? "reconciliation_required" : "retryable", safeError: message.slice(0, 500) });
+    await updateDetailedReleaseStatus(releaseId, providerRequestStarted ? "delivery_failed" : "queued_for_distribution", message);
     await logDistributionEvent({ releaseId, requestPayload: redactedPayload, responsePayload: null, errors: [message], success: false });
     await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: "DIRENOTE_NETWORK_ERROR", details: { message } });
     await createAdminTaskOnce({ eventKey: `release:${releaseId}:direnote:network`, type: "DireNote Failed", priority: "critical", title: `DireNote submission failed: ${displayName(release)}`, body: message, href: `/admin?tab=releases&releaseId=${releaseId}`, entityType: "release", entityId: releaseId });
-    return { release: await getDetailedReleaseById(releaseId), validation, submitted: false, retryable: true, retryCount: retryCountFromRelease(release) + 1, error: message };
+    return { release: await getDetailedReleaseById(releaseId), validation, submitted: false, retryable: !providerRequestStarted, retryCount: retryCountFromRelease(release) + 1, error: message };
   }
 }
 

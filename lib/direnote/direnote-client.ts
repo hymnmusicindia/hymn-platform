@@ -108,9 +108,11 @@ async function postToDireNote(endpoint: string, payload: Record<string, unknown>
     if (!data || typeof data !== "object" || Array.isArray(data)) {
       return { success: false, httpStatus: response.status, contentType, raw: safeResponsePreview(raw, config), error: "DIRENOTE_MALFORMED_RESPONSE: DireNote returned JSON that was not an object." };
     }
-    const apiRejected = data?.success === false || Boolean(data?.error) || Boolean(data?.errors);
+    // The v2.2 contract requires an explicit acknowledgement. A proxy's 200
+    // response or an unrelated JSON object is not evidence of provider success.
+    const apiRejected = data.success !== true || Boolean(data.error) || (Array.isArray(data.errors) ? data.errors.length > 0 : Boolean(data.errors));
     const providerError = apiRejected || !response.ok ? extractDireNoteProviderError(data) : {};
-    let safeError = providerError.message;
+    let safeError = providerError.message || (response.ok && apiRejected ? "DIRENOTE_UNCONFIRMED_RESPONSE: DireNote did not explicitly acknowledge this request. Reconcile the provider result before sending again." : undefined);
     for (const secret of [config.pin, config.clientId]) if (secret) safeError = safeError?.split(secret).join("[REDACTED]");
     const retryHeader = response.headers.get("retry-after");
     const retryAfterSeconds = retryHeader ? Math.max(0, /^\d+$/.test(retryHeader) ? Number(retryHeader) : Math.ceil((Date.parse(retryHeader) - Date.now()) / 1000)) : undefined;
