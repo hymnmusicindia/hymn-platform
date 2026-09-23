@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { upcFromDireNoteResponse } from "@/lib/direnote-upc";
+import { validIsrc, validReleaseBarcode } from "@/lib/release-input-rules";
 
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -85,7 +86,9 @@ export async function ensureCurrentDireNoteAttempt(releaseId: number) {
     const release = await tx.release.findUniqueOrThrow({ where: { id: releaseId }, include: { tracks: true } });
     if (current) {
       const recoveredUpc = normalizeDireNoteAttemptUpc(current.responseRedacted) ?? normalizeDireNoteAttemptUpc(current.rawStatusPayload) ?? normalizeDireNoteAttemptUpc(release.metadata) ?? release.upc;
-      if (recoveredUpc && current.upc !== recoveredUpc) {
+      if (recoveredUpc && current.upc && current.upc !== recoveredUpc) throw new Error("Stored provider UPC conflicts with the current submission identity. Manual reconciliation is required.");
+      if (recoveredUpc && release.upc && release.upc !== recoveredUpc) throw new Error("Stored provider UPC conflicts with the release identity. Manual reconciliation is required.");
+      if (recoveredUpc && !current.upc) {
         if (release.upc !== recoveredUpc) await tx.release.update({ where: { id: release.id }, data: { upc: recoveredUpc } });
         return tx.distributionSubmissionAttempt.update({ where: { id: current.id }, data: { upc: recoveredUpc } });
       }
@@ -121,6 +124,8 @@ export async function activateDireNoteAttempt(id: number, input: { upc: string |
     const attempt = await tx.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id } });
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422027, ${attempt.releaseId}::integer)`;
     const release = await tx.release.findUniqueOrThrow({ where: { id: attempt.releaseId }, include: { tracks: true } });
+    input = { ...input, upc: input.upc || release.upc };
+    if (input.upc && !validReleaseBarcode(input.upc)) throw new Error("DireNote returned an invalid UPC. Reconcile the provider identity before continuing.");
     if (release.upc && input.upc && release.upc !== input.upc) throw new Error("DireNote returned a conflicting UPC. Reconcile the provider identity before continuing.");
     if (release.upc !== input.upc) await tx.externalIdentifierHistory.create({ data: { releaseId: release.id, provider: "direnote", identifierType: "upc", previousValue: release.upc, canonicalValue: input.upc ?? "awaiting_assignment", source: "submission_attempt" } });
     const metadata = release.metadata && typeof release.metadata === "object" && !Array.isArray(release.metadata) ? release.metadata : {};
@@ -130,6 +135,8 @@ export async function activateDireNoteAttempt(id: number, input: { upc: string |
       const identifier = item as { id: number; isrc: string | null };
       const track = release.tracks.find(row => row.id === identifier.id);
       if (!track) throw new Error("Submission track identity changed during ingest.");
+      identifier.isrc ||= track.isrc;
+      if (identifier.isrc && !validIsrc(identifier.isrc)) throw new Error("DireNote returned an invalid ISRC. Reconcile the recording identity before continuing.");
       if (track.isrc && identifier.isrc && track.isrc !== identifier.isrc) throw new Error("DireNote returned a conflicting ISRC. Reconcile the recording identity before continuing.");
       if (track.isrc !== identifier.isrc) await tx.externalIdentifierHistory.create({ data: { releaseId: release.id, trackId: track.id, provider: "direnote", identifierType: "isrc", previousValue: track.isrc, canonicalValue: identifier.isrc ?? "awaiting_assignment", source: "submission_attempt" } });
       await tx.track.update({ where: { id: track.id }, data: { isrc: identifier.isrc } });

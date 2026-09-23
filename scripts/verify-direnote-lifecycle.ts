@@ -49,7 +49,7 @@ const server = createServer(async (request, response) => {
     return;
   }
   if (mode === "malformed") { response.end("not JSON"); return; }
-  const ids = body.upc === oldUpc ? oldIsrcs : newIsrcs;
+  const ids = mode === "conflicting-isrc" ? ["INDN22609999", oldIsrcs[1]] : mode === "invalid-isrc" ? ["BAD", oldIsrcs[1]] : body.upc === oldUpc ? oldIsrcs : newIsrcs;
   response.end(JSON.stringify({ success: true, release: { album_name: "Magenta", upc_code: body.upc, status: mode === "accepted" ? "Accepted" : "Pending" }, tracks: ids.map((isrc, index) => ({ track_number: index + 1, track_name: `Track ${index + 1}`, isrc, artist: returnedArtist, status: "Pending", remarks: mode === "remark" && index === 1 ? remark : "NONE" })) }));
 });
 
@@ -151,15 +151,20 @@ async function main() {
   await prisma.release.update({ where: { id: release.id }, data: { direNoteLastAttemptedAt: new Date(0) } });
   await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));
   assert.equal(statusUpcs.at(-1), newUpc);
-  for (const failure of ["401", "500", "malformed"]) {
+  for (const failure of ["401", "500", "malformed", "conflicting-isrc", "invalid-isrc"]) {
     mode = failure;
     await assert.rejects(() => syncDireNoteRelease(release.id));
     const unchanged = await prisma.release.findUniqueOrThrow({ where: { id: release.id } });
     assert.equal(unchanged.status, "DISTRIBUTOR_PROCESSING");
     assert.equal(unchanged.upc, newUpc);
+    assert.deepEqual((await prisma.track.findMany({ where: { releaseId: release.id }, orderBy: { trackNumber: "asc" } })).map(track => track.isrc), oldIsrcs);
     assert(!JSON.stringify(await prisma.direNoteLog.findMany()).includes("fixture-pin"));
   }
   mode = "remark";
+  const syncLease = `direnote-release-sync:${release.id}`;
+  await prisma.$executeRaw`UPDATE "cron_leases" SET "leased_until" = NOW() + INTERVAL '5 minutes', "run_id" = 'competing-poll' WHERE "lease_key" = ${syncLease}`;
+  await assert.rejects(() => syncDireNoteRelease(release.id), /already being/);
+  await prisma.$executeRaw`UPDATE "cron_leases" SET "leased_until" = NOW() - INTERVAL '1 second' WHERE "lease_key" = ${syncLease}`;
   await syncDireNoteRelease(release.id);
   assert.equal(await prisma.notification.count({ where: { userId: user.id, title: { startsWith: "Fix required" } } }), 2);
   mode = "accepted";

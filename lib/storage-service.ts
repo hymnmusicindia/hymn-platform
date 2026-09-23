@@ -3,7 +3,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
-import { Transform } from "node:stream";
+import { Readable, Transform } from "node:stream";
 import { prisma } from "@/lib/prisma";
 import { managedStorageRoot } from "@/lib/hostinger-storage";
 
@@ -65,12 +65,15 @@ export class LocalStorageProvider {
     const folder = safeAbsolute(`Temp Uploads/${tempPath}`);
     await fsp.mkdir(folder, { recursive: true });
     const target = path.join(folder, `${String(index).padStart(5, "0")}.part`);
-    const existing = await fsp.stat(target).catch(() => null);
-    if (existing) {
-      if (existing.size !== bytes.length) throw new Error("Duplicate chunk size does not match.");
-      return existing.size;
-    }
-    await fsp.writeFile(target, bytes, { flag: "wx" });
+    const pending = `${target}.${crypto.randomUUID()}.pending`;
+    try {
+      await fsp.writeFile(pending, bytes, { flag: "wx" });
+      try { await fsp.link(pending, target); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        if (!(await fsp.readFile(target)).equals(bytes)) throw new Error("Duplicate chunk content does not match.");
+      }
+    } finally { await fsp.rm(pending, { force: true }); }
     return bytes.length;
   }
 
@@ -82,13 +85,15 @@ export class LocalStorageProvider {
     const hash = crypto.createHash("sha256");
     let size = 0;
     const meter = new Transform({ transform(chunk, _encoding, callback) { size += chunk.length; hash.update(chunk); callback(null, chunk); } });
-    meter.pipe(output);
-    for (let index = 0; index < totalChunks; index += 1) {
-      const part = path.join(folder, `${String(index).padStart(5, "0")}.part`);
-      await pipeline(fs.createReadStream(part), meter, { end: false });
+    async function* chunks() {
+      for (let index = 0; index < totalChunks; index += 1) {
+        const part = path.join(folder, `${String(index).padStart(5, "0")}.part`);
+        yield* fs.createReadStream(part);
+      }
     }
-    meter.end();
-    await new Promise<void>((resolve, reject) => { output.once("finish", resolve); output.once("error", reject); });
+    // One pipeline owns all streams so a missing chunk or disk failure rejects
+    // promptly and destroys the remaining streams instead of hanging completion.
+    await pipeline(Readable.from(chunks()), meter, output);
     if (size !== expectedSize) throw new Error("Assembled file size does not match the upload session.");
     const handle = await fsp.open(assembled, "r");
     const header = Buffer.alloc(12); await handle.read(header, 0, 12, 0); await handle.close();

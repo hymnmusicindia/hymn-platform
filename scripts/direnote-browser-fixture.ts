@@ -168,11 +168,13 @@ export async function startDireNoteBrowser(userId: number) {
         await expect(page.getByRole("button", { name: "Fix Track 2", exact: true })).toBeVisible();
         await expect(page.getByText("3473620313503", { exact: true }).first()).toBeVisible();
         await page.screenshot({ path: ".cache/direnote-correction-desktop.png", fullPage: true });
-        await page.setViewportSize({ width: 390, height: 844 });
-        await expect(page.getByRole("button", { name: "Fix Track 2", exact: true })).toBeVisible();
-        await page.screenshot({ path: ".cache/direnote-correction-mobile.png", fullPage: true });
-        const overflow = await page.evaluate(() => [...document.querySelectorAll("body *")].map(element => ({ tag: element.tagName, className: element.className, width: element.getBoundingClientRect().width, right: element.getBoundingClientRect().right })).filter(element => element.width > window.innerWidth || element.right > window.innerWidth + 2).slice(0, 12));
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth && document.body.scrollWidth <= window.innerWidth), JSON.stringify(overflow)).toBe(true);
+        for (const width of [320, 360, 375, 390, 430]) {
+          await page.setViewportSize({ width, height: 844 });
+          await expect(page.getByRole("button", { name: "Fix Track 2", exact: true })).toBeVisible();
+          await page.screenshot({ path: `.cache/direnote-correction-${width}.png`, fullPage: true });
+          const overflow = await page.evaluate(() => [...document.querySelectorAll("body *")].map(element => ({ tag: element.tagName, className: element.className, width: element.getBoundingClientRect().width, right: element.getBoundingClientRect().right })).filter(element => element.width > window.innerWidth || element.right > window.innerWidth + 2).slice(0, 12));
+          expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth && document.body.scrollWidth <= window.innerWidth), `${width}px: ${JSON.stringify(overflow)}`).toBe(true);
+        }
         await page.setViewportSize({ width: 1440, height: 1000 });
         await page.getByRole("button", { name: "Fix Track 2", exact: true }).click();
         await expect(page).toHaveURL(/correctionField=tracks\.1\./);

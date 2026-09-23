@@ -28,7 +28,7 @@ const mocks = {
   } } },
   "@/lib/media-placeholder": { missingImageSvg: () => "placeholder", missingImageResponseHeaders: () => ({ "Cache-Control": "no-store" }) },
   "@/lib/release-media": { storedAssetIdFromUrl: () => 9 },
-  "@/lib/public-home-data": { getPublicHomePreview: async () => ({ featuredReleases: featured ? [{ id: 42 }] : [] }) }
+  "@/lib/db": { getSiteSettings: async () => ({ homeFeaturedReleaseIds: featured ? [42] : [99] }) }
 };
 const source = fs.readFileSync(path.join(__dirname, "../app/api/releases/[id]/artwork/route.ts"), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;

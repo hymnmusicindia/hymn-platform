@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { localPrivateStorage } from "@/lib/private-storage";
 import { missingImageResponseHeaders, missingImageSvg } from "@/lib/media-placeholder";
 import { storedAssetIdFromUrl } from "@/lib/release-media";
-import { getPublicHomePreview } from "@/lib/public-home-data";
+import { getSiteSettings } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -22,9 +22,15 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   // Only covers already featured publicly may bypass owner authentication.
   // Check current status too, since the homepage preview is cached.
   const isLive = ["live", "partially_live"].includes(String(release.status).toLowerCase()) && !release.archivedAt;
-  const isPublicShowcaseArtwork = !canReadPrivateArtwork && isLive
-    ? (await getPublicHomePreview()).featuredReleases.some((featured) => featured.id === releaseId)
-    : false;
+  let isPublicShowcaseArtwork = false;
+  if (!canReadPrivateArtwork && isLive) {
+    // Do not invoke the cached homepage composition from this request. It reads
+    // every homepage collection and can throw when nested under request-bound
+    // session access. Empty selection means the homepage shows recent live
+    // releases; a configured selection restricts it to those IDs.
+    const selected = (await getSiteSettings()).homeFeaturedReleaseIds ?? [];
+    isPublicShowcaseArtwork = selected.length === 0 || selected.includes(releaseId);
+  }
   if (!canReadPrivateArtwork && !isPublicShowcaseArtwork) {
     if (!user && !admin) return new NextResponse(missingImageSvg(), { status: 200, headers: { ...missingImageResponseHeaders(), "X-HYMN-Release-Asset": "unauthorized" } });
     return new NextResponse(missingImageSvg(), { status: 200, headers: { ...missingImageResponseHeaders(), "X-HYMN-Release-Asset": "forbidden" } });

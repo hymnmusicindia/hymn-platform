@@ -37,6 +37,11 @@ async function main() {
   await writeFile(audioPath, wav());
   assert.equal((await verifyAudioIntegrity(audioPath, "audio/wav")).duration, 1);
   process.env.HYMN_STORAGE_ROOT = dir;
+  await Promise.all([localStorageProvider.writeChunk("resume", 0, Buffer.from("same")), localStorageProvider.writeChunk("resume", 0, Buffer.from("same"))]);
+  await assert.rejects(localStorageProvider.writeChunk("resume", 0, Buffer.from("evil")), /content does not match/);
+  await localStorageProvider.writeChunk("resume", 1, Buffer.from("tail"));
+  assert.equal((await localStorageProvider.assemble("resume", 2, 8)).size, 8);
+  await assert.rejects(localStorageProvider.assemble("resume", 3, 12), /ENOENT/);
   await localStorageProvider.write("retained.wav", Buffer.from("original master"));
   const replacement = path.join(dir, "replacement.wav");
   await writeFile(replacement, Buffer.from("replacement master"));

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { getDireNoteReleaseInformation, getDireNoteReleaseInformationByReference, getDireNoteRevenueReport, redactDireNoteDiagnostic } from "@/lib/direnote";
 import { importDireNoteRevenueReport } from "@/lib/direnote-revenue";
@@ -12,6 +13,7 @@ import { direNoteCorrectionFingerprint, extractDireNoteCorrections, matchDireNot
 import { normalizeDireNoteUpc, upcFromDireNoteIsrcReport, upcFromDireNoteResponse } from "@/lib/direnote-upc";
 import { ensureCurrentDireNoteAttempt } from "@/lib/distribution-idempotency";
 import { attachedArtistProfileIds, verifiedArtistStoreLinks } from "@/lib/artist-store-links";
+import { validIsrc, validReleaseBarcode } from "@/lib/release-input-rules";
 
 type RecordValue = Record<string, unknown>;
 
@@ -115,15 +117,24 @@ function aggregateReleaseStatus(tracks: RecordValue[], releaseStatus: unknown, r
 
 /** Fetches the documented UPC lookup and caches provider facts without overwriting HYMN metadata. */
 export async function syncDireNoteRelease(releaseId: number, actorId?: number | null) {
-  // This short transaction only arbitrates entry. Provider HTTP happens after
-  // it commits; holding an xact advisory lock through a network call starves
-  // the connection pool and blocks every other reconciliation.
+  // A durable lease spans HTTP without holding a database connection open.
+  const leaseKey = `direnote-release-sync:${releaseId}`;
+  const runId = randomUUID();
   const acquired = await prisma.$transaction(async lock => {
     const rows = await lock.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(81422028, ${releaseId}::integer) AS locked`;
-    return Boolean(rows[0]?.locked);
+    if (!rows[0]?.locked) return false;
+    const leases = await lock.$queryRaw<Array<{ run_id: string }>>`
+      INSERT INTO "cron_leases" ("lease_key", "run_id", "leased_until", "updated_at")
+      VALUES (${leaseKey}, ${runId}, NOW() + INTERVAL '5 minutes', NOW())
+      ON CONFLICT ("lease_key") DO UPDATE SET "run_id" = EXCLUDED."run_id", "leased_until" = EXCLUDED."leased_until", "updated_at" = NOW()
+      WHERE "cron_leases"."leased_until" < NOW() RETURNING "run_id"`;
+    return leases[0]?.run_id === runId;
   }, { timeout: 10_000, maxWait: 5_000 });
   if (!acquired) throw new Error("DireNote release is already being synchronized or submitted.");
-  return syncCurrentDireNoteRelease(releaseId, actorId);
+  try { return await syncCurrentDireNoteRelease(releaseId, actorId); }
+  finally {
+    await prisma.$executeRaw`UPDATE "cron_leases" SET "leased_until" = NOW(), "updated_at" = NOW() WHERE "lease_key" = ${leaseKey} AND "run_id" = ${runId}`;
+  }
 }
 
 async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | null) {
@@ -239,6 +250,18 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422027, ${releaseId}::integer)`;
     const stillCurrent = await tx.distributionSubmissionAttempt.findFirst({ where: { id: attempt.id, isCurrent: true } });
     if (!stillCurrent) throw new Error("DireNote attempt was superseded during status lookup. Retry the current attempt.");
+    const currentRelease = await tx.release.findUniqueOrThrow({ where: { id: releaseId }, include: { tracks: true } });
+    const receivedUpc = normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc;
+    if (receivedUpc && (!validReleaseBarcode(receivedUpc) || (currentRelease.upc && currentRelease.upc !== receivedUpc))) {
+      throw new Error("DireNote UPC conflicts with the stored release identity or has an invalid check digit. No identifiers were changed.");
+    }
+    for (const track of currentRelease.tracks) {
+      const external = remoteTracks.find(remote => matchDireNoteTrack(remote, mappingTracks)?.id === track.id);
+      const receivedIsrc = text(external?.isrc);
+      if (receivedIsrc && (!validIsrc(receivedIsrc) || (track.isrc && track.isrc !== receivedIsrc))) {
+        throw new Error(`DireNote ISRC conflicts with track ${track.trackNumber}'s stored recording identity or is invalid. No identifiers were changed.`);
+      }
+    }
     await tx.distributionSubmissionAttempt.update({ where: { id: attempt.id }, data: {
       lastCheckedAt: new Date(), providerStatus: aggregateStatus.provider, rawStatusPayload: safe as never,
       upc: normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc,
