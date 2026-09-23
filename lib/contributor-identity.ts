@@ -136,19 +136,27 @@ async function partyForCredit(db: any, actorUserId: number, contribution: Canoni
 
 export async function syncTrackContributions(db: any, input: { trackId: number; actorUserId: number; contributions: CanonicalContributionInput[] }) {
   const desired: Array<{ partyId: number; role: ContributorRole; creditedName: string; legalNameSnapshot: string | null; providerRole: string | null; sequence: number }> = [];
+  // Reuse identities across roles within this save, never by matching names.
+  const resolvedParties = new Map<string, Awaited<ReturnType<typeof partyForCredit>>["party"]>();
   for (const [sequence, raw] of input.contributions.entries()) {
     const role = normalizeContributorRole(raw.role);
     if (!role) throw new Error(`Unsupported contributor role: ${raw.role}`);
     const providerRole = mapContributorRoleToDireNote(role);
     const creditedName = providerRole === "producer" ? String(raw.artistName || raw.name || "").trim() : String(raw.legalName || raw.name || "").trim();
     if (!creditedName) throw new Error(providerRole === "producer" ? "Producer artist name is required." : "Contributor legal name is required.");
-    const { party, created } = await partyForCredit(db, input.actorUserId, raw);
+    const identityKey = raw.partyId ? `party:${raw.partyId}` : raw.clientReference?.trim() ? `ref:${raw.clientReference.trim()}` : undefined;
+    const cachedParty = identityKey ? resolvedParties.get(identityKey) : undefined;
+    const { party, created } = cachedParty ? { party: cachedParty, created: false } : await partyForCredit(db, input.actorUserId, raw);
+    if (identityKey) resolvedParties.set(identityKey, party);
     desired.push({ partyId: party.id, role, creditedName, legalNameSnapshot: raw.legalName?.trim() || null, providerRole, sequence });
     if (created) await db.auditLog.create({ data: { actorId: input.actorUserId, actorType: "user", actorRole: "release_owner", entity: "contributor_party", entityId: String(party.id), action: "contributor.identity_created", newValue: { publicId: party.publicId, professionalName: party.professionalName }, metadata: { source: "release_credit" } } });
   }
   const unique = new Map(desired.map((item) => [`${item.partyId}:${item.role}`, item]));
   const current = await db.trackContribution.findMany({ where: { trackId: input.trackId, source: "RELEASE_FORM" } });
+  const currentByKey = new Map(current.map((item: any) => [`${item.partyId}:${item.role}`, item] as const));
   for (const item of unique.values()) {
+    const previous = currentByKey.get(`${item.partyId}:${item.role}`) as any;
+    if (previous && previous.creditedName === item.creditedName && previous.legalNameSnapshot === item.legalNameSnapshot && previous.providerRole === item.providerRole && previous.sequence === item.sequence) continue;
     await db.trackContribution.upsert({
       where: { trackId_partyId_role: { trackId: input.trackId, partyId: item.partyId, role: item.role } },
       create: { trackId: input.trackId, ...item, source: "RELEASE_FORM", createdByUserId: input.actorUserId },

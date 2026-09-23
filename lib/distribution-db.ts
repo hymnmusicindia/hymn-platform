@@ -1387,6 +1387,8 @@ export async function updatePaidDistributionRelease(input: {
   if (!pool) {
     if (isPostgresPrisma()) {
       const { tracks, ...rest } = input.metadata;
+      // Saving all tracks, identities and credits can exceed Prisma's 5s default
+      // on a remote database. Keep the save atomic with a bounded 30s budget.
       await prisma.$transaction(async (tx) => {
         const lock = await tx.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(81422028, ${input.releaseId}::integer) AS locked`;
         if (!lock[0]?.locked) throw new Error("This release is being synchronized or submitted. Retry saving shortly.");
@@ -1437,7 +1439,7 @@ export async function updatePaidDistributionRelease(input: {
           const attempt = await tx.distributionSubmissionAttempt.findFirst({ where: { releaseId: input.releaseId, provider: "direnote", isCurrent: true } });
           if (attempt) await tx.distributionSubmissionAttempt.update({ where: { id: attempt.id }, data: { corrections: { ...(typeof attempt.corrections === "object" && attempt.corrections ? attempt.corrections : {}), status: "customer_resolved", artistResolvedAt: new Date().toISOString() } } });
         }
-      });
+      }, { timeout: 30_000 });
       if (existingRelease.status === "changes_requested" && existingRelease.direNoteStatus) return getDetailedReleaseByUserId(input.userId, input.releaseId);
       const reviewReason = "Paid release metadata was submitted for review.";
       const currentStatus = String(existingRelease.status ?? "").trim().toLowerCase();

@@ -48,7 +48,7 @@
     "test:direnote-virtual": "node --import tsx scripts/verify-direnote-virtual.ts",
     "test:direnote-e2e": "node --import tsx scripts/verify-direnote-virtual.ts --build",
     "test:managed-services": "tsx scripts/verify-managed-services.ts",
-    "test:producer-lifecycle": "tsx scripts/verify-producer-lifecycle.ts",
+    "test:producer-lifecycle": "tsx scripts/verify-producer-lifecycle.ts && node --conditions=react-server --import tsx scripts/verify-contributor-sync.ts",
     "test:performance-execution": "tsx scripts/verify-performance-execution.ts",
     "test:managed-services-integration": "tsx scripts/verify-managed-services-integration.ts",
     "audit:producer-identities": "tsx scripts/audit-producer-identity-migration.ts",
