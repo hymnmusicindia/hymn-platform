@@ -16,7 +16,8 @@ export async function startDireNoteBrowser(userId: number) {
     if (!ready) throw new Error("Production server did not become ready.");
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, extraHTTPHeaders: { "x-forwarded-proto": "https" } });
     await context.route("https://cdn.example.test/cover.jpg", route => route.fulfill({ path: "public/assets/producers/placeholder-1.jpg", contentType: "image/jpeg" }));
-    await context.addCookies([{ name: "hymn_session", value: jwt.sign({ sub: userId, email: "gxrry@example.test", name: "gxrry", role: "customer" }, process.env.JWT_SECRET!, { expiresIn: "1h" }), url: origin }]);
+    const addUserSession = () => context.addCookies([{ name: "hymn_session", value: jwt.sign({ sub: userId, email: "gxrry@example.test", name: "gxrry", role: "customer" }, process.env.JWT_SECRET!, { expiresIn: "1h" }), url: origin }]);
+    await addUserSession();
     const page = await context.newPage();
     let artistWizardUrl = "";
     return {
@@ -117,6 +118,7 @@ export async function startDireNoteBrowser(userId: number) {
         await page.screenshot({ path: ".cache/artist-store-links-after-cron.png", fullPage: true });
       },
       async readinessIsolation(singleId: number, staleId: number) {
+        await context.addCookies([{ name: "hymn_admin_session", value: jwt.sign({ username: "admin", role: "admin" }, process.env.ADMIN_JWT_SECRET!, { expiresIn: "1h" }), url: origin }]);
         const actual = await context.request.get(`${origin}/api/admin/releases/${singleId}/direnote/readiness`);
         expect(actual.status()).toBe(200);
         const data = await actual.json();
@@ -148,6 +150,7 @@ export async function startDireNoteBrowser(userId: number) {
         await page.screenshot({ path: ".cache/harado-readiness-mobile.png", fullPage: true });
         await page.setViewportSize({ width: 1440, height: 1000 });
         await page.unroute(staleRoute);
+        await context.clearCookies({ name: "hymn_admin_session" });
       },
       async paidDraftCheckout(releaseId: number, fulfilled: boolean, expectedStatus = 200) {
         const response = await context.request.post(`${origin}/api/distribution/payment/create-order`, { data: { draftReleaseId: releaseId, plan: "one_time", paymentModel: "one_time", trackCount: 1, releaseType: "single", platforms: ["Spotify"] } });
@@ -256,6 +259,7 @@ export async function startDireNoteBrowser(userId: number) {
         await page.screenshot({ path: ".cache/direnote-admin-history.png", fullPage: true });
       },
       async repeatAcceptedSubmission(releaseId: number) {
+        await context.addCookies([{ name: "hymn_admin_session", value: jwt.sign({ username: "admin", role: "admin" }, process.env.ADMIN_JWT_SECRET!, { expiresIn: "1h" }), url: origin }]);
         const attempts = [
           () => context.request.patch(`${origin}/api/admin/update-status/${releaseId}`, { data: { status: "sent" } }),
           () => context.request.post(`${origin}/api/admin/releases/${releaseId}/direnote`, { data: { action: "submit" } }),
@@ -266,6 +270,16 @@ export async function startDireNoteBrowser(userId: number) {
           expect(response.status(), await response.text()).toBe(200);
           expect((await response.json()).release.status).toBe("sent_to_distributor");
         }
+        await context.clearCookies({ name: "hymn_admin_session" });
+      },
+      async expiredSessionKeepsDraft(releaseId: number) {
+        await context.clearCookies();
+        const expired = await context.request.post(`${origin}/api/distribution/releases/${releaseId}/edit`);
+        expect(expired.status()).toBe(401);
+        await addUserSession();
+        const recovered = await context.request.post(`${origin}/api/distribution/releases/${releaseId}/edit`);
+        expect(recovered.status(), await recovered.text()).toBe(200);
+        expect((await recovered.json()).release.id).toBe(releaseId);
       },
       async stop() { await browser.close(); app.kill(); await stopped; }
     };

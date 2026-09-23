@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { prisma } from "../lib/prisma";
 import { saveDraftDistributionRelease } from "../lib/distribution-db";
-import { claimDistributionSubmission, finishDistributionSubmission } from "../lib/distribution-idempotency";
+import { claimDistributionSubmission, finishDistributionSubmission, submissionRetryDelayMs } from "../lib/distribution-idempotency";
 import { reserveFirstRelease, FIRST_RELEASE_PROMOTION_CODE } from "../lib/first-release-promotion";
 import { confirmDistributionPayment, receiveRazorpayEvent, processRazorpayEvent } from "../lib/payment-webhooks";
 import { confirmDistributionNonReceipt } from "../lib/distribution-recovery";
+import { releaseReviewSnapshotHash } from "../lib/release-review-snapshot";
+import { POST as cleanupUploads } from "../app/api/cron/storage-cleanup/route";
+import { findReleaseIdentifierConflicts } from "../lib/release-identifier-conflicts";
 
 assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/fixture:fixture@127\.0\.0\.1:55439\/direnote_virtual/);
 
@@ -19,6 +22,8 @@ async function main() {
   const saved = await saveDraftDistributionRelease({ userId: user.id, draftReleaseId: release.id, metadata });
   assert.deepEqual(saved.tracks.map((row: any) => row.id), before.map(row => row.id), "Draft retries preserve track IDs");
   assert.equal(await prisma.contributorParty.count({ where: { createdByUserId: user.id } }), 1);
+  const reviewedHash = await releaseReviewSnapshotHash(release.id, user.id);
+  assert.match(reviewedHash ?? "", /^[a-f0-9]{64}$/);
   const beforeFailure = await prisma.track.findMany({ where: { releaseId: release.id }, orderBy: { trackNumber: "asc" } });
   const corrupt = { ...metadata, releaseTitle: "Must roll back", tracks: [track(1), { ...track(2), contributors: [{ role: "INVALID", legalName: "Broken" }] }] };
   await assert.rejects(saveDraftDistributionRelease({ userId: user.id, draftReleaseId: release.id, metadata: corrupt }), /Unsupported/);
@@ -32,6 +37,7 @@ async function main() {
   const edited = await prisma.release.findUniqueOrThrow({ where: { id: release.id } });
   assert.equal(edited.paymentStatus, "paid");
   assert.equal(edited.reviewConfirmedAt, null, "An edit invalidates the review confirmation");
+  assert.notEqual(await releaseReviewSnapshotHash(release.id, user.id), reviewedHash, "Persisted review fingerprint changes with authoritative release metadata");
   assert.equal(await prisma.track.count({ where: { releaseId: release.id } }), 1);
   await prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422028, ${release.id}::integer)`;
@@ -43,6 +49,7 @@ async function main() {
   await prisma.distributionSubmissionAttempt.update({ where: { id: claim.attempt.id }, data: { startedAt: new Date(0) } });
   assert.equal((await claimDistributionSubmission(release.id, { version: 2 })).claimed, false, "Changed payload must not bypass an uncertain prior delivery");
   assert.equal(await prisma.distributionSubmissionAttempt.count({ where: { releaseId: release.id } }), 1);
+  assert(submissionRetryDelayMs(2, claim.attempt.idempotencyKey) > submissionRetryDelayMs(1, claim.attempt.idempotencyKey), "Submission retry delay uses bounded exponential backoff with jitter");
   await assert.rejects(confirmDistributionNonReceipt({ releaseId: release.id, attemptId: claim.attempt.id, adminId: user.id, evidence: "No", providerReference: "ticket" }), /confirmation/);
   await confirmDistributionNonReceipt({ releaseId: release.id, attemptId: claim.attempt.id, adminId: user.id, evidence: "Provider support confirmed no ingestion exists for this exact attempt.", providerReference: "fixture-ticket-1" });
   assert.equal((await claimDistributionSubmission(release.id, { version: 1 })).claimed, true);
@@ -61,6 +68,14 @@ async function main() {
   const reservations = await Promise.allSettled(Array.from({ length: 2 }, () => reserveFirstRelease({ userId: other.id, originalAmount: 99, discountAmount: 99, finalAmount: 0 })));
   assert.equal(reservations.filter(result => result.status === "fulfilled").length, 1, "Only one concurrent free entitlement reservation succeeds");
   assert.equal(await prisma.promotionRedemption.count({ where: { userId: other.id } }), 1);
+  const staleUpload = await prisma.uploadSession.create({ data: { userId: user.id, releaseId: release.id, assetCategory: "TRACK_AUDIO_MASTER", originalFilename: "stale.wav", mimeType: "audio/wav", totalSize: 10, chunkSize: 10, totalChunks: 1, uploadedChunks: [0], bytesUploaded: 10, status: "ASSEMBLING", tempPath: `stale-${Date.now()}`, expiresAt: new Date(Date.now() + 60_000) } });
+  await prisma.uploadSession.update({ where: { id: staleUpload.id }, data: { updatedAt: new Date(Date.now() - 20 * 60_000) } });
+  const cleanup = await cleanupUploads(new Request("http://localhost/api/cron/storage-cleanup", { method: "POST", headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } }));
+  assert.equal(cleanup.status, 200);
+  assert.equal((await prisma.uploadSession.findUniqueOrThrow({ where: { id: staleUpload.id } })).status, "FAILED", "Interrupted upload finalization becomes safely retryable");
+  const identityOwner = await prisma.release.create({ data: { userId: other.id, title: "Identity owner", artistName: "Other Artist", genre: "Pop", releaseDate: new Date("2099-01-10"), releaseType: "single", status: "DRAFT", upc: "3473620313503", tracks: { create: { title: "Other recording", trackNumber: 1, primaryArtist: "Other Artist", isrc: "INDN22602442", audioUrl: "/api/assets/999999/download" } } } });
+  const conflicts = await findReleaseIdentifierConflicts({ releaseId: release.id, upc: identityOwner.upc, tracks: [{ trackNumber: 1, isrc: "INDN22602442", audioUrl: "/api/assets/999998/download" }] });
+  assert.deepEqual(conflicts.map(conflict => conflict.code).sort(), ["ISRC_RECORDING_CONFLICT", "UPC_ALREADY_ASSIGNED"]);
   console.log("Pipeline PostgreSQL regression passed: 10 tracks, stable IDs, rollback, owner/status guards, review invalidation, save lock, uncertain-delivery deduplication, free-release race.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => prisma.$disconnect());

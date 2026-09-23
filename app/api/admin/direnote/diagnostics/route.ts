@@ -22,13 +22,40 @@ async function lastTest() {
 
 export async function GET() {
   const admin = await requireAdminPermission("system.manage"); if ("error" in admin) return admin.error;
-  const [lastSync, lastSuccessfulSync] = await Promise.all([
+  const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const [lastSync, lastSuccessfulSync, stuckAttempts, anomalousReleases] = await Promise.all([
     prisma.direNoteSyncRun.findFirst({ orderBy: { startedAt: "desc" } }),
-    prisma.direNoteSyncRun.findFirst({ where: { status: "completed" }, orderBy: { completedAt: "desc" } })
+    prisma.direNoteSyncRun.findFirst({ where: { status: "completed" }, orderBy: { completedAt: "desc" } }),
+    prisma.distributionSubmissionAttempt.findMany({
+      where: { provider: "direnote", isCurrent: true, OR: [
+        { state: "processing", updatedAt: { lt: sixHoursAgo } },
+        { state: "reconciliation_required" },
+        { state: "submitted", providerStatus: { in: ["processing", "scheduled", "awaiting_live_confirmation", "partially_live"] }, lastCheckedAt: { lt: fourteenDaysAgo } }
+      ] },
+      select: { id: true, releaseId: true, state: true, providerStatus: true, startedAt: true, updatedAt: true, lastCheckedAt: true, safeError: true, release: { select: { title: true, status: true } } },
+      orderBy: { updatedAt: "asc" }, take: 100
+    }),
+    prisma.release.findMany({
+      where: { archivedAt: null, OR: [
+        { status: { in: ["QUEUED_FOR_DISTRIBUTION", "SUBMITTING_TO_DISTRIBUTOR"] }, distributionSubmissions: { none: { provider: "direnote", state: { in: ["processing", "submitted", "reconciliation_required"] } } } },
+        { status: "DRAFT", paymentStatus: "paid", updatedAt: { lt: sixHoursAgo } },
+        { status: "DRAFT", direNoteStatus: { not: null } },
+        { status: "LIVE", distributionSubmissions: { none: { provider: "direnote", state: "submitted" } } }
+      ] },
+      select: { id: true, title: true, status: true, paymentStatus: true, direNoteStatus: true, updatedAt: true },
+      orderBy: { updatedAt: "asc" }, take: 100
+    })
   ]);
   const lastSyncAt = lastSync?.startedAt.getTime() ?? 0;
   const syncHealth = !lastSyncAt ? "unknown" : Date.now() - lastSyncAt > 2 * 60 * 60 * 1000 ? "degraded" : lastSync?.status === "completed" ? "healthy" : "degraded";
-  return NextResponse.json({ ...status(), lastTest: await lastTest(), syncHealth, lastSync: lastSync ? { ...lastSync, summary: redactDireNoteDiagnostic(lastSync.summary) } : null, lastSuccessfulSync: lastSuccessfulSync ? { completedAt: lastSuccessfulSync.completedAt, runId: lastSuccessfulSync.runId } : null });
+  return NextResponse.json({ ...status(), lastTest: await lastTest(), syncHealth, lastSync: lastSync ? { ...lastSync, summary: redactDireNoteDiagnostic(lastSync.summary) } : null, lastSuccessfulSync: lastSuccessfulSync ? { completedAt: lastSuccessfulSync.completedAt, runId: lastSuccessfulSync.runId } : null,
+    operationalHealth: {
+      issueCount: stuckAttempts.length + anomalousReleases.length,
+      stuckAttempts: stuckAttempts.map(item => ({ ...item, safeError: item.safeError?.slice(0, 500) ?? null })),
+      anomalousReleases
+    }
+  });
 }
 
 export async function POST() {

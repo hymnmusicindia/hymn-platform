@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { validIsrc, validReleaseBarcode } from "../lib/release-input-rules";
 
 const db = new PrismaClient();
 const apply = process.argv.includes("--apply");
@@ -8,7 +9,7 @@ const releaseId = releaseArgument ? Number(releaseArgument.slice("--release-id="
 if (releaseArgument && (!Number.isInteger(releaseId) || !releaseId || releaseId < 1)) throw new Error("--release-id must be a positive integer");
 
 function record(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
-function validUpc(value: unknown) { const valueText = String(value ?? "").replace(/[\s-]/g, ""); return /^\d{12,14}$/.test(valueText) ? valueText : null; }
+function validUpc(value: unknown) { const valueText = String(value ?? "").replace(/[\s-]/g, ""); return validReleaseBarcode(valueText) ? valueText : null; }
 
 async function main() {
   const attempts = await db.distributionSubmissionAttempt.findMany({
@@ -48,11 +49,24 @@ async function main() {
       if (supersedeAttemptIds.length) await tx.distributionSubmissionAttempt.updateMany({ where: { id: { in: supersedeAttemptIds } }, data: { isCurrent: false, providerStatus: "superseded" } });
       const attempt = await tx.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: repair.attemptId }, include: { release: { include: { tracks: true } } } });
       const upc = validUpc(repair.changes.upc);
-      if (upc) await tx.release.update({ where: { id: repair.releaseId }, data: { upc } });
+      if (upc) {
+        const conflict = await tx.release.findFirst({ where: { id: { not: repair.releaseId }, upc }, select: { id: true } });
+        if (conflict) throw new Error(`Refusing UPC repair for release ${repair.releaseId}: identifier is already assigned.`);
+        if (attempt.release.upc !== upc) {
+          await tx.externalIdentifierHistory.create({ data: { releaseId: repair.releaseId, provider: "direnote", identifierType: "upc", previousValue: attempt.release.upc, canonicalValue: upc, source: "reconciliation_tool" } });
+          await tx.release.update({ where: { id: repair.releaseId }, data: { upc } });
+        }
+      }
       const identifiers = Array.isArray(attempt.trackIdentifiers) ? attempt.trackIdentifiers as Array<Record<string, unknown>> : [];
       for (const track of attempt.release.tracks) {
         const isrc = String(identifiers.find(item => Number(item.id) === track.id)?.isrc ?? "").trim();
-        if (isrc && !track.isrc) await tx.track.update({ where: { id: track.id }, data: { isrc } });
+        if (isrc && !validIsrc(isrc)) throw new Error(`Refusing invalid ISRC repair for track ${track.id}.`);
+        if (isrc && !track.isrc) {
+          const conflict = await tx.track.findFirst({ where: { id: { not: track.id }, isrc }, select: { id: true } });
+          if (conflict) throw new Error(`Refusing ISRC repair for track ${track.id}: identifier is already assigned.`);
+          await tx.externalIdentifierHistory.create({ data: { releaseId: repair.releaseId, trackId: track.id, provider: "direnote", identifierType: "isrc", previousValue: null, canonicalValue: isrc, source: "reconciliation_tool" } });
+          await tx.track.update({ where: { id: track.id }, data: { isrc } });
+        }
       }
       if (repair.changes.status === "SENT_TO_DISTRIBUTOR") await tx.release.update({ where: { id: repair.releaseId }, data: { status: "SENT_TO_DISTRIBUTOR" } });
     });

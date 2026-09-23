@@ -2873,7 +2873,10 @@ export function ReleaseForm({
       const reviewReleaseId = await ensureUploadDraft();
       const confirmationResponse = await fetch("/api/distribution/review-confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ releaseId: reviewReleaseId, metadataSnapshot: autosaveSnapshot }) });
       const confirmation = await confirmationResponse.json().catch(() => ({}));
-      if (!confirmationResponse.ok) throw new Error(confirmation.error || "Could not save review confirmation.");
+      if (!confirmationResponse.ok) {
+        const details = Array.isArray(confirmation.errors) ? confirmation.errors.map((item: { message?: unknown }) => String(item?.message || "")).filter(Boolean) : [];
+        throw new Error(details.length ? details.join(" · ") : confirmation.error || "Could not save review confirmation.");
+      }
 
       const orderRequestPayload = {
         plan: selectedPlan,
@@ -6238,6 +6241,9 @@ export function ReleaseForm({
           <p
             className="text-xs md:text-sm"
             style={{ color: "var(--text-muted)" }}
+            role="alert"
+            aria-live="assertive"
+            tabIndex={-1}
           >
             {customerMessage(status)}
           </p>

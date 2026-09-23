@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getContentIdEligibility } from "@/lib/content-id-eligibility";
 import { normalizeReleaseText, safeReleaseText, parseReleaseDate, validIsrc, validReleaseBarcode } from "@/lib/release-input-rules";
+import { isDistributionChannel } from "@/lib/distribution-capabilities";
 
 const releaseText = z.string().transform(normalizeReleaseText).pipe(z.string().min(1).max(300).refine(safeReleaseText, "Use plain text without control characters or HTML."));
 
@@ -131,7 +132,7 @@ export const checkoutItemSchema = z.discriminatedUnion("type", [
     type: z.literal("distribution"),
     plan: z.enum(["one_time", "half_yearly", "yearly", "yearly_plus"]),
     trackCount: z.number().int().min(1).max(100).default(1),
-    platforms: z.array(z.string().min(1)).default(["Spotify", "Apple Music"]),
+    platforms: z.array(z.string().min(1).refine(isDistributionChannel, "Choose a supported distribution channel.")).default(["Spotify", "Apple Music"]),
     youtubeContentIdEnabled: z.boolean().optional()
   })
 ]);
@@ -229,7 +230,7 @@ const distributionMetadataBaseSchema = z.object({
   upcCode: z.string().trim().refine(value => !value || validReleaseBarcode(value), "Enter a valid UPC/EAN with its check digit.").nullable().optional(),
   releasePreviouslyReleased: z.boolean().optional(),
   releaseTiming: z.string().min(1),
-  platforms: z.array(z.string()).min(1),
+  platforms: z.array(z.string().refine(isDistributionChannel, "Choose a supported distribution channel.")).min(1),
   youtubeContentIdEnabled: z.boolean().optional(),
   youtubeContentIdChannelUrl: z.string().nullable().optional(),
   monetisationAccepted: z.boolean().optional(),
@@ -261,6 +262,7 @@ function validateContentIdOwnership(value: z.infer<typeof distributionMetadataBa
   if (value.releaseType !== "single" && value.tracks.length < 2) add(["tracks"], "An EP or Album must contain at least two tracks.");
   const numbers = new Set<number>();
   const isrcs = new Set<string>();
+  if (new Set(value.platforms).size !== value.platforms.length) add(["platforms"], "Choose each distribution channel only once.");
   value.tracks.forEach((track, index) => {
     if (numbers.has(track.trackNumber) || track.trackNumber !== index + 1) add(["tracks", index, "trackNumber"], "Track numbering must be unique and sequential.");
     numbers.add(track.trackNumber);
@@ -284,7 +286,7 @@ export const distributionOrderCreateSchema = z.object({
   paymentModel: z.enum(["one_time", "subscription"]),
   trackCount: z.number().int().min(1),
   releaseType: z.enum(["single", "ep", "album"]),
-  platforms: z.array(z.string().min(1)).min(1),
+  platforms: z.array(z.string().min(1).refine(isDistributionChannel, "Choose a supported distribution channel.")).min(1),
   youtubeContentIdEnabled: z.boolean().optional(),
   promotionCode: z.literal("FIRST_RELEASE_FREE").optional(),
   draftReleaseId: z.number().int().positive().optional(),

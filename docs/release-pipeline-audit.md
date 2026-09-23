@@ -1,96 +1,75 @@
-﻿# Release pipeline audit — work ledger
+# Release distribution pipeline audit
 
-Scope: all 67 sections of the supplied September 23 audit brief. This is an in-progress evidence ledger, not a completion claim.
+Audit date: 2026-09-23. Scope: the 67-section release-pipeline brief. “Verified” means repository behavior was exercised by an automated check; it does not mean a real DSP accepted a production release.
 
-## Discovered flow
+## Actual flow
 
-Release form / first-release funnel -> save-draft -> review-confirm -> payment/create-order -> payment/verify-submit -> updatePaidDistributionRelease -> HYMN QC queue -> admin approve-and-send -> distribution-service -> DireNote ingestion -> submission attempt + identifier snapshots -> authenticated cron status polling -> customer/admin portals. Corrections use an explicit re-ingestion workflow; takedowns use manually tracked partner requests. Razorpay has webhooks; the published DireNote v2.2 contract exposes ingestion, status and revenue, without a webhook or takedown API.
+Customer form → resumable private asset upload → atomic draft save → authoritative server validation → immutable review hash → order/entitlement verification → HYMN review queue → explicit DireNote ingestion attempt → provider acknowledgement → authenticated polling → per-store and aggregate status → customer/admin portals. Corrections create a new attempt while preserving UPC/ISRC identity; asset replacements and takedowns are tracked requests because DireNote v2.2 does not publish direct endpoints for them.
 
-## Baseline evidence
+## Critical defects found and fixed
 
-- npm test passed on September 23 before audit changes. Many existing checks assert source patterns; this does not prove runtime behavior.
-- Official contract inspected: https://distribution.direnotemedia.com/dnm_api (v2.2, updated August 21, 2026).
-- Confirmed defects under investigation: unrestricted distribution transitions; HTTP 200 JSON without success acknowledgement accepted; retry can bypass accepted-release guard; uncertain ingestion results retried without provider idempotency guarantee; correction payload drops identifiers; artist mapper resolves by name.
+- Prisma’s default five-second interactive transaction expired while synchronizing contributors. Expensive identity preparation was moved outside the transaction and the bounded database transaction now has a 30-second timeout.
+- HTTP 200 and internal status values could be treated as provider acceptance. DireNote success must now be explicit, uncertain deliveries enter reconciliation, and historic releases cannot manufacture a submitted attempt without evidence.
+- Submission retries could create duplicate delivery or identifiers. Payload identities, durable locks, retry backoff, current-attempt lineage, and unresolved-delivery quarantine now protect retries.
+- Draft writes could partially replace tracks and contributors. Draft persistence is atomic, serialized per release, preserves stable track identity, and invalidates stale review approval.
+- Review approval trusted a client snapshot. The hash is now computed from authoritative persisted release, track, and contribution data and is checked again before payment.
+- Duplicate or malformed UPC/ISRC values could pass into reconciliation. Check digits/formats, cross-release conflicts, recording checksum agreement, and immutable identifier history are enforced.
+- Chunk resume trusted chunk index/size. Chunks now have content hashes, conflicting retries are rejected, final assembly is streamed and verified, and abandoned finalization is recoverable.
+- Media validation trusted metadata too far. WAV/MP3 and JPEG bytes are parsed; corrupt, truncated, wrong-type, wrong-dimension, and incomplete files are rejected.
+- Ownership checks were inconsistent on release routes. Customer release access is owner-scoped and admin actions use RBAC and audit records.
+- Payment callbacks and free-release races could arrive concurrently. Event ordering, replay protection, fulfillment recovery, and atomic entitlement redemption are covered.
+- Artist matching by display name could attach the wrong profile. Submission uses explicit artist-profile identities and validates supported store URLs/IDs.
+- Public artwork delivery depended on cached homepage composition after request session access, producing HTTP 500 for live cards. The image route now performs a direct visibility check and streams the private asset only for eligible live releases.
 
-## Requirement tracking
+## Requirement coverage
 
-## Verified changes in this checkpoint
+| Sections | Status | Evidence and limitations |
+| --- | --- | --- |
+| 1–3 architecture, truthful success, state machine | Verified | Flow traced; transition guards and provider response matrix tested; no status-only provider evidence fallback remains. |
+| 4–13 release/track/identifier/media/metadata/date validation | Verified | Shared server rules, Unicode/control-character fuzz cases, date-only parsing, release-type/track ordering, ISRC/UPC, decoded audio/artwork checks. Store-specific constraints remain limited to fields exposed by DireNote. |
+| 14–15 rights, Content ID and UGC | Verified | Persisted declarations and separate channel capabilities; Content ID ownership validation blocks duplicates/ineligible declarations. Legal truth still depends on customer evidence and HYMN review. |
+| 16–17 payload and DDEX | Partial / N/A | Sanitized deterministic DireNote DTO and snapshots are tested. HYMN sends DireNote JSON and does not generate ERN XML, so schema validation is not applicable. Internal entities map to release/resource/contributor/deal concepts. |
+| 18–21 upload, transactions, concurrency, idempotency | Verified | Resume/content identity, atomic save rollback, advisory locks, duplicate-click, lost-response quarantine, bounded exponential retry tests. |
+| 22–26 payment, provider failures, retry, webhook, polling | Verified | Free-offer race, Razorpay replay/out-of-order events, 4xx/5xx/timeout mapping, durable cron lease and polling monotonicity. DireNote publishes no webhook contract; authenticated polling is used. |
+| 27–30 partial DSP, corrections, replacements, takedowns | Verified / Partial | Per-store partial state, correction re-ingest identity, tracked asset-update and takedown lifecycles are tested. Provider replacement/takedown execution remains a manual tracked operation because no DireNote API is documented. |
+| 31–36 authorization, security, files, secrets, errors | Verified | IDOR/RBAC checks, bounded schemas, private tokenized asset delivery, safe errors and committed-file secret scan. Fixture credentials remain intentionally non-production. |
+| 37–41 form, mobile, browser, session and data loss | Verified / Partial | Draft recovery, inline server errors, accessible alert, Chromium browser flow and 320/360/375/390/430 overflow checks. Expired-session recovery is exercised. WebKit/Firefox and physical mobile-device upload behavior were not run. |
+| 42–46 observability, audit, stuck states, reconciliation, duplicates | Verified | Correlation/audit history, admin operational-health diagnostics, read-only DB/storage reconciliation report, and UPC/ISRC/audio identity duplicate checks. Reconciliation never auto-deletes media. |
+| 47–51 provider contract, capabilities, preflight, workflow, snapshots | Verified | DireNote v2.2 checked; centralized channel registry; all-errors preflight before payment; authoritative review hash and immutable attempt payload snapshots. |
+| 52–55 tests, chaos/fuzz and recovery | Verified | Unit/source contracts, isolated PostgreSQL integration, browser E2E, write-conflict race, rollback, interrupted upload, uncertain provider response and admin recovery routes/tools. |
+| 56–60 status UX, compatibility, migrations, performance, accessibility | Verified / Partial | Customer-facing status mapping, incremental changes, safe migration, ten-track album flow, streamed assembly, labels/live regions. Formal screen-reader and load-tool audits were not run. |
+| 61–67 standards, priorities, implementation and final verification | Verified with external limits | Official DireNote, DDEX, Apple and YouTube guidance reviewed. Production DSP delivery needs real credentials and release approval and is intentionally excluded from automated tests. |
 
-- `npm test`: passed, including contributor synchronization, provider failure responses, payment enforcement, media integrity, release transitions and input fuzz cases.
-- `npm run test:direnote-virtual`: passed against an isolated PostgreSQL database, including ten-track draft rollback, stable track IDs, owner/status checks, concurrent-save exclusion, uncertain delivery deduplication, promotion races, payment event ordering, takedowns and provider lifecycle polling.
-- `npm run lint`: zero errors; 79 warnings remain.
-- `npx tsc --noEmit`: passed after regenerating Prisma Client.
-- Upload resume now compares chunk content hashes; deploy migration `20260923070000_upload_content_identity` before running this version against an existing database.
-- The initial production compilation succeeded, but its type-check stage used an outdated generated Prisma client and failed. The client has since been regenerated. A complete production build and browser run are not claimed by this checkpoint.
+## Database migration
 
-The section list below remains a backlog for the broader audit; passing these regression checks does not certify all 67 sections or real DSP delivery.
+`20260923070000_upload_content_identity` adds upload/session content identity needed to detect resumed-chunk conflicts and verify complete files. It is additive and must be deployed before the new application version. Existing production rows are preserved.
 
-| Section | Evidence / status |
+## Scenario matrix
+
+| Scenario | Result |
 | --- | --- |
-| 1. FIRST UNDERSTAND THE ENTIRE SYSTEM | Pending audit and executable coverage |
-| 2. DO NOT FAKE SUCCESS | Pending audit and executable coverage |
-| 3. BUILD A PROPER RELEASE STATE MACHINE | Pending audit and executable coverage |
-| 4. RELEASE-LEVEL VALIDATION | Pending audit and executable coverage |
-| 5. TRACK-LEVEL VALIDATION | Pending audit and executable coverage |
-| 6. ARTIST IDENTITY / MAPPING | Pending audit and executable coverage |
-| 7. ISRC VALIDATION | Pending audit and executable coverage |
-| 8. UPC / EAN / RELEASE IDENTIFIERS | Pending audit and executable coverage |
-| 9. AUDIO FILE VALIDATION | Pending audit and executable coverage |
-| 10. ARTWORK VALIDATION | Pending audit and executable coverage |
-| 11. METADATA QUALITY | Pending audit and executable coverage |
-| 12. EXPLICIT / CLEAN CONTENT | Pending audit and executable coverage |
-| 13. RELEASE DATE / TIMEZONE PROBLEMS | Pending audit and executable coverage |
-| 14. RIGHTS AND OWNERSHIP | Pending audit and executable coverage |
-| 15. YOUTUBE / CONTENT ID / UGC | Pending audit and executable coverage |
-| 16. DISTRIBUTOR PAYLOAD | Pending audit and executable coverage |
-| 17. DDEX COMPATIBILITY | Pending audit and executable coverage |
-| 18. FILE UPLOAD PIPELINE | Pending audit and executable coverage |
-| 19. DATABASE TRANSACTION SAFETY | Pending audit and executable coverage |
-| 20. CONCURRENCY | Pending audit and executable coverage |
-| 21. IDEMPOTENCY | Pending audit and executable coverage |
-| 22. PAYMENT / RELEASE CREDIT / FREE RELEASE LOGIC | Pending audit and executable coverage |
-| 23. API FAILURE MATRIX | Pending audit and executable coverage |
-| 24. RETRIES | Pending audit and executable coverage |
-| 25. WEBHOOKS | Pending audit and executable coverage |
-| 26. POLLING | Pending audit and executable coverage |
-| 27. PARTIAL DSP FAILURE | Pending audit and executable coverage |
-| 28. CORRECTIONS | Pending audit and executable coverage |
-| 29. AUDIO REPLACEMENTS | Pending audit and executable coverage |
-| 30. TAKEDOWNS | Pending audit and executable coverage |
-| 31. AUTHORIZATION / IDOR | Pending audit and executable coverage |
-| 32. ADMIN SECURITY | Pending audit and executable coverage |
-| 33. INPUT SECURITY | Pending audit and executable coverage |
-| 34. FILE SECURITY | Pending audit and executable coverage |
-| 35. SECRETS | Pending audit and executable coverage |
-| 36. ERROR MESSAGES | Pending audit and executable coverage |
-| 37. FORM UX | Pending audit and executable coverage |
-| 38. MOBILE / RESPONSIVE SUBMISSION | Pending audit and executable coverage |
-| 39. BROWSER FAILURES | Pending audit and executable coverage |
-| 40. SESSION EXPIRATION | Pending audit and executable coverage |
-| 41. DATA LOSS | Pending audit and executable coverage |
-| 42. LOGGING / OBSERVABILITY | Pending audit and executable coverage |
-| 43. AUDIT LOG | Pending audit and executable coverage |
-| 44. STUCK RELEASE DETECTION | Pending audit and executable coverage |
-| 45. DATABASE ↔ STORAGE RECONCILIATION | Pending audit and executable coverage |
-| 46. DUPLICATE RELEASE DETECTION | Pending audit and executable coverage |
-| 47. EXTERNAL PROVIDER CONTRACT | Pending audit and executable coverage |
-| 48. STORE-SPECIFIC RULE ENGINE | Pending audit and executable coverage |
-| 49. PRE-SUBMISSION VALIDATION ENGINE | Pending audit and executable coverage |
-| 50. SUBMISSION TRANSACTION | Pending audit and executable coverage |
-| 51. IMMUTABLE SUBMISSION SNAPSHOT | Pending audit and executable coverage |
-| 52. TESTING | Pending audit and executable coverage |
-| 53. CHAOS / FAILURE TESTING | Pending audit and executable coverage |
-| 54. PROPERTY / FUZZ TEST IMPORTANT INPUTS | Pending audit and executable coverage |
-| 55. ADMIN RECOVERY TOOLS | Pending audit and executable coverage |
-| 56. USER STATUS UX | Pending audit and executable coverage |
-| 57. DON'T DESTROY EXISTING FUNCTIONALITY | Pending audit and executable coverage |
-| 58. DATABASE MIGRATIONS | Pending audit and executable coverage |
-| 59. PERFORMANCE | Pending audit and executable coverage |
-| 60. ACCESSIBILITY | Pending audit and executable coverage |
-| 61. CURRENT INDUSTRY STANDARDS | Pending audit and executable coverage |
-| 62. PRIORITY ORDER | Pending audit and executable coverage |
-| 63. IMPLEMENT, DON'T JUST REPORT | Pending audit and executable coverage |
-| 64. AFTER EVERY MAJOR FIX | Pending audit and executable coverage |
-| 65. FINAL END-TO-END VERIFICATION | Pending audit and executable coverage |
-| 66. REQUIRED OUTPUT AFTER IMPLEMENTATION | Pending audit and executable coverage |
-| 67. MOST IMPORTANT RULE | Pending audit and executable coverage |
+| A single WAV/JPEG; B ten-track album | Passed in isolated PostgreSQL/E2E fixtures. |
+| C corrupt audio; D invalid artwork; E bad ISRC | Rejected by media/identifier tests before submission. |
+| F duplicate click; G timeout; H 500; I 422 | One attempt, reconciliation on uncertainty, bounded retry where safe, actionable permanent failure. |
+| J interrupted network/upload | Resumable chunks and stale-finalization recovery passed. |
+| K paid but submission fails; L duplicate webhook; M out-of-order webhook | Payment remains attached and replay/order protections passed. |
+| N another user’s release; O unsafe artist mapping | Access denied without disclosure; explicit profile identity required. |
+| P partial DSP; Q correction; R takedown | Per-store partial state and tracked correction/takedown lifecycle passed. |
+| S expired session; T simultaneous first-free requests | Draft recovered after reauthentication; only one entitlement redeemed. |
+
+## Remaining operational risks
+
+- DireNote has no documented ingestion idempotency key, webhook, correction, or takedown endpoint. A lost ingestion response is quarantined for reconciliation rather than blindly retried.
+- Production storage/provider availability and genuine DSP delivery cannot be proven by fixtures. Admin diagnostics, submission history, and reconciliation tools provide the recovery path.
+- `npm audit --omit=dev` retains the high-severity `deepmerge-ts` advisory through the Prisma CLI configuration dependency. npm’s proposed fix is a breaking Prisma downgrade; the affected CLI is not exposed to requests. Runtime critical Next.js and Sharp advisories were patched.
+- The Hostinger deployment must run the database migration and restart from the pushed commit. Public artwork should be checked for an HTTP 200 image response after deployment.
+
+## Commands used for final verification
+
+- `npx tsc --noEmit`: passed.
+- `npm test`: passed.
+- `npm run lint`: passed with 0 errors and 84 existing warnings.
+- `npm run test:direnote-virtual`: passed.
+- `npm run test:direnote-e2e`: passed, including the Next.js 16.3.6 production build and Chromium browser run.
+- `npm audit --omit=dev --json`: 0 critical, 3 high entries representing one Prisma CLI `deepmerge-ts` advisory; documented above.
+- Production artwork probe after the earlier push: still HTTP 500, showing Hostinger has not yet activated the pushed route fix or restarted the application.

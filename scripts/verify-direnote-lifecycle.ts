@@ -191,7 +191,19 @@ async function main() {
     metadata: { ...(release.metadata as object), releaseTitle: "Transfer fixture", releasePreviouslyReleased: true, originalReleaseDate: "2020-01-01" },
     tracks: { create: [1, 2].map((n, index) => ({ title: `Track ${n}`, trackNumber: n, primaryArtist: "gxrry", audioUrl: `https://cdn.example.test/track${n}.wav`, isrc: oldIsrcs[index], metadata: { language: "English", songwriters: "Fixture Artist", composers: "Fixture Artist", duration: "180" } })) }
   } });
-  const transferAttempt = await ensureCurrentDireNoteAttempt(transfer.id);
+  const transferTracks = await prisma.track.findMany({ where: { releaseId: transfer.id }, orderBy: { trackNumber: "asc" } });
+  const transferAttempt = await prisma.distributionSubmissionAttempt.create({ data: {
+    releaseId: transfer.id,
+    provider: "direnote",
+    state: "submitted",
+    isCurrent: true,
+    idempotencyKey: `fixture:transfer:${transfer.id}`,
+    payloadHash: "fixture-transfer-submission",
+    upc: transfer.upc,
+    trackIdentifiers: transferTracks.map((track, index) => ({ id: track.id, isrc: oldIsrcs[index] })),
+    completedAt: new Date(),
+  } });
+  assert.equal((await ensureCurrentDireNoteAttempt(transfer.id)).id, transferAttempt.id);
   await prisma.distributionSubmissionAttempt.update({ where: { id: transferAttempt.id }, data: { startedAt: new Date(0) } });
   const transferred = await submitRelease(transfer.id, { correctionReingest: true });
   assert.equal(transferred.submitted, true, JSON.stringify(transferred));
@@ -200,6 +212,7 @@ async function main() {
   const paidDraft = await prisma.release.create({ data: { userId: user.id, artistProfileId: artist.id, title: "Paid draft", artistName: "gxrry", genre: "Pop", releaseDate: new Date("2099-01-10"), status: "DRAFT", paymentStatus: "paid" } });
   await saveDraftDistributionRelease({ userId: user.id, draftReleaseId: paidDraft.id, metadata: { artistName: "gxrry", trackName: "Paid draft", tracks: [] } as any });
   assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: paidDraft.id } })).paymentStatus, "paid", "Saving a draft must not erase payment.");
+  if (browser) await browser.expiredSessionKeepsDraft(paidDraft.id);
   const paidOrder = await prisma.distributionOrder.create({ data: { userId: user.id, releaseId: paidDraft.id, plan: "one_time", amount: 99, paymentStatus: "paid", razorpayOrderId: "order_fixture_paid_draft", razorpayPaymentId: "pay_fixture_paid_draft", fulfilledAt: new Date() } });
   if (browser) {
     await prisma.release.update({ where: { id: paidDraft.id }, data: { paymentStatus: "pending" } });

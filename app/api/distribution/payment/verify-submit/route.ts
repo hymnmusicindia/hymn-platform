@@ -15,6 +15,8 @@ import { attachReservedSubscriptionRelease, releaseReservedSubscriptionSlot, res
 import { distributionOrderPriceMatches } from "@/lib/distribution-order-price";
 import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution";
 import { checkoutPlan } from "@/lib/distribution-checkout-plan";
+import { releaseReviewSnapshotHash } from "@/lib/release-review-snapshot";
+import { findReleaseIdentifierConflicts } from "@/lib/release-identifier-conflicts";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -28,9 +30,13 @@ export async function POST(request: Request) {
     const parsed = distributionSubmitSchema.parse(payload);
     if (!parsed.draftReleaseId) return NextResponse.json({ error: "Save and review your release draft before submitting." }, { status: 409 });
     if (parsed.draftReleaseId) {
-      const reviewedDraft = await prisma.release.findFirst({ where: { id: parsed.draftReleaseId, userId: session.sub }, select: { status: true, reviewConfirmedAt: true, reviewConfirmedBy: true } });
+      const reviewedDraft = await prisma.release.findFirst({ where: { id: parsed.draftReleaseId, userId: session.sub }, select: { status: true, reviewConfirmedAt: true, reviewConfirmedBy: true, reviewMetadataHash: true } });
       if (!reviewedDraft) return NextResponse.json({ error: "Draft release not found." }, { status: 404 });
       if (reviewedDraft.status === "DRAFT" && (!reviewedDraft.reviewConfirmedAt || reviewedDraft.reviewConfirmedBy !== session.sub)) return NextResponse.json({ error: "Review confirmation is required before payment or submission." }, { status: 409 });
+      if (reviewedDraft.status === "DRAFT") {
+        const currentReviewHash = await releaseReviewSnapshotHash(parsed.draftReleaseId, session.sub);
+        if (!reviewedDraft.reviewMetadataHash || reviewedDraft.reviewMetadataHash !== currentReviewHash) return NextResponse.json({ error: "The release changed after it was reviewed. Review and confirm the latest saved version before submitting." }, { status: 409 });
+      }
     }
     const isFirstReleaseOffer = parsed.promotionCode === FIRST_RELEASE_PROMOTION_CODE;
     const persistedOrder = await prisma.distributionOrder.findUnique({ where: { razorpayOrderId: parsed.razorpay_order_id } });
@@ -58,6 +64,8 @@ export async function POST(request: Request) {
     if (invalidPrimaryArtist) {
       return NextResponse.json({ error: "Select primary artists from your saved artist cards before submitting." }, { status: 400 });
     }
+    const identifierConflicts = await findReleaseIdentifierConflicts({ releaseId: parsed.draftReleaseId, upc: parsed.metadata.upcCode, tracks: parsed.metadata.tracks.map(track => ({ trackNumber: track.trackNumber, isrc: track.isrc, audioUrl: track.uploadedAudioUrl || track.existingAudioUrl })) });
+    if (identifierConflicts.length) return NextResponse.json({ error: identifierConflicts[0].message, code: identifierConflicts[0].code, errors: identifierConflicts }, { status: 409 });
     const requirePrivateAsset = (value: string | undefined, label: string) => {
       if (!value) return value;
       if (process.env.NODE_ENV === "production" && !value.startsWith("/api/assets/")) throw new Error(`${label} must use authenticated private storage.`);

@@ -1,5 +1,7 @@
 ﻿import type { ContributorCredit } from "@/lib/types";
 
+import type { DistributionChannel } from "@/lib/distribution-capabilities";
+
 export type ContributorRole = ContributorCredit["role"];
 
 export const versionOptions = ["Original", "Explicit", "Clean (Censored)", "Remix", "Acoustic", "Instrumental", "Live", "Other"] as const;
@@ -18,6 +20,9 @@ export const socialPlatforms = [
   { name: "TikTok", icon: "TT" },
   { name: "YouTube Music", icon: "YT" }
 ] as const;
+
+const configuredChannels: ReadonlyArray<DistributionChannel> = [...storePlatforms.map(item => item.name), ...socialPlatforms.map(item => item.name)];
+void configuredChannels;
 
 export const contributorRoles: Array<{ key: ContributorRole; label: string }> = [
   { key: "songwriter", label: "Songwriters" },

@@ -15,9 +15,15 @@ export function distributionPayloadIdentity(releaseId: number, payload: unknown)
   return { payloadHash, idempotencyKey: `direnote:release:${releaseId}:${payloadHash}` };
 }
 
+export function submissionRetryDelayMs(attemptCount: number, idempotencyKey: string) {
+  const exponent = Math.max(0, Math.min(5, attemptCount - 1));
+  const base = Math.min(2 * 60 * 60 * 1000, 5 * 60 * 1000 * 2 ** exponent);
+  const jitter = crypto.createHash("sha256").update(idempotencyKey).digest().readUInt16BE(0) % Math.max(1, Math.floor(base / 5));
+  return base + jitter;
+}
+
 export async function claimDistributionSubmission(releaseId: number, payload: unknown, correctionAttemptId?: number) {
   const identity = distributionPayloadIdentity(releaseId, correctionAttemptId ? { payload, correctionAttemptId } : payload);
-  const cooldownMs = 5 * 60 * 1000;
   const latestAttempt = await prisma.distributionSubmissionAttempt.findFirst({
     where: { releaseId, provider: "direnote" },
     orderBy: { startedAt: "desc" },
@@ -26,6 +32,7 @@ export async function claimDistributionSubmission(releaseId: number, payload: un
   // ingestion idempotency key, so a new payload hash must not bypass this guard.
   const unresolved = await prisma.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: "direnote", state: { in: ["processing", "reconciliation_required"] } }, orderBy: { id: "desc" } });
   if (unresolved) return { attempt: unresolved, claimed: false, alreadySubmitted: false, retryAfterSeconds: undefined };
+  const cooldownMs = latestAttempt ? submissionRetryDelayMs(latestAttempt.attemptCount, latestAttempt.idempotencyKey) : 0;
   if (latestAttempt && latestAttempt.startedAt > new Date(Date.now() - cooldownMs)) {
     const retryAfterSeconds = Math.max(1, Math.ceil((latestAttempt.startedAt.getTime() + cooldownMs - Date.now()) / 1000));
     return {
@@ -95,11 +102,14 @@ export async function ensureCurrentDireNoteAttempt(releaseId: number) {
       return current;
     }
     const latest = await tx.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: "direnote", state: "submitted" }, orderBy: { id: "desc" } });
-    if (!latest && !release.direNoteStatus && !["SENT_TO_DISTRIBUTOR", "DISTRIBUTOR_PROCESSING", "PROCESSING", "SCHEDULED", "AWAITING_LIVE_CONFIRMATION", "PARTIALLY_LIVE", "DELIVERED", "LIVE"].includes(release.status)) throw new Error("This release has no submitted DireNote attempt to synchronize.");
+    // A release status is an internal projection, not evidence that DireNote
+    // accepted an ingestion request. Never manufacture a submitted attempt from
+    // that projection: doing so would make polling and correction workflows
+    // report provider delivery that cannot be proved.
+    if (!latest) throw new Error("This release has no submitted DireNote attempt to synchronize. Manual evidence reconciliation is required.");
     const snapshot = release.tracks.map(track => ({ id: track.id, title: track.title, trackNumber: track.trackNumber, isrc: track.isrc }));
     const data = { isCurrent: true, upc: normalizeDireNoteAttemptUpc(latest?.responseRedacted) ?? normalizeDireNoteAttemptUpc(latest?.rawStatusPayload) ?? normalizeDireNoteAttemptUpc(release.metadata) ?? release.upc, trackIdentifiers: snapshot, providerStatus: release.direNoteStatus };
-    if (latest) return tx.distributionSubmissionAttempt.update({ where: { id: latest.id }, data });
-    return tx.distributionSubmissionAttempt.create({ data: { releaseId, ...data, state: "submitted", idempotencyKey: `direnote:legacy:${releaseId}`, payloadHash: "legacy-backfill", completedAt: release.createdAt } });
+    return tx.distributionSubmissionAttempt.update({ where: { id: latest.id }, data });
   });
 }
 
@@ -157,6 +167,3 @@ export async function activateDireNoteAttempt(id: number, input: { upc: string |
     return tx.distributionSubmissionAttempt.update({ where: { id }, data: { ...input, isCurrent: true, state: "submitted", providerStatus: "processing", completedAt: new Date() } });
   }, { timeout: 30_000 });
 }
-// vercel trigger 9
-
-// vercel trigger 12

@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma";
 import { checkoutPlan } from "../lib/distribution-checkout-plan";
 import { consumeRateLimit } from "../lib/rate-limit";
+import { releaseReviewSnapshotHash } from "../lib/release-review-snapshot";
 
 const orders = new Map<string, { id: string; amount: number; currency: string; payment?: Record<string, unknown> }>();
 export async function startCheckoutMock() {
@@ -45,7 +46,7 @@ export async function verifySubmissionCheckout() {
     const artist = await prisma.artistCard.create({ data: { userId: user.id, artistName: "Checkout Artist", instagramUrl: "https://instagram.com/checkout_artist" } });
     const client = await playwrightRequest.newContext({ baseURL: origin, extraHTTPHeaders: { "x-forwarded-proto": "https", Cookie: `hymn_session=${jwt.sign({ sub: user.id, email: user.email, name: user.name, role: "customer" }, process.env.JWT_SECRET!, { expiresIn: "1h" })}` } });
     async function draft(status: "DRAFT" | "AWAITING_PAYMENT" = "DRAFT") {
-      const release = await prisma.release.create({ data: { userId: user.id, title: "Submission Fixture", artistName: artist.artistName, genre: "Pop", releaseDate: new Date("2099-01-10"), releaseType: "single", status, paymentStatus: "pending", reviewConfirmedAt: new Date(), reviewConfirmedBy: user.id } });
+      const release = await prisma.release.create({ data: { userId: user.id, artistProfileId: artist.id, title: "Submission Fixture", artistName: artist.artistName, genre: "Pop", releaseDate: new Date("2099-01-10"), releaseType: "single", status, paymentStatus: "pending" } });
       async function asset(file: string, mime: string) {
         const row = await prisma.storedAsset.create({ data: { ownerUserId: user.id, releaseId: release.id, assetType: mime === "image/jpeg" ? "private_unreleased_artwork" : "private_unreleased_audio", storageProvider: "local", objectKey: `checkout-fixture/${release.id}/${file}`, originalFilename: file, safeFilename: file, mimeType: mime, byteSize: 100, checksum: "fixture", accessClassification: "private", uploadStatus: "ready" } });
         return `/api/assets/${row.id}/download?filename=${file}`;
@@ -53,6 +54,10 @@ export async function verifySubmissionCheckout() {
       const artwork = await asset("cover.jpg", "image/jpeg");
       const audio = await asset("master.wav", "audio/wav");
       const metadata = { artistName: artist.artistName, releaseTitle: release.title, releaseType: "single", releaseDate: "2099-01-10", recordLabelName: "Fixture Records", primaryGenre: "Pop", secondaryGenre: "Indie Pop", language: "Hindi", contentType: "Original/Exclusive Licensed", territory: "Worldwide", releaseTiming: "schedule_release", platforms: ["Spotify"], copyrightOwner: "2026 Fixture Records", publishingRights: "2026 Fixture Artist", legal: { ownershipConfirmation: true, noInfringement: true, collaboratorsCredited: true, platformGuidelines: true, hymnNotLiable: true, termsAccepted: true, falseMetadataAcknowledged: true, fraudWarningAccepted: true }, paymentModel: "one_time", plan: "one_time", artworkFileKey: "artwork", uploadedArtworkUrl: artwork, tracks: [{ trackTitle: release.title, trackNumber: 1, primaryArtist: artist.artistName, artistProfileIds: [artist.id], songwriters: "Fixture Artist", composers: "Fixture Artist", producers: "Fixture Artist", version: "Instrumental", language: "Hindi", isCover: false, coverLicenseConfirmed: false, audioFileKey: "audio-0", uploadedAudioUrl: audio, duration: "180", explicitContent: false, dolbyAtmos: false }] };
+      await prisma.release.update({ where: { id: release.id }, data: { artworkUrl: artwork, metadata } });
+      await prisma.track.create({ data: { releaseId: release.id, title: release.title, trackNumber: 1, primaryArtist: artist.artistName, audioUrl: audio, metadata: metadata.tracks[0] } });
+      const reviewMetadataHash = await releaseReviewSnapshotHash(release.id, user.id);
+      await prisma.release.update({ where: { id: release.id }, data: { reviewConfirmedAt: new Date(), reviewConfirmedBy: user.id, reviewMetadataHash } });
       return { release, metadata };
     }
     async function subscription(plan = "half_yearly", limit: number | null = 1) {
