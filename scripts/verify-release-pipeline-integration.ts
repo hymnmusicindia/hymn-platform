@@ -8,6 +8,7 @@ import { confirmDistributionNonReceipt } from "../lib/distribution-recovery";
 import { releaseReviewSnapshotHash } from "../lib/release-review-snapshot";
 import { POST as cleanupUploads } from "../app/api/cron/storage-cleanup/route";
 import { findReleaseIdentifierConflicts } from "../lib/release-identifier-conflicts";
+import { resolvePrivateReleaseArtworkUrl } from "../lib/release-asset-resolution";
 
 assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/fixture:fixture@127\.0\.0\.1:55439\/direnote_virtual/);
 
@@ -49,6 +50,8 @@ async function main() {
   assert.equal(duplicate.tracks[0].isrc ?? null, null, "A duplicated release does not reuse the source recording identifier");
   assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: duplicate.id } })).artworkUrl, `/api/assets/${singleArtwork.id}/download?filename=cover.jpg`, "A duplicated release retains the owned private artwork asset rather than the source release route");
   assert.equal(duplicate.artworkUrl, `/api/releases/${duplicate.id}/artwork?filename=cover.jpg`);
+  await prisma.release.update({ where: { id: duplicate.id }, data: { artworkUrl: `/api/releases/${single.id}/artwork` } });
+  assert.equal(await resolvePrivateReleaseArtworkUrl({ userId: user.id, releaseId: duplicate.id, value: `/api/releases/${single.id}/artwork` }), `/api/assets/${singleArtwork.id}/download?filename=cover.jpg`, "Legacy duplicates resolve the same owner's source artwork route back to its private JPEG asset");
   const renamed = await saveDraftDistributionRelease({ userId: user.id, draftReleaseId: duplicate.id, metadata: { ...metadata, releaseType: "single", releaseTitle: duplicate.releaseTitle, tracks: [{ ...track(1), trackTitle: "Renamed Single" }] } });
   assert.equal(renamed.releaseTitle, "Renamed Single");
   assert.equal(renamed.tracks[0].trackTitle, "Renamed Single", "Renaming a duplicated single track also updates its release title");

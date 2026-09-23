@@ -14,7 +14,8 @@ const beatMaster = beatAssetRelativePath({ producerName: "Aditya / Producer", pr
 assert.equal(beatMaster, "Beatstore/Aditya - Producer - producer_7/Night - Drive - beat_42/Master Audio/master.wav");
 assert(!beatMaster.includes("..") && !beatMaster.includes("\\"));
 assert.equal(normalizePublicUploadUrl("/home/account/hymn-storage/Public/Beatstore/Producer/Beat/Cover Art/cover.png"), "/api/public-uploads/Beatstore/Producer/Beat/Cover%20Art/cover.png");
-assert.equal(canonicalReleaseArtworkUrl(20, "/api/assets/51/download?filename=cover.jpg"), "/api/releases/20/artwork");
+assert.equal(canonicalReleaseArtworkUrl(20, "/api/assets/51/download?filename=cover.jpg"), "/api/releases/20/artwork?filename=cover.jpg");
+assert.equal(canonicalReleaseArtworkUrl(20, "/api/releases/12/artwork"), "/api/releases/12/artwork?filename=cover.jpg");
 assert.equal(canonicalReleaseArtworkUrl(20, "/api/public-uploads/releases/cover.jpg"), "/api/public-uploads/releases/cover.jpg");
 assert.equal(canonicalReleaseArtworkUrl(20, "https://cdn.example.test/cover.jpg"), "https://cdn.example.test/cover.jpg");
 assert.equal(storedAssetIdFromUrl("/api/assets/51/download?filename=cover.jpg"), 51);
