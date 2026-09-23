@@ -96,13 +96,20 @@ export async function POST(request: Request) {
       });
     }
 
+    // DireNote models a single as one catalog product whose album and track
+    // titles must be identical. Treat the track title as authoritative while
+    // editing so duplicated singles cannot retain a stale "- Copy" album name.
+    const releaseTitle = metadata.releaseType === "single" && tracks.length === 1
+      ? tracks[0].trackTitle
+      : metadata.releaseTitle ?? tracks[0]?.trackTitle ?? "Untitled release";
+
     const release = await saveDraftDistributionRelease({
       userId: session.sub,
       draftReleaseId,
       metadata: {
         artistName: metadata.artistName ?? "",
         trackName: metadata.tracks?.[0]?.trackTitle ?? metadata.trackName ?? metadata.releaseTitle ?? "",
-        releaseTitle: metadata.releaseTitle ?? metadata.tracks?.[0]?.trackTitle ?? "Untitled release",
+        releaseTitle,
         releaseType: metadata.releaseType ?? "single",
         contentType: metadata.contentType,
         sunoReceiptUrl: metadata.sunoReceiptUrl,

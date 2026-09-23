@@ -6,6 +6,7 @@ import { normalizeDireNoteGenre } from "../lib/direnote-config";
 import { upcFromDireNoteResponse } from "../lib/direnote-upc";
 import { royaltyEconomicFingerprint } from "../lib/royalty-fingerprint";
 import type { Release } from "../lib/types";
+import { canonicalReleaseArtworkUrl } from "../lib/release-media";
 
 const release: Release = { id: 1, userId: 1, artistName: "NZLDR", trackName: "TEST", releaseTitle: "TEST", releaseType: "single", audioUrl: "https://cdn.example.test/test.wav", artworkUrl: "https://cdn.example.test/cover.jpg", releaseDate: "2099-01-10", language: "English", platforms: [], primaryGenre: "Pop", secondaryGenre: "Indie Pop", labelName: "Example Records", copyrightOwner: "2026 Example Records", publishingRights: "2026 NZLDR", contentType: "original", tracks: [{ id: 1, releaseId: 1, trackTitle: "TEST", trackNumber: 1, primaryArtist: "NZLDR", audioUrl: "https://cdn.example.test/test.wav", duration: "180", explicitContent: false, dolbyAtmos: false, songwriters: "Nzl Dr", composers: "Nzl Dr", createdAt: new Date().toISOString() }], status: "approved", createdAt: new Date().toISOString() };
 const payload = buildDireNotePayload(release);
@@ -28,6 +29,9 @@ assert.equal(validated({ tracks: [{ ...payload.tracks[0], songwriters: [{ name: 
 assert.equal(validated({ albumGenre: "Not a genre" }).issues.some(issue => issue.field === "albumGenre"), true);
 assert.equal(validated({ albumLanguage: "Not a language" }).issues.some(issue => issue.field === "albumLanguage"), true);
 assert.equal(validated({ cover_art_url: "https://cdn.example.test/cover.png" }).issues.some(issue => issue.message.includes("JPEG")), true);
+const canonicalArtwork = canonicalReleaseArtworkUrl(42, "/api/assets/9/download?filename=original-upload.jpeg");
+assert.equal(canonicalArtwork, "/api/releases/42/artwork?filename=cover.jpg");
+assert.equal(validated({ cover_art_url: `https://hymn.example${canonicalArtwork}` }).issues.some(issue => issue.field === "cover_art_url"), false);
 assert.equal(validated({ tracks: [{ ...payload.tracks[0], audio_url: "https://cdn.example.test/audio.aac" }] }).issues.some(issue => issue.message.includes("WAV or MP3")), true);
 assert.deepEqual(normalizeDireNoteGenre("Rap"), { genre: "Hip-Hop", subgenre: "Other Hip-Hop" });
 assert.deepEqual(normalizeDireNoteGenre("Electronic"), { genre: "Electronic/Dance", subgenre: "Other Electronic" });

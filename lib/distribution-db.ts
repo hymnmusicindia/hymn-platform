@@ -621,23 +621,36 @@ function duplicateSafeValue(value: unknown) {
 export async function duplicateReleaseForUser(userId: number, releaseId: number) {
   const source = await getDetailedReleaseByUserId(userId, releaseId);
   if (!source) return null;
+  const persistedArtwork = isPostgresPrisma()
+    ? await prisma.release.findFirst({ where: { id: releaseId, userId }, select: { artworkUrl: true } })
+    : null;
   const { id: _id, userId: _userId, status: _status, createdAt: _createdAt, queuePosition: _queuePosition,
     estimatedReviewTime: _estimatedReviewTime, tracks, reviewIssues: _reviewIssues, rejectionReason: _rejectionReason,
     correctionReason: _correctionReason, reviewedAt: _reviewedAt, reviewedBy: _reviewedBy,
     distributorReleaseId: _distributorReleaseId, upcCode: _upcCode, ...safeSource } = source;
+  const copyTitle = `${source.releaseTitle || source.trackName || "Untitled release"} - Copy`;
+  const duplicateTracks = (tracks ?? []).map((track) => {
+    const { id: _trackId, releaseId: _trackReleaseId, createdAt: _trackCreatedAt, isrc: _isrc,
+      distributorStatus: _distributorStatus, ...safeTrack } = track;
+    return {
+      ...safeTrack,
+      // A duplicated single must be internally valid before the user edits it.
+      ...(source.releaseType === "single" && (tracks?.length ?? 0) === 1 ? { trackTitle: copyTitle } : {}),
+      metadata: duplicateSafeValue(track.metadata)
+    };
+  });
   return saveDraftDistributionRelease({
     userId,
     metadata: {
       ...safeSource,
-      releaseTitle: `${source.releaseTitle || source.trackName || "Untitled release"} - Copy`,
-      trackName: `${source.releaseTitle || source.trackName || "Untitled release"} - Copy`,
+      // Keep the owned private asset reference. The display model contains a
+      // release-scoped route which would otherwise point back to the source.
+      artworkUrl: persistedArtwork?.artworkUrl ?? safeSource.artworkUrl,
+      releaseTitle: copyTitle,
+      trackName: copyTitle,
       paymentStatus: "pending",
       metadata: duplicateSafeValue(source.metadata),
-      tracks: (tracks ?? []).map((track) => {
-        const { id: _trackId, releaseId: _trackReleaseId, createdAt: _trackCreatedAt, isrc: _isrc,
-          distributorStatus: _distributorStatus, ...safeTrack } = track;
-        return { ...safeTrack, metadata: duplicateSafeValue(track.metadata) };
-      })
+      tracks: duplicateTracks
     } as any
   });
 }
@@ -978,6 +991,10 @@ export async function saveDraftDistributionRelease(input: {
     tracks: DraftTrackInput[];
   };
 }) {
+  if (input.metadata.releaseType === "single" && input.metadata.tracks.length === 1) {
+    const title = input.metadata.tracks[0].trackTitle?.trim();
+    if (title) input = { ...input, metadata: { ...input.metadata, releaseTitle: title, trackName: title } };
+  }
   const pool = getPool();
   const existingRelease = input.draftReleaseId ? await getDetailedReleaseByUserId(input.userId, input.draftReleaseId) : null;
   const releaseId = input.draftReleaseId ?? existingRelease?.id ?? nextId(memory.releases);
@@ -1377,6 +1394,10 @@ export async function updatePaidDistributionRelease(input: {
   verifiedOrderId?: string;
   metadata: Omit<Release, "id" | "userId" | "status" | "createdAt" | "queuePosition" | "estimatedReviewTime" | "tracks"> & { recordLabelName?: string; tracks: Omit<ReleaseTrack, "id" | "releaseId" | "createdAt">[] };
 }) {
+  if (input.metadata.releaseType === "single" && input.metadata.tracks.length === 1) {
+    const title = input.metadata.tracks[0].trackTitle?.trim();
+    if (title) input = { ...input, metadata: { ...input.metadata, releaseTitle: title, trackName: title } };
+  }
   const pool = getPool();
   const queuePosition = (await getDistributionQueueSummary()).pendingQueue + 1;
   const existingRelease = await getDetailedReleaseByUserId(input.userId, input.releaseId);

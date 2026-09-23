@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { prisma } from "../lib/prisma";
-import { saveDraftDistributionRelease } from "../lib/distribution-db";
+import { duplicateReleaseForUser, saveDraftDistributionRelease } from "../lib/distribution-db";
 import { claimDistributionSubmission, finishDistributionSubmission, submissionRetryDelayMs } from "../lib/distribution-idempotency";
 import { reserveFirstRelease, FIRST_RELEASE_PROMOTION_CODE } from "../lib/first-release-promotion";
 import { confirmDistributionPayment, receiveRazorpayEvent, processRazorpayEvent } from "../lib/payment-webhooks";
@@ -39,6 +39,19 @@ async function main() {
   assert.equal(edited.reviewConfirmedAt, null, "An edit invalidates the review confirmation");
   assert.notEqual(await releaseReviewSnapshotHash(release.id, user.id), reviewedHash, "Persisted review fingerprint changes with authoritative release metadata");
   assert.equal(await prisma.track.count({ where: { releaseId: release.id } }), 1);
+  const single = await saveDraftDistributionRelease({ userId: user.id, metadata: { ...metadata, releaseTitle: "Original Single", trackName: "Original Single", releaseType: "single", tracks: [{ ...track(1), trackTitle: "Original Single", isrc: "INDN22602449" }] } });
+  const singleArtwork = await prisma.storedAsset.create({ data: { ownerUserId: user.id, releaseId: single.id, assetType: "private_unreleased_artwork", storageProvider: "local", objectKey: `fixture/${single.id}/cover.jpg`, originalFilename: "cover.jpg", safeFilename: "cover.jpg", mimeType: "image/jpeg", byteSize: 4, checksum: `single-art-${single.id}`, accessClassification: "private", uploadStatus: "ready" } });
+  await prisma.release.update({ where: { id: single.id }, data: { artworkUrl: `/api/assets/${singleArtwork.id}/download?filename=cover.jpg` } });
+  const duplicate = await duplicateReleaseForUser(user.id, single.id);
+  assert(duplicate);
+  assert.equal(duplicate.releaseTitle, "Original Single - Copy");
+  assert.equal(duplicate.tracks[0].trackTitle, duplicate.releaseTitle, "A duplicated single starts with matching release and track titles");
+  assert.equal(duplicate.tracks[0].isrc ?? null, null, "A duplicated release does not reuse the source recording identifier");
+  assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: duplicate.id } })).artworkUrl, `/api/assets/${singleArtwork.id}/download?filename=cover.jpg`, "A duplicated release retains the owned private artwork asset rather than the source release route");
+  assert.equal(duplicate.artworkUrl, `/api/releases/${duplicate.id}/artwork?filename=cover.jpg`);
+  const renamed = await saveDraftDistributionRelease({ userId: user.id, draftReleaseId: duplicate.id, metadata: { ...metadata, releaseType: "single", releaseTitle: duplicate.releaseTitle, tracks: [{ ...track(1), trackTitle: "Renamed Single" }] } });
+  assert.equal(renamed.releaseTitle, "Renamed Single");
+  assert.equal(renamed.tracks[0].trackTitle, "Renamed Single", "Renaming a duplicated single track also updates its release title");
   await prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422028, ${release.id}::integer)`;
     await assert.rejects(saveDraftDistributionRelease({ userId: user.id, draftReleaseId: release.id, metadata }), /being saved or submitted/);

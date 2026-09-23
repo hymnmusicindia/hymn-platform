@@ -1,7 +1,10 @@
 export function canonicalReleaseArtworkUrl(releaseId: number, storedUrl: unknown) {
   if (typeof storedUrl !== "string" || !storedUrl.trim()) return "";
   const value = storedUrl.trim();
-  if (storedAssetIdFromUrl(value) && Number.isInteger(releaseId) && releaseId > 0) return `/api/releases/${releaseId}/artwork`;
+  // The public release route hides the private StoredAsset URL. Keep a JPEG
+  // delivery filename in the query so upstream distributors that validate the
+  // URL name (as DireNote does) can identify the already-validated asset type.
+  if (storedAssetIdFromUrl(value) && Number.isInteger(releaseId) && releaseId > 0) return `/api/releases/${releaseId}/artwork?filename=cover.jpg`;
   return value;
 }
 
