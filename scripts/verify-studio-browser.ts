@@ -106,6 +106,7 @@ async function main() {
       await appMenu.waitFor({ state: "visible" });
       await appMenu.getByRole("menuitem", { name: /Dashboard/ }).waitFor({ state: "visible" });
       await appMenu.getByRole("menuitem", { name: /Studio/ }).waitFor({ state: "visible" });
+      await appMenu.getByRole("menuitem", { name: /Services/ }).waitFor({ state: "visible" });
       const launcherOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       assert.ok(launcherOverflow <= 2, `The app launcher has ${launcherOverflow}px horizontal overflow at ${viewport.name}.`);
       await page.screenshot({ path: path.join(output, `${viewport.name}-app-launcher.png`), fullPage: true });
