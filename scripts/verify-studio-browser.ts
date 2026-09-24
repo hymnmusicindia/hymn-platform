@@ -43,6 +43,19 @@ async function main() {
     { name: "profile", url: `/studio/engineers/${order.engineerProfile.slug}` },
     { name: "workspace", url: `/studio/orders/${order.publicId}` },
   ];
+  const adminToken = jwt.sign({ username: "admin", role: "admin", sid: randomUUID() }, process.env.ADMIN_JWT_SECRET!, { expiresIn: "1h" });
+  const adminCookie = `hymn_admin_session=${adminToken}`;
+  const adminPage = await directGet("http://127.0.0.1:55910/admin/studio", adminCookie);
+  assert.equal(adminPage.status, 200, adminPage.body.slice(0, 500));
+  assert.match(adminPage.body, /Appoint an engineer/);
+  const apiEngineerUser = await prisma.user.create({ data: { googleId: `studio-api-engineer-${randomUUID()}`, name: "API Appointed Engineer", email: `studio-api-engineer-${randomUUID()}@example.test` } });
+  const apiSlug = `api-appointed-${randomUUID()}`;
+  const appointmentResponse = await directPost("http://127.0.0.1:55910/api/admin/studio/engineers", adminCookie, JSON.stringify({
+    userId: apiEngineerUser.id, professionalName: "API Appointed Engineer", slug: apiSlug, profilePhotoUrl: null, bio: "A verified engineer appointed through the protected admin API.", specialties: ["Mixing", "Mastering"], genres: ["Pop"], availability: "AVAILABLE", maxActiveOrders: 3, verificationState: "VERIFIED", sellerState: "ACTIVE", payoutState: "PENDING",
+    listing: { title: "API mix and master", description: "A complete professional mix and master for commercial release.", standardPrice: 2200, beatCustomerPrice: 1800, includedRevisions: 2, additionalRevisionPrice: 400, turnaroundDays: 5, sourceRequirements: ["Consolidated stems"], deliverables: ["24-bit WAV"], instantAccept: false, active: true, paused: false },
+  }));
+  assert.equal(appointmentResponse.status, 201, appointmentResponse.body);
+  assert.equal((await directGet(`http://127.0.0.1:55910/studio/engineers/${apiSlug}`, "")).status, 200);
   if (process.argv.includes("--http-only")) {
     const requestBaseUrl = "http://127.0.0.1:55910";
     for (const target of targets) {

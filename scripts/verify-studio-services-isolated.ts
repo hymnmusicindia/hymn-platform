@@ -14,7 +14,9 @@ const run = (args: string[], executable = process.execPath) => new Promise<void>
 
 async function main() {
   const previousSchema = path.join(fixture, "schema-before-studio.prisma");
-  writeFileSync(previousSchema, execFileSync("git", ["show", "HEAD:prisma/schema.prisma"], { encoding: "utf8", windowsHide: true }));
+  const studioMigrationCommit = execFileSync("git", ["log", "-n", "1", "--format=%H", "--diff-filter=A", "--", "prisma/migrations/20260923190000_studio_services/migration.sql"], { encoding: "utf8", windowsHide: true }).trim();
+  if (!studioMigrationCommit) throw new Error("Could not locate the commit that introduced the Studio migration.");
+  writeFileSync(previousSchema, execFileSync("git", ["show", `${studioMigrationCommit}^:prisma/schema.prisma`], { encoding: "utf8", windowsHide: true }));
   const pg = new EmbeddedPostgres({ databaseDir, port, user: "fixture", password: "fixture", persistent: true, initdbFlags: ["--encoding=UTF8", "--locale=C"], postgresFlags: ["-h", "127.0.0.1"] });
   await pg.initialise(); await pg.start();
   try {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { prisma } from "../lib/prisma";
 import { localPrivateStorage } from "../lib/private-storage";
 import { confirmPersistedPayment } from "../lib/payment-webhooks";
+import { appointStudioEngineer, updateStudioEngineer } from "../lib/admin-studio-engineers";
 import { approveStudioDelivery, assertStudioParticipant, cancelStudioOrder, confirmStudioPayment, createStudioAmendmentPayment, createStudioDelivery, createStudioOrder, createStudioPayment, createStudioRevisionPayment, handoffStudioOrderToRelease, proposeStudioAmendment, requestStudioRevision, respondToStudioOrder, reviewStudioOrder, runStudioAutomation, sendStudioMessage, transitionStudioOrder } from "../lib/studio-services";
 
 async function main() {
@@ -13,6 +14,23 @@ async function main() {
     prisma.user.create({ data: { googleId: `studio-producer-${stamp}`, name: "Beat Producer", email: `studio-producer-${stamp}@example.test` } }),
     prisma.user.create({ data: { googleId: `studio-outsider-${stamp}`, name: "Studio Outsider", email: `studio-outsider-${stamp}@example.test` } }),
   ]);
+  const appointedUser = await prisma.user.create({ data: { googleId: `studio-appointed-${stamp}`, name: "Appointed Engineer", email: `studio-appointed-${stamp}@example.test` } });
+  const appointmentInput = {
+    userId: appointedUser.id, professionalName: "Appointed Engineer", slug: `appointed-engineer-${stamp}`, profilePhotoUrl: null, bio: "An experienced mix engineer appointed through Studio operations.", specialties: ["Mixing", "Mastering"], genres: ["Pop", "R&B"], availability: "AVAILABLE" as const, maxActiveOrders: 4, verificationState: "VERIFIED" as const, sellerState: "ACTIVE" as const, payoutState: "PENDING" as const,
+    listing: { title: "Mix and master", description: "A complete mix and master prepared for commercial release.", standardPrice: 2500, beatCustomerPrice: 2000, includedRevisions: 2, additionalRevisionPrice: 500, turnaroundDays: 5, sourceRequirements: ["Consolidated stems", "Reference mix"], deliverables: ["24-bit WAV", "320 kbps MP3"], instantAccept: false, active: true, paused: false },
+  };
+  const appointed = await appointStudioEngineer(appointmentInput, customer.id, `appoint-${stamp}`);
+  assert.equal(appointed.listings.length, 1);
+  assert.equal((await prisma.contributorParty.findUniqueOrThrow({ where: { claimedByUserId: appointedUser.id }, include: { engineerProfile: true } })).engineerProfile?.id, appointed.id);
+  assert.equal(await prisma.notification.count({ where: { userId: appointedUser.id, eventKey: `studio:engineer-appointed:${appointed.id}` } }), 1);
+  assert.equal(await prisma.auditLog.count({ where: { action: "STUDIO_ENGINEER_APPOINTED", entityId: String(appointed.id) } }), 1);
+  await assert.rejects(() => appointStudioEngineer(appointmentInput, customer.id, `appoint-again-${stamp}`), /already has an engineer profile/i);
+  await updateStudioEngineer(appointed.id, { ...appointmentInput, professionalName: "Appointed Engineer Updated", sellerState: "PAUSED", listing: { ...appointmentInput.listing, active: false, paused: true } }, customer.id, `update-${stamp}`);
+  const updatedAppointment = await prisma.engineerProfile.findUniqueOrThrow({ where: { id: appointed.id }, include: { listings: true } });
+  assert.equal(updatedAppointment.professionalName, "Appointed Engineer Updated");
+  assert.equal(updatedAppointment.sellerState, "PAUSED");
+  assert.equal(updatedAppointment.listings[0].active, false);
+  assert.equal(await prisma.auditLog.count({ where: { action: "STUDIO_ENGINEER_UPDATED", entityId: String(appointed.id) } }), 1);
   const party = await prisma.contributorParty.create({ data: { publicId: `HYM_STUDIO_${stamp}`, professionalName: "Studio Engineer", displayName: "Studio Engineer", claimedByUserId: engineerUser.id, createdByUserId: engineerUser.id, identityState: "CLAIMED" } });
   const engineer = await prisma.engineerProfile.create({ data: { contributorPartyId: party.id, slug: `studio-engineer-${stamp}`, professionalName: "Studio Engineer", availability: "AVAILABLE", maxActiveOrders: 2, verificationState: "VERIFIED" } });
   const listing = await prisma.studioServiceListing.create({ data: { engineerProfileId: engineer.id, title: "Integration Mix & Master", description: "Integration fixture", standardPrice: 2000, beatCustomerPrice: 1500, includedRevisions: 2, additionalRevisionPrice: 400, turnaroundDays: 5, sourceRequirements: { stems: true }, deliverables: { wav: true } } });
