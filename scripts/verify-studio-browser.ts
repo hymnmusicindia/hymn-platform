@@ -96,6 +96,21 @@ async function main() {
         assert.ok(overflow <= 2, `${target.url} has ${overflow}px horizontal overflow at ${viewport.name}.`);
         await page.screenshot({ path: path.join(output, `${viewport.name}-${target.name}.png`), fullPage: true });
       }
+      await page.goto(`${baseUrl}/studio`, { waitUntil: "domcontentloaded", timeout: 120000 });
+      await page.waitForLoadState("load");
+      const launcherButton = page.getByRole("button", { name: "Open HYMN apps" });
+      await launcherButton.waitFor({ state: "visible" });
+      await page.waitForFunction(() => document.readyState === "complete");
+      await launcherButton.click();
+      const appMenu = page.getByRole("menu", { name: "HYMN apps" });
+      await appMenu.waitFor({ state: "visible" });
+      await appMenu.getByRole("menuitem", { name: /Dashboard/ }).waitFor({ state: "visible" });
+      await appMenu.getByRole("menuitem", { name: /Studio/ }).waitFor({ state: "visible" });
+      const launcherOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      assert.ok(launcherOverflow <= 2, `The app launcher has ${launcherOverflow}px horizontal overflow at ${viewport.name}.`);
+      await page.screenshot({ path: path.join(output, `${viewport.name}-app-launcher.png`), fullPage: true });
+      await page.keyboard.press("Escape");
+      await appMenu.waitFor({ state: "hidden" });
       await context.close();
     }
   } finally {

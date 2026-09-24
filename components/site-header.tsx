@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { AlertCircle, Bell, CheckCircle2, Disc3, HelpCircle, LayoutDashboard, LogOut, Menu, PackageCheck, ShieldCheck, ShoppingCart, UserRound, WalletCards, X } from "lucide-react";
+import { AlertCircle, Bell, CheckCircle2, Disc3, Headphones, HelpCircle, LayoutDashboard, LogOut, Menu, PackageCheck, ShieldCheck, ShoppingCart, UserRound, WalletCards, X } from "lucide-react";
 import clsx from "clsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mainNav } from "@/lib/site";
@@ -48,6 +48,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [appLauncherOpen, setAppLauncherOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [cartCount, setCartCount] = useState(0);
   const [cartOpen, setCartOpen] = useState(false);
@@ -98,6 +99,18 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [profileOpen]);
+
+  useEffect(() => {
+    if (!appLauncherOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || !target.closest("[data-app-launcher-root]")) setAppLauncherOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setAppLauncherOpen(false); };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => { document.removeEventListener("pointerdown", closeOutside); document.removeEventListener("keydown", closeOnEscape); };
+  }, [appLauncherOpen]);
 
   const loadNotifications = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -261,6 +274,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
   const openCart = () => {
     setOpen(false);
+    setAppLauncherOpen(false);
     setScrolled(true);
     setCartOpen(true);
   };
@@ -323,7 +337,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
       <div data-notification-menu-root className={clsx("relative", mobile ? "w-full" : "")}>
         <button
           type="button"
-          onClick={() => { setNotificationsOpen((value) => !value); setProfileOpen(false); }}
+          onClick={() => { setNotificationsOpen((value) => !value); setProfileOpen(false); setAppLauncherOpen(false); }}
           className={clsx("site-header-bare-icon relative inline-flex h-10 w-10 items-center justify-center rounded-full border-0 bg-transparent sm:h-11 sm:w-11", mobile ? "w-full justify-start gap-3 px-3" : "")}
           style={{ color: "var(--text)" }}
           aria-expanded={notificationsOpen}
@@ -413,12 +427,27 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
       </div>
     ) : null;
 
+  const AppLauncher = ({ mobile = false }: { mobile?: boolean }) => user ? (
+    <div data-app-launcher-root className="relative">
+      <button type="button" onClick={() => { setAppLauncherOpen(value => !value); setProfileOpen(false); setNotificationsOpen(false); }} className={clsx("site-header-bare-icon inline-flex h-10 w-10 items-center justify-center rounded-full sm:h-11 sm:w-11", appLauncherOpen && "bg-[var(--bg-soft)]")} aria-label="Open HYMN apps" aria-expanded={appLauncherOpen} aria-haspopup="menu">
+        <span className="grid grid-cols-3 gap-[3px]" aria-hidden="true">{Array.from({ length: 9 }, (_, index) => <span key={index} className="h-[3px] w-[3px] rounded-full bg-current"/>)}</span>
+      </button>
+      {appLauncherOpen ? <div role="menu" aria-label="HYMN apps" className={clsx("z-50 rounded-[1.35rem] border border-[var(--border-strong)] bg-[var(--card-strong)] p-3 shadow-2xl", mobile ? "fixed left-3 right-3 top-[4.25rem] w-auto" : "absolute right-0 mt-3 w-[min(22rem,calc(100vw-1.5rem))]")}>
+        <div className="px-2 pb-3 pt-1"><p className="hymn-kicker">HYMN workspace</p><p className="mt-1 text-sm text-[var(--text-muted)]">Choose where you want to work.</p></div>
+        <div className="grid grid-cols-2 gap-2">
+          <Link role="menuitem" href={user.role === "producer" ? "/producer/dashboard" : "/dashboard"} onClick={() => setAppLauncherOpen(false)} className="group rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-4 transition hover:-translate-y-0.5 hover:border-[var(--border-strong)]"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]"><LayoutDashboard className="h-5 w-5"/></span><strong className="mt-3 block text-sm">Dashboard</strong><span className="mt-1 block text-xs leading-5 text-[var(--text-muted)]">Account, releases, and earnings</span></Link>
+          <Link role="menuitem" href="/studio" onClick={() => setAppLauncherOpen(false)} className="group rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-4 transition hover:-translate-y-0.5 hover:border-[var(--border-strong)]"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--info)_12%,transparent)] text-[var(--info)]"><Headphones className="h-5 w-5"/></span><strong className="mt-3 block text-sm">Studio</strong><span className="mt-1 block text-xs leading-5 text-[var(--text-muted)]">Mixing and mastering projects</span></Link>
+        </div>
+      </div> : null}
+    </div>
+  ) : null;
+
   const ProfileMenu = ({ mobile = false }: { mobile?: boolean }) =>
     user ? (
       <div data-profile-menu-root className={clsx("relative", mobile ? "w-full" : "")}>
         <button
           type="button"
-          onClick={() => setProfileOpen((value) => !value)}
+          onClick={() => { setProfileOpen((value) => !value); setAppLauncherOpen(false); setNotificationsOpen(false); }}
           className={clsx(
             "inline-flex h-11 w-11 items-center justify-center rounded-full text-left transition hover:translate-y-[-1px]",
             mobile ? "w-full justify-start border p-1.5 pr-3" : "border-0 bg-transparent p-0"
@@ -521,15 +550,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <div className="hidden items-center gap-3 lg:flex">
             {!isAuthenticated ? <ThemeToggle /> : null}
-            {isAuthenticated ? (
-              <Link
-                href={user?.role === "producer" ? "/producer/dashboard" : "/dashboard"}
-                className="site-header-soft-button inline-flex items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold backdrop-blur-xl"
-              >
-                <LayoutDashboard className="h-4 w-4" />
-                Dashboard
-              </Link>
-            ) : (
+            {isAuthenticated ? <AppLauncher /> : (
               <Link
                 href="/login"
                 className="site-header-cta inline-flex min-w-[120px] items-center justify-center rounded-full border px-4 py-2 text-center text-sm font-semibold"
@@ -544,6 +565,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           </div>
 
           <div className="flex items-center gap-0 lg:hidden">
+            {isAuthenticated ? <AppLauncher mobile /> : null}
             {isAuthenticated ? <NotificationBell /> : null}
             <ThemeToggle />
             {isAuthenticated ? <ProfileMenu /> : null}
@@ -566,7 +588,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
             type="button"
             className="inline-flex h-10 w-10 items-center justify-center rounded-full border sm:h-11 sm:w-11 lg:hidden"
             style={{ borderColor: "color-mix(in srgb, var(--glass-border) 88%, transparent)", background: "color-mix(in srgb, var(--glass-bg) 84%, transparent)", color: "var(--text)", backdropFilter: "blur(10px) saturate(140%)" }}
-            onClick={() => setOpen((value) => !value)}
+            onClick={() => { setOpen((value) => !value); setAppLauncherOpen(false); }}
             aria-expanded={open}
             aria-controls="site-mobile-nav"
             aria-label={open ? "Close menu" : "Open menu"}
@@ -584,15 +606,11 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
                 {item.label}
               </Link>
             ))}
-            {isAuthenticated ? (
-              <Link href={user?.role === "producer" ? "/producer/dashboard" : "/dashboard"} className="w-full rounded-full border px-4 py-3 text-center text-sm font-semibold" style={{ borderColor: "rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.06)", color: "var(--text)" }} onClick={() => setOpen(false)}>
-                Dashboard
-              </Link>
-            ) : (
+            {!isAuthenticated ? (
               <Link href="/login" className="site-header-cta w-full rounded-full border px-4 py-3 text-center text-sm font-semibold" style={{ borderColor: "color-mix(in srgb, var(--accent) 42%, var(--border))", background: "linear-gradient(180deg, var(--accent-strong), var(--accent))", color: "var(--accent-foreground)" }} onClick={() => setOpen(false)}>
                 Login
               </Link>
-            )}
+            ) : null}
 
           </div>
         </div>
