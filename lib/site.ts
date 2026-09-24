@@ -2,7 +2,6 @@ import { Beat, Release } from "@/lib/types";
 
 export const mainNav = [
   { href: "/", label: "Home" },
-  { href: "/services", label: "Services" },
   { href: "/distribution", label: "Distribution" },
   { href: "/beat-store", label: "Beatstore" },
   { href: "/contact", label: "Contact" }
