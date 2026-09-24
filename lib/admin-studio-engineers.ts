@@ -12,6 +12,11 @@ export const studioEngineerInputSchema = z.object({
   bio: z.string().trim().min(20).max(2000),
   specialties: csvList,
   genres: csvList,
+  socialLinks: z.object({
+    instagram: z.string().url().max(1000).nullable(),
+    youtube: z.string().url().max(1000).nullable(),
+  }),
+  portfolioItems: z.array(z.object({ title: z.string().trim().min(2).max(120), url: z.string().url().max(1000) })).max(20),
   availability: z.enum(["AVAILABLE", "UNAVAILABLE"]),
   maxActiveOrders: z.number().int().min(1).max(50),
   verificationState: z.enum(["UNVERIFIED", "VERIFIED"]),
@@ -54,11 +59,12 @@ const snapshot = (input: StudioEngineerInput) => ({
   listingPaused: input.listing.paused,
   standardPrice: input.listing.standardPrice,
   beatCustomerPrice: input.listing.beatCustomerPrice,
+  portfolioItems: input.portfolioItems.length,
 });
 
 export async function appointStudioEngineer(input: StudioEngineerInput, actorId: number | null, requestId: string) {
   return prisma.$transaction(async tx => {
-    const user = await tx.user.findUnique({ where: { id: input.userId }, select: { id: true, name: true, status: true } });
+    const user = await tx.user.findUnique({ where: { id: input.userId }, select: { id: true, name: true, avatar: true, status: true } });
     if (!user) throw new Error("Selected user does not exist.");
     if (user.status !== "ACTIVE") throw new Error("Only an active user can be appointed as an engineer.");
 
@@ -85,10 +91,11 @@ export async function appointStudioEngineer(input: StudioEngineerInput, actorId:
         contributorPartyId: party.id,
         slug: input.slug,
         professionalName: input.professionalName,
-        profilePhotoUrl: input.profilePhotoUrl || null,
+        profilePhotoUrl: input.profilePhotoUrl || user.avatar || null,
         bio: input.bio,
         specialties: input.specialties,
         genres: input.genres,
+        portfolio: { socials: input.socialLinks, works: input.portfolioItems } as Prisma.InputJsonObject,
         availability: input.availability,
         maxActiveOrders: input.maxActiveOrders,
         verificationState: input.verificationState,
@@ -126,7 +133,7 @@ export async function appointStudioEngineer(input: StudioEngineerInput, actorId:
 
 export async function updateStudioEngineer(profileId: number, input: StudioEngineerInput, actorId: number | null, requestId: string) {
   return prisma.$transaction(async tx => {
-    const current = await tx.engineerProfile.findUnique({ where: { id: profileId }, include: { contributorParty: true, listings: { orderBy: { createdAt: "asc" } } } });
+    const current = await tx.engineerProfile.findUnique({ where: { id: profileId }, include: { contributorParty: { include: { claimedBy: { select: { avatar: true } } } }, listings: { orderBy: { createdAt: "asc" } } } });
     if (!current) throw new Error("Engineer profile not found.");
     if (current.contributorParty.claimedByUserId !== input.userId) throw new Error("An engineer profile cannot be reassigned to another user.");
     const primaryListing = current.listings[0];
@@ -137,10 +144,11 @@ export async function updateStudioEngineer(profileId: number, input: StudioEngin
       data: {
         slug: input.slug,
         professionalName: input.professionalName,
-        profilePhotoUrl: input.profilePhotoUrl || null,
+        profilePhotoUrl: input.profilePhotoUrl || current.contributorParty.claimedBy?.avatar || null,
         bio: input.bio,
         specialties: input.specialties,
         genres: input.genres,
+        portfolio: { socials: input.socialLinks, works: input.portfolioItems } as Prisma.InputJsonObject,
         availability: input.availability,
         maxActiveOrders: input.maxActiveOrders,
         verificationState: input.verificationState,

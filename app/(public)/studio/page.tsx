@@ -2,44 +2,25 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { BadgeCheck, Clock3, Headphones, SlidersHorizontal } from "lucide-react";
 import { listStudioEngineers } from "@/lib/studio-services";
+
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "HYMN Studio | Mixing & Mastering", description: "Choose a verified HYMN engineer and finish your record in a private Studio workspace." };
 const money = (value: unknown) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(value));
+
 export default async function StudioPage({ searchParams }: { searchParams: Promise<{ genre?: string; maxPrice?: string; turnaround?: string }> }) {
   const query = await searchParams;
   const engineers = await listStudioEngineers({ genre: query.genre, maxPrice: Number(query.maxPrice) || undefined, maxTurnaround: Number(query.turnaround) || undefined });
-  return <main className="shell pb-20 pt-8 sm:pt-12"><section className="overflow-hidden rounded-[2rem] border border-[var(--border)] bg-[radial-gradient(circle_at_75%_15%,rgba(91,140,255,.18),transparent_34%),var(--card)] px-6 py-12 sm:px-10 lg:px-14"><p className="hymn-kicker">HYMN Studio</p><h1 className="mt-3 max-w-3xl text-4xl font-semibold tracking-[-.04em] sm:text-6xl">Mix & master your track with a professional engineer.</h1><p className="mt-5 max-w-2xl text-base leading-7 text-[var(--text-muted)]">Private source files, clear delivery dates, two included revisions, and one workspace from rough vocals to final master.</p></section>
-  <form
-    className="mt-8 grid gap-3 rounded-[1.75rem] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--card)_82%,transparent),color-mix(in_srgb,var(--bg-soft)_66%,transparent))] p-3 shadow-[inset_0_1px_0_color-mix(in_srgb,var(--text)_5%,transparent),0_18px_55px_rgba(0,0,0,.12)] sm:grid-cols-[auto_minmax(0,1fr)_auto_auto] sm:items-center sm:gap-2 sm:p-3"
-    aria-label="Studio filters"
-  >
-    <span className="flex items-center gap-2 px-2 text-sm font-semibold text-[var(--text-muted)] sm:pr-3">
-      <span className="grid h-8 w-8 place-items-center rounded-full bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-[var(--accent)]">
-        <SlidersHorizontal className="h-4 w-4" />
-      </span>
-      Filters
-    </span>
-    <label className="sr-only" htmlFor="studio-genre">Genre</label>
-    <input
-      id="studio-genre"
-      name="genre"
-      defaultValue={query.genre}
-      placeholder="Search by genre"
-      className="field min-w-0"
-    />
-    <label className="sr-only" htmlFor="studio-turnaround">Turnaround time</label>
-    <select
-      id="studio-turnaround"
-      name="turnaround"
-      defaultValue={query.turnaround || ""}
-      className="field min-w-0 sm:w-48"
-    >
-      <option value="">Any turnaround</option>
-      <option value="3">Up to 3 days</option>
-      <option value="5">Up to 5 days</option>
-      <option value="7">Up to 7 days</option>
-    </select>
-    <button className="btn-primary w-full justify-center sm:w-auto" type="submit">Apply filters</button>
-  </form>
-  <section className="mt-8"><div className="mb-5"><p className="hymn-kicker">Curated engineers</p><h2 className="mt-2 text-2xl font-semibold">Choose your sound partner</h2></div>{engineers.length ? <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{engineers.flatMap(engineer => engineer.listings.slice(0,1).map(listing => <article key={listing.id} className="group rounded-[1.5rem] border border-[var(--border)] bg-[var(--card)] p-5 transition hover:-translate-y-1 hover:border-[var(--border-strong)]"><div className="flex items-center gap-4"><div className="grid h-14 w-14 place-items-center overflow-hidden rounded-2xl bg-[var(--bg-soft)]">{engineer.profilePhotoUrl ? <img src={engineer.profilePhotoUrl} alt="" className="h-full w-full object-cover"/> : <Headphones className="h-6 w-6 text-[var(--text-soft)]"/>}</div><div><h3 className="flex items-center gap-1.5 font-semibold">{engineer.professionalName}{engineer.verificationState === "VERIFIED" ? <BadgeCheck className="h-4 w-4 text-[var(--info)]" aria-label="Verified"/> : null}</h3><p className="text-sm text-[var(--text-muted)]">Mixing & Mastering</p></div></div><p className="mt-5 line-clamp-3 text-sm leading-6 text-[var(--text-muted)]">{listing.description}</p><div className="mt-5 flex flex-wrap gap-2 text-xs text-[var(--text-muted)]">{listing.acceptedGenres.slice(0,3).map(genre => <span key={genre} className="rounded-full border border-[var(--border)] px-2.5 py-1">{genre}</span>)}</div><div className="mt-6 flex items-end justify-between border-t border-[var(--border)] pt-5"><div><strong className="text-xl text-[var(--money)]">{money(listing.beatCustomerPrice ?? listing.standardPrice)}</strong><p className="text-xs text-[var(--text-soft)]">{listing.beatCustomerPrice ? "Beat customer price" : "Project price"}</p></div><div className="text-right text-xs text-[var(--text-muted)]"><span className="flex items-center gap-1"><Clock3 className="h-3.5 w-3.5"/>{listing.turnaroundDays} day delivery</span><p className="mt-1">{listing.includedRevisions} revisions included</p></div></div><Link className="btn-primary mt-5 w-full justify-center" href={`/studio/engineers/${engineer.slug}`}>View profile</Link></article>))}</div> : <div className="rounded-2xl border border-dashed border-[var(--border)] p-10 text-center text-[var(--text-muted)]">No engineers match these filters right now.</div>}</section></main>;
+  return <main className="shell pb-20 pt-8 sm:pt-12">
+    <section className="overflow-hidden rounded-[2rem] border border-[var(--border)] bg-[radial-gradient(circle_at_75%_15%,rgba(91,140,255,.18),transparent_34%),var(--card)] px-6 py-12 sm:px-10 lg:px-14"><p className="hymn-kicker">HYMN Studio</p><h1 className="mt-3 max-w-3xl text-4xl font-semibold tracking-[-.04em] sm:text-6xl">Mix & master your track with a professional engineer.</h1><p className="mt-5 max-w-2xl text-base leading-7 text-[var(--text-muted)]">Private source files, clear delivery dates, two included revisions, and one workspace from rough vocals to final master.</p></section>
+    <form className="mt-8 grid gap-3 rounded-[1.75rem] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--card)_82%,transparent),color-mix(in_srgb,var(--bg-soft)_66%,transparent))] p-3 shadow-[inset_0_1px_0_color-mix(in_srgb,var(--text)_5%,transparent),0_18px_55px_rgba(0,0,0,.12)] sm:grid-cols-[auto_minmax(0,1fr)_auto_auto] sm:items-center sm:gap-2" aria-label="Studio filters">
+      <span className="flex items-center gap-2 px-2 text-sm font-semibold text-[var(--text-muted)] sm:pr-3"><span className="grid h-8 w-8 place-items-center rounded-full bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-[var(--accent)]"><SlidersHorizontal className="h-4 w-4"/></span>Filters</span>
+      <label className="sr-only" htmlFor="studio-genre">Genre</label><input id="studio-genre" name="genre" defaultValue={query.genre} placeholder="Search by genre" className="field min-w-0"/>
+      <label className="sr-only" htmlFor="studio-turnaround">Turnaround time</label><select id="studio-turnaround" name="turnaround" defaultValue={query.turnaround || ""} className="field min-w-0 sm:w-48"><option value="">Any turnaround</option><option value="3">Up to 3 days</option><option value="5">Up to 5 days</option><option value="7">Up to 7 days</option></select>
+      <button className="btn-primary w-full justify-center sm:w-auto" type="submit">Apply filters</button>
+    </form>
+    <section className="mt-8"><div className="mb-5"><p className="hymn-kicker">Curated engineers</p><h2 className="mt-2 text-2xl font-semibold">Choose your sound partner</h2></div>{engineers.length ? <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{engineers.flatMap(engineer => engineer.listings.slice(0, 1).map(listing => {
+      const photo = engineer.profilePhotoUrl ?? engineer.contributorParty.claimedBy?.avatar;
+      return <article key={listing.id} className="group rounded-[1.5rem] border border-[var(--border)] bg-[var(--card)] p-5 transition hover:-translate-y-1 hover:border-[var(--border-strong)]"><div className="flex items-center gap-4"><div className="grid h-14 w-14 place-items-center overflow-hidden rounded-2xl bg-[var(--bg-soft)]">{photo ? <img src={photo} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover"/> : <Headphones className="h-6 w-6 text-[var(--text-soft)]"/>}</div><div><h3 className="flex items-center gap-1.5 font-semibold">{engineer.professionalName}{engineer.verificationState === "VERIFIED" ? <BadgeCheck className="h-4 w-4 text-[var(--info)]" aria-label="Verified"/> : null}</h3><p className="text-sm text-[var(--text-muted)]">Mixing & Mastering</p></div></div><p className="mt-5 line-clamp-3 text-sm leading-6 text-[var(--text-muted)]">{listing.description}</p><div className="mt-5 flex flex-wrap gap-2 text-xs text-[var(--text-muted)]">{listing.acceptedGenres.slice(0, 3).map(genre => <span key={genre} className="rounded-full border border-[var(--border)] px-2.5 py-1">{genre}</span>)}</div><div className="mt-6 flex items-end justify-between border-t border-[var(--border)] pt-5"><div><strong className="text-xl text-[var(--money)]">{money(listing.beatCustomerPrice ?? listing.standardPrice)}</strong><p className="text-xs text-[var(--text-soft)]">{listing.beatCustomerPrice ? "Beat customer price" : "Project price"}</p></div><div className="text-right text-xs text-[var(--text-muted)]"><span className="flex items-center gap-1"><Clock3 className="h-3.5 w-3.5"/>{listing.turnaroundDays} day delivery</span><p className="mt-1">{listing.includedRevisions} revisions included</p></div></div><Link className="btn-primary mt-5 w-full justify-center" href={`/studio/engineers/${engineer.slug}`}>View profile</Link></article>;
+    }))}</div> : <div className="rounded-2xl border border-dashed border-[var(--border)] p-10 text-center text-[var(--text-muted)]">No engineers match these filters right now.</div>}</section>
+  </main>;
 }

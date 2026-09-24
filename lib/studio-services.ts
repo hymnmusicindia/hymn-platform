@@ -28,7 +28,7 @@ export async function listStudioEngineers(filters: { genre?: string; maxPrice?: 
         ...(filters.maxTurnaround ? { turnaroundDays: { lte: filters.maxTurnaround } } : {}),
         ...(filters.genre ? { acceptedGenres: { has: filters.genre } } : {}) } },
     },
-    include: { listings: { where: { active: true, paused: false, serviceType: "MIXING_MASTERING" }, orderBy: { sortOrder: "asc" } } },
+    include: { listings: { where: { active: true, paused: false, serviceType: "MIXING_MASTERING" }, orderBy: { sortOrder: "asc" } }, contributorParty: { include: { claimedBy: { select: { avatar: true } } } } },
     orderBy: [{ verificationState: "desc" }, { ratingAverage: "desc" }, { completedOrderCount: "desc" }],
   });
 }

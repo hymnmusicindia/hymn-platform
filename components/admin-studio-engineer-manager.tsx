@@ -1,21 +1,25 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BadgeCheck, ChevronDown, CirclePause, Headphones, UserPlus } from "lucide-react";
+import { BadgeCheck, Check, ChevronDown, CirclePause, Headphones, Instagram, Music2, Search, UserPlus, UserRound, Youtube } from "lucide-react";
 
-type UserOption = { id: number; name: string; email: string };
+type UserOption = { id: number; name: string; email: string; avatar: string | null };
+type PortfolioItem = { title: string; url: string };
 type Engineer = {
   id: number;
   userId: number;
   userName: string;
   userEmail: string;
+  userAvatar: string;
   professionalName: string;
   slug: string;
   profilePhotoUrl: string;
   bio: string;
   specialties: string[];
   genres: string[];
+  socialLinks: { instagram: string; youtube: string };
+  portfolioItems: PortfolioItem[];
   availability: string;
   maxActiveOrders: number;
   verificationState: string;
@@ -37,6 +41,10 @@ type Engineer = {
   };
 };
 
+const GENRES = ["Afrobeats", "Alternative", "Ambient", "Bollywood", "Classical", "Country", "Dance", "Devotional", "Drill", "EDM", "Electronic", "Folk", "Funk", "Ghazal", "Hip-Hop", "House", "Indie", "Jazz", "Lo-fi", "Metal", "Pop", "Punjabi", "R&B", "Reggae", "Rock", "Soul", "Techno", "Trap", "World"];
+const SPECIALTIES = ["Mixing", "Mastering", "Vocal Production", "Vocal Tuning", "Dialogue Editing", "Stem Mixing", "Dolby Atmos", "Podcast Mixing", "Live Recording", "Sound Design", "Beat Production", "Restoration"];
+const initials = (name: string) => name.split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase();
+
 const defaults: Engineer["listing"] = {
   title: "Professional Mixing & Mastering",
   description: "A complete professional mix and master for one song, delivered release-ready.",
@@ -53,6 +61,7 @@ const defaults: Engineer["listing"] = {
 };
 
 const split = (value: FormDataEntryValue | null) => String(value || "").split(",").map(item => item.trim()).filter(Boolean);
+const portfolioLines = (value: FormDataEntryValue | null) => String(value || "").split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => { const separator = line.indexOf("|"); return separator > 0 ? { title: line.slice(0, separator).trim(), url: line.slice(separator + 1).trim() } : { title: "Featured work", url: line }; });
 function payload(form: FormData) {
   const beatPrice = String(form.get("beatCustomerPrice") || "").trim();
   return {
@@ -63,6 +72,8 @@ function payload(form: FormData) {
     bio: String(form.get("bio") || ""),
     specialties: split(form.get("specialties")),
     genres: split(form.get("genres")),
+    socialLinks: { instagram: String(form.get("instagram") || "").trim() || null, youtube: String(form.get("youtube") || "").trim() || null },
+    portfolioItems: portfolioLines(form.get("portfolioItems")),
     availability: String(form.get("availability")),
     maxActiveOrders: Number(form.get("maxActiveOrders")),
     verificationState: String(form.get("verificationState")),
@@ -85,20 +96,32 @@ function payload(form: FormData) {
   };
 }
 
+function UserPicker({ users }: { users: UserOption[] }) {
+  const [open, setOpen] = useState(false), [query, setQuery] = useState(""), [selectedId, setSelectedId] = useState<number | null>(null);
+  const selected = users.find(user => user.id === selectedId);
+  const visible = useMemo(() => { const term = query.trim().toLowerCase(); return users.filter(user => !term || `${user.name} ${user.email}`.toLowerCase().includes(term)).slice(0, 50); }, [query, users]);
+  return <div className="relative"><input type="hidden" name="userId" required value={selectedId ?? ""} /><span className="mb-2 block text-sm font-medium">Registered user</span><button type="button" className="field flex w-full items-center justify-between gap-3 text-left" onClick={() => setOpen(value => !value)} aria-expanded={open}><span className="flex min-w-0 items-center gap-3">{selected ? <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-[var(--bg-soft)]">{selected.avatar ? <img src={selected.avatar} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" /> : initials(selected.name)}</span> : <UserRound className="h-5 w-5 text-[var(--text-soft)]" />}<span className="min-w-0"><strong className="block truncate text-sm">{selected?.name ?? "Choose an account"}</strong><small className="block truncate text-[var(--text-muted)]">{selected?.email ?? "Search by name or email"}</small></span></span><ChevronDown className={`h-4 w-4 shrink-0 transition ${open ? "rotate-180" : ""}`} /></button>{open ? <div className="absolute z-40 mt-2 w-full overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--card-strong)] shadow-2xl"><label className="relative block border-b border-[var(--border)] p-3"><Search className="pointer-events-none absolute left-6 top-6 h-4 w-4 text-[var(--text-soft)]"/><input autoFocus className="field w-full pl-10" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search name or email…" /></label><div className="max-h-72 overflow-y-auto p-2">{visible.map(user => <button type="button" key={user.id} onClick={() => { setSelectedId(user.id); setOpen(false); setQuery(""); }} className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition hover:bg-[var(--bg-soft)]"><span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-[var(--bg-soft)] text-xs font-semibold">{user.avatar ? <img src={user.avatar} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover"/> : initials(user.name)}</span><span className="min-w-0 flex-1"><strong className="block truncate text-sm">{user.name}</strong><small className="block truncate text-[var(--text-muted)]">{user.email}</small></span>{selectedId === user.id ? <Check className="h-4 w-4 text-[var(--success)]"/> : null}</button>)}{!visible.length ? <p className="p-5 text-center text-sm text-[var(--text-muted)]">No matching accounts.</p> : null}</div></div> : null}</div>;
+}
+
+function TagPicker({ name, label, options, initial }: { name: string; label: string; options: string[]; initial: string[] }) {
+  const [selected, setSelected] = useState(initial);
+  const choices = [...new Set([...options, ...initial])];
+  return <fieldset><legend className="text-sm font-medium">{label}</legend><input type="hidden" name={name} value={selected.join(",")} /><div className="mt-2 flex flex-wrap gap-2">{choices.map(option => { const active = selected.includes(option); return <button type="button" key={option} aria-pressed={active} onClick={() => setSelected(items => active ? items.filter(item => item !== option) : [...items, option])} className={`rounded-full border px-3 py-2 text-xs font-medium transition ${active ? "border-[color-mix(in_srgb,var(--accent)_55%,var(--border))] bg-[var(--accent-soft)] text-[var(--accent)]" : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--border-strong)]"}`}>{active ? <Check className="mr-1 inline h-3 w-3"/> : null}{option}</button>; })}</div>{!selected.length ? <p className="mt-2 text-xs text-[var(--danger)]">Choose at least one option.</p> : null}</fieldset>;
+}
+
 function EngineerFields({ engineer, users }: { engineer?: Engineer; users?: UserOption[] }) {
   const listing = engineer?.listing ?? defaults;
   return <div className="grid gap-5">
-    {engineer ? <input type="hidden" name="userId" value={engineer.userId} /> : <label className="grid gap-2 text-sm font-medium">Registered user<select className="field" name="userId" required defaultValue=""><option value="" disabled>Select the account that will receive engineer access</option>{users?.map(user => <option key={user.id} value={user.id}>{user.name} · {user.email}</option>)}</select></label>}
+    {engineer ? <input type="hidden" name="userId" value={engineer.userId} /> : <UserPicker users={users ?? []} />}
     <div className="grid gap-4 md:grid-cols-2">
       <label className="grid gap-2 text-sm font-medium">Professional name<input className="field" name="professionalName" required minLength={2} defaultValue={engineer?.professionalName} /></label>
       <label className="grid gap-2 text-sm font-medium">Public profile slug<input className="field" name="slug" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="mix-engineer-name" defaultValue={engineer?.slug} /></label>
     </div>
-    <label className="grid gap-2 text-sm font-medium">Profile photo URL <span className="text-xs font-normal text-[var(--text-soft)]">Optional HTTPS image URL</span><input className="field" type="url" name="profilePhotoUrl" placeholder="https://…" defaultValue={engineer?.profilePhotoUrl} /></label>
+    <label className="grid gap-2 text-sm font-medium">Profile photo URL <span className="text-xs font-normal text-[var(--text-soft)]">Optional. Leave blank to use the selected account’s Google profile photo.</span><input className="field" type="url" name="profilePhotoUrl" placeholder="Uses Google profile photo automatically" defaultValue={engineer?.profilePhotoUrl && engineer.profilePhotoUrl !== engineer.userAvatar ? engineer.profilePhotoUrl : ""} /></label>
     <label className="grid gap-2 text-sm font-medium">Bio<textarea className="field min-h-28" name="bio" required minLength={20} defaultValue={engineer?.bio} /></label>
-    <div className="grid gap-4 md:grid-cols-2">
-      <label className="grid gap-2 text-sm font-medium">Specialties <span className="text-xs font-normal text-[var(--text-soft)]">Comma-separated</span><input className="field" name="specialties" required placeholder="Mixing, Mastering, Vocal production" defaultValue={engineer?.specialties.join(", ")} /></label>
-      <label className="grid gap-2 text-sm font-medium">Genres <span className="text-xs font-normal text-[var(--text-soft)]">Comma-separated</span><input className="field" name="genres" required placeholder="Hip-Hop, Pop, R&B" defaultValue={engineer?.genres.join(", ")} /></label>
-    </div>
+    <TagPicker name="specialties" label="Specialties" options={SPECIALTIES} initial={engineer?.specialties ?? ["Mixing", "Mastering"]} />
+    <TagPicker name="genres" label="Genres" options={GENRES} initial={engineer?.genres ?? ["Hip-Hop", "Pop", "R&B"]} />
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-4 sm:p-5"><div className="flex items-center gap-2"><Music2 className="h-4 w-4 text-[var(--accent)]"/><h3 className="font-semibold">Public links and work</h3></div><p className="mt-1 text-xs text-[var(--text-muted)]">These links appear on the engineer’s public profile so artists can review their work.</p><div className="mt-4 grid gap-4 md:grid-cols-2"><label className="grid gap-2 text-sm font-medium"><span className="flex items-center gap-2"><Instagram className="h-4 w-4"/>Instagram profile</span><input className="field" type="url" name="instagram" placeholder="https://instagram.com/username" defaultValue={engineer?.socialLinks.instagram} /></label><label className="grid gap-2 text-sm font-medium"><span className="flex items-center gap-2"><Youtube className="h-4 w-4"/>YouTube channel</span><input className="field" type="url" name="youtube" placeholder="https://youtube.com/@channel" defaultValue={engineer?.socialLinks.youtube} /></label></div><label className="mt-4 grid gap-2 text-sm font-medium">Songs and work samples <span className="text-xs font-normal leading-5 text-[var(--text-soft)]">Add one per line as “Song title | link”. You can use YouTube, Spotify, SoundCloud, or a direct audio link.</span><textarea className="field min-h-28" name="portfolioItems" placeholder={"Midnight Drive | https://youtube.com/watch?v=…\nVocal mix before and after | https://soundcloud.com/…"} defaultValue={engineer?.portfolioItems.map(item => `${item.title} | ${item.url}`).join("\n")} /></label></div>
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
       <label className="grid gap-2 text-sm font-medium">Availability<select className="field" name="availability" defaultValue={engineer?.availability ?? "AVAILABLE"}><option value="AVAILABLE">Available</option><option value="UNAVAILABLE">Unavailable</option></select></label>
       <label className="grid gap-2 text-sm font-medium">Verification<select className="field" name="verificationState" defaultValue={engineer?.verificationState ?? "VERIFIED"}><option value="VERIFIED">Verified</option><option value="UNVERIFIED">Unverified</option></select></label>
