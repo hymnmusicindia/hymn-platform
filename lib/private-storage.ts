@@ -7,7 +7,7 @@ import { beatAssetRelativePath, finalRelativePath, localStorageProvider } from "
 import { CANONICAL_HOSTINGER_STORAGE_ROOT, managedStorageRoot } from "@/lib/hostinger-storage";
 import { verifyArtworkIntegrity, verifyAudioIntegrity } from "@/lib/media-integrity";
 
-export type PrivateAssetType = "private_audio_master" | "private_beat_deliverable" | "private_beat_license" | "private_cover_licence" | "private_ownership_proof" | "private_ai_receipt" | "private_royalty_statement" | "private_payout_report" | "private_payout_proof" | "private_kyc_document" | "private_unreleased_artwork";
+export type PrivateAssetType = "private_audio_master" | "private_studio_source" | "private_studio_delivery" | "private_beat_deliverable" | "private_beat_license" | "private_cover_licence" | "private_ownership_proof" | "private_ai_receipt" | "private_royalty_statement" | "private_payout_report" | "private_payout_proof" | "private_kyc_document" | "private_unreleased_artwork";
 export type PrivateUploadInput = { ownerUserId: number; ownerName?: string; releaseId?: number; beatPurchaseId?: number; beatId?: number; beatTitle?: string; assetType: PrivateAssetType; fileName: string; mimeType: string; bytes: Buffer; retentionUntil?: Date };
 export type AuthorizedReadInput = { assetId: number; requesterUserId: number; isAdmin: boolean; range?: string | null };
 export type StoredPrivateAsset = { id: number; downloadPath: string; checksum: string; byteSize: number };
@@ -20,6 +20,8 @@ export interface PrivateStorageAdapter {
 
 const policies: Record<PrivateAssetType, { max: number; mime: string[] }> = {
   private_audio_master: { max: 500 * 1024 * 1024, mime: ["audio/wav", "audio/x-wav", "audio/mpeg"] },
+  private_studio_source: { max: 2 * 1024 * 1024 * 1024, mime: ["audio/wav", "audio/x-wav", "audio/flac", "audio/mpeg", "application/zip"] },
+  private_studio_delivery: { max: 500 * 1024 * 1024, mime: ["audio/wav", "audio/x-wav", "audio/flac", "audio/mpeg", "application/zip"] },
   private_beat_deliverable: { max: 500 * 1024 * 1024, mime: ["audio/wav", "audio/x-wav", "audio/flac", "audio/mpeg", "application/zip"] },
   private_beat_license: { max: 20 * 1024 * 1024, mime: ["application/pdf"] },
   private_unreleased_artwork: { max: 20 * 1024 * 1024, mime: ["image/jpeg"] },
@@ -156,11 +158,12 @@ export const localPrivateStorage: PrivateStorageAdapter = {
     return { id: asset.id, downloadPath: `/api/assets/${asset.id}/download?filename=${encodeURIComponent(safeFilename)}`, checksum, byteSize: input.bytes.length };
   },
   async createAuthorizedRead(input) {
-    const asset = await prisma.storedAsset.findUnique({ where: { id: input.assetId } });
+    const asset = await prisma.storedAsset.findUnique({ where: { id: input.assetId }, include: { studioFile: { include: { order: { include: { engineerParty: { select: { claimedByUserId: true } } } } } } } });
     if (!asset || asset.deletedAt || (asset.retentionUntil && asset.retentionUntil <= new Date())) throw new Error("Asset is unavailable.");
     if (!input.isAdmin && asset.ownerUserId !== input.requesterUserId) {
       const purchased = asset.assetType === "private_beat_deliverable" && asset.beatId ? await prisma.beatPurchase.count({ where: { beatId: asset.beatId, userId: input.requesterUserId, hasAccess: true } }) : 0;
-      if (!purchased) throw new Error("Forbidden.");
+      const studioParticipant = asset.studioFile && (asset.studioFile.order.customerId === input.requesterUserId || asset.studioFile.order.engineerParty.claimedByUserId === input.requesterUserId);
+      if (!purchased && !studioParticipant) throw new Error("Forbidden.");
     }
     if (asset.storageProvider === "vercel_blob" || asset.objectKey.startsWith("http://") || asset.objectKey.startsWith("https://")) {
       const blob = await get(asset.objectKey, { access: "private", headers: input.range ? { Range: input.range } : undefined });

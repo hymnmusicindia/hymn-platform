@@ -5,6 +5,7 @@ import { completeCheckoutOrder } from "@/lib/db";
 import { qualifyReferralInTransaction, reverseReferralForTransactionInTransaction, sendReferralRewardEmails } from "@/lib/referrals";
 import { synchronizeProviderSubscription, synchronizeSubscriptionPayment } from "@/lib/subscription-billing";
 import { normalizeBeatLicenseType } from "@/lib/beat-store";
+import { confirmStudioPayment } from "@/lib/studio-services";
 
 type RazorpayEntity = { id?: string; order_id?: string; payment_id?: string; subscription_id?: string; invoice_id?: string; plan_id?: string; amount?: number; currency?: string; status?: string; error_code?: string; error_description?: string; current_start?: number | null; current_end?: number | null; start_at?: number | null; ended_at?: number | null; charge_at?: number | null; created_at?: number; notes?: Record<string, unknown> };
 type RazorpayPayload = { event?: string; id?: string; payload?: { payment?: { entity?: RazorpayEntity }; order?: { entity?: RazorpayEntity }; refund?: { entity?: RazorpayEntity }; subscription?: { entity?: RazorpayEntity } } };
@@ -68,12 +69,13 @@ export async function processRazorpayEvent(eventId: number) {
     };
     let resolvedOrderId = event.razorpayOrderId;
     if (!resolvedOrderId && event.paymentId) {
-      const [distribution, checkout] = await Promise.all([
+      const [distribution, checkout, studio] = await Promise.all([
         prisma.distributionOrder.findUnique({ where: { razorpayPaymentId: event.paymentId }, select: { razorpayOrderId: true } }),
-        prisma.checkoutOrder.findUnique({ where: { razorpayPaymentId: event.paymentId }, select: { razorpayOrderId: true } })
+        prisma.checkoutOrder.findUnique({ where: { razorpayPaymentId: event.paymentId }, select: { razorpayOrderId: true } }),
+        prisma.studioPayment.findUnique({ where: { razorpayPaymentId: event.paymentId }, select: { razorpayOrderId: true } })
       ]);
-      if (distribution && checkout) throw new Error("Ambiguous persisted Razorpay payment identifier.");
-      resolvedOrderId = distribution?.razorpayOrderId ?? checkout?.razorpayOrderId ?? null;
+      if ([distribution, checkout, studio].filter(Boolean).length > 1) throw new Error("Ambiguous persisted Razorpay payment identifier.");
+      resolvedOrderId = distribution?.razorpayOrderId ?? checkout?.razorpayOrderId ?? studio?.razorpayOrderId ?? null;
     }
     if (event.eventType in nonFulfilmentStates) {
       if (resolvedOrderId) await applyPaymentState({ razorpayOrderId: resolvedOrderId, paymentId: event.paymentId, state: nonFulfilmentStates[event.eventType], eventId: event.id, amountMinor: event.amountMinor });
@@ -159,13 +161,15 @@ export async function confirmCheckoutPayment(input: { razorpayOrderId: string; p
 }
 
 export async function confirmPersistedPayment(input: { razorpayOrderId: string; paymentId: string; userId?: number; amountMinor?: number; currency?: string; source: "browser" | "webhook" | "reconciliation" | "admin_replay" }) {
-  const [distribution, checkout] = await Promise.all([
+  const [distribution, checkout, studio] = await Promise.all([
     prisma.distributionOrder.findUnique({ where: { razorpayOrderId: input.razorpayOrderId }, select: { id: true } }),
-    prisma.checkoutOrder.findUnique({ where: { razorpayOrderId: input.razorpayOrderId }, select: { id: true } })
+    prisma.checkoutOrder.findUnique({ where: { razorpayOrderId: input.razorpayOrderId }, select: { id: true } }),
+    prisma.studioPayment.findUnique({ where: { razorpayOrderId: input.razorpayOrderId }, select: { id: true } })
   ]);
-  if (distribution && checkout) throw new Error("Ambiguous persisted Razorpay order identifier.");
+  if ([distribution, checkout, studio].filter(Boolean).length > 1) throw new Error("Ambiguous persisted Razorpay order identifier.");
   if (distribution) return { kind: "distribution" as const, order: await confirmDistributionPayment(input) };
   if (checkout) return { kind: "checkout" as const, order: await confirmCheckoutPayment(input) };
+  if (studio) return { kind: "studio" as const, order: await confirmStudioPayment({ razorpayOrderId: input.razorpayOrderId, paymentId: input.paymentId, customerId: input.userId, amountMinor: input.amountMinor, currency: input.currency, source: "webhook" }) };
   throw new Error("Persisted HYMN order was not found.");
 }
 
@@ -173,7 +177,8 @@ async function applyPaymentState(input: { razorpayOrderId: string; paymentId: st
   await prisma.$transaction(async tx => {
     const distribution = await tx.distributionOrder.findUnique({ where: { razorpayOrderId: input.razorpayOrderId } });
     const checkout = await tx.checkoutOrder.findUnique({ where: { razorpayOrderId: input.razorpayOrderId }, include: { items: true } });
-    if (distribution && checkout) throw new Error("Ambiguous persisted Razorpay order identifier.");
+    const studio = await tx.studioPayment.findUnique({ where: { razorpayOrderId: input.razorpayOrderId }, include: { order: true } });
+    if ([distribution, checkout, studio].filter(Boolean).length > 1) throw new Error("Ambiguous persisted Razorpay order identifier.");
     if (distribution) {
       if (ignoreStalePaymentState(distribution.paymentStatus, input.state)) return;
       if (distribution.razorpayPaymentId && input.paymentId && distribution.razorpayPaymentId !== input.paymentId) throw new Error("Payment event does not match the captured order payment.");
@@ -183,6 +188,14 @@ async function applyPaymentState(input: { razorpayOrderId: string; paymentId: st
       if (fullReversal && distribution.plan !== "one_time") await tx.subscription.updateMany({ where: { userId: distribution.userId, status: "active" }, data: { status: "cancelled" } });
       if (fullReversal) await reverseReferralForTransactionInTransaction(tx, { transactionType: "distribution_order", transactionId: distribution.id, reason: input.state as "refunded" | "charged_back" });
       await tx.auditLog.create({ data: { action: `RAZORPAY_${input.state.toUpperCase()}`, entity: "distribution_order", entityId: String(distribution.id), metadata: { eventId: input.eventId, paymentId: input.paymentId } } });
+      return;
+    }
+    if (studio) {
+      if (studio.razorpayPaymentId && input.paymentId && studio.razorpayPaymentId !== input.paymentId) throw new Error("Payment event does not match the captured Studio payment.");
+      const mapped = input.state === "refunded" ? "REFUNDED" : input.state === "refund_pending" ? "REFUND_PENDING" : input.state === "disputed" || input.state === "charged_back" ? "DISPUTED" : input.state.toUpperCase();
+      await tx.studioPayment.update({ where: { id: studio.id }, data: { status: mapped, refundedAt: mapped === "REFUNDED" ? new Date() : undefined } });
+      if (["REFUND_PENDING", "REFUNDED", "DISPUTED"].includes(mapped)) await tx.studioServiceOrder.update({ where: { id: studio.orderId }, data: { paymentStatus: mapped, status: mapped as "REFUND_PENDING" | "REFUNDED" | "DISPUTED" } });
+      await tx.auditLog.create({ data: { action: `RAZORPAY_${mapped}`, entity: "studio_payment", entityId: String(studio.id), metadata: { eventId: input.eventId, paymentId: input.paymentId } } });
       return;
     }
     if (!checkout) return;

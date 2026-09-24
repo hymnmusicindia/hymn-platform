@@ -148,6 +148,25 @@ async function main() {
   if (syncedCount > 0) {
     console.log(`Synchronized ${syncedCount} existing PRODUCER users without profiles.`);
   }
+
+  // Real, configurable Studio supply. Ratings and completed-order counts remain
+  // empty until actual marketplace activity creates them.
+  const studioParty = await prisma.contributorParty.upsert({
+    where: { claimedByUserId: adminUser.id },
+    create: { publicId: "HYM_STUDIO_ENGINEER_PRIMARY", professionalName: adminUser.name, displayName: adminUser.name, claimedByUserId: adminUser.id, createdByUserId: adminUser.id, identityState: "CLAIMED" },
+    update: {},
+  });
+  const engineer = await prisma.engineerProfile.upsert({
+    where: { contributorPartyId: studioParty.id },
+    create: { contributorPartyId: studioParty.id, slug: "hymn-studio-engineer", professionalName: studioParty.professionalName, bio: "A HYMN Studio engineer focused on clear vocals, musical low end, and streaming-ready masters.", specialties: ["Mixing", "Mastering", "Vocal production"], genres: ["Hip-Hop", "Trap", "R&B", "Pop"], availability: "AVAILABLE", maxActiveOrders: 3, verificationState: "VERIFIED", sellerState: "ACTIVE" },
+    update: {},
+  });
+  await prisma.studioServiceListing.upsert({
+    where: { publicId: "00000000-0000-4000-8000-000000000101" },
+    create: { publicId: "00000000-0000-4000-8000-000000000101", engineerProfileId: engineer.id, title: "Professional Mixing & Mastering", description: "A complete mix and master for one song, including vocal balance, dynamics, spatial processing, tonal correction, and a release-ready master.", standardPrice: 1999, beatCustomerPrice: 1499, includedRevisions: 2, additionalRevisionPrice: 399, turnaroundDays: 5, acceptedGenres: ["Hip-Hop", "Trap", "R&B", "Pop"], sourceRequirements: { required: ["Consolidated stems or multitracks", "Rough reference mix", "Tempo and sample rate"], preferred: ["24-bit WAV files", "Dry and wet vocal references"] }, deliverables: { files: ["24-bit WAV master", "320 kbps MP3", "Instrumental when applicable"] }, instantAccept: false, active: true, paused: false },
+    update: {},
+  });
+  console.log("Seeded Studio engineer and Mixing & Mastering listing.");
 }
 
 main()

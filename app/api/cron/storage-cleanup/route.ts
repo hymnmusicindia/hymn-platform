@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { localStorageProvider } from "@/lib/storage-service";
+import { localPrivateStorage } from "@/lib/private-storage";
 
 export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
@@ -27,6 +28,16 @@ export async function POST(request: Request) {
       console.error("Expired upload cleanup failed", { uploadSessionId: session.id, error });
     }
   }
-  console.info("Temporary upload cleanup completed", { candidates: expired.length, cleaned, staleFinalizations: staleFinalizations.length, recovered });
-  return NextResponse.json({ candidates: expired.length, cleaned, staleFinalizations: staleFinalizations.length, recovered });
+  const expiredAssets = await prisma.storedAsset.findMany({ where: { retentionUntil: { lte: now }, deletedAt: null }, select: { id: true }, take: 250 });
+  let assetsDeleted = 0;
+  for (const asset of expiredAssets) {
+    try {
+      await localPrivateStorage.delete({ assetId: asset.id, requesterUserId: 0, isAdmin: true });
+      assetsDeleted += 1;
+    } catch (error) {
+      console.error("Expired private asset cleanup failed", { assetId: asset.id, error });
+    }
+  }
+  console.info("Storage cleanup completed", { candidates: expired.length, cleaned, staleFinalizations: staleFinalizations.length, recovered, expiredAssets: expiredAssets.length, assetsDeleted });
+  return NextResponse.json({ candidates: expired.length, cleaned, staleFinalizations: staleFinalizations.length, recovered, expiredAssets: expiredAssets.length, assetsDeleted });
 }

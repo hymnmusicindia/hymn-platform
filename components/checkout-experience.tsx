@@ -304,7 +304,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
             <div className="mt-5 rounded-[1.2rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
               <p className="font-semibold" style={{ color: "var(--text)" }}>Payment verified.</p>
               <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Your order has been recorded and rewards were processed securely.</p>
-              <Link href="/dashboard" className="btn-outline pressable mt-4 inline-flex">Open dashboard</Link>
+              {product === "beatstore" ? <div className="mt-4 rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--card)" }}><p className="text-xs font-semibold uppercase tracking-[.16em]" style={{ color: "var(--text-soft)" }}>Your beat is ready</p><h3 className="mt-2 font-semibold">Turn it into a finished record.</h3><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Get your vocals professionally mixed and mastered. HYMN Beat customers receive configured Studio pricing.</p><Link href="/studio" className="btn-primary pressable mt-4 inline-flex">Find a mixing engineer<ArrowRight className="h-4 w-4" /></Link><Link href="/dashboard?module=purchases" className="ml-3 inline-flex text-sm underline">Maybe later</Link></div> : <Link href="/dashboard" className="btn-outline pressable mt-4 inline-flex">Open dashboard</Link>}
             </div>
           ) : (
             <button type="button" className="btn-primary pressable mt-6 w-full" disabled={loading || paying || !quote} onClick={proceedToPay}>
