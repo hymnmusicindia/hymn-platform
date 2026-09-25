@@ -11,7 +11,6 @@ import {
   listAllSupportTickets,
   listPartnershipLeads,
   listProducerApplications,
-  listProducerProfiles,
   listUsers
 } from "@/lib/db";
 import { listAllDistributionOrders, listAllDetailedReleases } from "@/lib/distribution-db";
@@ -78,7 +77,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const resolvedSearchParams = await searchParams;
   const [users, releases, beats] = await Promise.all([canReadUsers ? listUsers() : Promise.resolve([]), listAllDetailedReleases(), listAllBeats()]);
   const [orders, applications, leads] = await Promise.all([listAllOrders(), listProducerApplications(), listPartnershipLeads()]);
-  const [distributionOrders, artistProfiles, producerProfiles] = await Promise.all([listAllDistributionOrders(), listAllArtistProfiles(), listProducerProfiles()]);
+  const [distributionOrders, artistProfiles] = await Promise.all([listAllDistributionOrders(), listAllArtistProfiles()]);
   const [siteSettings, notifications, supportTickets] = await Promise.all([getSiteSettings(), listLatestNotifications(50), listAllSupportTickets()]);
   const requestedTabCandidate = resolvedSearchParams?.tab && ADMIN_TABS.includes(resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) ? (resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) : undefined;
   const requestedTab = requestedTabCandidate === "users" && !canReadUsers ? "overview" : requestedTabCandidate;
@@ -99,7 +98,6 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         initialLeads={leads}
         initialDistributionOrders={distributionOrders}
         initialArtistProfiles={artistProfiles}
-        initialProducerProfiles={producerProfiles}
         initialSiteSettings={siteSettings}
         initialNotifications={notifications}
         initialSupportTickets={supportTickets}

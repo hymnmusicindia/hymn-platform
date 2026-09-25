@@ -15,7 +15,7 @@ import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { DireNoteDiagnostics } from "@/components/direnote-diagnostics";
 import type { AdminPayoutRequest } from "@/lib/payout";
 import type { AdminPermissionKey } from "@/lib/access";
-import type { AdminStoreStatus, ArtistProfile, Beat, DistributionOrder, Notification, Order, PartnershipLead, ProducerApplication, ProducerProfile, Release, SiteSettings, StoreStatus, StoreStatusHistoryEntry, SupportTicket, User } from "@/lib/types";
+import type { AdminStoreStatus, ArtistProfile, Beat, DistributionOrder, Notification, Order, PartnershipLead, ProducerApplication, Release, SiteSettings, StoreStatus, StoreStatusHistoryEntry, SupportTicket, User } from "@/lib/types";
 
 type PersistedAdminTask = { id: number; type: string; priority: string; title: string; body: string; href: string; status: string; createdAt: string };
 const REVIEW_QUEUE_STATUSES = ["submitted", "in_queue", "under_review", "changes_requested", "approved", "failed"] as const;
@@ -531,7 +531,6 @@ export function AdminControlCenter({
   initialLeads,
   initialDistributionOrders,
   initialArtistProfiles,
-  initialProducerProfiles,
   initialSiteSettings,
   initialNotifications,
   initialSupportTickets
@@ -548,7 +547,6 @@ export function AdminControlCenter({
   initialLeads: PartnershipLead[];
   initialDistributionOrders: DistributionOrder[];
   initialArtistProfiles: ArtistProfile[];
-  initialProducerProfiles: ProducerProfile[];
   initialSiteSettings: SiteSettings;
   initialNotifications: Notification[];
   initialSupportTickets: SupportTicket[];
@@ -1469,7 +1467,7 @@ export function AdminControlCenter({
         <div className="grid gap-6">
           {activeTab === "settings" ? <DireNoteDiagnostics /> : null}
           {activeTab === "settings" ? <SurfaceSection title="Transactional email" description="Resend delivery configuration, attempts, failures, and retries."><div className="flex flex-col gap-4 rounded-2xl border p-5 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div><p className="font-semibold">Email logs</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Review every transactional email attempt and retry failed deliveries safely.</p></div><a href="/admin/email-logs" className="btn-primary w-fit">Open email logs</a></div></SurfaceSection> : null}
-          <AdminContentManager initialProducerProfiles={initialProducerProfiles} initialReleases={initialReleases} initialSiteSettings={initialSiteSettings} />
+          <AdminContentManager initialReleases={initialReleases} initialSiteSettings={initialSiteSettings} />
         </div>
       ) : null}
 

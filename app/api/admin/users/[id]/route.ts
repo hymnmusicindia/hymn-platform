@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { requireAdminPermission } from "@/lib/access";
-import { createNotification, updateUserRole } from "@/lib/db";
+import { createNotification } from "@/lib/db";
 import { userRoleUpdateSchema } from "@/lib/validation";
 import { prisma } from "@/lib/prisma";
 
@@ -35,20 +36,35 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const payload = userRoleUpdateSchema.parse(body);
     const activeAdminMembership = await prisma.adminMembership.findFirst({ where: { userId: Number(id), active: true, revokedAt: null }, select: { id: true } });
     if (activeAdminMembership) return NextResponse.json({ error: "Remove this user's administrator membership before assigning an Artist or Producer workspace." }, { status: 409 });
-    const user = await updateUserRole(Number(id), payload.role);
+    const userId = Number(id);
+    const actorId = "sub" in result ? Number(result.sub) || null : null;
+    const user = await prisma.$transaction(async (tx) => {
+      const existing = await tx.user.findUnique({ where: { id: userId } });
+      if (!existing) return null;
+      const updated = await tx.user.update({ where: { id: userId }, data: { role: payload.role === "producer" ? "PRODUCER" : "CUSTOMER" } });
+      if (payload.role === "producer") {
+        const party = await tx.contributorParty.upsert({
+          where: { claimedByUserId: userId },
+          create: { publicId: `HYM_${randomUUID().replaceAll("-", "").toUpperCase()}`, professionalName: updated.name, displayName: updated.name, identityState: "CLAIMED", claimedByUserId: userId, createdByUserId: userId, nameHistory: { create: { professionalName: updated.name, displayName: updated.name, changedByUserId: actorId, reason: "Producer access granted" } } },
+          update: { identityState: "CLAIMED", mergedIntoId: null }
+        });
+        await tx.producerProfile.upsert({
+          where: { userId },
+          create: { userId, contributorPartyId: party.id, slug: `${updated.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "producer"}-${userId}`, displayName: updated.name, bio: "", specialty: "Music producer", status: "pending_setup", active: true },
+          update: { contributorPartyId: party.id, active: true, status: "pending_setup" }
+        });
+      } else {
+        await tx.producerProfile.updateMany({ where: { userId }, data: { active: false, status: "disabled" } });
+        await tx.beat.updateMany({ where: { userId }, data: { enabled: false, status: "HIDDEN" } });
+      }
+      await tx.auditLog.create({ data: { actorId, action: payload.role === "producer" ? "PRODUCER_ROLE_GRANTED" : "PRODUCER_ROLE_REVOKED", entity: "user", entityId: String(userId), metadata: { role: payload.role, producerUserId: userId } } });
+      return updated;
+    });
     if (!user) return NextResponse.json({ error: "User not found." }, { status: 404 });
     if (payload.role === "producer") {
-      await prisma.producerProfile.upsert({
-        where: { userId: user.id },
-        create: { userId: user.id, slug: `${user.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "producer"}-${user.id}`, displayName: user.name, bio: "", specialty: "Music producer", status: "pending_setup", active: true },
-        update: { active: true, status: "pending_setup" }
-      });
       await createNotification({ userId: user.id, title: "Producer access enabled", body: "You can now access your Producer Dashboard from your HYMN dashboard.", type: "account", href: "/producer/dashboard", actionLabel: "Open Producer Dashboard", eventKey: `producer:${user.id}:role-enabled` });
-    } else {
-      await prisma.producerProfile.updateMany({ where: { userId: user.id }, data: { active: false, status: "disabled" } });
     }
-    await prisma.auditLog.create({ data: { actorId: "sub" in result ? result.sub : null, action: payload.role === "producer" ? "PRODUCER_ROLE_GRANTED" : "PRODUCER_ROLE_REVOKED", entity: "user", entityId: String(user.id), metadata: { role: payload.role } } });
-    return NextResponse.json({ user });
+    return NextResponse.json({ user: { ...user, role: user.role.toLowerCase(), status: user.status.toLowerCase(), avatarUrl: user.avatar, createdAt: user.createdAt.toISOString(), updatedAt: user.updatedAt.toISOString() } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not update role.";
     return NextResponse.json({ error: message }, { status: 400 });

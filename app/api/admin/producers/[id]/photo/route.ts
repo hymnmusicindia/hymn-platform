@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { saveUploadedFile } from "@/lib/storage";
+import { ensureClaimedContributorParty } from "@/lib/contributor-identity";
 
 function slugify(value: string, userId: number) {
   const base = value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "producer";
@@ -27,14 +28,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const avatarUrl = await saveUploadedFile(avatar, "producers/avatars", "image");
 
     const user = await prisma.user.findUnique({ where: { id: producerId } });
-    if (!user) {
+    if (!user || user.role !== "PRODUCER") {
       return NextResponse.json({ error: "Producer account not found." }, { status: 404 });
     }
 
+    const contributorParty = await ensureClaimedContributorParty(producerId, user.name || "Music Producer");
     const profile = await prisma.producerProfile.upsert({
       where: { userId: producerId },
       create: {
         userId: producerId,
+        contributorPartyId: contributorParty.id,
         slug: slugify(user.name || "producer", producerId),
         displayName: user.name || "Music Producer",
         bio: "",
@@ -44,6 +47,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         active: true
       },
       update: {
+        contributorPartyId: contributorParty.id,
         avatarUrl
       }
     });

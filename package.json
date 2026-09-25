@@ -60,6 +60,7 @@
     "test:performance-execution": "tsx scripts/verify-performance-execution.ts",
     "test:managed-services-integration": "tsx scripts/verify-managed-services-integration.ts",
     "audit:producer-identities": "tsx scripts/audit-producer-identity-migration.ts",
+    "producers:reset": "tsx scripts/reset-producer-accounts.ts",
     "audit:release-storage": "tsx scripts/audit-release-storage-reconciliation.ts",
     "lint": "eslint ."
   },

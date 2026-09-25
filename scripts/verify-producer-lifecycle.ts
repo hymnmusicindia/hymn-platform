@@ -11,6 +11,10 @@ const migration = read("prisma/migrations/20260922160000_canonical_contributor_i
 const identity = read("lib/contributor-identity.ts");
 const startRelease = read("app/api/beat-purchases/[id]/start-release/route.ts");
 const distribution = read("lib/distribution-db.ts");
+const producerRoleRoute = read("app/api/admin/users/[id]/route.ts");
+const producerProfilesRoute = read("app/api/admin/producer-profiles/route.ts");
+const producerStore = read("lib/db.ts");
+const producerReset = read("scripts/reset-producer-accounts.ts");
 
 for (const model of ["ContributorParty", "ContributorExternalIdentifier", "ContributorNameHistory", "TrackContribution", "TrackContributionSnapshot", "ContributorInvitation", "ProducerIdentityMerge", "ReleaseTrackBeatLink"]) assert.match(schema, new RegExp(`model ${model}\\b`));
 assert.match(schema, /@@unique\(\[trackId, partyId, role\]\)/, "One party/role credit must be idempotent per track.");
@@ -27,6 +31,13 @@ assert.match(identity, /Historical credits remain linked|trackContributionSnapsh
 assert.match(startRelease, /releaseTrackBeatLink\.create/);
 assert.match(startRelease, /syncTrackContributions/);
 assert.match(distribution, /syncTrackContributions/);
+assert.match(producerRoleRoute, /prisma\.\$transaction/, "Producer role and identity changes must be atomic.");
+assert.match(producerRoleRoute, /contributorPartyId: party\.id/, "Producer profiles must link to the account's canonical contributor identity.");
+assert.match(producerRoleRoute, /beat\.updateMany[\s\S]*enabled: false/, "Revoking producer access must remove its inventory from sale.");
+assert.match(producerStore, /user: \{ role: "PRODUCER", status: "ACTIVE" \}/, "Public producer profiles must belong to active Producer accounts.");
+assert.match(producerProfilesRoute, /status: 410/, "Disconnected free-form producer creation must stay retired.");
+assert.match(producerReset, /--confirm=RESET_ALL_PRODUCERS/, "The producer reset must require explicit confirmation.");
+assert.match(producerReset, /salesPreserved/, "The producer reset must preserve financial history.");
 
 for (const role of ["PRODUCER", "CO_PRODUCER", "ADDITIONAL_PRODUCER", "EXECUTIVE_PRODUCER", "VOCAL_PRODUCER", "REMIXER", "COMPOSER", "LYRICIST", "SONGWRITER", "MIX_ENGINEER", "MASTERING_ENGINEER", "RECORDING_ENGINEER", "PERFORMER", "ARRANGER"]) assert.ok(CONTRIBUTOR_ROLES.includes(role as any));
 assert.equal(normalizeContributorRole("co-producer"), "CO_PRODUCER");

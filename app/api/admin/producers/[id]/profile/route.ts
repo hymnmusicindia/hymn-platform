@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { saveUploadedFile } from "@/lib/storage";
+import { ensureClaimedContributorParty } from "@/lib/contributor-identity";
 
 function slugify(value: string, userId: number) {
   const base = value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "producer";
@@ -31,10 +32,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const coverPhotoUrl = coverPhoto instanceof File && coverPhoto.size ? await saveUploadedFile(coverPhoto, "producers/covers", "image") : undefined;
     const storefrontComplete = Boolean((avatarUrl || user.producerProfile?.avatarUrl) && (coverPhotoUrl || user.producerProfile?.coverPhotoUrl));
     const nextStatus = ["suspended", "disabled"].includes(user.producerProfile?.status || "") ? user.producerProfile!.status : storefrontComplete ? "active" : "pending_setup";
+    const contributorParty = await ensureClaimedContributorParty(producerId, displayName);
     const profile = await prisma.producerProfile.upsert({
       where: { userId: producerId },
       create: {
         userId: producerId,
+        contributorPartyId: contributorParty.id,
         slug: slugify(displayName, producerId),
         displayName,
         bio: "",
@@ -45,6 +48,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         active: true,
       },
       update: {
+        contributorPartyId: contributorParty.id,
         displayName,
         ...(avatarUrl ? { avatarUrl } : {}),
         ...(coverPhotoUrl ? { coverPhotoUrl } : {}),

@@ -2762,10 +2762,15 @@ export async function listProducerProfiles(limit?: number): Promise<ProducerProf
   if (usesPostgresPrisma()) {
     try {
       const profiles = await prisma.producerProfile.findMany({
+        where: {
+          active: true,
+          status: "active",
+          user: { role: "PRODUCER", status: "ACTIVE" }
+        },
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
         ...(take ? { take } : {})
       });
-      if (profiles.length > 0) return profiles.map(mapPrismaProducerProfile);
+      return profiles.map(mapPrismaProducerProfile);
     } catch (e) {
       rethrowProductionPersistenceFailure(e);
       console.error("Prisma listProducerProfiles error; using development memory data:", e);
