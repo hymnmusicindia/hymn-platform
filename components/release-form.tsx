@@ -208,6 +208,7 @@ type TrackDraft = {
   audioFile: File | null;
   audioFileName: string;
   existingAudioUrl: string;
+  audioAssetId?: number;
   audioUploadStatus: "idle" | "uploading" | "uploaded" | "failed";
   audioUploadProgress: number;
   audioBytesUploaded: number;
@@ -219,6 +220,14 @@ type TrackDraft = {
   lyrics: string;
   explicitContent: boolean;
   dolbyAtmos: boolean;
+};
+
+type AudioLibraryPrefill = {
+  assetId: number;
+  audioUrl: string;
+  fileName: string;
+  checksum: string;
+  prior?: { release: Record<string, any>; track: Record<string, any> | null } | null;
 };
 
 type ReleaseDraft = {
@@ -416,27 +425,30 @@ function createInitialReleaseDraft(
   initialRelease: Release | null | undefined,
   minimumScheduledDate: string,
   prefillSuggestions: ReleasePrefillSuggestion[] = [],
+  audioLibraryPrefill?: AudioLibraryPrefill,
 ): ReleaseDraft {
   if (!initialRelease) {
     const suggested = Object.fromEntries(prefillSuggestions.map((item) => [item.field, item.value]));
+    const prior = audioLibraryPrefill?.prior?.release;
+    const priorMetadata = prior?.metadata && typeof prior.metadata === "object" ? prior.metadata as Record<string, any> : {};
     return {
-      releasePreviouslyReleased: false,
+      releasePreviouslyReleased: Boolean(prior),
       contentType: "", sunoReceiptUrl: "", sunoLink: "", licenseReceiptUrl: "",
       upcCode: "",
       existingIsrcCode: "",
       releaseTitle: "",
-      recordLabelName: suggested.recordLabelName ?? "",
-      primaryGenre: suggested.primaryGenre ?? "",
-      secondaryGenre: suggested.secondaryGenre ?? "",
-      mood: "",
-      language: suggested.language ?? "",
-      territory: "Worldwide",
+      recordLabelName: (prior?.labelName || prior?.labelDisplayName || suggested.recordLabelName) ?? "",
+      primaryGenre: (prior?.primaryGenre || prior?.genre || priorMetadata.primaryGenre || suggested.primaryGenre) ?? "",
+      secondaryGenre: (prior?.secondaryGenre || priorMetadata.secondaryGenre || suggested.secondaryGenre) ?? "",
+      mood: prior?.mood || priorMetadata.mood || "",
+      language: (prior?.language || priorMetadata.language || suggested.language) ?? "",
+      territory: prior?.territory || priorMetadata.territory || "Worldwide",
       selectedCountries: [],
       releaseTiming: "quick_release",
       scheduledReleaseDate: minimumScheduledDate,
       originalReleaseDate: "",
-      copyrightOwner: suggested.copyrightOwner ?? "",
-      publishingRights: suggested.publishingRights ?? "",
+      copyrightOwner: (prior?.copyrightOwner || priorMetadata.copyrightOwner || suggested.copyrightOwner) ?? "",
+      publishingRights: (prior?.publishingRights || priorMetadata.publishingRights || suggested.publishingRights) ?? "",
     };
   }
 
@@ -628,9 +640,12 @@ function PlatformLogo({
 
 function createTracksFromRelease(
   initialRelease: Release | null | undefined,
+  audioLibraryPrefill?: AudioLibraryPrefill,
 ): TrackDraft[] {
   const sourceTracks = initialRelease?.tracks?.length
     ? initialRelease.tracks
+    : audioLibraryPrefill?.prior?.track
+      ? [audioLibraryPrefill.prior.track as any]
     : initialRelease
       ? [
           {
@@ -651,7 +666,7 @@ function createTracksFromRelease(
             originalArtist: undefined,
             originalTrackLink: undefined,
             coverLicenseConfirmed: false,
-            audioUrl: initialRelease.audioUrl,
+             audioUrl: initialRelease.audioUrl,
             duration: "",
             bpm: null,
             musicalKey: undefined,
@@ -678,8 +693,8 @@ function createTracksFromRelease(
         ? nestedTrackMetadata.artistProfileIds
         : [];
     const savedPrimaryArtistIds = savedArtistProfileIds
-      .map((id) => Number(id))
-      .filter((id): id is number => Number.isInteger(id) && id > 0)
+      .map((id: unknown) => Number(id))
+      .filter((id: number): id is number => Number.isInteger(id) && id > 0)
       .slice(0, 3);
     return {
       id: createId(),
@@ -715,14 +730,15 @@ function createTracksFromRelease(
       audioFileName: fileNameFromUrl(
         track?.audioUrl || initialRelease?.audioUrl || "",
       ),
-      existingAudioUrl: track?.audioUrl || initialRelease?.audioUrl || "",
-      audioUploadStatus:
-        track?.audioUrl || initialRelease?.audioUrl ? "uploaded" : "idle",
-      audioUploadProgress: track?.audioUrl || initialRelease?.audioUrl ? 100 : 0,
+       existingAudioUrl: track?.audioUrl || initialRelease?.audioUrl || (audioLibraryPrefill && !initialRelease ? audioLibraryPrefill.audioUrl : ""),
+       audioAssetId: audioLibraryPrefill && !initialRelease ? audioLibraryPrefill.assetId : undefined,
+       audioUploadStatus:
+         track?.audioUrl || initialRelease?.audioUrl || (audioLibraryPrefill && !initialRelease ? audioLibraryPrefill.audioUrl : "") ? "uploaded" : "idle",
+       audioUploadProgress: track?.audioUrl || initialRelease?.audioUrl || (audioLibraryPrefill && !initialRelease ? audioLibraryPrefill.audioUrl : "") ? 100 : 0,
       audioBytesUploaded: 0,
       audioTotalBytes: 0,
       requiresAudioReplacement: correctionMentions(initialRelease, new RegExp(`audio|tracks\\.${index}\\.audio_url`, "i")),
-      audioPreviewUrl: track?.audioUrl || initialRelease?.audioUrl || "",
+       audioPreviewUrl: track?.audioUrl || initialRelease?.audioUrl || (audioLibraryPrefill && !initialRelease ? audioLibraryPrefill.audioUrl : ""),
       duration: track?.duration?.trim() || "",
       titleLanguage: readTrackLanguage(track),
       lyrics: track?.lyrics ?? track?.trackLyrics ?? "",
@@ -1026,6 +1042,7 @@ export function ReleaseForm({
   firstReleaseOffer = false,
   campaignAttribution = {},
   prefillSuggestions = [],
+  audioLibraryPrefill,
   initialCorrectionField,
 }: {
   selectedPlan: DistributionPlanOption;
@@ -1035,6 +1052,7 @@ export function ReleaseForm({
   firstReleaseOffer?: boolean;
   campaignAttribution?: Record<string, string>;
   prefillSuggestions?: ReleasePrefillSuggestion[];
+  audioLibraryPrefill?: AudioLibraryPrefill;
   initialCorrectionField?: string;
 }) {
   const router = useRouter();
@@ -1166,7 +1184,7 @@ export function ReleaseForm({
     () => initialRelease?.youtubeContentIdChannelUrl ?? "",
   );
   const [release, setRelease] = useState<ReleaseDraft>(() =>
-    createInitialReleaseDraft(initialRelease, minimumScheduledDate, prefillSuggestions),
+    createInitialReleaseDraft(initialRelease, minimumScheduledDate, prefillSuggestions, audioLibraryPrefill),
   );
   const contentIdEligibility = useMemo(
     () => getContentIdEligibility(release.contentType),
@@ -1208,7 +1226,7 @@ export function ReleaseForm({
     setPlatforms((current) => current.filter((item) => !socialPlatforms.some((platform) => platform.name === item)));
   }, [contentIdEligibility.eligible]);
   const [tracks, setTracks] = useState<TrackDraft[]>(() =>
-    createTracksFromRelease(initialRelease),
+    createTracksFromRelease(initialRelease, audioLibraryPrefill),
   );
   const [submittedRelease, setSubmittedRelease] = useState<Release | null>(
     null,
@@ -1469,7 +1487,8 @@ export function ReleaseForm({
           songwriters: contributorNames(track.songwriters),
           composers: contributorNames(track.composers),
           producers: producerNames(track.producers),
-          audioUrl: track.existingAudioUrl,
+           audioUrl: track.existingAudioUrl,
+           audioAssetId: track.audioAssetId,
           audioFileName: track.audioFileName,
           duration: track.duration,
           bpm: null,
@@ -2589,7 +2608,8 @@ export function ReleaseForm({
             ? `cover-license-${index}`
             : undefined,
           existingCoverLicenseConfirmed: track.existingCoverLicenseConfirmed,
-          existingAudioUrl: track.existingAudioUrl || undefined,
+           existingAudioUrl: track.existingAudioUrl || undefined,
+           audioAssetId: track.audioAssetId,
           audioFileKey: `audio-${index}`,
           duration: track.duration,
           explicitContent: track.explicitContent,
@@ -2701,7 +2721,8 @@ export function ReleaseForm({
               ? `cover-license-${index}`
               : undefined,
             existingCoverLicenseConfirmed: track.existingCoverLicenseConfirmed,
-            existingAudioUrl: track.existingAudioUrl || undefined,
+             existingAudioUrl: track.existingAudioUrl || undefined,
+             audioAssetId: track.audioAssetId,
             audioFileKey: `audio-${index}`,
             duration: track.duration,
             explicitContent: track.explicitContent,
@@ -2820,6 +2841,7 @@ export function ReleaseForm({
             : undefined,
           audioFileKey: `audio-${index}`,
           existingAudioUrl: track.existingAudioUrl || undefined,
+          audioAssetId: track.audioAssetId,
           existingCoverLicenseConfirmed: track.existingCoverLicenseConfirmed,
           duration: track.duration,
           explicitContent: track.explicitContent,

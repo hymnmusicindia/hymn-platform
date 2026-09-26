@@ -337,6 +337,7 @@ model Release {
   splitEarnings               SplitEarningLineItem[]
   direNoteLogs                DireNoteLog[]
   storedAssets                StoredAsset[]
+  audioAssetLinks             ReleaseAssetLink[]
   uploadSessions              UploadSession[]
   statusTransitions           ReleaseStatusTransition[]
   distributionSubmissions     DistributionSubmissionAttempt[]
@@ -614,6 +615,7 @@ model Track {
   reconciliationDiscrepancies DireNoteReconciliationDiscrepancy[]
   identifierHistory           ExternalIdentifierHistory[]
   storedAssets                StoredAsset[]
+  audioAssetLinks             ReleaseAssetLink[]
   uploadSessions              UploadSession[]
   contributions               TrackContribution[]
   contributionSnapshots       TrackContributionSnapshot[]
@@ -1266,6 +1268,7 @@ model StoredAsset {
   managedServiceDocuments ManagedServiceDocument[]
   payoutProofs            PayoutRequest[]          @relation("PayoutProof")
   uploadSessions          UploadSession[]
+  releaseAssetLinks       ReleaseAssetLink[]
   studioFile              StudioFile?
 
   @@index([ownerUserId, assetType, createdAt])
@@ -1273,6 +1276,22 @@ model StoredAsset {
   @@index([trackId, category])
   @@index([deletedAt, retentionUntil])
   @@map("stored_assets")
+}
+
+model ReleaseAssetLink {
+  id         Int         @id @default(autoincrement())
+  assetId    Int         @map("asset_id")
+  releaseId  Int         @map("release_id")
+  trackId    Int?        @map("track_id")
+  role       String      @default("TRACK_AUDIO_MASTER")
+  createdAt  DateTime    @default(now()) @map("created_at")
+  asset      StoredAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  release    Release     @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  track      Track?      @relation(fields: [trackId], references: [id], onDelete: SetNull)
+
+  @@unique([assetId, releaseId, trackId, role])
+  @@index([releaseId, trackId, role])
+  @@map("release_asset_links")
 }
 
 model UploadSession {

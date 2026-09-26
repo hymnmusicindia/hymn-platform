@@ -7,10 +7,12 @@ import type { ReleaseTrack } from "@/lib/types";
 import { distributionEditSchema } from "@/lib/validation";
 import { assertDireNoteAssetFormat } from "@/lib/distribution-asset-format";
 import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution";
+import { prisma } from "@/lib/prisma";
 
 type EditTrackPayload = Omit<ReleaseTrack, "id" | "releaseId" | "createdAt"> & {
   coverLicenseUrl?: string;
   existingAudioUrl?: string;
+  audioAssetId?: number;
   existingCoverLicenseConfirmed?: boolean;
   coverLicenseFileKey?: string;
 };
@@ -109,6 +111,7 @@ export async function POST(request: Request) {
         coverLicenseConfirmed: track.coverLicenseConfirmed || track.existingCoverLicenseConfirmed || Boolean(coverLicenseUrl),
         coverLicenseUrl,
         audioUrl,
+        audioAssetId: track.audioAssetId,
         duration: track.duration,
         bpm: track.bpm,
         musicalKey: track.musicalKey,
@@ -176,6 +179,15 @@ export async function POST(request: Request) {
 
     if (!release) {
       return NextResponse.json({ error: "Release not found." }, { status: 404 });
+    }
+
+    const libraryLinks = parsed.metadata.tracks
+      .filter((track) => Number.isInteger(track.audioAssetId) && (track.audioAssetId ?? 0) > 0)
+      .map((track) => ({ assetId: track.audioAssetId as number, releaseId: release.id, trackId: release.tracks?.find((item) => item.trackNumber === track.trackNumber)?.id ?? null }));
+    if (libraryLinks.length) {
+      const ownedAssets = await prisma.storedAsset.findMany({ where: { id: { in: libraryLinks.map((item) => item.assetId) }, ownerUserId: session.sub, assetType: "private_audio_master", uploadStatus: "ready", deletedAt: null }, select: { id: true } });
+      const allowed = new Set(ownedAssets.map((asset) => asset.id));
+      await prisma.releaseAssetLink.createMany({ data: libraryLinks.filter((item) => allowed.has(item.assetId)).map((item) => ({ ...item, role: "TRACK_AUDIO_MASTER" })), skipDuplicates: true });
     }
 
     return NextResponse.json({ release });

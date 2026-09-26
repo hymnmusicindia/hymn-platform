@@ -199,6 +199,7 @@ export const distributionTrackSchema = z.object({
   uploadedCoverLicenseUrl: z.string().optional(),
   audioFileKey: z.string().min(1),
   existingAudioUrl: z.string().optional(),
+  audioAssetId: z.number().int().positive().optional(),
   uploadedAudioUrl: z.string().optional(),
   duration: z.string().min(1),
   bpm: z.number().nullable().optional(),

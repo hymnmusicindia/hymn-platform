@@ -5,6 +5,7 @@ import { FIRST_RELEASE_PROMOTION_CODE, getFirstReleaseEligibility } from "@/lib/
 import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution";
 import { getContentIdEligibility } from "@/lib/content-id-eligibility";
 import { recordGrowthEvent } from "@/lib/growth";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -91,7 +92,8 @@ export async function POST(request: Request) {
           ...(track.metadata && typeof track.metadata === "object" ? track.metadata : {}),
           artistProfileIds: Array.isArray(track.artistProfileIds) ? track.artistProfileIds : [],
           featuredArtistProfileIds: Array.isArray(track.featuredArtistProfileIds) ? track.featuredArtistProfileIds : [],
-          remixerProfileIds: Array.isArray(track.remixerProfileIds) ? track.remixerProfileIds : []
+          remixerProfileIds: Array.isArray(track.remixerProfileIds) ? track.remixerProfileIds : [],
+          audioAssetId: Number.isInteger(Number(track.audioAssetId)) ? Number(track.audioAssetId) : undefined
         }
       });
     }
@@ -150,6 +152,18 @@ export async function POST(request: Request) {
         tracks
       }
     });
+
+    const libraryLinks = (metadata.tracks ?? []).flatMap((track: any) => {
+      const assetId = Number(track.audioAssetId);
+      const trackNumber = Number(track.trackNumber);
+      const savedTrack = release?.tracks?.find((item: any) => item.trackNumber === trackNumber);
+      return Number.isInteger(assetId) && assetId > 0 && savedTrack?.id ? [{ assetId, releaseId: release.id, trackId: savedTrack.id }] : [];
+    });
+    if (libraryLinks.length) {
+      const ownedAssets = await prisma.storedAsset.findMany({ where: { id: { in: libraryLinks.map((item: { assetId: number }) => item.assetId) }, ownerUserId: session.sub, assetType: "private_audio_master", uploadStatus: "ready", deletedAt: null }, select: { id: true } });
+      const allowed = new Set(ownedAssets.map((item: { id: number }) => item.id));
+      await prisma.releaseAssetLink.createMany({ data: libraryLinks.filter((item: { assetId: number }) => allowed.has(item.assetId)).map((item: { assetId: number; releaseId: number; trackId: number | null }) => ({ ...item, role: "TRACK_AUDIO_MASTER" })), skipDuplicates: true });
+    }
 
     if (!draftReleaseId && release?.id) {
       await recordGrowthEvent({ event: "release_started", key: `release-start:${release.id}`, userId: session.sub, properties: { release_id: release.id } });
