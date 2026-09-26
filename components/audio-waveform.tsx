@@ -266,7 +266,7 @@ export function AudioWaveform({ src, title, subtitle, compact = false, compactMi
           <div className="audio-waveform-live" aria-hidden="true">
             {bars.map((bar, index) => {
               const active = index / Math.max(1, bars.length - 1) <= progress;
-              return <span key={`${index}-${bar.toFixed(3)}`} style={{ height: `${Math.max(4, Math.round(bar * 22))}px`, background: active ? "var(--accent)" : "var(--border-strong)" }} />;
+              return <span key={`${index}-${bar.toFixed(3)}`} style={{ height: `${Math.max(3, Math.round(bar * 16))}px`, background: active ? "var(--accent)" : "var(--border-strong)" }} />;
             })}
           </div>
         </div>
