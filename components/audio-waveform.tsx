@@ -2,7 +2,7 @@
 
 import { Pause, Pencil, Play, RotateCcw, Waves } from "lucide-react";
 import clsx from "clsx";
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
 type AudioWaveformProps = {
   src?: string;
@@ -43,6 +43,7 @@ export function AudioWaveform({ src, title, subtitle, compact = false, compactMi
   const [playbackError, setPlaybackError] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rafRef = useRef<number | null>(null);
+  const seekingRef = useRef(false);
 
   useEffect(() => {
     setBars(fallbackBars(barCount));
@@ -199,14 +200,44 @@ export function AudioWaveform({ src, title, subtitle, compact = false, compactMi
     void audio.play().catch(() => setPlaybackError(true));
   }
 
-  function seek(event: MouseEvent<HTMLDivElement>) {
+  function seekAt(clientX: number, element: HTMLDivElement) {
     const audio = audioRef.current;
     if (!audio || !audio.duration) return;
 
-    const rect = event.currentTarget.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const rect = element.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     audio.currentTime = ratio * audio.duration;
     setProgress(ratio);
+  }
+
+  function seek(event: PointerEvent<HTMLDivElement>) {
+    seekAt(event.clientX, event.currentTarget);
+  }
+
+  function beginSeek(event: PointerEvent<HTMLDivElement>) {
+    seekingRef.current = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    seek(event);
+  }
+
+  function moveSeek(event: PointerEvent<HTMLDivElement>) {
+    if (seekingRef.current) seek(event);
+  }
+
+  function endSeek(event: PointerEvent<HTMLDivElement>) {
+    seekingRef.current = false;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+
+  function keyboardSeek(event: KeyboardEvent<HTMLDivElement>) {
+    const audio = audioRef.current;
+    if (!audio?.duration) return;
+    const step = event.shiftKey ? 10 : 5;
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      audio.currentTime = Math.max(0, Math.min(audio.duration, audio.currentTime + (event.key === "ArrowLeft" ? -step : step)));
+      setProgress(audio.currentTime / audio.duration);
+    }
   }
 
   if (compact) {
@@ -231,7 +262,7 @@ export function AudioWaveform({ src, title, subtitle, compact = false, compactMi
           ) : <strong title={title}>{title}</strong>}
           <span>{playbackError ? "Preview unavailable · tap retry" : subtitle || ""}</span>
         </div> : null}
-        <div role="slider" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-label={`Seek ${title}`} onClick={seek} className="audio-waveform-inline-track">
+        <div role="slider" tabIndex={0} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-label={`Seek ${title}`} onPointerDown={beginSeek} onPointerMove={moveSeek} onPointerUp={endSeek} onPointerCancel={endSeek} onKeyDown={keyboardSeek} className="audio-waveform-inline-track">
           <div className="audio-waveform-live" aria-hidden="true">
             {bars.map((bar, index) => {
               const active = index / Math.max(1, bars.length - 1) <= progress;
