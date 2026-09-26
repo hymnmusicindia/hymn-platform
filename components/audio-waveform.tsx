@@ -239,7 +239,7 @@ export function AudioWaveform({ src, title, subtitle, compact = false, compactMi
             })}
           </div>
         </div>
-        <span className="audio-waveform-inline-time">{currentTime} / {totalTime}</span>
+        {!compactMinimal ? <span className="audio-waveform-inline-time">{currentTime} / {totalTime}</span> : null}
       </div>
     );
   }
