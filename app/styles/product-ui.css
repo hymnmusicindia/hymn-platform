@@ -1970,7 +1970,7 @@ body:has(.distribution-start-page) > header,body:has(.distribution-start-page) >
 .track-attribute-toggle > span:first-child {
   line-height: 1.25rem;
 }
-.audio-waveform-inline-minimal { width: 100%; min-width: 0; margin-left: 0; grid-template-columns: 2.5rem minmax(0, 1fr); }
+.audio-waveform-inline-minimal { width: calc(100% + 15rem); min-width: 0; margin-left: -15rem; grid-template-columns: 2.5rem minmax(0, 1fr); }
 
 .track-attribute-toggle .track-attribute-switch {
   flex: 0 0 auto;
