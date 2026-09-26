@@ -35,7 +35,7 @@ function fallbackBars(count: number) {
 
 export function AudioWaveform({ src, title, subtitle, compact = false, compactMinimal = false, editableTitle }: AudioWaveformProps) {
   const validSrc = typeof src === "string" && src.trim() !== "";
-  const barCount = compact ? 72 : 96;
+  const barCount = compact ? 120 : 144;
   const [bars, setBars] = useState<number[]>(() => fallbackBars(barCount));
   const [playing, setPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
