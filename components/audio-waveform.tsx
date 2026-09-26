@@ -9,6 +9,7 @@ type AudioWaveformProps = {
   title: string;
   subtitle?: string;
   compact?: boolean;
+  compactMinimal?: boolean;
   editableTitle?: {
     value: string;
     placeholder: string;
@@ -32,7 +33,7 @@ function fallbackBars(count: number) {
   return Array.from({ length: count }, (_, index) => 0.35 + ((index % 6) / 12));
 }
 
-export function AudioWaveform({ src, title, subtitle, compact = false, editableTitle }: AudioWaveformProps) {
+export function AudioWaveform({ src, title, subtitle, compact = false, compactMinimal = false, editableTitle }: AudioWaveformProps) {
   const validSrc = typeof src === "string" && src.trim() !== "";
   const barCount = compact ? 40 : 64;
   const [bars, setBars] = useState<number[]>(() => fallbackBars(barCount));
@@ -193,12 +194,12 @@ export function AudioWaveform({ src, title, subtitle, compact = false, editableT
 
   if (compact) {
     return (
-      <div className={clsx("audio-waveform-inline", playing && "is-playing", !validSrc && "is-disabled", playbackError && "has-error")}>
+      <div className={clsx("audio-waveform-inline", compactMinimal && "audio-waveform-inline-minimal", playing && "is-playing", !validSrc && "is-disabled", playbackError && "has-error")}>
         {validSrc ? <audio ref={audioRef} src={src} preload="metadata" /> : null}
         <button type="button" className="audio-waveform-inline-play" onClick={playbackError ? retryPlayback : togglePlayback} disabled={!validSrc} aria-label={`${playbackError ? "Retry preview for" : playing ? "Pause" : "Play"} ${title}`}>
           {playbackError ? <RotateCcw /> : playing ? <Pause /> : <Play />}
         </button>
-        <div className="audio-waveform-inline-copy">
+        {!compactMinimal ? <div className="audio-waveform-inline-copy">
           {editableTitle ? (
             <label className="audio-waveform-inline-name">
               <Pencil aria-hidden="true" />
@@ -212,7 +213,7 @@ export function AudioWaveform({ src, title, subtitle, compact = false, editableT
             </label>
           ) : <strong title={title}>{title}</strong>}
           <span>{playbackError ? "Preview unavailable · tap retry" : subtitle || ""}</span>
-        </div>
+        </div> : null}
         <div role="slider" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-label={`Seek ${title}`} onClick={seek} className="audio-waveform-inline-track">
           <div className="audio-waveform-live" aria-hidden="true">
             {bars.map((bar, index) => {
