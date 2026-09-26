@@ -55,10 +55,17 @@ export function AudioWaveform({ src, title, subtitle, compact = false, editableT
 
     let cancelled = false;
     const context = new window.AudioContext();
+    const controller = new AbortController();
+    const schedule = typeof window.requestIdleCallback === "function"
+      ? (callback: () => void) => window.requestIdleCallback(callback, { timeout: 1800 })
+      : (callback: () => void) => window.setTimeout(callback, 700);
+    const cancelSchedule = typeof window.cancelIdleCallback === "function"
+      ? (handle: number) => window.cancelIdleCallback(handle)
+      : (handle: number) => window.clearTimeout(handle);
 
     const readWaveform = async () => {
       try {
-        const response = await fetch(src);
+        const response = await fetch(src, { signal: controller.signal });
         const buffer = await response.arrayBuffer();
         const decoded = await context.decodeAudioData(buffer.slice(0));
         if (cancelled) return;
@@ -86,10 +93,12 @@ export function AudioWaveform({ src, title, subtitle, compact = false, editableT
       }
     };
 
-    void readWaveform();
+    const scheduled = schedule(() => { void readWaveform(); });
 
     return () => {
       cancelled = true;
+      controller.abort();
+      cancelSchedule(scheduled);
       void context.close();
     };
   }, [barCount, src, validSrc]);
