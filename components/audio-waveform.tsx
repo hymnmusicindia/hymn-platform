@@ -35,7 +35,7 @@ function fallbackBars(count: number) {
 
 export function AudioWaveform({ src, title, subtitle, compact = false, compactMinimal = false, editableTitle }: AudioWaveformProps) {
   const validSrc = typeof src === "string" && src.trim() !== "";
-  const barCount = compact ? 40 : 64;
+  const barCount = compact ? 72 : 96;
   const [bars, setBars] = useState<number[]>(() => fallbackBars(barCount));
   const [playing, setPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -73,15 +73,17 @@ export function AudioWaveform({ src, title, subtitle, compact = false, compactMi
 
         const channels = Array.from({ length: decoded.numberOfChannels }, (_, channelIndex) => decoded.getChannelData(channelIndex));
         const blockSize = Math.max(1, Math.ceil(decoded.length / barCount));
-        const nextBars = Array.from({ length: barCount }, (_, index) => {
+        const rawPeaks = Array.from({ length: barCount }, (_, index) => {
           const start = index * blockSize;
           const end = Math.min(decoded.length, start + blockSize);
           let peak = 0;
           for (let sample = start; sample < end; sample += 1) {
             for (const channel of channels) peak = Math.max(peak, Math.abs(channel[sample] ?? 0));
           }
-          return Math.max(0.08, Math.min(1, peak));
+          return peak;
         });
+        const peakMax = Math.max(...rawPeaks, 0.001);
+        const nextBars = rawPeaks.map((peak) => Math.max(0.12, Math.min(1, peak / peakMax)));
 
         setBars(nextBars);
         setDuration(decoded.duration);
