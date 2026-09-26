@@ -56,6 +56,15 @@ export function AudioWaveform({ src, title, subtitle, compact = false, compactMi
 
     let cancelled = false;
     const context = new window.AudioContext();
+    const cacheKey = `hymn-waveform:${src}:${barCount}`;
+    try {
+      const cached = window.localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached) as { bars?: number[]; duration?: number };
+        if (Array.isArray(parsed.bars) && parsed.bars.length === barCount) setBars(parsed.bars);
+        if (typeof parsed.duration === "number") setDuration(parsed.duration);
+      }
+    } catch {}
     const controller = new AbortController();
     const schedule = typeof window.requestIdleCallback === "function"
       ? (callback: () => void) => window.requestIdleCallback(callback, { timeout: 1800 })
@@ -87,6 +96,7 @@ export function AudioWaveform({ src, title, subtitle, compact = false, compactMi
 
         setBars(nextBars);
         setDuration(decoded.duration);
+        try { window.localStorage.setItem(cacheKey, JSON.stringify({ bars: nextBars, duration: decoded.duration })); } catch {}
       } catch {
         if (!cancelled) {
           setBars(fallbackBars(barCount));
@@ -202,7 +212,7 @@ export function AudioWaveform({ src, title, subtitle, compact = false, compactMi
   if (compact) {
     return (
       <div className={clsx("audio-waveform-inline", compactMinimal && "audio-waveform-inline-minimal", playing && "is-playing", !validSrc && "is-disabled", playbackError && "has-error")}>
-        {validSrc ? <audio ref={audioRef} src={src} preload="metadata" /> : null}
+        {validSrc ? <audio ref={audioRef} src={src} preload="auto" /> : null}
         <button type="button" className="audio-waveform-inline-play" onClick={playbackError ? retryPlayback : togglePlayback} disabled={!validSrc} aria-label={`${playbackError ? "Retry preview for" : playing ? "Pause" : "Play"} ${title}`}>
           {playbackError ? <RotateCcw /> : playing ? <Pause /> : <Play />}
         </button>
