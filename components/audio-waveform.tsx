@@ -63,15 +63,16 @@ export function AudioWaveform({ src, title, subtitle, compact = false, editableT
         const decoded = await context.decodeAudioData(buffer.slice(0));
         if (cancelled) return;
 
-        const channel = decoded.getChannelData(0);
-        const blockSize = Math.floor(channel.length / barCount) || 1;
+        const channels = Array.from({ length: decoded.numberOfChannels }, (_, channelIndex) => decoded.getChannelData(channelIndex));
+        const blockSize = Math.max(1, Math.ceil(decoded.length / barCount));
         const nextBars = Array.from({ length: barCount }, (_, index) => {
           const start = index * blockSize;
-          let sum = 0;
-          for (let offset = 0; offset < blockSize; offset += 1) {
-            sum += Math.abs(channel[start + offset] ?? 0);
+          const end = Math.min(decoded.length, start + blockSize);
+          let peak = 0;
+          for (let sample = start; sample < end; sample += 1) {
+            for (const channel of channels) peak = Math.max(peak, Math.abs(channel[sample] ?? 0));
           }
-          return Math.max(0.14, Math.min(1, sum / blockSize * 2.8));
+          return Math.max(0.08, Math.min(1, peak));
         });
 
         setBars(nextBars);
@@ -201,7 +202,7 @@ export function AudioWaveform({ src, title, subtitle, compact = false, editableT
               />
             </label>
           ) : <strong title={title}>{title}</strong>}
-          <span>{playbackError ? "Preview unavailable · tap retry" : subtitle || "Audio master"}</span>
+          <span>{playbackError ? "Preview unavailable · tap retry" : subtitle || ""}</span>
         </div>
         <div role="slider" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-label={`Seek ${title}`} onClick={seek} className="audio-waveform-inline-track">
           <div className="audio-waveform-live" aria-hidden="true">
