@@ -109,6 +109,9 @@ export function AudioWaveform({ src, title, subtitle, compact = false, compactMi
     if (!audio) return;
 
     const onLoadedMetadata = () => setDuration(audio.duration);
+    const onTimeUpdate = () => {
+      if (audio.duration && Number.isFinite(audio.currentTime)) setProgress(audio.currentTime / audio.duration);
+    };
     const onCanPlay = () => setPlaybackError(false);
     const onError = () => { setPlaying(false); setPlaybackError(true); };
     const onPause = () => setPlaying(false);
@@ -119,6 +122,7 @@ export function AudioWaveform({ src, title, subtitle, compact = false, compactMi
     };
 
     audio.addEventListener("loadedmetadata", onLoadedMetadata);
+    audio.addEventListener("timeupdate", onTimeUpdate);
     audio.addEventListener("canplay", onCanPlay);
     audio.addEventListener("error", onError);
     audio.addEventListener("pause", onPause);
@@ -127,6 +131,7 @@ export function AudioWaveform({ src, title, subtitle, compact = false, compactMi
 
     return () => {
       audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+      audio.removeEventListener("timeupdate", onTimeUpdate);
       audio.removeEventListener("canplay", onCanPlay);
       audio.removeEventListener("error", onError);
       audio.removeEventListener("pause", onPause);
