@@ -48,7 +48,7 @@ export function AudioWaveform({ src, title, subtitle, compact = false, editableT
   }, [barCount]);
 
   useEffect(() => {
-    if (!validSrc || typeof window === "undefined" || src?.startsWith("/api/assets/")) {
+    if (!validSrc || typeof window === "undefined") {
       setBars(fallbackBars(barCount));
       return;
     }
