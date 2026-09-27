@@ -135,6 +135,20 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
 async function submitLockedRelease(releaseId: number, options: { actorId?: number | null; siteUrl?: string; retry?: boolean; adminConfirmedExistingArtists?: boolean; correctionReingest?: boolean }) {
   const release = await getDetailedReleaseById(releaseId);
   if (!release) throw new Error("Release not found.");
+  const newerActiveDuplicate = await prisma.release.findFirst({
+    where: {
+      userId: release.userId,
+      archivedAt: null,
+      id: { not: releaseId },
+      title: { equals: release.releaseTitle || release.trackName, mode: "insensitive" },
+      createdAt: { gt: new Date(release.createdAt) },
+      status: { notIn: ["DRAFT", "AWAITING_PAYMENT", "ARCHIVED"] }
+    },
+    select: { id: true, title: true, releaseDate: true }
+  });
+  if (newerActiveDuplicate && !options.correctionReingest) {
+    throw new Error(`This release has a newer active version (#${newerActiveDuplicate.id}) and cannot be sent. Open the latest version instead.`);
+  }
   if (release.paymentStatus !== "paid") throw new Error("A verified payment or entitlement is required before partner delivery.");
   const rights = [release.ownershipConfirmed, release.noUnauthorizedSamples, release.collaboratorsCredited, release.platformCompliant, release.hymnNotLiable, release.agreedToTerms, release.falseMetadataAcknowledged];
   if (rights.some(value => value !== true)) throw new Error("Complete all ownership and legal declarations before partner delivery.");
