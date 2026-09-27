@@ -150,15 +150,9 @@ function CorrectionWorkspace({ release, onFix }: { release: Release; onFix: (fie
 
   function resubmit() {
     startResubmitting(async () => {
-      setResubmitStatus("Resubmitting corrections…");
-      const response = await fetch(`/api/releases/${release.id}/resubmit`, { method: "POST" });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setResubmitStatus(data.error || "Corrections could not be resubmitted.");
-        return;
-      }
-      setResubmitStatus("Corrections returned to HYMN review.");
-      router.refresh();
+      setResubmitStatus("Opening the correction wizard…");
+      const field = issues[0]?.field;
+      router.push(`/distribution/start?edit=${release.id}${field ? `&correctionField=${encodeURIComponent(field)}` : ""}`);
     });
   }
 

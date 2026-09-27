@@ -22,15 +22,8 @@ export function ProviderCorrectionWorkspace({ release, onFix }: { release: Relea
   }, [release.id, release.lastEditedAt]);
   async function submit() {
     setBusy(true);
-    setMessage("");
-    try {
-      const response = await fetch(`/api/releases/${release.id}/resubmit`, { method: "POST" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Corrections could not be submitted.");
-      setMessage("Corrections submitted. Awaiting DireNote review.");
-      router.refresh();
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Submission failed."); }
-    finally { setBusy(false); }
+    const field = release.reviewIssues?.fields?.[0]?.field;
+    router.push(`/distribution/start?edit=${release.id}${field ? `&correctionField=${encodeURIComponent(field)}` : ""}`);
   }
   const open = release.status === "changes_requested";
   return <section className="py-5">
@@ -47,7 +40,7 @@ export function ProviderCorrectionWorkspace({ release, onFix }: { release: Relea
         {open ? <button type="button" className="btn-outline mt-3" onClick={() => onFix(issue.field)}>{trackIndex ? `Fix Track ${Number(trackIndex) + 1}` : "Fix release"}</button> : null}
       </article>;
     })}</div>
-    {open ? <button type="button" className="btn-primary mt-4 inline-flex items-center gap-2 disabled:opacity-50" disabled={!saved || busy} onClick={submit}><Send size={16} />{busy ? "Submitting..." : "Submit Corrections"}</button> : null}
+    {open ? <button type="button" className="btn-primary mt-4 inline-flex items-center gap-2 disabled:opacity-50" disabled={!saved || busy} onClick={submit}><Send size={16} />{busy ? "Opening wizard..." : "Submit Corrections"}</button> : null}
     {message ? <p role="status" className="mt-3 text-sm">{customerMessage(message)}</p> : null}
   </section>;
 }
