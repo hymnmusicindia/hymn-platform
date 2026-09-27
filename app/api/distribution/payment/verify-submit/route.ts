@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { getDetailedReleaseById, getDistributionPricing, submitPaidDistributionRelease, updatePaidDistributionRelease } from "@/lib/distribution-db";
+import { getDetailedReleaseById, getDetailedReleaseByUserId, getDistributionPricing, submitPaidDistributionRelease, updatePaidDistributionRelease } from "@/lib/distribution-db";
 import { createNotification, getSubscriptionByUserId, listArtistProfilesByUser, touchArtistProfiles } from "@/lib/db";
 import { verifyCapturedRazorpayPayment, verifyRazorpaySignature } from "@/lib/razorpay";
 import { distributionSubmitSchema } from "@/lib/validation";
@@ -17,6 +17,8 @@ import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution"
 import { checkoutPlan } from "@/lib/distribution-checkout-plan";
 import { releaseReviewSnapshotHash } from "@/lib/release-review-snapshot";
 import { findReleaseIdentifierConflicts } from "@/lib/release-identifier-conflicts";
+import { validateReleaseForDireNote } from "@/lib/direnote-readiness";
+import { getPublicAppUrl } from "@/lib/public-app-url";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -238,6 +240,24 @@ export async function POST(request: Request) {
       if (!submissionPersisted && subscriptionReservation) await releaseReservedSubscriptionSlot(subscriptionReservation.subscriptionId, subscriptionReservation.counted, parsed.draftReleaseId).catch(() => undefined);
       if (promotionRedemption) await releaseFirstReleaseReservation(promotionRedemption.id).catch(() => undefined);
       throw error;
+    }
+
+    // Run the same provider readiness contract immediately after persistence.
+    // A passing result is recorded for the admin queue; only real issues remain
+    // paused for manual QC and correction.
+    if (release?.id) {
+      try {
+        const persisted = await getDetailedReleaseByUserId(session.sub, release.id);
+        if (persisted) {
+          const readiness = await validateReleaseForDireNote(persisted, { siteUrl: getPublicAppUrl(request.url) });
+          const previousMetadata = persisted.metadata && typeof persisted.metadata === "object" ? persisted.metadata : {};
+          const autoQc = { status: readiness.ready ? "passed" : "issues_found", checkedAt: new Date().toISOString(), issueCount: readiness.issues.length, warningCount: readiness.warnings.length };
+          await prisma.release.update({ where: { id: release.id }, data: { metadata: { ...previousMetadata, autoQc } as any } });
+          release = await getDetailedReleaseByUserId(session.sub, release.id) ?? release;
+        }
+      } catch (error) {
+        console.error("Automatic DireNote QC could not be recorded", { releaseId: release.id, error });
+      }
     }
 
     await createNotification({

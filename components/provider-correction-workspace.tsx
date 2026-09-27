@@ -5,6 +5,7 @@ import { customerMessage } from "@/lib/customer-message";
 import type { Release } from "@/lib/types";
 
 export function ProviderCorrectionWorkspace({ release, onFix }: { release: Release; onFix: (field?: string) => void }) {
+  const saved = false;
   const open = release.status === "changes_requested";
   return <section className="py-5">
     <h2 className="text-xl font-semibold">{open ? "Action Required" : "Provider review"}</h2>
