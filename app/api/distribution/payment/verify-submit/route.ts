@@ -154,7 +154,9 @@ export async function POST(request: Request) {
     ]))];
     await touchArtistProfiles(session.sub, artistProfileIds);
 
-    const resolvedReleaseTitle = parsed.metadata.releaseTitle?.trim() || parsed.metadata.tracks[0]?.trackTitle || "Untitled release";
+    const resolvedReleaseTitle = parsed.metadata.releaseType === "single" && parsed.metadata.tracks.length === 1
+      ? parsed.metadata.tracks[0]?.trackTitle?.trim() || parsed.metadata.releaseTitle?.trim() || "Untitled release"
+      : parsed.metadata.releaseTitle?.trim() || parsed.metadata.tracks[0]?.trackTitle || "Untitled release";
     let promotionRedemption: Awaited<ReturnType<typeof reserveFirstRelease>> | null = null;
     if (isFirstReleaseOffer) {
       promotionRedemption = await reserveFirstRelease({ userId: session.sub, ...promotionQuote!, attribution: parsed.attribution });

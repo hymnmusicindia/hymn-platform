@@ -207,11 +207,15 @@ function toDireNoteArtist(name: string, profiles: ArtistProfile[] = [], release?
   const profile = pickArtistProfile(name, profiles, selectedIds);
   const meta = release ? releaseMeta(release) : {};
   const artistMeta = meta.artistLinks?.[name] ?? meta.artistLinks?.[name.trim().toLowerCase()] ?? {};
+  const youtubeUrl = profile?.youtubeUrl ?? artistMeta.youtube_url ?? artistMeta.youtubeUrl ?? meta.youtubeArtistUrl;
+  const verifiedYoutube = verifiedArtistStoreLinks({ youtube: youtubeUrl }).youtube?.url;
   return {
     name,
     spotify_url: profile?.spotifyUrl ?? artistMeta.spotify_url ?? artistMeta.spotifyUrl ?? undefined,
     apple_url: profile?.appleUrl ?? artistMeta.apple_url ?? artistMeta.appleUrl ?? undefined,
-    youtube_url: profile?.youtubeUrl ?? artistMeta.youtube_url ?? artistMeta.youtubeUrl ?? meta.youtubeArtistUrl ?? undefined,
+    // Duplicated releases may contain an old video/album URL. Do not send it
+    // as an artist identity link; DireNote correctly rejects those URLs.
+    youtube_url: verifiedYoutube,
     instagram_url: profile?.instagramUrl ?? artistMeta.instagram_url ?? artistMeta.instagramUrl ?? meta.instagramUrl ?? undefined
   };
 }
@@ -284,11 +288,14 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
   const isPreviouslyReleased = release.releasePreviouslyReleased !== undefined ? Boolean(release.releasePreviouslyReleased) : meta.releasePreviouslyReleased !== undefined ? Boolean(meta.releasePreviouslyReleased) : Boolean(meta.previouslyReleased);
   const moodCandidate = release.mood || meta.mood || meta.formData?.mood || "";
   const mood = typeof moodCandidate === "string" ? moodCandidate.trim() : "";
+  const singleTrackTitle = release.releaseType === "single" && (release.tracks?.length ?? 0) === 1
+    ? release.tracks?.[0]?.trackTitle?.trim()
+    : undefined;
 
   const payload: DireNotePayload = {
     pin: getDireNoteConfig().pin || "",
     client_id: getDireNoteConfig().clientId || "",
-    albumname: release.releaseTitle,
+    albumname: singleTrackTitle || release.releaseTitle,
     albumVersion: meta.albumVersion ?? meta.version ?? meta.edition ?? undefined,
     typeOfRelease: normalizeType(release.releaseType),
     albumGenre: normalizedGenre.genre,
