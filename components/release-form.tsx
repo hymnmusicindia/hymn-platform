@@ -46,19 +46,27 @@ import {
 
 type PrivateUploadType = "private_audio_master" | "private_unreleased_artwork" | "private_cover_licence" | "private_ownership_proof" | "private_ai_receipt";
 
-function uploadPrivateAsset(file: File, assetType: PrivateUploadType, options: { releaseId?: number; signal?: AbortSignal; onProgress?: (loaded: number, total: number) => void } = {}) {
+function uploadPrivateAsset(file: File, assetType: PrivateUploadType, options: { releaseId?: number; signal?: AbortSignal; onProgress?: (loaded: number, total: number) => void; attempt?: number } = {}) {
   return new Promise<string>((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open("POST", "/api/assets");
     request.responseType = "json";
     request.upload.onprogress = (event) => options.onProgress?.(event.loaded, event.total || file.size);
-    request.onerror = () => reject(new Error("Could not reach the upload service."));
+    request.onerror = () => {
+      if ((options.attempt ?? 0) < 2 && !options.signal?.aborted) {
+        window.setTimeout(() => uploadPrivateAsset(file, assetType, { ...options, attempt: (options.attempt ?? 0) + 1 }).then(resolve, reject), 800 * 2 ** (options.attempt ?? 0));
+      } else reject(new Error("Could not reach the upload service after 3 attempts. Check your connection and try again."));
+    };
     request.onabort = () => reject(new DOMException("Upload cancelled.", "AbortError"));
     request.onload = () => {
       const body = typeof request.response === "string"
         ? (() => { try { return JSON.parse(request.response); } catch { return {}; } })()
         : request.response || {};
       if (request.status < 200 || request.status >= 300) {
+        if (request.status >= 500 && (options.attempt ?? 0) < 2 && !options.signal?.aborted) {
+          window.setTimeout(() => uploadPrivateAsset(file, assetType, { ...options, attempt: (options.attempt ?? 0) + 1 }).then(resolve, reject), 800 * 2 ** (options.attempt ?? 0));
+          return;
+        }
         reject(new Error(body.error || `Private upload failed (HTTP ${request.status || "unknown"}).`));
         return;
       }
