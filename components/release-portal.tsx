@@ -140,19 +140,19 @@ function CorrectionWorkspace({ release, onFix }: { release: Release; onFix: (fie
   const selectedIssue = issues.find((issue) => issue.field === selectedField) ?? issues[0];
   const requiredResolved = requiredCount === 0 || issues.every((issue) => resolvedFields.has(issue.field));
 
-  function toggleResolved(field: string) {
-    setResolvedFields((current) => {
-      const next = new Set(current);
-      if (next.has(field)) next.delete(field); else next.add(field);
-      return next;
-    });
-  }
-
   function resubmit() {
     startResubmitting(async () => {
       setResubmitStatus("Opening the correction wizard…");
       const field = issues[0]?.field;
       router.push(`/distribution/start?edit=${release.id}${field ? `&correctionField=${encodeURIComponent(field)}` : ""}`);
+    });
+  }
+
+  function toggleResolved(field: string) {
+    setResolvedFields((current) => {
+      const next = new Set(current);
+      if (next.has(field)) next.delete(field); else next.add(field);
+      return next;
     });
   }
 

@@ -1459,7 +1459,6 @@ export async function updatePaidDistributionRelease(input: {
           if (attempt) await tx.distributionSubmissionAttempt.update({ where: { id: attempt.id }, data: { corrections: { ...(typeof attempt.corrections === "object" && attempt.corrections ? attempt.corrections : {}), status: "customer_resolved", artistResolvedAt: new Date().toISOString() } } });
         }
       }, { timeout: 30_000 });
-      if (existingRelease.status === "changes_requested" && existingRelease.direNoteStatus) return getDetailedReleaseByUserId(input.userId, input.releaseId);
       const reviewReason = "Paid release metadata was submitted for review.";
       const currentStatus = String(existingRelease.status ?? "").trim().toLowerCase();
       if (currentStatus === "changes_requested" || currentStatus === "rejected") await updateDetailedReleaseStatus(input.releaseId, "resubmitted", reviewReason);

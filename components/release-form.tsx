@@ -1620,7 +1620,7 @@ export function ReleaseForm({
   const fieldClass = (key: string, invalid: boolean) =>
     clsx(
       "field",
-      invalid || validationErrorKeys.has(key) ? "field-invalid" : "",
+      invalid || validationErrorKeys.has(key) || correctionFieldActive(key) ? "field-invalid" : "",
       shakingField === key ? "field-shake" : "",
     );
 
