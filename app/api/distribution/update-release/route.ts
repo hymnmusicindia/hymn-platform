@@ -81,12 +81,12 @@ export async function POST(request: Request) {
       }
       await assertDireNoteAssetFormat({ userId: existingRelease.userId, url: audioUrl, kind: "audio", label: `Audio for ${track.trackTitle}` });
 
-      let coverLicenseUrl: string | undefined;
+      let coverLicenseUrl: string | undefined = track.uploadedCoverLicenseUrl;
       if (track.coverLicenseFileKey) {
         const licenseUpload = formData.get(track.coverLicenseFileKey);
         if (licenseUpload instanceof File) {
           coverLicenseUrl = await savePrivate(licenseUpload, "private_cover_licence");
-        } else if (!(track.existingCoverLicenseConfirmed ?? track.coverLicenseConfirmed)) {
+        } else if (!(track.existingCoverLicenseConfirmed ?? track.coverLicenseConfirmed) && !coverLicenseUrl) {
           return NextResponse.json({ error: `Cover license missing for ${track.trackTitle}.` }, { status: 400 });
         }
       }
