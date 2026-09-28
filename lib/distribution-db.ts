@@ -430,9 +430,24 @@ export async function notifyReleaseStatusChange(release: Release, status: Releas
     return;
   }
 
-  // Approval and hand-off are internal workflow transitions. Customers continue
-  // to see Under Review and are contacted only for action, scheduling, or go-live.
-  if (status === "approved" || status === "sent_to_distributor" || status === "sent") return;
+  // HYMN approval remains an internal transition. Once DireNote accepts the
+  // hand-off, let the artist know their release has entered distribution.
+  if (status === "approved") return;
+
+  if (status === "sent_to_distributor" || status === "sent") {
+    await createNotification({
+      userId: release.userId,
+      title: `Release sent for distribution: ${releaseName}`,
+      body: "Your release has been sent to DireNote for distribution processing.",
+      type: "release",
+      href: releaseHref,
+      actionLabel: "Track distribution",
+      eventKey: `release:${release.id}:status:sent_to_distributor`,
+      metadata: baseMetadata
+    });
+    await sendStatusEmail("release_sent_to_distributor");
+    return;
+  }
 
   if (status === "live") {
     await createNotification({
@@ -449,7 +464,7 @@ export async function notifyReleaseStatusChange(release: Release, status: Releas
     return;
   }
 
-  if (status === "failed") {
+  if (status === "failed" || status === "delivery_failed") {
     await createNotification({
       userId: release.userId,
       title: `Distribution issue: ${releaseName}`,
@@ -458,7 +473,7 @@ export async function notifyReleaseStatusChange(release: Release, status: Releas
       href: releaseHref,
       actionLabel: "Fix issue",
       priority: "high",
-      eventKey: `release:${release.id}:status:failed`,
+      eventKey: `release:${release.id}:status:distribution_failed`,
       metadata: baseMetadata
     });
     await sendStatusEmail("release_distribution_failed");

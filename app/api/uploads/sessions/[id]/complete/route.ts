@@ -1,10 +1,12 @@
 import path from "node:path";
 import fs from "node:fs/promises";
+import { createReadStream } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
-import { finalRelativePath, localStorageProvider, validateSessionHeader } from "@/lib/storage-service";
+import { finalRelativePath, localStorageProvider, storageRootPath, validateSessionHeader } from "@/lib/storage-service";
 import { validatePrivateUpload, type PrivateAssetType } from "@/lib/private-storage";
 import { verifyArtworkIntegrity, verifyAudioIntegrity } from "@/lib/media-integrity";
 
@@ -42,8 +44,28 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const relativePath = `${target.slice(0, -extension.length)}-${randomUUID()}${extension}`;
     await localStorageProvider.moveAssembled(assembled.path, relativePath);
     const safeFilename = path.basename(relativePath);
+    // Keep the managed Hostinger copy and a private object-storage mirror. The
+    // SHA-256 checksum is shared by both copies so reads can validate recovery.
+    let objectKey = relativePath;
+    let storageProvider = "LOCAL";
+    if (session.assetCategory === "TRACK_AUDIO_MASTER" && process.env.BLOB_READ_WRITE_TOKEN?.trim()) {
+      try {
+        const localCopyPath = path.resolve(storageRootPath(), relativePath);
+        const blob = await put(`release-masters/${session.releaseId}/${session.id}/${safeFilename}`, createReadStream(localCopyPath), {
+          access: "private",
+          addRandomSuffix: false,
+          contentType: session.mimeType,
+          multipart: true,
+        });
+        objectKey = blob.url;
+        storageProvider = "vercel_blob";
+      } catch (error) {
+        await fs.unlink(path.resolve(storageRootPath(), relativePath)).catch(() => undefined);
+        throw new Error(`Could not preserve the audio upload in redundant storage: ${error instanceof Error ? error.message : "private storage failed"}`);
+      }
+    }
     const { asset, completed } = await prisma.$transaction(async tx => {
-      const asset = await tx.storedAsset.create({ data: { ownerUserId: session.userId, releaseId: session.releaseId, trackId: session.trackId, assetType: session.assetCategory === "TRACK_AUDIO_MASTER" ? "private_audio_master" : session.assetCategory === "RELEASE_COVER_ART" ? "private_unreleased_artwork" : "private_ownership_proof", storageProvider: "LOCAL", storageRoot: "HYMN_STORAGE_ROOT", relativePath, objectKey: relativePath, originalFilename: session.originalFilename, safeFilename, storedFilename: safeFilename, mimeType: session.mimeType, byteSize: assembled.size, checksum: assembled.checksum, category: session.assetCategory, entityType: session.trackId || session.clientTrackId ? "TRACK" : "RELEASE", entityId: String(session.trackId || session.clientTrackId || session.releaseId), accessClassification: "private", uploadStatus: "ready" } });
+      const asset = await tx.storedAsset.create({ data: { ownerUserId: session.userId, releaseId: session.releaseId, trackId: session.trackId, assetType: session.assetCategory === "TRACK_AUDIO_MASTER" ? "private_audio_master" : session.assetCategory === "RELEASE_COVER_ART" ? "private_unreleased_artwork" : "private_ownership_proof", storageProvider, storageRoot: "HYMN_STORAGE_ROOT", relativePath, objectKey, originalFilename: session.originalFilename, safeFilename, storedFilename: safeFilename, mimeType: session.mimeType, byteSize: assembled.size, checksum: assembled.checksum, category: session.assetCategory, entityType: session.trackId || session.clientTrackId ? "TRACK" : "RELEASE", entityId: String(session.trackId || session.clientTrackId || session.releaseId), accessClassification: "private", uploadStatus: "ready" } });
       const completed = await tx.uploadSession.update({ where: { id }, data: { status: "COMPLETED", finalAssetId: asset.id, completedAt: new Date(), bytesUploaded: session.totalSize } });
       return { asset, completed };
     });

@@ -166,13 +166,24 @@ export const localPrivateStorage: PrivateStorageAdapter = {
       if (!purchased && !studioParticipant) throw new Error("Forbidden.");
     }
     if (asset.storageProvider === "vercel_blob" || asset.objectKey.startsWith("http://") || asset.objectKey.startsWith("https://")) {
-      const blob = await get(asset.objectKey, { access: "private", headers: input.range ? { Range: input.range } : undefined });
-      const statusCode = Number(blob?.statusCode);
-      if (!blob || ![200, 206].includes(statusCode) || !blob.stream) throw new Error("Could not fetch remote private asset.");
-      const buf = Buffer.from(await new Response(blob.stream).arrayBuffer());
-      return { bytes: buf, mimeType: asset.mimeType, fileName: asset.safeFilename, contentRange: blob.headers.get("content-range"), contentLength: blob.headers.get("content-length") };
+      try {
+        const blob = await get(asset.objectKey, { access: "private", headers: input.range ? { Range: input.range } : undefined });
+        const statusCode = Number(blob?.statusCode);
+        if (!blob || ![200, 206].includes(statusCode) || !blob.stream) throw new Error("Could not fetch remote private asset.");
+        const buf = Buffer.from(await new Response(blob.stream).arrayBuffer());
+        if (!input.range && crypto.createHash("sha256").update(buf).digest("hex") !== asset.checksum) throw new Error("Stored private asset failed its SHA-256 integrity check.");
+        return { bytes: buf, mimeType: asset.mimeType, fileName: asset.safeFilename, contentRange: blob.headers.get("content-range"), contentLength: blob.headers.get("content-length") };
+      } catch (remoteError) {
+        // A local copy is retained for recovery when mirrored remote storage is enabled.
+        if (!asset.relativePath) throw remoteError;
+        const buf = await readLocalAsset(asset.relativePath, asset.relativePath);
+        if (!input.range && crypto.createHash("sha256").update(buf).digest("hex") !== asset.checksum) throw new Error("Stored private asset failed its SHA-256 integrity check.");
+        return { bytes: buf, mimeType: asset.mimeType, fileName: asset.safeFilename };
+      }
     }
-    return { bytes: await readLocalAsset(asset.objectKey, asset.relativePath), mimeType: asset.mimeType, fileName: asset.safeFilename };
+    const bytes = await readLocalAsset(asset.objectKey, asset.relativePath);
+    if (crypto.createHash("sha256").update(bytes).digest("hex") !== asset.checksum) throw new Error("Stored private asset failed its SHA-256 integrity check.");
+    return { bytes, mimeType: asset.mimeType, fileName: asset.safeFilename };
   },
   async delete(input) {
     const asset = await prisma.storedAsset.findUnique({ where: { id: input.assetId } });
@@ -180,6 +191,11 @@ export const localPrivateStorage: PrivateStorageAdapter = {
     await prisma.storedAsset.update({ where: { id: asset.id }, data: { deletedAt: new Date(), uploadStatus: "deleted" } });
     if (asset.storageProvider === "vercel_blob" || asset.objectKey.startsWith("http://") || asset.objectKey.startsWith("https://")) {
       await del(asset.objectKey).catch(() => undefined);
+      if (asset.relativePath) {
+        const root = privateStorageRootPath();
+        const backup = path.resolve(/* turbopackIgnore: true */ root, asset.relativePath);
+        if (backup.startsWith(`${root}${path.sep}`)) await fs.unlink(backup).catch(() => undefined);
+      }
       return;
     }
     const root = privateStorageRootPath();
