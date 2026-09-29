@@ -18,22 +18,28 @@
 .record { width: 100px; height: 100px; position: absolute; left: calc(50% - 12px); border-radius: 50%; background: repeating-radial-gradient(circle, #292929 0 1px, #111 2px 4px); border: 1px solid #454545; display: grid; place-items: center; transform: rotate(20deg); transition: transform .7s; }
 .stage:hover .record { transform: rotate(110deg); }
 .record span { display: grid; place-items: center; width: 35px; height: 35px; background: #e8e3da; color: #181818; border-radius: 50%; font-size: 14px; font-weight: 700; }
-.sleeve { z-index: 1; width: 92px; height: 94px; transform: translateX(-24px) rotate(-9deg); padding: 12px; background: var(--accent); color: var(--accent-foreground); font-size: 21px; line-height: 1; font-weight: 800; letter-spacing: -.05em; box-shadow: 5px 7px 12px #0002; }
-.sleeve span { display: block; font-size: 8px; letter-spacing: .05em; margin-top: 7px; }
+.sleeve { z-index: 1; width: 92px; height: 94px; transform: translateX(-24px) rotate(-9deg); background: #1a1a1a url("/assets/hymnlogowhite.png") center / 76% auto no-repeat; box-shadow: 5px 7px 12px #0002; }
 .console { width: 155px; padding: 12px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--card); transform: rotate(-3deg); box-shadow: 3px 5px 10px #0001; }
 .wave { display: flex; height: 45px; align-items: center; gap: 3px; }
 .wave i { flex: 1; background: var(--accent); border-radius: 2px; }
 .stage:hover .wave i { animation: meter .8s ease-in-out 2 alternate; }
 .controls { display: flex; align-items: center; gap: 12px; padding-top: 8px; border-top: 1px solid var(--border); color: var(--text-muted); }
 .controls span { width: 15px; height: 15px; border: 3px solid var(--text-soft); border-radius: 50%; }
-.world { position: relative; display: grid; place-items: center; width: 205px; height: 112px; color: var(--text-soft); }
-.world > span { position: absolute; padding: 5px 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--card); color: var(--text); font-size: 8px; box-shadow: 0 3px 6px #0001; }
-.platformOne { top: 12px; left: 7px; }
-.platformTwo { right: 0; top: 45px; }
-.platformThree { bottom: 9px; left: 15px; }
+.world { position: relative; display: grid; place-items: center; width: 205px; height: 120px; }
+.globe { display: block; width: 126px; height: 126px; background: url("/assets/release-globe.svg") center / contain no-repeat; transition: transform .6s ease; }
+.platformOne, .platformTwo, .platformThree { position: absolute; width: 35px; height: 35px; border: 1px solid var(--border); border-radius: 50%; background-color: var(--card); background-position: center; background-size: 25px; background-repeat: no-repeat; box-shadow: 0 4px 12px #0002; transition: transform .3s, box-shadow .3s; }
+.platformOne { top: 10px; left: 12px; background-image: url("/assets/store-logos/symbol-spotify.png"); }
+.platformTwo { right: 9px; top: 43px; background-image: url("/assets/store-logos/symbol-apple.png"); }
+.platformThree { bottom: 2px; left: 26px; background-image: url("/assets/store-logos/symbol-youtube.png"); }
+.stage:is(:hover, :focus-visible) .globe { transform: rotate(-12deg) scale(1.08); }
+.stage:is(:hover, :focus-visible) .platformOne { transform: translate(-3px, -3px); }
+.stage:is(:hover, :focus-visible) .platformTwo { transform: translate(4px, -2px); }
+.stage:is(:hover, :focus-visible) .platformThree { transform: translate(-3px, 3px); }
+.world > span:not(.globe):hover { transform: scale(1.2); box-shadow: 0 5px 15px #0003; }
+.stage:active .world { transform: scale(.95); }
 .terms { font-size: 10px; line-height: 1.6; color: var(--text-muted); }
 .terms a { text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; color: var(--text); }
 .banner a:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
 @keyframes meter { from { transform: scaleY(.5); } to { transform: scaleY(1); } }
-@media (max-width: 760px) { .banner { padding: 20px 16px 15px; } .heading { align-items: flex-start; flex-direction: column; gap: 13px; } .journey { grid-template-columns: minmax(0, 1fr) 15px minmax(0, 1fr) 15px minmax(0, 1fr); margin-top: 17px; } .connector svg { width: 12px; } .caption { padding: 9px 6px; min-height: 48px; } .number, .caption > svg, .caption p { display: none; } .caption h3 { font-size: 10px; line-height: 1.4; } .art { height: 95px; } .sleeve { width: 57px; height: 62px; padding: 8px; font-size: 15px; transform: translateX(-9px) rotate(-9deg); } .sleeve span { font-size: 5px; } .record { width: 64px; height: 64px; left: calc(50% - 9px); } .record span { width: 24px; height: 24px; font-size: 10px; } .console { width: 75px; padding: 7px; } .wave { gap: 1px; height: 30px; } .controls { gap: 6px; padding-top: 4px; } .controls svg { width: 12px; } .controls span { width: 8px; height: 8px; border-width: 2px; } .world { width: 86px; height: 85px; } .world > svg { width: 53px; } .world > span { font-size: 5px; padding: 3px; } .platformOne { left: 0; top: 8px; } .platformTwo { right: 0; top: 37px; } .platformThree { left: 0; bottom: 6px; } .terms { font-size: 9px; } }
+@media (max-width: 760px) { .banner { padding: 20px 16px 15px; } .heading { align-items: flex-start; flex-direction: column; gap: 13px; } .journey { grid-template-columns: minmax(0, 1fr) 15px minmax(0, 1fr) 15px minmax(0, 1fr); margin-top: 17px; } .connector svg { width: 12px; } .caption { padding: 9px 6px; min-height: 48px; } .number, .caption > svg, .caption p { display: none; } .caption h3 { font-size: 10px; line-height: 1.4; } .art { height: 95px; } .sleeve { width: 57px; height: 62px; padding: 8px; font-size: 15px; transform: translateX(-9px) rotate(-9deg); } .record { width: 64px; height: 64px; left: calc(50% - 9px); } .record span { width: 24px; height: 24px; font-size: 10px; } .console { width: 75px; padding: 7px; } .wave { gap: 1px; height: 30px; } .controls { gap: 6px; padding-top: 4px; } .controls svg { width: 12px; } .controls span { width: 8px; height: 8px; border-width: 2px; } .world { width: 86px; height: 85px; } .globe { width: 78px; height: 78px; } .platformOne, .platformTwo, .platformThree { width: 24px; height: 24px; background-size: 18px; } .platformOne { left: 0; top: 8px; } .platformTwo { right: 0; top: 37px; } .platformThree { left: 0; bottom: 6px; } .terms { font-size: 9px; } }
 @media (prefers-reduced-motion: reduce) { .banner * { animation: none !important; transition: none !important; } }

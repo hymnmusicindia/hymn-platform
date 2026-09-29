@@ -14,6 +14,8 @@ async function main() {
     bundle: true, outfile: path.join(output, "banner.js"), jsx: "automatic",
     define: { "process.env.NODE_ENV": '"production"' },
     plugins: [{ name: "isolated-link", setup(builder) {
+      builder.onResolve({ filter: /^\/assets\// }, args => ({ path: path.join(process.cwd(), "public", args.path) }));
+      builder.onLoad({ filter: /\.(png|svg)$/ }, async args => ({ contents: await fs.readFile(args.path), loader: "dataurl" }));
       builder.onResolve({ filter: /^next\/link$/ }, () => ({ path: "link", namespace: "fixture" }));
       builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({ contents: 'import React from "react"; export default function Link(props) { return React.createElement("a", props); }', resolveDir: process.cwd() }));
     } }]

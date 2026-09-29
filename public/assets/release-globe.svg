@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" fill="none">
+  <defs>
+    <radialGradient id="ocean" cx=".3" cy=".22" r=".85"><stop stop-color="#fbfaf7"/><stop offset=".5" stop-color="#d5d2cb"/><stop offset="1" stop-color="#575e65"/></radialGradient>
+    <radialGradient id="shine" cx=".24" cy=".16" r=".9"><stop stop-color="white" stop-opacity=".5"/><stop offset=".65" stop-color="white" stop-opacity="0"/><stop offset="1" stop-color="#10141d" stop-opacity=".45"/></radialGradient>
+    <clipPath id="sphere"><circle cx="80" cy="80" r="59"/></clipPath>
+  </defs>
+  <ellipse cx="80" cy="145" rx="40" ry="5" fill="#111827" opacity=".12"/>
+  <circle cx="80" cy="80" r="64" stroke="#96999c" stroke-opacity=".25"/>
+  <circle cx="80" cy="80" r="59" fill="url(#ocean)"/>
+  <g clip-path="url(#sphere)">
+    <g stroke="#fff" stroke-opacity=".25" stroke-width=".7"><ellipse cx="80" cy="80" rx="24" ry="59"/><ellipse cx="80" cy="80" rx="46" ry="59"/><ellipse cx="80" cy="80" rx="59" ry="22"/><ellipse cx="80" cy="80" rx="59" ry="43"/><path d="M21 80h118M80 21v118"/></g>
+    <g fill="#626b6e" stroke="#a2aaa8" stroke-width=".6" stroke-linejoin="round">
+      <path d="m30 45 10-10 17-8 13 4-2 8-10 3-2 8 8 5-4 10-10 3-3 12-8-3-5-13-8-5z"/>
+      <path d="m52 80 12 3 9 9-2 10-8 6-3 15-6 9-4-11 2-11-7-10-3-12z"/>
+      <path d="m84 44 9-7 7 3 7-6 19 7 14 14-3 14-10 2-9-8-7 4-4 12-8-9-5-10-10 2-6-8z"/>
+      <path d="m85 65 15 3 8 12-4 14-10 13-7-5-4-13-9-8 2-10z"/>
+      <path d="m119 103 11-5 10 6-4 12-15 3-8-8zM70 24l9-1 3 9-7 6-8-5z"/>
+    </g>
+    <circle cx="80" cy="80" r="59" fill="url(#shine)"/>
+  </g>
+  <circle cx="80" cy="80" r="59" stroke="#c1c5c7" stroke-opacity=".7"/>
+  <ellipse cx="80" cy="80" rx="76" ry="29" transform="rotate(-25 80 80)" stroke="#9da3a8" stroke-opacity=".45" stroke-dasharray="2 5"/>
+</svg>
