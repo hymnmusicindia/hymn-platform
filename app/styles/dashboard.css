@@ -1777,6 +1777,10 @@ html[data-theme="dark"] .home-store-logo {
   isolation: isolate;
 }
 
+html[data-theme="dark"] .home-store-marquee-shell {
+  background: transparent;
+}
+
 .home-store-marquee-shell::before,
 .home-store-marquee-shell::after {
   position: absolute;
