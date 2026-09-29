@@ -1766,7 +1766,11 @@ html[data-theme="dark"] .distribution-store-logo {
   opacity: 1;
 }
 
-.home-store-logo,
+.home-store-logo {
+  filter: grayscale(1);
+  opacity: .28;
+}
+
 html[data-theme="dark"] .home-store-logo {
   filter: grayscale(1) invert(1);
   opacity: .36;
@@ -1775,10 +1779,6 @@ html[data-theme="dark"] .home-store-logo {
 .home-store-marquee-shell {
   position: relative;
   isolation: isolate;
-}
-
-html[data-theme="dark"] .home-store-marquee-shell {
-  background: transparent;
 }
 
 .home-store-marquee-shell::before,
@@ -1794,12 +1794,12 @@ html[data-theme="dark"] .home-store-marquee-shell {
 
 .home-store-marquee-shell::before {
   left: 0;
-  background: linear-gradient(90deg, #070707 0%, transparent 100%);
+  background: linear-gradient(90deg, var(--bg) 0%, transparent 100%);
 }
 
 .home-store-marquee-shell::after {
   right: 0;
-  background: linear-gradient(270deg, #070707 0%, transparent 100%);
+  background: linear-gradient(270deg, var(--bg) 0%, transparent 100%);
 }
 
 @media (max-width: 768px) {

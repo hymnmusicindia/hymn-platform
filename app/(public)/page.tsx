@@ -163,7 +163,7 @@ export default async function HomePage() {
             Connected To The Global Music Ecosystem
           </h2>
         </div>
-        <div className="home-store-marquee-shell mt-5 overflow-hidden rounded-2xl bg-[linear-gradient(90deg,#070707_0%,#141416_50%,#070707_100%)]">
+        <div className="home-store-marquee-shell mt-5 overflow-hidden">
           <div className="marquee-row music-store-marquee items-center gap-12 px-8 py-5 sm:gap-16">
             {storeLogoMarquee.map((item, index) => (
               <div key={`${item.name}-${index}`} className="inline-flex h-12 w-36 shrink-0 items-center justify-center" title={item.name}>
