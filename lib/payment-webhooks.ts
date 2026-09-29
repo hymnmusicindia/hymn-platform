@@ -152,10 +152,14 @@ export async function confirmCheckoutPayment(input: { razorpayOrderId: string; p
   const order = await completeCheckoutOrder(input.razorpayOrderId, input.paymentId);
   if (!order) throw new Error("Checkout fulfilment did not return an order.");
   if (persisted.paymentStatus !== "paid") await prisma.auditLog.create({ data: { actorId: input.userId ?? null, action: "CHECKOUT_PAYMENT_CONFIRMED", entity: "checkout_order", entityId: String(order.id), metadata: { source: input.source, paymentId: input.paymentId } } });
-  const purchases = await prisma.beatPurchase.findMany({ where: { userId: order.userId, paymentId: input.paymentId, licenseUrl: null } });
+  const purchases = await prisma.beatPurchase.findMany({ where: { userId: order.userId, paymentId: input.paymentId, hasAccess: true }, include: { user: true, beat: true } });
   if (purchases.length) {
     const { generateBeatLicense } = await import("@/lib/beat-license");
-    for (const purchase of purchases) await generateBeatLicense(purchase.id, order.userId).catch(() => null);
+    const { sendBeatEmailEvent, emailAppUrl } = await import("@/lib/email/email-events");
+    for (const purchase of purchases) {
+      if (!purchase.licenseUrl) await generateBeatLicense(purchase.id, order.userId).catch(() => null);
+      await sendBeatEmailEvent({ event: "beat_purchase_success", purchaseId: purchase.id, userId: order.userId, to: purchase.user.email, userName: purchase.user.name, beatTitle: purchase.beat.title, url: emailAppUrl("/dashboard?module=purchases") }).catch(() => null);
+    }
   }
   return order;
 }

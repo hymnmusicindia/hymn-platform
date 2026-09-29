@@ -375,13 +375,14 @@ export async function notifyReleaseStatusChange(release: Release, status: Releas
     issueType: release.reviewIssues?.type ?? null,
     selectedFields: release.reviewIssues?.fields ?? []
   };
-  const sendStatusEmail = async (event: "release_approved_by_hymn" | "release_changes_requested" | "release_rejected" | "release_sent_to_distributor" | "release_scheduled" | "release_live" | "release_distribution_failed") => {
+  const sendStatusEmail = async (event: "release_under_review" | "release_approved_by_hymn" | "release_changes_requested" | "release_rejected" | "release_sent_to_distributor" | "release_scheduled" | "release_live" | "release_distribution_failed") => {
     const user = await findUserById(release.userId);
     if (!user) return;
     await sendReleaseEmail(event, { to: user.email, userId: user.id, userName: user.name, releaseTitle: releaseName, artistName: release.artistName, releaseId: release.id, releaseStatus: status, releaseDate: release.releaseDate, manageReleaseUrl: emailAppUrl(`/dashboard/releases/${release.id}`), correctionUrl: emailAppUrl(`/dashboard/releases/${release.id}?tab=corrections`), rejectionReason: reason ?? undefined, correctionEventKey: status === "changes_requested" ? correctionEventKey : undefined });
   };
 
   if (status === "under_review") {
+    await sendStatusEmail("release_under_review");
     await createNotification({
       userId: release.userId,
       title: "Your release is under review",
@@ -430,9 +431,10 @@ export async function notifyReleaseStatusChange(release: Release, status: Releas
     return;
   }
 
-  // HYMN approval remains an internal transition. Once DireNote accepts the
-  // hand-off, let the artist know their release has entered distribution.
-  if (status === "approved") return;
+  if (status === "approved") {
+    await sendStatusEmail("release_approved_by_hymn");
+    return;
+  }
 
   if (status === "sent_to_distributor" || status === "sent") {
     await createNotification({

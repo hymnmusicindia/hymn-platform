@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getEmailClient, getEmailConfig } from "@/lib/email/email-client";
+import { purchaseAttachments } from "@/lib/email/purchase-attachments";
 
 const recipientSchema = z.string().trim().email().max(320);
 export type EmailDeliveryStatus = "sent" | "failed" | "skipped" | "duplicate_skipped";
@@ -22,7 +23,9 @@ export async function sendTransactionalEmail(input: TransactionalEmailInput): Pr
     const client = getEmailClient();
     if (!client || !recipient) return { status: "skipped", logId: log.id };
     try {
-      const result = await client.emails.send({ from: config.from, to: recipient, subject: input.subject, html: input.html, text: input.text, ...(config.replyTo ? { replyTo: config.replyTo } : {}) });
+      const attachments = input.entityType === "beat_purchase" && input.userId && input.entityId
+        ? await purchaseAttachments(Number(input.entityId), input.userId, recipient).catch(() => []) : [];
+      const result = await client.emails.send({ from: config.from, to: recipient, subject: input.subject, html: input.html, text: input.text, attachments, ...(config.replyTo ? { replyTo: config.replyTo } : {}) });
       if (result.error) throw new Error(result.error.message);
       await emailLog.update({ where: { id: log.id }, data: { status: "sent", providerMessageId: result.data?.id ?? null, sentAt: new Date() } });
       return { status: "sent", logId: log.id, providerMessageId: result.data?.id };

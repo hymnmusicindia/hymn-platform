@@ -62,6 +62,7 @@
     "audit:producer-identities": "tsx scripts/audit-producer-identity-migration.ts",
     "producers:reset": "tsx scripts/reset-producer-accounts.ts",
     "audit:release-storage": "tsx scripts/audit-release-storage-reconciliation.ts",
+    "email:test-rejected": "node --conditions=react-server --import tsx scripts/send-test-release-email.ts",
     "lint": "eslint ."
   },
   "dependencies": {
@@ -77,6 +78,7 @@
     "lucide-react": "^0.511.0",
     "mysql2": "3.24.4",
     "next": "16.3.6",
+    "nodemailer": "^10.0.12",
     "razorpay": "^2.9.6",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -91,6 +93,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^22.14.1",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "autoprefixer": "^10.4.21",

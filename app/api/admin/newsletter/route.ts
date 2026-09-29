@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const admin = await requireRecentAdminPermission("system.manage");
   if ("error" in admin) return admin.error;
-  if (!getEmailConfig().enabled) return NextResponse.json({ error: "Resend is not enabled on this environment." }, { status: 503 });
+  if (!getEmailConfig().enabled) return NextResponse.json({ error: "Email sending is not enabled or configured in this environment." }, { status: 503 });
   try {
     const input = createSchema.parse(await request.json());
     const actorId = "sub" in admin ? Number(admin.sub) : null;
