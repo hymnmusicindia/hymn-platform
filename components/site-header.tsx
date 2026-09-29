@@ -38,11 +38,6 @@ const presenceOptions: Array<{ value: PresenceStatus; label: string; description
   { value: "do_not_disturb", label: "Do Not Disturb", description: "Show a red status dot" }
 ];
 
-function HeaderCountBadge({ count, mobile = false, max = 99 }: { count: number; mobile?: boolean; max?: number }) {
-  if (count <= 0) return null;
-  return <span className={clsx("text-[11px] font-black leading-none tracking-[-0.06em] drop-shadow-[0_1px_4px_rgba(0,0,0,.65)]", mobile ? "static ml-auto" : "absolute left-1/2 -top-0.5 ml-1.5")} style={{ color: "var(--money)" }}>{count > max ? `${max}+` : count}</span>;
-}
-
 function notificationTimeAgo(value: string) {
   const diffMs = Date.now() - new Date(value).getTime();
   const minutes = Math.max(0, Math.floor(diffMs / 60000));
@@ -66,6 +61,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   const [appLauncherOpen, setAppLauncherOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [cartCount, setCartCount] = useState(0);
+  const [cartDropSequence, setCartDropSequence] = useState(0);
   const [cartOpen, setCartOpen] = useState(false);
   const [cartMounted, setCartMounted] = useState(false);
   const [cartItems, setCartItems] = useState<HeaderCartItem[]>([]);
@@ -76,6 +72,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const notificationMutationsRef = useRef<Set<number>>(new Set());
   const markAllPendingRef = useRef(false);
+  const previousCartCountRef = useRef<number | null>(null);
   const isAuthenticated = Boolean(user);
 
   useEffect(() => {
@@ -264,15 +261,20 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
       try {
         const raw = window.localStorage.getItem("hymn-beat-cart");
         if (!raw) {
+          previousCartCountRef.current = 0;
           setCartItems([]);
           setCartCount(0);
           return;
         }
         const cart = JSON.parse(raw);
         const items = Array.isArray(cart) ? cart : [];
+        const nextCount = items.length;
+        if (previousCartCountRef.current !== null && nextCount > previousCartCountRef.current) setCartDropSequence((value) => value + 1);
+        previousCartCountRef.current = nextCount;
         setCartItems(items);
-        setCartCount(items.length);
+        setCartCount(nextCount);
       } catch {
+        previousCartCountRef.current = 0;
         setCartItems([]);
         setCartCount(0);
       }
@@ -381,11 +383,10 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           style={{ color: "var(--text)" }}
           aria-expanded={notificationsOpen}
           aria-haspopup="dialog"
-          aria-label="Notifications"
+          aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"}
         >
-          <Bell className="h-5 w-5" />
+          <Bell className={clsx("notification-bell-icon h-5 w-5", unreadCount > 0 && "has-unread")} />
           {mobile ? <span className="text-sm font-semibold">Notifications</span> : null}
-          <HeaderCountBadge count={unreadCount} max={9} mobile={mobile} />
         </button>
 
         {notificationsOpen ? (
@@ -626,13 +627,16 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
           <button
             type="button"
-            aria-label="Shopping cart"
+            aria-label={cartCount ? `Shopping cart, ${cartCount} ${cartCount === 1 ? "item" : "items"}` : "Shopping cart, empty"}
             onClick={openCart}
             className="site-header-bare-icon relative z-10 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-transparent sm:h-11 sm:w-11"
             style={{ color: "var(--text)" }}
           >
-            <ShoppingCart className="h-5 w-5" />
-            <HeaderCountBadge count={cartCount} />
+            <span className={clsx("site-cart-visual", cartCount > 0 && "has-items")} aria-hidden="true">
+              {cartCount > 0 ? <span className="site-cart-cargo"><span /><span /></span> : null}
+              {cartDropSequence > 0 ? <span key={cartDropSequence} className="site-cart-drop" /> : null}
+              <ShoppingCart className="site-cart-icon h-5 w-5" />
+            </span>
           </button>
 
           <button

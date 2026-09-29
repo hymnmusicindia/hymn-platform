@@ -1650,6 +1650,89 @@ html[data-theme="light"] .producer-panel-shell .dashboard-os-sidebar img {
   transform: translateY(-1px);
 }
 
+.notification-bell-icon {
+  transform-origin: 50% 8%;
+}
+
+.notification-bell-icon.has-unread {
+  animation: hymn-notification-ring 6s ease-in-out infinite;
+}
+
+.site-cart-visual {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.site-cart-icon {
+  position: relative;
+  z-index: 2;
+  overflow: visible;
+}
+
+.site-cart-visual.has-items .site-cart-icon {
+  color: var(--text);
+  filter: drop-shadow(0 1px 4px color-mix(in srgb, var(--money) 25%, transparent));
+}
+
+.site-cart-cargo {
+  position: absolute;
+  z-index: 1;
+  left: 0.34rem;
+  top: 0.48rem;
+  width: 0.69rem;
+  height: 0.38rem;
+  overflow: hidden;
+  transform: skewX(-8deg);
+}
+
+.site-cart-cargo span {
+  position: absolute;
+  bottom: 0;
+  width: 0.31rem;
+  border-radius: 2px 2px 1px 1px;
+  background: linear-gradient(145deg, var(--money), color-mix(in srgb, var(--money) 55%, var(--accent)));
+  box-shadow: 0 0 6px color-mix(in srgb, var(--money) 36%, transparent);
+}
+
+.site-cart-cargo span:first-child { left: 0; height: 0.29rem; transform: rotate(-8deg); }
+.site-cart-cargo span:last-child { right: 0; height: 0.38rem; transform: rotate(8deg); }
+
+.site-cart-drop {
+  position: absolute;
+  z-index: 3;
+  left: 0.56rem;
+  top: -0.32rem;
+  width: 0.34rem;
+  height: 0.34rem;
+  border-radius: 2px;
+  background: linear-gradient(145deg, var(--money), var(--accent));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--money) 45%, transparent);
+  animation: hymn-cart-drop 720ms cubic-bezier(.2,.8,.25,1) both;
+}
+
+@keyframes hymn-notification-ring {
+  0%, 7%, 100% { transform: rotate(0deg); }
+  1.5% { transform: rotate(15deg); }
+  3% { transform: rotate(-13deg); }
+  4.5% { transform: rotate(9deg); }
+  6% { transform: rotate(-5deg); }
+}
+
+@keyframes hymn-cart-drop {
+  0% { opacity: 0; transform: translateY(-0.45rem) rotate(-18deg) scale(.72); }
+  20% { opacity: 1; }
+  72% { opacity: 1; transform: translateY(0.55rem) rotate(10deg) scale(1); }
+  100% { opacity: 0; transform: translateY(0.72rem) rotate(5deg) scale(.72); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-bell-icon.has-unread,
+  .site-cart-drop { animation: none; }
+}
+
 .theme-toggle-bare {
   border: 0;
   border-radius: 999px;
