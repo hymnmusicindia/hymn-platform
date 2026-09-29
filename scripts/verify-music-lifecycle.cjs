@@ -34,15 +34,16 @@ async function main() {
     await page.getByRole("tab", { name: /Find your beat/ }).focus();
     await page.keyboard.press("ArrowRight");
     assert.equal(await page.getByRole("tab", { name: /Mix & master/ }).getAttribute("aria-selected"), "true");
-    assert.equal(await page.getByRole("link", { name: "Find my engineer" }).getAttribute("href"), "/studio");
+    assert.equal(await page.getByRole("link", { name: "Explore Studio at standard pricing" }).getAttribute("href"), "/studio");
     await page.keyboard.press("End");
-    assert.equal(await page.getByRole("link", { name: "Plan my release" }).getAttribute("href"), "/distribution");
-    for (const [count, price, savings] of [[1, "₹99", null], [6, "₹546", "8% off"], [12, "₹1,069", "10% off"], [16, "₹1,346", "15% off"]]) {
-      await page.getByRole("slider").fill(String(count));
-      await page.getByText(price, { exact: true }).waitFor();
-      if (savings) await page.getByText(new RegExp(savings)).waitFor();
-    }
+    assert.equal(await page.getByRole("link", { name: "Explore standard distribution pricing" }).getAttribute("href"), "/distribution");
+    assert.equal(await page.getByRole("link", { name: "Start with a beat to claim offers" }).getAttribute("href"), "/beat-store");
+    assert.equal(await page.getByRole("link", { name: "T&C apply." }).getAttribute("href"), "/terms-of-service");
+    assert.equal(await page.getByRole("slider").count(), 0);
+    await page.getByText(/Direct service orders use standard pricing/).waitFor();
     await page.locator("section").screenshot({ path: path.join(output, "distribution.png") });
+    for (const theme of ["light", "dark"]) {
+    await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
     for (const width of [375, 768, 1440]) {
       await page.setViewportSize({ width, height: 1000 });
       for (const name of [/Find your beat/, /Mix & master/, /Release worldwide/]) {
@@ -50,10 +51,12 @@ async function main() {
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Overflow at ${width}`);
         assert.equal(await page.getByRole("tabpanel").count(), 1);
       }
-      if (width === 375) await page.locator("section").screenshot({ path: path.join(output, "mobile.png") });
+      if (width === 375) await page.locator("section").screenshot({ path: path.join(output, `${theme}-mobile.png`) });
+    }
+    await page.locator("section").screenshot({ path: path.join(output, `${theme}-desktop.png`) });
     }
     assert.deepEqual(errors, []);
-    console.log(`Lifecycle interactions, pricing, keyboard navigation and responsive checks passed. Previews: ${output}`);
+    console.log(`Lifecycle interactions, offer entry links, theme layouts, keyboard navigation and responsive checks passed. Previews: ${output}`);
   } finally { await browser.close(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

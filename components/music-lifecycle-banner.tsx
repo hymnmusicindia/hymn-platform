@@ -1,25 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { useId, useState, type KeyboardEvent } from "react";
 import { ArrowDown, ArrowRight, Check, Disc3, Globe2, Headphones, SlidersHorizontal } from "lucide-react";
-import { getTrackPricingQuote } from "@/lib/distribution-pricing";
 import styles from "./music-lifecycle-banner.module.css";
 
 const stages = [
-  { name: "Find your beat", label: "The spark", icon: Disc3, title: "That beat you keep coming back to?", emphasis: "Make it yours.", body: "Find your sound, choose the licence that fits your plans, and purchase your beat. Record your vocals. Your next record starts here.", benefit: "Your beat purchase can unlock special Studio pricing.", href: "/beat-store", cta: "Find my beat", output: "Beat + your vocals", tag: "01 / CREATE", color: "#d5fa78" },
-  { name: "Mix & master", label: "The transformation", icon: SlidersHorizontal, title: "You bring the performance.", emphasis: "We bring the polish.", body: "Choose a professional engineer at their listed rate. Send your beat and vocals, collaborate on the mix, and approve a master ready for your release.", benefit: "Eligible HYMN beat purchases get the engineer’s special beat-customer rate.", href: "/studio", cta: "Find my engineer", output: "Your finished master", tag: "02 / FINISH", color: "#c8b5ff" },
-  { name: "Release worldwide", label: "The next chapter", icon: Globe2, title: "From your headphones.", emphasis: "To everyone’s.", body: "Bring your approved master into distribution, add your artwork and credits, and submit for review. Choose your release date and give your music a home on streaming platforms.", benefit: "Releasing more music? Save with automatic multi-track pricing.", href: "/distribution", cta: "Plan my release", output: "Ready for the world", tag: "03 / RELEASE", color: "#8ee4ed" }
+  { name: "Find your beat", label: "The spark", icon: Disc3, title: "That beat you keep coming back to?", emphasis: "Make it yours.", body: "Find your sound, choose the licence that fits your plans, and purchase your beat. Record your vocals. Your next record starts here.", benefit: "Start with a HYMN Beat Store purchase to qualify for journey offers.", href: "/beat-store", output: "Beat + your vocals", tag: "01 / CREATE" },
+  { name: "Mix & master", label: "The transformation", icon: SlidersHorizontal, title: "You bring the performance.", emphasis: "We bring the polish.", body: "Choose a professional engineer at their listed rate. Send your beat and vocals, collaborate on the mix, and approve a master ready for your release.", benefit: "Special Studio rates require an eligible HYMN beat purchase linked to your project. Otherwise, standard pricing applies.", href: "/studio", output: "Your finished master", tag: "02 / FINISH" },
+  { name: "Release worldwide", label: "The next chapter", icon: Globe2, title: "From your headphones.", emphasis: "To everyone’s.", body: "Bring your approved master into distribution, add your artwork and credits, and submit for review. Choose your release date and give your music a home on streaming platforms.", benefit: "Continue from your HYMN beat purchase to claim eligible journey offers. Starting directly with distribution uses standard pricing.", href: "/distribution", output: "Ready for the world", tag: "03 / RELEASE" }
 ] as const;
 const bars = Array.from({ length: 45 }, (_, i) => 18 + ((i * 37 + i * i * 11) % 70));
-const money = (value: number) => `₹${value.toLocaleString("en-IN")}`;
 
 export function MusicLifecycleBanner() {
   const [active, setActive] = useState(0);
-  const [trackCount, setTrackCount] = useState(6);
   const id = useId();
-  const stage = stages[active];
-  const quote = getTrackPricingQuote(trackCount);
 
   function navigate(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     const next = event.key === "ArrowRight" ? (index + 1) % 3 : event.key === "ArrowLeft" ? (index + 2) % 3 : event.key === "Home" ? 0 : event.key === "End" ? 2 : null;
@@ -31,13 +26,13 @@ export function MusicLifecycleBanner() {
 
   return (
     <section className="shell py-12 sm:py-16" aria-labelledby={`${id}-heading`}>
-      <div className={styles.banner} style={{ "--journey-accent": stage.color } as CSSProperties}>
+      <div className={styles.banner}>
         <div className={styles.heading}>
           <div>
             <p className={styles.eyebrow}><span /> THE HYMN FULL-CIRCLE EXPERIENCE</p>
             <h2 id={`${id}-heading`}>A beat. A finished record.<br /><span>Your next big beginning.</span></h2>
           </div>
-          <p className={styles.intro}>Buy the beat. Mix & master with us. <br />Release it to the world. <br /><strong>Beat-customer Studio rates. Multi-track release savings.</strong></p>
+          <p className={styles.intro}>Buy the beat. Mix & master with us. <br />Release it to the world. <br /><strong>Exclusive journey offers start with a HYMN beat purchase.</strong></p>
         </div>
 
         <div className={styles.tabs} role="tablist" aria-label="Explore your music journey">
@@ -55,8 +50,8 @@ export function MusicLifecycleBanner() {
               <h3>{item.title}<br /><span>{item.emphasis}</span></h3>
               <p className={styles.body}>{item.body}</p>
               <div className={styles.benefit}><Check size={17} aria-hidden="true" /><p>{item.benefit}</p></div>
-              <Link href={item.href} className={styles.cta}>{item.cta}<ArrowRight size={18} aria-hidden="true" /></Link>
-              {index === 0 && <button type="button" className={styles.skip} onClick={() => setActive(1)}>Already have a beat? Start with the mix <ArrowRight size={14} /></button>}
+              <Link href="/beat-store" className={styles.cta}>{index === 0 ? "Find my beat" : "Start with a beat to claim offers"}<ArrowRight size={18} aria-hidden="true" /></Link>
+              {index > 0 && <Link href={item.href} className={styles.skip}>{index === 1 ? "Explore Studio at standard pricing" : "Explore standard distribution pricing"} <ArrowRight size={14} /></Link>}
             </div>
 
             <div className={styles.visual}>
@@ -73,10 +68,9 @@ export function MusicLifecycleBanner() {
               </div> : <div className={styles.releaseScene}>
                 <div className={styles.destinations} aria-hidden="true"><Globe2 size={34} strokeWidth={1} /><span>Spotify</span><span>Apple Music</span><span>YouTube Music</span></div>
                 <div className={styles.quote}>
-                  <div className={styles.quoteHeading}><label htmlFor={`${id}-tracks`}>Plan your release</label><span>{trackCount} {trackCount === 1 ? "track" : "tracks"}</span></div>
-                  <input id={`${id}-tracks`} aria-label="Number of tracks to distribute" type="range" min={1} max={20} value={trackCount} onChange={(event) => setTrackCount(Number(event.target.value))} />
-                  <div className={styles.price} aria-live="polite"><strong>{money(quote.finalPrice)}</strong><span>{quote.savings > 0 ? <><s>{money(quote.basePrice)}</s><b>Save {money(quote.savings)} · {Math.round(quote.discountRate * 100)}% off</b></> : <>Base distribution price</>}</span></div>
-                  <p>Base distribution only. Add-ons extra. Bulk savings start at 6 tracks.</p>
+                  <div className={styles.quoteHeading}><strong>Your route to journey offers</strong></div>
+                  <ol className={styles.offerSteps}><li>Purchase your beat from the HYMN Beat Store.</li><li>Link that purchase when starting your Studio project.</li><li>Continue with your finished master into distribution.</li></ol>
+                  <p>Offers apply only to eligible beat-purchase journeys. Direct service orders use standard pricing. Available offers and final prices are shown before payment.</p>
                 </div>
               </div>}
               <div className={styles.output}><span><item.icon size={17} />{item.output}</span><span>MADE WITH HYMN <ArrowDown size={13} /></span></div>
@@ -84,7 +78,7 @@ export function MusicLifecycleBanner() {
           </>}
         </div>)}
 
-        <div className={styles.footer}><span><span className={styles.footerMark}>H</span> LESS RUNNING AROUND. MORE MAKING MUSIC.</span><p>Studio savings vary by engineer and eligible beat purchase. Distribution discounts depend on track count.</p></div>
+        <div className={styles.footer}><span><span className={styles.footerMark}>H</span> LESS RUNNING AROUND. MORE MAKING MUSIC.</span><p>Special offers require an eligible HYMN Beat Store purchase and must start through the beat-purchase workflow. Otherwise, standard pricing applies. <Link href="/terms-of-service" className={styles.terms}>T&amp;C apply.</Link></p></div>
       </div>
     </section>
   );
