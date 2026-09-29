@@ -30,6 +30,18 @@ type HeaderNotification = {
 
 type HeaderCartItem = { beatId: number; licenseType: BeatStoreLicenseType | "general" | "basic" | "premium"; price: number };
 type HeaderCartBeat = { id: number; title: string; producerName?: string; artworkUrl?: string };
+type PresenceStatus = "online" | "invisible" | "do_not_disturb";
+
+const presenceOptions: Array<{ value: PresenceStatus; label: string; description: string }> = [
+  { value: "online", label: "Online", description: "Show a green status dot" },
+  { value: "invisible", label: "Invisible", description: "Appear offline" },
+  { value: "do_not_disturb", label: "Do Not Disturb", description: "Show a red status dot" }
+];
+
+function HeaderCountBadge({ count, mobile = false, max = 99 }: { count: number; mobile?: boolean; max?: number }) {
+  if (count <= 0) return null;
+  return <span className={clsx("inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 px-1 text-[10px] font-black leading-none shadow-[0_3px_10px_rgba(0,0,0,.3)]", mobile ? "static ml-auto" : "absolute left-1/2 top-0 ml-1")} style={{ borderColor: "var(--header-bg-solid)", background: "linear-gradient(180deg,var(--accent-strong),var(--accent))", color: "var(--accent-foreground)" }}>{count > max ? `${max}+` : count}</span>;
+}
 
 function notificationTimeAgo(value: string) {
   const diffMs = Date.now() - new Date(value).getTime();
@@ -48,6 +60,8 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [presence, setPresence] = useState<PresenceStatus>("online");
+  const [presenceSaving, setPresenceSaving] = useState(false);
   const [appLauncherOpen, setAppLauncherOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [cartCount, setCartCount] = useState(0);
@@ -66,6 +80,14 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   useEffect(() => {
     setCartMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetch("/api/account/presence", { cache: "no-store" })
+      .then(async response => response.ok ? response.json() : Promise.reject())
+      .then(data => { if (presenceOptions.some(option => option.value === data.presence)) setPresence(data.presence); })
+      .catch(() => undefined);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -313,6 +335,21 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
     router.refresh();
   }
 
+  async function updatePresence(next: PresenceStatus) {
+    if (presenceSaving || next === presence) return;
+    const previous = presence;
+    setPresence(next);
+    setPresenceSaving(true);
+    try {
+      const response = await fetch("/api/account/presence", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ presence: next }) });
+      if (!response.ok) throw new Error("Could not update profile status.");
+    } catch {
+      setPresence(previous);
+    } finally {
+      setPresenceSaving(false);
+    }
+  }
+
   const initials = user?.name
     ?.split(" ")
     .map((part) => part[0])
@@ -346,11 +383,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
         >
           <Bell className="h-5 w-5" />
           {mobile ? <span className="text-sm font-semibold">Notifications</span> : null}
-          {unreadCount > 0 ? (
-            <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full border px-1 text-[9px] font-extrabold leading-none shadow-sm" style={{ borderColor: "var(--header-bg-solid)", background: "var(--text)", color: "var(--bg)" }}>
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </span>
-          ) : null}
+          <HeaderCountBadge count={unreadCount} max={9} mobile={mobile} />
         </button>
 
         {notificationsOpen ? (
@@ -477,7 +510,9 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
                 }}
               />
             </span>
-            <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 shadow-sm" style={{ borderColor: "var(--header-bg-solid)", background: "var(--success)" }} aria-label="Online" />
+            <span className="absolute bottom-0 right-0 grid h-3.5 w-3.5 place-items-center rounded-full border-[2.5px] shadow-sm" style={{ borderColor: "var(--header-bg-solid)", background: presence === "online" ? "var(--success)" : presence === "do_not_disturb" ? "var(--danger)" : "var(--text-soft)" }} aria-label={presenceOptions.find(option => option.value === presence)?.label}>
+              {presence === "do_not_disturb" ? <span className="h-[2px] w-1.5 rounded-full bg-white" /> : presence === "invisible" ? <span className="h-1.5 w-1.5 rounded-full bg-[var(--header-bg-solid)]" /> : null}
+            </span>
           </span>
         </button>
 
@@ -493,6 +528,16 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
             <div className="border-b pb-3" style={{ borderColor: "var(--border)" }}>
               <p className="truncate text-sm font-semibold">{user.name}</p>
               <p className="mt-1 truncate text-xs" style={{ color: "var(--text-muted)" }}>{user.email}</p>
+            </div>
+            <div className="border-b py-3" style={{ borderColor: "var(--border)" }}>
+              <p className="px-2 text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Profile status</p>
+              <div className="mt-2 grid gap-1">
+                {presenceOptions.map(option => <button key={option.value} type="button" disabled={presenceSaving} onClick={() => updatePresence(option.value)} className={clsx("flex items-center gap-3 rounded-xl px-2.5 py-2 text-left transition hover:bg-white/5 disabled:opacity-60", presence === option.value && "bg-white/[0.06]")} role="menuitemradio" aria-checked={presence === option.value}>
+                  <span className="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full" style={{ background: option.value === "online" ? "var(--success)" : option.value === "do_not_disturb" ? "var(--danger)" : "var(--text-soft)" }}>{option.value === "do_not_disturb" ? <span className="h-[2px] w-2 rounded-full bg-white" /> : option.value === "invisible" ? <span className="h-2 w-2 rounded-full bg-[var(--card-strong)]" /> : null}</span>
+                  <span className="min-w-0 flex-1"><strong className="block text-xs font-semibold">{option.label}</strong><span className="mt-0.5 block text-[10px]" style={{ color: "var(--text-soft)" }}>{option.description}</span></span>
+                  {presence === option.value ? <CheckCircle2 className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} /> : null}
+                </button>)}
+              </div>
             </div>
             <div className="mt-3 grid gap-1">
               <Link href={user.role === "producer" ? "/producer/dashboard" : "/dashboard"} onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-white/5">
@@ -581,9 +626,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
             style={{ color: "var(--text)" }}
           >
             <ShoppingCart className="h-5 w-5" />
-            {cartCount > 0 ? <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full border px-1 text-[9px] font-extrabold leading-none shadow-sm" style={{ borderColor: "var(--header-bg-solid)", background: "var(--text)", color: "var(--bg)" }}>
-              {cartCount > 99 ? "99+" : cartCount}
-            </span> : null}
+            <HeaderCountBadge count={cartCount} />
           </button>
 
           <button

@@ -140,6 +140,7 @@ model User {
   email                         String                              @unique
   passwordHash                  String?                             @map("password_hash")
   avatar                        String?
+  presenceStatus                String                              @default("online") @map("presence_status")
   role                          UserRole                            @default(CUSTOMER)
   status                        AccountStatus                       @default(ACTIVE)
   statusReason                  String?                             @map("status_reason")
