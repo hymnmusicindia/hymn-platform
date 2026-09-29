@@ -52,13 +52,36 @@ async function expectDenied() {
   assert.equal(reads, before, "Denied requests must not read private storage");
 }
 async function main() {
+  // Exercise homepage selection with and without manually featured IDs.
+  let selectedIds = [];
+  const releases = ["draft", "submitted", "scheduled", "sent", "sent_to_distributor", "distributor_processing", "awaiting_live_confirmation", "delivered", "partially_live", "live", "takedown", "archived"].map((status, index) => ({ id: index + 1, status, artworkUrl: "/cover.jpg" }));
+  releases.push({ id: 34, status: "scheduled", artworkUrl: "/cover.jpg" });
+  releases.push({ id: 35, status: "live", artworkUrl: "" });
+  const homeMocks = {
+    "next/cache": { unstable_cache: (fn) => fn },
+    "@/lib/db": {
+      listAllBeats: async () => [], listProducerProfiles: async () => [], listRecentGoogleAvatarUrls: async () => [],
+      getSiteSettings: async () => ({ homeFeaturedReleaseIds: selectedIds }),
+      listAllReleases: async () => releases
+    },
+    "@/lib/prisma": { prisma: { purchaseReview: { findMany: async () => [] } } }
+  };
+  const homeSource = fs.readFileSync(path.join(__dirname, "../lib/public-home-data.ts"), "utf8");
+  const homeSandbox = { exports: {}, require: (name) => {
+    assert.ok(name in homeMocks, `Unexpected homepage dependency: ${name}`);
+    return homeMocks[name];
+  } };
+  vm.runInNewContext(ts.transpileModule(homeSource, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, homeSandbox);
+  for (const selection of [[], releases.map((release) => release.id), [1, 3, 34]]) {
+    selectedIds = selection;
+    const result = await homeSandbox.exports.getPublicHomePreview();
+    assert.deepEqual(Array.from(result.featuredReleases, (release) => release.id), selection.length === 3 ? [] : [10]);
+  }
   await expectArtwork(); // Anonymous homepage visitor.
   user = { sub: 88 };
   await expectArtwork(); // Signed-in visitor who does not own the release.
   user = null;
-  status = "PARTIALLY_LIVE";
-  await expectArtwork();
-  for (const privateStatus of ["DRAFT", "SUBMITTED", "TAKEDOWN", "ARCHIVED"]) {
+  for (const privateStatus of ["DRAFT", "SUBMITTED", "SCHEDULED", "SENT", "SENT_TO_DISTRIBUTOR", "DISTRIBUTOR_PROCESSING", "AWAITING_LIVE_CONFIRMATION", "DELIVERED", "PARTIALLY_LIVE", "TAKEDOWN", "ARCHIVED"]) {
     status = privateStatus;
     await expectDenied(); // Stale homepage cache must not expose private covers.
   }

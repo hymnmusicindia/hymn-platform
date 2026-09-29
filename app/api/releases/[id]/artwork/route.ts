@@ -21,7 +21,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   const canReadPrivateArtwork = Boolean(admin) || userIsAdmin || user?.sub === ownerUserId || user?.sub === release.userId;
   // Only covers already featured publicly may bypass owner authentication.
   // Check current status too, since the homepage preview is cached.
-  const isLive = ["live", "partially_live"].includes(String(release.status).toLowerCase()) && !release.archivedAt;
+  const isLive = String(release.status).toLowerCase() === "live" && !release.archivedAt;
   let isPublicShowcaseArtwork = false;
   if (!canReadPrivateArtwork && isLive) {
     // Do not invoke the cached homepage composition from this request. It reads
