@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { AlertCircle, Bell, CheckCircle2, Disc3, Headphones, HelpCircle, LayoutDashboard, LogOut, Menu, Music2, PackageCheck, ShieldCheck, ShoppingCart, UserRound, WalletCards, X } from "lucide-react";
+import { AlertCircle, Bell, CheckCircle2, ChevronDown, Disc3, Headphones, HelpCircle, LayoutDashboard, LogOut, Menu, Music2, PackageCheck, ShieldCheck, ShoppingCart, UserRound, WalletCards, X } from "lucide-react";
 import clsx from "clsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mainNav } from "@/lib/site";
@@ -40,7 +40,7 @@ const presenceOptions: Array<{ value: PresenceStatus; label: string; description
 
 function HeaderCountBadge({ count, mobile = false, max = 99 }: { count: number; mobile?: boolean; max?: number }) {
   if (count <= 0) return null;
-  return <span className={clsx("inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 px-1 text-[10px] font-black leading-none shadow-[0_3px_10px_rgba(0,0,0,.3)]", mobile ? "static ml-auto" : "absolute left-1/2 top-0 ml-1")} style={{ borderColor: "var(--header-bg-solid)", background: "linear-gradient(180deg,var(--accent-strong),var(--accent))", color: "var(--accent-foreground)" }}>{count > max ? `${max}+` : count}</span>;
+  return <span className={clsx("text-[11px] font-black leading-none tracking-[-0.06em] drop-shadow-[0_1px_4px_rgba(0,0,0,.65)]", mobile ? "static ml-auto" : "absolute left-1/2 -top-0.5 ml-1.5")} style={{ color: "var(--money)" }}>{count > max ? `${max}+` : count}</span>;
 }
 
 function notificationTimeAgo(value: string) {
@@ -62,6 +62,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [presence, setPresence] = useState<PresenceStatus>("online");
   const [presenceSaving, setPresenceSaving] = useState(false);
+  const [presenceExpanded, setPresenceExpanded] = useState(false);
   const [appLauncherOpen, setAppLauncherOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [cartCount, setCartCount] = useState(0);
@@ -336,6 +337,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   }
 
   async function updatePresence(next: PresenceStatus) {
+    setPresenceExpanded(false);
     if (presenceSaving || next === presence) return;
     const previous = presence;
     setPresence(next);
@@ -482,7 +484,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
       <div data-profile-menu-root className={clsx("relative", mobile ? "w-full" : "")}>
         <button
           type="button"
-          onClick={() => { setProfileOpen((value) => !value); setAppLauncherOpen(false); setNotificationsOpen(false); }}
+          onClick={() => { setProfileOpen((value) => { const next = !value; if (next) setPresenceExpanded(false); return next; }); setAppLauncherOpen(false); setNotificationsOpen(false); }}
           className={clsx(
             "inline-flex h-11 w-11 items-center justify-center rounded-full text-left transition hover:translate-y-[-1px]",
             mobile ? "w-full justify-start border p-1.5 pr-3" : "border-0 bg-transparent p-0"
@@ -530,14 +532,18 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
               <p className="mt-1 truncate text-xs" style={{ color: "var(--text-muted)" }}>{user.email}</p>
             </div>
             <div className="border-b py-3" style={{ borderColor: "var(--border)" }}>
-              <p className="px-2 text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Profile status</p>
-              <div className="mt-2 grid gap-1">
-                {presenceOptions.map(option => <button key={option.value} type="button" disabled={presenceSaving} onClick={() => updatePresence(option.value)} className={clsx("flex items-center gap-3 rounded-xl px-2.5 py-2 text-left transition hover:bg-white/5 disabled:opacity-60", presence === option.value && "bg-white/[0.06]")} role="menuitemradio" aria-checked={presence === option.value}>
+              <button type="button" onClick={() => setPresenceExpanded(value => !value)} className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition hover:bg-white/5" role="menuitem" aria-expanded={presenceExpanded}>
+                <span className="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full" style={{ background: presence === "online" ? "var(--success)" : presence === "do_not_disturb" ? "var(--danger)" : "var(--text-soft)" }}>{presence === "do_not_disturb" ? <span className="h-[2px] w-2 rounded-full bg-white" /> : presence === "invisible" ? <span className="h-2 w-2 rounded-full bg-[var(--card-strong)]" /> : null}</span>
+                <span className="min-w-0 flex-1"><span className="block text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Profile status</span><strong className="mt-1 block text-xs font-semibold">{presenceOptions.find(option => option.value === presence)?.label}</strong></span>
+                <ChevronDown className={clsx("h-4 w-4 shrink-0 transition-transform", presenceExpanded && "rotate-180")} style={{ color: "var(--text-soft)" }} />
+              </button>
+              {presenceExpanded ? <div className="mt-1 grid gap-1 rounded-xl border p-1.5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+                {presenceOptions.map(option => <button key={option.value} type="button" disabled={presenceSaving} onClick={() => updatePresence(option.value)} className={clsx("flex items-center gap-3 rounded-lg px-2.5 py-2 text-left transition hover:bg-white/5 disabled:opacity-60", presence === option.value && "bg-white/[0.06]")} role="menuitemradio" aria-checked={presence === option.value}>
                   <span className="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full" style={{ background: option.value === "online" ? "var(--success)" : option.value === "do_not_disturb" ? "var(--danger)" : "var(--text-soft)" }}>{option.value === "do_not_disturb" ? <span className="h-[2px] w-2 rounded-full bg-white" /> : option.value === "invisible" ? <span className="h-2 w-2 rounded-full bg-[var(--card-strong)]" /> : null}</span>
                   <span className="min-w-0 flex-1"><strong className="block text-xs font-semibold">{option.label}</strong><span className="mt-0.5 block text-[10px]" style={{ color: "var(--text-soft)" }}>{option.description}</span></span>
                   {presence === option.value ? <CheckCircle2 className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} /> : null}
                 </button>)}
-              </div>
+              </div> : null}
             </div>
             <div className="mt-3 grid gap-1">
               <Link href={user.role === "producer" ? "/producer/dashboard" : "/dashboard"} onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-white/5">

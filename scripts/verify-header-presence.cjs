@@ -59,12 +59,16 @@ async function main() {
     }
 
     await page.locator("[data-profile-menu-root] > button").first().click();
+    await page.getByRole("menuitem", { name: /Profile status Online/ }).click();
     await page.getByRole("menuitemradio", { name: /Do Not Disturb/ }).click();
     assert.deepEqual(updates.at(-1), { presence: "do_not_disturb" });
     await page.locator('[aria-label="Do Not Disturb"]:visible').waitFor();
+    assert.equal(await page.getByRole("menuitemradio").count(), 0, "Presence choices should collapse after selection");
+    await page.getByRole("menuitem", { name: /Profile status Do Not Disturb/ }).click();
     await page.getByRole("menuitemradio", { name: /Invisible/ }).click();
     assert.deepEqual(updates.at(-1), { presence: "invisible" });
     await page.locator('[aria-label="Invisible"]:visible').waitFor();
+    assert.equal(await page.getByRole("menuitemradio").count(), 0, "Presence choices should collapse after selection");
     await page.screenshot({ path: path.join(output, "header-presence.png") });
     console.log(`Header badge placement and persisted presence controls passed. Preview: ${output}`);
   } finally {
