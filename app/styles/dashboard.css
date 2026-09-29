@@ -1768,7 +1768,7 @@ html[data-theme="dark"] .distribution-store-logo {
 
 .home-store-logo {
   filter: grayscale(1);
-  opacity: .28;
+  opacity: .42;
 }
 
 html[data-theme="dark"] .home-store-logo {
