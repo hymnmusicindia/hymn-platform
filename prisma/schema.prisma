@@ -1646,6 +1646,39 @@ model EmailLog {
   @@map("email_logs")
 }
 
+model NewsletterSubscriber {
+  id               Int       @id @default(autoincrement())
+  email            String    @unique
+  status           String    @default("subscribed")
+  source           String    @default("website")
+  consentAt        DateTime  @default(now()) @map("consent_at")
+  unsubscribedAt   DateTime? @map("unsubscribed_at")
+  unsubscribeToken String    @unique @map("unsubscribe_token")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@map("newsletter_subscribers")
+}
+
+model NewsletterCampaign {
+  id             Int       @id @default(autoincrement())
+  subject        String
+  html           String
+  text           String
+  status         String    @default("draft")
+  recipientCount Int       @default(0) @map("recipient_count")
+  sentCount      Int       @default(0) @map("sent_count")
+  failedCount    Int       @default(0) @map("failed_count")
+  cursorId       Int       @default(0) @map("cursor_id")
+  createdById    Int?      @map("created_by_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  sentAt         DateTime? @map("sent_at")
+
+  @@index([status, createdAt])
+  @@map("newsletter_campaigns")
+}
+
 model Subscription {
   id                     Int                        @id @default(autoincrement())
   userId                 Int                        @unique @map("user_id")

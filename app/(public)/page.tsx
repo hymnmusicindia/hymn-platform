@@ -10,7 +10,6 @@ import {
   Instagram,
   LineChart,
   Linkedin,
-  Music2,
   Twitter,
   Youtube,
 } from "lucide-react";
@@ -18,6 +17,7 @@ import type { LucideIcon } from "lucide-react";
 import { FloatingAssistant } from "@/components/floating-assistant";
 import { AnimatedHeroMetrics } from "@/components/animated-hero-metrics";
 import { GoogleAuthButton } from "@/components/google-auth-button";
+import { HomeNewsletter } from "@/components/home-newsletter";
 import { beatStoreReviews, buildBeatStorefront } from "@/lib/beat-store";
 import { getPublicHomePreview } from "@/lib/public-home-data";
 import { getSession } from "@/lib/session";
@@ -363,22 +363,20 @@ export default async function HomePage() {
             <h2 className="max-w-sm text-2xl font-medium leading-tight tracking-[-0.03em] text-white sm:text-3xl">
               Subscribe to our newsletter<br className="hidden sm:block" /> for updates
             </h2>
-            <form className="flex w-full max-w-md overflow-hidden rounded-md border border-[#a4f800] bg-white shadow-[0_0_0_1px_rgba(164,248,0,0.18)]" action="/contact" method="get">
-              <label className="sr-only" htmlFor="home-newsletter-email">Email address</label>
-              <input id="home-newsletter-email" name="email" type="email" required placeholder="Enter your email" className="min-w-0 flex-1 border-0 bg-white px-4 py-3 text-sm text-[#131313] outline-none placeholder:text-[#777]" />
-              <button type="submit" className="shrink-0 bg-[#9af000] px-5 py-3 text-sm font-medium text-[#121212] transition-colors hover:bg-[#b3ff31]">Subscribe</button>
-            </form>
+            <HomeNewsletter />
           </div>
 
           <div className="my-9 h-px bg-white/[0.055] sm:my-11" />
 
           <div className="flex flex-col gap-7 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3 text-xl font-semibold tracking-[-0.04em] text-white">
-              <span className="grid h-8 w-11 place-items-center text-[#9af000]" aria-hidden="true"><Music2 className="h-7 w-7" strokeWidth={2.4} /></span>
-              HYMN MUSIC
-            </div>
+            <Image src="/assets/hymnlogowhite.png" alt="HYMN Music" width={164} height={56} className="h-10 w-auto object-contain" />
             <div className="flex items-center gap-6 text-white sm:gap-7" aria-label="HYMN social channels">
-              {[Instagram, Twitter, Music2, Linkedin, Youtube].map((Icon, index) => <span key={index} className="grid h-8 w-8 place-items-center"><Icon className="h-5 w-5" strokeWidth={2.2} /></span>)}
+              {[
+                ["Instagram", "https://instagram.com/hymnmusicindia", Instagram],
+                ["X", "https://x.com/hymnmusicindia", Twitter],
+                ["LinkedIn", "https://linkedin.com/company/hymnmusicindia", Linkedin],
+                ["YouTube", "https://youtube.com/@hymnmusicindia", Youtube]
+              ].map(([label, href, Icon]) => { const SocialIcon = Icon as typeof Instagram; return <a key={label as string} href={href as string} target="_blank" rel="noreferrer" aria-label={label as string} className="grid h-8 w-8 place-items-center transition-opacity hover:opacity-70"><SocialIcon className="h-5 w-5" strokeWidth={2.2} /></a>; })}
             </div>
           </div>
         </div>
