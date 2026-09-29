@@ -7,6 +7,7 @@ import { ArrowDown, ArrowLeft, ArrowRight, Check, ChevronDown, Disc3, ExternalLi
 import { beatLicenseLabel, beatLicensePrice, buildBeatStorefront, normalizeBeatLicenseType, type BeatStoreLicenseType, type StorefrontBeat } from "@/lib/beat-store";
 import type { Beat, ProducerProfile } from "@/lib/types";
 import { BeatCard } from "@/components/beat-card";
+import { BeatStoreHero } from "@/components/beat-store-hero";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import { useBeatPreviewPlayer } from "@/components/beat-preview-player";
 
@@ -633,7 +634,18 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
       </div>
 
       <section className="mx-auto max-w-[1700px] pb-10 pt-0 lg:pb-14">
-        <section className="relative mb-6 overflow-hidden rounded-[2rem] border border-[var(--border)] bg-[var(--text)] text-[var(--bg)] shadow-[0_22px_70px_rgba(0,0,0,.18)]">
+        <BeatStoreHero
+          moods={quickMoods}
+          producer={spotlightProducer}
+          onMood={(mood) => findMyBeat(mood)}
+          onSurprise={() => findMyBeat()}
+          onFinder={() => setBeatFinderOpen(true)}
+          onProducer={() => {
+            if (spotlightProducer) setSelectedProducerSlug(spotlightProducer.slug);
+            document.getElementById("beat-catalog")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
+        />
+        <section className="hidden">
           <div className="pointer-events-none absolute -right-20 -top-36 h-96 w-96 rounded-full border-[70px] border-[color-mix(in_srgb,var(--accent)_42%,transparent)] opacity-75" />
           <div className="pointer-events-none absolute bottom-[-8rem] right-[22%] h-72 w-72 rounded-full border border-white/10" />
           <div className="relative grid gap-8 p-6 sm:p-9 lg:grid-cols-[1.1fr_.9fr] lg:items-end lg:p-12">
