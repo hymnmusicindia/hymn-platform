@@ -83,18 +83,13 @@ export default async function HomePage() {
   const [{ beats, producerProfiles, googleAvatarUrls, featuredReviews, featuredReleases }, session] = await Promise.all([getPublicHomePreview(), getSession()]);
   const { catalog } = buildBeatStorefront(beats, producerProfiles);
   const homepageShowcaseReleases = [...featuredReleases];
-  for (let index = homepageShowcaseReleases.length - 1; index > 0; index--) {
-    const randomIndex = Math.floor(Math.random() * (index + 1));
-    [homepageShowcaseReleases[index], homepageShowcaseReleases[randomIndex]] = [homepageShowcaseReleases[randomIndex], homepageShowcaseReleases[index]];
-  }
   const showcaseRows = ["left", "static", "right"].map((direction, rowIndex) => {
-    const items = homepageShowcaseReleases.filter((_, index) => index % 3 === rowIndex);
-    const source = items.length ? items : homepageShowcaseReleases;
+    const source = homepageShowcaseReleases;
     return {
       direction,
-      items: direction !== "static" && source.length
-        ? Array.from({ length: Math.max(8, source.length) }, (_, index) => source[index % source.length])
-        : source
+      // Each row starts at a different release and cycles the complete set, so
+      // featured cards alternate instead of a row repeating one artwork.
+      items: source.length ? Array.from({ length: Math.max(8, source.length * 2) }, (_, index) => source[(index + rowIndex) % source.length]) : []
     };
   });
   return (
