@@ -318,7 +318,7 @@ export default async function HomePage() {
             <h2 className="max-w-sm text-2xl font-medium leading-tight tracking-[-0.03em] text-white sm:text-3xl">
               Subscribe to our newsletter<br className="hidden sm:block" /> for updates
             </h2>
-            <HomeNewsletter />
+            <HomeNewsletter accountEmail={session?.email} />
           </div>
 
           <div className="my-9 h-px bg-white/[0.055] sm:my-11" />
