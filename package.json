@@ -7,9 +7,9 @@
   },
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "prisma generate && next build",
-    "build:release": "prisma generate && tsx scripts/deploy-production-migrations.ts && next build",
-    "vercel-build": "prisma generate && tsx scripts/verify-direnote-schema.ts --production-build && next build",
+    "build": "prisma generate && next build --webpack",
+    "build:release": "prisma generate && tsx scripts/deploy-production-migrations.ts && next build --webpack",
+    "vercel-build": "prisma generate && tsx scripts/verify-direnote-schema.ts --production-build && next build --webpack",
     "deploy:release": "tsx scripts/deploy-production-migrations.ts",
     "start": "tsx scripts/start-production.ts",
     "db:generate": "prisma generate",
