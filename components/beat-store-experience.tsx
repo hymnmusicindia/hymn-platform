@@ -576,25 +576,25 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
       </div>
 
       <section className="mx-auto max-w-[1700px] pb-10 pt-0 lg:pb-14">
-        <div className="mb-10 sm:mb-14">
-          <div key={selectedProducer?.slug ?? "all-producers"} className="fade-up mt-3 overflow-hidden rounded-[1.75rem] border border-[var(--border)] bg-[var(--card)] shadow-[0_22px_65px_rgba(0,0,0,0.14)] sm:rounded-[2rem]">
-            <div className="grid md:min-h-[420px] md:grid-cols-2">
-              <div key={spotlightProducer?.slug ?? "producer-room"} className="producer-spotlight-enter relative z-10 flex flex-col justify-center bg-[var(--card)] p-6 sm:p-9 lg:p-12">
+        <div className="mb-6">
+          <div key={selectedProducer?.slug ?? "all-producers"} className="fade-up mt-3 overflow-hidden rounded-[1.75rem] border border-[var(--border)] bg-[var(--card)] shadow-[0_16px_45px_rgba(0,0,0,0.1)]">
+            <div className="grid md:min-h-[230px] md:grid-cols-[1.35fr_.65fr]">
+              <div key={spotlightProducer?.slug ?? "producer-room"} className="producer-spotlight-enter relative z-10 flex flex-col justify-center bg-[var(--card)] p-6 sm:p-8">
                 {selectedProducer ? <p className="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">Producer spotlight</p> : null}
-                <h3 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-[var(--text)] sm:text-5xl">{spotlightProducer ? spotlightProducer.name || "Unnamed producer" : "Explore beats from every producer."}</h3>
-                <p className="mt-4 max-w-xl text-sm leading-6 text-[var(--text-muted)] sm:text-base sm:leading-7">
+                <h3 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[var(--text)] sm:text-4xl">{spotlightProducer ? spotlightProducer.name || "Unnamed producer" : "Find the beat. Build the record."}</h3>
+                <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--text-muted)]">
                   {spotlightProducer ? spotlightProducer.description || `${spotlightProducer.specialty || "Distinctive sounds"}, shaped for artists building their next release.` : "Move across distinct sounds, moods, and creative perspectives to find the right foundation for your next record."}
                 </p>
-                 <div className="mt-7">
-                   {!producerDetailsOpen ? <button type="button" onClick={() => { if (spotlightProducer) setSelectedProducerSlug(spotlightProducer.slug); setProducerDetailsOpen(true); }} className="btn-primary inline-flex">{spotlightProducer ? `Explore ${spotlightProducer.name || "producer"} beats` : "Explore all beats"}<ArrowDown className="ml-2 h-4 w-4" /></button> : <div className="producer-connect-panel rounded-[1.35rem] border border-[var(--border)] bg-[var(--bg-soft)] p-4 sm:p-5">
+                 <div className="mt-5 flex flex-wrap items-center gap-3">
+                   {!producerDetailsOpen ? <button type="button" onClick={() => { if (spotlightProducer) setSelectedProducerSlug(spotlightProducer.slug); setProducerDetailsOpen(true); }} className="btn-primary inline-flex">Browse catalog<ArrowDown className="ml-2 h-4 w-4" /></button> : <div className="producer-connect-panel rounded-[1.35rem] border border-[var(--border)] bg-[var(--bg-soft)] p-4 sm:p-5">
                      <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-[var(--text-soft)]">Connect with {spotlightProducer?.name || "producer"}</p><a href="#beat-catalog" className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--text)] transition hover:text-[var(--accent)]">View beats <ArrowDown className="h-3.5 w-3.5" /></a></div>
                      {producerSocials.length ? <div className="mt-3 flex flex-wrap gap-2">{producerSocials.map((social) => <a key={social.label} href={social.href!} target="_blank" rel="noreferrer" className="group inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--card)] px-3.5 py-2 text-xs font-semibold text-[var(--text)] shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-md" aria-label={`Open ${spotlightProducer?.name || "producer"} on ${social.label}`}>{social.icon}<span>{social.label}</span><ExternalLink className="h-3 w-3 text-[var(--text-soft)] transition group-hover:text-[var(--text)]" /></a>)}</div> : <p className="mt-3 text-xs leading-5 text-[var(--text-muted)]">This producer has not added public social links yet.</p>}
                      {otherProducers.length ? <div className="mt-4 border-t border-[var(--border)] pt-4"><p className="text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-[var(--text-soft)]">Discover another producer</p><div className="mt-2.5 flex flex-wrap gap-2">{otherProducers.map((producer) => <button key={producer.slug} type="button" onClick={() => { setSelectedProducerSlug(producer.slug); setPreviewProducerIndex(Math.max(0, displayProducerProfiles.findIndex((item) => item.slug === producer.slug))); }} className="group inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--card)] py-1.5 pl-1.5 pr-3 text-left transition hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-md" aria-label={`Show ${producer.name || "producer"}`}><span className="relative h-7 w-7 shrink-0 overflow-hidden rounded-full bg-[var(--surface)] ring-1 ring-[var(--border)]"><img src={producer.avatarUrl || producer.imageUrl || getFallbackImage(producer.id)} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" onError={(event) => replaceBrokenImage(event, getFallbackImage(producer.id))} /></span><span className="max-w-28 truncate text-xs font-semibold text-[var(--text)]">{producer.name || "Producer"}</span></button>)}</div></div> : null}
-                   </div>}
+                   </div>}<Link href="/producer-login" className="btn-outline inline-flex">Sell your beats</Link>
                  </div>
               </div>
-              <div className="flex min-h-[390px] flex-col overflow-hidden border-t border-[var(--border)] bg-[var(--bg-soft)] md:min-h-0 md:border-l md:border-t-0">
-                <div className="relative min-h-[320px] flex-1 overflow-hidden bg-[radial-gradient(circle_at_60%_32%,color-mix(in_srgb,var(--accent)_16%,var(--bg-soft)),var(--bg-soft)_65%)]">
+              <div className="hidden min-h-0 flex-col overflow-hidden border-l border-[var(--border)] bg-[var(--bg-soft)] md:flex">
+                <div className="relative min-h-[230px] flex-1 overflow-hidden bg-[radial-gradient(circle_at_60%_32%,color-mix(in_srgb,var(--accent)_16%,var(--bg-soft)),var(--bg-soft)_65%)]">
                   {selectedProducer || previewProducer ? (
                     <img
                       key={(selectedProducer ?? previewProducer)?.slug}
@@ -688,7 +688,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
               </div>
             ) : null}
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-2.5">
               {visibleBeats.map((beat) => (
                 <BeatCard
                   key={beat.id}

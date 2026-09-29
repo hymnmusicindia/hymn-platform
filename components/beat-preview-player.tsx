@@ -148,7 +148,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
         aria-modal="true"
         aria-label={`Licence ${beat.title}`}
         tabIndex={-1}
-        className="absolute inset-x-0 bottom-0 mx-auto max-h-[92svh] w-full max-w-5xl overflow-y-auto overscroll-contain rounded-t-[2rem] border border-white/10 bg-[var(--bg)] p-4 pb-28 shadow-[0_-24px_90px_rgba(0,0,0,0.45)] outline-none sm:bottom-6 sm:max-h-[min(820px,88svh)] sm:rounded-[2rem] sm:p-6 sm:pb-28"
+        className="absolute bottom-0 right-0 top-0 max-h-none w-full max-w-xl overflow-y-auto overscroll-contain border-l border-white/10 bg-[var(--bg)] p-4 pb-28 shadow-[-24px_0_90px_rgba(0,0,0,0.4)] outline-none sm:p-6 sm:pb-28"
       >
         <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-white/18 sm:hidden" />
         <div className="flex items-start justify-between gap-3">
@@ -163,7 +163,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
           <button type="button" onClick={(event) => close(event)} className="sticky top-0 z-20 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--text)] shadow-lg" aria-label="Close licensing options"><X className="h-4 w-4" /></button>
         </div>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <div className="mt-5 grid gap-2">
           {options.map((option) => {
             const active = selected === option.purchasableKey;
             return (
@@ -172,7 +172,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
                 type="button"
                 disabled={option.disabled}
                 onClick={() => onSelect(option.purchasableKey)}
-                className={`min-h-44 rounded-[1.35rem] border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${active ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_18%,transparent)]" : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--border-strong)]"}`}
+                className={`rounded-[1.1rem] border p-3.5 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${active ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_18%,transparent)]" : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--border-strong)]"}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -182,7 +182,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
                   </div>
                   <span className={`grid h-7 w-7 place-items-center rounded-full border ${active ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--bg)]" : "border-[var(--border)]"}`}>{active ? <Check className="h-4 w-4" /> : null}</span>
                 </div>
-                <div className="mt-4 grid gap-2 text-xs text-[var(--text-muted)]">
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-muted)]">
                   <span>{option.delivery}</span>
                   <span>{option.streamLimit}</span>
                   <span>{option.exclusive ? "Exclusive after purchase" : "Beat remains available"}</span>
@@ -205,7 +205,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
           </div>
         </section>
 
-        <div className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-5xl border-t border-[var(--border)] bg-[var(--bg)] p-4 shadow-[0_-18px_48px_rgba(0,0,0,0.32)] sm:bottom-6 sm:flex sm:items-center sm:justify-between sm:gap-4 sm:rounded-b-[2rem] sm:px-6">
+        <div className="fixed bottom-0 right-0 z-20 w-full max-w-xl border-t border-[var(--border)] bg-[var(--bg)] p-4 shadow-[0_-18px_48px_rgba(0,0,0,0.32)] sm:flex sm:items-center sm:justify-between sm:gap-4 sm:px-6">
           <p className="mb-3 text-sm text-[var(--text-muted)] sm:mb-0">Selected: <span className="font-semibold text-[var(--text)]">{selectedOption.title}</span> · {formatMoney(selectedOption.price)}</p>
           <div className="grid gap-2 sm:flex">
             <button type="button" onClick={addToCart} className="btn-outline pressable"><ShoppingBag className="mr-2 h-4 w-4" />Add to Cart</button>
