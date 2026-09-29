@@ -1766,6 +1766,12 @@ html[data-theme="dark"] .distribution-store-logo {
   opacity: 1;
 }
 
+.home-store-logo,
+html[data-theme="dark"] .home-store-logo {
+  filter: grayscale(1) invert(1);
+  opacity: .2;
+}
+
 @media (max-width: 768px) {
   .distribution-map-grid path {
     animation-duration: 13s;

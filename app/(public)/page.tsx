@@ -164,16 +164,11 @@ export default async function HomePage() {
               Connected To The Global Music Ecosystem
             </h2>
           </div>
-          <div className="mt-7 overflow-hidden rounded-2xl border"
-            style={{
-              borderColor: "color-mix(in srgb, var(--glass-border) 82%, transparent)",
-              background: "rgba(255, 255, 255, 0.96)"
-            }}
-          >          
+          <div className="mt-7 overflow-hidden rounded-2xl bg-[linear-gradient(90deg,#090909_0%,#111113_50%,#090909_100%)]">
             <div className="marquee-row music-store-marquee items-center gap-12 px-8 py-5 sm:gap-16">
               {storeLogoMarquee.map((item, index) => (
                 <div key={`${item.name}-${index}`} className="inline-flex h-12 w-36 shrink-0 items-center justify-center" title={item.name}>
-                  <Image src={item.src} alt={item.name} width={144} height={48} className={`distribution-store-logo ${item.className}`} />
+                  <Image src={item.src} alt={item.name} width={144} height={48} className={`distribution-store-logo home-store-logo ${item.className}`} />
                 </div>
               ))}
             </div>
