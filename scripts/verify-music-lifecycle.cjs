@@ -28,33 +28,27 @@ async function main() {
     await page.addStyleTag({ content: globalCss.css });
     await page.addStyleTag({ path: path.join(output, "banner.css") });
     await page.addScriptTag({ path: path.join(output, "banner.js") });
-    await page.getByRole("heading", { name: /Your next big beginning/ }).waitFor();
-    assert.equal(await page.getByRole("link", { name: "Find my beat" }).getAttribute("href"), "/beat-store");
-    await page.locator("section").screenshot({ path: path.join(output, "desktop.png") });
-    await page.getByRole("tab", { name: /Find your beat/ }).focus();
-    await page.keyboard.press("ArrowRight");
-    assert.equal(await page.getByRole("tab", { name: /Mix & master/ }).getAttribute("aria-selected"), "true");
-    assert.equal(await page.getByRole("link", { name: "Explore Studio at standard pricing" }).getAttribute("href"), "/studio");
-    await page.keyboard.press("End");
-    assert.equal(await page.getByRole("link", { name: "Explore standard distribution pricing" }).getAttribute("href"), "/distribution");
-    assert.equal(await page.getByRole("link", { name: "Start with a beat to claim offers" }).getAttribute("href"), "/beat-store");
+    await page.getByRole("heading", { name: "Your sound. Release-ready." }).waitFor();
+    assert.equal(await page.getByRole("link", { name: "Start with a beat", exact: true }).getAttribute("href"), "/beat-store");
+    assert.equal(await page.getByRole("link", { name: /Explore mixing/ }).getAttribute("href"), "/studio");
+    assert.equal(await page.getByRole("link", { name: /Explore distribution/ }).getAttribute("href"), "/distribution");
     assert.equal(await page.getByRole("link", { name: "T&C apply." }).getAttribute("href"), "/terms-of-service");
-    assert.equal(await page.getByRole("slider").count(), 0);
-    await page.getByText(/Direct service orders use standard pricing/).waitFor();
-    await page.locator("section").screenshot({ path: path.join(output, "distribution.png") });
+    assert.equal(await page.getByRole("tab").count(), 0);
+    await page.getByText(/Otherwise, standard pricing applies/).waitFor();
     for (const theme of ["light", "dark"]) {
-    await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
-    for (const width of [375, 768, 1440]) {
-      await page.setViewportSize({ width, height: 1000 });
-      for (const name of [/Find your beat/, /Mix & master/, /Release worldwide/]) {
-        await page.getByRole("tab", { name }).click();
-        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Overflow at ${width}`);
-        assert.equal(await page.getByRole("tabpanel").count(), 1);
+      await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+      for (const width of [320, 375, 768, 1440]) {
+        await page.setViewportSize({ width, height: 1000 });
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Horizontal overflow at ' + width);
+        const bounds = await page.locator("section").boundingBox();
+        assert.ok(bounds.height < 510, 'Banner should remain compact at ' + width);
+        for (const name of ["Buy your beat", "Mix & master", "Release worldwide"]) await page.getByRole("heading", { name, exact: true }).waitFor();
+        await page.locator("section").screenshot({ path: path.join(output, theme + '-' + width + '.png') });
       }
-      if (width === 375) await page.locator("section").screenshot({ path: path.join(output, `${theme}-mobile.png`) });
     }
-    await page.locator("section").screenshot({ path: path.join(output, `${theme}-desktop.png`) });
-    }
+    await page.getByRole("link", { name: "Start with a beat", exact: true }).focus();
+    await page.keyboard.press("Tab");
+    assert.ok(await page.getByRole("link", { name: /Buy a beat from HYMN/ }).evaluate(el => el === document.activeElement));
     assert.deepEqual(errors, []);
     console.log(`Lifecycle interactions, offer entry links, theme layouts, keyboard navigation and responsive checks passed. Previews: ${output}`);
   } finally { await browser.close(); }
