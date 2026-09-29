@@ -158,20 +158,18 @@ export default async function HomePage() {
       </section>
 
       <section className="shell py-10 sm:py-14">
-        <div className="rounded-[2rem] border border-border bg-surface/72 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.3)] backdrop-blur-2xl sm:p-7">
-          <div className="flex justify-center py-2 text-center sm:py-4">
-            <h2 className="text-balance text-[clamp(1.05rem,3vw,2.25rem)] font-bold leading-tight tracking-[-0.04em] text-[var(--text)] sm:whitespace-nowrap sm:leading-none" style={{ fontFamily: '"Avenir Next", "Century Gothic", "Segoe UI Variable Display", "Segoe UI", sans-serif' }}>
-              Connected To The Global Music Ecosystem
-            </h2>
-          </div>
-          <div className="mt-7 overflow-hidden rounded-2xl bg-[linear-gradient(90deg,#090909_0%,#111113_50%,#090909_100%)]">
-            <div className="marquee-row music-store-marquee items-center gap-12 px-8 py-5 sm:gap-16">
-              {storeLogoMarquee.map((item, index) => (
-                <div key={`${item.name}-${index}`} className="inline-flex h-12 w-36 shrink-0 items-center justify-center" title={item.name}>
-                  <Image src={item.src} alt={item.name} width={144} height={48} className={`distribution-store-logo home-store-logo ${item.className}`} />
-                </div>
-              ))}
-            </div>
+        <div className="py-2 sm:py-4">
+          <h2 className="text-center text-balance text-[clamp(1.05rem,3vw,2.25rem)] font-bold leading-tight tracking-[-0.04em] text-[var(--text)] sm:whitespace-nowrap sm:leading-none" style={{ fontFamily: '"Avenir Next", "Century Gothic", "Segoe UI Variable Display", "Segoe UI", sans-serif' }}>
+            Connected To The Global Music Ecosystem
+          </h2>
+        </div>
+        <div className="home-store-marquee-shell mt-7 overflow-hidden rounded-2xl bg-[linear-gradient(90deg,#050505_0%,#151518_50%,#050505_100%)]">
+          <div className="marquee-row music-store-marquee items-center gap-12 px-8 py-5 sm:gap-16">
+            {storeLogoMarquee.map((item, index) => (
+              <div key={`${item.name}-${index}`} className="inline-flex h-12 w-36 shrink-0 items-center justify-center" title={item.name}>
+                <Image src={item.src} alt={item.name} width={144} height={48} className={`distribution-store-logo home-store-logo ${item.className}`} />
+              </div>
+            ))}
           </div>
         </div>
       </section>
