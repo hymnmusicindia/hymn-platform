@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowDown, Check, ChevronDown, Disc3, ExternalLink, Filter, Gauge, Globe2, Headphones, Instagram, Music2, Search, ShoppingBag, Sparkles, Users2, WandSparkles, X, Youtube } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, Check, ChevronDown, Disc3, ExternalLink, Filter, Gauge, Globe2, Headphones, Instagram, Music2, Search, ShoppingBag, Sparkles, Users2, WandSparkles, X, Youtube } from "lucide-react";
 import { beatLicenseLabel, beatLicensePrice, buildBeatStorefront, normalizeBeatLicenseType, type BeatStoreLicenseType, type StorefrontBeat } from "@/lib/beat-store";
 import type { Beat, ProducerProfile } from "@/lib/types";
 import { BeatCard } from "@/components/beat-card";
@@ -201,14 +201,14 @@ function MobileFiltersModal({
 }) {
   const dialogRef = useAccessibleDialog(open, onClose);
   return (
-    <div className={`fixed inset-0 z-40 lg:hidden transition ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
+    <div className={`fixed inset-0 z-40 transition ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
       <button
         type="button"
         onClick={onClose}
         className={`absolute inset-0 bg-black/50 transition-opacity duration-200 ${open ? "opacity-100" : "opacity-0"}`}
         aria-label="Close filters"
       />
-      <div ref={dialogRef as React.RefObject<HTMLDivElement | null>} role="dialog" aria-modal="true" aria-labelledby="beat-filter-title" tabIndex={-1} className={`absolute inset-x-0 bottom-0 max-h-[92vh] overflow-y-auto rounded-t-[28px] border border-[var(--border)] bg-[var(--bg)] p-4 shadow-[0_-24px_80px_rgba(0,0,0,0.3)] transition-transform duration-300 ${open ? "translate-y-0" : "translate-y-full"}`}>
+      <div ref={dialogRef as React.RefObject<HTMLDivElement | null>} role="dialog" aria-modal="true" aria-labelledby="beat-filter-title" tabIndex={-1} className={`absolute inset-x-0 bottom-0 max-h-[92vh] overflow-y-auto rounded-t-[28px] border border-[var(--border)] bg-[var(--bg)] p-4 shadow-[0_-24px_80px_rgba(0,0,0,0.3)] transition duration-300 sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:max-w-2xl sm:rounded-[28px] sm:p-6 ${open ? "translate-y-0 opacity-100 sm:-translate-x-1/2 sm:-translate-y-1/2" : "translate-y-full opacity-0 sm:-translate-x-1/2 sm:translate-y-[-45%]"}`}>
         <div className="mx-auto mb-4 h-1.5 w-16 rounded-full bg-[var(--border)]" />
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
@@ -223,6 +223,45 @@ function MobileFiltersModal({
       </div>
     </div>
   );
+}
+
+function BeatFinderWizard({ open, genres, moods, onClose, onApply }: { open: boolean; genres: string[]; moods: string[]; onClose: () => void; onApply: (value: { genre: string; mood: string; min: number; max: number; budget: number | null }) => void }) {
+  const dialogRef = useAccessibleDialog(open, onClose);
+  const [step, setStep] = useState(0);
+  const [genre, setGenre] = useState("");
+  const [mood, setMood] = useState("");
+  const [tempo, setTempo] = useState("mid");
+  const [budget, setBudget] = useState("any");
+  useEffect(() => { if (open) setStep(0); }, [open]);
+  if (!open) return null;
+  const tempoValues: Record<string, [number, number]> = { slow: [60, 89], mid: [90, 119], fast: [120, 149], wild: [150, 180] };
+  const steps = [
+    { eyebrow: "Start with the sound", title: "What lane are we in?", note: "Choose the closest fit. You can fine-tune it later.", options: genres.slice(0, 8), value: genre, set: setGenre },
+    { eyebrow: "Set the feeling", title: "What should the first bar feel like?", note: "The mood matters more than a perfect label.", options: moods.slice(0, 8), value: mood, set: setMood },
+    { eyebrow: "Find the pocket", title: "How should it move?", note: "No metronome maths needed.", options: ["slow", "mid", "fast", "wild"], value: tempo, set: setTempo },
+    { eyebrow: "Keep it practical", title: "What’s your beat budget?", note: "We’ll only show options that make sense.", options: ["₹500", "₹1,000", "₹2,500", "any"], value: budget, set: setBudget }
+  ];
+  const current = steps[step];
+  const done = step === steps.length - 1;
+  const apply = () => {
+    const [min, max] = tempoValues[tempo];
+    onApply({ genre, mood, min, max, budget: budget === "any" ? null : Number(budget.replace(/[^0-9]/g, "")) });
+    onClose();
+  };
+  return <div className="fixed inset-0 z-[2147483550] grid place-items-center p-3 sm:p-6">
+    <button type="button" onClick={onClose} className="absolute inset-0 bg-black/70 backdrop-blur-md" aria-label="Close beat finder" />
+    <section ref={dialogRef as React.RefObject<HTMLElement | null>} role="dialog" aria-modal="true" aria-labelledby="beat-finder-title" tabIndex={-1} className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] border border-white/10 bg-[var(--bg)] shadow-[0_30px_100px_rgba(0,0,0,.55)]">
+      <div className="h-1 bg-[var(--border)]"><div className="h-full bg-[var(--accent)] transition-all duration-500" style={{ width: `${((step + 1) / steps.length) * 100}%` }} /></div>
+      <div className="p-6 sm:p-9">
+        <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-[.22em] text-[var(--accent)]">{current.eyebrow} · {step + 1}/{steps.length}</p><h2 id="beat-finder-title" className="mt-3 text-3xl font-semibold tracking-[-.04em] text-[var(--text)]">{current.title}</h2><p className="mt-2 text-sm text-[var(--text-muted)]">{current.note}</p></div><button type="button" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[var(--border)]"><X className="h-4 w-4" /></button></div>
+        <div className="mt-7 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {current.options.map((option) => { const chosen = current.value === option; return <button key={option} type="button" onClick={() => current.set(option)} className={`min-h-20 rounded-2xl border p-3 text-left text-sm font-semibold capitalize transition hover:-translate-y-0.5 ${chosen ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text)] shadow-[inset_0_-3px_0_var(--accent)]" : "border-[var(--border)] bg-[var(--card)] text-[var(--text-muted)] hover:border-[var(--border-strong)]"}`}>{option === "mid" ? "In the pocket" : option === "wild" ? "Full energy" : option}<span className="mt-3 block text-[10px] font-normal text-[var(--text-soft)]">{step === 2 ? option === "slow" ? "60–89 BPM" : option === "mid" ? "90–119 BPM" : option === "fast" ? "120–149 BPM" : "150+ BPM" : chosen ? "That’s the one" : "Pick this"}</span></button>; })}
+        </div>
+        <div className="mt-8 flex items-center justify-between"><button type="button" onClick={() => step ? setStep(step - 1) : onClose()} className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--text-muted)]"><ArrowLeft className="h-4 w-4" />{step ? "Back" : "Maybe later"}</button><button type="button" disabled={!current.value} onClick={() => done ? apply() : setStep(step + 1)} className="btn-primary min-w-36 justify-center disabled:opacity-40">{done ? "Show my matches" : "Next"}<ArrowRight className="ml-2 h-4 w-4" /></button></div>
+      </div>
+      <div className="border-t border-[var(--border)] bg-[var(--bg-soft)] px-6 py-3 text-center text-xs italic text-[var(--text-soft)]">Built like a conversation with the friend who always sends the right beat.</div>
+    </section>
+  </div>;
 }
 
 
@@ -252,6 +291,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
   const beatPlayer = useBeatPreviewPlayer();
   const [cartOpen, setCartOpen] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [beatFinderOpen, setBeatFinderOpen] = useState(false);
   const [visibleCount, setVisibleCount] = useState(initialVisibleCount);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
@@ -460,6 +500,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
     setBpmMax(180);
     setDraftBpmMin(60);
     setDraftBpmMax(180);
+    setOnboardingBudgetMax(null);
   };
 
   const filterContent = (
@@ -570,6 +611,13 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
       />
 
       <MobileFiltersModal open={mobileFiltersOpen} onClose={() => setMobileFiltersOpen(false)} content={<div className="space-y-3">{filterContent}</div>} />
+      <BeatFinderWizard open={beatFinderOpen} genres={genres} moods={moods} onClose={() => setBeatFinderOpen(false)} onApply={({ genre, mood, min, max, budget }) => {
+        setSelectedGenres(genre ? [genre] : []);
+        setSelectedMoods(mood ? [mood] : []);
+        setBpmMin(min); setBpmMax(max); setDraftBpmMin(min); setDraftBpmMax(max);
+        setOnboardingBudgetMax(budget);
+        window.setTimeout(() => document.getElementById("beat-catalog")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+      }} />
 
       <div
         role="status"
@@ -592,10 +640,12 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
             <div>
               <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.24em] opacity-60"><Headphones className="h-4 w-4" />The HYMN Beat Store</div>
               <h1 className="mt-5 max-w-3xl text-4xl font-semibold leading-[.95] tracking-[-.055em] sm:text-6xl">Don’t browse forever.<br /><span className="text-[var(--accent)]">Hear your record.</span></h1>
-              <p className="mt-5 max-w-xl text-sm leading-6 opacity-65 sm:text-base">Pick a feeling. We’ll cue a beat, then show the licence that fits how you plan to release it.</p>
+              <p className="mt-5 max-w-xl text-sm leading-6 opacity-65 sm:text-base">Start with the beat. Mix and master with HYMN. Send the finished record worldwide—all in one connected run.</p>
+              <div className="mt-5 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[.14em]"><span className="rounded-full border border-white/15 px-3 py-1.5">01 Pick a beat</span><span className="opacity-35">→</span><span className="rounded-full border border-white/15 px-3 py-1.5">02 Mix + master</span><span className="opacity-35">→</span><span className="rounded-full border border-white/15 px-3 py-1.5">03 Release worldwide</span></div>
               <div className="mt-7 flex flex-wrap gap-2">
                 {quickMoods.map((mood) => <button key={mood} type="button" onClick={() => findMyBeat(mood)} className="rounded-full border border-white/15 bg-white/[.06] px-4 py-2.5 text-xs font-semibold transition hover:-translate-y-0.5 hover:border-[var(--accent)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]">{mood}</button>)}
                 <button type="button" onClick={() => findMyBeat()} className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-4 py-2.5 text-xs font-semibold text-[var(--accent-foreground)] transition hover:scale-[1.03]"><WandSparkles className="h-4 w-4" />Surprise me</button>
+                <button type="button" onClick={() => setBeatFinderOpen(true)} className="inline-flex items-center gap-2 rounded-full border border-white/25 px-4 py-2.5 text-xs font-semibold transition hover:border-white/60 hover:bg-white/10"><Sparkles className="h-4 w-4" />Need a beat for your banger?</button>
               </div>
             </div>
             <div className="rounded-[1.5rem] border border-white/10 bg-white/[.06] p-5 backdrop-blur-md">
@@ -641,11 +691,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
           </div>
         </div>
 
-        <div id="beat-catalog" className="scroll-mt-24 grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-          <aside className="hidden self-start space-y-4 lg:block lg:sticky lg:top-24">
-            {filterContent}
-          </aside>
-
+        <div id="beat-catalog" className="scroll-mt-24">
           <div className="space-y-5">
             <div className="surface-card p-5">
               <div className="flex flex-wrap items-center justify-between gap-4">
@@ -656,17 +702,24 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <button type="button" onClick={() => setMobileFiltersOpen(true)} className="btn-outline inline-flex lg:hidden">
+                <button type="button" onClick={() => setBeatFinderOpen(true)} className="btn-outline inline-flex">
+                  <WandSparkles className="mr-2 h-4 w-4" />
+                  Find my beat
+                </button>
+                <button type="button" onClick={() => setMobileFiltersOpen(true)} className="btn-outline inline-flex">
                   <Filter className="mr-2 h-4 w-4" />
                   Filters
                 </button>
-                <button type="button" onClick={clearFilters} className="btn-outline hidden lg:inline-flex">
+                <button type="button" onClick={clearFilters} className="btn-outline hidden sm:inline-flex">
                   Clear filters
                 </button>
                 <button type="button" onClick={() => setCartOpen(true)} className="btn-primary inline-flex">
                   <ShoppingBag className="mr-2 h-4 w-4" />
                   Cart ({cart.length})
                 </button>
+              </div>
+              <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+                {genres.slice(0, 8).map((genre) => <button key={genre} type="button" onClick={() => setSelectedGenres((current) => toggleSelection(current, genre))} className={`shrink-0 rounded-full border px-3.5 py-2 text-xs font-semibold transition ${selectedGenres.includes(genre) ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text)]" : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--border-strong)]"}`}>{genre}</button>)}
               </div>
               </div>
               <div className="mt-5 grid gap-3 border-t border-[var(--border)] pt-4 md:grid-cols-[minmax(0,1fr)_210px]">
@@ -704,7 +757,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
               ) : null}
             </div>
 
-            {(selectedGenres.length || selectedMoods.length || selectedKey !== "All" || bpmMin !== 60 || bpmMax !== 180) ? (
+            {(selectedGenres.length || selectedMoods.length || selectedKey !== "All" || bpmMin !== 60 || bpmMax !== 180 || onboardingBudgetMax !== null) ? (
               <div className="flex flex-wrap gap-2">
                 {selectedGenres.map((genre) => (
                   <FilterChip key={genre} label={genre} onRemove={() => setSelectedGenres((current) => current.filter((entry) => entry !== genre))} />
@@ -714,6 +767,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
                 ))}
                 {selectedKey !== "All" ? <FilterChip label={selectedKey} onRemove={() => setSelectedKey("All")} /> : null}
                 {(bpmMin !== 60 || bpmMax !== 180) ? <FilterChip label={`${bpmMin}-${bpmMax} BPM`} onRemove={() => { setBpmMin(60); setBpmMax(180); setDraftBpmMin(60); setDraftBpmMax(180); }} /> : null}
+                {onboardingBudgetMax !== null ? <FilterChip label={`Under ₹${onboardingBudgetMax.toLocaleString("en-IN")}`} onRemove={() => setOnboardingBudgetMax(null)} /> : null}
               </div>
             ) : null}
 

@@ -7,7 +7,7 @@ import { beatLicensePrice, type BeatStoreLicenseType } from "@/lib/beat-store";
 
 export type ExtendedBeatCardData = Beat & { coverImage?: string; vibeTag?: string; exclusiveRemaining?: number; producer?: { slug: string; name: string } };
 
-export function BeatCard({ beat, active = false, playing = false, onPlay, onLicense, selectedLicenses = [] }: {
+export function BeatCard({ beat, active = false, playing = false, onPlay, onAdd, onLicense, selectedLicenses = [] }: {
   beat: ExtendedBeatCardData; active?: boolean; playing?: boolean; onPlay?: () => void; onAdd?: (licenseType: BeatStoreLicenseType) => void; onLicense?: (licenseType: BeatStoreLicenseType) => void; selectedLicenses?: BeatStoreLicenseType[];
 }) {
   const [coverFailed, setCoverFailed] = useState(false);
@@ -30,9 +30,13 @@ export function BeatCard({ beat, active = false, playing = false, onPlay, onLice
       <span className="max-w-28 truncate rounded-full bg-[var(--bg-soft)] px-2.5 py-1">{beat.vibeTag || beat.genre || "Beats"}</span>
       <span>{beat.bpm} BPM</span><span>·</span><span>{beat.keySignature || "Key —"}</span>
     </div>
-    <button type="button" onClick={() => onLicense?.("wav")} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--text)] px-3.5 text-xs font-semibold text-[var(--bg)] transition hover:scale-[1.02] sm:px-4">
-      {selectedLicenses.length ? <Check className="h-3.5 w-3.5" /> : <ShoppingBag className="h-3.5 w-3.5" />}
+    <div className="flex items-center gap-2">
+      <button type="button" onClick={() => onAdd?.("wav")} className={`grid h-11 w-11 place-items-center rounded-xl border transition hover:-translate-y-0.5 ${selectedLicenses.length ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]" : "border-[var(--border)] bg-[var(--card)] text-[var(--text)] hover:border-[var(--border-strong)]"}`} aria-label={selectedLicenses.length ? `Remove ${beat.title} from cart` : `Add ${beat.title} WAV licence to cart`}>
+        {selectedLicenses.length ? <Check className="h-4 w-4" /> : <ShoppingBag className="h-4 w-4" />}
+      </button>
+      <button type="button" onClick={() => onLicense?.("wav")} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--text)] px-3.5 text-xs font-semibold text-[var(--bg)] transition hover:scale-[1.02] sm:px-4">
       <span className="hidden md:inline">Choose licence</span><span>₹{startingPrice.toLocaleString("en-IN")}</span>
-    </button>
+      </button>
+    </div>
   </article>;
 }

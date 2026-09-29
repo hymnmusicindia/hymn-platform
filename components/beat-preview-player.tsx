@@ -335,7 +335,8 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
                 </div>
               ) : null}
             </div>
-            <button type="button" onClick={() => value.openLicensing(beat)} className="btn-primary pressable min-h-10 px-4 text-xs">From {formatMoney(fromPrice)}</button>
+            <button type="button" onClick={addToCart} className="btn-outline pressable min-h-10 px-3 text-xs" aria-label={`Add ${beat.title} to cart`}><ShoppingBag className="h-4 w-4" /><span className="hidden xl:inline">Add</span></button>
+            <button type="button" onClick={() => value.openLicensing(beat, "wav")} className="btn-primary pressable min-h-10 px-4 text-xs">From {formatMoney(fromPrice)}</button>
           </div>
         </div>
         {value.error ? <p className="mt-2 text-xs font-semibold text-red-300">{customerMessage(value.error)}</p> : null}
