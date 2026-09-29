@@ -3,15 +3,11 @@ import Link from "next/link";
 import {
   ArrowRight,
   BadgeCheck,
-  Clapperboard,
-  DollarSign,
-  FileAudio,
   Headphones,
   Instagram,
-  LineChart,
   Youtube,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { MusicLifecycleBanner } from "@/components/music-lifecycle-banner";
 import { FloatingAssistant } from "@/components/floating-assistant";
 import { AnimatedHeroMetrics } from "@/components/animated-hero-metrics";
 import { GoogleAuthButton } from "@/components/google-auth-button";
@@ -72,12 +68,6 @@ const testimonials = [
   ["They understood the music and the market. That combination is rare.", "Arjun N.", "Label Partner", "7 territories activated"]
 ];
 
-const platformPanels: Array<[string, string, LucideIcon]> = [
-  ["Release Workflow", "Metadata, artwork, files, review", FileAudio],
-  ["Audience Analytics", "Cities, sources, platform lift", LineChart],
-  ["Campaign Management", "Tasks, moments, creative assets", Clapperboard],
-  ["Royalty Insights", "Credits, earnings, payout readiness", DollarSign]
-];
 
 export default async function HomePage() {
   const [{ beats, producerProfiles, googleAvatarUrls, featuredReviews, featuredReleases }, session] = await Promise.all([getPublicHomePreview(), getSession()]);
@@ -192,28 +182,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="shell py-12 sm:py-16">
-        <div className="grid gap-8 lg:grid-cols-[0.9fr,1.1fr] lg:items-center">
-          <div>
-            <h2 className="text-4xl font-semibold tracking-[-0.03em] text-[var(--text)] sm:text-5xl">Release workflow, analytics, earnings, and campaign control in one workspace.</h2>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <Link href="/distribution" className="btn-primary">View Distribution</Link>
-              <Link href="/dashboard" className="btn-outline">Open Dashboard</Link>
-            </div>
-          </div>
-          <div className="home-workspace-shell rounded-[2rem] border border-border bg-surface/82 p-4 shadow-[0_34px_110px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:p-6">
-            <div className="grid gap-4 md:grid-cols-2">
-              {platformPanels.map(([title, body, Icon]) => (
-                <div key={title} className="home-workspace-card rounded-3xl border border-border bg-card p-5">
-                  <Icon className="h-5 w-5 text-foreground" />
-                  <h3 className="mt-5 text-lg font-semibold text-[var(--text)]">{title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-muted">{body}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+      <MusicLifecycleBanner />
 
       <section className="shell py-10 sm:py-16">
         <div className="relative overflow-hidden rounded-[2rem] border border-border bg-black px-5 py-10 shadow-[0_32px_120px_rgba(0,0,0,0.42)] sm:px-8 lg:min-h-[470px] lg:px-14 lg:py-16">
