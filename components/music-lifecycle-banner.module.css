@@ -26,17 +26,23 @@
 .controls { display: flex; align-items: center; gap: 12px; padding-top: 8px; border-top: 1px solid var(--border); color: var(--text-muted); }
 .controls span { width: 15px; height: 15px; border: 3px solid var(--text-soft); border-radius: 50%; }
 .world { position: relative; display: grid; place-items: center; width: 205px; height: 120px; }
-.globe { display: block; width: 126px; height: 126px; background: url("/assets/release-globe.svg") center / contain no-repeat; transition: transform .6s ease; }
+.globe { display: block; width: 126px; height: 126px; background: url("/assets/release-globe.svg") center / contain no-repeat; }
 .platformOne, .platformTwo, .platformThree { position: absolute; width: 35px; height: 35px; border: 1px solid var(--border); border-radius: 50%; background-color: var(--card); background-position: center; background-size: 25px; background-repeat: no-repeat; box-shadow: 0 4px 12px #0002; transition: transform .3s, box-shadow .3s; }
 .platformOne { top: 10px; left: 12px; background-image: url("/assets/store-logos/symbol-spotify.png"); }
 .platformTwo { right: 9px; top: 43px; background-image: url("/assets/store-logos/symbol-apple.png"); }
 .platformThree { bottom: 2px; left: 26px; background-image: url("/assets/store-logos/symbol-youtube.png"); }
-.stage:is(:hover, :focus-visible) .globe { transform: rotate(-12deg) scale(1.08); }
-.stage:is(:hover, :focus-visible) .platformOne { transform: translate(-3px, -3px); }
-.stage:is(:hover, :focus-visible) .platformTwo { transform: translate(4px, -2px); }
-.stage:is(:hover, :focus-visible) .platformThree { transform: translate(-3px, 3px); }
-.world > span:not(.globe):hover { transform: scale(1.2); box-shadow: 0 5px 15px #0003; }
-.stage:active .world { transform: scale(.95); }
+.stage:is(:hover, :focus-visible) .platformOne { transform: translate(-3px, -7px); }
+.stage:is(:hover, :focus-visible) .platformTwo { transform: translate(4px, -6px); }
+.stage:is(:hover, :focus-visible) .platformThree { transform: translate(-3px, -6px); }
+.world > span:not(.globe):hover { transform: translateY(-8px) scale(1.08); box-shadow: 0 5px 15px #0003; }
+.distributionStage:hover { transform: none; }
+.platformOne { --trail-color: #80b944; }
+.platformTwo { --trail-color: #fa2866; }
+.platformThree { --trail-color: #fa4545; }
+.platformOne::after, .platformTwo::after, .platformThree::after { content: ""; position: absolute; pointer-events: none; top: calc(100% + 3px); left: 40%; width: 20%; height: 19px; border-radius: 50%; background: linear-gradient(var(--trail-color), transparent); opacity: 0; transform: rotate(-18deg) scaleY(.4); transform-origin: top; transition: opacity .3s, transform .3s; }
+.stage:is(:hover, :focus-visible, :active) .world > span::after { opacity: .45; transform: rotate(-18deg) scaleY(1); }
+.stage:active .world > span:not(.globe) { transform: translateY(-8px); }
+@media (prefers-reduced-motion: reduce) { .world > span, .world > span::after { transform: none !important; transition: none !important; } }
 .terms { font-size: 10px; line-height: 1.6; color: var(--text-muted); }
 .terms a { text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; color: var(--text); }
 .banner a:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }

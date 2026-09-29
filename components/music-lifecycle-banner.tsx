@@ -23,9 +23,9 @@ export function MusicLifecycleBanner() {
             <div className={styles.caption}><span className={styles.number}>02</span><div><h3>Mix & master</h3><p>Polished by our engineers.</p></div><ArrowRight size={16} aria-hidden="true" /></div>
           </Link>
           <div className={styles.connector} aria-hidden="true"><ArrowRight size={18} /></div>
-          <Link href="/distribution" className={styles.stage} aria-label="Explore distribution; standard pricing without an eligible HYMN beat purchase">
+          <Link href="/distribution" className={`${styles.stage} ${styles.distributionStage}`} title="Distribute your music to Spotify, Apple Music, YouTube Music and more" aria-label="Explore distribution; standard pricing without an eligible HYMN beat purchase">
             <div className={styles.art} aria-hidden="true"><div className={styles.world}><span className={styles.globe} /><span className={styles.platformOne} title="Spotify" /><span className={styles.platformTwo} title="Apple Music" /><span className={styles.platformThree} title="YouTube Music" /></div></div>
-            <div className={styles.caption}><span className={styles.number}>03</span><div><h3>Release worldwide</h3><p>Ready for your listeners.</p></div><ArrowRight size={16} aria-hidden="true" /></div>
+            <div className={styles.caption}><span className={styles.number}>03</span><div><h3>Reach global listeners</h3><p>Distribute to streaming platforms.</p></div><ArrowRight size={16} aria-hidden="true" /></div>
           </Link>
         </div>
         <p className={styles.terms}>Special offers: start with an eligible HYMN beat purchase and link it to your project. Otherwise, standard pricing applies. <Link href="/terms-of-service">T&amp;C apply.</Link></p>

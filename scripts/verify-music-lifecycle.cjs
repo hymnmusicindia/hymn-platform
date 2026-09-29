@@ -44,13 +44,25 @@ async function main() {
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Horizontal overflow at ' + width);
         const bounds = await page.locator("section").boundingBox();
         assert.ok(bounds.height < 510, 'Banner should remain compact at ' + width);
-        for (const name of ["Buy your beat", "Mix & master", "Release worldwide"]) await page.getByRole("heading", { name, exact: true }).waitFor();
+        for (const name of ["Buy your beat", "Mix & master", "Reach global listeners"]) await page.getByRole("heading", { name, exact: true }).waitFor();
         await page.locator("section").screenshot({ path: path.join(output, theme + '-' + width + '.png') });
       }
     }
     await page.getByRole("link", { name: "Start with a beat", exact: true }).focus();
     await page.keyboard.press("Tab");
     assert.ok(await page.getByRole("link", { name: /Buy a beat from HYMN/ }).evaluate(el => el === document.activeElement));
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.mouse.move(0, 0);
+    const distribution = page.getByRole("link", { name: /Explore distribution/ });
+    const globe = distribution.locator('span[class*="globe"]');
+    const spotify = distribution.locator('[title="Spotify"]');
+    const globeBefore = await globe.boundingBox();
+    const logoBefore = await spotify.boundingBox();
+    await distribution.hover();
+    await page.waitForTimeout(400);
+    assert.deepEqual(await globe.boundingBox(), globeBefore, "Globe must remain still on hover");
+    assert.ok((await spotify.boundingBox()).y < logoBefore.y, "Store logo should rise on hover");
+    assert.ok(await spotify.evaluate(el => Number(getComputedStyle(el, "::after").opacity) > 0), "Store trail should appear");
     assert.deepEqual(errors, []);
     console.log(`Lifecycle interactions, offer entry links, theme layouts, keyboard navigation and responsive checks passed. Previews: ${output}`);
   } finally { await browser.close(); }
