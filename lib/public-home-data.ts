@@ -5,6 +5,9 @@ import { prisma } from "@/lib/prisma";
 const HOME_BEAT_LIMIT = 8;
 const HOME_PRODUCER_LIMIT = 12;
 const HOME_RELEASE_SHOWCASE_LIMIT = 9;
+// Exception approved for the scheduled 30 Sep 2026 release. Keep the normal
+// homepage policy restricted to live and partially-live releases.
+const SCHEDULED_HOMEPAGE_EXCEPTION_RELEASE_IDS = new Set([34]);
 
 export const getPublicHomePreview = unstable_cache(
   async () => {
@@ -22,7 +25,7 @@ export const getPublicHomePreview = unstable_cache(
       ? allReleases.filter((release) => selectedOrder.has(release.id)).sort((a, b) => (selectedOrder.get(a.id) ?? 0) - (selectedOrder.get(b.id) ?? 0))
       : allReleases;
     const featuredReleases = releaseSource
-      .filter((release) => Boolean(release.artworkUrl) && (release.status === "live" || release.status === "partially_live"))
+      .filter((release) => Boolean(release.artworkUrl) && (release.status === "live" || release.status === "partially_live" || (release.status === "scheduled" && SCHEDULED_HOMEPAGE_EXCEPTION_RELEASE_IDS.has(release.id))))
       .slice(0, HOME_RELEASE_SHOWCASE_LIMIT)
       .map((release) => ({
         id: release.id,
@@ -34,6 +37,6 @@ export const getPublicHomePreview = unstable_cache(
       }));
     return { beats, producerProfiles, googleAvatarUrls, featuredReviews, featuredReleases };
   },
-  ["public-home-preview-v4"],
+  ["public-home-preview-v5"],
   { revalidate: 300, tags: ["public-home-preview"] }
 );
