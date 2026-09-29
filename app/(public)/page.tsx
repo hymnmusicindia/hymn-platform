@@ -9,8 +9,6 @@ import {
   Headphones,
   Instagram,
   LineChart,
-  Linkedin,
-  Twitter,
   Youtube,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -372,10 +370,8 @@ export default async function HomePage() {
             <Image src="/assets/hymnlogowhite.png" alt="HYMN Music" width={164} height={56} className="h-10 w-auto object-contain" />
             <div className="flex items-center gap-6 text-white sm:gap-7" aria-label="HYMN social channels">
               {[
-                ["Instagram", "https://instagram.com/hymnmusicindia", Instagram],
-                ["X", "https://x.com/hymnmusicindia", Twitter],
-                ["LinkedIn", "https://linkedin.com/company/hymnmusicindia", Linkedin],
-                ["YouTube", "https://youtube.com/@hymnmusicindia", Youtube]
+                ["Instagram", "https://www.instagram.com/hymnmusic.in/", Instagram],
+                ["YouTube", "https://www.youtube.com/@hymnmusic_in/", Youtube]
               ].map(([label, href, Icon]) => { const SocialIcon = Icon as typeof Instagram; return <a key={label as string} href={href as string} target="_blank" rel="noreferrer" aria-label={label as string} className="grid h-8 w-8 place-items-center transition-opacity hover:opacity-70"><SocialIcon className="h-5 w-5" strokeWidth={2.2} /></a>; })}
             </div>
           </div>
