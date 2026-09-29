@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowDown, Check, ChevronDown, Disc3, ExternalLink, Filter, Gauge, Globe2, Instagram, Music2, Search, ShoppingBag, Sparkles, Users2, X, Youtube } from "lucide-react";
+import { ArrowDown, Check, ChevronDown, Disc3, ExternalLink, Filter, Gauge, Globe2, Headphones, Instagram, Music2, Search, ShoppingBag, Sparkles, Users2, WandSparkles, X, Youtube } from "lucide-react";
 import { beatLicenseLabel, beatLicensePrice, buildBeatStorefront, normalizeBeatLicenseType, type BeatStoreLicenseType, type StorefrontBeat } from "@/lib/beat-store";
 import type { Beat, ProducerProfile } from "@/lib/types";
 import { BeatCard } from "@/components/beat-card";
@@ -333,6 +333,15 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
   const cartDetails = useMemo(() => cart.map((item) => ({ item, beat: catalog.find((entry) => entry.id === item.beatId) })).filter((entry): entry is { item: CartItem; beat: StorefrontBeat } => Boolean(entry.beat)), [cart, catalog]);
   const cartTotal = useMemo(() => cart.reduce((sum, item) => sum + item.price, 0), [cart]);
 
+  const quickMoods = moods.slice(0, 4);
+  const findMyBeat = (mood?: string) => {
+    if (mood) setSelectedMoods([mood]);
+    const pool = mood ? catalog.filter((beat) => beat.mood === mood) : filteredBeats;
+    const pick = pool[Math.floor(Math.random() * Math.max(pool.length, 1))] ?? catalog[0];
+    document.getElementById("beat-catalog")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (pick) window.setTimeout(() => beatPlayer.playBeat(pick, pool.length ? pool : catalog), 380);
+  };
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const raw = window.localStorage.getItem("hymn-beat-cart");
@@ -576,7 +585,27 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
       </div>
 
       <section className="mx-auto max-w-[1700px] pb-10 pt-0 lg:pb-14">
-        <div className="mb-6">
+        <section className="relative mb-6 overflow-hidden rounded-[2rem] border border-[var(--border)] bg-[var(--text)] text-[var(--bg)] shadow-[0_22px_70px_rgba(0,0,0,.18)]">
+          <div className="pointer-events-none absolute -right-20 -top-36 h-96 w-96 rounded-full border-[70px] border-[color-mix(in_srgb,var(--accent)_42%,transparent)] opacity-75" />
+          <div className="pointer-events-none absolute bottom-[-8rem] right-[22%] h-72 w-72 rounded-full border border-white/10" />
+          <div className="relative grid gap-8 p-6 sm:p-9 lg:grid-cols-[1.1fr_.9fr] lg:items-end lg:p-12">
+            <div>
+              <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.24em] opacity-60"><Headphones className="h-4 w-4" />The HYMN Beat Store</div>
+              <h1 className="mt-5 max-w-3xl text-4xl font-semibold leading-[.95] tracking-[-.055em] sm:text-6xl">Don’t browse forever.<br /><span className="text-[var(--accent)]">Hear your record.</span></h1>
+              <p className="mt-5 max-w-xl text-sm leading-6 opacity-65 sm:text-base">Pick a feeling. We’ll cue a beat, then show the licence that fits how you plan to release it.</p>
+              <div className="mt-7 flex flex-wrap gap-2">
+                {quickMoods.map((mood) => <button key={mood} type="button" onClick={() => findMyBeat(mood)} className="rounded-full border border-white/15 bg-white/[.06] px-4 py-2.5 text-xs font-semibold transition hover:-translate-y-0.5 hover:border-[var(--accent)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]">{mood}</button>)}
+                <button type="button" onClick={() => findMyBeat()} className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-4 py-2.5 text-xs font-semibold text-[var(--accent-foreground)] transition hover:scale-[1.03]"><WandSparkles className="h-4 w-4" />Surprise me</button>
+              </div>
+            </div>
+            <div className="rounded-[1.5rem] border border-white/10 bg-white/[.06] p-5 backdrop-blur-md">
+              <p className="text-xs font-semibold uppercase tracking-[.18em] opacity-50">A human marketplace</p>
+              <p className="mt-3 text-xl font-medium leading-7">“The right beat should make you reach for the mic before the preview ends.”</p>
+              <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4 text-xs"><span className="opacity-60">Picked by ears. Checked by people.</span><Link href="/producer-login" className="font-semibold text-[var(--accent)]">Sell your beats →</Link></div>
+            </div>
+          </div>
+        </section>
+        <div className="hidden">
           <div key={selectedProducer?.slug ?? "all-producers"} className="fade-up mt-3 overflow-hidden rounded-[1.75rem] border border-[var(--border)] bg-[var(--card)] shadow-[0_16px_45px_rgba(0,0,0,0.1)]">
             <div className="grid md:min-h-[230px] md:grid-cols-[1.35fr_.65fr]">
               <div key={spotlightProducer?.slug ?? "producer-room"} className="producer-spotlight-enter relative z-10 flex flex-col justify-center bg-[var(--card)] p-6 sm:p-8">

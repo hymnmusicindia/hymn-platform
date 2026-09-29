@@ -30,7 +30,7 @@ export function BeatCard({ beat, active = false, playing = false, onPlay, onLice
       <span className="max-w-28 truncate rounded-full bg-[var(--bg-soft)] px-2.5 py-1">{beat.vibeTag || beat.genre || "Beats"}</span>
       <span>{beat.bpm} BPM</span><span>·</span><span>{beat.keySignature || "Key —"}</span>
     </div>
-    <button type="button" onClick={() => onLicense?.("mp3")} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--text)] px-3.5 text-xs font-semibold text-[var(--bg)] transition hover:scale-[1.02] sm:px-4">
+    <button type="button" onClick={() => onLicense?.("wav")} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--text)] px-3.5 text-xs font-semibold text-[var(--bg)] transition hover:scale-[1.02] sm:px-4">
       {selectedLicenses.length ? <Check className="h-3.5 w-3.5" /> : <ShoppingBag className="h-3.5 w-3.5" />}
       <span className="hidden md:inline">Choose licence</span><span>₹{startingPrice.toLocaleString("en-IN")}</span>
     </button>

@@ -4,7 +4,7 @@ import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Check, ChevronLeft, ChevronRight, Disc3, ExternalLink, ListMusic, Pause, Play, Repeat, ShoppingBag, Volume2, VolumeX, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Disc3, ExternalLink, ListMusic, Pause, Play, Repeat, ShieldCheck, ShoppingBag, Sparkles, Volume2, VolumeX, X } from "lucide-react";
 import { beatLicenseCatalog, beatLicensePrice, normalizeBeatLicenseType, type BeatStoreLicenseType, type StorefrontBeat } from "@/lib/beat-store";
 
 type LicenseChoice = BeatStoreLicenseType;
@@ -155,7 +155,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
           <div className="flex min-w-0 gap-4">
             <PlayerArtwork beat={beat} />
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--text-soft)]">Licensing</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">Choose how you’ll use it</p>
               <h2 className="mt-1 truncate text-2xl font-semibold tracking-[-0.04em] text-[var(--text)]">{beat.title}</h2>
               <p className="mt-1 truncate text-sm text-[var(--text-muted)]">{beat.producer.name} · {beat.bpm} BPM · {beat.keySignature || "Key not supplied"}</p>
             </div>
@@ -163,7 +163,8 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
           <button type="button" onClick={(event) => close(event)} className="sticky top-0 z-20 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--text)] shadow-lg" aria-label="Close licensing options"><X className="h-4 w-4" /></button>
         </div>
 
-        <div className="mt-5 grid gap-2">
+        <div className="mt-5 flex items-center gap-2 rounded-xl bg-[var(--accent-soft)] px-3.5 py-3 text-xs text-[var(--text-muted)]"><Sparkles className="h-4 w-4 shrink-0 text-[var(--accent)]" /><span><strong className="text-[var(--text)]">Most artists choose WAV</strong> for a clean mix and release-ready master.</span></div>
+        <div className="mt-3 grid gap-2">
           {options.map((option) => {
             const active = selected === option.purchasableKey;
             return (
@@ -172,15 +173,14 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
                 type="button"
                 disabled={option.disabled}
                 onClick={() => onSelect(option.purchasableKey)}
-                className={`rounded-[1.1rem] border p-3.5 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${active ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_18%,transparent)]" : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--border-strong)]"}`}
+                className={`group rounded-[1.1rem] border p-3.5 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${active ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[inset_4px_0_0_var(--accent)]" : "border-[var(--border)] bg-[var(--card)] hover:-translate-y-0.5 hover:border-[var(--border-strong)]"}`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-[var(--text)]">{option.title}</p>
-                    <p className="mt-2 text-2xl font-bold tracking-[-0.04em] text-[var(--text)]">{formatMoney(option.price)}</p>
-                    <p className="mt-1 text-xs text-[var(--text-soft)]">{option.bestFor}</p>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold text-[var(--text)]">{option.title}</p>{option.id === "wav" ? <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[.1em] text-[var(--accent-foreground)]">Recommended</span> : null}</div>
+                    <p className="mt-1 text-xs text-[var(--text-soft)]">{option.id === "mp3" ? "For demos and writing" : option.id === "wav" ? "For singles and streaming" : option.id === "stems" ? "For a custom professional mix" : "For full ownership and Content ID"}</p>
                   </div>
-                  <span className={`grid h-7 w-7 place-items-center rounded-full border ${active ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--bg)]" : "border-[var(--border)]"}`}>{active ? <Check className="h-4 w-4" /> : null}</span>
+                  <div className="flex shrink-0 items-center gap-3"><strong className="text-xl tracking-[-.03em] text-[var(--text)]">{formatMoney(option.price)}</strong><span className={`grid h-7 w-7 place-items-center rounded-full border ${active ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]" : "border-[var(--border)]"}`}>{active ? <Check className="h-4 w-4" /> : null}</span></div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-muted)]">
                   <span>{option.delivery}</span>
@@ -191,6 +191,11 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
               </button>
             );
           })}
+        </div>
+
+        <div className="mt-4 flex items-start gap-3 rounded-xl border border-dashed border-[var(--border-strong)] px-4 py-3">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[var(--accent)]" />
+          <p className="text-xs leading-5 text-[var(--text-muted)]"><span className="font-semibold italic text-[var(--text)]">A note from HYMN:</span> your exact licence is saved with the purchase, so you always know what you can release.</p>
         </div>
 
         <section className="mt-5 rounded-[1.5rem] border border-[var(--border)] bg-[var(--card)] p-4">
