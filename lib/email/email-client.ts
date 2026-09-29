@@ -5,6 +5,10 @@ import { getPublicAppUrl } from "@/lib/public-app-url";
 
 export type EmailAttachment = { filename: string; content: Buffer; contentType: string };
 
+function mailbox(value?: string) {
+  return (value?.match(/<([^>]+)>/)?.[1] || value || "").trim().toLowerCase();
+}
+
 export function getEmailClient() {
   const config = getEmailConfig();
   if (!config.enabled) return null;
@@ -29,10 +33,15 @@ export function getEmailClient() {
 
 export function getEmailConfig() {
   const provider = process.env.EMAIL_PROVIDER?.toLowerCase() || "resend";
+  const smtpUser = process.env.SMTP_USER?.trim();
+  const requestedFrom = process.env.EMAIL_FROM?.trim();
+  const smtpFrom = requestedFrom && (mailbox(requestedFrom) === mailbox(smtpUser) || process.env.SMTP_ALLOW_FROM_ALIAS === "true")
+    ? requestedFrom
+    : smtpUser ? `HYMN Music <${smtpUser}>` : undefined;
   return {
     enabled: process.env.EMAIL_ENABLED === "true" && (provider === "smtp" ? Boolean(process.env.SMTP_USER?.trim() && process.env.SMTP_APP_PASSWORD?.trim()) : provider === "resend" && Boolean(process.env.RESEND_API_KEY?.trim())),
     provider,
-    from: process.env.EMAIL_FROM?.trim() || (provider === "smtp" ? `HYMN Music <${process.env.SMTP_USER?.trim()}>` : "HYMN Music <updates@hymnmusic.in>"),
+    from: provider === "smtp" ? smtpFrom || "HYMN Music" : requestedFrom || "HYMN Music <updates@hymnmusic.in>",
     replyTo: process.env.EMAIL_REPLY_TO?.trim() || (provider === "smtp" ? process.env.SMTP_USER?.trim() : "hello@hymnmusic.fun"),
     appUrl: getPublicAppUrl()
   };

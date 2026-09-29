@@ -33,11 +33,13 @@ async function main() {
   env.EMAIL_ENABLED = "false";
   assert.equal(client.getEmailClient(), null);
 
-  const templates = load("lib/email/email-templates.ts");
-  const html = templates.emailLayout({ title: "<script>bad</script>", body: "A & B", ctaLabel: "Open", ctaUrl: "https://example.com/?a=1&b=2", timelineStep: 2 });
+  const templates = load("lib/email/email-templates.ts", { "@/lib/public-app-url": { getPublicAppUrl: () => "https://example.com" } });
+  const html = templates.emailLayout({ title: "<script>bad</script>", body: "A & B", ctaLabel: "Open", ctaUrl: "https://example.com/?a=1&b=2", timelineStep: 2, sections: [{ title: "What next?", body: "Wait for us." }] });
   assert.ok(!html.includes("<script>"));
   assert.ok(html.includes("A &amp; B"));
   assert.ok(html.includes('role="presentation"'));
+  assert.ok(html.includes("https://example.com/assets/hymnlogowhite.png"));
+  assert.ok(html.includes("What next?"));
 
   let purchase = { user: { email: "buyer@example.com" }, licenseType: "mp3", licenseAsset: { id: 1, byteSize: 3 }, beat: { deliverableAsset: { id: 2, byteSize: 4, mimeType: "audio/wav" } } };
   let reads = 0;
