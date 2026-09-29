@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       create: { email: normalized, unsubscribeToken: newsletterToken(), source: "homepage" },
       update: { status: "subscribed", source: "homepage", consentAt: new Date(), unsubscribedAt: null, unsubscribeToken: newsletterToken() }
     });
-    return NextResponse.json({ subscribed: true, status: subscriber.status });
+    return NextResponse.json({ subscribed: true, status: subscriber.status, unsubscribeToken: subscriber.unsubscribeToken });
   } catch (error) {
     console.error("Newsletter subscription failed", error);
     return NextResponse.json({ error: "Newsletter signup is temporarily unavailable. Please try again shortly." }, { status: 503 });
