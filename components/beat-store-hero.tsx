@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, Headphones, Mic2, Radio, Sparkles, WandSparkles } from "lucide-react";
 import type { ProducerProfile } from "@/lib/types";
 
+const carouselGlassButton = "rounded-full border border-white/20 bg-[linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,.045))] px-4 py-2.5 text-xs font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,.2),0_8px_24px_rgba(0,0,0,.22)] backdrop-blur-xl transition duration-200 hover:-translate-y-0.5 hover:border-white/45 hover:bg-[linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,.08))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,.3),0_12px_30px_rgba(0,0,0,.3)] active:translate-y-0";
+const carouselPrimaryButton = "inline-flex items-center gap-2 rounded-full border border-white/70 bg-[linear-gradient(180deg,#fff,#e9e9eb)] px-5 py-3 text-xs font-bold text-black shadow-[inset_0_1px_0_#fff,0_10px_28px_rgba(0,0,0,.34)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_#fff,0_14px_34px_rgba(0,0,0,.42)] active:translate-y-0";
+
 export function BeatStoreHero({ moods, producer, onMood, onSurprise, onFinder, onProducer }: {
   moods: string[];
   producer: ProducerProfile | null;
@@ -32,7 +35,7 @@ export function BeatStoreHero({ moods, producer, onMood, onSurprise, onFinder, o
         <div className="relative flex h-full max-w-2xl flex-col justify-center p-7 pb-20 sm:p-9 sm:pb-20">
           <h1 className="text-5xl font-semibold leading-[.91] tracking-[-.06em] sm:text-6xl">Find the sound<br /><span className="text-[var(--money)]">that moves the room.</span></h1>
           <p className="mt-5 max-w-lg text-sm leading-6 text-white/70 sm:text-base">The right beat makes the room move before you ever step on stage.</p>
-          <div className="mt-7 flex flex-wrap gap-2">{moods.slice(0, 4).map((mood) => <button key={mood} type="button" onClick={() => onMood(mood)} className="rounded-full border border-white/20 bg-black/20 px-4 py-2.5 text-xs font-semibold backdrop-blur transition hover:-translate-y-0.5 hover:border-white/60 hover:bg-white/10">{mood}</button>)}<button type="button" onClick={onSurprise} className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-xs font-bold text-black transition hover:scale-[1.03]"><WandSparkles className="h-4 w-4" />Surprise me</button></div>
+          <div className="mt-7 flex flex-wrap gap-2">{moods.slice(0, 4).map((mood) => <button key={mood} type="button" onClick={() => onMood(mood)} className={carouselGlassButton}>{mood}</button>)}<button type="button" onClick={onSurprise} className={carouselPrimaryButton}><WandSparkles className="h-4 w-4" />Surprise me</button></div>
         </div>
       </article>
 
@@ -42,10 +45,9 @@ export function BeatStoreHero({ moods, producer, onMood, onSurprise, onFinder, o
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_82%_46%,color-mix(in_srgb,var(--money)_15%,transparent),transparent_30%)]" />
         <div className="relative grid h-full items-center gap-7 p-7 pb-20 sm:p-9 sm:pb-20 lg:grid-cols-[.9fr_1.1fr]">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[.24em] text-[var(--money)]">From your headphones to theirs</p>
-            <h2 className="mt-4 text-5xl font-semibold leading-[.91] tracking-[-.06em] sm:text-[3.35rem]">Start with a beat.<br /><span className="text-[var(--money)]">End with a record</span><br />the world can hear.</h2>
+            <h2 className="text-5xl font-semibold leading-[.91] tracking-[-.06em] sm:text-[3.35rem]">Start with a beat.<br /><span className="text-[var(--money)]">End with a record</span><br />the world can hear.</h2>
             <p className="mt-5 max-w-md text-sm leading-6 text-white/65">Choose it here. Finish it with a real engineer. Release it without rebuilding your project somewhere else.</p>
-            <div className="mt-6 flex flex-wrap gap-3"><button type="button" onClick={onFinder} className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-xs font-bold text-black"><Sparkles className="h-4 w-4" />Find my starting beat</button><Link href="/studio" className="rounded-full border border-white/25 px-5 py-3 text-xs font-semibold">Meet the studio</Link></div>
+            <div className="mt-6 flex flex-wrap gap-3"><button type="button" onClick={onFinder} className={carouselPrimaryButton}><Sparkles className="h-4 w-4" />Find my starting beat</button><Link href="/studio" className={carouselGlassButton}>Meet the studio</Link></div>
           </div>
           <div className="relative">
             <div className="relative grid grid-cols-3">
@@ -66,15 +68,15 @@ export function BeatStoreHero({ moods, producer, onMood, onSurprise, onFinder, o
           <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.24em] text-[var(--money)]"><Radio className="h-4 w-4" />Producer on rotation</p>
           <h2 className="mt-4 text-5xl font-semibold leading-[.92] tracking-[-.055em] sm:text-6xl">{producer?.name || "A new sound is waiting."}</h2>
           <p className="mt-5 max-w-lg text-sm leading-6 text-white/65">{producer?.description || producer?.specialty || "Independent producers, real points of view, and beats made to become songs."}</p>
-          <div className="mt-7 flex flex-wrap gap-3"><button type="button" onClick={onProducer} className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-xs font-bold text-black"><Mic2 className="h-4 w-4" />Hear this producer</button><Link href="/producer-login" className="rounded-full border border-white/25 px-5 py-3 text-xs font-semibold">Put your beats here</Link></div>
+          <div className="mt-7 flex flex-wrap gap-3"><button type="button" onClick={onProducer} className={carouselPrimaryButton}><Mic2 className="h-4 w-4" />Hear this producer</button><Link href="/producer-login" className={carouselGlassButton}>Put your beats here</Link></div>
         </div>
       </article>
     </div>
 
     <div className="absolute bottom-5 left-6 z-20 flex items-center gap-3 sm:left-10">
-      <button type="button" onClick={() => go(slide - 1)} className="grid h-10 w-10 place-items-center rounded-full border border-white/20 bg-black/35 backdrop-blur transition hover:border-white/60" aria-label="Previous slide"><ArrowLeft className="h-4 w-4" /></button>
-      <div className="flex gap-1.5">{[0, 1, 2].map((index) => <button key={index} type="button" onClick={() => go(index)} className={`h-1.5 rounded-full transition-all ${slide === index ? "w-8 bg-white" : "w-3 bg-white/35"}`} aria-label={`Go to slide ${index + 1}`} aria-current={slide === index ? "true" : undefined} />)}</div>
-      <button type="button" onClick={() => go(slide + 1)} className="grid h-10 w-10 place-items-center rounded-full border border-white/20 bg-black/35 backdrop-blur transition hover:border-white/60" aria-label="Next slide"><ArrowRight className="h-4 w-4" /></button>
+      <button type="button" onClick={() => go(slide - 1)} className="grid h-11 w-11 place-items-center rounded-full border border-white/20 bg-[linear-gradient(145deg,rgba(255,255,255,.16),rgba(255,255,255,.04))] shadow-[inset_0_1px_0_rgba(255,255,255,.22),0_8px_24px_rgba(0,0,0,.28)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-white/45 hover:bg-white/15" aria-label="Previous slide"><ArrowLeft className="h-4 w-4" /></button>
+      <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,.08)] backdrop-blur-xl">{[0, 1, 2].map((index) => <button key={index} type="button" onClick={() => go(index)} className={`h-1.5 rounded-full transition-all duration-300 ${slide === index ? "w-8 bg-white shadow-[0_0_12px_rgba(255,255,255,.55)]" : "w-2 bg-white/30 hover:bg-white/60"}`} aria-label={`Go to slide ${index + 1}`} aria-current={slide === index ? "true" : undefined} />)}</div>
+      <button type="button" onClick={() => go(slide + 1)} className="grid h-11 w-11 place-items-center rounded-full border border-white/20 bg-[linear-gradient(145deg,rgba(255,255,255,.16),rgba(255,255,255,.04))] shadow-[inset_0_1px_0_rgba(255,255,255,.22),0_8px_24px_rgba(0,0,0,.28)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-white/45 hover:bg-white/15" aria-label="Next slide"><ArrowRight className="h-4 w-4" /></button>
     </div>
   </section>;
 }
