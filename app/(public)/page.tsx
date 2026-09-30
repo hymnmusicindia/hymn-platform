@@ -156,9 +156,10 @@ export default async function HomePage() {
       </section>
 
       <section className="shell py-12 sm:py-16">
-        <div className="grid gap-6 border-b border-[var(--border)] pb-8 md:grid-cols-[1.2fr_1fr] md:items-end">
-          <div><p className="mb-4 text-[10px] font-semibold uppercase tracking-[.24em] text-[var(--text-muted)]">Independent sound. Worldwide destinations.</p><h2 className="text-4xl font-semibold leading-[1.02] tracking-[-.05em] text-[var(--text)] sm:text-5xl">Made in your room.<br /><span className="text-[var(--text-muted)]">Played in theirs.</span></h2></div>
-          <div className="max-w-md md:justify-self-end"><p className="text-sm leading-7 text-[var(--text-muted)]">From someone’s headphones to their next favourite playlist. Deliver your music to the streaming and social platforms where listeners spend their time.</p><Link href="/distribution" className="mt-5 inline-flex items-center gap-3 text-sm font-semibold text-[var(--text)]">Find your next audience<ArrowRight className="h-4 w-4" /></Link></div>
+        <div className="border-b border-[var(--border)] pb-8 text-center">
+          <p className="mb-4 text-[10px] font-semibold uppercase tracking-[.28em] text-[var(--text-muted)]">Global distribution</p>
+          <h2 className="text-[clamp(2.7rem,7vw,6.5rem)] font-semibold leading-[.84] tracking-[-.065em] text-[var(--text)]">WHERE YOUR<br className="sm:hidden" /> MUSIC LANDS</h2>
+          <p className="mx-auto mt-6 max-w-xl text-sm leading-7 text-[var(--text-muted)]">The stores, streaming services and social platforms that carry your release to listeners worldwide.</p>
         </div>
         <div className="home-store-marquee-shell mt-5 overflow-hidden">
           <div className="marquee-row music-store-marquee items-center gap-12 px-8 py-5 sm:gap-16">

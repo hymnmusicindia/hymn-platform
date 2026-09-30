@@ -33,7 +33,7 @@ export function BeatStoreHero({ moods, producer, onMood, onSurprise, onFinder, o
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,6,7,.97)_0%,rgba(5,6,7,.75)_43%,rgba(5,6,7,.18)_78%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(0,0,0,.72),transparent_55%)]" />
         <div className="relative flex h-full max-w-2xl flex-col justify-center p-7 pb-20 sm:p-9 sm:pb-20">
-          <h1 className="text-5xl font-semibold leading-[.91] tracking-[-.06em] sm:text-6xl">Find the sound<br /><span className="text-[var(--money)]">that moves the room.</span></h1>
+          <h1 className="text-5xl font-semibold leading-[.91] tracking-[-.06em] sm:text-6xl">Find the sound<br /><span className="text-white/55">that moves the room.</span></h1>
           <p className="mt-5 max-w-lg text-sm leading-6 text-white/70 sm:text-base">The right beat makes the room move before you ever step on stage.</p>
           <div className="mt-7 flex flex-wrap gap-2">{moods.slice(0, 4).map((mood) => <button key={mood} type="button" onClick={() => onMood(mood)} className={carouselGlassButton}>{mood}</button>)}<button type="button" onClick={onSurprise} className={carouselPrimaryButton}><WandSparkles className="h-4 w-4" />Surprise me</button></div>
         </div>
@@ -42,10 +42,10 @@ export function BeatStoreHero({ moods, producer, onMood, onSurprise, onFinder, o
       <article className={`absolute inset-0 transition duration-700 ${slide === 1 ? "z-10 translate-x-0 opacity-100" : "pointer-events-none translate-x-8 opacity-0"}`} aria-hidden={slide !== 1}>
         <img src="https://media3.giphy.com/media/T9aOBkDuHGMaC0J2kP/giphy.gif" alt="" className="absolute inset-0 h-full w-full object-cover opacity-35 grayscale-[25%]" />
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,6,7,.98)_0%,rgba(5,6,7,.86)_48%,rgba(5,6,7,.52)_100%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_82%_46%,color-mix(in_srgb,var(--money)_15%,transparent),transparent_30%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_82%_46%,rgba(255,255,255,.09),transparent_30%)]" />
         <div className="relative grid h-full items-center gap-7 p-7 pb-20 sm:p-9 sm:pb-20 lg:grid-cols-[.9fr_1.1fr]">
           <div>
-            <h2 className="text-5xl font-semibold leading-[.91] tracking-[-.06em] sm:text-[3.35rem]">Start with a beat.<br /><span className="text-[var(--money)]">End with a record</span><br />the world can hear.</h2>
+            <h2 className="text-5xl font-semibold leading-[.91] tracking-[-.06em] sm:text-[3.35rem]">Start with a beat.<br /><span className="text-white/55">End with a record</span><br />the world can hear.</h2>
             <p className="mt-5 max-w-md text-sm leading-6 text-white/65">Choose it here. Finish it with a real engineer. Release it without rebuilding your project somewhere else.</p>
             <div className="mt-6 flex flex-wrap gap-3"><button type="button" onClick={onFinder} className={carouselPrimaryButton}><Sparkles className="h-4 w-4" />Find my starting beat</button><Link href="/studio" className={carouselGlassButton}>Meet the studio</Link></div>
           </div>
@@ -55,7 +55,7 @@ export function BeatStoreHero({ moods, producer, onMood, onSurprise, onFinder, o
                 ["01", "BEAT", "Choose the sound. We handle the licence and deliver the right files.", Headphones],
                 ["02", "STUDIO", "Send your vocals. Our engineer turns the session into a finished master.", Mic2],
                 ["03", "WORLD", "Approve the record. HYMN prepares and delivers your release worldwide.", Radio]
-              ].map(([number, title, note, Icon], index) => <div key={String(number)} className={`relative px-3 py-2 sm:px-5 ${index ? "border-l border-white/15" : ""}`}><span className="font-mono text-[9px] text-white/35">{String(number)}</span><Icon className="mt-6 h-7 w-7 text-[var(--money)]" /><strong className="mt-7 block text-xs tracking-[.12em]">{String(title)}</strong><span className="mt-2 block max-w-[11rem] text-[11px] leading-5 text-white/50">{String(note)}</span></div>)}
+              ].map(([number, title, note, Icon], index) => <div key={String(number)} className={`relative px-3 py-2 sm:px-5 ${index ? "border-l border-white/15" : ""}`}><span className="font-mono text-[9px] text-white/35">{String(number)}</span><Icon className="mt-6 h-7 w-7 text-white/70" /><strong className="mt-7 block text-xs tracking-[.12em]">{String(title)}</strong><span className="mt-2 block max-w-[11rem] text-[11px] leading-5 text-white/50">{String(note)}</span></div>)}
             </div>
           </div>
         </div>
@@ -65,7 +65,7 @@ export function BeatStoreHero({ moods, producer, onMood, onSurprise, onFinder, o
         <img src={producerImage} alt="" className="absolute inset-0 h-full w-full object-cover object-center" />
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,6,7,.96),rgba(5,6,7,.62)_48%,rgba(5,6,7,.2))]" />
         <div className="relative flex h-full max-w-2xl flex-col justify-center p-7 pb-20 sm:p-9 sm:pb-20">
-          <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.24em] text-[var(--money)]"><Radio className="h-4 w-4" />Producer on rotation</p>
+          <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.24em] text-white/60"><Radio className="h-4 w-4" />Producer on rotation</p>
           <h2 className="mt-4 text-5xl font-semibold leading-[.92] tracking-[-.055em] sm:text-6xl">{producer?.name || "A new sound is waiting."}</h2>
           <p className="mt-5 max-w-lg text-sm leading-6 text-white/65">{producer?.description || producer?.specialty || "Independent producers, real points of view, and beats made to become songs."}</p>
           <div className="mt-7 flex flex-wrap gap-3"><button type="button" onClick={onProducer} className={carouselPrimaryButton}><Mic2 className="h-4 w-4" />Hear this producer</button><Link href="/producer-login" className={carouselGlassButton}>Put your beats here</Link></div>
