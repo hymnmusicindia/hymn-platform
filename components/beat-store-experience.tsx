@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowRight, Check, ChevronDown, Disc3, ExternalLink, Filter, Gauge, Globe2, Headphones, Instagram, Music2, Search, ShoppingBag, Sparkles, Users2, WandSparkles, X, Youtube } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, Check, ChevronDown, Disc3, ExternalLink, Filter, Gauge, Globe2, Instagram, Music2, Search, ShoppingBag, Sparkles, Users2, WandSparkles, X, Youtube } from "lucide-react";
 import { beatLicenseLabel, beatLicensePrice, buildBeatStorefront, normalizeBeatLicenseType, type BeatStoreLicenseType, type StorefrontBeat } from "@/lib/beat-store";
 import type { Beat, ProducerProfile } from "@/lib/types";
 import { BeatCard } from "@/components/beat-card";
