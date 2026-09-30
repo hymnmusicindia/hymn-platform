@@ -8,21 +8,45 @@ import "./styles/product-ui.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(getPublicAppUrl()),
-  title: "HYMN Music - Hitting Your Music Notes",
-  description:
-    "HYMN full-stack platform for distribution, beats, services, payments, dashboard and admin operations.",
+  title: { default: "HYMN Music | Music Distribution, Beats & Artist Services", template: "%s | HYMN Music" },
+  description: "Release music worldwide, license beats, book mixing and mastering, manage royalties, and grow your independent music career with HYMN Music.",
+  applicationName: "HYMN Music",
+  authors: [{ name: "HYMN Music", url: "/" }],
+  creator: "HYMN Music",
+  publisher: "HYMN Music",
+  category: "Music",
+  keywords: ["music distribution India", "digital music distribution", "buy beats online", "beat licensing", "mixing and mastering", "independent artists", "music royalties", "release music on Spotify", "music producer marketplace", "HYMN Music"],
   icons: {
-    icon: [{ url: "/assets/hymn-favicon.png?v=4", type: "image/png", sizes: "180x180" }],
-    shortcut: "/assets/hymn-favicon.png?v=4",
-    apple: [{ url: "/assets/hymn-favicon.png?v=4", type: "image/png", sizes: "180x180" }]
+    icon: [{ url: "/favicon.png", type: "image/png", sizes: "96x96" }],
+    shortcut: "/favicon.png",
+    apple: [{ url: "/apple-touch-icon.png", type: "image/png", sizes: "180x180" }]
   },
-  alternates: { canonical: "/" }
+  manifest: "/manifest.webmanifest",
+  openGraph: {
+    type: "website",
+    siteName: "HYMN Music",
+    title: "HYMN Music | Music Distribution, Beats & Artist Services",
+    description: "From beat licensing and professional mixing to worldwide music distribution and royalty management.",
+    url: "/",
+    images: [{ url: "/icon-512.png", width: 512, height: 512, alt: "HYMN Music" }]
+  },
+  twitter: { card: "summary", title: "HYMN Music", description: "Music distribution, beats, mixing, mastering and artist services in one platform.", images: ["/icon-512.png"] },
+  robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 } }
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const origin = getPublicAppUrl();
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@graph": [
+      { "@type": "Organization", "@id": `${origin}/#organization`, name: "HYMN Music", url: origin, logo: `${origin}/icon-512.png`, description: "Music distribution, beat licensing, mixing, mastering, royalty and artist services for independent musicians." },
+      { "@type": "WebSite", "@id": `${origin}/#website`, url: origin, name: "HYMN Music", publisher: { "@id": `${origin}/#organization` }, inLanguage: "en-IN" }
+    ]
+  };
   return (
     <html lang="en" data-theme="light" suppressHydrationWarning>
       <head>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
         <script
           id="hymn-theme-initializer"
           dangerouslySetInnerHTML={{

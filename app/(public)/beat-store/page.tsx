@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "License Beats from HYMN Producers | HYMN Beat Store",
+  title: "License Beats from Independent Producers",
   description: "Preview, compare rights, and license curated beats from HYMN producers.",
   alternates: { canonical: "/beat-store" },
   openGraph: { title: "HYMN Beat Store", description: "Curated, release-ready beats with clear licensing.", url: "/beat-store" }

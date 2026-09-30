@@ -14,6 +14,9 @@ import {
   UploadCloud
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Artist & Music Services", description: "Explore music distribution, release marketing, playlist support and professional services built for independent artists and labels.", alternates: { canonical: "/services" } };
 
 type ServiceShowcase = {
   title: string;

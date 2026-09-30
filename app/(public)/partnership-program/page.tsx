@@ -1,6 +1,8 @@
 import { PartnershipLeadForm } from "@/components/partnership-lead-form";
 import { ChevronDown } from "lucide-react";
+import type { Metadata } from "next";
 
+export const metadata: Metadata = { title: "Music Partnership Program", description: "Partner with HYMN Music on producer catalogs, release distribution and artist campaigns.", alternates: { canonical: "/partnership-program" } };
 
 export default function PartnershipProgramPage() {
   const sections = [

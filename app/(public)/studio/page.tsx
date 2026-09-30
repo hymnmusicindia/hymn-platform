@@ -4,7 +4,7 @@ import { BadgeCheck, Clock3, Headphones, SlidersHorizontal } from "lucide-react"
 import { listStudioEngineers } from "@/lib/studio-services";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "HYMN Studio | Mixing & Mastering", description: "Choose a verified HYMN engineer and finish your record in a private Studio workspace." };
+export const metadata: Metadata = { title: "Online Mixing & Mastering Studio", description: "Choose a HYMN engineer, share source files securely, manage revisions and finish a release-ready master in one private workspace.", alternates: { canonical: "/studio" } };
 const money = (value: unknown) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(value));
 
 export default async function StudioPage({ searchParams }: { searchParams: Promise<{ genre?: string; maxPrice?: string; turnaround?: string }> }) {

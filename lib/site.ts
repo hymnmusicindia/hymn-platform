@@ -11,15 +11,15 @@ export const footerColumns = {
   artists: [
     { href: "/beat-store", label: "Browse Beats" },
     { href: "/distribution", label: "Music Distribution" },
+    { href: "/studio", label: "Mixing & Mastering" },
+    { href: "/services", label: "Artist Services" },
     { href: "/login?role=customer", label: "Login / Signup" },
-    { href: "/analytics", label: "Analytics" },
-    { href: "/payout", label: "Payout" }
   ],
   producers: [
-    { href: "/sell-your-beats", label: "Sell Your Beats" },
-    { href: "/login?role=producer", label: "Login / Signup" },
+    { href: "/producer-login", label: "Sell Your Beats" },
+    { href: "/beat-store", label: "Producer Marketplace" },
     { href: "/partnership-program", label: "Partnership Program" },
-    { href: "/payout", label: "Payout" }
+    { href: "/policies/producer-terms", label: "Producer Terms" }
   ],
   company: [
     { href: "/about", label: "About HYMN" },

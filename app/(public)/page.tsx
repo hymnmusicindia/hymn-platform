@@ -16,6 +16,13 @@ import { beatStoreReviews, buildBeatStorefront } from "@/lib/beat-store";
 import { getPublicHomePreview } from "@/lib/public-home-data";
 import { getSession } from "@/lib/session";
 import { destinationForRole } from "@/lib/routes";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Music Distribution, Beats & Artist Services",
+  description: "Build your next release with HYMN Music: license beats, book mixing and mastering, distribute worldwide, track royalties, and grow your independent music career.",
+  alternates: { canonical: "/" }
+};
 
 
 

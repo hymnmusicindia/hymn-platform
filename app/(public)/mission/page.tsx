@@ -4,8 +4,9 @@ import Link from "next/link";
 import { ArrowRight, HeartHandshake, Quote, Sparkles } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Our Mission & Founder | HYMN Music",
-  description: "Learn about HYMN Music's artist-first mission and read a message from founder Aditya Ujjain."
+  title: "Our Mission & Founder",
+  description: "Learn about HYMN Music's artist-first mission and read a message from founder Aditya Ujjain.",
+  alternates: { canonical: "/mission" }
 };
 
 export default function MissionPage() {

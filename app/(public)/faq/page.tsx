@@ -4,8 +4,9 @@ import { ContentPageShell } from "@/components/content-page-shell";
 import { FaqCenter } from "@/components/faq-center";
 
 export const metadata: Metadata = {
-  title: "FAQ | HYMN",
-  description: "Searchable answers for HYMN distribution, pricing, artist profiles, payments, and technical support."
+  title: "Music Distribution & Beat Licensing FAQ",
+  description: "Answers about HYMN music distribution, beat licences, pricing, artist profiles, payments, royalties and technical support.",
+  alternates: { canonical: "/faq" }
 };
 
 const LAST_UPDATED = "August 3, 2026";

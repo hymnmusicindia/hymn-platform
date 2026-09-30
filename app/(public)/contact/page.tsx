@@ -1,6 +1,9 @@
 import { ContactForm } from "@/components/contact-form";
 import { ArrowRight, MessageCircle, Send } from "lucide-react";
 import { getSession } from "@/lib/session";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Contact", description: "Contact HYMN Music for music distribution, beat licensing, release support, partnerships, mixing and mastering.", alternates: { canonical: "/contact" } };
 
 export default async function ContactPage() {
   const session = await getSession();
