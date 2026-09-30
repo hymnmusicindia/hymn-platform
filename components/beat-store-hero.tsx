@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, Headphones, Mic2, Radio, Sparkles, WandSparkles } from "lucide-react";
 import type { ProducerProfile } from "@/lib/types";
@@ -27,27 +26,37 @@ export function BeatStoreHero({ moods, producer, onMood, onSurprise, onFinder, o
   return <section className="relative mb-6 overflow-hidden rounded-[2rem] border border-white/10 bg-[#090a0b] text-white shadow-[0_26px_80px_rgba(0,0,0,.28)]" onPointerEnter={() => setPaused(true)} onPointerLeave={() => setPaused(false)} onFocusCapture={() => setPaused(true)} onBlurCapture={() => setPaused(false)} aria-roledescription="carousel" aria-label="HYMN Beat Store">
     <div className="relative min-h-[480px] sm:min-h-[520px]">
       <article className={`absolute inset-0 transition duration-700 ${slide === 0 ? "z-10 translate-x-0 opacity-100" : "pointer-events-none -translate-x-8 opacity-0"}`} aria-hidden={slide !== 0}>
-        <Image src="/assets/beat-store/artist-studio-hero-v1.png" alt="" fill priority sizes="(max-width: 1700px) 100vw, 1700px" className="object-cover object-[64%_center]" />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,6,7,.96)_0%,rgba(5,6,7,.78)_39%,rgba(5,6,7,.08)_78%)]" />
+        <img src="https://media1.giphy.com/media/v1.Y2lkPTZjMDliOTUydzVwNWR5MGQ2OTQ0YWloa2xic210OXk5dDJrcTlwcXZseW1neThlYiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/n3xnioxdtDrHIsfqOY/giphy-downsized-medium.gif" alt="" className="absolute inset-0 h-full w-full object-cover object-center" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,6,7,.97)_0%,rgba(5,6,7,.75)_43%,rgba(5,6,7,.18)_78%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(0,0,0,.72),transparent_55%)]" />
         <div className="relative flex min-h-[480px] max-w-2xl flex-col justify-center p-7 sm:min-h-[520px] sm:p-12">
           <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.24em] text-white/55"><Headphones className="h-4 w-4" />The HYMN Beat Store</p>
-          <h1 className="mt-5 text-5xl font-semibold leading-[.91] tracking-[-.06em] sm:text-7xl">Hear the first bar.<br /><span className="text-[#c9ff63]">See the whole song.</span></h1>
-          <p className="mt-5 max-w-lg text-sm leading-6 text-white/65 sm:text-base">Find the beat that pulls a record out of you. Licence it clearly and keep building from the same place.</p>
+          <h1 className="mt-5 text-5xl font-semibold leading-[.91] tracking-[-.06em] sm:text-7xl">Find the beat<br /><span className="text-[#c9ff63]">your crowd sings back.</span></h1>
+          <p className="mt-5 max-w-lg text-sm leading-6 text-white/70 sm:text-base">Start with a feeling. Leave with the sound your listeners remember.</p>
           <div className="mt-7 flex flex-wrap gap-2">{moods.slice(0, 4).map((mood) => <button key={mood} type="button" onClick={() => onMood(mood)} className="rounded-full border border-white/20 bg-black/20 px-4 py-2.5 text-xs font-semibold backdrop-blur transition hover:-translate-y-0.5 hover:border-[#c9ff63] hover:text-[#c9ff63]">{mood}</button>)}<button type="button" onClick={onSurprise} className="inline-flex items-center gap-2 rounded-full bg-[#c9ff63] px-4 py-2.5 text-xs font-bold text-black transition hover:scale-[1.03]"><WandSparkles className="h-4 w-4" />Surprise me</button></div>
         </div>
       </article>
 
       <article className={`absolute inset-0 transition duration-700 ${slide === 1 ? "z-10 translate-x-0 opacity-100" : "pointer-events-none translate-x-8 opacity-0"}`} aria-hidden={slide !== 1}>
-        <div className="absolute inset-0 bg-[#ebe9e2]" />
-        <div className="absolute -right-20 top-[-9rem] h-[34rem] w-[34rem] rounded-full border-[6rem] border-[#c9ff63]" />
-        <Image src="/assets/release-globe.svg" alt="" width={448} height={448} className="absolute bottom-[-4rem] right-[5%] h-[28rem] w-[28rem] opacity-75" />
-        <div className="relative flex min-h-[480px] max-w-3xl flex-col justify-center p-7 text-black sm:min-h-[520px] sm:p-12">
-          <p className="text-[10px] font-bold uppercase tracking-[.24em] text-black/45">One song. One connected run.</p>
-          <h2 className="mt-5 text-5xl font-semibold leading-[.91] tracking-[-.06em] sm:text-7xl">Beat to master.<br />Master to world.</h2>
-          <div className="mt-8 grid max-w-2xl gap-2 sm:grid-cols-3">
-            {[["01", "Choose the beat", "Clear licence. Files ready."], ["02", "Mix + master", "Work with HYMN engineers."], ["03", "Release everywhere", "Distribution when it’s ready."]].map(([number, title, note]) => <div key={number} className="border-t border-black/25 py-4 sm:pr-5"><span className="font-mono text-[10px] text-black/40">{number}</span><strong className="mt-2 block text-sm">{title}</strong><span className="mt-1 block text-xs text-black/50">{note}</span></div>)}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_35%,rgba(201,255,99,.18),transparent_26%),linear-gradient(135deg,#090b0d,#15191a_55%,#080909)]" />
+        <div className="absolute inset-0 opacity-15" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,.16) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.16) 1px,transparent 1px)", backgroundSize: "42px 42px" }} />
+        <div className="absolute inset-x-0 top-[30%] flex h-24 items-center gap-1 overflow-hidden opacity-20">{Array.from({ length: 56 }).map((_, index) => <span key={index} className="w-1 shrink-0 rounded-full bg-[#c9ff63] animate-pulse" style={{ height: `${18 + ((index * 29) % 72)}%`, animationDelay: `${index * 35}ms` }} />)}</div>
+        <div className="relative grid min-h-[480px] items-center gap-7 p-7 sm:min-h-[520px] sm:p-12 lg:grid-cols-[.9fr_1.1fr]">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[.24em] text-[#c9ff63]">From spark to speakers</p>
+            <h2 className="mt-5 text-5xl font-semibold leading-[.91] tracking-[-.06em] sm:text-6xl">One beat.<br />A finished record.<br /><span className="text-[#c9ff63]">Everywhere.</span></h2>
+            <p className="mt-5 max-w-md text-sm leading-6 text-white/60">Licence the sound, finish it with HYMN engineers, then send it to the stores your listeners already use.</p>
+            <div className="mt-6 flex flex-wrap gap-3"><button type="button" onClick={onFinder} className="inline-flex items-center gap-2 rounded-full bg-[#c9ff63] px-5 py-3 text-xs font-bold text-black"><Sparkles className="h-4 w-4" />Find my starting beat</button><Link href="/studio" className="rounded-full border border-white/25 px-5 py-3 text-xs font-semibold">Meet the studio</Link></div>
           </div>
-          <div className="mt-6 flex flex-wrap gap-3"><button type="button" onClick={onFinder} className="inline-flex items-center gap-2 rounded-full bg-black px-5 py-3 text-xs font-semibold text-white"><Sparkles className="h-4 w-4" />Need a beat for your banger?</button><Link href="/studio" className="rounded-full border border-black/25 px-5 py-3 text-xs font-semibold">Explore mixing</Link></div>
+          <div className="relative">
+            <div className="absolute left-[12%] right-[12%] top-1/2 h-px bg-[linear-gradient(90deg,transparent,#c9ff63,transparent)]" />
+            <div className="relative grid grid-cols-3 gap-2">
+              {[["01", "BEAT", "Find the pulse", Headphones], ["02", "STUDIO", "Shape the record", Mic2], ["03", "WORLD", "Meet listeners", Radio]].map(([number, title, note, Icon]) => <div key={String(number)} className="relative rounded-[1.4rem] border border-white/12 bg-black/45 p-4 backdrop-blur-md sm:p-5"><span className="font-mono text-[9px] text-white/35">{String(number)}</span><span className="mt-8 grid h-11 w-11 place-items-center rounded-full bg-[#c9ff63] text-black shadow-[0_0_32px_rgba(201,255,99,.25)]"><Icon className="h-5 w-5" /></span><strong className="mt-5 block text-xs tracking-[.12em]">{String(title)}</strong><span className="mt-1 block text-[10px] text-white/45">{String(note)}</span></div>)}
+            </div>
+            <div className="mt-4 flex items-center justify-center gap-5 rounded-full border border-white/10 bg-black/35 px-5 py-3">
+              {["spotify", "apple", "youtube", "amazon"].map((store) => <img key={store} src={`/assets/store-logos/wordmark-${store}.png`} alt={store} className="h-4 max-w-20 object-contain brightness-0 invert opacity-65" />)}
+            </div>
+          </div>
         </div>
       </article>
 
