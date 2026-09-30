@@ -262,47 +262,31 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
   };
 
   return (
-    <aside className={`fixed inset-x-0 bottom-0 z-[2147483640] border-t border-white/10 bg-[color-mix(in_srgb,var(--bg)_92%,black)] shadow-[0_-24px_70px_rgba(0,0,0,0.34)] backdrop-blur-xl transition-transform duration-300 ${collapsed && !menuOpen && !licensingOpen ? "translate-y-[calc(100%-0.55rem-env(safe-area-inset-bottom))]" : "translate-y-0"}`} onPointerEnter={() => setCollapsed(false)} onFocus={() => setCollapsed(false)}>
-      <button type="button" onClick={() => setCollapsed((current) => !current)} className="absolute left-1/2 top-0 h-4 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-[var(--card-strong)] shadow-lg" aria-label={collapsed ? "Expand preview player" : "Collapse preview player"} />
-      <div className="mx-auto max-w-[1700px] px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 sm:px-5">
-        <div className="flex items-center gap-2 text-[11px] font-semibold text-[var(--text-soft)]">
-          <span>{formatTime(value.currentTime)}</span>
-          <input
-            type="range"
-            min={0}
-            max={Math.max(1, value.duration || 1)}
-            step={0.1}
-            value={Math.min(value.currentTime, value.duration || value.currentTime)}
-            onChange={(event) => value.seek(Number(event.target.value))}
-            className="beat-player-range h-8 flex-1"
-            style={{ ["--beat-progress" as string]: `${progress}%` }}
-            aria-label={`Seek ${beat.title}`}
-          />
-          <span>{formatTime(value.duration)}</span>
-        </div>
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:grid-cols-[minmax(220px,0.85fr)_minmax(240px,1fr)_minmax(230px,0.9fr)]">
-          <button type="button" onClick={() => value.openLicensing(beat)} className="flex min-w-0 items-center gap-3 text-left" aria-label={`Open licence options for ${beat.title}`}>
-            <PlayerArtwork beat={beat} />
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold text-[var(--text)]">{beat.title}</span>
-              <span className="block truncate text-xs text-[var(--text-soft)]">{beat.producer.name}</span>
-            </span>
-          </button>
+    <aside className={`fixed inset-x-0 bottom-0 z-[2147483640] border-t border-white/10 bg-black/65 shadow-[0_-12px_40px_rgba(0,0,0,0.25)] backdrop-blur-2xl transition-transform duration-300 ${collapsed && !menuOpen && !licensingOpen ? "translate-y-[calc(100%-0.4rem-env(safe-area-inset-bottom))]" : "translate-y-0"}`} onPointerEnter={() => setCollapsed(false)} onFocus={() => setCollapsed(false)}>
+      <button type="button" onClick={() => setCollapsed((current) => !current)} className="absolute left-1/2 top-0 h-2 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/15" aria-label={collapsed ? "Expand preview player" : "Collapse preview player"} />
+      <div className="mx-auto grid max-w-[1700px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-3 pb-[calc(0.45rem+env(safe-area-inset-bottom))] pt-2 sm:grid-cols-[minmax(180px,.75fr)_minmax(360px,1.35fr)_auto] sm:px-5">
+        <button type="button" onClick={() => value.openLicensing(beat)} className="flex min-w-0 items-center gap-2.5 text-left" aria-label={`Open licence options for ${beat.title}`}>
+          <span className="scale-90"><PlayerArtwork beat={beat} /></span>
+          <span className="min-w-0"><span className="block truncate text-xs font-semibold text-white sm:text-sm">{beat.title}</span><span className="block truncate text-[10px] text-white/45 sm:text-xs">{beat.producer.name} · {beat.bpm} BPM</span></span>
+        </button>
 
-          <div className="flex items-center justify-center gap-2 sm:gap-3">
-            <button type="button" onClick={value.previous} className="hidden h-10 w-10 place-items-center rounded-full text-[var(--text)] transition hover:bg-white/8 sm:grid" aria-label="Previous beat" disabled={!canUseQueue}><ChevronLeft className="h-5 w-5" /></button>
-            <button type="button" onClick={value.togglePlay} className="grid h-12 w-12 place-items-center rounded-full bg-white text-black shadow-[0_14px_36px_rgba(255,255,255,0.18)] transition hover:scale-105" aria-label={value.playing ? `Pause ${beat.title}` : `Play ${beat.title}`}>
-              {value.playing ? <Pause className="h-5 w-5" fill="currentColor" /> : <Play className="ml-0.5 h-5 w-5" fill="currentColor" />}
-            </button>
-            <button type="button" onClick={value.next} className="hidden h-10 w-10 place-items-center rounded-full text-[var(--text)] transition hover:bg-white/8 sm:grid" aria-label="Next beat" disabled={!canUseQueue}><ChevronRight className="h-5 w-5" /></button>
+        <div className="order-3 col-span-2 flex min-w-0 items-center gap-2 sm:order-none sm:col-span-1">
+          <div className="flex shrink-0 items-center">
+            <button type="button" onClick={value.previous} className="grid h-8 w-8 place-items-center rounded-full text-white/65 transition hover:bg-white/10 hover:text-white" aria-label="Previous beat" disabled={!canUseQueue}><ChevronLeft className="h-4 w-4" /></button>
+            <button type="button" onClick={value.togglePlay} className="grid h-10 w-10 place-items-center rounded-full bg-white text-black transition hover:scale-105" aria-label={value.playing ? `Pause ${beat.title}` : `Play ${beat.title}`}>{value.playing ? <Pause className="h-4 w-4" fill="currentColor" /> : <Play className="ml-0.5 h-4 w-4" fill="currentColor" />}</button>
+            <button type="button" onClick={value.next} className="grid h-8 w-8 place-items-center rounded-full text-white/65 transition hover:bg-white/10 hover:text-white" aria-label="Next beat" disabled={!canUseQueue}><ChevronRight className="h-4 w-4" /></button>
           </div>
+          <span className="w-8 text-right font-mono text-[9px] text-white/45">{formatTime(value.currentTime)}</span>
+          <input type="range" min={0} max={Math.max(1, value.duration || 1)} step={0.1} value={Math.min(value.currentTime, value.duration || value.currentTime)} onChange={(event) => value.seek(Number(event.target.value))} className="beat-player-range h-6 min-w-0 flex-1" style={{ ["--beat-progress" as string]: `${progress}%` }} aria-label={`Seek ${beat.title}`} />
+          <span className="w-8 font-mono text-[9px] text-white/45">{value.duration ? `-${formatTime(Math.max(0, value.duration - value.currentTime))}` : "0:00"}</span>
+        </div>
 
-          <div className="hidden items-center justify-end gap-2 sm:flex">
+        <div className="flex items-center justify-end gap-1">
             <button type="button" onClick={() => value.setLoop(!value.loop)} className={`grid h-10 w-10 place-items-center rounded-full border transition ${value.loop ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]" : "border-transparent text-[var(--text-soft)] hover:bg-white/8 hover:text-[var(--text)]"}`} aria-label={value.loop ? "Disable loop" : "Loop preview"}><Repeat className="h-4 w-4" /></button>
-            <button type="button" onClick={() => value.setMuted(!value.muted)} className="grid h-10 w-10 place-items-center rounded-full text-[var(--text-soft)] transition hover:bg-white/8 hover:text-[var(--text)]" aria-label={value.muted ? "Unmute audio" : "Mute audio"}>{value.muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}</button>
-            <input type="range" min={0} max={1} step={0.01} value={value.volume} onChange={(event) => value.setVolume(Number(event.target.value))} className="beat-volume-range w-20" aria-label="Preview volume" />
+            <button type="button" onClick={() => value.setMuted(!value.muted)} className="hidden h-9 w-9 place-items-center rounded-full text-white/55 transition hover:bg-white/10 hover:text-white md:grid" aria-label={value.muted ? "Unmute audio" : "Mute audio"}>{value.muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}</button>
+            <input type="range" min={0} max={1} step={0.01} value={value.volume} onChange={(event) => value.setVolume(Number(event.target.value))} className="beat-volume-range hidden w-16 lg:block" aria-label="Preview volume" />
             <div className="relative">
-              <button type="button" onClick={() => setMenuOpen((current) => !current)} className="grid h-10 w-10 place-items-center rounded-full text-[var(--text-soft)] transition hover:bg-white/8 hover:text-[var(--text)]" aria-label="More beat actions"><ListMusic className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setMenuOpen((current) => !current)} className="grid h-9 w-9 place-items-center rounded-full text-white/55 transition hover:bg-white/10 hover:text-white" aria-label="More beat actions"><ListMusic className="h-4 w-4" /></button>
               {menuOpen ? (
                 <div className="absolute bottom-12 right-0 w-[min(92vw,560px)] overflow-hidden rounded-[1.4rem] border border-white/10 bg-[color-mix(in_srgb,var(--bg)_94%,black)] shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl">
                   <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
@@ -335,12 +319,11 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
                 </div>
               ) : null}
             </div>
-            <button type="button" onClick={addToCart} className="btn-outline pressable min-h-10 px-3 text-xs" aria-label={`Add ${beat.title} to cart`}><ShoppingBag className="h-4 w-4" /><span className="hidden xl:inline">Add</span></button>
-            <button type="button" onClick={() => value.openLicensing(beat, "wav")} className="btn-primary pressable min-h-10 px-4 text-xs">From {formatMoney(fromPrice)}</button>
-          </div>
+            <button type="button" onClick={addToCart} className="grid h-9 w-9 place-items-center rounded-full border border-white/15 text-white transition hover:border-[var(--accent)] hover:text-[var(--accent)]" aria-label={`Add ${beat.title} to cart`}><ShoppingBag className="h-4 w-4" /></button>
+            <button type="button" onClick={() => value.openLicensing(beat, "wav")} className="hidden rounded-full bg-white px-3.5 py-2 text-[10px] font-bold text-black transition hover:scale-[1.02] sm:block">From {formatMoney(fromPrice)}</button>
+        </div>
         </div>
         {value.error ? <p className="mt-2 text-xs font-semibold text-red-300">{customerMessage(value.error)}</p> : null}
-      </div>
     </aside>
   );
 }
@@ -483,7 +466,7 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
 
   return (
     <BeatPreviewContext.Provider value={value}>
-      <div className={activeBeat ? "pb-[calc(7.5rem+env(safe-area-inset-bottom))] sm:pb-[7.25rem]" : undefined}>
+      <div className={activeBeat ? "pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-[4.75rem]" : undefined}>
         {children}
       </div>
       <BottomPlayer value={value} licensingOpen={licensingOpen} />
