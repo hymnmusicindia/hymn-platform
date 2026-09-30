@@ -30,21 +30,26 @@ export function HomeProducerInvitation() {
           </div>
         </div>
 
-        <div className="relative mt-10 min-h-[275px] lg:mt-0">
-          <div className="absolute left-[2%] top-1 w-[78%] rotate-[-3deg] rounded-[1.4rem] border border-white/15 bg-black/55 p-5 shadow-[0_24px_70px_rgba(0,0,0,.45)] backdrop-blur-xl transition duration-300 hover:rotate-0">
-            <div className="flex items-center justify-between"><span className="rounded-full border border-white/15 px-2.5 py-1 text-[8px] font-semibold uppercase tracking-[.18em] text-white/55">Your storefront</span><span className="flex items-center gap-1.5 text-[9px] text-white/45"><span className="h-1.5 w-1.5 rounded-full bg-white" />Live preview</span></div>
-            <div className="mt-5 flex items-center gap-4">
-              <span className="relative grid h-16 w-16 shrink-0 place-items-center rounded-full border border-white/20 bg-[repeating-radial-gradient(circle,#08090b_0_5px,#252830_6px_7px)] shadow-[0_8px_22px_rgba(0,0,0,.5)]"><span className="grid h-7 w-7 place-items-center rounded-full bg-white text-black"><Play className="ml-0.5 h-3 w-3 fill-current" /></span></span>
-              <div className="min-w-0 flex-1"><p className="truncate text-lg font-semibold">Your next placement</p><p className="mt-1 text-xs text-white/45">Preview · 02:41</p><div className="mt-3 h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full w-[42%] rounded-full bg-white/70" /></div></div>
-              <div className="text-right"><p className="text-[9px] uppercase tracking-[.16em] text-white/35">From</p><p className="mt-1 text-lg font-semibold">₹120</p></div>
+        <div className="relative mt-8 flex justify-center lg:mt-0 lg:justify-end lg:pr-10">
+          <div className="pointer-events-none absolute inset-8 rounded-full bg-white/[.07] blur-3xl" />
+          <div className="relative w-[250px] max-w-full rotate-[5deg] rounded-[2.5rem] border border-white/35 bg-gradient-to-br from-[#686b71] via-[#1a1b1e] to-[#45484f] p-[5px] shadow-[18px_28px_65px_rgba(0,0,0,.65),inset_0_0_0_1px_rgba(255,255,255,.2)] transition-transform duration-500 hover:rotate-0 focus-within:rotate-0 motion-reduce:transition-none">
+            <span aria-hidden="true" className="absolute -left-[3px] top-20 h-10 w-[3px] rounded-l bg-[#666970]" />
+            <span aria-hidden="true" className="absolute -right-[3px] top-24 h-14 w-[3px] rounded-r bg-[#666970]" />
+            <div className="overflow-hidden rounded-[2.2rem] border border-black bg-[#0b0c0f] px-4 pb-3 pt-3">
+              <div aria-hidden="true" className="flex items-center justify-between px-1 text-[9px] font-semibold text-white/70"><span>9:41</span><span className="h-5 w-[68px] rounded-full bg-black shadow-[inset_0_0_0_1px_#222]" /><span className="h-2 w-4 rounded-sm border border-white/60 bg-white/50" /></div>
+              <div className="mb-3 mt-4 flex items-center justify-between"><strong className="text-sm tracking-[-.04em]">HYMN</strong><span className="text-[8px] uppercase tracking-[.18em] text-white/40">Store preview</span></div>
+              <div className="relative grid h-[125px] place-items-center overflow-hidden rounded-2xl bg-[radial-gradient(ellipse_at_30%_10%,#747a85,#272a31_45%,#111216_80%)]">
+                <span aria-hidden="true" className="absolute -right-8 -top-8 h-36 w-36 rounded-full border border-white/10" />
+                <span aria-hidden="true" className="grid h-24 w-24 place-items-center rounded-full border border-white/15 bg-[repeating-radial-gradient(circle,#08090b_0_4px,#252830_5px_6px)] shadow-[8px_12px_22px_rgba(0,0,0,.6)]"><span className="grid h-8 w-8 place-items-center rounded-full bg-[#d5d8dd] text-black"><Play className="ml-0.5 h-3 w-3 fill-current" /></span></span>
+              </div>
+              <div className="mt-3"><p className="text-base font-semibold tracking-tight">Your sound. Your store.</p><p className="mt-1 text-[10px] text-white/45">Original beats, ready for their next record.</p></div>
+              <div className="my-3 flex items-center gap-1" aria-hidden="true">{[7,12,8,17,22,10,15,24,13,8,20,16,9,22,14,7,18,11,15,7].map((height, index) => <span key={index} className={`flex-1 rounded-full ${index < 8 ? "bg-white/80" : "bg-white/20"}`} style={{ height }} />)}</div>
+              <div className="grid grid-cols-3 gap-1 border-y border-white/10 py-2" aria-label="Explore selling steps">
+                {steps.map((step, index) => <button key={step.name} type="button" onClick={() => setActive(index)} aria-pressed={active === index} className={`flex flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-[10px] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-white ${active === index ? "bg-white text-black" : "text-white/50 hover:bg-white/10 hover:text-white"}`}><step.icon className="h-3.5 w-3.5" />{step.name}</button>)}
+              </div>
+              <p className="min-h-9 pt-3 text-center text-[10px] text-white/65" aria-live="polite">{steps[active].detail}</p>
+              <div aria-hidden="true" className="mx-auto mt-2 h-1 w-20 rounded-full bg-white/60" />
             </div>
-          </div>
-
-          <div className="absolute bottom-1 right-0 w-[82%] rotate-[2deg] rounded-[1.4rem] border border-white/20 bg-[#17191e]/90 p-4 shadow-[0_25px_70px_rgba(0,0,0,.45)] backdrop-blur-2xl transition duration-300 hover:rotate-0">
-            <div className="relative grid grid-cols-3 before:absolute before:left-[16%] before:right-[16%] before:top-5 before:h-px before:bg-white/15">
-              {steps.map((step, index) => <button key={step.name} type="button" onClick={() => setActive(index)} aria-pressed={active === index} className="relative z-10 flex flex-col items-center text-center"><span className={`grid h-10 w-10 place-items-center rounded-full border transition ${active === index ? "border-white bg-white text-black shadow-[0_0_24px_rgba(255,255,255,.2)]" : "border-white/20 bg-[#111216] text-white/55 hover:border-white/50"}`}><step.icon className="h-4 w-4" /></span><strong className={`mt-2 text-[10px] ${active === index ? "text-white" : "text-white/45"}`}>{step.name}</strong></button>)}
-            </div>
-            <p className="mt-3 border-t border-white/10 pt-3 text-center text-xs text-white/65" aria-live="polite">{steps[active].detail}</p>
           </div>
         </div>
       </div>
