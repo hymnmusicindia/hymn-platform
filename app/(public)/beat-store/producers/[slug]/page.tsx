@@ -18,7 +18,7 @@ export default async function ProducerProfilePage({ params }: { params: Promise<
 
   return (
     <main className="pb-20">
-      <section className="relative overflow-hidden border-b" style={{ borderColor: "var(--border)" }}>
+      <section className="force-dark relative overflow-hidden border-b" style={{ borderColor: "var(--border)" }}>
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `linear-gradient(180deg, rgba(0, 0, 0, 0.48), rgba(0, 0, 0, 0.84)), url("${producer.imageUrl}")` }}

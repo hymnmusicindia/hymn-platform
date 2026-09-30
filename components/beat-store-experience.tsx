@@ -249,7 +249,7 @@ function BeatFinderWizard({ open, genres, moods, onClose, onApply }: { open: boo
     onApply({ genre, mood, min, max, budget: budget === "any" ? null : Number(budget.replace(/[^0-9]/g, "")) });
     onClose();
   };
-  return <div className="fixed inset-0 z-[2147483550] grid place-items-center p-3 sm:p-6">
+  return <div className="fixed inset-0 z-[180] grid place-items-center p-3 sm:p-6">
     <button type="button" onClick={onClose} className="absolute inset-0 bg-black/70 backdrop-blur-md" aria-label="Close beat finder" />
     <section ref={dialogRef as React.RefObject<HTMLElement | null>} role="dialog" aria-modal="true" aria-labelledby="beat-finder-title" tabIndex={-1} className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] border border-white/10 bg-[var(--bg)] shadow-[0_30px_100px_rgba(0,0,0,.55)]">
       <div className="h-1 bg-[var(--border)]"><div className="h-full bg-[var(--accent)] transition-all duration-500" style={{ width: `${((step + 1) / steps.length) * 100}%` }} /></div>

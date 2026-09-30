@@ -231,7 +231,7 @@ export function PayoutDashboard({ initialSummary }: { initialSummary: PayoutSumm
 
       <nav className="surface-card mt-6 flex gap-1 overflow-x-auto p-1.5" aria-label="Payout sections">
         {(["overview", "monthly", "quarterly", "statements", "requests", "details"] as const).map((tab) => (
-          <button key={tab} type="button" onClick={() => selectTab(tab)} aria-current={activeTab === tab ? "page" : undefined} className={activeTab === tab ? "btn-primary pressable shrink-0 px-4 py-2 text-sm capitalize" : "pressable shrink-0 rounded-full px-4 py-2 text-sm font-medium capitalize transition-colors hover:bg-black/5 dark:hover:bg-white/5"} style={activeTab === tab ? undefined : { color: "var(--text-muted)" }}>
+          <button key={tab} type="button" onClick={() => selectTab(tab)} aria-current={activeTab === tab ? "page" : undefined} className={activeTab === tab ? "btn-primary pressable shrink-0 px-4 py-2 text-sm capitalize" : "pressable shrink-0 rounded-full px-4 py-2 text-sm font-medium capitalize transition-colors hover:bg-[var(--hover)]"} style={activeTab === tab ? undefined : { color: "var(--text-muted)" }}>
             {tab === "details" ? "Payout details" : tab}
           </button>
         ))}

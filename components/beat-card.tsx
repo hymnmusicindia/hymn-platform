@@ -15,7 +15,7 @@ export function BeatCard({ beat, active = false, playing = false, onPlay, onAdd,
   const startingPrice = Math.min(beatLicensePrice(beat, "mp3"), beatLicensePrice(beat, "wav"));
   const artwork = beat.coverImage && !coverFailed ? beat.coverImage : "";
 
-  return <article className={`group relative grid min-h-[98px] grid-cols-[78px_minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-2xl border bg-[#101216] p-3 text-white transition duration-200 hover:-translate-y-0.5 hover:border-white/25 hover:shadow-[0_16px_38px_rgba(0,0,0,.22)] sm:grid-cols-[78px_minmax(190px,1.4fr)_minmax(190px,.8fr)_auto] sm:gap-4 ${active ? "border-white/35 ring-1 ring-white/10" : "border-white/10"}`} id={`beat-${beat.id}`}>
+  return <article className={`force-dark group relative grid min-h-[98px] grid-cols-[78px_minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-2xl border bg-[#101216] p-3 text-white transition duration-200 hover:-translate-y-0.5 hover:border-white/25 hover:shadow-[0_16px_38px_rgba(0,0,0,.22)] sm:grid-cols-[78px_minmax(190px,1.4fr)_minmax(190px,.8fr)_auto] sm:gap-4 ${active ? "border-white/35 ring-1 ring-white/10" : "border-white/10"}`} id={`beat-${beat.id}`}>
     {artwork ? <img src={artwork} alt="" loading="lazy" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-25 blur-[2px] transition duration-500 group-hover:scale-[1.14] group-hover:opacity-30" onError={() => setCoverFailed(true)} /> : null}
     <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(7,8,10,.68),rgba(10,11,14,.90)_42%,rgba(10,11,14,.97))]" />
 

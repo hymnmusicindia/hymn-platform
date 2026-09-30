@@ -144,7 +144,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
   };
 
   return (
-    <div className="fixed inset-x-0 bottom-0 top-16 z-[2147483500] grid place-items-center overflow-hidden p-2 pb-[6.75rem] sm:top-[4.5rem] sm:p-3 sm:pb-[5.5rem]">
+    <div className="force-dark fixed inset-x-0 bottom-0 top-16 z-[180] grid place-items-center overflow-hidden p-2 pb-[6.75rem] sm:top-[4.5rem] sm:p-3 sm:pb-[5.5rem]">
       <button type="button" className="absolute inset-0 bg-black/72 backdrop-blur-md" onClick={(event) => close(event)} aria-label="Close licensing options" />
       <div
         ref={panelRef}
@@ -246,7 +246,7 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
   };
 
   return (
-    <aside className={`fixed inset-x-0 bottom-0 z-[2147483640] border-t border-white/10 bg-black/65 shadow-[0_-12px_40px_rgba(0,0,0,0.25)] backdrop-blur-2xl transition-transform duration-300 ${collapsed && !menuOpen ? "translate-y-[calc(100%-0.5rem-env(safe-area-inset-bottom))]" : "translate-y-0"}`} onPointerEnter={() => setCollapsed(false)} onPointerLeave={() => { if (licensingOpen) setCollapsed(true); }} onFocus={() => setCollapsed(false)}>
+    <aside className={`force-dark fixed inset-x-0 bottom-0 z-[190] border-t border-white/10 bg-black/65 shadow-[0_-12px_40px_rgba(0,0,0,0.25)] backdrop-blur-2xl transition-transform duration-300 ${collapsed && !menuOpen ? "translate-y-[calc(100%-0.5rem-env(safe-area-inset-bottom))]" : "translate-y-0"}`} onPointerEnter={() => setCollapsed(false)} onPointerLeave={() => { if (licensingOpen) setCollapsed(true); }} onFocus={() => setCollapsed(false)}>
       <button type="button" onClick={() => setCollapsed((current) => !current)} className="absolute left-1/2 top-0 h-2 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/15" aria-label={collapsed ? "Expand preview player" : "Collapse preview player"} />
       <div className="mx-auto grid max-w-[1700px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-3 pb-[calc(0.45rem+env(safe-area-inset-bottom))] pt-2 sm:grid-cols-[minmax(180px,.75fr)_minmax(360px,1.35fr)_auto] sm:px-5">
         <button type="button" onClick={() => value.openLicensing(beat)} className="flex min-w-0 items-center gap-2.5 text-left" aria-label={`Open licence options for ${beat.title}`}>

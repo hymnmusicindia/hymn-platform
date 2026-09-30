@@ -533,13 +533,13 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
               <p className="mt-1 truncate text-xs" style={{ color: "var(--text-muted)" }}>{user.email}</p>
             </div>
             <div className="border-b py-3" style={{ borderColor: "var(--border)" }}>
-              <button type="button" onClick={() => setPresenceExpanded(value => !value)} className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition hover:bg-white/5" role="menuitem" aria-expanded={presenceExpanded}>
+              <button type="button" onClick={() => setPresenceExpanded(value => !value)} className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition hover:bg-[var(--hover)]" role="menuitem" aria-expanded={presenceExpanded}>
                 <span className="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full" style={{ background: presence === "online" ? "var(--success)" : presence === "do_not_disturb" ? "var(--danger)" : "var(--text-soft)" }}>{presence === "do_not_disturb" ? <span className="h-[2px] w-2 rounded-full bg-white" /> : presence === "invisible" ? <span className="h-2 w-2 rounded-full bg-[var(--card-strong)]" /> : null}</span>
                 <span className="min-w-0 flex-1"><span className="block text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Profile status</span><strong className="mt-1 block text-xs font-semibold">{presenceOptions.find(option => option.value === presence)?.label}</strong></span>
                 <ChevronDown className={clsx("h-4 w-4 shrink-0 transition-transform", presenceExpanded && "rotate-180")} style={{ color: "var(--text-soft)" }} />
               </button>
               {presenceExpanded ? <div className="mt-1 grid gap-1 rounded-xl border p-1.5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-                {presenceOptions.map(option => <button key={option.value} type="button" disabled={presenceSaving} onClick={() => updatePresence(option.value)} className={clsx("flex items-center gap-3 rounded-lg px-2.5 py-2 text-left transition hover:bg-white/5 disabled:opacity-60", presence === option.value && "bg-white/[0.06]")} role="menuitemradio" aria-checked={presence === option.value}>
+                {presenceOptions.map(option => <button key={option.value} type="button" disabled={presenceSaving} onClick={() => updatePresence(option.value)} className={clsx("flex items-center gap-3 rounded-lg px-2.5 py-2 text-left transition hover:bg-[var(--hover)] disabled:opacity-60", presence === option.value && "bg-[var(--hover)]")} role="menuitemradio" aria-checked={presence === option.value}>
                   <span className="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full" style={{ background: option.value === "online" ? "var(--success)" : option.value === "do_not_disturb" ? "var(--danger)" : "var(--text-soft)" }}>{option.value === "do_not_disturb" ? <span className="h-[2px] w-2 rounded-full bg-white" /> : option.value === "invisible" ? <span className="h-2 w-2 rounded-full bg-[var(--card-strong)]" /> : null}</span>
                   <span className="min-w-0 flex-1"><strong className="block text-xs font-semibold">{option.label}</strong><span className="mt-0.5 block text-[10px]" style={{ color: "var(--text-soft)" }}>{option.description}</span></span>
                   {presence === option.value ? <CheckCircle2 className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} /> : null}
@@ -547,19 +547,19 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
               </div> : null}
             </div>
             <div className="mt-3 grid gap-1">
-              <Link href={user.role === "producer" ? "/producer/dashboard" : "/dashboard"} onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-white/5">
+              <Link href={user.role === "producer" ? "/producer/dashboard" : "/dashboard"} onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
                 <UserRound className="h-4 w-4" />
                 Update personal details
               </Link>
-              <Link href="/dashboard/releases" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-white/5">
+              <Link href="/dashboard/releases" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
                 <ShieldCheck className="h-4 w-4" />
                 Releases and account status
               </Link>
-              <Link href="/payout" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-white/5">
+              <Link href="/payout" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
                 <Bell className="h-4 w-4" />
                 Payout
               </Link>
-              <Link href="/faq" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-white/5">
+              <Link href="/faq" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
                 <HelpCircle className="h-4 w-4" />
                 Help and FAQ
               </Link>
@@ -575,7 +575,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
   return (
     <header
-      className="sticky top-0 z-50 border-b backdrop-blur-2xl backdrop-saturate-150"
+      className="sticky top-0 z-[200] border-b backdrop-blur-2xl backdrop-saturate-150"
       style={{
         borderColor: scrolled || open ? "var(--header-border)" : "transparent",
         background: scrolled || open ? "var(--header-bg-solid)" : "var(--header-bg)",
