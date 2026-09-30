@@ -117,18 +117,6 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
     disabled: entry.purchasableKey === "exclusive" && (beat.exclusiveRemaining === 0 || licensePrice(beat, "exclusive") <= 0)
   }));
   const selectedOption = options.find((option) => option.purchasableKey === selected) ?? options[0];
-  const normalizedSelected = normalizeBeatLicenseType(selectedOption.purchasableKey);
-  const terms = [
-    ["Files Included", normalizedSelected === "mp3" ? "MP3 deliverable only." : normalizedSelected === "wav" ? "WAV/master deliverable." : normalizedSelected === "stems" ? "Stem files if supplied by the producer." : "Stem files plus WAV/master deliverable."],
-    ["Commercial Usage", selectedOption.commercialUse ? "Commercial use is allowed under the stored licence snapshot." : "Commercial use is not enabled for this licence."],
-    ["Release Limit", normalizedSelected === "exclusive" ? "Complete exclusive right after successful purchase." : `${beat.generalMaxCommercialReleases ?? 1} commercial release${(beat.generalMaxCommercialReleases ?? 1) === 1 ? "" : "s"}.`],
-    ["Streams / Views", beat.generalStreamingLimit ? `${beat.generalStreamingLimit.toLocaleString("en-IN")} streams/views for General Licence.` : normalizedSelected === "exclusive" ? "As stated in the exclusive agreement snapshot." : "Configured per beat/licence snapshot."],
-    ["Monetisation", (normalizedSelected === "exclusive" || beat.generalMonetizationAllowed !== false) ? "Monetisation is allowed." : "Monetisation is not allowed."],
-    ["Credit Requirement", normalizedSelected === "exclusive" ? "Credit terms follow the exclusive agreement." : beat.generalCreditRequired === false ? "Producer credit is optional." : "Producer credit is required."],
-    ["Content ID", normalizedSelected === "exclusive" ? "Content ID is included for the exclusive buyer." : "Content ID is not allowed for this general licence."],
-    ["Exclusivity", normalizedSelected === "exclusive" ? "Beat is removed from future marketplace sales after successful exclusive purchase. Prior General licences remain valid." : "Non-exclusive. The beat remains available to other customers."],
-    ["Refund Policy", "Checkout and licence delivery use HYMN's existing verified purchase flow."]
-  ];
 
   const addToCart = () => writeCartItem(beat, selected);
   const selectAndAdd = (licenseType: LicenseChoice) => {
@@ -153,7 +141,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
   };
 
   return (
-    <div className="fixed inset-x-0 bottom-[6.25rem] top-16 z-[2147483500] grid place-items-center overflow-y-auto p-3 sm:bottom-[4.75rem] sm:top-[4.5rem] sm:p-5">
+    <div className="fixed inset-x-0 bottom-[6.25rem] top-16 z-[2147483500] grid place-items-center overflow-hidden p-2 sm:bottom-[4.75rem] sm:top-[4.5rem] sm:p-3">
       <button type="button" className="absolute inset-0 bg-black/72 backdrop-blur-md" onClick={(event) => close(event)} aria-label="Close licensing options" />
       <div
         ref={panelRef}
@@ -161,7 +149,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
         aria-modal="true"
         aria-label={`Licence ${beat.title}`}
         tabIndex={-1}
-        className="relative my-auto max-h-full w-full max-w-[46rem] overflow-y-auto overscroll-contain rounded-[1.75rem] border border-white/12 bg-[linear-gradient(145deg,rgba(19,21,25,.98),rgba(7,8,10,.98))] p-4 shadow-[0_30px_90px_rgba(0,0,0,.7)] outline-none sm:p-5"
+        className="relative my-auto w-full max-w-[44rem] overflow-hidden rounded-[1.6rem] border border-white/12 bg-[linear-gradient(145deg,rgba(19,21,25,.98),rgba(7,8,10,.98))] p-3 shadow-[0_30px_90px_rgba(0,0,0,.7)] outline-none sm:p-4"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 gap-4">
@@ -175,13 +163,14 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
           <button type="button" onClick={(event) => close(event)} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--text)]" aria-label="Close licensing options"><X className="h-4 w-4" /></button>
         </div>
 
-        <div className="mt-4 grid items-center gap-5 md:grid-cols-[18.5rem_1fr]">
-          <div className="mx-auto w-full max-w-[18.5rem]">
+        <div className="mt-3 grid items-center gap-4 md:grid-cols-[16.5rem_1fr]">
+          <div className="mx-auto w-full max-w-[13rem] sm:max-w-[16.5rem]">
             <div className="relative aspect-square overflow-hidden rounded-full border border-white/20 bg-[radial-gradient(circle,#181b20_0_20%,#0b0d10_21%_53%,#15181d_54%_55%,#090a0c_56%)] shadow-[0_22px_60px_rgba(0,0,0,.55),inset_0_0_0_8px_rgba(255,255,255,.025),inset_0_0_45px_rgba(255,255,255,.035)] ring-1 ring-black/60">
               <div className="grid h-full grid-cols-2 grid-rows-2">
                 {options.map((option, index) => {
                   const active = selected === option.purchasableKey;
-                  const lit = hoveredLicense === option.purchasableKey || active;
+                  const lit = hoveredLicense ? hoveredLicense === option.purchasableKey : active;
+                  const wheelLabel = option.id === "mp3" ? "MP3" : option.id === "wav" ? "WAV" : option.id === "stems" ? "Stems" : "Exclusive";
                   return (
                     <button
                       key={option.id}
@@ -193,13 +182,12 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
                       onClick={(event) => { if (event.detail !== 2) onSelect(option.purchasableKey); }}
                       onDoubleClick={() => selectAndAdd(option.purchasableKey)}
                       onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); selectAndAdd(option.purchasableKey); } }}
-                      className={`group relative flex flex-col justify-center overflow-hidden px-5 py-4 text-left transition duration-200 disabled:cursor-not-allowed disabled:opacity-35 ${index % 2 ? "border-l border-white/10" : ""} ${index > 1 ? "border-t border-white/10" : ""} ${lit ? "bg-[linear-gradient(145deg,var(--accent),color-mix(in_srgb,var(--accent)_72%,black))] text-[var(--accent-foreground)] shadow-[inset_0_0_28px_rgba(255,255,255,.15)]" : "bg-transparent text-white hover:bg-white/[.09]"}`}
+                      className={`group relative flex flex-col items-start overflow-hidden text-left transition duration-200 disabled:cursor-not-allowed disabled:opacity-35 ${index % 2 ? "border-l border-white/10 pl-8 pr-3 sm:pl-10" : "pl-4 pr-8 sm:pl-6 sm:pr-10"} ${index > 1 ? "border-t border-white/10 pb-4 pt-8 sm:pt-10" : "pb-8 pt-4 sm:pb-10 sm:pt-6"} ${lit ? "bg-[linear-gradient(145deg,var(--accent),color-mix(in_srgb,var(--accent)_72%,black))] text-[var(--accent-foreground)] shadow-[inset_0_0_28px_rgba(255,255,255,.15)]" : "bg-transparent text-white hover:bg-white/[.09]"}`}
                       aria-label={`${option.title}, ${formatMoney(option.price)}. Double click to add to cart.`}
                     >
                       <span className={`text-[9px] font-bold uppercase tracking-[.18em] ${lit ? "opacity-65" : "text-white/35"}`}>{String(index + 1).padStart(2, "0")}</span>
-                      <strong className="mt-1 text-sm leading-tight">{option.title.replace(" Licence", "")}</strong>
-                      <span className={`mt-1 text-base font-semibold ${lit ? "" : "text-white/70"}`}>{formatMoney(option.price)}</span>
-                      <span className={`mt-1 text-[9px] leading-3.5 ${lit ? "opacity-70" : "text-white/35"}`}>{option.id === "mp3" ? "Write and demo" : option.id === "wav" ? "Release ready" : option.id === "stems" ? "Build the full mix" : "Own it exclusively"}</span>
+                      <strong className="mt-1 whitespace-nowrap text-xs leading-tight sm:text-sm">{wheelLabel}</strong>
+                      <span className={`mt-1 whitespace-nowrap text-sm font-semibold sm:text-base ${lit ? "" : "text-white/70"}`}>{formatMoney(option.price)}</span>
                     </button>
                   );
                 })}
@@ -208,7 +196,6 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
                 <div><Disc3 className="mx-auto h-4 w-4 text-[var(--accent)]" /><span className="mt-1 block text-[8px] font-semibold uppercase tracking-[.15em] text-white/45">Double click</span><span className="block text-[9px] font-semibold text-white">Add to cart</span></div>
               </div>
             </div>
-            <p className="mt-2 text-center text-[10px] text-[var(--text-soft)]">Hover to preview. Double click or double tap to add.</p>
           </div>
 
           <div className="min-w-0">
@@ -227,12 +214,6 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
           </div>
         </div>
 
-        <details className="group mt-4 border-t border-[var(--border)] pt-3">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-[var(--text)]">View licence terms<ChevronRight className="h-4 w-4 text-[var(--text-soft)] transition group-open:rotate-90" /></summary>
-          <div className="mt-3 grid gap-x-6 sm:grid-cols-2">
-            {terms.map(([title, body]) => <div key={title} className="border-t border-[var(--border)] py-3"><p className="text-xs font-semibold text-[var(--text)]">{title}</p><p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{body}</p></div>)}
-          </div>
-        </details>
       </div>
     </div>
   );
