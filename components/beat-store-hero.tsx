@@ -30,9 +30,8 @@ export function BeatStoreHero({ moods, producer, onMood, onSurprise, onFinder, o
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,6,7,.97)_0%,rgba(5,6,7,.75)_43%,rgba(5,6,7,.18)_78%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(0,0,0,.72),transparent_55%)]" />
         <div className="relative flex h-full max-w-2xl flex-col justify-center p-7 pb-20 sm:p-9 sm:pb-20">
-          <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.24em] text-white/55"><Headphones className="h-4 w-4" />The HYMN Beat Store</p>
-          <h1 className="mt-4 text-5xl font-semibold leading-[.91] tracking-[-.06em] sm:text-6xl">Find the sound<br /><span className="text-[var(--money)]">that moves the room.</span></h1>
-          <p className="mt-5 max-w-lg text-sm leading-6 text-white/70 sm:text-base">That reaction starts before the stage—with one beat you cannot stop replaying.</p>
+          <h1 className="text-5xl font-semibold leading-[.91] tracking-[-.06em] sm:text-6xl">Find the sound<br /><span className="text-[var(--money)]">that moves the room.</span></h1>
+          <p className="mt-5 max-w-lg text-sm leading-6 text-white/70 sm:text-base">The right beat makes the room move before you ever step on stage.</p>
           <div className="mt-7 flex flex-wrap gap-2">{moods.slice(0, 4).map((mood) => <button key={mood} type="button" onClick={() => onMood(mood)} className="rounded-full border border-white/20 bg-black/20 px-4 py-2.5 text-xs font-semibold backdrop-blur transition hover:-translate-y-0.5 hover:border-white/60 hover:bg-white/10">{mood}</button>)}<button type="button" onClick={onSurprise} className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-xs font-bold text-black transition hover:scale-[1.03]"><WandSparkles className="h-4 w-4" />Surprise me</button></div>
         </div>
       </article>

@@ -650,8 +650,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
           <div className="pointer-events-none absolute bottom-[-8rem] right-[22%] h-72 w-72 rounded-full border border-white/10" />
           <div className="relative grid gap-8 p-6 sm:p-9 lg:grid-cols-[1.1fr_.9fr] lg:items-end lg:p-12">
             <div>
-              <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[.24em] opacity-60"><Headphones className="h-4 w-4" />The HYMN Beat Store</div>
-              <h1 className="mt-5 max-w-3xl text-4xl font-semibold leading-[.95] tracking-[-.055em] sm:text-6xl">Don’t browse forever.<br /><span className="text-[var(--accent)]">Hear your record.</span></h1>
+              <h1 className="max-w-3xl text-4xl font-semibold leading-[.95] tracking-[-.055em] sm:text-6xl">Don’t browse forever.<br /><span className="text-[var(--accent)]">Hear your record.</span></h1>
               <p className="mt-5 max-w-xl text-sm leading-6 opacity-65 sm:text-base">Start with the beat. Mix and master with HYMN. Send the finished record worldwide—all in one connected run.</p>
               <div className="mt-5 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[.14em]"><span className="rounded-full border border-white/15 px-3 py-1.5">01 Pick a beat</span><span className="opacity-35">→</span><span className="rounded-full border border-white/15 px-3 py-1.5">02 Mix + master</span><span className="opacity-35">→</span><span className="rounded-full border border-white/15 px-3 py-1.5">03 Release worldwide</span></div>
               <div className="mt-7 flex flex-wrap gap-2">
