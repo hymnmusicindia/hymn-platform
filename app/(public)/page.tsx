@@ -156,15 +156,17 @@ export default async function HomePage() {
       </section>
 
       <section className="shell py-12 sm:py-16">
-        <div className="border-b border-[var(--border)] pb-8 text-center">
-          <p className="mb-4 text-[10px] font-semibold uppercase tracking-[.28em] text-[var(--text-muted)]">Global distribution</p>
-          <h2 className="text-[clamp(2.7rem,7vw,6.5rem)] font-semibold leading-[.84] tracking-[-.065em] text-[var(--text)]">WHERE YOUR<br className="sm:hidden" /> MUSIC LANDS</h2>
-          <p className="mx-auto mt-6 max-w-xl text-sm leading-7 text-[var(--text-muted)]">The stores, streaming services and social platforms that carry your release to listeners worldwide.</p>
-        </div>
-        <div className="home-store-marquee-shell mt-5 overflow-hidden">
+        <Link href="/distribution" className="home-store-destination-title group relative block border-y border-[var(--border)] py-8 sm:py-10" aria-label="Explore global music distribution">
+          <h2 className="text-[clamp(3rem,9vw,8rem)] font-semibold leading-[.76] tracking-[-.075em] text-[var(--text)]">
+            <span className="home-store-title-line block">WHERE YOUR</span>
+            <span className="home-store-title-line block text-right">MUSIC LANDS</span>
+          </h2>
+          <span className="home-store-title-arrow absolute right-[48%] top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full border border-[var(--border-strong)] bg-[var(--bg)] text-xl text-[var(--text)] shadow-[var(--shadow-soft)] sm:h-16 sm:w-16" aria-hidden="true">↗</span>
+        </Link>
+        <div className="home-store-marquee-shell overflow-hidden border-b border-[var(--border)]">
           <div className="marquee-row music-store-marquee items-center gap-12 px-8 py-5 sm:gap-16">
             {storeLogoMarquee.map((item, index) => (
-              <div key={`${item.name}-${index}`} className="inline-flex h-12 w-36 shrink-0 items-center justify-center" title={item.name}>
+              <div key={`${item.name}-${index}`} className="home-store-logo-stop inline-flex h-12 w-36 shrink-0 items-center justify-center" title={item.name}>
                 <Image src={item.src} alt={item.name} width={144} height={48} className={`distribution-store-logo home-store-logo ${item.className}`} />
               </div>
             ))}

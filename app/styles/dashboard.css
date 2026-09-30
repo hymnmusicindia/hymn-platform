@@ -1769,6 +1769,7 @@ html[data-theme="dark"] .distribution-store-logo {
 .home-store-logo {
   filter: grayscale(1);
   opacity: .42;
+  transition: filter .3s ease, opacity .3s ease, transform .3s ease;
 }
 
 html[data-theme="dark"] .home-store-logo {
@@ -1779,6 +1780,46 @@ html[data-theme="dark"] .home-store-logo {
 .home-store-marquee-shell {
   position: relative;
   isolation: isolate;
+}
+
+.home-store-destination-title {
+  overflow: hidden;
+}
+
+.home-store-title-line {
+  transition: transform .55s cubic-bezier(.2,.75,.2,1), color .35s ease;
+}
+
+.home-store-destination-title:hover .home-store-title-line:first-child,
+.home-store-destination-title:focus-visible .home-store-title-line:first-child {
+  transform: translateX(2.5vw);
+}
+
+.home-store-destination-title:hover .home-store-title-line:nth-child(2),
+.home-store-destination-title:focus-visible .home-store-title-line:nth-child(2) {
+  transform: translateX(-2.5vw);
+  color: var(--text-muted);
+}
+
+.home-store-title-arrow {
+  transition: transform .45s cubic-bezier(.2,.75,.2,1), background-color .3s ease, color .3s ease;
+}
+
+.home-store-destination-title:hover .home-store-title-arrow,
+.home-store-destination-title:focus-visible .home-store-title-arrow {
+  transform: translateY(-50%) rotate(45deg) scale(1.08);
+  background: var(--text);
+  color: var(--bg);
+}
+
+.home-store-marquee-shell:hover .music-store-marquee {
+  animation-play-state: paused;
+}
+
+.home-store-logo-stop:hover .home-store-logo {
+  filter: grayscale(0);
+  opacity: 1;
+  transform: scale(1.08);
 }
 
 .home-store-marquee-shell::before,
