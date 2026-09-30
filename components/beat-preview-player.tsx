@@ -142,7 +142,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
   };
 
   return (
-    <div className="fixed inset-x-0 bottom-[6.25rem] top-16 z-[2147483500] grid place-items-center overflow-hidden p-2 sm:bottom-[4.75rem] sm:top-[4.5rem] sm:p-3">
+    <div className="fixed inset-x-0 bottom-0 top-16 z-[2147483500] grid place-items-center overflow-hidden p-2 pb-[6.75rem] sm:top-[4.5rem] sm:p-3 sm:pb-[5.5rem]">
       <button type="button" className="absolute inset-0 bg-black/72 backdrop-blur-md" onClick={(event) => close(event)} aria-label="Close licensing options" />
       <div
         ref={panelRef}
