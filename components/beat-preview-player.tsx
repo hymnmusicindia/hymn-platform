@@ -204,27 +204,33 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
   const [collapsed, setCollapsed] = useState(false);
   const lastScrollYRef = useRef(0);
   useEffect(() => {
+    setCollapsed(licensingOpen);
     lastScrollYRef.current = window.scrollY;
     let frame = 0;
     const onScroll = () => {
-      if (licensingOpen) {
-        setCollapsed(false);
-        lastScrollYRef.current = window.scrollY;
-        return;
-      }
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
         const current = window.scrollY;
         const delta = current - lastScrollYRef.current;
+        if (licensingOpen) {
+          if (delta > 8) setCollapsed(false);
+          lastScrollYRef.current = current;
+          return;
+        }
         if (current < 80 || delta < -10) setCollapsed(false);
         else if (delta > 14 && current > 180) setCollapsed(true);
         lastScrollYRef.current = current;
       });
     };
+    const onWheel = (event: WheelEvent) => {
+      if (licensingOpen && event.deltaY > 8) setCollapsed(false);
+    };
     window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("wheel", onWheel, { passive: true });
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("wheel", onWheel);
     };
   }, [licensingOpen]);
   if (!beat) return null;
@@ -238,7 +244,7 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
   };
 
   return (
-    <aside className={`fixed inset-x-0 bottom-0 z-[2147483640] border-t border-white/10 bg-black/65 shadow-[0_-12px_40px_rgba(0,0,0,0.25)] backdrop-blur-2xl transition-transform duration-300 ${collapsed && !menuOpen && !licensingOpen ? "translate-y-[calc(100%-0.4rem-env(safe-area-inset-bottom))]" : "translate-y-0"}`} onPointerEnter={() => setCollapsed(false)} onFocus={() => setCollapsed(false)}>
+    <aside className={`fixed inset-x-0 bottom-0 z-[2147483640] border-t border-white/10 bg-black/65 shadow-[0_-12px_40px_rgba(0,0,0,0.25)] backdrop-blur-2xl transition-transform duration-300 ${collapsed && !menuOpen ? "translate-y-[calc(100%-0.5rem-env(safe-area-inset-bottom))]" : "translate-y-0"}`} onPointerEnter={() => setCollapsed(false)} onPointerLeave={() => { if (licensingOpen) setCollapsed(true); }} onFocus={() => setCollapsed(false)}>
       <button type="button" onClick={() => setCollapsed((current) => !current)} className="absolute left-1/2 top-0 h-2 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/15" aria-label={collapsed ? "Expand preview player" : "Collapse preview player"} />
       <div className="mx-auto grid max-w-[1700px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-3 pb-[calc(0.45rem+env(safe-area-inset-bottom))] pt-2 sm:grid-cols-[minmax(180px,.75fr)_minmax(360px,1.35fr)_auto] sm:px-5">
         <button type="button" onClick={() => value.openLicensing(beat)} className="flex min-w-0 items-center gap-2.5 text-left" aria-label={`Open licence options for ${beat.title}`}>
