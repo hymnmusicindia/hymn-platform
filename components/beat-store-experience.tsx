@@ -202,14 +202,14 @@ function MobileFiltersModal({
 }) {
   const dialogRef = useAccessibleDialog(open, onClose);
   return (
-    <div className={`fixed inset-0 z-40 transition ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
+    <div className={`fixed inset-x-0 bottom-0 top-16 z-40 transition sm:top-[4.5rem] ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
       <button
         type="button"
         onClick={onClose}
         className={`absolute inset-0 bg-black/50 transition-opacity duration-200 ${open ? "opacity-100" : "opacity-0"}`}
         aria-label="Close filters"
       />
-      <div ref={dialogRef as React.RefObject<HTMLDivElement | null>} role="dialog" aria-modal="true" aria-labelledby="beat-filter-title" tabIndex={-1} className={`absolute inset-x-0 bottom-0 max-h-[92vh] overflow-y-auto rounded-t-[28px] border border-[var(--border)] bg-[var(--bg)] p-4 shadow-[0_-24px_80px_rgba(0,0,0,0.3)] transition duration-300 sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:max-w-2xl sm:rounded-[28px] sm:p-6 ${open ? "translate-y-0 opacity-100 sm:-translate-x-1/2 sm:-translate-y-1/2" : "translate-y-full opacity-0 sm:-translate-x-1/2 sm:translate-y-[-45%]"}`}>
+      <div ref={dialogRef as React.RefObject<HTMLDivElement | null>} role="dialog" aria-modal="true" aria-labelledby="beat-filter-title" tabIndex={-1} className={`absolute inset-x-0 bottom-0 max-h-[calc(100dvh-4.5rem)] overflow-y-auto overscroll-contain rounded-t-[28px] border border-[var(--border)] bg-[var(--bg)] p-4 shadow-[0_-24px_80px_rgba(0,0,0,0.3)] transition duration-300 sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:max-h-[calc(100dvh-6.5rem)] sm:max-w-2xl sm:rounded-[28px] sm:p-6 ${open ? "translate-y-0 opacity-100 sm:-translate-x-1/2 sm:-translate-y-1/2" : "translate-y-full opacity-0 sm:-translate-x-1/2 sm:translate-y-[-45%]"}`}>
         <div className="mx-auto mb-4 h-1.5 w-16 rounded-full bg-[var(--border)]" />
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
