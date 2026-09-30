@@ -3,6 +3,7 @@
 import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
+import { LicenceWheel } from "@/components/licence-wheel";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Disc3, ExternalLink, ListMusic, Pause, Play, Repeat, ShoppingBag, Volume2, VolumeX, X } from "lucide-react";
 import { beatLicenseCatalog, beatLicensePrice, normalizeBeatLicenseType, type BeatStoreLicenseType, type StorefrontBeat } from "@/lib/beat-store";
@@ -165,37 +166,15 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
 
         <div className="mt-3 grid items-center gap-4 md:grid-cols-[16.5rem_1fr]">
           <div className="mx-auto w-full max-w-[13rem] sm:max-w-[16.5rem]">
-            <div className="relative aspect-square overflow-hidden rounded-full border border-white/20 bg-[radial-gradient(circle,#181b20_0_20%,#0b0d10_21%_53%,#15181d_54%_55%,#090a0c_56%)] shadow-[0_22px_60px_rgba(0,0,0,.55),inset_0_0_0_8px_rgba(255,255,255,.025),inset_0_0_45px_rgba(255,255,255,.035)] ring-1 ring-black/60">
-              <div className="grid h-full grid-cols-2 grid-rows-2">
-                {options.map((option, index) => {
-                  const active = selected === option.purchasableKey;
-                  const lit = hoveredLicense ? hoveredLicense === option.purchasableKey : active;
-                  const wheelLabel = option.id === "mp3" ? "MP3" : option.id === "wav" ? "WAV" : option.id === "stems" ? "Stems" : "Exclusive";
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      disabled={option.disabled}
-                      onPointerEnter={() => setHoveredLicense(option.purchasableKey)}
-                      onPointerLeave={() => setHoveredLicense(null)}
-                      onPointerUp={(event) => { if (event.pointerType === "touch") handleTouch(option.purchasableKey); }}
-                      onClick={(event) => { if (event.detail !== 2) onSelect(option.purchasableKey); }}
-                      onDoubleClick={() => selectAndAdd(option.purchasableKey)}
-                      onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); selectAndAdd(option.purchasableKey); } }}
-                      className={`group relative flex flex-col items-start overflow-hidden text-left transition duration-200 disabled:cursor-not-allowed disabled:opacity-35 ${index % 2 ? "border-l border-white/10 pl-7 pr-4 sm:pl-8" : "pl-8 pr-6 sm:pl-10"} ${index > 1 ? "border-t border-white/10 pb-7 pt-6" : "pb-8 pt-5 sm:pt-6"} ${lit ? "bg-[linear-gradient(145deg,var(--accent),color-mix(in_srgb,var(--accent)_72%,black))] text-[var(--accent-foreground)] shadow-[inset_0_0_28px_rgba(255,255,255,.15)]" : "bg-transparent text-white hover:bg-white/[.09]"}`}
-                      aria-label={`${option.title}, ${formatMoney(option.price)}. Double click to add to cart.`}
-                    >
-                      <span className={`text-[9px] font-bold uppercase tracking-[.18em] ${lit ? "opacity-65" : "text-white/35"}`}>{String(index + 1).padStart(2, "0")}</span>
-                      <strong className="mt-1 whitespace-nowrap text-xs leading-tight sm:text-sm">{wheelLabel}</strong>
-                      <span className={`mt-1 whitespace-nowrap text-sm font-semibold sm:text-base ${lit ? "" : "text-white/70"}`}>{formatMoney(option.price)}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="pointer-events-none absolute left-1/2 top-1/2 grid h-[5.35rem] w-[5.35rem] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-[radial-gradient(circle_at_40%_30%,#242830,#090a0c_68%)] p-2 text-center shadow-[0_0_0_7px_rgba(5,6,8,.72),0_12px_28px_rgba(0,0,0,.65)]">
-                <div><Disc3 className="mx-auto h-4 w-4 text-[var(--accent)]" /><span className="mt-1 block text-[8px] font-semibold uppercase tracking-[.15em] text-white/45">Double click</span><span className="block text-[9px] font-semibold text-white">Add to cart</span></div>
-              </div>
-            </div>
+            <LicenceWheel
+              options={options.map(option => ({ key: option.purchasableKey, label: option.id === "mp3" ? "MP3" : option.id === "wav" ? "WAV" : option.id === "stems" ? "Stems" : "Exclusive", price: formatMoney(option.price), disabled: option.disabled }))}
+              highlighted={hoveredLicense ?? selected}
+              onHighlight={key => setHoveredLicense(key as LicenseChoice | null)}
+              onSelect={key => onSelect(key as LicenseChoice)}
+              onConfirm={key => selectAndAdd(key as LicenseChoice)}
+              onTouch={key => handleTouch(key as LicenseChoice)}
+            />
+            <p className="mt-1 text-center text-[10px] text-[var(--text-soft)]">Double click or double tap to add</p>
           </div>
 
           <div className="min-w-0">
