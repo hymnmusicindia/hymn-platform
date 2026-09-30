@@ -4,7 +4,7 @@ import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Check, ChevronLeft, ChevronRight, Disc3, ExternalLink, ListMusic, Pause, Play, Repeat, ShieldCheck, ShoppingBag, Sparkles, Volume2, VolumeX, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Disc3, ExternalLink, ListMusic, Pause, Play, Repeat, ShoppingBag, Volume2, VolumeX, X } from "lucide-react";
 import { beatLicenseCatalog, beatLicensePrice, normalizeBeatLicenseType, type BeatStoreLicenseType, type StorefrontBeat } from "@/lib/beat-store";
 
 type LicenseChoice = BeatStoreLicenseType;
@@ -42,11 +42,6 @@ function formatTime(value: number) {
   const minutes = Math.floor(value / 60);
   const seconds = Math.floor(value % 60).toString().padStart(2, "0");
   return `${minutes}:${seconds}`;
-}
-
-function fallbackImage(id: number | string) {
-  const seed = typeof id === "number" ? id : id.length;
-  return `/assets/producers/placeholder-${(seed % 5) + 1}.jpg`;
 }
 
 function safePreviewUrl(beat: StorefrontBeat | null) {
@@ -95,6 +90,8 @@ function PlayerArtwork({ beat, size = "small" }: { beat: StorefrontBeat; size?: 
 
 function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: StorefrontBeat | null; open: boolean; selected: LicenseChoice; onSelect: (value: LicenseChoice) => void; onClose: () => void }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const [hoveredLicense, setHoveredLicense] = useState<LicenseChoice | null>(null);
+  const lastTouchRef = useRef<{ license: LicenseChoice; at: number } | null>(null);
   const close = useCallback((event?: { preventDefault?: () => void; stopPropagation?: () => void }) => {
     event?.preventDefault?.();
     event?.stopPropagation?.();
@@ -134,89 +131,108 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
   ];
 
   const addToCart = () => writeCartItem(beat, selected);
+  const selectAndAdd = (licenseType: LicenseChoice) => {
+    onSelect(licenseType);
+    writeCartItem(beat, licenseType);
+    onClose();
+  };
+  const handleTouch = (licenseType: LicenseChoice) => {
+    const now = Date.now();
+    const previous = lastTouchRef.current;
+    onSelect(licenseType);
+    if (previous?.license === licenseType && now - previous.at < 420) {
+      lastTouchRef.current = null;
+      selectAndAdd(licenseType);
+      return;
+    }
+    lastTouchRef.current = { license: licenseType, at: now };
+  };
   const buyNow = () => {
     writeCartItem(beat, selected);
     window.location.href = "/checkout?product=beatstore";
   };
 
   return (
-    <div className="fixed inset-0 z-[2147483500]">
-      <button type="button" className="absolute inset-0 bg-black/64 backdrop-blur-sm" onClick={(event) => close(event)} aria-label="Close licensing options" />
+    <div className="fixed inset-0 z-[2147483500] grid place-items-center overflow-y-auto p-3 sm:p-6">
+      <button type="button" className="fixed inset-0 bg-black/72 backdrop-blur-md" onClick={(event) => close(event)} aria-label="Close licensing options" />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={`Licence ${beat.title}`}
         tabIndex={-1}
-        className="absolute bottom-0 right-0 top-0 max-h-none w-full max-w-xl overflow-y-auto overscroll-contain border-l border-white/10 bg-[var(--bg)] p-4 pb-28 shadow-[-24px_0_90px_rgba(0,0,0,0.4)] outline-none sm:p-6 sm:pb-28"
+        className="relative my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl overflow-y-auto overscroll-contain rounded-[2rem] border border-white/12 bg-[color-mix(in_srgb,var(--bg)_94%,transparent)] p-5 shadow-[0_32px_100px_rgba(0,0,0,.62)] outline-none backdrop-blur-2xl sm:max-h-[calc(100dvh-3rem)] sm:p-7"
       >
-        <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-white/18 sm:hidden" />
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 gap-4">
             <PlayerArtwork beat={beat} />
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">Choose how you’ll use it</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">Choose your licence</p>
               <h2 className="mt-1 truncate text-2xl font-semibold tracking-[-0.04em] text-[var(--text)]">{beat.title}</h2>
-              <p className="mt-1 truncate text-sm text-[var(--text-muted)]">{beat.producer.name} · {beat.bpm} BPM · {beat.keySignature || "Key not supplied"}</p>
+              <p className="mt-1 truncate text-sm text-[var(--text-muted)]">{beat.producer.name} &middot; {beat.bpm} BPM &middot; {beat.keySignature || "Key not supplied"}</p>
             </div>
           </div>
-          <button type="button" onClick={(event) => close(event)} className="sticky top-0 z-20 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--text)] shadow-lg" aria-label="Close licensing options"><X className="h-4 w-4" /></button>
+          <button type="button" onClick={(event) => close(event)} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--text)]" aria-label="Close licensing options"><X className="h-4 w-4" /></button>
         </div>
 
-        <div className="mt-5 flex items-center gap-2 rounded-xl bg-[var(--accent-soft)] px-3.5 py-3 text-xs text-[var(--text-muted)]"><Sparkles className="h-4 w-4 shrink-0 text-[var(--accent)]" /><span><strong className="text-[var(--text)]">Most artists choose WAV</strong> for a clean mix and release-ready master.</span></div>
-        <div className="mt-3 grid gap-2">
-          {options.map((option) => {
-            const active = selected === option.purchasableKey;
-            return (
-              <button
-                key={option.id}
-                type="button"
-                disabled={option.disabled}
-                onClick={() => onSelect(option.purchasableKey)}
-                className={`group rounded-[1.1rem] border p-3.5 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${active ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[inset_4px_0_0_var(--accent)]" : "border-[var(--border)] bg-[var(--card)] hover:-translate-y-0.5 hover:border-[var(--border-strong)]"}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold text-[var(--text)]">{option.title}</p>{option.id === "wav" ? <span className="rounded-full bg-[var(--accent)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[.1em] text-[var(--accent-foreground)]">Recommended</span> : null}</div>
-                    <p className="mt-1 text-xs text-[var(--text-soft)]">{option.id === "mp3" ? "For demos and writing" : option.id === "wav" ? "For singles and streaming" : option.id === "stems" ? "For a custom professional mix" : "For full ownership and Content ID"}</p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3"><strong className="text-xl tracking-[-.03em] text-[var(--text)]">{formatMoney(option.price)}</strong><span className={`grid h-7 w-7 place-items-center rounded-full border ${active ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]" : "border-[var(--border)]"}`}>{active ? <Check className="h-4 w-4" /> : null}</span></div>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-muted)]">
-                  <span>{option.delivery}</span>
-                  <span>{option.streamLimit}</span>
-                  <span>{option.exclusive ? "Exclusive after purchase" : "Beat remains available"}</span>
-                  <span>{option.includesStems ? "Stems if producer uploaded them" : "No stems by default"}</span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="mt-4 flex items-start gap-3 rounded-xl border border-dashed border-[var(--border-strong)] px-4 py-3">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[var(--accent)]" />
-          <p className="text-xs leading-5 text-[var(--text-muted)]"><span className="font-semibold italic text-[var(--text)]">A note from HYMN:</span> your exact licence is saved with the purchase, so you always know what you can release.</p>
-        </div>
-
-        <section className="mt-5 rounded-[1.5rem] border border-[var(--border)] bg-[var(--card)] p-4">
-          <h3 className="text-lg font-semibold text-[var(--text)]">Usage Terms</h3>
-          <div className="mt-3 divide-y divide-[var(--border)]">
-            {terms.map(([title, body]) => (
-              <details key={title} className="group py-3" open={title === "Files Included" || title === "Exclusivity"}>
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-[var(--text)]">{title}<ChevronRight className="h-4 w-4 text-[var(--text-soft)] transition group-open:rotate-90" /></summary>
-                <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">{body}</p>
-              </details>
-            ))}
+        <div className="mt-6 grid items-center gap-6 md:grid-cols-[minmax(19rem,23rem)_1fr]">
+          <div className="mx-auto w-full max-w-[23rem]">
+            <div className="relative aspect-square overflow-hidden rounded-full border border-white/20 bg-black shadow-[0_24px_70px_rgba(0,0,0,.45),inset_0_0_50px_rgba(255,255,255,.04)]">
+              <div className="grid h-full grid-cols-2 grid-rows-2">
+                {options.map((option, index) => {
+                  const active = selected === option.purchasableKey;
+                  const lit = hoveredLicense === option.purchasableKey || active;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      disabled={option.disabled}
+                      onPointerEnter={() => setHoveredLicense(option.purchasableKey)}
+                      onPointerLeave={() => setHoveredLicense(null)}
+                      onPointerUp={(event) => { if (event.pointerType === "touch") handleTouch(option.purchasableKey); }}
+                      onClick={(event) => { if (event.detail !== 2) onSelect(option.purchasableKey); }}
+                      onDoubleClick={() => selectAndAdd(option.purchasableKey)}
+                      onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); selectAndAdd(option.purchasableKey); } }}
+                      className={`group relative flex flex-col justify-center overflow-hidden p-5 text-left transition duration-200 disabled:cursor-not-allowed disabled:opacity-35 ${index % 2 ? "border-l border-white/14" : ""} ${index > 1 ? "border-t border-white/14" : ""} ${lit ? "bg-[var(--accent)] text-[var(--accent-foreground)]" : "bg-white/[.035] text-white hover:bg-white/[.11]"}`}
+                      aria-label={`${option.title}, ${formatMoney(option.price)}. Double click to add to cart.`}
+                    >
+                      <span className={`text-[10px] font-bold uppercase tracking-[.16em] ${lit ? "opacity-70" : "text-white/45"}`}>{String(index + 1).padStart(2, "0")}</span>
+                      <strong className="mt-2 text-sm sm:text-base">{option.title.replace(" Licence", "")}</strong>
+                      <span className={`mt-1 text-lg font-semibold ${lit ? "" : "text-white/75"}`}>{formatMoney(option.price)}</span>
+                      <span className={`mt-2 text-[10px] leading-4 ${lit ? "opacity-75" : "text-white/40"}`}>{option.id === "mp3" ? "Write and demo" : option.id === "wav" ? "Release ready" : option.id === "stems" ? "Build the full mix" : "Own it exclusively"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="pointer-events-none absolute left-1/2 top-1/2 grid h-[6.6rem] w-[6.6rem] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-[#0b0d10] p-3 text-center shadow-[0_0_0_8px_rgba(5,6,8,.55),0_12px_32px_rgba(0,0,0,.5)]">
+                <div><Disc3 className="mx-auto h-5 w-5 text-[var(--accent)]" /><span className="mt-1 block text-[9px] font-semibold uppercase tracking-[.16em] text-white/50">Double click</span><span className="mt-0.5 block text-[10px] font-semibold text-white">Add to cart</span></div>
+              </div>
+            </div>
+            <p className="mt-3 text-center text-[11px] text-[var(--text-soft)]">Hover to preview. Double click or double tap to choose and add.</p>
           </div>
-        </section>
 
-        <div className="fixed bottom-0 right-0 z-20 w-full max-w-xl border-t border-[var(--border)] bg-[var(--bg)] p-4 shadow-[0_-18px_48px_rgba(0,0,0,0.32)] sm:flex sm:items-center sm:justify-between sm:gap-4 sm:px-6">
-          <p className="mb-3 text-sm text-[var(--text-muted)] sm:mb-0">Selected: <span className="font-semibold text-[var(--text)]">{selectedOption.title}</span> · {formatMoney(selectedOption.price)}</p>
-          <div className="grid gap-2 sm:flex">
-            <button type="button" onClick={addToCart} className="btn-outline pressable"><ShoppingBag className="mr-2 h-4 w-4" />Add to Cart</button>
-            <button type="button" onClick={buyNow} className="btn-primary pressable">Buy Now · {formatMoney(selectedOption.price)}</button>
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--text-soft)]">Current choice</p>
+            <h3 className="mt-2 text-3xl font-semibold tracking-[-.05em] text-[var(--text)]">{selectedOption.title}</h3>
+            <p className="mt-2 text-2xl font-semibold text-[var(--accent)]">{formatMoney(selectedOption.price)}</p>
+            <p className="mt-4 text-sm leading-6 text-[var(--text-muted)]">{selectedOption.id === "mp3" ? "For writing, demos and an easy MP3 delivery." : selectedOption.id === "wav" ? "The clean release-ready file most artists need." : selectedOption.id === "stems" ? "Individual parts for a detailed custom mix." : "Full ownership with the exclusive agreement."}</p>
+            <div className="mt-5 flex flex-wrap gap-2 text-xs text-[var(--text-muted)]">
+              <span className="rounded-full border border-[var(--border)] px-3 py-1.5">{selectedOption.delivery}</span>
+              <span className="rounded-full border border-[var(--border)] px-3 py-1.5">{selectedOption.streamLimit}</span>
+            </div>
+            <div className="mt-6 grid gap-2 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
+              <button type="button" onClick={addToCart} className="btn-outline pressable"><ShoppingBag className="mr-2 h-4 w-4" />Add selected</button>
+              <button type="button" onClick={buyNow} className="btn-primary pressable">Buy now &middot; {formatMoney(selectedOption.price)}</button>
+            </div>
           </div>
         </div>
+
+        <details className="mt-6 border-t border-[var(--border)] pt-4">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-[var(--text)]">View licence terms<ChevronRight className="h-4 w-4 text-[var(--text-soft)] transition group-open:rotate-90" /></summary>
+          <div className="mt-3 grid gap-x-6 sm:grid-cols-2">
+            {terms.map(([title, body]) => <div key={title} className="border-t border-[var(--border)] py-3"><p className="text-xs font-semibold text-[var(--text)]">{title}</p><p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{body}</p></div>)}
+          </div>
+        </details>
       </div>
     </div>
   );
