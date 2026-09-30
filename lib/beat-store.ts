@@ -158,8 +158,16 @@ function createPoster(title: string, subtitle: string, palette: [string, string,
 }
 
 function resolvePreviewUrl(url?: string) {
-  return url && !url.startsWith("/demo-previews/") ? url : "";
+  if (url?.startsWith("/demo-previews/")) return "/demo-previews/hymn-sample-beat.wav";
+  return url || "";
 }
+
+const sampleCoverImages = [
+  "https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&q=80&w=900",
+  "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&q=80&w=900",
+  "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&q=80&w=900",
+  "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&q=80&w=900"
+] as const;
 
 export function buildBeatStorefront(beats: Beat[], producerProfiles: ProducerProfile[] = []) {
   const palettes: [string, string, string][] = [["#0f0f0f", "#2a2a2a", "#7f1d1d"], ["#0b1020", "#202938", "#5b5f97"], ["#0a192f", "#112240", "#64ffda"]];
@@ -207,6 +215,7 @@ export function buildBeatStorefront(beats: Beat[], producerProfiles: ProducerPro
   function resolveArtworkUrl(beat: Beat, producer: ProducerSpotlight, vibeTag: string) {
     const url = beat.artworkUrl;
     if (!url || typeof url !== "string" || url.trim() === "") {
+      if (beat.fileUrl?.startsWith("/demo-previews/") || beat.previewUrl?.startsWith("/demo-previews/")) return sampleCoverImages[Math.abs(beat.id) % sampleCoverImages.length];
       return createPoster(beat.title, vibeTag, producer.palette, "square");
     }
     try {
