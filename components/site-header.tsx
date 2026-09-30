@@ -326,7 +326,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
     setCartItems(next);
     setCartCount(next.length);
     window.localStorage.setItem("hymn-beat-cart", JSON.stringify(next));
-    window.dispatchEvent(new CustomEvent("hymn-cart-updated", { detail: { count: next.length } }));
+    window.dispatchEvent(new CustomEvent("hymn-cart-updated", { detail: { count: next.length, items: next } }));
   }
 
   async function logout() {
@@ -375,7 +375,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
   const NotificationBell = ({ mobile = false }: { mobile?: boolean }) =>
     isAuthenticated ? (
-      <div data-notification-menu-root className={clsx("relative", mobile ? "w-full" : "")}>
+      <div data-notification-menu-root className={clsx("relative z-[1250] pointer-events-auto", mobile ? "w-full" : "")}>
         <button
           type="button"
           onClick={() => { setNotificationsOpen((value) => !value); setProfileOpen(false); setAppLauncherOpen(false); }}
@@ -394,7 +394,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
             role="dialog"
             aria-label="Notifications"
             onMouseDown={(event) => event.stopPropagation()}
-            className={clsx("site-notification-panel z-50 mt-3 rounded-2xl border p-3 shadow-2xl", mobile ? "w-full" : "absolute right-0 w-[min(24rem,calc(100vw-2rem))]")}
+            className={clsx("site-notification-panel z-[1260] mt-3 rounded-2xl border p-3 shadow-2xl", mobile ? "w-full" : "absolute right-0 w-[min(24rem,calc(100vw-2rem))]")}
             style={{ borderColor: "var(--border)", background: "var(--card-strong)", color: "var(--text)" }}
           >
             <div className="flex items-start justify-between gap-3 border-b pb-3" style={{ borderColor: "var(--border)" }}>
@@ -464,11 +464,11 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
     ) : null;
 
   const AppLauncher = ({ mobile = false }: { mobile?: boolean }) => user ? (
-    <div data-app-launcher-root className="relative">
+    <div data-app-launcher-root className="relative z-[1250] pointer-events-auto">
       <button type="button" onClick={() => { setAppLauncherOpen(value => !value); setProfileOpen(false); setNotificationsOpen(false); }} className={clsx("site-header-bare-icon inline-flex h-10 w-10 items-center justify-center rounded-full sm:h-11 sm:w-11", appLauncherOpen && "bg-[var(--bg-soft)]")} aria-label="Open HYMN apps" aria-expanded={appLauncherOpen} aria-haspopup="menu">
         <span className="grid grid-cols-3 gap-[3px]" aria-hidden="true">{Array.from({ length: 9 }, (_, index) => <span key={index} className="h-[3px] w-[3px] rounded-full bg-current"/>)}</span>
       </button>
-      {appLauncherOpen ? <div role="menu" aria-label="HYMN apps" className={clsx("z-50 rounded-[1.35rem] border border-[var(--border-strong)] bg-[var(--card-strong)] p-3 shadow-2xl", mobile ? "fixed left-3 right-3 top-[4.25rem] w-auto" : "absolute right-0 mt-3 w-[min(22rem,calc(100vw-1.5rem))]")}>
+      {appLauncherOpen ? <div role="menu" aria-label="HYMN apps" className={clsx("z-[1260] rounded-[1.35rem] border border-[var(--border-strong)] bg-[var(--card-strong)] p-3 shadow-2xl", mobile ? "fixed left-3 right-3 top-[4.25rem] w-auto" : "absolute right-0 mt-3 w-[min(22rem,calc(100vw-1.5rem))]")}>
         <div className="px-2 pb-3 pt-1"><p className="hymn-kicker">HYMN workspace</p><p className="mt-1 text-sm text-[var(--text-muted)]">Choose where you want to work.</p></div>
         <div className="grid grid-cols-2 gap-2">
           <Link role="menuitem" href={user.role === "producer" ? "/producer/dashboard" : "/dashboard"} onClick={() => setAppLauncherOpen(false)} className="group rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-4 transition hover:-translate-y-0.5 hover:border-[var(--border-strong)]"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]"><LayoutDashboard className="h-5 w-5"/></span><strong className="mt-3 block text-sm">Dashboard</strong><span className="mt-1 block text-xs leading-5 text-[var(--text-muted)]">Account, releases, and earnings</span></Link>
@@ -575,7 +575,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
   return (
     <header
-      className="sticky top-0 z-[200] border-b backdrop-blur-2xl backdrop-saturate-150"
+      className="sticky top-0 z-[1200] overflow-visible border-b backdrop-blur-2xl backdrop-saturate-150"
       style={{
         borderColor: scrolled || open ? "var(--header-border)" : "transparent",
         background: scrolled || open ? "var(--header-bg-solid)" : "var(--header-bg)",

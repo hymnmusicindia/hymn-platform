@@ -289,6 +289,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
   const displayBeats = beats;
   const { catalog } = useMemo(() => buildBeatStorefront(displayBeats, displayProducerProfiles), [displayBeats, displayProducerProfiles]);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const externalCartSyncRef = useRef(false);
   const beatPlayer = useBeatPreviewPlayer();
   const [cartOpen, setCartOpen] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -402,8 +403,12 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!cartHydrated) return;
+    if (externalCartSyncRef.current) {
+      externalCartSyncRef.current = false;
+      return;
+    }
     window.localStorage.setItem("hymn-beat-cart", JSON.stringify(cart));
-    window.dispatchEvent(new CustomEvent("hymn-cart-updated", { detail: { count: cart.length } }));
+    window.dispatchEvent(new CustomEvent("hymn-cart-updated", { detail: { count: cart.length, items: cart } }));
   }, [cart, cartHydrated]);
 
   useEffect(() => {
@@ -415,6 +420,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
       const normalized: CartItem[] = rawItems
         .map((item) => ({ beatId: Number(item.beatId), licenseType: normalizeBeatLicenseType(item.licenseType), price: Number(item.price ?? 0) }))
         .filter((item): item is CartItem => Number.isInteger(item.beatId) && item.beatId > 0);
+      externalCartSyncRef.current = true;
       setCart(normalized);
     };
     window.addEventListener("hymn-cart-updated", syncCart);
