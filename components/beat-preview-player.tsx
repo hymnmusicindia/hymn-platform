@@ -5,7 +5,7 @@ import { customerMessage } from "@/lib/customer-message";
 import Link from "next/link";
 import { LicenceWheel } from "@/components/licence-wheel";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, Disc3, ExternalLink, ListMusic, Pause, Play, Repeat, ShoppingBag, Volume2, VolumeX, X } from "lucide-react";
+import { Disc3, ExternalLink, ListMusic, Pause, Play, Repeat, ShoppingBag, Shuffle, SkipBack, SkipForward, Volume2, VolumeX, X } from "lucide-react";
 import { beatLicenseCatalog, beatLicensePrice, normalizeBeatLicenseType, type BeatStoreLicenseType, type StorefrontBeat } from "@/lib/beat-store";
 
 type LicenseChoice = BeatStoreLicenseType;
@@ -17,6 +17,7 @@ type BeatPreviewContextValue = {
   currentTime: number;
   duration: number;
   loop: boolean;
+  shuffle: boolean;
   volume: number;
   muted: boolean;
   error: string | null;
@@ -26,6 +27,7 @@ type BeatPreviewContextValue = {
   next: () => void;
   seek: (time: number) => void;
   setLoop: (value: boolean) => void;
+  setShuffle: (value: boolean) => void;
   setVolume: (value: number) => void;
   setMuted: (value: boolean) => void;
   openLicensing: (beat?: StorefrontBeat | null, licenseType?: LicenseChoice) => void;
@@ -252,19 +254,22 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
           <span className="min-w-0"><span className="block truncate text-xs font-semibold text-white sm:text-sm">{beat.title}</span><span className="block truncate text-[10px] text-white/45 sm:text-xs">{beat.producer.name} · {beat.bpm} BPM</span></span>
         </button>
 
-        <div className="order-3 col-span-2 flex min-w-0 items-center gap-2 sm:order-none sm:col-span-1">
-          <div className="flex shrink-0 items-center">
-            <button type="button" onClick={value.previous} className="grid h-8 w-8 place-items-center rounded-full text-white/65 transition hover:bg-white/10 hover:text-white" aria-label="Previous beat" disabled={!canUseQueue}><ChevronLeft className="h-4 w-4" /></button>
-            <button type="button" onClick={value.togglePlay} className="grid h-10 w-10 place-items-center rounded-full bg-white text-black transition hover:scale-105" aria-label={value.playing ? `Pause ${beat.title}` : `Play ${beat.title}`}>{value.playing ? <Pause className="h-4 w-4" fill="currentColor" /> : <Play className="ml-0.5 h-4 w-4" fill="currentColor" />}</button>
-            <button type="button" onClick={value.next} className="grid h-8 w-8 place-items-center rounded-full text-white/65 transition hover:bg-white/10 hover:text-white" aria-label="Next beat" disabled={!canUseQueue}><ChevronRight className="h-4 w-4" /></button>
+        <div className="order-3 col-span-2 flex min-w-0 flex-col sm:order-none sm:col-span-1">
+          <div className="flex h-9 items-center justify-center gap-1.5">
+            <button type="button" onClick={() => value.setShuffle(!value.shuffle)} className={`grid h-8 w-8 place-items-center rounded-full transition ${value.shuffle ? "text-[var(--accent)]" : "text-white/45 hover:text-white"}`} aria-label={value.shuffle ? "Disable shuffle" : "Shuffle beats"}><Shuffle className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={value.previous} className="grid h-8 w-8 place-items-center rounded-full text-white/65 transition hover:text-white disabled:opacity-30" aria-label="Previous beat" disabled={!canUseQueue}><SkipBack className="h-4 w-4" fill="currentColor" /></button>
+            <button type="button" onClick={value.togglePlay} className="mx-1 grid h-9 w-9 place-items-center rounded-full bg-white text-black shadow-[0_5px_18px_rgba(0,0,0,.35)] transition hover:scale-105" aria-label={value.playing ? `Pause ${beat.title}` : `Play ${beat.title}`}>{value.playing ? <Pause className="h-4 w-4" fill="currentColor" /> : <Play className="ml-0.5 h-4 w-4" fill="currentColor" />}</button>
+            <button type="button" onClick={value.next} className="grid h-8 w-8 place-items-center rounded-full text-white/65 transition hover:text-white disabled:opacity-30" aria-label="Next beat" disabled={!canUseQueue}><SkipForward className="h-4 w-4" fill="currentColor" /></button>
+            <button type="button" onClick={() => value.setLoop(!value.loop)} className={`relative grid h-8 w-8 place-items-center rounded-full transition ${value.loop ? "text-[var(--accent)]" : "text-white/45 hover:text-white"}`} aria-label={value.loop ? "Disable repeat" : "Repeat beat"}><Repeat className="h-3.5 w-3.5" />{value.loop ? <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-[var(--accent)]" /> : null}</button>
           </div>
-          <span className="w-8 text-right font-mono text-[9px] text-white/45">{formatTime(value.currentTime)}</span>
-          <input type="range" min={0} max={Math.max(1, value.duration || 1)} step={0.1} value={Math.min(value.currentTime, value.duration || value.currentTime)} onChange={(event) => value.seek(Number(event.target.value))} className="beat-player-range h-6 min-w-0 flex-1" style={{ ["--beat-progress" as string]: `${progress}%` }} aria-label={`Seek ${beat.title}`} />
-          <span className="w-8 font-mono text-[9px] text-white/45">{value.duration ? `-${formatTime(Math.max(0, value.duration - value.currentTime))}` : "0:00"}</span>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="w-9 text-right font-mono text-[9px] text-white/45">{formatTime(value.currentTime)}</span>
+            <input type="range" min={0} max={Math.max(1, value.duration || 1)} step={0.1} value={Math.min(value.currentTime, value.duration || value.currentTime)} onChange={(event) => value.seek(Number(event.target.value))} className="beat-player-range h-4 min-w-0 flex-1" style={{ ["--beat-progress" as string]: `${progress}%` }} aria-label={`Seek ${beat.title}`} />
+            <span className="w-9 font-mono text-[9px] text-white/45">{value.duration ? `-${formatTime(Math.max(0, value.duration - value.currentTime))}` : "0:00"}</span>
+          </div>
         </div>
 
         <div className="flex items-center justify-end gap-1">
-            <button type="button" onClick={() => value.setLoop(!value.loop)} className={`grid h-10 w-10 place-items-center rounded-full border transition ${value.loop ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]" : "border-transparent text-[var(--text-soft)] hover:bg-white/8 hover:text-[var(--text)]"}`} aria-label={value.loop ? "Disable loop" : "Loop preview"}><Repeat className="h-4 w-4" /></button>
             <button type="button" onClick={() => value.setMuted(!value.muted)} className="hidden h-9 w-9 place-items-center rounded-full text-white/55 transition hover:bg-white/10 hover:text-white md:grid" aria-label={value.muted ? "Unmute audio" : "Mute audio"}>{value.muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}</button>
             <input type="range" min={0} max={1} step={0.01} value={value.volume} onChange={(event) => value.setVolume(Number(event.target.value))} className="beat-volume-range hidden w-16 lg:block" aria-label="Preview volume" />
             <div className="relative">
@@ -318,6 +323,7 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [loop, setLoopState] = useState(false);
+  const [shuffle, setShuffleState] = useState(false);
   const [volume, setVolumeState] = useState(1);
   const [muted, setMutedState] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -406,9 +412,13 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
     if (!activeBeat || !queueRef.current.length) return;
     const currentIndex = queueRef.current.findIndex((beat) => beat.id === activeBeat.id);
     if (currentIndex < 0) return;
-    const nextBeat = queueRef.current[(currentIndex + offset + queueRef.current.length) % queueRef.current.length];
+    const randomIndex = queueRef.current.length > 1
+      ? (currentIndex + 1 + Math.floor(Math.random() * (queueRef.current.length - 1))) % queueRef.current.length
+      : currentIndex;
+    const nextIndex = shuffle ? randomIndex : (currentIndex + offset + queueRef.current.length) % queueRef.current.length;
+    const nextBeat = queueRef.current[nextIndex];
     if (nextBeat) playBeat(nextBeat, queueRef.current);
-  }, [activeBeat, playBeat]);
+  }, [activeBeat, playBeat, shuffle]);
 
   const value = useMemo<BeatPreviewContextValue>(() => ({
     activeBeat,
@@ -417,6 +427,7 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
     currentTime,
     duration,
     loop,
+    shuffle,
     volume,
     muted,
     error,
@@ -436,6 +447,7 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
       setCurrentTime(audio.currentTime);
     },
     setLoop: setLoopState,
+    setShuffle: setShuffleState,
     setVolume: (next) => setVolumeState(Math.max(0, Math.min(1, next))),
     setMuted: setMutedState,
     openLicensing: (beat, licenseType = "mp3") => {
@@ -444,7 +456,7 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
       setLicensingOpen(true);
     },
     closeLicensing: () => setLicensingOpen(false)
-  }), [activeBeat, currentTime, duration, ensureAudio, error, loop, muted, playBeat, playQueueOffset, playing, volume]);
+  }), [activeBeat, currentTime, duration, ensureAudio, error, loop, muted, playBeat, playQueueOffset, playing, shuffle, volume]);
 
   return (
     <BeatPreviewContext.Provider value={value}>
