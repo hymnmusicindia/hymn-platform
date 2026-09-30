@@ -76,6 +76,14 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   const isAuthenticated = Boolean(user);
 
   useEffect(() => {
+    setOpen(false);
+    setProfileOpen(false);
+    setNotificationsOpen(false);
+    setAppLauncherOpen(false);
+    setCartOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
     setCartMounted(true);
   }, []);
 

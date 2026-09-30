@@ -1818,7 +1818,7 @@ html[data-theme="dark"] .home-store-logo {
   min-width: 0;
   overflow: hidden;
   padding-block: 1cqw;
-  filter: drop-shadow(0 5px 8px rgba(0,0,0,.16));
+  mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent);
 }
 
 .home-store-inline-marquee .music-store-marquee {
@@ -1847,7 +1847,7 @@ html[data-theme="dark"] .home-store-logo {
 
 .home-store-inline-marquee::before,
 .home-store-inline-marquee::after {
-  width: 22%;
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

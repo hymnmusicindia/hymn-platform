@@ -32,7 +32,7 @@ export function HomeProducerInvitation() {
 
         <div className="relative mt-8 flex justify-center lg:mt-0 lg:justify-end lg:pr-10">
           <div className="pointer-events-none absolute inset-8 rounded-full bg-white/[.07] blur-3xl" />
-          <div className="relative w-[250px] max-w-full rotate-[5deg] rounded-[2.5rem] border border-white/35 bg-gradient-to-br from-[#686b71] via-[#1a1b1e] to-[#45484f] p-[5px] shadow-[18px_28px_65px_rgba(0,0,0,.65),inset_0_0_0_1px_rgba(255,255,255,.2)] transition-transform duration-500 hover:rotate-0 focus-within:rotate-0 motion-reduce:transition-none">
+          <div className="relative w-[250px] max-w-full rounded-[2.5rem] border border-white/35 bg-gradient-to-br from-[#686b71] via-[#1a1b1e] to-[#45484f] p-[5px] shadow-[18px_28px_65px_rgba(0,0,0,.65),inset_0_0_0_1px_rgba(255,255,255,.2)]">
             <span aria-hidden="true" className="absolute -left-[3px] top-20 h-10 w-[3px] rounded-l bg-[#666970]" />
             <span aria-hidden="true" className="absolute -right-[3px] top-24 h-14 w-[3px] rounded-r bg-[#666970]" />
             <div className="overflow-hidden rounded-[2.2rem] border border-black bg-[#0b0c0f] px-4 pb-3 pt-3">
