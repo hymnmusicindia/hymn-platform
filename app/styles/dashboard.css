@@ -1782,34 +1782,76 @@ html[data-theme="dark"] .home-store-logo {
   isolation: isolate;
 }
 
-.home-store-destination-title {
-  overflow: hidden;
+.home-store-destination-layout {
+  container-type: inline-size;
+  display: grid;
+  gap: clamp(.5rem, 1.5vw, 1.25rem);
 }
 
-.home-store-title-line {
-  transition: transform .55s cubic-bezier(.2,.75,.2,1), color .35s ease;
+.home-store-destination-row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 2cqw;
 }
 
-.home-store-destination-title:hover .home-store-title-line:first-child,
-.home-store-destination-title:focus-visible .home-store-title-line:first-child {
-  transform: translateX(2.5vw);
+.home-store-destination-row-reverse {
+  grid-template-columns: minmax(0, 1fr) max-content;
 }
 
-.home-store-destination-title:hover .home-store-title-line:nth-child(2),
-.home-store-destination-title:focus-visible .home-store-title-line:nth-child(2) {
-  transform: translateX(-2.5vw);
+.home-store-destination-row-reverse .home-store-destination-words {
+  grid-column: 2;
+  grid-row: 1;
   color: var(--text-muted);
 }
 
-.home-store-title-arrow {
-  transition: transform .45s cubic-bezier(.2,.75,.2,1), background-color .3s ease, color .3s ease;
+.home-store-destination-words {
+  font-size: 9.5cqw;
+  font-weight: 600;
+  line-height: .88;
+  letter-spacing: -.075em;
+  white-space: nowrap;
+  color: var(--text);
 }
 
-.home-store-destination-title:hover .home-store-title-arrow,
-.home-store-destination-title:focus-visible .home-store-title-arrow {
-  transform: translateY(-50%) rotate(45deg) scale(1.08);
-  background: var(--text);
-  color: var(--bg);
+.home-store-inline-marquee {
+  min-width: 0;
+  overflow: hidden;
+  padding-block: 1cqw;
+  filter: drop-shadow(0 5px 8px rgba(0,0,0,.16));
+}
+
+.home-store-inline-marquee .music-store-marquee {
+  align-items: center;
+  animation-duration: 65s;
+}
+
+.home-store-destination-row-reverse .music-store-marquee {
+  animation-direction: reverse;
+}
+
+.home-store-inline-marquee .home-store-logo-stop {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex: 0 0 clamp(72px, 13cqw, 155px);
+  height: clamp(24px, 4cqw, 48px);
+  padding-inline: clamp(10px, 1.5cqw, 20px);
+}
+
+.home-store-inline-marquee .home-store-logo {
+  max-width: 100%;
+  max-height: clamp(16px, 2.7cqw, 32px);
+  object-fit: contain;
+}
+
+.home-store-inline-marquee::before,
+.home-store-inline-marquee::after {
+  width: 22%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-store-inline-marquee .music-store-marquee { animation: none; }
 }
 
 .home-store-marquee-shell:hover .music-store-marquee {

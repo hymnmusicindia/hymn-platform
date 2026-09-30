@@ -156,21 +156,20 @@ export default async function HomePage() {
       </section>
 
       <section className="shell py-12 sm:py-16">
-        <Link href="/distribution" className="home-store-destination-title group relative block border-y border-[var(--border)] py-8 sm:py-10" aria-label="Explore global music distribution">
-          <h2 className="text-[clamp(3rem,9vw,8rem)] font-semibold leading-[.76] tracking-[-.075em] text-[var(--text)]">
-            <span className="home-store-title-line block">WHERE YOUR</span>
-            <span className="home-store-title-line block text-right">MUSIC LANDS</span>
-          </h2>
-          <span className="home-store-title-arrow absolute right-[48%] top-1/2 grid h-12 w-12 -translate-y-1/2 place-items-center rounded-full border border-[var(--border-strong)] bg-[var(--bg)] text-xl text-[var(--text)] shadow-[var(--shadow-soft)] sm:h-16 sm:w-16" aria-hidden="true">↗</span>
-        </Link>
-        <div className="home-store-marquee-shell overflow-hidden border-b border-[var(--border)]">
-          <div className="marquee-row music-store-marquee items-center gap-12 px-8 py-5 sm:gap-16">
-            {storeLogoMarquee.map((item, index) => (
-              <div key={`${item.name}-${index}`} className="home-store-logo-stop inline-flex h-12 w-36 shrink-0 items-center justify-center" title={item.name}>
-                <Image src={item.src} alt={item.name} width={144} height={48} className={`distribution-store-logo home-store-logo ${item.className}`} />
+        <div className="home-store-destination-layout border-y border-[var(--border)] py-6 sm:py-9">
+          <h2 className="sr-only">WHERE YOUR MUSIC LANDS</h2>
+          {[0, 1].map((row) => <div key={row} className={`home-store-destination-row ${row === 1 ? "home-store-destination-row-reverse" : ""}`}>
+            <span aria-hidden="true" className="home-store-destination-words">{row === 0 ? "WHERE YOUR" : "MUSIC LANDS"}</span>
+            <div className="home-store-marquee-shell home-store-inline-marquee" aria-label={row === 0 ? "Music platforms" : undefined} aria-hidden={row === 1 ? true : undefined}>
+              <div className="marquee-row music-store-marquee">
+                {(row === 0 ? storeLogoMarquee : [...storeLogos.slice(7), ...storeLogos.slice(0, 7), ...storeLogos.slice(7), ...storeLogos.slice(0, 7)]).map((item, index) => (
+                  <div key={`${item.name}-${index}`} className="home-store-logo-stop" title={item.name} aria-hidden={index >= storeLogos.length ? true : undefined}>
+                    <Image src={item.src} alt={item.name} width={144} height={48} className={`distribution-store-logo home-store-logo ${item.className}`} />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          </div>)}
         </div>
       </section>
 
