@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowRight, Check, ChevronDown } from "lucide-react";
+import { ArrowRight, LockKeyhole, Sparkles } from "lucide-react";
+import styles from "./first-release-reveal.module.css";
 import { motion, useReducedMotion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
@@ -70,9 +71,8 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
   };
   const claim = () => { void track("first_release_reward_cta_clicked"); void track(state.event); router.push(isUsed ? "/distribution/start" : startHref); };
   const passRaised = ["passRising", "reward", "revealed"].includes(revealState);
-  // The spring overshoots the pocket while the pass is being pulled free, then
-  // settles in its readable position above the envelope's foreground layer.
-  const passLift = revealState === "passRising" ? -70 : passRaised ? 0 : 178;
+  // Lift the letter clear of the pocket before exposing its claim action.
+  const passLift = passRaised ? 0 : 170;
   const passVisible = revealState !== "sealed" && revealState !== "pressed" && revealState !== "sealBreaking";
   const actionVisible = revealState === "revealed";
 
@@ -87,37 +87,34 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
     </section>
   </main>;
 
-  return <main className={`first-release-page first-release-scene first-release-scene-${revealState}`}>
-    <section className="first-release-scene-shell" aria-label="HYMN First Release Pass reveal">
-      <div className="first-release-scene-vignette" aria-hidden="true" />
-      <div className="first-release-envelope-stage" data-state={revealState}>
-        {revealState === "sealed" && <p className="first-release-scene-instruction"><ChevronDown aria-hidden="true" /><span className="first-release-desktop-copy">OPEN YOUR FIRST RELEASE PASS</span><span className="first-release-mobile-copy">TAP TO OPEN YOUR GIFT</span></p>}
-        <div className="first-release-ground-shadow" aria-hidden="true" />
-        <div className="first-release-envelope-back" aria-hidden="true" />
-        <div className="first-release-envelope-cavity" aria-hidden="true" />
-        <div className="first-release-interior-glow" aria-hidden="true" />
-        {passVisible && <motion.section className="first-release-live-pass" initial={reduceMotion ? false : { opacity: 0, y: 250, rotate: -1 }} animate={{ opacity: 1, y: passLift, rotate: passRaised ? 0 : -1 }} transition={{ type: "spring", stiffness: 185, damping: 20 }} aria-labelledby="first-release-pass-title">
-          <div className="first-release-pass-head"><span>HYMN FIRST RELEASE PASS</span><b>01/01</b></div>
-          <h1 id="first-release-pass-title" className="first-release-pass-title">FIRST SINGLE</h1>
-          <FirstReleaseReceipt />
-          <div className="first-release-product-status"><p>PRODUCT STATUS</p>{["Artwork", "Audio", "Metadata"].map(item => <span key={item}>{item}<Check aria-hidden="true" /></span>)}<em>Ready to begin your release</em></div>
-          {actionVisible && <motion.div className="first-release-pass-action" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .22 }}>
-            <p>YOUR PASS IS READY</p>
+  return <main className={styles.scene} data-state={revealState}>
+    <Link href="/" className={styles.home} aria-label="HYMN home"><Image src="/assets/hymnlogowhite.png" alt="HYMN" width={100} height={34} /></Link>
+    <section className={styles.shell} aria-label="HYMN First Release Pass reveal">
+      <header className={styles.heading}><p>A LITTLE SOMETHING TO GET YOU STARTED</p><h1>{passRaised ? "Your first record starts here." : "Big things start with one release."}</h1><span>{passRaised ? "A first-release gift, from HYMN to you." : "One tap. Your next chapter."}</span></header>
+      <div className={styles.stage}>
+        <div className={styles.halo} aria-hidden="true" />
+        <div className={styles.rays} aria-hidden="true" />
+        <div className={styles.shadow} aria-hidden="true" />
+        <div className={styles.back} aria-hidden="true" />
+        <motion.div className={styles.flap} animate={{ rotateX: passVisible ? -178 : 0 }} transition={{ duration: reduceMotion ? 0 : .6, ease: [.22, 1, .36, 1] }} aria-hidden="true" />
+        {passVisible && <motion.section className={styles.letter} initial={reduceMotion ? false : { opacity: 0, y: 210, rotate: -3, scale: .88 }} animate={{ opacity: passRaised ? 1 : .3, y: passLift, rotate: passRaised ? -1 : -3, scale: passRaised ? 1 : .88 }} transition={{ type: "spring", stiffness: 125, damping: 20, duration: reduceMotion ? 0 : undefined }} aria-labelledby="first-release-pass-title">
+          <div className={styles.letterhead}><strong>HYMN</strong><span>AN INVITATION<br />TO YOUR FIRST RELEASE</span></div>
+          <p className={styles.salutation}>Dear {eligibility.firstName || "artist"},</p>
+          <h2 id="first-release-pass-title">The world should<br />hear your music.</h2>
+          <p className={styles.body}>Your first single’s base distribution fee is on us. Bring your sound. We’ll help you take the next step.</p>
+          <FirstReleaseReceipt className={styles.receipt} />
+          <div className={styles.signature}><span>Here’s to your first of many,</span><strong>The HYMN team</strong></div>
+          <p className={styles.terms}>One single. Base distribution covered. Optional add-ons cost extra.</p>
+          {actionVisible && <motion.div className={styles.action} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduceMotion ? 0 : .22 }}>
             {eligibility.authenticated ? <button type="button" onClick={claim}>{state.cta}<ArrowRight aria-hidden="true" /></button> : <GoogleAuthButton label={state.cta} expectedRole="customer" referralCode={referralCode} appearance="quiet" onAuthenticated={() => { void track("first_release_auth_started"); void track("first_release_auth_completed"); router.push(startHref); router.refresh(); }} />}
           </motion.div>}
-          <div className="first-release-pass-foot">STATUS: <b>{state.status}</b></div>
+          <div className={styles.status}><Sparkles size={12} aria-hidden="true" />{state.status}</div>
         </motion.section>}
-        <div className="first-release-envelope-front" aria-hidden="true" />
-        <Image className="first-release-envelope-wordmark" src="/assets/hymnlogowhite.png" alt="" width={220} height={75} priority />
-        <motion.div className="first-release-envelope-flap" animate={revealState === "opening" || revealState === "glowing" || passRaised ? { rotateX: -164 } : revealState === "sealBreaking" ? { rotateX: 2 } : { rotateX: 0 }} transition={{ duration: .52, ease: [0.16, 1, .3, 1] }} aria-hidden="true" />
-        <button type="button" className="first-release-seal-button" onClick={open} disabled={revealState !== "sealed"} aria-label="Open your HYMN First Release Pass">
-          <span className="first-release-seal-base" />
-          {revealState !== "sealBreaking" && <span className="first-release-seal-mark" aria-hidden="true" />}
-          {revealState === "sealBreaking" && <><span className="first-release-seal-half first-release-seal-half-left" /><span className="first-release-seal-half first-release-seal-half-right" /><span className="first-release-seal-fragment first-release-seal-fragment-one" /><span className="first-release-seal-fragment first-release-seal-fragment-two" /></>}
-        </button>
-        {passRaised && <div className="first-release-reward-particles" aria-hidden="true">{Array.from({ length: 10 }, (_, index) => <i key={index} style={{ "--particle": index } as React.CSSProperties} />)}</div>}
+        <div className={styles.front} aria-hidden="true"><span>YOUR NEXT CHAPTER</span></div>
+        <button type="button" className={styles.seal} onClick={open} disabled={revealState !== "sealed"} aria-label="Open your HYMN First Release Pass"><LockKeyhole size={23} aria-hidden="true" /><span>OPEN</span></button>
+        {passRaised && <div className={styles.particles} aria-hidden="true">{Array.from({ length: 14 }, (_, index) => <i key={index} style={{ "--i": index, "--x": `${Math.cos(index * 2.4) * 210}px`, "--y": `${Math.sin(index * 2.4) * 240}px` } as React.CSSProperties} />)}</div>}
       </div>
-      {revealState !== "sealed" && revealState !== "revealed" && <p className="first-release-scene-progress" aria-live="polite">{revealState === "sealBreaking" ? "BREAKING THE SEAL" : revealState === "opening" ? "OPENING YOUR GIFT" : "YOUR PASS IS RISING"}</p>}
+      <p className={styles.progress} aria-live="polite">{revealState === "sealed" ? "TAP THE SEAL TO UNLOCK" : revealState === "revealed" ? "A SMALL GIFT. A BIG BEGINNING." : "UNLOCKING YOUR FIRST RELEASE…"}</p>
       {revealState === "revealed" && <p className="sr-only" role="status">Your first release pass is ready. ₹0 due today.</p>}
     </section>
   </main>;
