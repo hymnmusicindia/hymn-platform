@@ -55,11 +55,12 @@ export function isReleaseUnfinished(release: Release) {
 }
 
 export function getReleasePortalDateLabel(release: Release) {
+  if (release.releaseTiming === "quick_release") return "As soon as possible after approval";
   const source = release.releaseDate || release.createdAt;
   const parsed = new Date(source);
   if (Number.isNaN(parsed.getTime())) return "Date pending";
   const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(parsed);
-  return isTentativeQuickRelease(release) ? `${date} · Tentative` : date;
+  return date;
 }
 
 export function isTentativeQuickRelease(release: Release) {
@@ -68,7 +69,7 @@ export function isTentativeQuickRelease(release: Release) {
 }
 
 export function getReleasePortalDateTitle(release: Release) {
-  return isTentativeQuickRelease(release) ? "Expected release date" : "Release date";
+  return release.releaseTiming === "quick_release" ? "Release timing" : "Release date";
 }
 
 export function getReleasePortalTrackCount(release: Release) {

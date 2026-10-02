@@ -1283,10 +1283,10 @@ export function ReleaseForm({
     release.releaseTiming === "schedule_release"
       ? release.scheduledReleaseDate
       : quickReleaseDate;
-  const releaseDateSummaryTitle = release.releaseTiming === "quick_release" ? "Expected release date" : "Release date";
-  const releaseDateSummaryValue = selectedReleaseDate
-    ? `${selectedReleaseDate}${release.releaseTiming === "quick_release" ? " · Tentative" : ""}`
-    : "Pending";
+  const releaseDateSummaryTitle = release.releaseTiming === "quick_release" ? "Release timing" : "Release date";
+  const releaseDateSummaryValue = release.releaseTiming === "quick_release"
+    ? "As soon as possible after approval"
+    : selectedReleaseDate || "Pending";
   const releaseDateValid =
     release.releaseTiming === "quick_release" ||
     (Boolean(release.scheduledReleaseDate) &&
@@ -4397,7 +4397,7 @@ export function ReleaseForm({
                       className="mt-2 text-xs leading-5"
                       style={{ color: "var(--text-muted)" }}
                     >
-                      Estimated store date<br /><strong style={{ color: "var(--text)" }}>{quickReleaseDate}</strong>
+                      Your release will go live as soon as possible after approval. Availability varies by store.
                     </p>
                   </button>
                   <button
