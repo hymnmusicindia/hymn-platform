@@ -29,69 +29,32 @@ const STORE_LOGOS: readonly StoreLogo[] = [
 ] as const;
 
 export function DistributionHero() {
-  const marqueeItems = [...STORE_LOGOS, ...STORE_LOGOS];
-
   return (
-    <section className="distribution-hero overflow-hidden rounded-[2rem] border p-4 shadow-[0_28px_80px_rgba(0,0,0,0.22)] sm:p-7 lg:p-8">
-      <div className="grid gap-8 lg:grid-cols-[1.02fr,0.98fr] lg:items-center">
-        <div className="relative z-10 space-y-6">
-          <div className="grid gap-4">
-            <h1 className="max-w-3xl text-3xl font-semibold leading-tight text-balance sm:text-5xl lg:text-6xl fade-up" style={{ animationDelay: "0.16s", color: "var(--text)" }}>
-              Distribute Your Music Worldwide.
-            </h1>
-            <p className="max-w-2xl fade-up" style={{ animationDelay: "0.26s" }}>
-              <span className="block text-base font-medium leading-7 sm:text-xl sm:leading-8" style={{ color: "var(--text)" }}>
-                Release on Spotify, Apple Music, YouTube &amp; 150+ platforms.
-              </span>
-              <span className="mt-3 inline-flex items-center gap-2.5 text-xs font-semibold uppercase tracking-[0.16em] sm:text-sm" style={{ color: "var(--text-muted)" }}>
-                <span className="h-px w-7" style={{ background: "var(--accent)" }} aria-hidden="true" />
-                Reach listeners across the globe.
-              </span>
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-3 fade-up" style={{ animationDelay: "0.34s" }}>
-            <Link href="/distribution/start" className="btn-primary pressable hover-lift">
-              Start Distribution
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link href="#distribution-pricing" className="btn-outline pressable hover-lift">
-              View Pricing
-            </Link>
-          </div>
+    <section className="distribution-hero distribution-hero-editorial" aria-labelledby="distribution-hero-title">
+      <div className="distribution-hero-copy">
+        <p className="distribution-hero-eyebrow">Independent music. Worldwide.</p>
+        <h1 id="distribution-hero-title">Your music.<br /><span>Everywhere it matters.</span></h1>
+        <p className="distribution-hero-description">From your next single to your whole catalogue. Release on Spotify, Apple Music, YouTube Music and more, all from HYMN.</p>
+        <div className="distribution-hero-actions">
+          <Link href="/distribution/start" className="btn-primary pressable">Start your release<ArrowRight className="h-4 w-4" /></Link>
+          <Link href="#distribution-pricing" className="distribution-hero-pricing">Explore pricing<ArrowRight className="h-4 w-4" /></Link>
         </div>
-
-        <div
-          className="relative overflow-hidden rounded-[1.75rem] border p-4 sm:p-5 lg:p-6 fade-up"
-          style={{
-            animationDelay: "0.22s",
-            borderColor: "color-mix(in srgb, var(--glass-border) 88%, transparent)",
-            background: "linear-gradient(165deg, color-mix(in srgb, var(--glass-bg-strong) 86%, transparent) 0%, color-mix(in srgb, var(--glass-bg) 78%, transparent) 100%)"
-          }}
-        >
-          <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(circle at 8% 18%, color-mix(in srgb, var(--page-glow) 55%, transparent), transparent 45%)" }} />
-
-          <div className="relative z-10">
-            <div
-              className="overflow-hidden rounded-2xl border"
-              style={{
-                borderColor: "color-mix(in srgb, var(--glass-border) 82%, transparent)",
-                background: "rgba(255, 255, 255, 0.97)"
-              }}
-            >
-              <div className="marquee-row music-store-marquee items-center gap-10 px-6 py-4">
-                {marqueeItems.map((item, index) => (
-                  <div key={`${item.name}-${index}`} className="inline-flex h-12 w-32 shrink-0 items-center justify-center" title={item.name}>
-                    <Image src={item.src} alt={item.name} width={144} height={48} className={`distribution-store-logo ${item.className}`} />
-                  </div>
-                ))}
+      </div>
+      <div className="distribution-hero-destinations" aria-label="Distribution to over 150 music platforms">
+        <div className="distribution-hero-reach"><span className="distribution-hero-count">150<span>+</span></span><p>places to find<br />your next listener.</p></div>
+        <div className="distribution-hero-store-lanes" tabIndex={0} aria-label="Music platforms. Focus or hover to pause the scrolling logos.">
+          {[STORE_LOGOS.slice(0, 8), STORE_LOGOS.slice(8)].map((stores, row) => (
+            <div className="distribution-hero-store-window" key={row}>
+              <div className="distribution-hero-store-track" style={{ animationDirection: row ? "reverse" : "normal" }}>
+                {[0, 1].map((copy) => <div className="distribution-hero-store-group" key={copy} aria-hidden={copy === 1 ? true : undefined}>
+                  {stores.map((store) => <div className="distribution-hero-store" key={store.name}><Image src={store.src} alt={store.name} width={144} height={48} /></div>)}
+                </div>)}
               </div>
             </div>
-          </div>
+          ))}
         </div>
+        <p className="distribution-hero-footnote">Streaming services. Music stores. Social platforms.</p>
       </div>
     </section>
   );
 }
-
-// vercel trigger 3
