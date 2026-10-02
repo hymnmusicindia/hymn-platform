@@ -211,6 +211,7 @@ export async function POST(request: Request) {
         paymentModel: parsed.metadata.paymentModel,
         paymentStatus: "paid" as const,
         distributionPlan: parsed.metadata.plan,
+        ...(isFirstReleaseOffer ? { promotionCode: FIRST_RELEASE_PROMOTION_CODE, campaignAttribution: parsed.attribution ?? {} } : {}),
         tracks
       };
       if (parsed.draftReleaseId) {

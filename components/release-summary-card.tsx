@@ -39,7 +39,7 @@ export function ReleaseSummaryCard({
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const canDelete = release.status === "draft";
   const releaseMetadata = release.metadata && typeof release.metadata === "object" ? release.metadata as Record<string, unknown> : {};
-  const isFreeReleaseDraft = release.status === "draft" && releaseMetadata.promotionCode === "FIRST_RELEASE_FREE";
+  const showFreeReleaseTag = ["draft", "changes_requested"].includes(release.status) && releaseMetadata.promotionCode === "FIRST_RELEASE_FREE";
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -124,7 +124,7 @@ export function ReleaseSummaryCard({
         </div>
       </div>
 
-      {isFreeReleaseDraft ? <div className="mt-3 inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.09em] text-emerald-600 dark:text-emerald-400"><Gift className="h-3 w-3" />One-time free release</div> : null}
+      {showFreeReleaseTag ? <div className="mt-3 inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.09em] text-emerald-600 dark:text-emerald-400"><Gift className="h-3 w-3" />Free release</div> : null}
 
       <div className="release-summary-meta-row mt-3 flex min-w-0 items-center justify-between gap-3">
         <span
