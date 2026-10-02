@@ -5675,11 +5675,11 @@ export function ReleaseForm({
         ) : null}
         {step === 7 ? (
           <section className={clsx("grid gap-5", stepMotion)}>
-            <div className="relative grid gap-3 py-3 text-center md:py-6">
+            <div className="review-page-heading relative grid gap-3 py-3">
               <button type="button" onClick={() => goToStep(5)} className="text-sm font-semibold md:absolute md:left-0 md:top-7" style={{ color: "var(--text-muted)" }}>← Back to release</button>
-              <p className="text-[11px] font-semibold uppercase tracking-[.22em]" style={{ color: "var(--accent)" }}>Final confirmation</p>
-              <h2 className="text-3xl font-semibold tracking-[-.035em] md:text-5xl">Review your release</h2>
-              <p className="mx-auto max-w-xl text-sm leading-6 md:text-base" style={{ color: "var(--text-muted)" }}>Take one final look before we prepare it for distribution.</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[.18em]" style={{ color: "var(--text-muted)" }}>Release review</p>
+              <h2 className="text-3xl font-semibold tracking-[-.035em] md:text-4xl">One last look.</h2>
+              <p className="text-sm leading-6" style={{ color: "var(--text-muted)" }}>Check your audio, credits and delivery details, then submit to HYMN for review.</p>
             </div>
 
             <div
@@ -6166,7 +6166,7 @@ export function ReleaseForm({
 
             </div>
 
-            <div className="rounded-[1.5rem] border p-5 md:p-7" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
+            <div className="review-confirmation rounded-[1.5rem] border p-5 md:p-7" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
               <p className="text-xl font-semibold">Everything look correct?</p>
               <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }}>Confirm that the metadata, credits, ownership information, legal declarations, and delivery details shown above are accurate.</p>
               <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border p-4 text-sm font-medium" style={{ borderColor: reviewConfirmed ? "var(--accent)" : "var(--border)", background: "var(--bg-soft)" }}>
