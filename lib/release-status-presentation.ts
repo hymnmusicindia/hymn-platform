@@ -1,4 +1,10 @@
 export type ReleaseStatusTone = "neutral" | "progress" | "success" | "warning" | "danger";
+export const CUSTOMER_REVIEW_STATUSES = new Set([
+  "submitted", "resubmitted", "in_queue", "in_qc_queue", "under_review",
+  "approved", "queued_for_distribution", "submitting_to_distributor",
+  "sent", "sent_to_distributor", "distributor_processing", "processing",
+  "delivered", "scheduled", "awaiting_live_confirmation"
+]);
 const map: Record<string, { label: string; description: string; tone: ReleaseStatusTone; step: number; nextAction: string }> = {
   draft: { label: "Draft", description: "Finish the release details when you are ready.", tone: "neutral", step: 0, nextAction: "Continue release" },
   submitted: { label: "Submitted", description: "HYMN has received your release.", tone: "progress", step: 1, nextAction: "Track review" },
@@ -25,7 +31,12 @@ const map: Record<string, { label: string; description: string; tone: ReleaseSta
   live: { label: "Live", description: "Your release is available and reporting will follow.", tone: "success", step: 4, nextAction: "View performance" },
   failed: { label: "Delivery Issue", description: "HYMN needs your attention to continue delivery.", tone: "danger", step: 2, nextAction: "Resolve issue" }
 };
-export function getReleaseStatusPresentation(status?: string | null) { return map[String(status || "draft").toLowerCase()] || { label: String(status || "Status pending").replaceAll("_", " "), description: "Open the release for the latest details.", tone: "neutral" as const, step: 0, nextAction: "Manage release" }; }
+export function getReleaseStatusPresentation(status?: string | null) {
+  if (CUSTOMER_REVIEW_STATUSES.has(String(status).toLowerCase())) {
+    return { label: "Under Review", description: "Your release is being prepared for stores. We’ll update you when it goes live.", tone: "progress" as const, step: 1, nextAction: "View release" };
+  }
+  return map[String(status || "draft").toLowerCase()] || { label: String(status || "Status pending").replaceAll("_", " "), description: "Open the release for the latest details.", tone: "neutral" as const, step: 0, nextAction: "Manage release" };
+}
 
 /** Human labels for operational release states. Kept client-safe so admin and
  * customer surfaces cannot drift by each maintaining their own formatter. */

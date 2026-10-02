@@ -1,9 +1,11 @@
 import { Release, ReleaseStatus } from "@/lib/types";
+import { CUSTOMER_REVIEW_STATUSES } from "@/lib/release-status-presentation";
 
 export type ReleasePortalStage = "draft" | "review" | "changes_requested" | "scheduled" | "processing" | "partially_live" | "released" | "rejected" | "queued" | "sending" | "partner_received" | "payment_required" | "delivery_issue" | "takedown_pending" | "taken_down" | "archived" | "unknown";
 
 export function getReleasePortalStage(release: Release): ReleasePortalStage {
   const s = release.status.toLowerCase();
+  if (CUSTOMER_REVIEW_STATUSES.has(s)) return "review";
   if (s === "draft") return "draft";
   if (s === "rejected") return "rejected";
   if (s === "changes_requested" || s === "distributor_changes_required") return "changes_requested";
