@@ -19,6 +19,9 @@ for (const invalid of [
 const migration = fs.readFileSync(path.join(process.cwd(), "prisma/migrations/20260825090000_first_release_free_funnel/migration.sql"), "utf8");
 assert.match(migration, /UNIQUE INDEX "promotion_redemptions_promotion_id_user_id_key"/);
 assert.match(migration, /FIRST_RELEASE_FREE/);
+const repairMigration = fs.readFileSync(path.join(process.cwd(), "prisma/migrations/20261003120000_restore_first_release_promotion/migration.sql"), "utf8");
+assert.match(repairMigration, /INSERT INTO "promotions"/, "Deployments must restore the promotion configuration if the original seed row is missing.");
+assert.match(repairMigration, /ON CONFLICT \("code"\) DO UPDATE/, "The promotion repair must be safe to deploy more than once.");
 const promotionSource = fs.readFileSync(path.join(process.cwd(), "lib/first-release-promotion.ts"), "utf8");
 assert.match(promotionSource, /submittedReleaseCount/);
 assert.match(promotionSource, /release_already_submitted/);
@@ -26,6 +29,8 @@ const releaseFormSource = fs.readFileSync(path.join(process.cwd(), "components/r
 assert.match(releaseFormSource, /edit=\$\{id\}\$\{campaignQuery\}/, "Autosave must preserve the first-release campaign on the draft URL.");
 assert.match(releaseFormSource, /storePlatforms\.map\(\(platform\) => platform\.name\)/, "Default delivery must contain store platforms only and must not preselect paid social add-ons.");
 assert.match(releaseFormSource, /if \(firstReleaseOffer\) return;/, "The free funnel must prevent adding tracks beyond one Single.");
+assert.match(releaseFormSource, /FIRST_RELEASE_BASE_DISCOUNT/, "The review price must use the shared server-aligned first-release discount.");
+assert.match(releaseFormSource, /Submit your release/, "A zero-due first release must be presented as a direct submission, not checkout.");
 const distributionStartSource = fs.readFileSync(path.join(process.cwd(), "app/(authenticated)/distribution/start/page.tsx"), "utf8");
 assert.match(distributionStartSource, /campaignDraftEligible/, "An eligible campaign draft must retain its offer while being edited.");
 console.log("First Release Free pricing, add-on, qualification, and database uniqueness guards passed.");

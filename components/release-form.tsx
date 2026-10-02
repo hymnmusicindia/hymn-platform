@@ -3,6 +3,7 @@
 import { customerMessage } from "@/lib/customer-message";
 import { checkoutPlan } from "@/lib/distribution-checkout-plan";
 import { getContentIdEligibility } from "@/lib/content-id-eligibility";
+import { FIRST_RELEASE_BASE_DISCOUNT } from "@/lib/first-release-pricing";
 
 import clsx from "clsx";
 import {
@@ -1354,7 +1355,7 @@ export function ReleaseForm({
     (selectedPlan === "one_time"
       ? trackPricingQuote.finalPrice
       : currentPlan.price) + ugcAddOnAmount;
-  const firstReleaseDiscount = firstReleaseOffer && selectedPlan === "one_time" && releaseType === "single" && tracks.length === 1 ? Math.min(99, distributionAmount - ugcAddOnAmount) : 0;
+  const firstReleaseDiscount = firstReleaseOffer && selectedPlan === "one_time" && releaseType === "single" && tracks.length === 1 ? Math.min(FIRST_RELEASE_BASE_DISCOUNT, distributionAmount - ugcAddOnAmount) : 0;
   const finalDistributionAmount = Math.max(0, distributionAmount - firstReleaseDiscount);
   const hymnCreditsApplied = useHymnCredits && !subscriptionCovered && selectedPlan === "one_time" ? Math.min(Math.max(0, hymnCreditBalance), finalDistributionAmount) : 0;
   const distributionCheckoutAmount = Math.max(0, finalDistributionAmount - hymnCreditsApplied);
@@ -6209,7 +6210,7 @@ export function ReleaseForm({
                   : subscriptionCovered
                     ? "Confirm & Submit Release →"
                     : distributionCheckoutAmount === 0
-                      ? "Confirm & Submit Release →"
+                      ? "Submit your release →"
                       : `Continue to Checkout · Rs ${distributionCheckoutAmount.toLocaleString("en-IN")} →`}
               </button>
             </div>
