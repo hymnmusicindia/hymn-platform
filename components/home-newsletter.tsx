@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { ArrowRight, Check, Mail, Sparkles } from "lucide-react";
 
 export function HomeNewsletter({ accountEmail }: { accountEmail?: string | null }) {
@@ -8,9 +8,40 @@ export function HomeNewsletter({ accountEmail }: { accountEmail?: string | null 
   const [sending, setSending] = useState(false);
   const [useDifferentEmail, setUseDifferentEmail] = useState(!accountEmail);
   const [subscription, setSubscription] = useState<{ email: string; token: string } | null>(null);
+  const [checking, setChecking] = useState(Boolean(accountEmail));
+  const [checkFailed, setCheckFailed] = useState(false);
+  const [checkVersion, setCheckVersion] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setSubscription(null);
+    setUseDifferentEmail(!accountEmail);
+    setCheckFailed(false);
+    setMessage(null);
+    if (!accountEmail) { setChecking(false); return; }
+    setChecking(true);
+    void fetch("/api/newsletter/subscribe", { cache: "no-store", signal: controller.signal })
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Could not check your subscription.");
+        if (!controller.signal.aborted) setSubscription(data.subscription);
+      })
+      .catch(error => {
+        if (!controller.signal.aborted) { setCheckFailed(true); setMessage(error instanceof Error ? error.message : "Could not check your subscription."); }
+      })
+      .finally(() => { if (!controller.signal.aborted) setChecking(false); });
+    return () => controller.abort();
+  }, [accountEmail, checkVersion]);
+
+  useEffect(() => {
+    const refresh = () => { if (accountEmail && !sending && !useDifferentEmail) setCheckVersion(value => value + 1); };
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [accountEmail, sending, useDifferentEmail]);
 
   async function subscribe(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (sending || checking || checkFailed) return;
     const form = event.currentTarget;
     const email = useDifferentEmail
       ? String(new FormData(form).get("email") || "").trim()
@@ -59,12 +90,12 @@ export function HomeNewsletter({ accountEmail }: { accountEmail?: string | null 
     <form onSubmit={subscribe} className="w-full max-w-lg">
       <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.025))] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,.08),0_20px_55px_rgba(0,0,0,.22)] sm:p-6">
         <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-white/[0.06] blur-3xl" />
-        {subscription ? (
+        {checking ? <p className="relative text-sm text-white/70" role="status">Checking your subscription…</p> : checkFailed ? <button type="button" onClick={() => setCheckVersion(value => value + 1)} className="relative text-sm text-white underline underline-offset-4">Retry subscription check</button> : subscription ? (
           <div className="relative">
             <div className="flex items-start gap-4">
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-black"><Check className="h-5 w-5" strokeWidth={2.5} /></span>
               <div className="min-w-0">
-                <p className="text-base font-semibold text-white">You’re on the list.</p>
+                <p className="text-base font-semibold text-white">Subscribed</p>
                 <p className="mt-1 text-sm leading-6 text-white/60">HYMN updates will go to</p>
                 <p className="truncate text-sm font-medium text-white">{subscription.email}</p>
               </div>
