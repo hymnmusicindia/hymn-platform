@@ -1,0 +1,73 @@
+/* Secondary colour roles: monochrome actions remain the primary hierarchy.
+   Never reuse these decorative colours for success, warning or error states. */
+:root {
+  --brand-iris: #b9adff;
+  --brand-teal: #81d5cc;
+  --brand-wash: rgba(155, 133, 255, .075);
+  --brand-teal-wash: rgba(81, 184, 174, .055);
+  --accent-soft: rgba(155, 133, 255, .12);
+  --focus: #b9adff;
+  --page-glow: rgba(155, 133, 255, .12);
+}
+html[data-theme="light"] {
+  --brand-iris: #6144ad;
+  --brand-teal: #176f6b;
+  --brand-wash: rgba(115, 83, 188, .055);
+  --brand-teal-wash: rgba(27, 124, 116, .045);
+  --accent-soft: rgba(115, 83, 188, .09);
+  --focus: #6144ad;
+  --page-glow: rgba(115, 83, 188, .08);
+}
+html[data-theme="dark"] {
+  --accent-soft: rgba(155, 133, 255, .12);
+  --focus: #b9adff;
+  --page-glow: rgba(155, 133, 255, .12);
+}
+.force-dark {
+  --brand-iris: #b9adff;
+  --brand-teal: #81d5cc;
+}
+::selection { background:var(--brand-iris); color:var(--bg); }
+
+/* Shared panels get a low-opacity tint; content and financial statuses stay
+   on their established neutral surfaces. */
+.surface-card {
+  background:linear-gradient(125deg,var(--brand-wash),transparent 48%),var(--card);
+}
+.field:focus-visible {
+  outline:2px solid var(--focus);
+  outline-offset:2px;
+}
+.site-nav-item.site-nav-link-active { color:var(--brand-iris); }
+.site-nav-item.site-nav-link-active::after { background:var(--brand-iris); }
+.btn-outline:hover { border-color:var(--brand-iris); background:var(--accent-soft); }
+
+/* Store destinations: colour in the typography and real brand assets,
+   without a boxed carousel or a gradient across readable text. */
+.home-store-marquee-shell {
+  background:radial-gradient(ellipse at 90% 20%,var(--brand-wash),transparent 55%),radial-gradient(ellipse at 10% 90%,var(--brand-teal-wash),transparent 55%);
+}
+.home-store-destination-row-reverse .home-store-destination-words { color:var(--brand-iris); }
+html:not([data-theme="dark"]) .home-store-logo,
+html:not([data-theme="dark"]) .distribution-hero-store img { filter:none; opacity:.8; mix-blend-mode:multiply; }
+html[data-theme="dark"] .home-store-logo { filter:grayscale(1) invert(1); opacity:.75; }
+html[data-theme="dark"] .home-store-logo-stop:hover .home-store-logo { filter:grayscale(1) invert(1); opacity:1; }
+.home-store-inline-marquee { mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent); }
+.distribution-hero-copy h1 span { color:var(--brand-iris); }
+.distribution-hero-count > span { color:var(--brand-teal); }
+.distribution-hero-pricing { text-decoration-color:var(--brand-iris); border-bottom-color:var(--brand-iris); }
+.distribution-hero.distribution-hero-editorial {
+  background:radial-gradient(ellipse at 90% 40%,var(--brand-teal-wash),transparent 58%);
+}
+
+/* A small editorial accent ties the music imagery to the rest of the site. */
+.beat-store-hero h1 > span { color:var(--brand-iris); }
+.beat-store-hero button[aria-current="true"] { background:var(--brand-iris); box-shadow:0 0 12px rgba(185,173,255,.25); }
+.is-review-mode .review-page-heading > p:first-of-type,
+.distribution-hero-eyebrow { color:var(--brand-iris); }
+.is-review-mode .review-page-heading { border-bottom-color:color-mix(in srgb,var(--brand-iris) 25%,var(--border)); }
+
+@media (forced-colors:active) {
+  .home-store-destination-words,.distribution-hero-copy h1 span,.site-nav-item.site-nav-link-active { color:CanvasText; }
+  .surface-card,.home-store-marquee-shell,.distribution-hero.distribution-hero-editorial { background:Canvas; }
+}
