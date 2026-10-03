@@ -29,7 +29,7 @@ export function ReleaseSummaryCard({
   const title = release.releaseTitle?.trim() || release.trackName || "Untitled release";
   const stage = getReleasePortalStage(release);
   const trackCount = getReleasePortalTrackCount(release);
-  const needsCorrection = release.status === "changes_requested";
+  const needsCorrection = stage === "changes_requested";
   const primaryActionLabel = release.status === "draft" ? "Edit" : needsCorrection ? "Fix release" : actionLabel;
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -39,7 +39,7 @@ export function ReleaseSummaryCard({
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const canDelete = release.status === "draft";
   const releaseMetadata = release.metadata && typeof release.metadata === "object" ? release.metadata as Record<string, unknown> : {};
-  const showFreeReleaseTag = ["draft", "changes_requested"].includes(release.status) && releaseMetadata.promotionCode === "FIRST_RELEASE_FREE";
+  const showFreeReleaseTag = ["draft", "changes_requested"].includes(stage) && releaseMetadata.promotionCode === "FIRST_RELEASE_FREE";
 
   useEffect(() => {
     if (!menuOpen) return;

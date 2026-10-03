@@ -10,7 +10,9 @@ export type CampaignAttribution = Partial<Record<"utm_source" | "utm_medium" | "
 
 const submittedReleaseWhere = (userId: number): Prisma.ReleaseWhereInput => ({
   OR: [{ userId }, { ownerUserId: userId }],
-  status: { notIn: [ReleaseStatus.DRAFT, ReleaseStatus.AWAITING_PAYMENT] }
+  status: { notIn: [ReleaseStatus.DRAFT, ReleaseStatus.AWAITING_PAYMENT] },
+  // Deleted drafts are soft-archived, but have never consumed a release.
+  NOT: { status: ReleaseStatus.ARCHIVED, paymentStatus: { not: "paid" }, metadata: { path: ["submittedAt"], equals: Prisma.AnyNull }, statusTransitions: { none: { newStatus: ReleaseStatus.SUBMITTED } } }
 });
 
 async function promotion() {
@@ -27,6 +29,10 @@ async function promotion() {
 export async function getFirstReleaseEligibility(userId: number) {
   const offer = await promotion();
   if (!offer) return { eligible: false as const, reason: "promotion_inactive" as const };
+  if (offer.maxRedemptions != null) {
+    const used = await prisma.promotionRedemption.count({ where: { promotionId: offer.id, status: "REDEEMED" } });
+    if (used >= offer.maxRedemptions) return { eligible: false as const, reason: "promotion_exhausted" as const };
+  }
   const submittedReleaseCount = await prisma.release.count({ where: submittedReleaseWhere(userId) });
   if (submittedReleaseCount > 0) return { eligible: false as const, reason: "release_already_submitted" as const };
   const redemption = await prisma.promotionRedemption.findUnique({ where: { promotionId_userId: { promotionId: offer.id, userId } } });

@@ -86,6 +86,12 @@ async function buildLineItems(input: CheckoutInput): Promise<CheckoutLineItem[]>
 }
 
 export async function buildCheckoutQuote(userId: number, input: CheckoutInput): Promise<CheckoutQuote> {
+  const distribution = input.items.filter((item) => item.type === "distribution");
+  if (distribution.some((item) => item.plan === "one_time")) throw new Error("Review and submit your release through the distribution form before checkout.");
+  if (distribution.length && input.items.length !== 1) throw new Error("Purchase subscriptions separately from beats.");
+  if (distribution.length && (input.couponCode || input.useReferralCredits)) throw new Error("Coupons and checkout credits are not available for recurring subscriptions.");
+  const beatIds = input.items.flatMap((item) => item.type === "beat" ? [item.beatId] : []);
+  if (new Set(beatIds).size !== beatIds.length) throw new Error("Choose one licence per beat before checkout.");
   const user = await findUserById(userId);
   if (!user) throw new Error("User not found.");
 

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { statusAfterDireNoteAcceptance, statusWhenScheduledDateArrives, transitionReleaseStatus } from "../lib/release-status-engine";
 import { getReleaseStatusPresentation } from "../lib/release-status-presentation";
-import { getReleasePortalStage } from "../lib/release-portal";
+import { getReleasePortalStage, getReleasePortalStageLabel, getReleasePortalFilterLabel, getReleasePortalDateLabel } from "../lib/release-portal";
+import { CUSTOMER_REVIEW_STATUSES } from "../lib/release-status-presentation";
 
 assert.equal(transitionReleaseStatus({ currentStatus: "draft", nextStatus: "submitted" }), "submitted");
 assert.equal(transitionReleaseStatus({ currentStatus: "changes_requested", nextStatus: "resubmitted" }), "resubmitted");
@@ -18,8 +19,16 @@ assert.equal(transitionReleaseStatus({ currentStatus: "approved", nextStatus: "c
 assert.throws(() => transitionReleaseStatus({ currentStatus: "draft", nextStatus: "archived", manualOverride: true }), /requires a reason/);
 assert.equal(statusWhenScheduledDateArrives(true), "awaiting_live_confirmation");
 assert.equal(statusAfterDireNoteAcceptance({ releaseDate: "2020-01-01" }, new Date("2026-01-01T00:00:00Z")), "awaiting_live_confirmation");
-assert.equal(getReleaseStatusPresentation("approved").label, "Approved by HYMN");
-assert.equal(getReleaseStatusPresentation("sent_to_distributor").label, "Received by Partner");
+for (const status of CUSTOMER_REVIEW_STATUSES) {
+  assert.equal(getReleaseStatusPresentation(status).label, "Under Review");
+  assert.equal(getReleasePortalStage({ status } as any), "review");
+  assert.equal(getReleasePortalFilterLabel(status as any), "Under Review");
+}
+assert.equal(getReleasePortalStageLabel("partner_received"), "Under Review");
+assert.equal(getReleasePortalDateLabel({ status: "live", releaseTiming: "quick_release" } as any), "Available now");
+assert.equal(getReleasePortalStage({ status: "distributed" } as any), "released");
+assert.equal(getReleasePortalFilterLabel("changes_requested"), "Changes Requested");
+assert.equal(getReleaseStatusPresentation("distributed").label, "Live");
 assert.equal(getReleasePortalStage({ status: "delivery_failed" } as any), "delivery_issue");
 assert.equal(getReleasePortalStage({ status: "taken_down" } as any), "taken_down");
 assert.equal(getReleasePortalStage({ status: "unknown" } as any), "unknown");

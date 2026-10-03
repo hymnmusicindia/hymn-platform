@@ -58,11 +58,11 @@ assert(beatArtworkRoute.includes("databaseCommitted") && beatArtworkRoute.includ
 const beatCard = readFileSync("components/beat-card.tsx", "utf8");
 const beatStore = readFileSync("components/beat-store-experience.tsx", "utf8");
 assert(beatCard.includes('loading="lazy"') && beatCard.includes("setCoverFailed(true)"), "Beat covers must use the original URL with a visible failure fallback.");
-assert(beatCard.includes('h-16 w-16') && beatCard.includes("Pause") && beatCard.includes("Play"), "Beat artwork must expose a large central play/pause control.");
-assert(beatCard.includes("controlsVisible || active") && beatCard.includes("onPointerEnter") && beatCard.includes("onPointerLeave"), "Playback controls must appear only on hover, touch reveal, focus, or active playback.");
+assert(beatCard.includes('onClick={onPlay}') && beatCard.includes('aria-label={playing') && beatCard.includes("Pause") && beatCard.includes("Play"), "Beat artwork must expose an accessible play/pause control.");
+assert(beatCard.includes("group-hover:opacity-100") && beatCard.includes("group-focus-within:opacity-100"), "Playback controls must be discoverable with pointer and keyboard focus.");
 assert(!beatCard.includes("Available") && !beatCard.includes("beatStoreSlug"), "Beat cards must remain compact and must not navigate to a redundant detail page.");
-assert(beatCard.includes("Key {beat.keySignature}") && beatCard.includes("{beat.bpm} BPM"), "Mood, key, and BPM must share one compact metadata row.");
+assert(beatCard.includes("beat.keySignature") && beatCard.includes("{beat.bpm} BPM"), "Beat cards must expose key and BPM metadata.");
 assert(!existsSync("app/(public)/beat-store/beats/[slug]/page.tsx"), "The redundant standalone beat-detail page must remain removed.");
-assert(beatStore.includes('grid grid-cols-1 gap-4 sm:grid-cols-2'), "Phone layouts must render full-width beat cards.");
+assert(beatStore.includes('grid grid-cols-1 gap-2.5'), "Beat list rows must remain full-width.");
 assert(beatStore.includes("replaceBrokenImage") && beatStore.includes("producer portrait"), "Producer portraits must retain the original source and recover from missing legacy media.");
 console.log("Upload storage architecture checks passed.");

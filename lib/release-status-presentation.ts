@@ -32,6 +32,8 @@ const map: Record<string, { label: string; description: string; tone: ReleaseSta
   failed: { label: "Delivery Issue", description: "HYMN needs your attention to continue delivery.", tone: "danger", step: 2, nextAction: "Resolve issue" }
 };
 export function getReleaseStatusPresentation(status?: string | null) {
+  if (["released", "distributed"].includes(String(status).toLowerCase())) return map.live;
+  if (status === "awaiting_payment") return { label: "Payment Required", description: "Complete checkout to submit your release.", tone: "warning" as const, step: 0, nextAction: "Continue checkout" };
   if (CUSTOMER_REVIEW_STATUSES.has(String(status).toLowerCase())) {
     return { label: "Under Review", description: "Your release is being prepared for stores. We’ll update you when it goes live.", tone: "progress" as const, step: 1, nextAction: "View release" };
   }

@@ -22,11 +22,12 @@ export function getReleasePortalStage(release: Release): ReleasePortalStage {
   if (s === "awaiting_live_confirmation" || s === "delivered") return "processing";
   if (s === "partially_live") return "partially_live";
   if (s === "scheduled") return "scheduled";
-  if (s === "live" || s === "released") return "released";
+  if (s === "live" || s === "released" || s === "distributed") return "released";
   return "unknown";
 }
 
 export function getReleasePortalStageLabel(stage: ReleasePortalStage) {
+  if (["queued", "sending", "partner_received", "scheduled", "processing"].includes(stage)) return "Under Review";
   const operational: Partial<Record<ReleasePortalStage, string>> = { queued: "Queued for Distribution", sending: "Sending to Partner", partner_received: "Received by Partner", payment_required: "Payment Required", delivery_issue: "Delivery Needs Attention", takedown_pending: "Takedown Pending", taken_down: "Taken Down", archived: "Archived", unknown: "Status Pending" };
   if (operational[stage]) return operational[stage]!;
   if (stage === "scheduled") return "Scheduled";
@@ -57,7 +58,13 @@ export function isReleaseUnfinished(release: Release) {
 }
 
 export function getReleasePortalDateLabel(release: Release) {
-  if (release.releaseTiming === "quick_release") return "As soon as possible after approval";
+  if (release.releaseTiming === "quick_release") {
+    const stage = getReleasePortalStage(release);
+    if (stage === "released") return "Available now";
+    if (stage === "partially_live") return "Available on some stores";
+    if (stage === "taken_down") return "Removed from stores";
+    return "As soon as possible after approval";
+  }
   const source = release.releaseDate || release.createdAt;
   const parsed = new Date(source);
   if (Number.isNaN(parsed.getTime())) return "Date pending";
@@ -142,9 +149,7 @@ export function getReleasePortalBadgeStyle(stage: ReleasePortalStage) {
 }
 
 export function getReleasePortalFilterLabel(status: ReleaseStatus) {
-  if (status === "live") return "Released";
-  if (["approved", "sent", "sent_to_distributor", "distributor_processing"].includes(status)) return "Under Review";
-  return "Draft";
+  return getReleasePortalStageLabel(getReleasePortalStage({ status } as Release));
 }
 
 

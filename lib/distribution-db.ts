@@ -628,7 +628,7 @@ export async function getDetailedReleaseByUserId(userId: number, releaseId: numb
   return releases.find((release) => release.id === releaseId) ?? null;
 }
 
-const duplicateUnsafeMetadataKeys = new Set(["direnoteResponse", "direnoteValidationErrors", "reviewIssues", "reviewHistory", "analytics", "earnings", "audit"]);
+const duplicateUnsafeMetadataKeys = new Set(["direnoteResponse", "direnoteValidationErrors", "reviewIssues", "reviewHistory", "analytics", "earnings", "audit", "promotionCode", "campaignAttribution", "submittedAt"]);
 
 function duplicateSafeValue(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
@@ -659,7 +659,7 @@ export async function duplicateReleaseForUser(userId: number, releaseId: number)
   return saveDraftDistributionRelease({
     userId,
     metadata: {
-      ...safeSource,
+      ...(duplicateSafeValue(safeSource) as typeof safeSource),
       // Keep the owned private asset reference. The display model contains a
       // release-scoped route which would otherwise point back to the source.
       artworkUrl: persistedArtwork?.artworkUrl ?? safeSource.artworkUrl,

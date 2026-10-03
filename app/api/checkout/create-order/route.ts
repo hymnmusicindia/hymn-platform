@@ -7,6 +7,7 @@ import { checkoutCreateOrderSchema } from "@/lib/validation";
 import { generateBeatLicense } from "@/lib/beat-license";
 import { prisma } from "@/lib/prisma";
 import { emailAppUrl, sendBeatEmailEvent } from "@/lib/email/email-events";
+import { createProviderSubscription, isSubscriptionProduct } from "@/lib/subscription-billing";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -15,6 +16,11 @@ export async function POST(request: Request) {
   try {
     const payload = checkoutCreateOrderSchema.parse(await request.json());
     const quote = await buildCheckoutQuote(session.sub, payload);
+    const item = payload.items[0];
+    if (item.type === "distribution" && isSubscriptionProduct(item.plan)) {
+      const created = await createProviderSubscription(session.sub, item.plan);
+      return NextResponse.json({ requiresPayment: true, billingType: "subscription", subscriptionId: created.provider.id, amount: created.version.amount, currency: created.version.currency, quote, key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || "" });
+    }
     const amountPaise = Math.round(quote.finalAmount * 100);
 
     if (amountPaise > 0 && process.env.NODE_ENV === "production" && !razorpay) {

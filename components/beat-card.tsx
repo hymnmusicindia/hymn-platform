@@ -38,7 +38,7 @@ export function BeatCard({ beat, active = false, playing = false, onPlay, onAdd,
       <span>{beat.bpm} BPM</span><span>·</span><span>{beat.keySignature || "Key —"}</span>
     </div>
     <div className="relative flex items-center gap-2">
-      <button type="button" onClick={() => onAdd?.("wav")} className={`grid h-11 w-11 place-items-center rounded-xl border transition hover:-translate-y-0.5 ${selectedLicenses.length ? "border-white/50 bg-white/15 text-white" : "border-white/20 bg-black/20 text-white hover:border-white/45"}`} aria-label={selectedLicenses.length ? `Remove ${beat.title} from cart` : `Add ${beat.title} WAV licence to cart`}>
+      <button type="button" onClick={() => onAdd?.(selectedLicenses[0] ?? "wav")} className={`grid h-11 w-11 place-items-center rounded-xl border transition hover:-translate-y-0.5 ${selectedLicenses.length ? "border-white/50 bg-white/15 text-white" : "border-white/20 bg-black/20 text-white hover:border-white/45"}`} aria-label={selectedLicenses.length ? `Remove ${beat.title} from cart` : `Add ${beat.title} WAV licence to cart`}>
         {selectedLicenses.length ? <Check className="h-4 w-4" /> : <ShoppingBag className="h-4 w-4" />}
       </button>
       <button type="button" onClick={() => onLicense?.("wav")} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-3.5 text-xs font-semibold text-black transition hover:scale-[1.02] sm:px-4">

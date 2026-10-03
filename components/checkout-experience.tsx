@@ -92,7 +92,7 @@ function loadRazorpayScript() {
 }
 
 export function CheckoutExperience({ product }: { product?: string | null }) {
-  const [items, setItems] = useState<CheckoutItem[]>(() => defaultItems(product));
+  const [items, setItems] = useState<CheckoutItem[]>(() => product === "beatstore" ? [] : defaultItems(product));
   const [couponInput, setCouponInput] = useState("");
   const [couponCode, setCouponCode] = useState<string | undefined>();
   const [useReferralCredits, setUseReferralCredits] = useState(false);
@@ -105,7 +105,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
   useEffect(() => {
     if (product === "beatstore") {
       const cartItems = readBeatCart();
-      setItems(cartItems.length ? cartItems : defaultItems(null));
+      setItems(cartItems);
     }
   }, [product]);
 
@@ -116,6 +116,12 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
     async function refreshQuote() {
       setLoading(true);
       setFeedback(null);
+      setQuote(null);
+      if (!payload.items.length) {
+        setFeedback("Your cart is empty. Add a beat from the Beat Store to continue.");
+        setLoading(false);
+        return;
+      }
       try {
         const response = await fetch("/api/checkout/quote", {
           method: "POST",
@@ -147,6 +153,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
   }
 
   async function proceedToPay() {
+    if (!quote || loading || paying || !items.length) return;
     setPaying(true);
     setFeedback(null);
     try {
@@ -161,6 +168,11 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
       if (!data.requiresPayment) {
         setSuccess(true);
         setQuote(data.quote);
+        setPaying(false);
+        if (product === "beatstore") {
+          window.localStorage.removeItem("hymn-beat-cart");
+          window.dispatchEvent(new CustomEvent("hymn-cart-updated", { detail: { items: [] } }));
+        }
         if (data.reviewEligibility) window.dispatchEvent(new CustomEvent("hymn:purchase-review-eligible", { detail: data.reviewEligibility }));
         return;
       }
@@ -174,10 +186,10 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
         currency: data.currency,
         name: "HYMN",
         description: "Secure HYMN checkout",
-        order_id: data.orderId,
+        ...(data.billingType === "subscription" ? { subscription_id: data.subscriptionId } : { order_id: data.orderId }),
         handler: async (payment: RazorpayResponse) => {
           try {
-            const verifyResponse = await fetch("/api/checkout/verify-payment", {
+            const verifyResponse = await fetch(data.billingType === "subscription" ? "/api/subscriptions/create" : "/api/checkout/verify-payment", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payment)
@@ -186,7 +198,10 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
             if (!verifyResponse.ok) throw new Error(verifyData.error || "Payment verification failed.");
             setSuccess(true);
             if (verifyData.reviewEligibility) window.dispatchEvent(new CustomEvent("hymn:purchase-review-eligible", { detail: verifyData.reviewEligibility }));
-            if (product === "beatstore") window.localStorage.removeItem("hymn-beat-cart");
+            if (product === "beatstore") {
+              window.localStorage.removeItem("hymn-beat-cart");
+              window.dispatchEvent(new CustomEvent("hymn-cart-updated", { detail: { items: [] } }));
+            }
           } catch (error) {
             setFeedback(error instanceof Error ? error.message : "Payment verification failed.");
           } finally {
@@ -232,7 +247,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
             {loading ? <p className="text-sm" style={{ color: "var(--text-muted)" }}>Refreshing checkout...</p> : null}
           </div>
 
-          <div className="mt-6 rounded-[1.4rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
+          {product === "beatstore" ? <><div className="mt-6 rounded-[1.4rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
             <div className="flex items-center gap-2">
               <BadgePercent className="h-4 w-4" style={{ color: "var(--text-soft)" }} />
               <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>Coupon code</p>
@@ -261,7 +276,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
                 Available balance: {formatMoney(quote?.referralCreditBalance ?? 0)}
               </span>
             </span>
-          </label>
+          </label></> : <p className="mt-6 text-sm" style={{ color: "var(--text-muted)" }}>Your subscription uses recurring billing. Access becomes available once payment is confirmed.</p>}
         </div>
 
         <aside className="surface-card self-start p-6 sm:p-8">
@@ -302,8 +317,8 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
           {feedback ? <p className="mt-4 text-sm" style={{ color: "var(--danger)" }}>{customerMessage(feedback)}</p> : null}
           {success ? (
             <div className="mt-5 rounded-[1.2rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-              <p className="font-semibold" style={{ color: "var(--text)" }}>Payment verified.</p>
-              <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Your order has been recorded and rewards were processed securely.</p>
+              <p className="font-semibold" style={{ color: "var(--text)" }}>{product === "beatstore" ? "Purchase confirmed." : "Subscription authorization received."}</p>
+              <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{product === "beatstore" ? "Your purchases are available in your dashboard." : "Check your dashboard for the latest payment and subscription status."}</p>
               {product === "beatstore" ? <div className="mt-4 rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--card)" }}><p className="text-xs font-semibold uppercase tracking-[.16em]" style={{ color: "var(--text-soft)" }}>Your beat is ready</p><h3 className="mt-2 font-semibold">Turn it into a finished record.</h3><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Get your vocals professionally mixed and mastered. HYMN Beat customers receive configured Studio pricing.</p><Link href="/studio" className="btn-primary pressable mt-4 inline-flex">Find a mixing engineer<ArrowRight className="h-4 w-4" /></Link><Link href="/dashboard?module=purchases" className="ml-3 inline-flex text-sm underline">Maybe later</Link></div> : <Link href="/dashboard" className="btn-outline pressable mt-4 inline-flex">Open dashboard</Link>}
             </div>
           ) : (

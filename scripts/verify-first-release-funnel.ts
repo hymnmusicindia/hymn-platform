@@ -36,6 +36,6 @@ assert.match(distributionStartSource, /campaignDraftEligible/, "An eligible camp
 const verifySubmitSource = fs.readFileSync(path.join(process.cwd(), "app/api/distribution/payment/verify-submit/route.ts"), "utf8");
 assert.match(verifySubmitSource, /promotionCode: FIRST_RELEASE_PROMOTION_CODE/, "Submitted free releases must retain their promotion marker for corrections and account history.");
 const summaryCardSource = fs.readFileSync(path.join(process.cwd(), "components/release-summary-card.tsx"), "utf8");
-assert.match(summaryCardSource, /\["draft", "changes_requested"\]/, "Free-release cards must be tagged while drafted or awaiting corrections.");
+assert.match(summaryCardSource, /\["draft", "changes_requested"\]\.includes\(stage\)/, "Free-release cards must include both HYMN and distributor correction stages.");
 assert.match(summaryCardSource, />Free release</, "The account card must use the concise FREE RELEASE tag.");
 console.log("First Release Free pricing, add-on, qualification, and database uniqueness guards passed.");
