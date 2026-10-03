@@ -5,7 +5,7 @@ import "./styles/dashboard.css";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 import "./styles/distribution.css";
 import "./styles/product-ui.css";
-import "./styles/brand-colour.css";
+import "./styles/material-depth.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(getPublicAppUrl()),

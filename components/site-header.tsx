@@ -596,15 +596,15 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           <Image src="/assets/hymnlogowhite.png" alt="HYMN Music Logo" width={156} height={52} className="h-7 w-auto max-w-24 object-contain sm:h-9 sm:max-w-none lg:h-10" style={{ filter: "var(--logo-filter)" }} priority />
         </Link>
 
-        <nav className="hidden items-center gap-1 lg:flex" aria-label="Main navigation">
+        <nav className="hymn-page-selector hidden items-center gap-1 lg:flex" aria-label="Main navigation">
           {mainNav.map((item) => (
             <Link
               key={item.href}
               href={item.href}
+              aria-current={(pathname === item.href || (item.href !== "/" && pathname.startsWith(`${item.href}/`))) ? "page" : undefined}
               className={clsx("site-nav-item group relative px-3 py-2 text-sm font-medium", pathname === item.href ? "site-nav-link-active" : "site-nav-link")}
             >
               {item.label}
-              <span className={clsx("absolute inset-x-3 -bottom-0.5 h-px origin-left rounded-full bg-[var(--accent)] transition duration-300", pathname === item.href ? "scale-x-100 opacity-100" : "scale-x-0 opacity-0 group-hover:scale-x-100 group-hover:opacity-100")} />
             </Link>
           ))}
         </nav>
@@ -665,7 +665,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
         <div id="site-mobile-nav" className="border-t lg:hidden" style={{ borderColor: "var(--glass-border)", background: "color-mix(in srgb, var(--glass-bg-strong) 88%, transparent)", backdropFilter: "blur(18px) saturate(155%)" }}>
           <div className="mx-auto flex max-h-[calc(100dvh-4rem)] max-w-7xl flex-col gap-3 overflow-y-auto overscroll-contain px-3 py-4 sm:max-h-[calc(100dvh-4.5rem)] sm:px-6">
             {mainNav.map((item) => (
-              <Link key={item.href} href={item.href} className="rounded-lg border px-4 py-3 transition" style={{ color: "var(--text-muted)", background: "color-mix(in srgb, var(--glass-bg) 75%, transparent)", borderColor: "color-mix(in srgb, var(--glass-border) 72%, transparent)" }} onClick={() => setOpen(false)}>
+              <Link key={item.href} href={item.href} aria-current={(pathname === item.href || (item.href !== "/" && pathname.startsWith(`${item.href}/`))) ? "page" : undefined} className="hymn-mobile-page-link rounded-lg border px-4 py-3 transition" onClick={() => setOpen(false)}>
                 {item.label}
               </Link>
             ))}

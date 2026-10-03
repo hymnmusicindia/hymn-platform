@@ -156,7 +156,7 @@ export default async function HomePage() {
       </section>
 
       <section className="shell py-12 sm:py-16">
-        <div className="home-store-destination-layout border-y border-[var(--border)] py-6 sm:py-9">
+        <div className="home-store-destination-layout py-6 sm:py-9">
           <h2 className="sr-only">WHERE YOUR MUSIC LANDS</h2>
           {[0, 1].map((row) => <div key={row} className={`home-store-destination-row ${row === 1 ? "home-store-destination-row-reverse" : ""}`}>
             <span aria-hidden="true" className="home-store-destination-words">{row === 0 ? "WHERE YOUR" : "MUSIC LANDS"}</span>
