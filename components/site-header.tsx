@@ -393,7 +393,10 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           aria-haspopup="dialog"
           aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"}
         >
-          <Bell className={clsx("notification-bell-icon h-5 w-5", unreadCount > 0 && "has-unread")} />
+          <span className="relative inline-flex h-5 w-5 shrink-0">
+            <Bell aria-hidden="true" className={clsx("notification-bell-icon h-5 w-5", unreadCount > 0 && "has-unread")} />
+            {unreadCount > 0 ? <span aria-hidden="true" className="notification-unread-alert">!</span> : null}
+          </span>
           {mobile ? <span className="text-sm font-semibold">Notifications</span> : null}
         </button>
 

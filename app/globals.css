@@ -1653,7 +1653,32 @@ html[data-theme="light"] .producer-panel-shell .dashboard-os-sidebar img {
 }
 
 .notification-bell-icon.has-unread {
+  color: #facc15;
+  fill: rgba(250, 204, 21, .18);
   animation: hymn-notification-ring 6s ease-in-out infinite;
+}
+
+html[data-theme="light"] .notification-bell-icon.has-unread {
+  color: #a66c00;
+  fill: rgba(250, 204, 21, .4);
+}
+
+.notification-unread-alert {
+  position: absolute;
+  top: -6px;
+  right: -7px;
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border: 1px solid rgba(70, 45, 0, .3);
+  border-radius: 50%;
+  background: #facc15;
+  color: #241800;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  pointer-events: none;
 }
 
 .site-cart-visual {
