@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   if (!email || !artistName) return NextResponse.json({ error: "Email and artistName are required." }, { status: 400 });
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) return NextResponse.json({ error: "Account not found." }, { status: 404 });
-  const beat = await prisma.beat.findFirst({ where: { enabled: true }, orderBy: [{ status: "desc" }, { createdAt: "asc" }] });
+  const beat = await prisma.beat.findFirst({ orderBy: [{ enabled: "desc" }, { status: "desc" }, { createdAt: "asc" }] });
   if (!beat) return NextResponse.json({ error: "No beat is available for a sample agreement." }, { status: 409 });
   const marker = `sample-agreement:${user.id}:${beat.id}`;
   let purchase = await prisma.beatPurchase.findFirst({ where: { userId: user.id, beatId: beat.id, paymentId: marker } });
