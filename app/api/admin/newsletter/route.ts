@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireRecentAdminPermission } from "@/lib/access";
+import { requireAdminPermission, requireRecentAdminPermission } from "@/lib/access";
 import { getEmailConfig } from "@/lib/email/email-client";
 import { sendTransactionalEmail } from "@/lib/email/send-transactional-email";
 import { newsletterEmail } from "@/lib/newsletter";
@@ -11,7 +11,7 @@ const createSchema = z.object({ subject: z.string().trim().min(3).max(180), mess
 const batchSize = 50;
 
 export async function GET(request: Request) {
-  const admin = await requireRecentAdminPermission("system.manage");
+  const admin = await requireAdminPermission("system.manage");
   if ("error" in admin) return admin.error;
   const mode = new URL(request.url).searchParams.get("format");
   const subscribers = await prisma.newsletterSubscriber.findMany({ where: { status: "subscribed" }, orderBy: { id: "asc" }, select: { email: true, source: true, status: true, consentAt: true } });

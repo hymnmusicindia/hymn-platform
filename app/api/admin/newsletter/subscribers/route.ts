@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireRecentAdminPermission } from "@/lib/access";
+import { requireAdminPermission, requireRecentAdminPermission } from "@/lib/access";
 import { newsletterToken, normalizeNewsletterEmail } from "@/lib/newsletter";
 import { prisma } from "@/lib/prisma";
 
@@ -9,7 +9,7 @@ const updateSchema = z.object({ id: z.number().int().positive(), action: z.enum(
 const actorId = (admin: Awaited<ReturnType<typeof requireRecentAdminPermission>>) => "sub" in admin ? Number(admin.sub) || null : null;
 
 export async function GET(request: Request) {
-  const admin = await requireRecentAdminPermission("system.manage");
+  const admin = await requireAdminPermission("system.manage");
   if ("error" in admin) return admin.error;
   const query = new URL(request.url).searchParams;
   const status = query.get("status") || "all";
