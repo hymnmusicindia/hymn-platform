@@ -37,17 +37,22 @@ export async function POST(request: Request) {
   let sent = 0; let failed = 0;
   for (const recipient of recipients) {
     const content = newsletterEmail({ subject: campaign.subject, message: campaign.text, unsubscribeToken: recipient.unsubscribeToken, imageUrl: campaign.imageUrl, imageAlt: campaign.imageAlt, ctaLabel: campaign.ctaLabel, ctaUrl: campaign.ctaUrl });
-    const result = await sendTransactionalEmail({ to: recipient.email, subject: campaign.subject, html: content.html, text: content.text, template: "newsletter_campaign", eventKey: `newsletter:${campaign.id}:subscriber:${recipient.id}`, entityType: "newsletter_campaign", entityId: campaign.id });
+    const baseEventKey = `newsletter:${campaign.id}:subscriber:${recipient.id}`;
+    const interrupted = await prisma.emailLog.findUnique({ where: { eventKey: baseEventKey }, select: { status: true, retryCount: true } });
+    const eventKey = interrupted?.status === "queued" ? `${baseEventKey}:retry:${interrupted.retryCount + 1}` : baseEventKey;
+    if (interrupted?.status === "queued") await prisma.emailLog.update({ where: { eventKey: baseEventKey }, data: { retryCount: { increment: 1 } } });
+    const result = await sendTransactionalEmail({ to: recipient.email, subject: campaign.subject, html: content.html, text: content.text, template: "newsletter_campaign", eventKey, entityType: "newsletter_campaign", entityId: campaign.id });
     if (result.status === "sent" || result.status === "duplicate_skipped") sent += 1; else failed += 1;
   }
   const latestCampaign = await prisma.newsletterCampaign.findUniqueOrThrow({ where: { id: campaign.id } });
   const cursorId = Math.max(latestCampaign.cursorId, recipients.at(-1)?.id ?? campaign.cursorId);
   const remaining = await prisma.newsletterSubscriber.count({ where: { status: "subscribed", id: { gt: cursorId } } });
   const eventKeyPrefix = `newsletter:${campaign.id}:subscriber:`;
-  const [totalSent, totalFailed] = await Promise.all([
+  const [sentLogs, totalFailed] = await Promise.all([
     prisma.emailLog.count({ where: { eventKey: { startsWith: eventKeyPrefix }, status: "sent" } }),
     prisma.emailLog.count({ where: { eventKey: { startsWith: eventKeyPrefix }, status: "failed" } }),
   ]);
+  const totalSent = Math.min(campaign.recipientCount, sentLogs);
   const finalStatus = remaining ? "sending" : totalSent === 0 && totalFailed > 0 ? "failed" : totalFailed > 0 ? "partial" : "sent";
   campaign = await prisma.newsletterCampaign.update({ where: { id: campaign.id }, data: { cursorId, sentCount: totalSent, failedCount: totalFailed, status: finalStatus, ...(!remaining && totalSent > 0 ? { sentAt: new Date() } : {}) } });
   return NextResponse.json({ campaignId: campaign.id, status: campaign.status, processed: recipients.length, sent, failed, remaining, totalSent, totalFailed });
