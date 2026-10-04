@@ -1667,6 +1667,8 @@ model NewsletterCampaign {
   subject        String
   html           String
   text           String
+  imageUrl       String?   @map("image_url")
+  imageAlt       String?   @map("image_alt")
   status         String    @default("draft")
   recipientCount Int       @default(0) @map("recipient_count")
   sentCount      Int       @default(0) @map("sent_count")

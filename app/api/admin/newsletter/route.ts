@@ -5,8 +5,9 @@ import { requireRecentAdminPermission } from "@/lib/access";
 import { getEmailConfig } from "@/lib/email/email-client";
 import { sendTransactionalEmail } from "@/lib/email/send-transactional-email";
 import { newsletterEmail } from "@/lib/newsletter";
+import { getPublicAppUrl } from "@/lib/public-app-url";
 
-const createSchema = z.object({ subject: z.string().trim().min(3).max(180), message: z.string().trim().min(3).max(20_000), campaignId: z.number().int().positive().optional() });
+const createSchema = z.object({ subject: z.string().trim().min(3).max(180), message: z.string().trim().min(3).max(20_000), imageUrl: z.string().url().max(2048).optional(), imageAlt: z.string().trim().max(160).optional(), campaignId: z.number().int().positive().optional() });
 const batchSize = 50;
 
 export async function GET(request: Request) {
@@ -26,18 +27,19 @@ export async function POST(request: Request) {
   if (!getEmailConfig().enabled) return NextResponse.json({ error: "Email sending is not enabled or configured in this environment." }, { status: 503 });
   try {
     const input = createSchema.parse(await request.json());
+    if (input.imageUrl && !input.imageUrl.startsWith(`${getPublicAppUrl()}/api/public-uploads/site/newsletter/`)) return NextResponse.json({ error: "Upload campaign images through the newsletter composer." }, { status: 400 });
     const actorId = "sub" in admin ? Number(admin.sub) : null;
     let campaign = input.campaignId ? await prisma.newsletterCampaign.findUnique({ where: { id: input.campaignId } }) : null;
     if (!campaign) {
       const recipientCount = await prisma.newsletterSubscriber.count({ where: { status: "subscribed" } });
-      campaign = await prisma.newsletterCampaign.create({ data: { subject: input.subject, html: input.message, text: input.message, recipientCount, createdById: actorId, status: "sending" } });
+      campaign = await prisma.newsletterCampaign.create({ data: { subject: input.subject, html: input.message, text: input.message, imageUrl: input.imageUrl || null, imageAlt: input.imageAlt || null, recipientCount, createdById: actorId, status: "sending" } });
       await prisma.auditLog.create({ data: { actorType: "admin", actorId, action: "NEWSLETTER_CAMPAIGN_CREATED", entity: "newsletter_campaign", entityId: String(campaign.id), metadata: { recipientCount } } });
     }
     if (["sent", "cancelled"].includes(campaign.status)) return NextResponse.json({ error: "This campaign has already finished." }, { status: 409 });
     const recipients = await prisma.newsletterSubscriber.findMany({ where: { status: "subscribed", id: { gt: campaign.cursorId } }, orderBy: { id: "asc" }, take: batchSize });
     let sent = 0, failed = 0;
     for (const recipient of recipients) {
-      const content = newsletterEmail({ message: campaign.text, unsubscribeToken: recipient.unsubscribeToken });
+      const content = newsletterEmail({ message: campaign.text, unsubscribeToken: recipient.unsubscribeToken, imageUrl: campaign.imageUrl, imageAlt: campaign.imageAlt });
       const result = await sendTransactionalEmail({ to: recipient.email, subject: campaign.subject, html: content.html, text: content.text, template: "newsletter_campaign", eventKey: `newsletter:${campaign.id}:subscriber:${recipient.id}`, entityType: "newsletter_campaign", entityId: campaign.id });
       if (result.status === "sent" || result.status === "duplicate_skipped") sent += 1; else failed += 1;
     }

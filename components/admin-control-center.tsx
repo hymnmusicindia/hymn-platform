@@ -1098,6 +1098,7 @@ export function AdminControlCenter({
         { key: "promotions", label: "Promotions", description: "Campaign ops", group: "Growth / Content" },
         { key: "timed-playlists", label: "Timed Playlists", description: "Playlist scheduling", group: "Growth / Content" },
         { key: "content", label: "Content Settings", description: "Site and producer content", group: "Growth / Content" },
+        { key: "newsletter", label: "Newsletter", description: "Audience and email campaigns", group: "Growth / Content", href: "/admin/newsletter" },
         { key: "producers", label: "Producers", description: "Applications and catalog", group: "Marketplace" },
         { key: "operations", label: "Beats / Orders", description: "Inventory and leads", group: "Marketplace" },
         { key: "reviews", label: "Reviews", description: "Moderate customer feedback", group: "Marketplace" },
