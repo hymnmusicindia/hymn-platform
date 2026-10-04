@@ -6,7 +6,6 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { DashboardFrame } from "@/components/dashboard-frame";
-import { FloatingAssistant } from "@/components/floating-assistant";
 import { BeatCard } from "@/components/beat-card";
 import { Beat, BeatPurchase, Notification, Order, Release, SupportTicket, User } from "@/lib/types";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
@@ -796,14 +795,6 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         </div>
       ) : null}
 
-      <FloatingAssistant
-        context="Customer support"
-        suggestions={[
-          { label: "Submit a release", description: "Jump straight into distribution metadata and files." },
-          { label: "Browse beats", description: "Open the revenue engine and licensing options." },
-          { label: "Check account", description: "Review your profile, referral code, and activity." }
-        ]}
-      />
       <OnboardingAgentDock />
 
     </DashboardFrame>

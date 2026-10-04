@@ -6,12 +6,12 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { DashboardFrame } from "@/components/dashboard-frame";
-import { FloatingAssistant } from "@/components/floating-assistant";
 import { BeatCard } from "@/components/beat-card";
 import { Beat, BeatPurchase, Notification, Order, Release, SupportTicket, User } from "@/lib/types";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { CustomerHome, ProducerHome } from "@/components/simplified-dashboard-home";
 import { FirstLoginReferralPrompt } from "@/components/first-login-referral-prompt";
+import { OnboardingAgentDock } from "@/components/onboarding-agent-card";
 import { normalizeBeatLicenseType } from "@/lib/beat-store";
 
 const AnalyticsDashboard = dynamic(() => import("@/components/analytics-dashboard").then((module) => module.AnalyticsDashboard));
@@ -507,14 +507,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
           </div>
         </Panel>
       ) : null}
-      <FloatingAssistant
-        context="Producer support"
-        suggestions={[
-          { label: "Upload a beat", description: "Jump to the inventory upload workflow." },
-          { label: "Check sales", description: "Review orders and catalog performance." },
-          { label: "Open beatstore", description: "See the storefront experience like a buyer." }
-        ]}
-      />
+      <OnboardingAgentDock />
 
 
       {editingBeat ? (

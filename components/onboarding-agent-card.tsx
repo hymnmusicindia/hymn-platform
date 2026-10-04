@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, Check, CheckCircle2, Circle, Compass, LoaderCircle, RotateCcw, Sparkles, X } from "lucide-react";
+import { ArrowRight, Check, CheckCircle2, Circle, Compass, LifeBuoy, LoaderCircle, MessageCircle, RotateCcw, Sparkles, X } from "lucide-react";
 import type { OnboardingAgentState } from "@/lib/onboarding-agent";
 
 type Payload = { state: OnboardingAgentState | null; goalOptions: Array<{ id: string; label: string }>; goalLimit: number; knownGoalId?: string };
 
-export function OnboardingAgentCard({ compact = false, onVisibilityChange }: { compact?: boolean; onVisibilityChange?: (visible: boolean, autoOpen: boolean) => void } = {}) {
+export function OnboardingAgentCard({ compact = false, forceGoalChoice = false, onVisibilityChange }: { compact?: boolean; forceGoalChoice?: boolean; onVisibilityChange?: (visible: boolean, autoOpen: boolean) => void } = {}) {
   const [payload, setPayload] = useState<Payload | null>(null);
   const [selectedGoal, setSelectedGoal] = useState("");
   const [customGoal, setCustomGoal] = useState("");
@@ -35,11 +35,11 @@ export function OnboardingAgentCard({ compact = false, onVisibilityChange }: { c
   }
 
   useEffect(() => {
-    if (!payload?.state && payload?.knownGoalId && !startedKnownGoal.current) {
+    if (!forceGoalChoice && !payload?.state && payload?.knownGoalId && !startedKnownGoal.current) {
       startedKnownGoal.current = true;
       void update({ action: "generate", goalId: payload.knownGoalId });
     }
-  }, [payload]);
+  }, [forceGoalChoice, payload]);
 
   const state = payload?.state;
   const nextStep = useMemo(() => state?.plan.steps.find((step) => step.status === "not_started" || step.status === "in_progress"), [state]);
@@ -48,7 +48,7 @@ export function OnboardingAgentCard({ compact = false, onVisibilityChange }: { c
     const visible = !state || state.status === "active" || editingGoal;
     onVisibilityChange?.(visible, visible && !state);
   }, [editingGoal, onVisibilityChange, payload, state]);
-  if ((!payload || (!payload.state && Boolean(payload.knownGoalId))) && !error) return <section className="onboarding-agent onboarding-agent-loading" aria-live="polite"><LoaderCircle className="animate-spin" /><div><strong>Creating your setup…</strong><span>Checking your workspace and available next steps.</span></div></section>;
+  if ((!payload || (!forceGoalChoice && !payload.state && Boolean(payload.knownGoalId))) && !error) return <section className="onboarding-agent onboarding-agent-loading" aria-live="polite"><LoaderCircle className="animate-spin" /><div><strong>Creating your setup…</strong><span>Checking your workspace and available next steps.</span></div></section>;
   if (!payload && error) return <section className="onboarding-agent onboarding-agent-error"><div><strong>We couldn’t load your setup.</strong><span>{error}</span></div><button type="button" className="btn-outline" onClick={() => void load()}>Retry</button></section>;
   if (!payload || ((state?.status === "completed" || state?.status === "dismissed") && !editingGoal)) return null;
 
@@ -76,15 +76,31 @@ export function OnboardingAgentCard({ compact = false, onVisibilityChange }: { c
 
 export function OnboardingAgentDock() {
   const [open, setOpen] = useState(false);
-  const [visible, setVisible] = useState(true);
+  const [onboardingAvailable, setOnboardingAvailable] = useState(true);
+  const [forceGoalChoice, setForceGoalChoice] = useState(false);
+  const [agentKey, setAgentKey] = useState(0);
+  const [resetting, setResetting] = useState(false);
   const autoOpened = useRef(false);
-  if (!visible) return null;
+
+  async function reonboard() {
+    setResetting(true);
+    try {
+      const response = await fetch("/api/onboarding-agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "reset" }) });
+      if (!response.ok) return;
+      setForceGoalChoice(true); setOnboardingAvailable(true); setAgentKey((value) => value + 1);
+    } finally { setResetting(false); }
+  }
+
+  const handleAvailability = (available: boolean, autoOpen: boolean) => {
+    setOnboardingAvailable(available);
+    if (autoOpen && !autoOpened.current) { autoOpened.current = true; setOpen(true); }
+  };
   return <div className="onboarding-agent-dock">
-    {open ? <div className="onboarding-agent-dock-panel"><div className="onboarding-agent-dock-bar"><span><Sparkles />Onboarding Agent</span><button type="button" onClick={() => setOpen(false)} aria-label="Minimize onboarding"><X /></button></div><OnboardingAgentCard compact onVisibilityChange={(available, autoOpen) => { setVisible(available); if (autoOpen && !autoOpened.current) { autoOpened.current = true; setOpen(true); } }} /></div> : <OnboardingAgentCardProbe onVisibilityChange={(available, autoOpen) => { setVisible(available); if (autoOpen && !autoOpened.current) { autoOpened.current = true; setOpen(true); } }} />}
-    <button type="button" className="onboarding-agent-launcher" onClick={() => setOpen((value) => !value)} aria-label={open ? "Close onboarding agent" : "Open onboarding agent"} aria-expanded={open}>{open ? <X /> : <Compass />}<span>Setup</span></button>
+    {open ? <div className="onboarding-agent-dock-panel"><div className="onboarding-agent-dock-bar"><span>{onboardingAvailable ? <Sparkles /> : <LifeBuoy />}{onboardingAvailable ? "Onboarding Agent" : "HYMN Support"}</span><button type="button" onClick={() => setOpen(false)} aria-label="Minimize panel"><X /></button></div>{onboardingAvailable ? <OnboardingAgentCard key={agentKey} compact forceGoalChoice={forceGoalChoice} onVisibilityChange={handleAvailability} /> : <section className="onboarding-support-panel"><p className="eyebrow">Your HYMN workspace</p><h2>How can we help?</h2><p>Your setup is complete. Find answers, contact support, or start onboarding again with a different goal.</p><div><Link href="/faq"><LifeBuoy />Help and FAQ<ArrowRight /></Link><Link href="/dashboard?tab=support"><MessageCircle />Contact support<ArrowRight /></Link></div><button type="button" className="btn-outline pressable" disabled={resetting} onClick={() => void reonboard()}><RotateCcw />{resetting ? "Preparing setup…" : "Re-onboard me"}</button></section>}</div> : <OnboardingAgentCardProbe key={agentKey} forceGoalChoice={forceGoalChoice} onVisibilityChange={handleAvailability} />}
+    <button type="button" className="onboarding-agent-launcher" onClick={() => setOpen((value) => !value)} aria-label={open ? "Close panel" : onboardingAvailable ? "Open onboarding agent" : "Open support"} aria-expanded={open}>{open ? <X /> : onboardingAvailable ? <Compass /> : <MessageCircle />}<span>{onboardingAvailable ? "Setup" : "Support"}</span></button>
   </div>;
 }
 
-function OnboardingAgentCardProbe({ onVisibilityChange }: { onVisibilityChange: (visible: boolean, autoOpen: boolean) => void }) {
-  return <div className="onboarding-agent-probe" aria-hidden="true"><OnboardingAgentCard compact onVisibilityChange={onVisibilityChange} /></div>;
+function OnboardingAgentCardProbe({ forceGoalChoice, onVisibilityChange }: { forceGoalChoice: boolean; onVisibilityChange: (visible: boolean, autoOpen: boolean) => void }) {
+  return <div className="onboarding-agent-probe" aria-hidden="true"><OnboardingAgentCard compact forceGoalChoice={forceGoalChoice} onVisibilityChange={onVisibilityChange} /></div>;
 }
