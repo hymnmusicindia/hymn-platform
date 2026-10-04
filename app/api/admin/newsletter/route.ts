@@ -13,8 +13,8 @@ export async function GET(request: Request) {
   const admin = await requireRecentAdminPermission("system.manage");
   if ("error" in admin) return admin.error;
   const mode = new URL(request.url).searchParams.get("format");
-  const subscribers = await prisma.newsletterSubscriber.findMany({ where: { status: "subscribed" }, orderBy: { id: "asc" }, select: { email: true } });
-  if (mode === "csv") return new NextResponse(`email\n${subscribers.map(row => `"${row.email.replace(/"/g, '""')}"`).join("\n")}\n`, { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": "attachment; filename=hymn-newsletter-subscribers.csv", "Cache-Control": "no-store" } });
+  const subscribers = await prisma.newsletterSubscriber.findMany({ where: { status: "subscribed" }, orderBy: { id: "asc" }, select: { email: true, source: true, status: true, consentAt: true } });
+  if (mode === "csv") return new NextResponse(`email,source,status,consent_at\n${subscribers.map(row => [row.email, row.source, row.status, row.consentAt.toISOString()].map(value => `"${value.replace(/"/g, '""')}"`).join(",")).join("\n")}\n`, { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": "attachment; filename=hymn-newsletter-subscribers.csv", "Cache-Control": "no-store" } });
   if (mode === "text") return new NextResponse(subscribers.map(row => row.email).join(", "), { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
   const [total, unsubscribed, campaigns] = await Promise.all([prisma.newsletterSubscriber.count({ where: { status: "subscribed" } }), prisma.newsletterSubscriber.count({ where: { status: "unsubscribed" } }), prisma.newsletterCampaign.findMany({ orderBy: { createdAt: "desc" }, take: 20 })]);
   return NextResponse.json({ total, unsubscribed, campaigns, configured: getEmailConfig().enabled }, { headers: { "Cache-Control": "no-store" } });
