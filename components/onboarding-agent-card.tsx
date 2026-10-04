@@ -61,7 +61,7 @@ export function OnboardingAgentCard({ compact = false, forceGoalChoice = false, 
     const roleGoals = selectedRole === "artist" ? ["release", "finish-release", "buy-beat"] : selectedRole === "producer" ? ["sell-beats"] : selectedRole === "engineer" ? ["studio"] : [];
     const roles = [
       { id: "artist" as const, title: "Artist", copy: "Release your sound", image: "/assets/onboarding/artist.jpg" },
-      { id: "producer" as const, title: "Producer", copy: "Build your beat catalogue", image: "/images/producers/rohan-flux.png" },
+      { id: "producer" as const, title: "Producer", copy: "Build your beat catalogue", image: "/assets/onboarding/producer.jpg" },
       { id: "engineer" as const, title: "Sound engineer", copy: "Explore studio services", image: "/assets/onboarding/engineer.jpg" }
     ];
     return <section className={`onboarding-agent onboarding-agent-goal ${compact ? "is-compact" : ""}`} aria-labelledby="onboarding-agent-question">
