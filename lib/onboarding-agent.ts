@@ -7,11 +7,11 @@ export const ONBOARDING_GOAL_LIMIT = 140;
 export const ONBOARDING_REGENERATION_LIMIT = 5;
 
 export const onboardingGoalOptions = [
-  { id: "release", label: "Distribute my music" },
-  { id: "finish-release", label: "Finish a release" },
-  { id: "buy-beat", label: "Find a beat" },
-  { id: "sell-beats", label: "Sell my beats" },
-  { id: "studio", label: "Book studio services" }
+  { id: "release", label: "Artist · Release music" },
+  { id: "sell-beats", label: "Producer · Sell beats" },
+  { id: "buy-beat", label: "Artist · Find a beat" },
+  { id: "studio", label: "Creator · Studio services" },
+  { id: "finish-release", label: "Continue my release" }
 ] as const;
 
 export type OnboardingStep = {

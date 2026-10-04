@@ -12,7 +12,7 @@ import { Beat, BeatPurchase, Notification, Order, Release, SupportTicket, User }
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { CustomerHome, ProducerHome } from "@/components/simplified-dashboard-home";
 import { FirstLoginReferralPrompt } from "@/components/first-login-referral-prompt";
-import { OnboardingAgentCard } from "@/components/onboarding-agent-card";
+import { OnboardingAgentDock } from "@/components/onboarding-agent-card";
 
 const AnalyticsDashboard = dynamic(() => import("@/components/analytics-dashboard").then((module) => module.AnalyticsDashboard));
 const ReferralPanel = dynamic(() => import("@/components/referral-panel").then((module) => module.ReferralPanel));
@@ -366,7 +366,6 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
     >
       <FirstLoginReferralPrompt />
       <AccountRestrictionNotice user={user} />
-      {activeTab === "overview" ? <OnboardingAgentCard /> : null}
       {producerAccessDisabled ? (
         <section role="alert" className="flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "color-mix(in srgb, var(--danger) 45%, var(--border))", background: "color-mix(in srgb, var(--danger-soft) 72%, var(--card))" }}>
           <div>
@@ -805,6 +804,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
           { label: "Check account", description: "Review your profile, referral code, and activity." }
         ]}
       />
+      <OnboardingAgentDock />
 
     </DashboardFrame>
   );
