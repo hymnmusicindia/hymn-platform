@@ -559,13 +559,13 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
       {deletingBeat ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl text-center">
-            <h3 className="text-xl font-semibold mb-2" style={{ color: "var(--text)" }}>Delete Beat</h3>
+            <h3 className="text-xl font-semibold mb-2" style={{ color: "var(--text)" }}>Remove beat?</h3>
             <p className="text-sm mb-6" style={{ color: "var(--text-soft)" }}>
-              Are you sure you want to permanently delete "{deletingBeat.title}"? This cannot be undone.
+              “{deletingBeat.title}” will be permanently deleted when it has no sales history. If licences or sales exist, it will be archived and removed from sale while those records remain available.
             </p>
             <div className="flex flex-col gap-3">
-              <button type="button" onClick={handleBeatDelete} className="btn-primary pressable bg-red-600 border-red-600 hover:bg-red-700 text-white">Yes, delete beat</button>
-              <button type="button" onClick={() => setDeletingBeat(null)} className="btn-outline pressable">Cancel</button>
+              <button type="button" disabled={isPending} onClick={handleBeatDelete} className="btn-primary pressable bg-red-600 border-red-600 hover:bg-red-700 text-white disabled:opacity-60">{isPending ? "Removing…" : "Remove beat"}</button>
+              <button type="button" disabled={isPending} onClick={() => setDeletingBeat(null)} className="btn-outline pressable disabled:opacity-60">Cancel</button>
             </div>
           </div>
         </div>

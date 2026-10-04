@@ -170,6 +170,10 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   const [payoutSummary, setPayoutSummary] = useState<CustomerPayoutSummary | null>(null);
   const [workspaceAnalytics, setWorkspaceAnalytics] = useState<any[]>(analytics);
   const [supportFeedback, setSupportFeedback] = useState<string | null>(null);
+  const [dataErrors, setDataErrors] = useState<Record<string, string>>({});
+  const [reloadKey, setReloadKey] = useState(0);
+  const [purchaseAction, setPurchaseAction] = useState<{ id: number; type: "license" | "release" } | null>(null);
+  const [notificationActionPending, setNotificationActionPending] = useState(false);
   const paidOrders = orders.filter((order) => order.paymentStatus === "paid");
   const releaseLimit = subscription?.releaseLimit ?? subscription?.release_limit ?? null;
   const subscriptionExpiry = subscription?.expiryDate ?? subscription?.expiry ?? null;
@@ -197,41 +201,44 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       if (notificationResponse?.ok) {
         const data = await notificationResponse.json();
         setNotifications(Array.isArray(data.notifications) ? data.notifications : []);
-      }
+        setDataErrors(current => { const next = { ...current }; delete next.notifications; return next; });
+      } else setDataErrors(current => ({ ...current, notifications: "Notifications could not be loaded." }));
       if (ticketResponse?.ok) {
         const data = await ticketResponse.json();
         setSupportTickets(Array.isArray(data.tickets) ? data.tickets : []);
-      }
+        setDataErrors(current => { const next = { ...current }; delete next.support; return next; });
+      } else setDataErrors(current => ({ ...current, support: "Support tickets could not be loaded." }));
       if (payoutResponse?.ok) {
         const data = await payoutResponse.json();
         setPayoutSummary(data);
-      }
+        setDataErrors(current => { const next = { ...current }; delete next.payout; return next; });
+      } else setDataErrors(current => ({ ...current, payout: "Earnings are temporarily unavailable. Your balance has not been changed." }));
     }
     loadWorkspaceData();
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [reloadKey]);
 
   useEffect(() => {
     if (activeTab !== "purchases" && activeTab !== "support") return;
     let ignore = false;
     fetch("/api/beat-purchases", { cache: "no-store" })
       .then((response) => response.ok ? response.json() : null)
-      .then((data) => { if (!ignore && data) setBeatPurchases(Array.isArray(data.purchases) ? data.purchases : []); })
-      .catch(() => undefined);
+      .then((data) => { if (ignore) return; if (data) { setBeatPurchases(Array.isArray(data.purchases) ? data.purchases : []); setDataErrors(current => { const next = { ...current }; delete next.purchases; return next; }); } else setDataErrors(current => ({ ...current, purchases: "Purchases could not be loaded." })); })
+      .catch(() => { if (!ignore) setDataErrors(current => ({ ...current, purchases: "Purchases could not be loaded." })); });
     return () => { ignore = true; };
-  }, [activeTab]);
+  }, [activeTab, reloadKey]);
 
   useEffect(() => {
     if (activeTab !== "analytics" || workspaceAnalytics.length) return;
     let ignore = false;
     fetch("/api/dashboard/analytics", { cache: "no-store" })
       .then((response) => response.ok ? response.json() : null)
-      .then((data) => { if (!ignore && data) setWorkspaceAnalytics(Array.isArray(data.analytics) ? data.analytics : []); })
-      .catch(() => undefined);
+      .then((data) => { if (ignore) return; if (data) { setWorkspaceAnalytics(Array.isArray(data.analytics) ? data.analytics : []); setDataErrors(current => { const next = { ...current }; delete next.analytics; return next; }); } else setDataErrors(current => ({ ...current, analytics: "Analytics could not be loaded." })); })
+      .catch(() => { if (!ignore) setDataErrors(current => ({ ...current, analytics: "Analytics could not be loaded." })); });
     return () => { ignore = true; };
-  }, [activeTab, workspaceAnalytics.length]);
+  }, [activeTab, reloadKey, workspaceAnalytics.length]);
 
   async function openNotification(notification: Notification) {
     if (!notification.readAt) {
@@ -242,17 +249,23 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   }
 
   async function generatePurchaseLicense(purchaseId: number) {
-    const response = await fetch("/api/licenses/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ purchaseId }) });
-    const data = await response.json();
-    if (!response.ok) { setSupportFeedback(data.error || "Could not generate license."); return; }
-    setBeatPurchases((items) => items.map((item) => item.id === purchaseId ? { ...item, licenseUrl: data.licenseUrl } : item));
+    if (purchaseAction) return; setPurchaseAction({ id: purchaseId, type: "license" }); setSupportFeedback(null);
+    try { const response = await fetch("/api/licenses/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ purchaseId }) });
+      const data = await response.json();
+      if (!response.ok) { setSupportFeedback(data.error || "Could not generate license. Try again."); return; }
+      setBeatPurchases((items) => items.map((item) => item.id === purchaseId ? { ...item, licenseUrl: data.licenseUrl } : item));
+    } catch { setSupportFeedback("Could not generate licence. Check your connection and try again.");
+    } finally { setPurchaseAction(null); }
   }
 
   async function startReleaseFromPurchase(purchaseId: number) {
-    const response = await fetch(`/api/beat-purchases/${purchaseId}/start-release`, { method: "POST" });
-    const data = await response.json();
-    if (!response.ok) { setSupportFeedback(data.error || "Could not start release."); return; }
-    window.location.assign(data.href);
+    if (purchaseAction) return; setPurchaseAction({ id: purchaseId, type: "release" }); setSupportFeedback(null);
+    try { const response = await fetch(`/api/beat-purchases/${purchaseId}/start-release`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) { setSupportFeedback(data.error || "Could not start release. Try again."); return; }
+      window.location.assign(data.href);
+    } catch { setSupportFeedback("Could not start the release. Check your connection and try again.");
+    } finally { setPurchaseAction(null); }
   }
 
   const filteredReleases = useMemo(() => {
@@ -404,11 +417,12 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
 
           <div className="grid gap-6 xl:grid-cols-[0.9fr,1.1fr]">
             <Panel title="Verified money" description="Balances derived from imported royalty lines and recorded payout activity.">
+              {dataErrors.payout ? <div role="alert" className="mb-4 rounded-xl border p-3 text-sm" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>{dataErrors.payout} <button type="button" className="ml-2 underline" onClick={() => setReloadKey(value => value + 1)}>Retry</button></div> : null}
               <div className="grid gap-4 sm:grid-cols-2">
-                <StatCard label="Available balance" value={formatMoney(payoutSummary?.availableBalance ?? 0)} />
-                <StatCard label="Held / pending payout" value={formatMoney(payoutSummary?.pendingBalance ?? 0)} />
-                <StatCard label="Lifetime verified earnings" value={formatMoney(payoutSummary?.totalEarnings ?? 0)} />
-                <StatCard label="Lifetime paid" value={formatMoney(payoutSummary?.paidTillDate ?? 0)} />
+                <StatCard label="Available balance" value={dataErrors.payout ? "Unavailable" : formatMoney(payoutSummary?.availableBalance ?? 0)} />
+                <StatCard label="Held / pending payout" value={dataErrors.payout ? "Unavailable" : formatMoney(payoutSummary?.pendingBalance ?? 0)} />
+                <StatCard label="Lifetime verified earnings" value={dataErrors.payout ? "Unavailable" : formatMoney(payoutSummary?.totalEarnings ?? 0)} />
+                <StatCard label="Lifetime paid" value={dataErrors.payout ? "Unavailable" : formatMoney(payoutSummary?.paidTillDate ?? 0)} />
               </div>
               <p className="mt-4 text-xs" style={{ color: "var(--text-soft)" }}>Verified through the latest imported provider statement. Reporting is historical, not real-time.</p>
               <Link href="/payout" className="btn-outline pressable mt-5 inline-flex">Open Payouts</Link>
@@ -534,16 +548,19 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         </Panel>
       ) : null}
       {activeTab === "analytics" ? (
-        <AnalyticsDashboard userName={user.name} analytics={workspaceAnalytics} />
+        <div>
+          {dataErrors.analytics ? <div role="alert" className="mb-4 rounded-xl border p-3 text-sm" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>{dataErrors.analytics} <button type="button" className="ml-2 underline" onClick={() => setReloadKey(value => value + 1)}>Retry</button></div> : null}
+          <AnalyticsDashboard userName={user.name} analytics={workspaceAnalytics} />
+        </div>
       ) : null}
 
       {activeTab === "earnings" ? (
         <div className="grid gap-6 xl:grid-cols-[1fr,0.9fr]">
           <Panel title="Payout dashboard summary" description="Uses verified royalty entries and payout requests. No calculator estimates are treated as balance.">
             <div className="grid gap-4 sm:grid-cols-3">
-              <StatCard label="Total earnings" value={formatMoney(payoutSummary?.totalEarnings ?? 0)} />
-              <StatCard label="Available balance" value={formatMoney(payoutSummary?.availableBalance ?? 0)} />
-              <StatCard label="Pending payout" value={formatMoney(payoutSummary?.pendingBalance ?? 0)} />
+              <StatCard label="Total earnings" value={payoutSummary ? formatMoney(payoutSummary.totalEarnings) : "Unavailable"} />
+              <StatCard label="Available balance" value={payoutSummary ? formatMoney(payoutSummary.availableBalance) : "Unavailable"} />
+              <StatCard label="Pending payout" value={payoutSummary ? formatMoney(payoutSummary.pendingBalance) : "Unavailable"} />
             </div>
             <div className="mt-5 rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
               <p className="font-semibold" style={{ color: "var(--text)" }}>Payout status</p>
@@ -607,7 +624,9 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
 
       {activeTab === "messages" ? (
         <Panel title="Messages and notifications" description="Release updates, payment updates, support responses, and admin notices.">
-          {notifications.some((notification) => !notification.readAt) ? <button type="button" className="btn-outline pressable mb-4 px-3 py-2 text-xs" onClick={async () => { const response = await fetch("/api/notifications", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "mark-all-read" }) }); if (response.ok) setNotifications((items) => items.map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() }))); }}>Mark all as read</button> : null}
+          {dataErrors.notifications ? <div role="alert" className="mb-4 rounded-xl border p-3 text-sm" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>{dataErrors.notifications} <button type="button" className="ml-2 underline" onClick={() => setReloadKey(value => value + 1)}>Retry</button></div> : null}
+          {notifications.some((notification) => !notification.readAt) ? <button type="button" disabled={notificationActionPending} className="btn-outline pressable mb-4 px-3 py-2 text-xs disabled:opacity-60" onClick={async () => { setNotificationActionPending(true); setDataErrors(current => { const next = { ...current }; delete next.notificationAction; return next; }); try { const response = await fetch("/api/notifications", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "mark-all-read" }) }); if (!response.ok) throw new Error(); setNotifications((items) => items.map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() }))); } catch { setDataErrors(current => ({ ...current, notificationAction: "Notifications could not be updated. Try again." })); } finally { setNotificationActionPending(false); } }}>{notificationActionPending ? "Updating…" : "Mark all as read"}</button> : null}
+          {dataErrors.notificationAction ? <p role="alert" className="mb-4 text-sm" style={{ color: "var(--danger)" }}>{dataErrors.notificationAction}</p> : null}
           <div className="grid gap-3">
             {notifications.filter((notification) => matchesQuery([notification.title, notification.body, notification.type], dashboardSearch)).map((notification) => (
               <article key={notification.id} className="surface-list-item p-4" style={!notification.readAt ? { borderColor: "var(--accent)" } : undefined}>
@@ -621,7 +640,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
                 {notification.href ? <button type="button" onClick={() => openNotification(notification)} className="btn-outline pressable mt-3 px-3 py-2 text-xs">{notification.actionLabel || "Open"}</button> : null}
               </article>
             ))}
-            {notifications.length === 0 ? <EmptyState copy="No notifications yet." /> : null}
+            {!dataErrors.notifications && notifications.length === 0 ? <EmptyState copy="No notifications yet." /> : null}
           </div>
         </Panel>
       ) : null}
@@ -644,6 +663,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
             </form>
           </Panel>
           <Panel title="Ticket history">
+            {dataErrors.support ? <div role="alert" className="mb-4 rounded-xl border p-3 text-sm" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>{dataErrors.support} <button type="button" className="ml-2 underline" onClick={() => setReloadKey(value => value + 1)}>Retry</button></div> : null}
             <div className="grid gap-3">
               {supportTickets.filter((ticket) => matchesQuery([ticket.subject, ticket.message, ticket.status], dashboardSearch)).map((ticket) => (
                 <article key={ticket.id} className="surface-list-item p-4">
@@ -653,7 +673,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
                   </div>
                 </article>
               ))}
-              {supportTickets.length === 0 ? <EmptyState copy="No support tickets yet." /> : null}
+              {!dataErrors.support && supportTickets.length === 0 ? <EmptyState copy="No support tickets yet." /> : null}
             </div>
           </Panel>
         </div>
@@ -674,8 +694,10 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
 
       {activeTab === "purchases" ? (
         <Panel title="Bought beats, downloads, and licenses" description="Review verified orders, payment state, and the assets you unlocked.">
+          {dataErrors.purchases ? <div role="alert" className="mb-4 rounded-xl border p-3 text-sm" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>{dataErrors.purchases} <button type="button" className="ml-2 underline" onClick={() => setReloadKey(value => value + 1)}>Retry</button></div> : null}
+          {supportFeedback ? <p role="status" className="mb-4 text-sm" style={{ color: "var(--text)" }}>{supportFeedback}</p> : null}
           <div className="grid gap-4">
-            {beatPurchases.map((purchase) => <article key={`purchase-${purchase.id}`} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold" style={{ color: "var(--text)" }}>Beat purchase #{purchase.id}</p><p className="mt-1 text-sm capitalize" style={{ color: "var(--text-soft)" }}>Beat #{purchase.beatId} · {purchase.licenseType} · {purchase.licenseUrl ? "License ready" : "License processing"}</p></div><StatusPill label={purchase.releaseId ? "release created" : purchase.licenseUrl ? "ready" : "processing"} active={Boolean(purchase.licenseUrl)} /></div><div className="mt-3 flex flex-wrap gap-2">{purchase.licenseUrl ? <a href={`/api/beat-purchases/${purchase.id}/license`} className="btn-outline pressable px-3 py-2 text-xs">Download License</a> : <button type="button" onClick={() => generatePurchaseLicense(purchase.id)} className="btn-outline pressable px-3 py-2 text-xs">Generate License</button>}<button type="button" disabled={!purchase.licenseUrl} onClick={() => startReleaseFromPurchase(purchase.id)} className="btn-primary pressable px-3 py-2 text-xs disabled:opacity-50">{purchase.releaseId ? "Continue Release" : "Release with this beat"}</button></div></article>)}
+            {beatPurchases.map((purchase) => <article key={`purchase-${purchase.id}`} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold" style={{ color: "var(--text)" }}>Beat purchase #{purchase.id}</p><p className="mt-1 text-sm capitalize" style={{ color: "var(--text-soft)" }}>Beat #{purchase.beatId} · {purchase.licenseType} · {purchase.licenseUrl ? "License ready" : "License processing"}</p></div><StatusPill label={purchase.releaseId ? "release created" : purchase.licenseUrl ? "ready" : "processing"} active={Boolean(purchase.licenseUrl)} /></div><div className="mt-3 flex flex-wrap gap-2">{purchase.licenseUrl ? <a href={`/api/beat-purchases/${purchase.id}/license`} className="btn-outline pressable px-3 py-2 text-xs">Download License</a> : <button type="button" disabled={Boolean(purchaseAction)} onClick={() => generatePurchaseLicense(purchase.id)} className="btn-outline pressable px-3 py-2 text-xs disabled:opacity-50">{purchaseAction?.id === purchase.id && purchaseAction.type === "license" ? "Generating licence…" : "Generate licence"}</button>}<button type="button" disabled={!purchase.licenseUrl || Boolean(purchaseAction)} onClick={() => startReleaseFromPurchase(purchase.id)} className="btn-primary pressable px-3 py-2 text-xs disabled:opacity-50" title={!purchase.licenseUrl ? "Generate the licence before starting a release." : undefined}>{purchaseAction?.id === purchase.id && purchaseAction.type === "release" ? "Preparing release…" : purchase.releaseId ? "Continue Release" : "Release with this beat"}</button></div>{!purchase.licenseUrl ? <p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>Generate the licence before starting a release.</p> : null}</article>)}
             {filteredOrders.map((order) => (
               <article key={order.id} className="surface-list-item p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">

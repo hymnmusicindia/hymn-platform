@@ -1529,7 +1529,15 @@ export function ReleaseForm({
   const reviewMetadataFingerprint = useMemo(() => JSON.stringify(autosaveSnapshot), [autosaveSnapshot]);
   const autosavePendingRef = useRef<Promise<void>>(Promise.resolve());
   const savingReleaseRef = useRef(false);
+  const lastSavedFingerprintRef = useRef(reviewMetadataFingerprint);
   const confirmedReviewFingerprintRef = useRef<string | null>(null);
+  const hasUnsavedChanges = lastSavedFingerprintRef.current !== reviewMetadataFingerprint;
+  useEffect(() => {
+    if (!hasUnsavedChanges || submittedRelease) return;
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [hasUnsavedChanges, submittedRelease]);
   useEffect(() => {
     if (confirmedReviewFingerprintRef.current && confirmedReviewFingerprintRef.current !== reviewMetadataFingerprint) {
       confirmedReviewFingerprintRef.current = null;
@@ -1573,12 +1581,24 @@ export function ReleaseForm({
       }))
         .then((response) => {
           if (!response.ok) throw new Error("Autosave failed");
+          lastSavedFingerprintRef.current = reviewMetadataFingerprint;
           setAutosaveStatus("saved");
         })
         .catch(() => setAutosaveStatus("error"));
     }, 1200);
     return () => window.clearTimeout(timer);
-  }, [autosaveEligible, autosaveSnapshot, draftReleaseId, submittedRelease, submitting, initialRelease]);
+  }, [autosaveEligible, autosaveSnapshot, draftReleaseId, reviewMetadataFingerprint, submittedRelease, submitting, initialRelease]);
+
+  async function retryAutosave() {
+    if (!draftReleaseId || submitting) return saveDraftRelease();
+    setAutosaveStatus("saving");
+    try {
+      const response = await fetch(`/api/distribution/drafts/${draftReleaseId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(autosaveSnapshot) });
+      if (!response.ok) throw new Error("Save failed");
+      lastSavedFingerprintRef.current = reviewMetadataFingerprint;
+      setAutosaveStatus("saved");
+    } catch { setAutosaveStatus("error"); }
+  }
 
   useEffect(() => {
     if (customLabelAllowed) return;
@@ -2763,6 +2783,8 @@ export function ReleaseForm({
       if (savedId > 0) {
         setDraftReleaseId(savedId);
       }
+      lastSavedFingerprintRef.current = reviewMetadataFingerprint;
+      setAutosaveStatus("saved");
       if (!forSubmission) {
         setStatus("Draft saved. Opening Your Releases...");
         router.push("/dashboard/releases");
@@ -3142,7 +3164,8 @@ export function ReleaseForm({
           <button type="button" onClick={saveDraftRelease} disabled={submitting} className="release-workspace-quit">Save &amp; Quit</button>
           <NextImage src="/assets/hymnlogowhite.png" alt="HYMN Music" width={116} height={38} priority className="release-workspace-logo" />
           <div className="release-workspace-state" aria-live="polite">
-            <span className={autosaveEligible && autosaveStatus === "saved" ? "is-saved" : ""}>{autosaveEligible && autosaveStatus === "saved" ? "Saved ✓" : autosaveLabel}</span>
+            <span className={autosaveEligible && autosaveStatus === "saved" ? "is-saved" : ""}>{autosaveEligible && autosaveStatus === "saved" ? "Saved ✓" : !autosaveEligible && hasUnsavedChanges ? "Unsaved changes" : autosaveLabel}</span>
+            {autosaveStatus === "error" ? <button type="button" onClick={retryAutosave} disabled={submitting} className="release-workspace-review">Retry save</button> : null}
             {step !== 7 ? <button type="button" onClick={enterReviewMode} className="release-workspace-review">Review</button> : null}
           </div>
         </header>

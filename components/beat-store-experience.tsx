@@ -311,7 +311,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
   const [sectionState, setSectionState] = useState<Record<SectionKey, boolean>>({ genre: true, mood: true, bpm: true, key: true });
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
-  const [cartNotice, setCartNotice] = useState<{ beatTitle: string; action: "added" | "removed" } | null>(null);
+  const [cartNotice, setCartNotice] = useState<{ beatTitle: string; action: "added" | "removed"; item?: CartItem } | null>(null);
 
   const genres = useMemo(() => Array.from(new Set(catalog.map((beat) => beat.genre))).sort(), [catalog]);
   const moods = useMemo(() => Array.from(new Set(catalog.map((beat) => beat.mood))).sort(), [catalog]);
@@ -614,7 +614,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
         cartDetails={cartDetails}
         total={cartTotal}
         onClose={() => setCartOpen(false)}
-        onRemove={(beatId, licenseType) => setCart((current) => current.filter((item) => !(item.beatId === beatId && item.licenseType === licenseType)))}
+        onRemove={(beatId, licenseType) => setCart((current) => { const item = current.find((entry) => entry.beatId === beatId && entry.licenseType === licenseType); const beat = catalog.find((entry) => entry.id === beatId); if (item) setCartNotice({ beatTitle: beat?.title || "Beat", action: "removed", item }); return current.filter((entry) => !(entry.beatId === beatId && entry.licenseType === licenseType)); })}
       />
 
       <MobileFiltersModal open={mobileFiltersOpen} onClose={() => setMobileFiltersOpen(false)} content={<div className="space-y-3">{filterContent}</div>} />
@@ -637,6 +637,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
         <span className="min-w-0 truncate">
           {cartNotice ? `${cartNotice.beatTitle} ${cartNotice.action === "added" ? "added to cart" : "removed from cart"}` : "Cart updated"}
         </span>
+        {cartNotice?.action === "removed" && cartNotice.item ? <button type="button" className="shrink-0 underline underline-offset-4" onClick={() => { const item = cartNotice.item!; setCart(current => [...current.filter(entry => !(entry.beatId === item.beatId && entry.licenseType === item.licenseType)), item]); setCartNotice({ beatTitle: cartNotice.beatTitle, action: "added" }); }}>Undo</button> : null}
       </div>
 
       <section className="mx-auto max-w-[1700px] pb-10 pt-0 lg:pb-14">
@@ -811,9 +812,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
                   Load more
                 </button>
               ) : null}
-              <span className="text-sm text-[var(--text-soft)]">
-                {filteredBeats.length === 0 ? "No beats match these filters." : "Auto-load keeps the browse session moving."}
-              </span>
+              {filteredBeats.length === 0 ? <div className="flex flex-wrap items-center justify-center gap-3 text-sm text-[var(--text-soft)]"><span>No beats match your search and filters.</span><button type="button" onClick={() => { clearFilters(); setSearchQuery(""); }} className="underline underline-offset-4 text-[var(--text)]">Clear search and filters</button></div> : <span className="text-sm text-[var(--text-soft)]">Auto-load keeps the browse session moving.</span>}
             </div>
           </div>
         </div>
