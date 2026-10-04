@@ -6,6 +6,7 @@ import { getPublicAppUrl } from "@/lib/public-app-url";
 import "./styles/distribution.css";
 import "./styles/product-ui.css";
 import "./styles/material-depth.css";
+import { SmartHelpLayer } from "@/components/smart-help-layer";
 
 export const metadata: Metadata = {
   metadataBase: new URL(getPublicAppUrl()),
@@ -65,7 +66,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           }}
         />
       </head>
-      <body suppressHydrationWarning>{children}{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</body>
+      <body suppressHydrationWarning>{children}<SmartHelpLayer />{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</body>
     </html>
   );
 }

@@ -11,6 +11,7 @@ import { mainNav } from "@/lib/site";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { SessionPayload } from "@/lib/types";
 import { beatLicenseLabel, type BeatStoreLicenseType } from "@/lib/beat-store";
+import { SmartHelpToggle } from "@/components/smart-help-toggle";
 
 type SiteHeaderProps = {
   user?: SessionPayload | null;
@@ -614,6 +615,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <div className="hidden items-center gap-3 lg:flex">
+            <SmartHelpToggle />
             {!isAuthenticated ? <ThemeToggle /> : null}
             {isAuthenticated ? <AppLauncher /> : (
               <Link
@@ -630,6 +632,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           </div>
 
           <div className="flex items-center gap-0 lg:hidden">
+            <SmartHelpToggle compact />
             {isAuthenticated ? <AppLauncher mobile /> : null}
             {isAuthenticated ? <NotificationBell /> : null}
             <ThemeToggle />
