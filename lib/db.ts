@@ -3643,10 +3643,10 @@ export async function createBeatPurchase(userId: number, beatId: number, license
 
 export async function getBeatPurchasesByUser(userId: number) {
   if (usesPostgresPrisma()) {
-    const purchases = await prisma.beatPurchase.findMany({
-      where: { userId, hasAccess: true },
-      orderBy: { purchasedAt: "desc" }
-    });
+    const [purchases, artistCard] = await Promise.all([
+      prisma.beatPurchase.findMany({ where: { userId, hasAccess: true }, orderBy: { purchasedAt: "desc" } }),
+      prisma.artistCard.findFirst({ where: { userId, archivedAt: null }, orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }], select: { artistName: true } })
+    ]);
     
     return purchases.map(p => ({
       id: p.id,
@@ -3656,6 +3656,8 @@ export async function getBeatPurchasesByUser(userId: number) {
       purchasedAt: p.purchasedAt.toISOString(),
       licenseUploadedAt: p.licenseUploadedAt?.toISOString() || undefined,
       licenseUrl: p.licenseUrl || undefined,
+      needsArtistName: !p.licenseUrl && !artistCard?.artistName,
+      suggestedArtistName: artistCard?.artistName ?? null,
       releaseId: p.releaseId ?? null,
       paymentId: p.paymentId ?? null,
       hasAccess: p.hasAccess,

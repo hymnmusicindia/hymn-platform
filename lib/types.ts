@@ -422,6 +422,8 @@ export interface BeatPurchase {
   purchasedAt: string;
   licenseUploadedAt?: string | null;
   licenseUrl?: string | null;
+  needsArtistName?: boolean;
+  suggestedArtistName?: string | null;
   releaseId?: number | null;
   paymentId?: string | null;
   hasAccess: boolean;

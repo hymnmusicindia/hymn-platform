@@ -19,7 +19,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const release = await prisma.$transaction(async (tx) => {
     const created = await tx.release.create({ data: {
       userId: user.user.id, title: beat.title, artistName: user.user.name, genre: beat.genre, releaseDate: new Date(), status: "DRAFT", releaseType: "single", paymentStatus: "pending",
-      metadata: { mood: beat.mood, beatPurchaseId: purchase.id, license_receipt_url: purchase.licenseUrl, contentType: purchase.licenseType === "exclusive" ? "Exclusive Licensed" : "Non-Exclusive Licensed", beatTitle: beat.title, bpm: beat.bpm, musicalKey: beat.keySignature, producerCredit: producerParty.professionalName, producerPartyId: producerParty.publicId, licenseType: purchase.licenseType }
+      metadata: { mood: beat.mood, beatPurchaseId: purchase.id, license_receipt_url: purchase.licenseUrl, licenseAgreementUrl: `/licenses/${purchase.id}`, contentType: purchase.licenseType === "exclusive" ? "Exclusive Licensed" : "Non-Exclusive Licensed", beatTitle: beat.title, bpm: beat.bpm, musicalKey: beat.keySignature, producerCredit: producerParty.professionalName, producerPartyId: producerParty.publicId, licenseType: purchase.licenseType }
     } });
     const track = await tx.track.create({ data: { releaseId: created.id, title: beat.title, trackNumber: 1, primaryArtist: user.user.name, metadata: { producers: producerParty.professionalName, bpm: beat.bpm, musicalKey: beat.keySignature } } });
     await syncTrackContributions(tx, { trackId: track.id, actorUserId: user.user.id, contributions: [{ partyId: producerParty.id, role: "producer", artistName: producerParty.professionalName }] });

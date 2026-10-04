@@ -9,6 +9,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!purchase.licenseUrl) return NextResponse.json({ error: "License is still processing." }, { status: 409 });
   const target = new URL(purchase.licenseUrl, _request.url);
   if (target.origin !== new URL(_request.url).origin || !target.pathname.startsWith("/api/assets/")) return NextResponse.json({ error: "Legacy public licence access is disabled; regenerate this licence." }, { status: 409 });
+  await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { downloadedAt: new Date(), downloadCount: { increment: 1 } } });
   return NextResponse.redirect(target);
 }
 // vercel trigger 9

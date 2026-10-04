@@ -44,6 +44,7 @@ export async function createStudioOrder(input: { customerId: number; listingPubl
     if (active >= listing.engineerProfile.maxActiveOrders) throw new Error("This engineer is currently at capacity.");
     const beatPurchase = input.beatPurchaseId ? await tx.beatPurchase.findFirst({ where: { id: input.beatPurchaseId, userId: input.customerId, hasAccess: true }, include: { beat: true, checkoutOrderItem: { select: { orderId: true } } } }) : null;
     if (input.beatPurchaseId && !beatPurchase) throw new Error("The selected beat purchase is unavailable.");
+    if (beatPurchase && (!beatPurchase.licenseUrl || !beatPurchase.licenseTermsSnapshot)) throw new Error("Create the beat licence agreement before starting a Studio project.");
     const basePrice = listing.standardPrice;
     const finalPrice = beatPurchase && listing.beatCustomerPrice ? listing.beatCustomerPrice : basePrice;
     const discountAmount = basePrice.sub(finalPrice);
@@ -375,7 +376,7 @@ export async function handoffStudioOrderToRelease(input: { orderPublicId: string
     } else {
       const beat = order.sourceBeat;
       const producer = beat ? (beat.producerParty ?? ensuredProducerParty) : null;
-      const release = await tx.release.create({ data: { userId: input.customerId, title: order.projectTitle, artistName: order.customer.name, genre: beat?.genre || "", releaseDate: new Date(), status: "DRAFT", releaseType: "single", paymentStatus: "pending", metadata: { studioOrderId: order.publicId, finalMasterAssetId: finalFile.assetId, ...(purchase ? { beatPurchaseId: purchase.id, license_receipt_url: purchase.licenseUrl, licenseType: purchase.licenseType, contentType: purchase.licenseType === "exclusive" ? "Exclusive Licensed" : "Non-Exclusive Licensed" } : { contentType: "Original" }) } } });
+      const release = await tx.release.create({ data: { userId: input.customerId, title: order.projectTitle, artistName: order.customer.name, genre: beat?.genre || "", releaseDate: new Date(), status: "DRAFT", releaseType: "single", paymentStatus: "pending", metadata: { studioOrderId: order.publicId, finalMasterAssetId: finalFile.assetId, ...(purchase ? { beatPurchaseId: purchase.id, license_receipt_url: purchase.licenseUrl, licenseAgreementUrl: `/licenses/${purchase.id}`, licenseType: purchase.licenseType, contentType: purchase.licenseType === "exclusive" ? "Exclusive Licensed" : "Non-Exclusive Licensed" } : { contentType: "Original" }) } } });
       const track = await tx.track.create({ data: { releaseId: release.id, title: order.projectTitle, trackNumber: 1, primaryArtist: order.customer.name, audioUrl: `/api/assets/${finalFile.assetId}/download?filename=${encodeURIComponent(finalFile.asset.safeFilename)}`, metadata: { finalMasterAssetId: finalFile.assetId, studioOrderId: order.publicId, studioEngineerPartyId: order.engineerParty.publicId, mixingEngineer: order.engineerParty.professionalName, masteringEngineer: order.engineerParty.professionalName, ...(producer ? { producers: producer.professionalName } : {}) } } });
       trackId = track.id;
       if (beat && purchase && producer) {
