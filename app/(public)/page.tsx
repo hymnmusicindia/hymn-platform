@@ -9,7 +9,6 @@ import {
 } from "lucide-react";
 import { MusicLifecycleBanner } from "@/components/music-lifecycle-banner";
 import { HomeProducerInvitation } from "@/components/home-producer-invitation";
-import { FloatingAssistant } from "@/components/floating-assistant";
 import { AnimatedHeroMetrics } from "@/components/animated-hero-metrics";
 import { GoogleAuthButton } from "@/components/google-auth-button";
 import { HomeNewsletter } from "@/components/home-newsletter";
@@ -345,14 +344,6 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <FloatingAssistant
-        context="Home support"
-        suggestions={[
-          { label: "Join The Platform", description: "Start the release and artist growth journey." },
-          { label: "Explore services", description: "See distribution, marketing, label services, and creative support." },
-          { label: "Open dashboard", description: "Review queue status, analytics, earnings, and orders." }
-        ]}
-      />
     </main>
   );
 }
