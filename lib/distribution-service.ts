@@ -135,6 +135,12 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
 async function submitLockedRelease(releaseId: number, options: { actorId?: number | null; siteUrl?: string; retry?: boolean; adminConfirmedExistingArtists?: boolean; correctionReingest?: boolean }) {
   const release = await getDetailedReleaseById(releaseId);
   if (!release) throw new Error("Release not found.");
+  const reviewingCorrections = ["under_review", "approved"].includes(release.status);
+  const correctionAttempt = reviewingCorrections ? await prisma.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: "direnote", isCurrent: true }, select: { corrections: true } }) : null;
+  const correctionsResolved = Boolean(correctionAttempt?.corrections && typeof correctionAttempt.corrections === "object" && (correctionAttempt.corrections as Record<string, unknown>).status === "customer_resolved");
+  // Customer corrections return to HYMN review. Admin approval must send the
+  // corrected payload, rather than report the previous accepted attempt as a duplicate.
+  if (reviewingCorrections && correctionsResolved) options = { ...options, correctionReingest: true };
   const newerActiveDuplicate = await prisma.release.findFirst({
     where: {
       userId: release.userId,
@@ -152,7 +158,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
   if (release.paymentStatus !== "paid") throw new Error("A verified payment or entitlement is required before partner delivery.");
   const rights = [release.ownershipConfirmed, release.noUnauthorizedSamples, release.collaboratorsCredited, release.platformCompliant, release.hymnNotLiable, release.agreedToTerms, release.falseMetadataAcknowledged];
   if (rights.some(value => value !== true)) throw new Error("Complete all ownership and legal declarations before partner delivery.");
-  if (options.correctionReingest && !["changes_requested", "distributor_changes_required"].includes(release.status)) throw new Error("Only a release with requested provider corrections can be re-ingested.");
+  if (options.correctionReingest && !["changes_requested", "distributor_changes_required"].includes(release.status) && !(reviewingCorrections && correctionsResolved)) throw new Error("Only a release with requested provider corrections can be re-ingested.");
 
   // Check acceptance under the submission lock, before validation or approval can
   // alter a release that the distributor already owns. Corrections use an explicit re-ingest flow.

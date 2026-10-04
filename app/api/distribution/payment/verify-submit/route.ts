@@ -146,9 +146,6 @@ export async function POST(request: Request) {
       });
     }
 
-    if (persistedOrder.amount === 0 && persistedOrder.creditsUsed === 0) {
-      await confirmDistributionEntitlement({ razorpayOrderId: parsed.razorpay_order_id, userId: session.sub, paymentId: parsed.razorpay_payment_id });
-    }
     const artistProfileIds = [...new Set(parsed.metadata.tracks.flatMap((track) => [
       ...(track.artistProfileIds ?? []),
       ...(track.featuredArtistProfileIds ?? []),
@@ -167,6 +164,9 @@ export async function POST(request: Request) {
     let orderClaimed = false;
     let subscriptionReservation: Awaited<ReturnType<typeof reserveSubscriptionReleaseSlot>> | null = null;
     try {
+      if (persistedOrder.amount === 0 && persistedOrder.creditsUsed === 0) {
+        await confirmDistributionEntitlement({ razorpayOrderId: parsed.razorpay_order_id, userId: session.sub, paymentId: parsed.razorpay_payment_id });
+      }
       await claimDistributionOrderForSubmission({ razorpayOrderId: parsed.razorpay_order_id, userId: session.sub });
       orderClaimed = true;
       if (isSubscriptionEntitlement) subscriptionReservation = await reserveSubscriptionReleaseSlot(session.sub, parsed.draftReleaseId);
@@ -239,7 +239,11 @@ export async function POST(request: Request) {
       const submissionPersisted = Boolean(release || (persistedRelease && !["DRAFT", "AWAITING_PAYMENT"].includes(persistedRelease.status)));
       if (!submissionPersisted && orderClaimed) await releaseDistributionOrderClaim({ razorpayOrderId: parsed.razorpay_order_id, userId: session.sub }).catch(() => undefined);
       if (!submissionPersisted && subscriptionReservation) await releaseReservedSubscriptionSlot(subscriptionReservation.subscriptionId, subscriptionReservation.counted, parsed.draftReleaseId).catch(() => undefined);
-      if (promotionRedemption) await releaseFirstReleaseReservation(promotionRedemption.id).catch(() => undefined);
+      if (promotionRedemption && !submissionPersisted) await releaseFirstReleaseReservation(promotionRedemption.id).catch(() => undefined);
+      if (promotionRedemption && submissionPersisted) {
+        const submittedId = release?.id ?? parsed.draftReleaseId;
+        if (submittedId) await redeemFirstRelease(promotionRedemption.id, submittedId).catch(() => undefined);
+      }
       throw error;
     }
 
@@ -263,8 +267,8 @@ export async function POST(request: Request) {
 
     await createNotification({
       userId: session.sub,
-      title: isSubscriptionEntitlement ? "Subscription release submitted" : "Distribution payment confirmed",
-      body: isSubscriptionEntitlement ? "Your active subscription covered this release submission." : "Your distribution payment is confirmed and your release is in review.",
+      title: isFirstReleaseOffer ? "First release submitted" : isSubscriptionEntitlement ? "Subscription release submitted" : "Distribution payment confirmed",
+      body: isFirstReleaseOffer ? "Your first-release credit has been applied. Your release is under review." : isSubscriptionEntitlement ? "Your active subscription covered this release submission." : "Your distribution payment is confirmed and your release is in review.",
       type: "order",
       href: release?.id ? `/dashboard/releases?releaseId=${release.id}` : "/dashboard/releases",
       actionLabel: "Open release",

@@ -1078,6 +1078,7 @@ export function ReleaseForm({
     ? initialCorrectionField?.match(/^tracks\.(\d+)\./) : null;
   const correctionTrackIndex = correctionTrackMatch ? Number(correctionTrackMatch[1]) : null;
   const [step, setStep] = useState(correctionTrackIndex !== null ? 3 : initialRelease ? 7 : 1);
+  const singleReleaseGift = firstReleaseOffer || (initialRelease?.metadata && typeof initialRelease.metadata === "object" && (initialRelease.metadata as Record<string, unknown>).promotionCode === "FIRST_RELEASE_FREE");
   const trackCampaignEvent = (event: string, metadata?: Record<string, unknown>) => {
     if (!firstReleaseOffer) return;
     void fetch("/api/promotions/first-release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event, attribution: campaignAttribution, metadata }) }).catch(() => undefined);
@@ -1272,13 +1273,13 @@ export function ReleaseForm({
     if (initialRelease?.id) return initialRelease.id;
     if (!draftCreationPromiseRef.current) {
       draftCreationRef.current = true;
-      draftCreationPromiseRef.current = fetch("/api/distribution/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: displayedReleaseTitle }) })
+      draftCreationPromiseRef.current = fetch("/api/distribution/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: displayedReleaseTitle, ...(firstReleaseOffer ? { promotionCode: "FIRST_RELEASE_FREE", attribution: campaignAttribution } : {}) }) })
         .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not start draft."); return Number(data.draft?.id); })
         .then(id => { if (!Number.isInteger(id) || id < 1) throw new Error("Draft creation returned an invalid identifier."); setDraftReleaseId(id); return id; })
         .catch(error => { draftCreationRef.current = false; draftCreationPromiseRef.current = null; throw error; });
     }
     return draftCreationPromiseRef.current;
-  }, [displayedReleaseTitle, draftReleaseId, initialRelease]);
+  }, [displayedReleaseTitle, draftReleaseId, initialRelease, firstReleaseOffer, campaignAttribution]);
   const selectedReleaseDate =
     release.releaseTiming === "schedule_release"
       ? release.scheduledReleaseDate
@@ -1465,10 +1466,7 @@ export function ReleaseForm({
         .join(", "),
       genre: release.primaryGenre,
       releaseDate: selectedReleaseDate,
-      artworkUrl:
-        artworkPreview && !artworkPreview.startsWith("data:")
-          ? artworkPreview
-          : undefined,
+      artworkUrl: persistedArtworkUrl ?? initialRelease?.artworkUrl ?? undefined,
       audioUrl: tracks[0]?.existingAudioUrl || undefined,
       metadata: {
         ...release,
@@ -1512,7 +1510,8 @@ export function ReleaseForm({
       },
     }),
     [
-      artworkPreview,
+      persistedArtworkUrl,
+      initialRelease?.artworkUrl,
       displayedReleaseTitle,
       knownProfiles,
       legal,
@@ -1528,6 +1527,8 @@ export function ReleaseForm({
     ],
   );
   const reviewMetadataFingerprint = useMemo(() => JSON.stringify(autosaveSnapshot), [autosaveSnapshot]);
+  const autosavePendingRef = useRef<Promise<void>>(Promise.resolve());
+  const savingReleaseRef = useRef(false);
   const confirmedReviewFingerprintRef = useRef<string | null>(null);
   useEffect(() => {
     if (confirmedReviewFingerprintRef.current && confirmedReviewFingerprintRef.current !== reviewMetadataFingerprint) {
@@ -1560,15 +1561,16 @@ export function ReleaseForm({
   }, [autosaveEligible, campaignAttribution, displayedReleaseTitle, draftReleaseId, ensureUploadDraft, firstReleaseOffer, initialRelease, router]);
 
   useEffect(() => {
-    if (!autosaveEligible || !draftReleaseId || submitting || submittedRelease) return;
+    if (!autosaveEligible || !draftReleaseId || submitting || submittedRelease || (initialRelease && initialRelease.status !== "draft")) return;
     setAutosaveStatus("waiting");
     const timer = window.setTimeout(() => {
+      if (savingReleaseRef.current) return;
       setAutosaveStatus("saving");
-      fetch(`/api/distribution/drafts/${draftReleaseId}`, {
+      autosavePendingRef.current = autosavePendingRef.current.catch(() => undefined).then(() => fetch(`/api/distribution/drafts/${draftReleaseId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(autosaveSnapshot),
-      })
+      }))
         .then((response) => {
           if (!response.ok) throw new Error("Autosave failed");
           setAutosaveStatus("saved");
@@ -1576,7 +1578,7 @@ export function ReleaseForm({
         .catch(() => setAutosaveStatus("error"));
     }, 1200);
     return () => window.clearTimeout(timer);
-  }, [autosaveEligible, autosaveSnapshot, draftReleaseId, submittedRelease, submitting]);
+  }, [autosaveEligible, autosaveSnapshot, draftReleaseId, submittedRelease, submitting, initialRelease]);
 
   useEffect(() => {
     if (customLabelAllowed) return;
@@ -1722,7 +1724,7 @@ export function ReleaseForm({
       })),
     );
   const addTrack = () => {
-    if (firstReleaseOffer) return;
+    if (singleReleaseGift) return;
     setTrackList((current) => [...current, { ...createTrack(current.length + 1), primaryArtistIds: current[0]?.primaryArtistIds ?? [] }]);
     setExpandedTrack(tracks.length);
   };
@@ -2651,11 +2653,14 @@ export function ReleaseForm({
     return data;
   }
 
-  async function saveDraftRelease() {
+  async function persistDraftRelease(forSubmission = false) {
+    if (savingReleaseRef.current && !forSubmission) return;
+    savingReleaseRef.current = true;
     setSubmitting(true);
     setUploadProgress(0);
     setStatus("Saving draft...");
     try {
+      await autosavePendingRef.current;
       const uploaded = await uploadFilesDirectly();
       setStatus("Saving draft...");
 
@@ -2758,17 +2763,25 @@ export function ReleaseForm({
       if (savedId > 0) {
         setDraftReleaseId(savedId);
       }
-      setStatus("Draft saved. Opening Your Releases...");
-      router.push("/dashboard/releases");
-      router.refresh();
+      if (!forSubmission) {
+        setStatus("Draft saved. Opening Your Releases...");
+        router.push("/dashboard/releases");
+        router.refresh();
+      }
+      return savedId;
     } catch (error) {
+      if (forSubmission) throw error;
       setStatus(
         error instanceof Error ? error.message : "Could not save draft.",
       );
     } finally {
-      setSubmitting(false);
+      if (!forSubmission) {
+        savingReleaseRef.current = false;
+        setSubmitting(false);
+      }
     }
   }
+  async function saveDraftRelease() { await persistDraftRelease(); }
 
   async function submitRelease(
     orderId: string,
@@ -2873,6 +2886,7 @@ export function ReleaseForm({
 
   async function handleFinalSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (savingReleaseRef.current) return;
     if (validationIssues.length > 0) {
       const issue = validationIssues[0];
       setValidationErrorKeys(new Set(validationIssues.map((item) => item.key)));
@@ -2884,10 +2898,12 @@ export function ReleaseForm({
       return;
     }
 
+    savingReleaseRef.current = true;
     setSubmitting(true);
     setUploadProgress(0);
     setStatus(null);
     try {
+      await autosavePendingRef.current;
       if (isPaidReleaseResubmission) {
         const data = await submitEditedRelease();
         if (data.release?.status === "changes_requested" && data.release?.direNoteStatus) {
@@ -2901,7 +2917,8 @@ export function ReleaseForm({
       }
 
       if (!reviewConfirmed || confirmedReviewFingerprintRef.current !== reviewMetadataFingerprint) throw new Error("Confirm the reviewed release information before continuing.");
-      const reviewReleaseId = await ensureUploadDraft();
+      const reviewReleaseId = await persistDraftRelease(true);
+      if (!reviewReleaseId) throw new Error("Could not save the latest release details. Please retry before submitting.");
       const confirmationResponse = await fetch("/api/distribution/review-confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ releaseId: reviewReleaseId, metadataSnapshot: autosaveSnapshot }) });
       const confirmation = await confirmationResponse.json().catch(() => ({}));
       if (!confirmationResponse.ok) {
@@ -3024,6 +3041,7 @@ export function ReleaseForm({
         error instanceof Error ? error.message : "Something went wrong.",
       );
     } finally {
+      savingReleaseRef.current = false;
       setSubmitting(false);
     }
   }
@@ -3415,7 +3433,7 @@ export function ReleaseForm({
               {tracks.some((track) => track.audioUploadStatus !== "idle" || track.audioPreviewUrl || track.existingAudioUrl)
                 ? Array.from({ length: Math.max(0, 4 - tracks.length) }, (_, slot) => <span key={`available-audio-slot-${slot}`} className="release-audio-placeholder" aria-hidden="true" />)
                 : null}
-              {firstReleaseOffer ? (
+              {singleReleaseGift ? (
                 <button type="button" disabled className="release-add-audio-track" title="Locked for this FREE one-time Single release" aria-label="Add another track locked for this free one-time Single release">
                   <LockKeyhole />
                   <span>Add track — locked for this FREE release</span>
@@ -5431,7 +5449,7 @@ export function ReleaseForm({
                         className="mt-1.5 text-lg font-semibold"
                         style={{ color: "var(--text)" }}
                       >
-                        {firstReleaseOffer && finalDistributionAmount === 0 ? "FREE" : <>₹ {finalDistributionAmount.toLocaleString("en-IN")}</>}
+                        {isPaidReleaseResubmission ? "Already covered" : firstReleaseOffer && finalDistributionAmount === 0 ? "FREE" : <>₹ {finalDistributionAmount.toLocaleString("en-IN")}</>}
                       </p>
                     </div>
                     <div className="p-4" style={{ background: "var(--card)" }}>
@@ -6040,7 +6058,7 @@ export function ReleaseForm({
                     </div>
                   </section>
 
-                  {!subscriptionCovered ? <section className="payment-summary p-5 md:p-7">
+                  {isPaidReleaseResubmission ? <section className="payment-summary p-5 md:p-7"><h3 className="text-lg font-semibold">No additional payment</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Your existing release entitlement covers these corrections. Submit the updated release for review.</p></section> : !subscriptionCovered ? <section className="payment-summary p-5 md:p-7">
                     <div className="flex items-end justify-between gap-4 border-b pb-4" style={{ borderColor: "var(--border)" }}>
                       <h3 className="text-lg font-semibold">Payment summary</h3>
                       <span className="text-[10px] uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Invoice</span>

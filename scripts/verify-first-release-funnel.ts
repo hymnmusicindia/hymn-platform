@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { calculateFirstReleasePrice, FIRST_RELEASE_BASE_DISCOUNT } from "../lib/first-release-promotion";
+import { firstReleaseStartHref, showFirstReleaseBadge } from "../lib/first-release-flow";
 
 const noAddon = calculateFirstReleasePrice({ plan: "one_time", releaseType: "single", trackCount: 1, normalAmount: 99 });
 assert.deepEqual(noAddon, { originalAmount: 99, discountAmount: 99, finalAmount: 0 });
@@ -28,7 +29,7 @@ assert.match(promotionSource, /release_already_submitted/);
 const releaseFormSource = fs.readFileSync(path.join(process.cwd(), "components/release-form.tsx"), "utf8");
 assert.match(releaseFormSource, /edit=\$\{id\}\$\{campaignQuery\}/, "Autosave must preserve the first-release campaign on the draft URL.");
 assert.match(releaseFormSource, /storePlatforms\.map\(\(platform\) => platform\.name\)/, "Default delivery must contain store platforms only and must not preselect paid social add-ons.");
-assert.match(releaseFormSource, /if \(firstReleaseOffer\) return;/, "The free funnel must prevent adding tracks beyond one Single.");
+assert.match(releaseFormSource, /if \(singleReleaseGift\) return;/, "The free funnel must prevent extra tracks during both initial entry and corrections.");
 assert.match(releaseFormSource, /FIRST_RELEASE_BASE_DISCOUNT/, "The review price must use the shared server-aligned first-release discount.");
 assert.match(releaseFormSource, /Submit your release/, "A zero-due first release must be presented as a direct submission, not checkout.");
 const distributionStartSource = fs.readFileSync(path.join(process.cwd(), "app/(authenticated)/distribution/start/page.tsx"), "utf8");
@@ -36,6 +37,15 @@ assert.match(distributionStartSource, /campaignDraftEligible/, "An eligible camp
 const verifySubmitSource = fs.readFileSync(path.join(process.cwd(), "app/api/distribution/payment/verify-submit/route.ts"), "utf8");
 assert.match(verifySubmitSource, /promotionCode: FIRST_RELEASE_PROMOTION_CODE/, "Submitted free releases must retain their promotion marker for corrections and account history.");
 const summaryCardSource = fs.readFileSync(path.join(process.cwd(), "components/release-summary-card.tsx"), "utf8");
-assert.match(summaryCardSource, /\["draft", "changes_requested"\]\.includes\(stage\)/, "Free-release cards must include both HYMN and distributor correction stages.");
+for (const status of ["draft", "awaiting_payment", "submitted", "under_review", "changes_requested", "scheduled", "received_by_partner"]) {
+  assert.equal(showFirstReleaseBadge(status, { promotionCode: "FIRST_RELEASE_FREE" }), true, status);
+  assert.equal(showFirstReleaseBadge(status, {}), false, status);
+}
+for (const status of ["live", "LIVE", "distributed", "partially_live", "taken_down", "archived"]) assert.equal(showFirstReleaseBadge(status, { promotionCode: "FIRST_RELEASE_FREE" }), false, status);
+const campaignUrl = new URL(firstReleaseStartHref({ campaign: "other", edit: "999", utm_source: "ad", redirect: "https://example.com" }, 42), "https://hymnmusic.fun");
+assert.equal(campaignUrl.searchParams.get("campaign"), "first-release");
+assert.equal(campaignUrl.searchParams.get("edit"), "42");
+assert.equal(campaignUrl.searchParams.get("utm_source"), "ad");
+assert.equal(campaignUrl.searchParams.has("redirect"), false);
 assert.match(summaryCardSource, />Free release</, "The account card must use the concise FREE RELEASE tag.");
 console.log("First Release Free pricing, add-on, qualification, and database uniqueness guards passed.");

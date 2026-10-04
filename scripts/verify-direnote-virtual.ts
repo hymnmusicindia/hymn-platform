@@ -40,7 +40,11 @@ async function main() {
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-release-pipeline-integration.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-release-change-requests-integration.ts"]);
     if (process.argv.includes("--build")) await run(["node_modules/next/dist/bin/next", "build", "--webpack"]);
-    await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-direnote-lifecycle.ts", ...(process.argv.includes("--build") || process.argv.includes("--browser") ? ["--browser"] : [])]);
+    if (process.argv.includes("--checkout-only")) {
+      await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-direnote-lifecycle.ts"]);
+      await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-first-release-http.ts"]);
+    }
+    else await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-direnote-lifecycle.ts", ...(process.argv.includes("--build") || process.argv.includes("--browser") ? ["--browser"] : [])]);
   } finally {
     if (process.platform === "win32") await run(["-D", databaseDir, "-m", "fast", "-w", "stop"], path.resolve("node_modules/@embedded-postgres/windows-x64/native/bin/pg_ctl.exe"));
     else await pg.stop();

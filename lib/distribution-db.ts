@@ -1429,6 +1429,12 @@ export async function updatePaidDistributionRelease(input: {
         const lock = await tx.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(81422028, ${input.releaseId}::integer) AS locked`;
         if (!lock[0]?.locked) throw new Error("This release is being synchronized or submitted. Retry saving shortly.");
         const saved = await tx.release.findUniqueOrThrow({ where: { id: input.releaseId }, include: { tracks: { orderBy: { trackNumber: "asc" } } } });
+        const firstReleaseRedemption = await tx.promotionRedemption.findFirst({ where: { releaseId: saved.id, userId: input.userId, status: "REDEEMED", promotion: { code: "FIRST_RELEASE_FREE" } } });
+        if (firstReleaseRedemption) {
+          if (input.metadata.releaseType !== "single" || tracks.length !== 1) throw new Error("This first-release gift covers one Single. Keep one track when submitting corrections.");
+          const correctedPrice = getDistributionPricing("one_time", tracks.length, input.metadata.releaseType, input.metadata.platforms, { youtubeContentIdEnabled: input.metadata.youtubeContentIdEnabled });
+          if (correctedPrice > Number(firstReleaseRedemption.originalAmount)) throw new Error("These corrections add a paid service that was not included in your first release. Remove the additional service or contact HYMN support.");
+        }
         const verifiedCheckout = input.verifiedOrderId && ["DRAFT", "AWAITING_PAYMENT"].includes(saved.status)
           ? await tx.distributionOrder.findFirst({ where: { razorpayOrderId: input.verifiedOrderId, userId: input.userId, paymentStatus: "paid", fulfilledAt: { not: null }, OR: [{ releaseId: input.releaseId }, { releaseId: null }] } })
           : null;
@@ -1448,7 +1454,7 @@ export async function updatePaidDistributionRelease(input: {
             audioUrl: input.metadata.tracks[0]?.audioUrl || existingRelease.audioUrl || null,
             releaseDate: input.metadata.releaseDate ? new Date(input.metadata.releaseDate) : new Date(existingRelease.releaseDate),
             paymentStatus: "paid",
-            metadata: { ...(typeof saved.metadata === "object" && saved.metadata ? saved.metadata : {}), ...rest, upcCode: saved.upc, submittedAt: new Date().toISOString() } as any,
+            metadata: { ...(typeof saved.metadata === "object" && saved.metadata ? saved.metadata : {}), ...rest, ...(firstReleaseRedemption ? { promotionCode: "FIRST_RELEASE_FREE" } : {}), upcCode: saved.upc, submittedAt: new Date().toISOString() } as any,
             lastEditedAt: new Date()
           },
           select: { id: true }

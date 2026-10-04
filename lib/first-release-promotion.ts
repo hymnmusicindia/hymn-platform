@@ -9,10 +9,17 @@ const RESERVATION_TTL_MS = 30 * 60 * 1000;
 export type CampaignAttribution = Partial<Record<"utm_source" | "utm_medium" | "utm_campaign" | "utm_content" | "utm_term", string>>;
 
 const submittedReleaseWhere = (userId: number): Prisma.ReleaseWhereInput => ({
-  OR: [{ userId }, { ownerUserId: userId }],
-  status: { notIn: [ReleaseStatus.DRAFT, ReleaseStatus.AWAITING_PAYMENT] },
-  // Deleted drafts are soft-archived, but have never consumed a release.
-  NOT: { status: ReleaseStatus.ARCHIVED, paymentStatus: { not: "paid" }, metadata: { path: ["submittedAt"], equals: Prisma.AnyNull }, statusTransitions: { none: { newStatus: ReleaseStatus.SUBMITTED } } }
+  AND: [
+    { OR: [{ userId }, { ownerUserId: userId }] },
+    // Reopening a submitted release as a draft must not restore first-release eligibility.
+    // An archived, unfinished draft without submission history remains eligible.
+    { OR: [
+      { status: { notIn: [ReleaseStatus.DRAFT, ReleaseStatus.AWAITING_PAYMENT, ReleaseStatus.ARCHIVED] } },
+      { statusTransitions: { some: { newStatus: ReleaseStatus.SUBMITTED } } },
+      { metadata: { path: ["submittedAt"], not: Prisma.AnyNull } },
+      { status: ReleaseStatus.ARCHIVED, paymentStatus: "paid" }
+    ] }
+  ]
 });
 
 async function promotion() {
@@ -58,7 +65,7 @@ export async function reserveFirstRelease(input: { userId: number; originalAmoun
     if (submittedReleaseCount > 0) throw new Error("The free first-release offer has already been used on this account.");
     await tx.promotionRedemption.deleteMany({ where: { promotionId: offer.id, userId: input.userId, status: "RESERVED", updatedAt: { lt: new Date(Date.now() - RESERVATION_TTL_MS) } } });
     if (offer.maxRedemptions != null) {
-      const used = await tx.promotionRedemption.count({ where: { promotionId: offer.id, status: "REDEEMED" } });
+      const used = await tx.promotionRedemption.count({ where: { promotionId: offer.id, OR: [{ status: "REDEEMED" }, { status: "RESERVED", updatedAt: { gte: new Date(now.getTime() - RESERVATION_TTL_MS) } }] } });
       if (used >= offer.maxRedemptions) throw new Error("The first-release offer has ended.");
     }
     try {

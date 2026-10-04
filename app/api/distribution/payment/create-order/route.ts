@@ -93,7 +93,7 @@ export async function POST(request: Request) {
     let promotion = null;
     if (payload.promotionCode === FIRST_RELEASE_PROMOTION_CODE) {
       const eligibility = await getFirstReleaseEligibility(session.sub);
-      if (!eligibility.eligible) return NextResponse.json({ error: "Your first-release offer has already been used or reserved." }, { status: 409 });
+      if (!eligibility.eligible) return NextResponse.json({ error: eligibility.reason === "reserved" ? "A first-release submission is already in progress. Check your releases before retrying." : ["promotion_inactive", "promotion_exhausted"].includes(eligibility.reason) ? "The first-release campaign is not currently accepting claims." : "This account has already used its first-release eligibility.", code: eligibility.reason }, { status: 409 });
       promotion = calculateFirstReleasePrice({ plan: payload.plan, releaseType: payload.releaseType, trackCount: payload.trackCount, normalAmount });
       amount = promotion.finalAmount;
     }

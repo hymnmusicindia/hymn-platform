@@ -10,6 +10,7 @@ import { getSubscriptionByUserId } from "@/lib/db";
 import { subscriptionHasEntitlement, subscriptionHasReleaseAllowance } from "@/lib/subscription-billing";
 import { prisma } from "@/lib/prisma";
 import { checkoutPlan } from "@/lib/distribution-checkout-plan";
+import { firstReleaseAttribution } from "@/lib/first-release-flow";
 
 function firstValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
@@ -41,11 +42,16 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
   const campaignDraftEligible = !editingRelease || (
     ["draft", "awaiting_payment"].includes(editingRelease.status) &&
     editingRelease.releaseType === "single" &&
-    (editingRelease.tracks?.length ?? 1) === 1
+    (editingRelease.tracks?.length ?? 0) <= 1
   );
   const campaignRequested = firstValue(params.campaign) === "first-release" || editingMetadata.promotionCode === "FIRST_RELEASE_FREE" || (selectedPlan === "one_time" && campaignDraftEligible);
   const campaignEligibility = user && campaignRequested ? await getFirstReleaseEligibility(user.id) : null;
-  const attribution = Object.fromEntries(["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"].map((key) => [key, firstValue(params[key as keyof typeof params])]).filter(([, value]) => Boolean(value))) as Record<string, string>;
+  const explicitCampaign = firstValue(params.campaign) === "first-release" || editingMetadata.promotionCode === "FIRST_RELEASE_FREE";
+  // An explicit free-release claim should use the gift, preserving subscription allowance.
+  if (explicitCampaign && campaignEligibility?.eligible && campaignDraftEligible && attachedOrder?.paymentStatus !== "paid") selectedPlan = "one_time";
+  const firstReleaseOffer = Boolean(selectedPlan === "one_time" && campaignEligibility?.eligible && campaignDraftEligible);
+  const savedAttribution = editingMetadata.campaignAttribution && typeof editingMetadata.campaignAttribution === "object" ? editingMetadata.campaignAttribution as Record<string, unknown> : {};
+  const attribution = { ...firstReleaseAttribution(savedAttribution), ...firstReleaseAttribution(Object.fromEntries(Object.entries(params).map(([key, value]) => [key, firstValue(value)]))) };
   const releasePrefill = user && !editingRelease ? await getReleasePrefill(user.id) : { suggestions: [], preferences: {} };
 
   return (
@@ -82,8 +88,9 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
 
           {user ? (
             <div className="mx-auto w-full max-w-[1440px]">
+              {explicitCampaign && campaignDraftEligible && editingRelease?.paymentStatus !== "paid" && campaignEligibility && !campaignEligibility.eligible ? <p role="status" className="mb-4 rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>The first-release offer is not currently available for this account. Your draft is saved. Check your existing releases or review the displayed price before continuing.</p> : null}
               {hasActiveSubscription && !hasReleaseAllowance && selectedPlan === "one_time" ? <p role="status" className="mb-4 rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>Your subscription release allowance is used up. You can submit this release with a one-time payment and apply any available HYMN credits at checkout.</p> : null}
-              <ReleaseForm selectedPlan={selectedPlan} hasActiveSubscription={hasActiveSubscription} hymnCreditBalance={Number(user.referralCredits || 0)} initialRelease={editingRelease} audioLibraryPrefill={audioLibraryPrefill} initialCorrectionField={firstValue(params.correctionField)} firstReleaseOffer={Boolean(campaignEligibility?.eligible && campaignDraftEligible)} campaignAttribution={attribution} prefillSuggestions={releasePrefill.suggestions} />
+              <ReleaseForm selectedPlan={selectedPlan} hasActiveSubscription={hasActiveSubscription} hymnCreditBalance={Number(user.referralCredits || 0)} initialRelease={editingRelease} audioLibraryPrefill={audioLibraryPrefill} initialCorrectionField={firstValue(params.correctionField)} firstReleaseOffer={firstReleaseOffer} campaignAttribution={attribution} prefillSuggestions={releasePrefill.suggestions} />
             </div>
           ) : firstValue(params.onboarding) === "release" ? <ReleaseOnboardingGate /> : (
             <div className="surface-card p-6 text-center sm:p-8">

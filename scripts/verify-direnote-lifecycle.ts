@@ -5,7 +5,7 @@ import { redactDireNoteDiagnostic } from "../lib/direnote";
 import { prisma } from "../lib/prisma";
 import { submitRelease } from "../lib/distribution-service";
 import { syncDireNoteRelease } from "../lib/direnote-service";
-import { getDetailedReleaseById, updatePaidDistributionRelease, saveDraftDistributionRelease } from "../lib/distribution-db";
+import { getDetailedReleaseById, updatePaidDistributionRelease, saveDraftDistributionRelease, updateDetailedReleaseStatus } from "../lib/distribution-db";
 import { GET as cron } from "../app/api/cron/direnote-release-sync/route";
 import { startDireNoteBrowser } from "./direnote-browser-fixture";
 import { getDireNoteReleaseInformation } from "../lib/direnote/direnote-client";
@@ -115,7 +115,7 @@ async function main() {
   assert.equal(savedInstrumental?.version, "Instrumental");
   assert.equal(savedInstrumental?.language, "Hindi", "Stale stored language must not control Instrumental delivery.");
   assert.equal(readTrackLanguage(savedInstrumental), "Instrumental");
-  assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: release.id } })).status, "CHANGES_REQUESTED");
+  assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: release.id } })).status, "UNDER_REVIEW", "Submitted corrections return to HYMN review.");
   assert.deepEqual((await prisma.track.findMany({ where: { releaseId: release.id }, orderBy: { trackNumber: "asc" } })).map(track => track.id), release.tracks.map(track => track.id));
   assert.equal((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: firstAttempt.id } })).corrections && ((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: firstAttempt.id } })).corrections as any).status, "customer_resolved");
   await syncDireNoteRelease(release.id);
@@ -123,7 +123,8 @@ async function main() {
   await prisma.distributionSubmissionAttempt.update({ where: { id: firstAttempt.id }, data: { startedAt: new Date(0) } });
   if (browser) await browser.submit(release.id);
   else {
-    const reingested = await submitRelease(release.id, { correctionReingest: true });
+    await updateDetailedReleaseStatus(release.id, "approved", "Fixture admin approved the corrected metadata.");
+    const reingested = await submitRelease(release.id);
     assert.equal(reingested.submitted, true, JSON.stringify(reingested));
   }
   assert.equal(ingests, 2);

@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Copy, Disc3, Gift, MoreHorizontal, Pencil, Settings, Trash2, X } from "lucide-react";
 import type { Release } from "@/lib/types";
+import { showFirstReleaseBadge } from "@/lib/first-release-flow";
 import {
   getReleasePortalBadgeStyle,
   getReleasePortalDateLabel,
@@ -39,7 +40,7 @@ export function ReleaseSummaryCard({
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const canDelete = release.status === "draft";
   const releaseMetadata = release.metadata && typeof release.metadata === "object" ? release.metadata as Record<string, unknown> : {};
-  const showFreeReleaseTag = ["draft", "changes_requested"].includes(stage) && releaseMetadata.promotionCode === "FIRST_RELEASE_FREE";
+  const showFreeReleaseTag = showFirstReleaseBadge(release.status, releaseMetadata);
 
   useEffect(() => {
     if (!menuOpen) return;

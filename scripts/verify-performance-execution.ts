@@ -38,7 +38,7 @@ assert(!distributionDatabase.includes("include: { tracks: true, user: { select: 
 const draftCreateRoute = source("app/api/distribution/drafts/route.ts");
 const draftUpdateRoute = source("app/api/distribution/drafts/[id]/route.ts");
 assert(draftCreateRoute.includes("select: { id: true }"), "Draft creation must not return unavailable optional Release columns.");
-assert(draftUpdateRoute.includes("select: { metadata: true }") && draftUpdateRoute.includes("select: { id: true, updatedAt: true }"), "Draft autosave must use legacy-schema-compatible Release projections.");
+assert(draftUpdateRoute.includes("select: { metadata: true, status: true, tracks: { select: { id: true, trackNumber: true } } }") && draftUpdateRoute.includes("select: { id: true, updatedAt: true }"), "Draft autosave must select only its required status, metadata and track identities, without optional Release columns.");
 
 const adminControlCenter = source("components/admin-control-center.tsx");
 const adminStatusRoute = source("app/api/admin/update-status/[id]/route.ts");

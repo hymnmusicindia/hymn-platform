@@ -6,6 +6,7 @@ import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution"
 import { getContentIdEligibility } from "@/lib/content-id-eligibility";
 import { recordGrowthEvent } from "@/lib/growth";
 import { prisma } from "@/lib/prisma";
+import { firstReleaseAttribution } from "@/lib/first-release-flow";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -42,13 +43,14 @@ export async function POST(request: Request) {
     const requestedFirstReleaseOffer = metadata.promotionCode === FIRST_RELEASE_PROMOTION_CODE;
     const existingMetadata = existingRelease?.metadata && typeof existingRelease.metadata === "object" ? existingRelease.metadata as Record<string, unknown> : {};
     const existingFirstReleaseOffer = existingMetadata.promotionCode === FIRST_RELEASE_PROMOTION_CODE;
+    const redeemedFirstRelease = draftReleaseId ? await prisma.promotionRedemption.findFirst({ where: { releaseId: draftReleaseId, userId: session.sub, status: "REDEEMED", promotion: { code: FIRST_RELEASE_PROMOTION_CODE } }, select: { id: true } }) : null;
     const promotionEligibility = requestedFirstReleaseOffer || existingFirstReleaseOffer ? await getFirstReleaseEligibility(session.sub) : null;
-    const preserveFirstReleaseOffer = Boolean(
+    const preserveFirstReleaseOffer = Boolean(redeemedFirstRelease || (
       (requestedFirstReleaseOffer || existingFirstReleaseOffer) &&
       promotionEligibility?.eligible &&
       metadata.releaseType === "single" &&
       (metadata.tracks?.length ?? 0) === 1
-    );
+    ));
 
     const tracks = [];
     for (const track of metadata.tracks ?? []) {
@@ -141,7 +143,7 @@ export async function POST(request: Request) {
         publishingRights: metadata.publishingRights ?? "",
         paymentModel: metadata.paymentModel ?? "one_time",
         distributionPlan: metadata.plan ?? "one_time",
-        ...(preserveFirstReleaseOffer ? { promotionCode: FIRST_RELEASE_PROMOTION_CODE, campaignAttribution: metadata.attribution ?? existingMetadata.campaignAttribution ?? {} } : {}),
+        ...(preserveFirstReleaseOffer ? { promotionCode: FIRST_RELEASE_PROMOTION_CODE, campaignAttribution: firstReleaseAttribution(metadata.attribution ?? existingMetadata.campaignAttribution ?? {}) } : {}),
         ownershipConfirmed: Boolean(metadata.legal?.ownershipConfirmation),
         noUnauthorizedSamples: Boolean(metadata.legal?.noInfringement),
         collaboratorsCredited: Boolean(metadata.legal?.collaboratorsCredited),

@@ -9,8 +9,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GoogleAuthButton } from "@/components/google-auth-button";
 import { FirstReleaseReceipt } from "@/components/first-release-receipt";
+import { firstReleaseAttribution, firstReleaseStartHref } from "@/lib/first-release-flow";
 
-type Eligibility = { authenticated: boolean; eligible: boolean; reason: string; firstName?: string };
+type Eligibility = { authenticated: boolean; eligible: boolean; reason: string; firstName?: string; draftId?: number };
 type Query = Record<string, string | undefined>;
 type RevealState = "sealed" | "pressed" | "sealBreaking" | "opening" | "glowing" | "passRising" | "reward" | "revealed";
 
@@ -32,10 +33,11 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
   const timersRef = useRef<number[]>([]);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [sceneScale, setSceneScale] = useState(.6);
-  const attribution = useMemo(() => Object.fromEntries(Object.entries(query).filter(([, value]) => Boolean(value))), [query]);
+  const attribution = useMemo(() => firstReleaseAttribution(query), [query]);
   const track = useCallback((event: string) => fetch("/api/promotions/first-release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event, attribution }) }).catch(() => undefined), [attribution]);
   const state = releaseState(eligibility);
   const isUsed = state.status === "CLAIMED" || state.status === "MEMBER";
+  const unavailable = ["promotion_inactive", "promotion_exhausted"].includes(eligibility.reason);
   useEffect(() => {
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -49,11 +51,7 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
     return () => { observer.disconnect(); document.body.style.overflow = previous; };
   }, [isUsed]);
   const referralCode = query.referral_code || query.ref;
-  const startHref = useMemo(() => {
-    const params = new URLSearchParams({ campaign: "first-release" });
-    for (const [key, value] of Object.entries(attribution)) if (value) params.set(key, value);
-    return `/distribution/start?${params}`;
-  }, [attribution]);
+  const startHref = useMemo(() => firstReleaseStartHref(attribution, eligibility.draftId), [attribution, eligibility.draftId]);
 
   useEffect(() => {
     if (viewedRef.current) return;
@@ -83,7 +81,7 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
     timersRef.current.push(window.setTimeout(() => sessionStorage.setItem("hymn:first-release-pass-revealed", "1"), 1900));
     if (hapticsEnabled && typeof navigator !== "undefined" && "vibrate" in navigator) timersRef.current.push(window.setTimeout(() => navigator.vibrate(10), 105));
   };
-  const claim = () => { void track("first_release_reward_cta_clicked"); void track(state.event); router.push(isUsed ? "/distribution/start" : startHref); };
+  const claim = () => { void track("first_release_reward_cta_clicked"); void track(state.event); router.push(eligibility.reason === "reserved" ? "/dashboard/releases" : isUsed ? "/distribution/start" : startHref); };
   const passRaised = ["passRising", "reward", "revealed"].includes(revealState);
   // Lift the letter clear of the pocket before exposing its claim action.
   const passLift = passRaised ? 0 : 365;
@@ -95,9 +93,9 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
     <section className={styles.emptyShell} aria-labelledby="first-release-empty-offer-title">
       <div className={styles.emptyArt}><Image src="/assets/first-release-empty-envelope.png" alt="An empty open envelope with a housefly leaving a dotted trail" width={1280} height={1280} priority /></div>
       <div className={styles.emptyCopy}>
-        <p className={styles.emptyEyebrow}>FIRST RELEASE PASS · ALREADY USED</p>
-        <h1 id="first-release-empty-offer-title">Nothing left in here.<br /><span>Plenty ahead of you.</span></h1>
-        <p>Your first-release gift has already been used. Your next record is a new chapter.</p>
+        <p className={styles.emptyEyebrow}>{unavailable ? "FIRST RELEASE PASS · UNAVAILABLE" : "FIRST RELEASE PASS · ALREADY USED"}</p>
+        <h1 id="first-release-empty-offer-title">{unavailable ? "The offer is unavailable." : "Nothing left in here."}<br /><span>Plenty ahead of you.</span></h1>
+        <p>{unavailable ? "The free-release campaign is not accepting claims right now. You can still explore our distribution plans." : "Your first-release gift has already been used. Your next record is a new chapter."}</p>
         <Link href="/distribution/start" className={styles.emptyCta}>Start your next release<ArrowRight size={16} /></Link>
         <p className={styles.emptyHelp}>Something doesn’t look right? <Link href="/contact">Talk to us</Link></p>
       </div>
@@ -124,7 +122,7 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
           <div className={styles.signature}><span>Here’s to your first of many,</span><strong>The HYMN team</strong></div>
           <p className={styles.terms}>One single. Base distribution covered. Optional add-ons cost extra.</p>
           <motion.div className={styles.action} inert={!actionVisible} aria-hidden={!actionVisible} animate={{ opacity: actionVisible ? 1 : 0 }} transition={{ duration: reduceMotion ? 0 : .22 }}>
-            {eligibility.authenticated ? <button type="button" onClick={claim}>{state.cta}<ArrowRight aria-hidden="true" /></button> : <GoogleAuthButton label={state.cta} expectedRole="customer" referralCode={referralCode} appearance="quiet" onAuthenticated={() => { void track("first_release_auth_started"); void track("first_release_auth_completed"); router.push(startHref); router.refresh(); }} />}
+            {eligibility.authenticated ? <button type="button" onClick={claim}>{eligibility.draftId && eligibility.eligible ? "CONTINUE MY FREE RELEASE" : state.cta}<ArrowRight aria-hidden="true" /></button> : <GoogleAuthButton label={state.cta} expectedRole="customer" referralCode={referralCode} appearance="quiet" onAuthenticated={() => { void track("first_release_auth_started"); void track("first_release_auth_completed"); router.refresh(); }} />}
           </motion.div>
           <div className={styles.status}><Sparkles size={12} aria-hidden="true" />{state.status}</div>
         </motion.section>}
