@@ -18,8 +18,8 @@ export async function POST(request: Request) {
   if (!email || !artistName) return NextResponse.json({ error: "Email and artistName are required." }, { status: 400 });
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) return NextResponse.json({ error: "Account not found." }, { status: 404 });
-  const beat = await prisma.beat.findFirst({ where: { enabled: true, status: "PUBLISHED" }, orderBy: { createdAt: "asc" } });
-  if (!beat) return NextResponse.json({ error: "No published beat is available for a sample agreement." }, { status: 409 });
+  const beat = await prisma.beat.findFirst({ where: { enabled: true }, orderBy: [{ status: "desc" }, { createdAt: "asc" }] });
+  if (!beat) return NextResponse.json({ error: "No beat is available for a sample agreement." }, { status: 409 });
   const marker = `sample-agreement:${user.id}:${beat.id}`;
   let purchase = await prisma.beatPurchase.findFirst({ where: { userId: user.id, beatId: beat.id, paymentId: marker } });
   if (!purchase) purchase = await prisma.beatPurchase.create({ data: { userId: user.id, beatId: beat.id, producerPartyId: beat.producerPartyId, licenseType: "mp3", paymentId: marker, hasAccess: true,
