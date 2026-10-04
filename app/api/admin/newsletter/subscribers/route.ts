@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const admin = await requireRecentAdminPermission("system.manage");
+  const admin = await requireAdminPermission("system.manage");
   if ("error" in admin) return admin.error;
   const parsed = addSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Enter one or more valid email addresses." }, { status: 400 });
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const admin = await requireRecentAdminPermission("system.manage");
+  const admin = await requireAdminPermission("system.manage");
   if ("error" in admin) return admin.error;
   const parsed = updateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid subscriber action." }, { status: 400 });
