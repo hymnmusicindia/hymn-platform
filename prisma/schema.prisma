@@ -1671,6 +1671,7 @@ model NewsletterCampaign {
   imageAlt       String?   @map("image_alt")
   ctaLabel       String?   @map("cta_label")
   ctaUrl         String?   @map("cta_url")
+  deliveryTokenHash String? @map("delivery_token_hash")
   status         String    @default("draft")
   recipientCount Int       @default(0) @map("recipient_count")
   sentCount      Int       @default(0) @map("sent_count")

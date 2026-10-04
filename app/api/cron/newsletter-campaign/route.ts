@@ -8,9 +8,14 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-function authorized(request: Request, campaignId: number) {
+function authorized(request: Request, campaignId: number, deliveryTokenHash?: string | null) {
   const bearer = request.headers.get("authorization");
   if (process.env.CRON_SECRET && bearer === `Bearer ${process.env.CRON_SECRET}`) return true;
+  const deliveryToken = request.headers.get("x-campaign-token");
+  if (deliveryToken && deliveryTokenHash) {
+    const actual = crypto.createHash("sha256").update(deliveryToken).digest("hex");
+    if (actual.length === deliveryTokenHash.length && crypto.timingSafeEqual(Buffer.from(actual), Buffer.from(deliveryTokenHash))) return true;
+  }
   const timestamp = request.headers.get("x-campaign-timestamp") || "";
   const signature = request.headers.get("x-campaign-signature") || "";
   if (!/^\d{13}$/.test(timestamp) || Math.abs(Date.now() - Number(timestamp)) > 5 * 60_000) return false;
@@ -23,10 +28,10 @@ function authorized(request: Request, campaignId: number) {
 export async function POST(request: Request) {
   const campaignId = Number(new URL(request.url).searchParams.get("campaignId"));
   if (!Number.isInteger(campaignId) || campaignId < 1) return NextResponse.json({ error: "A valid campaignId is required." }, { status: 400 });
-  if (!authorized(request, campaignId)) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  if (!getEmailConfig().enabled) return NextResponse.json({ error: "SMTP delivery is not configured." }, { status: 503 });
   let campaign = await prisma.newsletterCampaign.findUnique({ where: { id: campaignId } });
   if (!campaign) return NextResponse.json({ error: "Campaign not found." }, { status: 404 });
+  if (!authorized(request, campaignId, campaign.deliveryTokenHash)) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  if (!getEmailConfig().enabled) return NextResponse.json({ error: "SMTP delivery is not configured." }, { status: 503 });
   if (!['queued', 'sending'].includes(campaign.status)) return NextResponse.json({ error: `Campaign is ${campaign.status}.` }, { status: 409 });
   const recipients = await prisma.newsletterSubscriber.findMany({ where: { status: "subscribed", id: { gt: campaign.cursorId } }, orderBy: { id: "asc" }, take: 50 });
   let sent = 0; let failed = 0;
