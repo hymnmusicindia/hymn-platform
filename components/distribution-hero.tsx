@@ -28,15 +28,16 @@ const STORE_LOGOS: readonly StoreLogo[] = [
   { name: "JioSaavn", src: "/assets/store-logos/wordmark-jiosaavn.png", className: "h-8 w-auto" }
 ] as const;
 
-export function DistributionHero() {
+export function DistributionHero({ firstReleaseEligible = false }: { firstReleaseEligible?: boolean }) {
   return (
     <section className="distribution-hero distribution-hero-editorial" aria-labelledby="distribution-hero-title">
       <div className="distribution-hero-copy">
         <p className="distribution-hero-eyebrow">Independent music. Worldwide.</p>
         <h1 id="distribution-hero-title">Your music.<br /><span>Everywhere it matters.</span></h1>
         <p className="distribution-hero-description">From your next single to your whole catalogue. Release on Spotify, Apple Music, YouTube Music and more, all from HYMN.</p>
+        {firstReleaseEligible ? <Link href="/distribution/start?campaign=first-release" className="distribution-first-release-note"><span>₹0</span><strong>Your first release on us</strong><small>One Single · base distribution included</small><ArrowRight aria-hidden="true" /></Link> : null}
         <div className="distribution-hero-actions">
-          <Link href="/distribution/start" className="btn-primary pressable">Start your release<ArrowRight className="h-4 w-4" /></Link>
+          <Link href={firstReleaseEligible ? "/distribution/start?campaign=first-release" : "/distribution/start"} className="btn-primary pressable">{firstReleaseEligible ? "Start free" : "Start your release"}<ArrowRight className="h-4 w-4" /></Link>
           <Link href="#distribution-pricing" className="distribution-hero-pricing">Explore pricing<ArrowRight className="h-4 w-4" /></Link>
         </div>
       </div>

@@ -8,6 +8,7 @@ import { DistributionPricingStrip } from "@/components/distribution-pricing-stri
 import { ReleaseSummaryCard } from "@/components/release-summary-card";
 import type { DistributionPlanOption } from "@/lib/distribution-plans";
 import type { Metadata } from "next";
+import { getFirstReleaseEligibility } from "@/lib/first-release-promotion";
 
 export const metadata: Metadata = { title: "Music Distribution for Independent Artists", description: "Distribute music to Spotify, Apple Music, YouTube Music and more. Prepare metadata, submit releases, track review status and manage royalties with HYMN Music.", alternates: { canonical: "/distribution" } };
 
@@ -28,20 +29,20 @@ export default async function DistributionPage({ searchParams }: { searchParams?
   const normalizedRecommendation = requestedPlan === "half-yearly" ? "half_yearly" : requestedPlan;
   const recommendedPlan = ["half_yearly", "yearly", "yearly_plus"].includes(normalizedRecommendation || "") ? normalizedRecommendation as DistributionPlanOption : null;
   const user = await getCurrentUserForPage();
-  const [releases, orders, subscription] = user
-    ? await Promise.all([listDetailedReleasesByUser(user.id), listOrdersByUser(user.id), getSubscriptionByUserId(user.id)])
-    : [[], [], null];
+  const [releases, orders, subscription, firstReleaseEligibility] = user
+    ? await Promise.all([listDetailedReleasesByUser(user.id), listOrdersByUser(user.id), getSubscriptionByUserId(user.id), getFirstReleaseEligibility(user.id)])
+    : [[], [], null, null];
 
   const activePlan = subscription ? (subscription.plan as DistributionPlanOption) : (user ? detectActivePlan(orders) : null);
 
   return (
     <main className="distribution-page pb-20">
       <section className="shell py-8 sm:py-10 lg:py-12">
-        <DistributionHero />
+        <DistributionHero firstReleaseEligible={!user || Boolean(firstReleaseEligibility?.eligible)} />
       </section>
 
       <section className="shell">
-        <DistributionPricingStrip activePlan={activePlan} recommendedPlan={recommendedPlan} showPlanManagement={showPlanManagement} />
+        <DistributionPricingStrip activePlan={activePlan} recommendedPlan={recommendedPlan} showPlanManagement={showPlanManagement} firstReleaseEligible={!user || Boolean(firstReleaseEligibility?.eligible)} />
       </section>
 
       {user ? (

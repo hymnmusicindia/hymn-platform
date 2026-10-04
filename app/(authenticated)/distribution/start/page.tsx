@@ -44,11 +44,11 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
     editingRelease.releaseType === "single" &&
     (editingRelease.tracks?.length ?? 0) <= 1
   );
-  const campaignRequested = firstValue(params.campaign) === "first-release" || editingMetadata.promotionCode === "FIRST_RELEASE_FREE" || (selectedPlan === "one_time" && campaignDraftEligible);
-  const campaignEligibility = user && campaignRequested ? await getFirstReleaseEligibility(user.id) : null;
+  const campaignEligibility = user && campaignDraftEligible ? await getFirstReleaseEligibility(user.id) : null;
   const explicitCampaign = firstValue(params.campaign) === "first-release" || editingMetadata.promotionCode === "FIRST_RELEASE_FREE";
-  // An explicit free-release claim should use the gift, preserving subscription allowance.
-  if (explicitCampaign && campaignEligibility?.eligible && campaignDraftEligible && attachedOrder?.paymentStatus !== "paid") selectedPlan = "one_time";
+  // Every eligible first release uses the gift, including releases started from the standard portal.
+  // This preserves any subscription allowance for a later release.
+  if (campaignEligibility?.eligible && campaignDraftEligible && attachedOrder?.paymentStatus !== "paid") selectedPlan = "one_time";
   const firstReleaseOffer = Boolean(selectedPlan === "one_time" && campaignEligibility?.eligible && campaignDraftEligible);
   const savedAttribution = editingMetadata.campaignAttribution && typeof editingMetadata.campaignAttribution === "object" ? editingMetadata.campaignAttribution as Record<string, unknown> : {};
   const attribution = { ...firstReleaseAttribution(savedAttribution), ...firstReleaseAttribution(Object.fromEntries(Object.entries(params).map(([key, value]) => [key, firstValue(value)]))) };

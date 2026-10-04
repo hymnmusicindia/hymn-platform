@@ -57,11 +57,12 @@ interface DistributionPricingStripProps {
   activePlan?: DistributionPlanOption | null;
   recommendedPlan?: DistributionPlanOption | null;
   showPlanManagement?: boolean;
+  firstReleaseEligible?: boolean;
 }
 
 const subscriptionPlanRank: Record<string, number> = { half_yearly: 1, yearly: 2, yearly_plus: 3 };
 
-export function DistributionPricingStrip({ activePlan, recommendedPlan, showPlanManagement = false }: DistributionPricingStripProps = {}) {
+export function DistributionPricingStrip({ activePlan, recommendedPlan, showPlanManagement = false, firstReleaseEligible = false }: DistributionPricingStripProps = {}) {
   const planDetails =
     activePlan && activePlan !== "one_time"
       ? distributionPlanCards.find((p) => p.key === activePlan)
@@ -139,8 +140,8 @@ export function DistributionPricingStrip({ activePlan, recommendedPlan, showPlan
             </div>
 
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link href="/distribution/start" className="btn-primary pressable inline-flex">
-                New Release
+              <Link href={firstReleaseEligible ? "/distribution/start?campaign=first-release" : "/distribution/start"} className="btn-primary pressable inline-flex">
+                {firstReleaseEligible ? "Start free release" : "New Release"}
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link href="/distribution?manage=plans#distribution-pricing" className="btn-outline pressable inline-flex">
@@ -253,18 +254,18 @@ export function DistributionPricingStrip({ activePlan, recommendedPlan, showPlan
                   style={{ color: "var(--accent)" }}
                 />
                 <p className="text-sm font-semibold uppercase tracking-[0.22em]" style={{ color: "var(--accent)" }}>
-                  Quick Option
+                  {firstReleaseEligible ? "First release gift" : "Quick Option"}
                 </p>
               </div>
               <h3 className="mt-4 text-2xl font-bold sm:text-3xl" style={{ color: "var(--text)" }}>
-                Want to release a single track quickly?
+                {firstReleaseEligible ? "Your first release on us." : "Want to release a single track quickly?"}
               </h3>
               <p className="mt-3 max-w-xl text-base leading-7 sm:text-lg" style={{ color: "var(--text-muted)" }}>
-                No subscription needed. Pay once, distribute everywhere. Perfect for testing the waters or releasing one-off singles.
+                {firstReleaseEligible ? "Release one Single with base distribution covered by HYMN. No subscription or payment needed." : "No subscription needed. Pay once, distribute everywhere. Perfect for testing the waters or releasing one-off singles."}
               </p>
             </div>
             <Link 
-              href="/distribution/start" 
+              href={firstReleaseEligible ? "/distribution/start?campaign=first-release" : "/distribution/start"}
               className="distribution-quick-action pressable inline-flex w-fit items-center gap-2 rounded-[1rem] border-2 px-6 py-3 font-semibold transition duration-200 hover:translate-y-[-2px] hover:shadow-lg"
               style={{
                 borderColor: "var(--accent)",
@@ -274,7 +275,7 @@ export function DistributionPricingStrip({ activePlan, recommendedPlan, showPlan
               }}
             >
               <Zap className="h-4 w-4" />
-              Start Now
+              {firstReleaseEligible ? "Start free" : "Start Now"}
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
