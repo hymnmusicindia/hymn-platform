@@ -883,7 +883,7 @@ CREATE TABLE "email_logs" (
     "event_key" TEXT NOT NULL,
     "entity_type" TEXT,
     "entity_id" TEXT,
-    "provider" TEXT NOT NULL DEFAULT 'resend',
+    "provider" TEXT NOT NULL DEFAULT 'smtp',
     "status" TEXT NOT NULL DEFAULT 'queued',
     "provider_message_id" TEXT,
     "error_message" TEXT,

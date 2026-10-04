@@ -16,7 +16,6 @@ async function main() {
   let options, sent;
   const env = { EMAIL_ENABLED: "true", EMAIL_PROVIDER: "smtp", SMTP_USER: "sender@example.com", SMTP_APP_PASSWORD: "abcd efgh ijkl mnop" };
   const client = load("lib/email/email-client.ts", {
-    resend: { Resend: class { constructor() { throw Error("Must not use Resend for SMTP"); } } },
     nodemailer: { createTransport: config => { options = config; return { sendMail: async input => { sent = input; return { accepted: [input.to], messageId: "smtp-test" }; } }; } },
     "@/lib/public-app-url": { getPublicAppUrl: () => "https://example.com" }
   }, env);

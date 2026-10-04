@@ -41,4 +41,4 @@ Audit date: 2026-08-26. Scope: current repository lifecycle from role grant thro
 
 ## External production configuration
 
-Repository work cannot create third-party credentials. Hostinger must provide `DATABASE_URL`, `PRIVATE_STORAGE_ROOT`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, public site URLs, and Resend settings. Razorpay must send signed payment events to `/api/webhooks/razorpay`. Prisma migrations must run before the new application version starts.
+Repository work cannot create third-party credentials. Hostinger must provide `DATABASE_URL`, `PRIVATE_STORAGE_ROOT`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, public site URLs, and SMTP settings. Razorpay must send signed payment events to `/api/webhooks/razorpay`. Prisma migrations must run before the new application version starts.

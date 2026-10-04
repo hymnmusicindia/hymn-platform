@@ -1630,7 +1630,7 @@ model EmailLog {
   eventKey          String    @unique @map("event_key")
   entityType        String?   @map("entity_type")
   entityId          String?   @map("entity_id")
-  provider          String    @default("resend")
+  provider          String    @default("smtp")
   status            String    @default("queued")
   providerMessageId String?   @map("provider_message_id")
   errorMessage      String?   @map("error_message")

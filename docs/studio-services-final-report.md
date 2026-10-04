@@ -65,4 +65,4 @@ Migration `20260923190000_studio_services` creates the Studio domain tables, for
 
 ## O. Remaining risks
 
-Final Studio Services Terms and privacy wording require human legal review before production, as recorded in `studio-services-legal-review.md`. Production also requires live Razorpay, Resend, Vercel Blob/private storage, cron, and DireNote credentials; the automated suite deliberately uses isolated providers and databases and does not perform a live charge or DSP submission.
+Final Studio Services Terms and privacy wording require human legal review before production, as recorded in `studio-services-legal-review.md`. Production also requires live Razorpay, SMTP, Vercel Blob/private storage, cron, and DireNote credentials; the automated suite deliberately uses isolated providers and databases and does not perform a live charge or DSP submission.

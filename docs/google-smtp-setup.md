@@ -68,4 +68,4 @@ As checked on 30 September 2026, `hymnmusic.fun` publicly advertised Hostinger m
 
 Welcome/onboarding; payment failure with a safe retry link; beat refund confirmation; subscription renewal/failure/cancellation; account security changes; support ticket updates; takedown decisions; scheduled release reminders; periodic royalty statements. Each needs an authoritative event and deduplication key before enabling. Abandoned checkout, promotions and product recommendations should be opt-in marketing with unsubscribe controls.
 
-Gmail has sending quotas and is not a bulk campaign service. Existing newsletter campaigns will also use SMTP when selected; avoid large campaigns through this mailbox. For higher volume, configure a dedicated provider. Resend remains supported with `EMAIL_PROVIDER=resend`, `RESEND_API_KEY`, and a verified sender.
+Gmail has sending quotas and is not a bulk campaign service. Newsletter campaigns use the same SMTP mailbox; keep campaign volume within the mailbox provider's limits.
