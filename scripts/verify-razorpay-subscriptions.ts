@@ -5,7 +5,7 @@ import fs from "node:fs";
 process.env.RAZORPAY_KEY_SECRET = "subscription-test-secret";
 
 async function main() {
-const { isSubscriptionProduct, subscriptionHasEntitlement, subscriptionPeriodAdvanced, verifySubscriptionCheckoutSignature } = await import("../lib/subscription-billing");
+const { isSubscriptionProduct, subscriptionEntitlementEnd, subscriptionHasEntitlement, subscriptionPeriodAdvanced, verifySubscriptionCheckoutSignature } = await import("../lib/subscription-billing");
 
 assert.equal(isSubscriptionProduct("half_yearly"), true);
 assert.equal(isSubscriptionProduct("yearly"), true);
@@ -29,6 +29,10 @@ assert.equal(subscriptionHasEntitlement({ status: "halted", currentPeriodEnd: fu
 assert.equal(subscriptionHasEntitlement({ status: "paused", currentPeriodEnd: future }), false);
 assert.equal(subscriptionHasEntitlement({ status: "cancelled", currentPeriodEnd: future, cancelAtPeriodEnd: true }), false);
 assert.equal(subscriptionHasEntitlement({ status: "cancelled", currentPeriodEnd: past, cancelAtPeriodEnd: true }), false);
+// A stale period end from an earlier term must not expire a plan whose expiryDate was extended.
+assert.equal(subscriptionHasEntitlement({ status: "active", currentPeriodEnd: past, expiryDate: future }), true);
+assert.equal(subscriptionEntitlementEnd({ currentPeriodEnd: past, expiryDate: future }), future.getTime());
+assert.doesNotMatch(fs.readFileSync("lib/db.ts", "utf8"), /sub\.currentPeriodEnd \|\| sub\.expiryDate/);
 assert.equal(subscriptionPeriodAdvanced(new Date("2026-01-01"), new Date("2026-02-01")), true);
 assert.equal(subscriptionPeriodAdvanced(new Date("2026-02-01"), new Date("2026-02-01")), false);
 assert.equal(subscriptionPeriodAdvanced(null, new Date("2026-02-01")), false);

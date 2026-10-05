@@ -42,7 +42,7 @@ import { resolveGoogleAccountRole } from "@/lib/auth-role";
 import { normalizeBeatLicenseType } from "@/lib/beat-store";
 import { normalizePublicUploadUrl } from "@/lib/storage";
 import { canonicalReleaseArtworkUrl } from "@/lib/release-media";
-import { effectiveSubscriptionReleaseLimit } from "@/lib/subscription-billing";
+import { effectiveSubscriptionReleaseLimit, subscriptionEntitlementEnd } from "@/lib/subscription-billing";
 
 type MemoryState = {
   users: User[];
@@ -3352,8 +3352,8 @@ export async function getSubscriptionByUserId(userId: number) {
     const releasesUsed = await prisma.subscriptionReleaseUsage.count({ where: { subscriptionId: sub.id, ...(sub.currentPeriodStart ? { createdAt: { gte: sub.currentPeriodStart } } : {}) } });
     
     const now = new Date();
-    const expiryDate = new Date(sub.currentPeriodEnd || sub.expiryDate || sub.updatedAt);
-    const daysRemaining = Math.max(0, Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+    // A stale currentPeriodEnd from an earlier term must not expire a plan whose expiryDate was extended.
+    const daysRemaining = Math.max(0, Math.floor((subscriptionEntitlementEnd(sub) - now.getTime()) / (1000 * 60 * 60 * 24)));
     const status = sub.razorpaySubscriptionId ? sub.status : (daysRemaining > 0 ? sub.status : "expired");
     const effectiveReleaseLimit = effectiveSubscriptionReleaseLimit(sub);
     

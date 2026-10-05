@@ -449,7 +449,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         <div className="grid gap-3 md:grid-cols-2">
           <div className="summary-card"><span>Current plan</span><span className="capitalize">{subscription?.plan ?? "No active subscription"}</span></div>
           <div className="summary-card"><span>Status</span><span className="capitalize">{subscription?.cancelAtPeriodEnd ? "Cancelled · access until period end" : subscription?.status ?? "Not subscribed"}</span></div>
-          <div className="summary-card"><span>{subscription?.autoRenewal ? "Renews on" : "Access until"}</span><span>{subscription ? formatDate(subscription?.nextRenewalDate || subscription?.currentPeriodEnd || subscriptionExpiry) : "Not applicable"}</span></div>
+          <div className="summary-card"><span>{subscription?.autoRenewal ? "Renews on" : "Access until"}</span><span>{subscription ? formatDate(subscription?.nextRenewalDate || subscriptionExpiry) : "Not applicable"}</span></div>
           <div className="summary-card"><span>Price and frequency</span><span>{subscription?.amount != null ? `${subscription.currency || "INR"} ${subscription.amount} · ${subscription.billingInterval || "Provider billing cycle"}` : "Legacy/manual entitlement"}</span></div>
           <div className="summary-card"><span>Started</span><span>{subscription?.startedAt || subscription?.purchasedAt ? formatDate(subscription.startedAt || subscription.purchasedAt) : "Not available"}</span></div>
           <div className="summary-card"><span>Releases used</span><span>{subscription ? `${subscription.releasesUsed ?? 0} / ${releaseLimit ?? "Unlimited"}` : "No plan allowance"}</span></div>
