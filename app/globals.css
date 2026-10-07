@@ -1653,30 +1653,31 @@ html[data-theme="light"] .producer-panel-shell .dashboard-os-sidebar img {
 }
 
 .notification-bell-icon.has-unread {
-  color: #facc15;
-  fill: rgba(250, 204, 21, .18);
-  animation: hymn-notification-ring 6s ease-in-out infinite;
+  color: var(--text);
+  fill: color-mix(in srgb, var(--text) 12%, transparent);
 }
 
 html[data-theme="light"] .notification-bell-icon.has-unread {
-  color: #a66c00;
-  fill: rgba(250, 204, 21, .4);
+  color: var(--text);
+  fill: color-mix(in srgb, var(--text) 10%, transparent);
 }
 
 .notification-unread-alert {
   position: absolute;
-  top: -6px;
-  right: -7px;
+  top: -9px;
+  right: -12px;
   display: grid;
   place-items: center;
-  width: 15px;
-  height: 15px;
-  border: 1px solid rgba(70, 45, 0, .3);
-  border-radius: 50%;
-  background: #facc15;
-  color: #241800;
-  font-size: 11px;
-  font-weight: 900;
+  min-width: 16px;
+  height: 16px;
+  border: 1px solid var(--card);
+  border-radius: 999px;
+  padding: 0 3px;
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--shadow) 26%, transparent);
+  font-size: 9px;
+  font-weight: 800;
   line-height: 1;
   pointer-events: none;
 }
@@ -1697,7 +1698,7 @@ html[data-theme="light"] .notification-bell-icon.has-unread {
 
 .site-cart-visual.has-items .site-cart-icon {
   color: var(--text);
-  filter: drop-shadow(0 1px 4px color-mix(in srgb, var(--money) 25%, transparent));
+  filter: none;
 }
 
 .site-cart-cargo {
@@ -1716,8 +1717,8 @@ html[data-theme="light"] .notification-bell-icon.has-unread {
   bottom: 0;
   width: 0.31rem;
   border-radius: 2px 2px 1px 1px;
-  background: linear-gradient(145deg, var(--money), color-mix(in srgb, var(--money) 55%, var(--accent)));
-  box-shadow: 0 0 6px color-mix(in srgb, var(--money) 36%, transparent);
+  background: var(--text);
+  box-shadow: none;
 }
 
 .site-cart-cargo span:first-child { left: 0; height: 0.29rem; transform: rotate(-8deg); }
@@ -1731,8 +1732,8 @@ html[data-theme="light"] .notification-bell-icon.has-unread {
   width: 0.34rem;
   height: 0.34rem;
   border-radius: 2px;
-  background: linear-gradient(145deg, var(--money), var(--accent));
-  box-shadow: 0 0 8px color-mix(in srgb, var(--money) 45%, transparent);
+  background: var(--text);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--text) 35%, transparent);
   animation: hymn-cart-drop 720ms cubic-bezier(.2,.8,.25,1) both;
 }
 
@@ -2093,4 +2094,52 @@ html[data-theme="light"] .admin-panel-shell .dashboard-os-sidebar img {
   .admin-panel-shell .summary-card {
     align-items: flex-start;
   }
+}
+
+/* Shared header controls and activity surfaces. */
+.site-notification-trigger:hover,
+.site-cart-trigger:hover {
+  color: var(--text) !important;
+  background: color-mix(in srgb, var(--text) 7%, transparent) !important;
+}
+
+.site-cart-trigger { border: 1px solid color-mix(in srgb, var(--text) 13%, var(--border)) !important; background: color-mix(in srgb, var(--card) 76%, transparent) !important; box-shadow: inset 0 1px 0 color-mix(in srgb, white 13%, transparent); }
+.site-cart-trigger[aria-label*="item"] { border-color: color-mix(in srgb, var(--text) 32%, var(--border)) !important; }
+.site-cart-count { position: absolute; top: -5px; right: -7px; display: grid; min-width: 17px; height: 17px; place-items: center; border: 1px solid var(--card); border-radius: 999px; padding: 0 3px; background: var(--text); color: var(--bg); font-size: 9px; font-weight: 800; line-height: 1; box-shadow: 0 3px 9px color-mix(in srgb, var(--shadow) 24%, transparent); }
+.site-cart-visual { width: 1.3rem; height: 1.3rem; }
+
+.site-notification-panel { border-color: color-mix(in srgb, var(--text) 18%, var(--border)); background: linear-gradient(155deg, color-mix(in srgb, var(--card-strong) 94%, white 6%), var(--card-strong) 64%, color-mix(in srgb, var(--bg-elevated) 92%, var(--card))); color: var(--text); box-shadow: 0 24px 64px color-mix(in srgb, var(--shadow) 29%, transparent), inset 0 1px 0 color-mix(in srgb, white 14%, transparent); backdrop-filter: blur(22px) saturate(1.15); }
+.site-notification-heading { border-color: color-mix(in srgb, var(--border) 75%, transparent); padding: .4rem .35rem 1rem; }
+.site-notification-eyebrow { color: var(--text-soft); font-size: .61rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+.site-notification-title { margin-top: .25rem; font-size: 1.16rem; font-weight: 750; letter-spacing: -.035em; }
+.site-notification-subtitle { margin-top: .3rem; color: var(--text-muted); font-size: .72rem; }
+.site-notification-mark-all { flex: none; min-height: 2rem; border-color: color-mix(in srgb, var(--text) 20%, var(--border)); background: color-mix(in srgb, var(--text) 5%, transparent); color: var(--text); transition: background .18s ease, border-color .18s ease; }
+.site-notification-mark-all:not(:disabled):hover { border-color: color-mix(in srgb, var(--text) 40%, var(--border)); background: color-mix(in srgb, var(--text) 10%, transparent); }
+.site-notification-row { display: block; width: 100%; min-width: 0; border-radius: .9rem; }
+.site-notification-item { border-color: color-mix(in srgb, var(--border) 75%, transparent); background: color-mix(in srgb, var(--card) 80%, transparent); }
+.site-notification-item.is-unread { border-color: color-mix(in srgb, var(--text) 24%, var(--border)); background: linear-gradient(120deg, color-mix(in srgb, var(--text) 7%, var(--card)), var(--card)); box-shadow: inset 2px 0 0 var(--text); }
+.site-notification-row:hover .site-notification-item { border-color: color-mix(in srgb, var(--text) 34%, var(--border)); transform: translateY(-1px); }
+.site-notification-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.site-notification-item-icon { border-color: color-mix(in srgb, var(--border) 85%, transparent); background: color-mix(in srgb, var(--text) 7%, var(--card)); color: var(--text); }
+.site-notification-unread-dot { background: var(--text); box-shadow: 0 0 0 3px color-mix(in srgb, var(--text) 10%, transparent); }
+.site-notification-action { color: var(--text); }
+.site-notification-empty { color: var(--text-muted); }
+.site-notification-empty svg { color: var(--text-soft); }
+
+.site-cart-drawer { border-color: var(--border); background: linear-gradient(145deg, color-mix(in srgb, var(--card-strong) 90%, var(--bg-elevated)), var(--bg)); color: var(--text); box-shadow: -24px 0 80px color-mix(in srgb, var(--shadow) 25%, transparent); }
+.site-cart-drawer-heading { padding-bottom: 1.1rem; }
+.site-cart-drawer-count { display: inline-grid; min-width: 1.4rem; height: 1.4rem; vertical-align: middle; place-items: center; border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--text-muted); font-size: .7rem; }
+.site-cart-close { border: 1px solid var(--border); border-radius: 50%; background: color-mix(in srgb, var(--text) 5%, transparent); }
+.site-cart-close:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
+.site-cart-drawer-item { border-color: color-mix(in srgb, var(--border) 70%, transparent); padding: 1rem .2rem; }
+.site-cart-remove { color: var(--text-muted); text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; }
+.site-cart-remove:hover { color: var(--text); text-decoration-color: currentColor; }
+.site-cart-empty { color: var(--text-muted); }
+.site-cart-empty svg { color: var(--text-soft); }
+.site-cart-empty p:first-of-type { color: var(--text); }
+.site-cart-drawer-footer { background: color-mix(in srgb, var(--card-strong) 84%, transparent); }
+.site-cart-drawer-footer .btn-primary { display: flex; min-height: 3rem; align-items: center; justify-content: center; border-radius: .85rem; font-weight: 750; }
+
+@media (prefers-reduced-motion: reduce) {
+  .site-notification-row:hover .site-notification-item { transform: none; }
 }

@@ -1458,6 +1458,46 @@ html[data-theme="light"] .release-dolby-logo { filter:none; }
 body:has(.distribution-start-page) > header,body:has(.distribution-start-page) > footer { display:none; }
 .distribution-start-page > .shell { max-width:100%; padding-top:1rem; }
 
+/* Release workspace: one calm journey, with the release itself as the visual
+   anchor. These rules only reshape the wizard shell; field and submit logic
+   remain owned by ReleaseForm. */
+.release-live-preview {
+  display:grid;
+  grid-template-columns:4.35rem minmax(0,1fr);
+  align-items:center;
+  gap:.85rem;
+  padding:0 0 1.1rem;
+  border-bottom:1px solid color-mix(in srgb,var(--border) 52%,transparent);
+}
+.release-live-preview-art {
+  position:relative;
+  display:grid;
+  width:4.35rem;
+  aspect-ratio:1;
+  place-items:center;
+  overflow:hidden;
+  border:1px solid color-mix(in srgb,var(--border) 78%,transparent);
+  border-radius:.85rem;
+  background:
+    radial-gradient(circle at 32% 24%,color-mix(in srgb,var(--accent) 18%,transparent),transparent 46%),
+    var(--bg-soft);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 12px 28px color-mix(in srgb,var(--shadow) 12%,transparent);
+}
+.release-live-preview-art img { width:100%; height:100%; object-fit:cover; }
+.release-live-preview-art svg { width:1.55rem; color:var(--text-soft); }
+.release-live-preview span { display:block; color:var(--text-soft); font-size:.58rem; font-weight:800; letter-spacing:.13em; text-transform:uppercase; }
+.release-live-preview strong { display:block; overflow:hidden; margin-top:.3rem; color:var(--text); font-size:.92rem; text-overflow:ellipsis; white-space:nowrap; }
+.release-live-preview p { overflow:hidden; margin-top:.12rem; color:var(--text-muted); font-size:.7rem; text-overflow:ellipsis; white-space:nowrap; }
+.release-summary-stats .release-due-today { margin-top:.35rem; border-block:1px solid color-mix(in srgb,var(--accent) 22%,var(--border)) !important; }
+.release-summary-stats .release-due-today dd { color:var(--accent); font-size:.86rem !important; }
+.release-mobile-next-actions { display:grid; gap:.15rem; }
+.release-mobile-next-actions button { display:flex; width:100%; min-height:2.6rem; align-items:center; justify-content:space-between; gap:1rem; padding:.45rem .15rem; color:var(--text-muted); font-size:.72rem; line-height:1.4; text-align:left; }
+.release-mobile-next-actions button span { color:var(--accent); }
+
+@media (prefers-reduced-motion:reduce) {
+  .release-workflow *, .release-workflow *::before, .release-workflow *::after { scroll-behavior:auto !important; transition-duration:.01ms !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; }
+}
+
 /* vercel trigger 11 */
 
 /* Distribution studio — shares the onboarding system's restrained visual language. */
@@ -3427,3 +3467,42 @@ body:has(.first-release-empty-offer) > header,body:has(.first-release-empty-offe
 .first-release-empty-offer-art { width:100%; height:auto; object-fit:contain; filter:drop-shadow(0 18px 20px rgba(15,43,32,.16)); }
 .first-release-empty-offer-copy { max-width:390px; }.first-release-empty-offer-eyebrow { margin:0 0 14px; color:#31584a; font-size:.63rem; font-weight:900; letter-spacing:.2em; }.first-release-empty-offer-copy h1 { margin:0; font-size:clamp(2rem,4vw,3.9rem); font-weight:900; letter-spacing:-.07em; line-height:.93; }.first-release-empty-offer-copy > p:last-child { margin:22px 0 0; color:#5b5a52; font-size:1rem; line-height:1.55; }.first-release-empty-offer-copy a { color:#0d7050; font-weight:800; text-decoration-thickness:2px; text-underline-offset:3px; }
 @media (max-width:767px) { .first-release-empty-offer { overflow:auto; }.first-release-empty-offer-shell { width:min(420px,calc(100% - 36px)); grid-template-columns:1fr; gap:10px; padding-block:30px; }.first-release-empty-offer-art { width:min(82vw,360px); justify-self:center; }.first-release-empty-offer-copy { text-align:center; }.first-release-empty-offer-eyebrow { margin-bottom:10px; }.first-release-empty-offer-copy h1 { font-size:clamp(2rem,10vw,3rem); }.first-release-empty-offer-copy > p:last-child { margin-top:16px; } }
+
+/* Keep the release journey above legacy wizard button rules in the cascade. */
+@media (min-width:1024px) {
+  .release-workflow:not(.is-focused-step):not(.is-review-mode) {
+    grid-template-columns:minmax(154px,.32fr) minmax(0,1.85fr) minmax(236px,.5fr);
+  }
+  .release-workflow .release-workflow-nav > button {
+    position:relative;
+    min-height:2.65rem;
+    justify-content:flex-start;
+    padding:.55rem .75rem .55rem 2.15rem !important;
+    text-align:left;
+    text-transform:none;
+    letter-spacing:.01em;
+  }
+  .release-workflow .release-workflow-nav > button::before {
+    content:"";
+    position:absolute;
+    left:.82rem;
+    width:.55rem;
+    height:.55rem;
+    border:1px solid color-mix(in srgb,var(--text-soft) 60%,transparent);
+    border-radius:50%;
+    background:var(--surface);
+    box-shadow:0 0 0 4px var(--surface);
+  }
+  .release-workflow .release-workflow-nav > button:not(:last-child)::after {
+    content:"";
+    position:absolute;
+    top:1.62rem;
+    bottom:-.9rem;
+    left:1.08rem;
+    width:1px;
+    background:color-mix(in srgb,var(--border) 72%,transparent);
+  }
+  .release-workflow .release-workflow-nav > button.is-current::before { border-color:var(--accent); background:var(--accent); box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 11%,var(--surface)); }
+  .release-workflow .release-workflow-nav > button.is-complete::before { border-color:var(--success); background:var(--success); }
+  .release-workflow .release-workflow-nav > button.is-invalid::before { border-color:var(--danger); background:var(--danger); }
+}

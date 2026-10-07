@@ -318,7 +318,16 @@ const steps = [
   "Review & submit",
 ] as const;
 const visibleStepIndexes = [1, 0, 3, 2, 4, 5, 7] as const;
-const menuStepIndexes = [3, 2, 4, 5] as const;
+const menuStepIndexes = visibleStepIndexes;
+const stepMenuLabels: Record<number, string> = {
+  0: "Music",
+  1: "Artist",
+  2: "Release details",
+  3: "Tracks",
+  4: "Artwork",
+  5: "Delivery",
+  7: "Review",
+};
 const COPYRIGHT_OWNER_PREFERENCES_KEY = "hymn:copyright-owner-preferences";
 const defaultLegalState: LegalState = {
   ownershipConfirmation: false,
@@ -1114,6 +1123,7 @@ export function ReleaseForm({
   const [autosaveStatus, setAutosaveStatus] = useState<"waiting" | "saving" | "saved" | "error">(
     initialRelease ? "saved" : "waiting",
   );
+  const [hasStartedEditing, setHasStartedEditing] = useState(Boolean(initialRelease));
   const [attemptedStep, setAttemptedStep] = useState<number | null>(null);
   const [visitedSteps, setVisitedSteps] = useState<Set<number>>(() => new Set());
   const [validationErrorKeys, setValidationErrorKeys] = useState<Set<string>>(
@@ -1447,9 +1457,12 @@ export function ReleaseForm({
       readinessItems.length) *
       100,
   );
-  const autosaveEligible = readinessScore >= 70;
+  // Start protecting a new release after the first user edit. Existing drafts
+  // continue to autosave immediately. Readiness remains a submission signal,
+  // not a condition for protecting the artist's work.
+  const autosaveEligible = Boolean(initialRelease || draftReleaseId || hasStartedEditing);
   const autosaveLabel = !autosaveEligible
-    ? "Manual save only"
+    ? "Autosave starts when you begin"
     : autosaveStatus === "saving"
       ? "Saving…"
       : autosaveStatus === "error"
@@ -3157,6 +3170,12 @@ export function ReleaseForm({
       ) : null}
       <form
         onSubmit={handleFinalSubmit}
+        onChangeCapture={() => setHasStartedEditing(true)}
+        onInputCapture={() => setHasStartedEditing(true)}
+        onClickCapture={(event) => {
+          if ((event.target as HTMLElement).closest("button")) setHasStartedEditing(true);
+        }}
+        onDropCapture={() => setHasStartedEditing(true)}
         className={clsx("release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", (step === 0 || step === 1) && "is-focused-step", step === 0 && "is-audio-upload-step", step === 1 && "is-artist-step", step === 3 && "is-tracklist-step", step === 7 && "is-review-mode")}
         style={{ borderColor: "var(--border)", background: "var(--card)" }}
       >
@@ -3186,13 +3205,13 @@ export function ReleaseForm({
                 className="text-[10px] md:text-xs uppercase tracking-[0.18em]"
                 style={{ color: "var(--text-soft)" }}
               >
-                Stage {menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1} of {menuStepIndexes.length}
+                Step {menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1} of {menuStepIndexes.length}
               </p>
               <p
                 className="mt-1 text-sm md:text-base font-semibold"
                 style={{ color: "var(--text)" }}
               >
-                {steps[step]}
+                {stepMenuLabels[step] ?? steps[step]}
               </p>
             </div>
             <ChevronDown
@@ -3222,7 +3241,7 @@ export function ReleaseForm({
             >
               <div className="grid gap-2">
                 {menuStepIndexes.map((index) => {
-                  const label = steps[index];
+                  const label = stepMenuLabels[index] ?? steps[index];
                   const buttonState = stepButtonStyles(index);
                   return (
                     <button
@@ -3254,7 +3273,7 @@ export function ReleaseForm({
 
         <div className="release-workflow-nav hidden gap-2 md:grid md:grid-cols-5 lg:grid-cols-1" aria-label="Release submission steps">
           {menuStepIndexes.map((index) => {
-            const label = steps[index];
+            const label = stepMenuLabels[index] ?? steps[index];
             const buttonState = stepButtonStyles(index);
             return (
               <button
@@ -3279,7 +3298,17 @@ export function ReleaseForm({
         </div>
         <aside className="release-workflow-summary hidden lg:block" aria-label="Release summary">
           <div className="release-summary-card rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-            <p className="text-sm font-semibold">Release status</p>
+            <div className="release-live-preview" aria-label="Release preview">
+              <div className="release-live-preview-art">
+                {artworkPreview ? <NextImage src={artworkPreview} alt="" fill unoptimized sizes="70px" /> : <Disc3 aria-hidden="true" />}
+              </div>
+              <div className="min-w-0">
+                <span>Release preview</span>
+                <strong>{displayedReleaseTitle || "Untitled release"}</strong>
+                <p>{namesFor(tracks[0]?.primaryArtistIds ?? []) || tracks[0]?.primaryArtistQuery || "Artist not added"}</p>
+              </div>
+            </div>
+            <p className="mt-5 text-sm font-semibold">Your release</p>
             <div className="mt-4 flex items-center justify-between text-sm"><span style={{ color: "var(--text-muted)" }}>Completion</span><strong>{completion}%</strong></div>
             <div className="release-summary-progress mt-2 h-2 overflow-hidden rounded-full" style={{ background: "var(--border)" }}><span className="block h-full rounded-full" style={{ width: `${completion}%`, background: completion === 100 ? "var(--success)" : "var(--info)" }} /></div>
             <dl className="release-summary-stats mt-5 grid grid-cols-2 gap-2 text-sm">
@@ -3287,7 +3316,7 @@ export function ReleaseForm({
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Plan</dt><dd className="text-right">{currentPlan.title}</dd></div>
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Artists</dt><dd>{artistCount}</dd></div>
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Tracks</dt><dd>{tracks.length}</dd></div>
-              <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>{subscriptionCovered ? "Active subscription" : selectedPlan === "one_time" ? "Price" : "Plan coverage"}</dt><dd className="text-right">{subscriptionCovered ? currentPlan.title : selectedPlan === "one_time" ? (distributionCheckoutAmount === 0 ? (firstReleaseDiscount > 0 ? "FREE" : "HYMN credits") : `₹${distributionCheckoutAmount.toLocaleString("en-IN")}`) : `${currentPlan.cadence} · ₹${distributionAmount.toLocaleString("en-IN")}`}</dd></div>
+              <div className="release-due-today flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Due today</dt><dd className="text-right">{subscriptionCovered || distributionCheckoutAmount === 0 ? "₹0" : `₹${distributionCheckoutAmount.toLocaleString("en-IN")}`}</dd></div>
               <div className="flex justify-between gap-3"><dt style={{ color: "var(--text-muted)" }}>Save state</dt><dd aria-live="polite" style={{ color: autosaveEligible && autosaveStatus === "error" ? "var(--danger)" : autosaveEligible && autosaveStatus === "saved" ? "var(--success)" : "var(--text-muted)" }}>{autosaveLabel}</dd></div>
             </dl>
             {validationIssueCount > 0 ? <div className="release-summary-tasks mt-5 border-t pt-4" style={{ borderColor: "var(--border)" }}><p className="text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Next up</p><ul className="mt-3 grid gap-1">{validationIssues.slice(0, 5).map((issue) => <li key={`${issue.key}-${issue.trackIndex ?? "release"}`}><button type="button" onClick={() => triggerFieldFocus(issue)} className="group flex w-full items-start justify-between gap-3 py-2 text-left text-xs leading-5 transition" style={{ color: "var(--text-muted)" }}><span>{customerMessage(issue.message)}</span><span className="shrink-0 text-[var(--text-soft)] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--accent)]" aria-hidden="true">→</span></button></li>)}</ul></div> : null}
@@ -3296,7 +3325,8 @@ export function ReleaseForm({
         <div className="release-workflow-content grid min-w-0 gap-6">
         <details className="release-mobile-summary rounded-xl border p-3 lg:hidden" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
           <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between text-sm font-semibold">Release summary <span>{completion}% complete</span></summary>
-          <div className="mt-3 grid grid-cols-2 gap-3 border-t pt-3 text-sm" style={{ borderColor: "var(--border)" }}><p style={{ color: "var(--text-muted)" }}>Missing required</p><p className="text-right">{validationIssueCount}</p><p style={{ color: "var(--text-muted)" }}>Plan</p><p className="text-right">{currentPlan.title}</p><p style={{ color: "var(--text-muted)" }}>Artists / tracks</p><p className="text-right">{artistCount} / {tracks.length}</p><p style={{ color: "var(--text-muted)" }}>Save state</p><p className="text-right" aria-live="polite">{autosaveLabel}</p></div>
+          <div className="mt-3 grid grid-cols-2 gap-3 border-t pt-3 text-sm" style={{ borderColor: "var(--border)" }}><p style={{ color: "var(--text-muted)" }}>Missing required</p><p className="text-right">{validationIssueCount}</p><p style={{ color: "var(--text-muted)" }}>Due today</p><p className="text-right">{subscriptionCovered || distributionCheckoutAmount === 0 ? "₹0" : `₹${distributionCheckoutAmount.toLocaleString("en-IN")}`}</p><p style={{ color: "var(--text-muted)" }}>Artists / tracks</p><p className="text-right">{artistCount} / {tracks.length}</p><p style={{ color: "var(--text-muted)" }}>Save state</p><p className="text-right" aria-live="polite">{autosaveLabel}</p></div>
+          {validationIssueCount > 0 ? <ul className="release-mobile-next-actions mt-3 border-t pt-2" style={{ borderColor: "var(--border)" }}>{validationIssues.slice(0, 3).map((issue) => <li key={`mobile-${issue.key}-${issue.trackIndex ?? "release"}`}><button type="button" onClick={() => triggerFieldFocus(issue)}>{customerMessage(issue.message)} <span aria-hidden="true">→</span></button></li>)}</ul> : null}
         </details>
         {step === 1 ? (
           <section className={clsx("release-artist-stage", stepMotion)}>
@@ -5254,25 +5284,21 @@ export function ReleaseForm({
                           className="text-[10px] font-semibold uppercase tracking-[0.18em]"
                           style={{ color: "var(--text-soft)" }}
                         >
-                          Release score
+                          Submission status
                         </p>
                         <p
                           className="mt-1 text-2xl font-semibold"
                           style={{ color: "var(--text)" }}
                         >
-                          {readinessScore}
-                          <span
-                            className="text-sm font-medium"
-                            style={{ color: "var(--text-soft)" }}
-                          >
-                            /100
-                          </span>
+                          {validationIssueCount === 0
+                            ? "Ready to submit"
+                            : `${validationIssueCount} ${validationIssueCount === 1 ? "detail" : "details"} left`}
                         </p>
                       </div>
                       <span
                         className="rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em]"
                         style={
-                          readinessScore >= 90
+                          validationIssueCount === 0
                             ? {
                                 borderColor: "rgba(34,197,94,0.4)",
                                 background: "rgba(34,197,94,0.1)",
@@ -5285,21 +5311,8 @@ export function ReleaseForm({
                               }
                         }
                       >
-                        {readinessScore >= 90 ? "Ready" : "Needs review"}
+                        {validationIssueCount === 0 ? "Ready" : "Needs attention"}
                       </span>
-                    </div>
-                    <div
-                      className="mt-3 h-2 overflow-hidden rounded-full"
-                      style={{ background: "var(--bg-soft)" }}
-                    >
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{
-                          width: `${readinessScore}%`,
-                          background:
-                            readinessScore >= 90 ? "#22c55e" : "var(--money)",
-                        }}
-                      />
                     </div>
                   </div>
                 </div>
@@ -5317,24 +5330,12 @@ export function ReleaseForm({
                         className="text-xl font-semibold"
                         style={{ color: "var(--text)" }}
                       >
-                        {readinessScore}% Ready
+                        Submission checklist
                       </h3>
                     </div>
                     <ShieldCheck
                       className="h-6 w-6"
                       style={{ color: "var(--accent)" }}
-                    />
-                  </div>
-                  <div
-                    className="mt-4 h-2 overflow-hidden rounded-full"
-                    style={{ background: "rgba(255,255,255,0.08)" }}
-                  >
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${readinessScore}%`,
-                        background: "var(--accent)",
-                      }}
                     />
                   </div>
                   <div className="mt-4 grid gap-2">

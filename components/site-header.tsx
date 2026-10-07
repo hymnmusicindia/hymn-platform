@@ -388,7 +388,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
         <button
           type="button"
           onClick={() => { setNotificationsOpen((value) => !value); setProfileOpen(false); setAppLauncherOpen(false); }}
-          className={clsx("site-header-bare-icon relative inline-flex h-10 w-10 items-center justify-center rounded-full border-0 bg-transparent sm:h-11 sm:w-11", mobile ? "w-full justify-start gap-3 px-3" : "")}
+          className={clsx("site-header-bare-icon site-notification-trigger relative inline-flex h-10 w-10 items-center justify-center rounded-full border-0 bg-transparent sm:h-11 sm:w-11", mobile ? "w-full justify-start gap-3 px-3" : "")}
           style={{ color: "var(--text)" }}
           aria-expanded={notificationsOpen}
           aria-haspopup="dialog"
@@ -396,7 +396,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
         >
           <span className="relative inline-flex h-5 w-5 shrink-0">
             <Bell aria-hidden="true" className={clsx("notification-bell-icon h-5 w-5", unreadCount > 0 && "has-unread")} />
-            {unreadCount > 0 ? <span aria-hidden="true" className="notification-unread-alert">!</span> : null}
+            {unreadCount > 0 ? <span aria-hidden="true" className="notification-unread-alert">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
           </span>
           {mobile ? <span className="text-sm font-semibold">Notifications</span> : null}
         </button>
@@ -406,44 +406,40 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
             role="dialog"
             aria-label="Notifications"
             onMouseDown={(event) => event.stopPropagation()}
-            className={clsx("site-notification-panel z-[1260] mt-3 rounded-2xl border p-3 shadow-2xl", mobile ? "w-full" : "absolute right-0 w-[min(24rem,calc(100vw-2rem))]")}
-            style={{ borderColor: "var(--border)", background: "var(--card-strong)", color: "var(--text)" }}
+            className={clsx("site-notification-panel z-[1260] mt-3 rounded-2xl border p-3 shadow-2xl", mobile ? "w-full" : "absolute right-0 w-[min(26rem,calc(100vw-2rem))]")}
           >
-            <div className="flex items-start justify-between gap-3 border-b pb-3" style={{ borderColor: "var(--border)" }}>
+            <div className="site-notification-heading flex items-start justify-between gap-3 border-b pb-3">
               <div>
-                <p className="text-sm font-semibold">Notifications</p>
-                <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{unreadCount ? `${unreadCount} unread` : "All caught up"}</p>
+                <p className="site-notification-eyebrow">Your activity</p>
+                <p className="site-notification-title">Notifications</p>
+                <p className="site-notification-subtitle">{unreadCount ? `${unreadCount} unread ${unreadCount === 1 ? "update" : "updates"}` : "All caught up"}</p>
               </div>
-              <button type="button" onClick={markAllNotificationsRead} disabled={unreadCount === 0} className="rounded-full border px-3 py-1 text-xs font-semibold disabled:opacity-40" style={{ borderColor: "var(--border)", color: "var(--text)" }}>
+              <button type="button" onClick={markAllNotificationsRead} disabled={unreadCount === 0} className="site-notification-mark-all rounded-full border px-3 py-1 text-xs font-semibold disabled:opacity-40">
                 Mark all as read
               </button>
             </div>
-            <div className="mt-3 grid max-h-[28rem] gap-2 overflow-y-auto pr-1">
-              {notificationsLoading && notifications.length === 0 ? <p className="px-2 py-6 text-center text-sm" style={{ color: "var(--text-muted)" }}>Loading notifications...</p> : null}
-              {!notificationsLoading && notifications.length === 0 ? <p className="px-2 py-6 text-center text-sm" style={{ color: "var(--text-muted)" }}>No notifications yet.</p> : null}
+            <div className="site-notification-list mt-3 grid max-h-[28rem] gap-2 overflow-y-auto pr-1">
+              {notificationsLoading && notifications.length === 0 ? <p className="site-notification-empty px-2 py-6 text-center text-sm">Loading notifications...</p> : null}
+              {!notificationsLoading && notifications.length === 0 ? <div className="site-notification-empty px-2 py-8 text-center"><Bell className="mx-auto mb-3 h-5 w-5" aria-hidden="true" /><p className="text-sm font-semibold">You’re all caught up</p><p className="mt-1 text-xs">Updates about your music and account will appear here.</p></div> : null}
               {notifications.map((notification) => {
                 const unread = !notification.readAt;
                 const content = (
                   <article
-                    className="rounded-2xl border p-3 transition hover:-translate-y-0.5"
-                    style={{
-                      borderColor: notification.priority === "high" ? "rgba(248,113,113,0.45)" : unread ? "color-mix(in srgb, var(--accent) 45%, var(--border))" : "var(--border)",
-                      background: unread ? "linear-gradient(180deg, color-mix(in srgb, var(--accent) 13%, transparent), color-mix(in srgb, var(--card) 94%, transparent))" : "var(--card)"
-                    }}
+                    className={clsx("site-notification-item rounded-2xl border p-3 transition", unread && "is-unread")}
                   >
                     <div className="flex gap-3">
-                      <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: notification.priority === "high" ? "var(--danger)" : "var(--accent)" }}>
+                      <span className="site-notification-item-icon mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border">
                         {notification.priority === "high" ? <AlertCircle className="h-4 w-4" /> : <NotificationIcon type={notification.type} />}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-start justify-between gap-2">
                           <span className="text-sm font-semibold">{notification.title}</span>
-                          {unread ? <span className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{ background: "var(--accent)" }} /> : <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: "var(--text-soft)" }} />}
+                          {unread ? <span className="site-notification-unread-dot mt-1 h-2 w-2 shrink-0 rounded-full" /> : <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: "var(--text-soft)" }} />}
                         </span>
                         <span className="mt-1 block text-xs leading-5" style={{ color: "var(--text-muted)" }}>{customerMessage(notification.body)}</span>
                         <span className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px]" style={{ color: "var(--text-soft)" }}>
                           <span>{notificationTimeAgo(notification.createdAt)}</span>
-                          {notification.href ? <span className="font-semibold" style={{ color: "var(--accent)" }}>{notification.actionLabel || "Open"}</span> : null}
+                          {notification.href ? <span className="site-notification-action font-semibold">{notification.actionLabel || "Open"} →</span> : null}
                         </span>
                       </span>
                     </div>
@@ -451,7 +447,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
                 );
 
                 if (!notification.href) {
-                  return <button key={notification.id} type="button" onClick={() => markNotificationRead(notification.id)} className="text-left">{content}</button>;
+                  return <button key={notification.id} type="button" onClick={() => markNotificationRead(notification.id)} className="site-notification-row text-left">{content}</button>;
                 }
 
                 return (
@@ -463,7 +459,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
                        if (!marked) return;
                       router.push(notification.href as string);
                     }}
-                    className="text-left"
+                    className="site-notification-row text-left"
                   >
                     {content}
                   </button>
@@ -632,7 +628,6 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           </div>
 
           <div className="flex items-center gap-0 lg:hidden">
-            <SmartHelpToggle compact />
             {isAuthenticated ? <AppLauncher mobile /> : null}
             {isAuthenticated ? <NotificationBell /> : null}
             <ThemeToggle />
@@ -642,8 +637,10 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           <button
             type="button"
             aria-label={cartCount ? `Shopping cart, ${cartCount} ${cartCount === 1 ? "item" : "items"}` : "Shopping cart, empty"}
+            aria-expanded={cartOpen}
+            aria-haspopup="dialog"
             onClick={openCart}
-            className="site-header-bare-icon relative z-10 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-transparent sm:h-11 sm:w-11"
+            className="site-header-bare-icon site-cart-trigger relative z-10 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 bg-transparent sm:h-11 sm:w-11"
             style={{ color: "var(--text)" }}
           >
             <span className={clsx("site-cart-visual", cartCount > 0 && "has-items")} aria-hidden="true">
@@ -651,6 +648,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
               {cartDropSequence > 0 ? <span key={cartDropSequence} className="site-cart-drop" /> : null}
               <ShoppingCart className="site-cart-icon h-5 w-5" />
             </span>
+            {cartCount > 0 ? <span className="site-cart-count" aria-hidden="true">{cartCount > 99 ? "99+" : cartCount}</span> : null}
           </button>
 
           <button
@@ -687,22 +685,22 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
       {cartMounted ? createPortal(<div className={clsx("fixed inset-0 isolate z-[1000] overflow-hidden transition", cartOpen ? "pointer-events-auto" : "pointer-events-none")} aria-hidden={!cartOpen} inert={!cartOpen}>
         <button type="button" className={clsx("absolute inset-0 z-0 bg-black/60 transition-opacity", cartOpen ? "opacity-100" : "opacity-0")} onClick={() => setCartOpen(false)} aria-label="Close cart" />
-        <aside className={clsx("fixed right-0 top-0 z-10 flex h-[100dvh] w-full max-w-[410px] flex-col border-l p-5 shadow-2xl transition-transform duration-300", cartOpen ? "translate-x-0" : "translate-x-full")} style={{ borderColor: "var(--border)", background: "linear-gradient(180deg, var(--bg-elevated, #101216), var(--bg, #08090b))", color: "var(--text)", opacity: 1 }} role="dialog" aria-modal="true" aria-label="Shopping cart">
-          <div className="flex items-center justify-between border-b border-[var(--border)] pb-4">
-            <div><p className="text-xs uppercase tracking-[0.24em] text-[var(--text-soft)]">Cart</p><h2 className="mt-1 text-xl font-semibold text-[var(--text)]">Your beats</h2></div>
-            <button type="button" onClick={() => setCartOpen(false)} className="inline-flex h-10 w-10 items-center justify-center text-[var(--text-muted)] transition hover:text-[var(--text)]" aria-label="Close cart"><X className="h-5 w-5" /></button>
+        <aside className={clsx("site-cart-drawer fixed right-0 top-0 z-10 flex h-[100dvh] w-full max-w-[410px] flex-col border-l p-5 shadow-2xl transition-transform duration-300", cartOpen ? "translate-x-0" : "translate-x-full")} role="dialog" aria-modal="true" aria-label="Shopping cart">
+          <div className="site-cart-drawer-heading flex items-center justify-between border-b border-[var(--border)] pb-4">
+            <div><p className="text-xs uppercase tracking-[0.24em] text-[var(--text-soft)]">Your selection</p><h2 className="mt-1 text-xl font-semibold text-[var(--text)]">Beat cart <span className="site-cart-drawer-count">{cartCount}</span></h2></div>
+            <button type="button" onClick={() => setCartOpen(false)} className="site-cart-close inline-flex h-10 w-10 items-center justify-center text-[var(--text-muted)] transition hover:text-[var(--text)]" aria-label="Close cart"><X className="h-5 w-5" /></button>
           </div>
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-5">
+          <div className="site-cart-drawer-items min-h-0 flex-1 space-y-3 overflow-y-auto py-5">
             {cartItems.length ? cartItems.map((item) => {
               const beat = cartBeats.find((entry) => entry.id === item.beatId);
-              return <div key={`${item.beatId}-${item.licenseType}`} className="flex items-center gap-3 border-b border-[var(--border)] py-3">
+              return <div key={`${item.beatId}-${item.licenseType}`} className="site-cart-drawer-item flex items-center gap-3 border-b border-[var(--border)] py-3">
                 <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-[var(--bg-soft)]">{beat?.artworkUrl ? <Image src={beat.artworkUrl} alt="" fill sizes="56px" className="object-cover" /> : <Disc3 className="absolute inset-0 m-auto h-5 w-5 text-[var(--text-soft)]" />}</div>
-                <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-[var(--text)]">{beat?.title ?? `Beat ${item.beatId}`}</p><p className="mt-1 truncate text-xs text-[var(--text-soft)]">{beat?.producerName ?? beatLicenseLabel(item.licenseType)}</p></div>
-                <div className="text-right"><p className="text-sm font-semibold text-[var(--text)]">₹{Number(item.price).toLocaleString("en-IN")}</p><button type="button" onClick={() => removeCartItem(item.beatId, item.licenseType)} className="mt-1 text-xs text-[var(--danger)]">Remove</button></div>
+                <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-[var(--text)]">{beat?.title ?? `Beat ${item.beatId}`}</p><p className="mt-1 truncate text-xs text-[var(--text-soft)]">{beat?.producerName ?? "Beat licence"}</p><p className="mt-1 text-[11px] text-[var(--text-muted)]">{beatLicenseLabel(item.licenseType)} licence</p></div>
+                <div className="text-right"><p className="text-sm font-semibold text-[var(--text)]">₹{Number(item.price).toLocaleString("en-IN")}</p><button type="button" onClick={() => removeCartItem(item.beatId, item.licenseType)} className="site-cart-remove mt-2 text-xs">Remove</button></div>
               </div>;
-            }) : <div className="py-12 text-center text-sm text-[var(--text-soft)]">Your cart is empty.</div>}
+            }) : <div className="site-cart-empty py-12 text-center"><ShoppingCart className="mx-auto h-7 w-7" aria-hidden="true" /><p className="mt-4 text-sm font-semibold">Your cart is empty</p><p className="mt-1 text-xs">Find a beat that fits your next release.</p></div>}
           </div>
-          <div className="border-t border-[var(--border)] pt-4">
+          <div className="site-cart-drawer-footer border-t border-[var(--border)] pt-4">
             <div className="flex items-center justify-between text-sm"><span className="text-[var(--text-muted)]">Total</span><strong className="text-[var(--text)]">₹{cartItems.reduce((sum, item) => sum + Number(item.price || 0), 0).toLocaleString("en-IN")}</strong></div>
             {cartItems.length ? <Link href="/checkout?product=beatstore" onClick={() => setCartOpen(false)} className="btn-primary mt-4 w-full">Continue to checkout</Link> : <Link href="/beat-store" onClick={() => setCartOpen(false)} className="btn-primary mt-4 w-full">Browse beats</Link>}
           </div>
