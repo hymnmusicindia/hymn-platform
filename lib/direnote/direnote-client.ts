@@ -40,7 +40,7 @@ function malformedResponseError(status: number, contentType: string | null, prev
   const type = contentType?.split(";", 1)[0]?.trim().toLowerCase();
   const received = type ? ` (${type})` : "";
   if (status === 401 || status === 403) return `DIRENOTE_PROVIDER_AUTH_OR_ACCESS: DireNote returned HTTP ${status}${received}. Verify the API PIN, client ID and provider account access.`;
-  if (status === 404) return `DIRENOTE_PROVIDER_ENDPOINT_NOT_FOUND: DireNote returned HTTP 404${received}. Verify DIRENOTE_INGEST_ENDPOINT.`;
+  if (status === 404) return `DIRENOTE_PROVIDER_ENDPOINT_NOT_FOUND: DireNote returned HTTP 404${received}. Verify the configured DireNote endpoint.`;
   if (status >= 500) return `DIRENOTE_PROVIDER_UNAVAILABLE: DireNote returned HTTP ${status}${received}. The release remains queued and can be retried.`;
   return `DIRENOTE_MALFORMED_RESPONSE: DireNote returned HTTP ${status}${received}, not the required JSON response. Response preview: ${preview}`;
 }
@@ -108,7 +108,7 @@ async function postToDireNote(endpoint: string, payload: Record<string, unknown>
     if (!data || typeof data !== "object" || Array.isArray(data)) {
       return { success: false, httpStatus: response.status, contentType, raw: safeResponsePreview(raw, config), error: "DIRENOTE_MALFORMED_RESPONSE: DireNote returned JSON that was not an object." };
     }
-    // The v2.2 contract requires an explicit acknowledgement. A proxy's 200
+    // The v2.3 contract requires an explicit acknowledgement. A proxy's 200
     // response or an unrelated JSON object is not evidence of provider success.
     const apiRejected = data.success !== true || Boolean(data.error) || (Array.isArray(data.errors) ? data.errors.length > 0 : Boolean(data.errors));
     const providerError = apiRejected || !response.ok ? extractDireNoteProviderError(data) : {};
@@ -140,6 +140,22 @@ export function getDireNoteReleaseInformationByReference(reference: string, key:
 
 export function getDireNoteRevenueReport(isrc: string, options: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}) {
   return postToDireNote(getDireNoteConfig().revenueReportEndpoint, { isrc: normalizeIdentifier(isrc) }, options);
+}
+
+export function getDireNoteArtistInformation(artistId: string | number, options: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}) {
+  const normalized = typeof artistId === "number" ? artistId : Number(artistId.trim());
+  if (!Number.isSafeInteger(normalized) || normalized <= 0) {
+    return Promise.resolve<DireNoteSubmitResult>({ success: false, httpStatus: null, error: "A valid positive DireNote artist ID is required." });
+  }
+  return postToDireNote(getDireNoteConfig().artistInformationEndpoint, { artist_id: normalized }, options);
+}
+
+export function getDireNoteSongwriterInformation(songwriterId: string | number, options: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}) {
+  const normalized = typeof songwriterId === "number" ? songwriterId : Number(songwriterId.trim());
+  if (!Number.isSafeInteger(normalized) || normalized <= 0) {
+    return Promise.resolve<DireNoteSubmitResult>({ success: false, httpStatus: null, error: "A valid positive DireNote songwriter ID is required." });
+  }
+  return postToDireNote(getDireNoteConfig().songwriterInformationEndpoint, { songwriter_id: normalized }, options);
 }
 
 // vercel trigger 9

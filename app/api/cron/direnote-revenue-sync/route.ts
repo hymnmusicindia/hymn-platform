@@ -22,9 +22,9 @@ export async function GET(request: Request) {
   let actorId: number;
   try { actorId = await resolveAutomationActorId(); }
   catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Revenue automation audit attribution failed." }, { status: 503 }); }
-  // Revenue is accounting-period data. A monthly sweep reads only tracks that
-  // have not already produced a revenue lookup during this reporting month.
-  const periodStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
+  // Recheck daily because providers can revise the current accounting period
+  // after an earlier successful lookup. Import fingerprints remain idempotent.
+  const periodStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const candidates = await prisma.track.findMany({
     where: { isrc: { not: null }, release: { status: { in: ["SENT_TO_DISTRIBUTOR", "PROCESSING", "DELIVERED", "LIVE"] } } },
     select: { id: true, isrc: true, releaseId: true },

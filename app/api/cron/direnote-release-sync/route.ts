@@ -2,14 +2,13 @@ import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { syncDireNoteRelease } from "@/lib/direnote-service";
+import { syncDireNoteArtistInformation, syncDireNoteRelease, syncDireNoteSongwriterInformation } from "@/lib/direnote-service";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const LEASE_KEY = "direnote-release-sync";
 const CONCURRENCY = Math.max(1, Math.min(Number(process.env.DIRENOTE_RELEASE_SYNC_CONCURRENCY || 3), 5));
-const POST_REVIEW_PROVIDER_STATES = ["SCHEDULED", "AWAITING_LIVE_CONFIRMATION", "PARTIALLY_LIVE"] as const;
 // Provider polling continues for "SCHEDULED", "AWAITING_LIVE_CONFIRMATION",
 // and "PARTIALLY_LIVE" via the current attempt's providerStatus.
 
@@ -73,7 +72,14 @@ export async function GET(request: Request) {
       }
     };
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, candidates.length) }, worker));
-    const summary = { runId, candidateCount: candidates.length, providerRequestCount: results.length, processedCount: results.length, changedCount: results.filter(result => result.success).length, identifierRepairCount: results.filter(result => result.success && Boolean(result.upc)).length, statusRepairCount: results.filter(result => result.success && Boolean(result.status)).length, correctionCount: results.filter(result => result.status === "changes_required").length, errorCount: results.filter(result => !result.success).length, deferredCount: candidates.length - results.length, durationMs: Date.now() - started, eligible: candidates.length, checked: results.length };
+    const staleBefore = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [artists, songwriters] = await Promise.all([
+      prisma.artistCard.findMany({ where: { direNoteArtistId: { not: null }, archivedAt: null, OR: [{ direNoteLastSyncedAt: null }, { direNoteLastSyncedAt: { lt: staleBefore } }] }, select: { id: true }, take: 3, orderBy: { direNoteLastSyncedAt: { sort: "asc", nulls: "first" } } }),
+      prisma.contributorParty.findMany({ where: { direNoteSongwriterId: { not: null }, mergedIntoId: null, OR: [{ direNoteLastSyncedAt: null }, { direNoteLastSyncedAt: { lt: staleBefore } }] }, select: { id: true }, take: 3, orderBy: { direNoteLastSyncedAt: { sort: "asc", nulls: "first" } } })
+    ]);
+    const identityResults = await Promise.allSettled([...artists.map(item => syncDireNoteArtistInformation(item.id)), ...songwriters.map(item => syncDireNoteSongwriterInformation(item.id))]);
+    const identityErrors = identityResults.filter(item => item.status === "rejected").length;
+    const summary = { runId, candidateCount: candidates.length, providerRequestCount: results.length + identityResults.length, processedCount: results.length, changedCount: results.filter(result => result.success).length, identifierRepairCount: results.filter(result => result.success && Boolean(result.upc)).length, statusRepairCount: results.filter(result => result.success && Boolean(result.status)).length, correctionCount: results.filter(result => result.status === "changes_required").length, identityRefreshCount: identityResults.length - identityErrors, identityErrorCount: identityErrors, errorCount: results.filter(result => !result.success).length + identityErrors, deferredCount: candidates.length - results.length, durationMs: Date.now() - started, eligible: candidates.length, checked: results.length };
     await prisma.direNoteSyncRun.update({ where: { runId }, data: { status: summary.errorCount ? "completed_with_errors" : "completed", completedAt: new Date(), candidateCount: summary.candidateCount, providerRequestCount: summary.providerRequestCount, processedCount: summary.processedCount, changedCount: summary.changedCount, identifierRepairCount: summary.identifierRepairCount, statusRepairCount: summary.statusRepairCount, correctionCount: summary.correctionCount, errorCount: summary.errorCount, deferredCount: summary.deferredCount, durationMs: summary.durationMs, summary } });
     await prisma.direNoteLog.create({ data: { action: "hourly_status_sync", success: summary.errorCount === 0, responseJson: summary } });
     return NextResponse.json({ success: true, ...summary, results });

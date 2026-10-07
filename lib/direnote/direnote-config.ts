@@ -1,6 +1,8 @@
 const DEFAULT_DIRENOTE_ENDPOINT = "https://api.direnotemedia.com/ingest_content";
 const DEFAULT_DIRENOTE_RELEASE_INFORMATION_ENDPOINT = "https://api.direnotemedia.com/check_release_status";
 const DEFAULT_DIRENOTE_REVENUE_REPORT_ENDPOINT = "https://api.direnotemedia.com/check_revenue_report";
+const DEFAULT_DIRENOTE_ARTIST_INFORMATION_ENDPOINT = "https://api.direnotemedia.com/check_artist";
+const DEFAULT_DIRENOTE_SONGWRITER_INFORMATION_ENDPOINT = "https://api.direnotemedia.com/check_songwriter";
 
 function sanitizeConfiguredUrl(value?: string) {
   let configured = value?.trim();
@@ -52,11 +54,15 @@ export function getDireNoteConfig() {
     process.env.DIRENOTE_CLIENT_EMAIL?.trim();
   const releaseInformationEndpoint = normalizeEndpoint(process.env.DIRENOTE_RELEASE_INFORMATION_ENDPOINT, DEFAULT_DIRENOTE_RELEASE_INFORMATION_ENDPOINT);
   const revenueReportEndpoint = normalizeEndpoint(process.env.DIRENOTE_REVENUE_REPORT_ENDPOINT, DEFAULT_DIRENOTE_REVENUE_REPORT_ENDPOINT);
+  const artistInformationEndpoint = normalizeEndpoint(process.env.DIRENOTE_ARTIST_INFORMATION_ENDPOINT, DEFAULT_DIRENOTE_ARTIST_INFORMATION_ENDPOINT);
+  const songwriterInformationEndpoint = normalizeEndpoint(process.env.DIRENOTE_SONGWRITER_INFORMATION_ENDPOINT, DEFAULT_DIRENOTE_SONGWRITER_INFORMATION_ENDPOINT);
 
   return {
     endpoint,
     releaseInformationEndpoint,
     revenueReportEndpoint,
+    artistInformationEndpoint,
+    songwriterInformationEndpoint,
     pin,
     clientId,
     isConfigured: Boolean(endpoint && pin && clientId),

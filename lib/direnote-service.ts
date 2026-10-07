@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
-import { getDireNoteReleaseInformation, getDireNoteReleaseInformationByReference, getDireNoteRevenueReport, redactDireNoteDiagnostic } from "@/lib/direnote";
+import { getDireNoteArtistInformation, getDireNoteReleaseInformation, getDireNoteReleaseInformationByReference, getDireNoteRevenueReport, getDireNoteSongwriterInformation, redactDireNoteDiagnostic } from "@/lib/direnote";
 import { importDireNoteRevenueReport } from "@/lib/direnote-revenue";
 import { reserveDireNoteRequest } from "@/lib/direnote-rate-limit";
 import { createNotification } from "@/lib/db";
@@ -22,17 +22,118 @@ function text(value: unknown) { return typeof value === "string" || typeof value
 function normalized(value: string) { return value.replace(/[\s-]+/g, "").toUpperCase(); }
 function json(value: unknown) { return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue; }
 
+function verifiedInstagram(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== "https:" || !["instagram.com", "www.instagram.com"].includes(url.hostname) || !/^\/[A-Za-z0-9._]+\/?$/.test(url.pathname)) return null;
+    return `https://www.instagram.com/${url.pathname.split("/").filter(Boolean)[0]}`;
+  } catch { return null; }
+}
+
+function verifiedX(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== "https:" || !["x.com", "www.x.com", "twitter.com", "www.twitter.com"].includes(url.hostname) || !/^\/[A-Za-z0-9_]+\/?$/.test(url.pathname)) return null;
+    return `https://x.com/${url.pathname.split("/").filter(Boolean)[0]}`;
+  } catch { return null; }
+}
+
+/** Refreshes one locally associated artist from DireNote's v2.3 artist endpoint. */
+export async function syncDireNoteArtistInformation(artistCardId: number, actorId?: number | null, releaseId?: number | null) {
+  const card = await prisma.artistCard.findUnique({ where: { id: artistCardId } });
+  if (!card?.direNoteArtistId) throw new Error("This artist does not have a stored DireNote artist ID.");
+  await reserveDireNoteRequest("artist_information", releaseId ?? null, actorId);
+  const result = await getDireNoteArtistInformation(card.direNoteArtistId);
+  const payload = record(result.data);
+  const artist = record(payload.artist);
+  const remoteId = text(artist.artist_id);
+  const remoteName = text(artist.name);
+  await prisma.direNoteLog.create({ data: { releaseId: releaseId ?? null, action: "artist_information", httpStatus: result.httpStatus, success: result.success, requestPayloadRedacted: { artistId: card.direNoteArtistId }, responseJson: redactDireNoteDiagnostic(payload) as never, errorMessage: result.error ?? null, createdByAdminId: actorId ?? null } });
+  if (!result.success) throw new Error(result.error || text(payload.message) || "DireNote artist lookup failed.");
+  if (remoteId !== card.direNoteArtistId || !remoteName || remoteName.toLocaleLowerCase() !== card.artistName.trim().toLocaleLowerCase()) {
+    throw new Error("DireNote returned an artist profile that does not match the attached HYMN artist.");
+  }
+  const links = verifiedArtistStoreLinks(artist.links);
+  const instagram = verifiedInstagram(record(artist.links).instagram);
+  if (releaseId) {
+    const conflicts = [
+      ["spotify", card.spotifyProfileUrl, links.spotify?.url], ["apple", card.appleMusicProfileUrl, links.apple?.url],
+      ["youtube", card.youtubeUrl, links.youtube?.url], ["instagram", card.instagramUrl, instagram]
+    ].filter((item): item is [string, string, string] => Boolean(item[1] && item[2] && item[1] !== item[2]));
+    for (const [provider, hymnValue, direNoteValue] of conflicts) {
+      const field = `artist_${card.id}_profile_${provider}`;
+      const existing = await prisma.direNoteReconciliationDiscrepancy.findFirst({ where: { releaseId, field, status: "open" } });
+      if (!existing) await prisma.direNoteReconciliationDiscrepancy.create({ data: { releaseId, field, hymnValue, direNoteValue, severity: "warning" } });
+    }
+  }
+  const data: Prisma.ArtistCardUpdateInput = { direNoteLastSyncedAt: new Date() };
+  if (!card.spotifyProfileUrl && links.spotify) { data.spotifyProfileUrl = links.spotify.url; data.spotifyArtistId = links.spotify.id; }
+  if (!card.appleMusicProfileUrl && links.apple) { data.appleMusicProfileUrl = links.apple.url; data.appleArtistId = links.apple.id; }
+  if (!card.youtubeUrl && links.youtube) data.youtubeUrl = links.youtube.url;
+  if (!card.instagramUrl && instagram) data.instagramUrl = instagram;
+  return prisma.artistCard.update({ where: { id: card.id }, data });
+}
+
+/** Refreshes one canonical songwriter/composer identity from DireNote v2.3. */
+export async function syncDireNoteSongwriterInformation(partyId: number, actorId?: number | null, releaseId?: number | null) {
+  const party = await prisma.contributorParty.findUnique({ where: { id: partyId } });
+  if (!party?.direNoteSongwriterId || party.mergedIntoId) throw new Error("This contributor does not have an active DireNote songwriter identity.");
+  await reserveDireNoteRequest("songwriter_information", releaseId ?? null, actorId);
+  const result = await getDireNoteSongwriterInformation(party.direNoteSongwriterId);
+  const payload = record(result.data);
+  const songwriter = record(payload.songwriter);
+  const remoteId = text(songwriter.songwriter_id);
+  const remoteName = text(songwriter.name);
+  await prisma.direNoteLog.create({ data: { releaseId: releaseId ?? null, action: "songwriter_information", httpStatus: result.httpStatus, success: result.success, requestPayloadRedacted: { songwriterId: party.direNoteSongwriterId, partyId }, responseJson: redactDireNoteDiagnostic(payload) as never, errorMessage: result.error ?? null, createdByAdminId: actorId ?? null } });
+  if (!result.success) throw new Error(result.error || text(payload.message) || "DireNote songwriter lookup failed.");
+  const localNames = [party.legalName, party.professionalName, party.displayName].filter(Boolean).map(value => value!.trim().toLocaleLowerCase());
+  if (remoteId !== party.direNoteSongwriterId || !remoteName || !localNames.includes(remoteName.toLocaleLowerCase())) throw new Error("DireNote returned a songwriter record that does not match the attached HYMN contributor.");
+  const links = record(songwriter.links);
+  const ipi = text(songwriter.ipi) || null;
+  const iprsMember = ["Yes", "No"].includes(text(songwriter.iprs_member)) ? text(songwriter.iprs_member) : null;
+  if (releaseId) {
+    const conflicts = [["ipi", party.ipi, ipi], ["iprs_member", party.iprsMember, iprsMember], ["instagram", party.instagramUrl, verifiedInstagram(links.instagram)], ["x", party.xUrl, verifiedX(links.x)]]
+      .filter((item): item is [string, string, string] => Boolean(item[1] && item[2] && item[1] !== item[2]));
+    for (const [property, hymnValue, direNoteValue] of conflicts) {
+      const field = `contributor_${party.id}_${property}`;
+      const existing = await prisma.direNoteReconciliationDiscrepancy.findFirst({ where: { releaseId, field, status: "open" } });
+      if (!existing) await prisma.direNoteReconciliationDiscrepancy.create({ data: { releaseId, field, hymnValue, direNoteValue, severity: property === "ipi" ? "critical" : "warning" } });
+    }
+  }
+  return prisma.contributorParty.update({ where: { id: party.id }, data: {
+    direNoteLastSyncedAt: new Date(),
+    ...(!party.ipi && ipi ? { ipi } : {}),
+    ...(!party.iprsMember && iprsMember ? { iprsMember } : {}),
+    ...(!party.instagramUrl && verifiedInstagram(links.instagram) ? { instagramUrl: verifiedInstagram(links.instagram) } : {}),
+    ...(!party.xUrl && verifiedX(links.x) ? { xUrl: verifiedX(links.x) } : {})
+  } });
+}
+
 async function persistArtistLinks(tx: Prisma.TransactionClient, releaseId: number, userId: number, external: RecordValue, trackMetadata: unknown, releaseArtistProfileId: number | null) {
   const artist = record(external.artist);
   const name = text(artist.name);
+  const direNoteArtistId = text(artist.artist_id);
   const links = verifiedArtistStoreLinks(artist.links);
-  if (!name || !Object.keys(links).length) return;
+  if (!name || (!direNoteArtistId && !Object.keys(links).length)) return false;
   const ids = attachedArtistProfileIds(trackMetadata, releaseArtistProfileId);
-  if (!ids.length) return;
+  if (!ids.length) return false;
   const candidates = await tx.artistCard.findMany({ where: { id: { in: ids }, userId, archivedAt: null } });
   const matches = candidates.filter(card => card.artistName.trim().toLocaleLowerCase() === name.toLocaleLowerCase());
-  if (matches.length !== 1) return;
+  if (matches.length !== 1) return false;
   const card = matches[0];
+  let changed = false;
+  if (direNoteArtistId && /^\d+$/.test(direNoteArtistId)) {
+    if (!card.direNoteArtistId || card.direNoteArtistId === direNoteArtistId) {
+      const result = await tx.artistCard.updateMany({ where: { id: card.id, direNoteArtistId: card.direNoteArtistId }, data: { direNoteArtistId } });
+      changed ||= result.count > 0;
+    } else {
+      const field = `artist_${card.id}_direnote_id`;
+      const discrepancy = await tx.direNoteReconciliationDiscrepancy.findFirst({ where: { releaseId, field, status: "open" } });
+      if (!discrepancy) await tx.direNoteReconciliationDiscrepancy.create({ data: { releaseId, field, hymnValue: card.direNoteArtistId, direNoteValue: direNoteArtistId, severity: "critical" } });
+    }
+  }
   const values = [
     ["spotify", card.spotifyProfileUrl, links.spotify?.url, "spotifyProfileUrl", "spotifyArtistId", links.spotify?.id],
     ["apple", card.appleMusicProfileUrl, links.apple?.url, "appleMusicProfileUrl", "appleArtistId", links.apple?.id],
@@ -43,13 +144,39 @@ async function persistArtistLinks(tx: Prisma.TransactionClient, releaseId: numbe
     const currentVerified = verifiedArtistStoreLinks({ [provider]: current })[provider];
     if (!current || current === received || (providerId && currentVerified?.id === providerId)) {
       // Compare-and-set prevents concurrent releases or a user edit from replacing a link.
-      await tx.artistCard.updateMany({ where: { id: card.id, [field]: current }, data: { [field]: received, ...(idField && providerId ? { [idField]: providerId } : {}), direNoteLastSyncedAt: new Date() } });
+      const result = await tx.artistCard.updateMany({ where: { id: card.id, [field]: current }, data: { [field]: received, ...(idField && providerId ? { [idField]: providerId } : {}), direNoteLastSyncedAt: new Date() } });
+      changed ||= result.count > 0;
     } else {
       const fieldName = `artist_${card.id}_link_${provider}`;
       const discrepancy = await tx.direNoteReconciliationDiscrepancy.findFirst({ where: { releaseId, field: fieldName, status: "open" } });
       if (!discrepancy) await tx.direNoteReconciliationDiscrepancy.create({ data: { releaseId, field: fieldName, hymnValue: current, direNoteValue: received, severity: "warning" } });
     }
   }
+  return changed;
+}
+
+async function persistSongwriterIdsFromTrack(tx: Prisma.TransactionClient, releaseId: number, trackId: number, external: RecordValue) {
+  let changed = false;
+  const contributions = await tx.trackContribution.findMany({ where: { trackId, role: { in: ["SONGWRITER", "LYRICIST", "COMPOSER"] }, party: { mergedIntoId: null } }, include: { party: true } });
+  for (const [key, roles] of [["songwriter", ["SONGWRITER", "LYRICIST"]], ["composer", ["COMPOSER"]]] as const) {
+    const remote = record(external[key]);
+    const songwriterId = text(remote.songwriter_id);
+    const name = text(remote.name);
+    if (!/^\d+$/.test(songwriterId) || !name) continue;
+    const matches = contributions.filter(item => (roles as readonly string[]).includes(item.role) && (item.creditedName.trim().toLocaleLowerCase() === name.toLocaleLowerCase() || item.party.legalName?.trim().toLocaleLowerCase() === name.toLocaleLowerCase()));
+    const parties = [...new Map(matches.map(item => [item.party.id, item.party])).values()];
+    if (parties.length !== 1) continue;
+    const party = parties[0];
+    if (!party.direNoteSongwriterId || party.direNoteSongwriterId === songwriterId) {
+      const result = await tx.contributorParty.updateMany({ where: { id: party.id, direNoteSongwriterId: party.direNoteSongwriterId }, data: { direNoteSongwriterId: songwriterId } });
+      changed ||= result.count > 0;
+    } else {
+      const field = `contributor_${party.id}_direnote_songwriter_id`;
+      const discrepancy = await tx.direNoteReconciliationDiscrepancy.findFirst({ where: { releaseId, field, status: "open" } });
+      if (!discrepancy) await tx.direNoteReconciliationDiscrepancy.create({ data: { releaseId, trackId, field, hymnValue: party.direNoteSongwriterId, direNoteValue: songwriterId, severity: "critical" } });
+    }
+  }
+  return changed;
 }
 
 export function mapDireNoteStatus(value: unknown) {
@@ -246,6 +373,8 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     }
   }
 
+  let artistLinksChanged = false;
+  let songwriterIdsChanged = false;
   await prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422027, ${releaseId}::integer)`;
     const stillCurrent = await tx.distributionSubmissionAttempt.findFirst({ where: { id: attempt.id, isCurrent: true } });
@@ -276,12 +405,29 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       const externalIsrc = text(external.isrc);
       if (externalIsrc && normalized(externalIsrc) !== normalized(track.isrc ?? "")) await tx.externalIdentifierHistory.create({ data: { releaseId, trackId: track.id, provider: "direnote", identifierType: "isrc", previousValue: track.isrc, canonicalValue: externalIsrc, source: "release_information_sync" } });
       await tx.track.update({ where: { id: track.id }, data: { isrc: externalIsrc || track.isrc, distributorStatus: mapDireNoteStatus(external.status), metadata: json({ ...(record(track.metadata)), direNote: { ...(record(record(track.metadata).direNote)), lastSyncedAt: new Date().toISOString(), external: redactDireNoteDiagnostic(external) } }) } });
-      await persistArtistLinks(tx, releaseId, release.userId, external, track.metadata, release.artistProfileId);
+      artistLinksChanged ||= await persistArtistLinks(tx, releaseId, release.userId, external, track.metadata, release.artistProfileId);
+      songwriterIdsChanged ||= await persistSongwriterIdsFromTrack(tx, releaseId, track.id, external);
+      const localMetadata = record(track.metadata);
+      const trackComparisons = [
+        ["language", localMetadata.trackLanguage, external.track_language], ["genre", localMetadata.trackGenre, external.track_genre],
+        ["subgenre", localMetadata.trackSubgenre, external.track_subgenre], ["version", localMetadata.trackVersion, external.track_version],
+        ["previously_released", localMetadata.previouslyReleased, external.previously_released], ["explicit", localMetadata.explicitLyrics, external.explicit_lyrics]
+      ];
+      for (const [property, localValue, remoteValue] of trackComparisons) {
+        const hymnValue = text(localValue); const direNoteValue = text(remoteValue);
+        if (!hymnValue || !direNoteValue || normalized(hymnValue) === normalized(direNoteValue)) continue;
+        const field = `track_${track.id}_${property}`;
+        const existing = await tx.direNoteReconciliationDiscrepancy.findFirst({ where: { releaseId, field, status: "open" } });
+        if (!existing) await tx.direNoteReconciliationDiscrepancy.create({ data: { releaseId, trackId: track.id, field, hymnValue, direNoteValue, severity: "warning" } });
+      }
     }
     const remoteUpc = normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc;
     const comparisons = [
       { field: "upc", hymn: release.upc, external: remoteUpc, severity: "critical" },
       { field: "release_title", hymn: release.title, external: text(remoteRelease.album_name), severity: "warning" },
+      { field: "release_type", hymn: release.releaseType, external: text(remoteRelease.type_of_release), severity: "warning" },
+      { field: "label_name", hymn: text(record(release.metadata).labelName), external: text(remoteRelease.label_name), severity: "warning" },
+      { field: "release_date", hymn: release.releaseDate?.toISOString().slice(0, 10), external: text(remoteRelease.track_release_date).slice(0, 10), severity: "warning" },
       { field: "track_count", hymn: String(release.tracks.length), external: String(remoteTracks.length), severity: "warning" }
     ].filter(item => item.external && normalized(item.hymn ?? "") !== normalized(item.external));
     for (const comparison of comparisons) {
@@ -350,7 +496,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       console.error("[DireNote] Status notification failed after sync", { releaseId, status: aggregateStatus.provider, message: error instanceof Error ? error.message : "Notification persistence failed." });
     }
   }
-  const outcome = { success: true, releaseId, attemptId: attempt.id, upc: normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc, status: aggregateStatus.provider, trackCount: remoteTracks.length, diff: { statusChanged: aggregateStatus.canonical !== null && aggregateStatus.canonical !== previousStatus, upcChanged: Boolean((normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc) && (normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc) !== release.upc), isrcChanges: remoteTracks.filter(remote => { const track = mappingTracks.find(candidate => matchDireNoteTrack(remote, mappingTracks)?.id === candidate.id); return Boolean(track && text(remote.isrc) && normalized(text(remote.isrc)) !== normalized(track.isrc ?? "")); }).map(remote => text(remote.isrc)), correctionsChanged: providerCorrections.length > 0, artistLinksChanged: false, anomalies: [] as string[] } };
+  const outcome = { success: true, releaseId, attemptId: attempt.id, upc: normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc, status: aggregateStatus.provider, trackCount: remoteTracks.length, diff: { statusChanged: aggregateStatus.canonical !== null && aggregateStatus.canonical !== previousStatus, upcChanged: Boolean((normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc) && (normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc) !== release.upc), isrcChanges: remoteTracks.filter(remote => { const track = mappingTracks.find(candidate => matchDireNoteTrack(remote, mappingTracks)?.id === candidate.id); return Boolean(track && text(remote.isrc) && normalized(text(remote.isrc)) !== normalized(track.isrc ?? "")); }).map(remote => text(remote.isrc)), correctionsChanged: providerCorrections.length > 0, artistLinksChanged, songwriterIdsChanged, anomalies: [] as string[] } };
   await prisma.direNoteLog.create({ data: { releaseId, action: "reconciliation_sync", success: true, requestPayloadRedacted: { attemptId: attempt.id, upc: lookupUpc }, responseJson: outcome as unknown as Prisma.InputJsonValue } });
   return outcome;
 }

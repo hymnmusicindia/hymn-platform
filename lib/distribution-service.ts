@@ -27,6 +27,52 @@ import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution"
 import { prisma } from "@/lib/prisma";
 import { diffDireNotePayload } from "@/lib/direnote-payload-diff";
 import { snapshotTrackContributions } from "@/lib/contributor-identity";
+import { attachedArtistProfileIds } from "@/lib/artist-store-links";
+
+async function persistDireNoteArtistIds(releaseId: number, artists: Array<{ name: string; artistId: string }>) {
+  if (!artists.length) return [] as number[];
+  return prisma.$transaction(async tx => {
+    const release = await tx.release.findUnique({
+      where: { id: releaseId },
+      select: { userId: true, artistProfileId: true, tracks: { select: { metadata: true } } }
+    });
+    if (!release) return [] as number[];
+    const attachedIds = [...new Set(release.tracks.flatMap(track => attachedArtistProfileIds(track.metadata, release.artistProfileId)))];
+    if (!attachedIds.length) return [] as number[];
+    const cards = await tx.artistCard.findMany({ where: { id: { in: attachedIds }, userId: release.userId, archivedAt: null } });
+    const updated: number[] = [];
+    for (const remote of artists) {
+      const matches = cards.filter(card => card.artistName.trim().toLocaleLowerCase() === remote.name.trim().toLocaleLowerCase());
+      if (matches.length !== 1) continue;
+      const card = matches[0];
+      if (card.direNoteArtistId && card.direNoteArtistId !== remote.artistId) continue;
+      await tx.artistCard.update({ where: { id: card.id }, data: { direNoteArtistId: remote.artistId } });
+      updated.push(card.id);
+    }
+    return updated;
+  });
+}
+
+async function persistDireNoteSongwriterIds(releaseId: number, songwriters: Array<{ name: string; songwriterId: string }>) {
+  if (!songwriters.length) return [] as number[];
+  return prisma.$transaction(async tx => {
+    const contributions = await tx.trackContribution.findMany({
+      where: { track: { releaseId }, role: { in: ["SONGWRITER", "LYRICIST", "COMPOSER"] }, party: { mergedIntoId: null } },
+      include: { party: true }
+    });
+    const updated: number[] = [];
+    for (const remote of songwriters) {
+      const matches = contributions.filter(item => item.creditedName.trim().toLocaleLowerCase() === remote.name.trim().toLocaleLowerCase() || item.party.legalName?.trim().toLocaleLowerCase() === remote.name.trim().toLocaleLowerCase());
+      const parties = [...new Map(matches.map(item => [item.party.id, item.party])).values()];
+      if (parties.length !== 1) continue;
+      const party = parties[0];
+      if (party.direNoteSongwriterId && party.direNoteSongwriterId !== remote.songwriterId) continue;
+      await tx.contributorParty.update({ where: { id: party.id }, data: { direNoteSongwriterId: remote.songwriterId } });
+      updated.push(party.id);
+    }
+    return [...new Set(updated)];
+  });
+}
 
 export type DistributionValidationIssue = {
   field: string;
@@ -309,13 +355,20 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
       responsePayload: redactDireNoteDiagnostic(data),
       warnings: parsed.warnings
     });
+    const artistCardIds = await persistDireNoteArtistIds(releaseId, parsed.artists);
+    const contributorPartyIds = await persistDireNoteSongwriterIds(releaseId, parsed.songwriters);
 
     await logDistributionEvent({ releaseId, action: options.retry ? "retry_submission" : "release_submission", httpStatus: response.httpStatus, createdByAdminId: options.actorId, correlationId, requestPayload: redactedPayload, responsePayload: data, responseRaw: response.raw, warnings: parsed.warnings, success: true });
     await moveQueue(releaseId, "sent_to_direnote", options.actorId, "Release sent to DireNote.", { direnoteResponse: data, warnings: parsed.warnings });
     await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: "DIRENOTE_ACCEPTED", details: { attemptId: claim.attempt.id, correlationId, trigger: options.correctionReingest ? "AUTO_AFTER_REDRESSAL_APPROVAL" : "AUTO_AFTER_QC_APPROVAL", status: automaticStatus, upc: parsed.upc, warnings: parsed.warnings } });
     await resolveAdminTask(`release:${releaseId}:direnote:validation`, "DireNote submission accepted.");
     await resolveAdminTask(`release:${releaseId}:direnote:network`, "DireNote submission accepted.");
-    await finishDistributionSubmission(claim.attempt.id, { state: "submitted", httpStatus: response.httpStatus, providerReference: parsed.distributorReleaseId ?? parsed.upc ?? null, responseRedacted: { distributorReleaseId: parsed.distributorReleaseId ?? null, upc: parsed.upc ?? null, trackIsrcs: parsed.trackIsrcs, warnings: parsed.warnings } });
+    await finishDistributionSubmission(claim.attempt.id, { state: "submitted", httpStatus: response.httpStatus, providerReference: parsed.distributorReleaseId ?? parsed.upc ?? null, responseRedacted: { distributorReleaseId: parsed.distributorReleaseId ?? null, upc: parsed.upc ?? null, trackIsrcs: parsed.trackIsrcs, artists: parsed.artists, songwriters: parsed.songwriters, warnings: parsed.warnings } });
+    if (artistCardIds.length || contributorPartyIds.length) {
+      const { syncDireNoteArtistInformation, syncDireNoteSongwriterInformation } = await import("@/lib/direnote-service");
+      await Promise.allSettled(artistCardIds.map(artistCardId => syncDireNoteArtistInformation(artistCardId, options.actorId, releaseId)));
+      await Promise.allSettled(contributorPartyIds.map(partyId => syncDireNoteSongwriterInformation(partyId, options.actorId, releaseId)));
+    }
     return { release: updatedRelease, validation, submitted: true, retryable: false, warnings: parsed.warnings };
   } catch (error) {
     const message = error instanceof Error ? error.message : "DireNote submission failed.";

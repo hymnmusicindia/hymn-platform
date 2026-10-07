@@ -2479,6 +2479,12 @@ model ContributorParty {
   claimedByUserId       Int?                            @unique @map("claimed_by_user_id")
   createdByUserId       Int?                            @map("created_by_user_id")
   verifiedAt            DateTime?                       @map("verified_at")
+  ipi                   String?
+  iprsMember            String?                         @map("iprs_member")
+  instagramUrl          String?                         @map("instagram_url")
+  xUrl                  String?                         @map("x_url")
+  direNoteSongwriterId  String?                         @map("direnote_songwriter_id")
+  direNoteLastSyncedAt  DateTime?                       @map("direnote_last_synced_at")
   mergedIntoId          Int?                            @map("merged_into_id")
   createdAt             DateTime                        @default(now()) @map("created_at")
   updatedAt             DateTime                        @updatedAt @map("updated_at")
@@ -2507,6 +2513,7 @@ model ContributorParty {
   @@index([professionalName])
   @@index([claimedByUserId, identityState])
   @@index([mergedIntoId])
+  @@index([direNoteSongwriterId])
   @@map("contributor_parties")
 }
 

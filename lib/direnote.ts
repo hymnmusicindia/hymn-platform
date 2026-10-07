@@ -16,7 +16,7 @@ import { getPublicAppUrl } from "@/lib/public-app-url";
 import { mapContributorToDireNote } from "@/lib/contributor-provider-mapping";
 import { attachedArtistProfileIds, verifiedArtistStoreLinks } from "@/lib/artist-store-links";
 import { parseReleaseDate, validIsrc, validReleaseBarcode, safeReleaseText } from "@/lib/release-input-rules";
-export { submitToDireNote, getDireNoteReleaseInformation, getDireNoteReleaseInformationByReference, getDireNoteRevenueReport } from "@/lib/direnote/direnote-client";
+export { submitToDireNote, getDireNoteReleaseInformation, getDireNoteReleaseInformationByReference, getDireNoteRevenueReport, getDireNoteArtistInformation, getDireNoteSongwriterInformation } from "@/lib/direnote/direnote-client";
 
 export type DireNoteArtist = {
   name: string;
@@ -100,6 +100,8 @@ export type DireNoteSuccessResponse = {
   distributor_release_id?: string;
   cover_art?: string;
   tracks?: Array<{ track_name?: string; isrc?: string; wav_file?: string; status?: string }>;
+  artists?: Array<{ name?: string; artist_id?: string | number; created?: boolean }>;
+  songwriters?: Array<{ name?: string; songwriter_id?: string | number; created?: boolean }>;
   warnings?: string[];
   [key: string]: unknown;
 };
@@ -121,6 +123,8 @@ export type DireNoteParsedResponse = {
   distributorReleaseId?: string | null;
   warnings: string[];
   trackIsrcs: Array<{ trackNumber?: number; trackTitle?: string; isrc?: string | null; distributorStatus?: string | null }>;
+  artists: Array<{ name: string; artistId: string; created?: boolean }>;
+  songwriters: Array<{ name: string; songwriterId: string; created?: boolean }>;
   status: "sent_to_distributor" | "processing" | "delivered";
 };
 
@@ -528,6 +532,8 @@ export function parseDireNoteResponse(response: unknown): DireNoteParsedResponse
   const nested = [record, (record as any).data, (record as any).result, (record as any).release].find((value) => value && typeof value === "object" && (value.upc || value.UPC || value.upc_code || value.upcCode || value.tracks)) as any ?? record;
   const success = record.success === true || nested.success === true;
   const tracks = Array.isArray(nested.tracks) ? nested.tracks : Array.isArray((record as any).tracks) ? (record as any).tracks : [];
+  const artists = Array.isArray(nested.artists) ? nested.artists : Array.isArray((record as any).artists) ? (record as any).artists : [];
+  const songwriters = Array.isArray(nested.songwriters) ? nested.songwriters : Array.isArray((record as any).songwriters) ? (record as any).songwriters : [];
   return {
     raw: response,
     success,
@@ -541,6 +547,16 @@ export function parseDireNoteResponse(response: unknown): DireNoteParsedResponse
       isrc: track.isrc ?? track.ISRC ?? null,
       distributorStatus: track.status ?? null
     })),
+    artists: artists.flatMap((artist: any) => {
+      const name = typeof artist?.name === "string" ? artist.name.trim() : "";
+      const artistId = typeof artist?.artist_id === "number" || typeof artist?.artist_id === "string" ? String(artist.artist_id).trim() : "";
+      return name && /^\d+$/.test(artistId) ? [{ name, artistId, ...(typeof artist.created === "boolean" ? { created: artist.created } : {}) }] : [];
+    }),
+    songwriters: songwriters.flatMap((songwriter: any) => {
+      const name = typeof songwriter?.name === "string" ? songwriter.name.trim() : "";
+      const songwriterId = typeof songwriter?.songwriter_id === "number" || typeof songwriter?.songwriter_id === "string" ? String(songwriter.songwriter_id).trim() : "";
+      return name && /^\d+$/.test(songwriterId) ? [{ name, songwriterId, ...(typeof songwriter.created === "boolean" ? { created: songwriter.created } : {}) }] : [];
+    }),
     status: "processing"
   };
 }

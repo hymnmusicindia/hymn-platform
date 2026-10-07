@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { submitToDireNote, getDireNoteReleaseInformation, getDireNoteRevenueReport } from "../lib/direnote/direnote-client";
+import { submitToDireNote, getDireNoteArtistInformation, getDireNoteReleaseInformation, getDireNoteRevenueReport, getDireNoteSongwriterInformation } from "../lib/direnote/direnote-client";
 
 process.env.DIRENOTE_CLIENT_ID = "fixture-client";
 process.env.DIRENOTE_API_PIN = "fixture-secret";
@@ -8,7 +8,9 @@ async function main() {
   const calls = [
     (fetchImpl: typeof fetch) => submitToDireNote({}, { fetchImpl, timeoutMs: 20 }),
     (fetchImpl: typeof fetch) => getDireNoteReleaseInformation("123456789012", { fetchImpl, timeoutMs: 20 }),
-    (fetchImpl: typeof fetch) => getDireNoteRevenueReport("INTST2600001", { fetchImpl, timeoutMs: 20 })
+    (fetchImpl: typeof fetch) => getDireNoteRevenueReport("INTST2600001", { fetchImpl, timeoutMs: 20 }),
+    (fetchImpl: typeof fetch) => getDireNoteArtistInformation(1042, { fetchImpl, timeoutMs: 20 }),
+    (fetchImpl: typeof fetch) => getDireNoteSongwriterInformation(2210, { fetchImpl, timeoutMs: 20 })
   ];
   for (const call of calls) {
     for (const status of [200, 201, 202, 204, 400, 401, 403, 404, 409, 422, 429, 500, 502, 503, 504]) {
@@ -31,6 +33,6 @@ async function main() {
     assert.equal(limited.retryAfterSeconds, 120);
     assert(!limited.error?.includes("fixture-secret"));
   }
-  console.log("Provider HTTP, malformed-response, network, timeout and rate-limit matrix passed for all three endpoints.");
+console.log("Provider HTTP, malformed-response, network, timeout and rate-limit matrix passed for all five endpoints.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

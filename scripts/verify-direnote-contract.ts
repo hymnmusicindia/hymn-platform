@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { buildDireNotePayload, parseDireNoteResponse, validateDireNotePayload } from "../lib/direnote";
-import { extractDireNoteProviderError, getDireNoteReleaseInformation, getDireNoteRevenueReport, submitToDireNote } from "../lib/direnote/direnote-client";
+import { extractDireNoteProviderError, getDireNoteArtistInformation, getDireNoteReleaseInformation, getDireNoteRevenueReport, getDireNoteSongwriterInformation, submitToDireNote } from "../lib/direnote/direnote-client";
 import { getDireNoteConfig } from "../lib/direnote/direnote-config";
 import { normalizeDireNoteGenre } from "../lib/direnote-config";
 import { upcFromDireNoteResponse } from "../lib/direnote-upc";
@@ -40,6 +40,8 @@ assert.equal(validated({ tracks: [{ ...payload.tracks[0], artists: [{ name: "New
 assert.equal(validated({ tracks: [{ ...payload.tracks[0], trackGenre: "Pop", trackSubgenre: "Trap" }] }).issues.some(issue => issue.field === "tracks.0.trackSubgenre"), true);
 assert.equal(validated({ contenttype: "AI Generated", suno_receipt_url: "https://cdn.example.test/receipt.jpg", sunoLink: "https://suno.com/song/example" }).issues.some(issue => issue.field === "suno_receipt_url" && issue.message.includes("PDF")), true);
 assert.equal(parseDireNoteResponse({ success: true, release_id: "dn_1", upc: "890123", tracks: [{ track_name: "TEST", isrc: "IN-TEST-1", status: "Pending" }] }).trackIsrcs[0].isrc, "IN-TEST-1");
+assert.deepEqual(parseDireNoteResponse({ success: true, artists: [{ name: "NZLDR", artist_id: 1042, created: true }] }).artists, [{ name: "NZLDR", artistId: "1042", created: true }]);
+assert.deepEqual(parseDireNoteResponse({ success: true, songwriters: [{ name: "Nzl Dr", songwriter_id: 2210, created: false }] }).songwriters, [{ name: "Nzl Dr", songwriterId: "2210", created: false }]);
 assert.equal(parseDireNoteResponse({ success: true, release: { release_id: "dn_2", upc_code: "8901234567890" }, tracks: [{ track_name: "TEST", isrc: "IN-TEST-2", status: "Pending" }] }).upc, "8901234567890");
 assert.equal(parseDireNoteResponse({ success: true, data: { release: { upc_code: "8901234567891" }, tracks: [{ track_name: "TEST", isrc: "IN-TEST-3" }] } }).upc, "8901234567891");
 assert.equal(upcFromDireNoteResponse({ release: { upc_code: "8901234567892" } }), "8901234567892");
@@ -56,16 +58,28 @@ assert.equal(getDireNoteConfig().endpoint, "https://api.direnotemedia.com/ingest
 process.env.DIRENOTE_INGEST_ENDPOINT = "https://direnote.invalid/ingest";
 process.env.DIRENOTE_RELEASE_INFORMATION_ENDPOINT = "https://direnote.invalid/status";
 process.env.DIRENOTE_REVENUE_REPORT_ENDPOINT = "https://direnote.invalid/revenue";
+process.env.DIRENOTE_ARTIST_INFORMATION_ENDPOINT = "https://direnote.invalid/artist";
+process.env.DIRENOTE_SONGWRITER_INFORMATION_ENDPOINT = "https://direnote.invalid/songwriter";
 const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
 const fetchStub: typeof fetch = async (input, init) => { requests.push({ url: String(input), body: JSON.parse(String(init?.body ?? "{}")) }); return new Response(JSON.stringify({ success: true }), { status: 200 }); };
 await submitToDireNote({ albumname: "TEST" }, { fetchImpl: fetchStub });
 await getDireNoteReleaseInformation("890- 123", { fetchImpl: fetchStub });
 await getDireNoteRevenueReport("in-test 1", { fetchImpl: fetchStub });
-assert.deepEqual(requests.map(request => request.url), ["https://direnote.invalid/ingest", "https://direnote.invalid/status", "https://direnote.invalid/revenue"]);
+await getDireNoteArtistInformation("1042", { fetchImpl: fetchStub });
+await getDireNoteSongwriterInformation(2210, { fetchImpl: fetchStub });
+assert.deepEqual(requests.map(request => request.url), ["https://direnote.invalid/ingest", "https://direnote.invalid/status", "https://direnote.invalid/revenue", "https://direnote.invalid/artist", "https://direnote.invalid/songwriter"]);
 assert.equal(requests[0].body.pin, "contract-pin");
 assert.equal(requests[0].body.client_id, "contract-client");
 assert.equal(requests[1].body.upc, "890123");
 assert.equal(requests[2].body.isrc, "INTEST1");
+assert.equal(requests[3].body.artist_id, 1042);
+assert.equal(requests[4].body.songwriter_id, 2210);
+const invalidArtist = await getDireNoteArtistInformation("not-an-id", { fetchImpl: fetchStub });
+assert.equal(invalidArtist.success, false);
+assert.match(invalidArtist.error ?? "", /valid positive DireNote artist ID/);
+const invalidSongwriter = await getDireNoteSongwriterInformation(0, { fetchImpl: fetchStub });
+assert.equal(invalidSongwriter.success, false);
+assert.match(invalidSongwriter.error ?? "", /valid positive DireNote songwriter ID/);
 const rejected = await submitToDireNote({}, { fetchImpl: async () => new Response(JSON.stringify({ success: false, error: "invalid" }), { status: 400 }) });
 assert.deepEqual({ success: rejected.success, status: rejected.httpStatus }, { success: false, status: 400 });
 assert.equal(rejected.error, "invalid");
@@ -92,7 +106,7 @@ assert.deepEqual({ success: quotaRejected.success, status: quotaRejected.httpSta
 const reportingMonth = new Date("2026-06-01T00:00:00.000Z"); const salesMonth = new Date("2026-05-01T00:00:00.000Z");
 const fingerprint = royaltyEconomicFingerprint({ reportingMonth, salesMonth, isrc: "INDN-22601883", upc: "890 123 456", platform: "Spotify", country: "in", salesType: "Streaming", quantity: 1234, currency: "usd", netRevenue: 142.8 });
 assert.equal(fingerprint, royaltyEconomicFingerprint({ reportingMonth, salesMonth, isrc: "indn22601883", upc: "890123456", platform: " spotify ", country: "IN", salesType: "streaming", quantity: 1234, currency: "USD", netRevenue: 142.8000001 }));
-console.log("DireNote v2.2 payload contract and C/P-line regression verification passed.");
+console.log("DireNote v2.3 payload and identity-information contract verification passed.");
 }
 
 verifyClientContract().catch((error) => { console.error(error); process.exitCode = 1; });

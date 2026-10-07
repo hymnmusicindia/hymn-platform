@@ -227,6 +227,7 @@ export async function mergeContributorParties(input: { sourcePartyId: number; ta
     if (!source || !target) throw new Error("Both contributor identities must be active canonical records.");
     if (source.claimedByUserId && target.claimedByUserId && source.claimedByUserId !== target.claimedByUserId) throw new Error("Both identities are claimed by different accounts. Resolve account ownership before merging.");
     if (source.producerProfile && target.producerProfile) throw new Error("Both identities have producer profiles. Resolve the public profile conflict before merging.");
+    if (source.direNoteSongwriterId && target.direNoteSongwriterId && source.direNoteSongwriterId !== target.direNoteSongwriterId) throw new Error("These contributors have different DireNote songwriter identities. Reconcile the provider IDs before merging.");
     const targetIdentifiers = new Set(target.externalIdentifiers.map((item) => `${item.scheme}:${item.value}`));
     const conflictingIdentifierIds = source.externalIdentifiers.filter((item) => targetIdentifiers.has(`${item.scheme}:${item.value}`)).map((item) => item.id);
     if (conflictingIdentifierIds.length) await tx.contributorExternalIdentifier.deleteMany({ where: { id: { in: conflictingIdentifierIds } } });
@@ -248,6 +249,14 @@ export async function mergeContributorParties(input: { sourcePartyId: number; ta
       tx.contributorNameHistory.updateMany({ where: { partyId: source.id }, data: { partyId: target.id } })
     ]);
     if (source.producerProfile && !target.producerProfile) await tx.producerProfile.update({ where: { id: source.producerProfile.id }, data: { contributorPartyId: target.id } });
+    await tx.contributorParty.update({ where: { id: target.id }, data: {
+      ...(!target.direNoteSongwriterId && source.direNoteSongwriterId ? { direNoteSongwriterId: source.direNoteSongwriterId } : {}),
+      ...(!target.direNoteLastSyncedAt && source.direNoteLastSyncedAt ? { direNoteLastSyncedAt: source.direNoteLastSyncedAt } : {}),
+      ...(!target.ipi && source.ipi ? { ipi: source.ipi } : {}),
+      ...(!target.iprsMember && source.iprsMember ? { iprsMember: source.iprsMember } : {}),
+      ...(!target.instagramUrl && source.instagramUrl ? { instagramUrl: source.instagramUrl } : {}),
+      ...(!target.xUrl && source.xUrl ? { xUrl: source.xUrl } : {})
+    } });
     if (source.claimedByUserId && !target.claimedByUserId) await tx.contributorParty.update({ where: { id: target.id }, data: { claimedByUserId: source.claimedByUserId, identityState: source.identityState } });
     await tx.contributorParty.update({ where: { id: source.id }, data: { claimedByUserId: null, identityState: "MERGED", mergedIntoId: target.id } });
     const merge = await tx.producerIdentityMerge.create({ data: { sourcePartyId: source.id, targetPartyId: target.id, mergedByUserId: input.adminUserId ?? null, evidence: input.evidence as any } });
