@@ -3546,3 +3546,62 @@ body:has(.release-journey-intro) > header,body:has(.release-journey-intro) > foo
 @media(max-width:640px) { .release-journey-progress { flex-wrap:wrap; }.release-journey-progress-track { flex-basis:100%; } }
 @media(max-width:640px) { .release-journey-intro { min-height:calc(100svh - 5rem); }.release-journey-intro-body { min-height:calc(100svh - 13rem); }.release-format-options { gap:.5rem; }.release-format-options button { min-height:9rem; padding:.8rem; }.release-format-options strong { font-size:1rem; } }
 @media(prefers-reduced-motion:reduce) { .release-journey-intro button { transition:none; } }
+
+/* Compact release entry and growing music queue */
+.release-journey-intro { min-height:min(42rem,calc(100svh - 1rem)); padding:0 clamp(1rem,3vw,2rem) 1rem; }
+.release-journey-intro-header { min-height:4.25rem; }
+.release-journey-intro-body { min-height:min(31rem,calc(100svh - 5.75rem)); padding:1rem 0 1.25rem; }
+.release-journey-eyebrow { margin-bottom:.7rem; }
+.release-journey-intro h1 { font-size:clamp(2.15rem,5vw,4rem); }
+.release-journey-intro-body > p:not(.release-journey-eyebrow) { margin-top:.75rem; }
+.release-format-options { max-width:48rem; gap:.7rem; margin-top:1.35rem; }
+.release-format-options button { position:relative; min-height:6.25rem; display:grid; grid-template-columns:2.65rem 1fr; grid-template-rows:auto auto; align-content:center; column-gap:.85rem; row-gap:.12rem; overflow:hidden; border-color:color-mix(in srgb,var(--border) 82%,transparent); border-radius:1rem; padding:.85rem 1rem; background:linear-gradient(145deg,color-mix(in srgb,var(--card) 92%,var(--bg-soft)),color-mix(in srgb,var(--bg-soft) 78%,transparent)); box-shadow:inset 0 1px 0 color-mix(in srgb,var(--text) 6%,transparent),0 12px 34px color-mix(in srgb,var(--shadow) 6%,transparent); }
+.release-format-options button::after { content:""; position:absolute; width:5rem; height:5rem; right:-2.5rem; top:-2.5rem; border-radius:50%; background:var(--accent); opacity:0; filter:blur(22px); transition:opacity .2s ease; }
+.release-format-options button:hover:not(:disabled) { transform:translateY(-2px); border-color:color-mix(in srgb,var(--accent) 62%,var(--border)); box-shadow:inset 0 1px 0 color-mix(in srgb,var(--text) 8%,transparent),0 16px 38px color-mix(in srgb,var(--shadow) 10%,transparent); }
+.release-format-options button[aria-pressed="true"] { border-color:color-mix(in srgb,var(--accent) 75%,var(--border)); background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 13%,var(--card)),color-mix(in srgb,var(--accent) 4%,var(--bg-soft))); box-shadow:inset 0 1px 0 color-mix(in srgb,var(--text) 12%,transparent),0 15px 38px color-mix(in srgb,var(--accent) 12%,transparent); }
+.release-format-options button[aria-pressed="true"]::after { opacity:.16; }
+.release-format-symbol { grid-row:1 / 3; display:grid; width:2.65rem; height:2.65rem; place-items:center; align-self:center; border:1px solid color-mix(in srgb,var(--border-strong) 80%,transparent); border-radius:50%; background:color-mix(in srgb,var(--card) 82%,transparent); color:var(--text); font-size:1.15rem; box-shadow:inset 0 1px 0 color-mix(in srgb,var(--text) 10%,transparent); }
+.release-format-options strong { align-self:end; font-size:1.05rem; }
+.release-format-options small { align-self:start; font-size:.72rem; }
+.release-journey-primary { min-height:2.8rem; margin-top:1.25rem; padding:.55rem 1.35rem; }
+
+body:has(.release-workflow.is-audio-upload-step) { height:auto; min-height:100svh; overflow-x:hidden; overflow-y:auto; }
+.distribution-start-page:has(.release-workflow.is-audio-upload-step) { height:auto; min-height:100svh; overflow:visible; padding-bottom:2rem !important; }
+.release-workflow.is-audio-upload-step { min-height:calc(100svh - 1rem); }
+.release-workflow.is-audio-upload-step .release-audio-stage { min-height:0; align-content:start; padding-bottom:1.25rem; }
+.release-workflow.is-audio-upload-step .release-focused-actions { margin-top:.25rem; }
+.release-audio-queue,.release-audio-queue.is-scrollable { max-height:none; overflow:visible; padding-right:0; }
+.release-audio-empty-state { display:flex; min-height:4.25rem; align-items:center; gap:.8rem; border:1px dashed var(--border); border-radius:1rem; padding:.75rem; background:color-mix(in srgb,var(--bg-soft) 68%,transparent); }
+.release-audio-empty-state > span.release-audio-empty-number { display:grid; width:2.25rem; height:2.25rem; flex:none; place-items:center; border:1px solid var(--border); border-radius:50%; background:var(--card); color:var(--text-soft); font-size:.65rem; font-weight:800; letter-spacing:.08em; }
+.release-audio-empty-state > div { display:grid; gap:.15rem; text-align:left; }
+.release-audio-empty-state strong { color:var(--text); font-size:.76rem; }
+.release-audio-empty-state p { color:var(--text-muted); font-size:.68rem; }
+.release-audio-queue-item { grid-template-columns:2.25rem minmax(0,1fr) auto; min-height:4.4rem; border-radius:1rem; padding:.55rem .7rem; animation:release-track-arrive .28s cubic-bezier(.2,.8,.2,1) both; }
+.release-audio-queue-item.is-ready { border:1px solid color-mix(in srgb,var(--success) 24%,var(--border)); background:linear-gradient(100deg,color-mix(in srgb,var(--success) 5%,var(--bg-elevated)),var(--bg-elevated) 38%); }
+.release-audio-index { display:grid; width:2rem; height:2rem; place-items:center; border:1px solid var(--border); border-radius:50%; background:var(--card); color:var(--text-soft); font-size:.64rem; font-weight:800; letter-spacing:.08em; }
+.release-format-upgrade { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-top:.35rem; border:1px solid color-mix(in srgb,var(--accent) 40%,var(--border)); border-radius:1rem; padding:1rem; background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 10%,var(--card)),var(--card)); box-shadow:0 14px 38px color-mix(in srgb,var(--accent) 8%,transparent); }
+.release-format-upgrade > div:first-child { display:grid; gap:.16rem; text-align:left; }
+.release-format-upgrade > div:first-child > span { color:var(--accent); font-size:.63rem; font-weight:800; letter-spacing:.13em; text-transform:uppercase; }
+.release-format-upgrade strong { color:var(--text); font-size:1rem; }
+.release-format-upgrade p { color:var(--text-muted); font-size:.72rem; }
+.release-format-upgrade-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:.5rem; }
+.release-format-upgrade-actions button { min-height:2.5rem; border:1px solid var(--border-strong); border-radius:999px; padding:.5rem .85rem; color:var(--text-muted); font-size:.72rem; font-weight:750; }
+.release-format-upgrade-actions button:first-child { border-color:var(--accent); background:var(--accent); color:var(--accent-foreground); }
+.release-multiple-tracks-prompt { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-top:.25rem; border:0; border-top:1px solid var(--border); padding:.9rem .15rem .2rem; text-align:left; }
+.release-multiple-tracks-prompt span { color:var(--text-soft); font-size:.7rem; }
+.release-multiple-tracks-prompt strong { color:var(--text); font-size:.74rem; }
+@keyframes release-track-arrive { from { opacity:0; transform:translateY(8px) scale(.99); } to { opacity:1; transform:none; } }
+
+@media(max-width:640px) {
+  .release-journey-intro { min-height:100svh; border-radius:0; }
+  .release-journey-intro-header { min-height:3.8rem; }
+  .release-journey-intro-body { min-height:calc(100svh - 5rem); justify-content:flex-start; padding-top:1.25rem; }
+  .release-format-options { grid-template-columns:1fr; width:min(100%,24rem); margin-top:1rem; }
+  .release-format-options button { min-height:4.75rem; grid-template-columns:2.35rem 1fr auto; grid-template-rows:1fr; align-items:center; padding:.65rem .8rem; }
+  .release-format-symbol { grid-row:auto; width:2.35rem; height:2.35rem; }
+  .release-format-options strong,.release-format-options small { align-self:center; }
+  .release-format-upgrade { align-items:stretch; flex-direction:column; }
+  .release-format-upgrade-actions { justify-content:stretch; }
+  .release-format-upgrade-actions button { flex:1; }
+  .release-audio-queue-item { grid-template-columns:2rem minmax(0,1fr) auto; }
+}

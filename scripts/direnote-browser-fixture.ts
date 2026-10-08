@@ -37,7 +37,7 @@ export async function startDireNoteBrowser(userId: number) {
         await expect(page.getByRole("heading", { name: "Hello, gxrry." })).toBeVisible();
         await page.getByRole("button", { name: /Start your release/ }).click();
         await expect(page.getByRole("heading", { name: "What are you releasing?" })).toBeVisible();
-        await page.getByRole("button", { name: /EP 2/ }).click();
+        await page.getByRole("button", { name: /Single 1/ }).click();
         await page.getByRole("button", { name: /Continue to music/ }).click();
         await expect(page.getByRole("heading", { name: "Add your music" })).toBeVisible();
         await expect(page.getByRole("button", { name: "Continue to cover artwork" })).toBeVisible();
@@ -47,19 +47,28 @@ export async function startDireNoteBrowser(userId: number) {
         await page.setViewportSize({ width: 375, height: 844 });
         await page.reload();
         await expect(page.getByRole("heading", { name: "Add your music" })).toBeVisible();
-        await expect(page.getByText("EP name", { exact: true })).toBeVisible();
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth && document.body.scrollWidth <= window.innerWidth)).toBe(true);
         await page.screenshot({ path: ".cache/release-journey-music-mobile.png", fullPage: true });
         await page.setViewportSize({ width: 1440, height: 1000 });
-        await page.getByRole("textbox", { name: "EP name" }).fill("Fixture EP");
         const audio = fixtureWav();
         await page.locator(".release-batch-upload input[type=file]").setInputFiles([
           { name: "Night Drive.wav", mimeType: "audio/wav", buffer: audio },
           { name: "First Light.wav", mimeType: "audio/wav", buffer: audio },
         ]);
-        await expect(page.getByRole("button", { name: "Use this track title" })).toHaveCount(2, { timeout: 60000 });
-        await page.getByRole("button", { name: "Use this track title" }).first().click();
-        await page.getByRole("button", { name: "Use this track title" }).first().click();
+        await expect(page.getByText("2 tracks selected", { exact: true })).toBeVisible();
+        await page.getByRole("button", { name: "Keep as Single" }).click();
+        await expect(page.getByRole("button", { name: "Use this track title" })).toHaveCount(1, { timeout: 60000 });
+        await page.getByRole("button", { name: "Use this track title" }).click();
+        await page.locator(".release-batch-upload input[type=file]").setInputFiles([
+          { name: "First Light.wav", mimeType: "audio/wav", buffer: audio },
+        ]);
+        await expect(page.getByText("2 tracks selected", { exact: true })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Convert to EP" })).toBeVisible();
+        await page.getByRole("button", { name: "Convert to EP" }).click();
+        await expect(page.getByRole("textbox", { name: "EP name" })).toBeVisible();
+        await page.getByRole("textbox", { name: "EP name" }).fill("Fixture EP");
+        await expect(page.getByRole("button", { name: "Use this track title" })).toHaveCount(1, { timeout: 60000 });
+        await page.getByRole("button", { name: "Use this track title" }).click();
         await page.getByRole("button", { name: "Continue to cover artwork" }).click();
         await expect(page.getByRole("heading", { name: "Prepare your cover artwork" })).toBeVisible();
         const savedDraftUrl = page.url();
@@ -108,7 +117,7 @@ export async function startDireNoteBrowser(userId: number) {
         await stageNavigation.locator("button").filter({ hasText: /^Review$/ }).click();
         await expect(page.getByRole("heading", { name: "One last look." })).toBeVisible();
         await page.goto(artistWizardUrl);
-        console.log("Release journey browser checks passed: welcome, EP format, two audio uploads, title confirmation, cover upload, artist selection, every remaining stage, mobile resume and persisted draft.");
+        console.log("Release journey browser checks passed: welcome, smart Single-to-EP conversion, two audio uploads, title confirmation, cover upload, artist selection, every remaining stage, mobile resume and persisted draft.");
       },
       async artistWizard() {
         artistWizardUrl = page.url();
