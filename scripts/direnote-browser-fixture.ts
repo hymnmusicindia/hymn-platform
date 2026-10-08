@@ -37,8 +37,11 @@ export async function startDireNoteBrowser(userId: number) {
         await expect(page.getByRole("heading", { name: "Hello, gxrry." })).toBeVisible();
         await page.getByRole("button", { name: /Start your release/ }).click();
         await expect(page.getByRole("heading", { name: "What are you releasing?" })).toBeVisible();
-        await page.getByRole("button", { name: /Single 1/ }).click();
-        await page.getByRole("button", { name: /Continue to music/ }).click();
+        const formatShell = await page.locator(".release-journey-intro").boundingBox();
+        expect(formatShell).not.toBeNull();
+        expect(formatShell!.width).toBeLessThanOrEqual(1440 * 0.71);
+        expect(formatShell!.height).toBeLessThanOrEqual(1000 * 0.71);
+        await page.getByRole("button", { name: /Single 1/ }).dblclick();
         await expect(page.getByRole("heading", { name: "Add your music" })).toBeVisible();
         await expect(page.getByRole("button", { name: "Continue to cover artwork" })).toBeVisible();
         await page.getByRole("button", { name: "Continue to cover artwork" }).click();
@@ -59,6 +62,9 @@ export async function startDireNoteBrowser(userId: number) {
         await page.getByRole("button", { name: "Keep as Single" }).click();
         await expect(page.getByRole("button", { name: "Use this track title" })).toHaveCount(1, { timeout: 60000 });
         await page.getByRole("button", { name: "Use this track title" }).click();
+        await page.getByRole("button", { name: /Turn this release into an EP or Album/ }).click();
+        await expect(page.getByRole("dialog", { name: "How many tracks belong together?" })).toBeVisible();
+        await page.getByRole("button", { name: "Close format selector" }).click();
         await page.locator(".release-batch-upload input[type=file]").setInputFiles([
           { name: "First Light.wav", mimeType: "audio/wav", buffer: audio },
         ]);

@@ -1119,6 +1119,16 @@ export function ReleaseForm({
   const [step, setStep] = useState(correctionTrackIndex !== null ? 3 : initialRelease?.status === "draft" && initialStage != null && [0, 4, 1, 3, 2, 5, 7].includes(initialStage) ? initialStage : initialRelease ? 7 : 0);
   const resumeStageResolvedRef = useRef(false);
   const [journeyIntro, setJourneyIntro] = useState<"welcome" | "format" | null>(initialRelease || audioLibraryPrefill ? null : "welcome");
+  const [journeyExiting, setJourneyExiting] = useState(false);
+  const [musicEntering, setMusicEntering] = useState(false);
+  const [formatPickerOpen, setFormatPickerOpen] = useState(false);
+  const journeyTransitionTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!formatPickerOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setFormatPickerOpen(false); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [formatPickerOpen]);
   const [formatIntent, setFormatIntent] = useState<"single" | "ep" | "album" | null>(() => {
     const saved = initialRelease?.metadata && typeof initialRelease.metadata === "object" ? (initialRelease.metadata as Record<string, unknown>).wizardFormatIntent : null;
     return firstReleaseOffer ? "single" : saved === "single" || saved === "ep" || saved === "album" ? saved : initialRelease?.releaseType ?? null;
@@ -1318,6 +1328,7 @@ export function ReleaseForm({
   const isPaidReleaseResubmission = isPaidCorrectionRelease(initialRelease);
   useEffect(() => () => {
     if (stepTransitionTimerRef.current != null) window.clearTimeout(stepTransitionTimerRef.current);
+    if (journeyTransitionTimerRef.current != null) window.clearTimeout(journeyTransitionTimerRef.current);
   }, []);
   const scheduledDateWasMoved = Boolean(
     initialRelease?.releaseTiming === "schedule_release" &&
@@ -1695,8 +1706,11 @@ export function ReleaseForm({
   }, [autosaveEligible, autosaveSnapshot, draftConflict, draftReleaseId, reviewMetadataFingerprint, submittedRelease, submitting, initialRelease]);
 
   async function retryAutosave() {
-    if (draftConflict) return;
-    if (!draftReleaseId || submitting) return saveDraftRelease();
+    if (draftConflict || submitting) return false;
+    if (!draftReleaseId) {
+      await saveDraftRelease();
+      return true;
+    }
     setAutosaveStatus("saving");
     try {
       const response = await fetch(`/api/distribution/drafts/${draftReleaseId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...autosaveSnapshot, expectedUpdatedAt: draftVersionRef.current }) });
@@ -1706,7 +1720,23 @@ export function ReleaseForm({
       draftVersionRef.current = typeof data.savedAt === "string" ? data.savedAt : draftVersionRef.current;
       lastSavedFingerprintRef.current = reviewMetadataFingerprint;
       setAutosaveStatus("saved");
-    } catch (error) { setAutosaveStatus("error"); if (error instanceof Error) setStatus(error.message); }
+      return true;
+    } catch (error) {
+      setAutosaveStatus("error");
+      if (error instanceof Error) setStatus(error.message);
+      return false;
+    }
+  }
+
+  async function quitReleaseJourney() {
+    if (submitting) return;
+    await autosavePendingRef.current.catch(() => undefined);
+    if (autosaveEligible && hasUnsavedChanges) {
+      const saved = await retryAutosave();
+      if (!saved) return;
+      if (!draftReleaseId) return;
+    }
+    router.push("/distribution");
   }
 
   useEffect(() => {
@@ -3372,6 +3402,29 @@ export function ReleaseForm({
     setSubmittedRelease(null);
   }
 
+  function confirmFormatAndOpenMusic(nextFormat = formatIntent) {
+    if (!nextFormat || journeyExiting) return;
+    setFormatIntent(nextFormat);
+    setJourneyExiting(true);
+    if (journeyTransitionTimerRef.current != null) window.clearTimeout(journeyTransitionTimerRef.current);
+    journeyTransitionTimerRef.current = window.setTimeout(() => {
+      setJourneyIntro(null);
+      setJourneyExiting(false);
+      setMusicEntering(true);
+      setHasStartedEditing(true);
+      journeyTransitionTimerRef.current = window.setTimeout(() => {
+        setMusicEntering(false);
+        journeyTransitionTimerRef.current = null;
+      }, 520);
+    }, 340);
+  }
+
+  function chooseFormatFromDialog(nextFormat: "ep" | "album") {
+    setFormatIntent(nextFormat);
+    setFormatPickerOpen(false);
+    setStatus(null);
+  }
+
   if (submittedRelease) {
     return (
       <SuccessState
@@ -3383,10 +3436,10 @@ export function ReleaseForm({
     );
   }
   if (journeyIntro) return (
-    <section className="release-journey-intro" aria-labelledby="release-journey-heading">
+    <section className={clsx("release-journey-intro", journeyExiting && "is-exiting-to-music")} aria-labelledby="release-journey-heading">
       <header className="release-journey-intro-header">
         <button type="button" onClick={() => journeyIntro === "format" ? setJourneyIntro("welcome") : router.push("/distribution")}>
-          {journeyIntro === "format" ? "← Back" : "Save & quit"}
+          {journeyIntro === "format" ? "← Back" : "Quit"}
         </button>
         <NextImage src="/assets/hymnlogowhite.png" alt="HYMN Music" width={116} height={38} priority />
       </header>
@@ -3401,15 +3454,16 @@ export function ReleaseForm({
           <p>Choose a format to shape your path. You can change this before submitting.</p>
           <div className="release-format-options" role="group" aria-label="Release format">
             {(["single", "ep", "album"] as const).map((format) => (
-              <button key={format} type="button" aria-pressed={formatIntent === format} disabled={Boolean(singleReleaseGift && format !== "single")} onClick={() => setFormatIntent(format)}>
+              <button key={format} type="button" aria-pressed={formatIntent === format} aria-describedby="release-format-hint" disabled={Boolean(singleReleaseGift && format !== "single")} onClick={() => setFormatIntent(format)} onDoubleClick={() => confirmFormatAndOpenMusic(format)}>
                 <span className="release-format-symbol" aria-hidden="true">{format === "single" ? "♪" : format === "ep" ? "♫" : "♬"}</span>
                 <strong>{format === "ep" ? "EP" : format[0].toUpperCase() + format.slice(1)}</strong>
                 <small>{format === "single" ? "1 track" : format === "ep" ? "2–4 tracks" : "5–30 tracks"}</small>
               </button>
             ))}
           </div>
+          <p id="release-format-hint" className="release-format-hint">Select once to preview. Double-click to continue.</p>
           {singleReleaseGift ? <p className="release-format-note">Your first release on us covers one Single. EP and Album are available for later releases.</p> : null}
-          <button type="button" className="release-journey-primary" disabled={!formatIntent} onClick={() => { setJourneyIntro(null); setHasStartedEditing(true); }}>Continue to music <span aria-hidden="true">→</span></button>
+          <button type="button" className="release-journey-primary" disabled={!formatIntent || journeyExiting} onClick={() => confirmFormatAndOpenMusic()}>Continue to music <span aria-hidden="true">↓</span></button>
         </>}
       </div>
     </section>
@@ -3429,6 +3483,17 @@ export function ReleaseForm({
           </section>
         </div>
       ) : null}
+      {formatPickerOpen && typeof document !== "undefined" ? createPortal(
+        <div className="release-format-picker-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setFormatPickerOpen(false); }}>
+          <section className="release-format-picker" role="dialog" aria-modal="true" aria-labelledby="release-format-picker-title">
+            <header><div><span>Release format</span><h2 id="release-format-picker-title">How many tracks belong together?</h2></div><button type="button" onClick={() => setFormatPickerOpen(false)} aria-label="Close format selector"><X /></button></header>
+            <div className="release-format-picker-options">
+              <button type="button" onClick={() => chooseFormatFromDialog("ep")} aria-pressed={formatIntent === "ep"}><span>02–04</span><strong>EP</strong><small>A short connected project</small></button>
+              <button type="button" onClick={() => chooseFormatFromDialog("album")} aria-pressed={formatIntent === "album"}><span>05–30</span><strong>Album</strong><small>A full-length body of work</small></button>
+            </div>
+            <p>You can keep editing your uploaded tracks after switching.</p>
+          </section>
+        </div>, document.body) : null}
       <form
         onSubmit={handleFinalSubmit}
         onChangeCapture={() => setHasStartedEditing(true)}
@@ -3437,11 +3502,11 @@ export function ReleaseForm({
           if ((event.target as HTMLElement).closest("button")) setHasStartedEditing(true);
         }}
         onDropCapture={() => setHasStartedEditing(true)}
-        className={clsx("release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", (step === 0 || step === 1) && "is-focused-step", step === 0 && "is-audio-upload-step", step === 1 && "is-artist-step", step === 3 && "is-tracklist-step", step === 7 && "is-review-mode")}
+        className={clsx("release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", (step === 0 || step === 1) && "is-focused-step", step === 0 && "is-audio-upload-step", step === 0 && musicEntering && "is-entering-from-format", step === 1 && "is-artist-step", step === 3 && "is-tracklist-step", step === 7 && "is-review-mode")}
         style={{ borderColor: "var(--border)", background: "var(--card)" }}
       >
         <header className="release-workspace-header">
-          <button type="button" onClick={saveDraftRelease} disabled={submitting || draftConflict} className="release-workspace-quit">Save &amp; Quit</button>
+          <button type="button" onClick={quitReleaseJourney} disabled={submitting} className="release-workspace-quit">Quit</button>
           <NextImage src="/assets/hymnlogowhite.png" alt="HYMN Music" width={116} height={38} priority className="release-workspace-logo" />
           <div className="release-workspace-state" aria-live="polite">
             <span className={autosaveEligible && autosaveStatus === "saved" ? "is-saved" : ""}>{autosaveEligible && autosaveStatus === "saved" ? "Saved ✓" : !autosaveEligible && hasUnsavedChanges ? "Unsaved changes" : autosaveLabel}</span>
@@ -3698,7 +3763,7 @@ export function ReleaseForm({
             <div className="release-focused-intro">
               <h2>Add your music</h2>
               <p>{firstReleaseOffer ? "Upload one track for your free Single." : `Build your ${formatIntent === "ep" ? "EP with 2–4" : formatIntent === "album" ? "Album with 5–30" : "Single with one"} track${formatIntent === "single" ? "" : "s"}.`} Name each track as it uploads.</p>
-              {!singleReleaseGift ? <button type="button" className="release-change-format" onClick={() => setJourneyIntro("format")}>Change release format</button> : null}
+              {!singleReleaseGift ? <button type="button" className="release-change-format" onClick={() => setFormatPickerOpen(true)}>Change release format</button> : null}
             </div>
             <div className="release-onboarding-assets">
             <div className="release-onboarding-audio">
@@ -3775,7 +3840,7 @@ export function ReleaseForm({
               {pendingFormatUpgradeFiles.length ? <section className="release-format-upgrade" aria-live="polite">
                 <div><span>{pendingUpgradeTrackCount} tracks selected</span><strong>Make this an {pendingSuggestedFormat}?</strong><p>{pendingSuggestedFormat === "EP" ? "An EP keeps all 2–4 selected tracks together." : "Five or more tracks work best as an Album."}</p></div>
                 <div className="release-format-upgrade-actions"><button type="button" onClick={() => void acceptSuggestedFormat()} disabled={batchUploading}>Convert to {pendingSuggestedFormat}</button><button type="button" onClick={() => void keepSingleFromPendingFiles()} disabled={batchUploading}>Keep as Single</button></div>
-              </section> : formatIntent === "single" && tracks.some((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl)) ? <button type="button" className="release-multiple-tracks-prompt" onClick={() => setJourneyIntro("format")}><span>Have multiple tracks?</span><strong>Turn this release into an EP or Album <span aria-hidden="true">→</span></strong></button> : null}
+              </section> : formatIntent === "single" && tracks.some((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl)) ? <button type="button" className="release-multiple-tracks-prompt" onClick={() => setFormatPickerOpen(true)}><span>Have multiple tracks?</span><strong>Turn this release into an EP or Album <span aria-hidden="true">→</span></strong></button> : null}
             </div>
             </div>
             </div>
