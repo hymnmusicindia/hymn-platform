@@ -20,8 +20,6 @@ import {
   ChevronDown,
   ChevronUp,
   GripVertical,
-  LockKeyhole,
-  Plus,
   UploadCloud,
   X,
 } from "lucide-react";
@@ -2524,6 +2522,8 @@ export function ReleaseForm({
   ].filter((issue): issue is ValidationIssue => Boolean(issue));
   const primaryArtistComplete = Boolean(tracks[0]?.primaryArtistIds.length);
   const audioAssetsComplete = tracks.every((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl));
+  const uploadedMusicTracks = tracks.filter((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl)).length;
+  const canAddMusic = !singleReleaseGift && (formatIntent === "single" ? uploadedMusicTracks === 0 : tracks.length < (formatIntent === "ep" ? 4 : 30));
   const pendingUpgradeTrackCount = tracks.filter((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl)).length + pendingFormatUpgradeFiles.length;
   const pendingSuggestedFormat = pendingUpgradeTrackCount <= 4 ? "EP" : "Album";
   const stepChecks = [
@@ -3494,6 +3494,15 @@ export function ReleaseForm({
             <p>You can keep editing your uploaded tracks after switching.</p>
           </section>
         </div>, document.body) : null}
+      {pendingFormatUpgradeFiles.length > 0 && typeof document !== "undefined" ? createPortal(
+        <div className="release-format-picker-backdrop">
+          <section className="release-format-picker release-audio-conversion-dialog" role="dialog" aria-modal="true" aria-labelledby="release-audio-conversion-title">
+            <span className="release-audio-conversion-count">{pendingUpgradeTrackCount} tracks selected</span>
+            <h2 id="release-audio-conversion-title">Make this an {pendingSuggestedFormat}?</h2>
+            <p>Keep these tracks together, or use only the first track as a Single.</p>
+            <div className="release-audio-conversion-actions"><button type="button" onClick={() => void acceptSuggestedFormat()} disabled={batchUploading}>Convert to {pendingSuggestedFormat}</button><button type="button" onClick={() => void keepSingleFromPendingFiles()} disabled={batchUploading}>Keep as Single</button></div>
+          </section>
+        </div>, document.body) : null}
       <form
         onSubmit={handleFinalSubmit}
         onChangeCapture={() => setHasStartedEditing(true)}
@@ -3760,10 +3769,9 @@ export function ReleaseForm({
                 <span aria-hidden="true">→</span>
               </button>
             </nav>
-            <div className="release-focused-intro">
-              <h2>Add your music</h2>
-              <p>{firstReleaseOffer ? "Upload one track for your free Single." : `Build your ${formatIntent === "ep" ? "EP with 2–4" : formatIntent === "album" ? "Album with 5–30" : "Single with one"} track${formatIntent === "single" ? "" : "s"}.`} Name each track as it uploads.</p>
-              {!singleReleaseGift ? <button type="button" className="release-change-format" onClick={() => setFormatPickerOpen(true)}>Change release format</button> : null}
+            <div className="release-focused-intro release-music-heading">
+              <div><h2>Add your music</h2><p>{uploadedMusicTracks ? `${uploadedMusicTracks} track${uploadedMusicTracks === 1 ? "" : "s"} added` : "Start with your audio master"}</p></div>
+              <div className="release-music-format"><span>{formatIntent === "ep" ? "EP" : formatIntent === "album" ? "Album" : "Single"}</span>{!singleReleaseGift && !(formatIntent === "single" && uploadedMusicTracks > 0) ? <button type="button" onClick={() => setFormatPickerOpen(true)}>Change format</button> : null}</div>
             </div>
             <div className="release-onboarding-assets">
             <div className="release-onboarding-audio">
@@ -3771,20 +3779,14 @@ export function ReleaseForm({
                 <span>{formatIntent === "ep" ? "EP name" : "Album name"}</span>
                 <input type="text" maxLength={150} value={release.releaseTitle} onChange={(event) => setRelease((current) => ({ ...current, releaseTitle: event.target.value }))} placeholder={formatIntent === "ep" ? "Name your EP" : "Name your album"} />
               </label> : null}
-              <div className="release-onboarding-asset-heading"><strong>{correctionLabel("Audio masters", "audio-upload")}</strong><span>WAV or MP3 · upload the final mastered file</span></div>
-              {!singleReleaseGift ? <label className="release-batch-upload" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (!batchUploading) void handleAudioBatch(event.dataTransfer.files); }}>
+              {canAddMusic ? <label className="release-batch-upload" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (!batchUploading) void handleAudioBatch(event.dataTransfer.files); }}>
                 <UploadCloud aria-hidden="true" />
-                <span><strong>{batchUploading ? "Uploading your tracks…" : formatIntent === "single" ? "Choose your audio master" : "Choose multiple audio files"}</strong><small>{formatIntent === "single" ? "Select more than one and we’ll help you switch formats before uploading." : "Or drag files onto this area. Each file becomes a track."}</small></span>
+                <span><strong>{batchUploading ? "Uploading…" : uploadedMusicTracks ? "Add tracks" : "Choose audio"}</strong><small>WAV or MP3 <span className="release-desktop-upload-hint">· Drag files here</span></small></span>
                 <input type="file" accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" multiple disabled={batchUploading} onChange={(event) => { if (event.target.files) void handleAudioBatch(event.target.files); event.target.value = ""; }} />
               </label> : null}
               {pendingAudioUploads.length ? <div className="release-resume-uploads" role="status"><strong>Continue an interrupted upload</strong><p>Choose the original file. Uploaded chunks will be reused where possible.</p>{pendingAudioUploads.map((session) => <label key={session.id}><span>{session.originalFilename} · {Math.round(session.bytesUploaded / Math.max(session.totalSize, 1) * 100)}% received</span><span className="release-resume-file">Choose file<input type="file" accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" onChange={(event) => { const file = event.target.files?.[0]; if (file) void resumeAudioUpload(session, file); event.target.value = ""; }} /></span></label>)}</div> : null}
             <div className={clsx("release-audio-queue", tracks.length > 4 && "is-scrollable")}>
-              {!tracks.some((track) => track.audioUploadStatus !== "idle" || track.audioPreviewUrl || track.existingAudioUrl) ? (
-                <div className="release-audio-empty-state">
-                  <span className="release-audio-empty-number" aria-hidden="true">01</span>
-                  <div><strong>Your first track will appear here</strong><p>Choose or drop a master above to create its track row.</p></div>
-                </div>
-              ) : tracks.map((track, index) => {
+              {!tracks.some((track) => track.audioUploadStatus !== "idle" || track.audioPreviewUrl || track.existingAudioUrl) && !singleReleaseGift ? null : tracks.map((track, index) => {
                 const hasAudio = Boolean((track.audioPreviewUrl || track.existingAudioUrl) && track.audioUploadStatus === "uploaded");
                 const isUploading = track.audioUploadStatus === "uploading";
                 return (
@@ -3826,21 +3828,7 @@ export function ReleaseForm({
                   </article>
                 );
               })}
-              {singleReleaseGift ? (
-                <button type="button" disabled className="release-add-audio-track" title="Locked for this FREE one-time Single release" aria-label="Add another track locked for this free one-time Single release">
-                  <LockKeyhole />
-                  <span>Add track — locked for this FREE release</span>
-                </button>
-              ) : tracks.some((track) => track.audioUploadStatus !== "idle" || track.audioPreviewUrl || track.existingAudioUrl) ? (
-                <button type="button" onClick={tracks.length >= (formatIntent === "single" ? 1 : formatIntent === "ep" ? 4 : 30) ? () => setJourneyIntro("format") : addTrack} className="release-add-audio-track" title="Add another audio master">
-                  <Plus />
-                  <span>{tracks.length >= (formatIntent === "single" ? 1 : formatIntent === "ep" ? 4 : 30) ? "Change format to add more" : "Add track"}</span>
-                </button>
-              ) : null}
-              {pendingFormatUpgradeFiles.length ? <section className="release-format-upgrade" aria-live="polite">
-                <div><span>{pendingUpgradeTrackCount} tracks selected</span><strong>Make this an {pendingSuggestedFormat}?</strong><p>{pendingSuggestedFormat === "EP" ? "An EP keeps all 2–4 selected tracks together." : "Five or more tracks work best as an Album."}</p></div>
-                <div className="release-format-upgrade-actions"><button type="button" onClick={() => void acceptSuggestedFormat()} disabled={batchUploading}>Convert to {pendingSuggestedFormat}</button><button type="button" onClick={() => void keepSingleFromPendingFiles()} disabled={batchUploading}>Keep as Single</button></div>
-              </section> : formatIntent === "single" && tracks.some((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl)) ? <button type="button" className="release-multiple-tracks-prompt" onClick={() => setFormatPickerOpen(true)}><span>Have multiple tracks?</span><strong>Turn this release into an EP or Album <span aria-hidden="true">→</span></strong></button> : null}
+              {formatIntent === "single" && uploadedMusicTracks > 0 && !singleReleaseGift && !pendingFormatUpgradeFiles.length ? <button type="button" className="release-multiple-tracks-prompt" onClick={() => setFormatPickerOpen(true)}>Make this an EP or Album <span aria-hidden="true">→</span></button> : null}
             </div>
             </div>
             </div>
@@ -6619,9 +6607,7 @@ export function ReleaseForm({
                   : step === 1
                   ? `Continue with ${tracks[0]?.primaryArtistIds.length ?? 0} artist${(tracks[0]?.primaryArtistIds.length ?? 0) === 1 ? "" : "s"} →`
                   : step === 0
-                    ? audioAssetsComplete
-                      ? `Continue with ${tracks.length} track${tracks.length === 1 ? "" : "s"} →`
-                      : "Skip for now →"
+                    ? "Continue to artwork →"
                     : "Save and Continue →"}
               </button>
             ) : null}

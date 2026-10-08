@@ -80,16 +80,17 @@ export async function startDireNoteBrowser(userId: number) {
         await page.getByRole("button", { name: "Keep as Single" }).click();
         await expect(page.getByRole("button", { name: "Use this track title" })).toHaveCount(1, { timeout: 60000 });
         await page.getByRole("button", { name: "Use this track title" }).click();
-        await page.getByRole("button", { name: /Turn this release into an EP or Album/ }).click();
+        await page.screenshot({ path: ".cache/release-clean-single.png", fullPage: true });
+        await expect(page.getByText("Change format to add more")).toHaveCount(0);
+        await page.getByRole("button", { name: /Make this an EP or Album/ }).click();
         await expect(page.getByRole("dialog", { name: "How many tracks belong together?" })).toBeVisible();
-        await page.getByRole("button", { name: "Close format selector" }).click();
+        await page.locator(".release-format-picker-options").getByRole("button", { name: /EP/ }).click();
+        await expect(page.getByRole("textbox", { name: "EP name" })).toBeVisible();
         await page.locator(".release-batch-upload input[type=file]").setInputFiles([
           { name: "First Light.wav", mimeType: "audio/wav", buffer: audio },
         ]);
-        await expect(page.getByText("2 tracks selected", { exact: true })).toBeVisible();
-        await expect(page.getByRole("button", { name: "Convert to EP" })).toBeVisible();
-        await page.getByRole("button", { name: "Convert to EP" }).click();
-        await expect(page.getByRole("textbox", { name: "EP name" })).toBeVisible();
+        await expect(page.getByText("Add tracks", { exact: true })).toBeVisible();
+        await page.screenshot({ path: ".cache/release-clean-ep.png", fullPage: true });
         await page.getByRole("textbox", { name: "EP name" }).fill("Fixture EP");
         await expect(page.getByRole("button", { name: "Use this track title" })).toHaveCount(1, { timeout: 60000 });
         await page.getByRole("button", { name: "Use this track title" }).click();

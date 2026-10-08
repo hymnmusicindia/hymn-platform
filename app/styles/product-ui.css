@@ -3766,3 +3766,39 @@ body:has(.release-workflow.is-audio-upload-step) { height:auto; min-height:100sv
   .release-workflow.release-workflow.is-artist-step .release-artist-stage { min-height:0; padding:2rem 0; }
   .release-workflow.release-workflow .release-focused-actions { position:static; }
 }
+
+/* Music stage: one clear upload action and a track-first hierarchy. */
+.release-workflow.release-workflow.is-audio-upload-step .release-audio-stage { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); gap:clamp(14px,2.6vh,24px); }
+.release-workflow.release-workflow.is-audio-upload-step .release-music-heading { display:flex; align-items:center; justify-content:space-between; gap:24px; width:100%; padding:0 0 14px; border-bottom:1px solid var(--border); text-align:left; }
+.release-music-heading h2 { margin:0; }
+.release-music-heading p { margin:5px 0 0 !important; color:var(--text-muted); font-size:.75rem; }
+.release-music-format { display:flex; align-items:center; gap:14px; flex-shrink:0; }
+.release-music-format > span { color:var(--text); font-size:.8rem; font-weight:800; }
+.release-music-format button { min-height:40px; padding:0; color:var(--text-muted); font-size:.75rem; text-decoration:underline; text-underline-offset:4px; }
+.release-music-format button:hover { color:var(--text); }
+.release-workflow.release-workflow.is-audio-upload-step .release-onboarding-assets { display:block; min-height:0; height:100%; }
+.release-workflow.release-workflow.is-audio-upload-step .release-onboarding-audio { width:100%; min-height:0; height:100%; }
+.release-workflow.release-workflow.is-audio-upload-step .release-journey-title-field { grid-template-columns:8rem minmax(0,1fr); align-items:center; max-width:100%; }
+.release-workflow.release-workflow.is-audio-upload-step .release-batch-upload { width:100%; min-height:70px; border-radius:14px; }
+.release-workflow.release-workflow.is-audio-upload-step .release-onboarding-audio:has(.release-audio-queue-item) .release-batch-upload { min-height:56px; }
+.release-workflow.release-workflow.is-audio-upload-step .release-batch-upload > svg { width:1.4rem; height:1.4rem; }
+.release-workflow.release-workflow.is-audio-upload-step .release-batch-upload > span { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.release-workflow.release-workflow.is-audio-upload-step .release-batch-upload small { display:inline; font-size:.7rem; white-space:nowrap; }
+.release-workflow.release-workflow.is-audio-upload-step .release-audio-queue { gap:8px; }
+.release-workflow.release-workflow.is-audio-upload-step .release-audio-queue-item { min-height:78px; border-radius:12px; }
+.release-multiple-tracks-prompt { justify-content:flex-start; gap:.35rem; width:fit-content; min-height:38px; margin-top:8px; border:0; padding:0 2px; color:var(--text-muted); font-size:.75rem; font-weight:650; }
+.release-multiple-tracks-prompt:hover { color:var(--text); }
+.release-audio-conversion-dialog { padding:28px; }
+.release-audio-conversion-count { color:var(--accent); font-size:.7rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
+.release-audio-conversion-dialog h2 { margin:8px 0 0; font-size:1.6rem; }
+.release-audio-conversion-dialog p { margin-top:8px; color:var(--text-muted); font-size:.85rem; line-height:1.5; }
+.release-audio-conversion-actions { display:flex; align-items:center; gap:12px; margin-top:24px; }
+.release-audio-conversion-actions button { min-height:44px; border:1px solid var(--border); border-radius:999px; padding:9px 18px; font-size:.8rem; font-weight:750; }
+.release-audio-conversion-actions button:first-child { border-color:var(--accent); background:var(--accent); color:var(--accent-foreground); }
+@media(max-width:640px) {
+  .release-workflow.release-workflow.is-audio-upload-step .release-music-heading { align-items:flex-start; flex-wrap:wrap; gap:8px; }
+  .release-music-format { width:100%; justify-content:space-between; }
+  .release-workflow.release-workflow.is-audio-upload-step .release-journey-title-field { grid-template-columns:1fr; }
+  .release-workflow.release-workflow.is-audio-upload-step .release-desktop-upload-hint { display:none; }
+  .release-audio-conversion-actions { align-items:stretch; flex-direction:column; }
+}
