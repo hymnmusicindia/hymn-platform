@@ -43,6 +43,8 @@ export async function startDireNoteBrowser(userId: number) {
         expect(formatShell!.height).toBeLessThanOrEqual(1000 * 0.71);
         await page.getByRole("button", { name: /Single 1/ }).dblclick();
         await expect(page.getByRole("heading", { name: "Add your music" })).toBeVisible();
+        await page.setViewportSize({ width: 1280, height: 720 });
+        expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight && document.body.scrollHeight <= window.innerHeight)).toBe(true);
         await expect(page.getByRole("button", { name: "Continue to cover artwork" })).toBeVisible();
         await page.getByRole("button", { name: "Continue to cover artwork" }).click();
         await expect(page.getByText("Upload every audio master before moving to cover artwork.", { exact: false })).toBeVisible();

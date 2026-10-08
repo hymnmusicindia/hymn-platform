@@ -3667,3 +3667,33 @@ body:has(.release-workflow.is-audio-upload-step) { height:auto; min-height:100sv
   .release-format-picker-options { grid-template-columns:1fr; border-bottom:0; }
   .release-format-picker-options button + button { border-left:0; border-top:1px solid var(--border); }
 }
+
+/* Keep the music workspace inside one desktop viewport. The track queue owns
+   overflow once a release contains more rows than the available canvas. */
+@media (min-width:1120px) {
+  body:has(.release-workflow.is-audio-upload-step) { height:100svh; min-height:0; overflow:hidden; }
+  .distribution-start-page:has(.release-workflow.is-audio-upload-step),
+  .distribution-start-page:has(.release-workflow.is-audio-upload-step) > .shell { height:100svh; min-height:0; overflow:hidden; padding-block:0 !important; }
+  .release-workflow.is-audio-upload-step { width:min(86vw,74rem); height:calc(100svh - 1rem); min-height:0; max-height:calc(100svh - 1rem); grid-template-rows:auto auto minmax(0,1fr); gap:clamp(.45rem,1vh,.75rem); overflow:hidden; padding-block:clamp(.75rem,1.6vh,1.15rem) !important; }
+  .release-workflow.is-audio-upload-step .release-workspace-header { min-height:2.7rem; padding-bottom:.55rem; }
+  .release-workflow.is-audio-upload-step .release-journey-progress { padding-bottom:.25rem; }
+  .release-workflow.is-audio-upload-step .release-workflow-content { min-height:0; height:100%; overflow:hidden; gap:0; }
+  .release-workflow.is-audio-upload-step .release-mobile-summary,
+  .release-workflow.is-audio-upload-step .release-focused-actions { display:none; }
+  .release-workflow.is-audio-upload-step .release-audio-stage { grid-template-columns:minmax(11rem,14rem) minmax(0,1fr); grid-template-rows:minmax(0,1fr); width:100%; max-width:none; height:100%; min-height:0; align-items:start; gap:clamp(1rem,2.5vw,2.25rem); overflow:hidden; border-radius:1.35rem; padding:clamp(.85rem,1.7vh,1.15rem); }
+  .release-workflow.is-audio-upload-step .release-focused-intro { align-self:center; text-align:left; }
+  .release-workflow.is-audio-upload-step .release-focused-intro h2 { font-size:clamp(1.7rem,2.5vw,2.35rem); line-height:1; }
+  .release-workflow.is-audio-upload-step .release-focused-intro h2 + p { margin:.65rem 0 0; font-size:.72rem; line-height:1.45; }
+  .release-workflow.is-audio-upload-step .release-change-format { margin-top:.85rem; }
+  .release-workflow.is-audio-upload-step .release-onboarding-assets { width:100%; max-width:none; min-height:0; height:100%; margin:0; }
+  .release-workflow.is-audio-upload-step .release-onboarding-audio { display:flex; min-height:0; height:100%; flex-direction:column; overflow:hidden; padding:clamp(.7rem,1.4vh,.9rem); }
+  .release-workflow.is-audio-upload-step .release-journey-title-field { grid-template-columns:6rem minmax(0,1fr); align-items:center; gap:.75rem; margin-bottom:.6rem; }
+  .release-workflow.is-audio-upload-step .release-journey-title-field input { min-height:2.55rem; }
+  .release-workflow.is-audio-upload-step .release-onboarding-asset-heading { display:flex; align-items:baseline; justify-content:space-between; gap:1rem; margin-bottom:.4rem; }
+  .release-workflow.is-audio-upload-step .release-batch-upload { min-height:3.8rem; margin-bottom:.55rem; padding:.65rem .85rem; }
+  .release-workflow.is-audio-upload-step .release-audio-queue,
+  .release-workflow.is-audio-upload-step .release-audio-queue.is-scrollable { min-height:0; max-height:none; flex:1; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; padding-right:.3rem; }
+  .release-workflow.is-audio-upload-step .release-audio-queue-item { min-height:3.7rem; padding:.38rem .6rem; }
+  .release-workflow.is-audio-upload-step .release-focused-side-arrow.is-left { left:-5.4rem; }
+  .release-workflow.is-audio-upload-step .release-focused-side-arrow.is-right { right:-5.4rem; }
+}
