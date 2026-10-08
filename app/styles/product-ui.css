@@ -3670,11 +3670,43 @@ body:has(.release-workflow.is-audio-upload-step) { height:auto; min-height:100sv
 
 /* Shared release shell: explicit grid placement prevents legacy sidebars from
    leaving invisible columns on the focused stages. */
-.distribution-start-page .release-workflow.release-workflow,
-.distribution-start-page .release-journey-intro {
+.distribution-start-page .release-workflow.release-workflow {
   width:100%; max-width:1440px; margin-inline:auto; box-sizing:border-box;
 }
 .distribution-start-page > .shell { width:100%; padding-inline:clamp(16px,3vw,48px); align-items:start; }
+/* Entry screens use a centered, content-sized panel, not the editing grid. */
+.distribution-start-page:has(.release-journey-intro) { padding-bottom:0 !important; }
+.distribution-start-page:has(.release-journey-intro) > .shell {
+  display:grid; min-height:100svh; align-items:center;
+  padding:clamp(16px,3vh,32px) clamp(16px,3vw,48px) !important;
+}
+.distribution-start-page .release-journey-intro {
+  width:100%; max-width:1120px; height:auto; min-height:0;
+  margin:auto; padding:0 clamp(20px,3vw,40px);
+  border-radius:24px; box-sizing:border-box;
+}
+.release-journey-intro .release-journey-intro-header { min-height:68px; gap:20px; }
+.release-journey-intro .release-journey-intro-header > button {
+  position:static; min-height:44px; display:inline-flex; align-items:center;
+  padding:0; flex-shrink:0; text-decoration:none;
+}
+.release-journey-intro .release-journey-intro-header > button:hover { text-decoration:underline; }
+.release-journey-intro .release-journey-intro-header > img { width:100px; height:auto; }
+.release-journey-intro .release-journey-intro-body {
+  min-height:0; width:100%; max-width:800px;
+  padding:clamp(24px,5vh,56px) 0; justify-content:center;
+}
+.release-journey-intro h1 { font-size:clamp(2rem,4vw,3.5rem); line-height:1.12; letter-spacing:-.045em; }
+.release-journey-intro .release-journey-eyebrow { margin-bottom:16px; }
+.release-journey-intro .release-format-options { width:100%; max-width:720px; margin-top:24px; }
+.release-journey-intro .release-format-options button { min-height:88px; }
+.release-journey-intro .release-journey-primary { margin-top:20px; min-height:46px; }
+.release-journey-intro .release-format-hint { font-size:.75rem; line-height:1.4; }
+@media(max-width:640px) {
+  .release-journey-intro .release-format-options { margin-top:20px; }
+  .release-journey-intro .release-format-options button { min-height:64px; }
+  .release-journey-intro .release-journey-intro-body { padding:24px 0; }
+}
 .release-workflow.release-workflow { gap:1.25rem; padding:clamp(16px,2vw,28px); border-radius:1.25rem; }
 .release-workflow.release-workflow > .release-workspace-header,
 .release-workflow.release-workflow > .release-journey-progress,

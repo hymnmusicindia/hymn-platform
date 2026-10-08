@@ -3441,7 +3441,7 @@ export function ReleaseForm({
         <button type="button" onClick={() => journeyIntro === "format" ? setJourneyIntro("welcome") : router.push("/distribution")}>
           {journeyIntro === "format" ? "← Back" : "Quit"}
         </button>
-        <NextImage src="/assets/hymnlogowhite.png" alt="HYMN Music" width={116} height={38} priority />
+        <NextImage src="/assets/hymnlogowhite.png" alt="HYMN Music" width={116} height={38} priority style={{ filter: "var(--logo-filter)" }} />
       </header>
       <div className="release-journey-intro-body">
         <p className="release-journey-eyebrow">YOUR RELEASE JOURNEY</p>
@@ -3507,7 +3507,7 @@ export function ReleaseForm({
       >
         <header className="release-workspace-header">
           <button type="button" onClick={quitReleaseJourney} disabled={submitting} className="release-workspace-quit">Quit</button>
-          <NextImage src="/assets/hymnlogowhite.png" alt="HYMN Music" width={116} height={38} priority className="release-workspace-logo" />
+          <NextImage src="/assets/hymnlogowhite.png" alt="HYMN Music" width={116} height={38} priority className="release-workspace-logo" style={{ filter: "var(--logo-filter)" }} />
           <div className="release-workspace-state" aria-live="polite">
             <span className={autosaveEligible && autosaveStatus === "saved" ? "is-saved" : ""}>{autosaveEligible && autosaveStatus === "saved" ? "Saved ✓" : !autosaveEligible && hasUnsavedChanges ? "Unsaved changes" : autosaveLabel}</span>
             {autosaveStatus === "error" && !draftConflict ? <button type="button" onClick={retryAutosave} disabled={submitting} className="release-workspace-review">Retry save</button> : null}

@@ -39,8 +39,19 @@ export async function startDireNoteBrowser(userId: number) {
         await expect(page.getByRole("heading", { name: "What are you releasing?" })).toBeVisible();
         const formatShell = await page.locator(".release-journey-intro").boundingBox();
         expect(formatShell).not.toBeNull();
-        expect(formatShell!.width).toBeGreaterThan(1440 * 0.85);
-        expect(formatShell!.height).toBeLessThanOrEqual(1000 * 0.71);
+        expect(Math.abs(formatShell!.y - (1000 - formatShell!.height) / 2)).toBeLessThan(3);
+        for (const viewport of [{ width: 1250, height: 590 }, { width: 375, height: 844 }]) {
+          await page.setViewportSize(viewport);
+          const panel = (await page.locator(".release-journey-intro").boundingBox())!;
+          expect(Math.abs(panel.y - (viewport.height - panel.height) / 2)).toBeLessThan(3);
+          const back = (await page.getByRole("button", { name: "Back", exact: false }).boundingBox())!;
+          const next = (await page.getByRole("button", { name: /Continue to music/ }).boundingBox())!;
+          expect(back.x).toBeGreaterThanOrEqual(panel.x);
+          expect(next.y + next.height).toBeLessThan(panel.y + panel.height - 16);
+          expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
+          await page.screenshot({ path: `.cache/release-entry-${viewport.width}.png`, fullPage: true });
+        }
+        await page.setViewportSize({ width: 1440, height: 1000 });
         await page.getByRole("button", { name: /Single 1/ }).dblclick();
         await expect(page.getByRole("heading", { name: "Add your music" })).toBeVisible();
         await page.setViewportSize({ width: 1280, height: 720 });
