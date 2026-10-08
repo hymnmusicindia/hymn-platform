@@ -177,6 +177,7 @@ export interface Release {
   trackName: string;
   releaseTitle: string;
   releaseType: "single" | "ep" | "album";
+  wizardFormatIntent?: "single" | "ep" | "album" | null;
   audioUrl: string;
   artworkUrl: string;
   releaseDate: string;
@@ -252,6 +253,7 @@ export interface Release {
   }>;
   metadata?: Record<string, unknown> | null;
   draftCompletionPercent?: number;
+  draftVersion?: string | null;
   lastEditedAt?: string | null;
   missingFields?: string[];
   distributionStores?: UserStoreStatus[];

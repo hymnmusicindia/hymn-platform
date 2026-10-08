@@ -98,6 +98,7 @@ export function deserializeRelease(dbData: any): Release {
     reviewedAt: dbData.reviewedAt ? dbData.reviewedAt.toISOString() : metadata.reviewedAt ?? null,
     reviewedBy: dbData.reviewedBy ?? metadata.reviewedBy ?? null,
     draftCompletionPercent: dbData.draftCompletionPercent ?? metadata.draftCompletionPercent ?? 0,
+    draftVersion: dbData.updatedAt?.toISOString?.() ?? null,
     lastEditedAt: dbData.lastEditedAt?.toISOString?.() ?? metadata.lastEditedAt ?? null,
     missingFields: Array.isArray(dbData.missingFields) ? dbData.missingFields : Array.isArray(metadata.missingFields) ? metadata.missingFields : [],
     distributionStores,
@@ -1003,6 +1004,7 @@ type DraftTrackInput = Omit<ReleaseTrack, "id" | "releaseId" | "createdAt"> & { 
 export async function saveDraftDistributionRelease(input: {
   userId: number;
   draftReleaseId?: number | null;
+  expectedUpdatedAt?: string | null;
   metadata: Omit<Release, "id" | "userId" | "status" | "createdAt" | "queuePosition" | "estimatedReviewTime" | "tracks"> & {
     recordLabelName?: string;
     tracks: DraftTrackInput[];
@@ -1014,6 +1016,7 @@ export async function saveDraftDistributionRelease(input: {
   }
   const pool = getPool();
   const existingRelease = input.draftReleaseId ? await getDetailedReleaseByUserId(input.userId, input.draftReleaseId) : null;
+  if (input.expectedUpdatedAt && existingRelease?.draftVersion !== input.expectedUpdatedAt) throw new Error("This draft was updated elsewhere. Reload the latest version before editing.");
   const releaseId = input.draftReleaseId ?? existingRelease?.id ?? nextId(memory.releases);
   const now = new Date().toISOString();
   const baseTrack = input.metadata.tracks[0] ?? {
@@ -1060,6 +1063,7 @@ export async function saveDraftDistributionRelease(input: {
           : null;
         if (input.draftReleaseId && !current) throw new Error("Draft release not found.");
         if (current && current.status !== "DRAFT") throw new Error("This release is no longer a draft. Refresh before editing.");
+        if (input.expectedUpdatedAt && current?.updatedAt.toISOString() !== input.expectedUpdatedAt) throw new Error("This draft was updated elsewhere. Reload the latest version before editing.");
         const data = {
           title: input.metadata.releaseTitle || input.metadata.trackName || "Untitled Release",
           artistName: input.metadata.artistName || "",

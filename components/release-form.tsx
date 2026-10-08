@@ -22,6 +22,7 @@ import {
   GripVertical,
   LockKeyhole,
   Plus,
+  UploadCloud,
   X,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -198,6 +199,7 @@ type TrackDraft = {
   id: string;
   trackNumber: number;
   trackTitle: string;
+  suggestedTitleUnconfirmed: boolean;
   existingIsrcCode: string;
   versionPreset: string;
   customVersion: string;
@@ -237,6 +239,15 @@ type AudioLibraryPrefill = {
   fileName: string;
   checksum: string;
   prior?: { release: Record<string, any>; track: Record<string, any> | null } | null;
+};
+
+type PendingAudioUpload = {
+  id: string;
+  clientTrackId: string | null;
+  originalFilename: string;
+  totalSize: number;
+  bytesUploaded: number;
+  status: string;
 };
 
 type ReleaseDraft = {
@@ -317,14 +328,14 @@ const steps = [
   "",
   "Review & submit",
 ] as const;
-const visibleStepIndexes = [1, 0, 3, 2, 4, 5, 7] as const;
+const visibleStepIndexes = [0, 4, 1, 3, 2, 5, 7] as const;
 const menuStepIndexes = visibleStepIndexes;
 const stepMenuLabels: Record<number, string> = {
   0: "Music",
-  1: "Artist",
+  1: "Artists",
   2: "Release details",
-  3: "Tracks",
-  4: "Artwork",
+  3: "Credits & tracks",
+  4: "Cover artwork",
   5: "Delivery",
   7: "Review",
 };
@@ -364,6 +375,7 @@ function createTrack(trackNumber = 1): TrackDraft {
     id: createId(),
     trackNumber,
     trackTitle: "",
+    suggestedTitleUnconfirmed: false,
     existingIsrcCode: "",
     versionPreset: "Original",
     customVersion: "",
@@ -486,7 +498,9 @@ function createInitialReleaseDraft(
     upcCode: initialRelease.upcCode ?? "",
     originalReleaseDate: initialRelease.originalReleaseDate?.slice(0, 10) ?? "",
     existingIsrcCode: initialRelease.tracks?.[0]?.isrc ?? "",
-    releaseTitle: initialRelease.releaseTitle?.trim() || "",
+    releaseTitle: initialRelease.status === "draft" && /^(?:untitled(?:\s+(?:single|ep|album|release))?)$/i.test(initialRelease.releaseTitle?.trim() || "")
+      ? ""
+      : initialRelease.releaseTitle?.trim() || "",
     recordLabelName:
       initialRelease.labelName?.trim() ||
       initialRelease.labelDisplayName?.trim() ||
@@ -715,12 +729,15 @@ function createTracksFromRelease(
       .filter((id: number): id is number => Number.isInteger(id) && id > 0)
       .slice(0, 3);
     return {
-      id: createId(),
+      id: typeof (trackMetadata.clientTrackId ?? nestedTrackMetadata.clientTrackId) === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(String(trackMetadata.clientTrackId ?? nestedTrackMetadata.clientTrackId))
+        ? String(trackMetadata.clientTrackId ?? nestedTrackMetadata.clientTrackId)
+        : createId(),
       trackNumber: track?.trackNumber ?? index + 1,
       trackTitle:
         track?.trackTitle && !isPlaceholderTrackTitle(track.trackTitle)
           ? track.trackTitle.trim()
           : "",
+      suggestedTitleUnconfirmed: trackMetadata.suggestedTitleUnconfirmed === true || nestedTrackMetadata.suggestedTitleUnconfirmed === true,
       existingIsrcCode: track?.isrc?.trim() || "",
       versionPreset: legacyExplicitVersion
         ? "Original"
@@ -832,6 +849,15 @@ function releaseTypeFromCount(trackCount: number) {
   if (trackCount <= 1) return "single" as const;
   if (trackCount <= 4) return "ep" as const;
   return "album" as const;
+}
+
+function titleFromAudioFilename(fileName: string) {
+  return fileName.replace(/\.(wav|mp3)$/i, "").replace(/^\s*\d{1,2}[\s._-]+/, "").replace(/[_]+/g, " ").trim().slice(0, 150);
+}
+
+function recordJourneyEvent(releaseId: number | null, event: "stage_reached" | "audio_upload_failed" | "audio_upload_resumed" | "draft_conflict", stage: number, format: string | null, trackCount: number) {
+  if (!releaseId) return;
+  void fetch("/api/distribution/journey-events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ releaseId, event, stage, format, trackCount }) }).catch(() => undefined);
 }
 
 async function getAudioDuration(file: File) {
@@ -1053,6 +1079,8 @@ function StepIntro({
 }
 
 export function ReleaseForm({
+  userName,
+  initialStage,
   selectedPlan,
   hasActiveSubscription = false,
   hymnCreditBalance = 0,
@@ -1063,6 +1091,8 @@ export function ReleaseForm({
   audioLibraryPrefill,
   initialCorrectionField,
 }: {
+  userName?: string;
+  initialStage?: number;
   selectedPlan: DistributionPlanOption;
   hasActiveSubscription?: boolean;
   hymnCreditBalance?: number;
@@ -1086,7 +1116,13 @@ export function ReleaseForm({
   const correctionTrackMatch = initialRelease?.reviewIssues?.fields.some(issue => issue.field === initialCorrectionField)
     ? initialCorrectionField?.match(/^tracks\.(\d+)\./) : null;
   const correctionTrackIndex = correctionTrackMatch ? Number(correctionTrackMatch[1]) : null;
-  const [step, setStep] = useState(correctionTrackIndex !== null ? 3 : initialRelease ? 7 : 1);
+  const [step, setStep] = useState(correctionTrackIndex !== null ? 3 : initialRelease?.status === "draft" && initialStage != null && [0, 4, 1, 3, 2, 5, 7].includes(initialStage) ? initialStage : initialRelease ? 7 : 0);
+  const resumeStageResolvedRef = useRef(false);
+  const [journeyIntro, setJourneyIntro] = useState<"welcome" | "format" | null>(initialRelease || audioLibraryPrefill ? null : "welcome");
+  const [formatIntent, setFormatIntent] = useState<"single" | "ep" | "album" | null>(() => {
+    const saved = initialRelease?.metadata && typeof initialRelease.metadata === "object" ? (initialRelease.metadata as Record<string, unknown>).wizardFormatIntent : null;
+    return firstReleaseOffer ? "single" : saved === "single" || saved === "ep" || saved === "album" ? saved : initialRelease?.releaseType ?? null;
+  });
   const singleReleaseGift = firstReleaseOffer || (initialRelease?.metadata && typeof initialRelease.metadata === "object" && (initialRelease.metadata as Record<string, unknown>).promotionCode === "FIRST_RELEASE_FREE");
   const trackCampaignEvent = (event: string, metadata?: Record<string, unknown>) => {
     if (!firstReleaseOffer) return;
@@ -1106,6 +1142,7 @@ export function ReleaseForm({
   const [expandedTrack, setExpandedTrack] = useState(correctionTrackIndex ?? 0);
   const [artistRemovalCandidateId, setArtistRemovalCandidateId] = useState<number | null>(null);
   const [trackArtistRemovalCandidate, setTrackArtistRemovalCandidate] = useState<string | null>(null);
+  const [trackArtistEditorIndex, setTrackArtistEditorIndex] = useState<number | null>(null);
   const audioPreviewObjectUrlsRef = useRef<Set<string>>(new Set());
   const [draggedTrackIndex, setDraggedTrackIndex] = useState<number | null>(null);
   const [versionPickerTrack, setVersionPickerTrack] = useState<number | null>(null);
@@ -1117,12 +1154,17 @@ export function ReleaseForm({
   const [useHymnCredits, setUseHymnCredits] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [status, setStatus] = useState<string | null>(null);
+  const [batchUploading, setBatchUploading] = useState(false);
+  const [pendingAudioUploads, setPendingAudioUploads] = useState<PendingAudioUpload[]>([]);
   const [rightsUploadProgress, setRightsUploadProgress] = useState<number | null>(null);
   const [rightsUploadError, setRightsUploadError] = useState<string | null>(null);
   const [rightsDocumentationOpen, setRightsDocumentationOpen] = useState(false);
   const [autosaveStatus, setAutosaveStatus] = useState<"waiting" | "saving" | "saved" | "error">(
     initialRelease ? "saved" : "waiting",
   );
+  const [draftConflict, setDraftConflict] = useState(false);
+  const draftVersionRef = useRef<string | null>(initialRelease?.draftVersion ?? null);
+  const allowReloadRef = useRef(false);
   const [hasStartedEditing, setHasStartedEditing] = useState(Boolean(initialRelease));
   const [attemptedStep, setAttemptedStep] = useState<number | null>(null);
   const [visitedSteps, setVisitedSteps] = useState<Set<number>>(() => new Set());
@@ -1177,6 +1219,25 @@ export function ReleaseForm({
   const [draftReleaseId, setDraftReleaseId] = useState<number | null>(() =>
     initialRelease?.id ?? null,
   );
+  useEffect(() => {
+    if (!draftReleaseId) return;
+    let cancelled = false;
+    fetch(`/api/uploads/sessions?releaseId=${draftReleaseId}`)
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data) => {
+        if (cancelled) return;
+        setPendingAudioUploads((Array.isArray(data.sessions) ? data.sessions : []).filter((session: PendingAudioUpload & { assetCategory?: string }) => session.assetCategory === "TRACK_AUDIO_MASTER" && ["CREATED", "UPLOADING", "PAUSED", "FAILED"].includes(session.status) && session.bytesUploaded > 0));
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [draftReleaseId]);
+  useEffect(() => {
+    if (!draftReleaseId || typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.pathname !== "/distribution/start" || url.searchParams.get("stage") === String(step)) return;
+    url.searchParams.set("stage", String(step));
+    window.history.replaceState(window.history.state, "", url);
+  }, [draftReleaseId, step]);
   const [socialConsentAccepted, setSocialConsentAccepted] = useState(
     () =>
       initialRelease?.monetisationAccepted ??
@@ -1269,6 +1330,22 @@ export function ReleaseForm({
     () => releaseTypeFromCount(tracks.length),
     [tracks.length],
   );
+  const lastJourneyStageRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!draftReleaseId) return;
+    if (initialRelease?.status === "draft" && initialStage == null && !resumeStageResolvedRef.current) return;
+    const key = `${draftReleaseId}:${step}`;
+    if (lastJourneyStageRef.current === key) return;
+    lastJourneyStageRef.current = key;
+    recordJourneyEvent(draftReleaseId, "stage_reached", step, formatIntent, tracks.length);
+  }, [draftReleaseId, formatIntent, initialRelease, initialStage, step, tracks.length]);
+  const conflictTrackedRef = useRef(false);
+  useEffect(() => {
+    if (draftConflict && !conflictTrackedRef.current) {
+      conflictTrackedRef.current = true;
+      recordJourneyEvent(draftReleaseId, "draft_conflict", step, formatIntent, tracks.length);
+    }
+  }, [draftConflict, draftReleaseId, formatIntent, step, tracks.length]);
   const requiresReleaseTitle = releaseType !== "single";
   const displayedReleaseTitle = useMemo(
     () =>
@@ -1283,13 +1360,13 @@ export function ReleaseForm({
     if (initialRelease?.id) return initialRelease.id;
     if (!draftCreationPromiseRef.current) {
       draftCreationRef.current = true;
-      draftCreationPromiseRef.current = fetch("/api/distribution/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: displayedReleaseTitle, ...(firstReleaseOffer ? { promotionCode: "FIRST_RELEASE_FREE", attribution: campaignAttribution } : {}) }) })
-        .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not start draft."); return Number(data.draft?.id); })
+      draftCreationPromiseRef.current = fetch("/api/distribution/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: displayedReleaseTitle, wizardFormatIntent: formatIntent, ...(firstReleaseOffer ? { promotionCode: "FIRST_RELEASE_FREE", attribution: campaignAttribution } : {}) }) })
+        .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not start draft."); draftVersionRef.current = typeof data.draft?.updatedAt === "string" ? data.draft.updatedAt : null; return Number(data.draft?.id); })
         .then(id => { if (!Number.isInteger(id) || id < 1) throw new Error("Draft creation returned an invalid identifier."); setDraftReleaseId(id); return id; })
         .catch(error => { draftCreationRef.current = false; draftCreationPromiseRef.current = null; throw error; });
     }
     return draftCreationPromiseRef.current;
-  }, [displayedReleaseTitle, draftReleaseId, initialRelease, firstReleaseOffer, campaignAttribution]);
+  }, [displayedReleaseTitle, draftReleaseId, initialRelease, firstReleaseOffer, campaignAttribution, formatIntent]);
   const selectedReleaseDate =
     release.releaseTiming === "schedule_release"
       ? release.scheduledReleaseDate
@@ -1484,6 +1561,7 @@ export function ReleaseForm({
       metadata: {
         ...release,
         releaseType,
+        wizardFormatIntent: formatIntent,
         platforms,
         youtubeContentIdEnabled,
         youtubeContentIdChannelUrl,
@@ -1493,10 +1571,13 @@ export function ReleaseForm({
           .filter((item) => !item.complete)
           .map((item) => item.label),
         tracks: tracks.map((track, index) => ({
+          clientTrackId: track.id,
           trackTitle: track.trackTitle,
+          suggestedTitleUnconfirmed: track.suggestedTitleUnconfirmed,
           language: track.titleLanguage,
           lyrics: track.lyrics,
           version: track.versionPreset === "Other" ? track.customVersion : track.versionPreset,
+          isrc: track.existingIsrcCode,
           trackNumber: index + 1,
           primaryArtist: track.primaryArtistIds
             .map((id) => knownProfiles[id]?.name)
@@ -1504,16 +1585,22 @@ export function ReleaseForm({
             .join(", "),
           artistProfileIds: track.primaryArtistIds,
           featuredArtists: track.featuredArtists,
+          additionalPrimaryArtists: track.remixers,
           songwriters: contributorNames(track.songwriters),
           composers: contributorNames(track.composers),
           producers: producerNames(track.producers),
-           audioUrl: track.existingAudioUrl,
-           audioAssetId: track.audioAssetId,
+          isCover: track.isCover,
+          originalArtist: track.originalArtist,
+          originalTrackLink: track.originalTrackLink,
+          coverLicenseConfirmed: track.existingCoverLicenseConfirmed,
+          audioUrl: track.existingAudioUrl,
+          audioAssetId: track.audioAssetId,
           audioFileName: track.audioFileName,
           duration: track.duration,
           bpm: null,
           musicalKey: "",
           explicitContent: track.explicitContent,
+          dolbyAtmos: track.dolbyAtmos,
           contributors: [
             ...contributorCredits("songwriter", track.songwriters),
             ...contributorCredits("composer", track.composers),
@@ -1533,6 +1620,7 @@ export function ReleaseForm({
       readinessScore,
       release,
       releaseType,
+      formatIntent,
       selectedReleaseDate,
       tracks,
       youtubeContentIdChannelUrl,
@@ -1546,11 +1634,11 @@ export function ReleaseForm({
   const confirmedReviewFingerprintRef = useRef<string | null>(null);
   const hasUnsavedChanges = lastSavedFingerprintRef.current !== reviewMetadataFingerprint;
   useEffect(() => {
-    if (!hasUnsavedChanges || submittedRelease) return;
-    const warnBeforeLeaving = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    if ((!hasUnsavedChanges && !batchUploading) || submittedRelease) return;
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => { if (allowReloadRef.current) return; event.preventDefault(); event.returnValue = ""; };
     window.addEventListener("beforeunload", warnBeforeLeaving);
     return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
-  }, [hasUnsavedChanges, submittedRelease]);
+  }, [batchUploading, hasUnsavedChanges, submittedRelease]);
   useEffect(() => {
     if (confirmedReviewFingerprintRef.current && confirmedReviewFingerprintRef.current !== reviewMetadataFingerprint) {
       confirmedReviewFingerprintRef.current = null;
@@ -1573,16 +1661,16 @@ export function ReleaseForm({
           const campaignQuery = firstReleaseOffer
             ? `&campaign=first-release${Object.entries(campaignAttribution).map(([key, value]) => `&${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join("")}`
             : "";
-          router.replace(`/distribution/start?edit=${id}${campaignQuery}`);
+          window.history.replaceState(window.history.state, "", `/distribution/start?edit=${id}${campaignQuery}&stage=${step}`);
         }
       })
       .catch(() => {
         draftCreationRef.current = false;
       });
-  }, [autosaveEligible, campaignAttribution, displayedReleaseTitle, draftReleaseId, ensureUploadDraft, firstReleaseOffer, initialRelease, router]);
+  }, [autosaveEligible, campaignAttribution, displayedReleaseTitle, draftReleaseId, ensureUploadDraft, firstReleaseOffer, initialRelease, step]);
 
   useEffect(() => {
-    if (!autosaveEligible || !draftReleaseId || submitting || submittedRelease || (initialRelease && initialRelease.status !== "draft")) return;
+    if (!autosaveEligible || !draftReleaseId || submitting || submittedRelease || draftConflict || (initialRelease && initialRelease.status !== "draft")) return;
     setAutosaveStatus("waiting");
     const timer = window.setTimeout(() => {
       if (savingReleaseRef.current) return;
@@ -1590,27 +1678,34 @@ export function ReleaseForm({
       autosavePendingRef.current = autosavePendingRef.current.catch(() => undefined).then(() => fetch(`/api/distribution/drafts/${draftReleaseId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(autosaveSnapshot),
+        body: JSON.stringify({ ...autosaveSnapshot, expectedUpdatedAt: draftVersionRef.current }),
       }))
-        .then((response) => {
-          if (!response.ok) throw new Error("Autosave failed");
+        .then(async (response) => {
+          const data = await response.json().catch(() => ({}));
+          if (data.code === "DRAFT_VERSION_CONFLICT") { setDraftConflict(true); throw new Error(data.error); }
+          if (!response.ok) throw new Error(data.error || "Autosave failed");
+          draftVersionRef.current = typeof data.savedAt === "string" ? data.savedAt : draftVersionRef.current;
           lastSavedFingerprintRef.current = reviewMetadataFingerprint;
           setAutosaveStatus("saved");
         })
-        .catch(() => setAutosaveStatus("error"));
+        .catch((error) => { setAutosaveStatus("error"); if (error instanceof Error) setStatus(error.message); });
     }, 1200);
     return () => window.clearTimeout(timer);
-  }, [autosaveEligible, autosaveSnapshot, draftReleaseId, reviewMetadataFingerprint, submittedRelease, submitting, initialRelease]);
+  }, [autosaveEligible, autosaveSnapshot, draftConflict, draftReleaseId, reviewMetadataFingerprint, submittedRelease, submitting, initialRelease]);
 
   async function retryAutosave() {
+    if (draftConflict) return;
     if (!draftReleaseId || submitting) return saveDraftRelease();
     setAutosaveStatus("saving");
     try {
-      const response = await fetch(`/api/distribution/drafts/${draftReleaseId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(autosaveSnapshot) });
-      if (!response.ok) throw new Error("Save failed");
+      const response = await fetch(`/api/distribution/drafts/${draftReleaseId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...autosaveSnapshot, expectedUpdatedAt: draftVersionRef.current }) });
+      const data = await response.json().catch(() => ({}));
+      if (data.code === "DRAFT_VERSION_CONFLICT") { setDraftConflict(true); throw new Error(data.error); }
+      if (!response.ok) throw new Error(data.error || "Save failed");
+      draftVersionRef.current = typeof data.savedAt === "string" ? data.savedAt : draftVersionRef.current;
       lastSavedFingerprintRef.current = reviewMetadataFingerprint;
       setAutosaveStatus("saved");
-    } catch { setAutosaveStatus("error"); }
+    } catch (error) { setAutosaveStatus("error"); if (error instanceof Error) setStatus(error.message); }
   }
 
   useEffect(() => {
@@ -1758,6 +1853,8 @@ export function ReleaseForm({
     );
   const addTrack = () => {
     if (singleReleaseGift) return;
+    const formatMaximum = formatIntent === "single" ? 1 : formatIntent === "ep" ? 4 : 30;
+    if (tracks.length >= formatMaximum) { setStatus(`This ${formatIntent === "ep" ? "EP" : formatIntent === "single" ? "Single" : "Album"} allows up to ${formatMaximum} track${formatMaximum === 1 ? "" : "s"}. Change the release format to add more.`); return; }
     setTrackList((current) => [...current, { ...createTrack(current.length + 1), primaryArtistIds: current[0]?.primaryArtistIds ?? [] }]);
     setExpandedTrack(tracks.length);
   };
@@ -1915,6 +2012,7 @@ export function ReleaseForm({
       signal: AbortSignal;
       reportProgress: (loaded: number, total: number) => void;
     },
+    clientTrackId?: string,
   ) {
     const supportedMime = ["audio/wav", "audio/x-wav", "audio/mpeg"].includes(file.type);
     if (!supportedMime || !/\.(wav|mp3)$/i.test(file.name)) {
@@ -1922,16 +2020,21 @@ export function ReleaseForm({
     }
     clearCorrectionField("audio-upload", `track-${index}-audio`);
     const currentTrack = tracks[index];
+    const previewUrl = URL.createObjectURL(file);
+    audioPreviewObjectUrlsRef.current.add(previewUrl);
+    const duration = await getAudioDuration(file).catch(() => {
+      safeRevokePreviewUrl(previewUrl);
+      audioPreviewObjectUrlsRef.current.delete(previewUrl);
+      throw new Error("Could not read the uploaded audio.");
+    });
     if (currentTrack?.audioPreviewUrl) {
       safeRevokePreviewUrl(currentTrack.audioPreviewUrl);
       audioPreviewObjectUrlsRef.current.delete(currentTrack.audioPreviewUrl);
     }
-    const previewUrl = URL.createObjectURL(file);
-    audioPreviewObjectUrlsRef.current.add(previewUrl);
-    const duration = await getAudioDuration(file).catch(() => {
-      throw new Error("Could not read the uploaded audio.");
-    });
-    updateTrack(index, {
+    setTracks((current) => current.map((track, trackIndex) => trackIndex === index ? {
+      ...track,
+      trackTitle: track.trackTitle.trim() ? track.trackTitle : titleFromAudioFilename(file.name),
+      suggestedTitleUnconfirmed: track.trackTitle.trim() ? track.suggestedTitleUnconfirmed : true,
       audioFile: file,
       audioFileName: file.name,
       existingAudioUrl: "",
@@ -1942,12 +2045,12 @@ export function ReleaseForm({
       audioBytesUploaded: 0,
       audioTotalBytes: file.size,
       requiresAudioReplacement: false,
-    });
+    } : track));
     try {
       const releaseId = await ensureUploadDraft();
       const downloadPath = await uploadPrivateAudio(file, {
         releaseId,
-        clientTrackId: currentTrack.id,
+        clientTrackId: clientTrackId ?? currentTrack?.id ?? "",
         signal: controls.signal,
         onProgress: (loaded, total) => {
           controls.reportProgress(loaded, total);
@@ -1966,9 +2069,60 @@ export function ReleaseForm({
         audioTotalBytes: file.size,
       });
       trackCampaignEvent("audio_uploaded", { trackIndex: index });
+      setPendingAudioUploads((current) => current.filter((session) => session.clientTrackId !== (clientTrackId ?? currentTrack?.id)));
     } catch (error) {
       updateTrack(index, { audioUploadStatus: "failed", requiresAudioReplacement: true });
+      recordJourneyEvent(draftReleaseId, "audio_upload_failed", step, formatIntent, tracks.length);
       throw error;
+    }
+  }
+
+  async function handleAudioBatch(files: FileList | File[]) {
+    if (batchUploading) return;
+    const selected = Array.from(files);
+    if (!selected.length) return;
+    const available = singleReleaseGift || formatIntent === "single" ? 1 : formatIntent === "ep" ? 4 : 30;
+    const reuseFirst = tracks.length === 1 && !tracks[0].existingAudioUrl && !tracks[0].audioFile && !tracks[0].audioPreviewUrl;
+    if (tracks.length + selected.length - (reuseFirst ? 1 : 0) > available) {
+      setStatus(singleReleaseGift ? "This free Single includes one track." : `You can upload up to ${available} tracks.`);
+      return;
+    }
+    setStatus(null);
+    setBatchUploading(true);
+    const startsAt = reuseFirst ? 0 : tracks.length;
+    const newTracks = selected.map((_, offset) => startsAt + offset).filter((index) => index >= tracks.length).map((index) => ({ ...createTrack(index + 1), primaryArtistIds: tracks[0]?.primaryArtistIds ?? [] }));
+    if (newTracks.length) setTrackList((current) => [...current, ...newTracks]);
+    for (let offset = 0; offset < selected.length; offset++) {
+      const index = startsAt + offset;
+      const controller = new AbortController();
+      const id = index < tracks.length ? tracks[index].id : newTracks[index - tracks.length].id;
+      try {
+        await handleAudioFile(index, selected[offset], { signal: controller.signal, reportProgress: () => undefined }, id);
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "One or more tracks could not be uploaded. Retry the failed track below.");
+      }
+    }
+    setBatchUploading(false);
+  }
+
+  async function resumeAudioUpload(session: PendingAudioUpload, file: File) {
+    if (file.name !== session.originalFilename || file.size !== session.totalSize) {
+      setStatus(`Choose the original ${session.originalFilename} file to resume this upload.`);
+      return;
+    }
+    const matchingIndex = tracks.findIndex((track) => track.id === session.clientTrackId);
+    const reuseFirst = matchingIndex < 0 && tracks.length === 1 && !tracks[0].existingAudioUrl && !tracks[0].audioFile && !tracks[0].audioPreviewUrl;
+    const index = matchingIndex >= 0 ? matchingIndex : reuseFirst ? 0 : tracks.length;
+    const trackId = session.clientTrackId || (index < tracks.length ? tracks[index].id : createId());
+    if (matchingIndex < 0 && !reuseFirst) setTrackList((current) => [...current, { ...createTrack(index + 1), id: trackId, primaryArtistIds: current[0]?.primaryArtistIds ?? [] }]);
+    else if (reuseFirst) updateTrack(0, { id: trackId });
+    try {
+      await handleAudioFile(index, file, { signal: new AbortController().signal, reportProgress: () => undefined }, session.clientTrackId || "");
+      setPendingAudioUploads((current) => current.filter((pending) => pending.id !== session.id));
+      recordJourneyEvent(draftReleaseId, "audio_upload_resumed", step, formatIntent, tracks.length);
+      setStatus(null);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not resume this upload. Retry with the same file.");
     }
   }
 
@@ -2077,6 +2231,8 @@ export function ReleaseForm({
         trackIndex: index,
         message: "Enter the actual title for every track before continuing.",
       };
+    if (track.suggestedTitleUnconfirmed)
+      return { step: 3, key: `track-${index}-title`, trackIndex: index, message: "Confirm or edit the title suggested from the audio filename." };
     if (track.requiresAudioReplacement)
       return {
         step: 3,
@@ -2219,7 +2375,7 @@ export function ReleaseForm({
   const artworkIssue = (): ValidationIssue | null =>
     !artworkPreview || artworkError
       ? {
-          step: 0,
+          step: 4,
           key: "artwork-upload",
           message: artworkError || "Upload cover artwork before continuing.",
         }
@@ -2237,7 +2393,7 @@ export function ReleaseForm({
         ? { step: 5, key: "ai-generation-link", message: "Add the original AI-generation track or project link before submitting this release." } : null,
       platforms.length === 0
         ? {
-            step: 6,
+            step: 5,
             key: "store-selection",
             message: "Choose at least one store or social destination.",
           }
@@ -2284,7 +2440,11 @@ export function ReleaseForm({
   const destinationsIssue = (): ValidationIssue | null =>
     destinationsIssues()[0] ?? null;
 
+  const formatIssue: ValidationIssue | null = formatIntent && releaseType !== formatIntent
+    ? { step: 0, key: "release-format", message: formatIntent === "single" ? "A Single contains one track. Remove extra tracks or change the format." : formatIntent === "ep" ? "An EP contains 2–4 tracks. Add tracks or change the format." : "An Album contains 5–30 tracks. Add tracks or change the format." }
+    : null;
   const validationIssues = [
+    formatIssue,
     ...tracks
       .map((track, index) => trackIssue(track, index))
       .filter((issue): issue is ValidationIssue => Boolean(issue)),
@@ -2295,15 +2455,21 @@ export function ReleaseForm({
   const primaryArtistComplete = Boolean(tracks[0]?.primaryArtistIds.length);
   const audioAssetsComplete = tracks.every((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl));
   const stepChecks = [
-    audioAssetsComplete && Boolean(artworkPreview) && !artworkError,
+    !formatIssue && audioComplete && tracks.every((track) => Boolean(track.trackTitle.trim()) && !track.suggestedTitleUnconfirmed),
     primaryArtistComplete,
     !releaseInfoIssue(),
     tracks.every((track, index) => !trackIssue(track, index)),
-    !artworkIssue() && audioAssetsComplete,
+    !artworkIssue(),
     !destinationsIssues().some((issue) => issue.step === 5),
-    !destinationsIssues().some((issue) => issue.step === 6),
-    validationIssues.length === 0,
+    true,
+    validationIssues.length === 0 && (reviewConfirmed || isPaidReleaseResubmission),
   ];
+  const initialUnfinishedStep = visibleStepIndexes.find((index) => !stepChecks[index]);
+  useEffect(() => {
+    if (resumeStageResolvedRef.current || !initialRelease || initialRelease.status !== "draft" || initialStage != null || correctionTrackIndex !== null) return;
+    resumeStageResolvedRef.current = true;
+    if (initialUnfinishedStep != null) setStep(initialUnfinishedStep);
+  }, [initialRelease, initialStage, correctionTrackIndex, initialUnfinishedStep]);
   const validationIssueCount = validationIssues.length;
   const completion = Math.round(
     (visibleStepIndexes.filter((index) => stepChecks[index]).length /
@@ -2325,7 +2491,7 @@ export function ReleaseForm({
   );
 
   function firstIssueForStep(stepIndex: number): ValidationIssue | null {
-    if (stepIndex === 0) return artworkIssue();
+    if (stepIndex === 0) return formatIssue ?? tracks.map((track, index) => trackIssue(track, index)).find((issue) => issue?.key.endsWith("-audio") || issue?.key.endsWith("-title")) ?? null;
     if (stepIndex === 1 && !primaryArtistComplete) return { step: 1, key: "release-primary-artists", message: "Select at least one saved primary artist profile." };
     if (stepIndex === 2) return releaseInfoIssue();
     if (stepIndex === 3)
@@ -2333,8 +2499,8 @@ export function ReleaseForm({
         tracks.map((track, index) => trackIssue(track, index)).find(Boolean) ??
         null
       );
-    if (stepIndex === 4) return artworkIssue() ?? tracks.map((track, index) => trackIssue(track, index)).find((issue) => issue?.key.endsWith("-audio")) ?? null;
-    if (stepIndex === 5 || stepIndex === 6) return destinationsIssues().find((issue) => issue.step === stepIndex) ?? null;
+    if (stepIndex === 4) return artworkIssue();
+    if (stepIndex === 5) return destinationsIssues().find((issue) => issue.step === stepIndex) ?? null;
     return (
       [3, 2, 4, 5, 6].map((index) => firstIssueForStep(index)).find(Boolean) ??
       null
@@ -2443,14 +2609,6 @@ export function ReleaseForm({
     }
     setAttemptedStep(null);
     setStatus(null);
-    if (step === 1) {
-      goToStep(0);
-      return;
-    }
-    if (step === 0) {
-      goToStep(3);
-      return;
-    }
     const currentIndex = visibleStepIndexes.indexOf(
       step as (typeof visibleStepIndexes)[number],
     );
@@ -2485,7 +2643,7 @@ export function ReleaseForm({
     setStatus(null);
     setVisitedSteps((current) => new Set([...current, 1]));
     setStepMotion("step-adjacent-forward");
-    setStep(0);
+    setStep(3);
     if (stepTransitionTimerRef.current != null) window.clearTimeout(stepTransitionTimerRef.current);
     stepTransitionTimerRef.current = window.setTimeout(() => {
       stepTransitionRef.current = false;
@@ -2495,6 +2653,26 @@ export function ReleaseForm({
   }
 
   function continueFromMusic() {
+    if (!audioComplete) {
+      setStatus("Upload every audio master before moving to cover artwork. You can save this draft and return later.");
+      return;
+    }
+    if (tracks.some((track) => !track.trackTitle.trim() || isPlaceholderTrackTitle(track.trackTitle))) {
+      setStatus("Give every track its final title before continuing.");
+      return;
+    }
+    if (formatIntent !== "single" && !release.releaseTitle.trim()) {
+      setStatus(`Name your ${formatIntent === "ep" ? "EP" : "Album"} before continuing.`);
+      return;
+    }
+    if (tracks.some((track) => track.suggestedTitleUnconfirmed)) {
+      setStatus("Confirm or edit each title suggested from an audio filename before continuing.");
+      return;
+    }
+    if (formatIntent && releaseType !== formatIntent) {
+      setStatus(formatIntent === "single" ? "A Single needs exactly one track. Remove extra tracks to continue." : formatIntent === "ep" ? "An EP needs 2–4 tracks. Add your remaining music or change the format." : "An Album needs 5–30 tracks. Add your remaining music or change the format.");
+      return;
+    }
     if (stepTransitionTimerRef.current != null) window.clearTimeout(stepTransitionTimerRef.current);
     stepTransitionRef.current = false;
     setStepTransitioning(false);
@@ -2502,7 +2680,7 @@ export function ReleaseForm({
     setStatus(null);
     setVisitedSteps((current) => new Set([...current, 0]));
     setStepMotion("step-adjacent-forward");
-    setStep(3);
+    setStep(4);
   }
 
   async function uploadFilesDirectly() {
@@ -2687,6 +2865,7 @@ export function ReleaseForm({
   }
 
   async function persistDraftRelease(forSubmission = false) {
+    if (draftConflict) { setStatus("This draft changed in another tab. Open the latest version before saving."); return; }
     if (savingReleaseRef.current && !forSubmission) return;
     savingReleaseRef.current = true;
     setSubmitting(true);
@@ -2699,11 +2878,13 @@ export function ReleaseForm({
 
       const payload = {
         draftReleaseId: uploaded.releaseId ?? draftReleaseId,
+        expectedUpdatedAt: draftVersionRef.current,
         metadata: {
           artistName: primaryArtistName,
           trackName: tracks[0]?.trackTitle.trim() || displayedReleaseTitle,
           releaseTitle: displayedReleaseTitle,
           releaseType,
+          wizardFormatIntent: formatIntent ?? undefined,
           releasePreviouslyReleased: release.releasePreviouslyReleased,
           upcCode: release.releasePreviouslyReleased
             ? release.upcCode.trim()
@@ -2738,6 +2919,7 @@ export function ReleaseForm({
           uploadedArtworkUrl: uploaded.artworkUrl,
           tracks: tracks.map((track, index) => ({
             trackTitle: track.trackTitle,
+            metadata: { clientTrackId: track.id, suggestedTitleUnconfirmed: track.suggestedTitleUnconfirmed },
             isrc: release.releasePreviouslyReleased
               ? track.existingIsrcCode.trim()
               : undefined,
@@ -2791,11 +2973,13 @@ export function ReleaseForm({
         body: formData,
       });
       const data = await response.json();
+      if (data.code === "DRAFT_VERSION_CONFLICT") setDraftConflict(true);
       if (!response.ok) throw new Error(data.error || "Unable to save draft.");
       const savedId = Number(data.release?.id ?? draftReleaseId ?? 0);
       if (savedId > 0) {
         setDraftReleaseId(savedId);
       }
+      draftVersionRef.current = typeof data.release?.draftVersion === "string" ? data.release.draftVersion : draftVersionRef.current;
       lastSavedFingerprintRef.current = reviewMetadataFingerprint;
       setAutosaveStatus("saved");
       if (!forSubmission) {
@@ -2921,6 +3105,7 @@ export function ReleaseForm({
 
   async function handleFinalSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (draftConflict) { setStatus("This draft changed in another tab. Open the latest version before submitting."); return; }
     if (savingReleaseRef.current) return;
     if (validationIssues.length > 0) {
       const issue = validationIssues[0];
@@ -2960,6 +3145,8 @@ export function ReleaseForm({
         const details = Array.isArray(confirmation.errors) ? confirmation.errors.map((item: { message?: unknown }) => String(item?.message || "")).filter(Boolean) : [];
         throw new Error(details.length ? details.join(" · ") : confirmation.error || "Could not save review confirmation.");
       }
+
+      if (typeof confirmation.updatedAt === "string") draftVersionRef.current = confirmation.updatedAt;
 
       const orderRequestPayload = {
         plan: selectedPlan,
@@ -3153,6 +3340,38 @@ export function ReleaseForm({
       />
     );
   }
+  if (journeyIntro) return (
+    <section className="release-journey-intro" aria-labelledby="release-journey-heading">
+      <header className="release-journey-intro-header">
+        <button type="button" onClick={() => journeyIntro === "format" ? setJourneyIntro("welcome") : router.push("/distribution")}>
+          {journeyIntro === "format" ? "← Back" : "Save & quit"}
+        </button>
+        <NextImage src="/assets/hymnlogowhite.png" alt="HYMN Music" width={116} height={38} priority />
+      </header>
+      <div className="release-journey-intro-body">
+        <p className="release-journey-eyebrow">YOUR RELEASE JOURNEY</p>
+        {journeyIntro === "welcome" ? <>
+          <h1 id="release-journey-heading">Hello{userName?.trim() ? `, ${userName.trim().split(/\s+/)[0]}` : ""}.</h1>
+          <p>Let’s get your music ready for listeners. We’ll guide you through each part and save your work as you go.</p>
+          <button type="button" className="release-journey-primary" onClick={() => setJourneyIntro("format")}>Start your release <span aria-hidden="true">→</span></button>
+        </> : <>
+          <h1 id="release-journey-heading">What are you releasing?</h1>
+          <p>Choose a format to shape your path. You can change this before submitting.</p>
+          <div className="release-format-options" role="group" aria-label="Release format">
+            {(["single", "ep", "album"] as const).map((format) => (
+              <button key={format} type="button" aria-pressed={formatIntent === format} disabled={Boolean(singleReleaseGift && format !== "single")} onClick={() => setFormatIntent(format)}>
+                <span className="release-format-symbol" aria-hidden="true">{format === "single" ? "♪" : format === "ep" ? "♫" : "♬"}</span>
+                <strong>{format === "ep" ? "EP" : format[0].toUpperCase() + format.slice(1)}</strong>
+                <small>{format === "single" ? "1 track" : format === "ep" ? "2–4 tracks" : "5–30 tracks"}</small>
+              </button>
+            ))}
+          </div>
+          {singleReleaseGift ? <p className="release-format-note">Your first release on us covers one Single. EP and Album are available for later releases.</p> : null}
+          <button type="button" className="release-journey-primary" disabled={!formatIntent} onClick={() => { setJourneyIntro(null); setHasStartedEditing(true); }}>Continue to music <span aria-hidden="true">→</span></button>
+        </>}
+      </div>
+    </section>
+  );
   return (
     <>
       {submitting && status !== "Opening Razorpay..." ? (
@@ -3180,14 +3399,19 @@ export function ReleaseForm({
         style={{ borderColor: "var(--border)", background: "var(--card)" }}
       >
         <header className="release-workspace-header">
-          <button type="button" onClick={saveDraftRelease} disabled={submitting} className="release-workspace-quit">Save &amp; Quit</button>
+          <button type="button" onClick={saveDraftRelease} disabled={submitting || draftConflict} className="release-workspace-quit">Save &amp; Quit</button>
           <NextImage src="/assets/hymnlogowhite.png" alt="HYMN Music" width={116} height={38} priority className="release-workspace-logo" />
           <div className="release-workspace-state" aria-live="polite">
             <span className={autosaveEligible && autosaveStatus === "saved" ? "is-saved" : ""}>{autosaveEligible && autosaveStatus === "saved" ? "Saved ✓" : !autosaveEligible && hasUnsavedChanges ? "Unsaved changes" : autosaveLabel}</span>
-            {autosaveStatus === "error" ? <button type="button" onClick={retryAutosave} disabled={submitting} className="release-workspace-review">Retry save</button> : null}
+            {autosaveStatus === "error" && !draftConflict ? <button type="button" onClick={retryAutosave} disabled={submitting} className="release-workspace-review">Retry save</button> : null}
             {step !== 7 ? <button type="button" onClick={enterReviewMode} className="release-workspace-review">Review</button> : null}
           </div>
         </header>
+        {draftConflict ? <div className="release-draft-conflict" role="alert"><span>This draft changed in another tab. Your edits here have not replaced the latest version.</span><button type="button" onClick={() => { if (window.confirm("Open the latest draft? Unsaved changes in this tab will be lost.")) { allowReloadRef.current = true; window.location.reload(); } }}>Open latest draft</button></div> : null}
+        <div className="release-journey-progress" role="group" aria-label="Release journey progress">
+          <div><span>LEVEL {menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1} / {menuStepIndexes.length}</span><strong>{stepMenuLabels[step] ?? steps[step]}</strong></div>
+          <div className="release-journey-progress-track" role="progressbar" aria-label="Journey stages reached" aria-valuemin={0} aria-valuemax={menuStepIndexes.length} aria-valuenow={menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1}><span style={{ width: `${((menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1) / menuStepIndexes.length) * 100}%` }} /></div>
+        </div>
         {firstReleaseOffer ? <div className="release-free-offer-banner flex items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-500">🎁 First release on us</div> : null}
         <div
           className="release-mobile-step-menu md:hidden rounded-[1.3rem] border p-3 md:p-4"
@@ -3330,6 +3554,7 @@ export function ReleaseForm({
         </details>
         {step === 1 ? (
           <section className={clsx("release-artist-stage", stepMotion)}>
+            <button type="button" className="release-change-format" onClick={() => goToStep(4)}>← Back to cover artwork</button>
             <div className="release-focused-intro">
               <h2>Who are the primary artists on this release?</h2>
             </div>
@@ -3368,7 +3593,7 @@ export function ReleaseForm({
               <div className="release-artist-stage-count"><span>{tracks[0]?.primaryArtistIds.length ?? 0} of 3 selected</span><span>Drag artists to set their store delivery order</span></div>
             </div>
             <button type="button" onClick={continueFromArtists} disabled={stepTransitioning} className="release-artist-continue">
-              {stepTransitioning ? "Opening add music…" : "Continue to add music →"}
+              {stepTransitioning ? "Opening track credits…" : "Continue to track credits →"}
             </button>
           </section>
         ) : null}
@@ -3421,20 +3646,31 @@ export function ReleaseForm({
         {step === 0 ? (
           <section className={clsx("release-audio-stage", stepMotion)}>
             <nav className="release-focused-side-nav" aria-label="Music upload step navigation">
-              <button type="button" className="release-focused-side-arrow is-left" onClick={() => goToStep(1)} disabled={stepTransitioning || submitting} aria-label="Back to primary artists">
+              <button type="button" className="release-focused-side-arrow is-left" onClick={() => setJourneyIntro("format")} disabled={stepTransitioning || submitting} aria-label="Back to release format">
                 <span aria-hidden="true">←</span>
               </button>
-              <button type="button" className="release-focused-side-arrow is-right" onClick={advanceStep} disabled={stepTransitioning || submitting} aria-label="Continue to track details">
+              <button type="button" className="release-focused-side-arrow is-right" onClick={continueFromMusic} disabled={stepTransitioning || submitting} aria-label="Continue to cover artwork">
                 <span aria-hidden="true">→</span>
               </button>
             </nav>
             <div className="release-focused-intro">
-              <h2>Add your music and cover</h2>
-              <p>{firstReleaseOffer ? "Upload 1 track for your free Single release" : "Add up to 30 tracks for a maximum length of 1 hour"}<br /><span className="release-dolby-note"><img src="https://d21buns5ku92am.cloudfront.net/68644/images/413934-Dolby%20Atmos%20Horizontal-015e44-medium-1641853769.png" alt="Dolby Atmos" className="release-dolby-logo" /> Add Dolby Atmos™ files directly in track information.</span></p>
+              <h2>Add your music</h2>
+              <p>{firstReleaseOffer ? "Upload one track for your free Single." : `Build your ${formatIntent === "ep" ? "EP with 2–4" : formatIntent === "album" ? "Album with 5–30" : "Single with one"} track${formatIntent === "single" ? "" : "s"}.`} Name each track as it uploads.</p>
+              {!singleReleaseGift ? <button type="button" className="release-change-format" onClick={() => setJourneyIntro("format")}>Change release format</button> : null}
             </div>
             <div className="release-onboarding-assets">
             <div className="release-onboarding-audio">
+              {formatIntent && formatIntent !== "single" ? <label className="release-journey-title-field">
+                <span>{formatIntent === "ep" ? "EP name" : "Album name"}</span>
+                <input type="text" maxLength={150} value={release.releaseTitle} onChange={(event) => setRelease((current) => ({ ...current, releaseTitle: event.target.value }))} placeholder={formatIntent === "ep" ? "Name your EP" : "Name your album"} />
+              </label> : null}
               <div className="release-onboarding-asset-heading"><strong>{correctionLabel("Audio masters", "audio-upload")}</strong><span>WAV or MP3 · upload the final mastered file</span></div>
+              {!singleReleaseGift ? <label className="release-batch-upload" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (!batchUploading) void handleAudioBatch(event.dataTransfer.files); }}>
+                <UploadCloud aria-hidden="true" />
+                <span><strong>{batchUploading ? "Uploading your tracks…" : "Choose multiple audio files"}</strong><small>Or drag files onto this area. Each file becomes a track.</small></span>
+                <input type="file" accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" multiple disabled={batchUploading} onChange={(event) => { if (event.target.files) void handleAudioBatch(event.target.files); event.target.value = ""; }} />
+              </label> : null}
+              {pendingAudioUploads.length ? <div className="release-resume-uploads" role="status"><strong>Continue an interrupted upload</strong><p>Choose the original file. Uploaded chunks will be reused where possible.</p>{pendingAudioUploads.map((session) => <label key={session.id}><span>{session.originalFilename} · {Math.round(session.bytesUploaded / Math.max(session.totalSize, 1) * 100)}% received</span><span className="release-resume-file">Choose file<input type="file" accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" onChange={(event) => { const file = event.target.files?.[0]; if (file) void resumeAudioUpload(session, file); event.target.value = ""; }} /></span></label>)}</div> : null}
             <div className={clsx("release-audio-queue", tracks.length > 4 && "is-scrollable")}>
               {!tracks.some((track) => track.audioUploadStatus !== "idle" || track.audioPreviewUrl || track.existingAudioUrl) ? (
                 <div className="release-audio-empty-state">
@@ -3444,7 +3680,7 @@ export function ReleaseForm({
                   </div>
                 </div>
               ) : tracks.map((track, index) => {
-                const hasAudio = Boolean(track.audioPreviewUrl && track.audioUploadStatus === "uploaded");
+                const hasAudio = Boolean((track.audioPreviewUrl || track.existingAudioUrl) && track.audioUploadStatus === "uploaded");
                 const isUploading = track.audioUploadStatus === "uploading";
                 return (
                   <article key={track.id} className={clsx("release-audio-queue-item", hasAudio && "is-ready", isUploading && "is-uploading")}>
@@ -3458,7 +3694,7 @@ export function ReleaseForm({
                       ) : hasAudio ? (
                         <div className="release-audio-inline-details">
                           <AudioWaveform
-                            src={track.audioPreviewUrl}
+                            src={track.audioPreviewUrl || track.existingAudioUrl}
                             title={track.trackTitle || `Track ${index + 1}`}
                             subtitle={[track.audioFileName, track.duration, fileFormat(track.audioFile, track.audioFileName)].filter(Boolean).join(" • ")}
                             compact
@@ -3467,9 +3703,10 @@ export function ReleaseForm({
                               placeholder: "Add track name",
                               ariaLabel: `Track ${index + 1} name`,
                               inputRef: registerField(`track-${index}-title`) as (node: HTMLInputElement | null) => void,
-                              onChange: (value) => updateTrack(index, { trackTitle: value }),
+                              onChange: (value) => updateTrack(index, { trackTitle: value, suggestedTitleUnconfirmed: false }),
                             }}
                           />
+                          {track.suggestedTitleUnconfirmed ? <button type="button" className="release-confirm-title" onClick={() => updateTrack(index, { suggestedTitleUnconfirmed: false })}>Use this track title</button> : null}
                         </div>
                       ) : (
                         <UploadDropzone accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" iconOnly compact ctaLabel="Add track" title={`Track ${index + 1} audio`} description="Choose a WAV or MP3 master" helperLines={[]} fileName={track.audioFile?.name || track.audioFileName} fileFormat={fileFormat(track.audioFile, track.audioFileName)} onSelect={async (file, controls) => handleAudioFile(index, file, controls)} />
@@ -3492,18 +3729,12 @@ export function ReleaseForm({
                   <span>Add track — locked for this FREE release</span>
                 </button>
               ) : tracks.some((track) => track.audioUploadStatus !== "idle" || track.audioPreviewUrl || track.existingAudioUrl) ? (
-                <button type="button" onClick={addTrack} className="release-add-audio-track" title="Add another audio master">
+                <button type="button" onClick={tracks.length >= (formatIntent === "single" ? 1 : formatIntent === "ep" ? 4 : 30) ? () => setJourneyIntro("format") : addTrack} className="release-add-audio-track" title="Add another audio master">
                   <Plus />
-                  <span>Add track</span>
+                  <span>{tracks.length >= (formatIntent === "single" ? 1 : formatIntent === "ep" ? 4 : 30) ? "Change format to add more" : "Add track"}</span>
                 </button>
               ) : null}
             </div>
-            </div>
-            <div ref={registerField("artwork-upload")} className="release-onboarding-artwork">
-              <div className="release-onboarding-artwork-heading"><strong>{correctionLabel("Cover artwork", "artwork-upload")}</strong><span>JPG · square · minimum 3000 × 3000 px</span></div>
-              <ArtworkSquareDropzone previewUrl={artworkPreview} fileName={artworkFile?.name} fileType={fileFormat(artworkFile)} dimensions={artworkDimensions} error={showErrors && artworkIssue() ? artworkIssue()?.message ?? null : artworkError} minimalFeedback onSelect={handleArtwork} />
-              {artworkScanning ? <p className="release-onboarding-artwork-note"><LoaderCircle className="animate-spin" />Checking artwork…</p> : null}
-              {artworkWarning ? <ArtworkWarning warning={artworkWarning} /> : null}
             </div>
             </div>
           </section>
@@ -3749,6 +3980,7 @@ export function ReleaseForm({
                               onChange={(event) =>
                                 updateTrack(index, {
                                   trackTitle: event.target.value,
+                                  suggestedTitleUnconfirmed: false,
                                 })
                               }
                               placeholder="Track title"
@@ -3816,6 +4048,7 @@ export function ReleaseForm({
                           <div className="grid gap-3 md:gap-4 lg:grid-cols-3">
                             <div className="release-track-artist-field">
                               <span className="release-track-artist-label">Primary Artist</span>
+                              {trackArtistEditorIndex !== index ? <button type="button" className="release-track-artist-summary" onClick={() => setTrackArtistEditorIndex(index)}><strong>{namesFor(track.primaryArtistIds) || "Artist needed"}</strong><span>Change for this track →</span></button> : <>
                               <div className="release-track-artist-avatar-picker">
                                 {track.primaryArtistIds.map((profileId, artistIndex) => {
                                   const profile = knownProfiles[profileId];
@@ -3854,6 +4087,8 @@ export function ReleaseForm({
                                 />
                               </div>
                               <small>Up to 3 artist profiles</small>
+                              <button type="button" className="release-track-artist-done" onClick={() => setTrackArtistEditorIndex(null)}>Done</button>
+                              </>}
                             </div>
                             <div>
                               <label
@@ -4008,35 +4243,8 @@ export function ReleaseForm({
                             background: "var(--bg-soft)",
                           }}
                         >
-                          <UploadDropzone
-                            accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3"
-                            iconOnly
-                            compact={Boolean(track.audioPreviewUrl && track.audioUploadStatus === "uploaded")}
-                            title="Audio upload"
-                            description="Drop the master audio here"
-                            helperLines={[
-                              "Direct-to-storage",
-                              "WAV or MP3 only",
-                              "Resumable for large files",
-                            ]}
-                            fileName={
-                              track.audioFile?.name || track.audioFileName
-                            }
-                            fileFormat={fileFormat(
-                              track.audioFile,
-                              track.audioFileName,
-                            )}
-                            fileSize={formatFileSize(track.audioFile?.size)}
-                            error={
-                              showErrors &&
-                              issue?.key === `track-${index}-audio`
-                                ? issue.message
-                                : null
-                            }
-                            onSelect={async (file, controls) => {
-                              await handleAudioFile(index, file, controls);
-                            }}
-                          />
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs"><strong>{audioReady ? "Audio ready" : track.audioUploadStatus === "uploading" ? "Audio uploading" : "Audio needed"}</strong><button type="button" className="font-semibold text-[var(--accent)]" onClick={() => goToStep(0)}>{audioReady ? "Replace in Music" : "Add in Music"} →</button></div>
+                          {showErrors && issue?.key === `track-${index}-audio` ? <p className="text-xs text-[var(--danger)]">{issue.message}</p> : null}
                           {track.audioUploadStatus === "uploading" || track.audioUploadStatus === "failed" ? (
                             <div className="grid gap-2 rounded-[1rem] border px-3 py-3" style={{ borderColor: track.audioUploadStatus === "failed" ? "color-mix(in srgb,var(--danger) 38%,var(--border))" : "var(--border)", background: "var(--card)" }} aria-live="polite">
                               <div className="flex min-w-0 items-center justify-between gap-3 text-xs font-semibold">
@@ -4253,7 +4461,7 @@ export function ReleaseForm({
                 </div>
               );
             })}
-            {firstReleaseOffer ? <div className="group relative inline-flex max-w-max pb-7">
+            {singleReleaseGift ? <div className="group relative inline-flex max-w-max pb-7">
               <button
                 type="button"
                 aria-disabled="true"
@@ -4269,9 +4477,9 @@ export function ReleaseForm({
             </div> : <button
                 type="button"
                 className="btn-outline pressable hover-lift max-w-max text-xs md:text-sm py-2 md:py-2.5 px-3 md:px-4"
-                onClick={addTrack}
+                onClick={tracks.length >= (formatIntent === "single" ? 1 : formatIntent === "ep" ? 4 : 30) ? () => goToStep(0) : addTrack}
               >
-                + Add another track
+                {tracks.length >= (formatIntent === "single" ? 1 : formatIntent === "ep" ? 4 : 30) ? "Change format in Music" : "+ Add another track"}
               </button>}
           </section>
         ) : null}
@@ -4577,7 +4785,7 @@ export function ReleaseForm({
               {artworkWarning ? (
                 <ArtworkWarning warning={artworkWarning} />
               ) : null}
-              <div className="mt-6 border-t pt-5" style={{ borderColor: "var(--border)" }}><div className="flex items-center justify-between gap-3"><div><p className="font-semibold">Audio masters</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{tracks.filter((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl)).length} of {tracks.length} uploaded</p></div><button type="button" className="pressable py-2 text-xs font-semibold" style={{ color: "var(--text-muted)" }} onClick={() => goToStep(3)}>Review audio</button></div><div className="mt-4 grid gap-3">{tracks.map((track, index) => <div key={`${track.id}-asset-status`} className="flex items-center justify-between gap-3 text-xs"><span className="truncate">{index + 1}. {track.trackTitle || "Untitled track"}</span><span style={{ color: track.audioFile || track.existingAudioUrl || track.audioPreviewUrl ? "var(--success)" : "var(--danger)" }}>{track.audioFile || track.existingAudioUrl || track.audioPreviewUrl ? "Ready" : "Missing"}</span></div>)}</div></div>
+               <div className="mt-6 border-t pt-5" style={{ borderColor: "var(--border)" }}><div className="flex items-center justify-between gap-3"><div><p className="font-semibold">Audio masters</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{tracks.filter((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl)).length} of {tracks.length} uploaded</p></div><button type="button" className="pressable py-2 text-xs font-semibold" style={{ color: "var(--text-muted)" }} onClick={() => goToStep(0)}>Review audio</button></div><div className="mt-4 grid gap-3">{tracks.map((track, index) => <div key={`${track.id}-asset-status`} className="flex items-center justify-between gap-3 text-xs"><span className="truncate">{index + 1}. {track.trackTitle || "Untitled track"}</span><span style={{ color: track.audioFile || track.existingAudioUrl || track.audioPreviewUrl ? "var(--success)" : "var(--danger)" }}>{track.audioFile || track.existingAudioUrl || track.audioPreviewUrl ? "Ready" : "Missing"}</span></div>)}</div></div>
             </div>
             <div
               className="artwork-requirements overflow-hidden"
@@ -6242,7 +6450,7 @@ export function ReleaseForm({
               </button>
               <button
                 type="submit"
-                disabled={submitting || !legalComplete || (!isPaidReleaseResubmission && !reviewConfirmed) || validationIssues.length > 0}
+                disabled={submitting || draftConflict || !legalComplete || (!isPaidReleaseResubmission && !reviewConfirmed) || validationIssues.length > 0}
                 className={clsx("release-footer-action is-primary w-full disabled:opacity-60 sm:w-auto", distributionCheckoutAmount === 0 && "is-free-release")}
               >
                 {submitting
@@ -6298,7 +6506,7 @@ export function ReleaseForm({
                 className={clsx("release-footer-action is-primary w-full whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-45 md:w-auto", step === 0 && !audioAssetsComplete && "is-skip")}
               >
                 {step !== 0 && stepTransitioning
-                  ? step === 0 ? "Add music ready" : "Opening add music…"
+                  ? "Opening next stage…"
                   : step === 1
                   ? `Continue with ${tracks[0]?.primaryArtistIds.length ?? 0} artist${(tracks[0]?.primaryArtistIds.length ?? 0) === 1 ? "" : "s"} →`
                   : step === 0

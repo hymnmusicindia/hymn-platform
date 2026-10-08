@@ -220,6 +220,7 @@ const distributionMetadataBaseSchema = z.object({
   artistName: releaseText,
   releaseTitle: releaseText.optional(),
   releaseType: z.enum(["single", "ep", "album"]),
+  wizardFormatIntent: z.enum(["single", "ep", "album"]).optional(),
   releaseDate: z.string().refine(value => Boolean(parseReleaseDate(value)), "Enter a valid release date (YYYY-MM-DD)."),
   originalReleaseDate: z.string().refine(value => !value || Boolean(parseReleaseDate(value)), "Enter a valid original release date.").optional(),
   recordLabelName: z.string().min(1),

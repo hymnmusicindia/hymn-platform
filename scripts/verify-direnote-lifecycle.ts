@@ -105,7 +105,7 @@ async function main() {
   assert.equal(await prisma.notification.count({ where: { userId: user.id, title: { startsWith: "Fix required" } } }), 1);
   assert.equal(await prisma.emailLog.count({ where: { userId: user.id, template: "release_changes_requested" } }), 1);
   assert.equal(await prisma.adminTask.count({ where: { entityId: String(release.id), type: "DireNote Correction" } }), 1);
-  if (process.argv.includes("--browser")) { browser = await startDireNoteBrowser(user.id); await browser.correction(release.id); await browser.artistWizard(); }
+  if (process.argv.includes("--browser")) { browser = await startDireNoteBrowser(user.id); await browser.correction(release.id); await browser.artistWizard(); await browser.newReleaseJourney(); }
   const detailed = await getDetailedReleaseById(release.id);
   assert(detailed);
   const editedTracks = detailed.tracks!.map(track => ({ ...track, language: "Hindi", version: track.trackNumber === 2 ? "Instrumental" : track.version }));
@@ -122,11 +122,9 @@ async function main() {
   assert.equal(((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: firstAttempt.id } })).corrections as any).status, "customer_resolved");
   await prisma.distributionSubmissionAttempt.update({ where: { id: firstAttempt.id }, data: { startedAt: new Date(0) } });
   if (browser) await browser.submit(release.id);
-  else {
-    await updateDetailedReleaseStatus(release.id, "approved", "Fixture admin approved the corrected metadata.");
-    const reingested = await submitRelease(release.id);
-    assert.equal(reingested.submitted, true, JSON.stringify(reingested));
-  }
+  await updateDetailedReleaseStatus(release.id, "approved", "Fixture admin approved the corrected metadata.");
+  const reingested = await submitRelease(release.id);
+  assert.equal(reingested.submitted, true, JSON.stringify(reingested));
   assert.equal(ingests, 2);
   assert.equal(ingestPayloads[0].tracks[1].trackLanguage, "Hindi");
   assert.equal(ingestPayloads[1].tracks[1].trackLanguage, "Instrumental");
@@ -147,7 +145,7 @@ async function main() {
   assert.deepEqual(redactDireNoteDiagnostic(ingestPayloads[1]), attempts[1].payloadRedacted, "The entire HTTP body must match the saved canonical payload snapshot.");
   await writeFile(".cache/direnote-correction-http-body.json", JSON.stringify(redactDireNoteDiagnostic(ingestPayloads[1]), null, 2));
   assert((attempts[1].payloadDiff as any[]).some(change => change.field === "tracks.1.trackLanguage" && change.before === "Hindi" && change.after === "Instrumental"));
-  assert.equal(await prisma.release.count({ where: { userId: user.id } }), 1);
+  assert.equal(await prisma.release.count({ where: { userId: user.id } }), browser ? 2 : 1, "The browser journey creates one additional saved draft.");
   mode = "pending";
   await prisma.release.update({ where: { id: release.id }, data: { direNoteLastAttemptedAt: new Date(0) } });
   await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));

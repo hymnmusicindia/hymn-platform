@@ -1,6 +1,16 @@
 import { spawn } from "node:child_process";
 import { chromium, expect } from "@playwright/test";
 import jwt from "jsonwebtoken";
+import sharp from "sharp";
+
+function fixtureWav() {
+  const bytes = Buffer.alloc(44 + 44100 * 4);
+  bytes.write("RIFF", 0); bytes.writeUInt32LE(bytes.length - 8, 4); bytes.write("WAVEfmt ", 8);
+  bytes.writeUInt32LE(16, 16); bytes.writeUInt16LE(1, 20); bytes.writeUInt16LE(2, 22);
+  bytes.writeUInt32LE(44100, 24); bytes.writeUInt32LE(176400, 28); bytes.writeUInt16LE(4, 32); bytes.writeUInt16LE(16, 34);
+  bytes.write("data", 36); bytes.writeUInt32LE(bytes.length - 44, 40);
+  return bytes;
+}
 
 export async function startDireNoteBrowser(userId: number) {
   const origin = "http://127.0.0.1:55441";
@@ -22,11 +32,90 @@ export async function startDireNoteBrowser(userId: number) {
     let artistWizardUrl = "";
     return {
       page,
+      async newReleaseJourney() {
+        await page.goto(`${origin}/distribution/start`);
+        await expect(page.getByRole("heading", { name: "Hello, gxrry." })).toBeVisible();
+        await page.getByRole("button", { name: /Start your release/ }).click();
+        await expect(page.getByRole("heading", { name: "What are you releasing?" })).toBeVisible();
+        await page.getByRole("button", { name: /EP 2/ }).click();
+        await page.getByRole("button", { name: /Continue to music/ }).click();
+        await expect(page.getByRole("heading", { name: "Add your music" })).toBeVisible();
+        await expect(page.getByRole("button", { name: "Continue to cover artwork" })).toBeVisible();
+        await page.getByRole("button", { name: "Continue to cover artwork" }).click();
+        await expect(page.getByText("Upload every audio master before moving to cover artwork.", { exact: false })).toBeVisible();
+        await expect(page).toHaveURL(/edit=\d+/);
+        await page.setViewportSize({ width: 375, height: 844 });
+        await page.reload();
+        await expect(page.getByRole("heading", { name: "Add your music" })).toBeVisible();
+        await expect(page.getByText("EP name", { exact: true })).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth && document.body.scrollWidth <= window.innerWidth)).toBe(true);
+        await page.screenshot({ path: ".cache/release-journey-music-mobile.png", fullPage: true });
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        await page.getByRole("textbox", { name: "EP name" }).fill("Fixture EP");
+        const audio = fixtureWav();
+        await page.locator(".release-batch-upload input[type=file]").setInputFiles([
+          { name: "Night Drive.wav", mimeType: "audio/wav", buffer: audio },
+          { name: "First Light.wav", mimeType: "audio/wav", buffer: audio },
+        ]);
+        await expect(page.getByRole("button", { name: "Use this track title" })).toHaveCount(2, { timeout: 60000 });
+        await page.getByRole("button", { name: "Use this track title" }).first().click();
+        await page.getByRole("button", { name: "Use this track title" }).first().click();
+        await page.getByRole("button", { name: "Continue to cover artwork" }).click();
+        await expect(page.getByRole("heading", { name: "Prepare your cover artwork" })).toBeVisible();
+        const savedDraftUrl = page.url();
+        await expect(page.getByRole("complementary", { name: "Release summary" }).getByText("Saved", { exact: true })).toBeVisible({ timeout: 15000 });
+        await page.goto(savedDraftUrl);
+        await page.locator('[aria-label="Release submission steps"]').getByRole("button", { name: "Music" }).click();
+        await expect(page.getByRole("textbox", { name: "EP name" })).toHaveValue("Fixture EP");
+        await expect(page.getByRole("textbox", { name: "Track 1 name" })).toHaveValue("Night Drive");
+        await expect(page.getByRole("textbox", { name: "Track 2 name" })).toHaveValue("First Light");
+        await page.getByRole("button", { name: "Continue to cover artwork" }).click();
+        await page.getByRole("button", { name: "Save and Continue" }).click();
+        await expect(page.getByRole("alert").filter({ hasText: "Upload cover artwork before continuing." })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Prepare your cover artwork" })).toBeVisible();
+        await page.getByRole("button", { name: "Review audio" }).click();
+        await expect(page.getByRole("heading", { name: "Add your music" })).toBeVisible();
+        await page.getByRole("button", { name: "Continue to cover artwork" }).click();
+        const cover = await sharp({ create: { width: 3000, height: 3000, channels: 3, background: "#334455" } }).jpeg().toBuffer();
+        const coverUpload = page.waitForResponse(response => response.url().endsWith("/api/assets") && response.request().method() === "POST");
+        await page.locator('input[type=file][accept="image/jpeg,.jpg,.jpeg"]').setInputFiles({ name: "fixture-cover.jpg", mimeType: "image/jpeg", buffer: cover });
+        expect((await coverUpload).status()).toBe(201);
+        await expect(page.getByRole("button", { name: "Replace cover artwork" })).toBeVisible();
+        await page.locator('[aria-label="Release submission steps"]').getByRole("button", { name: "Artists" }).click();
+        await page.getByRole("button", { name: "Add primary artist", exact: true }).click();
+        await page.getByRole("dialog", { name: "Add artist profile" }).getByRole("button", { name: "Use artist" }).first().click();
+        await expect(page.getByLabel("Selected primary artists").locator(".release-selected-artist")).toHaveCount(1);
+        const draftId = Number(new URL(savedDraftUrl).searchParams.get("edit"));
+        await expect.poll(async () => {
+          const response = await context.request.get(`${origin}/api/distribution/drafts/${draftId}`);
+          if (!response.ok()) return false;
+          const body = await response.json();
+          return Boolean(body.draft?.artworkUrl && body.draft?.tracks?.length === 2 && body.draft.tracks.every((track: { artistProfileIds?: number[] }) => track.artistProfileIds?.length === 1));
+        }, { timeout: 20000 }).toBe(true);
+        await page.reload();
+        await expect(page.getByRole("heading", { name: "Who are the primary artists on this release?" })).toBeVisible();
+        await expect(page.getByLabel("Selected primary artists").locator(".release-selected-artist")).toHaveCount(1);
+        await page.getByRole("button", { name: /Continue to track credits/ }).click();
+        await expect(page.getByRole("heading", { name: "Track list" })).toBeVisible();
+        await expect(page.locator('button[aria-busy="true"]')).toHaveCount(0);
+        const stageNavigation = page.locator(".release-workflow-nav");
+        await stageNavigation.locator("button").filter({ hasText: "Release details" }).click();
+        await expect(page.getByRole("heading", { name: "Define your release" })).toBeVisible();
+        await expect(page.locator('button[aria-busy="true"]')).toHaveCount(0);
+        await stageNavigation.locator("button").filter({ hasText: "Delivery" }).click();
+        await expect(page.getByRole("heading", { name: "Choose where your music goes" })).toBeVisible();
+        await expect(page.locator('button[aria-busy="true"]')).toHaveCount(0);
+        await stageNavigation.locator("button").filter({ hasText: /^Review$/ }).click();
+        await expect(page.getByRole("heading", { name: "One last look." })).toBeVisible();
+        await page.goto(artistWizardUrl);
+        console.log("Release journey browser checks passed: welcome, EP format, two audio uploads, title confirmation, cover upload, artist selection, every remaining stage, mobile resume and persisted draft.");
+      },
       async artistWizard() {
         artistWizardUrl = page.url();
         const missingInstagram = await context.request.post(`${origin}/api/artists`, { data: { name: "Missing Instagram", hasLiveMusic: false } });
         expect(missingInstagram.status()).toBe(400);
         const openWizard = async () => {
+          await page.locator('[aria-label="Release submission steps"]').getByRole("button", { name: "Artists" }).click();
           await page.getByRole("button", { name: "Add primary artist", exact: true }).first().click();
           await page.getByRole("button", { name: /Add another artist profile/ }).click();
         };
@@ -82,8 +171,10 @@ export async function startDireNoteBrowser(userId: number) {
         expect(profile.appleUrl).toBeNull();
         expect(profile.instagramUrl).toBe("https://instagram.com/browser_debut");
         await page.reload();
+        await page.setViewportSize({ width: 1440, height: 1000 });
         const persisted = await (await context.request.get(`${origin}/api/artists`)).json();
         expect(persisted.artists.filter((artist: { id: number }) => artist.id === profile.id)).toHaveLength(1);
+        await page.locator('[aria-label="Release submission steps"]').getByRole("button", { name: "Artists" }).click();
         await page.getByRole("button", { name: "Add primary artist", exact: true }).first().click();
         await expect(page.getByText("Browser Debut Artist", { exact: true })).toBeVisible();
         await expect(page.getByText("First release · Store profiles pending", { exact: true }).first()).toBeVisible();
@@ -102,7 +193,7 @@ export async function startDireNoteBrowser(userId: number) {
         const close = page.getByRole("button", { name: "Close artist profile popup", exact: true }).last();
         if (await close.isVisible()) await close.click();
         await page.setViewportSize({ width: 1440, height: 1000 });
-        await page.reload();
+        await page.goto(artistWizardUrl);
         console.log("Artist wizard browser checks passed: portal centering, mobile, existing Apple-only artist, first-release Instagram creation, back navigation and persistence.");
       },
       async savedArtistLinks(artistId: number, spotifyUrl: string, appleUrl: string) {
@@ -111,6 +202,7 @@ export async function startDireNoteBrowser(userId: number) {
         expect(profile.spotifyUrl).toBe(spotifyUrl);
         expect(profile.appleUrl).toBe(appleUrl);
         await page.goto(artistWizardUrl);
+        await page.locator('[aria-label="Release submission steps"]').getByRole("button", { name: "Artists" }).click();
         await page.getByRole("button", { name: "Add primary artist", exact: true }).first().click();
         const picker = page.getByRole("dialog", { name: "Add artist profile", exact: true });
         await expect(picker.locator(`a[href="${spotifyUrl}"]`)).toBeVisible();
@@ -191,7 +283,7 @@ export async function startDireNoteBrowser(userId: number) {
         await page.getByRole("button", { name: "Instrumental", exact: true }).last().click();
         await expect(panel.getByText("Track Language", { exact: true })).toHaveCount(0);
         await expect(panel.getByRole("button", { name: "Hindi", exact: true })).toHaveCount(0);
-        await page.getByRole("button", { name: /Release info/ }).first().click();
+        await page.locator('[aria-label="Release submission steps"]').getByRole("button", { name: "Release details" }).click();
         await page.getByRole("button", { name: "Hindi", exact: true }).click();
         await page.getByRole("dialog", { name: "Choose language" }).getByRole("button", { name: "Tamil", exact: true }).click();
         await expect(page.locator('button[aria-busy="true"]')).toHaveCount(0);
@@ -203,7 +295,7 @@ export async function startDireNoteBrowser(userId: number) {
         await page.getByRole("button", { name: "AI Generated", exact: true }).click();
         await page.getByRole("dialog", { name: "Choose content ownership" }).getByRole("button", { name: "Original/Exclusive Licensed", exact: true }).click();
         await expect(page.locator('button[aria-busy="true"]')).toHaveCount(0);
-        await page.getByRole("button", { name: "Review", exact: true }).click();
+        await page.locator('[aria-label="Release submission steps"]').getByRole("button", { name: "Review", exact: true }).click();
         await page.screenshot({ path: ".cache/direnote-form-before-save.png", fullPage: true });
         const save = page.getByRole("button", { name: /Submit corrections/ });
         await expect(save).toBeEnabled();
@@ -214,16 +306,13 @@ export async function startDireNoteBrowser(userId: number) {
         await page.goto(`${origin}/distribution/start?edit=${releaseId}&correctionField=tracks.1.trackLanguage`);
         await expect(page.locator('[data-track-index="1"]').getByRole("button", { name: "Instrumental", exact: true })).toHaveCount(1);
         await expect(page.locator('[data-track-index="1"]').getByText("Track Language", { exact: true })).toHaveCount(0);
-        await expect(page.locator('[data-track-index="1"] .release-track-selected-artist')).toHaveCount(1);
+        await expect(page.locator('[data-track-index="1"] .release-track-artist-summary')).toContainText("gxrry");
         await page.screenshot({ path: ".cache/direnote-language-reloaded.png", fullPage: true });
       },
       async submit(releaseId: number) {
         await page.goto(`${origin}/dashboard/releases/${releaseId}?tab=corrections`);
-        const button = page.getByRole("button", { name: "Submit Corrections", exact: true });
-        await expect(button).toBeEnabled();
-        const response = page.waitForResponse(value => value.url().endsWith(`/api/releases/${releaseId}/resubmit`));
-        await button.click();
-        expect((await response).status()).toBe(200);
+        await expect(page.getByText("HYMN is reviewing your metadata, artwork, audio, and rights.")).toBeVisible();
+        await expect(page.getByRole("button", { name: "Submit Corrections", exact: true })).toHaveCount(0);
       },
       async history(releaseId: number) {
         await page.goto(`${origin}/dashboard/releases/${releaseId}?tab=distribution`);

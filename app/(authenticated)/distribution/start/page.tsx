@@ -16,7 +16,7 @@ function firstValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function DistributionStartPage({ searchParams }: { searchParams?: Promise<{ edit?: string | string[]; audioAssetId?: string | string[]; correctionField?: string | string[]; resume?: string | string[]; manage?: string | string[]; onboarding?: string | string[]; campaign?: string | string[]; utm_source?: string | string[]; utm_medium?: string | string[]; utm_campaign?: string | string[]; utm_content?: string | string[]; utm_term?: string | string[] }> }) {
+export default async function DistributionStartPage({ searchParams }: { searchParams?: Promise<{ edit?: string | string[]; audioAssetId?: string | string[]; correctionField?: string | string[]; resume?: string | string[]; manage?: string | string[]; onboarding?: string | string[]; stage?: string | string[]; campaign?: string | string[]; utm_source?: string | string[]; utm_medium?: string | string[]; utm_campaign?: string | string[]; utm_content?: string | string[]; utm_term?: string | string[] }> }) {
   const user = await getCurrentUserForPage();
   const params = (await searchParams) ?? {};
   const requestedId = Number(firstValue(params.edit) ?? firstValue(params.resume) ?? firstValue(params.manage) ?? "");
@@ -90,7 +90,7 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
             <div className="mx-auto w-full max-w-[1440px]">
               {explicitCampaign && campaignDraftEligible && editingRelease?.paymentStatus !== "paid" && campaignEligibility && !campaignEligibility.eligible ? <p role="status" className="mb-4 rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>The first-release offer is not currently available for this account. Your draft is saved. Check your existing releases or review the displayed price before continuing.</p> : null}
               {hasActiveSubscription && !hasReleaseAllowance && selectedPlan === "one_time" ? <p role="status" className="mb-4 rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>Your subscription release allowance is used up. You can submit this release with a one-time payment and apply any available HYMN credits at checkout.</p> : null}
-              <ReleaseForm selectedPlan={selectedPlan} hasActiveSubscription={hasActiveSubscription} hymnCreditBalance={Number(user.referralCredits || 0)} initialRelease={editingRelease} audioLibraryPrefill={audioLibraryPrefill} initialCorrectionField={firstValue(params.correctionField)} firstReleaseOffer={firstReleaseOffer} campaignAttribution={attribution} prefillSuggestions={releasePrefill.suggestions} />
+              <ReleaseForm userName={user.name} initialStage={firstValue(params.stage) ? Number(firstValue(params.stage)) : undefined} selectedPlan={selectedPlan} hasActiveSubscription={hasActiveSubscription} hymnCreditBalance={Number(user.referralCredits || 0)} initialRelease={editingRelease} audioLibraryPrefill={audioLibraryPrefill} initialCorrectionField={firstValue(params.correctionField)} firstReleaseOffer={firstReleaseOffer} campaignAttribution={attribution} prefillSuggestions={releasePrefill.suggestions} />
             </div>
           ) : firstValue(params.onboarding) === "release" ? <ReleaseOnboardingGate /> : (
             <div className="surface-card p-6 text-center sm:p-8">

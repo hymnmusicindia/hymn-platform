@@ -4,8 +4,9 @@ export const CANONICAL_HOSTINGER_STORAGE_ROOT = "/home/u390865851/private-storag
 export const CANONICAL_HOSTINGER_PUBLIC_STORAGE_ROOT = `${CANONICAL_HOSTINGER_STORAGE_ROOT}/Public`;
 
 export function managedStorageRoot(env: NodeJS.ProcessEnv = process.env) {
-  if (env.NODE_ENV === "production") return CANONICAL_HOSTINGER_STORAGE_ROOT;
+  if (env.NODE_ENV === "production" && env.HYMN_ALLOW_STORAGE_ROOT_OVERRIDE !== "true") return CANONICAL_HOSTINGER_STORAGE_ROOT;
   const configured = env.HYMN_STORAGE_ROOT?.trim() || env.PRIVATE_STORAGE_ROOT?.trim();
+  if (env.NODE_ENV === "production" && !configured) throw new Error("An explicit private storage root is required when the production storage override is enabled.");
   return configured ? path.resolve(configured) : path.resolve(".hymn-storage");
 }
 

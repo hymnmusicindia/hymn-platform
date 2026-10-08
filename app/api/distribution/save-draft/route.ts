@@ -110,11 +110,13 @@ export async function POST(request: Request) {
     const release = await saveDraftDistributionRelease({
       userId: session.sub,
       draftReleaseId,
+      expectedUpdatedAt: typeof payload.expectedUpdatedAt === "string" ? payload.expectedUpdatedAt : null,
       metadata: {
         artistName: metadata.artistName ?? "",
         trackName: metadata.tracks?.[0]?.trackTitle ?? metadata.trackName ?? metadata.releaseTitle ?? "",
         releaseTitle,
         releaseType: metadata.releaseType ?? "single",
+        wizardFormatIntent: metadata.wizardFormatIntent,
         contentType: metadata.contentType,
         sunoReceiptUrl: metadata.sunoReceiptUrl,
         sunoLink: metadata.sunoLink,
@@ -174,7 +176,8 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Save Draft Error:", error);
     const message = error instanceof Error ? error.message : "Could not save draft release.";
-    return NextResponse.json({ error: message }, { status: 400 });
+    const conflict = message.includes("updated elsewhere");
+    return NextResponse.json({ error: message, ...(conflict ? { code: "DRAFT_VERSION_CONFLICT" } : {}) }, { status: conflict ? 409 : 400 });
   }
 }
 // vercel trigger 4

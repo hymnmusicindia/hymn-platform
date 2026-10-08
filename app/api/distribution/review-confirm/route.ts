@@ -26,6 +26,6 @@ export async function POST(request: Request) {
   const metadataHash = await releaseReviewSnapshotHash(releaseId, auth.user.id);
   if (!metadataHash) return NextResponse.json({ error: "Draft release not found." }, { status: 404 });
   const confirmedAt = new Date();
-  await prisma.release.update({ where: { id: releaseId }, data: { reviewConfirmedAt: confirmedAt, reviewConfirmedBy: auth.user.id, reviewMetadataHash: metadataHash } });
-  return NextResponse.json({ confirmedAt: confirmedAt.toISOString(), metadataHash });
+  const updated = await prisma.release.update({ where: { id: releaseId }, data: { reviewConfirmedAt: confirmedAt, reviewConfirmedBy: auth.user.id, reviewMetadataHash: metadataHash } });
+  return NextResponse.json({ confirmedAt: confirmedAt.toISOString(), metadataHash, updatedAt: updated.updatedAt.toISOString() });
 }

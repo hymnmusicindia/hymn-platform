@@ -20,8 +20,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const updated = await prisma.$transaction(async tx => {
   const locked = await tx.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(81422028, ${id}::integer) AS locked`;
   if (!locked[0]?.locked) throw new Error("This release is being saved or submitted. Retry shortly.");
-  const current = await tx.release.findFirst({ where: { id, userId: user.session.sub, archivedAt: null }, select: { metadata: true, status: true, tracks: { select: { id: true, trackNumber: true } } } });
+  const current = await tx.release.findFirst({ where: { id, userId: user.session.sub, archivedAt: null }, select: { metadata: true, status: true, updatedAt: true, tracks: { select: { id: true, trackNumber: true } } } });
   if (!current || current.status !== "DRAFT") throw new Error("This release is no longer an editable draft. Refresh before editing.");
+  if (typeof body.expectedUpdatedAt === "string" && body.expectedUpdatedAt !== current.updatedAt.toISOString()) {
+    return { conflict: true as const, latestUpdatedAt: current.updatedAt.toISOString() };
+  }
   const existing = typeof current?.metadata === "object" && current.metadata ? current.metadata as Record<string, unknown> : {};
   const updated = await tx.release.update({ where: { id }, data: {
     metadata: { ...existing, ...metadata, promotionCode: existing.promotionCode ?? null, campaignAttribution: existing.campaignAttribution ?? {}, lastEditedAt: new Date().toISOString() } as any,
@@ -49,9 +52,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     await tx.track.deleteMany({ where: { releaseId: id, trackNumber: { gt: tracks.length } } });
   }
-  return updated;
+  return { conflict: false as const, updated };
   }, { timeout: 30_000 });
-  return NextResponse.json({ draft: updated, savedAt: updated.updatedAt.toISOString() });
+  if (updated.conflict) return NextResponse.json({ error: "This draft was updated elsewhere. Reload the latest version before editing.", code: "DRAFT_VERSION_CONFLICT", latestUpdatedAt: updated.latestUpdatedAt }, { status: 409 });
+  return NextResponse.json({ draft: updated.updated, savedAt: updated.updated.updatedAt.toISOString() });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to save draft." }, { status: 409 });
   }
