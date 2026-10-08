@@ -3668,32 +3668,69 @@ body:has(.release-workflow.is-audio-upload-step) { height:auto; min-height:100sv
   .release-format-picker-options button + button { border-left:0; border-top:1px solid var(--border); }
 }
 
-/* Keep the music workspace inside one desktop viewport. The track queue owns
-   overflow once a release contains more rows than the available canvas. */
-@media (min-width:1120px) {
-  body:has(.release-workflow.is-audio-upload-step) { height:100svh; min-height:0; overflow:hidden; }
+/* Shared release shell: explicit grid placement prevents legacy sidebars from
+   leaving invisible columns on the focused stages. */
+.distribution-start-page .release-workflow.release-workflow,
+.distribution-start-page .release-journey-intro {
+  width:100%; max-width:1440px; margin-inline:auto; box-sizing:border-box;
+}
+.distribution-start-page > .shell { width:100%; padding-inline:clamp(16px,3vw,48px); align-items:start; }
+.release-workflow.release-workflow { gap:1.25rem; padding:clamp(16px,2vw,28px); border-radius:1.25rem; }
+.release-workflow.release-workflow > .release-workspace-header,
+.release-workflow.release-workflow > .release-journey-progress,
+.release-workflow.release-workflow > .release-free-offer-banner,
+.release-workflow.release-workflow > .release-draft-conflict { grid-column:1 / -1; grid-row:auto; }
+.release-workflow.release-workflow .release-workspace-header { margin:0; padding:0 0 .75rem; min-height:3rem; }
+.release-workflow.release-workflow.is-review-mode .release-workspace-header { display:flex !important; }
+.release-workflow.release-workflow .release-workspace-logo { display:block; }
+.release-workflow.release-workflow.is-focused-step { grid-template-columns:minmax(0,1fr); }
+.release-workflow.release-workflow.is-focused-step .release-workflow-content,
+.release-workflow.release-workflow.is-review-mode .release-workflow-content { grid-column:1 / -1; grid-row:auto; width:100%; min-width:0; }
+.release-workflow.release-workflow.is-focused-step .release-artist-stage { max-width:48rem; }
+.release-workflow.release-workflow .release-focused-side-nav { display:none; }
+.release-workflow.release-workflow.is-audio-upload-step .release-audio-stage { width:100%; max-width:none; border:0; border-radius:0; background:transparent; box-shadow:none; }
+.release-workflow.release-workflow.is-audio-upload-step .release-onboarding-assets { width:100%; max-width:none; margin:0; }
+.release-workflow.release-workflow.is-audio-upload-step .release-onboarding-audio { border:0; border-radius:0; padding:0; background:transparent; box-shadow:none; }
+.release-workflow.release-workflow.is-audio-upload-step .release-focused-actions { display:flex; position:static; width:100%; max-width:none; justify-content:space-between; align-items:center; gap:1rem; margin:0; padding:.65rem 0 0; border-top:1px solid var(--border); }
+.release-workflow.release-workflow.is-audio-upload-step .release-focused-actions > button:first-child { display:block; width:auto; min-width:0; }
+.release-workflow.release-workflow.is-audio-upload-step .release-focused-actions > button:last-child { width:auto; min-width:0; min-height:2.75rem; }
+.release-workflow.release-workflow .release-audio-empty-state { min-height:5rem; align-self:start; }
+@media(min-width:1024px) {
+  .release-workflow.release-workflow:not(.is-focused-step):not(.is-review-mode) { grid-template-columns:156px minmax(0,1fr) 224px; column-gap:24px; }
+  .release-workflow.release-workflow:not(.is-focused-step):not(.is-review-mode) .release-workflow-nav,
+  .release-workflow.release-workflow:not(.is-focused-step):not(.is-review-mode) .release-workflow-summary,
+  .release-workflow.release-workflow:not(.is-focused-step):not(.is-review-mode) .release-workflow-content { grid-row:3; }
+  .release-workflow.release-workflow:not(.is-focused-step):not(.is-review-mode):has(> .release-free-offer-banner) .release-workflow-nav,
+  .release-workflow.release-workflow:not(.is-focused-step):not(.is-review-mode):has(> .release-free-offer-banner) .release-workflow-summary,
+  .release-workflow.release-workflow:not(.is-focused-step):not(.is-review-mode):has(> .release-free-offer-banner) .release-workflow-content { grid-row:4; }
+}
+@media(min-width:900px) and (min-height:540px) {
+  body:has(.release-workflow.is-audio-upload-step) { height:auto; min-height:100svh; overflow-x:hidden; overflow-y:auto; }
   .distribution-start-page:has(.release-workflow.is-audio-upload-step),
-  .distribution-start-page:has(.release-workflow.is-audio-upload-step) > .shell { height:100svh; min-height:0; overflow:hidden; padding-block:0 !important; }
-  .release-workflow.is-audio-upload-step { width:min(86vw,74rem); height:calc(100svh - 1rem); min-height:0; max-height:calc(100svh - 1rem); grid-template-rows:auto auto minmax(0,1fr); gap:clamp(.45rem,1vh,.75rem); overflow:hidden; padding-block:clamp(.75rem,1.6vh,1.15rem) !important; }
-  .release-workflow.is-audio-upload-step .release-workspace-header { min-height:2.7rem; padding-bottom:.55rem; }
-  .release-workflow.is-audio-upload-step .release-journey-progress { padding-bottom:.25rem; }
-  .release-workflow.is-audio-upload-step .release-workflow-content { min-height:0; height:100%; overflow:hidden; gap:0; }
-  .release-workflow.is-audio-upload-step .release-mobile-summary,
-  .release-workflow.is-audio-upload-step .release-focused-actions { display:none; }
-  .release-workflow.is-audio-upload-step .release-audio-stage { grid-template-columns:minmax(11rem,14rem) minmax(0,1fr); grid-template-rows:minmax(0,1fr); width:100%; max-width:none; height:100%; min-height:0; align-items:start; gap:clamp(1rem,2.5vw,2.25rem); overflow:hidden; border-radius:1.35rem; padding:clamp(.85rem,1.7vh,1.15rem); }
-  .release-workflow.is-audio-upload-step .release-focused-intro { align-self:center; text-align:left; }
-  .release-workflow.is-audio-upload-step .release-focused-intro h2 { font-size:clamp(1.7rem,2.5vw,2.35rem); line-height:1; }
-  .release-workflow.is-audio-upload-step .release-focused-intro h2 + p { margin:.65rem 0 0; font-size:.72rem; line-height:1.45; }
-  .release-workflow.is-audio-upload-step .release-change-format { margin-top:.85rem; }
-  .release-workflow.is-audio-upload-step .release-onboarding-assets { width:100%; max-width:none; min-height:0; height:100%; margin:0; }
-  .release-workflow.is-audio-upload-step .release-onboarding-audio { display:flex; min-height:0; height:100%; flex-direction:column; overflow:hidden; padding:clamp(.7rem,1.4vh,.9rem); }
-  .release-workflow.is-audio-upload-step .release-journey-title-field { grid-template-columns:6rem minmax(0,1fr); align-items:center; gap:.75rem; margin-bottom:.6rem; }
-  .release-workflow.is-audio-upload-step .release-journey-title-field input { min-height:2.55rem; }
-  .release-workflow.is-audio-upload-step .release-onboarding-asset-heading { display:flex; align-items:baseline; justify-content:space-between; gap:1rem; margin-bottom:.4rem; }
-  .release-workflow.is-audio-upload-step .release-batch-upload { min-height:3.8rem; margin-bottom:.55rem; padding:.65rem .85rem; }
-  .release-workflow.is-audio-upload-step .release-audio-queue,
-  .release-workflow.is-audio-upload-step .release-audio-queue.is-scrollable { min-height:0; max-height:none; flex:1; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; padding-right:.3rem; }
-  .release-workflow.is-audio-upload-step .release-audio-queue-item { min-height:3.7rem; padding:.38rem .6rem; }
-  .release-workflow.is-audio-upload-step .release-focused-side-arrow.is-left { left:-5.4rem; }
-  .release-workflow.is-audio-upload-step .release-focused-side-arrow.is-right { right:-5.4rem; }
+  .distribution-start-page:has(.release-workflow.is-audio-upload-step) > .shell { height:auto; min-height:100svh; overflow:visible; padding-block:0 !important; }
+  .release-workflow.release-workflow.is-audio-upload-step { height:100svh; min-height:0; grid-template-rows:auto auto minmax(0,1fr); gap:.75rem; }
+  .release-workflow.release-workflow.is-audio-upload-step:has(> .release-free-offer-banner) { grid-template-rows:auto auto auto minmax(0,1fr); }
+  .release-workflow.release-workflow.is-audio-upload-step:has(> .release-draft-conflict) { height:auto; min-height:100svh; }
+  .release-workflow.release-workflow.is-audio-upload-step .release-workflow-content { display:flex; flex-direction:column; height:100%; min-height:0; gap:.65rem; align-self:stretch; }
+  .release-workflow.release-workflow.is-audio-upload-step .release-audio-stage { display:grid; grid-template-columns:minmax(180px,.32fr) minmax(0,1fr); grid-template-rows:minmax(0,1fr); flex:1; min-height:0; gap:clamp(24px,4vw,64px); padding:1rem 0; align-items:start; }
+  .release-workflow.release-workflow.is-audio-upload-step .release-focused-intro { align-self:start; padding-top:.25rem; text-align:left; }
+  .release-workflow.release-workflow.is-audio-upload-step .release-focused-intro h2 { font-size:clamp(1.8rem,2.6vw,2.6rem); line-height:1.05; }
+  .release-workflow.release-workflow.is-audio-upload-step .release-focused-intro h2 + p { margin:.75rem 0 0; max-width:25rem; font-size:.85rem; line-height:1.5; }
+  .release-workflow.release-workflow.is-audio-upload-step .release-onboarding-assets { min-height:0; height:100%; }
+  .release-workflow.release-workflow.is-audio-upload-step .release-onboarding-audio { display:flex; flex-direction:column; min-height:0; height:100%; }
+  .release-workflow.release-workflow.is-audio-upload-step .release-journey-title-field { grid-template-columns:7rem minmax(0,1fr); align-items:center; gap:1rem; margin-bottom:.85rem; }
+  .release-workflow.release-workflow.is-audio-upload-step .release-onboarding-asset-heading { display:flex; justify-content:space-between; align-items:baseline; gap:1rem; }
+  .release-workflow.release-workflow.is-audio-upload-step .release-batch-upload { min-height:4.5rem; flex-shrink:0; margin-bottom:.75rem; padding:.8rem 1rem; }
+  .release-workflow.release-workflow.is-audio-upload-step .release-audio-queue { flex:1; min-height:0; max-height:none; overflow-y:auto; overflow-x:hidden; align-content:start; scrollbar-gutter:stable; padding-right:.4rem; }
+  .release-workflow.release-workflow.is-audio-upload-step .release-audio-queue-item { min-height:5.5rem; }
+  .release-workflow.release-workflow.is-audio-upload-step .release-focused-actions { flex-shrink:0; }
+}
+@media(max-width:899px), (max-height:539px) {
+  body:has(.release-workflow.is-focused-step) { height:auto; overflow-y:auto; }
+  .distribution-start-page:has(.release-workflow.is-focused-step),
+  .distribution-start-page:has(.release-workflow.is-focused-step) > .shell { height:auto; overflow:visible; }
+  .release-workflow.release-workflow.is-focused-step .release-workspace-header { position:static; width:100%; height:auto; inset:auto; }
+  .release-workflow.release-workflow.is-audio-upload-step .release-audio-stage { min-height:0; padding:1rem 0; }
+  .release-workflow.release-workflow.is-artist-step .release-artist-stage { min-height:0; padding:2rem 0; }
+  .release-workflow.release-workflow .release-focused-actions { position:static; }
 }

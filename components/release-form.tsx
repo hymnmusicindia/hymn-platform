@@ -6585,8 +6585,9 @@ export function ReleaseForm({
           >
             <button
               type="button"
-              disabled={step === 1 || step === 0 || step === menuStepIndexes[0] || submitting}
+                disabled={step === 1 || (step !== 0 && step === menuStepIndexes[0]) || submitting}
               onClick={() => {
+                  if (step === 0) { setJourneyIntro("format"); return; }
                 const currentIndex = menuStepIndexes.indexOf(
                   step as (typeof menuStepIndexes)[number],
                 );
@@ -6594,7 +6595,7 @@ export function ReleaseForm({
               }}
               className="release-footer-action is-muted w-full whitespace-nowrap disabled:opacity-40 md:w-auto"
             >
-              ← Previous
+              ← Back
             </button>
             <button
               type="button"
@@ -6608,6 +6609,7 @@ export function ReleaseForm({
               <button
                 type="button"
                 onClick={step === 0 ? continueFromMusic : advanceStep}
+                aria-label={step === 0 ? "Continue to cover artwork" : undefined}
                 disabled={submitting || (step !== 0 && stepTransitioning)}
                 aria-busy={step !== 0 && stepTransitioning}
                 className={clsx("release-footer-action is-primary w-full whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-45 md:w-auto", step === 0 && !audioAssetsComplete && "is-skip")}
