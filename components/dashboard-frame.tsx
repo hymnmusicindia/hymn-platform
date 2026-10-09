@@ -5,6 +5,8 @@ import clsx from "clsx";
 import Link from "next/link";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 
 type DashboardNavItem<T extends string> = {
   key: T | string;
@@ -60,14 +62,26 @@ export function DashboardFrame<T extends string>({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const newMenuRef = useRef<HTMLDivElement>(null);
+  const newDialogRef = useAccessibleDialog(newOpen, () => setNewOpen(false));
+  const [createPosition, setCreatePosition] = useState({ top: 80, left: 252, width: 600 });
   useEffect(() => {
     if (!newOpen) return;
-    function dismiss(event: MouseEvent) { if (!newMenuRef.current?.contains(event.target as Node)) setNewOpen(false); }
-    function escape(event: KeyboardEvent) { if (event.key === "Escape") setNewOpen(false); }
+    function position() {
+      const rect = newMenuRef.current?.getBoundingClientRect();
+      const width = Math.min(600, window.innerWidth - 32);
+      const left = window.innerWidth < 1024 ? 16 : Math.max(16, Math.min((rect?.right ?? 236) + 16, window.innerWidth - width - 16));
+      const top = window.innerWidth < 1024 ? 76 : Math.max(72, Math.min(rect?.top ?? 80, window.innerHeight - 160));
+      setCreatePosition({ top, left, width });
+    }
+    position();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function dismiss(event: MouseEvent) { if (!newMenuRef.current?.contains(event.target as Node) && !newDialogRef.current?.contains(event.target as Node)) setNewOpen(false); }
     document.addEventListener("mousedown", dismiss);
-    document.addEventListener("keydown", escape);
-    return () => { document.removeEventListener("mousedown", dismiss); document.removeEventListener("keydown", escape); };
-  }, [newOpen]);
+    window.addEventListener("resize", position);
+    window.addEventListener("scroll", position, true);
+    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener("mousedown", dismiss); window.removeEventListener("resize", position); window.removeEventListener("scroll", position, true); };
+  }, [newOpen, newDialogRef]);
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
     function toggleNavigation() { if (window.innerWidth < 1024) setMobileOpen(value => !value); else setCollapsed(value => !value); }
@@ -192,12 +206,12 @@ export function DashboardFrame<T extends string>({
 
         <div className="portal-create" ref={newMenuRef}>
           <button type="button" className="portal-new-button" aria-expanded={newOpen} aria-controls="portal-create-menu" onClick={() => setNewOpen(value => !value)}><Plus size={18} /><span>New</span></button>
-          {newOpen ? <div id="portal-create-menu" className="portal-create-menu"><div className="portal-create-heading">Create something new<button type="button" aria-label="Close create menu" onClick={() => setNewOpen(false)}><X size={18} /></button></div><div className="portal-create-grid">{[
+          {newOpen ? createPortal(<div className="hymn-overlay create-overlay"><button className="create-overlay-backdrop" type="button" aria-label="Dismiss create menu" onClick={() => setNewOpen(false)} /><section ref={newDialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="portal-create-title" id="portal-create-menu" className="portal-create-menu" style={{ ...createPosition, maxHeight: `calc(100dvh - ${createPosition.top + 16}px)` }}><div className="portal-create-heading"><span id="portal-create-title">Create something new</span><button type="button" aria-label="Close create menu" onClick={() => setNewOpen(false)}><X size={18} /></button></div><div className="portal-create-grid">{[
             { href: "/distribution/start", icon: Disc3, title: "Music release", copy: "Get your music ready for worldwide distribution." },
             { href: "/beat-store", icon: Store, title: "Find a beat", copy: "Explore sounds for your next release." },
             { href: "/studio", icon: Headphones, title: "Mixing / Mastering", copy: "Give your music a professional finish." },
             { href: "/managed-services", icon: TrendingUp, title: "Artist services", copy: "Explore support for your next project." }
-          ].map(action => <Link key={action.href} href={action.href} onClick={() => { setNewOpen(false); setMobileOpen(false); }}><action.icon /><span><strong>{action.title}</strong><small>{action.copy}</small></span></Link>)}</div></div> : null}
+          ].map(action => <Link key={action.href} href={action.href} onClick={() => { setNewOpen(false); setMobileOpen(false); }}><action.icon /><span><strong>{action.title}</strong><small>{action.copy}</small></span></Link>)}</div></section></div>, document.body) : null}
         </div>
 
         <div ref={navScrollRef} onScroll={updateNavScroll} className="dashboard-nav-scroll mt-4 min-h-0 flex-1 content-start gap-3 overflow-x-hidden overflow-y-auto pr-1 grid">

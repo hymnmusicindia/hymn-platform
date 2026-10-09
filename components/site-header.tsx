@@ -12,6 +12,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import type { SessionPayload } from "@/lib/types";
 import { beatLicenseLabel, type BeatStoreLicenseType } from "@/lib/beat-store";
 import { SmartHelpToggle } from "@/components/smart-help-toggle";
+import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 
 type SiteHeaderProps = {
   user?: SessionPayload | null;
@@ -74,6 +75,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   const [cartDropSequence, setCartDropSequence] = useState(0);
   const [cartOpen, setCartOpen] = useState(false);
   const [cartMounted, setCartMounted] = useState(false);
+  const cartDialogRef = useAccessibleDialog(cartOpen, () => setCartOpen(false));
   const [cartItems, setCartItems] = useState<HeaderCartItem[]>([]);
   const [cartBeats, setCartBeats] = useState<HeaderCartBeat[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -318,6 +320,8 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   const openCart = () => {
     setOpen(false);
     setAppLauncherOpen(false);
+    setProfileOpen(false);
+    setNotificationsOpen(false);
     setScrolled(true);
     setCartOpen(true);
   };
@@ -696,9 +700,9 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
         </div>
       ) : null}
 
-      {cartMounted ? createPortal(<div className={clsx("fixed inset-0 isolate z-[1000] overflow-hidden transition", cartOpen ? "pointer-events-auto" : "pointer-events-none")} aria-hidden={!cartOpen} inert={!cartOpen}>
+      {cartMounted ? createPortal(<div className={clsx("hymn-overlay site-cart-layer fixed inset-0 isolate overflow-hidden transition", cartOpen ? "pointer-events-auto" : "pointer-events-none")} aria-hidden={!cartOpen} inert={!cartOpen}>
         <button type="button" className={clsx("absolute inset-0 z-0 bg-black/60 transition-opacity", cartOpen ? "opacity-100" : "opacity-0")} onClick={() => setCartOpen(false)} aria-label="Close cart" />
-        <aside className={clsx("site-cart-drawer fixed right-0 top-0 z-10 flex h-[100dvh] w-full max-w-[410px] flex-col border-l p-5 shadow-2xl transition-transform duration-300", cartOpen ? "translate-x-0" : "translate-x-full")} role="dialog" aria-modal="true" aria-label="Shopping cart">
+        <aside ref={cartDialogRef} tabIndex={-1} className={clsx("site-cart-drawer fixed right-0 top-0 z-10 flex h-[100dvh] w-full max-w-[410px] flex-col border-l p-5 shadow-2xl transition-transform duration-300", cartOpen ? "translate-x-0" : "translate-x-full")} role="dialog" aria-modal="true" aria-label="Shopping cart">
           <div className="site-cart-drawer-heading flex items-center justify-between border-b border-[var(--border)] pb-4">
             <div><p className="text-xs uppercase tracking-[0.24em] text-[var(--text-soft)]">Your selection</p><h2 className="mt-1 text-xl font-semibold text-[var(--text)]">Beat cart <span className="site-cart-drawer-count">{cartCount}</span></h2></div>
             <button type="button" onClick={() => setCartOpen(false)} className="site-cart-close inline-flex h-10 w-10 items-center justify-center text-[var(--text-muted)] transition hover:text-[var(--text)]" aria-label="Close cart"><X className="h-5 w-5" /></button>
@@ -715,7 +719,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           </div>
           <div className="site-cart-drawer-footer border-t border-[var(--border)] pt-4">
             <div className="flex items-center justify-between text-sm"><span className="text-[var(--text-muted)]">Total</span><strong className="text-[var(--text)]">₹{cartItems.reduce((sum, item) => sum + Number(item.price || 0), 0).toLocaleString("en-IN")}</strong></div>
-            {cartItems.length ? <Link href="/checkout?product=beatstore" onClick={() => setCartOpen(false)} className="btn-primary mt-4 w-full">Continue to checkout</Link> : <Link href="/beat-store" onClick={() => setCartOpen(false)} className="btn-primary mt-4 w-full">Browse beats</Link>}
+            {cartItems.length ? <Link href="/checkout?product=beatstore" onClick={() => setCartOpen(false)} className="cart-next-action">Continue to checkout <span aria-hidden="true">→</span></Link> : <Link href="/beat-store" onClick={() => setCartOpen(false)} className="cart-next-action">Browse beats <span aria-hidden="true">→</span></Link>}
           </div>
         </aside>
       </div>, document.body) : null}
