@@ -45,7 +45,7 @@ export async function startDireNoteBrowser(userId: number) {
           const panel = (await page.locator(".release-journey-intro").boundingBox())!;
           expect(Math.abs(panel.y - (viewport.height - panel.height) / 2)).toBeLessThan(3);
           const back = (await page.getByRole("button", { name: "Back", exact: false }).boundingBox())!;
-          const next = (await page.getByRole("button", { name: /Continue to music/ }).boundingBox())!;
+          const next = (await page.getByRole("button", { name: /Continue to artists/ }).boundingBox())!;
           expect(back.x).toBeGreaterThanOrEqual(panel.x);
           expect(next.y + next.height).toBeLessThan(panel.y + panel.height - 16);
           expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
@@ -53,6 +53,11 @@ export async function startDireNoteBrowser(userId: number) {
         }
         await page.setViewportSize({ width: 1440, height: 1000 });
         await page.getByRole("button", { name: /Single 1/ }).dblclick();
+        await expect(page.getByRole("heading", { name: "Who are the primary artists on this release?" })).toBeVisible();
+        await page.getByRole("button", { name: "Add primary artist", exact: true }).click();
+        await page.getByRole("dialog", { name: "Add artist profile" }).getByRole("button", { name: "Use artist" }).first().click();
+        await expect(page.getByLabel("Selected primary artists").locator(".release-selected-artist")).toHaveCount(1);
+        await page.getByRole("button", { name: /Continue to music/ }).click();
         await expect(page.getByRole("heading", { name: "Add your music" })).toBeVisible();
         await page.setViewportSize({ width: 1280, height: 720 });
         expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight && document.body.scrollHeight <= window.innerHeight)).toBe(true);
@@ -96,12 +101,12 @@ export async function startDireNoteBrowser(userId: number) {
         await page.getByRole("button", { name: "Use this track title" }).click();
         await page.getByRole("button", { name: "Continue to cover artwork" }).click();
         await expect(page.getByRole("heading", { name: "Prepare your cover artwork" })).toBeVisible();
-        expect((await page.locator(".release-workflow-content").boundingBox())!.y).toBeLessThan(250);
+        expect((await page.locator(".release-workflow-content").boundingBox())!.y).toBeLessThan(280);
         await page.screenshot({ path: ".cache/release-standard-artwork-desktop.png", fullPage: true });
         const savedDraftUrl = page.url();
-        await expect(page.getByRole("complementary", { name: "Release summary" }).getByText("Saved", { exact: true })).toBeVisible({ timeout: 15000 });
+        await expect(page.locator(".release-workspace-state").getByText("Saved", { exact: false })).toBeVisible({ timeout: 15000 });
         await page.goto(savedDraftUrl);
-        await page.locator('[aria-label="Release submission steps"]').getByRole("button", { name: "Music" }).click();
+        await page.locator('[aria-label="Release sections"]').getByRole("button", { name: "Music" }).click();
         await expect(page.getByRole("textbox", { name: "EP name" })).toHaveValue("Fixture EP");
         await expect(page.getByRole("textbox", { name: "Track 1 name" })).toHaveValue("Night Drive");
         await expect(page.getByRole("textbox", { name: "Track 2 name" })).toHaveValue("First Light");
@@ -126,9 +131,7 @@ export async function startDireNoteBrowser(userId: number) {
         await page.locator('input[type=file][accept="image/jpeg,.jpg,.jpeg"]').setInputFiles({ name: "fixture-cover.jpg", mimeType: "image/jpeg", buffer: cover });
         expect((await coverUpload).status()).toBe(201);
         await expect(page.getByRole("button", { name: "Replace cover artwork" })).toBeVisible();
-        await page.locator('[aria-label="Release submission steps"]').getByRole("button", { name: "Artists" }).click();
-        await page.getByRole("button", { name: "Add primary artist", exact: true }).click();
-        await page.getByRole("dialog", { name: "Add artist profile" }).getByRole("button", { name: "Use artist" }).first().click();
+        await page.locator('[aria-label="Release sections"]').getByRole("button", { name: "Artists" }).click();
         await expect(page.getByLabel("Selected primary artists").locator(".release-selected-artist")).toHaveCount(1);
         const draftId = Number(new URL(savedDraftUrl).searchParams.get("edit"));
         await expect.poll(async () => {
@@ -140,7 +143,9 @@ export async function startDireNoteBrowser(userId: number) {
         await page.reload();
         await expect(page.getByRole("heading", { name: "Who are the primary artists on this release?" })).toBeVisible();
         await expect(page.getByLabel("Selected primary artists").locator(".release-selected-artist")).toHaveCount(1);
-        await page.getByRole("button", { name: /Continue to track credits/ }).click();
+        await page.getByRole("button", { name: /Continue to music/ }).click();
+        await page.getByRole("button", { name: "Continue to cover artwork" }).click();
+        await page.locator('[aria-label="Release sections"]').getByRole("button", { name: "Credits & tracks" }).click();
         await expect(page.getByRole("heading", { name: "Track list" })).toBeVisible();
         await expect(page.locator('button[aria-busy="true"]')).toHaveCount(0);
         const stageNavigation = page.locator(".release-workflow-nav");
@@ -162,7 +167,7 @@ export async function startDireNoteBrowser(userId: number) {
         const missingInstagram = await context.request.post(`${origin}/api/artists`, { data: { name: "Missing Instagram", hasLiveMusic: false } });
         expect(missingInstagram.status()).toBe(400);
         const openWizard = async () => {
-          await page.locator('[aria-label="Release submission steps"]').getByRole("button", { name: "Artists" }).click();
+          await page.locator('[aria-label="Release sections"]').getByRole("button", { name: "Artists" }).click();
           await page.getByRole("button", { name: "Add primary artist", exact: true }).first().click();
           await page.getByRole("button", { name: /Add another artist profile/ }).click();
         };
@@ -221,7 +226,7 @@ export async function startDireNoteBrowser(userId: number) {
         await page.setViewportSize({ width: 1440, height: 1000 });
         const persisted = await (await context.request.get(`${origin}/api/artists`)).json();
         expect(persisted.artists.filter((artist: { id: number }) => artist.id === profile.id)).toHaveLength(1);
-        await page.locator('[aria-label="Release submission steps"]').getByRole("button", { name: "Artists" }).click();
+        await page.locator('[aria-label="Release sections"]').getByRole("button", { name: "Artists" }).click();
         await page.getByRole("button", { name: "Add primary artist", exact: true }).first().click();
         await expect(page.getByText("Browser Debut Artist", { exact: true })).toBeVisible();
         await expect(page.getByText("First release · Store profiles pending", { exact: true }).first()).toBeVisible();
@@ -249,7 +254,7 @@ export async function startDireNoteBrowser(userId: number) {
         expect(profile.spotifyUrl).toBe(spotifyUrl);
         expect(profile.appleUrl).toBe(appleUrl);
         await page.goto(artistWizardUrl);
-        await page.locator('[aria-label="Release submission steps"]').getByRole("button", { name: "Artists" }).click();
+        await page.locator('[aria-label="Release sections"]').getByRole("button", { name: "Artists" }).click();
         await page.getByRole("button", { name: "Add primary artist", exact: true }).first().click();
         const picker = page.getByRole("dialog", { name: "Add artist profile", exact: true });
         await expect(picker.locator(`a[href="${spotifyUrl}"]`)).toBeVisible();
@@ -330,7 +335,7 @@ export async function startDireNoteBrowser(userId: number) {
         await page.getByRole("button", { name: "Instrumental", exact: true }).last().click();
         await expect(panel.getByText("Track Language", { exact: true })).toHaveCount(0);
         await expect(panel.getByRole("button", { name: "Hindi", exact: true })).toHaveCount(0);
-        await page.locator('[aria-label="Release submission steps"]').getByRole("button", { name: "Release details" }).click();
+        await page.locator('[aria-label="Release sections"]').getByRole("button", { name: "Release details" }).click();
         await page.getByRole("button", { name: "Hindi", exact: true }).click();
         await page.getByRole("dialog", { name: "Choose language" }).getByRole("button", { name: "Tamil", exact: true }).click();
         await expect(page.locator('button[aria-busy="true"]')).toHaveCount(0);
@@ -342,7 +347,7 @@ export async function startDireNoteBrowser(userId: number) {
         await page.getByRole("button", { name: "AI Generated", exact: true }).click();
         await page.getByRole("dialog", { name: "Choose content ownership" }).getByRole("button", { name: "Original/Exclusive Licensed", exact: true }).click();
         await expect(page.locator('button[aria-busy="true"]')).toHaveCount(0);
-        await page.locator('[aria-label="Release submission steps"]').getByRole("button", { name: "Review", exact: true }).click();
+        await page.locator('[aria-label="Release sections"]').getByRole("button", { name: /^Review/ }).click();
         await page.screenshot({ path: ".cache/direnote-form-before-save.png", fullPage: true });
         const save = page.getByRole("button", { name: /Submit corrections/ });
         await expect(save).toBeEnabled();

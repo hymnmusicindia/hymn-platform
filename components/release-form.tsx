@@ -326,7 +326,7 @@ const steps = [
   "",
   "Review & submit",
 ] as const;
-const visibleStepIndexes = [0, 4, 1, 3, 2, 5, 7] as const;
+const visibleStepIndexes = [1, 0, 4, 3, 2, 5, 7] as const;
 const menuStepIndexes = visibleStepIndexes;
 const stepMenuLabels: Record<number, string> = {
   0: "Music",
@@ -1114,7 +1114,7 @@ export function ReleaseForm({
   const correctionTrackMatch = initialRelease?.reviewIssues?.fields.some(issue => issue.field === initialCorrectionField)
     ? initialCorrectionField?.match(/^tracks\.(\d+)\./) : null;
   const correctionTrackIndex = correctionTrackMatch ? Number(correctionTrackMatch[1]) : null;
-  const [step, setStep] = useState(correctionTrackIndex !== null ? 3 : initialRelease?.status === "draft" && initialStage != null && [0, 4, 1, 3, 2, 5, 7].includes(initialStage) ? initialStage : initialRelease ? 7 : 0);
+  const [step, setStep] = useState(correctionTrackIndex !== null ? 3 : initialRelease?.status === "draft" && initialStage != null && [0, 4, 1, 3, 2, 5, 7].includes(initialStage) ? initialStage : initialRelease ? 7 : 1);
   const resumeStageResolvedRef = useRef(false);
   const [journeyIntro, setJourneyIntro] = useState<"welcome" | "format" | null>(initialRelease || audioLibraryPrefill ? null : "welcome");
   const [journeyExiting, setJourneyExiting] = useState(false);
@@ -2699,7 +2699,7 @@ export function ReleaseForm({
     goToStep(7);
   }
 
-  function continueFromArtists() {
+  async function continueFromArtists() {
     if (stepTransitionRef.current) return;
     if (!primaryArtistComplete) {
       const issue = { step: 1, key: "release-primary-artists", message: "Select at least one saved primary artist profile." };
@@ -2713,9 +2713,38 @@ export function ReleaseForm({
     setStepTransitioning(true);
     setAttemptedStep(null);
     setStatus(null);
+    // Artist selection now precedes audio. Persist it before the upload flow
+    // starts, otherwise a fast upload and reload can reopen a draft without its
+    // selected profile IDs.
+    try {
+      const id = await ensureUploadDraft();
+      setAutosaveStatus("saving");
+      autosavePendingRef.current = autosavePendingRef.current.catch(() => undefined).then(async () => {
+        const response = await fetch(`/api/distribution/drafts/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...autosaveSnapshot, expectedUpdatedAt: draftVersionRef.current }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (data.code === "DRAFT_VERSION_CONFLICT") setDraftConflict(true);
+        if (!response.ok) throw new Error(data.error || "Could not save the selected artists.");
+        draftVersionRef.current = typeof data.savedAt === "string" ? data.savedAt : draftVersionRef.current;
+      });
+      await autosavePendingRef.current;
+      lastSavedFingerprintRef.current = reviewMetadataFingerprint;
+      setAutosaveStatus("saved");
+    } catch (error) {
+      setAutosaveStatus("error");
+      setStatus(error instanceof Error ? error.message : "Could not save the selected artists. Try again.");
+      stepTransitionRef.current = false;
+      setStepTransitioning(false);
+      return;
+    }
     setVisitedSteps((current) => new Set([...current, 1]));
     setStepMotion("step-adjacent-forward");
-    setStep(3);
+    setStep(0);
+    setMusicEntering(true);
+    window.setTimeout(() => setMusicEntering(false), 520);
     if (stepTransitionTimerRef.current != null) window.clearTimeout(stepTransitionTimerRef.current);
     stepTransitionTimerRef.current = window.setTimeout(() => {
       stepTransitionRef.current = false;
@@ -3402,20 +3431,17 @@ export function ReleaseForm({
     setSubmittedRelease(null);
   }
 
-  function confirmFormatAndOpenMusic(nextFormat = formatIntent) {
+  function confirmFormatAndOpenArtists(nextFormat = formatIntent) {
     if (!nextFormat || journeyExiting) return;
     setFormatIntent(nextFormat);
     setJourneyExiting(true);
     if (journeyTransitionTimerRef.current != null) window.clearTimeout(journeyTransitionTimerRef.current);
     journeyTransitionTimerRef.current = window.setTimeout(() => {
+      setStep(1);
       setJourneyIntro(null);
       setJourneyExiting(false);
-      setMusicEntering(true);
       setHasStartedEditing(true);
-      journeyTransitionTimerRef.current = window.setTimeout(() => {
-        setMusicEntering(false);
-        journeyTransitionTimerRef.current = null;
-      }, 520);
+      journeyTransitionTimerRef.current = null;
     }, 340);
   }
 
@@ -3454,7 +3480,7 @@ export function ReleaseForm({
           <p>Choose a format to shape your path. You can change this before submitting.</p>
           <div className="release-format-options" role="group" aria-label="Release format">
             {(["single", "ep", "album"] as const).map((format) => (
-              <button key={format} type="button" aria-pressed={formatIntent === format} aria-describedby="release-format-hint" disabled={Boolean(singleReleaseGift && format !== "single")} onClick={() => setFormatIntent(format)} onDoubleClick={() => confirmFormatAndOpenMusic(format)}>
+              <button key={format} type="button" aria-pressed={formatIntent === format} aria-describedby="release-format-hint" disabled={Boolean(singleReleaseGift && format !== "single")} onClick={() => setFormatIntent(format)} onDoubleClick={() => confirmFormatAndOpenArtists(format)}>
                 <span className="release-format-symbol" aria-hidden="true">{format === "single" ? "♪" : format === "ep" ? "♫" : "♬"}</span>
                 <strong>{format === "ep" ? "EP" : format[0].toUpperCase() + format.slice(1)}</strong>
                 <small>{format === "single" ? "1 track" : format === "ep" ? "2–4 tracks" : "5–30 tracks"}</small>
@@ -3463,7 +3489,7 @@ export function ReleaseForm({
           </div>
           <p id="release-format-hint" className="release-format-hint">Select once to preview. Double-click to continue.</p>
           {singleReleaseGift ? <p className="release-format-note">Your first release on us covers one Single. EP and Album are available for later releases.</p> : null}
-          <button type="button" className="release-journey-primary" disabled={!formatIntent || journeyExiting} onClick={() => confirmFormatAndOpenMusic()}>Continue to music <span aria-hidden="true">↓</span></button>
+          <button type="button" className="release-journey-primary" disabled={!formatIntent || journeyExiting} onClick={() => confirmFormatAndOpenArtists()}>Continue to artists <span aria-hidden="true">↓</span></button>
         </>}
       </div>
     </section>
@@ -3525,10 +3551,19 @@ export function ReleaseForm({
         </header>
         {draftConflict ? <div className="release-draft-conflict" role="alert"><span>This draft changed in another tab. Your edits here have not replaced the latest version.</span><button type="button" onClick={() => { if (window.confirm("Open the latest draft? Unsaved changes in this tab will be lost.")) { allowReloadRef.current = true; window.location.reload(); } }}>Open latest draft</button></div> : null}
         <div className="release-journey-progress" role="group" aria-label="Release journey progress">
-          <div><span>LEVEL {menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1} / {menuStepIndexes.length}</span><strong>{stepMenuLabels[step] ?? steps[step]}</strong></div>
+          <div><span>{step === 0 || step === 1 ? "SETUP" : "SECTION"} {menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1} / {menuStepIndexes.length}</span><strong>{stepMenuLabels[step] ?? steps[step]}</strong></div>
           <div className="release-journey-progress-track" role="progressbar" aria-label="Journey stages reached" aria-valuemin={0} aria-valuemax={menuStepIndexes.length} aria-valuenow={menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1}><span style={{ width: `${((menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1) / menuStepIndexes.length) * 100}%` }} /></div>
         </div>
         {firstReleaseOffer ? <div className="release-free-offer-banner flex items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-500">🎁 First release on us</div> : null}
+        {step !== 0 && step !== 1 && step !== 7 ? (
+          <div className="release-editor-status" role="status">
+            <div className="release-editor-status-main">
+              <span className="release-editor-status-dot" aria-hidden="true" />
+              <span><strong>{completion}% ready</strong><span className="release-editor-status-separator" aria-hidden="true">·</span>{validationIssueCount === 0 ? "Ready to review" : `${validationIssueCount} item${validationIssueCount === 1 ? "" : "s"} to finish`}</span>
+            </div>
+            {validationIssueCount > 0 ? <button type="button" onClick={() => triggerFieldFocus(validationIssues[0])}>Go to next item <span aria-hidden="true">→</span></button> : <button type="button" onClick={enterReviewMode}>Review release <span aria-hidden="true">→</span></button>}
+          </div>
+        ) : null}
         <div
           className="release-mobile-step-menu md:hidden rounded-[1.3rem] border p-3 md:p-4"
           style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}
@@ -3588,6 +3623,7 @@ export function ReleaseForm({
                       key={`mobile-${label}`}
                       type="button"
                       onClick={() => jumpToStep(index)}
+                      aria-current={buttonState.isCurrent ? "step" : undefined}
                       className={clsx(
                         buttonState.className,
                         "text-left py-2.5 md:py-3 px-3 md:px-4",
@@ -3611,7 +3647,7 @@ export function ReleaseForm({
           </div>
         </div>
 
-        <div className="release-workflow-nav hidden gap-2 md:grid md:grid-cols-5 lg:grid-cols-1" aria-label="Release submission steps">
+        <nav className="release-workflow-nav hidden gap-2 md:grid md:grid-cols-5 lg:grid-cols-1" aria-label="Release sections">
           {menuStepIndexes.map((index) => {
             const label = stepMenuLabels[index] ?? steps[index];
             const buttonState = stepButtonStyles(index);
@@ -3621,7 +3657,7 @@ export function ReleaseForm({
                 type="button"
                 onClick={() => jumpToStep(index)}
                 className={buttonState.className}
-                style={buttonState.style}
+                aria-current={buttonState.isCurrent ? "step" : undefined}
               >
                 <span className="flex items-center justify-center gap-2">
                   {buttonState.hasCorrection || buttonState.validity === "invalid" ? (
@@ -3630,12 +3666,13 @@ export function ReleaseForm({
                       aria-hidden="true"
                     />
                   ) : null}
-                  {label}
+                  <span>{label}</span>
+                  {buttonState.validity === "complete" && !buttonState.hasCorrection ? <span className="release-nav-complete" aria-hidden="true">✓</span> : null}
                 </span>
               </button>
             );
           })}
-        </div>
+        </nav>
         <aside className="release-workflow-summary hidden lg:block" aria-label="Release summary">
           <div className="release-summary-card rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
             <div className="release-live-preview" aria-label="Release preview">
@@ -3670,7 +3707,7 @@ export function ReleaseForm({
         </details>
         {step === 1 ? (
           <section className={clsx("release-artist-stage", stepMotion)}>
-            <button type="button" className="release-change-format" onClick={() => goToStep(4)}>← Back to cover artwork</button>
+            <button type="button" className="release-change-format" onClick={() => setJourneyIntro("format")}>← Back to release format</button>
             <div className="release-focused-intro">
               <h2>Who are the primary artists on this release?</h2>
             </div>
@@ -3709,7 +3746,7 @@ export function ReleaseForm({
               <div className="release-artist-stage-count"><span>{tracks[0]?.primaryArtistIds.length ?? 0} of 3 selected</span><span>Drag artists to set their store delivery order</span></div>
             </div>
             <button type="button" onClick={continueFromArtists} disabled={stepTransitioning} className="release-artist-continue">
-              {stepTransitioning ? "Opening track credits…" : "Continue to track credits →"}
+              {stepTransitioning ? "Opening music upload…" : "Continue to music →"}
             </button>
           </section>
         ) : null}
@@ -6567,8 +6604,8 @@ export function ReleaseForm({
               ? "release-focused-actions"
               : "release-footer-mobile-actions sticky bottom-3 z-20 grid grid-cols-[0.85fr_0.7fr_1.55fr] items-stretch gap-1.5 rounded-[1.4rem] border p-2 shadow-2xl backdrop-blur-xl md:flex md:flex-wrap md:items-center md:justify-between md:gap-3 md:p-3"}
             style={(step === 0 || step === 1) ? undefined : {
-              borderColor: "var(--border)",
-              background: "color-mix(in srgb, var(--card) 90%, transparent)",
+              borderColor: "#41454a",
+              background: "#24272a",
             }}
           >
             <button
