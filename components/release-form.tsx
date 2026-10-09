@@ -3736,7 +3736,7 @@ export function ReleaseForm({
                           <AudioWaveform
                             src={track.audioPreviewUrl || track.existingAudioUrl}
                             title={track.audioFileName || `Track ${index + 1}`}
-                            subtitle={[track.audioFileName, track.duration, fileFormat(track.audioFile, track.audioFileName)].filter(Boolean).join(" • ")}
+                            subtitle={["Original master", track.duration, fileFormat(track.audioFile, track.audioFileName)].filter(Boolean).join(" • ")}
                             compact
                           />
                         </div>

@@ -14,6 +14,7 @@ import "./styles/workspace-pages.css";
 import "./styles/workspace-overlays.css";
 import "./styles/mobile-workspace.css";
 import "./styles/release-upload-controls.css";
+import "./styles/release-audio-player.css";
 import { SmartHelpLayer } from "@/components/smart-help-layer";
 
 export const metadata: Metadata = {

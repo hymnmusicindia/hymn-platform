@@ -3,11 +3,13 @@ import { existsSync, mkdirSync, writeFileSync, unlinkSync, rmdirSync } from "nod
 
 const directory="app/batch-upload-audit-preview";
 function wav() {
-  const data=Buffer.alloc(16044);
+  const data=Buffer.alloc(160044);
   data.write("RIFF"); data.writeUInt32LE(data.length-8,4); data.write("WAVEfmt ",8);
   data.writeUInt32LE(16,16); data.writeUInt16LE(1,20); data.writeUInt16LE(1,22);
   data.writeUInt32LE(8000,24); data.writeUInt32LE(16000,28); data.writeUInt16LE(2,32); data.writeUInt16LE(16,34);
-  data.write("data",36); data.writeUInt32LE(16000,40); return data;
+  data.write("data",36); data.writeUInt32LE(160000,40);
+  for(let i=0;i<80000;i++) data.writeInt16LE(Math.round(Math.sin(i*.17)*(.08+.8*Math.pow(Math.sin(i/80000*Math.PI),2))*30000),44+i*2);
+  return data;
 }
 async function main() {
   if(existsSync(directory)) throw new Error("Preview already exists");
@@ -35,7 +37,11 @@ export default function Page(){return <div className="hymn-portal-root"><SiteHea
         }
         if(url.pathname==="/api/uploads/sessions") return json({sessions:[],config:{chunkSize:20000}});
         if(url.pathname.endsWith("/complete")) return json({asset:{downloadPath:`/api/assets/${url.pathname.split("/")[4]}`}});
-        if(url.pathname.startsWith("/api/assets/")) return route.fulfill({contentType:"audio/wav",body:wav()});
+        if(url.pathname.startsWith("/api/assets/")) {
+          const data=wav(),range=req.headers()["range"]?.match(/bytes=(\d+)-(\d*)/);
+          if(range) {const start=Number(range[1]),end=Math.min(Number(range[2]||data.length-1),data.length-1);return route.fulfill({status:206,contentType:"audio/wav",headers:{"Accept-Ranges":"bytes","Content-Range":`bytes ${start}-${end}/${data.length}`},body:data.subarray(start,end+1)});}
+          return route.fulfill({contentType:"audio/wav",headers:{"Accept-Ranges":"bytes"},body:data});
+        }
         return json({artists:[],releases:[],draft:{id:123,updatedAt:"2026-10-09"}});
       });
       await page.goto(`${process.env.WORKSPACE_PREVIEW_URL || "http://localhost:3015"}/batch-upload-audit-preview`,{timeout:120000});
@@ -69,6 +75,16 @@ export default function Page(){return <div className="hymn-portal-root"><SiteHea
       await expect(page.locator(".release-batch-upload strong")).toHaveText("Add tracks");
       const rows=page.locator(".release-audio-queue-item");
       await expect(rows.nth(0)).toContainText("first.wav");await expect(rows.nth(1)).toContainText("third.wav");
+      const wave=rows.first().getByRole("slider");
+      await expect(rows.first().locator(".audio-waveform-live")).not.toHaveClass(/is-pending/,{timeout:15000});
+      const heights=await rows.first().locator(".audio-waveform-live > span").evaluateAll(nodes=>nodes.map(node=>node.getBoundingClientRect().height));
+      expect(Math.max(...heights)-Math.min(...heights)).toBeGreaterThan(10);
+      expect((await wave.boundingBox())!.width).toBeGreaterThan(width>=1024?140:100);
+      await expect(wave).toHaveCSS("filter","none");
+      await expect.poll(()=>rows.first().locator("audio").evaluate(node=>Number.isFinite(node.duration) && node.duration>0)).toBe(true);
+      await rows.first().locator("audio").evaluate(async node=>{await node.play();node.pause();});
+      await wave.focus();await page.keyboard.press("ArrowRight");await expect(wave).toHaveAttribute("aria-valuenow","50");
+      await page.keyboard.press("Home");await expect(wave).toHaveAttribute("aria-valuenow","0");
       const footer=page.locator(".release-focused-actions");
       await expect(footer.getByRole("button",{name:"Back",exact:false})).toBeVisible();
       await expect(footer.getByRole("button",{name:"Continue to cover artwork",exact:true})).toBeVisible();
