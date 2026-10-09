@@ -9,6 +9,7 @@ import "./styles/material-depth.css";
 import "./styles/portal.css";
 import "./styles/landing.css";
 import "./styles/workspace-navigation.css";
+import "./styles/premium-actions.css";
 import { SmartHelpLayer } from "@/components/smart-help-layer";
 
 export const metadata: Metadata = {

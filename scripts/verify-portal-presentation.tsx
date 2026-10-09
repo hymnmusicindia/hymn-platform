@@ -5,7 +5,7 @@ import { readFileSync, mkdirSync } from "node:fs";
 import { DashboardFrame } from "../components/dashboard-frame";
 
 async function main() {
-  const css = readFileSync(".next/dev/static/css/app/layout.css", "utf8") + readFileSync("app/styles/portal.css", "utf8") + readFileSync("app/styles/workspace-navigation.css", "utf8");
+  const css = readFileSync(".next/dev/static/css/app/layout.css", "utf8") + readFileSync("app/styles/portal.css", "utf8") + readFileSync("app/styles/workspace-navigation.css", "utf8") + readFileSync("app/styles/premium-actions.css", "utf8");
   const markup = renderToStaticMarkup(<div className="hymn-portal-root"><header><div>HYMN</div></header><div className="hymn-portal"><DashboardFrame title="Artist workspace" subtitle="Your music" activeKey="releases" onSelect={() => {}} navItems={[
     { key:"overview", label:"Overview", group:"Home" },
     { key:"releases", label:"My releases", group:"Distribution" },
@@ -25,9 +25,10 @@ async function main() {
       expect(dimensions.content).toBeLessThanOrEqual(dimensions.viewport);
       expect(await page.locator(".portal-workspace").evaluate(element => getComputedStyle(element).display)).toBe("flex");
       expect(await page.locator(".dashboard-os-sidebar").evaluate(element => getComputedStyle(element).backgroundColor)).toBe("rgb(8, 9, 11)");
-      expect(await page.locator(".btn-primary").evaluate(element => getComputedStyle(element).color)).toBe("rgb(17, 22, 28)");
+      expect(await page.locator(".btn-primary").evaluate(element => getComputedStyle(element).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+      expect(await page.locator(".btn-primary").evaluate(element => getComputedStyle(element).borderTopWidth)).toBe("0px");
       expect(await page.locator(".dashboard-os-nav-item.is-active").evaluate(element => getComputedStyle(element).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
-      expect(await page.locator(".dashboard-os-nav-item.is-active").evaluate(element => getComputedStyle(element).textShadow)).not.toBe("none");
+      expect(await page.locator(".dashboard-os-nav-item.is-active").evaluate(element => getComputedStyle(element).textShadow)).toBe("none");
       if (width > 1024) await expect(page.getByRole("button", {name:"My releases", exact:true})).toBeVisible();
       else await expect(page.getByRole("button", {name:"Menu", exact:true})).toBeVisible();
       await page.screenshot({ path:`.cache/portal/${theme}-${width}.png`, fullPage:true });

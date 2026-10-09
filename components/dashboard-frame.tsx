@@ -74,7 +74,10 @@ export function DashboardFrame<T extends string>({
     window.addEventListener("hymn-toggle-navigation", toggleNavigation);
     return () => window.removeEventListener("hymn-toggle-navigation", toggleNavigation);
   }, []);
-  const [closedGroups, setClosedGroups] = useState<Set<string>>(() => new Set());
+  const [openGroup, setOpenGroup] = useState<string | null>(() => {
+    if (navGroups?.length) return navGroups.find(group => group.items.some(item => item.key === activeKey))?.label ?? null;
+    return navItems.find(item => item.key === activeKey)?.group ?? "Workspace";
+  });
   const [localSearch, setLocalSearch] = useState("");
   const navScrollRef = useRef<HTMLDivElement>(null);
   const [navScroll, setNavScroll] = useState({ canUp: false, canDown: false });
@@ -120,9 +123,10 @@ export function DashboardFrame<T extends string>({
     observer.observe(element);
     window.addEventListener("resize", updateNavScroll);
     return () => { observer.disconnect(); window.removeEventListener("resize", updateNavScroll); };
-  }, [updateNavScroll, visibleGroups, closedGroups, mobileOpen, collapsed]);
+  }, [updateNavScroll, visibleGroups, openGroup, mobileOpen, collapsed]);
   const activeItem = useMemo(() => flatItems.find((item) => item.key === activeKey), [activeKey, flatItems]);
   const activeGroup = useMemo(() => groups.find((group) => group.items.some((item) => item.key === activeKey)), [activeKey, groups]);
+  useEffect(() => { setOpenGroup(activeGroup?.label ?? null); }, [activeGroup?.label]);
   useEffect(() => {
     const frame = requestAnimationFrame(() => window.dispatchEvent(new CustomEvent("hymn-workspace-section", { detail: activeGroup?.label ?? "Workspace" })));
     return () => cancelAnimationFrame(frame);
@@ -134,12 +138,7 @@ export function DashboardFrame<T extends string>({
   }
 
   function toggleGroup(label: string) {
-    setClosedGroups((current) => {
-      const next = new Set(current);
-      if (next.has(label)) next.delete(label);
-      else next.add(label);
-      return next;
-    });
+    setOpenGroup(current => current === label ? null : label);
   }
 
   const isOverview = activeKey === "overview";
@@ -203,8 +202,7 @@ export function DashboardFrame<T extends string>({
 
         <div ref={navScrollRef} onScroll={updateNavScroll} className="dashboard-nav-scroll mt-4 min-h-0 flex-1 content-start gap-3 overflow-x-hidden overflow-y-auto pr-1 grid">
           {visibleGroups.map((group) => {
-            const groupActive = group.items.some((item) => item.key === activeKey);
-            const closed = closedGroups.has(group.label) && !groupActive;
+            const closed = openGroup !== group.label;
             return (
               <div key={group.label} className="dashboard-os-nav-group">
                 <button

@@ -21,7 +21,15 @@ async function main() {
       await expect(page.locator(".landing-rail").getByRole("link",{name:"Trends",exact:true})).toHaveAttribute("href","/analytics");
       const selection=await page.locator(".landing-nav-link.is-active").evaluate(element=>({background:getComputedStyle(element).backgroundColor,shadow:getComputedStyle(element).textShadow}));
       expect(selection.background).toBe("rgba(0, 0, 0, 0)");
-      expect(selection.shadow).not.toBe("none");
+      expect(selection.shadow).toBe("none");
+      if(width<1024) await page.getByRole("button",{name:"Toggle service navigation"}).click();
+      await page.locator(".landing-rail").getByRole("button",{name:"Beatstore",exact:true}).click();
+      await expect(page.locator(".landing-rail").getByRole("button",{name:"Distribution",exact:true})).toHaveAttribute("aria-expanded","false");
+      await expect(page.locator(".landing-rail").getByRole("button",{name:"Beatstore",exact:true})).toHaveAttribute("aria-expanded","true");
+      await expect(page.locator(".landing-rail").getByRole("link",{name:"My releases",exact:true})).toBeHidden();
+      await page.locator(".landing-rail").getByRole("button",{name:"Distribution",exact:true}).click();
+      await expect(page.locator(".landing-rail").getByRole("button",{name:"Beatstore",exact:true})).toHaveAttribute("aria-expanded","false");
+      if(width<1024) await page.locator(".landing-rail").getByRole("button",{name:"Close navigation",exact:true}).click();
       for(const id of ["journey","producers","released","artists","beats","newsletter"]) await expect(page.locator(`#${id}`)).toHaveCount(1);
       const dimensions=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth}));
       expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.width);
