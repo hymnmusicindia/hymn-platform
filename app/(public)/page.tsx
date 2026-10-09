@@ -8,6 +8,7 @@ import {
   Youtube,
 } from "lucide-react";
 import { MusicLifecycleBanner } from "@/components/music-lifecycle-banner";
+import { LandingWorkspace } from "@/components/landing-workspace";
 import { HomeProducerInvitation } from "@/components/home-producer-invitation";
 import { AnimatedHeroMetrics } from "@/components/animated-hero-metrics";
 import { GoogleAuthButton } from "@/components/google-auth-button";
@@ -90,8 +91,9 @@ export default async function HomePage() {
     };
   });
   return (
-    <main className="overflow-hidden bg-background pb-20 text-foreground">
-      <section className="relative -mt-[73px] min-h-[96vh] overflow-hidden pt-[73px]">
+    <main id="home" className="hymn-landing">
+      <LandingWorkspace workspaceHref={session ? destinationForRole(session.role) : "/login"}>
+      <section className="landing-hero">
         <div className="absolute inset-0">
           <Image src={images.hero.src} alt={images.hero.alt} fill priority fetchPriority="high" quality={75} sizes="100vw" className="scale-105 object-cover object-center opacity-52" />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_68%_32%,rgba(255,255,255,0.16),transparent_26%),linear-gradient(90deg,rgba(9,11,16,0.96)_0%,rgba(9,11,16,0.76)_46%,rgba(9,11,16,0.5)_100%)]" />
@@ -99,9 +101,10 @@ export default async function HomePage() {
           <div className="absolute inset-0 opacity-35 [background-image:radial-gradient(circle_at_20%_30%,rgba(255,255,255,0.25)_0_1px,transparent_1px),radial-gradient(circle_at_80%_45%,rgba(255,255,255,0.34)_0_1px,transparent_1px)] [background-size:90px_90px,140px_140px] motion-safe:animate-[hymn-grid-float_22s_linear_infinite]" />
         </div>
 
-        <div className={`shell relative grid min-h-[calc(96vh-73px)] min-w-0 grid-cols-[minmax(0,1fr)] items-center gap-10 py-12 sm:py-14 ${session ? "" : "lg:grid-cols-[minmax(0,1fr)_minmax(330px,410px)] lg:gap-12"}`}>
-          <div className="min-w-0 max-w-4xl">
-            <h1 className="text-4xl font-semibold leading-[1.02] tracking-[-0.035em] text-white sm:text-5xl sm:leading-[0.96] lg:text-7xl xl:text-[5.8rem]">
+        <div className="landing-hero-content">
+          <div className="landing-hero-copy">
+            <p className="landing-eyebrow">Independent artists. Unlimited possibilities.</p>
+            <h1>
               Where Artists Become Movements.
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-white opacity-70 sm:mt-6 sm:text-base sm:leading-8 lg:text-lg">
@@ -131,7 +134,20 @@ export default async function HomePage() {
                 </span>
               </Link>
           </div>
-          {!session ? (
+        </div>
+      </section>
+
+      <section className="landing-next-move" aria-labelledby="next-move-title">
+        <div className="landing-section-heading"><div><p className="landing-eyebrow">One home for your music</p><h2 id="next-move-title">What are you creating next?</h2></div><span>Start anywhere. Keep moving.</span></div>
+        <div className="landing-services">{[
+          {href:"/distribution",number:"01",title:"Release your music",copy:"Take your next release to the world's music platforms.",icon:ArrowRight,tag:"Distribution"},
+          {href:"/beat-store",number:"02",title:"Find your next sound",copy:"Discover beats and license the one that feels like you.",icon:Headphones,tag:"Beatstore"},
+          {href:"/studio",number:"03",title:"Finish your record",copy:"Connect with engineers for mixing and mastering.",icon:Headphones,tag:"Mixing / Mastering"}
+        ].map(service=><Link key={service.number} href={service.href} className="landing-service"><div><span>{service.tag}</span><small>{service.number}</small></div><service.icon size={25}/><h3>{service.title}</h3><p>{service.copy}</p><span className="landing-service-cta">Explore <ArrowRight size={16}/></span></Link>)}</div>
+      </section>
+
+      {!session ? (
+            <section className="landing-signup">
             <aside className="force-dark relative mx-auto min-w-0 w-full max-w-[410px] overflow-hidden rounded-[1.65rem] border border-white/15 bg-black/[0.12] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-lg sm:p-6 lg:p-7">
               <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(255,255,255,0.1),transparent_38%),linear-gradient(145deg,rgba(255,255,255,0.035),transparent_62%)]" />
               <div className="relative">
@@ -150,11 +166,10 @@ export default async function HomePage() {
                 </p>
               </div>
             </aside>
+            </section>
           ) : null}
-        </div>
-      </section>
 
-      <section className="shell py-12 sm:py-16">
+      <section className="landing-platforms shell py-12 sm:py-16">
         <div className="home-store-destination-layout py-6 sm:py-9">
           <h2 className="sr-only">WHERE YOUR MUSIC LANDS</h2>
           {[0, 1].map((row) => <div key={row} className={`home-store-destination-row ${row === 1 ? "home-store-destination-row-reverse" : ""}`}>
@@ -190,10 +205,10 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <MusicLifecycleBanner />
-      <HomeProducerInvitation />
+      <div id="journey" className="landing-banner landing-journey"><MusicLifecycleBanner /></div>
+      <div id="producers" className="landing-banner landing-producers"><HomeProducerInvitation /></div>
 
-      <section className="shell py-10 sm:py-16">
+      <section id="released" className="landing-releases shell py-10 sm:py-16">
         <div className="relative overflow-hidden rounded-[2rem] border border-border bg-black px-5 py-10 shadow-[0_32px_120px_rgba(0,0,0,0.42)] sm:px-8 lg:min-h-[470px] lg:px-14 lg:py-16">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_18%,rgba(255,255,255,0.1),transparent_25%),linear-gradient(90deg,rgba(0,0,0,1)_0%,rgba(0,0,0,0.92)_44%,rgba(0,0,0,0.54)_100%)]" />
           <div className="relative grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
@@ -203,7 +218,7 @@ export default async function HomePage() {
                 Yes, this release moved through HYMN.
               </h2>
               <p className="mt-6 max-w-md text-sm font-medium leading-7 sm:text-base" style={{ color: "#d4d4d8" }}>
-                Spotlight real releases from your HYMN database and turn the homepage into living proof of the platform.
+                Discover the music and independent artists building their next chapter with HYMN.
               </p>
               <Link href={session ? "/distribution/start" : "/login?mode=signup"} className="mt-7 inline-flex items-center gap-3 rounded-xl border border-white/12 bg-white/[0.08] px-5 py-3 text-sm font-semibold text-white transition hover:border-white/28 hover:bg-white/[0.14]">
                 Your next release is waiting
@@ -235,7 +250,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="shell py-12 sm:py-16">
+      <section id="artists" className="landing-artists shell py-12 sm:py-16">
         <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 className="text-4xl font-semibold tracking-[-0.03em] text-[var(--text)] sm:text-5xl">Trusted by artists who move with intent.</h2>
@@ -266,7 +281,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="shell py-10 sm:py-16">
+      <section className="landing-career shell py-10 sm:py-16">
         <div className="relative overflow-hidden rounded-[1.75rem] border border-border bg-surface p-6 shadow-[0_34px_130px_rgba(0,0,0,0.42)] sm:rounded-[2.5rem] sm:p-10 lg:p-14">
           <div className="absolute inset-0">
             <Image src={images.backstage.src} alt={images.backstage.alt} fill sizes="100vw" className="object-cover opacity-18" unoptimized />
@@ -297,7 +312,8 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="shell py-10">
+      <section id="beats" className="landing-beats shell py-10">
+        <div className="landing-section-heading"><div><p className="landing-eyebrow">Beatstore</p><h2>A new sound. A new beginning.</h2></div><Link href="/beat-store">Browse all beats <ArrowRight size={16}/></Link></div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {catalog.slice(0, 4).map((beat) => (
             <article key={beat.id} className="overflow-hidden rounded-[1.35rem] border border-border bg-card/76 p-3 shadow-[0_16px_50px_rgba(0,0,0,0.22)]">
@@ -321,7 +337,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="border-y border-white/[0.06] bg-[#090a0c]">
+      <section id="newsletter" className="landing-newsletter border-y border-white/[0.06] bg-[#090a0c]">
         <div className="shell py-10 sm:py-14 lg:py-16">
           <div className="flex flex-col gap-7 lg:flex-row lg:items-center lg:justify-between lg:gap-12">
             <h2 className="max-w-sm text-2xl font-medium leading-tight tracking-[-0.03em] text-white sm:text-3xl">
@@ -343,7 +359,7 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
-
+      </LandingWorkspace>
     </main>
   );
 }

@@ -7,6 +7,7 @@ import "./styles/distribution.css";
 import "./styles/product-ui.css";
 import "./styles/material-depth.css";
 import "./styles/portal.css";
+import "./styles/landing.css";
 import { SmartHelpLayer } from "@/components/smart-help-layer";
 
 export const metadata: Metadata = {
