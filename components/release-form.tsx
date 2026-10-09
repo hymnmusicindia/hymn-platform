@@ -3436,7 +3436,8 @@ export function ReleaseForm({
           if ((event.target as HTMLElement).closest("button")) setHasStartedEditing(true);
         }}
         onDropCapture={() => setHasStartedEditing(true)}
-        className={clsx("release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", (step === 0 || step === 1) && "is-focused-step", step === 0 && "is-audio-upload-step", step === 0 && musicEntering && "is-entering-from-format", step === 1 && "is-artist-step", step === 3 && "is-tracklist-step", step === 7 && "is-review-mode")}
+        data-editor-stage={step}
+        className={clsx("release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", step !== 0 && step !== 1 && "release-premium-editor", (step === 0 || step === 1) && "is-focused-step", step === 0 && "is-audio-upload-step", step === 0 && musicEntering && "is-entering-from-format", step === 1 && "is-artist-step", step === 3 && "is-tracklist-step", step === 7 && "is-review-mode")}
         style={{ borderColor: "var(--border)", background: "var(--card)" }}
       >
         <header className="release-workspace-header">
@@ -3598,6 +3599,7 @@ export function ReleaseForm({
           </div>
         </aside>
         <div className="release-workflow-content grid min-w-0 gap-6">
+        <div className="release-editor-panels">
         {step === 1 ? (
           <section className={clsx("release-artist-stage", stepMotion)}>
             <button type="button" className="release-change-format" onClick={() => setJourneyIntro("welcome")}>← Back</button>
@@ -3644,8 +3646,8 @@ export function ReleaseForm({
           </section>
         ) : null}
         {step === 5 ? (
-          <section className={clsx("grid gap-5", stepMotion)}>
-            <StepIntro title="Confirm ownership and delivery" />
+          <section className={clsx("release-rights-stage grid gap-5", stepMotion)}>
+            <StepIntro title="Ownership & rights" />
             <div className="rounded-xl border p-4 sm:p-5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-soft)" }}>Master rights</p>
               <div className="mt-3 grid gap-4 sm:grid-cols-2">
@@ -4499,7 +4501,7 @@ export function ReleaseForm({
         {step === 2 ? (
           <section
             className={clsx(
-              "grid gap-5 md:grid-cols-[1.1fr,0.9fr]",
+              "release-metadata-stage grid gap-5 md:grid-cols-[1.1fr,0.9fr]",
               stepMotion,
             )}
           >
@@ -4759,7 +4761,7 @@ export function ReleaseForm({
         {step === 4 ? (
           <section
             className={clsx(
-              "grid items-start gap-5 lg:grid-cols-[minmax(300px,0.85fr),minmax(0,1.15fr)]",
+              "release-artwork-stage grid items-start gap-5 lg:grid-cols-[minmax(300px,0.85fr),minmax(0,1.15fr)]",
               stepMotion,
             )}
           >
@@ -4934,7 +4936,7 @@ export function ReleaseForm({
           </section>
         ) : null}
         {step === 5 ? (
-          <section className={clsx("grid gap-6", stepMotion)}>
+          <section className={clsx("release-delivery-stage grid gap-6", stepMotion)}>
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr),360px]">
               <div className="grid gap-6">
                 <div
@@ -5937,7 +5939,7 @@ export function ReleaseForm({
           </section>
         ) : null}
         {step === 7 ? (
-          <section className={clsx("grid gap-5", stepMotion)}>
+          <section className={clsx("release-review-stage grid gap-5", stepMotion)}>
             <div className="review-page-heading relative grid gap-3 py-3">
               <button type="button" onClick={() => goToStep(5)} className="text-sm font-semibold md:absolute md:left-0 md:top-7" style={{ color: "var(--text-muted)" }}>← Back to release</button>
               <p className="text-[11px] font-semibold uppercase tracking-[.18em]" style={{ color: "var(--text-muted)" }}>Release review</p>
@@ -6479,6 +6481,7 @@ export function ReleaseForm({
             </div>
           </section>
         ) : null}
+        </div>
         {step !== 7 && step !== 1 ? (
           <div
             className={(step === 0 || step === 1)

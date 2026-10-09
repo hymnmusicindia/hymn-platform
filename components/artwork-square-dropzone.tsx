@@ -19,6 +19,7 @@ export function ArtworkSquareDropzone({ previewUrl, fileName, fileType, dimensio
   const [dragging, setDragging] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
   const suppressNextClickRef = useRef(false);
 
   useEffect(() => {
@@ -31,6 +32,7 @@ export function ArtworkSquareDropzone({ previewUrl, fileName, fileType, dimensio
     if (!file) return;
 
     setProcessing(true);
+    setSelectionError(null);
     setProgress(10);
 
     let active = true;
@@ -45,12 +47,12 @@ export function ArtworkSquareDropzone({ previewUrl, fileName, fileType, dimensio
       window.clearInterval(timer);
       setProgress(100);
       setProcessing(false);
-    } catch (selectionError) {
+    } catch (caughtError) {
       active = false;
       window.clearInterval(timer);
       setProcessing(false);
       setProgress(0);
-      throw selectionError;
+      setSelectionError(caughtError instanceof Error ? caughtError.message : "Could not read this artwork. Choose another JPG.");
     }
   }
 
@@ -131,7 +133,7 @@ export function ArtworkSquareDropzone({ previewUrl, fileName, fileType, dimensio
         </div>
       ) : null}
 
-      {error ? <p className="inline-error">{customerMessage(error)}</p> : null}
+      {error || selectionError ? <p className="inline-error" role="alert">{customerMessage(error || selectionError)}</p> : null}
     </div>
   );
 }
