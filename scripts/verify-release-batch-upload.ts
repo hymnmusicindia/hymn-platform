@@ -98,6 +98,10 @@ export default function Page(){return <div className="hymn-portal-root"><SiteHea
       await page.screenshot({path:`.cache/batch-upload/music-${width}.png`});
       await footer.getByRole("button",{name:"Continue to cover artwork",exact:true}).click();
       await expect(page.getByRole("heading",{name:"Prepare your cover artwork",exact:true})).toBeVisible();
+      await expect(page.locator(".release-mobile-summary")).toHaveCount(0);
+      await expect(page.locator(".release-workflow-nav > button")).toHaveCount(5);
+      await expect(page.locator(".release-workflow-nav").getByRole("button",{name:/^(Artists|Music)$/})).toHaveCount(0);
+      await expect(page.locator(".release-nav-complete")).toHaveCount(0);
       await page.close();
     }
     console.log("Batch upload passed: concurrent transfers, independent failure, stable row identity after removal, centered dropzone, and Back/Next at desktop/mobile widths.");

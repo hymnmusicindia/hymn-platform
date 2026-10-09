@@ -3514,7 +3514,7 @@ export function ReleaseForm({
               style={{ borderColor: "var(--border)" }}
             >
               <div className="grid gap-2">
-                {menuStepIndexes.map((index) => {
+                {menuStepIndexes.filter((index) => index !== 0 && index !== 1).map((index) => {
                   const label = stepMenuLabels[index] ?? steps[index];
                   const buttonState = stepButtonStyles(index);
                   return (
@@ -3547,7 +3547,7 @@ export function ReleaseForm({
         </div>
 
         <nav className="release-workflow-nav hidden gap-2 md:grid md:grid-cols-5 lg:grid-cols-1" aria-label="Release sections">
-          {menuStepIndexes.map((index) => {
+          {menuStepIndexes.filter((index) => index !== 0 && index !== 1).map((index) => {
             const label = stepMenuLabels[index] ?? steps[index];
             const buttonState = stepButtonStyles(index);
             return (
@@ -3566,7 +3566,6 @@ export function ReleaseForm({
                     />
                   ) : null}
                   <span>{label}</span>
-                  {buttonState.validity === "complete" && !buttonState.hasCorrection ? <span className="release-nav-complete" aria-hidden="true">✓</span> : null}
                 </span>
               </button>
             );
@@ -3599,11 +3598,6 @@ export function ReleaseForm({
           </div>
         </aside>
         <div className="release-workflow-content grid min-w-0 gap-6">
-        <details className="release-mobile-summary rounded-xl border p-3 lg:hidden" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between text-sm font-semibold">Release summary <span>{completion}% complete</span></summary>
-          <div className="mt-3 grid grid-cols-2 gap-3 border-t pt-3 text-sm" style={{ borderColor: "var(--border)" }}><p style={{ color: "var(--text-muted)" }}>Missing required</p><p className="text-right">{validationIssueCount}</p><p style={{ color: "var(--text-muted)" }}>Due today</p><p className="text-right">{subscriptionCovered || distributionCheckoutAmount === 0 ? "₹0" : `₹${distributionCheckoutAmount.toLocaleString("en-IN")}`}</p><p style={{ color: "var(--text-muted)" }}>Artists / tracks</p><p className="text-right">{artistCount} / {tracks.length}</p><p style={{ color: "var(--text-muted)" }}>Save state</p><p className="text-right" aria-live="polite">{autosaveLabel}</p></div>
-          {validationIssueCount > 0 ? <ul className="release-mobile-next-actions mt-3 border-t pt-2" style={{ borderColor: "var(--border)" }}>{validationIssues.slice(0, 3).map((issue) => <li key={`mobile-${issue.key}-${issue.trackIndex ?? "release"}`}><button type="button" onClick={() => triggerFieldFocus(issue)}>{customerMessage(issue.message)} <span aria-hidden="true">→</span></button></li>)}</ul> : null}
-        </details>
         {step === 1 ? (
           <section className={clsx("release-artist-stage", stepMotion)}>
             <button type="button" className="release-change-format" onClick={() => setJourneyIntro("welcome")}>← Back</button>
