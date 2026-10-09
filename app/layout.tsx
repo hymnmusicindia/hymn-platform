@@ -12,6 +12,7 @@ import "./styles/workspace-navigation.css";
 import "./styles/premium-actions.css";
 import "./styles/workspace-pages.css";
 import "./styles/workspace-overlays.css";
+import "./styles/mobile-workspace.css";
 import { SmartHelpLayer } from "@/components/smart-help-layer";
 
 export const metadata: Metadata = {

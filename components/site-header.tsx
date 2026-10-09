@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { AlertCircle, Bell, CheckCircle2, ChevronDown, Crown, Disc3, Headphones, HelpCircle, LayoutDashboard, LogOut, Menu, MessageCircle, Music2, PackageCheck, PanelLeft, ShieldCheck, ShoppingCart, UserRound, WalletCards, X } from "lucide-react";
+import { AlertCircle, Bell, CheckCircle2, ChevronDown, Crown, Disc3, Headphones, HelpCircle, LayoutDashboard, LogOut, MessageCircle, Music2, PackageCheck, PanelLeft, ShieldCheck, ShoppingCart, UserRound, WalletCards, X } from "lucide-react";
 import clsx from "clsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mainNav } from "@/lib/site";
@@ -644,11 +644,8 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
             {isAuthenticated ? <ProfileMenu /> : null}
           </div>
 
-          <div className="flex items-center gap-0 lg:hidden">
-            {isAuthenticated ? <AppLauncher mobile /> : null}
-            {isAuthenticated ? <NotificationBell /> : null}
-            {!workspaceHeader ? <ThemeToggle /> : null}
-            {isAuthenticated ? <ProfileMenu /> : null}
+          <div className="mobile-account-access flex items-center gap-0 lg:hidden">
+            {isAuthenticated ? <ProfileMenu /> : <Link href="/login" className="mobile-login-link"><UserRound size={17} aria-hidden="true" /><span>Login</span></Link>}
           </div>
 
           <button
@@ -668,19 +665,10 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
             {cartCount > 0 ? <span className="site-cart-count" aria-hidden="true">{cartCount > 99 ? "99+" : cartCount}</span> : null}
           </button>
 
-          <button
-            type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border sm:h-11 sm:w-11 lg:hidden"
-            style={{ borderColor: "color-mix(in srgb, var(--glass-border) 88%, transparent)", background: "color-mix(in srgb, var(--glass-bg) 84%, transparent)", color: "var(--text)", backdropFilter: "blur(10px) saturate(140%)" }}
-            onClick={() => { setOpen((value) => !value); setAppLauncherOpen(false); }}
-            aria-expanded={open}
-            aria-controls="site-mobile-nav"
-            aria-label={open ? "Close menu" : "Open menu"}
-          >
-            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
         </div>
       </div>
+
+      <div className="mobile-workspace-subheader"><button type="button" aria-label="Toggle service navigation" onClick={() => window.dispatchEvent(new Event("hymn-toggle-navigation"))}><PanelLeft size={15} aria-hidden="true"/><span aria-live="polite">{activeSection}</span><ChevronDown size={13} aria-hidden="true"/></button></div>
 
       {open ? (
         <div id="site-mobile-nav" className="border-t lg:hidden" style={{ borderColor: "var(--glass-border)", background: "color-mix(in srgb, var(--glass-bg-strong) 88%, transparent)", backdropFilter: "blur(18px) saturate(155%)" }}>

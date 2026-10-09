@@ -8,7 +8,7 @@ async function main() {
     const page=await browser.newPage({reducedMotion:"reduce"});
     const errors:string[]=[];
     page.on("pageerror",error=>errors.push(error.message));
-    for(const width of [1440,390]) {
+    for(const width of [1440,320,390,768]) {
       await page.setViewportSize({width,height:1000});
       await page.goto(process.env.LANDING_PREVIEW_URL || "http://localhost:3015", {waitUntil:"domcontentloaded",timeout:120000});
       await expect(page.locator(".landing-hero h1")).toContainText("Where Artists Become Movements");
@@ -31,6 +31,10 @@ async function main() {
       await expect(page.locator(".landing-rail").getByRole("button",{name:"Beatstore",exact:true})).toHaveAttribute("aria-expanded","false");
       if(width<1024) await page.locator(".landing-rail").getByRole("button",{name:"Close navigation",exact:true}).click();
       for(const id of ["journey","producers","released","artists","beats","newsletter"]) await expect(page.locator(`#${id}`)).toHaveCount(1);
+      if(width<1024) {
+        const cta=page.locator(".landing-hero-copy > a");
+        expect(await cta.locator("span:not([aria-hidden]) > span").first().evaluate(node=>node.getBoundingClientRect().width)).toBeGreaterThan(150);
+      }
       const dimensions=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth}));
       expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.width);
       if(width<1024) {
@@ -39,11 +43,10 @@ async function main() {
         await expect(page.locator(".landing-rail")).toBeVisible();
         await page.locator(".landing-rail").getByRole("button",{name:"Close navigation",exact:true}).click();
         await expect(page.locator(".landing-rail")).not.toHaveClass(/is-open/);
-        await page.getByRole("button",{name:"Open menu",exact:true}).click();
-        const mobileSelection=await page.locator(".hymn-mobile-page-link[aria-current='page']").evaluate(element=>({background:getComputedStyle(element).backgroundColor,border:getComputedStyle(element).borderTopWidth}));
-        expect(mobileSelection.background).toBe("rgba(0, 0, 0, 0)");
-        expect(mobileSelection.border).toBe("0px");
-        await page.getByRole("button",{name:"Close menu",exact:true}).click();
+        await expect(page.getByRole("button",{name:"Open menu",exact:true})).toHaveCount(0);
+        await expect(page.locator(".mobile-login-link")).toBeVisible();
+        const subheader=await page.locator(".mobile-workspace-subheader button").boundingBox();
+        expect(Math.abs(subheader!.x + subheader!.width / 2 - width / 2)).toBeLessThan(2);
         await page.evaluate(()=>window.scrollTo(0,0));
       } else {
         await page.getByRole("button",{name:"Toggle service navigation"}).click();

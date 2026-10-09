@@ -29,9 +29,9 @@ async function main() {
       await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(data)});
     });
     const base=process.env.WORKSPACE_PREVIEW_URL || "http://localhost:3015";
-    for(const width of [1440,390]) {
+    for(const width of [1440,320,390,768]) {
       await page.setViewportSize({width,height:800});
-      for(const path of ["/faq","/distribution","/about","/mission","/policies","/contact"]) {
+      for(const path of ["/faq","/distribution","/about","/mission","/policies","/contact","/login","/services","/partnership-program","/privacy-policy","/terms-of-service"]) {
         await page.goto(base+path,{waitUntil:"domcontentloaded",timeout:120000});
         await expect(page.locator(".hymn-public-workspace .portal-workspace")).toBeVisible();
         await expect(page.locator(".hymn-studio-header")).toHaveCount(1);
@@ -58,6 +58,7 @@ async function main() {
         await page.getByRole("button",{name:"Your profile",exact:true}).click();
         await expect(page.getByRole("menuitem",{name:"Contact HYMN",exact:true})).toHaveAttribute("href","/contact");
         await expect(page.locator(".profile-avatar-image img:visible")).toHaveCSS("max-height","none");
+        await expect.poll(async()=> (await page.locator(".profile-avatar-image img:visible").boundingBox())?.width ?? 0).toBeGreaterThan(30);
         const avatar=await page.locator(".profile-avatar-image img:visible").evaluate(node=>{const rect=node.getBoundingClientRect();return {width:rect.width,height:rect.height,max:getComputedStyle(node).maxHeight};});
         expect(avatar.width).toBeGreaterThan(30);
         expect(avatar.width).toBe(avatar.height);expect(avatar.max).toBe("none");
@@ -99,7 +100,7 @@ async function main() {
       }
     }
     expect(errors).toEqual([]);
-    console.log("Workspace audit passed: six public destinations, FAQ search, plans, avatar/contact menu, catalogue controls, royalty split tabs, and viewport-fit submission entry on desktop/mobile.");
+    console.log("Workspace audit passed: eleven public destinations, FAQ search, plans, avatar/contact menu, catalogue controls, royalty split tabs, and viewport-fit submission entry on desktop/mobile.");
   } finally { await browser.close();unlinkSync(resolve(directory,"page.tsx"));rmdirSync(directory); }
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

@@ -3,6 +3,7 @@
 import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
+import { CustomerOverlay } from "@/components/customer-overlay";
 import { LicenceWheel } from "@/components/licence-wheel";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Disc3, ExternalLink, ListMusic, Pause, Play, Repeat, ShoppingBag, Shuffle, SkipBack, SkipForward, Volume2, VolumeX, X } from "lucide-react";
@@ -105,11 +106,8 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
     const handleKey = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
     window.addEventListener("keydown", handleKey);
     window.setTimeout(() => panelRef.current?.focus(), 0);
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     return () => {
       window.removeEventListener("keydown", handleKey);
-      document.body.style.overflow = originalOverflow;
     };
   }, [close, open]);
 
@@ -144,7 +142,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
   };
 
   return (
-    <div className="force-dark fixed inset-x-0 bottom-0 top-16 z-[180] grid place-items-center overflow-hidden p-2 pb-[6.75rem] sm:top-[4.5rem] sm:p-3 sm:pb-[5.5rem]">
+    <CustomerOverlay open={open}><div className="force-dark fixed inset-x-0 bottom-0 top-16 z-[180] grid place-items-center overflow-hidden p-2 pb-[6.75rem] sm:top-[4.5rem] sm:p-3 sm:pb-[5.5rem]">
       <button type="button" className="absolute inset-0 bg-black/72 backdrop-blur-md" onClick={(event) => close(event)} aria-label="Close licensing options" />
       <div
         ref={panelRef}
@@ -196,7 +194,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
         </div>
 
       </div>
-    </div>
+    </div></CustomerOverlay>
   );
 }
 

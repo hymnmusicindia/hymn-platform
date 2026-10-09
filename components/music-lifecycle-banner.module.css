@@ -43,9 +43,24 @@
 .stage:is(:hover, :focus-visible, :active) .world > span::after { opacity: .45; transform: rotate(-18deg) scaleY(1); }
 .stage:active .world > span:not(.globe) { transform: translateY(-8px); }
 @media (prefers-reduced-motion: reduce) { .world > span, .world > span::after { transform: none !important; transition: none !important; } }
+
 .terms { font-size: 10px; line-height: 1.6; color: var(--text-muted); }
 .terms a { text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; color: var(--text); }
 .banner a:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
 @keyframes meter { from { transform: scaleY(.5); } to { transform: scaleY(1); } }
 @media (max-width: 760px) { .banner { padding: 20px 16px 15px; } .heading { align-items: flex-start; flex-direction: column; gap: 13px; } .journey { grid-template-columns: minmax(0, 1fr) 15px minmax(0, 1fr) 15px minmax(0, 1fr); margin-top: 17px; } .connector svg { width: 12px; } .caption { padding: 9px 6px; min-height: 48px; } .number, .caption > svg, .caption p { display: none; } .caption h3 { font-size: 10px; line-height: 1.4; } .art { height: 95px; } .sleeve { width: 57px; height: 62px; padding: 8px; font-size: 15px; transform: translateX(-9px) rotate(-9deg); } .record { width: 64px; height: 64px; left: calc(50% - 9px); } .record span { width: 24px; height: 24px; font-size: 10px; } .console { width: 75px; padding: 7px; } .wave { gap: 1px; height: 30px; } .controls { gap: 6px; padding-top: 4px; } .controls svg { width: 12px; } .controls span { width: 8px; height: 8px; border-width: 2px; } .world { width: 86px; height: 85px; } .globe { width: 78px; height: 78px; } .platformOne, .platformTwo, .platformThree { width: 24px; height: 24px; background-size: 18px; } .platformOne { left: 0; top: 8px; } .platformTwo { right: 0; top: 37px; } .platformThree { left: 0; bottom: 6px; } .terms { font-size: 9px; } }
 @media (prefers-reduced-motion: reduce) { .banner * { animation: none !important; transition: none !important; } }
+
+@media (max-width: 640px) {
+  .banner { border-radius:6px; padding:22px 16px; }
+  .journey { grid-template-columns:1fr; gap:12px; margin:20px 0; }
+  .connector { display:none; }
+  .stage { display:grid; grid-template-columns:90px minmax(0,1fr); border-radius:4px; }
+  .art { height:100px; }
+  .caption { padding:14px; border-top:0; border-left:1px solid var(--border); }
+  .caption h3 { font-size:14px; line-height:1.4; }
+  .caption p { display:block; font-size:12px; line-height:1.5; margin-top:5px; }
+  .heading p,.terms { font-size:12px; line-height:1.7; }
+  .cta { min-height:44px; padding:8px 0; border:0; border-radius:0; background:none; color:var(--text-muted); }
+  .cta:hover { color:var(--text); transform:none; }
+}

@@ -10,6 +10,7 @@ import { BeatCard } from "@/components/beat-card";
 import { BeatStoreHero } from "@/components/beat-store-hero";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import { useBeatPreviewPlayer } from "@/components/beat-preview-player";
+import { CustomerOverlay } from "@/components/customer-overlay";
 
 type LicenseChoice = BeatStoreLicenseType;
 
@@ -107,7 +108,7 @@ function CartDrawer({
   }, [onClose, open]);
 
   return (
-    <div className={`fixed inset-0 z-50 transition ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
+    <CustomerOverlay open={open}><div className={`fixed inset-0 z-50 transition ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
       <button
         type="button"
         onClick={onClose}
@@ -187,7 +188,7 @@ function CartDrawer({
           )}
         </div>
       </aside>
-    </div>
+    </div></CustomerOverlay>
   );
 }
 
@@ -202,7 +203,7 @@ function MobileFiltersModal({
 }) {
   const dialogRef = useAccessibleDialog(open, onClose);
   return (
-    <div className={`fixed inset-x-0 bottom-0 top-16 z-40 transition sm:top-[4.5rem] ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
+    <CustomerOverlay open={open}><div className={`fixed inset-x-0 bottom-0 top-16 z-40 transition sm:top-[4.5rem] ${open ? "pointer-events-auto" : "pointer-events-none"}`}>
       <button
         type="button"
         onClick={onClose}
@@ -222,7 +223,7 @@ function MobileFiltersModal({
         </div>
         {content}
       </div>
-    </div>
+    </div></CustomerOverlay>
   );
 }
 
@@ -249,7 +250,7 @@ function BeatFinderWizard({ open, genres, moods, onClose, onApply }: { open: boo
     onApply({ genre, mood, min, max, budget: budget === "any" ? null : Number(budget.replace(/[^0-9]/g, "")) });
     onClose();
   };
-  return <div className="fixed inset-0 z-[180] grid place-items-center p-3 sm:p-6">
+  return <CustomerOverlay open={open}><div className="fixed inset-0 z-[180] grid place-items-center p-3 sm:p-6">
     <button type="button" onClick={onClose} className="absolute inset-0 bg-black/70 backdrop-blur-md" aria-label="Close beat finder" />
     <section ref={dialogRef as React.RefObject<HTMLElement | null>} role="dialog" aria-modal="true" aria-labelledby="beat-finder-title" tabIndex={-1} className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] border border-white/10 bg-[var(--bg)] shadow-[0_30px_100px_rgba(0,0,0,.55)]">
       <div className="h-1 bg-[var(--border)]"><div className="h-full bg-[var(--accent)] transition-all duration-500" style={{ width: `${((step + 1) / steps.length) * 100}%` }} /></div>
@@ -262,7 +263,7 @@ function BeatFinderWizard({ open, genres, moods, onClose, onApply }: { open: boo
       </div>
       <div className="border-t border-[var(--border)] bg-[var(--bg-soft)] px-6 py-3 text-center text-xs italic text-[var(--text-soft)]">Built like a conversation with the friend who always sends the right beat.</div>
     </section>
-  </div>;
+  </div></CustomerOverlay>;
 }
 
 

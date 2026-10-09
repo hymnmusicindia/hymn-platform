@@ -1,0 +1,110 @@
+/* Mobile customer journey: one header, one navigation entry, readable content. */
+.mobile-workspace-subheader { display:none; }
+.customer-overlay { position:fixed; inset:0; z-index:1800; color:#f4f5f7; --bg:#181b22; --bg-soft:#20242c; --card:#232730; --text:#f4f5f7; --text-muted:#aeb5c1; --text-soft:#8a93a2; --border:#343a45; --border-strong:#515967; }
+@media(max-width:1023px) {
+  .customer-overlay > div.fixed { top:0!important; }
+  .customer-overlay [role="dialog"] { max-height:calc(100dvh - 32px); overflow-y:auto; overscroll-behavior:contain; border-radius:8px; }
+  .customer-overlay :is(input,select,textarea) { font-size:16px; }
+  .customer-overlay button { min-height:44px; }
+}
+@media(max-width:1023px) {
+  html { scroll-padding-top:120px; }
+  html body header.hymn-studio-header { height:104px!important; }
+  html body .hymn-studio-header > div:first-child { height:60px; min-height:60px; padding:0 18px; }
+  html body .hymn-studio-header .header-brand { flex:1 1 auto; }
+  html body .hymn-studio-header .header-brand img { width:88px; max-height:34px; }
+  html body .hymn-studio-header .studio-header-section { display:none; }
+  html body .mobile-workspace-subheader { display:flex; align-items:center; justify-content:center; height:44px; border-top:1px solid #24272e; border-bottom:1px solid #24272e; background:linear-gradient(100deg,#0c0e12,#15181e 50%,#0c0e12); }
+  .mobile-workspace-subheader button { display:flex; align-items:center; justify-content:center; gap:10px; min-height:44px; min-width:160px; padding:0 20px; border:0; background:none; color:#f5f7fa; font-size:13px; font-weight:600; letter-spacing:.015em; }
+  .mobile-workspace-subheader button svg { color:#aab2bf; stroke-width:1.5; }
+  .mobile-workspace-subheader button svg:last-child { width:11px; margin-left:3px; }
+  .mobile-login-link { display:flex; align-items:center; gap:7px; min-height:44px; padding:0 10px; color:#d5dae2; font-size:13px; font-weight:550; }
+  .mobile-login-link:hover { color:#fff; }
+  .mobile-account-access { margin-right:4px; }
+  .mobile-account-access [role="menu"] { position:fixed!important; top:60px; left:12px; right:12px; width:auto!important; max-height:calc(100dvh - 84px); margin-top:8px; overflow-y:auto; overscroll-behavior:contain; }
+  html body .hymn-studio-header .site-cart-trigger { width:44px; height:44px; }
+  html body .landing-mobile-menu,html body .dashboard-os-mobile-head { display:none!important; }
+  html body .hymn-portal-root .hymn-portal .hymn-portal-frame { min-height:calc(100dvh - 104px); }
+  html body .hymn-portal-root .hymn-portal .portal-workspace { min-height:calc(100dvh - 112px); }
+  html body .hymn-portal-root .hymn-portal .dashboard-os-topbar { padding:16px 18px 0; }
+  html body .hymn-portal-root .hymn-portal .dashboard-os-search { width:100%; flex:1; border-radius:4px; }
+  html body .hymn-portal-root .hymn-portal .dashboard-os-hero { padding:22px 18px 0; }
+  html body .hymn-portal-root .hymn-portal .portal-page-content { padding:22px 18px 28px; }
+  .hymn-portal-root main,.hymn-portal-root section,.hymn-portal-root article,.hymn-portal-root form { min-width:0; }
+  .hymn-portal-root :is(h1,h2,h3,p,label,dd) { overflow-wrap:break-word; }
+  .hymn-portal-root h1 { font-size:clamp(28px,5vw,36px); line-height:1.15; }
+  .hymn-portal-root .content-page h1,.hymn-public-workspace main.shell > div > header h1 { font-size:clamp(28px,5.5vw,36px); }
+  .hymn-portal-root :is(.field,.input,input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),select,textarea) { min-width:0; max-width:100%; font-size:16px!important; }
+  .hymn-portal-root :is(.field,.input,select) { min-height:44px; }
+  .hymn-portal-root button:not(.audio-waveform-bar):not(.audio-waveform-live):not(.audio-waveform-bars),.hymn-overlay button,.hymn-portal-root :is(a.btn-primary,a.btn-outline,a.cart-next-action) { min-height:44px; }
+  .hymn-portal-root .workspace-options { gap:2px 18px; }
+  .hymn-portal-root div:has(> table) { max-width:100%; overflow-x:auto; scrollbar-width:thin; }
+  .hymn-portal-root table { font-size:13px; }
+  .hymn-portal-root audio { width:100%; max-width:100%; }
+  .hymn-portal-root .master-library-heading { align-items:flex-start; gap:12px; }
+  .hymn-portal-root .master-library-heading h1 { font-size:26px; }
+  .hymn-portal-root .master-library-heading a { padding:0; font-size:12px; white-space:normal; min-height:44px; }
+  html body .create-overlay .portal-create-menu { top:116px!important; max-height:calc(100dvh - 132px)!important; }
+  html body .distribution-start-page .release-journey-intro { min-height:calc(100dvh - 148px); }
+  html body .release-workflow .release-focused-intro h2 { font-size:clamp(24px,5vw,32px); }
+  html body .release-workflow .release-focused-actions { padding-bottom:max(12px,env(safe-area-inset-bottom))!important; }
+  .hymn-portal-root .release-dashboard-tabs { gap:0 18px; }
+  .hymn-portal-root .release-dashboard-tabs a { min-height:44px; padding:10px 0!important; }
+  .hymn-portal-root .release-library-toolbar { gap:12px; }
+  .hymn-portal-root .release-view-toggle { align-self:flex-start; }
+  .hymn-portal-root .release-filter-control select { padding-block:10px; }
+  .hymn-portal-root .release-draft-resume-action { justify-content:space-between; }
+  .hymn-overlay [aria-modal="true"] { max-width:100%; }
+}
+@media(max-width:640px) {
+  html body .hymn-studio-header > div:first-child { padding-inline:16px; }
+  html body .hymn-landing { padding:8px 10px 16px; }
+  .hymn-landing .landing-canvas { border-radius:8px; }
+  html body .hymn-landing .landing-hero,html body .hymn-landing .landing-hero-content { min-height:0; }
+  html body .landing-hero-content { padding:32px 22px; }
+  html body .landing-hero h1 { font-size:clamp(36px,9.4vw,46px); line-height:1.04; }
+  html body .landing-hero-copy > p:not(.landing-eyebrow) { font-size:14px; line-height:1.7; margin-top:20px; }
+  html body .landing-eyebrow { font-size:9px; letter-spacing:.13em; line-height:1.6; }
+  html body .landing-hero-copy > div.grid p:first-child { font-size:21px; }
+  html body .landing-hero-copy > div.grid p:last-child { font-size:9px; letter-spacing:.07em; }
+  .landing-hero-copy > a { gap:12px; min-height:56px; }
+  .landing-hero-copy > a > span[aria-hidden="true"] { flex-shrink:0; }
+  .landing-hero-copy > a > span[aria-hidden="true"] > span { width:28px; height:28px; }
+  .landing-hero-copy > a > span:not([aria-hidden]) { flex:1; min-width:0; }
+  .landing-hero-copy > a > span:not([aria-hidden]) > span { height:auto; width:auto; }
+  html body .landing-next-move,html body .landing-signup,html body .landing-banner { padding:28px 18px 0; }
+  html body .landing-service { min-height:0; padding:20px; }
+  .landing-service-cta { min-height:44px; padding-top:10px; }
+  html body .landing-signup > aside { padding:22px 18px; background:#22262e; }
+  .landing-signup > aside > .absolute,
+  .landing-releases > div > .absolute,
+  .landing-career > div > .absolute,
+  .landing-producers .force-dark > .absolute { display:none; }
+  html body .landing-releases > div,html body .landing-career > div { padding:24px 18px; border-radius:6px; background:#20242c; }
+  .landing-releases > div > div.relative { gap:24px; }
+  .landing-releases > div > div.relative > div:first-child h2 { font-size:30px; line-height:1.1; }
+  .landing-releases > div > div.relative > div:first-child p { margin-top:16px; }
+  .landing-releases .home-release-showcase-viewport:has(> p) { gap:0; }
+  .landing-releases .home-release-showcase-viewport:has(> p) > div { display:none; }
+  .landing-releases .home-release-showcase-viewport > p { padding:20px 0; text-align:left; }
+  html body .hymn-landing .landing-career h2 { font-size:28px; }
+  .landing-career .premium-cta,.landing-career .premium-ghost { justify-content:space-between; }
+  .hymn-landing .home-store-destination-words { font-size:clamp(22px,6vw,30px); }
+  .hymn-landing .home-store-logo { filter:grayscale(1) invert(1)!important; mix-blend-mode:screen!important; opacity:.8; }
+  .hymn-landing .landing-producers .force-dark { border-radius:6px; background:#191d25; box-shadow:none; }
+  .hymn-landing .landing-producers .force-dark > div.grid { padding:24px 18px; min-height:0; gap:18px; }
+  .hymn-landing .landing-producers .force-dark h2 { font-size:28px; line-height:1.15; }
+  .hymn-landing .landing-producers .force-dark p { font-size:13px; }
+  .hymn-landing .landing-newsletter { margin:20px 18px; }
+  .hymn-landing .landing-newsletter > .shell { padding:22px 18px; }
+  .hymn-landing .landing-newsletter input { font-size:16px; min-height:44px; }
+  .hymn-landing .landing-newsletter form { flex-wrap:wrap; gap:10px; }
+  .hymn-landing .landing-newsletter form button { min-height:44px; }
+  html body .hymn-landing #label .shell { gap:18px; padding:0; }
+  html body .hymn-landing #label h2 { font-size:30px; }
+  html body .hymn-landing #label p { font-size:14px; line-height:1.7; }
+  .hymn-public-workspace main.shell > section:first-child { padding-inline:18px; }
+  .hymn-public-workspace form[aria-label="Studio filters"] { border-radius:6px; }
+  .hymn-portal-root .surface-card,.hymn-portal-root .metric-card { padding:18px; }
+}
+@media(prefers-reduced-motion:reduce) { .mobile-workspace-subheader * { transition:none; } }
