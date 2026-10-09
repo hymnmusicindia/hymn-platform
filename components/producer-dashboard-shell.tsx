@@ -268,9 +268,13 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
       subtitle={user.email}
       navItems={[
         { key: "overview", label: "Overview", description: "Catalogue, sales and actions", group: "Home" },
-        { key: "catalog", label: "My Beats", description: "Catalogue and pricing", group: "Beats" },
-        { key: "upload", label: "Upload Beat", description: "Add a new beat", group: "Beats" },
-        { key: "store", label: "Beat Store", description: "Open your storefront", group: "Beats", href: "/beat-store" },
+        { key: "releases", label: "My releases", group: "Distribution", href: "/dashboard?tab=releases" },
+        { key: "new-release", label: "Add release", group: "Distribution", href: "/distribution/start" },
+        { key: "catalog", label: "My beats", description: "Catalogue and pricing", group: "Beatstore" },
+        { key: "upload", label: "Upload beat", description: "Add a new beat", group: "Beatstore" },
+        { key: "store", label: "Browse beats", description: "Open your storefront", group: "Beatstore", href: "/beat-store" },
+        { key: "studio", label: "Browse services", group: "Mixing / Mastering", href: "/studio" },
+        { key: "studio-orders", label: "My projects", group: "Mixing / Mastering", href: "/dashboard/studio" },
         { key: "sales", label: "Sales", description: "Verified purchases", group: "Business" },
         { key: "earnings", label: "Earnings", description: "Your 70% share", group: "Business" },
         { key: "payout", label: "Payouts", description: "Balance and withdrawals", group: "Business" },

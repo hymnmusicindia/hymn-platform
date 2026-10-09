@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, ChevronDown, ChevronUp, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, X } from "lucide-react";
+import { Bell, ChevronDown, ChevronUp, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, X, Plus, Disc3, TrendingUp, Wallet, Music2, Headphones, Settings, Users, LifeBuoy, Store, LayoutGrid, Upload, Crown } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import Image from "next/image";
@@ -58,6 +58,16 @@ export function DashboardFrame<T extends string>({
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
+  const newMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!newOpen) return;
+    function dismiss(event: MouseEvent) { if (!newMenuRef.current?.contains(event.target as Node)) setNewOpen(false); }
+    function escape(event: KeyboardEvent) { if (event.key === "Escape") setNewOpen(false); }
+    document.addEventListener("mousedown", dismiss);
+    document.addEventListener("keydown", escape);
+    return () => { document.removeEventListener("mousedown", dismiss); document.removeEventListener("keydown", escape); };
+  }, [newOpen]);
   const [collapsed, setCollapsed] = useState(false);
   const [closedGroups, setClosedGroups] = useState<Set<string>>(() => new Set());
   const [localSearch, setLocalSearch] = useState("");
@@ -126,7 +136,7 @@ export function DashboardFrame<T extends string>({
   const isOverview = activeKey === "overview";
 
   return (
-    <div className="dashboard-os-shell lg:grid-cols-[var(--dashboard-sidebar-width,312px),minmax(0,1fr)]" style={{ "--dashboard-sidebar-width": collapsed ? "96px" : "312px" } as React.CSSProperties}>
+    <div data-collapsed={collapsed} className="hymn-portal-frame dashboard-os-shell lg:grid-cols-[var(--dashboard-sidebar-width,236px),minmax(0,1fr)]" style={{ "--dashboard-sidebar-width": collapsed ? "76px" : "236px" } as React.CSSProperties}>
       <div className="dashboard-os-mobile-head lg:hidden">
         <div>
           <h1 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>{title}</h1>
@@ -161,8 +171,6 @@ export function DashboardFrame<T extends string>({
               <Image src="/assets/hymnlogowhite.png" alt="HYMN" width={112} height={32} className="h-8 w-auto object-contain" />
                {eyebrow ? <span className="rounded-full border border-border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.22em]" style={{ background: "var(--bg-soft)", color: "var(--accent)" }}>{eyebrow}</span> : null}
             </div>
-            <h2 className="text-2xl font-semibold leading-tight" style={{ color: "var(--text)" }}>{title}</h2>
-            <div className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{subtitle}</div>
           </div>
           <div className="flex items-center gap-2">
             <button type="button" aria-label="Close workspace navigation" className="pressable inline-flex h-11 w-11 items-center justify-center rounded-xl border lg:hidden" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} onClick={() => setMobileOpen(false)}>
@@ -174,7 +182,17 @@ export function DashboardFrame<T extends string>({
           </div>
         </div>
 
-        <div ref={navScrollRef} onScroll={updateNavScroll} className={clsx("dashboard-nav-scroll mt-4 min-h-0 flex-1 content-start gap-3 overflow-x-hidden overflow-y-auto pr-1", collapsed ? "lg:hidden" : "grid")}>
+        <div className="portal-create" ref={newMenuRef}>
+          <button type="button" className="portal-new-button" aria-expanded={newOpen} aria-controls="portal-create-menu" onClick={() => setNewOpen(value => !value)}><Plus size={18} /><span>New</span></button>
+          {newOpen ? <div id="portal-create-menu" className="portal-create-menu"><div className="portal-create-heading">Create something new<button type="button" aria-label="Close create menu" onClick={() => setNewOpen(false)}><X size={18} /></button></div><div className="portal-create-grid">{[
+            { href: "/distribution/start", icon: Disc3, title: "Music release", copy: "Get your music ready for worldwide distribution." },
+            { href: "/beat-store", icon: Store, title: "Find a beat", copy: "Explore sounds for your next release." },
+            { href: "/studio", icon: Headphones, title: "Mixing / Mastering", copy: "Give your music a professional finish." },
+            { href: "/managed-services", icon: TrendingUp, title: "Artist services", copy: "Explore support for your next project." }
+          ].map(action => <Link key={action.href} href={action.href} onClick={() => { setNewOpen(false); setMobileOpen(false); }}><action.icon /><span><strong>{action.title}</strong><small>{action.copy}</small></span></Link>)}</div></div> : null}
+        </div>
+
+        <div ref={navScrollRef} onScroll={updateNavScroll} className="dashboard-nav-scroll mt-4 min-h-0 flex-1 content-start gap-3 overflow-x-hidden overflow-y-auto pr-1 grid">
           {visibleGroups.map((group) => {
             const groupActive = group.items.some((item) => item.key === activeKey);
             const closed = closedGroups.has(group.label) && !groupActive;
@@ -184,6 +202,7 @@ export function DashboardFrame<T extends string>({
                   type="button"
                   className={clsx("dashboard-os-group-toggle", collapsed ? "lg:justify-center" : "")}
                   onClick={() => toggleGroup(group.label)}
+                  aria-expanded={!closed}
                   title={collapsed ? group.label : undefined}
                 >
                   <span className={clsx(collapsed ? "lg:hidden" : "")}>
@@ -195,19 +214,15 @@ export function DashboardFrame<T extends string>({
                 <div className={clsx("grid gap-1.5", closed ? "hidden" : "")}>
                   {group.items.map((item) => {
                     const active = item.key === activeKey;
-                    const content = <><span
-                          className={clsx("mt-1 inline-flex h-2.5 w-2.5 shrink-0 rounded-full transition", collapsed ? "lg:hidden" : "")}
-                          style={{
-                            background: active ? "var(--accent)" : "var(--text-soft)",
-                            boxShadow: active ? "0 0 18px color-mix(in srgb, var(--accent) 72%, transparent)" : "none"
-                          }}
-                        /><span className={clsx("min-w-0", collapsed ? "lg:hidden" : "") }><span className="block truncate font-semibold">{item.label}</span>{item.description ? <span className="mt-1 block truncate text-xs opacity-75">{item.description}</span> : null}</span></>;
-                    return item.href ? <Link key={item.key} href={item.href} onClick={() => setMobileOpen(false)} className={clsx("dashboard-os-nav-item pressable hover-lift", active ? "is-active" : "is-idle")} title={collapsed ? item.label : undefined}>{content}</Link> : (
+                    const Icon = /release|catalog/.test(item.key) ? Disc3 : /analytics|sales/.test(item.key) ? TrendingUp : /earning|payout/.test(item.key) ? Wallet : /upload/.test(item.key) ? Upload : /studio|mix|master/.test(item.key) ? Headphones : /store|purchase/.test(item.key) ? Store : /setting|profile|account/.test(item.key) ? Settings : /collaborator|referral/.test(item.key) ? Users : /support|help/.test(item.key) ? LifeBuoy : item.key === "overview" ? LayoutGrid : Music2;
+                    const content = <><Icon className="portal-nav-icon" /><span className={clsx("min-w-0", collapsed ? "lg:hidden" : "")}><span className="block truncate font-semibold">{item.label}</span></span></>;
+                    return item.href ? <Link key={item.key} href={item.href} aria-current={active ? "page" : undefined} onClick={() => setMobileOpen(false)} className={clsx("dashboard-os-nav-item pressable hover-lift", active ? "is-active" : "is-idle")} title={collapsed ? item.label : undefined}>{content}</Link> : (
                       <button
                         key={item.key}
                         type="button"
                         onClick={() => handleSelect(item.key)}
                         className={clsx("dashboard-os-nav-item pressable hover-lift", active ? "is-active" : "is-idle")}
+                        aria-current={active ? "page" : undefined}
                         title={collapsed ? item.label : undefined}
                       >
                         {content}
@@ -225,8 +240,9 @@ export function DashboardFrame<T extends string>({
         </div>
       </aside>
 
-      <div className="grid gap-6">
+      <div className="portal-workspace grid gap-6">
         <div className="dashboard-os-topbar">
+          <span className="portal-section-label">{activeGroup?.label ?? "Workspace"}</span>
           {!(compactOverview && isOverview) ? <div className="dashboard-os-search">
             <Search className="h-4 w-4" style={{ color: "var(--text-muted)" }} />
             <input
@@ -238,6 +254,7 @@ export function DashboardFrame<T extends string>({
             <Command className="h-4 w-4" style={{ color: "var(--text-muted)" }} />
           </div> : <div />}
           <div className="flex items-center gap-2">
+            <Link href="/distribution" className="portal-upgrade"><Crown size={16} /> Plans</Link>
             {workspaceAction}
             {quickActions && isOverview ? <div className="hidden items-center gap-2 xl:flex">{quickActions}</div> : null}
             <button type="button" className="dashboard-os-icon-button" aria-label={notificationCount ? `Notifications, ${notificationCount} unread` : "Notifications"} onClick={onNotificationsClick} disabled={!onNotificationsClick}>
@@ -257,7 +274,7 @@ export function DashboardFrame<T extends string>({
         </section> : null}
         
 
-        {children}
+        <div className="portal-page-content">{children}</div>
       </div>
     </div>
   );
