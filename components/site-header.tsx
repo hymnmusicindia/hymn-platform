@@ -53,7 +53,7 @@ function notificationTimeAgo(value: string) {
 
 export function SiteHeader({ user = null }: SiteHeaderProps) {
   const pathname = usePathname();
-  const workspaceHeader = pathname === "/" || /^\/(dashboard|producer|distribution\/start|first-release|analytics|payout|royalty-payouts|audio-library|managed-services|studio\/(orders|start|engineer))($|\/)/.test(pathname);
+  const workspaceHeader = true;
   const sectionLabel = pathname.startsWith("/producer") || pathname.startsWith("/beat-store") ? "Beatstore" : pathname.startsWith("/studio") || pathname === "/dashboard/studio" ? "Mixing / Mastering" : pathname.startsWith("/dashboard/releases") || pathname.startsWith("/distribution") || pathname === "/analytics" || pathname.includes("payout") ? "Distribution" : pathname === "/audio-library" ? "Library" : pathname === "/" ? "Home" : "Workspace";
   const [activeSection, setActiveSection] = useState(sectionLabel);
   useEffect(() => {
@@ -510,10 +510,11 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           style={mobile ? { borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" } : { color: "var(--text)" }}
           aria-expanded={profileOpen}
           aria-haspopup="menu"
+          aria-label="Your profile"
         >
           <span className="relative inline-flex h-10 w-10 shrink-0 rounded-full">
             <span
-              className="inline-flex h-full w-full items-center justify-center overflow-hidden rounded-full border text-xs font-bold"
+              className="profile-avatar-image relative inline-flex h-full w-full items-center justify-center overflow-hidden rounded-full border text-xs font-bold"
               style={{ borderColor: "var(--border-strong)", background: "var(--bg-soft)", borderRadius: "50%", clipPath: "circle(50%)" }}
             >
               <Image
@@ -579,6 +580,9 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
               <Link href="/faq" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
                 <HelpCircle className="h-4 w-4" />
                 Help and FAQ
+              </Link>
+              <Link href="/contact" role="menuitem" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 px-3 py-2 text-sm font-medium">
+                <MessageCircle className="h-4 w-4" /> Contact HYMN
               </Link>
             </div>
             <button type="button" onClick={logout} className="mt-2 flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left text-sm font-semibold" style={{ borderColor: "var(--border)", color: "var(--danger)" }}>

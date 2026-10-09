@@ -19,7 +19,10 @@ const navigation = [
   { key: "studio-orders", label: "My projects", group: "Mixing / Mastering", href: "/dashboard/studio" },
   { key: "managed-services", label: "Artist services", group: "Mixing / Mastering", href: "/managed-services" },
   { key: "settings", label: "Settings", group: "Account", href: "/dashboard?tab=settings" },
-  { key: "support", label: "Help & support", group: "Account", href: "/dashboard?tab=support" }
+  { key: "support", label: "Help & support", group: "Account", href: "/dashboard?tab=support" },
+  { key: "plans", label: "Plans", group: "Distribution", href: "/distribution" },
+  { key: "faq", label: "FAQ", group: "Account", href: "/faq" },
+  { key: "contact", label: "Contact HYMN", group: "Account", href: "/contact" }
 ];
 
 export function PortalLayout({ children }: { children: React.ReactNode }) {

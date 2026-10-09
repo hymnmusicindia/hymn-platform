@@ -1,0 +1,123 @@
+/* Destination pages share HYMN's graphite workspace and silver text actions. */
+.hymn-portal-root { --glass-bg:#202227; --glass-bg-strong:#23252b; --glass-border:#35373e; --hover:rgba(255,255,255,.04); --material-ink:#f5f7fa; --material-title:linear-gradient(110deg,#f5f7fa,#aeb8c4); --material-teal:#b0b2bb; --material-wash:rgba(255,255,255,.025); }
+.hymn-public-workspace .portal-workspace { min-height:calc(100dvh - 68px); }
+.hymn-public-workspace .dashboard-os-hero { display:none; }
+.hymn-public-workspace .portal-page-content { padding-top:32px!important; }
+.hymn-public-workspace .portal-page-content > main { min-height:0!important; padding-top:0!important; background:transparent!important; }
+.hymn-public-workspace main > .shell { width:100%; max-width:none; padding-inline:0; }
+.hymn-public-workspace .portal-page-content > footer { margin-top:64px; border-top:1px solid var(--border); background:transparent!important; }
+.hymn-public-workspace main.shell > div { max-width:1100px; }
+.hymn-public-workspace main.shell > div > header { padding-bottom:24px; border-bottom:1px solid var(--border); }
+.hymn-public-workspace main.shell > div > header h1 { max-width:900px; font-size:clamp(30px,3.5vw,46px); line-height:1.12; letter-spacing:-.04em; }
+.hymn-public-workspace main.shell > div > header > div:last-child:not(:first-child) { border:0!important; border-radius:0; padding:0; background:none!important; font-size:12px; }
+.hymn-portal-root .surface-card:not(.release-summary-card),
+.hymn-portal-root .surface-list-item,.hymn-portal-root .metric-card,
+.hymn-portal-root .summary-card,.hymn-portal-root .ios-collapse { border-radius:6px!important; box-shadow:none!important; }
+.hymn-portal-root .customer-module-section { padding:0!important; border:0!important; background:none!important; }
+.hymn-portal-root .customer-module-section > div:first-child { padding-bottom:20px; }
+.hymn-portal-root .customer-module-section > div:first-child > div > p:first-child { color:var(--text-soft)!important; }
+.hymn-portal-root .field { border-radius:4px!important; box-shadow:none!important; }
+.hymn-portal-root :is(button,a)[class*="rounded"]:not([aria-label]):not(.release-summary-card):not(.beat-card) {
+  border-radius:0!important; background:none!important; box-shadow:none!important; text-shadow:none!important; transform:none!important;
+}
+.hymn-portal-root button[class*="rounded"]:not([aria-label]):not([aria-expanded]):not([role="menuitemradio"]) { border:0!important; }
+.hymn-portal-root :is(button,a)[class*="rounded"]:not([aria-label]):hover { color:var(--text)!important; }
+.hymn-portal-root button[aria-pressed="true"] { color:var(--text)!important; }
+.hymn-portal-root .faq-article { border:0!important; border-bottom:1px solid var(--border)!important; border-radius:0!important; background:none!important; }
+.hymn-portal-root .faq-article button { padding-inline:0; }
+.hymn-portal-root .faq-article .chip { padding:0; border:0; border-radius:0; background:none; color:var(--text-soft); font-size:10px; letter-spacing:.12em; text-transform:uppercase; }
+.hymn-portal-root .faq-article [role="region"] { padding-inline:0; }
+.hymn-portal-root #distribution-pricing { padding-top:12px; }
+.hymn-portal-root #distribution-pricing > div { padding:24px 0!important; border:0!important; border-radius:0!important; background:none!important; }
+.hymn-portal-root .distribution-plan-grid { overflow:visible!important; display:grid!important; grid-template-columns:repeat(3,minmax(0,1fr)); }
+.hymn-portal-root .distribution-plan-card { border-radius:6px!important; background:rgba(255,255,255,.025)!important; box-shadow:none!important; transform:none!important; }
+.hymn-portal-root .distribution-plan-card:hover { border-color:var(--border-strong)!important; }
+.hymn-portal-root .distribution-page > .shell { padding-block:20px; }
+.hymn-portal-root .distribution-hero { border-radius:6px!important; box-shadow:none!important; }
+.hymn-portal-root .distribution-hero-store img { filter:grayscale(1) invert(1)!important; opacity:.7!important; mix-blend-mode:screen!important; }
+.hymn-portal-root .distribution-first-release-note { border:0; border-left:1px solid var(--border-strong); border-radius:0; background:none; box-shadow:none; transform:none; }
+.hymn-portal-root .distribution-first-release-note > span { border-radius:0; background:none; color:var(--text); }
+
+/* The avatar is positioned inside its own clipped circle, separate from presence. */
+html body header .profile-avatar-image { position:relative; isolation:isolate; flex:0 0 40px; width:40px!important; height:40px!important; min-width:40px; overflow:hidden; border-radius:50%!important; }
+html body header .profile-avatar-image img { width:100%!important; height:100%!important; max-width:none!important; max-height:none!important; object-fit:cover!important; object-position:center; border-radius:50%!important; }
+html body [data-profile-menu-root] [role="menu"] { border-radius:6px; }
+html body [data-profile-menu-root] [role="menu"] :is(button,a) { border-radius:0!important; background:none!important; box-shadow:none!important; }
+html body [data-profile-menu-root] [role="menu"] :is(button,a):hover { color:var(--text); }
+
+/* Catalogue options: light labels and ruled selects, without nested boxes. */
+html body .release-filter-control { padding:8px 0!important; border:0!important; border-radius:0!important; background:none!important; box-shadow:none!important; }
+html body .hymn-portal-root .hymn-portal .release-filter-control .field { min-height:36px; padding:6px 24px 6px 0; border:0!important; border-bottom:1px solid var(--border)!important; border-radius:0!important; background:transparent!important; color:var(--text); }
+html body .release-filter-control .field:focus { border-bottom-color:var(--text)!important; }
+html body .release-filter-label { font-size:9px; letter-spacing:.13em; }
+html body .release-visible-meter { padding:8px 0!important; border:0!important; border-radius:0!important; background:none!important; }
+html body .release-dashboard-stat-chip { padding:2px 14px 2px 0; border:0!important; border-radius:0!important; background:none!important; }
+html body .release-view-toggle { border:0!important; border-radius:0; background:none!important; }
+html body .release-view-toggle button { border-radius:0; background:none!important; }
+html body .release-dashboard-tabs { width:auto; padding:0 0 12px; border:0; border-bottom:1px solid var(--border); border-radius:0!important; background:none!important; box-shadow:none!important; }
+html body .hymn-portal-root .hymn-portal .release-library-panel { padding:8px 0!important; border:0!important; border-radius:0!important; background:none!important; }
+html body .release-draft-resume-card::before,html body .release-draft-resume-card::after { display:none!important; }
+html body .release-draft-resume-card.release-draft-resume-card {
+  position:relative; padding:24px!important; border:1px solid var(--border)!important; border-left:2px solid var(--money)!important;
+  border-radius:4px!important; background:linear-gradient(105deg,rgba(245,193,108,.055),transparent 65%)!important; box-shadow:none!important;
+}
+.release-draft-resume-card h2 { margin-top:8px; font-size:22px; letter-spacing:-.025em; }
+html body .release-draft-resume-action { display:inline-flex; gap:12px; padding:10px 0!important; background:none!important; color:var(--text-muted)!important; box-shadow:none!important; border:0!important; border-radius:0!important; transform:none!important; }
+html body .release-draft-resume-action:hover { color:var(--text)!important; }
+.draft-readiness { display:flex; flex-wrap:wrap; gap:20px; margin-top:18px; padding:0; list-style:none; }
+.draft-readiness li { display:flex; align-items:center; gap:7px; color:var(--text-soft); font-size:11px; }
+.draft-readiness li[data-ready="true"] { color:var(--text-muted); }
+.draft-readiness li[data-ready="true"] > span:first-child { color:var(--money); }
+.workspace-options { display:flex; flex-wrap:wrap; gap:8px 24px; padding-bottom:12px; border-bottom:1px solid var(--border); }
+.workspace-options button { min-height:36px; padding:4px 0; border:0; background:none; color:var(--text-soft); text-transform:capitalize; font-size:13px; font-weight:550; transition:color .18s; }
+.workspace-options button:is(:hover,[aria-pressed="true"]) { color:var(--text); }
+.workspace-options button:focus-visible { outline:1px solid var(--focus); outline-offset:4px; }
+.splits-workspace .metric-card { border:0; border-left:1px solid var(--border); border-radius:0!important; background:none; }
+
+/* Fit the release journey into the workspace instead of stacking two viewports. */
+html body .portal-workspace:has(.distribution-start-page) > :is(.dashboard-os-topbar,.dashboard-os-hero) { display:none!important; }
+html body .portal-workspace:has(.distribution-start-page) { min-height:0!important; }
+html body .portal-page-content:has(.distribution-start-page) { padding:20px!important; }
+html body .distribution-start-page.distribution-start-page { min-height:0!important; padding:0!important; background:none!important; }
+html body .distribution-start-page.distribution-start-page > .shell { display:block; width:100%; min-height:0!important; max-width:none; padding:0!important; background:none; }
+html body .distribution-start-page.distribution-start-page > .shell > div { gap:0; }
+html body .distribution-start-page .release-journey-intro { display:flex; flex-direction:column; width:100%; height:100%; min-height:0; margin:0; padding:0 24px 20px; border:0; border-radius:0; background:none!important; box-shadow:none; }
+html body .release-journey-intro .release-journey-intro-header { flex-shrink:0; min-height:48px; }
+html body .release-journey-intro .release-journey-intro-header > button { position:static; min-height:36px; }
+html body .release-journey-intro .release-journey-intro-body { flex:1; min-height:0; padding:20px 0; justify-content:center; }
+html body .release-journey-intro h1 { font-size:clamp(32px,4.2vw,56px); }
+html body .release-journey-primary { min-height:40px; padding:8px 0; border:0; border-radius:0; background:none!important; box-shadow:none; color:var(--text-muted)!important; }
+html body .release-journey-primary:hover { color:var(--text)!important; }
+html body .distribution-start-page .release-workflow.release-workflow { min-height:0!important; width:100%; margin:0; padding:16px 20px!important; border:0!important; border-radius:0!important; background:none!important; box-shadow:none!important; gap:16px; }
+html body .release-workflow .release-workspace-header { position:static; min-height:40px; }
+html body .release-workflow .release-focused-card { border-radius:4px; background:none; box-shadow:none; }
+html body .release-workflow .release-focused-actions { position:sticky!important; bottom:0; z-index:5; margin:0; padding:12px 0!important; background:var(--bg-elevated); }
+@media(min-width:1024px) {
+  html body .hymn-portal-frame:has(.distribution-start-page) { height:calc(100dvh - 58px); min-height:0!important; padding-bottom:10px; }
+  html body .portal-workspace:has(.distribution-start-page) { height:100%; }
+  html body .portal-page-content:has(.distribution-start-page) { flex:1; height:100%; min-height:0; overflow:hidden; }
+  html body .distribution-start-page:has(.release-journey-intro),
+  html body .distribution-start-page:has(.release-journey-intro) > .shell,
+  html body .distribution-start-page:has(.release-journey-intro) > .shell > div,
+  html body .distribution-start-page:has(.release-journey-intro) > .shell > div > div { height:100%; }
+  html body .distribution-start-page:has(.release-workflow) { height:100%!important; overflow:auto!important; scrollbar-width:thin; }
+  html body .distribution-start-page:has(.release-workflow) > .shell,
+  html body .distribution-start-page:has(.release-workflow) > .shell > div,
+  html body .distribution-start-page:has(.release-workflow) > .shell > div > div { height:auto!important; }
+  html body .release-workflow.is-focused-step .release-artist-stage { min-height:0; padding:16px 0; }
+  html body .release-workflow.is-audio-upload-step .release-audio-stage { min-height:0; padding:16px 0; }
+}
+@media(max-width:1023px) {
+  html body .portal-page-content:has(.distribution-start-page) { padding:16px!important; }
+  html body .distribution-start-page .release-journey-intro { min-height:calc(100dvh - 180px); padding-inline:4px; }
+}
+@media(max-width:640px) {
+  .hymn-public-workspace .portal-page-content { padding:20px 16px!important; }
+  .hymn-portal-root .distribution-plan-grid { grid-template-columns:1fr; }
+  .hymn-portal-root .distribution-plan-card { width:100%!important; min-width:0!important; }
+  .hymn-portal-root .distribution-plan-card > div { width:100%; }
+  .draft-readiness { gap:14px; }
+  .workspace-options { gap:4px 18px; }
+  html body .distribution-start-page .release-workflow.release-workflow { padding:12px 0!important; }
+}
+@media(prefers-reduced-motion:reduce) { .workspace-options button { transition:none; } }

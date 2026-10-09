@@ -9,7 +9,7 @@ import { ProviderCorrectionWorkspace } from "@/components/provider-correction-wo
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { AlertTriangle, ArrowLeft, ChevronDown, Clock3, Copy, ExternalLink, Filter, Grid2X2, List, Pencil, Search, Share2, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, ChevronDown, Clock3, Copy, ExternalLink, Filter, Grid2X2, List, Pencil, Search, Share2, Sparkles } from "lucide-react";
 import { Release } from "@/lib/types";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import {
@@ -494,9 +494,12 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
             <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
               Pick up {draftRelease.releaseTitle?.trim() || draftRelease.trackName} from where you left off.
             </p>
+            <ol className="draft-readiness" aria-label="Draft preparation">
+              {[{ label: "Audio", ready: Boolean(draftRelease.audioUrl || draftRelease.tracks?.some(track => track.audioUrl)) }, { label: "Artwork", ready: Boolean(draftRelease.artworkUrl) }, { label: "Release date", ready: Boolean(draftRelease.releaseDate) }].map(item => <li key={item.label} data-ready={item.ready}><span aria-hidden="true">{item.ready ? "✓" : "○"}</span>{item.label}<span className="sr-only">{item.ready ? " added" : " needed"}</span></li>)}
+            </ol>
           </div>
           <Link href={getReleasePortalAction(draftRelease).href} className="release-draft-resume-action inline-flex w-full items-center justify-center rounded-full px-5 py-3 font-semibold transition hover:-translate-y-0.5 sm:w-auto" style={{ background: "var(--money)", color: "var(--money-foreground)", boxShadow: "0 16px 38px rgba(245,193,108,0.16)" }}>
-            Finish your release
+            Finish your release <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Link>
         </section>
       ) : null}
