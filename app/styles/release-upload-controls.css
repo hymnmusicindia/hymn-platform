@@ -1,4 +1,18 @@
 /* Release uploads and stage navigation share the quiet workspace treatment. */
+html body .release-workflow.release-workflow.is-audio-upload-step { height:auto!important; min-height:0!important; }
+html body .release-workflow.release-workflow.is-audio-upload-step .release-workflow-content { height:auto; min-height:0; }
+html body .release-workflow.release-workflow.is-audio-upload-step .release-audio-stage { flex:0 0 auto; min-height:0; }
+html body .release-workflow.release-workflow.is-audio-upload-step :is(.release-onboarding-assets,.release-onboarding-audio) { height:auto; min-height:0; }
+html body .release-workflow.release-workflow.is-audio-upload-step .release-audio-queue {
+  flex:0 1 auto;
+  min-height:0;
+  max-height:clamp(78px,calc(100dvh - 510px),440px);
+  overflow-y:auto;
+  overflow-x:hidden;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+  align-content:start;
+}
 html body .release-workflow.is-audio-upload-step .release-batch-upload {
   justify-content:center;
   text-align:center;
@@ -10,6 +24,10 @@ html body .release-workflow.is-audio-upload-step .release-batch-upload > span {
 }
 html body .release-workflow.is-audio-upload-step .release-batch-upload strong { line-height:1.4; }
 html body .release-workflow.is-audio-upload-step .release-focused-actions {
+  position:static!important;
+  flex:0 0 auto;
+  inset:auto;
+  width:100%;
   display:flex;
   align-items:center;
   justify-content:space-between;
