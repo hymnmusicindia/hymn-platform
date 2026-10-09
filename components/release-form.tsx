@@ -2043,44 +2043,41 @@ export function ReleaseForm({
     }
     clearCorrectionField("audio-upload", `track-${index}-audio`);
     const currentTrack = tracks[index];
+    const trackId = clientTrackId ?? currentTrack?.id;
+    const patchTrack = (patch: Partial<TrackDraft>) => setTracks((current) => current.map((track) => track.id === trackId ? { ...track, ...patch } : track));
     const previewUrl = URL.createObjectURL(file);
     audioPreviewObjectUrlsRef.current.add(previewUrl);
-    const duration = await getAudioDuration(file).catch(() => {
-      safeRevokePreviewUrl(previewUrl);
-      audioPreviewObjectUrlsRef.current.delete(previewUrl);
-      throw new Error("Could not read the uploaded audio.");
-    });
     if (currentTrack?.audioPreviewUrl) {
       safeRevokePreviewUrl(currentTrack.audioPreviewUrl);
       audioPreviewObjectUrlsRef.current.delete(currentTrack.audioPreviewUrl);
     }
-    setTracks((current) => current.map((track, trackIndex) => trackIndex === index ? {
-      ...track,
-      trackTitle: track.trackTitle.trim() ? track.trackTitle : titleFromAudioFilename(file.name),
-      suggestedTitleUnconfirmed: track.trackTitle.trim() ? track.suggestedTitleUnconfirmed : true,
+    patchTrack({
+      trackTitle: currentTrack?.trackTitle.trim() || titleFromAudioFilename(file.name),
+      suggestedTitleUnconfirmed: currentTrack?.trackTitle.trim() ? currentTrack.suggestedTitleUnconfirmed : true,
       audioFile: file,
       audioFileName: file.name,
       existingAudioUrl: "",
       audioPreviewUrl: previewUrl,
-      duration,
       audioUploadStatus: "uploading",
       audioUploadProgress: 0,
       audioBytesUploaded: 0,
       audioTotalBytes: file.size,
       requiresAudioReplacement: false,
-    } : track));
+    });
     try {
+      const duration = await getAudioDuration(file).catch(() => { throw new Error("Could not read the uploaded audio."); });
+      patchTrack({ duration });
       const releaseId = await ensureUploadDraft();
       const downloadPath = await uploadPrivateAudio(file, {
         releaseId,
-        clientTrackId: clientTrackId ?? currentTrack?.id ?? "",
+        clientTrackId: trackId ?? "",
         signal: controls.signal,
         onProgress: (loaded, total) => {
           controls.reportProgress(loaded, total);
-          updateTrack(index, { audioUploadProgress: Math.min(99, Math.round(loaded / Math.max(total, 1) * 100)), audioBytesUploaded: loaded, audioTotalBytes: total });
+          patchTrack({ audioUploadProgress: Math.min(99, Math.round(loaded / Math.max(total, 1) * 100)), audioBytesUploaded: loaded, audioTotalBytes: total });
         },
       });
-      updateTrack(index, {
+      patchTrack({
         audioFile: null,
         audioFileName: file.name,
         existingAudioUrl: downloadPath,
@@ -2094,7 +2091,9 @@ export function ReleaseForm({
       trackCampaignEvent("audio_uploaded", { trackIndex: index });
       setPendingAudioUploads((current) => current.filter((session) => session.clientTrackId !== (clientTrackId ?? currentTrack?.id)));
     } catch (error) {
-      updateTrack(index, { audioUploadStatus: "failed", requiresAudioReplacement: true });
+      patchTrack({ audioUploadStatus: "failed", requiresAudioReplacement: true });
+      safeRevokePreviewUrl(previewUrl);
+      audioPreviewObjectUrlsRef.current.delete(previewUrl);
       recordJourneyEvent(draftReleaseId, "audio_upload_failed", step, formatIntent, tracks.length);
       throw error;
     }
@@ -2111,17 +2110,20 @@ export function ReleaseForm({
     const startsAt = reuseFirst ? 0 : tracks.length;
     const newTracks = selected.map((_, offset) => startsAt + offset).filter((index) => index >= tracks.length).map((index) => ({ ...createTrack(index + 1), primaryArtistIds: tracks[0]?.primaryArtistIds ?? [] }));
     if (newTracks.length) setTrackList((current) => [...current, ...newTracks]);
-    for (let offset = 0; offset < selected.length; offset++) {
-      const index = startsAt + offset;
-      const controller = new AbortController();
-      const id = index < tracks.length ? tracks[index].id : newTracks[index - tracks.length].id;
-      try {
-        await handleAudioFile(index, selected[offset], { signal: controller.signal, reportProgress: () => undefined }, id);
-      } catch (error) {
-        setStatus(error instanceof Error ? error.message : "One or more tracks could not be uploaded. Retry the failed track below.");
-      }
+    try {
+      await Promise.all(selected.map(async (file, offset) => {
+        const index = startsAt + offset;
+        const controller = new AbortController();
+        const id = index < tracks.length ? tracks[index].id : newTracks[index - tracks.length].id;
+        try {
+          await handleAudioFile(index, file, { signal: controller.signal, reportProgress: () => undefined }, id);
+        } catch (error) {
+          setStatus(error instanceof Error ? error.message : "One or more tracks could not be uploaded. Retry the failed track below.");
+        }
+      }));
+    } finally {
+      setBatchUploading(false);
     }
-    setBatchUploading(false);
   }
 
   async function handleAudioBatch(files: FileList | File[]) {
