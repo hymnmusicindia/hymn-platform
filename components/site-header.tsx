@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { AlertCircle, Bell, CheckCircle2, ChevronDown, Disc3, Headphones, HelpCircle, LayoutDashboard, LogOut, Menu, Music2, PackageCheck, ShieldCheck, ShoppingCart, UserRound, WalletCards, X } from "lucide-react";
+import { AlertCircle, Bell, CheckCircle2, ChevronDown, Crown, Disc3, Headphones, HelpCircle, LayoutDashboard, LogOut, Menu, MessageCircle, Music2, PackageCheck, PanelLeft, ShieldCheck, ShoppingCart, UserRound, WalletCards, X } from "lucide-react";
 import clsx from "clsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mainNav } from "@/lib/site";
@@ -53,6 +53,15 @@ function notificationTimeAgo(value: string) {
 
 export function SiteHeader({ user = null }: SiteHeaderProps) {
   const pathname = usePathname();
+  const workspaceHeader = pathname === "/" || /^\/(dashboard|producer|distribution\/start|first-release|analytics|payout|royalty-payouts|audio-library|managed-services|studio\/(orders|start|engineer))($|\/)/.test(pathname);
+  const sectionLabel = pathname.startsWith("/producer") || pathname.startsWith("/beat-store") ? "Beatstore" : pathname.startsWith("/studio") || pathname === "/dashboard/studio" ? "Mixing / Mastering" : pathname.startsWith("/dashboard/releases") || pathname.startsWith("/distribution") || pathname === "/analytics" || pathname.includes("payout") ? "Distribution" : pathname === "/audio-library" ? "Library" : pathname === "/" ? "Home" : "Workspace";
+  const [activeSection, setActiveSection] = useState(sectionLabel);
+  useEffect(() => {
+    setActiveSection(sectionLabel);
+    function updateSection(event: Event) { const label = (event as CustomEvent<string>).detail; if (typeof label === "string") setActiveSection(label); }
+    window.addEventListener("hymn-workspace-section", updateSection);
+    return () => window.removeEventListener("hymn-workspace-section", updateSection);
+  }, [sectionLabel]);
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -583,7 +592,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
   return (
     <header
-      className="sticky top-0 z-[1200] overflow-visible border-b backdrop-blur-2xl backdrop-saturate-150"
+      className={clsx("sticky top-0 z-[1200] overflow-visible border-b backdrop-blur-2xl backdrop-saturate-150", workspaceHeader && "hymn-studio-header")}
       style={{
         borderColor: scrolled || open ? "var(--header-border)" : "transparent",
         background: scrolled || open ? "var(--header-bg-solid)" : "var(--header-bg)",
@@ -592,11 +601,11 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
       }}
     >
       <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-1 px-3 py-2 sm:min-h-[4.5rem] sm:gap-4 sm:px-6 sm:py-3 lg:px-8">
-        <Link href="/" className="flex min-w-0 shrink items-center" aria-label="HYMN Music home">
+        <Link href="/" className="header-brand flex min-w-0 shrink items-center" aria-label="HYMN Music home">
           <Image src="/assets/hymnlogowhite.png" alt="HYMN Music Logo" width={156} height={52} className="h-7 w-auto max-w-24 object-contain sm:h-9 sm:max-w-none lg:h-10" style={{ filter: "var(--logo-filter)" }} priority />
         </Link>
 
-        <nav className="hymn-page-selector hidden items-center gap-1 lg:flex" aria-label="Main navigation">
+        {workspaceHeader ? <div className="studio-header-section"><button type="button" aria-label="Toggle service navigation" onClick={()=>window.dispatchEvent(new Event("hymn-toggle-navigation"))}><PanelLeft size={17}/></button><span>{activeSection}</span></div> : <nav className="hymn-page-selector hidden items-center gap-1 lg:flex" aria-label="Main navigation">
           {mainNav.map((item) => (
             <Link
               key={item.href}
@@ -607,12 +616,12 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
               {item.label}
             </Link>
           ))}
-        </nav>
+        </nav>}
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <div className="hidden items-center gap-3 lg:flex">
-            <SmartHelpToggle />
-            {!isAuthenticated ? <ThemeToggle /> : null}
+            {workspaceHeader ? <><Link href="/distribution" className="studio-header-plans"><Crown size={16}/> Plans</Link><Link href="/contact" className="studio-header-tool" aria-label="Contact HYMN"><MessageCircle size={18}/></Link><Link href="/faq" className="studio-header-tool" aria-label="Help and support"><HelpCircle size={18}/></Link></> : <SmartHelpToggle />}
+            {!isAuthenticated && !workspaceHeader ? <ThemeToggle /> : null}
             {isAuthenticated ? <AppLauncher /> : (
               <Link
                 href="/login"
@@ -623,14 +632,14 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
               </Link>
             )}
             {isAuthenticated ? <NotificationBell /> : null}
-            {isAuthenticated ? <ThemeToggle /> : null}
+            {isAuthenticated && !workspaceHeader ? <ThemeToggle /> : null}
             {isAuthenticated ? <ProfileMenu /> : null}
           </div>
 
           <div className="flex items-center gap-0 lg:hidden">
             {isAuthenticated ? <AppLauncher mobile /> : null}
             {isAuthenticated ? <NotificationBell /> : null}
-            <ThemeToggle />
+            {!workspaceHeader ? <ThemeToggle /> : null}
             {isAuthenticated ? <ProfileMenu /> : null}
           </div>
 

@@ -69,6 +69,11 @@ export function DashboardFrame<T extends string>({
     return () => { document.removeEventListener("mousedown", dismiss); document.removeEventListener("keydown", escape); };
   }, [newOpen]);
   const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    function toggleNavigation() { if (window.innerWidth < 1024) setMobileOpen(value => !value); else setCollapsed(value => !value); }
+    window.addEventListener("hymn-toggle-navigation", toggleNavigation);
+    return () => window.removeEventListener("hymn-toggle-navigation", toggleNavigation);
+  }, []);
   const [closedGroups, setClosedGroups] = useState<Set<string>>(() => new Set());
   const [localSearch, setLocalSearch] = useState("");
   const navScrollRef = useRef<HTMLDivElement>(null);
@@ -118,6 +123,10 @@ export function DashboardFrame<T extends string>({
   }, [updateNavScroll, visibleGroups, closedGroups, mobileOpen, collapsed]);
   const activeItem = useMemo(() => flatItems.find((item) => item.key === activeKey), [activeKey, flatItems]);
   const activeGroup = useMemo(() => groups.find((group) => group.items.some((item) => item.key === activeKey)), [activeKey, groups]);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => window.dispatchEvent(new CustomEvent("hymn-workspace-section", { detail: activeGroup?.label ?? "Workspace" })));
+    return () => cancelAnimationFrame(frame);
+  }, [activeGroup?.label]);
 
   function handleSelect(key: string) {
     onSelect(key as T);
@@ -216,9 +225,10 @@ export function DashboardFrame<T extends string>({
                     const active = item.key === activeKey;
                     const Icon = /release|catalog/.test(item.key) ? Disc3 : /analytics|sales/.test(item.key) ? TrendingUp : /earning|payout/.test(item.key) ? Wallet : /upload/.test(item.key) ? Upload : /studio|mix|master/.test(item.key) ? Headphones : /store|purchase/.test(item.key) ? Store : /setting|profile|account/.test(item.key) ? Settings : /collaborator|referral/.test(item.key) ? Users : /support|help/.test(item.key) ? LifeBuoy : item.key === "overview" ? LayoutGrid : Music2;
                     const content = <><Icon className="portal-nav-icon" /><span className={clsx("min-w-0", collapsed ? "lg:hidden" : "")}><span className="block truncate font-semibold">{item.label}</span></span></>;
-                    return item.href ? <Link key={item.key} href={item.href} aria-current={active ? "page" : undefined} onClick={() => setMobileOpen(false)} className={clsx("dashboard-os-nav-item pressable hover-lift", active ? "is-active" : "is-idle")} title={collapsed ? item.label : undefined}>{content}</Link> : (
+                    return item.href ? <Link key={item.key} href={item.href} data-nav-key={item.key} aria-current={active ? "page" : undefined} onClick={() => setMobileOpen(false)} className={clsx("dashboard-os-nav-item pressable hover-lift", active ? "is-active" : "is-idle")} title={collapsed ? item.label : undefined}>{content}</Link> : (
                       <button
                         key={item.key}
+                        data-nav-key={item.key}
                         type="button"
                         onClick={() => handleSelect(item.key)}
                         className={clsx("dashboard-os-nav-item pressable hover-lift", active ? "is-active" : "is-idle")}

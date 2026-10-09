@@ -1,29 +1,37 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { ArrowUpRight, ChevronDown, Disc3, Headphones, Home, LayoutGrid, Menu, Music2, Plus, Store, Users, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowUpRight, ChevronDown, Disc3, Headphones, Home, LayoutGrid, Menu, Music2, Plus, Store, Users, X, TrendingUp, Wallet, Megaphone, ShieldCheck, Settings, LifeBuoy, Folder } from "lucide-react";
 
 const groups = [
-  { title:"Distribution", links:[{label:"Release your music",href:"/distribution",icon:Disc3},{label:"Released on HYMN",href:"#released",icon:Music2},{label:"Your release journey",href:"#journey",icon:LayoutGrid}] },
-  { title:"Beatstore", links:[{label:"Discover beats",href:"#beats",icon:Headphones},{label:"Browse the store",href:"/beat-store",icon:Store},{label:"For producers",href:"#producers",icon:Users}] },
-  { title:"Mixing / Mastering", links:[{label:"Find an engineer",href:"/studio",icon:Headphones},{label:"Artist services",href:"/managed-services",icon:LayoutGrid}] },
-  { title:"Community", links:[{label:"Artist stories",href:"#artists",icon:Users},{label:"Stay in the loop",href:"#newsletter",icon:Music2}] }
+  { title:"Library", links:[{label:"My files",href:"/audio-library",icon:Folder}] },
+  { title:"Distribution", links:[{label:"My releases",href:"/dashboard/releases",icon:Disc3},{label:"Trends",href:"/analytics",icon:TrendingUp},{label:"Earnings",href:"/payout",icon:Wallet},{label:"Promotion",href:"/dashboard?tab=promotions",icon:Megaphone},{label:"Content ID",href:"/dashboard?tab=content-id",icon:ShieldCheck},{label:"Royalty splits",href:"/dashboard?tab=collaborators",icon:Users}] },
+  { title:"Beatstore", links:[{label:"Browse beats",href:"/beat-store",icon:Store},{label:"My purchases",href:"/dashboard?tab=purchases",icon:Music2},{label:"Sell beats",href:"/producer/dashboard",icon:Users}] },
+  { title:"Mixing / Mastering", links:[{label:"Find an engineer",href:"/studio",icon:Headphones},{label:"My projects",href:"/dashboard/studio",icon:LayoutGrid},{label:"Artist services",href:"/managed-services",icon:Music2}] },
+  { title:"Account", links:[{label:"Settings",href:"/dashboard?tab=settings",icon:Settings},{label:"Help & support",href:"/dashboard?tab=support",icon:LifeBuoy}] }
 ];
 
 export function LandingWorkspace({ children, workspaceHref }: {children:React.ReactNode; workspaceHref:string}) {
   const [open,setOpen] = useState(false);
-  const [closed,setClosed] = useState<string[]>([]);
-  return <div className="landing-workspace">
+  const [collapsed,setCollapsed] = useState(false);
+  const [navigationReady,setNavigationReady] = useState(false);
+  useEffect(()=>{
+    function toggleNavigation() { if(window.innerWidth<1024)setOpen(value=>!value);else setCollapsed(value=>!value); }
+    window.addEventListener("hymn-toggle-navigation",toggleNavigation);
+    setNavigationReady(true);
+    return ()=>window.removeEventListener("hymn-toggle-navigation",toggleNavigation);
+  },[]);
+  return <div data-navigation-ready={navigationReady} className={`landing-workspace ${collapsed ? "rail-collapsed" : ""}`}>
     <button type="button" className="landing-mobile-menu" aria-expanded={open} aria-controls="landing-navigation" onClick={()=>setOpen(!open)}><Menu size={18}/> Explore HYMN <ChevronDown size={16}/></button>
     {open && <button className="landing-rail-backdrop" aria-label="Close navigation" onClick={()=>setOpen(false)}/>}
     <aside id="landing-navigation" className={`landing-rail ${open ? "is-open" : ""}`}>
-      <div className="landing-rail-top"><span>YOUR NEXT CHAPTER</span><button type="button" aria-label="Close navigation" onClick={()=>setOpen(false)}><X size={18}/></button></div>
-      <Link href="/first-release" className="landing-new"><Plus size={17}/> Start a release</Link>
-      <a href="#home" className="landing-nav-link is-active" onClick={()=>setOpen(false)}><Home size={16}/> Home</a>
-      <nav aria-label="HYMN services">{groups.map(group=><div className="landing-nav-group" key={group.title}><button type="button" className="landing-group-title" aria-expanded={!closed.includes(group.title)} onClick={()=>setClosed(current=>current.includes(group.title)?current.filter(item=>item!==group.title):[...current,group.title])}>{group.title}<ChevronDown size={13} className={closed.includes(group.title)?"is-closed":""}/></button>{!closed.includes(group.title)&&group.links.map(item=><Link href={item.href} key={item.label} className="landing-nav-link" onClick={()=>setOpen(false)}><item.icon size={16}/>{item.label}</Link>)}</div>)}</nav>
+      <div className="landing-rail-top"><button type="button" aria-label="Close navigation" onClick={()=>setOpen(false)}><X size={18}/></button></div>
+      <Link href="/distribution/start" className="landing-new" aria-label="New release"><Plus size={17}/><span>New</span></Link>
+      <Link href="/" className="landing-nav-link is-active" aria-current="page" aria-label="Home" onClick={()=>setOpen(false)}><Home size={16}/><span>Home</span></Link>
+      <nav aria-label="HYMN services">{groups.map(group=><div className="landing-nav-group" key={group.title}><h2 className="landing-group-title">{group.title}</h2>{group.links.map(item=><Link href={item.href} key={item.label} aria-label={item.label} className={`landing-nav-link ${item.label === "Promotion" ? "landing-service-divider" : ""}`} onClick={()=>setOpen(false)}><item.icon size={16}/><span>{item.label}</span></Link>)}</div>)}</nav>
       <div className="landing-rail-bottom"><Link href={workspaceHref}>Your workspace <ArrowUpRight size={15}/></Link><Link href="/contact">Talk to HYMN <ArrowUpRight size={15}/></Link><span>Independent music. Shared ambition.</span></div>
     </aside>
-    <div className="landing-canvas"><div className="landing-canvas-bar"><span><LayoutGrid size={15}/> Artist hub</span><span>Make your next move.</span><Link href={workspaceHref}>Open workspace <ArrowUpRight size={15}/></Link></div>{children}</div>
+    <div className="landing-canvas">{children}</div>
   </div>;
 }

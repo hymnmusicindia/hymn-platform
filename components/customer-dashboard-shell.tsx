@@ -3,6 +3,7 @@
 import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { DashboardFrame } from "@/components/dashboard-frame";
@@ -159,6 +160,7 @@ function Timeline({ items }: { items: Array<{ label: string; detail?: string; ac
 }
 
 export function CustomerDashboardShell({ user, releases, orders, subscription, analytics = [], producerAccessDisabled = false }: { user: User; releases: Release[]; orders: Order[]; subscription?: any | null; analytics?: any[]; producerAccessDisabled?: boolean }) {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<"overview" | "releases" | "upload" | "analytics" | "earnings" | "promotions" | "collaborators" | "distribution" | "content-id" | "messages" | "support" | "settings" | "purchases" | "subscription" | "referral" | "account">("overview");
   const [dashboardSearch, setDashboardSearch] = useState("");
   const [releaseStatusFilter, setReleaseStatusFilter] = useState("all");
@@ -182,13 +184,14 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   const planDaysRemaining = subscriptionExpiry ? Math.max(0, Math.ceil((new Date(subscriptionExpiry).getTime() - Date.now()) / 86_400_000)) : 0;
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = searchParams;
     if (params.get("module") === "splits") setActiveTab("collaborators");
     else {
       const requested = params.get("tab");
       if (requested && ["overview", "releases", "upload", "analytics", "earnings", "promotions", "collaborators", "distribution", "content-id", "messages", "support", "settings", "purchases", "subscription", "referral", "account"].includes(requested)) setActiveTab(requested as typeof activeTab);
+      else setActiveTab("overview");
     }
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     let ignore = false;
@@ -349,10 +352,13 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       overviewSubtitle={actionItems.length > 0 ? <button type="button" className="text-left font-medium transition-opacity hover:opacity-70" style={{ color: "var(--accent)" }} onClick={() => selectCustomerTab(actionItems[0].tab)}>{actionItems.length} item{actionItems.length === 1 ? "" : "s"} need your attention <span aria-hidden="true">→</span></button> : <span>Your workspace is clear.</span>}
       navItems={[
         { key: "overview", label: "Overview", description: "What matters now", group: "Home" },
-        { key: "releases", label: "My releases", description: "Your music and status", group: "Distribution" },
+        { key: "files", label: "My files", group: "Library", href: "/audio-library" },
+        { key: "releases", label: "My releases", description: "Your music and status", group: "Distribution", href: "/dashboard/releases" },
         { key: "upload", label: "Add release", description: "Upload and submit music", group: "Distribution" },
         { key: "analytics", label: "Trends", description: "Streams and audience insights", group: "Distribution" },
         { key: "earnings", label: "Earnings", description: "Reported royalties", group: "Distribution" },
+        { key: "promotions", label: "Promotion", description: "Campaigns and release promotion", group: "Distribution" },
+        { key: "content-id", label: "Content ID", description: "Rights and monetization", group: "Distribution" },
         { key: "collaborators", label: "Royalty splits", description: "Invites and shares", group: "Distribution" },
         { key: "payouts", label: "Payouts", description: "Balance and requests", group: "Distribution", href: "/payout" },
         { key: "beat-store", label: "Browse beats", description: "Find your next sound", group: "Beatstore", href: "/beat-store" },

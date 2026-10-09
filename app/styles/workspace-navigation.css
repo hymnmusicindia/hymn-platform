@@ -1,0 +1,73 @@
+/* Standalone chrome: a quiet rail and luminous type, using HYMN's silver palette. */
+header.hymn-studio-header.hymn-studio-header {
+  height:58px; background:#08090b!important; border:0!important; box-shadow:none!important;
+  --text:#f5f7fa; --text-muted:#b0b3bd; --text-soft:#969daa; --logo-filter:none;
+  --bg-soft:#1c2026; --card:#22262d; --card-strong:#22262d; --border:#353b45;
+}
+header.hymn-studio-header>div:first-child { display:flex; justify-content:flex-start; max-width:none; height:58px; min-height:58px; padding:0 20px; gap:0; }
+.hymn-studio-header .header-brand { flex:0 0 204px; }
+.hymn-studio-header .header-brand img { width:100px; height:auto; max-height:35px; filter:none!important; }
+.studio-header-section { display:flex; align-items:center; gap:18px; min-width:0; color:#f5f7fa; font-size:15px; font-weight:600; }
+.studio-header-section button { display:grid; place-items:center; width:32px; height:32px; color:#c8cbd2; }
+.studio-header-section button:hover { color:#fff; }
+.hymn-studio-header>div:first-child>div:last-child { margin-left:auto; gap:12px; }
+.studio-header-plans { display:flex; align-items:center; gap:6px; padding:10px 4px; color:#f5c16c; font-size:12px; font-weight:600; }
+.studio-header-tool { display:grid; place-items:center; width:30px; height:34px; color:#c8cbd2; }
+.hymn-studio-header .site-header-cta { min-width:0; padding:8px 12px; border:0!important; background:none!important; color:#f5f7fa!important; box-shadow:none!important; }
+.hymn-studio-header .site-header-bare-icon { border:0!important; background:none!important; box-shadow:none!important; }
+.hymn-studio-header .site-header-bare-icon::before,.hymn-studio-header .site-header-bare-icon::after { display:none; }
+.hymn-studio-header .hymn-mobile-page-link { border:0; border-radius:0; background:none; box-shadow:none; color:#a6afbd; }
+.hymn-studio-header .hymn-mobile-page-link[aria-current="page"] { background:none; box-shadow:none; color:#fff; text-shadow:0 0 14px #dce9f970,0 0 3px #ffffff70; }
+.hymn-studio-header a:focus-visible,.hymn-studio-header button:focus-visible { outline:2px solid #c7d5df; outline-offset:3px; }
+.hymn-landing .landing-rail { top:58px; height:calc(100dvh - 58px); padding-top:10px; }
+.hymn-landing .landing-rail-top { margin:0; min-height:0; }
+.hymn-landing .landing-new { margin-bottom:20px; }
+.hymn-landing .landing-group-title { padding:0 7px 10px; color:#d5d8de; font-size:13px; font-weight:600; }
+.hymn-landing .landing-nav-group { margin-top:22px; }
+.hymn-landing .landing-nav-link { position:relative; min-height:34px; padding:8px 12px; gap:12px; border:0; border-radius:0; background:none; color:#969da9; font-size:13px; font-weight:450; box-shadow:none; transition:color .2s,text-shadow .2s; }
+.hymn-landing .landing-nav-link:hover,.hymn-landing .landing-nav-link.is-active { border:0; background:none; color:#fff; box-shadow:none; text-shadow:0 0 14px #dce9f970,0 0 3px #ffffff70; }
+.hymn-landing .landing-nav-link.is-active { font-weight:650; }
+.hymn-landing .landing-nav-link.is-active svg { color:#e5edf6; filter:drop-shadow(0 0 4px #dce9f970); }
+.hymn-landing .landing-service-divider { margin-top:14px; border-top:1px solid #292d34; padding-top:18px; }
+.hymn-landing .landing-rail-bottom { margin-top:22px; padding-top:18px; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-nav-item,
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-nav-item:hover,
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-nav-item.is-active {
+  border:0; border-radius:0; background:none; box-shadow:none; transform:none;
+}
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-nav-item.is-active,
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-nav-item:hover { color:#fff; text-shadow:0 0 14px #dce9f970,0 0 3px #ffffff70; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-sidebar>div:first-child img { display:none; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-sidebar>div:first-child .dashboard-sidebar-toggle { display:none; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .portal-create { margin-top:0; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-topbar { min-height:0; border:0; padding:16px 32px 0; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-topbar .portal-section-label,
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-topbar .portal-upgrade { display:none; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-topbar .dashboard-os-icon-button { display:none; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .release-dashboard-tab { border:0!important; border-radius:0; background:none!important; color:#a6afbd!important; box-shadow:none; transform:none; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .release-dashboard-tab[aria-current="page"] { color:#fff!important; text-shadow:0 0 14px #dce9f970,0 0 3px #ffffff70; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-group-toggle { padding-top:4px; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-group-toggle:hover { background:none; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-nav-item[data-nav-key="promotions"] { margin-top:12px; border-top:1px solid #292d34; padding-top:18px; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-hero { padding-top:32px; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .portal-workspace { min-height:calc(100dvh - 68px); }
+@media(min-width:1024px) {
+  .hymn-landing .landing-workspace.rail-collapsed { grid-template-columns:76px minmax(0,1fr); }
+  .rail-collapsed .landing-rail { padding-inline:12px; }
+  .rail-collapsed .landing-nav-link { justify-content:center; padding:10px; }
+  .rail-collapsed .landing-nav-link>span,.rail-collapsed .landing-new>span,.rail-collapsed .landing-group-title,.rail-collapsed .landing-rail-bottom { display:none; }
+}
+@media(max-width:1023px) {
+  .hymn-studio-header .header-brand { flex-basis:150px; }
+  .hymn-landing .landing-rail { top:0; height:100dvh; padding-top:20px; }
+  .hymn-landing .landing-rail-top { justify-content:flex-end; margin-bottom:10px; }
+}
+@media(max-width:640px) {
+  header.hymn-studio-header>div:first-child { padding-inline:14px; }
+  .hymn-studio-header .header-brand { flex-basis:98px; }
+  .hymn-studio-header .header-brand img { width:74px; }
+  .studio-header-section { gap:4px; font-size:12px; }
+  .hymn-studio-header>div:first-child>div:last-child { gap:0; }
+  .studio-header-section button { width:28px; }
+}
+@media(prefers-reduced-motion:reduce) { .hymn-studio-header *,.landing-nav-link { transition:none; } }
