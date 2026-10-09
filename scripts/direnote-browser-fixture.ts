@@ -35,8 +35,6 @@ export async function startDireNoteBrowser(userId: number) {
       async newReleaseJourney() {
         await page.goto(`${origin}/distribution/start`);
         await expect(page.getByRole("heading", { name: "Hello, gxrry." })).toBeVisible();
-        await page.getByRole("button", { name: /Start your release/ }).click();
-        await expect(page.getByRole("heading", { name: "What are you releasing?" })).toBeVisible();
         const formatShell = await page.locator(".release-journey-intro").boundingBox();
         expect(formatShell).not.toBeNull();
         expect(Math.abs(formatShell!.y - (1000 - formatShell!.height) / 2)).toBeLessThan(3);
@@ -44,15 +42,15 @@ export async function startDireNoteBrowser(userId: number) {
           await page.setViewportSize(viewport);
           const panel = (await page.locator(".release-journey-intro").boundingBox())!;
           expect(Math.abs(panel.y - (viewport.height - panel.height) / 2)).toBeLessThan(3);
-          const back = (await page.getByRole("button", { name: "Back", exact: false }).boundingBox())!;
-          const next = (await page.getByRole("button", { name: /Continue to artists/ }).boundingBox())!;
+          const back = (await page.getByRole("button", { name: "Quit" }).boundingBox())!;
+          const next = (await page.getByRole("button", { name: /Start your release/ }).boundingBox())!;
           expect(back.x).toBeGreaterThanOrEqual(panel.x);
           expect(next.y + next.height).toBeLessThan(panel.y + panel.height - 16);
           expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
           await page.screenshot({ path: `.cache/release-entry-${viewport.width}.png`, fullPage: true });
         }
         await page.setViewportSize({ width: 1440, height: 1000 });
-        await page.getByRole("button", { name: /Single 1/ }).dblclick();
+        await page.getByRole("button", { name: /Start your release/ }).click();
         await expect(page.getByRole("heading", { name: "Who are the primary artists on this release?" })).toBeVisible();
         await page.getByRole("button", { name: "Add primary artist", exact: true }).click();
         await page.getByRole("dialog", { name: "Add artist profile" }).getByRole("button", { name: "Use artist" }).first().click();
@@ -81,24 +79,11 @@ export async function startDireNoteBrowser(userId: number) {
           { name: "Night Drive.wav", mimeType: "audio/wav", buffer: audio },
           { name: "First Light.wav", mimeType: "audio/wav", buffer: audio },
         ]);
-        await expect(page.getByText("2 tracks selected", { exact: true })).toBeVisible();
-        await page.getByRole("button", { name: "Keep as Single" }).click();
-        await expect(page.getByRole("button", { name: "Use this track title" })).toHaveCount(1, { timeout: 60000 });
-        await page.getByRole("button", { name: "Use this track title" }).click();
+        await expect(page.locator(".release-audio-queue-item.is-ready")).toHaveCount(2, { timeout: 60000 });
         await page.screenshot({ path: ".cache/release-clean-single.png", fullPage: true });
-        await expect(page.getByText("Change format to add more")).toHaveCount(0);
-        await page.getByRole("button", { name: /Make this an EP or Album/ }).click();
-        await expect(page.getByRole("dialog", { name: "How many tracks belong together?" })).toBeVisible();
-        await page.locator(".release-format-picker-options").getByRole("button", { name: /EP/ }).click();
-        await expect(page.getByRole("textbox", { name: "EP name" })).toBeVisible();
-        await page.locator(".release-batch-upload input[type=file]").setInputFiles([
-          { name: "First Light.wav", mimeType: "audio/wav", buffer: audio },
-        ]);
-        await expect(page.getByText("Add tracks", { exact: true })).toBeVisible();
+        await expect(page.locator(".release-music-format")).toContainText("EP");
+        await expect(page.locator(".release-audio-stage input[type=text]")).toHaveCount(0);
         await page.screenshot({ path: ".cache/release-clean-ep.png", fullPage: true });
-        await page.getByRole("textbox", { name: "EP name" }).fill("Fixture EP");
-        await expect(page.getByRole("button", { name: "Use this track title" })).toHaveCount(1, { timeout: 60000 });
-        await page.getByRole("button", { name: "Use this track title" }).click();
         await page.getByRole("button", { name: "Continue to cover artwork" }).click();
         await expect(page.getByRole("heading", { name: "Prepare your cover artwork" })).toBeVisible();
         expect((await page.locator(".release-workflow-content").boundingBox())!.y).toBeLessThan(280);
@@ -107,9 +92,7 @@ export async function startDireNoteBrowser(userId: number) {
         await expect(page.locator(".release-workspace-state").getByText("Saved", { exact: false })).toBeVisible({ timeout: 15000 });
         await page.goto(savedDraftUrl);
         await page.locator('[aria-label="Release sections"]').getByRole("button", { name: "Music" }).click();
-        await expect(page.getByRole("textbox", { name: "EP name" })).toHaveValue("Fixture EP");
-        await expect(page.getByRole("textbox", { name: "Track 1 name" })).toHaveValue("Night Drive");
-        await expect(page.getByRole("textbox", { name: "Track 2 name" })).toHaveValue("First Light");
+        await expect(page.locator(".release-audio-queue-item.is-ready")).toHaveCount(2);
         await page.setViewportSize({ width: 1250, height: 590 });
         expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)).toBe(true);
         const compactNext = await page.getByRole("button", { name: "Continue to cover artwork" }).boundingBox();
@@ -160,7 +143,7 @@ export async function startDireNoteBrowser(userId: number) {
         await expect(page.getByRole("heading", { name: "One last look." })).toBeVisible();
         await page.screenshot({ path: ".cache/release-standard-review-desktop.png", fullPage: true });
         await page.goto(artistWizardUrl);
-        console.log("Release journey browser checks passed: welcome, smart Single-to-EP conversion, two audio uploads, title confirmation, cover upload, artist selection, every remaining stage, mobile resume and persisted draft.");
+        console.log("Release journey browser checks passed: welcome, automatic Single-to-EP classification, two audio uploads without music-stage title fields, cover upload, artist selection, every remaining stage, mobile resume and persisted draft.");
       },
       async artistWizard() {
         artistWizardUrl = page.url();

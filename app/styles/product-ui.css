@@ -3805,10 +3805,10 @@ body:has(.release-workflow.is-audio-upload-step) { height:auto; min-height:100sv
 
 /* Release editor: a quiet, section-based workspace around the existing form. */
 .distribution-start-page:has(.release-workflow) {
-  background: #161719;
+  background: var(--bg);
   min-height: 100svh;
 }
-.distribution-start-page:has(.release-journey-intro) { background: #161719; }
+.distribution-start-page:has(.release-journey-intro) { background: var(--bg); }
 body:has(.release-workflow) > header,
 body:has(.release-workflow) > footer { display: none; }
 .distribution-start-page:has(.release-workflow) > .shell {
@@ -3816,44 +3816,14 @@ body:has(.release-workflow) > footer { display: none; }
   max-width: none;
 }
 .release-journey-intro {
-  --bg: #161719;
-  --card: #202225;
-  --bg-soft: #202225;
-  --bg-elevated: #303235;
-  --text: #f5f6f7;
-  --text-muted: #b6bbc2;
-  --text-soft: #9ca3ac;
-  --border: #41454a;
-  --border-strong: #666c73;
-  --accent: #36d5c5;
-  --accent-foreground: #102220;
-  --accent-soft: #1e4845;
-  background: radial-gradient(circle at 75% 15%, rgba(54,213,197,.08), transparent 42%), #191b1e;
+  background: radial-gradient(circle at 75% 15%, var(--accent-soft), transparent 42%), var(--card);
   color: var(--text);
 }
-.release-journey-intro .release-journey-intro-header img { filter: none !important; }
+.release-journey-intro .release-journey-intro-header img { filter: var(--logo-filter) !important; }
 .release-workflow.release-workflow {
-  --bg: #161719;
-  --card: #202225;
-  --bg-soft: #202225;
-  --bg-elevated: #303235;
-  --text: #f5f6f7;
-  --text-muted: #b6bbc2;
-  --text-soft: #9ca3ac;
-  --border: #41454a;
-  --border-strong: #666c73;
-  --accent: #36d5c5;
-  --accent-foreground: #102220;
-  --accent-soft: #1e4845;
-  --danger: #f17898;
-  --danger-soft: #492b36;
-  --info: #36d5c5;
-  --success: #70d6a5;
-  --hover: #2b2f32;
-  --glass-highlight: rgba(255,255,255,.06);
   color: var(--text);
-  background: #191b1e !important;
-  border-color: #36393e !important;
+  background: var(--card) !important;
+  border-color: var(--border) !important;
   box-shadow: 0 28px 90px rgba(0,0,0,.24);
 }
 .release-workflow.release-workflow:not(.is-focused-step):not(.is-review-mode) {
@@ -3863,7 +3833,7 @@ body:has(.release-workflow) > footer { display: none; }
   min-height: 54px;
   padding-bottom: 16px !important;
 }
-.release-workflow .release-workspace-logo { filter: none !important; }
+.release-workflow .release-workspace-logo { filter: var(--logo-filter) !important; }
 .release-workflow .release-workspace-quit {
   border: 0;
   background: transparent;
@@ -3888,7 +3858,7 @@ body:has(.release-workflow) > footer { display: none; }
 }
 .release-workflow .release-journey-progress-track {
   height: 3px;
-  background: #34383b;
+  background: var(--border-strong);
 }
 .release-workflow .release-journey-progress-track > span {
   background: var(--accent);
@@ -3901,9 +3871,9 @@ body:has(.release-workflow) > footer { display: none; }
   gap: 12px;
   min-height: 54px;
   padding: 10px 16px;
-  border: 1px solid #3d4145;
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: #24272a;
+  background: var(--bg-elevated);
   color: var(--text-muted);
   font-size: 13px;
 }
@@ -3919,9 +3889,9 @@ body:has(.release-workflow) > footer { display: none; }
   flex: none;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 4px rgba(54,213,197,.12);
+  box-shadow: 0 0 0 4px var(--accent-soft);
 }
-.release-editor-status-separator { margin: 0 8px; color: #747b81; }
+.release-editor-status-separator { margin: 0 8px; color: var(--text-soft); }
 .release-editor-status > button {
   min-height: 34px;
   flex: none;
@@ -3955,12 +3925,12 @@ body:has(.release-workflow) > footer { display: none; }
 .release-workflow .release-workflow-nav > button::after { content: none !important; }
 .release-workflow .release-step-button.is-current {
   border-left-color: var(--accent) !important;
-  background: rgba(54,213,197,.07) !important;
+  background: var(--accent-soft) !important;
   color: var(--text) !important;
 }
-.release-workflow .release-step-button.is-invalid { color: #f4b2c4 !important; }
+.release-workflow .release-step-button.is-invalid { color: var(--danger) !important; }
 .release-workflow .release-step-button:hover:not(.is-current) {
-  background: #282b2e !important;
+  background: var(--hover) !important;
   color: var(--text) !important;
 }
 .release-nav-complete { margin-left: auto; color: var(--accent); font-size: 14px; }
@@ -3968,7 +3938,7 @@ body:has(.release-workflow) > footer { display: none; }
   display: block;
   margin-bottom: 2px;
   border-radius: 12px;
-  background: #24272a !important;
+  background: var(--bg-elevated) !important;
 }
 .release-workflow .release-mobile-summary > summary { color: var(--text); }
 .release-workflow .release-workflow-content { gap: 18px; }
@@ -3987,7 +3957,7 @@ body:has(.release-workflow) > footer { display: none; }
 .release-workflow .release-track-panel {
   border-color: var(--border) !important;
   box-shadow: none !important;
-  background: #24272a !important;
+  background: var(--bg-elevated) !important;
 }
 .release-workflow .release-track-trigger {
   border-color: transparent !important;
@@ -4002,7 +3972,7 @@ body:has(.release-workflow) > footer { display: none; }
 .release-workflow .artwork-requirements { min-width: 0; }
 .release-workflow .store-platform-option[aria-pressed="true"] {
   border-color: var(--accent) !important;
-  background: rgba(54,213,197,.08) !important;
+  background: var(--accent-soft) !important;
   box-shadow: none !important;
 }
 .release-workflow input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
@@ -4022,10 +3992,10 @@ body:has(.release-workflow) > footer { display: none; }
   outline-offset: 2px;
 }
 .release-workflow .release-footer-mobile-actions {
-  border-color: #41454a !important;
-  background: #24272a !important;
+  border-color: var(--border) !important;
+  background: var(--bg-elevated) !important;
   background-image: none !important;
-  color: #f5f6f7;
+  color: var(--text);
   box-shadow: 0 18px 42px rgba(0,0,0,.24) !important;
 }
 .release-workflow .release-footer-action.is-muted,
@@ -4058,7 +4028,7 @@ body:has(.release-workflow) > footer { display: none; }
   .release-workflow.release-workflow:not(.is-focused-step):not(.is-review-mode) { padding: 16px; border-radius: 0; }
   .release-editor-status { align-items: flex-start; flex-direction: column; }
   .release-editor-status > button { padding: 0 0 0 18px; }
-  .release-workflow .release-mobile-step-menu { border-radius: 12px; background: #24272a !important; }
+  .release-workflow .release-mobile-step-menu { border-radius: 12px; background: var(--bg-elevated) !important; }
   .release-workflow .release-mobile-step-menu .release-step-button { border-left: 2px solid transparent !important; }
 }
 @media (prefers-reduced-motion: reduce) {

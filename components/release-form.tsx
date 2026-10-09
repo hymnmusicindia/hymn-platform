@@ -1116,20 +1116,13 @@ export function ReleaseForm({
   const correctionTrackIndex = correctionTrackMatch ? Number(correctionTrackMatch[1]) : null;
   const [step, setStep] = useState(correctionTrackIndex !== null ? 3 : initialRelease?.status === "draft" && initialStage != null && [0, 4, 1, 3, 2, 5, 7].includes(initialStage) ? initialStage : initialRelease ? 7 : 1);
   const resumeStageResolvedRef = useRef(false);
-  const [journeyIntro, setJourneyIntro] = useState<"welcome" | "format" | null>(initialRelease || audioLibraryPrefill ? null : "welcome");
+  const [journeyIntro, setJourneyIntro] = useState<"welcome" | null>(initialRelease || audioLibraryPrefill ? null : "welcome");
   const [journeyExiting, setJourneyExiting] = useState(false);
   const [musicEntering, setMusicEntering] = useState(false);
-  const [formatPickerOpen, setFormatPickerOpen] = useState(false);
   const journeyTransitionTimerRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (!formatPickerOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setFormatPickerOpen(false); };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [formatPickerOpen]);
   const [formatIntent, setFormatIntent] = useState<"single" | "ep" | "album" | null>(() => {
     const saved = initialRelease?.metadata && typeof initialRelease.metadata === "object" ? (initialRelease.metadata as Record<string, unknown>).wizardFormatIntent : null;
-    return firstReleaseOffer ? "single" : saved === "single" || saved === "ep" || saved === "album" ? saved : initialRelease?.releaseType ?? null;
+    return firstReleaseOffer ? "single" : saved === "single" || saved === "ep" || saved === "album" ? saved : initialRelease?.releaseType ?? "single";
   });
   const singleReleaseGift = firstReleaseOffer || (initialRelease?.metadata && typeof initialRelease.metadata === "object" && (initialRelease.metadata as Record<string, unknown>).promotionCode === "FIRST_RELEASE_FREE");
   const trackCampaignEvent = (event: string, metadata?: Record<string, unknown>) => {
@@ -1163,7 +1156,6 @@ export function ReleaseForm({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [status, setStatus] = useState<string | null>(null);
   const [batchUploading, setBatchUploading] = useState(false);
-  const [pendingFormatUpgradeFiles, setPendingFormatUpgradeFiles] = useState<File[]>([]);
   const [pendingAudioUploads, setPendingAudioUploads] = useState<PendingAudioUpload[]>([]);
   const [rightsUploadProgress, setRightsUploadProgress] = useState<number | null>(null);
   const [rightsUploadError, setRightsUploadError] = useState<string | null>(null);
@@ -1340,6 +1332,9 @@ export function ReleaseForm({
     () => releaseTypeFromCount(tracks.length),
     [tracks.length],
   );
+  useEffect(() => {
+    setFormatIntent(releaseType);
+  }, [releaseType]);
   const lastJourneyStageRef = useRef<string | null>(null);
   useEffect(() => {
     if (!draftReleaseId) return;
@@ -1882,8 +1877,7 @@ export function ReleaseForm({
     );
   const addTrack = () => {
     if (singleReleaseGift) return;
-    const formatMaximum = formatIntent === "single" ? 1 : formatIntent === "ep" ? 4 : 30;
-    if (tracks.length >= formatMaximum) { setStatus(`This ${formatIntent === "ep" ? "EP" : formatIntent === "single" ? "Single" : "Album"} allows up to ${formatMaximum} track${formatMaximum === 1 ? "" : "s"}. Change the release format to add more.`); return; }
+    if (tracks.length >= 30) { setStatus("An Album can contain up to 30 tracks."); return; }
     setTrackList((current) => [...current, { ...createTrack(current.length + 1), primaryArtistIds: current[0]?.primaryArtistIds ?? [] }]);
     setExpandedTrack(tracks.length);
   };
@@ -2141,36 +2135,7 @@ export function ReleaseForm({
       if (existingAudioCount === 0) await uploadAudioBatch(selected.slice(0, 1), 1);
       return;
     }
-    if (formatIntent === "single" && resultingTrackCount > 1) {
-      if (resultingTrackCount > 30) {
-        setStatus("An Album can contain up to 30 tracks. Choose 30 files or fewer.");
-        return;
-      }
-      setPendingFormatUpgradeFiles(selected);
-      setStatus(null);
-      return;
-    }
-    await uploadAudioBatch(selected, formatIntent === "ep" ? 4 : formatIntent === "album" ? 30 : 1);
-  }
-
-  async function acceptSuggestedFormat() {
-    if (!pendingFormatUpgradeFiles.length || batchUploading) return;
-    const existingAudioCount = tracks.filter((track) => Boolean(track.existingAudioUrl || track.audioFile || track.audioPreviewUrl)).length;
-    const resultingTrackCount = existingAudioCount + pendingFormatUpgradeFiles.length;
-    const suggestedFormat = resultingTrackCount <= 4 ? "ep" : "album";
-    const selected = pendingFormatUpgradeFiles;
-    setPendingFormatUpgradeFiles([]);
-    setFormatIntent(suggestedFormat);
-    await uploadAudioBatch(selected, suggestedFormat === "ep" ? 4 : 30);
-  }
-
-  async function keepSingleFromPendingFiles() {
-    if (!pendingFormatUpgradeFiles.length || batchUploading) return;
-    const existingAudioCount = tracks.filter((track) => Boolean(track.existingAudioUrl || track.audioFile || track.audioPreviewUrl)).length;
-    const first = pendingFormatUpgradeFiles[0];
-    setPendingFormatUpgradeFiles([]);
-    if (existingAudioCount === 0 && first) await uploadAudioBatch([first], 1);
-    else setStatus("Kept your original first track as the Single.");
+    await uploadAudioBatch(selected, 30);
   }
 
   async function resumeAudioUpload(session: PendingAudioUpload, file: File) {
@@ -2508,11 +2473,7 @@ export function ReleaseForm({
   const destinationsIssue = (): ValidationIssue | null =>
     destinationsIssues()[0] ?? null;
 
-  const formatIssue: ValidationIssue | null = formatIntent && releaseType !== formatIntent
-    ? { step: 0, key: "release-format", message: formatIntent === "single" ? "A Single contains one track. Remove extra tracks or change the format." : formatIntent === "ep" ? "An EP contains 2–4 tracks. Add tracks or change the format." : "An Album contains 5–30 tracks. Add tracks or change the format." }
-    : null;
   const validationIssues = [
-    formatIssue,
     ...tracks
       .map((track, index) => trackIssue(track, index))
       .filter((issue): issue is ValidationIssue => Boolean(issue)),
@@ -2523,11 +2484,9 @@ export function ReleaseForm({
   const primaryArtistComplete = Boolean(tracks[0]?.primaryArtistIds.length);
   const audioAssetsComplete = tracks.every((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl));
   const uploadedMusicTracks = tracks.filter((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl)).length;
-  const canAddMusic = !singleReleaseGift && (formatIntent === "single" ? uploadedMusicTracks === 0 : tracks.length < (formatIntent === "ep" ? 4 : 30));
-  const pendingUpgradeTrackCount = tracks.filter((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl)).length + pendingFormatUpgradeFiles.length;
-  const pendingSuggestedFormat = pendingUpgradeTrackCount <= 4 ? "EP" : "Album";
+  const canAddMusic = (!singleReleaseGift || uploadedMusicTracks === 0) && tracks.length < 30;
   const stepChecks = [
-    !formatIssue && audioComplete && tracks.every((track) => Boolean(track.trackTitle.trim()) && !track.suggestedTitleUnconfirmed),
+    audioComplete,
     primaryArtistComplete,
     !releaseInfoIssue(),
     tracks.every((track, index) => !trackIssue(track, index)),
@@ -2563,7 +2522,7 @@ export function ReleaseForm({
   );
 
   function firstIssueForStep(stepIndex: number): ValidationIssue | null {
-    if (stepIndex === 0) return formatIssue ?? tracks.map((track, index) => trackIssue(track, index)).find((issue) => issue?.key.endsWith("-audio") || issue?.key.endsWith("-title")) ?? null;
+    if (stepIndex === 0) return !audioComplete ? { step: 0, key: "audio-upload", message: "Upload every audio master before continuing." } : null;
     if (stepIndex === 1 && !primaryArtistComplete) return { step: 1, key: "release-primary-artists", message: "Select at least one saved primary artist profile." };
     if (stepIndex === 2) return releaseInfoIssue();
     if (stepIndex === 3)
@@ -2756,22 +2715,6 @@ export function ReleaseForm({
   function continueFromMusic() {
     if (!audioComplete) {
       setStatus("Upload every audio master before moving to cover artwork. You can save this draft and return later.");
-      return;
-    }
-    if (tracks.some((track) => !track.trackTitle.trim() || isPlaceholderTrackTitle(track.trackTitle))) {
-      setStatus("Give every track its final title before continuing.");
-      return;
-    }
-    if (formatIntent !== "single" && !release.releaseTitle.trim()) {
-      setStatus(`Name your ${formatIntent === "ep" ? "EP" : "Album"} before continuing.`);
-      return;
-    }
-    if (tracks.some((track) => track.suggestedTitleUnconfirmed)) {
-      setStatus("Confirm or edit each title suggested from an audio filename before continuing.");
-      return;
-    }
-    if (formatIntent && releaseType !== formatIntent) {
-      setStatus(formatIntent === "single" ? "A Single needs exactly one track. Remove extra tracks to continue." : formatIntent === "ep" ? "An EP needs 2–4 tracks. Add your remaining music or change the format." : "An Album needs 5–30 tracks. Add your remaining music or change the format.");
       return;
     }
     if (stepTransitionTimerRef.current != null) window.clearTimeout(stepTransitionTimerRef.current);
@@ -3431,9 +3374,8 @@ export function ReleaseForm({
     setSubmittedRelease(null);
   }
 
-  function confirmFormatAndOpenArtists(nextFormat = formatIntent) {
-    if (!nextFormat || journeyExiting) return;
-    setFormatIntent(nextFormat);
+  function startReleaseJourney() {
+    if (journeyExiting) return;
     setJourneyExiting(true);
     if (journeyTransitionTimerRef.current != null) window.clearTimeout(journeyTransitionTimerRef.current);
     journeyTransitionTimerRef.current = window.setTimeout(() => {
@@ -3443,12 +3385,6 @@ export function ReleaseForm({
       setHasStartedEditing(true);
       journeyTransitionTimerRef.current = null;
     }, 340);
-  }
-
-  function chooseFormatFromDialog(nextFormat: "ep" | "album") {
-    setFormatIntent(nextFormat);
-    setFormatPickerOpen(false);
-    setStatus(null);
   }
 
   if (submittedRelease) {
@@ -3464,33 +3400,14 @@ export function ReleaseForm({
   if (journeyIntro) return (
     <section className={clsx("release-journey-intro", journeyExiting && "is-exiting-to-music")} aria-labelledby="release-journey-heading">
       <header className="release-journey-intro-header">
-        <button type="button" onClick={() => journeyIntro === "format" ? setJourneyIntro("welcome") : router.push("/distribution")}>
-          {journeyIntro === "format" ? "← Back" : "Quit"}
-        </button>
+        <button type="button" onClick={() => router.push("/distribution")}>Quit</button>
         <NextImage src="/assets/hymnlogowhite.png" alt="HYMN Music" width={116} height={38} priority style={{ filter: "var(--logo-filter)" }} />
       </header>
       <div className="release-journey-intro-body">
         <p className="release-journey-eyebrow">YOUR RELEASE JOURNEY</p>
-        {journeyIntro === "welcome" ? <>
           <h1 id="release-journey-heading">Hello{userName?.trim() ? `, ${userName.trim().split(/\s+/)[0]}` : ""}.</h1>
           <p>Let’s get your music ready for listeners. We’ll guide you through each part and save your work as you go.</p>
-          <button type="button" className="release-journey-primary" onClick={() => setJourneyIntro("format")}>Start your release <span aria-hidden="true">→</span></button>
-        </> : <>
-          <h1 id="release-journey-heading">What are you releasing?</h1>
-          <p>Choose a format to shape your path. You can change this before submitting.</p>
-          <div className="release-format-options" role="group" aria-label="Release format">
-            {(["single", "ep", "album"] as const).map((format) => (
-              <button key={format} type="button" aria-pressed={formatIntent === format} aria-describedby="release-format-hint" disabled={Boolean(singleReleaseGift && format !== "single")} onClick={() => setFormatIntent(format)} onDoubleClick={() => confirmFormatAndOpenArtists(format)}>
-                <span className="release-format-symbol" aria-hidden="true">{format === "single" ? "♪" : format === "ep" ? "♫" : "♬"}</span>
-                <strong>{format === "ep" ? "EP" : format[0].toUpperCase() + format.slice(1)}</strong>
-                <small>{format === "single" ? "1 track" : format === "ep" ? "2–4 tracks" : "5–30 tracks"}</small>
-              </button>
-            ))}
-          </div>
-          <p id="release-format-hint" className="release-format-hint">Select once to preview. Double-click to continue.</p>
-          {singleReleaseGift ? <p className="release-format-note">Your first release on us covers one Single. EP and Album are available for later releases.</p> : null}
-          <button type="button" className="release-journey-primary" disabled={!formatIntent || journeyExiting} onClick={() => confirmFormatAndOpenArtists()}>Continue to artists <span aria-hidden="true">↓</span></button>
-        </>}
+          <button type="button" className="release-journey-primary" onClick={startReleaseJourney}>Start your release <span aria-hidden="true">→</span></button>
       </div>
     </section>
   );
@@ -3509,26 +3426,6 @@ export function ReleaseForm({
           </section>
         </div>
       ) : null}
-      {formatPickerOpen && typeof document !== "undefined" ? createPortal(
-        <div className="release-format-picker-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setFormatPickerOpen(false); }}>
-          <section className="release-format-picker" role="dialog" aria-modal="true" aria-labelledby="release-format-picker-title">
-            <header><div><span>Release format</span><h2 id="release-format-picker-title">How many tracks belong together?</h2></div><button type="button" onClick={() => setFormatPickerOpen(false)} aria-label="Close format selector"><X /></button></header>
-            <div className="release-format-picker-options">
-              <button type="button" onClick={() => chooseFormatFromDialog("ep")} aria-pressed={formatIntent === "ep"}><span>02–04</span><strong>EP</strong><small>A short connected project</small></button>
-              <button type="button" onClick={() => chooseFormatFromDialog("album")} aria-pressed={formatIntent === "album"}><span>05–30</span><strong>Album</strong><small>A full-length body of work</small></button>
-            </div>
-            <p>You can keep editing your uploaded tracks after switching.</p>
-          </section>
-        </div>, document.body) : null}
-      {pendingFormatUpgradeFiles.length > 0 && typeof document !== "undefined" ? createPortal(
-        <div className="release-format-picker-backdrop">
-          <section className="release-format-picker release-audio-conversion-dialog" role="dialog" aria-modal="true" aria-labelledby="release-audio-conversion-title">
-            <span className="release-audio-conversion-count">{pendingUpgradeTrackCount} tracks selected</span>
-            <h2 id="release-audio-conversion-title">Make this an {pendingSuggestedFormat}?</h2>
-            <p>Keep these tracks together, or use only the first track as a Single.</p>
-            <div className="release-audio-conversion-actions"><button type="button" onClick={() => void acceptSuggestedFormat()} disabled={batchUploading}>Convert to {pendingSuggestedFormat}</button><button type="button" onClick={() => void keepSingleFromPendingFiles()} disabled={batchUploading}>Keep as Single</button></div>
-          </section>
-        </div>, document.body) : null}
       <form
         onSubmit={handleFinalSubmit}
         onChangeCapture={() => setHasStartedEditing(true)}
@@ -3707,7 +3604,7 @@ export function ReleaseForm({
         </details>
         {step === 1 ? (
           <section className={clsx("release-artist-stage", stepMotion)}>
-            <button type="button" className="release-change-format" onClick={() => setJourneyIntro("format")}>← Back to release format</button>
+            <button type="button" className="release-change-format" onClick={() => setJourneyIntro("welcome")}>← Back</button>
             <div className="release-focused-intro">
               <h2>Who are the primary artists on this release?</h2>
             </div>
@@ -3799,7 +3696,7 @@ export function ReleaseForm({
         {step === 0 ? (
           <section className={clsx("release-audio-stage", stepMotion)}>
             <nav className="release-focused-side-nav" aria-label="Music upload step navigation">
-              <button type="button" className="release-focused-side-arrow is-left" onClick={() => setJourneyIntro("format")} disabled={stepTransitioning || submitting} aria-label="Back to release format">
+              <button type="button" className="release-focused-side-arrow is-left" onClick={() => goToStep(1)} disabled={stepTransitioning || submitting} aria-label="Back to artists">
                 <span aria-hidden="true">←</span>
               </button>
               <button type="button" className="release-focused-side-arrow is-right" onClick={continueFromMusic} disabled={stepTransitioning || submitting} aria-label="Continue to cover artwork">
@@ -3808,14 +3705,10 @@ export function ReleaseForm({
             </nav>
             <div className="release-focused-intro release-music-heading">
               <div><h2>Add your music</h2><p>{uploadedMusicTracks ? `${uploadedMusicTracks} track${uploadedMusicTracks === 1 ? "" : "s"} added` : "Start with your audio master"}</p></div>
-              <div className="release-music-format"><span>{formatIntent === "ep" ? "EP" : formatIntent === "album" ? "Album" : "Single"}</span>{!singleReleaseGift && !(formatIntent === "single" && uploadedMusicTracks > 0) ? <button type="button" onClick={() => setFormatPickerOpen(true)}>Change format</button> : null}</div>
+              <div className="release-music-format"><span>{releaseType === "ep" ? "EP" : releaseType === "album" ? "Album" : "Single"}</span></div>
             </div>
             <div className="release-onboarding-assets">
             <div className="release-onboarding-audio">
-              {formatIntent && formatIntent !== "single" ? <label className="release-journey-title-field">
-                <span>{formatIntent === "ep" ? "EP name" : "Album name"}</span>
-                <input type="text" maxLength={150} value={release.releaseTitle} onChange={(event) => setRelease((current) => ({ ...current, releaseTitle: event.target.value }))} placeholder={formatIntent === "ep" ? "Name your EP" : "Name your album"} />
-              </label> : null}
               {canAddMusic ? <label className="release-batch-upload" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (!batchUploading) void handleAudioBatch(event.dataTransfer.files); }}>
                 <UploadCloud aria-hidden="true" />
                 <span><strong>{batchUploading ? "Uploading…" : uploadedMusicTracks ? "Add tracks" : "Choose audio"}</strong><small>WAV or MP3 <span className="release-desktop-upload-hint">· Drag files here</span></small></span>
@@ -3840,18 +3733,10 @@ export function ReleaseForm({
                         <div className="release-audio-inline-details">
                           <AudioWaveform
                             src={track.audioPreviewUrl || track.existingAudioUrl}
-                            title={track.trackTitle || `Track ${index + 1}`}
+                            title={track.audioFileName || `Track ${index + 1}`}
                             subtitle={[track.audioFileName, track.duration, fileFormat(track.audioFile, track.audioFileName)].filter(Boolean).join(" • ")}
                             compact
-                            editableTitle={{
-                              value: track.trackTitle,
-                              placeholder: "Add track name",
-                              ariaLabel: `Track ${index + 1} name`,
-                              inputRef: registerField(`track-${index}-title`) as (node: HTMLInputElement | null) => void,
-                              onChange: (value) => updateTrack(index, { trackTitle: value, suggestedTitleUnconfirmed: false }),
-                            }}
                           />
-                          {track.suggestedTitleUnconfirmed ? <button type="button" className="release-confirm-title" onClick={() => updateTrack(index, { suggestedTitleUnconfirmed: false })}>Use this track title</button> : null}
                         </div>
                       ) : (
                         <UploadDropzone accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" iconOnly compact ctaLabel="Add track" title={`Track ${index + 1} audio`} description="Choose a WAV or MP3 master" helperLines={[]} fileName={track.audioFile?.name || track.audioFileName} fileFormat={fileFormat(track.audioFile, track.audioFileName)} onSelect={async (file, controls) => handleAudioFile(index, file, controls)} />
@@ -3865,7 +3750,6 @@ export function ReleaseForm({
                   </article>
                 );
               })}
-              {formatIntent === "single" && uploadedMusicTracks > 0 && !singleReleaseGift && !pendingFormatUpgradeFiles.length ? <button type="button" className="release-multiple-tracks-prompt" onClick={() => setFormatPickerOpen(true)}>Make this an EP or Album <span aria-hidden="true">→</span></button> : null}
             </div>
             </div>
             </div>
@@ -4117,6 +4001,7 @@ export function ReleaseForm({
                               }
                               placeholder="Track title"
                             />
+                            {track.suggestedTitleUnconfirmed ? <button type="button" className="mt-2 text-xs font-semibold underline underline-offset-4" style={{ color: "var(--text-muted)" }} onClick={() => updateTrack(index, { suggestedTitleUnconfirmed: false })}>Use this title</button> : null}
                           </div>
                           <div>
                             <label
@@ -4609,9 +4494,9 @@ export function ReleaseForm({
             </div> : <button
                 type="button"
                 className="btn-outline pressable hover-lift max-w-max text-xs md:text-sm py-2 md:py-2.5 px-3 md:px-4"
-                onClick={tracks.length >= (formatIntent === "single" ? 1 : formatIntent === "ep" ? 4 : 30) ? () => goToStep(0) : addTrack}
+                onClick={tracks.length >= 30 ? () => goToStep(0) : addTrack}
               >
-                {tracks.length >= (formatIntent === "single" ? 1 : formatIntent === "ep" ? 4 : 30) ? "Change format in Music" : "+ Add another track"}
+                {tracks.length >= 30 ? "Maximum 30 tracks" : "+ Add another track"}
               </button>}
           </section>
         ) : null}
@@ -6612,7 +6497,7 @@ export function ReleaseForm({
               type="button"
                 disabled={step === 1 || (step !== 0 && step === menuStepIndexes[0]) || submitting}
               onClick={() => {
-                  if (step === 0) { setJourneyIntro("format"); return; }
+                  if (step === 0) { goToStep(1); return; }
                 const currentIndex = menuStepIndexes.indexOf(
                   step as (typeof menuStepIndexes)[number],
                 );
