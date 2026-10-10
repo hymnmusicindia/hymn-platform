@@ -150,3 +150,22 @@ html body .release-catalogue-filters .release-filter-count { padding:4px 0 8px!i
  .release-catalogue-stat strong { font-size:17px; }
  html body .hymn-portal-root .hymn-portal .release-catalogue-filters .field { min-height:44px; font-size:14px; }
 }
+
+/* Sign-in sits within the workspace surface rather than an inset black panel. */
+.hymn-public-workspace .auth-standalone-page { min-height:calc(100svh - 190px); display:grid; align-items:center; padding:36px 24px; border-radius:24px; background:transparent; }
+.auth-standalone-page > .absolute { border-radius:inherit; }
+.auth-standalone-page > .shell { width:100%; padding:0; }
+.auth-standalone-page .auth-minimal { min-height:420px; max-width:544px; padding:28px 24px 40px; }
+.auth-minimal > a { margin-bottom:44px; color:#abb4c2; font-size:12px; font-weight:500; }
+.auth-minimal > a:hover { color:#fff; }
+.auth-minimal > div:last-child { margin-top:36px; padding-top:28px; border-color:#ffffff0e; }
+.auth-minimal > div:last-child > details { border-radius:12px; }
+@media(max-width:700px) {
+ .hymn-public-workspace .auth-standalone-page { min-height:calc(100svh - 200px); border-radius:18px; padding:24px 12px; }
+ .auth-standalone-page .auth-minimal { min-height:360px; padding:20px 8px 32px; }
+ .auth-minimal > a { margin-bottom:40px; min-height:44px; display:inline-flex; align-items:center; }
+}
+
+html body .auth-minimal button.group { background:#f4f6f9!important; color:#171b22!important; border:1px solid #ffffff70!important; border-radius:12px!important; box-shadow:0 8px 24px #00000014!important; }
+html body .auth-minimal button.group:hover { background:#fff!important; }
+.auth-minimal button.group > span.absolute { display:none; }
