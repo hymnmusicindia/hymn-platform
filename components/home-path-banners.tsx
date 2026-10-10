@@ -28,14 +28,13 @@ const storeLogos = [
 
 
 export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{featuredReleases:Awaited<ReturnType<typeof getPublicHomePreview>>["featuredReleases"];catalog:ReturnType<typeof buildBeatStorefront>["catalog"];signedIn?:boolean}) {
-  const homepageShowcaseReleases = [...featuredReleases];
-  const showcaseRows = ["left", "static", "right"].map((direction, rowIndex) => {
-    const source = homepageShowcaseReleases;
+  const homepageShowcaseReleases = [...new Map(featuredReleases.map(release => [release.id, release])).values()];
+  const showcaseRows = ["left", "right", "left"].slice(0, Math.min(3, homepageShowcaseReleases.length)).map((direction, rowIndex) => {
+    // Disjoint pools keep a release in one row throughout the entire animation.
+    const source = homepageShowcaseReleases.filter((_, index) => index % Math.min(3, homepageShowcaseReleases.length) === rowIndex);
     return {
       direction,
-      // Each row starts at a different release and cycles the complete set, so
-      // featured cards alternate instead of a row repeating one artwork.
-      items: source.length ? Array.from({ length: Math.max(8, source.length * 2) }, (_, index) => source[(index + rowIndex) % source.length]) : []
+      items: Array.from({ length: source.length * Math.ceil(8 / source.length) }, (_, index) => source[index % source.length])
     };
   });
   return {
@@ -53,7 +52,7 @@ export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{
             <div className="home-release-copy">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/50">#releasedonhymn</p>
               <h2 className="home-release-title">
-                Yes, this release<br />moved through<br /><span>HYMN.</span>
+                Yes, these releases<br />moved through<br /><span>HYMN.</span>
               </h2>
               <p className="mt-6 max-w-md text-sm font-medium leading-7 sm:text-base" style={{ color: "#d4d4d8" }}>
                 Discover the music and independent artists building their next chapter with HYMN.
@@ -66,11 +65,11 @@ export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{
 
             <div className="home-release-showcase-viewport relative grid min-w-0 gap-4 overflow-hidden">
               {!homepageShowcaseReleases.length ? <p className="py-12 text-center text-sm" style={{ color: "#d4d4d8" }}>Released music will appear here soon.</p> : null}
-              {showcaseRows.map((row) => (
-                <div key={row.direction} className="overflow-hidden">
+              {showcaseRows.map((row, rowIndex) => (
+                <div key={rowIndex} className="home-release-showcase-row overflow-hidden">
                   <div className={`home-release-showcase-track home-release-showcase-track-${row.direction}`}>
-                    {(row.direction === "static" ? row.items : [...row.items, ...row.items]).map((release, index) => (
-                      <article key={`${row.direction}-${release.id}-${index}`} aria-hidden={index >= row.items.length ? true : undefined} className="group relative w-[140px] shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/[0.06] shadow-[0_18px_60px_rgba(0,0,0,0.32)] sm:w-[170px]">
+                    {[...row.items, ...row.items].map((release, index) => (
+                      <article key={`${rowIndex}-${release.id}-${index}`} data-release-id={release.id} aria-hidden={index >= row.items.length ? true : undefined} className="group relative w-[140px] shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/[0.06] shadow-[0_18px_60px_rgba(0,0,0,0.32)] sm:w-[170px]">
                         <div className="aspect-square overflow-hidden">
                           <img src={release.artworkUrl} alt={`${release.title} artwork`} loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
                         </div>

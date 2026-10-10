@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 const HOME_BEAT_LIMIT = 8;
 const HOME_PRODUCER_LIMIT = 12;
-const HOME_RELEASE_SHOWCASE_LIMIT = 9;
+const HOME_RELEASE_SHOWCASE_LIMIT = 12;
 
 export const getPublicHomePreview = unstable_cache(
   async () => {
