@@ -32,10 +32,10 @@ export function beginHomeGuide(guide: Omit<HomeGuide, "phase">) {
 
 export type HomeBannerId = "platforms" | "releases" | "journey" | "beats" | "producers" | "studio";
 export function homeFeedSections(goalId: string | undefined, visit: number): HomeBannerId[] {
-  const sections: HomeBannerId[] = goalId === "buy-beat" ? ["beats","studio","releases"]
+  const sections: HomeBannerId[] = goalId === "buy-beat" ? ["beats","studio"]
     : goalId === "sell-beats" ? ["producers","beats","studio"]
-    : goalId === "studio" ? ["studio","releases","journey"]
-    : ["platforms","releases","journey","studio"];
+    : goalId === "studio" ? ["studio","journey"]
+    : ["platforms","journey","studio"];
   const pinned = sections.includes("platforms") ? ["platforms" as const] : [];
   const rotating = sections.filter(id => id !== "platforms");
   const offset = Math.abs(visit) % rotating.length;
