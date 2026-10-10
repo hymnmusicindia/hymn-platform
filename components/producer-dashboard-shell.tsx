@@ -11,7 +11,6 @@ import { Beat, BeatPurchase, Notification, Order, Release, SupportTicket, User }
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { CustomerHome, ProducerHome } from "@/components/simplified-dashboard-home";
 import { FirstLoginReferralPrompt } from "@/components/first-login-referral-prompt";
-import { OnboardingAgentDock } from "@/components/onboarding-agent-card";
 import { normalizeBeatLicenseType } from "@/lib/beat-store";
 
 const AnalyticsDashboard = dynamic(() => import("@/components/analytics-dashboard").then((module) => module.AnalyticsDashboard));
@@ -511,7 +510,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
           </div>
         </Panel>
       ) : null}
-      <OnboardingAgentDock />
+
 
 
       {editingBeat ? (

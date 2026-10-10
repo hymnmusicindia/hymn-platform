@@ -18,6 +18,7 @@ import "./styles/release-audio-player.css";
 import "./styles/release-editor-premium.css";
 import "./styles/release-record-review.css";
 import "./styles/subscription-options.css";
+import "./styles/home-goal-workspace.css";
 import { SmartHelpLayer } from "@/components/smart-help-layer";
 
 export const metadata: Metadata = {

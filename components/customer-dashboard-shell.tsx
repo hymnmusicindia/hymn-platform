@@ -12,7 +12,6 @@ import { Beat, BeatPurchase, Notification, Order, Release, SupportTicket, User }
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { CustomerHome, ProducerHome } from "@/components/simplified-dashboard-home";
 import { FirstLoginReferralPrompt } from "@/components/first-login-referral-prompt";
-import { OnboardingAgentDock } from "@/components/onboarding-agent-card";
 
 const AnalyticsDashboard = dynamic(() => import("@/components/analytics-dashboard").then((module) => module.AnalyticsDashboard));
 const ReferralPanel = dynamic(() => import("@/components/referral-panel").then((module) => module.ReferralPanel));
@@ -829,7 +828,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         </div>
       ) : null}
 
-      <OnboardingAgentDock />
+
 
     </DashboardFrame>
   );

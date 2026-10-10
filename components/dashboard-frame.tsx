@@ -93,6 +93,13 @@ export function DashboardFrame<T extends string>({
     if (navGroups?.length) return navGroups.find(group => group.items.some(item => item.key === activeKey))?.label ?? null;
     return navItems.find(item => item.key === activeKey)?.group ?? "Workspace";
   });
+  useEffect(() => {
+    function reveal(event: Event) { setOpenGroup((event as CustomEvent<string>).detail); setCollapsed(false); setLocalSearch(""); if(window.innerWidth<1024) setMobileOpen(true); }
+    function hide() { setMobileOpen(false); }
+    window.addEventListener("hymn-reveal-service",reveal);
+    window.addEventListener("hymn-hide-service",hide);
+    return () => { window.removeEventListener("hymn-reveal-service",reveal); window.removeEventListener("hymn-hide-service",hide); };
+  }, []);
   const [localSearch, setLocalSearch] = useState("");
   const navScrollRef = useRef<HTMLDivElement>(null);
   const [navScroll, setNavScroll] = useState({ canUp: false, canDown: false });
@@ -238,7 +245,7 @@ export function DashboardFrame<T extends string>({
                     const active = item.key === activeKey;
                     const Icon = /release|catalog/.test(item.key) ? Disc3 : /analytics|sales/.test(item.key) ? TrendingUp : /earning|payout/.test(item.key) ? Wallet : /upload/.test(item.key) ? Upload : /studio|mix|master/.test(item.key) ? Headphones : /store|purchase/.test(item.key) ? Store : /setting|profile|account/.test(item.key) ? Settings : /collaborator|referral/.test(item.key) ? Users : /support|help/.test(item.key) ? LifeBuoy : item.key === "overview" ? LayoutGrid : Music2;
                     const content = <><Icon className="portal-nav-icon" /><span className={clsx("min-w-0", collapsed ? "lg:hidden" : "")}><span className="block truncate font-semibold">{item.label}</span></span></>;
-                    return item.href ? <Link key={item.key} href={item.href} data-nav-key={item.key} aria-current={active ? "page" : undefined} onClick={(event) => { setMobileOpen(false); if (item.key === "plans" || item.key === "subscriptions") { event.preventDefault(); openSubscriptions(); } }} className={clsx("dashboard-os-nav-item pressable hover-lift", active ? "is-active" : "is-idle")} title={collapsed ? item.label : undefined}>{content}</Link> : (
+                    return item.href ? <Link key={item.key} href={item.href} data-guide-route={item.href} data-nav-key={item.key} aria-current={active ? "page" : undefined} onClick={(event) => { setMobileOpen(false); if (item.key === "plans" || item.key === "subscriptions") { event.preventDefault(); openSubscriptions(); } }} className={clsx("dashboard-os-nav-item pressable hover-lift", active ? "is-active" : "is-idle")} title={collapsed ? item.label : undefined}>{content}</Link> : (
                       <button
                         key={item.key}
                         data-nav-key={item.key}

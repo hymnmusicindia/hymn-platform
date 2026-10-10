@@ -8,6 +8,7 @@ import {
   Youtube,
 } from "lucide-react";
 import { MusicLifecycleBanner } from "@/components/music-lifecycle-banner";
+import { HomeGoalWorkspace } from "@/components/home-goal-workspace";
 import { LandingWorkspace } from "@/components/landing-workspace";
 import { HomeProducerInvitation } from "@/components/home-producer-invitation";
 import { AnimatedHeroMetrics } from "@/components/animated-hero-metrics";
@@ -78,7 +79,9 @@ const testimonials = [
 
 
 export default async function HomePage() {
-  const [{ beats, producerProfiles, googleAvatarUrls, featuredReviews, featuredReleases }, session] = await Promise.all([getPublicHomePreview(), getSession()]);
+  const session = await getSession();
+  if (session) return <main id="home" className="hymn-landing"><LandingWorkspace workspaceHref={destinationForRole(session.role)}><HomeGoalWorkspace userId={session.sub} name={session.name} /></LandingWorkspace></main>;
+  const { beats, producerProfiles, googleAvatarUrls, featuredReviews, featuredReleases } = await getPublicHomePreview();
   const { catalog } = buildBeatStorefront(beats, producerProfiles);
   const homepageShowcaseReleases = [...featuredReleases];
   const showcaseRows = ["left", "static", "right"].map((direction, rowIndex) => {
@@ -92,7 +95,7 @@ export default async function HomePage() {
   });
   return (
     <main id="home" className="hymn-landing">
-      <LandingWorkspace workspaceHref={session ? destinationForRole(session.role) : "/login"}>
+      <LandingWorkspace workspaceHref="/login">
       <section className="landing-hero">
         <div className="absolute inset-0">
           <Image src={images.hero.src} alt={images.hero.alt} fill priority fetchPriority="high" quality={75} sizes="100vw" className="scale-105 object-cover object-center opacity-52" />
@@ -220,7 +223,7 @@ export default async function HomePage() {
               <p className="mt-6 max-w-md text-sm font-medium leading-7 sm:text-base" style={{ color: "#d4d4d8" }}>
                 Discover the music and independent artists building their next chapter with HYMN.
               </p>
-              <Link href={session ? "/distribution/start" : "/login?mode=signup"} className="mt-7 inline-flex items-center gap-3 rounded-xl border border-white/12 bg-white/[0.08] px-5 py-3 text-sm font-semibold text-white transition hover:border-white/28 hover:bg-white/[0.14]">
+              <Link href="/login?mode=signup" className="mt-7 inline-flex items-center gap-3 rounded-xl border border-white/12 bg-white/[0.08] px-5 py-3 text-sm font-semibold text-white transition hover:border-white/28 hover:bg-white/[0.14]">
                 Your next release is waiting
                 <ArrowRight className="h-4 w-4" />
               </Link>
@@ -295,8 +298,8 @@ export default async function HomePage() {
               Join a premium agency and label ecosystem built for artists who want releases, audiences, identity, monetization, and cultural impact to grow together.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:flex-wrap">
-              <Link href={session ? destinationForRole(session.role) : "/login"} className="premium-cta inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[#f4f7fb] px-6 py-3 text-sm font-semibold text-[#071013] shadow-[0_0_42px_rgba(255,255,255,0.18)] sm:w-auto sm:min-h-12">
-                {session ? "Go to Dashboard" : "Login"}
+              <Link href="/login" className="premium-cta inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[#f4f7fb] px-6 py-3 text-sm font-semibold text-[#071013] shadow-[0_0_42px_rgba(255,255,255,0.18)] sm:w-auto sm:min-h-12">
+                Login
                 <ArrowRight className="h-4 w-4" />
               </Link>
               {!session ? (
@@ -343,7 +346,7 @@ export default async function HomePage() {
             <h2 className="max-w-sm text-2xl font-medium leading-tight tracking-[-0.03em] text-white sm:text-3xl">
               Subscribe to our newsletter<br className="hidden sm:block" /> for updates
             </h2>
-            <HomeNewsletter accountEmail={session?.email} />
+            <HomeNewsletter />
           </div>
 
           <div className="my-9 h-px bg-white/[0.055] sm:my-11" />
