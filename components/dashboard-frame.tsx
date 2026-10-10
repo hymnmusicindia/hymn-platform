@@ -1,8 +1,9 @@
 "use client";
 
-import { Bell, ChevronDown, ChevronUp, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, X, Plus, Disc3, TrendingUp, Wallet, Music2, Headphones, Settings, Users, LifeBuoy, Store, LayoutGrid, Upload, Crown } from "lucide-react";
+import { Bell, ChevronDown, ChevronUp, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, X, Plus, Disc3, TrendingUp, Wallet, Music2, Headphones, Settings, Users, LifeBuoy, Store, LayoutGrid, Upload } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
+import { SubscriptionButton, openSubscriptions } from "@/components/subscription-options";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -237,7 +238,7 @@ export function DashboardFrame<T extends string>({
                     const active = item.key === activeKey;
                     const Icon = /release|catalog/.test(item.key) ? Disc3 : /analytics|sales/.test(item.key) ? TrendingUp : /earning|payout/.test(item.key) ? Wallet : /upload/.test(item.key) ? Upload : /studio|mix|master/.test(item.key) ? Headphones : /store|purchase/.test(item.key) ? Store : /setting|profile|account/.test(item.key) ? Settings : /collaborator|referral/.test(item.key) ? Users : /support|help/.test(item.key) ? LifeBuoy : item.key === "overview" ? LayoutGrid : Music2;
                     const content = <><Icon className="portal-nav-icon" /><span className={clsx("min-w-0", collapsed ? "lg:hidden" : "")}><span className="block truncate font-semibold">{item.label}</span></span></>;
-                    return item.href ? <Link key={item.key} href={item.href} data-nav-key={item.key} aria-current={active ? "page" : undefined} onClick={() => setMobileOpen(false)} className={clsx("dashboard-os-nav-item pressable hover-lift", active ? "is-active" : "is-idle")} title={collapsed ? item.label : undefined}>{content}</Link> : (
+                    return item.href ? <Link key={item.key} href={item.href} data-nav-key={item.key} aria-current={active ? "page" : undefined} onClick={(event) => { setMobileOpen(false); if (item.key === "plans" || item.key === "subscriptions") { event.preventDefault(); openSubscriptions(); } }} className={clsx("dashboard-os-nav-item pressable hover-lift", active ? "is-active" : "is-idle")} title={collapsed ? item.label : undefined}>{content}</Link> : (
                       <button
                         key={item.key}
                         data-nav-key={item.key}
@@ -276,7 +277,7 @@ export function DashboardFrame<T extends string>({
             <Command className="h-4 w-4" style={{ color: "var(--text-muted)" }} />
           </div> : <div />}
           <div className="flex items-center gap-2">
-            <Link href="/distribution" className="portal-upgrade"><Crown size={16} /> Plans</Link>
+            <SubscriptionButton className="portal-upgrade" />
             {workspaceAction}
             {quickActions && isOverview ? <div className="hidden items-center gap-2 xl:flex">{quickActions}</div> : null}
             <button type="button" className="dashboard-os-icon-button" aria-label={notificationCount ? `Notifications, ${notificationCount} unread` : "Notifications"} onClick={onNotificationsClick} disabled={!onNotificationsClick}>

@@ -4,13 +4,14 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { AlertCircle, Bell, CheckCircle2, ChevronDown, Crown, Disc3, Headphones, HelpCircle, LayoutDashboard, LogOut, MessageCircle, Music2, PackageCheck, PanelLeft, ShieldCheck, ShoppingCart, UserRound, WalletCards, X } from "lucide-react";
+import { AlertCircle, Bell, CheckCircle2, ChevronDown, Disc3, Headphones, HelpCircle, LayoutDashboard, LogOut, MessageCircle, Music2, PackageCheck, PanelLeft, ShieldCheck, ShoppingCart, UserRound, WalletCards, X } from "lucide-react";
 import clsx from "clsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mainNav } from "@/lib/site";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { SessionPayload } from "@/lib/types";
 import { beatLicenseLabel, type BeatStoreLicenseType } from "@/lib/beat-store";
+import { SubscriptionButton, SubscriptionOptions } from "@/components/subscription-options";
 import { SmartHelpToggle } from "@/components/smart-help-toggle";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 
@@ -628,7 +629,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <div className="hidden items-center gap-3 lg:flex">
-            {workspaceHeader ? <><Link href="/distribution" className="studio-header-plans"><Crown size={16}/> Plans</Link><Link href="/contact" className="studio-header-tool" aria-label="Contact HYMN"><MessageCircle size={18}/></Link><Link href="/faq" className="studio-header-tool" aria-label="Help and support"><HelpCircle size={18}/></Link></> : <SmartHelpToggle />}
+            {workspaceHeader ? <><SubscriptionButton className="studio-header-plans" /><Link href="/contact" className="studio-header-tool" aria-label="Contact HYMN"><MessageCircle size={18}/></Link><Link href="/faq" className="studio-header-tool" aria-label="Help and support"><HelpCircle size={18}/></Link></> : <SmartHelpToggle />}
             {!isAuthenticated && !workspaceHeader ? <ThemeToggle /> : null}
             {isAuthenticated ? <AppLauncher /> : (
               <Link
@@ -711,6 +712,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           </div>
         </aside>
       </div>, document.body) : null}
+      <SubscriptionOptions />
     </header>
   );
 }
