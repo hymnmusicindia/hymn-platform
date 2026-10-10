@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowRight, AudioLines, Check, ChevronDown, Compass, Disc3, Headphones, LoaderCircle, Music2, RotateCcw, Mic2, SlidersHorizontal, Users } from "lucide-react";
+import { ArrowRight, AudioLines, Check, X, Compass, Disc3, Headphones, LoaderCircle, Music2, RotateCcw, Mic2, SlidersHorizontal, Users } from "lucide-react";
 import type { OnboardingAgentState } from "@/lib/onboarding-agent";
 import { beginHomeGuide, homeGoal, homeGoals, onboardingTarget, homeFeedSections, type HomeBannerId } from "@/lib/home-goals";
 
@@ -26,7 +26,14 @@ export function HomeGoalWorkspace({ userId, name, banners = {} }: { userId: numb
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [visit, setVisit] = useState(0);
-  const [popupOpen, setPopupOpen] = useState(true);
+  const [popupOpen, setPopupOpen] = useState(false);
+  const popupToggleRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!popupOpen) return;
+    function dismiss(event: KeyboardEvent) { if (event.key === "Escape") { setPopupOpen(false); popupToggleRef.current?.focus(); } }
+    window.addEventListener("keydown", dismiss);
+    return () => window.removeEventListener("keydown", dismiss);
+  }, [popupOpen]);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   async function load() {
@@ -89,7 +96,7 @@ export function HomeGoalWorkspace({ userId, name, banners = {} }: { userId: numb
   const completed = steps.filter(step => ["completed", "skipped"].includes(step.status)).length;
   const firstName = name.trim().split(/\s+/)[0] || "there";
   const activeHref = onboardingTarget(next?.action_target || goal.href, state?.goalId);
-  const guide = (href: string, title: string, description: string) => beginHomeGuide({ userId, goalId: state?.goalId || goal.id, href, title, description });
+  const guide = (href: string, title: string, description: string) => { setPopupOpen(false); beginHomeGuide({ userId, goalId: state?.goalId || goal.id, href, title, description }); };
 
   return <section className="home-goal-workspace" data-home-goal={state?.goalId || "choose"} data-mode={state && !chooser ? "home" : "onboarding"} aria-labelledby="home-goal-title">
     <div className="home-goal-backdrop" aria-hidden="true"><Image src="/home-hero-crowd.jpg" alt="" fill priority sizes="100vw" /></div>
@@ -106,10 +113,11 @@ export function HomeGoalWorkspace({ userId, name, banners = {} }: { userId: numb
       <div className="home-goal-choice-footer"><p>{busy && choosingProfession ? "Saving your profession..." : "Your path. Always changeable."}</p><div>{state ? <button type="button" onClick={() => { setEditing(false); void load(); }} disabled={busy}>Cancel</button> : <Link href="/dashboard">Explore first</Link>}{!choosingProfession ? <button className="home-goal-primary" type="button" disabled={busy || !selected} onClick={() => void update({ action: state ? "regenerate" : "generate", goalId: selected })}>{busy ? <><LoaderCircle size={16} /> Building your path...</> : <>Build my path <ArrowRight size={16} /></>}</button> : null}</div></div>
     </> : state ? <>
       {typeof document !== "undefined" ? createPortal(<aside className="home-path-popup" aria-label="Your focus">
-      <button className="home-path-popup-toggle" type="button" aria-expanded={popupOpen} aria-controls="home-path-popup-content" onClick={() => setPopupOpen(open => !open)}><Compass size={17}/><span>Your focus. Your next move.</span><ChevronDown size={16}/></button>
+      <button ref={popupToggleRef} className="home-path-popup-toggle" type="button" aria-label={popupOpen ? "Close goal guide" : "Open goal guide"} title="Your goal guide" aria-expanded={popupOpen} aria-controls="home-path-popup-content" onClick={() => setPopupOpen(open => !open)}>{popupOpen ? <X size={22}/> : <Compass size={24}/>}</button>
       <div id="home-path-popup-content" hidden={!popupOpen}>
+      <header className="home-path-popup-heading"><Compass size={17}/><span>Your focus. Your next move.</span></header>
       <div className="home-path-launch"><Link className="home-goal-primary" href={activeHref}>{next?.action_label || goal.action}<ArrowRight size={16}/></Link><button type="button" onClick={() => { setSelected(state.goalId || ""); setEditing(true); requestAnimationFrame(() => headingRef.current?.focus()); }}>Change goal</button></div>
-      <details className="home-path-guide"><summary>Your guide <span>{completed}/{steps.length} steps</span><ArrowRight size={16}/></summary>
+      <details className="home-path-guide" open><summary>Your guide <span>{completed}/{steps.length} steps</span><ArrowRight size={16}/></summary>
       <div className="home-goal-focus-grid"><article className="home-goal-feature"><div className="home-goal-feature-label"><span>YOUR NEXT STEP</span></div><h2>{next?.title || "Your path is complete. Keep creating."}</h2><p>{next?.description || "Your chosen tools and services are ready whenever you need them."}</p><div className="home-goal-feature-actions"><Link className="home-goal-primary" href={activeHref}>{next?.action_label || goal.action}<ArrowRight size={16} /></Link><button type="button" onClick={() => guide(activeHref, next?.title || goal.title, next?.description || goal.description)}><Compass size={16} /> Guide me there</button></div><details className="home-goal-feature-footnote"><summary>Why this step?</summary>{next?.why_it_matters || "Revisit any step or choose a new objective."}</details></article>
       <aside className="home-goal-checklist"><header><h2>Your next steps</h2><span>{completed}/{steps.length}</span></header><div className="home-goal-progress" role="progressbar" aria-label="Your path progress" aria-valuemin={0} aria-valuemax={steps.length || 1} aria-valuenow={completed}><span style={{ width: `${steps.length ? completed / steps.length * 100 : 0}%` }} /></div><ol>{steps.map((step,index) => <li key={step.id} data-status={step.status} data-current={step.id === next?.id}><span className="home-goal-step-number">{step.status === "completed" ? <Check size={14} /> : step.status === "skipped" ? "—" : String(index + 1).padStart(2,"0")}</span><div><h3>{step.title}</h3>{!["completed","skipped"].includes(step.status) ? <div className="home-goal-step-actions"><button type="button" onClick={() => guide(step.action_target, step.title, step.description)} disabled={busy}>Show me <ArrowRight size={12} /></button><button type="button" onClick={() => void update({ action:"step", stepId:step.id, status:"completed" })} disabled={busy}>Mark done</button><button type="button" onClick={() => void update({ action:"step", stepId:step.id, status:"skipped" })} disabled={busy}>Skip</button></div> : <span className="home-goal-step-finished">{step.status === "completed" ? "Completed" : "Skipped"}</span>}</div></li>)}</ol></aside></div>
       </details>

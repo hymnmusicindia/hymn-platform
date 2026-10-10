@@ -153,13 +153,13 @@ html body .home-goal-primary:hover:not(:disabled) { background:#fff; color:#080c
 /* A quiet, non-modal goal companion keeps the hero for music. */
 .home-goal-hero-showcase { min-width:0; }
 .home-goal-hero-showcase > .shell { width:100%; max-width:none; margin:0; padding:0 36px 24px; }
-.home-path-popup { position:fixed; z-index:90; right:108px; bottom:24px; width:min(380px,calc(100vw - 36px)); border:1px solid #ffffff24; border-radius:20px; background:linear-gradient(145deg,#202630f5,#11161df5); box-shadow:0 18px 70px #0008; backdrop-filter:blur(24px); color:#f4f6fa; overflow:hidden; font-family:inherit; }
+.home-path-popup { position:fixed; z-index:90; right:24px; bottom:calc(24px + env(safe-area-inset-bottom)); color:#f4f6fa; font-family:inherit; }
 .home-path-popup a { text-decoration:none; }
-.home-path-popup-toggle { display:flex; align-items:center; gap:10px; width:100%; min-height:56px; padding:14px 18px; color:#e4e9f1; text-align:left; font-size:12px; font-weight:550; }
-.home-path-popup-toggle > svg:first-child { color:#9daec5; flex-shrink:0; }
-.home-path-popup-toggle > svg:last-child { margin-left:auto; flex-shrink:0; transition:transform .2s; }
-.home-path-popup-toggle[aria-expanded="false"] > svg:last-child { transform:rotate(180deg); }
-#home-path-popup-content { padding:0 18px; max-height:min(560px,calc(100dvh - 180px)); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; }
+.home-path-popup-toggle { display:grid; place-items:center; width:52px; height:52px; margin-left:auto; border:1px solid #ffffff30; border-radius:50%; background:linear-gradient(145deg,#2c3440,#11161d); box-shadow:0 8px 30px #0006; color:#e4e9f1; transition:transform .2s,border-color .2s; }
+.home-path-popup-toggle:hover { transform:translateY(-2px); border-color:#ffffff60; }
+.home-path-popup-heading { display:flex; align-items:center; gap:10px; padding:18px 0; font-size:12px; font-weight:600; }
+.home-path-popup-heading svg { color:#9daec5; }
+#home-path-popup-content { position:absolute; right:0; bottom:66px; width:min(380px,calc(100vw - 32px)); padding:0 18px; max-height:min(600px,calc(100dvh - 170px)); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; border:1px solid #ffffff24; border-radius:20px; background:linear-gradient(145deg,#202630fa,#11161dfa); box-shadow:0 18px 70px #0008; backdrop-filter:blur(24px); }
 #home-path-popup-content[hidden] { display:none; }
 .home-path-popup .home-path-launch { padding:2px 0 14px; gap:18px; }
 .home-path-popup .home-goal-primary { min-height:42px; padding:10px 15px; font-size:11px; border-radius:9px; }
@@ -175,11 +175,11 @@ html body .home-goal-primary:hover:not(:disabled) { background:#fff; color:#080c
 .home-path-popup :is(a,button,summary):focus-visible { outline:2px solid #dce5f2; outline-offset:3px; }
 @media(max-width:700px) {
  .home-goal-hero-showcase > .shell { padding:0 18px 20px; }
- .home-path-popup { right:12px; bottom:calc(84px + env(safe-area-inset-bottom)); width:min(360px,calc(100vw - 24px)); border-radius:17px; }
- .home-goal-workspace[data-mode="home"] { padding-bottom:200px; }
- #home-path-popup-content { max-height:calc(100dvh - 260px); }
+ .home-path-popup { right:16px; bottom:calc(20px + env(safe-area-inset-bottom)); }
+
+ #home-path-popup-content { max-height:calc(100dvh - 150px); border-radius:17px; }
 }
-@media(prefers-reduced-motion:reduce) { .home-path-popup-toggle > svg { transition:none; } }
+@media(prefers-reduced-motion:reduce) { .home-path-popup-toggle { transition:none; } }
 
 /* Welcome briefly, then let the music occupy the hero. */
 .home-welcome-intro { display:grid; grid-template-rows:1fr; }
