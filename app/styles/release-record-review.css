@@ -1,0 +1,90 @@
+﻿/* Release dialogs own their palette because portals render outside the workspace. */
+html body .customer-overlay { --bg-elevated:#1c2027; --bg-soft:#242932; --card:#20252d; --border:#3b424e; --text:#f4f5f7; --text-muted:#b7bec9; --text-soft:#929baa; color:var(--text); color-scheme:dark; }
+html body :is(.release-dialog-layer,.genre-picker-backdrop) { z-index:2100; align-items:center; padding:24px; overflow:hidden; background:rgba(4,6,10,.76); backdrop-filter:blur(12px); }
+html body .release-dialog-layer > section { min-height:0; max-height:calc(100dvh - 48px); outline:none; }
+html body .contributors-modal { max-height:calc(100dvh - 48px)!important; border:1px solid #3b424e; border-radius:12px!important; background:#1c2027!important; color:#f4f5f7; }
+html body .contributors-modal > :first-child { flex-shrink:0; padding:22px 28px!important; background:#20252d!important; }
+html body .contributors-modal > .grid { min-height:0; padding:24px 28px!important; gap:24px; }
+html body .contributors-modal > :last-child { flex-shrink:0; padding:18px 28px!important; }
+html body .contributors-modal .contributor-person-fields { display:grid!important; grid-template-columns:1fr 1fr!important; gap:18px!important; padding:20px!important; margin-top:14px; border:1px solid #363d48!important; background:#20252d!important; }
+html body .contributors-modal .contributor-person-fields > :first-child { grid-column:1/-1; }
+html body .contributors-modal .contributor-person-fields > span { display:none; }
+html body .contributors-modal .contributor-person-fields > .col-span-full { grid-template-columns:1fr 1fr!important; gap:18px!important; }
+html body .contributors-modal .field,html body .genre-picker-modal .field { min-height:48px!important; width:100%; padding:12px 14px!important; border:1px solid #454e5d!important; border-radius:5px!important; background:#282e38!important; color:#f4f5f7!important; font-size:15px; }
+html body .genre-picker-modal .relative > .field { padding-left:40px!important; }
+html body .genre-picker-modal { max-height:calc(100dvh - 48px); border-radius:12px!important; background:#1c2027!important; color:#f4f5f7; }
+html body .genre-picker-modal button:hover { background:#303743; color:#fff; }
+html body .contributors-modal button { min-height:44px; }
+/* A single generous editing area; legal copy and territories no longer compete in narrow columns. */
+html body .release-workflow.release-premium-editor { grid-template-columns:132px minmax(0,1fr); gap:12px 24px; }
+html body .release-premium-editor .release-editor-status { display:none; }
+html body .release-premium-editor :is(.field,.input) { min-height:48px!important; padding:12px 14px!important; font-size:15px; }
+html body .release-premium-editor .track-editor-fields { gap:24px; }
+html body .release-premium-editor .track-editor-fields > div.grid { gap:20px; }
+html body .release-premium-editor .release-details-fields { gap:22px; }
+@media(min-width:1024px) {
+ html body .release-workflow.release-premium-editor { grid-template-rows:auto auto minmax(0,1fr); }
+ html body .release-premium-editor .release-workflow-nav,html body .release-premium-editor .release-workflow-content { grid-row:3!important; }
+ html body .release-premium-editor[data-editor-stage="5"] .release-editor-panels { grid-template-columns:minmax(0,1fr); }
+ html body .release-premium-editor[data-editor-stage="5"] .release-rights-stage,html body .release-premium-editor[data-editor-stage="5"] .release-delivery-stage { grid-column:1; grid-row:auto; }
+}
+/* Artwork-led record sleeve and readable liner notes. */
+html body .release-record-review { display:grid; gap:28px; color:#f4f5f7; }
+html body .record-review-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+html body .record-review-heading p,html body .record-review-identity > p { color:#aeb6c4; font-size:10px; letter-spacing:.18em; margin:0 0 10px; }
+html body .record-review-heading h2 { font-size:clamp(26px,3vw,38px); letter-spacing:-.04em; line-height:1.15; }
+html body .record-review-heading > span { font-size:12px; color:#b7bec9; }
+html body .record-review-card { display:grid; grid-template-columns:minmax(160px,240px) minmax(0,1fr); gap:30px; padding:28px; border:1px solid #3c4350; border-radius:8px; background:linear-gradient(125deg,#303641,#1d222b 80%); }
+html body .record-review-cover { aspect-ratio:1; display:grid; place-items:center; background:#171b22; overflow:hidden; border-radius:4px; }
+html body .record-review-cover img { width:100%; height:100%; object-fit:cover; }
+html body .record-review-cover > svg { width:64px; height:64px; color:#6e798c; }
+html body .record-review-identity { display:flex; flex-direction:column; justify-content:center; min-width:0; gap:12px; }
+html body .record-review-identity h3 { font-size:clamp(28px,3.8vw,48px); letter-spacing:-.04em; line-height:1.1; overflow-wrap:anywhere; }
+html body .record-review-identity > span { font-size:17px; color:#c9ced8; }
+html body .release-record-review dl { display:grid; gap:14px; margin:10px 0; }
+html body .release-record-review dt { color:#929caa; font-size:11px; margin-bottom:5px; }
+html body .release-record-review dd { margin:0; font-size:14px; line-height:1.6; overflow-wrap:anywhere; }
+html body .record-review-identity dl { grid-template-columns:1fr 1fr; }
+html body .release-record-review button:not(.release-footer-action) { color:#b8c1cf; background:transparent; border:0; border-radius:0; box-shadow:none; text-align:left; min-height:44px; font-size:12px; }
+html body .release-record-review button:hover:not(:disabled) { color:#fff; }
+html body .release-record-review button:focus-visible { outline:2px solid #b7c3d7; outline-offset:3px; }
+html body .record-review-tracks > header,html body .record-review-details header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+html body .release-record-review h3 { font-weight:600; }
+html body .record-review-track { display:grid; grid-template-columns:28px minmax(0,1fr); gap:12px; padding:20px 0; border-bottom:1px solid #333a46; }
+html body .record-track-number { color:#7e899a; font-size:12px; padding-top:18px; }
+html body .record-track-credits { display:flex; flex-wrap:wrap; gap:10px 24px; color:#a8b2c2; font-size:11px; margin-top:14px; }
+html body .record-track-credits b { color:#d9dfe9; font-weight:500; margin-right:6px; }
+html body .record-review-details { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:24px; }
+html body .record-review-details > section { border-top:1px solid #414956; padding-top:12px; min-width:0; }
+html body .record-review-details h3 { font-size:14px; }
+html body .record-review-issues { padding:20px; background:#27272a; border-left:2px solid #d3ac74; }
+html body .record-review-issues > button { display:flex; width:100%; justify-content:space-between; gap:20px; border-bottom:1px solid #393b40!important; }
+html body .record-review-ready { display:flex; gap:10px; color:#82c9a2; font-size:13px; }
+html body .release-premium-editor .record-review-confirmation { padding:22px!important; background:#232b2a!important; border:1px solid #495d53!important; }
+html body .release-premium-editor .record-review-confirmation > label { display:flex; align-items:flex-start; gap:16px; padding:0; margin:0; border:0; background:none; cursor:pointer; }
+html body .record-review-confirmation input { width:22px; height:22px; flex-shrink:0; accent-color:#83c3a1; margin-top:2px; }
+html body .record-review-confirmation label > span { display:grid; gap:8px; }
+html body .record-review-confirmation strong { font-size:16px; }
+html body .record-review-confirmation span > span { color:#b9c5c0; font-size:13px; line-height:1.7; }
+html body .record-review-payment { display:flex; justify-content:space-between; gap:16px; font-size:14px; }
+html body .release-premium-editor .release-record-review .review-submit-bar { position:static; background:transparent!important; padding:16px 0; }
+@media(max-width:700px) {
+ html body :is(.release-dialog-layer,.genre-picker-backdrop) { padding:12px; }
+ html body .release-dialog-layer > section,html body .contributors-modal,html body .genre-picker-modal { max-height:calc(100dvh - 24px)!important; }
+ html body .contributors-modal > :first-child,html body .contributors-modal > .grid,html body .contributors-modal > :last-child { padding:16px!important; }
+ html body .contributors-modal .contributor-person-fields { grid-template-columns:1fr!important; padding:14px!important; }
+ html body .contributors-modal .contributor-person-fields > .col-span-full { grid-template-columns:1fr!important; }
+ html body .contributors-modal .field,html body .genre-picker-modal .field,html body .release-premium-editor :is(.field,.input) { font-size:16px; }
+ html body .release-workflow.release-premium-editor { grid-template-columns:1fr; }
+ html body .record-review-card { grid-template-columns:1fr; padding:20px; gap:22px; }
+ html body .record-review-cover { width:min(100%,280px); justify-self:center; }
+ html body .record-review-details { grid-template-columns:1fr; gap:18px; }
+ html body .record-review-heading { align-items:start; flex-direction:column; }
+ html body .record-review-payment { flex-wrap:wrap; }
+}
+html body .customer-overlay .contributors-modal { height:auto!important; min-height:0!important; max-height:calc(100dvh - 48px)!important; }
+html body .customer-overlay .contributors-modal > .grid { flex:1 1 auto!important; min-height:0!important; overflow-y:auto!important; }
+html body .customer-overlay .contributors-modal > :first-child { min-height:0!important; }
+html body .customer-overlay .contributors-modal > :last-child { min-height:0!important; }
+html body .release-record-review .payment-summary { border-top:1px solid #414956; padding:20px 0; }
+html body .release-record-review .payment-lines { display:grid; gap:12px; margin-top:20px; }

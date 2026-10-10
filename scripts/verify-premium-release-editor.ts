@@ -37,11 +37,21 @@ export default function Page(){const stage=Number(useSearchParams().get("stage")
         if(stage===3) {
           const title=page.getByPlaceholder("Track title",{exact:true});
           await expect(title).toBeVisible();await title.fill("Midnight session");await expect(title).toHaveValue("Midnight session");
+          await form.getByRole("button",{name:"Edit credits",exact:true}).first().click();
+          const modal=page.locator(".contributors-modal");await expect(modal).toBeVisible();
+          const mb=await modal.boundingBox();expect(mb!.y).toBeGreaterThanOrEqual(0);expect(mb!.y+mb!.height).toBeLessThanOrEqual(height);
+          const name=modal.getByPlaceholder("Full legal name").first();await name.fill("Test Writer");await expect(name).toHaveValue("Test Writer");
+          expect((await name.boundingBox())!.width).toBeGreaterThan(150);
+          await page.keyboard.press("Escape");await expect(modal).not.toBeVisible();
         }
         if(stage===5) {
           await expect(form.locator(".release-rights-stage").getByText("Master rights",{exact:true})).toBeVisible();
           const rights=form.locator(".release-rights-stage input").first();await rights.fill("HYMN Artist");await expect(rights).toHaveValue("HYMN Artist");
           await expect(form.locator(".legal-declaration-details")).toBeVisible();
+          await form.locator(".release-rights-stage").getByRole("button",{name:/Select content ownership/}).click();
+          const picker=page.getByRole("dialog",{name:"Choose content ownership"});await expect(picker).toBeVisible();
+          expect(await picker.evaluate(node=>getComputedStyle(node).backgroundColor)).toBe("rgb(28, 32, 39)");
+          await picker.getByRole("button",{name:"Original/Exclusive Licensed",exact:true}).click();await expect(picker).not.toBeVisible();
         }
         expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
         if(width<1024) {

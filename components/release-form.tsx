@@ -24,7 +24,8 @@ import {
   X,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { CustomerOverlay } from "@/components/customer-overlay";
+import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import NextImage from "next/image";
 import { useRouter } from "next/navigation";
 import { ArtistPicker } from "@/components/artist-picker";
@@ -991,9 +992,11 @@ function SearchableSelect({
     setQuery("");
   }
 
+  const pickerRef = useAccessibleDialog(open, closePicker);
+
   const picker = open ? (
     <div className="genre-picker-backdrop fixed inset-0 z-[120] flex items-end justify-center bg-black/55 p-0 backdrop-blur-sm sm:items-center sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) closePicker(); }}>
-      <section role="dialog" aria-modal="true" aria-label={`Choose ${label.toLowerCase()}`} className="genre-picker-modal flex max-h-[82vh] w-full flex-col overflow-hidden rounded-t-[1.5rem] border shadow-2xl sm:max-w-lg sm:rounded-[1.5rem]" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
+      <section ref={pickerRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`Choose ${label.toLowerCase()}`} className="genre-picker-modal flex max-h-[82vh] w-full flex-col overflow-hidden rounded-t-[1.5rem] border shadow-2xl sm:max-w-lg sm:rounded-[1.5rem]" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
         <header className="flex items-center justify-between gap-4 border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
           <h3 className="font-semibold" style={{ color: "var(--text)" }}>Choose {label.toLowerCase()}</h3>
           <button type="button" onClick={closePicker} aria-label={`Close ${label.toLowerCase()} picker`} className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[var(--text-muted)] transition hover:bg-[var(--bg-soft)] hover:text-[var(--text)]"><X className="h-4 w-4" /></button>
@@ -1038,7 +1041,7 @@ function SearchableSelect({
           style={{ color: "var(--text-soft)" }}
         />
       </button>
-      {picker && typeof document !== "undefined" ? createPortal(picker, document.body) : null}
+      {picker ? <CustomerOverlay>{picker}</CustomerOverlay> : null}
     </div>
   );
 }
@@ -4021,13 +4024,13 @@ export function ReleaseForm({
                             >
                               <span className="flex w-full items-center justify-between gap-3 text-left"><span>{track.versionPreset || "Choose version"}</span><ChevronDown className="h-4 w-4 text-[var(--text-soft)]" /></span>
                             </button>
-                            {versionPickerTrack === index && typeof document !== "undefined" ? createPortal(
+                            {versionPickerTrack === index ? <CustomerOverlay>
                               <div className="genre-picker-backdrop fixed inset-0 z-[120] flex items-end justify-center bg-black/55 p-0 backdrop-blur-sm sm:items-center sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) setVersionPickerTrack(null); }}>
                                 <section role="dialog" aria-modal="true" aria-label="Choose track version" className="genre-picker-modal w-full overflow-hidden rounded-t-[1.5rem] border shadow-2xl sm:max-w-md sm:rounded-[1.5rem]" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
                                   <header className="flex items-center justify-between gap-4 border-b px-5 py-4" style={{ borderColor: "var(--border)" }}><h3 className="font-semibold" style={{ color: "var(--text)" }}>Track version</h3><button type="button" onClick={() => setVersionPickerTrack(null)} aria-label="Close version picker" className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[var(--text-muted)] transition hover:bg-[var(--bg-soft)]"><X className="h-4 w-4" /></button></header>
                                   <div className="grid gap-1 p-3">{versionOptions.filter((option) => option !== "Explicit").map((option) => { const selected = track.versionPreset === option; return <button key={option} type="button" className="flex min-h-11 items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm font-medium transition hover:bg-[var(--bg-soft)]" style={{ color: "var(--text)" }} onClick={() => { updateTrack(index, { versionPreset: option, customVersion: option === "Other" ? track.customVersion : "" }); setVersionPickerTrack(null); }}><span>{option}</span>{selected ? <Check className="h-4 w-4 text-[var(--accent)]" /> : null}</button>; })}</div>
                                 </section>
-                              </div>, document.body) : null}
+                              </div></CustomerOverlay> : null}
                             {track.versionPreset === "Other" ? (
                               <input
                                 className={clsx(
@@ -5939,372 +5942,20 @@ export function ReleaseForm({
           </section>
         ) : null}
         {step === 7 ? (
-          <section className={clsx("release-review-stage grid gap-5", stepMotion)}>
-            <div className="review-page-heading relative grid gap-3 py-3">
-              <button type="button" onClick={() => goToStep(5)} className="text-sm font-semibold md:absolute md:left-0 md:top-7" style={{ color: "var(--text-muted)" }}>← Back to release</button>
-              <p className="text-[11px] font-semibold uppercase tracking-[.18em]" style={{ color: "var(--text-muted)" }}>Release review</p>
-              <h2 className="text-3xl font-semibold tracking-[-.035em] md:text-4xl">One last look.</h2>
-              <p className="text-sm leading-6" style={{ color: "var(--text-muted)" }}>Check your audio, credits and delivery details, then submit to HYMN for review.</p>
-            </div>
-
-            <div
-              className="release-review overflow-hidden rounded-[1.75rem] border"
-              style={{
-                borderColor: "var(--border)",
-                background: "var(--bg-soft)",
-                boxShadow: "0 24px 70px rgba(0,0,0,0.18)",
-              }}
-            >
-              <div
-                className="review-hero grid gap-5 border-b py-6 md:grid-cols-[160px,1fr] md:py-8"
-                style={{
-                  borderColor: "var(--border)",
-                  background:
-                    "linear-gradient(135deg, color-mix(in srgb, var(--accent) 8%, var(--card)), var(--card))",
-                }}
-              >
-                <div
-                  className="aspect-square overflow-hidden rounded-2xl border"
-                  style={{
-                    borderColor: "var(--border)",
-                    background: "var(--card)",
-                  }}
-                >
-                  {artworkPreview ? (
-                    <img
-                      src={artworkPreview}
-                      alt={`${displayedReleaseTitle} artwork`}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
-                      <Disc3
-                        className="h-8 w-8"
-                        style={{ color: "var(--text-soft)" }}
-                      />
-                    </div>
-                  )}
-                </div>
-                <div className="flex min-w-0 flex-col justify-center">
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      `${tracks.length} Track${tracks.length === 1 ? "" : "s"}`,
-                      releaseType === "single"
-                        ? "Single"
-                        : releaseType === "ep"
-                          ? "EP"
-                          : "Album",
-                      tracks.some((track) => track.explicitContent)
-                        ? "Explicit"
-                        : "Clean",
-                      ...(validationIssues.length === 0 ? ["Ready to submit"] : []),
-                    ].map((pill) => (
-                      <span
-                        key={pill}
-                        className="review-pill text-[10px] font-semibold uppercase tracking-[0.14em]"
-                        style={{
-                          borderColor: "var(--border)",
-                          background: "var(--bg-soft)",
-                          color: "var(--text-muted)",
-                        }}
-                      >
-                        {pill}
-                      </span>
-                    ))}
-                  </div>
-                  <h3
-                    className="mt-4 truncate text-2xl font-semibold md:text-4xl"
-                    style={{ color: "var(--text)" }}
-                  >
-                    {displayedReleaseTitle}
-                  </h3>
-                  <p
-                    className="mt-2 text-base"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    {primaryArtistName || "Primary artist missing"}
-                  </p>
-                  <p
-                    className="mt-3 text-sm"
-                    style={{ color: "var(--text-soft)" }}
-                  >
-                    {releaseDateSummaryTitle}: {releaseDateSummaryValue}
-                  </p>
-                </div>
-              </div>
-
-              <div
-                className="grid divide-y lg:grid-cols-[1.05fr,0.95fr] lg:divide-x lg:divide-y-0"
-                style={{ borderColor: "var(--border)" }}
-              >
-                <div
-                  className="grid gap-0 lg:[&>*+*]:border-t"
-                  style={{ borderColor: "var(--border)" }}
-                >
-                  <section className="p-5 md:p-7">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h3 className="text-lg font-semibold">Media & tracks</h3>
-                        <p
-                          className="mt-1 text-sm"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          {artworkPreview ? "Artwork ready" : "Artwork missing"}{" "}
-                          ·{" "}
-                          {tracks.every((track) =>
-                            Boolean(track.audioPreviewUrl),
-                          )
-                            ? "Audio ready"
-                            : "Audio missing"}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <button type="button" className="text-sm font-semibold" style={{ color: "var(--text-muted)" }} onClick={() => goToStep(4)}>Artwork</button>
-                        <button type="button" className="text-sm font-semibold" style={{ color: "var(--accent)" }} onClick={() => goToStep(3)}>Tracks</button>
-                      </div>
-                    </div>
-                    <div className="review-track-groups mt-5">
-                      {tracks.map((track) => (
-                        <div key={`${track.id}-review-track`} className="review-track-group py-5 first:pt-0 last:pb-0">
-                          <AudioWaveform
-                          src={track.audioPreviewUrl}
-                          title={track.trackTitle || "Untitled track"}
-                          subtitle={
-                            [
-                              track.audioFileName || "Final master",
-                              track.duration,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ") || "Audio preview unavailable"
-                          }
-                          compact
-                        />
-                          <div className="mt-2 grid gap-x-5 gap-y-2 text-sm sm:grid-cols-2">
-                            {[
-                              ["Artist", namesFor(track.primaryArtistIds) || track.primaryArtistQuery || "Add an artist"],
-                              ["Genre", release.primaryGenre || "—"],
-                              ["Language", track.titleLanguage || release.language || "—"],
-                            ].map(([label, value]) => (
-                              <div key={label} className="review-detail-row flex justify-between gap-3">
-                                <span className="review-label" style={{ color: "var(--text-muted)" }}>{label}</span>
-                                <span className="review-value truncate text-right">{value}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {artworkWarning ? (
-                      <ArtworkWarning warning={artworkWarning} />
-                    ) : null}
-                    <div
-                      className="hidden"
-                      style={{ borderColor: "var(--border)" }}
-                    >
-                      {tracks.map((track) => (
-                        <div
-                          key={`${track.id}-summary`}
-                          className="py-4 first:pt-0 last:pb-0"
-                        >
-                          <div className="grid gap-x-5 gap-y-2 text-sm sm:grid-cols-2">
-                            {[
-                              [
-                                "Artist",
-                                namesFor(track.primaryArtistIds) ||
-                                  track.primaryArtistQuery ||
-                                  "Add an artist",
-                              ],
-                              ["Genre", release.primaryGenre || "—"],
-                              [
-                                "Language",
-                                track.titleLanguage || release.language || "—",
-                              ],
-                            ].map(([label, value]) => (
-                              <div
-                                key={label}
-                                className="review-detail-row flex justify-between gap-3"
-                              >
-                                <span className="review-label" style={{ color: "var(--text-muted)" }}>
-                                  {label}
-                                </span>
-                                <span className="review-value truncate text-right">
-                                  {value}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section
-                    className="border-t p-5 md:p-7"
-                    style={{ borderColor: "var(--border)" }}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-lg font-semibold">Release details</h3>
-                      <button
-                        type="button"
-                        className="text-sm font-semibold"
-                        style={{ color: "var(--accent)" }}
-                        onClick={() => goToStep(2)}
-                      >
-                        Edit
-                      </button>
-                    </div>
-                    <div className="release-details-review-grid mt-4 grid text-sm">
-                      {[
-                        ["Release title", displayedReleaseTitle],
-                        [
-                          "Version",
-                          tracks[0]?.versionPreset === "Other"
-                            ? tracks[0]?.customVersion
-                            : tracks[0]?.versionPreset,
-                        ],
-                        [
-                          "Release type",
-                          releaseType === "single"
-                            ? "Single"
-                            : releaseType === "ep"
-                              ? "EP"
-                              : "Album",
-                        ],
-                        ["Genre", release.primaryGenre],
-                        ["Subgenre", release.secondaryGenre],
-                        ["Mood", release.mood],
-                        ["Language", release.language],
-                        [releaseDateSummaryTitle, releaseDateSummaryValue],
-                        ["Label", release.recordLabelName],
-                        ["Copyright", release.copyrightOwner],
-                      ].map(([label, value]) => (
-                        <div
-                          key={label}
-                          className="review-detail-row flex items-start justify-between gap-4"
-                          style={{
-                            borderColor:
-                              "color-mix(in srgb, var(--border) 65%, transparent)",
-                          }}
-                        >
-                          <span className="review-label" style={{ color: "var(--text-muted)" }}>
-                            {label}
-                          </span>
-                          <span className="review-value max-w-[60%] text-right">
-                            {value || "—"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                </div>
-
-                <div
-                  className="grid content-start divide-y"
-                  style={{ borderColor: "var(--border)" }}
-                >
-                  <section className="p-5 md:p-7">
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-lg font-semibold">Artist details</h3>
-                      <button
-                        type="button"
-                        className="text-sm font-semibold"
-                        style={{ color: "var(--accent)" }}
-                        onClick={() => goToStep(3)}
-                      >
-                        Edit
-                      </button>
-                    </div>
-                    <div className="mt-4 grid gap-3 text-sm">
-                      {[
-                        ["Primary artist", primaryArtistName || "Add your artist"],
-                        [
-                          "Featured artists",
-                          tracks
-                            .map((track) => track.featuredArtists)
-                            .filter(Boolean)
-                            .join(", ") || "—",
-                        ],
-                        [
-                          "Artist profile",
-                          tracks.every(
-                            (track) => track.primaryArtistIds.length > 0,
-                          )
-                            ? "Profile connected"
-                            : "Connect a profile",
-                        ],
-                      ].map(([label, value]) => (
-                        <div
-                          key={label}
-                          className="review-detail-row flex items-center justify-between gap-4"
-                        >
-                          <span className="review-label" style={{ color: "var(--text-muted)" }}>
-                            {label}
-                          </span>
-                          <span className="review-value">{value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="p-5 md:p-7">
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-lg font-semibold">
-                        Distribution details
-                      </h3>
-                      <button
-                        type="button"
-                        className="text-sm font-semibold"
-                        style={{ color: "var(--accent)" }}
-                        onClick={() => goToStep(6)}
-                      >
-                        Edit
-                      </button>
-                    </div>
-                    <div className="mt-4 grid gap-3 text-sm">
-                      {[
-                        ["C-Line", release.copyrightOwner],
-                        ["P-Line", release.publishingRights],
-                        ["Ownership", release.contentType],
-                        ["Rights proof", release.licenseReceiptUrl ? "Attached" : "Not attached"],
-                        [
-                          "Platforms",
-                          `${storeSelections.length} platform${storeSelections.length === 1 ? "" : "s"} selected`,
-                        ],
-                        [
-                          "Territories",
-                          release.territory === "Selected countries"
-                            ? `${release.selectedCountries.length} countries selected`
-                            : "Worldwide",
-                        ],
-                        [
-                          "Monetisation",
-                          socialConsentAccepted ? "Enabled" : "Off",
-                        ],
-                        [
-                          "YouTube Content ID",
-                          youtubeContentIdEnabled ? "Enabled" : "Off",
-                        ],
-                        [
-                          "Release timing",
-                          release.releaseTiming === "schedule_release"
-                            ? "Scheduled"
-                            : "Quick release",
-                        ],
-                        ["Plan", currentPlan.title],
-                      ].map(([label, value]) => (
-                        <div
-                          key={label}
-                          className="review-detail-row flex items-center justify-between gap-4"
-                        >
-                          <span className="review-label" style={{ color: "var(--text-muted)" }}>
-                            {label}
-                          </span>
-                          <span className="review-value text-right">{value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-
+          <section className="release-review-stage release-record-review">
+            <header className="record-review-heading"><div><p>YOUR NEXT RELEASE</p><h2>Ready for the world?</h2></div><span>{validationIssues.length === 0 ? "Ready for review" : `${validationIssues.length} items to finish`}</span></header>
+            <article className="record-review-card">
+              <div className="record-review-cover">{artworkPreview ? <img src={artworkPreview} alt={`${displayedReleaseTitle} artwork`} /> : <Disc3 aria-label="Artwork missing" />}</div>
+              <div className="record-review-identity"><p>{releaseType.toUpperCase()} · {tracks.length} {tracks.length === 1 ? "TRACK" : "TRACKS"}</p><h3>{displayedReleaseTitle}</h3><span>{primaryArtistName || "Primary artist missing"}</span><dl><div><dt>{releaseDateSummaryTitle}</dt><dd>{releaseDateSummaryValue}</dd></div><div><dt>Label</dt><dd>{release.recordLabelName || "Not provided"}</dd></div></dl><button type="button" onClick={() => goToStep(4)}>Edit artwork →</button></div>
+            </article>
+            <section className="record-review-tracks"><header><h3>The music</h3><button type="button" onClick={() => goToStep(3)}>Edit tracks & credits →</button></header>{tracks.map((track,index) => <div className="record-review-track" key={track.id}><span className="record-track-number">{String(index+1).padStart(2,"0")}</span><div><AudioWaveform src={track.existingAudioUrl || track.audioPreviewUrl} title={track.trackTitle || "Untitled track"} subtitle={[namesFor(track.primaryArtistIds) || track.primaryArtistQuery,track.duration,track.explicitContent ? "Explicit" : "Clean"].filter(Boolean).join(" · ")} compact /><div className="record-track-credits"><span><b>Songwriters</b> {track.songwriters.map(entry => entry.legalName || entry.artistName).filter(Boolean).join(", ") || "Not provided"}</span><span><b>Composers</b> {track.composers.map(entry => entry.legalName || entry.artistName).filter(Boolean).join(", ") || "Not provided"}</span><span><b>Producers</b> {track.producers.map(entry => entry.artistName || entry.legalName).filter(Boolean).join(", ") || "Not provided"}</span></div></div></div>)}</section>
+            <div className="record-review-details">{[
+              {title:"Release details",stage:2,rows:[["Genre",release.primaryGenre],["Subgenre",release.secondaryGenre],["Language",release.language],["Mood",release.mood]]},
+              {title:"Rights & ownership",stage:5,rows:[["Copyright",release.copyrightOwner],["Recording rights",release.publishingRights],["Content ownership",release.contentType],["Rights proof",release.licenseReceiptUrl ? "Attached" : "Not attached"]]},
+              {title:"Delivery",stage:5,rows:[["Platforms",storeSelections.join(", ")],["Territories",release.territory === "Selected countries" ? release.selectedCountries.join(", ") : "Worldwide"],["Content ID",youtubeContentIdEnabled ? "Enabled" : "Off"],["Social monetisation",socialConsentAccepted ? "Enabled" : "Off"]]}
+            ].map(group => <section key={group.title}><header><h3>{group.title}</h3><button type="button" onClick={() => goToStep(group.stage)}>Edit →</button></header><dl>{group.rows.map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value || "Not provided"}</dd></div>)}</dl></section>)}</div>
+            {validationIssues.length > 0 ? <section className="record-review-issues"><h3>A few details need your attention</h3>{validationIssues.map(issue => <button type="button" key={`${issue.key}-${issue.trackIndex}`} onClick={() => triggerFieldFocus(issue)}><span>{customerMessage(issue.message)}</span><span aria-hidden="true">→</span></button>)}</section> : <p className="record-review-ready"><CheckCircle2 size={18} /> All required release details are complete.</p>}
+            <div className="review-confirmation record-review-confirmation"><label><input type="checkbox" checked={reviewConfirmed} onChange={(event) => { setReviewConfirmed(event.target.checked); confirmedReviewFingerprintRef.current = event.target.checked ? reviewMetadataFingerprint : null; }} /><span><strong>{reviewConfirmed ? "Confirmed. This is my release." : "One final confirmation"}</strong><span>I have checked the music, credits, rights and delivery details, and I have authority to distribute this release.</span></span></label></div>
                   {isPaidReleaseResubmission ? <section className="payment-summary p-5 md:p-7"><h3 className="text-lg font-semibold">No additional payment</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Your existing release entitlement covers these corrections. Submit the updated release for review.</p></section> : !subscriptionCovered ? <section className="payment-summary p-5 md:p-7">
                     <div className="flex items-end justify-between gap-4 border-b pb-4" style={{ borderColor: "var(--border)" }}>
                       <h3 className="text-lg font-semibold">Payment summary</h3>
@@ -6370,76 +6021,8 @@ export function ReleaseForm({
                     </div>
                   </section> : null}
 
-                  <section className="p-5 md:p-7">
-                    <div className="flex items-center gap-3">
-                      <ShieldCheck
-                        className="readiness-shield h-5 w-5"
-                        style={{
-                          color:
-                            validationIssues.length === 0
-                              ? "#86efac"
-                              : "#fde68a",
-                        }}
-                      />
-                      <div>
-                        <h3 className="font-semibold">
-                          {validationIssues.length === 0
-                            ? "Ready to submit"
-                            : "Submission readiness"}
-                        </h3>
-                        <p
-                          className="mt-1 text-sm"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          {validationIssues.length === 0
-                            ? "Your release is ready for HYMN review."
-                            : "Fix the required items before submitting."}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-4 grid gap-2">
-                      {readinessItems.map((item) => (
-                        <div
-                          key={item.label}
-                          className="flex items-center gap-2 text-sm"
-                        >
-                          <span
-                            className={clsx("readiness-status-icon inline-flex h-5 w-5 items-center justify-center rounded-full", item.complete ? "is-complete" : "is-missing")}
-                            style={{
-                              background: item.complete
-                                ? "rgba(34,197,94,0.14)"
-                                : "rgba(250,204,21,0.12)",
-                              color: item.complete ? "#86efac" : "#fde68a",
-                            }}
-                          >
-                            {item.complete ? (
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                            ) : (
-                              "!"
-                            )}
-                          </span>
-                          <span className={item.complete ? "" : "readiness-missing-text"} style={{ color: "var(--text-muted)" }}>
-                            {item.shortLabel}
-                            {item.complete ? "" : " missing"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                </div>
-              </div>
 
-            </div>
-
-            <div className="review-confirmation rounded-[1.5rem] border p-5 md:p-7" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
-              <p className="text-xl font-semibold">Everything look correct?</p>
-              <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }}>Confirm that the metadata, credits, ownership information, legal declarations, and delivery details shown above are accurate.</p>
-              <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border p-4 text-sm font-medium" style={{ borderColor: reviewConfirmed ? "var(--accent)" : "var(--border)", background: "var(--bg-soft)" }}>
-                <input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0" checked={reviewConfirmed} onChange={(event) => { setReviewConfirmed(event.target.checked); confirmedReviewFingerprintRef.current = event.target.checked ? reviewMetadataFingerprint : null; }} />
-                <span>I confirm that the release information above is correct and that I have authority to distribute this content.</span>
-              </label>
-            </div>
-
+            <div className="record-review-payment"><span>{isPaidReleaseResubmission ? "Corrections to your existing release" : subscriptionCovered ? "Covered by your plan" : "Total payable"}</span><strong>{isPaidReleaseResubmission || subscriptionCovered ? "No additional payment" : distributionCheckoutAmount === 0 ? "₹0" : `₹${distributionCheckoutAmount.toLocaleString("en-IN")}`}</strong></div>
             <div
               className="review-submit-bar sticky bottom-3 z-20 grid gap-3 py-3 backdrop-blur-xl sm:grid-cols-[auto,1fr,auto]"
               style={{

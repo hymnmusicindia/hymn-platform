@@ -1,6 +1,8 @@
 ﻿"use client";
 
 import clsx from "clsx";
+import { CustomerOverlay } from "@/components/customer-overlay";
+import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import Link from "next/link";
 import Image from "next/image";
 import { AlertTriangle, ArrowRight, Check, ChevronDown, Clock3, Disc3, Globe2, Search, X } from "lucide-react";
@@ -30,37 +32,21 @@ function ModalShell({
   maxWidthClass: string;
   children: ReactNode;
 }) {
-  useEffect(() => {
-    if (!open) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open, onClose]);
+  const dialogRef = useAccessibleDialog(open, onClose);
 
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/45 px-4 py-6 backdrop-blur-md"
+    <CustomerOverlay><div
+      className="release-dialog-layer fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/45 px-4 py-6 backdrop-blur-md"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className={clsx("w-full", maxWidthClass)} onMouseDown={(event) => event.stopPropagation()}>
+      <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Release settings" className={clsx("w-full", maxWidthClass)} onMouseDown={(event) => event.stopPropagation()}>
         {children}
-      </div>
-    </div>
+      </section>
+    </div></CustomerOverlay>
   );
 }
 
@@ -241,7 +227,7 @@ export function ContributorsModal({
                 </div>
                 <div className="mt-3 grid gap-2">
                   {entries.map((entry, entryIndex) => (
-                    <div key={entry.id} className="grid gap-2 rounded-xl border p-2.5 sm:grid-cols-[auto,1fr,1fr,auto] sm:items-center" style={{ borderColor: (role.key === "producer" ? entry.artistName : entry.legalName).trim() ? "var(--border)" : "rgba(250,204,21,0.36)", background: "var(--card)" }}>
+                    <div key={entry.id} className="contributor-person-fields grid gap-2 rounded-xl border p-2.5 sm:grid-cols-[auto,1fr,1fr,auto] sm:items-center" style={{ borderColor: (role.key === "producer" ? entry.artistName : entry.legalName).trim() ? "var(--border)" : "rgba(250,204,21,0.36)", background: "var(--card)" }}>
                       <ContributorIdentityPicker entry={entry} role={role.key} onSelect={(patch) => updateRole(key, entry.id, patch)} />
                       <span className="hidden h-8 w-8 items-center justify-center rounded-lg border text-xs font-semibold sm:inline-flex" style={{ borderColor: "var(--border)", color: "var(--text-soft)" }}>{entryIndex + 1}</span>
                       <label className={role.key === "producer" ? "order-2 grid gap-1" : "grid gap-1"}>

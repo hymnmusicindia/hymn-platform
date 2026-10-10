@@ -16,6 +16,7 @@ import "./styles/mobile-workspace.css";
 import "./styles/release-upload-controls.css";
 import "./styles/release-audio-player.css";
 import "./styles/release-editor-premium.css";
+import "./styles/release-record-review.css";
 import { SmartHelpLayer } from "@/components/smart-help-layer";
 
 export const metadata: Metadata = {
