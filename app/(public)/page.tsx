@@ -30,7 +30,7 @@ export const metadata: Metadata = {
 
 const images = {
   hero: {
-    src: "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&q=75&w=1920",
+    src: "/home-hero-crowd.jpg",
     alt: "Artist performing in front of a massive concert crowd"
   },
   studio: {

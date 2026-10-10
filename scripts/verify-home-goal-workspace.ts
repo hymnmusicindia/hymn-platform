@@ -19,6 +19,12 @@ export default function Layout({children}:{children:React.ReactNode}){return <di
     const page = await browser.newPage({ reducedMotion:"reduce" });
     const errors:string[]=[]; page.on("pageerror",error=>errors.push(error.message));
     let saved:OnboardingAgentState|null=null;
+    let savedProfession="";
+    let failProfession=false;
+    await page.route("**/api/user/onboarding-preferences", async route => {
+      if(route.request().method()==="PATCH") { if(failProfession) return route.fulfill({status:503,json:{error:"Unavailable"}}); savedProfession=route.request().postDataJSON().onboardingUserType; return route.fulfill({json:{success:true}}); }
+      return route.fulfill({json:{preferences:{onboardingUserType:savedProfession}}});
+    });
     let failLoad=false, failSave=false;
     let writes=0;
     await page.route("**/api/onboarding-agent",async request=>{
@@ -35,9 +41,23 @@ export default function Layout({children}:{children:React.ReactNode}){return <di
       await page.setViewportSize({width,height:900});
       for(const goal of homeGoals) {
         console.log(`Checking ${goal.id} at ${width}px`);
-        saved=null;
+        saved=null; savedProfession="";
         await page.goto(base+route,{timeout:120000,waitUntil:"domcontentloaded"});
+        await expect(page.getByRole("heading",{name:"Your role in music?"})).toBeVisible();
+        await expect(page.getByRole("group",{name:"Choose your profession"}).getByRole("button")).toHaveCount(4);
+        if(goal.id==="release") await page.screenshot({path:`.cache/home-goal/profession-${width}.png`});
+        if(goal.id==="release" && width===1440) {
+          failProfession=true;
+          await page.getByRole("button",{name:"Artist",exact:true}).click();
+          await expect(page.locator(".home-goal-error")).toContainText("save your profession");
+          await expect(page.getByRole("heading",{name:"Your role in music?"})).toBeVisible();
+          failProfession=false;
+        }
+        await page.getByRole("button",{name:goal.id==="sell-beats" ? "Producer" : goal.id==="finish-release" ? "Manager" : goal.id==="studio" ? "Music Engineer" : "Artist",exact:true}).click();
         await expect(page.getByRole("heading",{name:"What brings you to HYMN?"})).toBeVisible();
+        expect(await page.getByRole("group",{name:"Choose your main objective"}).getByRole("button").count()).toBeLessThanOrEqual(3);
+        await expect(page.locator(".home-goal-backdrop img")).toHaveAttribute("src", /home-hero-crowd/);
+        if(goal.id==="release") await page.screenshot({path:`.cache/home-goal/chooser-${width}.png`});
         const choice=page.getByRole("button",{name:new RegExp(goal.title.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"))});
         await choice.click();await expect(choice).toHaveAttribute("aria-pressed","true");
         await page.getByRole("button",{name:"Build my path"}).click();
@@ -78,6 +98,7 @@ export default function Layout({children}:{children:React.ReactNode}){return <di
     await page.goto(base+route);await expect(page.getByRole("button",{name:"Retry",exact:true})).toBeVisible();
     failLoad=false;await page.getByRole("button",{name:"Retry",exact:true}).click();
     await expect(page.getByRole("heading",{name:"What brings you to HYMN?"})).toBeVisible();
+    await page.getByRole("button",{name:/Release my music/}).click();
     failSave=true;await page.getByRole("button",{name:"Build my path"}).click();
     await expect(page.locator(".home-goal-error")).toContainText("5 minutes");
     await expect(page.getByRole("button",{name:"Build my path"})).toBeEnabled();
@@ -91,7 +112,7 @@ export default function Layout({children}:{children:React.ReactNode}){return <di
     await page.keyboard.press("Escape");await expect(page.locator(".home-goal-guide-layer")).toHaveCount(0);
     }
     expect(errors).toEqual([]);
-    console.log("Home onboarding passed: five goals, account persistence, completion/skip, personalized recommendations, real navigation highlight, cross-route guide, errors, and three responsive widths.");
+    console.log("Home onboarding passed: profession-first choices, limited goals, account persistence, completion/skip, personalized recommendations, real navigation highlight, cross-route guide, errors, and three responsive widths.");
   } finally {
     await browser.close();
     unlinkSync(`${directory}/destination/page.tsx`);rmdirSync(`${directory}/destination`);
