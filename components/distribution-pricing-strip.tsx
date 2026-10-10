@@ -14,7 +14,7 @@ const planVisuals = {
   yearly_plus: { eyebrow: "For professionals" }
 } as const;
 
-const planPerks = {
+export const planPerks = {
   one_time: [
     { label: "Single release submission", included: true },
     { label: "Metadata review", included: true },

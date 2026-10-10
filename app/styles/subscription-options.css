@@ -1,47 +1,80 @@
-﻿/* Standalone subscription comparison, outside workspace stacking contexts. */
+﻿/* Focused offer strip and comparable subscription choices. */
 html body .customer-overlay:has(.subscription-dialog) { z-index:2300; }
-.subscription-backdrop { position:fixed; inset:0; display:grid; place-items:center; padding:24px; background:rgba(3,5,9,.8); backdrop-filter:blur(14px); }
-.subscription-dialog { display:flex; flex-direction:column; width:min(1120px,100%); max-height:calc(100dvh - 48px); min-height:0; overflow:hidden; border:1px solid #414753; border-radius:12px; background:linear-gradient(140deg,#272c36,#171b22 65%); color:#f4f5f7; box-shadow:0 30px 120px #0009; outline:none; }
-.subscription-dialog-heading { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:24px 30px; border-bottom:1px solid #343b47; flex-shrink:0; }
-.subscription-dialog-heading p,.subscription-first-release p { margin:0 0 9px; font-size:10px; font-weight:600; letter-spacing:.2em; color:#a7b1c2; }
-.subscription-dialog-heading h2 { font-size:27px; font-weight:600; line-height:1.1; letter-spacing:-.035em; }
+.subscription-backdrop { position:fixed; inset:0; display:grid; place-items:center; padding:20px; background:rgba(3,5,9,.8); backdrop-filter:blur(14px); }
+.subscription-dialog { display:flex; flex-direction:column; width:min(1120px,100%); max-height:calc(100dvh - 40px); min-height:0; overflow:hidden; border:1px solid #414753; border-radius:10px; background:linear-gradient(140deg,#272c36,#171b22 65%); color:#f4f5f7; box-shadow:0 30px 120px #0009; outline:none; }
+.subscription-dialog-heading { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:18px 26px; border-bottom:1px solid #343b47; flex-shrink:0; }
+.subscription-dialog-heading p { margin:0 0 6px; font-size:9px; font-weight:600; letter-spacing:.2em; color:#a7b1c2; }
+.subscription-dialog-heading h2 { font-size:26px; font-weight:600; line-height:1.1; letter-spacing:-.035em; }
 .subscription-dialog-heading > button { display:grid; place-items:center; width:44px; height:44px; border:0; background:transparent; color:#aeb8c8; }
-.subscription-dialog-content { overflow-y:auto; min-height:0; overscroll-behavior:contain; padding:26px 30px; scrollbar-width:thin; }
-.subscription-first-release { display:grid; grid-template-columns:52px minmax(0,1fr) auto; align-items:center; gap:22px; padding:26px; border:1px solid #61616a; border-radius:8px; background:radial-gradient(ellipse at top right,#695a3a40,transparent 65%),linear-gradient(125deg,#353a44,#242830); }
-.subscription-gift-icon { display:grid; place-items:center; width:52px; height:52px; color:#e4bf76; border-top:1px solid #827047; border-bottom:1px solid #827047; }
-.subscription-first-release h3 { margin:0 0 10px; font-size:clamp(24px,3vw,32px); font-weight:600; letter-spacing:-.035em; line-height:1.15; }
-.subscription-first-release span { display:block; color:#c5cbd5; font-size:14px; line-height:1.7; }
-.subscription-first-release small { display:block; margin-top:8px; font-size:11px; color:#969fac; line-height:1.5; }
-.subscription-first-release a { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:14px 0; min-height:48px; border-bottom:1px solid #a49473; color:#f0ddba; font-size:14px; font-weight:600; white-space:nowrap; }
-.subscription-comparison-heading { margin:28px 0 20px; display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:12px; }
-.subscription-comparison-heading h3 { font-size:20px; font-weight:550; letter-spacing:-.025em; }
-.subscription-comparison-heading p,.subscription-dialog-note { color:#9ba6b7; font-size:12px; line-height:1.7; }
-html body .subscription-dialog #distribution-pricing { padding:0; scroll-margin:0; }
-html body .subscription-dialog #distribution-pricing > div { padding:0; border:0; border-radius:0; background:none!important; }
-html body .subscription-dialog #distribution-pricing > div > :not(.distribution-plan-grid) { display:none; }
-html body .subscription-dialog .distribution-plan-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin:0; overflow:visible; }
-html body .subscription-dialog .distribution-plan-card { padding:22px; border:1px solid #3c4451!important; border-radius:6px; box-shadow:none!important; transform:none!important; animation:none; background:linear-gradient(150deg,#282e38,#1c2129)!important; }
-html body .subscription-dialog .distribution-plan-card:nth-child(2) { border-color:#8f8062!important; }
-html body .subscription-dialog .distribution-plan-card > div > div:first-child { flex-direction:column-reverse; align-items:flex-start; gap:12px; }
-html body .subscription-dialog .distribution-plan-badge { padding:0; border:0; background:none!important; color:#b4bece!important; font-size:9px; letter-spacing:.1em; }
-html body .subscription-dialog .distribution-plan-card:nth-child(2) .distribution-plan-badge { color:#ddc18b!important; }
-html body .subscription-dialog .distribution-plan-description { min-height:66px; line-height:1.7; }
-html body .subscription-dialog .distribution-plan-action { min-height:48px; justify-content:space-between; padding:12px 0; border:0; border-bottom:1px solid #555e6d; border-radius:0; background:none!important; color:#f2f4f8!important; box-shadow:none; }
-html body .subscription-dialog .distribution-plan-action[href]::after { content:'→'; font-size:19px; }
-html body .subscription-dialog .distribution-plan-perk { font-size:12px; line-height:1.6; }
-.subscription-dialog-note { margin:22px 0 0; text-align:center; }
-html body .subscription-dialog :is(button,a):hover { color:#fff!important; }
-html body .subscription-dialog :is(button,a):focus-visible { outline:2px solid #c6b68e; outline-offset:4px; }
+.subscription-dialog-content { overflow-y:auto; min-height:0; overscroll-behavior:contain; padding:20px 26px; scrollbar-width:thin; }
+html body .subscription-dialog .subscription-first-release { display:grid; grid-template-columns:40px minmax(0,1fr) auto; align-items:center; gap:16px; padding:12px 18px; border:1px solid #50535d; border-radius:6px; background:linear-gradient(110deg,#393a3c,#292e37 65%); }
+.subscription-offer-icon { display:grid; place-items:center; width:40px; height:40px; color:#e4bf76; }
+.subscription-offer-copy { min-width:0; }
+html body .subscription-dialog .subscription-first-release h3 { margin:0 0 5px; font-size:20px; font-weight:600; letter-spacing:-.03em; line-height:1.2; }
+html body .subscription-dialog .subscription-first-release p { margin:0; color:#c5cbd5; font-size:12px; line-height:1.5; letter-spacing:0; font-weight:400; }
+html body .subscription-dialog .subscription-first-release small { display:block; margin-top:5px; color:#a4acb9; font-size:10px; line-height:1.4; }
+html body .subscription-dialog .subscription-offer-action { display:flex; align-items:center; justify-content:center; gap:14px; padding:11px 15px; min-height:44px; border:0!important; border-radius:4px; background:#e6e9ed!important; color:#1b2028!important; text-decoration:none!important; font-size:12px; font-weight:600; white-space:nowrap; box-shadow:none; transition:background .2s,color .2s; }
+html body .subscription-dialog .subscription-offer-action:hover { color:#080a0e!important; background:#fff!important; }
+html body .subscription-dialog .subscription-offer-action::after,html body .subscription-dialog .subscription-offer-action::before { display:none!important; }
+.subscription-comparison-heading { margin:22px 0 14px; display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:10px; }
+.subscription-comparison-heading h3 { font-size:19px; font-weight:550; letter-spacing:-.025em; }
+.subscription-comparison-heading p,.subscription-dialog-note { margin:0; color:#a2acbc; font-size:11px; line-height:1.6; }
+.subscription-shared-benefits { padding:0 0 16px; }
+.subscription-shared-benefits > span { display:block; margin-bottom:9px; font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:#a2afc1; }
+.subscription-shared-benefits ul { display:flex; flex-wrap:wrap; gap:8px 22px; margin:0; list-style:none; padding:0; }
+.subscription-shared-benefits li { display:flex; align-items:center; gap:7px; font-size:11px; color:#c2cbd8; }
+.subscription-shared-benefits svg { color:#86b79a; flex-shrink:0; }
+.subscription-comparison-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+html body .subscription-dialog .subscription-comparison-card { display:flex; flex-direction:column; min-width:0; padding:18px!important; border:1px solid #3e4654!important; border-radius:6px!important; box-shadow:none!important; transform:none!important; animation:none!important; background:linear-gradient(150deg,#282e38,#1c2129)!important; }
+html body .subscription-dialog .subscription-comparison-card[data-featured="true"] { border-color:#958366!important; background:linear-gradient(150deg,#37383c,#232832)!important; }
+.subscription-comparison-card header > span { font-size:9px; font-weight:600; letter-spacing:.12em; color:#a9b5c6; }
+.subscription-comparison-card[data-featured="true"] header > span { color:#e3c68e; }
+.subscription-comparison-card h3 { font-size:20px; font-weight:600; letter-spacing:-.03em; margin:10px 0 6px; }
+.subscription-comparison-card header p { color:#adb8c9; font-size:12px; line-height:1.5; margin:0; }
+.subscription-price { margin:14px 0 8px; }
+.subscription-price strong { font-size:34px; font-weight:600; letter-spacing:-.05em; }
+.subscription-price > span { color:#a5b0c0; font-size:12px; }
+.subscription-price small { display:block; color:#98a4b7; font-size:10px; margin-top:3px; }
+.subscription-comparison-card dl { margin:0; display:grid; gap:12px; padding:14px 0 8px; border-top:1px solid #3c4451; }
+.subscription-comparison-card dl > div { display:flex; align-items:baseline; justify-content:space-between; gap:12px; font-size:12px; }
+.subscription-comparison-card dt { color:#aab6c8; }
+.subscription-comparison-card dd { margin:0; color:#e5e9ef; text-align:right; }
+.subscription-value-note { color:#c0af8e; font-size:10px; line-height:1.5; margin:4px 0 14px; min-height:15px; }
+html body .subscription-dialog .subscription-plan-action { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; padding:12px 0; margin:0 0 12px; border:0; background:none; color:#e6ebf3; font-size:12px; font-weight:600; text-decoration:none!important; }
+html body .subscription-dialog .subscription-plan-action::after,html body .subscription-dialog .subscription-plan-action::before { display:none!important; }
+html body .subscription-dialog .subscription-plan-action:hover { color:#fff; }
+.subscription-full-comparison { border-top:1px solid #3b4350; margin-top:18px; }
+.subscription-full-comparison summary { display:flex; align-items:center; justify-content:space-between; min-height:44px; cursor:pointer; list-style:none; color:#c5cfde; font-size:12px; }
+.subscription-full-comparison summary::-webkit-details-marker { display:none; }
+.subscription-full-comparison[open] summary svg { transform:rotate(180deg); }
+.subscription-full-comparison > div { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:22px; padding:12px 0 20px; }
+.subscription-full-comparison h4 { font-size:14px; margin-bottom:14px; }
+.subscription-full-comparison ul { display:grid; gap:12px; list-style:none; padding:0; margin:0; }
+.subscription-full-comparison li { display:flex; gap:8px; color:#b6c1d2; font-size:11px; line-height:1.5; }
+.subscription-full-comparison li svg { flex-shrink:0; color:#83bc9b; margin-top:2px; }
+.subscription-full-comparison li[data-included="false"] { color:#8993a3; }
+.subscription-full-comparison li[data-included="false"] svg { color:#8993a3; }
+.subscription-dialog-note { margin:12px 0 0; text-align:center; }
+html body .subscription-dialog :is(button,a,summary):focus-visible { outline:2px solid #c6b68e; outline-offset:4px; }
+@keyframes subscription-gift-lift { 0%,70%,100% { transform:translateY(0) rotate(0); } 78% { transform:translateY(-3px) rotate(-7deg); } 87% { transform:translateY(-2px) rotate(6deg); } }
+@keyframes subscription-gift-lid { 0%,70%,100% { transform:translateY(0); } 80%,88% { transform:translateY(-2px); } }
+@keyframes subscription-lightning { 0%,65%,100% { transform:scale(1); opacity:.85; } 75% { transform:scale(1.13) rotate(-6deg); opacity:1; } 84% { transform:scale(1.03); opacity:1; } }
+.subscription-offer-icon.is-gift > svg { animation:subscription-gift-lift 4s ease-in-out infinite; }
+.subscription-offer-icon.is-gift > svg > :first-child { animation:subscription-gift-lid 4s ease-in-out infinite; }
+.subscription-offer-icon.is-lightning > svg { animation:subscription-lightning 4s ease-in-out infinite; }
 @media(max-width:700px) {
  .subscription-backdrop { padding:10px; }
- .subscription-dialog { max-height:calc(100dvh - 20px); border-radius:10px; }
- .subscription-dialog-heading { padding:18px; }
- .subscription-dialog-heading h2 { font-size:24px; }
- .subscription-dialog-content { padding:18px; }
- .subscription-first-release { grid-template-columns:minmax(0,1fr); gap:16px; padding:20px; }
- .subscription-gift-icon { width:36px; height:36px; }
- .subscription-first-release a { justify-self:start; width:150px; }
- html body .subscription-dialog .distribution-plan-grid { grid-template-columns:1fr; }
- html body .subscription-dialog .distribution-plan-card { min-width:0; width:100%; padding:22px; scroll-snap-align:none; }
- html body .subscription-dialog .distribution-plan-description { min-height:0; }
+ .subscription-dialog { max-height:calc(100dvh - 20px); border-radius:8px; }
+ .subscription-dialog-heading { padding:14px 16px; }
+ .subscription-dialog-heading h2 { font-size:23px; }
+ .subscription-dialog-content { padding:16px; }
+ html body .subscription-dialog .subscription-first-release { grid-template-columns:30px minmax(0,1fr); gap:12px; padding:14px; }
+ .subscription-offer-icon { width:30px; height:30px; align-self:start; }
+ html body .subscription-dialog .subscription-first-release h3 { font-size:18px; }
+ html body .subscription-dialog .subscription-offer-action { grid-column:2; justify-self:start; min-height:44px; white-space:normal; text-align:center; padding:10px 12px; }
+ .subscription-comparison-heading { margin-top:18px; }
+ .subscription-comparison-grid,.subscription-full-comparison > div { grid-template-columns:1fr; }
+ .subscription-shared-benefits ul { display:grid; gap:8px; }
+ html body .subscription-dialog .subscription-comparison-card { width:100%; min-width:0; }
 }
+@media(prefers-reduced-motion:reduce) { .subscription-offer-icon svg,.subscription-offer-icon svg > * { animation:none!important; } }
