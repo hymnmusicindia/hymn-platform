@@ -1,6 +1,6 @@
 import { chromium, expect } from "@playwright/test";
 import { existsSync, mkdirSync, writeFileSync, unlinkSync, rmdirSync } from "node:fs";
-import { homeGoals } from "../lib/home-goals";
+import { homeGoals, homeFeedSections } from "../lib/home-goals";
 import type { OnboardingAgentState } from "../lib/onboarding-agent";
 
 const directory = "app/home-goal-audit-preview";
@@ -12,7 +12,7 @@ async function main() {
   mkdirSync(".cache/home-goal", { recursive:true });
   writeFileSync(`${directory}/layout.tsx`, `import {SiteHeader} from "@/components/site-header";import {LandingWorkspace} from "@/components/landing-workspace";import {WorkspaceGoalGuide} from "@/components/workspace-goal-guide";
 export default function Layout({children}:{children:React.ReactNode}){return <div className="hymn-landing"><SiteHeader user={{sub:900,email:"preview@example.com",name:"Preview Artist",role:"customer"}}/><LandingWorkspace workspaceHref="/dashboard">{children}<nav aria-label="Preview tool"><a href="${route}/destination" data-guide-route="${route}/destination">Open preview tool</a></nav></LandingWorkspace><WorkspaceGoalGuide userId={900}/></div>}`);
-  writeFileSync(`${directory}/page.tsx`, `import {HomeGoalWorkspace} from "@/components/home-goal-workspace";export default function Page(){return <main><HomeGoalWorkspace userId={900} name="Preview Artist"/></main>}`);
+  writeFileSync(`${directory}/page.tsx`, `import {HomeGoalWorkspace} from "@/components/home-goal-workspace";import {buildHomePathBanners} from "@/components/home-path-banners";export default function Page(){return <main><HomeGoalWorkspace userId={900} name="Preview Artist" banners={buildHomePathBanners({catalog:[],featuredReleases:[{id:1,title:"Preview release",artistName:"Preview Artist",artworkUrl:"/home-hero-crowd.jpg",releaseType:"single",status:"live"}],signedIn:true})}/></main>}`);
   writeFileSync(`${directory}/destination/page.tsx`, `import Link from "next/link";export default function Page(){return <main style={{padding:40}}><h1>Prepare your project</h1><p>Your project tool is ready.</p><Link href="${route}">Back to your path</Link></main>}`);
   const browser = await chromium.launch();
   try {
@@ -65,10 +65,18 @@ export default function Layout({children}:{children:React.ReactNode}){return <di
         await expect(page.getByRole("heading",{name:goal.headline})).toBeVisible();
         await expect(page.locator(".landing-hero")).toHaveCount(0);
         await expect(page.locator(".onboarding-agent-dock")).toHaveCount(0);
-        await expect(page.locator(".home-goal-recommendations > div > a").first()).toHaveAttribute("href",goal.related[0].href);
+        await expect(page.locator(".home-goal-workspace")).toHaveAttribute("data-mode","home");
+        await expect(page.locator(".home-path-guide")).not.toHaveAttribute("open","");
+        const expected = homeFeedSections(goal.id,0).sort();
+        expect((await page.locator("[data-home-banner]").evaluateAll(nodes=>nodes.map(node=>node.getAttribute("data-home-banner")))).sort()).toEqual(expected);
+        const orderBefore = await page.locator("[data-home-banner]").evaluateAll(nodes=>nodes.map(node=>node.getAttribute("data-home-banner")));
+        await page.reload();
+        await expect(page.locator(".home-goal-workspace")).toHaveAttribute("data-mode","home");
+        await expect.poll(async()=>JSON.stringify(await page.locator("[data-home-banner]").evaluateAll(nodes=>nodes.map(node=>node.getAttribute("data-home-banner"))))).not.toBe(JSON.stringify(orderBefore));
         expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
         if(goal.id==="release") {
           await page.screenshot({path:`.cache/home-goal/release-${width}.png`});
+          await page.locator(".home-path-guide > summary").click();
           const previousWrites=writes;
           await page.getByRole("button",{name:"Guide me there"}).click();
           await expect(page.getByRole("region",{name:"Guided path"})).toBeVisible();
@@ -82,10 +90,12 @@ export default function Layout({children}:{children:React.ReactNode}){return <di
           await expect(page.locator(".home-goal-guide-layer")).toHaveCount(0);
           await page.getByRole("link",{name:"Back to your path"}).click();
           await expect(page.locator(".home-goal-workspace")).toHaveAttribute("data-home-goal","release");
+          await page.locator(".home-path-guide > summary").click();
           await page.getByRole("button",{name:"Mark done",exact:true}).first().click();
           await expect(page.getByRole("progressbar",{name:"Your path progress"})).toHaveAttribute("aria-valuenow","1");
           await expect(page.locator(".home-goal-feature h2")).toHaveText("Follow your progress");
           await page.reload();
+          await page.locator(".home-path-guide > summary").click();
           await expect(page.getByRole("progressbar",{name:"Your path progress"})).toHaveAttribute("aria-valuenow","1");
           await page.getByRole("button",{name:"Skip",exact:true}).click();
           await expect(page.locator(".home-goal-feature h2")).toHaveText("Your path is complete. Keep creating.");

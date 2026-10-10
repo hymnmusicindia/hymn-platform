@@ -29,3 +29,13 @@ export function beginHomeGuide(guide: Omit<HomeGuide, "phase">) {
   try { sessionStorage.setItem(guideKey(guide.userId), JSON.stringify(detail)); } catch { /* Guidance remains available without storage. */ }
   window.dispatchEvent(new CustomEvent("hymn-start-goal-guide", { detail }));
 }
+
+export type HomeBannerId = "platforms" | "releases" | "journey" | "beats" | "producers" | "studio";
+export function homeFeedSections(goalId: string | undefined, visit: number): HomeBannerId[] {
+  const sections: HomeBannerId[] = goalId === "buy-beat" ? ["beats","studio","releases"]
+    : goalId === "sell-beats" ? ["producers","beats","studio"]
+    : goalId === "studio" ? ["studio","releases","journey"]
+    : ["platforms","releases","journey","studio"];
+  const offset = Math.abs(visit) % sections.length;
+  return [...sections.slice(offset), ...sections.slice(0,offset)];
+}

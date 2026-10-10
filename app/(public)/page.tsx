@@ -7,10 +7,9 @@ import {
   Instagram,
   Youtube,
 } from "lucide-react";
-import { MusicLifecycleBanner } from "@/components/music-lifecycle-banner";
+import { buildHomePathBanners } from "@/components/home-path-banners";
 import { HomeGoalWorkspace } from "@/components/home-goal-workspace";
 import { LandingWorkspace } from "@/components/landing-workspace";
-import { HomeProducerInvitation } from "@/components/home-producer-invitation";
 import { AnimatedHeroMetrics } from "@/components/animated-hero-metrics";
 import { GoogleAuthButton } from "@/components/google-auth-button";
 import { HomeNewsletter } from "@/components/home-newsletter";
@@ -51,26 +50,6 @@ const images = {
   }
 };
 
-const storeLogos = [
-  { name: "Spotify", src: "/assets/store-logos/wordmark-spotify.png", className: "h-8 w-auto" },
-  { name: "Apple Music", src: "/assets/store-logos/wordmark-apple.png", className: "h-7 w-auto" },
-  { name: "YouTube Music", src: "/assets/store-logos/wordmark-youtube.png", className: "h-7 w-auto" },
-  { name: "Amazon Music", src: "/assets/store-logos/wordmark-amazon.png", className: "h-8 w-auto" },
-  { name: "Gaana", src: "/assets/store-logos/wordmark-gaana.png", className: "h-8 w-auto" },
-  { name: "TikTok", src: "/assets/store-logos/wordmark-tiktok.png", className: "h-7 w-auto" },
-  { name: "Instagram", src: "/assets/store-logos/instagram.png", className: "h-8 w-auto" },
-  { name: "Facebook", src: "/assets/store-logos/wordmark-facebook.png", className: "h-7 w-auto" },
-  { name: "Pandora", src: "/assets/store-logos/wordmark-pandora.png", className: "h-7 w-auto" },
-  { name: "Deezer", src: "/assets/store-logos/wordmark-deezer.png", className: "h-8 w-auto" },
-  { name: "TIDAL", src: "/assets/store-logos/wordmark-tidal.png", className: "h-7 w-auto" },
-  { name: "SoundCloud", src: "/assets/store-logos/wordmark-soundcloud.png", className: "h-7 w-auto" },
-  { name: "Boomplay", src: "/assets/store-logos/wordmark-boomplay.png", className: "h-12 w-auto scale-125" },
-  { name: "Anghami", src: "/assets/store-logos/wordmark-anghami.png", className: "h-8 w-auto" },
-  { name: "JioSaavn", src: "/assets/store-logos/wordmark-jiosaavn.png", className: "h-8 w-auto" }
-] as const;
-
-const storeLogoMarquee = [...storeLogos, ...storeLogos];
-
 const testimonials = [
   ["HYMN treated the release like a brand moment, not a file upload.", "Rhea K.", "Independent Artist", "3.1M launch streams"],
   ["The dashboard made our campaign feel controlled from announcement to payout.", "Dev House", "Producer Team", "12 releases managed"],
@@ -80,19 +59,10 @@ const testimonials = [
 
 export default async function HomePage() {
   const session = await getSession();
-  if (session) return <main id="home" className="hymn-landing"><LandingWorkspace workspaceHref={destinationForRole(session.role)}><HomeGoalWorkspace userId={session.sub} name={session.name} /></LandingWorkspace></main>;
   const { beats, producerProfiles, googleAvatarUrls, featuredReviews, featuredReleases } = await getPublicHomePreview();
   const { catalog } = buildBeatStorefront(beats, producerProfiles);
-  const homepageShowcaseReleases = [...featuredReleases];
-  const showcaseRows = ["left", "static", "right"].map((direction, rowIndex) => {
-    const source = homepageShowcaseReleases;
-    return {
-      direction,
-      // Each row starts at a different release and cycles the complete set, so
-      // featured cards alternate instead of a row repeating one artwork.
-      items: source.length ? Array.from({ length: Math.max(8, source.length * 2) }, (_, index) => source[(index + rowIndex) % source.length]) : []
-    };
-  });
+  const banners = buildHomePathBanners({featuredReleases,catalog,signedIn:Boolean(session)});
+  if (session) return <main id="home" className="hymn-landing"><LandingWorkspace workspaceHref={destinationForRole(session.role)}><HomeGoalWorkspace userId={session.sub} name={session.name} banners={banners} /></LandingWorkspace></main>;
   return (
     <main id="home" className="hymn-landing">
       <LandingWorkspace workspaceHref="/login">
@@ -172,23 +142,7 @@ export default async function HomePage() {
             </section>
           ) : null}
 
-      <section className="landing-platforms shell py-12 sm:py-16">
-        <div className="home-store-destination-layout py-6 sm:py-9">
-          <h2 className="sr-only">WHERE YOUR MUSIC LANDS</h2>
-          {[0, 1].map((row) => <div key={row} className={`home-store-destination-row ${row === 1 ? "home-store-destination-row-reverse" : ""}`}>
-            <span aria-hidden="true" className="home-store-destination-words">{row === 0 ? "WHERE YOUR" : "MUSIC LANDS"}</span>
-            <div className="home-store-marquee-shell home-store-inline-marquee" aria-label={row === 0 ? "Music platforms" : undefined} aria-hidden={row === 1 ? true : undefined}>
-              <div className="marquee-row music-store-marquee">
-                {(row === 0 ? storeLogoMarquee : [...storeLogos.slice(7), ...storeLogos.slice(0, 7), ...storeLogos.slice(7), ...storeLogos.slice(0, 7)]).map((item, index) => (
-                  <div key={`${item.name}-${index}`} className="home-store-logo-stop" title={item.name} aria-hidden={index >= storeLogos.length ? true : undefined}>
-                    <Image src={item.src} alt={item.name} width={144} height={48} className={`distribution-store-logo home-store-logo ${item.className}`} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>)}
-        </div>
-      </section>
+      {banners.platforms}
 
       <section id="label" className="relative py-16 sm:py-24">
         <div className="absolute inset-0">
@@ -208,50 +162,10 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <div id="journey" className="landing-banner landing-journey"><MusicLifecycleBanner /></div>
-      <div id="producers" className="landing-banner landing-producers"><HomeProducerInvitation /></div>
+      {banners.journey}
+      {banners.producers}
 
-      <section id="released" className="landing-releases shell py-10 sm:py-16">
-        <div className="relative overflow-hidden rounded-[2rem] border border-border bg-black px-5 py-10 shadow-[0_32px_120px_rgba(0,0,0,0.42)] sm:px-8 lg:min-h-[470px] lg:px-14 lg:py-16">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_18%,rgba(255,255,255,0.1),transparent_25%),linear-gradient(90deg,rgba(0,0,0,1)_0%,rgba(0,0,0,0.92)_44%,rgba(0,0,0,0.54)_100%)]" />
-          <div className="relative grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
-            <div className="max-w-xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/50">#releasedonhymn</p>
-              <h2 className="mt-6 text-4xl font-extrabold uppercase leading-[0.98] tracking-[-0.05em] text-white sm:text-5xl lg:text-6xl">
-                Yes, this release moved through HYMN.
-              </h2>
-              <p className="mt-6 max-w-md text-sm font-medium leading-7 sm:text-base" style={{ color: "#d4d4d8" }}>
-                Discover the music and independent artists building their next chapter with HYMN.
-              </p>
-              <Link href="/login?mode=signup" className="mt-7 inline-flex items-center gap-3 rounded-xl border border-white/12 bg-white/[0.08] px-5 py-3 text-sm font-semibold text-white transition hover:border-white/28 hover:bg-white/[0.14]">
-                Your next release is waiting
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
-
-            <div className="home-release-showcase-viewport relative grid min-w-0 gap-4 overflow-hidden">
-              {!homepageShowcaseReleases.length ? <p className="py-12 text-center text-sm" style={{ color: "#d4d4d8" }}>Released music will appear here soon.</p> : null}
-              {showcaseRows.map((row) => (
-                <div key={row.direction} className="overflow-hidden">
-                  <div className={`home-release-showcase-track home-release-showcase-track-${row.direction}`}>
-                    {(row.direction === "static" ? row.items : [...row.items, ...row.items]).map((release, index) => (
-                      <article key={`${row.direction}-${release.id}-${index}`} aria-hidden={index >= row.items.length ? true : undefined} className="group relative w-[140px] shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/[0.06] shadow-[0_18px_60px_rgba(0,0,0,0.32)] sm:w-[170px]">
-                        <div className="aspect-square overflow-hidden">
-                          <img src={release.artworkUrl} alt={`${release.title} artwork`} loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
-                        </div>
-                        <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,transparent_0%,rgba(0,0,0,0.58)_30%,rgba(0,0,0,0.94)_100%)] px-3 pb-3 pt-12 text-white">
-                          <p className="line-clamp-1 text-xs font-extrabold uppercase tracking-[-0.02em] drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)]">{release.title}</p>
-                          <p className="line-clamp-1 text-[11px] font-semibold text-white/[0.82] drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">{release.artistName}</p>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+      {banners.releases}
 
       <section id="artists" className="landing-artists shell py-12 sm:py-16">
         <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -315,30 +229,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section id="beats" className="landing-beats shell py-10">
-        <div className="landing-section-heading"><div><p className="landing-eyebrow">Beatstore</p><h2>A new sound. A new beginning.</h2></div><Link href="/beat-store">Browse all beats <ArrowRight size={16}/></Link></div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {catalog.slice(0, 4).map((beat) => (
-            <article key={beat.id} className="overflow-hidden rounded-[1.35rem] border border-border bg-card/76 p-3 shadow-[0_16px_50px_rgba(0,0,0,0.22)]">
-              <div className="relative overflow-hidden rounded-[1rem] border border-border">
-                <Image src={beat.coverImage} alt={beat.title} width={900} height={900} className="aspect-square w-full object-cover transition duration-500 hover:scale-[1.03]" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/72 via-transparent to-transparent" />
-                <button type="button" aria-label={`Preview ${beat.title}`} className="absolute left-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.15] bg-black/[0.35] text-white backdrop-blur-md">
-                  <Headphones className="h-3.5 w-3.5" />
-                </button>
-              </div>
-              <div className="mt-3 px-0.5 pb-0.5">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/42">{beat.genre} / {beat.bpm} BPM</p>
-                <h3 className="mt-1.5 text-lg font-semibold" style={{ color: "var(--text)" }}>{beat.title}</h3>
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <span className="text-sm font-semibold text-[#f5c16c]">Rs {beat.startingPrice}</span>
-                  <Link href="/beat-store" className="premium-ghost rounded-full border border-border px-3 py-1.5 text-[11px] font-semibold text-white/72">Open store</Link>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
+      {banners.beats}
 
       <section id="newsletter" className="landing-newsletter border-y border-white/[0.06] bg-[#090a0c]">
         <div className="shell py-10 sm:py-14 lg:py-16">
