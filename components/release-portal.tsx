@@ -381,21 +381,12 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
     </div>;
   }
   const statsChips = (
-    <>
-      <span className="release-dashboard-stat-chip inline-flex items-center gap-2 rounded-full border px-3 py-2" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-        <Clock3 className="h-4 w-4" />
-        {sortedReleases.length} total releases
-      </span>
-      <span className="release-dashboard-stat-chip inline-flex items-center gap-2 rounded-full border px-3 py-2" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-        Draft {stats.draft}
-      </span>
-      <span className="release-dashboard-stat-chip inline-flex items-center gap-2 rounded-full border px-3 py-2" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-        Scheduled {stats.scheduled}
-      </span>
-      <span className="release-dashboard-stat-chip inline-flex items-center gap-2 rounded-full border px-3 py-2" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-        Released {stats.released}
-      </span>
-    </>
+    <>{[
+      { kind: "total", label: "Total releases", count: sortedReleases.length },
+      { kind: "draft", label: "Draft", count: stats.draft },
+      { kind: "scheduled", label: "Scheduled", count: stats.scheduled },
+      { kind: "released", label: "Released", count: stats.released }
+    ].map(item => <span key={item.kind} className="release-catalogue-stat" data-kind={item.kind}><i aria-hidden="true" /><strong>{item.count}</strong><span>{item.label}</span></span>)}</>
   );
 
   if (selectedRelease && initialPanel !== "redressal") return <ReleaseManage release={selectedRelease} initialTab={initialTab} />;
@@ -464,7 +455,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
         </select>
       </label>
 
-      <div className="release-visible-meter rounded-2xl border px-4 py-4 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+      <div className="release-visible-meter release-filter-count" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
         <p className="text-xs uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>Visible now</p>
         <p className="mt-2 text-lg font-semibold" style={{ color: "var(--text)" }}>{Math.min(visibleCount, filteredReleases.length)} / {filteredReleases.length}</p>
       </div>
@@ -548,22 +539,22 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
 
           <div className="ios-collapse-content">
             <div className="ios-collapse-inner">
-              <div className="mt-4 flex flex-wrap gap-2 text-xs sm:text-sm" style={{ color: "var(--text-muted)" }}>
+              <div className="release-catalogue-totals mt-4" style={{ color: "var(--text-muted)" }}>
                 {statsChips}
               </div>
 
-              <div className="mt-4 grid gap-3">
+              <div className="release-catalogue-filters mt-4">
                 {filtersGrid}
               </div>
             </div>
           </div>
         </details>
 
-        <div className="mt-6 hidden flex-wrap gap-3 text-sm lg:flex" style={{ color: "var(--text-muted)" }}>
+        <div className="release-catalogue-totals release-catalogue-desktop-totals" style={{ color: "var(--text-muted)" }}>
           {statsChips}
         </div>
 
-        <div className="mt-6 hidden gap-4 lg:grid lg:grid-cols-3 xl:grid-cols-6">
+        <div className="release-catalogue-filters release-catalogue-desktop-filters">
           {filtersGrid}
         </div>
       </section>
