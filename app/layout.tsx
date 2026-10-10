@@ -20,6 +20,7 @@ import "./styles/release-record-review.css";
 import "./styles/subscription-options.css";
 import "./styles/home-goal-workspace.css";
 import "./styles/home-editorial.css";
+import "./styles/support-workspace.css";
 import { SmartHelpLayer } from "@/components/smart-help-layer";
 
 export const metadata: Metadata = {

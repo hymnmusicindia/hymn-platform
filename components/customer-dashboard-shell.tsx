@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
+import { SupportWorkspace } from "@/components/support-workspace";
 import { DashboardFrame } from "@/components/dashboard-frame";
 import { BeatCard } from "@/components/beat-card";
 import { Beat, BeatPurchase, Notification, Order, Release, SupportTicket, User } from "@/lib/types";
@@ -166,6 +167,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
+  const [supportLoading, setSupportLoading] = useState(true);
   const [beatPurchases, setBeatPurchases] = useState<BeatPurchase[]>([]);
   const [smartActions, setSmartActions] = useState<SmartNextAction[]>([]);
   const [payoutSummary, setPayoutSummary] = useState<CustomerPayoutSummary | null>(null);
@@ -195,6 +197,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   useEffect(() => {
     let ignore = false;
     async function loadWorkspaceData() {
+      setSupportLoading(true);
       const [notificationResponse, ticketResponse, payoutResponse] = await Promise.all([
         fetch("/api/notifications?limit=30", { cache: "no-store" }).catch(() => null),
         fetch("/api/support-tickets", { cache: "no-store" }).catch(() => null),
@@ -211,6 +214,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         setSupportTickets(Array.isArray(data.tickets) ? data.tickets : []);
         setDataErrors(current => { const next = { ...current }; delete next.support; return next; });
       } else setDataErrors(current => ({ ...current, support: "Support tickets could not be loaded." }));
+      setSupportLoading(false);
       if (payoutResponse?.ok) {
         const data = await payoutResponse.json();
         setPayoutSummary(data);
@@ -323,6 +327,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
     window.location.assign("/login?role=producer&next=/producer/dashboard");
   }
+
 
   async function submitSupportTicket(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -656,39 +661,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         </Panel>
       ) : null}
 
-      {activeTab === "support" ? (
-        <div className="grid gap-6 xl:grid-cols-[0.9fr,1.1fr]">
-          <Panel title="Create support ticket" description="For release, payment, artist profile, beat license, or general issues.">
-            <form onSubmit={submitSupportTicket} className="grid gap-4">
-              <select name="category" className="field" defaultValue="release_correction">
-                <option value="release_correction">Release rejected / corrections</option><option value="payment">Payment failed</option><option value="payout">Payout not visible</option><option value="beat_license">Beat license missing</option><option value="account_access">Google login / account</option><option value="general">General support</option>
-              </select>
-              <input name="subject" className="field" required minLength={3} placeholder="Short issue summary" />
-              <select name="priority" className="field" defaultValue="normal"><option value="normal">Normal priority</option><option value="high">Urgent / blocking</option></select>
-              <select name="relatedReleaseId" className="field" defaultValue=""><option value="">No linked release</option>{releases.map((release) => <option key={release.id} value={release.id}>{releaseTitle(release)}</option>)}</select>
-              <select name="relatedPurchaseId" className="field" defaultValue=""><option value="">No linked purchase</option>{beatPurchases.map((purchase) => <option key={purchase.id} value={purchase.id}>Purchase #{purchase.id} · Beat #{purchase.beatId}</option>)}</select>
-              <select name="relatedPayoutId" className="field" defaultValue=""><option value="">No linked payout</option>{payoutSummary?.payoutHistory.map((payout) => <option key={payout.id} value={payout.id}>Payout #{payout.id} · {payout.status}</option>)}</select>
-              <textarea name="message" required minLength={10} className="field min-h-32" placeholder="Describe the issue with release/order IDs if available." />
-              <button type="submit" className="btn-primary pressable">Create ticket</button>
-              {supportFeedback ? <p className="text-sm" style={{ color: "var(--text)" }}>{supportFeedback}</p> : null}
-            </form>
-          </Panel>
-          <Panel title="Ticket history">
-            {dataErrors.support ? <div role="alert" className="mb-4 rounded-xl border p-3 text-sm" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>{dataErrors.support} <button type="button" className="ml-2 underline" onClick={() => setReloadKey(value => value + 1)}>Retry</button></div> : null}
-            <div className="grid gap-3">
-              {supportTickets.filter((ticket) => matchesQuery([ticket.subject, ticket.message, ticket.status], dashboardSearch)).map((ticket) => (
-                <article key={ticket.id} className="surface-list-item p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div><p className="font-semibold" style={{ color: "var(--text)" }}>{ticket.subject}</p><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{ticket.message}</p></div>
-                    <StatusPill label={ticket.status.replace(/_/g, " ")} />
-                  </div>
-                </article>
-              ))}
-              {!dataErrors.support && supportTickets.length === 0 ? <EmptyState copy="No support tickets yet." /> : null}
-            </div>
-          </Panel>
-        </div>
-      ) : null}
+      {activeTab === "support" ? <SupportWorkspace loading={supportLoading} tickets={supportTickets} releases={releases.map(release=>({id:release.id,label:releaseTitle(release)}))} purchases={beatPurchases.map(purchase=>({id:purchase.id,label:`Purchase #${purchase.id} ? Beat #${purchase.beatId}`}))} payouts={(payoutSummary?.payoutHistory || []).map(payout=>({id:payout.id,label:`Payout #${payout.id} ? ${payout.status}`}))} error={dataErrors.support} externalSearch={dashboardSearch} onRetry={()=>setReloadKey(value=>value+1)} onCreated={ticket=>setSupportTickets(items=>[ticket,...items])}/> : null}
 
       {activeTab === "settings" ? (
         <Panel title="Account settings" description="Profile, subscription, and security state.">
