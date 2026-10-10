@@ -13,6 +13,7 @@
 .home-platform-logo-set { display:flex; flex:none; width:max(100vw,900px); }
 .home-platform-logo-set > div { display:flex; flex:1; align-items:center; justify-content:center; height:52px; opacity:.52; }
 .home-platform-logo-set img { width:auto; height:auto; max-width:150px; max-height:36px; object-fit:contain; filter:grayscale(1) brightness(0) invert(1); }
+.home-platform-logo-set img.home-platform-logo-detailed { filter:grayscale(1) invert(1); }
 .home-platform-editorial:hover .home-platform-track { animation-play-state:paused; }
 @keyframes home-platform-slide { from { transform:translateX(0); } to { transform:translateX(-50%); } }
 .hymn-landing .home-release-editorial { padding-block:28px; }
