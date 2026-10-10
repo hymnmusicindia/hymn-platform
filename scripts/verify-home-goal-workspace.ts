@@ -69,11 +69,13 @@ export default function Layout({children}:{children:React.ReactNode}){return <di
         await expect(page.locator(".home-path-guide")).not.toHaveAttribute("open","");
         const expected = homeFeedSections(goal.id,0).sort();
         expect((await page.locator("[data-home-banner]").evaluateAll(nodes=>nodes.map(node=>node.getAttribute("data-home-banner")))).sort()).toEqual(expected);
+        if(["release","finish-release"].includes(goal.id)) await expect(page.locator("[data-home-banner]").first()).toHaveAttribute("data-home-banner","platforms");
         const orderBefore = await page.locator("[data-home-banner]").evaluateAll(nodes=>nodes.map(node=>node.getAttribute("data-home-banner")));
         await page.reload();
         await expect(page.locator(".home-goal-workspace")).toHaveAttribute("data-mode","home");
         await expect.poll(async()=>JSON.stringify(await page.locator("[data-home-banner]").evaluateAll(nodes=>nodes.map(node=>node.getAttribute("data-home-banner"))))).not.toBe(JSON.stringify(orderBefore));
         expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        if(["release","finish-release"].includes(goal.id)) await expect(page.locator("[data-home-banner]").first()).toHaveAttribute("data-home-banner","platforms");
         if(goal.id==="release") {
           await page.screenshot({path:`.cache/home-goal/release-${width}.png`});
           await page.locator(".home-path-guide > summary").click();

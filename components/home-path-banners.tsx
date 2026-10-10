@@ -24,7 +24,7 @@ const storeLogos = [
   { name: "JioSaavn", src: "/assets/store-logos/wordmark-jiosaavn.png", className: "h-8 w-auto" }
 ] as const;
 
-const storeLogoMarquee = [...storeLogos, ...storeLogos];
+
 
 
 export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{featuredReleases:Awaited<ReturnType<typeof getPublicHomePreview>>["featuredReleases"];catalog:ReturnType<typeof buildBeatStorefront>["catalog"];signedIn?:boolean}) {
@@ -39,36 +39,22 @@ export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{
     };
   });
   return {
-    platforms: (<section className="landing-platforms shell py-12 sm:py-16">
-        <div className="home-store-destination-layout py-6 sm:py-9">
-          <h2 className="sr-only">WHERE YOUR MUSIC LANDS</h2>
-          {[0, 1].map((row) => <div key={row} className={`home-store-destination-row ${row === 1 ? "home-store-destination-row-reverse" : ""}`}>
-            <span aria-hidden="true" className="home-store-destination-words">{row === 0 ? "WHERE YOUR" : "MUSIC LANDS"}</span>
-            <div className="home-store-marquee-shell home-store-inline-marquee" aria-label={row === 0 ? "Music platforms" : undefined} aria-hidden={row === 1 ? true : undefined}>
-              <div className="marquee-row music-store-marquee">
-                {(row === 0 ? storeLogoMarquee : [...storeLogos.slice(7), ...storeLogos.slice(0, 7), ...storeLogos.slice(7), ...storeLogos.slice(0, 7)]).map((item, index) => (
-                  <div key={`${item.name}-${index}`} className="home-store-logo-stop" title={item.name} aria-hidden={index >= storeLogos.length ? true : undefined}>
-                    <Image src={item.src} alt={item.name} width={144} height={48} className={`distribution-store-logo home-store-logo ${item.className}`} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>)}
-        </div>
-      </section>),
-    releases: (<section id="released" className="landing-releases shell py-10 sm:py-16">
-        <div className="relative overflow-hidden rounded-[2rem] border border-border bg-black px-5 py-10 shadow-[0_32px_120px_rgba(0,0,0,0.42)] sm:px-8 lg:min-h-[470px] lg:px-14 lg:py-16">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_18%,rgba(255,255,255,0.1),transparent_25%),linear-gradient(90deg,rgba(0,0,0,1)_0%,rgba(0,0,0,0.92)_44%,rgba(0,0,0,0.54)_100%)]" />
-          <div className="relative grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
-            <div className="max-w-xl">
+    platforms: (<section className="landing-platforms home-platform-editorial shell" aria-labelledby="home-platform-title">
+      <h2 id="home-platform-title">Where your music <span>lands.</span></h2>
+      <div className="home-platform-logo-grid" aria-label="Music platforms">{storeLogos.map(item => <div key={item.name} title={item.name}><Image src={item.src} alt={item.name} width={144} height={48} className="distribution-store-logo" /></div>)}</div>
+    </section>),
+    releases: (<section id="released" className="landing-releases home-release-editorial shell">
+        <div className="home-release-stage">
+          <div className="home-release-layout">
+            <div className="home-release-copy">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/50">#releasedonhymn</p>
-              <h2 className="mt-6 text-4xl font-extrabold uppercase leading-[0.98] tracking-[-0.05em] text-white sm:text-5xl lg:text-6xl">
-                Yes, this release moved through HYMN.
+              <h2 className="home-release-title">
+                Yes, this release<br />moved through<br /><span>HYMN.</span>
               </h2>
               <p className="mt-6 max-w-md text-sm font-medium leading-7 sm:text-base" style={{ color: "#d4d4d8" }}>
                 Discover the music and independent artists building their next chapter with HYMN.
               </p>
-              <Link href={signedIn ? "/distribution/start" : "/login?mode=signup"} className="mt-7 inline-flex items-center gap-3 rounded-xl border border-white/12 bg-white/[0.08] px-5 py-3 text-sm font-semibold text-white transition hover:border-white/28 hover:bg-white/[0.14]">
+              <Link href={signedIn ? "/distribution/start" : "/login?mode=signup"} className="home-editorial-link">
                 Your next release is waiting
                 <ArrowRight className="h-4 w-4" />
               </Link>
@@ -123,6 +109,6 @@ export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{
       </section>),
     journey: <div id="journey" className="landing-banner landing-journey"><MusicLifecycleBanner /></div>,
     producers: <div id="producers" className="landing-banner landing-producers"><HomeProducerInvitation /></div>,
-    studio: <section className="home-path-studio"><div><p className="landing-eyebrow">Mixing / Mastering</p><h2>Your sound.<br />Release-ready.</h2><p>Give your next record its finishing touch.</p><Link href="/studio">Explore studio services <ArrowRight size={16}/></Link></div><Image src="/home-hero-crowd.jpg" alt="Live music audience" width={1000} height={700} className="home-path-studio-image" /></section>
+    studio: <section className="home-path-studio home-studio-editorial"><div><p className="landing-eyebrow">Mixing / Mastering</p><h2>Your sound.<br />Release-ready.</h2><p>Give your next record its finishing touch.</p><Link href="/studio">Explore studio services <ArrowRight size={16}/></Link></div><Image src="/home-studio.jpg" alt="Professional recording studio and mixing console" width={1400} height={900} className="home-path-studio-image" /></section>
   };
 }

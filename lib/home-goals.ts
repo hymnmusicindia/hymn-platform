@@ -36,6 +36,8 @@ export function homeFeedSections(goalId: string | undefined, visit: number): Hom
     : goalId === "sell-beats" ? ["producers","beats","studio"]
     : goalId === "studio" ? ["studio","releases","journey"]
     : ["platforms","releases","journey","studio"];
-  const offset = Math.abs(visit) % sections.length;
-  return [...sections.slice(offset), ...sections.slice(0,offset)];
+  const pinned = sections.includes("platforms") ? ["platforms" as const] : [];
+  const rotating = sections.filter(id => id !== "platforms");
+  const offset = Math.abs(visit) % rotating.length;
+  return [...pinned, ...rotating.slice(offset), ...rotating.slice(0,offset)];
 }
