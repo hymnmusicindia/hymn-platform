@@ -71,3 +71,20 @@ header.hymn-studio-header>div:first-child { display:flex; justify-content:flex-s
   .studio-header-section button { width:28px; }
 }
 @media(prefers-reduced-motion:reduce) { .hymn-studio-header *,.landing-nav-link { transition:none; } }
+
+/* Home is a destination, consistently placed above the service accordions. */
+html body .workspace-home-link { display:flex; align-items:center; gap:12px; min-height:40px; padding:8px 12px; color:#aeb5c0; font-size:13px; font-weight:600; text-decoration:none; background:none; border:0; box-shadow:none; }
+html body .workspace-home-link svg { flex-shrink:0; stroke-width:1.5; }
+html body .workspace-home-link:is(:hover,:focus-visible,.is-active) { color:#fff; text-shadow:none; }
+html body .workspace-home-link:focus-visible { outline:1px solid #c8ced8; outline-offset:2px; }
+.rail-collapsed .workspace-home-link > span { display:none; }
+.rail-collapsed .workspace-home-link { justify-content:center; }
+.hymn-landing .landing-nav-group .landing-nav-link,
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-nav-item { font-size:12px; min-height:30px; padding:6px 12px; gap:10px; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .portal-nav-icon,
+.hymn-landing .landing-nav-group .landing-nav-link svg { width:14px; height:14px; }
+@media(max-width:1023px) {
+ .hymn-landing .landing-nav-group .landing-nav-link,
+ .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-nav-item { min-height:44px; }
+ html body .workspace-home-link { min-height:44px; }
+}

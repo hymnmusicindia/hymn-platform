@@ -19,7 +19,10 @@ async function main() {
       await expect(page.locator(".landing-rail a[href^='#']")).toHaveCount(0);
       await expect(page.locator(".landing-rail").getByRole("link",{name:"My releases",exact:true})).toHaveAttribute("href","/dashboard/releases");
       await expect(page.locator(".landing-rail").getByRole("link",{name:"Trends",exact:true})).toHaveAttribute("href","/analytics");
-      const selection=await page.locator(".landing-nav-link.is-active").evaluate(element=>({background:getComputedStyle(element).backgroundColor,shadow:getComputedStyle(element).textShadow}));
+      await expect(page.locator(".landing-rail").getByRole("link",{name:"Home",exact:true})).toHaveAttribute("href","/");
+      await expect(page.locator(".landing-rail").getByRole("button",{name:"Home",exact:true})).toHaveCount(0);
+      expect(await page.locator(".landing-new").evaluate(node=>getComputedStyle(node).borderTopWidth)).toBe("1px");
+      const selection=await page.locator(".workspace-home-link.is-active").evaluate(element=>({background:getComputedStyle(element).backgroundColor,shadow:getComputedStyle(element).textShadow}));
       expect(selection.background).toBe("rgba(0, 0, 0, 0)");
       expect(selection.shadow).toBe("none");
       if(width<1024) await page.getByRole("button",{name:"Toggle service navigation"}).click();

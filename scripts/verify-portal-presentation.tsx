@@ -21,6 +21,11 @@ async function main() {
     for (const theme of ["light", "dark"]) for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height:900 });
       await page.setContent(`<html data-theme="${theme}"><head><meta name="viewport" content="width=device-width, initial-scale=1"/><style>${css}</style></head><body>${markup}</body></html>`);
+      await expect(page.locator(".dashboard-os-sidebar").getByRole("link",{name:"Home",exact:true})).toHaveAttribute("href","/");
+      await expect(page.locator(".dashboard-os-sidebar").getByRole("button",{name:"Home",exact:true})).toHaveCount(0);
+      await expect(page.locator('[data-nav-key="overview"]')).toHaveCount(0);
+      expect(await page.locator(".portal-new-button").evaluate(node=>getComputedStyle(node).borderTopWidth)).toBe("1px");
+      expect(await page.locator(".dashboard-os-nav-item").first().evaluate(node=>getComputedStyle(node).fontSize)).toBe("12px");
       const dimensions = await page.evaluate(() => ({ viewport:innerWidth, content:document.documentElement.scrollWidth }));
       expect(dimensions.content).toBeLessThanOrEqual(dimensions.viewport);
       expect(await page.locator(".portal-workspace").evaluate(element => getComputedStyle(element).display)).toBe("flex");

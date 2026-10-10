@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, ChevronDown, ChevronUp, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, X, Plus, Disc3, TrendingUp, Wallet, Music2, Headphones, Settings, Users, LifeBuoy, Store, LayoutGrid, Upload } from "lucide-react";
+import { Bell, ChevronDown, ChevronUp, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, X, Plus, Disc3, TrendingUp, Wallet, Music2, Headphones, Settings, Users, LifeBuoy, Store, LayoutGrid, Upload, Home } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
 import { SubscriptionButton, openSubscriptions } from "@/components/subscription-options";
@@ -224,6 +224,7 @@ export function DashboardFrame<T extends string>({
 
         <div ref={navScrollRef} onScroll={updateNavScroll} className="dashboard-nav-scroll mt-4 min-h-0 flex-1 content-start gap-3 overflow-x-hidden overflow-y-auto pr-1 grid">
           {visibleGroups.map((group) => {
+            if (group.label === "Home") return <Link key="Home" href="/" aria-label="Home" className="workspace-home-link" title={collapsed ? "Home" : undefined} onClick={() => setMobileOpen(false)}><Home size={16} /><span className={clsx(collapsed ? "lg:hidden" : "")}>Home</span></Link>;
             const closed = openGroup !== group.label;
             return (
               <div key={group.label} className="dashboard-os-nav-group">

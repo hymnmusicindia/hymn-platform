@@ -1,11 +1,11 @@
 /* Text-first actions: no pills, halos or decorative button frames. */
 html body .hymn-page-selector { border:0!important; border-radius:0!important; background:none!important; box-shadow:none!important; }
-html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost,.landing-new,.portal-new-button,.landing-mobile-menu,.site-header-cta,.site-nav-item,.hymn-mobile-page-link,.release-summary-action-button,.release-dashboard-tab,button.rounded-full:not([aria-label]),a.rounded-full:not([aria-label])) {
+html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost,.landing-mobile-menu,.site-header-cta,.site-nav-item,.hymn-mobile-page-link,.release-summary-action-button,.release-dashboard-tab,button.rounded-full:not([aria-label]),a.rounded-full:not([aria-label])) {
   border:0!important; border-radius:0!important; background:none!important; background-image:none!important;
   box-shadow:none!important; text-shadow:none!important; filter:none!important; transform:none!important;
   color:var(--text-muted,#a3abb8)!important; transition:color .18s ease!important;
 }
-html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost,.landing-new,.portal-new-button,.landing-mobile-menu,.site-header-cta,.site-nav-item,.hymn-mobile-page-link,.release-summary-action-button,.release-dashboard-tab,button.rounded-full:not([aria-label]),a.rounded-full:not([aria-label])):is(:hover,:focus-visible),
+html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost,.landing-mobile-menu,.site-header-cta,.site-nav-item,.hymn-mobile-page-link,.release-summary-action-button,.release-dashboard-tab,button.rounded-full:not([aria-label]),a.rounded-full:not([aria-label])):is(:hover,:focus-visible),
 html body :is(.btn-primary,.site-nav-item[aria-current="page"],.hymn-mobile-page-link[aria-current="page"],.release-dashboard-tab[aria-current="page"]) { color:var(--text,#f5f7fa)!important; }
 html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost)::before,
 html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost)::after { display:none!important; }
@@ -77,3 +77,7 @@ html body .master-library .audio-waveform-playhead { background:#e5edf6; box-sha
   .master-library-actions { grid-column:2; grid-row:1; }
 }
 @media(prefers-reduced-motion:reduce) { html body :is(.landing-group-title,.landing-group-title svg,.btn-primary,.btn-outline) { transition:none!important; } }
+
+/* Shared sidebar create action retains its requested outline. */
+html body :is(.landing-new,.portal-new-button) { border:1px solid #454b55!important; border-radius:5px!important; background:transparent!important; box-shadow:none!important; text-shadow:none!important; color:#c5ccd6!important; min-height:38px; font-size:13px; }
+html body :is(.landing-new,.portal-new-button):hover { border-color:#858d99!important; color:#fff!important; background:transparent!important; }
