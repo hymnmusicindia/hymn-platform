@@ -580,11 +580,11 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
               </Link>
               <Link href="/payout" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
                 <Bell className="h-4 w-4" />
-                Payout
+                Payouts
               </Link>
               <Link href="/faq" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
                 <HelpCircle className="h-4 w-4" />
-                Help and FAQ
+                FAQ
               </Link>
               <Link href="/contact" role="menuitem" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 px-3 py-2 text-sm font-medium">
                 <MessageCircle className="h-4 w-4" /> Contact HYMN
@@ -629,7 +629,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <div className="hidden items-center gap-3 lg:flex">
-            {workspaceHeader ? <><SubscriptionButton className="studio-header-plans" /><Link href="/contact" className="studio-header-tool" aria-label="Contact HYMN"><MessageCircle size={18}/></Link><Link href="/faq" className="studio-header-tool" aria-label="Help and support"><HelpCircle size={18}/></Link></> : <SmartHelpToggle />}
+            {workspaceHeader ? <><SubscriptionButton className="studio-header-plans" /><Link href="/contact" className="studio-header-tool" aria-label="Contact HYMN"><MessageCircle size={18}/></Link><Link href="/faq" className="studio-header-tool" aria-label="FAQ"><HelpCircle size={18}/></Link></> : <SmartHelpToggle />}
             {!isAuthenticated && !workspaceHeader ? <ThemeToggle /> : null}
             {isAuthenticated ? <AppLauncher /> : (
               <Link

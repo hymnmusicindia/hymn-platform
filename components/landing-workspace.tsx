@@ -1,16 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { workspaceGroups } from "@/lib/workspace-navigation";
 import { useEffect, useState } from "react";
-import { ArrowUpRight, ChevronDown, Disc3, Headphones, Home, LayoutGrid, Menu, Music2, Plus, Store, Users, X, TrendingUp, Wallet, Megaphone, ShieldCheck, Settings, LifeBuoy, Folder } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Home, Menu, Plus, X } from "lucide-react";
 
-const groups = [
-  { title:"Library", links:[{label:"My files",href:"/audio-library",icon:Folder}] },
-  { title:"Distribution", links:[{label:"Add release",href:"/distribution/start",icon:Plus},{label:"My releases",href:"/dashboard/releases",icon:Disc3},{label:"Trends",href:"/analytics",icon:TrendingUp},{label:"Earnings",href:"/payout",icon:Wallet},{label:"Promotion",href:"/dashboard?tab=promotions",icon:Megaphone},{label:"Content ID",href:"/dashboard?tab=content-id",icon:ShieldCheck},{label:"Royalty splits",href:"/dashboard?tab=collaborators",icon:Users}] },
-  { title:"Beatstore", links:[{label:"Browse beats",href:"/beat-store",icon:Store},{label:"My purchases",href:"/dashboard?tab=purchases",icon:Music2},{label:"Sell beats",href:"/producer/dashboard",icon:Users}] },
-  { title:"Mixing / Mastering", links:[{label:"Find an engineer",href:"/studio",icon:Headphones},{label:"My projects",href:"/dashboard/studio",icon:LayoutGrid},{label:"Artist services",href:"/managed-services",icon:Music2}] },
-  { title:"Account", links:[{label:"Settings",href:"/dashboard?tab=settings",icon:Settings},{label:"Help & support",href:"/dashboard?tab=support",icon:LifeBuoy}] }
-];
+const groups = workspaceGroups;
 
 export function LandingWorkspace({ children, workspaceHref }: {children:React.ReactNode; workspaceHref:string}) {
   const [open,setOpen] = useState(false);

@@ -2,6 +2,7 @@
 
 import { Bell, ChevronDown, ChevronUp, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, X, Plus, Disc3, TrendingUp, Wallet, Music2, Headphones, Settings, Users, LifeBuoy, Store, LayoutGrid, Upload, Home } from "lucide-react";
 import clsx from "clsx";
+import { consistentWorkspaceNavigation, workspaceNavigation } from "@/lib/workspace-navigation";
 import Link from "next/link";
 import { SubscriptionButton, openSubscriptions } from "@/components/subscription-options";
 import Image from "next/image";
@@ -120,7 +121,7 @@ export function DashboardFrame<T extends string>({
   const groups = useMemo<DashboardNavGroup<T>[]>(() => {
     if (navGroups?.length) return navGroups;
     const byGroup = new Map<string, DashboardNavItem<T>[]>();
-    navItems.forEach((item) => {
+    consistentWorkspaceNavigation(navItems).forEach((item) => {
       const label = item.group ?? "Workspace";
       byGroup.set(label, [...(byGroup.get(label) ?? []), item]);
     });
@@ -244,7 +245,7 @@ export function DashboardFrame<T extends string>({
                 <div className={clsx("grid gap-1.5", closed ? "hidden" : "")}>
                   {group.items.map((item) => {
                     const active = item.key === activeKey;
-                    const Icon = /release|catalog/.test(item.key) ? Disc3 : /analytics|sales/.test(item.key) ? TrendingUp : /earning|payout/.test(item.key) ? Wallet : /upload/.test(item.key) ? Upload : /studio|mix|master/.test(item.key) ? Headphones : /store|purchase/.test(item.key) ? Store : /setting|profile|account/.test(item.key) ? Settings : /collaborator|referral/.test(item.key) ? Users : /support|help/.test(item.key) ? LifeBuoy : item.key === "overview" ? LayoutGrid : Music2;
+                    const Icon = workspaceNavigation.find(entry => entry.label === item.label)?.icon ?? (/release|catalog/.test(item.key) ? Disc3 : /analytics|sales/.test(item.key) ? TrendingUp : /earning|payout/.test(item.key) ? Wallet : /upload/.test(item.key) ? Upload : /studio|mix|master/.test(item.key) ? Headphones : /store|purchase/.test(item.key) ? Store : /setting|profile|account/.test(item.key) ? Settings : /collaborator|referral/.test(item.key) ? Users : /support|help/.test(item.key) ? LifeBuoy : item.key === "overview" ? LayoutGrid : Music2);
                     const content = <><Icon className="portal-nav-icon" /><span className={clsx("min-w-0", collapsed ? "lg:hidden" : "")}><span className="block truncate font-semibold">{item.label}</span></span></>;
                     return item.href ? <Link key={item.key} href={item.href} data-guide-route={item.href} data-nav-key={item.key} aria-current={active ? "page" : undefined} onClick={(event) => { setMobileOpen(false); if (item.key === "plans" || item.key === "subscriptions") { event.preventDefault(); openSubscriptions(); } }} className={clsx("dashboard-os-nav-item pressable hover-lift", active ? "is-active" : "is-idle")} title={collapsed ? item.label : undefined}>{content}</Link> : (
                       <button
