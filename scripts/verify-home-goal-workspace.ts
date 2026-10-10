@@ -85,6 +85,9 @@ export default function Layout({children}:{children:React.ReactNode}){return <di
         expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
         if(["release","finish-release"].includes(goal.id)) await expect(page.locator(".home-personalized-feed [data-home-banner]").first()).toHaveAttribute("data-home-banner","platforms");
         if(goal.id==="release") {
+          await expect.poll(async()=>page.locator(".home-welcome-intro").evaluate(node=>node.getBoundingClientRect().height),{timeout:8000}).toBe(0);
+          await expect(page.locator(".home-goal-hero-showcase")).toBeVisible();
+          await expect(page.locator(".home-path-popup")).toBeVisible();
           await page.screenshot({path:`.cache/home-goal/release-${width}.png`});
           await page.locator(".home-path-guide > summary").click();
           const previousWrites=writes;

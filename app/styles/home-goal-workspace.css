@@ -180,3 +180,16 @@ html body .home-goal-primary:hover:not(:disabled) { background:#fff; color:#080c
  #home-path-popup-content { max-height:calc(100dvh - 260px); }
 }
 @media(prefers-reduced-motion:reduce) { .home-path-popup-toggle > svg { transition:none; } }
+
+/* Welcome briefly, then let the music occupy the hero. */
+.home-welcome-intro { display:grid; grid-template-rows:1fr; }
+.home-welcome-inner { min-height:0; overflow:hidden; }
+.home-goal-workspace[data-mode="home"] .home-welcome-inner > :is(.home-goal-topline,.home-goal-heading) { margin-left:36px; margin-right:36px; }
+.home-goal-workspace[data-mode="home"] .home-welcome-intro { animation:home-welcome-dismiss .75s cubic-bezier(.22,1,.36,1) 4s forwards; }
+
+@keyframes home-welcome-dismiss {
+ from { grid-template-rows:1fr; opacity:1; transform:translateY(0); }
+ to { grid-template-rows:0fr; opacity:0; transform:translateY(-24px); visibility:hidden; }
+}
+@media(max-width:700px) { .home-goal-workspace[data-mode="home"] .home-welcome-inner > :is(.home-goal-topline,.home-goal-heading) { margin-left:18px; margin-right:18px; } }
+@media(prefers-reduced-motion:reduce) { .home-goal-workspace[data-mode="home"] .home-welcome-intro { animation:home-welcome-dismiss .01ms linear 4s forwards!important; } }

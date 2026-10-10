@@ -93,8 +93,10 @@ export function HomeGoalWorkspace({ userId, name, banners = {} }: { userId: numb
 
   return <section className="home-goal-workspace" data-home-goal={state?.goalId || "choose"} data-mode={state && !chooser ? "home" : "onboarding"} aria-labelledby="home-goal-title">
     <div className="home-goal-backdrop" aria-hidden="true"><Image src="/home-hero-crowd.jpg" alt="" fill priority sizes="100vw" /></div>
+    <div className="home-welcome-intro"><div className="home-welcome-inner">
     <header className="home-goal-topline"><span><Compass size={15} /> YOUR NEXT CHAPTER</span><Link href="/dashboard">Open dashboard <ArrowRight size={14} /></Link></header>
     <div className="home-goal-heading"><p>Welcome{state ? " back" : ""}, {firstName}.</p><h1 id="home-goal-title" ref={headingRef} tabIndex={-1}>{choosingProfession ? "Your role in music?" : chooser ? "What brings you to HYMN?" : state ? "Your music. Ready for its next chapter." : "Your music. Your next move."}</h1>{chooser || !state ? <p>{choosingProfession ? "Start with you." : chooser ? "Pick your next move." : "Getting your workspace ready."}</p> : null}</div>
+    </div></div>
     {!payload && !error ? <div className="home-goal-loading" role="status"><LoaderCircle size={20} /> Loading your workspace…</div> : null}
     {error ? <div className="home-goal-error" role="alert"><span>{error}</span>{!payload ? <button type="button" onClick={() => void load()}>Retry</button> : null}</div> : null}
     {chooser ? <>
