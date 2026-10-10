@@ -41,7 +41,11 @@ export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{
   return {
     platforms: (<section className="landing-platforms home-platform-editorial shell" aria-labelledby="home-platform-title">
       <h2 id="home-platform-title">Where your music <span>lands.</span></h2>
-      <div className="home-platform-logo-grid" aria-label="Music platforms">{storeLogos.map(item => <div key={item.name} title={item.name}><Image src={item.src} alt={item.name} width={144} height={48} className="distribution-store-logo" /></div>)}</div>
+      <div className="home-platform-carousel" aria-hidden="true">{[0, 1, 2].map(column => {
+        const logos = storeLogos.filter((_, index) => index % 3 === column);
+        return <div className="home-platform-column" key={column}><div className="home-platform-track">{[0, 1].map(copy => <div className="home-platform-logo-set" key={copy}>{logos.map(item => <div key={item.name}><Image src={item.src} alt="" width={144} height={48} className="distribution-store-logo" /></div>)}</div>)}</div></div>;
+      })}</div>
+      <p className="sr-only">Available on {storeLogos.map(item => item.name).join(", ")}.</p>
     </section>),
     releases: (<section id="released" className="landing-releases home-release-editorial shell">
         <div className="home-release-stage">
