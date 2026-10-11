@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { BarChart3, Database, Globe, Headphones, Music, type LucideIcon } from "lucide-react";
-import { EmptyState } from "@/components/ui/hymn-ui";
+import { AnalyticsEmptyState } from "@/components/analytics-empty-state";
 
 type AnalyticsRow = {
   platform?: string | null;
@@ -42,7 +42,7 @@ function formatDate(value?: string | Date | null) {
 export function AnalyticsDashboard({ analytics = [] }: { userName?: string; analytics?: AnalyticsRow[] }) {
   const verified = analytics.filter((row) => row.isVerified === true);
   if (verified.length === 0) {
-    return <EmptyState title="Verified analytics will appear here" description="HYMN has not received verified reporting for this catalogue yet. Estimates, proxy listener counts and invented demographics are not shown." action={{ label: "Open full analytics", href: "/analytics" }} />;
+    return <AnalyticsEmptyState compact />;
   }
 
   const totalStreams = verified.reduce((sum, row) => sum + Math.max(0, row.streams ?? 0), 0);

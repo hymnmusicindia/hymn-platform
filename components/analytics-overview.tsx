@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUpRight, Globe2, RefreshCw, Sparkles, TrendingUp } from "lucide-react";
+import { AlertCircle, ArrowUpRight, Globe2, RefreshCw, Sparkles, TrendingUp } from "lucide-react";
 import { analyticsWindows } from "@/lib/analytics";
 import { AnalyticsCountryStat, AnalyticsPoint, AnalyticsPlatformStat, AnalyticsReleaseRow, AnalyticsSummary, AnalyticsWindow } from "@/lib/types";
-import { DataSourceBadge, EmptyState, ErrorState } from "@/components/ui/hymn-ui";
+import { DataSourceBadge } from "@/components/ui/hymn-ui";
+
+import { AnalyticsEmptyState } from "@/components/analytics-empty-state";
+import stateStyles from "./analytics-empty-state.module.css";
 
 const WINDOW_LABELS: Record<AnalyticsWindow, string> = { "7d": "7 days", "30d": "30 days", all: "All time" };
 const PLATFORM_COLORS: Record<string, string> = { Spotify: "#22c55e", "Apple Music": "#e879f9", YouTube: "#60a5fa" };
@@ -102,8 +105,8 @@ export function AnalyticsOverview({ summary }: { summary: AnalyticsSummary }) {
   const topCountry = data.countryBreakdown[0];
 
 
-  if (data.state === "error") return <ErrorState title="Analytics unavailable" description={data.errorMessage ?? "Verified analytics could not be loaded."} retry={() => window.location.reload()} />;
-  if (data.state === "empty") return <EmptyState title="Verified analytics will appear here" description="HYMN has not yet received verified analytics for the selected catalogue and reporting period. No estimates, fallback metrics or audience demographics are shown." action={{ label: "View Catalogue", href: "/dashboard/releases" }} secondaryAction={{ label: "How Reporting Works", href: "/royalty-payouts" }} />;
+  if (data.state === "error") return <section className={stateStyles.panel} role="alert"><div className={stateStyles.copy}><AlertCircle size={24} aria-hidden="true" /><h2 className={stateStyles.errorTitle}>Analytics unavailable</h2><p>{data.errorMessage ?? "Verified analytics could not be loaded. Please try again."}</p><div className={stateStyles.actions}><button className={stateStyles.primary} type="button" onClick={() => window.location.reload()}><RefreshCw size={15} aria-hidden="true" />Try again</button></div></div></section>;
+  if (data.state === "empty") return <AnalyticsEmptyState />;
 
   return <div className="grid gap-6 xl:gap-8"><section className="surface-card relative overflow-hidden p-6 sm:p-8"><div className="relative flex flex-wrap items-start justify-between gap-4"><div className="max-w-3xl"><h1 className="text-4xl font-semibold tracking-tight sm:text-5xl" style={{ color: "var(--text)" }}>{data.headline}</h1><p className="mt-4 max-w-2xl text-base leading-7" style={{ color: "var(--text-muted)" }}>Verified provider performance only. Royalty statements are historical reports, not real-time analytics.</p><div className="mt-4"><DataSourceBadge source={data.dataSource ?? "Source not recorded"} period={data.statementPeriod} /></div><dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm" style={{ color: "var(--text-muted)" }}><div><dt className="inline font-semibold">Imported: </dt><dd className="inline">{data.importedAt ? formatDateTime(data.importedAt) : "Not recorded"}</dd></div></dl></div><div className="rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-soft)" }}><RefreshCw className="h-3.5 w-3.5" />Imported report</div><p className="mt-2 text-sm font-medium" style={{ color: "var(--text)" }}>{formatDateTime(data.updatedAt)}</p></div></div><div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">{data.metrics.map((metric) => <MetricCard key={metric.label} label={metric.label} value={metric.value} kind={metric.format} detail={metric.detail} />)}</div></section>
 
