@@ -21,7 +21,7 @@
   .mobile-login-link { display:flex; align-items:center; gap:7px; min-height:44px; padding:0 10px; color:#d5dae2; font-size:13px; font-weight:550; }
   .mobile-login-link:hover { color:#fff; }
   .mobile-account-access { margin-right:4px; }
-  .mobile-account-access [role="menu"] { position:fixed!important; top:60px; left:12px; right:12px; width:auto!important; max-height:calc(100dvh - 84px); margin-top:8px; overflow-y:auto; overscroll-behavior:contain; }
+  .mobile-account-access [role="menu"], .mobile-account-access .site-notification-panel { position:fixed!important; top:60px; left:12px; right:12px; width:auto!important; max-height:calc(100dvh - 84px); margin-top:8px; overflow-y:auto; overscroll-behavior:contain; }
   html body .hymn-studio-header .site-cart-trigger { width:44px; height:44px; }
   html body .landing-mobile-menu,html body .dashboard-os-mobile-head { display:none!important; }
   html body .hymn-portal-root .hymn-portal .hymn-portal-frame { min-height:calc(100dvh - 104px); }
@@ -108,3 +108,5 @@
   .hymn-portal-root .surface-card,.hymn-portal-root .metric-card { padding:18px; }
 }
 @media(prefers-reduced-motion:reduce) { .mobile-workspace-subheader * { transition:none; } }
+
+@media (max-width:1023px) { .mobile-account-access .site-header-bare-icon { width:44px; height:44px; flex-shrink:0; } }

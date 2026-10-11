@@ -399,11 +399,11 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
   const NotificationBell = ({ mobile = false }: { mobile?: boolean }) =>
     isAuthenticated ? (
-      <div data-notification-menu-root className={clsx("relative z-[1250] pointer-events-auto", mobile ? "w-full" : "")}>
+      <div data-notification-menu-root className="relative z-[1250] pointer-events-auto">
         <button
           type="button"
           onClick={() => { setNotificationsOpen((value) => !value); setProfileOpen(false); setAppLauncherOpen(false); }}
-          className={clsx("site-header-bare-icon site-notification-trigger relative inline-flex h-10 w-10 items-center justify-center rounded-full border-0 bg-transparent sm:h-11 sm:w-11", mobile ? "w-full justify-start gap-3 px-3" : "")}
+          className="site-header-bare-icon site-notification-trigger relative inline-flex h-10 w-10 items-center justify-center rounded-full border-0 bg-transparent sm:h-11 sm:w-11"
           style={{ color: "var(--text)" }}
           aria-expanded={notificationsOpen}
           aria-haspopup="dialog"
@@ -413,7 +413,6 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
             <Bell aria-hidden="true" className={clsx("notification-bell-icon h-5 w-5", unreadCount > 0 && "has-unread")} />
             {unreadCount > 0 ? <span aria-hidden="true" className="notification-unread-alert">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
           </span>
-          {mobile ? <span className="text-sm font-semibold">Notifications</span> : null}
         </button>
 
         {notificationsOpen ? (
@@ -421,7 +420,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
             role="dialog"
             aria-label="Notifications"
             onMouseDown={(event) => event.stopPropagation()}
-            className={clsx("site-notification-panel z-[1260] mt-3 rounded-2xl border p-3 shadow-2xl", mobile ? "w-full" : "absolute right-0 w-[min(26rem,calc(100vw-2rem))]")}
+            className={clsx("site-notification-panel z-[1260] mt-3 rounded-2xl border p-3 shadow-2xl", mobile ? "fixed left-3 right-3 top-[4.25rem] w-auto" : "absolute right-0 w-[min(26rem,calc(100vw-2rem))]")}
           >
             <div className="site-notification-heading flex items-start justify-between gap-3 border-b pb-3">
               <div>
@@ -648,6 +647,8 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           </div>
 
           <div className="mobile-account-access flex items-center gap-0 lg:hidden">
+            {isAuthenticated ? <AppLauncher mobile /> : null}
+            {isAuthenticated ? <NotificationBell mobile /> : null}
             {isAuthenticated ? <ProfileMenu /> : <Link href="/login" className="mobile-login-link"><UserRound size={17} aria-hidden="true" /><span>Login</span></Link>}
           </div>
 
