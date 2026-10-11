@@ -19,7 +19,7 @@ export default async function ProducerProfilePage({ params }: { params: Promise<
       <img src={producer.imageUrl} alt="" className={styles.cover}/>
       <div className={styles.identity}>
         <img src={producer.avatarUrl} alt="" className={styles.avatar}/>
-        <div><span className={styles.eyebrow}>PRODUCER STOREFRONT</span><h1>{producer.name}</h1><p className={styles.handle}>@{producer.slug}</p></div>
+        <div><span className={styles.eyebrow}>PRODUCER STOREFRONT</span><h1>{producer.name}</h1><p className={styles.handle}>@{producer.slug}</p><Link href={`/p/${encodeURIComponent(producer.slug)}`} className={styles.bioLink}>Links & featured beats &rarr;</Link></div>
         <div className={styles.count}><strong>{producerBeats.length}</strong><span>Beats live</span></div>
       </div>
       {(producer.story || producer.genreIdentity) && <div className={styles.about}><p>{producer.story || producer.genreIdentity}</p></div>}

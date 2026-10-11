@@ -23,3 +23,12 @@ Four steps: Files, Details, Pricing and Review. File tiles replace long upload r
 ## Public producer storefront
 
 Active producer profiles are resolved by owner user ID, including administrators with an active producer profile. Beat rows link the saved producer name to `/beat-store/producers/{slug}`. The saved unique slug is the storefront ID; it remains stable when the producer changes their display name. Once a beat is published and enabled, the storefront editor shows the ID, live beat count and public link. Public storefronts show the cover, portrait, producer bio and only that producer's published, enabled catalogue. Draft, pending-review and unlisted beats stay out of the public catalogue. Accounts without a matching public profile retain the known owner name without a broken link.
+
+
+## Mobile producer bio link
+
+`/p/{slug}` is a public, mobile-first producer link page outside the workspace navigation. It uses the saved portrait, bio and banner, with a dark gradient over the banner background. Up to six live beats are ordered by paid, unrefunded licence sales; newest beats break ties and are used when there are no sales. Only public beat fields are sent to the player; customer and sales data remain on the server. A single audio element plays previews (or the existing controlled master fallback), supports pause and seeking, and stops the previous beat when switching.
+
+The page links to the complete standalone beat store and saved Instagram, YouTube, Spotify and website URLs. Missing or unsafe URLs are omitted. The share button uses the device share sheet when available and clipboard otherwise. The footer links to HYMN with the existing white logo. Active profiles get a bio-link entry in their storefront editor; the full storefront links back to the bio page. Canonical and social-preview metadata use the same saved identity. No database migration is required.
+
+Validation: `node --import tsx scripts/verify-producer-links.ts` and `node --import tsx scripts/verify-producer-link-browser.ts` check sales ranking, safe links, mobile widths (320/390/430), desktop, empty and single-beat profiles, playback switching, sharing, logo loading and touch targets.

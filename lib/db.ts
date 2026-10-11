@@ -2757,6 +2757,17 @@ async function ensureSiteSettingsRow(pool: mysql.Pool) {
   await pool.query("INSERT INTO site_settings (id, home_hero_image_url) VALUES (1, NULL)");
 }
 
+/** Public ranking signal only: paid licences, never customer or revenue details. */
+export async function listProducerBeatPerformance(producerId: number): Promise<Map<number, number>> {
+  if (!usesPostgresPrisma()) return new Map();
+  const sales = await prisma.beatSale.groupBy({
+    by: ["beatId"],
+    where: { producerUserId: producerId, status: "paid", refundedAmount: 0, netSaleAmount: { gt: 0 } },
+    _count: { _all: true }
+  });
+  return new Map(sales.map(sale => [sale.beatId, sale._count._all]));
+}
+
 export async function listProducerProfiles(limit?: number): Promise<ProducerProfile[]> {
   const take = limit == null ? undefined : Math.max(1, Math.min(limit, 48));
   if (usesPostgresPrisma()) {
