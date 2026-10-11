@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, CircleDollarSign, ShieldCheck } from "lucide-react";
-import { monthlyRevenue, revenueChannels, summarizeRevenue, type RevenueEntry, type RevenueChannel } from "@/lib/revenue-report";
+import { monthlyRevenue, revenueChannels, revenueFunding, revenueFundingLabels, summarizeRevenue, type RevenueFunding, type RevenueEntry, type RevenueChannel } from "@/lib/revenue-report";
 import { WorkspaceRecords } from "@/components/workspace-records";
 import { GatewayFinanceWorkspace } from "@/components/gateway-finance-workspace";
 
@@ -10,13 +10,14 @@ const money = (n: number) => new Intl.NumberFormat("en-IN", { style: "currency",
 export function AdminRevenueWorkspace({ entries, onPayments, search = "" }: { entries: RevenueEntry[]; onPayments: () => void; search?: string }) {
   const [period, setPeriod] = useState("all");
   const [channel, setChannel] = useState<RevenueChannel | "all">("all");
+  const [funding, setFunding] = useState<RevenueFunding | "all">("all");
   const [measure, setMeasure] = useState<"hymn" | "receipts">("hymn");
   const [from, setFrom] = useState(""); const [to, setTo] = useState("");
   const rows = useMemo(() => {
     const cutoff = period === "all" || period === "custom" ? 0 : Date.now() - Number(period) * 86400000;
     const query = search.trim().toLowerCase();
-    return entries.filter(row => (!query || `${row.customer} ${row.reference} ${row.channel} ${row.evidence}`.toLowerCase().includes(query)) && row.currency === "INR" && (channel === "all" || row.channel === channel) && Date.parse(row.date) >= cutoff && (period !== "custom" || ((!from || Date.parse(row.date) >= Date.parse(`${from}T00:00:00+05:30`)) && (!to || Date.parse(row.date) < Date.parse(`${to}T00:00:00+05:30`) + 86400000))));
-  }, [entries, period, channel, from, to, search]);
+    return entries.filter(row => (!query || `${row.customer} ${row.reference} ${row.channel} ${row.evidence}`.toLowerCase().includes(query)) && row.currency === "INR" && (funding === "all" || revenueFunding(row) === funding) && (channel === "all" || row.channel === channel) && Date.parse(row.date) >= cutoff && (period !== "custom" || ((!from || Date.parse(row.date) >= Date.parse(`${from}T00:00:00+05:30`)) && (!to || Date.parse(row.date) < Date.parse(`${to}T00:00:00+05:30`) + 86400000))));
+  }, [entries, period, channel, funding, from, to, search]);
   const summary = summarizeRevenue(rows); const months = monthlyRevenue(rows);
   const total = summary[measure]; const max = Math.max(1, ...months.map(row => row[measure]));
   const positiveTotal = summary.channels.reduce((sum, row) => sum + Math.max(0, row[measure]), 0);
@@ -26,7 +27,7 @@ export function AdminRevenueWorkspace({ entries, onPayments, search = "" }: { en
   return <div className="revenue-workspace">
     <GatewayFinanceWorkspace />
     <header className="revenue-heading"><div><p className="workspace-kicker">Command Center</p><h2>HYMN Revenue</h2><p>Collections, platform share, and the records behind them.</p></div><button className="btn-outline" onClick={onPayments}>Checkout attempts <ArrowUpRight size={15}/></button></header>
-    <div className="revenue-toolbar"><label>Period<select className="field" aria-label="Revenue period" value={period} onChange={e => setPeriod(e.target.value)}><option value="all">All recorded history</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option><option value="custom">Choose dates</option></select></label><label>Source<select className="field" aria-label="Revenue source" value={channel} onChange={e => setChannel(e.target.value as typeof channel)}><option value="all">All sources</option>{revenueChannels.map(name => <option key={name}>{name}</option>)}</select></label>{period === "custom" && <><label>From<input className="field" type="date" value={from} onChange={e => setFrom(e.target.value)}/></label><label>To<input className="field" type="date" min={from} value={to} onChange={e => setTo(e.target.value)}/></label></>}</div>
+    <div className="revenue-toolbar"><label>Period<select className="field" aria-label="Revenue period" value={period} onChange={e => setPeriod(e.target.value)}><option value="all">All recorded history</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option><option value="custom">Choose dates</option></select></label><label>Source<select className="field" aria-label="Revenue source" value={channel} onChange={e => setChannel(e.target.value as typeof channel)}><option value="all">All sources</option>{revenueChannels.map(name => <option key={name}>{name}</option>)}</select></label><label>Funding<select className="field" aria-label="Revenue funding" value={funding} onChange={e => setFunding(e.target.value as typeof funding)}><option value="all">All funding types</option>{Object.entries(revenueFundingLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>{period === "custom" && <><label>From<input className="field" type="date" value={from} onChange={e => setFrom(e.target.value)}/></label><label>To<input className="field" type="date" min={from} value={to} onChange={e => setTo(e.target.value)}/></label></>}</div>
     <div className="revenue-metrics">{[
       { label: "HYMN earned", value: summary.hymn, detail: "Service revenue + recorded commissions", icon: CircleDollarSign },
       { label: "Gross collected", value: summary.receipts, detail: "Includes creator shares", icon: ArrowDownLeft },
@@ -39,9 +40,10 @@ export function AdminRevenueWorkspace({ entries, onPayments, search = "" }: { en
     <details className="revenue-explainer"><summary>What these numbers include</summary><p>HYMN earned is subscription and distribution service receipts plus persisted Beat Store, studio, royalty and completed-payout fees. Donut segments show positive source totals; signed adjustments remain in the ledger. It is before tax, gateway fees, refunds and operating costs; it is not profit or bank settlement. Manually paid receipts retain pending gateway verification. Unallocated shares are excluded from HYMN earned. Royalty fees use statement month; other entries use their recorded date.</p>{summarizeRevenue(entries).otherCurrencies.length > 0 && <p>Other currencies are excluded from INR charts: {summarizeRevenue(entries).otherCurrencies.join(", ")}.</p>}</details>
     <section className="revenue-chart"><h3>Revenue ledger <small>{rows.length} records</small></h3><WorkspaceRecords searchable={false} rows={rows} rowKey={row => row.id} noun="revenue records" searchText={row => `${row.customer} ${row.reference} ${row.channel} ${row.evidence}`} columns={[
       {key:"source",label:"Source / customer",primary:true,render:row=><><strong>{row.channel}</strong><small>{row.customer}</small></>},
-      {key:"receipt",label:"Collected",value:row=>row.receipt,render:row=>row.receipt ? money(row.receipt) : "Ledger allocation"},
+      {key:"funding",label:"Funding",render:row=>revenueFundingLabels[revenueFunding(row)]},
+      {key:"receipt",label:"Payment collected",value:row=>row.receipt,render:row=><><strong>{money(row.receipt)}</strong>{revenueFunding(row) === "hybrid" && <small>Payment paid{row.creditsUsed !== undefined ? ` + ${money(row.creditsUsed)} credits used` : ""}</small>}{row.receipt === 0 && <small>{revenueFunding(row) === "subscription" ? "Covered by subscription" : revenueFunding(row) === "credits" ? `${row.creditsUsed !== undefined ? money(row.creditsUsed) + " " : ""}credits used` : revenueFundingLabels[revenueFunding(row)]}</small>}</>},
       {key:"hymn",label:"HYMN share",value:row=>row.hymn ?? -1,render:row=>row.hymn === null ? "Pending allocation" : money(row.hymn)},
-      {key:"evidence",label:"Evidence / reference",render:row=><><span className="status-pill">{row.evidence === "merchant_confirmation" ? "Paid · manually confirmed" : row.evidence === "ledger" ? "Recorded commission" : "Gateway captured"}</span><small>{row.reference}</small></>},
+      {key:"evidence",label:"Evidence / reference",render:row=><><span className="status-pill">{row.evidence === "merchant_confirmation" ? "Paid · manually confirmed" : row.evidence === "ledger" ? revenueFunding(row) === "ledger" ? "Recorded commission" : revenueFunding(row) === "subscription" ? "Subscription entitlement" : revenueFunding(row) === "credits" ? "Credit redemption" : "No payment required" : "Gateway captured"}</span><small>{row.reference}</small></>},
       {key:"date",label:"Date",value:row=>Date.parse(row.date),render:row=>new Date(row.date).toLocaleDateString("en-IN",{timeZone:"Asia/Kolkata"})}
     ]}/></section>
   </div>;

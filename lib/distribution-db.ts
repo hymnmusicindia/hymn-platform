@@ -869,6 +869,7 @@ export async function createDistributionOrder(input: { userId: number; plan: Sub
       releaseId: null,
       plan: input.plan,
       amount: input.amount,
+      creditsUsed: input.creditsUsed ?? 0,
       razorpayOrderId: input.razorpayOrderId,
       razorpayPaymentId: null,
       paymentStatus: "created",
@@ -887,6 +888,7 @@ export async function createDistributionOrder(input: { userId: number; plan: Sub
     releaseId: null,
     plan: input.plan,
     amount: input.amount,
+    creditsUsed: input.creditsUsed ?? 0,
     razorpayOrderId: input.razorpayOrderId,
     razorpayPaymentId: null,
     paymentStatus: "created",
@@ -904,7 +906,7 @@ export async function listAllDistributionOrders(): Promise<DistributionOrder[]> 
     return [...memory.orders].sort((a, b) => b.id - a.id);
   }
   const [rows] = await pool.query(
-    "SELECT id, user_id AS userId, release_id AS releaseId, plan, amount, razorpay_order_id AS razorpayOrderId, razorpay_payment_id AS razorpayPaymentId, payment_status AS paymentStatus, created_at AS createdAt FROM distribution_orders ORDER BY created_at DESC"
+    "SELECT id, user_id AS userId, release_id AS releaseId, plan, amount, credits_used AS creditsUsed, razorpay_order_id AS razorpayOrderId, razorpay_payment_id AS razorpayPaymentId, payment_status AS paymentStatus, created_at AS createdAt FROM distribution_orders ORDER BY created_at DESC"
   );
   return rows as DistributionOrder[];
 }
@@ -953,7 +955,7 @@ export async function markDistributionOrderPaid(orderId: string, paymentId: stri
   }
   await pool.query("UPDATE distribution_orders SET razorpay_payment_id = ?, payment_status = 'paid' WHERE razorpay_order_id = ?", [paymentId, orderId]);
   const [rows] = await pool.query(
-    "SELECT id, user_id AS userId, release_id AS releaseId, plan, amount, razorpay_order_id AS razorpayOrderId, razorpay_payment_id AS razorpayPaymentId, payment_status AS paymentStatus, created_at AS createdAt FROM distribution_orders WHERE razorpay_order_id = ? LIMIT 1",
+    "SELECT id, user_id AS userId, release_id AS releaseId, plan, amount, credits_used AS creditsUsed, razorpay_order_id AS razorpayOrderId, razorpay_payment_id AS razorpayPaymentId, payment_status AS paymentStatus, created_at AS createdAt FROM distribution_orders WHERE razorpay_order_id = ? LIMIT 1",
     [orderId]
   );
   return (rows as DistributionOrder[])[0] ?? null;

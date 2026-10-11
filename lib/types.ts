@@ -365,6 +365,7 @@ export interface DistributionQueueSummary {
 }
 
 export interface DistributionOrder {
+  creditsUsed?: number;
   id: number;
   userId: number;
   releaseId?: number | null;

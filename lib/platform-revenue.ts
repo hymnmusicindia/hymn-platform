@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { RevenueEntry } from "@/lib/revenue-report";
+import { distributionFunding } from "@/lib/revenue-report";
 import type { SubscriptionRevenueRow } from "@/lib/subscription-revenue";
 import type { DistributionOrder, Order } from "@/lib/types";
 
@@ -9,7 +10,7 @@ export async function listPlatformRevenue(distribution: DistributionOrder[], ord
   const add = (entry: RevenueEntry, payment?: string | null) => { if (payment && seen.has(payment)) return; if (payment) seen.add(payment); entries.push(entry); };
   // Subscription amounts are stored in paise; order and commission amounts are rupees.
   for (const row of subscriptions.filter(row => row.status === "captured" || row.status === "merchant_confirmed")) add({ id: row.id, channel: "Subscriptions", date: row.createdAt, receipt: row.amountMinor / 100, hymn: row.amountMinor / 100, currency: row.currency, reference: row.reference, customer: row.email, evidence: row.verification }, row.verification === "gateway" ? row.reference : null);
-  for (const row of distribution.filter(row => row.paymentStatus === "paid")) add({ id: `distribution:${row.id}`, channel: "Distribution", date: row.createdAt, receipt: row.amount, hymn: row.amount, currency: "INR", reference: row.razorpayPaymentId || row.razorpayOrderId, customer: `User #${row.userId}`, evidence: "gateway" }, row.razorpayPaymentId);
+  for (const row of distribution.filter(row => row.paymentStatus === "paid")) add({ id: `distribution:${row.id}`, channel: "Distribution", date: row.createdAt, receipt: row.amount, hymn: row.amount, currency: "INR", reference: row.razorpayPaymentId || row.razorpayOrderId, customer: `User #${row.userId}`, evidence: row.amount > 0 ? "gateway" : "ledger", funding: distributionFunding(row), creditsUsed: row.creditsUsed }, row.razorpayPaymentId);
   if (!process.env.DATABASE_URL) {
     for (const row of orders.filter(row => row.paymentStatus === "paid")) add({ id: `commerce:${row.id}`, channel: "Beat Store", date: row.createdAt, receipt: row.amount, hymn: null, currency: "INR", reference: row.razorpayPaymentId || row.razorpayOrderId, customer: row.buyerEmail || `User #${row.userId}`, evidence: "gateway" }, row.razorpayPaymentId);
     return entries;

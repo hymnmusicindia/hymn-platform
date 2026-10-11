@@ -1,8 +1,19 @@
 export type RevenueChannel = "Subscriptions" | "Distribution" | "Beat Store" | "Studio" | "Royalty fees" | "Payout fees";
+export type RevenueFunding = "payment" | "subscription" | "credits" | "hybrid" | "free" | "ledger";
+export const revenueFundingLabels: Record<RevenueFunding, string> = { payment: "Payments", subscription: "Subscription", credits: "Credits", hybrid: "Credits + payment", free: "Free release", ledger: "Commission allocation" };
 export type RevenueEntry = {
   id: string; channel: RevenueChannel; date: string; receipt: number; hymn: number | null;
   currency: string; reference: string; customer: string; evidence: "gateway" | "merchant_confirmation" | "ledger";
+  funding?: RevenueFunding; creditsUsed?: number;
 };
+export function revenueFunding(row: RevenueEntry): RevenueFunding {
+  return row.funding ?? (row.evidence === "ledger" ? "ledger" : row.channel === "Subscriptions" ? "subscription" : "payment");
+}
+export function distributionFunding(row: { amount: number; creditsUsed?: number; razorpayOrderId: string }): RevenueFunding {
+  if ((row.creditsUsed ?? 0) > 0 || /^(credit_distribution_|credits_)/.test(row.razorpayOrderId)) return row.amount > 0 ? "hybrid" : "credits";
+  if (row.amount === 0 && /^(sub_entitlement_|subscription_)/.test(row.razorpayOrderId)) return "subscription";
+  return row.amount > 0 ? "payment" : "free";
+}
 export const revenueChannels: RevenueChannel[] = ["Subscriptions", "Distribution", "Beat Store", "Studio", "Royalty fees", "Payout fees"];
 
 /** Amounts are INR rupees. Gross collections and the platform's share are different measures. */
