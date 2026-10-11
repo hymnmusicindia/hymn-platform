@@ -1,3 +1,4 @@
+import { listSubscriptionRevenue } from "@/lib/subscription-revenue";
 import { adminModuleAllowed } from "@/lib/admin-workspace-navigation";
 import { redirect } from "next/navigation";
 import { AdminControlCenter } from "@/components/admin-control-center";
@@ -77,6 +78,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const canReadUsers = permissions.includes("users.read");
   const canReadReleases=permissions.some(permission=>["releases.read","releases.review","distribution.retry","distribution.submit"].includes(permission));
   const canReadCommerce=permissions.some(permission=>["payouts.review","royalties.reconcile","services.manage"].includes(permission));
+  const subscriptionRevenue = permissions.some(permission => ["payouts.review", "royalties.reconcile"].includes(permission)) ? await listSubscriptionRevenue() : [];
   const canReadServices=permissions.includes("services.manage");
   const canReadSystem=permissions.includes("system.manage");
 
@@ -103,6 +105,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         initialApplications={applications}
         initialLeads={leads}
         initialDistributionOrders={distributionOrders}
+        initialSubscriptionRevenue={subscriptionRevenue}
         initialArtistProfiles={artistProfiles}
         initialSiteSettings={siteSettings}
         initialNotifications={notifications}

@@ -1,5 +1,8 @@
 ﻿"use client";
 
+import { AdminSubscriptionRevenue } from "@/components/admin-subscription-revenue";
+import type { SubscriptionRevenueRow } from "@/lib/subscription-revenue";
+
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { ReleaseSubmissionHistory } from "@/components/release-submission-history";
 import { adminReleaseStatusLabel } from "@/lib/release-status-presentation";
@@ -536,6 +539,7 @@ export function AdminControlCenter({
   initialApplications,
   initialLeads,
   initialDistributionOrders,
+  initialSubscriptionRevenue = [],
   initialArtistProfiles,
   initialSiteSettings,
   initialNotifications,
@@ -552,6 +556,7 @@ export function AdminControlCenter({
   initialApplications: ProducerApplication[];
   initialLeads: PartnershipLead[];
   initialDistributionOrders: DistributionOrder[];
+  initialSubscriptionRevenue?: SubscriptionRevenueRow[];
   initialArtistProfiles: ArtistProfile[];
   initialSiteSettings: SiteSettings;
   initialNotifications: Notification[];
@@ -1374,6 +1379,8 @@ export function AdminControlCenter({
       {activeTab === "earnings-entry" ? <AdminEarningsEntry users={users} releases={releases} /> : null}
 
       {activeTab === "royalties" ? <div className="grid gap-6"><AdminPayoutManager /><AdminPayoutReports /></div> : null}
+
+      {(["overview", "payments", "revenue"].includes(activeTab) && (hasPermission("payouts.review") || hasPermission("royalties.reconcile"))) ? <AdminSubscriptionRevenue rows={initialSubscriptionRevenue} /> : null}
 
       {(activeTab === "payments" || activeTab === "revenue") ? (
         <div className="grid gap-6">
