@@ -21,6 +21,8 @@ export async function PATCH(request: Request) {
   const result = await requireRole(["producer", "admin"]);
   if ("error" in result) return result.error;
   try {
+    const existing = await prisma.producerProfile.findUnique({ where: { userId: result.user.id }, select: { avatarUrl: true, coverPhotoUrl: true, status: true, active: true } });
+    if (existing && ((existing.active === false && existing.status !== "pending_setup") || ["suspended", "disabled"].includes(existing.status))) return NextResponse.json({ error: "Your producer account needs review. Contact HYMN support." }, { status: 403 });
     const contentType = request.headers.get("content-type") ?? "";
     const input: Record<string, unknown> = {};
     if (contentType.includes("multipart/form-data")) {
@@ -34,7 +36,6 @@ export async function PATCH(request: Request) {
 
     const displayName = String(input.displayName ?? "").trim();
     if (displayName.length < 2) return NextResponse.json({ error: "Producer display name is required." }, { status: 400 });
-    const existing = await prisma.producerProfile.findUnique({ where: { userId: result.user.id }, select: { avatarUrl: true, coverPhotoUrl: true } });
     if (!(input.avatarUrl || existing?.avatarUrl) || !(input.coverPhotoUrl || existing?.coverPhotoUrl)) return NextResponse.json({ error: "Profile photo and cover photo are required to complete producer setup." }, { status: 400 });
     const tags = String(input.producerTags ?? "").split(",").map((tag) => tag.trim()).filter(Boolean).slice(0, 12);
     const contributorParty = await ensureClaimedContributorParty(result.user.id, displayName);

@@ -44,6 +44,7 @@ export function DashboardFrame<T extends string>({
   onNotificationsClick,
   notificationCount = 0,
   compactOverview = false,
+  setupMode = false,
   children
 }: {
   eyebrow?: string;
@@ -63,6 +64,7 @@ export function DashboardFrame<T extends string>({
   onNotificationsClick?: () => void;
   notificationCount?: number;
   compactOverview?: boolean;
+  setupMode?: boolean;
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -278,7 +280,7 @@ export function DashboardFrame<T extends string>({
           <button type="button" onClick={() => scrollNavigation(-1)} disabled={!navScroll.canUp} aria-label="Scroll navigation up"><ChevronUp className="h-4 w-4" /></button>
           <button type="button" onClick={() => scrollNavigation(1)} disabled={!navScroll.canDown} aria-label="Scroll navigation down"><ChevronDown className="h-4 w-4" /></button>
         </div>
-        <WorkspaceFooter workspace={adminWorkspace ? "admin" : "creator"} adminActivityAllowed={navItems.some(item => item.key === "activity")} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+        {!setupMode && <WorkspaceFooter workspace={adminWorkspace ? "admin" : "creator"} adminActivityAllowed={navItems.some(item => item.key === "activity")} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />}
       </aside>
 
       <div className="portal-workspace grid gap-6">
@@ -295,7 +297,7 @@ export function DashboardFrame<T extends string>({
             <Command className="h-4 w-4" style={{ color: "var(--text-muted)" }} />
           </div> : <div />}
           <div className="flex items-center gap-2">
-            {!adminWorkspace ? <SubscriptionButton className="portal-upgrade" /> : null}
+            {!adminWorkspace && !setupMode ? <SubscriptionButton className="portal-upgrade" /> : null}
             {workspaceAction}
             {quickActions && isOverview ? <div className="hidden items-center gap-2 xl:flex">{quickActions}</div> : null}
             <button type="button" className="dashboard-os-icon-button" aria-label={notificationCount ? `Notifications, ${notificationCount} unread` : "Notifications"} onClick={onNotificationsClick} disabled={!onNotificationsClick}>

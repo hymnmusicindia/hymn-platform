@@ -8,6 +8,8 @@ import { localPrivateStorage } from "@/lib/private-storage";
 import { beatAssetRelativePath } from "@/lib/storage-service";
 import { validateBeatReadiness } from "@/lib/beat-readiness";
 import { createAdminTaskOnce } from "@/lib/task-queue";
+import { prisma } from "@/lib/prisma";
+import { producerSetup } from "@/lib/producer-setup";
 
 function normalizedAudioMime(file: File) {
   const extension = file.name.toLowerCase().split(".").pop();
@@ -35,6 +37,9 @@ export async function POST(request: Request) {
   let artworkUrl: string | undefined;
   let finalized = false;
   try {
+    const profile = await prisma.producerProfile.findUnique({ where: { userId: result.user.id } });
+    const setup = producerSetup(profile, []);
+    if (!setup.storefrontReady) return NextResponse.json({ error: setup.restricted ? "Your producer account needs review. Contact HYMN support." : "Complete your storefront name, profile image and cover before uploading your first beat.", href: "/producer/dashboard?tab=profile" }, { status: setup.restricted ? 403 : 409 });
     const formData = await request.formData();
     const title = String(formData.get("title") || "").trim();
     const bpm = Number(formData.get("bpm"));

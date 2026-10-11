@@ -3,6 +3,8 @@
 import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
+import { ProducerSetupGuide } from "@/components/producer-setup-guide";
+import { producerSetup, producerSetupTab } from "@/lib/producer-setup";
 import { WorkspaceGuidance, type GuideStep } from "@/components/workspace-guidance";
 import dynamic from "next/dynamic";
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
@@ -99,10 +101,29 @@ function Timeline({ items }: { items: Array<{ label: string; detail?: string; ac
 }
 
 function ProducerProfileWorkspace({ user, profile, onSubmit, pending, feedback }: { user: User; profile: any; onSubmit: (event: FormEvent<HTMLFormElement>) => void; pending: boolean; feedback: string | null }) {
-  return <div className="grid gap-6 xl:grid-cols-[0.75fr,1.25fr]"><Panel title="Producer identity" description="This profile powers your public identity across the HYMN Beat Store."><div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{profile?.coverPhotoUrl ? <img src={profile.coverPhotoUrl} alt="Producer cover" className="aspect-[16/7] w-full object-cover" /> : <div className="flex aspect-[16/7] items-center justify-center text-sm" style={{ color: "var(--text-muted)" }}>Add a cover photo</div>}<div className="p-5"><h3 className="text-2xl font-semibold">{profile?.displayName || user.name}</h3><p className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }}>{profile?.bio || "Complete your producer profile before publishing beats."}</p><div className="mt-4"><StatusPill label={profile?.status || "pending setup"} active={profile?.status === "active"} /></div></div></div></Panel><Panel title="Edit producer profile" description="Display name is required. Images are validated and stored through HYMN uploads."><form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2"><label className="grid gap-2 text-sm">Display name<input name="displayName" required minLength={2} defaultValue={profile?.displayName || user.name} className="field" /></label><label className="grid gap-2 text-sm">Location<input name="location" defaultValue={profile?.location || ""} className="field" /></label><label className="grid gap-2 text-sm sm:col-span-2">Bio<textarea name="bio" defaultValue={profile?.bio || ""} className="field min-h-28" /></label><label className="grid gap-2 text-sm sm:col-span-2">Genre tags<input name="producerTags" defaultValue={Array.isArray(profile?.tags) ? profile.tags.join(", ") : profile?.specialty || ""} className="field" placeholder="Hip-Hop, Trap, R&B" /></label><label className="grid gap-2 text-sm">Cover photo<input name="coverPhoto" type="file" accept="image/jpeg,image/png,image/webp" className="field" /></label><label className="grid gap-2 text-sm">Profile image<input name="avatar" type="file" accept="image/jpeg,image/png,image/webp" className="field" /></label>{[["instagramUrl","Instagram"],["youtubeUrl","YouTube"],["spotifyUrl","Spotify"],["websiteUrl","Website"]].map(([name,label])=><label key={name} className="grid gap-2 text-sm">{label}<input name={name} type="url" defaultValue={profile?.[name] || ""} className="field" /></label>)}<button type="submit" disabled={pending} className="btn-primary pressable sm:col-span-2">{pending ? "Saving..." : "Save producer profile"}</button>{feedback ? <p className="text-sm sm:col-span-2" style={{ color: "var(--text-muted)" }}>{customerMessage(feedback)}</p> : null}</form></Panel></div>;
+  return <div className="grid gap-6 xl:grid-cols-[0.75fr,1.25fr]">
+    <Panel title="Your storefront preview" description="Give artists a clear first impression of your sound.">
+      <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+        {profile?.coverPhotoUrl ? <img src={profile.coverPhotoUrl} alt="Producer cover" className="aspect-[16/7] w-full object-cover" /> : <div className="flex aspect-[16/7] items-center justify-center text-sm text-[var(--text-muted)]">Your cover image goes here</div>}
+        <div className="p-5">{profile?.avatarUrl && <img src={profile.avatarUrl} alt="Producer profile" className="mb-3 h-16 w-16 rounded-full object-cover"/>}<h3 className="text-2xl font-semibold">{profile?.displayName || user.name}</h3><p className="mt-2 text-sm text-[var(--text-muted)]">{profile?.bio || "Your beats. Your identity."}</p></div>
+      </div>
+    </Panel>
+    <Panel title="Set up your storefront" description="Three essentials to get started. You can refine everything later.">
+      <form onSubmit={onSubmit} className="grid gap-5">
+        <label className="grid gap-2 text-sm">Producer name<input name="displayName" required minLength={2} defaultValue={profile?.displayName || user.name} className="field" /><small className="text-[var(--text-muted)]">The name artists see beside your beats.</small></label>
+        <div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-2 text-sm">Profile image<input name="avatar" required={!profile?.avatarUrl} type="file" accept="image/jpeg,image/png,image/webp" className="field"/><small className="text-[var(--text-muted)]">A square portrait or your producer logo.</small></label><label className="grid gap-2 text-sm">Cover image<input name="coverPhoto" required={!profile?.coverPhotoUrl} type="file" accept="image/jpeg,image/png,image/webp" className="field"/><small className="text-[var(--text-muted)]">A wide image that represents your sound.</small></label></div>
+        <details className="rounded-xl border border-[var(--border)] p-4"><summary className="cursor-pointer text-sm font-semibold">Add more personality <span className="font-normal text-[var(--text-muted)]">(optional)</span></summary><div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <label className="grid gap-2 text-sm sm:col-span-2">Bio<textarea name="bio" defaultValue={profile?.bio || ""} className="field min-h-28"/></label><label className="grid gap-2 text-sm">Location<input name="location" defaultValue={profile?.location || ""} className="field"/></label><label className="grid gap-2 text-sm">Your sound<input name="producerTags" defaultValue={Array.isArray(profile?.tags) ? profile.tags.join(", ") : profile?.specialty || ""} className="field" placeholder="Hip-Hop, Trap, R&B"/></label>
+          {[["instagramUrl","Instagram"],["youtubeUrl","YouTube"],["spotifyUrl","Spotify"],["websiteUrl","Website"]].map(([name,label])=><label key={name} className="grid gap-2 text-sm">{label}<input name={name} type="url" defaultValue={profile?.[name] || ""} className="field"/></label>)}
+        </div></details>
+        {feedback && <p role="status" className="text-sm text-[var(--text-muted)]">{customerMessage(feedback)}</p>}
+        <button type="submit" disabled={pending} className="btn-primary pressable">{pending ? "Saving storefront..." : "Save storefront & continue"}</button>
+      </form>
+    </Panel>
+  </div>;
 }
 export function ProducerDashboardShell({ user, beats, orders, earnings, finance }: { user: User; beats: Beat[]; orders: Order[]; earnings: { totalSales: number; totalRevenue: number; beatsSold: number }; finance: any }) {
-  const [activeTab, setActiveTab] = useState<"overview" | "profile" | "catalog" | "collaborations" | "placements" | "contracts" | "earnings" | "payout" | "ledger" | "upload" | "licensing" | "messages" | "analytics" | "settings" | "manage" | "sales">("overview");
+  const [requestedTab, setActiveTab] = useState<"overview" | "profile" | "catalog" | "collaborations" | "placements" | "contracts" | "earnings" | "payout" | "ledger" | "upload" | "licensing" | "messages" | "analytics" | "settings" | "manage" | "sales">("overview");
   const [catalog, setCatalog] = useState(beats);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -115,6 +136,8 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
   const [selectedAudioFile, setSelectedAudioFile] = useState<File | null>(null);
   const [beatUploadStep, setBeatUploadStep] = useState(1);
   const [producerProfile, setProducerProfile] = useState(finance.profile ?? null);
+  const setup = producerSetup(producerProfile, catalog);
+  const activeTab = producerSetupTab(requestedTab, setup) as typeof requestedTab;
   const [producerNotifications, setProducerNotifications] = useState<Notification[]>([]);
   const enabledBeats = catalog.filter((beat) => beat.enabled);
   const disabledBeats = catalog.filter((beat) => !beat.enabled);
@@ -148,9 +171,11 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
   }, []);
 
   function selectProducerTab(tab: typeof activeTab) {
-    setActiveTab(tab);
+    const destination = producerSetupTab(tab, setup) as typeof requestedTab;
+    setActiveTab(destination);
+    setFeedback(null);
     const url = new URL(window.location.href);
-    url.searchParams.set("tab", tab);
+    url.searchParams.set("tab", destination);
     window.history.pushState({}, "", url);
   }
 
@@ -158,16 +183,24 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
     event.preventDefault();
     const form = event.currentTarget;
     startTransition(async () => {
+      setFeedback(null);
+      try {
       const response = await fetch("/api/producer/profile", { method: "PATCH", body: new FormData(form) });
       const data = await response.json();
       if (!response.ok) return setFeedback(data.error || "Could not update producer profile.");
       setProducerProfile(data.profile);
       setFeedback("Producer profile saved.");
+      if (!setup.complete && producerSetup(data.profile, catalog).storefrontReady) {
+        if (producerSetup(data.profile, catalog).complete) window.location.assign("/producer/dashboard?tab=overview");
+        else { setActiveTab("upload"); window.history.replaceState({}, "", "/producer/dashboard?tab=upload"); }
+      }
+      } catch { setFeedback("Could not save your storefront. Your form is still here; please retry."); }
     });
   }
 
   function handleBeatUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (beatUploadStep !== 5) return;
     const form = event.currentTarget;
     const formData = new FormData(form);
     setFeedback(null);
@@ -200,6 +233,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
         setSelectedAudioFile(null);
         setAudioFormat("");
         setBeatUploadStep(1);
+        if (!setup.complete && setup.storefrontReady) window.location.assign("/producer/dashboard?tab=overview");
       } catch (error) {
         setFeedback(error instanceof Error ? error.message : "Could not upload beat. Please retry.");
       }
@@ -297,7 +331,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
       eyebrow="Producer dashboard"
       title={user.name}
       subtitle={user.email}
-      navItems={[
+      navItems={setup.complete ? [
         {key:"overview",label:"Overview",group:"Workspace"},
         {key:"catalog",label:"My beats",description:"Inventory, pricing and review status",group:"Beatstore"},
         {key:"upload",label:"Upload beat",group:"Beatstore"},
@@ -314,21 +348,32 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
         {key:"messages",label:"Notifications",group:"Account"},
         {key:"settings",label:"Settings",group:"Account"},
         {key:"help",label:"Help & support",group:"Support",href:"/dashboard?tab=support"},
+      ] : [
+        {key:"overview",label:"Launch your store",group:"Workspace"},
+        {key:"profile",label:"Set up storefront",group:"Beatstore"},
+        ...(setup.storefrontReady ? [{key:"upload",label:"Upload first beat",group:"Beatstore"}] : []),
+        {key:"catalog",label:"My beats",group:"Beatstore"},
+        {key:"messages",label:"Notifications",group:"Account"},
+        {key:"settings",label:"Settings",group:"Account"},
+        {key:"help",label:"Help & support",group:"Support",href:"/dashboard?tab=support"},
       ]}
       activeKey={activeTab === "licensing" || activeTab === "contracts" ? "sales" : activeTab === "ledger" || activeTab === "payout" ? "earnings" : activeTab}
       onSelect={selectProducerTab}
-      newAction={{label:"Upload beat",onClick:()=>selectProducerTab("upload")}}
+      newAction={{label:setup.complete ? "Upload beat" : setup.storefrontReady ? "Upload first beat" : "Set up storefront",onClick:()=>selectProducerTab(setup.storefrontReady ? "upload" : "profile")}}
       searchValue={dashboardSearch}
       onSearchChange={setDashboardSearch}
       searchPlaceholder={activeTab === "catalog" ? "Search beats, genre, mood, BPM..." : activeTab === "licensing" || activeTab === "sales" ? "Search buyers, orders, licenses..." : "Search catalog and sales..."}
       workspaceAction={<WorkspaceSwitcher current="producer" available={user.role === "admin" ? ["customer", "producer", "admin"] : ["customer", "producer"]} />}
       onNotificationsClick={() => selectProducerTab("messages")}
       notificationCount={producerNotifications.filter((notification) => !notification.readAt).length}
+      setupMode={!setup.complete}
       compactOverview
     >
-      <FirstLoginReferralPrompt />
-      {["overview", "catalog", "upload"].includes(activeTab) && <WorkspaceGuidance title={guideBeat ? `Beat path: ${guideBeat.title}` : "Build your first beat listing"} steps={beatGuide}/>}
-      {activeTab === "overview" ? <ProducerHome user={user} beats={catalog} finance={{ ...finance, profile: producerProfile }} notifications={producerNotifications} onTab={(tab) => selectProducerTab(tab)} /> : null}
+      {setup.complete && <FirstLoginReferralPrompt />}
+      {!setup.complete && activeTab !== "overview" && <div className="surface-card flex flex-wrap items-center justify-between gap-3 p-4"><div><strong>Launch your store</strong><p className="text-xs text-[var(--text-muted)]">{setup.completedSteps}/2 complete - Storefront, then first beat</p></div><button className="btn-outline" onClick={() => selectProducerTab("overview")}>View setup guide</button></div>}
+      {setup.complete && ["overview", "catalog", "upload"].includes(activeTab) && <WorkspaceGuidance title={guideBeat ? `Beat path: ${guideBeat.title}` : "Build your first beat listing"} steps={beatGuide}/>}
+      {activeTab === "overview" && !setup.complete ? <ProducerSetupGuide setup={setup} profile={producerProfile} name={user.name} onTab={selectProducerTab}/> : null}
+      {activeTab === "overview" && setup.complete ? <ProducerHome user={user} beats={catalog} finance={{ ...finance, profile: producerProfile }} notifications={producerNotifications} onTab={(tab) => selectProducerTab(tab)} /> : null}
       {false && activeTab === "overview" ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Catalog size" value={catalog.length} />
         <StatCard label="Enabled beats" value={enabledBeats.length} />
@@ -377,7 +422,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
             <fieldset hidden={beatUploadStep !== 3} className="grid gap-4"><legend className="mb-4 text-xl font-semibold">Artwork</legend><label className="text-sm font-medium">Beat artwork (optional)<input name="artwork" type="file" accept="image/jpeg,image/png,image/webp" className="field mt-2" /></label><p className="text-xs text-[var(--text-soft)]">JPEG, PNG or WebP. HYMN uses a clean fallback if you skip artwork.</p></fieldset>
             <fieldset hidden={beatUploadStep !== 4} className="grid gap-4 sm:grid-cols-2"><legend className="mb-4 text-xl font-semibold">Pricing & licences</legend><div className="rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2 text-sm"><span className="block font-medium">MP3 Licence</span><span className="text-xs text-[var(--text-soft)]">Fixed HYMN standard: ₹120 · General · No Content ID</span></div><label className="text-sm font-medium">WAV Licence price<input name="generalPrice" required type="number" min="1" className="field mt-2" placeholder="₹500" /></label><label className="text-sm font-medium">Stem Files Licence price<input name="stemPrice" required type="number" min="1" className="field mt-2" placeholder="₹999" /></label><label className="text-sm font-medium">Stems Exclusive Licence price<input name="exclusivePrice" required type="number" min="2" className="field mt-2" placeholder="₹5000" /></label><input name="price" type="hidden" value="120" /><p className="sm:col-span-2 text-xs text-[var(--text-soft)]">MP3 is fixed at ₹120. WAV, Stem Files, and Stems Exclusive prices can be changed. General licences do not include Content ID; Stems Exclusive includes WAV and Content ID.</p></fieldset>
             <fieldset hidden={beatUploadStep !== 5} className="grid gap-3"><legend className="mb-4 text-xl font-semibold">Review</legend><div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><p className="font-semibold">Ready to submit for HYMN review</p><p className="mt-2 text-[var(--text-muted)]">We will validate the audio, artwork, metadata, prices, and sample declaration. The beat is not public until approved.</p></div></fieldset>
-            <div className="flex items-center justify-between gap-3 border-t pt-4" style={{ borderColor: "var(--border)" }}><button type="button" className="btn-outline" disabled={beatUploadStep === 1 || isPending} onClick={() => setBeatUploadStep((step) => Math.max(1, step - 1))}>Back</button>{beatUploadStep < 5 ? <button type="button" className="btn-primary" onClick={(event) => { const current = event.currentTarget.form?.querySelector<HTMLFieldSetElement>(`fieldset:not([hidden])`); const invalid = current ? Array.from(current.elements).find((element): element is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement => "checkValidity" in element && !(element as HTMLInputElement).checkValidity()) : null; if (invalid) return invalid.reportValidity(); setBeatUploadStep((step) => Math.min(5, step + 1)); }}>Continue</button> : <button type="submit" disabled={isPending} className="btn-primary pressable">{isPending ? "Uploading..." : "Submit for review"}</button>}</div>
+            <div className="flex items-center justify-between gap-3 border-t pt-4" style={{ borderColor: "var(--border)" }}><button type="button" className="btn-outline" disabled={beatUploadStep === 1 || isPending} onClick={() => setBeatUploadStep((step) => Math.max(1, step - 1))}>Back</button>{beatUploadStep < 5 ? <button type="button" className="btn-primary" onClick={(event) => { event.preventDefault(); const current = event.currentTarget.form?.querySelector<HTMLFieldSetElement>(`fieldset:not([hidden])`); const invalid = current ? Array.from(current.elements).find((element): element is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement => "checkValidity" in element && !(element as HTMLInputElement).checkValidity()) : null; if (invalid) return invalid.reportValidity(); setBeatUploadStep((step) => Math.min(5, step + 1)); }}>Continue</button> : <button type="submit" disabled={isPending} className="btn-primary pressable">{isPending ? "Uploading..." : "Submit for review"}</button>}</div>
             {feedback ? <p className="text-sm" style={{ color: "var(--text)" }}>{customerMessage(feedback)}</p> : null}
           </form>
         </Panel>
