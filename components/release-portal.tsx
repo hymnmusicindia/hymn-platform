@@ -7,6 +7,7 @@ import { ReleaseSubmissionHistory } from "@/components/release-submission-histor
 import { ProviderCorrectionWorkspace } from "@/components/provider-correction-workspace";
 
 import Link from "next/link";
+import { WorkspaceRecords } from "@/components/workspace-records";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, ChevronDown, Clock3, Copy, ExternalLink, Filter, Grid2X2, List, Pencil, Search, Share2, Sparkles } from "lucide-react";
@@ -568,33 +569,14 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
             actionLabel="Reset view"
           />
         ) : viewMode === "list" ? (
-          <>
-            <div className="grid gap-4 lg:hidden">
-              {visibleReleases.map((release) => <ReleaseCard key={release.id} release={release} selected={release.id === selectedReleaseId} />)}
-            </div>
-            <div className="hidden overflow-x-auto rounded-2xl border lg:block" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
-              <table className="w-full min-w-[1120px] text-left text-sm">
-                <thead><tr className="border-b text-xs uppercase tracking-[0.12em]" style={{ borderColor: "var(--border)", color: "var(--text-soft)" }}><th className="px-4 py-3">Artwork</th><th className="px-4 py-3">Release</th><th className="px-4 py-3">Artist</th><th className="px-4 py-3">Type</th><th className="px-4 py-3">Release date</th><th className="px-4 py-3">HYMN status</th><th className="px-4 py-3">Store status</th><th className="px-4 py-3">UPC</th><th className="px-4 py-3 text-right">Verified earnings</th><th className="px-4 py-3 text-right">Actions</th></tr></thead>
-                <tbody>{visibleReleases.map((release) => {
-                  const action = getReleasePortalAction(release);
-                  const liveStores = release.distributionStores?.filter((store) => store.status === "Live").length ?? 0;
-                  const storeTotal = release.distributionStores?.length ?? 0;
-                  return <tr key={release.id} className="border-b last:border-b-0" style={{ borderColor: "var(--border)" }}>
-                    <td className="px-4 py-3"><div className="relative h-11 w-11 overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{release.artworkUrl ? <Image src={release.artworkUrl} alt="" fill sizes="44px" className="object-cover" unoptimized /> : null}</div></td>
-                    <td className="max-w-[220px] px-4 py-3"><Link href={`/dashboard/releases/${release.id}`} className="block truncate font-semibold hover:underline">{release.releaseTitle || release.trackName}</Link></td>
-                    <td className="max-w-[160px] truncate px-4 py-3" style={{ color: "var(--text-muted)" }}>{release.artistName}</td>
-                    <td className="px-4 py-3 capitalize" style={{ color: "var(--text-muted)" }}>{release.releaseType}</td>
-                    <td className="whitespace-nowrap px-4 py-3" style={{ color: "var(--text-muted)" }}>{getReleasePortalDateLabel(release)}</td>
-                    <td className="px-4 py-3"><span className="status-pill capitalize">{getReleasePortalStage(release).replace(/_/g, " ")}</span></td>
-                    <td className="whitespace-nowrap px-4 py-3" style={{ color: "var(--text-muted)" }}>{storeTotal ? `${liveStores} of ${storeTotal} live` : "Not reported"}</td>
-                    <td className="px-4 py-3 font-mono text-xs" style={{ color: "var(--text-muted)" }}>{resolvedUpc(release)}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right">{Number(release.analytics?.revenue_total || 0) > 0 ? `₹${Number(release.analytics?.revenue_total).toLocaleString("en-IN")}` : "—"}</td>
-                    <td className="px-4 py-3 text-right"><Link href={action.href} className="btn-outline pressable inline-flex min-h-10 px-3 py-2 text-xs">{action.label}</Link></td>
-                  </tr>;
-                })}</tbody>
-              </table>
-            </div>
-          </>
+          <WorkspaceRecords rows={filteredReleases} rowKey={release=>release.id} searchable={false} searchText={release=>`${release.trackName} ${release.artistName}`} noun="releases" columns={[
+            {key:"release",label:"Release",primary:true,value:release=>release.releaseTitle||release.trackName,render:release=><div className="record-identity">{release.artworkUrl&&<img src={release.artworkUrl} alt=""/>}<div><strong>{release.releaseTitle||release.trackName}</strong><small>{release.artistName} / {release.releaseType}</small></div></div>},
+            {key:"stage",label:"Status",value:release=>getReleasePortalStage(release),render:release=><span className="status-pill">{getReleasePortalStage(release).replaceAll("_"," ")}</span>},
+            {key:"date",label:"Release date",render:release=>getReleasePortalDateLabel(release)},
+            {key:"stores",label:"Stores",render:release=>release.distributionStores?.length?`${release.distributionStores.filter(store=>store.status==="Live").length} / ${release.distributionStores.length} live`:"Not reported"},
+            {key:"upc",label:"UPC",render:release=>resolvedUpc(release)},
+            {key:"action",label:"Action",render:release=><Link href={getReleasePortalAction(release).href} className="btn-outline">{getReleasePortalAction(release).label}</Link>}
+          ]}/>
         ) : (
           <div className="release-library-grid grid grid-cols-1 justify-items-center gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {visibleReleases.map((release) => <ReleaseCard key={release.id} release={release} selected={release.id === selectedReleaseId} />)}
@@ -602,7 +584,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
         )}
       </section>
 
-      {filteredReleases.length > visibleCount ? (
+      {viewMode === "grid" && filteredReleases.length > visibleCount ? (
         <section className="flex justify-center">
           <button type="button" onClick={() => setVisibleCount((current) => current + PAGE_SIZE)} className="btn-outline pressable inline-flex w-full sm:w-auto">
             Load More

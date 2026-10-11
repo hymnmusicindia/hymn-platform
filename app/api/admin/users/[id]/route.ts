@@ -5,11 +5,15 @@ import { createNotification } from "@/lib/db";
 import { userRoleUpdateSchema } from "@/lib/validation";
 import { prisma } from "@/lib/prisma";
 
+
+const safeUserSelect = { id:true, name:true, email:true, role:true, status:true, avatar:true, createdAt:true, updatedAt:true, statusReason:true, statusChangedAt:true, deletionScheduledAt:true, appealRequestedAt:true, appealMessage:true } as const;
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const result = await requireAdminPermission("users.manage");
   if ("error" in result) return result.error;
 
   const { id } = await params;
+  if (!Number.isSafeInteger(Number(id)) || Number(id) < 1) return NextResponse.json({error:"Invalid user ID."},{status:400});
 
   try {
     const body = await request.json();
@@ -23,7 +27,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if ("sub" in result && Number(result.sub) === userId && accountStatus !== "active") return NextResponse.json({ error: "You cannot restrict your own admin account." }, { status: 409 });
       const now = new Date();
       const deletionScheduledAt = accountStatus === "deletion_scheduled" ? new Date(now.getTime() + 20 * 86_400_000) : null;
-      const updated = await prisma.user.update({ where: { id: userId }, data: { status: accountStatus.toUpperCase() as any, statusReason: reason || null, statusChangedAt: now, deletionScheduledAt, ...(accountStatus === "active" ? { appealRequestedAt: null, appealMessage: null } : {}) } });
+      const updated = await prisma.user.update({ select: safeUserSelect, where: { id: userId }, data: { status: accountStatus.toUpperCase() as any, statusReason: reason || null, statusChangedAt: now, deletionScheduledAt, ...(accountStatus === "active" ? { appealRequestedAt: null, appealMessage: null } : {}) } });
       if (accountStatus === "banned") await prisma.session.deleteMany({ where: { userId } });
       if (["suspended", "deletion_scheduled", "banned"].includes(accountStatus)) await prisma.producerProfile.updateMany({ where: { userId }, data: { active: false, status: "suspended" } });
       if (accountStatus === "active") await prisma.producerProfile.updateMany({ where: { userId, status: "suspended" }, data: { active: true, status: "active" } });
@@ -39,9 +43,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const userId = Number(id);
     const actorId = "sub" in result ? Number(result.sub) || null : null;
     const user = await prisma.$transaction(async (tx) => {
-      const existing = await tx.user.findUnique({ where: { id: userId } });
+      const existing = await tx.user.findUnique({ select:safeUserSelect, where: { id: userId } });
       if (!existing) return null;
-      const updated = await tx.user.update({ where: { id: userId }, data: { role: payload.role === "producer" ? "PRODUCER" : "CUSTOMER" } });
+      if(existing.role === (payload.role === "producer" ? "PRODUCER" : "CUSTOMER"))return existing;
+      const updated = await tx.user.update({ select: safeUserSelect, where: { id: userId }, data: { role: payload.role === "producer" ? "PRODUCER" : "CUSTOMER" } });
       if (payload.role === "producer") {
         const party = await tx.contributorParty.upsert({
           where: { claimedByUserId: userId },
@@ -66,7 +71,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     return NextResponse.json({ user: { ...user, role: user.role.toLowerCase(), status: user.status.toLowerCase(), avatarUrl: user.avatar, createdAt: user.createdAt.toISOString(), updatedAt: user.updatedAt.toISOString() } });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not update role.";
+    const message = error instanceof Error && error.name === "ZodError" ? "Check the account change fields." : "Could not update this account. Check the request and retry.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

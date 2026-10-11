@@ -35,6 +35,7 @@ export function consistentWorkspaceNavigation(items: NavItem[]): NavItem[] {
   // Administrative operations have a separate, permission-specific information architecture.
   if(items.some(item=>item.group==="Command Center")) return items;
   const producer = items.some(item=>item.key==="catalog" && item.group==="Beatstore");
+  if (producer) return items;
   const matched = new Set<NavItem>();
   const shared = workspaceNavigation.map(canonical=>{
     const existing = items.find(item=>item.group!=="Business" && (item.label===canonical.label

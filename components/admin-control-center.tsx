@@ -8,11 +8,13 @@ import { AdminContentManager } from "@/components/admin-content-manager";
 import { AdminReviewManager } from "@/components/admin-review-manager";
 import { AdminTimedPlaylistManager } from "@/components/admin-timed-playlist-manager";
 import { AdminActivityAndLogs } from "@/components/admin-activity-and-logs";
+import { WorkspaceRecords } from "@/components/workspace-records";
 import { AdminUserManagement } from "@/components/admin-user-management";
 import { AdminTeamAccessManager } from "@/components/admin-team-access-manager";
 import overviewStyles from "./dashboard-overview.module.css";
 import { OverviewMetric, OverviewPanel, OverviewPipeline } from "./simplified-dashboard-home";
 import { Disc3, Wallet, Bell, Music2, ArrowRight } from "lucide-react";
+import { adminNavigation, adminModuleAllowed } from "@/lib/admin-workspace-navigation";
 import { DashboardFrame } from "@/components/dashboard-frame";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { DireNoteDiagnostics } from "@/components/direnote-diagnostics";
@@ -20,12 +22,13 @@ import type { AdminPayoutRequest } from "@/lib/payout";
 import type { AdminPermissionKey } from "@/lib/access";
 import type { AdminStoreStatus, ArtistProfile, Beat, DistributionOrder, Notification, Order, PartnershipLead, ProducerApplication, Release, SiteSettings, StoreStatus, StoreStatusHistoryEntry, SupportTicket, User } from "@/lib/types";
 
-type PersistedAdminTask = { id: number; type: string; priority: string; title: string; body: string; href: string; status: string; createdAt: string };
+type PersistedAdminTask = { id: number; type: string; priority: string; title: string; body: string; href: string; status: string; createdAt: string; entityType?: string; entityId?: string | number };
 const REVIEW_QUEUE_STATUSES = ["submitted", "in_queue", "under_review", "changes_requested", "approved", "failed"] as const;
 const DELIVERY_FAILED_STATUSES = ["delivery_failed"] as const;
 const CATALOG_STATUSES = ["queued_for_distribution", "submitting_to_distributor", "sent", "sent_to_distributor", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered", "live"] as const;
 
 function formatMoney(amount: number) {
+  if (!Number.isFinite(amount)) return "Unavailable";
   return `Rs ${amount.toLocaleString("en-IN")}`;
 }
 
@@ -574,6 +577,10 @@ export function AdminControlCenter({
   const [feedback, setFeedback] = useState<string | null>(null);
   const [notificationFeedback, setNotificationFeedback] = useState<string | null>(null);
   const [persistedTasks, setPersistedTasks] = useState<PersistedAdminTask[]>([]);
+  const [tasksError,setTasksError] = useState("");
+  const [tasksLoading,setTasksLoading] = useState(true);
+  const [pendingTaskId,setPendingTaskId]=useState<number|null>(null);
+  const [taskReload,setTaskReload] = useState(0);
   const [releaseAudit, setReleaseAudit] = useState<Array<{ id: number; action: string; createdAt: string; metadata?: Record<string, unknown> | null }>>([]);
   const [loadedDireNoteReadiness, setDireNoteReadiness] = useState<{ releaseId: number; ready: boolean; issues: Array<{ field: string; category: string; message: string; fixSuggestion: string }>; warnings: Array<{ field: string; category: string; message: string }>; checklist?: Array<{ label: string; ready: boolean }> } | null>(null);
   const direNoteReadiness = loadedDireNoteReadiness?.releaseId === readinessReleaseId ? loadedDireNoteReadiness : null;
@@ -592,6 +599,9 @@ export function AdminControlCenter({
   const [cooldownClock, setCooldownClock] = useState(() => Date.now());
   const [queueSearch, setQueueSearch] = useState("");
   const [queueStatus, setQueueStatus] = useState("all");
+  const [supportStatusFilter,setSupportStatusFilter]=useState("all");
+  const [selectedTicketId,setSelectedTicketId]=useState<number|null>(null);
+  useEffect(()=>{const query=new URLSearchParams(window.location.search);const releaseId=Number(query.get("releaseId"));const ticketId=Number(query.get("ticketId"));if(initialReleases.some(release=>release.id===releaseId))setSelectedReleaseId(releaseId);if(initialSupportTickets.some(ticket=>ticket.id===ticketId))setSelectedTicketId(ticketId);},[initialReleases,initialSupportTickets]);
   const [queueType, setQueueType] = useState("all");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
   const [paymentPlanFilter, setPaymentPlanFilter] = useState("all");
@@ -609,12 +619,17 @@ export function AdminControlCenter({
   const [catalogTab, setCatalogTab] = useState<"overview" | "tracks" | "distribution" | "identifiers" | "stores" | "promolink" | "earnings" | "activity">(initialTab === "delivery" ? "distribution" : "overview");
   const [moduleSearch, setModuleSearch] = useState("");
   const [producerManagement, setProducerManagement] = useState<any[]>([]);
+  const [selectedProducerId,setSelectedProducerId]=useState<number|null>(null);
+  const [selectedBeatReviewId,setSelectedBeatReviewId]=useState<number|null>(initialBeatId??null);
   const [beatStatusFilter, setBeatStatusFilter] = useState("pending");
   const [producerBeatFilter, setProducerBeatFilter] = useState<number | null>(null);
   const [marketplaceLoading, setMarketplaceLoading] = useState(false);
   const [reviewingBeatId, setReviewingBeatId] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  useEffect(()=>{if(selectedBeatReviewId)document.getElementById(`admin-beat-${selectedBeatReviewId}`)?.scrollIntoView({behavior:"smooth",block:"start"});},[selectedBeatReviewId]);
+  useEffect(()=>{if(selectedProducerId)document.getElementById("producer-storefront-details")?.scrollIntoView({behavior:"smooth",block:"start"});},[selectedProducerId]);
+  useEffect(()=>{if(selectedTicketId)document.getElementById("support-ticket-detail")?.scrollIntoView({behavior:"smooth",block:"start"});},[selectedTicketId]);
   useEffect(() => {
     const timer = window.setInterval(() => setCooldownClock(Date.now()), 1000);
     return () => window.clearInterval(timer);
@@ -622,9 +637,11 @@ export function AdminControlCenter({
 
   useEffect(() => {
     let active = true;
-    fetch("/api/admin/tasks").then((response) => response.json()).then((data) => { if (active) setPersistedTasks(data.tasks ?? []); }).catch(() => undefined);
+    if (!adminAccess.permissions.includes("system.manage")) {setTasksLoading(false);return;}
+    setTasksLoading(true); setTasksError("");
+    fetch("/api/admin/tasks").then(async response => {if(!response.ok)throw new Error("Task queue could not be loaded.");return response.json();}).then(data => {if(active)setPersistedTasks(data.tasks ?? []);}).catch(()=>{if(active)setTasksError("Task queue unavailable. Other workload summaries remain available.");}).finally(()=>{if(active)setTasksLoading(false);});
     return () => { active = false; };
-  }, []);
+  }, [taskReload,adminAccess.permissions]);
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
@@ -663,13 +680,19 @@ export function AdminControlCenter({
   }, [activeTab, initialBeatId]);
 
   async function resolvePersistedTask(id: number) {
-    const response = await fetch(`/api/admin/tasks/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "resolved", note: "Resolved from Operations Queue." }) });
-    if (response.ok) setPersistedTasks((tasks) => tasks.filter((task) => task.id !== id));
+    await updatePersistedTask(id,{status:"resolved"});
   }
-  async function updatePersistedTask(id: number, body: Record<string, unknown>) {
-    const response = await fetch(`/api/admin/tasks/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const data = await response.json();
-    if (response.ok) setPersistedTasks((tasks) => body.status === "snoozed" || body.status === "resolved" ? tasks.filter((task) => task.id !== id) : tasks.map((task) => task.id === id ? { ...task, ...data.task } : task));
+  async function updatePersistedTask(id:number,body:Record<string,unknown>) {
+    if(pendingTaskId!==null)return;
+    setPendingTaskId(id);
+    try {
+      const response=await fetch(`/api/admin/tasks/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      const data=await response.json();
+      if(!response.ok)throw Error(data.error||"Task update failed.");
+      setPersistedTasks(tasks=>body.status==="snoozed"||body.status==="resolved"?tasks.filter(task=>task.id!==id):tasks.map(task=>task.id===id?{...task,...data.task}:task));
+      setFeedback(body.status==="snoozed"?"Task snoozed for 24 hours.":body.status==="resolved"?"Task resolved. Its underlying record retains its own workflow status.":"Task assigned.");
+    } catch {setFeedback("Task could not be updated. Retry; its status has not been changed in this view.");}
+    finally {setPendingTaskId(null);}
   }
 
   async function reviewBeat(beat: Beat, decision: "approved" | "changes_requested") {
@@ -734,7 +757,7 @@ export function AdminControlCenter({
         : true;
     return belongsToModule && (!query || searchable.includes(query)) && (queueStatus === "all" || release.status === queueStatus) && (queueType === "all" || release.releaseType === queueType);
   }), [activeTab, queueSearch, queueStatus, queueType, releases]);
-  const catalogReleases = useMemo(() => releases.filter((release) => CATALOG_STATUSES.includes(release.status as typeof CATALOG_STATUSES[number])), [releases]);
+  const catalogReleases = useMemo(() => releases.filter(release => (activeTab !== "delivery" || CATALOG_STATUSES.includes(release.status as typeof CATALOG_STATUSES[number])) && searchMatch(release.releaseTitle,release.trackName,release.artistName,release.upcCode,release.ownerEmail)), [releases,activeTab,moduleSearch]);
   const selectedCatalogRelease = catalogReleases.find((release) => release.id === selectedReleaseId) ?? catalogReleases[0] ?? null;
   const today = new Date();
   const todayLabel = `${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][today.getUTCDay()]}, ${today.getUTCDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][today.getUTCMonth()]} ${today.getUTCFullYear()}`;
@@ -750,16 +773,17 @@ export function AdminControlCenter({
 
   const releaseCountByUser = useMemo(() => {
     const counts = new Map<number, number>();
-    releases.forEach((release) => counts.set(release.userId, (counts.get(release.userId) ?? 0) + 1));
+    releases.filter(release=>release.ownerUserId||release.releaseSource!=="ADMIN_MANUAL").forEach((release) => counts.set(release.ownerUserId??release.userId, (counts.get(release.ownerUserId??release.userId) ?? 0) + 1));
     return counts;
   }, [releases]);
 
   const latestUserActivity = useMemo(() => {
     const stamps = new Map<number, string>();
     releases.forEach((release) => {
-      const current = stamps.get(release.userId);
+      const owner=release.ownerUserId??release.userId;
+      const current = stamps.get(owner);
       if (!current || new Date(release.createdAt).getTime() > new Date(current).getTime()) {
-        stamps.set(release.userId, release.createdAt);
+        stamps.set(owner, release.createdAt);
       }
     });
     initialOrders.forEach((order) => {
@@ -796,6 +820,7 @@ export function AdminControlCenter({
       .filter((release) => ["submitted", "in_queue", "under_review", "changes_requested", "failed", "rejected"].includes(release.status.toLowerCase()))
       .slice(0, 5)
       .map((release) => ({
+        entityType: "release", entityId: String(release.id),
         type: release.status === "changes_requested" ? "Correction" : ["failed", "rejected"].includes(release.status) ? "Risk" : "Release",
         title: adminReleaseTitle(release),
         detail: `${release.artistName} / ${release.releaseType.toUpperCase()}`,
@@ -808,6 +833,7 @@ export function AdminControlCenter({
       .filter((notification) => notification.type === "payout" && notification.priority === "high")
       .slice(0, 3)
       .map((notification) => ({
+        entityType: "notification", entityId: String(notification.id),
         type: "Payout",
         title: notification.title,
         detail: notification.body,
@@ -820,6 +846,7 @@ export function AdminControlCenter({
       .filter((ticket) => ["open", "in_progress"].includes(ticket.status))
       .slice(0, 3)
       .map((ticket) => ({
+        entityType: "support_ticket", entityId: String(ticket.id),
         type: "Support",
         title: ticket.subject,
         detail: ticket.message,
@@ -832,6 +859,7 @@ export function AdminControlCenter({
       .filter((application) => application.status === "pending")
       .slice(0, 3)
       .map((application) => ({
+        entityType: "producer_application", entityId: String(application.id),
         type: "Producer",
         title: application.artistName,
         detail: `${application.email} / ${application.genreFocus}`,
@@ -841,13 +869,14 @@ export function AdminControlCenter({
         tab: "producers" as AdminTab
       }));
     return [...releaseItems, ...payoutItems, ...supportItems, ...producerItems]
-      .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+      .sort((a,b) => Number(b.priority === "High") - Number(a.priority === "High") || new Date(a.time).getTime() - new Date(b.time).getTime())
       .slice(0, 8);
   }, [applications, initialNotifications, releases, supportTickets]);
   const filteredPersistedTasks = useMemo(() => persistedTasks.filter((item) => (taskPriorityFilter === "all" || item.priority === taskPriorityFilter) && (taskTypeFilter === "all" || item.type === taskTypeFilter)), [persistedTasks, taskPriorityFilter, taskTypeFilter]);
-  const filteredActionQueue = useMemo(() => actionQueue.filter((item) => (taskPriorityFilter === "all" || item.priority.toLowerCase() === taskPriorityFilter) && (taskTypeFilter === "all" || item.type === taskTypeFilter)), [actionQueue, taskPriorityFilter, taskTypeFilter]);
+  const filteredActionQueue = useMemo(() => actionQueue.filter((item) => !persistedTasks.some(task => task.entityType===item.entityType && String(task.entityId)===item.entityId) && (taskPriorityFilter === "all" || item.priority.toLowerCase() === taskPriorityFilter) && (taskTypeFilter === "all" || item.type === taskTypeFilter)), [actionQueue, persistedTasks, taskPriorityFilter, taskTypeFilter]);
 
   function selectAdminTab(tab: AdminTab) {
+    if (!adminModuleAllowed(tab, adminAccess.permissions)) return;
     setActiveTab(tab);
     if (tab === "delivery") setCatalogTab("distribution");
     setModuleSearch("");
@@ -1076,75 +1105,39 @@ export function AdminControlCenter({
     <DashboardFrame
       title="HYMN Command Center"
       subtitle={<span className="admin-identity"><span className="admin-identity-line"><span className="admin-online-dot" />{currentAdmin.name}<span className="admin-active-label">Active</span></span><span className="admin-identity-meta">{currentAdmin.email} · {todayLabel}</span></span>}
-      navItems={[
-        { key: "overview", label: "Operations Overview", description: "Queues requiring attention", group: "Command Center" },
-        { key: "notifications", label: "Notifications", description: "Operations feed", group: "Command Center" },
-        { key: "analytics", label: "Operational Reporting", description: "Persisted platform activity", group: "Command Center" },
-        { key: "releases", label: "Releases", description: "Manage approved, scheduled, and live catalog releases", group: "Distribution Operations" },
-        { key: "distribution-queue", label: "QC Queue", description: "Review and process submissions", group: "Distribution Operations" },
-        { key: "delivery-failed", label: "Delivery Failed", description: "Return failed distributor handoffs to QC", group: "Distribution Operations" },
-        { key: "delivery", label: "Distributor Delivery", description: "Distribution and store status", group: "Distribution Operations" },
-        { key: "updates", label: "Update Requests", description: "Metadata and delivery changes", group: "Distribution Operations", href: "/admin/release-change-requests" },
-        { key: "takedowns", label: "Takedowns", description: "Removal requests and outcomes", group: "Distribution Operations", href: "/admin/release-change-requests" },
-        { key: "fraud", label: "Fraud Detection", description: "Risk monitoring and investigations", group: "Distribution Operations", href: "/admin/fraud" },
-        { key: "referrals-admin", label: "Referrals", description: "Attribution, credits and abuse review", group: "Money Operations", href: "/admin/referrals" },
-        { key: "growth", label: "Growth", description: "Campaigns, inquiries and repeat releases", group: "Money Operations", href: "/admin/growth" },
-        { key: "payments", label: "Payments", description: "Checkout records", group: "Money Operations" },
-        { key: "revenue", label: "Revenue", description: "Revenue overview", group: "Money Operations" },
-        { key: "royalties", label: "Payouts", description: "Withdrawal controls", group: "Money Operations" },
-        { key: "earnings-entry", label: "Royalty Management", description: "Import reports and manage ledgers", group: "Money Operations", href: "/admin/royalties" },
-        { key: "reconciliation", label: "Reconciliation", description: "Resolve unmatched statement rows", group: "Money Operations", href: "/admin/royalties/reconciliation" },
-        { key: "kyc", label: "KYC", description: "Payout-profile review", group: "Money Operations", href: "/admin/payout-profiles" },
-        { key: "managed-services", label: "Managed Services", description: "CRBT, OAC and Content ID", group: "Growth / Content", href: "/admin/managed-services" },
-        { key: "artists", label: "Artists", description: "Profiles and creators", group: "Growth / Content" },
-        { key: "promotions", label: "Promotions", description: "Campaign ops", group: "Growth / Content" },
-        { key: "timed-playlists", label: "Timed Playlists", description: "Playlist scheduling", group: "Growth / Content" },
-        { key: "content", label: "Content Settings", description: "Site and producer content", group: "Growth / Content" },
-        { key: "newsletter", label: "Newsletter", description: "Audience and email campaigns", group: "Growth / Content", href: "/admin/newsletter" },
-        { key: "producers", label: "Producers", description: "Applications and catalog", group: "Marketplace" },
-        { key: "operations", label: "Beats / Orders", description: "Inventory and leads", group: "Marketplace" },
-        { key: "reviews", label: "Reviews", description: "Moderate customer feedback", group: "Marketplace" },
-        { key: "contracts", label: "Contracts", description: "Agreements and splits", group: "Support / Legal" },
-        { key: "support", label: "Support Tickets", description: "Inbound help", group: "Support / Legal" },
-        ...(hasPermission("users.read") ? [{ key: "users", label: "Users", description: "Role management", group: "Platform" }] : []),
-        { key: "team", label: "Team", description: "Staff operations", group: "Platform" },
-        { key: "activity", label: "Activity and Logs", description: "Active admins and session history", group: "Platform" },
-        { key: "integrations", label: "Integrations", description: "Provider configuration", group: "Platform", href: "/admin?tab=settings" },
-        { key: "health", label: "System Health", description: "Readiness and provider state", group: "Platform", href: "/admin?tab=settings#system-health" },
-        { key: "settings", label: "Settings", description: "Platform config", group: "Platform" }
-      ]}
+      navItems={adminNavigation(adminAccess.permissions)}
       activeKey={activeTab}
       onSelect={selectAdminTab}
       searchValue={moduleSearch}
       onSearchChange={setModuleSearch}
       searchPlaceholder={`Search ${activeTab.replace(/-/g, " ")}...`}
-      onNotificationsClick={() => selectAdminTab("notifications")}
+      onNotificationsClick={hasPermission("system.manage")?()=>selectAdminTab("notifications"):undefined}
       notificationCount={initialNotifications.filter((notification) => !notification.readAt).length}
       quickActions={
         <>
-          <button type="button" onClick={() => selectAdminTab("releases")} className="btn-outline pressable px-4 py-2 text-sm">Review Releases</button>
-          <button type="button" onClick={() => selectAdminTab("earnings-entry")} className="btn-primary pressable px-4 py-2 text-sm">Enter Earnings</button>
-          <button type="button" onClick={() => selectAdminTab("royalties")} className="btn-outline pressable px-4 py-2 text-sm">Manage Payouts</button>
+          {adminModuleAllowed("releases",adminAccess.permissions)?<button type="button" onClick={() => selectAdminTab("releases")} className="btn-outline pressable px-4 py-2 text-sm">Browse releases</button>:null}
+          {adminModuleAllowed("earnings-entry",adminAccess.permissions)?<button type="button" onClick={() => selectAdminTab("earnings-entry")} className="btn-primary pressable px-4 py-2 text-sm">Enter Earnings</button>:null}
+          {adminModuleAllowed("royalties",adminAccess.permissions)?<button type="button" onClick={() => selectAdminTab("royalties")} className="btn-outline pressable px-4 py-2 text-sm">Manage Payouts</button>:null}
         </>
       }
       compactOverview
       workspaceAction={<WorkspaceSwitcher current="admin" available={["customer", "producer", "admin"]} />}
     >
       <AdminActivityAndLogs currentPage={activeTab} visible={activeTab === "activity"} />
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div><span style={{ color: "var(--text-muted)" }}>Signed in as </span><strong>{currentAdmin.name}</strong><span style={{ color: "var(--text-muted)" }}> · Admin role: </span><strong className="capitalize">{adminAccess.role.replace(/_/g, " ")}</strong></div><span className="status-pill">{adminAccess.permissions.length} permissions</span></div>
+      <div className="admin-role-strip flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div><span style={{ color: "var(--text-muted)" }}>Signed in as </span><strong>{currentAdmin.name}</strong><span style={{ color: "var(--text-muted)" }}> · Admin role: </span><strong className="capitalize">{adminAccess.role.replace(/_/g, " ")}</strong></div><span className="status-pill">{adminAccess.permissions.length} permissions</span></div>
       {feedback ? <div role="status" className="flex items-start justify-between gap-4 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text)" }}><p className="leading-6">{feedback}</p><button type="button" onClick={() => setFeedback(null)} className="pressable shrink-0 rounded-lg p-1" aria-label="Dismiss message"><X className="h-4 w-4" /></button></div> : null}
 
       {activeTab === "overview" ? (
         <div className={overviewStyles.root}>
-          <header className={overviewStyles.header}><div><p className={overviewStyles.eyebrow}>Admin / Operations</p><h1>A clear view of what moves next.</h1><p className={overviewStyles.description}>Review, resolve, and keep the platform moving.</p></div><button className={overviewStyles.primary} onClick={() => selectAdminTab("distribution-queue")}>Open review queue <ArrowRight /></button></header>
+          <header className={overviewStyles.header}><div><p className={overviewStyles.eyebrow}>Admin / Operations</p><h1>A clear view of what moves next.</h1><p className={overviewStyles.description}>Review, resolve, and keep the platform moving.</p></div><button disabled={!hasPermission("releases.review")} className={overviewStyles.primary} onClick={() => selectAdminTab("distribution-queue")}>Open review queue <ArrowRight /></button></header>
           <div className={overviewStyles.metrics}>
-            <OverviewMetric label="Release reviews" value={pendingReviews} detail="Submitted, queued or in review" icon={<Music2 />} onClick={() => selectAdminTab("distribution-queue")} />
-            <OverviewMetric label="Beat reviews" value={pendingBeatReviews} detail="Awaiting marketplace approval" icon={<Disc3 />} onClick={() => selectAdminTab("operations")} />
-            <OverviewMetric label="Open support" value={openSupportTickets} detail="Open or in progress" icon={<Bell />} onClick={() => selectAdminTab("support")} />
-            <OverviewMetric label="Recorded revenue" value={formatMoney(distributionRevenue + commerceRevenue)} detail="Paid distribution & commerce orders" icon={<Wallet />} onClick={() => selectAdminTab("revenue")} />
+            <OverviewMetric label="Release reviews" value={hasPermission("releases.read")||hasPermission("releases.review")?pendingReviews:"Restricted"} detail="Submitted, queued or in review" icon={<Music2 />} onClick={() => selectAdminTab("distribution-queue")} />
+            <OverviewMetric label="Beat reviews" value={hasPermission("services.manage")?pendingBeatReviews:"Restricted"} detail="Awaiting marketplace approval" icon={<Disc3 />} onClick={() => selectAdminTab("operations")} />
+            <OverviewMetric label="Open support" value={hasPermission("services.manage")?openSupportTickets:"Restricted"} detail="Open or in progress" icon={<Bell />} onClick={() => selectAdminTab("support")} />
+            <OverviewMetric label="Recorded revenue" value={hasPermission("payouts.review")||hasPermission("royalties.reconcile")?formatMoney(distributionRevenue + commerceRevenue):"Restricted"} detail="Paid distribution & commerce orders" icon={<Wallet />} onClick={() => selectAdminTab("revenue")} />
           </div>
           <div className={overviewStyles.grid}>
-            <OverviewPanel title="Operations workboard"><div className={overviewStyles.queues}>{operationalQueues.filter(queue => !["Releases awaiting QC", "Open support tickets", "Beats awaiting approval"].includes(queue.label)).map(queue => <button className={overviewStyles.queue} key={queue.label} data-urgent={queue.count > 0} onClick={() => selectAdminTab(queue.tab)}><strong>{queue.count}</strong><span>{queue.label}</span><small>{queue.oldest}</small></button>)}<button className={overviewStyles.queue} data-urgent={pendingProducerApplications > 0} onClick={() => selectAdminTab("operations")}><strong>{pendingProducerApplications}</strong><span>Producer applications</span><small>Awaiting review</small></button></div></OverviewPanel>
+            <OverviewPanel title="Operations workboard"><div className={overviewStyles.queues}>{operationalQueues.filter(queue => adminModuleAllowed(queue.tab,adminAccess.permissions) && !["Releases awaiting QC", "Open support tickets", "Beats awaiting approval"].includes(queue.label)).map(queue => <button className={overviewStyles.queue} key={queue.label} data-urgent={queue.count > 0} onClick={() => selectAdminTab(queue.tab)}><strong>{queue.count}</strong><span>{queue.label}</span><small>{queue.oldest}</small></button>)}<button className={overviewStyles.queue} data-urgent={pendingProducerApplications > 0} onClick={() => selectAdminTab("operations")}><strong>{pendingProducerApplications}</strong><span>Producer applications</span><small>Awaiting review</small></button></div></OverviewPanel>
             <OverviewPanel title="Distribution pipeline"><OverviewPipeline stages={[
               { label: "Live", count: releases.filter(item => item.status === "live").length, color: "#8ac5ac" },
               { label: "Review", count: pendingReviews, color: "#b8c9ff" },
@@ -1152,13 +1145,14 @@ export function AdminControlCenter({
               { label: "Other stages", count: releases.length - releases.filter(item => item.status === "live").length - pendingReviews - changesRequested - failedDistributionJobs, color: "#c4a9e7" }
             ].map(item => ({ ...item, onClick: () => selectAdminTab("releases") }))} /><p className={overviewStyles.description}>{releases.length} releases across the platform</p></OverviewPanel>
           </div>
-          <div className={overviewStyles.adminDetails}>
+          <div className="workspace-task-layout">
           <SurfaceSection title="Today's Action Queue" description="Live admin tasks assembled from releases, payouts, support, and producer applications.">
             <div className="mb-4 grid gap-2 border-b pb-4 sm:grid-cols-2" style={{ borderColor: "var(--border)" }}><select className="field" value={taskPriorityFilter} onChange={(event) => setTaskPriorityFilter(event.target.value)}><option value="all">All priorities</option><option value="high">High priority</option><option value="normal">Normal priority</option><option value="critical">Critical</option></select><select className="field" value={taskTypeFilter} onChange={(event) => setTaskTypeFilter(event.target.value)}><option value="all">All queue types</option>{Array.from(new Set([...persistedTasks.map((item) => item.type), ...actionQueue.map((item) => item.type)])).sort().map((type) => <option key={type} value={type}>{type}</option>)}</select></div>
             <div className="grid gap-4">
+              {tasksLoading?<p role="status">Loading task queue?</p>:null}{tasksError?<p role="alert">{tasksError} <button className="btn-outline" onClick={()=>setTaskReload(value=>value+1)}>Retry</button></p>:null}
               {filteredPersistedTasks.map((item) => (
                 <article key={`task-${item.id}`} className="surface-list-item p-4" style={item.priority === "critical" ? { borderColor: "var(--danger)" } : undefined}>
-                  <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><StatusPill label={item.type} active={item.priority === "high" || item.priority === "critical"} /><span className="text-xs capitalize" style={{ color: "var(--text-soft)" }}>{item.priority} · {new Date(item.createdAt).toLocaleString("en-IN")}</span></div><p className="mt-3 font-semibold" style={{ color: "var(--text)" }}>{item.title}</p><p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>{item.body}</p></div><div className="flex flex-wrap gap-2"><a href={item.href} className="btn-outline pressable px-3 py-2 text-xs">Open</a><button type="button" onClick={() => updatePersistedTask(item.id, { status: "assigned", assignToMe: true, note: "Assigned from Operations Queue." })} className="btn-outline pressable px-3 py-2 text-xs">Assign to me</button><button type="button" onClick={() => updatePersistedTask(item.id, { status: "snoozed", snoozedUntil: new Date(Date.now() + 86_400_000).toISOString(), note: "Snoozed for 24 hours." })} className="btn-outline pressable px-3 py-2 text-xs">Snooze 24h</button><button type="button" onClick={() => resolvePersistedTask(item.id)} className="btn-outline pressable px-3 py-2 text-xs">Resolve</button></div></div>
+                  <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><StatusPill label={item.type} active={item.priority === "high" || item.priority === "critical"} /><span className="text-xs capitalize" style={{ color: "var(--text-soft)" }}>{item.priority} · {new Date(item.createdAt).toLocaleString("en-IN")}</span></div><p className="mt-3 font-semibold" style={{ color: "var(--text)" }}>{item.title}</p><p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>{item.body}</p></div><div className="flex flex-wrap gap-2"><a href={item.entityType === "support_ticket" ? `/admin?tab=support&ticketId=${item.entityId}` : item.entityType === "release" ? `/admin?tab=releases&releaseId=${item.entityId}` : item.href} className="btn-outline pressable px-3 py-2 text-xs">Open</a><button type="button" disabled={pendingTaskId!==null} onClick={() => updatePersistedTask(item.id, { status: "assigned", assignToMe: true, note: "Assigned from Operations Queue." })} className="btn-outline pressable px-3 py-2 text-xs">Assign to me</button><button type="button" disabled={pendingTaskId!==null} onClick={() => updatePersistedTask(item.id, { status: "snoozed", snoozedUntil: new Date(Date.now() + 86_400_000).toISOString(), note: "Snoozed for 24 hours." })} className="btn-outline pressable px-3 py-2 text-xs">Snooze 24h</button><button type="button" disabled={pendingTaskId!==null} onClick={() => resolvePersistedTask(item.id)} className="btn-outline pressable px-3 py-2 text-xs">Resolve</button></div></div>
                 </article>
               ))}
               {filteredActionQueue.map((item, index) => (
@@ -1172,11 +1166,11 @@ export function AdminControlCenter({
                       <p className="mt-3 font-semibold" style={{ color: "var(--text)" }}>{item.title}</p>
                       <p className="mt-2 line-clamp-2 text-sm" style={{ color: "var(--text-soft)" }}>{item.detail}</p>
                     </div>
-                    <button type="button" onClick={() => selectAdminTab(item.tab)} className="btn-outline pressable px-3 py-2 text-xs">{item.cta}</button>
+                    <button type="button" onClick={() => {selectAdminTab(item.tab); if(item.entityType==="support_ticket")setSelectedTicketId(Number(item.entityId));if(item.entityType==="release")setSelectedReleaseId(Number(item.entityId));}} className="btn-outline pressable px-3 py-2 text-xs">{item.cta}</button>
                   </div>
                 </article>
               ))}
-              {filteredPersistedTasks.length === 0 && filteredActionQueue.length === 0 ? <EmptyState copy="No queue items match the selected filters." /> : null}
+              {!tasksLoading && !tasksError && filteredPersistedTasks.length === 0 && filteredActionQueue.length === 0 ? <EmptyState copy="No queue items match the selected filters." /> : null}
             </div>
           </SurfaceSection>
 
@@ -1215,7 +1209,7 @@ export function AdminControlCenter({
       ) : null}
 
       {activeTab === "releases" || activeTab === "delivery" ? (
-        <div className="grid gap-6 xl:grid-cols-[0.82fr,1.18fr]">
+        <div className="workspace-module-layout">
           <SurfaceSection title={activeTab === "delivery" ? "Distributor Delivery" : "Releases"} description={activeTab === "delivery" ? "Track distribution processing, delivery state, store availability, and live confirmation." : "Manage approved, scheduled, distributed, and live catalog releases."}>
             <div className="grid gap-3">
               {catalogReleases.map((release) => <button key={release.id} type="button" onClick={() => { setSelectedReleaseId(release.id); setCatalogTab("overview"); }} className="surface-list-item pressable p-4 text-left" style={selectedCatalogRelease?.id === release.id ? { borderColor: "var(--accent)", background: "var(--accent-soft)" } : undefined}><div className="flex gap-3">{release.artworkUrl ? <img src={release.artworkUrl} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" /> : <div className="h-16 w-16 shrink-0 rounded-xl border border-dashed" style={{ borderColor: "var(--border)" }} />}<div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold">{release.releaseTitle || release.trackName}</p><p className="mt-1 truncate text-sm" style={{ color: "var(--text-muted)" }}>{release.artistName} · {release.releaseType.toUpperCase()} · {release.tracks?.length ?? 0} tracks</p></div><StatusPill label={adminReleaseStatusLabel(release.status, release.direNoteStatus)} active /></div><div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-soft)" }}><span>Release {release.releaseDate || "—"}</span><span>UPC {release.upcCode || "Pending"}</span><span>{release.distributionStores?.filter((store) => store.status === "Live").length ?? 0} stores live</span></div></div></div></button>)}
@@ -1251,7 +1245,7 @@ export function AdminControlCenter({
                   <select className="field" value={queueStatus} onChange={(event) => setQueueStatus(event.target.value)} aria-label="Filter by status"><option value="all">All statuses</option>{Array.from(new Set(releases.map((release) => release.status))).map((status) => <option key={status} value={status}>{status.replace(/_/g, " ")}</option>)}</select>
                   <select className="field" value={queueType} onChange={(event) => setQueueType(event.target.value)} aria-label="Filter by release type"><option value="all">All release types</option><option value="single">Single</option><option value="ep">EP</option><option value="album">Album</option></select>
                 </div>
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>{queueReleases.length} of {releases.length} submissions</p>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>{queueReleases.length} matching submissions</p>
               </div>
               {queueReleases.map((release) => {
                 const assetReady = Boolean(release.artworkUrl && (release.tracks ?? []).length && (release.tracks ?? []).every((track) => track.audioUrl));
@@ -1374,7 +1368,7 @@ export function AdminControlCenter({
       ) : null}
 
       {activeTab === "users" ? (
-        <AdminUserManagement initialUsers={users} releaseCounts={Object.fromEntries(releaseCountByUser)} latestActivity={Object.fromEntries(latestUserActivity)} permissions={adminAccess.permissions} onUserChange={(updated) => setUsers((items) => items.map((item) => item.id === updated.id ? { ...item, ...updated } : item))} />
+        <AdminUserManagement externalSearch={moduleSearch} onResetSearch={()=>setModuleSearch("")} initialUsers={users} releaseCounts={Object.fromEntries(releaseCountByUser)} latestActivity={Object.fromEntries(latestUserActivity)} permissions={adminAccess.permissions} onUserChange={(updated) => setUsers((items) => items.map((item) => item.id === updated.id ? { ...item, ...updated } : item))} />
       ) : null}
 
       {activeTab === "earnings-entry" ? <AdminEarningsEntry users={users} releases={releases} /> : null}
@@ -1405,45 +1399,20 @@ export function AdminControlCenter({
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Total captured" value={formatMoney([...initialDistributionOrders, ...initialOrders].filter((order) => order.paymentStatus === "paid").reduce((sum, order) => sum + order.amount, 0))} detail="Across distribution and Beat Store" /><StatCard label="Paid transactions" value={[...initialDistributionOrders, ...initialOrders].filter((order) => order.paymentStatus === "paid").length} detail="Gateway-confirmed records" /><StatCard label="Awaiting payment" value={[...initialDistributionOrders, ...initialOrders].filter((order) => order.paymentStatus === "created").length} detail="Orders created, not captured" /><StatCard label="Failed" value={[...initialDistributionOrders, ...initialOrders].filter((order) => order.paymentStatus === "failed").length} detail="Requires investigation" /></section>
 
           <div className="grid gap-6 2xl:grid-cols-2">
-          <SurfaceSection title="Distribution payments" description="Track Rs 99 submissions, subscriptions, and payment outcomes.">
-            <div className="grid gap-4">
-              {visibleDistributionPayments.map((order) => {
-                const linkedRelease = releases.find((release) => release.id === order.releaseId);
-                const account = userById.get(order.userId);
-                return (
-                  <article key={order.id} className="surface-list-item p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border text-sm font-semibold" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text)" }}>{account?.avatarUrl ? <img src={account.avatarUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : (account?.name || "U").slice(0, 1).toUpperCase()}</span>
-                        <div className="min-w-0"><p className="truncate font-semibold" style={{ color: "var(--text)" }}>{account?.name || "Unknown account"}</p><p className="truncate text-xs" style={{ color: "var(--text-muted)" }}>{account?.email || "Email unavailable"}</p><p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: "var(--text-soft)" }}>Logged-in ID #{order.userId}</p></div>
-                      </div>
-                      <StatusPill label={order.paymentStatus} active={order.paymentStatus === "paid"} />
-                    </div>
-                    <div className="mt-4 grid gap-3 border-t pt-4 text-xs sm:grid-cols-2" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}><div><span className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Order / plan</span><strong className="mt-1 block font-semibold" style={{ color: "var(--text)" }}>#{order.id} · {order.plan.replace(/_/g, " ")}</strong></div><div><span className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Amount</span><strong className="mt-1 block font-semibold" style={{ color: "var(--text)" }}>{formatMoney(order.amount)}</strong></div><div><span className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Release</span><strong className="mt-1 block truncate font-semibold" style={{ color: "var(--text)" }}>{linkedRelease?.releaseTitle || "Not linked yet"}{order.releaseId ? ` · #${order.releaseId}` : ""}</strong></div><div><span className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Created</span><strong className="mt-1 block font-semibold" style={{ color: "var(--text)" }}>{new Date(order.createdAt).toLocaleString("en-IN")}</strong></div></div>
-                    <div className="mt-3 rounded-lg border px-3 py-2 font-mono text-[11px] break-all" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>Gateway order: {order.razorpayOrderId || "Not assigned"}{order.razorpayPaymentId ? ` · Payment: ${order.razorpayPaymentId}` : ""}</div>
-                  </article>
-                );
-              })}
-              {visibleDistributionPayments.length === 0 ? <EmptyState copy="No distribution payments match these filters." /> : null}
-            </div>
-          </SurfaceSection>
-
-          <SurfaceSection title="Beat store payments" description="Verified storefront orders and payment state.">
-            <div className="grid gap-4">
-              {visibleBeatStorePayments.map((order) => {
-                const account = userById.get(order.userId);
-                return <article key={order.id} className="surface-list-item p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-3"><span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border text-sm font-semibold" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text)" }}>{account?.avatarUrl ? <img src={account.avatarUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : (order.buyerName || account?.name || "U").slice(0, 1).toUpperCase()}</span><div className="min-w-0"><p className="truncate font-semibold" style={{ color: "var(--text)" }}>{order.buyerName || account?.name || "Unknown customer"}</p><p className="truncate text-xs" style={{ color: "var(--text-muted)" }}>{order.buyerEmail || account?.email || "Email unavailable"}</p><p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: "var(--text-soft)" }}>Logged-in ID #{order.userId}</p></div></div>
-                    <StatusPill label={order.paymentStatus} active={order.paymentStatus === "paid"} />
-                  </div>
-                  <div className="mt-4 grid gap-3 border-t pt-4 text-xs sm:grid-cols-2" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}><div><span className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Order</span><strong className="mt-1 block" style={{ color: "var(--text)" }}>#{order.id} · {order.items.length} item{order.items.length === 1 ? "" : "s"}</strong></div><div><span className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Amount</span><strong className="mt-1 block" style={{ color: "var(--text)" }}>{formatMoney(order.amount)}</strong></div><div><span className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Purchase</span><strong className="mt-1 block truncate" style={{ color: "var(--text)" }}>{order.items.map((item) => item.beatTitle || `Beat #${item.beatId}`).join(", ") || "No items"}</strong></div><div><span className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: "var(--text-soft)" }}>Created</span><strong className="mt-1 block" style={{ color: "var(--text)" }}>{new Date(order.createdAt).toLocaleString("en-IN")}</strong></div></div>
-                  <div className="mt-3 rounded-lg border px-3 py-2 font-mono text-[11px] break-all" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>Gateway order: {order.razorpayOrderId || "Not assigned"}{order.razorpayPaymentId ? ` · Payment: ${order.razorpayPaymentId}` : ""}</div>
-                </article>;
-              })}
-              {visibleBeatStorePayments.length === 0 ? <EmptyState copy="No Beat Store payments match these filters." /> : null}
-            </div>
-          </SurfaceSection>
+          <SurfaceSection title="Distribution payments" description="Recorded checkout amounts, payment states, and gateway references."><WorkspaceRecords rows={visibleDistributionPayments} rowKey={order=>order.id} searchText={order=>`${order.id} ${order.userId} ${order.plan} ${order.razorpayOrderId} ${order.razorpayPaymentId} ${userById.get(order.userId)?.email}`} noun="payments" columns={[
+            {key:"order",label:"Order",primary:true,render:order=><><strong>#{order.id} / {order.plan.replaceAll("_"," ")}</strong><small>{order.razorpayOrderId}</small>{order.razorpayPaymentId&&<small>{order.razorpayPaymentId}</small>}</>,value:order=>order.id},
+            {key:"user",label:"Customer",render:order=><a href={`/admin?tab=users&userId=${order.userId}`}>{userById.get(order.userId)?.name||`User #${order.userId}`}</a>},
+            {key:"amount",label:"Amount",value:order=>order.amount,render:order=>formatMoney(order.amount)},
+            {key:"status",label:"Payment",render:order=><StatusPill label={order.paymentStatus}/>},
+            {key:"date",label:"Created",value:order=>Date.parse(order.createdAt),render:order=>new Date(order.createdAt).toLocaleDateString("en-IN")}
+          ]}/></SurfaceSection>
+          <SurfaceSection title="Beat store payments" description="Customer orders, purchased inventory, and payment verification."><WorkspaceRecords rows={visibleBeatStorePayments} rowKey={order=>order.id} searchText={order=>`${order.id} ${order.buyerName} ${order.buyerEmail} ${order.razorpayOrderId} ${order.items.map(item=>item.beatTitle).join(" ")}`} noun="orders" columns={[
+            {key:"order",label:"Order",primary:true,render:order=><><strong>#{order.id}</strong><small>{order.items.map(item=>item.beatTitle||`Beat #${item.beatId}`).join(", ")}</small><small>{order.razorpayPaymentId||order.razorpayOrderId}</small></>,value:order=>order.id},
+            {key:"buyer",label:"Buyer",render:order=><><span>{order.buyerName||`User #${order.userId}`}</span><small>{order.buyerEmail}</small></>},
+            {key:"amount",label:"Amount",value:order=>order.amount,render:order=>formatMoney(order.amount)},
+            {key:"status",label:"Payment",render:order=><StatusPill label={order.paymentStatus}/>},
+            {key:"date",label:"Created",value:order=>Date.parse(order.createdAt),render:order=>new Date(order.createdAt).toLocaleDateString("en-IN")}
+          ]}/></SurfaceSection>
           </div>
         </div>
       ) : null}
@@ -1483,7 +1452,7 @@ export function AdminControlCenter({
 
       {activeTab === "notifications" ? (
         <div className="grid gap-6 xl:grid-cols-[1.15fr,0.85fr]">
-          <SurfaceSection title="Generated notifications" description="Read-only stream of notifications created by platform events.">
+          <SurfaceSection title="Generated notifications" description="Browse recorded platform notifications and compose messages for the appropriate audience.">
             <form onSubmit={sendAdminNotification} className="mb-6 grid gap-3 rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
               <div className="grid gap-3 md:grid-cols-3">
                 <select name="target" className="field" defaultValue="all">
@@ -1558,38 +1527,29 @@ export function AdminControlCenter({
         </div>
       ) : null}
 
-      {activeTab === "support" ? (
-        <SurfaceSection title="Support tickets" description="Customer and producer requests with admin status control.">
-          <div className="grid gap-4">
-            {supportTickets.filter((ticket) => searchMatch(ticket.subject, ticket.message, ticket.category, ticket.status, ticket.userId)).map((ticket) => (
-              <article key={ticket.id} className="surface-list-item p-4">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div>
-                    <p className="font-semibold" style={{ color: "var(--text)" }}>{ticket.subject}</p>
-                    <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{ticket.message}</p>
-                    <p className="mt-3 text-xs" style={{ color: "var(--text-soft)" }}>User #{ticket.userId} / {new Date(ticket.createdAt).toLocaleString()}</p>
-                    <p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>Category: {ticket.category ?? "general"}{ticket.relatedReleaseId ? ` · Release #${ticket.relatedReleaseId}` : ""}{ticket.relatedPurchaseId ? ` · Purchase #${ticket.relatedPurchaseId}` : ""}{ticket.relatedPayoutId ? ` · Payout #${ticket.relatedPayoutId}` : ""}</p>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-4">
-                    {(["open", "in_progress", "resolved", "closed"] as SupportTicket["status"][]).map((status) => (
-                      <button key={status} type="button" disabled={isPending} onClick={() => updateTicketStatus(ticket.id, status)} className={ticket.status === status ? "btn-primary pressable px-3 py-2 text-xs" : "btn-outline pressable px-3 py-2 text-xs"}>
-                        {status.replace(/_/g, " ")}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </article>
-            ))}
-            {supportTickets.length === 0 ? <EmptyState copy="No support tickets yet." /> : null}
-          </div>
-        </SurfaceSection>
-      ) : null}
+      {activeTab === "support" ? <div className="grid gap-5"><SurfaceSection title="Support inbox" description="Find requests, inspect the conversation, and update the resolution status."><WorkspaceRecords rows={supportTickets.filter(ticket=>(supportStatusFilter==="all"||ticket.status===supportStatusFilter)&&searchMatch(ticket.subject,ticket.message,ticket.category,ticket.userId))} rowKey={ticket=>ticket.id} searchText={ticket=>`${ticket.id} ${ticket.subject} ${ticket.category} ${ticket.userId} ${users.find(user=>user.id===ticket.userId)?.email||""}`} noun="tickets" searchPlaceholder="Search issues, customers or ticket IDs" initialSort="date" actions={<select className="field" aria-label="Ticket status" value={supportStatusFilter} onChange={event=>setSupportStatusFilter(event.target.value)}><option value="all">All statuses</option>{["open","in_progress","resolved","closed"].map(status=><option key={status}>{status}</option>)}</select>} columns={[
+        {key:"issue",label:"Issue",primary:true,render:ticket=><><strong>{ticket.subject}</strong><small>#{ticket.id} / {ticket.category}</small></>,value:ticket=>ticket.subject},
+        {key:"customer",label:"Customer",render:ticket=><a href={`/admin?tab=users&userId=${ticket.userId}`}>{users.find(user=>user.id===ticket.userId)?.name||`User #${ticket.userId}`}</a>},
+        {key:"priority",label:"Priority",render:ticket=><StatusPill label={ticket.priority||"normal"}/>},
+        {key:"status",label:"Status",render:ticket=><StatusPill label={ticket.status}/>},
+        {key:"date",label:"Updated",value:ticket=>Date.parse(ticket.updatedAt||ticket.createdAt),render:ticket=>new Date(ticket.updatedAt||ticket.createdAt).toLocaleDateString("en-IN")},
+        {key:"open",label:"Details",render:ticket=><button className="btn-outline" onClick={()=>setSelectedTicketId(ticket.id)}>Open ticket</button>}
+      ]}/></SurfaceSection>{(()=>{const ticket=supportTickets.find(item=>item.id===selectedTicketId);return ticket?<div id="support-ticket-detail"><SurfaceSection title={`Ticket #${ticket.id}: ${ticket.subject}`} description={`${ticket.category} / ${ticket.priority||"normal"} priority`}><div className="workspace-ticket-message">{ticket.message}</div><div className="record-actions mt-4">{(["open","in_progress","resolved","closed"] as SupportTicket["status"][]).map(status=><button key={status} className={ticket.status===status?"btn-primary":"btn-outline"} disabled={isPending||ticket.status===status} onClick={()=>updateTicketStatus(ticket.id,status)}>{status.replaceAll("_"," ")}</button>)}<button className="btn-outline" onClick={()=>setSelectedTicketId(null)}>Close details</button></div></SurfaceSection></div>:null;})()}</div>:null}
 
       {activeTab === "producers" ? <div className="grid gap-6">
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Approved producers" value={producerManagement.length} detail="Accounts with producer access" /><StatCard label="Published inventory" value={publishedBeats} detail={`${pendingBeatReviews} awaiting review`} /><StatCard label="Verified gross sales" value={formatMoney(producerManagement.reduce((sum, producer) => sum + producer.grossRevenue, 0))} /><StatCard label="Producer earnings" value={formatMoney(producerManagement.reduce((sum, producer) => sum + producer.producerEarnings, 0))} detail="Contractual 70% share" /></section>
         <SurfaceSection title="Producer operations" description="Live creator accounts, storefront readiness, catalogue health, verified sales, and payout exposure.">
-          <div className="grid gap-5 xl:grid-cols-2">
-            {producerManagement.filter((producer) => searchMatch(producer.name, producer.email, producer.status, producer.profile?.displayName)).map((producer) => <ProducerManagementCard key={producer.id} producer={producer} pending={isPending} canManage={hasPermission("users.manage")} onOpenCatalogue={() => { setProducerBeatFilter(producer.id); setBeatStatusFilter("all"); selectAdminTab("operations"); }} onOpenLedger={() => selectAdminTab("royalties")} onSave={updateProducerProfile} onRevoke={() => { const linked = users.find((user) => user.id === producer.id); if (linked && window.confirm(`Revoke producer access for ${producer.name}? Their storefront will be disabled.`)) updateWorkspaceRole(linked, "customer"); }} />)}
+          <WorkspaceRecords rows={producerManagement} rowKey={producer=>producer.id} searchText={producer=>`${producer.name} ${producer.email} ${producer.profile?.displayName} ${producer.status}`} externalSearch={moduleSearch} noun="producers" columns={[
+            {key:"name",label:"Producer",primary:true,value:producer=>producer.name,render:producer=><><strong>{producer.profile?.displayName||producer.name}</strong><small>{producer.email}</small></>},
+            {key:"status",label:"Storefront",render:producer=><StatusPill label={producer.profile?.status||"Not set up"}/>},
+            {key:"sales",label:"Gross sales",value:producer=>producer.grossRevenue||0,render:producer=>formatMoney(producer.grossRevenue)},
+            {key:"earnings",label:"Producer earnings",value:producer=>producer.producerEarnings||0,render:producer=>formatMoney(producer.producerEarnings)},
+            {key:"open",label:"Inspect",render:producer=><div className="record-actions"><button className="btn-outline" onClick={()=>setSelectedProducerId(producer.id)}>Storefront details</button><a className="btn-outline" href={`/admin?tab=users&userId=${producer.id}`}>User workspace</a></div>}
+          ]}/>
+          {selectedProducerId?<button className="btn-outline mt-4" onClick={()=>setSelectedProducerId(null)}>Close storefront details</button>:null}
+
+          <div id="producer-storefront-details" className="grid gap-5">
+            {producerManagement.filter((producer) => producer.id===selectedProducerId).map((producer) => <ProducerManagementCard key={producer.id} producer={producer} pending={isPending} canManage={hasPermission("users.manage")} onOpenCatalogue={() => { setProducerBeatFilter(producer.id); setBeatStatusFilter("all"); selectAdminTab("operations"); }} onOpenLedger={() => selectAdminTab("royalties")} onSave={updateProducerProfile} onRevoke={() => { const linked = users.find((user) => user.id === producer.id); if (linked && window.confirm(`Revoke producer access for ${producer.name}? Their storefront will be disabled.`)) updateWorkspaceRole(linked, "customer"); }} />)}
             {producerManagement.length === 0 ? <EmptyState copy="No producers found. Grant producer access from Admin Portal → Users." /> : null}
           </div>
         </SurfaceSection>
@@ -1600,8 +1560,16 @@ export function AdminControlCenter({
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Awaiting approval" value={pendingBeatReviews} detail="Hidden until reviewed" /><StatCard label="Published beats" value={publishedBeats} detail="Visible in the Beat Store" /><StatCard label="Corrections requested" value={correctionBeats} detail="Waiting on producer" /><StatCard label="Beat orders" value={orders.length} detail={`${orders.filter((order) => order.paymentStatus === "paid").length} paid`} /></section>
           <SurfaceSection title="Beat review and catalogue" description="Live moderation queue. Review metadata, assets, rights declarations, pricing, and storefront state before publishing.">
             <div className="mb-5 grid gap-3 border-b pb-5 sm:grid-cols-2 xl:grid-cols-[1fr,1fr,auto]" style={{ borderColor: "var(--border)" }}><select className="field" value={beatStatusFilter} onChange={(event) => setBeatStatusFilter(event.target.value)}><option value="pending">Awaiting approval</option><option value="corrections">Corrections requested</option><option value="published">Published</option><option value="hidden">Hidden / suspended</option><option value="all">All beats</option></select><select className="field" value={producerBeatFilter ?? ""} onChange={(event) => setProducerBeatFilter(event.target.value ? Number(event.target.value) : null)}><option value="">All producers</option>{producerManagement.map((producer) => <option key={producer.id} value={producer.id}>{producer.profile?.displayName || producer.name}</option>)}</select><button type="button" onClick={() => { setBeatStatusFilter("pending"); setProducerBeatFilter(null); setModuleSearch(""); }} className="btn-outline pressable">Reset filters</button></div>
+            <WorkspaceRecords rows={filteredMarketplaceBeats} rowKey={beat=>beat.id} searchText={beat=>`${beat.title} ${beat.producerName} ${beat.genre} ${beat.status}`} noun="beats" columns={[
+              {key:"title",label:"Beat",primary:true,value:beat=>beat.title,render:beat=><div className="record-identity">{beat.artworkUrl?<img src={beat.artworkUrl} alt=""/>:null}<div><strong>{beat.title}</strong><small>{beat.producerName}</small></div></div>},
+              {key:"style",label:"Style",render:beat=><><span>{beat.genre}</span><small>{beat.bpm} BPM</small></>},
+              {key:"status",label:"Review",value:beat=>beat.status||"",render:beat=><StatusPill label={beat.status||"DRAFT"}/>},
+              {key:"price",label:"Price",value:beat=>beat.price,render:beat=>formatMoney(beat.generalPrice??beat.price)},
+              {key:"review",label:"Inspect",render:beat=><button className="btn-outline" onClick={()=>setSelectedBeatReviewId(beat.id)}>Review beat</button>}
+            ]}/>
+            {selectedBeatReviewId?<button className="btn-outline my-4" onClick={()=>setSelectedBeatReviewId(null)}>Close beat details</button>:null}
             <div className="grid gap-4">
-              {filteredMarketplaceBeats.map((beat) => (
+              {beats.filter(beat=>beat.id===selectedBeatReviewId).map((beat) => (
                 <article id={`admin-beat-${beat.id}`} key={beat.id} className="surface-list-item overflow-hidden p-0" style={initialBeatId === beat.id ? { outline: "2px solid var(--accent)", outlineOffset: "2px" } : undefined}>
                   <div className="grid md:grid-cols-[9rem,1fr]">{beat.artworkUrl ? <img src={beat.artworkUrl} alt={`${beat.title} cover`} className="aspect-square h-full min-h-36 w-full object-cover" /> : <div className="flex min-h-36 items-center justify-center border-b text-xs uppercase tracking-[0.18em] md:border-b-0 md:border-r" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text-soft)" }}>No artwork</div>}<div className="p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-lg font-semibold" style={{ color: "var(--text)" }}>{beat.title}</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{beat.producerName || `Producer #${beat.producerId}`} · Submitted {new Date(beat.createdAt).toLocaleDateString("en-IN")}</p></div><StatusPill label={beat.status ?? (beat.enabled ? "PUBLISHED" : "PENDING_REVIEW")} active={beat.status === "PUBLISHED" || beat.status === "PENDING_REVIEW"} /></div><div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 text-sm sm:grid-cols-4"><div><p className="text-xs" style={{ color: "var(--text-soft)" }}>Tempo</p><p className="mt-1 font-medium">{beat.bpm} BPM · {beat.keySignature || "Key missing"}</p></div><div><p className="text-xs" style={{ color: "var(--text-soft)" }}>Style</p><p className="mt-1 font-medium">{beat.genre} · {beat.mood}</p></div><div><p className="text-xs" style={{ color: "var(--text-soft)" }}>General</p><p className="mt-1 font-medium">{formatMoney(beat.generalPrice ?? beat.price)}</p></div><div><p className="text-xs" style={{ color: "var(--text-soft)" }}>Exclusive</p><p className="mt-1 font-medium">{formatMoney(beat.exclusivePrice ?? 0)}</p></div></div>{beat.reviewIssues?.reason ? <div className="mt-4 rounded-xl border px-3 py-2 text-sm" style={{ borderColor: "color-mix(in srgb, var(--danger) 45%, var(--border))", color: "var(--danger)" }}><strong>Corrections:</strong> {beat.reviewIssues.reason}</div> : null}<div className="mt-5 flex flex-wrap gap-2">{beat.previewUrl ? <a href={beat.previewUrl} target="_blank" rel="noreferrer" className="btn-outline pressable">Listen to preview</a> : <span className="btn-outline cursor-not-allowed opacity-50">Preview missing</span>}{beat.status !== "PUBLISHED" ? <button type="button" disabled={reviewingBeatId === beat.id || !hasPermission("users.manage")} onClick={() => reviewBeat(beat, "approved")} className="btn-primary pressable disabled:opacity-40">{reviewingBeatId === beat.id ? "Reviewing…" : "Approve and publish"}</button> : null}{beat.status !== "PUBLISHED" ? <button type="button" disabled={reviewingBeatId === beat.id || !hasPermission("users.manage")} onClick={() => reviewBeat(beat, "changes_requested")} className="btn-outline pressable disabled:opacity-40">Request corrections</button> : null}<button type="button" onClick={() => { setProducerBeatFilter(beat.producerId); setBeatStatusFilter("all"); }} className="btn-outline pressable">Producer catalogue</button></div></div></div>
                 </article>
@@ -1642,38 +1610,24 @@ export function AdminControlCenter({
       ) : null}
       {activeTab === "reviews" ? <AdminReviewManager /> : null}
       {activeTab === "team" ? <AdminTeamAccessManager users={users} canManage={hasPermission("system.manage")} /> : null}
-      {(activeTab === "analytics" || activeTab === "contracts" || activeTab === "promotions" || activeTab === "fraud") ? (
-        <div className="grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
-          <SurfaceSection title={activeTab === "analytics" ? "Platform analytics" : activeTab === "contracts" ? "Contracts" : activeTab === "promotions" ? "Promotion operations" : activeTab === "fraud" ? "Fraud detection" : "Team management"} description="Executive module view using live HYMN platform signals while preserving the existing backend operations.">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <StatCard label="Total artists" value={users.filter((user) => user.role === "customer").length} />
-              <StatCard label="Active releases" value={releases.length} />
-              <StatCard label="Monthly revenue" value={formatMoney(distributionRevenue + commerceRevenue)} />
-              <StatCard label="Pending reviews" value={pendingReviews} />
-            </div>
-            <div className="mt-6 grid gap-3">
-              {releases.slice(0, 5).map((release) => (
-                <article key={`${activeTab}-${release.id}`} className="surface-list-item p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold" style={{ color: "var(--text)" }}>{release.releaseTitle}</p>
-                      <p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>{release.artistName} / {release.status.replace(/_/g, " ")}</p>
-                    </div>
-                    <StatusPill label={release.status.replace(/_/g, " ")} />
-                  </div>
-                </article>
-              ))}
-            </div>
-          </SurfaceSection>
-          <SurfaceSection title="Operational shortcuts" description="Fast paths into the live systems that already power HYMN.">
-            <div className="grid gap-3">
-              <button type="button" onClick={() => setActiveTab("releases")} className="btn-primary pressable">Open release queue</button>
-              <button type="button" onClick={() => setActiveTab("revenue")} className="btn-outline pressable">Review financials</button>
-              <button type="button" onClick={() => setActiveTab("producers")} className="btn-outline pressable">Producer operations</button>
-            </div>
-          </SurfaceSection>
-        </div>
-      ) : null}
+      {activeTab === "analytics" ? <SurfaceSection title="Operational reporting" description="Current stored records. Counts describe this catalogue snapshot; revenue is paid order value across the loaded history.">
+        <div className="grid gap-4 sm:grid-cols-3"><StatCard label="Catalogue records" value={releases.length}/><StatCard label="Open support" value={openSupportTickets}/><StatCard label="Recorded order revenue" value={formatMoney(distributionRevenue+commerceRevenue)}/></div>
+        <div className="workspace-module-layout mt-5"><OverviewPanel title="Release workflow"><OverviewPipeline stages={Array.from(new Set(releases.map(row=>row.status))).map(status=>({label:status.replaceAll("_"," "),count:releases.filter(row=>row.status===status).length,color:status==="live"?"#8ac5ac":"#a6b9ed",onClick:()=>selectAdminTab("releases")}))}/></OverviewPanel><OverviewPanel title="Support workload"><OverviewPipeline stages={Array.from(new Set(supportTickets.map(row=>row.status))).map(status=>({label:status.replaceAll("_"," "),count:supportTickets.filter(row=>row.status===status).length,color:status==="resolved"?"#8ac5ac":"#e0b781",onClick:()=>selectAdminTab("support")}))}/></OverviewPanel></div>
+        <WorkspaceRecords rows={releases} rowKey={row=>row.id} searchText={row=>`${row.releaseTitle} ${row.artistName} ${row.ownerEmail} ${row.status}`} noun="releases" externalSearch={moduleSearch} columns={[
+          {key:"title",label:"Release",primary:true,value:row=>adminReleaseTitle(row),render:row=><><strong>{adminReleaseTitle(row)}</strong><small>{row.artistName}</small></>},
+          {key:"status",label:"Stage",value:row=>row.status,render:row=><StatusPill label={row.status.replaceAll("_"," ")}/>},
+          {key:"owner",label:"Owner",render:row=>row.ownerEmail||"Unassigned"},
+          {key:"date",label:"Created",value:row=>Date.parse(row.createdAt),render:row=>new Date(row.createdAt).toLocaleDateString("en-IN")},
+          {key:"open",label:"Inspect",render:row=><a className="btn-outline" href={`/admin?tab=releases&releaseId=${row.id}`}>Open release</a>}
+        ]}/>
+      </SurfaceSection>:null}
+      {activeTab === "contracts" ? <SurfaceSection title="Licence agreements" description="Documents generated for paid Beat Store purchases. Missing documents are clearly marked for follow-up."><WorkspaceRecords rows={orders.filter(order=>order.paymentStatus==="paid").flatMap(order=>order.items.map((item,index)=>({order,item,index})))} rowKey={row=>`${row.order.id}-${row.index}`} searchText={row=>`${row.order.id} ${row.item.beatTitle} ${row.item.licenseType} ${row.order.buyerEmail}`} noun="agreements" externalSearch={moduleSearch} columns={[
+        {key:"beat",label:"Beat / order",primary:true,render:row=><><strong>{row.item.beatTitle||`Beat #${row.item.beatId}`}</strong><small>Order #{row.order.id}</small></>},
+        {key:"buyer",label:"Buyer",render:row=>row.order.buyerEmail||`User #${row.order.userId}`},
+        {key:"tier",label:"Licence",value:row=>row.item.licenseType,render:row=>row.item.licenseType},
+        {key:"document",label:"Document",render:row=>row.item.licenseUrl?<a href={row.item.licenseUrl} className="btn-outline">Open agreement</a>:<StatusPill label="Document unavailable"/>}
+      ]}/></SurfaceSection>:null}
+      {activeTab === "promotions" || activeTab === "fraud" ? <SurfaceSection title={activeTab==="promotions"?"Promotion operations":"Fraud investigations"}><a className="btn-primary" href={activeTab==="promotions"?"/admin/campaigns":"/admin/fraud"}>Open {activeTab==="promotions"?"campaign workspace":"investigation workspace"}</a></SurfaceSection>:null}
       {confirmStatusAction && selectedRelease ? (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in zoom-in-95 duration-200">
           <section role="dialog" aria-modal="true" aria-label="Confirm Action" className="w-full max-w-md rounded-[1.5rem] border p-5 shadow-2xl sm:p-7" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>

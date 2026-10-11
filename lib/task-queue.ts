@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
 export type AdminTaskInput = { eventKey: string; type: string; priority: "low" | "normal" | "high" | "critical"; title: string; body: string; href: string; entityType: string; entityId: string | number };
-const memoryTasks: Array<AdminTaskInput & { id: number; status: string; createdAt: string; updatedAt: string }> = [];
+const memoryTasks: Array<AdminTaskInput & { id: number; status: string; createdAt: string; updatedAt: string; assignedTo?: number | null; snoozedUntil?: Date | null }> = [];
 
 function usesPostgres() {
   return process.env.DATABASE_URL?.startsWith("postgres") ?? false;
@@ -36,16 +36,19 @@ export async function resolveAdminTask(eventKey: string, note?: string) {
 }
 
 export async function listAdminTasks(filters: { status?: string; type?: string; priority?: string } = {}) {
-  if (!usesPostgres()) return memoryTasks.filter((task) => (!filters.status || task.status === filters.status) && (!filters.type || task.type === filters.type) && (!filters.priority || task.priority === filters.priority));
-  return prisma.adminTask.findMany({
+  const priorities = ["critical", "high", "normal", "low"];
+  if (!usesPostgres()) return memoryTasks.filter((task) =>
+    (filters.status ? task.status === filters.status : task.status !== "resolved" && (!task.snoozedUntil || task.snoozedUntil <= new Date())) &&
+    (!filters.type || task.type === filters.type) && (!filters.priority || task.priority === filters.priority)
+  ).sort((a,b) => priorities.indexOf(a.priority) - priorities.indexOf(b.priority) || Date.parse(a.createdAt) - Date.parse(b.createdAt)).slice(0,250);
+  const queues = await Promise.all((filters.priority ? [filters.priority] : priorities).map(priority => prisma.adminTask.findMany({
     where: {
       ...(filters.status ? { status: filters.status } : { status: { not: "resolved" }, OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: new Date() } }] }),
-      ...(filters.type ? { type: filters.type } : {}),
-      ...(filters.priority ? { priority: filters.priority } : {})
+      ...(filters.type ? { type: filters.type } : {}), priority
     },
-    orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
-    take: 250
-  });
+    orderBy: { createdAt: "asc" }, take: 250
+  })));
+  return queues.flat().slice(0,250);
 }
 
 export async function updateAdminTask(id: number, input: { status?: string; assignedTo?: number | null; note?: string | null; snoozedUntil?: Date | null; actorId?: number | null }) {
@@ -53,6 +56,8 @@ export async function updateAdminTask(id: number, input: { status?: string; assi
     const task = memoryTasks.find((item) => item.id === id);
     if (!task) return null;
     if (input.status) task.status = input.status;
+    if (input.assignedTo !== undefined) task.assignedTo = input.assignedTo;
+    if (input.snoozedUntil !== undefined) task.snoozedUntil = input.snoozedUntil;
     task.updatedAt = new Date().toISOString();
     return task;
   }

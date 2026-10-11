@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
+import { WorkspaceRecords } from "@/components/workspace-records";
 import { SupportWorkspace } from "@/components/support-workspace";
 import { DashboardFrame } from "@/components/dashboard-frame";
 import { BeatCard } from "@/components/beat-card";
@@ -480,33 +481,19 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       {activeTab === "releases" ? (
         <Panel title="Release command center" description="Search, filter, and inspect every submitted or drafted release.">
           <div className="mb-5 flex flex-wrap gap-2">
-            {["all", "draft", "submitted", "in_queue", "under_review", "approved", "sent", "live", "rejected", "failed"].map((status) => (
+            {["all", ...Array.from(new Set(releases.map(release=>release.status)))].map((status) => (
               <button key={status} type="button" onClick={() => setReleaseStatusFilter(status)} className={releaseStatusFilter === status ? "btn-primary pressable px-3 py-2 text-xs" : "btn-outline pressable px-3 py-2 text-xs"}>
                 {status.replace(/_/g, " ")}
               </button>
             ))}
           </div>
-          <MiniTable>
-            <div className="hidden grid-cols-[1.4fr,0.8fr,0.7fr,0.7fr,0.6fr] gap-3 border-b px-4 py-3 text-xs uppercase tracking-[0.18em] md:grid" style={{ borderColor: "var(--border)", color: "var(--text-soft)" }}>
-              <span>Release</span><span>Type</span><span>Status</span><span>Payment</span><span>Action</span>
-            </div>
-            <div className="grid gap-0">
-              {filteredReleases.map((release) => (
-                <article key={release.id} className="grid gap-3 border-b px-4 py-4 md:grid-cols-[1.4fr,0.8fr,0.7fr,0.7fr,0.6fr] md:items-center" style={{ borderColor: "var(--border)" }}>
-                  <div>
-                    <p className="font-semibold" style={{ color: "var(--text)" }}>{releaseTitle(release)}</p>
-                    <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{release.artistName} / {formatDate(release.releaseDate)}</p>
-                    {release.status === "draft" ? <p className="mt-1 text-xs" style={{ color: "var(--accent)" }}>{release.draftCompletionPercent ?? 0}% complete{release.missingFields?.length ? ` · Missing: ${release.missingFields.join(", ")}` : ""}</p> : null}
-                  </div>
-                  <span className="text-sm uppercase" style={{ color: "var(--text-muted)" }}>{release.releaseType}</span>
-                  <StatusPill label={release.status.replace(/_/g, " ")} active={!["rejected", "failed"].includes(release.status)} />
-                  <span className="text-sm" style={{ color: "var(--text-muted)" }}>{release.paymentStatus ?? "pending"}</span>
-                  {release.status === "draft" ? <Link href={`/distribution/start?edit=${release.id}`} className="btn-primary pressable px-3 py-2 text-center text-sm">Continue</Link> : <button type="button" onClick={() => setSelectedRelease(release)} className="btn-outline pressable px-3 py-2 text-sm">Details</button>}
-                </article>
-              ))}
-              {filteredReleases.length === 0 ? <div className="p-5"><EmptyState copy="No releases match this search/filter." /></div> : null}
-            </div>
-          </MiniTable>
+          <WorkspaceRecords rows={filteredReleases} rowKey={release=>release.id} searchText={release=>`${releaseTitle(release)} ${release.artistName} ${release.status} ${release.upcCode}`} noun="releases" columns={[
+            {key:"release",label:"Release",primary:true,value:release=>releaseTitle(release),render:release=><div className="record-identity">{release.artworkUrl&&<img src={release.artworkUrl} alt=""/>}<div><strong>{releaseTitle(release)}</strong><small>{release.artistName} / {release.releaseType}</small>{release.status==="draft"&&<small>{release.draftCompletionPercent??0}% complete</small>}</div></div>},
+            {key:"status",label:"Status",value:release=>release.status,render:release=><StatusPill label={release.status}/>},
+            {key:"payment",label:"Payment",render:release=>release.paymentStatus||"Not recorded"},
+            {key:"date",label:"Release date",render:release=>formatDate(release.releaseDate)},
+            {key:"action",label:"Action",render:release=>release.status==="draft"?<Link className="btn-outline" href={`/distribution/start?edit=${release.id}`}>Continue draft</Link>:<Link className="btn-outline" href={`/dashboard/releases/${release.id}`}>Manage release</Link>}
+          ]}/>
         </Panel>
       ) : null}
 
@@ -655,36 +642,15 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
           {dataErrors.purchases ? <div role="alert" className="mb-4 rounded-xl border p-3 text-sm" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>{dataErrors.purchases} <button type="button" className="ml-2 underline" onClick={() => setReloadKey(value => value + 1)}>Retry</button></div> : null}
           {supportFeedback ? <p role="status" className="mb-4 text-sm" style={{ color: "var(--text)" }}>{supportFeedback}</p> : null}
           <div className="grid gap-4">
-            {beatPurchases.map((purchase) => <article key={`purchase-${purchase.id}`} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold" style={{ color: "var(--text)" }}>Beat purchase #{purchase.id}</p><p className="mt-1 text-sm capitalize" style={{ color: "var(--text-soft)" }}>Beat #{purchase.beatId} · {purchase.licenseType} · {purchase.licenseUrl ? "Licence ready" : "Licence setup required"}</p></div><StatusPill label={purchase.releaseId ? "release created" : purchase.licenseUrl ? "ready" : "setup required"} active={Boolean(purchase.licenseUrl)} /></div>{purchase.needsArtistName && !purchase.licenseUrl ? <label className="mt-4 block max-w-sm text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Artist or stage name<input value={licenceArtistNames[purchase.id] ?? ""} onChange={(event) => setLicenceArtistNames(current => ({ ...current, [purchase.id]: event.target.value }))} maxLength={80} className="field mt-2 w-full" placeholder="Name used on releases"/><span className="mt-1 block font-normal" style={{ color: "var(--text-soft)" }}>Your account name remains the legal licensee. This name appears as the performing artist.</span></label> : null}<div className="mt-3 flex flex-wrap gap-2">{purchase.licenseUrl ? <><Link href={`/licenses/${purchase.id}`} className="btn-outline pressable px-3 py-2 text-xs">View agreement</Link><a href={`/api/beat-purchases/${purchase.id}/license`} className="btn-outline pressable px-3 py-2 text-xs">Download PDF</a></> : <button type="button" disabled={Boolean(purchaseAction) || Boolean(purchase.needsArtistName && !(licenceArtistNames[purchase.id] || "").trim())} onClick={() => generatePurchaseLicense(purchase.id)} className="btn-outline pressable px-3 py-2 text-xs disabled:opacity-50">{purchaseAction?.id === purchase.id && purchaseAction.type === "license" ? "Generating licence…" : "Create licence"}</button>}<button type="button" disabled={!purchase.licenseUrl || Boolean(purchaseAction)} onClick={() => startReleaseFromPurchase(purchase.id)} className="btn-primary pressable px-3 py-2 text-xs disabled:opacity-50" title={!purchase.licenseUrl ? "Create the licence before starting a release." : undefined}>{purchaseAction?.id === purchase.id && purchaseAction.type === "release" ? "Preparing release…" : purchase.releaseId ? "Continue release" : "Release with this beat"}</button></div>{!purchase.licenseUrl ? <p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>Create the agreement first. HYMN carries the same proof into Studio and distribution.</p> : null}</article>)}
-            {filteredOrders.map((order) => (
-              <article key={order.id} className="surface-list-item p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="font-semibold" style={{ color: "var(--text)" }}>Order #{order.id}</p>
-                  <StatusPill label={order.paymentStatus} active={order.paymentStatus === "paid"} />
-                </div>
-                <p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>{order.razorpayOrderId}</p>
-                <div className="mt-4 grid gap-3">
-                  {order.items.map((item, index) => (
-                    <div key={`${order.id}-${item.beatId}-${index}`} className="rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)" }}>
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="font-semibold" style={{ color: "var(--text)" }}>{item.beatTitle ?? `Beat #${item.beatId}`}</p>
-                          <p className="capitalize" style={{ color: "var(--text-soft)" }}>{item.licenseType} license</p>
-                        </div>
-                        <p style={{ color: "var(--text)" }}>Rs {item.price}</p>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs" style={{ color: "var(--text-soft)" }}>
-                        {item.downloadUrl ? <a href={item.downloadUrl} className="rounded-full border px-3 py-1" style={{ borderColor: "var(--border)" }}>Download file</a> : null}
-                        {item.licenseUrl ? <a href={item.licenseUrl} className="rounded-full border px-3 py-1" style={{ borderColor: "var(--border)" }}>View license</a> : null}
-                        {order.paymentStatus === "paid" && item.licenseUrl ? <Link href={`/distribution?beatId=${item.beatId}&licenseType=${encodeURIComponent(item.licenseType)}&orderId=${order.id}&licenseUrl=${encodeURIComponent(item.licenseUrl)}`} className="rounded-full bg-[var(--accent)] px-3 py-1 font-semibold text-[var(--accent-contrast)]">Turn this beat into a release</Link> : null}
-                      </div>
-                      {order.paymentStatus === "paid" && item.licenseUrl ? <p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>HYMN will carry the beat reference and license proof into the distribution flow.</p> : null}
-                    </div>
-                  ))}
-                </div>
-              </article>
-            ))}
-            {filteredOrders.length === 0 ? <EmptyState copy="No purchases match this search." /> : null}
+            {beatPurchases.filter(purchase=>!dashboardSearch||`${purchase.id} ${purchase.beatId} ${purchase.licenseType}`.toLowerCase().includes(dashboardSearch.toLowerCase())).map((purchase) => <article key={`purchase-${purchase.id}`} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold" style={{ color: "var(--text)" }}>Beat purchase #{purchase.id}</p><p className="mt-1 text-sm capitalize" style={{ color: "var(--text-soft)" }}>Beat #{purchase.beatId} · {purchase.licenseType} · {purchase.licenseUrl ? "Licence ready" : "Licence setup required"}</p></div><StatusPill label={purchase.releaseId ? "release created" : purchase.licenseUrl ? "ready" : "setup required"} active={Boolean(purchase.licenseUrl)} /></div>{purchase.needsArtistName && !purchase.licenseUrl ? <label className="mt-4 block max-w-sm text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Artist or stage name<input value={licenceArtistNames[purchase.id] ?? ""} onChange={(event) => setLicenceArtistNames(current => ({ ...current, [purchase.id]: event.target.value }))} maxLength={80} className="field mt-2 w-full" placeholder="Name used on releases"/><span className="mt-1 block font-normal" style={{ color: "var(--text-soft)" }}>Your account name remains the legal licensee. This name appears as the performing artist.</span></label> : null}<div className="mt-3 flex flex-wrap gap-2">{purchase.licenseUrl ? <><Link href={`/licenses/${purchase.id}`} className="btn-outline pressable px-3 py-2 text-xs">View agreement</Link><a href={`/api/beat-purchases/${purchase.id}/license`} className="btn-outline pressable px-3 py-2 text-xs">Download PDF</a></> : <button type="button" disabled={Boolean(purchaseAction) || Boolean(purchase.needsArtistName && !(licenceArtistNames[purchase.id] || "").trim())} onClick={() => generatePurchaseLicense(purchase.id)} className="btn-outline pressable px-3 py-2 text-xs disabled:opacity-50">{purchaseAction?.id === purchase.id && purchaseAction.type === "license" ? "Generating licence…" : "Create licence"}</button>}<button type="button" disabled={!purchase.licenseUrl || Boolean(purchaseAction)} onClick={() => startReleaseFromPurchase(purchase.id)} className="btn-primary pressable px-3 py-2 text-xs disabled:opacity-50" title={!purchase.licenseUrl ? "Create the licence before starting a release." : undefined}>{purchaseAction?.id === purchase.id && purchaseAction.type === "release" ? "Preparing release…" : purchase.releaseId ? "Continue release" : "Release with this beat"}</button></div>{!purchase.licenseUrl ? <p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>Create the agreement first. HYMN carries the same proof into Studio and distribution.</p> : null}</article>)}
+            <WorkspaceRecords rows={filteredOrders} rowKey={order=>order.id} searchText={order=>`${order.id} ${order.paymentStatus} ${order.items.map(item=>item.beatTitle).join(" ")}`} noun="orders" initialSort="date" columns={[
+              {key:"order",label:"Order",primary:true,value:order=>order.id,render:order=><><strong>Order #{order.id}</strong><small>{order.items.map(item=>item.beatTitle||`Beat #${item.beatId}`).join(", ")}</small></>},
+              {key:"amount",label:"Amount",value:order=>order.amount,render:order=>`Rs ${order.amount.toLocaleString("en-IN")}`},
+              {key:"status",label:"Payment",render:order=><StatusPill label={order.paymentStatus}/>},
+              {key:"date",label:"Created",value:order=>Date.parse(order.createdAt),render:order=>formatDate(order.createdAt)},
+              {key:"assets",label:"Files & agreements",render:order=><div className="record-actions">{order.paymentStatus==="paid"?order.items.map((item,index)=><span key={index} className="record-actions">{item.downloadUrl&&<a className="btn-outline" href={item.downloadUrl}>Download {order.items.length>1?index+1:""}</a>}{item.licenseUrl&&<a className="btn-outline" href={item.licenseUrl}>Agreement {order.items.length>1?index+1:""}</a>}</span>):"Unlocks after payment"}</div>}
+            ]}/>
+
           </div>
         </Panel>
       ) : null}

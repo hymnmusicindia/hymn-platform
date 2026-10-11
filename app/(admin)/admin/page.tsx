@@ -1,3 +1,4 @@
+import { adminModuleAllowed } from "@/lib/admin-workspace-navigation";
 import { redirect } from "next/navigation";
 import { AdminControlCenter } from "@/components/admin-control-center";
 import { getAdminAccessForPage, getAdminSessionForPage, getCurrentUserForPage } from "@/lib/access";
@@ -72,19 +73,24 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   if (!currentAdmin) redirect("/admin/login");
   const adminAccess = await getAdminAccessForPage();
-  const canReadUsers = Boolean(adminAccess?.permissions.includes("users.read"));
+  const permissions=adminAccess?.permissions||[];
+  const canReadUsers = permissions.includes("users.read");
+  const canReadReleases=permissions.some(permission=>["releases.read","releases.review","distribution.retry","distribution.submit"].includes(permission));
+  const canReadCommerce=permissions.some(permission=>["payouts.review","royalties.reconcile","services.manage"].includes(permission));
+  const canReadServices=permissions.includes("services.manage");
+  const canReadSystem=permissions.includes("system.manage");
 
   const resolvedSearchParams = await searchParams;
-  const [users, releases, beats] = await Promise.all([canReadUsers ? listUsers() : Promise.resolve([]), listAllDetailedReleases(), listAllBeats()]);
-  const [orders, applications, leads] = await Promise.all([listAllOrders(), listProducerApplications(), listPartnershipLeads()]);
-  const [distributionOrders, artistProfiles] = await Promise.all([listAllDistributionOrders(), listAllArtistProfiles()]);
-  const [siteSettings, notifications, supportTickets] = await Promise.all([getSiteSettings(), listLatestNotifications(50), listAllSupportTickets()]);
+  const [users, releases, beats] = await Promise.all([canReadUsers ? listUsers() : Promise.resolve([]), canReadReleases?listAllDetailedReleases():Promise.resolve([]), canReadServices?listAllBeats():Promise.resolve([])]);
+  const [orders, applications, leads] = await Promise.all([canReadCommerce?listAllOrders():Promise.resolve([]), canReadServices?listProducerApplications():Promise.resolve([]), canReadServices?listPartnershipLeads():Promise.resolve([])]);
+  const [distributionOrders, artistProfiles] = await Promise.all([canReadCommerce?listAllDistributionOrders():Promise.resolve([]), canReadUsers?listAllArtistProfiles():Promise.resolve([])]);
+  const [siteSettings, notifications, supportTickets] = await Promise.all([getSiteSettings(), canReadSystem?listLatestNotifications(50):Promise.resolve([]), canReadServices?listAllSupportTickets():Promise.resolve([])]);
   const requestedTabCandidate = resolvedSearchParams?.tab && ADMIN_TABS.includes(resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) ? (resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) : undefined;
-  const requestedTab = requestedTabCandidate === "users" && !canReadUsers ? "overview" : requestedTabCandidate;
+  const requestedTab = requestedTabCandidate && !adminModuleAllowed(requestedTabCandidate,permissions) ? "overview" : requestedTabCandidate;
 
   return (
     <main className="admin-panel-shell py-6 sm:py-8">
-      <div className="mb-4 flex justify-end"><a className="btn-secondary" href="/admin/releases/manual">Manual Releases</a></div>
+      {canReadSystem ? <div className="mb-4 flex justify-end"><a className="btn-secondary" href="/admin/releases/manual">Manual release</a></div> : null}
       <AdminControlCenter
         currentAdmin={currentAdmin}
         adminAccess={adminAccess ?? { role: "admin", permissions: [] }}

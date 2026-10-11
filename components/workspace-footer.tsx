@@ -5,12 +5,14 @@ import { Gift, HelpCircle, Mail, MoreHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import "@/app/styles/referral-center.css";
 
-export function WorkspaceFooter({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
+export function WorkspaceFooter({ onNavigate, collapsed = false, workspace = "creator", adminActivityAllowed = false }: { onNavigate?: () => void; collapsed?: boolean; workspace?: "admin" | "creator"; adminActivityAllowed?: boolean }) {
   const [open,setOpen] = useState(false);
   const root=useRef<HTMLDivElement>(null);
   const trigger=useRef<HTMLButtonElement>(null);
   useEffect(()=>{ if(!open)return;const outside=(event:PointerEvent)=>{if(!root.current?.contains(event.target as Node))setOpen(false);};const escape=(event:KeyboardEvent)=>{if(event.key==="Escape"){setOpen(false);trigger.current?.focus();}};document.addEventListener("pointerdown",outside);document.addEventListener("keydown",escape);return()=>{document.removeEventListener("pointerdown",outside);document.removeEventListener("keydown",escape);};},[open]);
   const navigate=()=>{setOpen(false);onNavigate?.();};
+  if (workspace === "admin" && !adminActivityAllowed) return null;
+  if (workspace === "admin") return <div className="workspace-admin-footer"><Link href="/admin?tab=activity" onClick={navigate} aria-label="Audit & activity"><HelpCircle size={16}/><span>Audit & activity</span></Link></div>;
   return <div className="workspace-footer-container" data-collapsed={collapsed}>
     <div className="workspace-footer-newsletter"><HomeNewsletter compact/></div>
     <button className="workspace-newsletter-expand" type="button" aria-label="Open newsletter signup" title="Newsletter" onClick={()=>window.dispatchEvent(new Event("hymn-toggle-navigation"))}><Mail size={19}/></button>

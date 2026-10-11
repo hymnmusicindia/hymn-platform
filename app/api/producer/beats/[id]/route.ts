@@ -33,7 +33,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const metadataChanged = result.user.role === "producer" && [payload.title, payload.bpm, payload.genre, payload.mood, payload.price, payload.generalPrice, payload.stemPrice, payload.exclusivePrice, payload.description, payload.subgenre, payload.tags, payload.sampleDeclaration, payload.sampleDisclosure].some((value) => value !== undefined);
     if (metadataChanged) {
       await prisma.beat.update({ where: { id: beatId }, data: { status: "PENDING_REVIEW", enabled: false, reviewIssues: Prisma.JsonNull } });
-      await createAdminTaskOnce({ eventKey: `producer:${result.user.id}:beat:${beatId}:review`, type: "Beat Awaiting Approval", priority: "normal", title: `Updated beat ready for review: ${updated.title}`, body: "Producer updated beat metadata. Review the current files and fields.", href: `/admin?tab=beats&beatId=${beatId}`, entityType: "beat", entityId: beatId });
+      await createAdminTaskOnce({ eventKey: `producer:${result.user.id}:beat:${beatId}:review`, type: "Beat Awaiting Approval", priority: "normal", title: `Updated beat ready for review: ${updated.title}`, body: "Producer updated beat metadata. Review the current files and fields.", href: `/admin?tab=operations&beatId=${beatId}`, entityType: "beat", entityId: beatId });
       return NextResponse.json({ beat: { ...updated, status: "PENDING_REVIEW", enabled: false, reviewIssues: null } });
     }
     return NextResponse.json({ beat: updated });

@@ -1,8 +1,9 @@
-import { SiteFooter } from "@/components/site-footer";
+import { AdminPortalLayout } from "@/components/admin-portal-layout";
+import { getAdminAccessForPage } from "@/lib/access";
 import { SiteHeader } from "@/components/site-header";
 import { getSession } from "@/lib/session";
 
 export default async function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const session = await getSession();
-  return <><SiteHeader user={session} />{children}<SiteFooter /></>;
+  const [session,access] = await Promise.all([getSession(),getAdminAccessForPage()]);
+  return <><SiteHeader user={session} /><AdminPortalLayout permissions={access?.permissions||[]}>{children}</AdminPortalLayout></>;
 }

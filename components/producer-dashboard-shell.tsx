@@ -11,6 +11,7 @@ import { Beat, BeatPurchase, Notification, Order, Release, SupportTicket, User }
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { CustomerHome, ProducerHome } from "@/components/simplified-dashboard-home";
 import { FirstLoginReferralPrompt } from "@/components/first-login-referral-prompt";
+import { WorkspaceRecords } from "@/components/workspace-records";
 import { normalizeBeatLicenseType } from "@/lib/beat-store";
 
 const AnalyticsDashboard = dynamic(() => import("@/components/analytics-dashboard").then((module) => module.AnalyticsDashboard));
@@ -32,7 +33,7 @@ function Panel({ title, description, children }: { title: string; description?: 
     <section className="surface-card customer-module-section overflow-hidden p-5 sm:p-6 lg:p-7 fade-up">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-5" style={{ borderColor: "var(--border)" }}>
         <div>
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: "var(--accent)" }}>Artist workspace</p>
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: "var(--accent)" }}>Producer workspace</p>
           <h2 className="text-xl font-semibold tracking-tight sm:text-2xl" style={{ color: "var(--text)" }}>{title}</h2>
           {description ? <p className="mt-2 max-w-3xl text-sm leading-6" style={{ color: "var(--text-muted)" }}>{description}</p> : null}
         </div>
@@ -54,6 +55,7 @@ function EmptyState({ copy }: { copy: string }) {
 }
 
 function formatMoney(amount: number) {
+  if (!Number.isFinite(amount)) return "Unavailable";
   return `Rs ${Math.round(amount).toLocaleString("en-IN")}`;
 }
 
@@ -115,10 +117,10 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
   const [producerNotifications, setProducerNotifications] = useState<Notification[]>([]);
   const enabledBeats = catalog.filter((beat) => beat.enabled);
   const disabledBeats = catalog.filter((beat) => !beat.enabled);
-  const licenseRows = orders.flatMap((order) => order.items.map((item) => ({ order, item })));
+  const licenseRows = orders.filter(order=>order.paymentStatus === "paid").flatMap((order) => order.items.map((item) => ({ order, item })));
   const genres = Array.from(new Set(catalog.map((beat) => beat.genre).filter(Boolean))).sort();
   const filteredCatalog = useMemo(() => catalog.filter((beat) => {
-    const matchesStatus = catalogStatusFilter === "all" || (catalogStatusFilter === "enabled" ? beat.enabled : !beat.enabled);
+    const matchesStatus = catalogStatusFilter === "all" || (catalogStatusFilter === "enabled" ? beat.enabled && beat.status === "PUBLISHED" : catalogStatusFilter === "disabled" ? !beat.enabled : beat.status === catalogStatusFilter);
     const matchesGenre = catalogGenreFilter === "all" || beat.genre === catalogGenreFilter;
     return matchesStatus && matchesGenre && matchesQuery([beat.title, beat.genre, beat.mood, beat.bpm, beat.price], dashboardSearch);
   }), [catalog, catalogGenreFilter, catalogStatusFilter, dashboardSearch]);
@@ -284,24 +286,29 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
       title={user.name}
       subtitle={user.email}
       navItems={[
-        { key: "overview", label: "Overview", description: "Catalogue, sales and actions", group: "Home" },
-        { key: "releases", label: "My releases", group: "Distribution", href: "/dashboard?tab=releases" },
-        { key: "new-release", label: "Add release", group: "Distribution", href: "/distribution/start" },
-        { key: "catalog", label: "My beats", description: "Catalogue and pricing", group: "Beatstore" },
-        { key: "upload", label: "Upload beat", description: "Add a new beat", group: "Beatstore" },
-        { key: "store", label: "Browse beats", description: "Open your storefront", group: "Beatstore", href: "/beat-store" },
-        { key: "studio", label: "Browse services", group: "Mixing / Mastering", href: "/studio" },
-        { key: "studio-orders", label: "My projects", group: "Mixing / Mastering", href: "/dashboard/studio" },
-        { key: "sales", label: "Sales", description: "Verified purchases", group: "Business" },
-        { key: "earnings", label: "Earnings", description: "Your 70% share", group: "Business" },
-        { key: "payout", label: "Payouts", description: "Balance and withdrawals", group: "Business" },
-        { key: "profile", label: "Producer Profile", description: "Your public identity", group: "Profile" },
-        { key: "messages", label: "Notifications", description: "Sales and account updates", group: "Account" },
-        { key: "settings", label: "Settings", description: "Workspace preferences", group: "Account" },
-        { key: "help", label: "Help & FAQ", description: "Guidance and support", group: "Support", href: "/faq" }
+        {key:"overview",label:"Overview",group:"Workspace"},
+        {key:"catalog",label:"My beats",description:"Inventory, pricing and review status",group:"Beatstore"},
+        {key:"upload",label:"Upload beat",group:"Beatstore"},
+        {key:"profile",label:"My storefront",group:"Beatstore"},
+        {key:"sales",label:"Sales",group:"Business"},
+        {key:"licensing",label:"Licences & agreements",group:"Business"},
+        {key:"earnings",label:"Earnings & payouts",group:"Business"},
+        {key:"ledger",label:"Wallet history",group:"Business"},
+        {key:"analytics",label:"Performance",group:"Business"},
+        {key:"collaborations",label:"Credited tracks",group:"Business"},
+        {key:"releases",label:"My releases",group:"Distribution",href:"/dashboard/releases"},
+        {key:"new-release",label:"Add release",group:"Distribution",href:"/distribution/start"},
+        {key:"splits",label:"Royalty splits",group:"Distribution",href:"/dashboard?tab=collaborators"},
+        {key:"studio",label:"Find an engineer",group:"Mixing / Mastering",href:"/studio"},
+        {key:"studio-orders",label:"My projects",group:"Mixing / Mastering",href:"/dashboard/studio"},
+        {key:"messages",label:"Notifications",group:"Account"},
+        {key:"settings",label:"Settings",group:"Account"},
+        {key:"help",label:"Help & support",group:"Support",href:"/dashboard?tab=support"},
+        {key:"faq",label:"FAQ",group:"Support",href:"/faq"}
       ]}
       activeKey={activeTab}
       onSelect={selectProducerTab}
+      newAction={{label:"Upload beat",onClick:()=>selectProducerTab("upload")}}
       searchValue={dashboardSearch}
       onSearchChange={setDashboardSearch}
       searchPlaceholder={activeTab === "catalog" ? "Search beats, genre, mood, BPM..." : activeTab === "licensing" || activeTab === "sales" ? "Search buyers, orders, licenses..." : "Search catalog and sales..."}
@@ -370,7 +377,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
           <div className="mb-5 grid gap-3 md:grid-cols-[0.8fr,0.8fr,1fr]">
             <select className="field" value={catalogStatusFilter} onChange={(event) => setCatalogStatusFilter(event.target.value)}>
               <option value="all">All status</option>
-              <option value="enabled">Enabled</option>
+              <option value="enabled">Published in store</option><option value="PENDING_REVIEW">Awaiting review</option><option value="CHANGES_REQUESTED">Corrections required</option><option value="DRAFT">Draft</option>
               <option value="disabled">Disabled</option>
             </select>
             <select className="field" value={catalogGenreFilter} onChange={(event) => setCatalogGenreFilter(event.target.value)}>
@@ -381,86 +388,32 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
               Showing {filteredCatalog.length} / {catalog.length} beats
             </div>
           </div>
-          <div className="grid gap-4">
-            {filteredCatalog.map((beat) => (
-              <article key={beat.id} className="surface-list-item p-4 lg:p-6">
-                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="w-full max-w-[280px]">
-                    <BeatCard beat={beat} />
-                    <div className="mt-3"><StatusPill label={(beat.status ?? (beat.enabled ? "PUBLISHED" : "PENDING_REVIEW")).replace(/_/g, " ")} active={beat.status === "PUBLISHED"} /></div>
-                    {beat.reviewIssues?.reason ? <div className="mt-3 rounded-xl border p-3 text-sm" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}><p className="font-semibold">Corrections requested</p><p className="mt-1">{beat.reviewIssues.reason}</p></div> : null}
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-5">
-                    {beat.fileUrl ? <a href={beat.fileUrl} target="_blank" rel="noreferrer" className="btn-outline pressable text-center">Preview</a> : <button type="button" disabled className="btn-outline opacity-50">No audio</button>}
-                    <Link href="/beat-store" className="btn-outline pressable text-center">Storefront</Link>
-                    <button type="button" onClick={() => setEditingBeat(beat)} className="btn-outline pressable">
-                      Edit
-                    </button>
-                    <button type="button" disabled={!beat.enabled && beat.status !== "APPROVED"} onClick={() => handleBeatUpdate(beat, { enabled: !beat.enabled })} className="btn-outline pressable disabled:opacity-50">
-                      {beat.enabled ? "Disable" : "Enable"}
-                    </button>
-                    <button type="button" onClick={() => setDeletingBeat(beat)} className="btn-outline pressable text-red-500 border-red-500 hover:bg-red-500/10 hover:text-red-600">
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </article>
-            ))}
-            {filteredCatalog.length === 0 ? <EmptyState copy="No beats match the active filters." /> : null}
-          </div>
+          <WorkspaceRecords searchable={false} rows={filteredCatalog} rowKey={beat=>beat.id} noun="beats" searchText={beat=>`${beat.title} ${beat.genre} ${beat.bpm} ${beat.status}`} searchPlaceholder="Search catalogue" columns={[
+            {key:"beat",label:"Beat",primary:true,value:beat=>beat.title,render:beat=><div className="record-identity">{beat.artworkUrl?<img src={beat.artworkUrl} alt=""/>:<span className="record-art"/>}<div><strong>{beat.title}</strong><small>{beat.genre} / {beat.bpm} BPM</small>{beat.reviewIssues?.reason&&<small style={{color:"var(--danger)"}}>{beat.reviewIssues.reason}</small>}</div></div>},
+            {key:"status",label:"Review",value:beat=>beat.status||"",render:beat=><StatusPill label={beat.status||"DRAFT"}/>},
+            {key:"price",label:"Starting price",value:beat=>beat.price,render:beat=>formatMoney(beat.generalPrice??beat.price)},
+            {key:"listed",label:"Visibility",render:beat=>beat.enabled&&beat.status==="PUBLISHED"?"Published":"Not listed"},
+            {key:"actions",label:"Manage",render:beat=><div className="record-actions">{beat.previewUrl||beat.fileUrl?<a href={beat.previewUrl||beat.fileUrl} target="_blank" rel="noreferrer" className="btn-outline">Listen</a>:null}<button onClick={()=>setEditingBeat(beat)} className="btn-outline">Edit</button><button disabled={isPending||(!beat.enabled&&beat.status!=="PUBLISHED")} onClick={()=>handleBeatUpdate(beat,{enabled:!beat.enabled})} className="btn-outline">{beat.enabled?"Unlist":"Publish"}</button><button disabled={isPending} className="btn-outline" onClick={()=>setDeletingBeat(beat)}>Delete</button></div>}
+          ]}/>
         </Panel>
       ) : null}
 
-      {activeTab === "licensing" ? (
-        <Panel title="Licensing system" description="License tier sales and available license documents from real orders.">
-          <div className="mb-5 grid gap-4 sm:grid-cols-4">
-            <StatCard label="MP3" value={licenseCounts.mp3} />
-            <StatCard label="WAV" value={licenseCounts.wav} />
-            <StatCard label="Stems" value={licenseCounts.stems} />
-            <StatCard label="Exclusive" value={licenseCounts.exclusive} />
-          </div>
-          <div className="grid gap-3">
-            {filteredLicenseRows.map(({ order, item }, index) => (
-              <article key={`${order.id}-${item.beatId}-${index}`} className="surface-list-item p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div><p className="font-semibold" style={{ color: "var(--text)" }}>{item.beatTitle ?? `Beat #${item.beatId}`}</p><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Order #{order.id} / {order.buyerEmail ?? order.buyerName ?? `User #${order.userId}`}</p></div>
-                  <StatusPill label={item.licenseType} />
-                </div>
-                {item.licenseUrl ? <a href={item.licenseUrl} className="mt-3 inline-flex rounded-full border px-3 py-1 text-xs" style={{ borderColor: "var(--border)", color: "var(--text)" }}>View license doc</a> : <p className="mt-3 text-xs" style={{ color: "var(--text-soft)" }}>No uploaded/generated license document available.</p>}
-              </article>
-            ))}
-            {filteredLicenseRows.length === 0 ? <EmptyState copy="No license sales match this search." /> : null}
-          </div>
-        </Panel>
-      ) : null}
+      {activeTab === "analytics" ? <Panel title="Catalogue performance" description="Paid Beat Store orders, grouped by beat. Streaming reports are available separately in Trends.">
+        <div className="user-workspace-summary"><StatCard label="Paid licences" value={licenseRows.length}/><StatCard label="Recorded sales" value={formatMoney(licenseRows.reduce((sum,row)=>sum+row.item.price,0))}/><StatCard label="Published beats" value={catalog.filter(beat=>beat.enabled&&beat.status==="PUBLISHED").length}/><StatCard label="Beats with sales" value={catalog.filter(beat=>licenseRows.some(row=>row.item.beatId===beat.id)).length}/></div>
+        <WorkspaceRecords searchable={false} externalSearch={dashboardSearch} rows={catalog.map(beat=>{const sales=licenseRows.filter(row=>row.item.beatId===beat.id);return {beat,count:sales.length,total:sales.reduce((sum,row)=>sum+row.item.price,0)};})} rowKey={row=>row.beat.id} searchText={row=>`${row.beat.title} ${row.beat.genre}`} noun="beats" initialSort="revenue" columns={[
+          {key:"beat",label:"Beat",primary:true,value:row=>row.beat.title,render:row=><><strong>{row.beat.title}</strong><small>{row.beat.genre}</small></>},
+          {key:"sales",label:"Paid licences",value:row=>row.count,render:row=><div className="performance-bar"><span style={{width:`${licenseRows.length?row.count/licenseRows.length*100:0}%`}}/><strong>{row.count}</strong></div>},
+          {key:"revenue",label:"Recorded sales",value:row=>row.total,render:row=>formatMoney(row.total)},
+          {key:"status",label:"Review",render:row=><StatusPill label={row.beat.status||"DRAFT"}/>}
+        ]}/>
+      </Panel>:null}
 
-      {activeTab === "analytics" ? (
-        <Panel title="Beat analytics" description="Real catalog and order-derived performance. No fake streaming metrics.">
-          <div className="grid gap-4 md:grid-cols-3">
-            <StatCard label="Enabled vs disabled" value={`${enabledBeats.length}/${disabledBeats.length}`} />
-            <StatCard label="Genres" value={genres.length} />
-            <StatCard label="Revenue" value={formatMoney(earnings.totalRevenue)} />
-          </div>
-          <div className="mt-6 grid gap-3">
-            {catalog.map((beat) => {
-              const sales = licenseRows.filter(({ item }) => item.beatId === beat.id);
-              return <div key={`analytics-${beat.id}`} className="summary-card"><span>{beat.title}</span><span>{sales.length} sale(s) / {formatMoney(sales.reduce((sum, row) => sum + row.item.price, 0))}</span></div>;
-            })}
-            {catalog.length === 0 ? <EmptyState copy="Upload beats to start catalog analytics." /> : null}
-          </div>
-        </Panel>
-      ) : null}
-
-      {activeTab === "contracts" ? (
-        <Panel title="Contract center" description="Lists existing license documents and clearly marks missing docs.">
-          <div className="grid gap-3">
-            {filteredLicenseRows.map(({ order, item }, index) => (
-              <div key={`contract-${order.id}-${index}`} className="summary-card"><span>{item.beatTitle ?? `Beat #${item.beatId}`} / {item.licenseType}</span><span>{item.licenseUrl ? "Document ready" : "Document missing"}</span></div>
-            ))}
-            {filteredLicenseRows.length === 0 ? <EmptyState copy="No contracts or license documents available yet." /> : null}
-          </div>
-        </Panel>
-      ) : null}
+      {activeTab === "contracts" || activeTab === "licensing" ? <Panel title="Licences & agreements" description="Verified sales, licence tiers, and the documents attached to each purchase."><WorkspaceRecords searchable={false} rows={filteredLicenseRows} rowKey={row=>`${row.order.id}-${row.item.beatId}-${row.item.licenseType}`} searchText={row=>`${row.order.id} ${row.item.beatTitle} ${row.item.licenseType} ${row.order.buyerEmail}`} noun="licences" columns={[
+        {key:"beat",label:"Beat",primary:true,value:row=>row.item.beatTitle||"",render:row=><><strong>{row.item.beatTitle||`Beat #${row.item.beatId}`}</strong><small>Order #{row.order.id}</small></>},
+        {key:"tier",label:"Licence",value:row=>row.item.licenseType,render:row=><StatusPill label={row.item.licenseType}/>},
+        {key:"buyer",label:"Buyer",render:row=>row.order.buyerName||row.order.buyerEmail||`User #${row.order.userId}`},
+        {key:"document",label:"Agreement",render:row=>row.item.licenseUrl?<a className="btn-outline" href={row.item.licenseUrl}>Open document</a>:<span>Not available</span>}
+      ]}/></Panel>:null}
 
       {(activeTab === "placements" || activeTab === "collaborations") ? (
         <Panel title={activeTab === "placements" ? "Placement opportunities" : "Collaborations"} description={activeTab === "collaborations" ? "Tracks connected to your canonical contributor identity, independent of Beat Store sales and payout setup." : "Uses paid beat orders and buyers as practical collaboration signals."}>
@@ -494,45 +447,25 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
         </Panel>
       ) : null}
 
-      {activeTab === "earnings" ? (
-        <Panel title="Producer earnings" description="Every paid beat sale is split server-side: 70% producer share and 30% HYMN commission.">
-          {finance.totalSales > 0 ? <section className="grid gap-4 md:grid-cols-4"><StatCard label="Gross sales" value={formatMoney(finance.grossRevenue)} /><StatCard label="Your 70%" value={formatMoney(finance.producerEarnings)} /><StatCard label="HYMN 30%" value={formatMoney(finance.hymnCommission)} /><StatCard label="Sales" value={finance.totalSales} /></section> : <EmptyState copy="No beat sales yet. Earnings will appear after a verified purchase is credited." />}
-        </Panel>
-      ) : null}
+      {activeTab === "earnings" || activeTab === "payout" ? <Panel title="Earnings & payouts" description="Your recorded producer share, available balance, and withdrawals."><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Your sale earnings" value={formatMoney(finance.producerEarnings)}/><StatCard label="Available to withdraw" value={formatMoney(finance.availableBalance)}/><StatCard label="Payouts pending" value={formatMoney(finance.pendingPayout)}/><StatCard label="Paid to date" value={formatMoney(finance.lifetimePaid)}/></div><div className="workspace-money-summary"><div><h3>Revenue share</h3><div className="workspace-share-bar" aria-label="Producer 70%, HYMN 30%"><span style={{width:"70%"}}>Your share 70%</span><span>HYMN 30%</span></div><p>Gross recorded sales {formatMoney(finance.grossRevenue)}. The ledger records the actual share credited for each sale.</p></div><div><h3>Withdraw your earnings</h3><p>Review payout eligibility, payment details, and withdrawal requests in your payout workspace.</p><Link className="btn-primary" href="/payout">Open payouts</Link><button className="btn-outline" onClick={()=>selectProducerTab("ledger")}>Wallet history</button></div></div></Panel>:null}
 
-      {activeTab === "payout" ? <Panel title="Producer payout" description="Producer sale balances use the existing secure payout request and quarterly processing system."><div className="grid gap-4 sm:grid-cols-3"><StatCard label="Available balance" value={formatMoney(finance.availableBalance)} /><StatCard label="Pending payout" value={formatMoney(finance.pendingPayout)} /><StatCard label="Lifetime paid" value={formatMoney(finance.lifetimePaid)} /></div><div className="mt-5 flex flex-wrap gap-3"><Link href="/payout" className="btn-primary pressable">Open payout dashboard</Link><button type="button" onClick={() => selectProducerTab("ledger")} className="btn-outline pressable">View producer ledger</button></div>{!finance.payouts?.length ? <div className="mt-5"><EmptyState copy="No producer payout activity yet. Your available balance will appear after beat sales are credited." /></div> : null}</Panel> : null}
+      {activeTab === "ledger" ? <Panel title="Wallet ledger" description="Recorded producer credits and balance movements."><WorkspaceRecords searchable={false} externalSearch={dashboardSearch} rows={(finance.ledger||[]) as Array<{id:number;type:string;note?:string;referenceId?:string;amount:number;balanceAfter:number;createdAt:string}>} rowKey={entry=>entry.id} searchText={entry=>`${entry.type} ${entry.note} ${entry.referenceId}`} noun="entries" initialSort="date" columns={[
+        {key:"type",label:"Movement",primary:true,render:entry=><><strong>{entry.type.replaceAll("_"," ")}</strong><small>{entry.note||entry.referenceId}</small></>},
+        {key:"amount",label:"Amount",value:entry=>Number(entry.amount),render:entry=>formatMoney(Number(entry.amount))},
+        {key:"balance",label:"Balance after",render:entry=>formatMoney(Number(entry.balanceAfter))},
+        {key:"date",label:"Recorded",value:entry=>Date.parse(entry.createdAt),render:entry=>new Date(entry.createdAt).toLocaleString("en-IN")}
+      ]}/></Panel>:null}
 
-      {activeTab === "ledger" ? <Panel title="Producer wallet ledger" description="Immutable credits created from verified beat sales. Commission percentages cannot be edited here."><div className="grid gap-3">{finance.ledger?.map((entry: any) => <article key={entry.id} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">{entry.type.replace(/_/g, " ")}</p><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{entry.note || `Reference ${entry.referenceId}`}</p><p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>{new Date(entry.createdAt).toLocaleString("en-IN")}</p></div><div className="text-right"><p className="font-semibold" style={{ color: "var(--success)" }}>+{formatMoney(Number(entry.amount))}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Balance {formatMoney(Number(entry.balanceAfter))}</p></div></div></article>)}{!finance.ledger?.length ? <EmptyState copy="No producer ledger entries yet. Verified beat sales will be credited automatically." /> : null}</div></Panel> : null}
-
-      {activeTab === "sales" ? (
-        <Panel title="Sales history" description="See every verified order and the license mix behind it.">
-          <div className="grid gap-4">
-            {orders.filter((order) => filteredLicenseRows.some((row) => row.order.id === order.id)).map((order) => (
-              <article key={order.id} className="surface-list-item p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="font-semibold" style={{ color: "var(--text)" }}>Order #{order.id}</p>
-                  <StatusPill label={`Rs ${order.amount}`} />
-                </div>
-                <p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>Buyer: {order.buyerName ?? `User #${order.userId}`}</p>
-                <div className="mt-4 grid gap-2">
-                  {order.items.filter((item) => matchesQuery([order.id, order.buyerName, order.buyerEmail, item.beatTitle, item.licenseType], dashboardSearch)).map((item, index) => {
-                    const sale = finance.sales?.find((entry: any) => entry.orderId === order.id && entry.beatId === item.beatId && entry.licenseType === item.licenseType);
-                    return <div key={`${order.id}-${item.beatId}-${index}`} className="rounded-xl border px-3 py-2 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
-                      <div className="flex flex-wrap items-center justify-between gap-2"><span>{item.beatTitle ?? `Beat #${item.beatId}`} · {item.licenseType}</span>{sale ? <span>Net {formatMoney(Number(sale.netSaleAmount))} · Producer {formatMoney(Number(sale.producerEarningAmount))} · HYMN {formatMoney(Number(sale.hymnCommissionAmount))}</span> : <span>Sale ledger pending</span>}</div>
-                    </div>;
-                  })}
-                </div>
-              </article>
-            ))}
-            {filteredLicenseRows.length === 0 ? <EmptyState copy="No producer sales match this search." /> : null}
-          </div>
-        </Panel>
-      ) : null}
-
-
+      {activeTab === "sales" ? <Panel title="Sales history" description="One row per verified sale. Your share comes from the recorded ledger."><WorkspaceRecords searchable={false} rows={filteredLicenseRows} rowKey={row=>`${row.order.id}-${row.item.beatId}-${row.item.licenseType}`} searchText={row=>`${row.order.id} ${row.item.beatTitle} ${row.order.buyerEmail} ${row.item.licenseType}`} noun="sales" initialSort="date" columns={[
+        {key:"beat",label:"Sale",primary:true,value:row=>row.item.beatTitle||"",render:row=><><strong>{row.item.beatTitle||`Beat #${row.item.beatId}`}</strong><small>Order #{row.order.id} / {row.item.licenseType}</small></>},
+        {key:"buyer",label:"Buyer",render:row=>row.order.buyerName||row.order.buyerEmail||`User #${row.order.userId}`},
+        {key:"gross",label:"Item price",value:row=>row.item.price,render:row=>formatMoney(row.item.price)},
+        {key:"share",label:"Your recorded share",render:row=>{const sale=finance.sales?.find((entry:any)=>entry.orderId===row.order.id&&entry.beatId===row.item.beatId&&entry.licenseType===row.item.licenseType);return sale?formatMoney(Number(sale.producerEarningAmount)):"Ledger pending";}},
+        {key:"date",label:"Date",value:row=>Date.parse(row.order.createdAt),render:row=>new Date(row.order.createdAt).toLocaleDateString("en-IN")}
+      ]}/></Panel>:null}
 
       {editingBeat ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+        <div role="dialog" aria-modal="true" aria-label="Edit beat" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl">
             <h3 className="text-xl font-semibold mb-4" style={{ color: "var(--text)" }}>Edit Beat</h3>
             <form onSubmit={handleBeatEditSubmit} className="grid gap-4">

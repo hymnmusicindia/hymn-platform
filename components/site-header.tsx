@@ -79,6 +79,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
       <Link href={crumb.href} aria-current={index === breadcrumbs.length - 1 ? "page" : undefined} title={crumb.label}>{crumb.label}</Link>
     </li>)}</ol></nav>;
   }
+  const adminWorkspaceHeader = pathname.startsWith("/admin") || pathname.startsWith("/dashboard/admin");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -644,7 +645,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <div className="hidden items-center gap-3 lg:flex">
-            {workspaceHeader ? <><SubscriptionButton className="studio-header-plans" /><Link href="/contact" className="studio-header-tool" aria-label="Contact HYMN"><MessageCircle size={18}/></Link><Link href="/faq" className="studio-header-tool" aria-label="FAQ"><HelpCircle size={18}/></Link></> : <SmartHelpToggle />}
+            {workspaceHeader ? <>{!adminWorkspaceHeader ? <SubscriptionButton className="studio-header-plans" /> : null}<Link href="/contact" className="studio-header-tool" aria-label="Contact HYMN"><MessageCircle size={18}/></Link><Link href="/faq" className="studio-header-tool" aria-label="FAQ"><HelpCircle size={18}/></Link></> : <SmartHelpToggle />}
             {!isAuthenticated && !workspaceHeader ? <ThemeToggle /> : null}
             {isAuthenticated ? <AppLauncher /> : (
               <Link
@@ -666,6 +667,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
             {isAuthenticated ? <ProfileMenu /> : <Link href="/login" className="mobile-login-link"><UserRound size={17} aria-hidden="true" /><span>Login</span></Link>}
           </div>
 
+          {!adminWorkspaceHeader ? <>
           <button
             type="button"
             aria-label={cartCount ? `Shopping cart, ${cartCount} ${cartCount === 1 ? "item" : "items"}` : "Shopping cart, empty"}
@@ -682,6 +684,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
             </span>
             {cartCount > 0 ? <span className="site-cart-count" aria-hidden="true">{cartCount > 99 ? "99+" : cartCount}</span> : null}
           </button>
+          </> : null}
 
         </div>
       </div>

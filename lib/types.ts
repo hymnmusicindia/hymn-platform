@@ -240,6 +240,8 @@ export interface Release {
   adminInternalNote?: string | null;
   reviewedAt?: string | null;
   reviewedBy?: string | null;
+  ownerUserId?: number | null;
+  releaseSource?: string;
   ownerEmail?: string | null;
   artistLinks?: Record<string, {
     spotify_url?: string;

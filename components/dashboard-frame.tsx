@@ -1,7 +1,8 @@
 "use client";
 
-import { Bell, ChevronDown, ChevronUp, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, X, Plus, Disc3, TrendingUp, Wallet, Music2, Headphones, Settings, Users, LifeBuoy, Store, LayoutGrid, Upload, Home } from "lucide-react";
+import { Bell, ChevronDown, ChevronUp, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, X, Plus, Disc3, TrendingUp, Wallet, Music2, Headphones, Settings, Users, LifeBuoy, Store, LayoutGrid, Upload, Home, FileText, Activity, ShieldCheck, ClipboardCheck } from "lucide-react";
 import clsx from "clsx";
+import "@/app/styles/workspace-system.css";
 import { WorkspaceFooter } from "@/components/workspace-footer";
 import { consistentWorkspaceNavigation, workspaceNavigation } from "@/lib/workspace-navigation";
 import Link from "next/link";
@@ -38,6 +39,7 @@ export function DashboardFrame<T extends string>({
   onSearchChange,
   searchPlaceholder = "Search workspace...",
   quickActions,
+  newAction,
   workspaceAction,
   onNotificationsClick,
   notificationCount = 0,
@@ -56,6 +58,7 @@ export function DashboardFrame<T extends string>({
   onSearchChange?: (value: string) => void;
   searchPlaceholder?: string;
   quickActions?: React.ReactNode;
+  newAction?: {label:string;onClick:()=>void};
   workspaceAction?: React.ReactNode;
   onNotificationsClick?: () => void;
   notificationCount?: number;
@@ -132,12 +135,12 @@ export function DashboardFrame<T extends string>({
   const flatItems = useMemo(() => groups.flatMap((group) => group.items), [groups]);
   const effectiveSearch = onSearchChange ? searchValue : localSearch;
   const visibleGroups = useMemo(() => {
-    const query = effectiveSearch.trim().toLowerCase();
+    const query = onSearchChange ? "" : effectiveSearch.trim().toLowerCase();
     if (!query) return groups;
     return groups
       .map((group) => ({ ...group, items: group.items.filter((item) => `${item.label} ${item.description ?? ""} ${group.label}`.toLowerCase().includes(query)) }))
       .filter((group) => group.items.length > 0);
-  }, [effectiveSearch, groups]);
+  }, [effectiveSearch, groups, onSearchChange]);
 
   useEffect(() => {
     updateNavScroll();
@@ -169,9 +172,10 @@ export function DashboardFrame<T extends string>({
   }
 
   const isOverview = activeKey === "overview";
+  const adminWorkspace = navItems.some(item => item.group === "Command Center");
 
   return (
-    <div data-collapsed={collapsed} className="hymn-portal-frame dashboard-os-shell lg:grid-cols-[var(--dashboard-sidebar-width,236px),minmax(0,1fr)]" style={{ "--dashboard-sidebar-width": collapsed ? "76px" : "236px" } as React.CSSProperties}>
+    <div data-workspace={adminWorkspace ? "admin" : "creator"} data-collapsed={collapsed} className="workspace-v2 hymn-portal-frame dashboard-os-shell lg:grid-cols-[var(--dashboard-sidebar-width,236px),minmax(0,1fr)]" style={{ "--dashboard-sidebar-width": collapsed ? "76px" : "236px" } as React.CSSProperties}>
       <div className="dashboard-os-mobile-head lg:hidden">
         <div>
           <h1 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>{title}</h1>
@@ -217,19 +221,19 @@ export function DashboardFrame<T extends string>({
           </div>
         </div>
 
-        <div className="portal-create" ref={newMenuRef}>
-          <button type="button" className="portal-new-button" aria-expanded={newOpen} aria-controls="portal-create-menu" onClick={() => setNewOpen(value => !value)}><Plus size={18} /><span>New</span></button>
+        {!adminWorkspace ? <div className="portal-create" ref={newMenuRef}>
+          <button type="button" className="portal-new-button" aria-expanded={newAction?undefined:newOpen} aria-controls={newAction?undefined:"portal-create-menu"} onClick={() => {if(newAction){newAction.onClick();setMobileOpen(false);}else setNewOpen(value => !value);}}><Plus size={18} /><span>{newAction?.label||"New"}</span></button>
           {newOpen ? createPortal(<div className="hymn-overlay create-overlay"><button className="create-overlay-backdrop" type="button" aria-label="Dismiss create menu" onClick={() => setNewOpen(false)} /><section ref={newDialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="portal-create-title" id="portal-create-menu" className="portal-create-menu" style={{ ...createPosition, maxHeight: `calc(100dvh - ${createPosition.top + 16}px)` }}><div className="portal-create-heading"><span id="portal-create-title">Create something new</span><button type="button" aria-label="Close create menu" onClick={() => setNewOpen(false)}><X size={18} /></button></div><div className="portal-create-grid">{[
             { href: "/distribution/start", icon: Disc3, title: "Music release", copy: "Get your music ready for worldwide distribution." },
             { href: "/beat-store", icon: Store, title: "Find a beat", copy: "Explore sounds for your next release." },
             { href: "/studio", icon: Headphones, title: "Mixing / Mastering", copy: "Give your music a professional finish." },
             { href: "/managed-services", icon: TrendingUp, title: "Artist services", copy: "Explore support for your next project." }
           ].map(action => <Link key={action.href} href={action.href} onClick={() => { setNewOpen(false); setMobileOpen(false); }}><action.icon /><span><strong>{action.title}</strong><small>{action.copy}</small></span></Link>)}</div></section></div>, document.body) : null}
-        </div>
+        </div> : null}
 
         <div ref={navScrollRef} onScroll={updateNavScroll} className="dashboard-nav-scroll mt-4 min-h-0 flex-1 content-start gap-3 overflow-x-hidden overflow-y-auto pr-1 grid">
           {visibleGroups.map((group) => {
-            if (group.label === "Home") return <Link key="Home" href="/" aria-label="Home" className="workspace-home-link" title={collapsed ? "Home" : undefined} onClick={() => setMobileOpen(false)}><Home size={16} /><span className={clsx(collapsed ? "lg:hidden" : "")}>Home</span></Link>;
+            if (group.label === "Home") return <div key="Home"><Link href="/" aria-label="Home" className="workspace-home-link" title={collapsed ? "Home" : undefined} onClick={() => setMobileOpen(false)}><Home size={16} /><span className={clsx(collapsed ? "lg:hidden" : "")}>Home</span></Link><Link href="/dashboard" className="dashboard-nav-link" aria-current={activeKey === "overview" ? "page" : undefined}><LayoutGrid size={16}/><span className={clsx(collapsed ? "lg:hidden" : "")}>Overview</span></Link></div>;
             const closed = openGroup !== group.label;
             return (
               <div key={group.label} className="dashboard-os-nav-group">
@@ -249,7 +253,7 @@ export function DashboardFrame<T extends string>({
                 <div className={clsx("grid gap-1.5", closed ? "hidden" : "")}>
                   {group.items.map((item) => {
                     const active = item.key === activeKey;
-                    const Icon = workspaceNavigation.find(entry => entry.label === item.label)?.icon ?? (/release|catalog/.test(item.key) ? Disc3 : /analytics|sales/.test(item.key) ? TrendingUp : /earning|payout/.test(item.key) ? Wallet : /upload/.test(item.key) ? Upload : /studio|mix|master/.test(item.key) ? Headphones : /store|purchase/.test(item.key) ? Store : /setting|profile|account/.test(item.key) ? Settings : /collaborator|referral/.test(item.key) ? Users : /support|help/.test(item.key) ? LifeBuoy : item.key === "overview" ? LayoutGrid : Music2);
+                    const Icon = workspaceNavigation.find(entry => entry.label === item.label)?.icon ?? (/notification|message/.test(item.key)?Bell:/user|artist|producer|team|collaborator|referral|contributor/.test(item.key)?Users:/fraud/.test(item.key)?ShieldCheck:/contract/.test(item.key)?FileText:/activity|audit|health/.test(item.key)?Activity:/review|queue/.test(item.key)?ClipboardCheck:/release|catalog|delivery/.test(item.key)?Disc3:/analytics|sales|growth/.test(item.key)?TrendingUp:/payment|revenue|royalt|earning|payout|reconcil|ledger/.test(item.key)?Wallet:/upload/.test(item.key)?Upload:/studio|mix|master/.test(item.key)?Headphones:/store|purchase/.test(item.key)?Store:/setting|profile|account|integration/.test(item.key)?Settings:/support|help/.test(item.key)?LifeBuoy:/email|newsletter|webhook/.test(item.key)?FileText:item.key==="overview"?LayoutGrid:Music2);
                     const content = <><Icon className="portal-nav-icon" /><span className={clsx("min-w-0", collapsed ? "lg:hidden" : "")}><span className="block truncate font-semibold">{item.label}</span></span></>;
                     return item.href ? <Link key={item.key} href={item.href} data-guide-route={item.href} data-nav-key={item.key} aria-current={active ? "page" : undefined} onClick={(event) => { setMobileOpen(false); if (item.key === "plans" || item.key === "subscriptions") { event.preventDefault(); openSubscriptions(); } }} className={clsx("dashboard-os-nav-item pressable hover-lift", active ? "is-active" : "is-idle")} title={collapsed ? item.label : undefined}>{content}</Link> : (
                       <button
@@ -274,7 +278,7 @@ export function DashboardFrame<T extends string>({
           <button type="button" onClick={() => scrollNavigation(-1)} disabled={!navScroll.canUp} aria-label="Scroll navigation up"><ChevronUp className="h-4 w-4" /></button>
           <button type="button" onClick={() => scrollNavigation(1)} disabled={!navScroll.canDown} aria-label="Scroll navigation down"><ChevronDown className="h-4 w-4" /></button>
         </div>
-        <WorkspaceFooter collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+        <WorkspaceFooter workspace={adminWorkspace ? "admin" : "creator"} adminActivityAllowed={navItems.some(item => item.key === "activity")} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
       </aside>
 
       <div className="portal-workspace grid gap-6">
@@ -291,7 +295,7 @@ export function DashboardFrame<T extends string>({
             <Command className="h-4 w-4" style={{ color: "var(--text-muted)" }} />
           </div> : <div />}
           <div className="flex items-center gap-2">
-            <SubscriptionButton className="portal-upgrade" />
+            {!adminWorkspace ? <SubscriptionButton className="portal-upgrade" /> : null}
             {workspaceAction}
             {quickActions && isOverview ? <div className="hidden items-center gap-2 xl:flex">{quickActions}</div> : null}
             <button type="button" className="dashboard-os-icon-button" aria-label={notificationCount ? `Notifications, ${notificationCount} unread` : "Notifications"} onClick={onNotificationsClick} disabled={!onNotificationsClick}>
