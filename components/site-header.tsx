@@ -1,5 +1,6 @@
 "use client";
 
+import { AccountHandle } from "@/components/account-handle";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -551,9 +552,10 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
             )}
             style={{ borderColor: "var(--border)", background: "var(--card-strong)", color: "var(--text)" }}
           >
-            <div className="border-b pb-3" style={{ borderColor: "var(--border)" }}>
-              <p className="truncate text-sm font-semibold">{user.name}</p>
-              <p className="mt-1 truncate text-xs" style={{ color: "var(--text-muted)" }}>{user.email}</p>
+            <div className="profile-identity border-b pb-3" style={{ borderColor: "var(--border)" }}>
+              <p className="profile-identity-name truncate text-sm font-semibold">{user.name}</p>
+              <p className="profile-identity-email mt-1 truncate text-xs" style={{ color: "var(--text-muted)" }}>{user.email}</p>
+              <AccountHandle compact />
             </div>
             <div className="border-b py-3" style={{ borderColor: "var(--border)" }}>
               <button type="button" onClick={() => setPresenceExpanded(value => !value)} className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition hover:bg-[var(--hover)]" role="menuitem" aria-expanded={presenceExpanded}>

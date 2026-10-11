@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/access";
 import { getOrCreateSplitRecord, listUserSplits } from "@/lib/splits";
 
 export const runtime = "nodejs";
-export async function GET() { const auth = await requireUser(); if ("error" in auth) return auth.error; return NextResponse.json(await listUserSplits(auth.user.id)); }
+export async function GET() { const auth = await requireUser(); if ("error" in auth) return auth.error; return NextResponse.json(await listUserSplits(auth.user.id), { headers: { "Cache-Control": "private, no-store" } }); }
 export async function POST(request: Request) {
   const auth = await requireUser(); if ("error" in auth) return auth.error;
   const body = await request.json().catch(() => ({}));

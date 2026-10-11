@@ -1,3 +1,4 @@
+import "./styles/royalty-splits.css";
 ﻿import type { Metadata } from "next";
 import "./globals.css";
 import { GrowthTracker } from "@/components/growth-tracker";

@@ -14,9 +14,9 @@ export async function sendReleaseEmail(event: EmailEvent, input: { to: string; u
   return sendTransactionalEmail({ ...template, to: input.to, template: event, eventKey: `release:${input.releaseId}:${event}${input.correctionEventKey ? `:${input.correctionEventKey}` : ""}:email`, userId: input.userId, entityType: "release", entityId: input.releaseId });
 }
 
-export async function sendSplitEmailEvent(input: Parameters<typeof splitEmail>[0] & { to: string; userId?: number; splitId: number; recipientEmail?: string }) {
+export async function sendSplitEmailEvent(input: Parameters<typeof splitEmail>[0] & { to: string; userId?: number; splitId: number; inviteId?: number; recipientEmail?: string }) {
   const template = splitEmail(input);
-  return sendTransactionalEmail({ ...template, to: input.to, template: input.event, eventKey: `split:${input.splitId}:${input.event}:${input.recipientEmail || input.to}:email`, userId: input.userId, entityType: "split", entityId: input.splitId });
+  return sendTransactionalEmail({ ...template, to: input.to, template: input.event, eventKey: `split:${input.splitId}:${input.inviteId ?? "legacy"}:${input.event}:${input.recipientEmail || input.to}:email`, userId: input.userId, entityType: "split", entityId: input.splitId });
 }
 
 export async function sendPayoutEmailEvent(input: Parameters<typeof payoutEmail>[0] & { to: string; userId: number; payoutId: string | number }) {

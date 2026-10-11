@@ -612,11 +612,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         </Panel>
       ) : null}
 
-      {activeTab === "collaborators" ? (
-        <Panel title="Splits and collaborators" description="Create royalty splits, invite collaborators, accept requests, and track verified split earnings.">
-          <SplitsDashboard releases={releases} />
-        </Panel>
-      ) : null}
+      {activeTab === "collaborators" ? <SplitsDashboard releases={releases} /> : null}
 
       {activeTab === "content-id" ? (
         <Panel title="Content ID and monetisation" description="Shows actual release-level Content ID and monetisation consent fields.">

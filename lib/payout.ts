@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { createNotificationOnce } from "@/lib/notifications";
 import { createAdminTaskOnce, resolveAdminTask } from "@/lib/task-queue";
 import { logAuditEvent } from "@/lib/audit-log";
-import { creditSplitRecipients } from "@/lib/payout/split-engine";
+import { allocateSplitInTransaction } from "@/lib/payout/split-engine";
 import { syncPayoutRequestToSheet, syncRoyaltyLineItemToSheet, syncSplitEarningLineItemsToSheet } from "@/lib/payout/sheets-sync";
 import { ensurePayoutPeriod, getCurrentQuarter } from "@/lib/payout/quarters";
 import { emailAppUrl, sendPayoutEmailEvent } from "@/lib/email/email-events";
@@ -383,11 +383,7 @@ export async function createAdminEarningsEntry(input: AdminEarningsEntryInput) {
     const duplicate = await (prisma as any).royaltyLineItem.findUnique({ where: { sourceKey } });
     if (duplicate) return { id: duplicate.id, userId, releaseId, releaseName: release.title || "your release", platform, statementMonth: statementDate.toISOString(), grossEarning, distributorDeduction, hymnCommission, artistNetPayable, duplicate: true };
   }
-  const activeSplit = await (prisma as any).splitRecord.findFirst({
-    where: { releaseId, trackId: null, status: { in: ["active", "pending_acceptance", "locked"] } },
-    select: { id: true }
-  });
-  const created = await (prisma as any).$transaction(async (tx: any) => {
+  const { lineItem: created, splitResult } = await (prisma as any).$transaction(async (tx: any) => {
     const lineItem = await tx.royaltyLineItem.create({
       data: {
         userId,
@@ -416,7 +412,8 @@ export async function createAdminEarningsEntry(input: AdminEarningsEntryInput) {
       }
     });
 
-    if (!activeSplit) await tx.artistPayoutBalance.upsert({
+    const splitResult = await allocateSplitInTransaction(tx, lineItem.id);
+    if (!splitResult.applied) await tx.artistPayoutBalance.upsert({
       where: { userId },
       create: {
         userId,
@@ -433,10 +430,8 @@ export async function createAdminEarningsEntry(input: AdminEarningsEntryInput) {
       }
     });
 
-    return lineItem;
-  });
-
-  const splitResult = activeSplit ? await creditSplitRecipients(created.id, input.actorId) : { applied: false };
+    return { lineItem, splitResult };
+  }, { timeout: 60000 });
   const monthlyPeriod = await ensurePayoutPeriod("monthly", statementYear, statementMonth);
   const splitRows = splitResult.applied && "earnings" in splitResult ? splitResult.earnings as any[] : [];
   await (prisma as any).payoutPeriod.update({ where: { id: monthlyPeriod.id }, data: {

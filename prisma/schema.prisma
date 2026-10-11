@@ -134,6 +134,8 @@ enum StudioPaymentPurpose {
 }
 
 model User {
+  handle UserHandle?
+  handleReservations UserHandleReservation[]
   id                            Int                                 @id @default(autoincrement())
   googleId                      String                              @unique @map("google_id")
   name                          String
@@ -2963,3 +2965,19 @@ model ReleaseTrackBeatLink {
 // vercel trigger
 
 // vercel trigger 2
+
+model UserHandle {
+  userId Int @id @map("user_id")
+  tag String @unique
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("user_handles")
+}
+model UserHandleReservation {
+  tag String @id
+  userId Int @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@map("user_handle_reservations")
+}

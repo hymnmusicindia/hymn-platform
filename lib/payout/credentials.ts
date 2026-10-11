@@ -53,19 +53,23 @@ export async function savePayoutCredential(userId: number, input: { method: "UPI
     bankAccountMasked: maskAccount(account!), bankAccountEncrypted: encrypt(account!), ifscMasked: maskIfsc(ifsc!), ifscEncrypted: encrypt(ifsc!),
     taxInfoEncrypted: input.taxInfo?.trim() ? encrypt(input.taxInfo.trim()) : null, legalName, country, taxResidency: input.taxResidency?.trim() || null, panLastFour: input.taxInfo?.trim().slice(-4) || null, status: "submitted", rejectionReason: null, verifiedAt: null, verifiedByAdminId: null
   };
-  const saved = await (prisma as any).payoutCredential.upsert({ where: { userId }, create: { userId, ...data }, update: data });
+  const saved = await prisma.$transaction(async tx => { await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`; return tx.payoutCredential.upsert({ where: { userId }, create: { userId, ...data }, update: data }); });
   await logAuditEvent({ actorType: "user", actorId: userId, entityType: "payout_credential", entityId: saved.id, action: existing ? "payout_credential.updated" : "payout_credential.created", oldValue: existing ? { method: existing.method, status: existing.status } : null, newValue: { method: saved.method, status: saved.status } });
   return getPayoutCredential(userId);
 }
 
 export async function releaseVerifiedPayoutEarnings(userId: number, transaction?: Prisma.TransactionClient) {
   const execute = async (tx: Prisma.TransactionClient) => {
+    await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
     const profile = await tx.payoutCredential.findUnique({ where: { userId } });
     if (!profile || profile.status !== "verified") throw new Error("Verified payout profile required.");
     const held = await tx.splitEarningLineItem.findMany({ where: { recipientUserId: userId, status: "pending_payout_details" } });
-    for (const earning of held) {
+    for (const candidate of held) {
+      await tx.$queryRaw`SELECT id FROM split_earning_line_items WHERE id = ${candidate.id} FOR UPDATE`;
+      const earning = await tx.splitEarningLineItem.findUniqueOrThrow({ where: { id: candidate.id } });
+      if (earning.status !== "pending_payout_details") continue;
       const balance = await tx.artistPayoutBalance.upsert({ where: { userId }, create: { userId, availableBalance: earning.netShareAmount, lifetimeEarnings: earning.netShareAmount }, update: { availableBalance: { increment: earning.netShareAmount }, lifetimeEarnings: { increment: earning.netShareAmount }, lastUpdatedAt: new Date() } });
-      await tx.walletTransaction.create({ data: { userId, type: "earning_release", amount: 0, direction: "release", idempotencyKey: `split-earning:${earning.id}:release`, referenceType: "split_earning", referenceId: String(earning.id), balanceAfter: balance.availableBalance, availabilityStatus: "available", auditMetadata: { releasedAmount: earning.netShareAmount.toString(), reason: "payout_profile_verified" }, note: "Held split earnings released after manual payout-profile verification." } });
+      await tx.walletTransaction.create({ data: { userId, type: "earning_credit", amount: earning.netShareAmount, direction: "credit", idempotencyKey: `split-earning:${earning.id}:credit`, referenceType: "split_earning", referenceId: String(earning.id), balanceAfter: balance.availableBalance, availabilityStatus: "available", auditMetadata: { releasedAmount: earning.netShareAmount.toString(), reason: "payout_profile_verified" }, note: "Held split earnings released after manual payout-profile verification." } });
       await tx.splitEarningLineItem.update({ where: { id: earning.id }, data: { status: "credited" } });
     }
     return held.length;
@@ -80,6 +84,9 @@ export async function reviewPayoutCredential(userId: number, input: { status: "u
   const allowed: Record<string, string[]> = { submitted: ["under_review", "changes_requested", "verified", "rejected"], under_review: ["changes_requested", "verified", "rejected"], changes_requested: ["under_review", "verified", "rejected"], verified: ["suspended"], rejected: ["under_review"], suspended: ["under_review", "verified"] };
   if (!allowed[existing.status]?.includes(input.status)) throw new Error(`Payout profile cannot move from ${existing.status} to ${input.status}.`);
   const result = await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
+    const current = await tx.payoutCredential.findUniqueOrThrow({ where: { userId } });
+    if (!allowed[current.status]?.includes(input.status)) throw new Error("Payout profile changed during review. Refresh and try again.");
     const profile = await tx.payoutCredential.update({ where: { userId }, data: { status: input.status, verificationNote: input.note.trim(), rejectionReason: ["changes_requested", "rejected"].includes(input.status) ? input.note.trim() : null, verifiedAt: input.status === "verified" ? new Date() : null, verifiedByAdminId: input.status === "verified" ? input.actorId : null } });
     const releasedEarnings = input.status === "verified" ? await releaseVerifiedPayoutEarnings(userId, tx) : 0;
     await tx.auditLog.create({ data: { actorId: input.actorId, action: "KYC_DECISION", entity: "payout_credential", entityId: String(profile.id), metadata: { previousStatus: existing.status, newStatus: input.status, note: input.note.trim(), releasedEarnings } } });
