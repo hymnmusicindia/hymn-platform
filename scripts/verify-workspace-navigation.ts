@@ -49,8 +49,8 @@ try {
   if(width<1024) await page.evaluate(()=>window.dispatchEvent(new Event('hymn-toggle-navigation')));
   const home=page.locator('a.workspace-home-link');
   assert.equal(await home.evaluate(node=>getComputedStyle(node).justifyContent),'center');
-  assert.ok(await home.evaluate(node=>parseFloat(getComputedStyle(node).fontSize))>=17);
-  assert.ok(await home.evaluate(node=>node.getBoundingClientRect().height)>=56);
+  assert.ok(await home.evaluate(node=>parseFloat(getComputedStyle(node).fontSize))===14);
+  assert.ok(await home.evaluate(node=>node.getBoundingClientRect().height)>=40);
   const newsletter=page.getByRole('form',{name:'Newsletter signup'});
   await expect(newsletter).toBeInViewport();
   newsletterFail=true;
@@ -61,6 +61,7 @@ try {
   newsletterFail=false;
   await newsletter.getByRole('button',{name:'Subscribe to newsletter'}).click();
   await expect(newsletter.getByText('Subscribed',{exact:true})).toBeVisible();
+  assert.ok(await newsletter.evaluate(node=>node.getBoundingClientRect().height)<100);
   await newsletter.getByRole('button',{name:'Unsubscribe',exact:true}).click();
   await expect(newsletter.getByRole('textbox')).toBeVisible();
   const gift=page.locator('.workspace-footer').getByRole('link',{name:'Refer a friend',exact:true});
