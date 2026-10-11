@@ -355,7 +355,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
         </div>
       ) : null}
 
-      {activeTab === "profile" ? <ProducerStorefrontEditor name={user.name} profile={producerProfile} onSubmit={saveProducerProfile} pending={isPending} feedback={feedback} /> : null}
+      {activeTab === "profile" ? <ProducerStorefrontEditor name={user.name} profile={producerProfile} liveBeatCount={catalog.filter(beat => beat.enabled && ["PUBLISHED", "EXCLUSIVE_RESERVED"].includes(beat.status || "")).length} onSubmit={saveProducerProfile} pending={isPending} feedback={feedback} /> : null}
 
       {activeTab === "upload" ? <ProducerBeatUploader producerName={producerProfile?.displayName || user.name} onUpload={handleBeatUpload}/> : null}
       {(activeTab === "manage" || activeTab === "catalog") ? (

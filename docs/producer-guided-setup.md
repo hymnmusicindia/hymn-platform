@@ -18,3 +18,8 @@ Validation: `node --import tsx scripts/verify-producer-setup.ts` covers readines
 ## Compact beat upload
 
 Four steps: Files, Details, Pricing and Review. File tiles replace long upload rows; master format is inferred from the selected extension. Artwork is part of Files. A sticky live beat card shows artwork, title, metadata chips and preview audio, falling back to the master when no preview is selected. Published, enabled beats without previews play their master through a beat-scoped endpoint with byte-range seeking; drafts and unlisted beats remain inaccessible. Prices use four licence cards, with an explicit suggested-prices action. Optional metadata and licence explanations are collapsed. Final review shows the actual files, beat facts and prices with edit actions, followed by sample declaration. Invalid exclusive pricing or missing sample disclosure blocks submission. Failures retain files and field values for retry.
+
+
+## Public producer storefront
+
+Active producer profiles are resolved by owner user ID, including administrators with an active producer profile. Beat rows link the saved producer name to `/beat-store/producers/{slug}`. The saved unique slug is the storefront ID; it remains stable when the producer changes their display name. Once a beat is published and enabled, the storefront editor shows the ID, live beat count and public link. Public storefronts show the cover, portrait, producer bio and only that producer's published, enabled catalogue. Draft, pending-review and unlisted beats stay out of the public catalogue. Accounts without a matching public profile retain the known owner name without a broken link.

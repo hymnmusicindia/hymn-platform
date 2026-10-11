@@ -1,6 +1,7 @@
 "use client";
 
 import styles from "./beat-card.module.css";
+import Link from "next/link";
 import { Check, Disc3, Pause, Play, ShoppingBag } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Beat } from "@/lib/types";
@@ -31,7 +32,7 @@ export function BeatCard({ beat, active = false, playing = false, onPlay, onAdd,
 
     <div className="relative min-w-0">
       <div className="flex items-center gap-2"><h3 className="truncate text-base font-semibold text-white">{beat.title}</h3>{active ? <span className="hidden h-1.5 w-1.5 animate-pulse rounded-full bg-white sm:block" /> : null}</div>
-      <p className="mt-1 truncate text-xs text-[#c6cbd4]">{beat.producer?.name || "Producer"}</p>
+      <p className="mt-1 truncate text-xs text-[#c6cbd4]">{beat.producer?.slug ? <Link href={`/beat-store/producers/${encodeURIComponent(beat.producer.slug)}`} className={styles.producer} aria-label={`View ${beat.producer.name}'s storefront`}>{beat.producer.name}</Link> : beat.producer?.name || beat.producerName || "Producer"}</p>
       <div className={`${styles.metadata} mt-2 flex gap-2 text-[10px] font-medium text-[#c6cbd4] sm:hidden`}><span>{beat.bpm} BPM</span><span>·</span><span>{beat.keySignature || "Key —"}</span></div>
     </div>
     <div className={`${styles.metadata} relative hidden min-w-0 items-center gap-2 text-xs text-[#c6cbd4] sm:flex`}>

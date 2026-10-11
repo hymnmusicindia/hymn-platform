@@ -9,7 +9,7 @@ type ProducerSeed = {
   imageUrl?: string | null;
 };
 
-type ProducerSource = ProducerSeed & { imageUrl?: string | null };
+type ProducerSource = ProducerSeed & { id: number; userId: number; avatarUrl?: string | null };
 
 export type ProducerSpotlight = ProducerSeed & {
   id?: number;
@@ -182,6 +182,7 @@ export function buildBeatStorefront(beats: Beat[], producerProfiles: ProducerPro
       story: profile.description,
       genreIdentity: profile.specialty,
       imageUrl: profile.imageUrl,
+      avatarUrl: profile.avatarUrl,
       palette: palettes[index % palettes.length]
     }));
 
@@ -189,12 +190,12 @@ export function buildBeatStorefront(beats: Beat[], producerProfiles: ProducerPro
   producerSources.forEach((source) => {
     const spotlight: ProducerSpotlight = {
       ...source,
-      imageUrl: (source as any).imageUrl ?? createPoster(source.name, source.genreIdentity, source.palette, "hero"),
-      avatarUrl: (source as any).imageUrl ?? createPoster(source.name.split(" ")[0], source.genreIdentity, source.palette, "avatar"),
+      imageUrl: source.imageUrl ?? createPoster(source.name, source.genreIdentity, source.palette, "hero"),
+      avatarUrl: source.avatarUrl ?? source.imageUrl ?? createPoster(source.name.split(" ")[0], source.genreIdentity, source.palette, "avatar"),
       beatIds: []
     };
-    if ((source as any).userId) {
-      producerMap.set((source as any).userId.toString(), spotlight);
+    if (source.userId) {
+      producerMap.set(source.userId.toString(), spotlight);
     }
     producerMap.set(source.slug, spotlight);
   });
@@ -202,8 +203,8 @@ export function buildBeatStorefront(beats: Beat[], producerProfiles: ProducerPro
   const producerList = Array.from(new Set(producerMap.values()));
   
   const unknownProducer: ProducerSpotlight = {
-    slug: "unknown-producer",
-    name: "Unknown Producer",
+    slug: "",
+    name: "Producer",
     story: "",
     genreIdentity: "Producer",
     palette: ["#1f2937", "#374151", "#9ca3af"],
@@ -227,8 +228,8 @@ export function buildBeatStorefront(beats: Beat[], producerProfiles: ProducerPro
     }
   }
 
-  const catalog: StorefrontBeat[] = beats.filter((beat) => beat.enabled).map((beat) => {
-    const producer = producerMap.get(beat.producerId?.toString() ?? "") ?? unknownProducer;
+  const catalog: StorefrontBeat[] = beats.filter((beat) => beat.enabled && (!beat.status || ["PUBLISHED", "EXCLUSIVE_RESERVED"].includes(beat.status))).map((beat) => {
+    const producer = producerMap.get(beat.producerId?.toString() ?? "") ?? { ...unknownProducer, name: beat.producerName || "Producer", beatIds: [] };
       
     producer.beatIds.push(beat.id);
     

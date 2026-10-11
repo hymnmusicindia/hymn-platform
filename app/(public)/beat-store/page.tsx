@@ -1,5 +1,5 @@
 import { BeatStoreExperience } from "@/components/beat-store-experience";
-import { listAllBeats, listProducerProfiles } from "@/lib/db";
+import { listBeats, listProducerProfiles } from "@/lib/db";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 
 export default async function BeatStorePage() {
-  const [beats, producerProfiles] = await Promise.all([listAllBeats(), listProducerProfiles()]);
+  const [beats, producerProfiles] = await Promise.all([listBeats(), listProducerProfiles()]);
 
   return (
     <main className="shell pb-12 pt-5 sm:pb-16 sm:pt-6">

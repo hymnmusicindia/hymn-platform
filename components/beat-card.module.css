@@ -5,3 +5,6 @@
 .card .licence:hover { background:#dce5f5 !important; }
 .card button:focus-visible { outline:2px solid #a8caff; outline-offset:3px; }
 .card .play { opacity:1; background:#080a0dcc; color:#fff; }
+.card .producer { color:#c6cbd4; text-decoration:underline; text-decoration-color:#c6cbd455; text-underline-offset:3px; }
+.card .producer:hover { color:#fff; text-decoration-color:#fff; }
+.card .producer:focus-visible { outline:2px solid #a8caff; outline-offset:3px; }

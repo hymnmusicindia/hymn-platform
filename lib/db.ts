@@ -2765,7 +2765,7 @@ export async function listProducerProfiles(limit?: number): Promise<ProducerProf
         where: {
           active: true,
           status: "active",
-          user: { role: "PRODUCER", status: "ACTIVE" }
+          user: { role: { in: ["PRODUCER", "ADMIN"] }, status: "ACTIVE" }
         },
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
         ...(take ? { take } : {})

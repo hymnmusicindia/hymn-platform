@@ -1,0 +1,20 @@
+import assert from "node:assert/strict";
+import { buildBeatStorefront, findProducerBySlug } from "../lib/beat-store";
+import type { Beat, ProducerProfile } from "../lib/types";
+
+const profile = { id:2, userId:18, slug:"aditya-ujjain-18", name:"Aditya Ujjain", active:true, sortOrder:0, description:"Independent beats", specialty:"Trap", imageUrl:"/cover.jpg", avatarUrl:"/avatar.jpg" } as ProducerProfile;
+const beat = { id:5, producerId:18, producerName:"Account name", title:"dark night", enabled:true, status:"PUBLISHED", genre:"Trap", mood:"Aggressive", bpm:120, price:120, fileUrl:"/api/beats/5/audio" } as Beat;
+const beats = [beat, {...beat,id:6,producerId:99,producerName:"Another producer"}, {...beat,id:7,status:"PENDING_REVIEW"}, {...beat,id:8,enabled:false}];
+const catalog = buildBeatStorefront(beats,[profile]).catalog;
+assert.equal(catalog.length,2,"Only published enabled beats are public");
+assert.equal(catalog[0].producer.name,"Aditya Ujjain","Saved stage name takes precedence");
+assert.equal(catalog[0].producer.slug,profile.slug);
+assert.equal(catalog[0].producer.avatarUrl,"/avatar.jpg","Use the portrait, not the cover for avatars");
+assert.equal(catalog[1].producer.name,"Another producer","Missing profiles preserve the known owner name");
+assert.equal(catalog[1].producer.slug,"","Missing profiles do not create broken storefront links");
+const result=findProducerBySlug(beats,profile.slug,[profile]);
+assert.deepEqual(result?.beats.map(entry=>entry.id),[5],"Storefront isolates the producer's live catalogue");
+assert.equal(findProducerBySlug(beats,"missing",[profile]),null);
+assert.equal(findProducerBySlug(beats,profile.slug,[{...profile,active:false}]),null);
+assert.equal(buildBeatStorefront(beats,[profile]).producers[0].beatIds.length,1);
+console.log("PASS producer identity, stable storefront ID, portrait, catalogue isolation and publication gates");
