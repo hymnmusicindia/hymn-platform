@@ -7,8 +7,7 @@ export const workspaceNavigation = [
   { key:"upload", label:"Add release", group:"Distribution", href:"/distribution/start", icon:Plus },
   { key:"releases", label:"My releases", group:"Distribution", href:"/dashboard/releases", icon:Disc3 },
   { key:"analytics", label:"Trends", group:"Distribution", href:"/analytics", icon:TrendingUp },
-  { key:"earnings", label:"Earnings", group:"Distribution", href:"/dashboard?tab=earnings", icon:Wallet },
-  { key:"payouts", label:"Payouts", group:"Distribution", href:"/payout", icon:Wallet },
+  { key:"earnings", label:"Earnings & payouts", group:"Distribution", href:"/payout", icon:Wallet },
   { key:"promotions", label:"Promotion", group:"Distribution", href:"/dashboard?tab=promotions", icon:Megaphone },
   { key:"content-id", label:"Content ID", group:"Distribution", href:"/dashboard?tab=content-id", icon:ShieldCheck },
   { key:"collaborators", label:"Royalty splits", group:"Distribution", href:"/dashboard?tab=collaborators", icon:Users },
@@ -39,6 +38,7 @@ export function consistentWorkspaceNavigation(items: NavItem[]): NavItem[] {
   const matched = new Set<NavItem>();
   const shared = workspaceNavigation.map(canonical=>{
     const existing = items.find(item=>item.group!=="Business" && (item.label===canonical.label
+      || (canonical.key==="earnings" && item.key==="earnings")
       || (canonical.key==="studio" && item.label==="Browse services")
       || (canonical.key==="artist-profiles" && item.label==="Artist Profiles")
       || (canonical.key==="support" && item.label==="Help & FAQ")
@@ -48,7 +48,7 @@ export function consistentWorkspaceNavigation(items: NavItem[]): NavItem[] {
     const local = producer && canonical.key==="settings" && existing && !existing.href;
     return {...canonical,...existing,key:existing?.key ?? (items.some(item=>item.key===canonical.key) ? `workspace-${canonical.key}` : canonical.key),label:canonical.label,group:canonical.group,href:local ? undefined : canonical.href};
   });
-  const extras = items.filter(item=>!matched.has(item)).map(item=>({...item,
+  const extras = items.filter(item=>!matched.has(item) && !(item.group==="Distribution" && ["payouts", "earnings"].includes(item.key))).map(item=>({...item,
     group:item.group==="Business" ? "Beatstore" : item.group==="Profile" ? "Account" : item.group}));
   return [...new Set([...shared.map(item=>item.group),...extras.map(item=>item.group)])]
     .flatMap(group=>[...shared.filter(item=>item.group===group),...extras.filter(item=>item.group===group)]);

@@ -53,7 +53,7 @@ const capabilities: Capability[] = [
   { id: "beat-purchases", label: "Manage beat purchases", description: "Access purchased beats and licences.", target: "/dashboard?tab=purchases" },
   { id: "producer-workspace", label: "Open producer workspace", description: "Set up a producer storefront, upload beats and manage sales.", target: "/producer/dashboard" },
   { id: "studio-services", label: "Book studio services", description: "Choose available mixing, mastering and studio services.", target: "/services" },
-  { id: "earnings", label: "Review earnings", description: "Review reported earnings and payout availability.", target: "/dashboard?tab=earnings" },
+  { id: "earnings", label: "Review earnings", description: "Review reported earnings and payout availability.", target: "/payout" },
   { id: "support", label: "Get support", description: "Open and follow a support request.", target: "/dashboard?tab=support" }
 ];
 

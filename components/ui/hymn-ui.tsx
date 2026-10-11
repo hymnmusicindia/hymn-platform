@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { WorkspaceLoading } from "@/components/workspace-loading";
 import type { ReactNode } from "react";
 import { AlertCircle, ArrowRight, CheckCircle2, Info, RefreshCw, TriangleAlert } from "lucide-react";
 
@@ -39,7 +40,7 @@ export function Skeleton({ className = "" }: { className?: string }) {
 }
 
 export function LoadingState({ label = "Loading your workspace" }: { label?: string }) {
-  return <section className="hymn-loading-panel" aria-live="polite" aria-busy="true"><span className="sr-only">{label}</span><Skeleton className="h-4 w-28" /><Skeleton className="mt-4 h-8 w-2/3" /><Skeleton className="mt-3 h-4 w-full" /><div className="mt-6 grid gap-3 sm:grid-cols-3"><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div></section>;
+  return <WorkspaceLoading label={label}/>;
 }
 
 export function InlineAlert({ tone = "info", title, children }: { tone?: Exclude<Tone, "neutral">; title: string; children: ReactNode }) {

@@ -9,7 +9,7 @@ export async function GET() {
   if ("error" in result) return result.error;
 
   const summary = await getPayoutSummary(result.user.id);
-  return NextResponse.json(summary);
+  return NextResponse.json(summary, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 // vercel trigger 2

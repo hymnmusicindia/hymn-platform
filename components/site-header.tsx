@@ -595,7 +595,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
               </Link>
               <Link href="/payout" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
                 <Bell className="h-4 w-4" />
-                Payouts
+                Earnings &amp; payouts
               </Link>
               <Link href="/faq" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
                 <HelpCircle className="h-4 w-4" />

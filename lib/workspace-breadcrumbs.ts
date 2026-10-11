@@ -10,7 +10,7 @@ const title = (part: string) => part.replace(/-/g, " ").replace(/\b\w/g, letter 
 
 export function workspaceBreadcrumbs(pathname: string, search = "", active?: ActiveLocation): WorkspaceCrumb[] {
   const query = new URLSearchParams(search);
-  const tab = query.get("tab");
+  const tab = pathname === "/dashboard" ? query.get("tab") : null;
   const exact = workspaceNavigation.find(item => {
     const url = new URL(item.href, "https://hymnmusic.fun");
     return url.pathname === pathname && url.searchParams.get("tab") === tab;
@@ -23,7 +23,11 @@ export function workspaceBreadcrumbs(pathname: string, search = "", active?: Act
   else if (pathname.startsWith("/studio/engineers/")) { group = "Mixing / Mastering"; leaf = { label: "Find an engineer", href: "/studio" }; detail = "Engineer profile"; }
   else if (pathname.startsWith("/beat-store/producers/")) { group = "Beatstore"; leaf = { label: "Browse beats", href: "/beat-store" }; detail = "Producer profile"; }
   else if (pathname === "/first-release") { group = "Distribution"; leaf = { label: "Add release", href: pathname }; }
-  else if (pathname === "/royalty-payouts") { group = "Distribution"; leaf = { label: "Payouts", href: pathname }; }
+  else if (pathname === "/royalty-payouts") { group = "Distribution"; leaf = { label: "Earnings & payouts", href: "/payout" }; }
+  if (pathname === "/payout" && query.get("tab") && query.get("tab") !== "overview") {
+    const sections: Record<string, string> = { monthly: "Earnings history", quarterly: "Quarter summary", statements: "Statements", requests: "Withdrawals", details: "Payout details" };
+    detail = sections[query.get("tab")!];
+  }
   // Frames also report local producer/admin tabs, which do not always change the URL.
   if (active && !detail && active.label && active.group !== "Workspace") {
     group = active.group;

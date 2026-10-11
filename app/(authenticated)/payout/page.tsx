@@ -5,7 +5,7 @@ import { getCurrentUserForPage } from "@/lib/access";
 import { getPayoutSummary } from "@/lib/payout";
 
 export const metadata: Metadata = {
-  title: "Payout | HYMN",
+  title: "Earnings & payouts | HYMN",
   description: "Track HYMN earnings, request withdrawals, and review payout history."
 };
 

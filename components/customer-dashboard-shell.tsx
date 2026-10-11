@@ -3,7 +3,7 @@
 import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { SupportWorkspace } from "@/components/support-workspace";
@@ -161,6 +161,7 @@ function Timeline({ items }: { items: Array<{ label: string; detail?: string; ac
 
 export function CustomerDashboardShell({ user, releases, orders, subscription, analytics = [], producerAccessDisabled = false }: { user: User; releases: Release[]; orders: Order[]; subscription?: any | null; analytics?: any[]; producerAccessDisabled?: boolean }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"overview" | "releases" | "upload" | "analytics" | "earnings" | "promotions" | "collaborators" | "distribution" | "content-id" | "messages" | "support" | "settings" | "purchases" | "subscription" | "referral" | "account">("overview");
   const [dashboardSearch, setDashboardSearch] = useState("");
   const [releaseStatusFilter, setReleaseStatusFilter] = useState("all");
@@ -189,10 +190,11 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
     if (params.get("module") === "splits") setActiveTab("collaborators");
     else {
       const requested = params.get("tab");
+      if (requested === "earnings" || requested === "payouts") { router.replace("/payout"); return; }
       if (requested && ["overview", "releases", "upload", "analytics", "earnings", "promotions", "collaborators", "distribution", "content-id", "messages", "support", "settings", "purchases", "subscription", "referral", "account"].includes(requested)) setActiveTab(requested as typeof activeTab);
       else setActiveTab("overview");
     }
-  }, [searchParams]);
+  }, [searchParams, router]);
 
   useEffect(() => {
     let ignore = false;
@@ -314,6 +316,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   }, [notifications, releases]);
 
   function selectCustomerTab(tab: typeof activeTab) {
+    if (tab === "earnings") { router.push("/payout"); return; }
     setActiveTab(tab);
     setDashboardSearch("");
     if (typeof window !== "undefined") {
@@ -386,7 +389,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       quickActions={
         <>
           <Link href="/distribution/start" className="btn-primary pressable px-4 py-2 text-sm">Create Release</Link>
-          <button type="button" onClick={() => selectCustomerTab("earnings")} className="btn-outline pressable px-4 py-2 text-sm">Open Payout</button>
+          <button type="button" onClick={() => selectCustomerTab("earnings")} className="btn-outline pressable px-4 py-2 text-sm">Earnings & payouts</button>
           <Link href="/beat-store" className="btn-outline pressable px-4 py-2 text-sm">Buy Beats</Link>
         </>
       }
@@ -441,7 +444,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
                 <StatCard label="Lifetime paid" value={dataErrors.payout ? "Unavailable" : formatMoney(payoutSummary?.paidTillDate ?? 0)} />
               </div>
               <p className="mt-4 text-xs" style={{ color: "var(--text-soft)" }}>Verified through the latest imported provider statement. Reporting is historical, not real-time.</p>
-              <Link href="/payout" className="btn-outline pressable mt-5 inline-flex">Open Payouts</Link>
+              <Link href="/payout" className="btn-outline pressable mt-5 inline-flex">Earnings & payouts</Link>
             </Panel>
 
             <Panel title="Recent releases" description="Your latest catalogue records and their immediate operational state.">
@@ -567,31 +570,6 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         <div>
           {dataErrors.analytics ? <div role="alert" className="mb-4 rounded-xl border p-3 text-sm" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>{dataErrors.analytics} <button type="button" className="ml-2 underline" onClick={() => setReloadKey(value => value + 1)}>Retry</button></div> : null}
           <AnalyticsDashboard userName={user.name} analytics={workspaceAnalytics} />
-        </div>
-      ) : null}
-
-      {activeTab === "earnings" ? (
-        <div className="grid gap-6 xl:grid-cols-[1fr,0.9fr]">
-          <Panel title="Payout dashboard summary" description="Uses verified royalty entries and payout requests. No calculator estimates are treated as balance.">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <StatCard label="Total earnings" value={payoutSummary ? formatMoney(payoutSummary.totalEarnings) : "Unavailable"} />
-              <StatCard label="Available balance" value={payoutSummary ? formatMoney(payoutSummary.availableBalance) : "Unavailable"} />
-              <StatCard label="Pending payout" value={payoutSummary ? formatMoney(payoutSummary.pendingBalance) : "Unavailable"} />
-            </div>
-            <div className="mt-5 rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-              <p className="font-semibold" style={{ color: "var(--text)" }}>Payout status</p>
-              <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
-                {payoutSummary ? payoutSummary.nextPayoutStatus : "Earnings appear after verified royalty reports are processed."} Earnings usually take around 1.5 months to reflect. Withdrawals take 24-48 hours after approval.
-              </p>
-              <Link href="/payout" className="btn-primary pressable mt-4 inline-flex">Open Payout Dashboard</Link>
-            </div>
-          </Panel>
-          <Panel title="Release-wise earnings">
-            <div className="grid gap-3">
-              {(payoutSummary?.releaseBreakdown ?? []).map((release) => <div key={release.releaseTitle} className="summary-card"><span>{release.releaseTitle}</span><span>{formatMoney(release.netEarnings)}</span></div>)}
-              {!(payoutSummary?.releaseBreakdown ?? []).length ? <EmptyState copy="Earnings appear after verified royalty reports are processed." /> : null}
-            </div>
-          </Panel>
         </div>
       ) : null}
 

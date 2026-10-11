@@ -39,6 +39,7 @@ export type PayoutSummary = {
   minimumPayoutUsd: number;
   availableBalanceUsd: number | null;
   payoutEligible: boolean;
+  payoutProfileStatus: string;
   exchangeRate: Awaited<ReturnType<typeof getPublicPayoutConfig>>;
   serviceFeeRate: number;
   monthlyEarnings: Array<{ month: string; grossEarnings: number; hymnServiceFee: number; netPayable: number; payoutStatus: string }>;
@@ -143,6 +144,7 @@ function monthKey(date: Date) {
 }
 
 function emptySummary(): PayoutSummary {
+  const current = getCurrentQuarter();
   return {
     totalEarnings: 0,
     availableBalance: 0,
@@ -151,12 +153,13 @@ function emptySummary(): PayoutSummary {
     currentMonthEarnings: 0,
     currentMonthSplitEarnings: 0, currentMonthHeldAmount: 0, currentMonthPaidAmount: 0,
     currentQuarterEarnings: 0, currentQuarterPaid: 0, currentQuarterHeld: 0, currentQuarterPending: 0, carryForwardBalance: 0,
-    quarter: { quarter: 1, year: new Date().getUTCFullYear(), status: "open", startDate: "", endDate: "", payoutRequestsOpen: false }, monthlyBreakdown: [], reports: [],
+    quarter: { quarter: current.quarter, year: current.year, status: "open", startDate: current.start.toISOString(), endDate: current.end.toISOString(), payoutRequestsOpen: false }, monthlyBreakdown: [], reports: [],
     nextPayoutStatus: "No royalty statement imported",
     minimumPayoutAmount: 0,
     minimumPayoutUsd: PAYOUT_CONFIG.minimumPayoutUsd,
     availableBalanceUsd: null,
     payoutEligible: false,
+    payoutProfileStatus: "missing",
     exchangeRate: { minimumPayoutUsd: PAYOUT_CONFIG.minimumPayoutUsd, approximateMinimumInr: null, usdToInrRate: null, rateUpdatedAt: null, rateStatus: "unavailable", payoutServiceFeePercent: PAYOUT_CONFIG.payoutServiceFeePercent },
     serviceFeeRate: PAYOUT_SERVICE_FEE_RATE,
     monthlyEarnings: [],
@@ -211,7 +214,7 @@ export async function getPayoutSummary(userId: number): Promise<PayoutSummary> {
   if (!usesPostgresPrisma()) return emptySummary();
 
   const currentQuarter = getCurrentQuarter();
-  const [balance, lineItems, requests, splitEarnings, carryForward, period, reports] = await Promise.all([
+  const [balance, lineItems, requests, splitEarnings, carryForward, period, reports, credential] = await Promise.all([
     (prisma as any).artistPayoutBalance.findUnique({ where: { userId } }),
     (prisma as any).royaltyLineItem.findMany({
       where: { userId },
@@ -226,14 +229,14 @@ export async function getPayoutSummary(userId: number): Promise<PayoutSummary> {
     (prisma as any).splitEarningLineItem.findMany({ where: { recipientUserId: userId }, include: { release: true, track: true, royaltyLineItem: true }, orderBy: { createdAt: "desc" } }),
     (prisma as any).quarterCarryForward.findFirst({ where: { userId, toYear: currentQuarter.year, toQuarter: currentQuarter.quarter }, orderBy: { createdAt: "desc" } }),
     (prisma as any).payoutPeriod.findFirst({ where: { type: "quarterly", year: currentQuarter.year, quarter: currentQuarter.quarter } }),
-    (prisma as any).payoutReport.findMany({ where: { userId }, orderBy: { generatedAt: "desc" }, take: 30 })
+    (prisma as any).payoutReport.findMany({ where: { userId }, orderBy: { generatedAt: "desc" }, take: 30 }),
+    (prisma as any).payoutCredential.findUnique({ where: { userId }, select: { status: true } })
   ]);
 
   const requestHistory = requests.map(mapRequest);
-  const heldRequests = requestHistory.filter((request: PayoutSummary["payoutHistory"][number]) => ["requested", "approved", "processing"].includes(request.status));
+  const heldRequests = requestHistory.filter((request: PayoutSummary["payoutHistory"][number]) => ["requested", "under_review", "approved", "processing"].includes(request.status));
   const paidRequests = requestHistory.filter((request: PayoutSummary["payoutHistory"][number]) => request.status === "paid");
   const lineNet = money(lineItems.reduce((sum: number, item: any) => sum + toNumber(item.netRevenue), 0));
-  const lineGross = money(lineItems.reduce((sum: number, item: any) => sum + toNumber(item.grossRevenue), 0));
   const heldAmount = money(heldRequests.reduce((sum: number, request: PayoutSummary["payoutHistory"][number]) => sum + request.requestedAmount, 0));
   const paidAmount = money(paidRequests.reduce((sum: number, request: PayoutSummary["payoutHistory"][number]) => sum + request.netPayout, 0));
   const availableBalance = balance ? toNumber(balance.availableBalance) : Math.max(0, lineNet - heldAmount - paidAmount);
@@ -320,7 +323,7 @@ export async function getPayoutSummary(userId: number): Promise<PayoutSummary> {
   const exchangeRate = await getPublicPayoutConfig();
   const availableBalanceUsd = exchangeRate.usdToInrRate ? new Prisma.Decimal(availableBalance).div(exchangeRate.usdToInrRate).toNumber() : null;
   return {
-    totalEarnings: money(totalEarnings || lineGross),
+    totalEarnings: money(totalEarnings),
     availableBalance: money(availableBalance),
     pendingBalance: money(pendingBalance),
     paidTillDate: money(paidTillDate),
@@ -335,6 +338,7 @@ export async function getPayoutSummary(userId: number): Promise<PayoutSummary> {
     minimumPayoutAmount: exchangeRate.approximateMinimumInr ?? 0,
     minimumPayoutUsd: PAYOUT_CONFIG.minimumPayoutUsd,
     availableBalanceUsd,
+    payoutProfileStatus: credential?.status ?? "missing",
     payoutEligible: availableBalanceUsd !== null && new Prisma.Decimal(availableBalanceUsd).gte(PAYOUT_CONFIG.minimumPayoutUsd),
     exchangeRate,
     serviceFeeRate: PAYOUT_SERVICE_FEE_RATE,

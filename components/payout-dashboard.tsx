@@ -2,31 +2,23 @@
 
 import { customerMessage } from "@/lib/customer-message";
 
-import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
-import { ArrowUpRight, ShieldCheck, WalletCards, X } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { ArrowUpRight, RefreshCw, X } from "lucide-react";
+import { EarningsRecords, WithdrawalRecords } from "@/components/earnings-records";
+import { EarningsBalance, EarningsOverview } from "@/components/earnings-overview";
+import { moneyLabel, payoutReadiness, recentEarningMonths } from "@/lib/earnings-presentation";
+import styles from "./earnings-center.module.css";
 import { ContextualHelp } from "@/components/contextual-help";
 import type { PayoutSummary } from "@/lib/payout";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 
 function formatMoney(amount: number) {
-  return `Rs ${Math.round(amount).toLocaleString("en-IN")}`;
-}
-
-function formatUsd(amount: number | null) {
-  return amount === null ? "USD unavailable" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+  return moneyLabel(amount);
 }
 
 function StatusBadge({ status }: { status: string }) {
   const active = status === "paid" || status === "Cleared";
   return <span className={active ? "status-pill status-pill-active" : "status-pill"}>{status.replace(/_/g, " ")}</span>;
-}
-
-function EmptyState({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="rounded-[1.5rem] border border-dashed p-6 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)", background: "var(--bg-soft)" }}>
-      {children}
-    </div>
-  );
 }
 
 function KpiCard({ label, value, detail }: { label: string; value: string; detail?: string }) {
@@ -40,55 +32,15 @@ function KpiCard({ label, value, detail }: { label: string; value: string; detai
   );
 }
 
-function MonthlyChart({ rows }: { rows: PayoutSummary["monthlyEarnings"] }) {
-  const max = Math.max(1, ...rows.map((row) => row.netPayable));
-  if (rows.length === 0) {
-    return (
-      <div className="flex min-h-[220px] items-center justify-center rounded-[1.5rem] border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-        <p className="max-w-md text-center text-sm" style={{ color: "var(--text-muted)" }}>
-          Monthly earnings analytics will appear after HYMN imports verified distributor royalty statements.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex min-h-[240px] items-end gap-3 rounded-[1.5rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-      {rows.map((row) => (
-        <div key={row.month} className="flex flex-1 flex-col items-center gap-3">
-          <div className="flex h-44 w-full items-end rounded-2xl" style={{ background: "var(--card)" }}>
-            <div className="w-full rounded-2xl transition-all" style={{ height: `${Math.max(8, (row.netPayable / max) * 100)}%`, background: "linear-gradient(180deg, var(--accent), var(--money))" }} />
-          </div>
-          <p className="text-center text-xs" style={{ color: "var(--text-soft)" }}>{row.month}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function TableShell({ headers, empty, children }: { headers: string[]; empty: string; children: React.ReactNode }) {
-  const hasRows = Array.isArray(children) ? children.length > 0 : Boolean(children);
-  return (
-    <div className="overflow-x-auto rounded-[1.25rem] border" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
-      <table className="min-w-full text-left text-sm">
-        <thead style={{ background: "var(--bg-soft)", color: "var(--text-soft)" }}>
-          <tr>{headers.map((header) => <th key={header} className="whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em]">{header}</th>)}</tr>
-        </thead>
-        <tbody style={{ color: "var(--text)" }}>{hasRows ? children : <tr><td className="px-4 py-6" colSpan={headers.length} style={{ color: "var(--text-muted)" }}>{empty}</td></tr>}</tbody>
-      </table>
-    </div>
-  );
-}
-
 function PayoutModal({ summary, onClose, onSuccess }: { summary: PayoutSummary; onClose: () => void; onSuccess: (summary: PayoutSummary) => void }) {
-  const [method, setMethod] = useState<"UPI" | "BANK">("UPI");
   const [amount, setAmount] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [uncertain, setUncertain] = useState(false);
   const [isPending, startTransition] = useTransition();
   const requestedAmount = Number(amount) || 0;
-  const serviceFee = requestedAmount * summary.serviceFeeRate;
-  const netPayout = requestedAmount - serviceFee;
-  const dialogRef = useAccessibleDialog(true, onClose);
+  const serviceFee = Math.round(requestedAmount * summary.serviceFeeRate * 100) / 100;
+  const netPayout = Math.round((requestedAmount - serviceFee) * 100) / 100;
+  const dialogRef = useAccessibleDialog(true, () => { if (!isPending) onClose(); });
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -97,19 +49,17 @@ function PayoutModal({ summary, onClose, onSuccess }: { summary: PayoutSummary; 
     const payload = Object.fromEntries(form.entries());
 
     startTransition(async () => {
-      const response = await fetch("/api/payout/request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, method, amount: requestedAmount })
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setFeedback(data.error || "Could not submit payout request.");
-        return;
-      }
-      const refreshed = await fetch("/api/payout/summary", { cache: "no-store" });
-      onSuccess(await refreshed.json());
-      onClose();
+      try {
+        const response = await fetch("/api/payout/request", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({...payload, amount:requestedAmount}) });
+        const data = await response.json();
+        if (!response.ok) { setFeedback(data.error || "Could not submit payout request."); return; }
+        // Reserve the accepted amount locally if the subsequent refresh is unavailable.
+        const acceptedRequest: PayoutSummary["payoutHistory"][number] = data.request;
+        const accepted = { ...summary, availableBalance: Math.max(0,Math.round((summary.availableBalance-acceptedRequest.requestedAmount)*100)/100), pendingBalance:Math.round((summary.pendingBalance+acceptedRequest.requestedAmount)*100)/100, payoutEligible:false, availableBalanceUsd:null, payoutHistory:[acceptedRequest,...summary.payoutHistory] };
+        onSuccess(accepted);
+        try { const refreshed = await fetch("/api/payout/summary",{cache:"no-store"}); if (refreshed.ok) onSuccess(await refreshed.json()); } catch { /* The accepted reservation remains visible. */ }
+        onClose();
+      } catch { setUncertain(true); setFeedback("The request could not be confirmed. Close this window and refresh your withdrawal activity before trying again."); }
     });
   }
 
@@ -121,42 +71,28 @@ function PayoutModal({ summary, onClose, onSuccess }: { summary: PayoutSummary; 
             <h2 id="payout-dialog-title" className="text-2xl font-semibold" style={{ color: "var(--text)" }}>Request Payout</h2>
             <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>HYMN manually reviews and processes payout requests. Track the confirmed status here instead of submitting another request.</p>
           </div>
-          <button type="button" onClick={onClose} className="btn-outline pressable px-3 py-2" aria-label="Close payout request"><X className="h-4 w-4" /></button>
+          <button type="button" disabled={isPending} onClick={onClose} className="btn-outline pressable px-3 py-2" aria-label="Close payout request"><X className="h-4 w-4" /></button>
         </div>
 
         <div className="mt-5 grid gap-4">
           <label className="grid gap-2 text-sm" style={{ color: "var(--text-muted)" }}>
             Amount to withdraw
-            <input name="amount" type="number" min={summary.minimumPayoutAmount || undefined} max={summary.availableBalance} step="1" required value={amount} onChange={(event) => setAmount(event.target.value)} className="field" placeholder={summary.minimumPayoutAmount ? String(summary.minimumPayoutAmount) : ""} />
+            <input name="amount" type="number" min={summary.exchangeRate.usdToInrRate ? Math.ceil(summary.minimumPayoutUsd * summary.exchangeRate.usdToInrRate * 100) / 100 : undefined} max={summary.availableBalance} step="0.01" required value={amount} onChange={(event) => setAmount(event.target.value)} className="field" placeholder={summary.minimumPayoutAmount ? String(summary.minimumPayoutAmount) : ""} />
           </label>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <button type="button" onClick={() => setMethod("UPI")} className={method === "UPI" ? "btn-primary pressable" : "btn-outline pressable"}>UPI</button>
-            <button type="button" onClick={() => setMethod("BANK")} className={method === "BANK" ? "btn-primary pressable" : "btn-outline pressable"}>Bank Transfer</button>
-          </div>
-          <input type="hidden" name="method" value={method} />
-
-          {method === "UPI" ? (
-            <label className="grid gap-2 text-sm" style={{ color: "var(--text-muted)" }}>UPI ID<input name="upiId" required className="field" placeholder="name@bank" /></label>
-          ) : (
-            <div className="grid gap-3">
-              <label className="grid gap-2 text-sm" style={{ color: "var(--text-muted)" }}>Account holder name<input name="accountHolderName" required className="field" /></label>
-              <label className="grid gap-2 text-sm" style={{ color: "var(--text-muted)" }}>Bank account number<input name="bankAccountNumber" required className="field" /></label>
-              <label className="grid gap-2 text-sm" style={{ color: "var(--text-muted)" }}>IFSC code<input name="ifsc" required className="field" /></label>
-            </div>
-          )}
+          <p className="text-sm" style={{ color:"var(--text-muted)" }}>Payment goes to your verified payout profile. <a href="/dashboard?module=splits&tab=payout-details" className="underline">Review payout details</a></p>
 
           <label className="grid gap-2 text-sm" style={{ color: "var(--text-muted)" }}>Optional note<textarea name="userNote" className="field min-h-24" placeholder="Anything the finance team should know?" /></label>
 
           <div className="rounded-[1.25rem] border p-4 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text)" }}>
             <p>Requested amount: {formatMoney(requestedAmount)}</p>
-            <p className="mt-2">HYMN service fee 2%: {formatMoney(serviceFee)}</p>
+            <p className="mt-2">HYMN service fee {summary.serviceFeeRate * 100}%: {formatMoney(serviceFee)}</p>
             <p className="mt-2 font-semibold">You will receive: {formatMoney(Math.max(0, netPayout))}</p>
           </div>
 
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>A 2% HYMN service fee will be deducted from each payout request.</p>
-          {feedback ? <p className="text-sm" style={{ color: "var(--danger)" }}>{customerMessage(feedback)}</p> : null}
-          <button type="submit" disabled={isPending || !summary.payoutEligible} className="btn-primary pressable disabled:opacity-50">{isPending ? "Submitting..." : "Submit payout request"}</button>
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>A {summary.serviceFeeRate * 100}% HYMN service fee will be deducted from each payout request.</p>
+          {feedback ? <p role="alert" className="text-sm" style={{ color: "var(--danger)" }}>{customerMessage(feedback)}</p> : null}
+          <button type="submit" disabled={isPending || uncertain || !payoutReadiness(summary).ready} className="btn-primary pressable disabled:opacity-50">{isPending ? "Submitting..." : "Submit payout request"}</button>
         </div>
       </form>
     </div>
@@ -168,84 +104,83 @@ export function PayoutDashboard({ initialSummary }: { initialSummary: PayoutSumm
   const [modalOpen, setModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "monthly" | "quarterly" | "statements" | "requests" | "details">("overview");
   const [reportFeedback, setReportFeedback] = useState("");
-  const hasStatements = summary.monthlyEarnings.length > 0 || summary.releaseBreakdown.length > 0 || summary.trackBreakdown.length > 0 || summary.platformBreakdown.length > 0;
-  const buttonDisabled = !summary.payoutEligible || !summary.quarter.payoutRequestsOpen;
-  const payoutProgress = Math.min(100, Math.max(0, ((summary.availableBalanceUsd ?? 0) / summary.minimumPayoutUsd) * 100));
-  const maxMonthly = useMemo(() => Math.max(0, ...summary.monthlyEarnings.map((row) => row.netPayable)), [summary.monthlyEarnings]);
-  const verifiedThrough = summary.monthlyEarnings[0]?.month || "No imported statement period";
-  const ledgerRows = useMemo(() => [
-    ...summary.monthlyEarnings.map((row) => ({ key: `royalty-${row.month}`, date: row.month, description: "Verified royalty statement", source: "Distributor statement", credit: row.netPayable, debit: 0, status: row.payoutStatus })),
-    ...summary.payoutHistory.map((row) => ({ key: `payout-${row.id}`, date: new Date(row.requestDate).toLocaleDateString("en-IN"), description: row.status === "paid" ? "Payout completion" : "Payout reservation", source: row.method, credit: 0, debit: row.netPayout, status: row.status })),
-  ], [summary.monthlyEarnings, summary.payoutHistory]);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState("");
+  const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
+  const refreshController = useRef<AbortController | null>(null);
+  const buttonDisabled = !payoutReadiness(summary).ready;
+  const refresh = useCallback(async () => {
+    if (refreshController.current) return;
+    const controller = new AbortController(); refreshController.current = controller;
+    setRefreshing(true);
+    try {
+      const response = await fetch("/api/payout/summary", { cache:"no-store", signal:controller.signal });
+      if (!response.ok) throw new Error("Could not refresh");
+      const next = await response.json();
+      if (typeof next.availableBalance !== "number" || !Array.isArray(next.payoutHistory)) throw new Error("Invalid summary");
+      setSummary(next); setRefreshError(""); setRefreshedAt(new Date().toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}));
+    } catch { if (!controller.signal.aborted) setRefreshError("Could not refresh. Showing your last loaded balances. Please try again."); }
+    finally { if (refreshController.current === controller) refreshController.current = null; if (!controller.signal.aborted) setRefreshing(false); }
+  }, []);
+  useEffect(() => {
+    const update = () => { if (document.visibilityState === "visible") void refresh(); };
+    const timer = window.setInterval(update, 60000);
+    window.addEventListener("focus",update);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus",update); refreshController.current?.abort(); refreshController.current=null; };
+  }, [refresh]);
 
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get("tab");
-    if (["overview", "monthly", "quarterly", "statements", "requests", "details"].includes(requested || "")) setActiveTab(requested as typeof activeTab);
+    const sync = () => {
+      const requested = new URLSearchParams(window.location.search).get("tab");
+      setActiveTab(["overview", "monthly", "quarterly", "statements", "requests", "details"].includes(requested || "") ? requested as typeof activeTab : "overview");
+    };
+    sync(); window.addEventListener("popstate",sync);
+    return () => window.removeEventListener("popstate",sync);
   }, []);
 
   function selectTab(tab: typeof activeTab) {
     setActiveTab(tab);
     const url = new URL(window.location.href);
     url.searchParams.set("tab", tab);
-    window.history.replaceState(null, "", url.toString());
+    window.history.pushState(null, "", url.toString());
+    window.dispatchEvent(new PopStateEvent("popstate"));
   }
 
   async function generateStatement(type: "monthly" | "quarterly") {
-    const now = new Date();
-    setReportFeedback("Generating statement…");
-    const response = await fetch("/api/payout/reports", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(type === "monthly" ? { type, month: now.getUTCMonth() + 1, year: now.getUTCFullYear() } : { type, quarter: summary.quarter.quarter, year: summary.quarter.year })
-    });
-    const result = await response.json();
-    if (!response.ok) return setReportFeedback(result.error || "Statement generation failed.");
-    setReportFeedback("Statement generated. Download starting…");
-    window.location.assign(`/api/payout/reports/${result.report.id}/download`);
+    if (reportBusy) return;
+    setReportBusy(true); setReportFeedback("Generating statement...");
+    const latest = recentEarningMonths(summary.monthlyEarnings).at(-1);
+    const [monthName, year] = latest?.month.split(" ") ?? [];
+    const month = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].indexOf(monthName?.slice(0,3) ?? "")+1;
+    if (type === "monthly" && (!month || !year)) { setReportBusy(false); setReportFeedback("No reported period is available for a monthly statement yet."); return; }
+    try {
+      const response = await fetch("/api/payout/reports", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(type==="monthly" ? {type,month,year:Number(year)} : {type,quarter:summary.quarter.quarter,year:summary.quarter.year})});
+      const result=await response.json();
+      if (!response.ok) throw new Error(result.error || "Statement generation failed.");
+      const download=document.createElement("a"); download.href=`/api/payout/reports/${result.report.id}/download`; download.download=""; document.body.appendChild(download); download.click(); download.remove();
+      setReportFeedback("Statement generated. Your download is starting.");
+      void refresh();
+    } catch(error) { setReportFeedback(error instanceof Error ? error.message : "Could not generate your statement. Please try again."); }
+    finally { setReportBusy(false); }
   }
 
   return (
-    <main className="shell py-12 sm:py-16">
-      <section className="surface-card relative overflow-hidden p-6 sm:p-8">
-        <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full opacity-20 blur-3xl" style={{ background: "var(--accent)" }} />
-        <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-3xl">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em]" style={{ borderColor: "var(--border)", color: "var(--text-muted)", background: "var(--bg-soft)" }}><ShieldCheck className="h-3.5 w-3.5" /> Verified earnings</div>
-            <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl" style={{ color: "var(--text)" }}>Payouts <ContextualHelp faqId="payout-pending" label="Payout eligibility" side="bottom">Availability depends on reported balance, the USD threshold, quarter status, verification, holds, and active requests.</ContextualHelp></h1>
-            <p className="mt-4 max-w-2xl text-base leading-7" style={{ color: "var(--text-muted)" }}>A clear view of your verified royalties, available funds, statements, and withdrawal history.</p>
-          </div>
-          <div className="w-full rounded-[1.5rem] border p-5 lg:max-w-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-            <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Available to withdraw</p><WalletCards className="h-5 w-5" style={{ color: "var(--money)" }} /></div>
-            <p className="mt-3 text-4xl font-semibold tracking-tight" style={{ color: "var(--text)" }}>{formatUsd(summary.availableBalanceUsd)}</p>
-            <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{formatMoney(summary.availableBalance)} INR{summary.exchangeRate.usdToInrRate ? " · converted at the latest USD/INR rate" : " · USD conversion unavailable"}</p>
-            <div className="mt-4 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--border)" }}><div className="h-full rounded-full transition-all" style={{ width: `${payoutProgress}%`, background: "var(--money)" }} /></div>
-            <div className="mt-2 flex justify-between gap-3 text-xs" style={{ color: "var(--text-soft)" }}><span>{summary.availableBalanceUsd === null ? "USD estimate unavailable" : `$${summary.availableBalanceUsd.toFixed(2)} of $${summary.minimumPayoutUsd}`}</span><span>{Math.round(payoutProgress)}%</span></div>
-            {summary.exchangeRate.usdToInrRate ? <p className="mt-3 text-xs" style={{ color: "var(--text-soft)" }}>1 USD = {summary.exchangeRate.usdToInrRate.toFixed(4)} INR · updated {summary.exchangeRate.rateUpdatedAt ? new Date(summary.exchangeRate.rateUpdatedAt).toLocaleString("en-IN") : "—"}{summary.exchangeRate.rateStatus === "stale" ? " · stale" : ""}</p> : null}
-            <button type="button" disabled={buttonDisabled} onClick={() => setModalOpen(true)} className="btn-primary pressable mt-4 w-full disabled:opacity-50">
-              Request payout <ArrowUpRight className="h-4 w-4" />
-            </button>
-            {buttonDisabled ? <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>{!summary.quarter.payoutRequestsOpen ? "Payout requests open after the current quarter closes." : summary.exchangeRate.rateStatus !== "active" ? "Payout requests pause while the exchange rate is unavailable or stale." : `HYMN's minimum payout threshold is $${summary.minimumPayoutUsd} USD.`}</p> : null}
-          </div>
-        </div>
-      </section>
-
-      <nav className="surface-card mt-6 flex gap-1 overflow-x-auto p-1.5" aria-label="Payout sections">
-        {(["overview", "monthly", "quarterly", "statements", "requests", "details"] as const).map((tab) => (
-          <button key={tab} type="button" onClick={() => selectTab(tab)} aria-current={activeTab === tab ? "page" : undefined} className={activeTab === tab ? "btn-primary pressable shrink-0 px-4 py-2 text-sm capitalize" : "pressable shrink-0 rounded-full px-4 py-2 text-sm font-medium capitalize transition-colors hover:bg-[var(--hover)]"} style={activeTab === tab ? undefined : { color: "var(--text-muted)" }}>
-            {tab === "details" ? "Payout details" : tab}
-          </button>
-        ))}
+    <main className={`shell ${styles.center}`}>
+      <header className={styles.heading}><div><h1>Earnings & payouts</h1><p>Your reported royalties, available funds and withdrawals, together.{refreshedAt ? ` Updated ${refreshedAt}.` : ""}</p></div><button className={styles.refresh} type="button" disabled={refreshing} onClick={()=>void refresh()}><RefreshCw size={14} aria-hidden="true"/>{refreshing ? "Refreshing..." : "Refresh balances"}</button></header>
+      {refreshError ? <p className={styles.feedback} role="alert">{refreshError}</p> : null}
+      <span className="sr-only" role="status">{refreshing ? "Refreshing balances" : refreshedAt ? `Balances refreshed at ${refreshedAt}` : "Balances loaded"}</span>
+      <EarningsBalance summary={summary} onSection={selectTab} onWithdraw={()=>setModalOpen(true)}/>
+      <nav className={styles.tabs} aria-label="Earnings and payout sections">
+        {(["overview", "monthly", "quarterly", "statements", "requests", "details"] as const).map(tab=><button key={tab} type="button" onClick={()=>selectTab(tab)} aria-current={activeTab===tab ? "page" : undefined}>{({overview:"Overview",monthly:"Earnings history",quarterly:"Quarter summary",statements:"Statements",requests:"Withdrawals",details:"Payout details"})[tab]}</button>)}
       </nav>
 
       {activeTab === "monthly" ? (
         <section className="surface-card mt-6 p-5 sm:p-6">
           <h2 className="text-2xl font-semibold">Monthly earning records</h2>
           <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Database-backed royalty and split rows. Excel reports are generated from these same records.</p>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><KpiCard label="Current Month Earnings" value={formatMoney(summary.currentMonthEarnings)} /><KpiCard label="Current Month Split Earnings" value={formatMoney(summary.currentMonthSplitEarnings)} /><KpiCard label="Current Month Held" value={formatMoney(summary.currentMonthHeldAmount)} /><KpiCard label="Current Month Paid" value={formatMoney(summary.currentMonthPaidAmount)} /></div>
-          <div className="mt-5"><MonthlyChart rows={summary.monthlyEarnings} /></div>
-          <div className="mt-5"><TableShell headers={["Month", "Release", "Track", "Platform", "UPC", "ISRC", "Gross", "Artist pool", "My share", "My earnings", "Status"]} empty="No split earning rows yet.">
-            {summary.monthlyBreakdown.map((row) => <tr key={row.id} className="border-t" style={{ borderColor: "var(--border)" }}><td className="px-3 py-3">{row.month}</td><td className="px-3 py-3">{row.release}</td><td className="px-3 py-3">{row.track}</td><td className="px-3 py-3">{row.platform}</td><td className="px-3 py-3">{row.upc}</td><td className="px-3 py-3">{row.isrc}</td><td className="px-3 py-3">{formatMoney(row.grossRevenue)}</td><td className="px-3 py-3">{formatMoney(row.artistPool)}</td><td className="px-3 py-3">{row.sharePercent}%</td><td className="px-3 py-3">{formatMoney(row.myEarnings)}</td><td className="px-3 py-3"><StatusBadge status={row.status} /></td></tr>)}
-          </TableShell></div>
+
+          <EarningsRecords rows={summary.monthlyBreakdown} periods={summary.monthlyEarnings}/>
         </section>
       ) : null}
 
@@ -259,7 +194,7 @@ export function PayoutDashboard({ initialSummary }: { initialSummary: PayoutSumm
 
       {activeTab === "statements" ? (
         <section className="surface-card mt-6 p-5 sm:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-2xl font-semibold">Downloadable statements</h2><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Statements contain only your own records.</p></div><div className="flex flex-wrap gap-2"><button type="button" className="btn-outline" onClick={() => generateStatement("monthly")}>Download My Monthly Statement</button><button type="button" className="btn-primary" onClick={() => generateStatement("quarterly")}>Download My Quarterly Statement</button></div></div>
+          <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-2xl font-semibold">Downloadable statements</h2><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Statements contain only your own records.</p></div><div className="flex flex-wrap gap-2"><button type="button" className="btn-outline" disabled={reportBusy} onClick={() => generateStatement("monthly")}>Download My Monthly Statement</button><button type="button" className="btn-primary" disabled={reportBusy} onClick={() => generateStatement("quarterly")}>Download My Quarterly Statement</button></div></div>
           {reportFeedback ? <p className="mt-3 text-sm">{reportFeedback}</p> : null}
           <div className="mt-5 grid gap-3">{summary.reports.map((report) => <article key={report.id} className="surface-list-item flex flex-wrap items-center justify-between gap-3 p-4"><div><p className="font-semibold">{report.fileName}</p><p className="mt-1 text-xs" style={{ color: "var(--text-soft)" }}>{new Date(report.generatedAt).toLocaleString("en-IN")} · {report.status}</p></div><a href={`/api/payout/reports/${report.id}/download`} className="btn-outline px-3 py-2 text-xs">Download</a></article>)}</div>
         </section>
@@ -273,97 +208,13 @@ export function PayoutDashboard({ initialSummary }: { initialSummary: PayoutSumm
             <div><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Withdrawal activity</p><h2 className="mt-2 text-2xl font-semibold">Payout requests</h2><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Track every request from submission through processing.</p></div>
             <button type="button" disabled={buttonDisabled} onClick={() => setModalOpen(true)} className="btn-primary pressable disabled:opacity-50">Request payout <ArrowUpRight className="h-4 w-4" /></button>
           </div>
-          <div className="mt-6"><TableShell headers={["Request date", "Requested", "Service fee", "Net payout", "Method", "Status", "Processed", "Evidence / timeline"]} empty="No payout requests yet.">
-            {summary.payoutHistory.map((row) => <tr key={row.id} className="border-t" style={{ borderColor: "var(--border)" }}><td className="whitespace-nowrap px-4 py-3">{new Date(row.requestDate).toLocaleDateString("en-IN")}</td><td className="px-4 py-3">{formatMoney(row.requestedAmount)}</td><td className="px-4 py-3">{formatMoney(row.serviceFee)}</td><td className="px-4 py-3 font-semibold">{formatMoney(row.netPayout)}</td><td className="px-4 py-3">{row.method}</td><td className="px-4 py-3"><StatusBadge status={row.status} /></td><td className="whitespace-nowrap px-4 py-3">{row.processedDate ? new Date(row.processedDate).toLocaleDateString("en-IN") : "-"}</td><td className="px-4 py-3">{row.receiptPath ? <a className="mr-3 underline" href={row.receiptPath}>Receipt</a> : null}{row.proofPath ? <a className="underline" href={row.proofPath}>Proof</a> : null}<details className="mt-2"><summary className="cursor-pointer">Timeline ({row.events.length})</summary><ol className="mt-1 min-w-72 space-y-1 text-xs">{row.events.map(event => <li key={event.id}>{new Date(event.createdAt).toLocaleString("en-IN")} · {event.previousStatus || "created"} → {event.newStatus}{event.note ? ` · ${event.note}` : ""}</li>)}</ol></details></td></tr>)}
-          </TableShell></div>
+          <WithdrawalRecords rows={summary.payoutHistory}/>
         </section>
       ) : null}
 
-      {activeTab === "overview" ? <>
-      {!hasStatements ? (
-        <div className="mt-6">
-          <EmptyState>No royalty statement has been imported yet. Earnings will appear after HYMN processes distributor reports.</EmptyState>
-        </div>
-      ) : null}
+      {activeTab === "overview" ? <EarningsOverview summary={summary} onSection={selectTab}/> : null}
 
-      <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Available balance" value={formatMoney(summary.availableBalance)} detail={`Verified statements · ${verifiedThrough}`} />
-        <KpiCard label="Current month earnings" value={formatMoney(summary.currentMonthEarnings)} detail={maxMonthly ? `Imported statement · ${verifiedThrough}` : "No imported statement period"} />
-        <KpiCard label="Current quarter earnings" value={formatMoney(summary.currentQuarterEarnings)} detail={`Q${summary.quarter.quarter} ${summary.quarter.year} · verified records`} />
-        <KpiCard label="Held balance" value={formatMoney(summary.currentQuarterHeld)} detail="Held in verified payout records" />
-        <KpiCard label="Pending payout" value={formatMoney(summary.pendingBalance)} detail="Submitted manual payout requests" />
-        <KpiCard label="Lifetime verified earnings" value={formatMoney(summary.totalEarnings)} detail={`Verified through ${verifiedThrough}`} />
-        <KpiCard label="Lifetime paid" value={formatMoney(summary.paidTillDate)} detail="Confirmed completed payouts" />
-        <KpiCard label="Carry forward balance" value={formatMoney(summary.carryForwardBalance)} detail="Verified unpaid balance" />
-      </section>
-
-      <section className="surface-card mt-6 p-5 sm:p-6"><div><h2 className="text-2xl font-semibold">Financial ledger</h2><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Verified through {verifiedThrough}. Running balance is omitted because the current backend does not supply an auditable per-entry running balance.</p></div><div className="mt-5"><TableShell headers={["Date", "Description", "Source", "Credit", "Debit", "Status"]} empty="No verified royalty credits or payout reservations yet.">{ledgerRows.map((row) => <tr key={row.key} className="border-t" style={{ borderColor: "var(--border)" }}><td className="whitespace-nowrap px-4 py-3">{row.date}</td><td className="px-4 py-3">{row.description}</td><td className="px-4 py-3" style={{ color: "var(--text-muted)" }}>{row.source}</td><td className="px-4 py-3" style={{ color: row.credit ? "var(--success)" : "var(--text-soft)" }}>{row.credit ? formatMoney(row.credit) : "—"}</td><td className="px-4 py-3">{row.debit ? formatMoney(row.debit) : "—"}</td><td className="px-4 py-3"><StatusBadge status={row.status} /></td></tr>)}</TableShell></div></section>
-
-      <section className="surface-card mt-6 p-5 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>Monthly earnings analytics</h2>
-            <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Only verified royalty statement data is shown here.</p>
-          </div>
-          <StatusBadge status="Finance-grade data only" />
-        </div>
-        <div className="mt-5"><MonthlyChart rows={summary.monthlyEarnings} /></div>
-        <div className="mt-5">
-          <TableShell headers={["Month", "Gross earnings", "HYMN service fee", "Net payable", "Payout status"]} empty="No monthly statement rows yet.">
-            {summary.monthlyEarnings.map((row) => (
-              <tr key={row.month} className="border-t" style={{ borderColor: "var(--border)" }}>
-                <td className="px-4 py-3">{row.month}</td><td className="px-4 py-3">{formatMoney(row.grossEarnings)}</td><td className="px-4 py-3">{formatMoney(row.hymnServiceFee)}</td><td className="px-4 py-3">{formatMoney(row.netPayable)}</td><td className="px-4 py-3"><StatusBadge status={row.payoutStatus} /></td>
-              </tr>
-            ))}
-          </TableShell>
-        </div>
-      </section>
-
-      <section className="mt-6 grid gap-6">
-        <div className="surface-card p-5 sm:p-6">
-          <h2 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>Earnings breakdown</h2>
-          <div className="mt-5 grid gap-5">
-            <TableShell headers={["Release", "UPC", "Gross", "HYMN fee", "Net", "Status"]} empty="No release-level earnings yet.">
-              {summary.releaseBreakdown.map((row) => <tr key={`${row.releaseTitle}-${row.upc}`} className="border-t" style={{ borderColor: "var(--border)" }}><td className="px-4 py-3">{row.releaseTitle}</td><td className="px-4 py-3">{row.upc}</td><td className="px-4 py-3">{formatMoney(row.grossEarnings)}</td><td className="px-4 py-3">{formatMoney(row.hymnFee)}</td><td className="px-4 py-3">{formatMoney(row.netEarnings)}</td><td className="px-4 py-3"><StatusBadge status={row.payoutStatus} /></td></tr>)}
-            </TableShell>
-            <TableShell headers={["Track", "ISRC", "Streams/downloads", "Net earnings"]} empty="No track-level earnings yet.">
-              {summary.trackBreakdown.map((row) => <tr key={`${row.trackTitle}-${row.isrc}`} className="border-t" style={{ borderColor: "var(--border)" }}><td className="px-4 py-3">{row.trackTitle}</td><td className="px-4 py-3">{row.isrc}</td><td className="px-4 py-3">{row.streamsDownloads ?? "-"}</td><td className="px-4 py-3">{formatMoney(row.netEarnings)}</td></tr>)}
-            </TableShell>
-            <TableShell headers={["Platform", "Earnings"]} empty="No platform earnings yet.">
-              {summary.platformBreakdown.map((row) => <tr key={row.platform} className="border-t" style={{ borderColor: "var(--border)" }}><td className="px-4 py-3">{row.platform}</td><td className="px-4 py-3">{formatMoney(row.earnings)}</td></tr>)}
-            </TableShell>
-          </div>
-        </div>
-
-        <div className="surface-card p-5 sm:p-6">
-          <h2 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>Payout history</h2>
-          <div className="mt-5">
-            <TableShell headers={["Request date", "Requested", "Service fee", "Net payout", "Method", "Status", "Processed", "Evidence"]} empty="No payout requests yet.">
-              {summary.payoutHistory.map((row) => <tr key={row.id} className="border-t" style={{ borderColor: "var(--border)" }}><td className="px-4 py-3">{new Date(row.requestDate).toLocaleDateString("en-IN")}</td><td className="px-4 py-3">{formatMoney(row.requestedAmount)}</td><td className="px-4 py-3">{formatMoney(row.serviceFee)}</td><td className="px-4 py-3">{formatMoney(row.netPayout)}</td><td className="px-4 py-3">{row.method}</td><td className="px-4 py-3"><StatusBadge status={row.status} /></td><td className="px-4 py-3">{row.processedDate ? new Date(row.processedDate).toLocaleDateString("en-IN") : "-"}</td><td className="px-4 py-3">{row.receiptPath ? <a className="underline" href={row.receiptPath}>Receipt</a> : row.adminNote ?? "-"}</td></tr>)}
-            </TableShell>
-          </div>
-        </div>
-      </section>
-
-      <section className="surface-card mt-8 overflow-hidden p-5 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-5" style={{ borderColor: "var(--border)" }}>
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]" style={{ borderColor: "var(--border)", color: "var(--success)", background: "var(--bg-soft)" }}><ShieldCheck className="h-3.5 w-3.5" /> Verified reporting data</div>
-            <h2 className="mt-3 text-2xl font-semibold" style={{ color: "var(--text)" }}>Verified earnings snapshot</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6" style={{ color: "var(--text-muted)" }}>Only imported, verified distributor reporting is shown here. HYMN does not use stream-rate estimates for payout balances.</p>
-          </div>
-          <p className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: "var(--border)", color: "var(--text-muted)", background: "var(--bg-soft)" }}>Reporting period: {verifiedThrough}</p>
-        </div>
-        {hasStatements ? <div className="mt-5 grid gap-4 lg:grid-cols-[0.8fr_0.8fr_0.8fr_1.6fr]">
-          <div className="rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Payout-ready</p><p className="mt-2 text-2xl font-semibold" style={{ color: "var(--text)" }}>{formatUsd(summary.availableBalanceUsd)}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{formatMoney(summary.availableBalance)} INR</p></div>
-          <div className="rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Verified earnings</p><p className="mt-2 text-2xl font-semibold" style={{ color: "var(--text)" }}>{formatMoney(summary.totalEarnings)}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Imported royalty records</p></div>
-          <div className="rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Platforms reported</p><p className="mt-2 text-2xl font-semibold" style={{ color: "var(--text)" }}>{summary.platformBreakdown.length}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{summary.monthlyEarnings.length} statement period{summary.monthlyEarnings.length === 1 ? "" : "s"}</p></div>
-          <div className="rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--card)" }}><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Top reported platforms</p><div className="mt-3 grid gap-2">{summary.platformBreakdown.slice(0, 3).map((row) => <div key={row.platform} className="flex items-center justify-between gap-3 text-sm"><span className="truncate" style={{ color: "var(--text-muted)" }}>{row.platform}</span><span className="font-semibold" style={{ color: "var(--text)" }}>{formatMoney(row.earnings)}</span></div>)}</div></div>
-        </div> : <div className="mt-5 rounded-2xl border border-dashed p-6 text-center" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><p className="font-semibold" style={{ color: "var(--text)" }}>No verified earnings imported yet</p><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>This area will populate after a verified distributor revenue report is imported into your HYMN ledger.</p></div>}
-      </section>
-      </> : null}
-
-      {modalOpen ? <PayoutModal summary={summary} onClose={() => setModalOpen(false)} onSuccess={setSummary} /> : null}
+      {modalOpen ? <PayoutModal summary={summary} onClose={() => setModalOpen(false)} onSuccess={next=>{refreshController.current?.abort();refreshController.current=null;setRefreshing(false);setRefreshError("");setSummary(next);}} /> : null}
     </main>
   );
 }
