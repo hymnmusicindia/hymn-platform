@@ -5,9 +5,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { AlertCircle, Bell, CheckCircle2, ChevronDown, Disc3, Headphones, HelpCircle, LayoutDashboard, LogOut, MessageCircle, Music2, PackageCheck, PanelLeft, ShieldCheck, ShoppingCart, UserRound, WalletCards, X } from "lucide-react";
+import { AlertCircle, Bell, CheckCircle2, ChevronDown, ChevronRight, Disc3, Headphones, HelpCircle, LayoutDashboard, LogOut, MessageCircle, Music2, PackageCheck, PanelLeft, ShieldCheck, ShoppingCart, UserRound, WalletCards, X } from "lucide-react";
 import clsx from "clsx";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { workspaceBreadcrumbs, type WorkspaceCrumb } from "@/lib/workspace-breadcrumbs";
+import "@/app/styles/workspace-breadcrumbs.css";
 import { mainNav } from "@/lib/site";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { SessionPayload } from "@/lib/types";
@@ -57,14 +59,26 @@ function notificationTimeAgo(value: string) {
 export function SiteHeader({ user = null }: SiteHeaderProps) {
   const pathname = usePathname();
   const workspaceHeader = true;
-  const sectionLabel = pathname.startsWith("/producer") || pathname.startsWith("/beat-store") ? "Beatstore" : pathname.startsWith("/studio") || pathname === "/dashboard/studio" ? "Mixing / Mastering" : pathname.startsWith("/dashboard/releases") || pathname.startsWith("/distribution") || pathname === "/analytics" || pathname.includes("payout") ? "Distribution" : pathname === "/audio-library" ? "Library" : pathname === "/" ? "Home" : "Workspace";
-  const [activeSection, setActiveSection] = useState(sectionLabel);
+  const [breadcrumbs, setBreadcrumbs] = useState<WorkspaceCrumb[]>(() => workspaceBreadcrumbs(pathname));
   useEffect(() => {
-    setActiveSection(sectionLabel);
-    function updateSection(event: Event) { const label = (event as CustomEvent<string>).detail; if (typeof label === "string") setActiveSection(label); }
-    window.addEventListener("hymn-workspace-section", updateSection);
-    return () => window.removeEventListener("hymn-workspace-section", updateSection);
-  }, [sectionLabel]);
+    const update = (event?: Event) => {
+      const detail = (event as CustomEvent<{ group: string; label?: string; href?: string }> | undefined)?.detail;
+      setBreadcrumbs(workspaceBreadcrumbs(pathname, window.location.search, detail));
+    };
+    update();
+    window.addEventListener("hymn-workspace-breadcrumbs", update);
+    window.addEventListener("popstate", update);
+    return () => {
+      window.removeEventListener("hymn-workspace-breadcrumbs", update);
+      window.removeEventListener("popstate", update);
+    };
+  }, [pathname]);
+  function Breadcrumbs() {
+    return <nav className="workspace-breadcrumbs" aria-label="Breadcrumb"><ol>{breadcrumbs.map((crumb, index) => <li key={`${index}-${crumb.href}`}>
+      {index > 0 ? <ChevronRight size={13} aria-hidden="true" /> : null}
+      <Link href={crumb.href} aria-current={index === breadcrumbs.length - 1 ? "page" : undefined} title={crumb.label}>{crumb.label}</Link>
+    </li>)}</ol></nav>;
+  }
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -615,7 +629,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           <Image src="/assets/hymnlogowhite.png" alt="HYMN Music Logo" width={156} height={52} className="h-7 w-auto max-w-24 object-contain sm:h-9 sm:max-w-none lg:h-10" style={{ filter: "var(--logo-filter)" }} priority />
         </Link>
 
-        {workspaceHeader ? <div className="studio-header-section"><button type="button" aria-label="Toggle service navigation" onClick={()=>window.dispatchEvent(new Event("hymn-toggle-navigation"))}><PanelLeft size={17}/></button><span>{activeSection}</span></div> : <nav className="hymn-page-selector hidden items-center gap-1 lg:flex" aria-label="Main navigation">
+        {workspaceHeader ? <div className="studio-header-section"><button type="button" aria-label="Toggle service navigation" onClick={()=>window.dispatchEvent(new Event("hymn-toggle-navigation"))}><PanelLeft size={17}/></button><Breadcrumbs /></div> : <nav className="hymn-page-selector hidden items-center gap-1 lg:flex" aria-label="Main navigation">
           {mainNav.map((item) => (
             <Link
               key={item.href}
@@ -672,7 +686,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
         </div>
       </div>
 
-      <div className="mobile-workspace-subheader"><button type="button" aria-label="Toggle service navigation" onClick={() => window.dispatchEvent(new Event("hymn-toggle-navigation"))}><PanelLeft size={15} aria-hidden="true"/><span aria-live="polite">{activeSection}</span><ChevronDown size={13} aria-hidden="true"/></button></div>
+      <div className="mobile-workspace-subheader"><button type="button" aria-label="Toggle service navigation" onClick={() => window.dispatchEvent(new Event("hymn-toggle-navigation"))}><PanelLeft size={15} aria-hidden="true"/></button><Breadcrumbs /></div>
 
       {open ? (
         <div id="site-mobile-nav" className="border-t lg:hidden" style={{ borderColor: "var(--glass-border)", background: "color-mix(in srgb, var(--glass-bg-strong) 88%, transparent)", backdropFilter: "blur(18px) saturate(155%)" }}>

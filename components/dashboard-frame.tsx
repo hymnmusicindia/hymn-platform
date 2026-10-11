@@ -152,9 +152,12 @@ export function DashboardFrame<T extends string>({
   const activeGroup = useMemo(() => groups.find((group) => group.items.some((item) => item.key === activeKey)), [activeKey, groups]);
   useEffect(() => { setOpenGroup(activeGroup?.label ?? null); }, [activeGroup?.label]);
   useEffect(() => {
-    const frame = requestAnimationFrame(() => window.dispatchEvent(new CustomEvent("hymn-workspace-section", { detail: activeGroup?.label ?? "Workspace" })));
+    const frame = requestAnimationFrame(() => {
+      window.dispatchEvent(new CustomEvent("hymn-workspace-section", { detail: activeGroup?.label ?? "Workspace" }));
+      window.dispatchEvent(new CustomEvent("hymn-workspace-breadcrumbs", { detail: { group: activeGroup?.label ?? "Workspace", label: activeItem?.label, href: activeItem?.href } }));
+    });
     return () => cancelAnimationFrame(frame);
-  }, [activeGroup?.label]);
+  }, [activeGroup?.label, activeItem?.label, activeItem?.href]);
 
   function handleSelect(key: string) {
     onSelect(key as T);

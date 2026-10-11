@@ -32,6 +32,17 @@ try {
   await expect(page.locator('a.workspace-home-link')).toHaveAttribute('href','/');
   await page.waitForFunction(()=>Object.keys(document.querySelector('.workspace-footer button')||{}).some(key=>key.startsWith('__reactProps$')));
   await page.waitForTimeout(1000);
+  const breadcrumb=page.locator(width<1024?'.mobile-workspace-subheader .workspace-breadcrumbs':'.studio-header-section .workspace-breadcrumbs');
+  await expect(breadcrumb.getByRole('link',{name:'Support',exact:true})).toHaveAttribute('href','/dashboard?tab=support');
+  await expect(breadcrumb.getByRole('link',{name:'FAQ',exact:true})).toHaveAttribute('aria-current','page');
+  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('hymn-workspace-breadcrumbs',{detail:{group:'Distribution',label:'Royalty splits',href:'/dashboard?tab=collaborators'}})));
+  const parent=breadcrumb.getByRole('link',{name:'Distribution',exact:true});
+  const child=breadcrumb.getByRole('link',{name:'Royalty splits',exact:true});
+  await expect(parent).toHaveAttribute('href','/distribution');
+  await expect(child).toHaveAttribute('href','/dashboard?tab=collaborators');
+  assert.ok(await child.evaluate(node=>parseFloat(getComputedStyle(node).fontSize)) < await parent.evaluate(node=>parseFloat(getComputedStyle(node).fontSize)));
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('hymn-workspace-breadcrumbs',{detail:{group:'Support',label:'FAQ',href:'/faq'}})));
   if(width<1024) await page.evaluate(()=>window.dispatchEvent(new Event('hymn-toggle-navigation')));
   const gift=page.locator('.workspace-footer').getByRole('link',{name:'Refer a friend',exact:true});
   await expect(gift).toBeInViewport();
