@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowDown, ArrowUpRight, Check, Globe, Instagram, Music2, Pause, Play, Share2, ShoppingBag, UserRound, Youtube } from "lucide-react";
+import { ArrowDown, ArrowUpRight, Check, Globe, Instagram, Music2, Share2, ShoppingBag, UserRound, Youtube } from "lucide-react";
 import { useRef, useState } from "react";
 import s from "./producer-link-page.module.css";
+import { BeatMusicWheel } from "./beat-music-wheel";
 
 import { useProducerBioPurchase } from "./producer-bio-purchase";
 import { beatLicensePrice } from "@/lib/beat-store";
@@ -11,7 +12,6 @@ import type { BioBeat, BioViewer } from "@/lib/producer-links";
 type FeaturedBeat = BioBeat;
 type Social = { id: "instagram" | "youtube" | "spotify" | "website"; label: string; url: string };
 const socialIcons = { instagram: Instagram, youtube: Youtube, spotify: Music2, website: Globe };
-const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 
 export function ProducerLinkPage({ name, slug, bio, avatar, banner, beats: initialBeats, socials, totalBeats = initialBeats.length, initialViewer = null }: {
   name: string; slug: string; bio: string; avatar: string; banner: string; beats: FeaturedBeat[]; socials: Social[]; totalBeats?: number; initialViewer?: BioViewer | null;
@@ -82,16 +82,13 @@ export function ProducerLinkPage({ name, slug, bio, avatar, banner, beats: initi
         <div className={s.sectionTitle}><h2>In the rotation</h2><span>{total} beats to discover</span></div>
         <div className={s.trackList}>{beats.map(beat=><div key={beat.id} className={`${s.track} ${active===beat.id?s.active:""}`}>
           <div className={s.trackMain}>
-            <button type="button" className={s.disc} disabled={!beat.audio} onClick={()=>toggle(beat)} aria-label={`${active===beat.id&&playing?"Pause":"Play"} ${beat.title}`} aria-pressed={active===beat.id&&playing}>
-              <img src={beat.artwork} alt="" loading="lazy"/>{active===beat.id&&playing?<Pause size={17} fill="currentColor"/>:<Play size={17} fill="currentColor"/>}
-            </button>
+            <BeatMusicWheel title={beat.title} artwork={beat.artwork} enabled={Boolean(beat.audio)} playing={active===beat.id&&playing} current={active===beat.id?current:0} duration={active===beat.id?duration:0} onToggle={()=>toggle(beat)} onSeek={seconds=>{if(active===beat.id&&audio.current){audio.current.currentTime=seconds;setCurrent(seconds);}}}/>
             <span className={s.trackInfo}><strong title={beat.title}>{beat.title}</strong><small>{name}</small><span className={s.trackMeta}>{beat.bpm} BPM &middot; {beat.keySignature||beat.genre}</span></span>
           </div>
           <div className={s.beatActions}>
             <button className={s.add} disabled={purchase.busy} onClick={()=>purchase.request("cart",beat)} aria-label={purchase.cart.some(item=>item.beatId===beat.id)?`Remove ${beat.title} from cart`:`Add ${beat.title} to cart`}>{purchase.cart.some(item=>item.beatId===beat.id)?<Check size={17}/>:<ShoppingBag size={17}/>}</button>
             <button className={s.buy} disabled={purchase.busy} onClick={()=>{audio.current?.pause();purchase.request("buy",beat);}} aria-label={`Instant buy ${beat.title}`}><span>Instant buy</span><strong>{`\u20b9${beatLicensePrice(beat,"mp3").toLocaleString("en-IN")}`}</strong></button>
           </div>
-          {active===beat.id&&duration>0&&<div className={s.progress}><span>{time(current)}</span><input type="range" aria-label={`Seek ${beat.title}`} min={0} max={duration} step={0.1} value={Math.min(current,duration)} onChange={event=>{if(audio.current)audio.current.currentTime=Number(event.target.value);setCurrent(Number(event.target.value));}}/><span>{time(duration)}</span></div>}
         </div>)}</div>
         {offset<total&&<button className={s.more} disabled={moreLoading} onClick={()=>void loadMore()}>{moreLoading?"Loading...":"Load more beats"}<ArrowDown size={16}/></button>}
         {error&&<p className={s.error} role="alert">{error}</p>}

@@ -24,13 +24,32 @@ async function main() {
     await page.route("https://producer.fixture/**",route=>route.fulfill(route.request().url().endsWith("hymnlogowhite.png")?{contentType:"image/png",body:readFileSync("public/assets/hymnlogowhite.png")}:route.request().url().endsWith("audio.wav")?{contentType:"audio/wav",body:wav}:{contentType:"text/html",body:'<html data-theme="light"><body><div id="app"></div></body></html>'}));
     await page.goto("https://producer.fixture/p/aditya-ujjain-18");await page.evaluate(value=>{(window as any).fixture=value;},{...fixture,beats:fixture.beats.slice(0,count),socials:count ? fixture.socials : []});await page.addStyleTag({content:css});await page.addScriptTag({content:readFileSync(".cache/producer-link-browser.js","utf8")});
     await page.getByRole("heading",{name:fixture.name,exact:true}).waitFor();
-    assert.equal(await page.getByRole("button",{name:/^Play Beat/}).count(),count);
+    assert.equal(await page.getByRole("slider",{name:/^Play Beat/}).count(),count);
     assert.equal(await page.getByLabel("Open Aditya Ujjain's beat store").getAttribute("href"),"/beat-store/producers/aditya-ujjain-18");
     if(count) assert.equal(await page.getByRole("link",{name:"Instagram",exact:true}).getAttribute("rel"),"noopener noreferrer");
     assert.equal(await page.getByRole("img",{name:"HYMN Music",exact:true}).count(),1);
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),"No horizontal overflow");
     for(const button of await page.getByRole("button").all()){const bounds=await button.boundingBox();assert(bounds&&bounds.height>=44,"Touch target height");}
-    if(count) { await page.getByLabel("Play Beat 1",{exact:true}).click();await page.getByLabel("Pause Beat 1",{exact:true}).waitFor();await page.getByLabel("Seek Beat 1").waitFor();
+    if(count) { await page.getByLabel("Play Beat 1",{exact:true}).click();await page.getByLabel("Pause Beat 1",{exact:true}).waitFor();assert.equal(await page.locator('input[type="range"]').count(),0,"No playback bar");
+    await page.waitForFunction(()=>Number(document.querySelector('[role="slider"]')?.getAttribute('aria-valuemax'))>0);
+    await page.getByLabel("Pause Beat 1",{exact:true}).click();
+    // A complete local WAV keeps seeking independent of the mocked HTTP range server.
+    await page.evaluate(base64=>{const audio=document.querySelector("audio")!;const bytes=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));audio.preload="auto";audio.src=URL.createObjectURL(new Blob([bytes],{type:"audio/wav"}));audio.load();},wav.toString("base64"));
+    await page.waitForFunction(()=>document.querySelector("audio")!.readyState>=3);
+    await page.getByRole("slider").first().press("End");
+    await page.waitForFunction(()=>document.querySelector("audio")!.currentTime>=3.9);
+    await page.getByRole("slider").first().press("Home");
+    const wheel=page.getByRole("slider").first();const bounds=await wheel.boundingBox();assert(bounds);
+    const cx=bounds.x+bounds.width/2,cy=bounds.y+bounds.height/2,r=bounds.width*.4;
+    await page.mouse.move(cx,cy-r);await page.mouse.down();
+    for(let step=1;step<=5;step++){const angle=-Math.PI/2+step*Math.PI/50;await page.mouse.move(cx+Math.cos(angle)*r,cy+Math.sin(angle)*r);}
+    await page.mouse.up();
+    await page.waitForFunction(()=>document.querySelector("audio")!.currentTime>0.5);
+    assert(await page.locator("audio").evaluate((a:HTMLAudioElement)=>a.paused),"Dragging does not toggle playback");
+    await page.mouse.move(cx+r,cy);await page.mouse.down();
+    for(let step=1;step<=10;step++){const angle=-step*Math.PI/50;await page.mouse.move(cx+Math.cos(angle)*r,cy+Math.sin(angle)*r);}
+    await page.mouse.up();
+    await page.waitForFunction(()=>document.querySelector("audio")!.currentTime<0.5);
     if(count>1) { await page.getByLabel("Play Beat 2",{exact:true}).click();await page.getByLabel("Pause Beat 2",{exact:true}).waitFor();assert.equal(await page.locator("audio").count(),1,"Only one player");
     await page.getByLabel("Pause Beat 2",{exact:true}).click();await page.getByLabel("Play Beat 2",{exact:true}).waitFor(); } }
     await page.getByLabel("Share Aditya Ujjain's profile").click();await page.getByRole("status").filter({hasText:"Link copied"}).waitFor();

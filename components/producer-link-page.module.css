@@ -36,8 +36,6 @@
 .page .buy { display:flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:10px 12px; border:0; border-radius:999px; background:#edf2ff; color:#151e30; font-size:10px; font-weight:650; white-space:nowrap; }
 .buy strong { font-size:11px; font-weight:650; }
 .beatActions button:disabled { opacity:.5; }
-.progress { grid-column:1/-1; display:flex; align-items:center; gap:8px; color:#c6d1e5; font-size:10px; font-variant-numeric:tabular-nums; }
-.progress input { min-width:0; flex:1; height:44px; padding:0; accent-color:#c7d8ff; }
 .page .more { display:flex; justify-content:center; align-items:center; gap:8px; min-height:48px; width:100%; margin-top:14px; padding:8px; border:0; background:none; color:#d2def4; font-size:12px; }
 .page .store { display:flex; justify-content:center; align-items:center; gap:12px; min-height:56px; margin:24px 0 0; padding:12px 0; border:0; border-top:1px solid #ffffff26; border-bottom:1px solid #ffffff26; background:none; color:#e8effd; text-decoration:none; font-size:13px; font-weight:600; }
 .footer { margin-top:26px; }
@@ -49,3 +47,9 @@
 @media(hover:hover) { .track:hover { background:#ffffff07; } .page .social:hover,.page .more:hover,.page .store:hover { color:#fff; } .page .buy:hover { background:#cbdcff; } }
 @media(min-width:700px) { .column { padding-top:32px; } .identity { margin-top:28px; } .background { filter:blur(16px); opacity:.45; } .track { padding:18px 0; } }
 @media(max-width:360px) { .page { padding-inline:14px; } .page h1 { font-size:26px; } .trackMain { gap:8px; } .disc { width:48px; height:48px; } .page .buy { gap:5px; padding-inline:9px; font-size:9px; } .beatActions { gap:4px; } .track { gap:6px; } }
+
+.page .disc { touch-action:none; user-select:none; cursor:grab; }
+.page .disc:active { cursor:grabbing; }
+.disc .wheelProgress { position:absolute; inset:0; width:100%; height:100%; transform:rotate(-90deg); filter:none; pointer-events:none; }
+.wheelProgress circle { fill:none; stroke:#c7d8ff; stroke-width:1.5; stroke-linecap:round; }
+.disc img { pointer-events:none; }
