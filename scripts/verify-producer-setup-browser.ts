@@ -63,8 +63,14 @@ async function main() {
       }
       await page.screenshot({path:`.cache/producer-upload-files-${width}.png`,fullPage:true});
       await page.locator('input[name="file"]').setInputFiles({ name: "master.mp3", mimeType: "audio/mpeg", buffer: Buffer.from("fixture") });
+      await page.getByLabel("Selected master audio").waitFor();
+      const masterSource = await page.locator("audio").getAttribute("src");
+      await page.locator('input[name="preview"]').setInputFiles({name:"preview.mp3",mimeType:"audio/mpeg",buffer:Buffer.from("preview fixture")});
+      await page.getByLabel("Selected public preview").waitFor();
+      assert.notEqual(await page.locator("audio").getAttribute("src"),masterSource,"Separate preview takes priority");
+      await page.locator('input[name="preview"]').setInputFiles([]);
       await page.getByRole("button", { name: "Continue", exact: true }).click();
-      assert.equal(await page.locator("audio").count(),0,"Master must never become a playable storefront preview");
+      assert.equal(await page.getByLabel("Selected master audio").count(),1,"Master is playable when no preview is provided");
       for (const [name, value] of Object.entries({ title: "First beat", bpm: "140", keySignature: "F minor", genre: "Trap", mood: "Dark" })) await page.locator(`[name="${name}"]`).fill(value);
       await page.getByRole("button", { name: "Continue", exact: true }).click();
       await page.getByRole("button",{name:"Use suggested prices"}).click();

@@ -1,0 +1,7 @@
+.card.card { color:#f7f8fa; background-color:#101216; }
+.card.card h3 { color:#f7f8fa; }
+.card.card p, .card .metadata { color:#c6cbd4; }
+.card .licence.licence { background:#f4f6fa !important; color:#101216 !important; border:1px solid #f4f6fa; }
+.card .licence:hover { background:#dce5f5 !important; }
+.card button:focus-visible { outline:2px solid #a8caff; outline-offset:3px; }
+.card .play { opacity:1; background:#080a0dcc; color:#fff; }

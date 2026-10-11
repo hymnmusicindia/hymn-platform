@@ -3765,7 +3765,7 @@ export function mapPrismaBeat(prismaBeat: any): Beat {
     exclusiveLegalMode: prismaBeat.exclusiveLegalMode,
     generalLicensesSold: prismaBeat.generalLicensesSold,
     exclusiveReservationExpiresAt: prismaBeat.exclusiveReservationExpiresAt?.toISOString() ?? null,
-    fileUrl: "",
+    fileUrl: prismaBeat.audioUploadId ? `/api/beats/${prismaBeat.id}/audio` : "",
     previewUrl: normalizePublicUploadUrl(prismaBeat.preview?.publicUrl) ?? "",
     artworkUrl: normalizePublicUploadUrl(prismaBeat.artwork?.publicUrl) ?? undefined,
     enabled: prismaBeat.enabled,
