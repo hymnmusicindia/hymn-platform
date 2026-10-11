@@ -1,3 +1,4 @@
+import { SubscriptionPlanConfigurationError, subscriptionCheckoutUnavailable } from "@/lib/subscription-plan-validation";
 import { NextResponse } from "next/server";
 import { buildCheckoutQuote, quoteToOrderItems } from "@/lib/checkout";
 import { createOrder, completeCheckoutOrder, createBeatPurchase, createNotification } from "@/lib/db";
@@ -90,6 +91,10 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not create checkout order.";
+    if (error instanceof SubscriptionPlanConfigurationError) {
+      console.error("Subscription plan configuration mismatch", { message });
+      return NextResponse.json({ error: subscriptionCheckoutUnavailable, code: "SUBSCRIPTION_PLAN_UNAVAILABLE" }, { status: 503 });
+    }
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

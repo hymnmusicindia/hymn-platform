@@ -7,6 +7,7 @@ import { findDistributionPlan } from "@/lib/distribution-plans";
 import { qualifyRecurringReferral } from "@/lib/referral-reward-policy";
 import { qualifyPartnerPayment } from "@/lib/growth-partners";
 import { recordGrowthEvent } from "@/lib/growth";
+import { SubscriptionPlanConfigurationError, validateSubscriptionProviderPlan } from "@/lib/subscription-plan-validation";
 
 export const SUBSCRIPTION_PRODUCTS = ["half_yearly", "yearly", "yearly_plus"] as const;
 export type SubscriptionProduct = typeof SUBSCRIPTION_PRODUCTS[number];
@@ -124,10 +125,10 @@ export function verifySubscriptionCheckoutSignature(paymentId: string, subscript
 async function resolvePlanVersion(product: SubscriptionProduct) {
   const policy = SUBSCRIPTION_POLICIES[product];
   const razorpayPlanId = process.env[policy.planEnv]?.trim();
-  if (!razorpayPlanId) throw new Error(`${policy.planEnv} is not configured.`);
+  if (!razorpayPlanId) throw new SubscriptionPlanConfigurationError(`${policy.planEnv} is not configured.`);
   if (!razorpay) throw new Error("Razorpay is not configured.");
   const providerPlan = await razorpay.plans.fetch(razorpayPlanId);
-  if (Number(providerPlan.item?.amount) !== policy.amount || String(providerPlan.item?.currency || "").toUpperCase() !== policy.currency) throw new Error(`${policy.planEnv} amount or currency does not match HYMN's ${policy.name} configuration.`);
+  validateSubscriptionProviderPlan(providerPlan, { ...policy, months: product === "half_yearly" ? 6 : 12 });
   return prisma.subscriptionPlanVersion.upsert({
     where: { razorpayPlanId },
     create: { product, razorpayPlanId, amount: policy.amount, currency: policy.currency, billingInterval: policy.billingInterval },
