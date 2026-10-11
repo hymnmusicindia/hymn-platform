@@ -34,3 +34,17 @@ Production compilation and the build TypeScript phase passed. Page-data collecti
 - [NN/g: Data Tables ? Four Major User Tasks](https://www.nngroup.com/articles/data-tables/): find, compare, inspect and act.
 - [Carbon: Data table usage](https://v10.carbondesignsystem.com/components/data-table/usage/): consistent toolbars, row actions and progressive detail.
 - [NN/g: Progressive disclosure](https://www.nngroup.com/articles/progressive-disclosure/): keep sensitive or secondary controls behind a deliberate detail step.
+
+## Visual revenue and creator guidance (12 October 2026)
+
+Command Center now has HYMN Revenue: source donut, monthly bars, period/source filters, financial summary cards and an evidence ledger. The overview total uses the same financial entries rather than only distribution/commerce orders. Subscription paise are converted to rupees; known gateway payment IDs are deduplicated across checkout types. Merchant confirmations remain separate evidence and are included once by the existing subscription ledger reader.
+
+Gross collections are not platform earnings. HYMN share includes subscription/distribution receipts, persisted Beat Store commissions, studio earning allocations, royalty service fees and paid-payout fees. Missing commission allocations are explicit; percentages are never inferred. INR views exclude other currencies and royalty lines use their statement/allocation currency. Rolled-back royalty statements are excluded. Figures are before tax, gateway charges, refund adjustments and operating expenses, and do not claim bank settlement or profit.
+
+Payments is a subview of HYMN Revenue; Integrations and Health share one destination. Producer Sales includes licence documents, and Earnings includes wallet history. Artist Settings includes profiles, and Help consolidates support destinations. Legacy URLs remain accessible. Creator release/beat guides use actual draft/review/published status and clickable stage destinations.
+
+Verification: `npx tsx scripts/verify-revenue-report.ts` covers amounts, platform shares, unknown allocations, currency isolation, India-time month buckets and menu consolidation. A read-only production check on 12 October confirmed INR798 collected and INR798 recorded HYMN share, including the INR699 merchant-confirmed receipt plus INR99 distribution payment. No production records were changed.
+
+Chart design follows [Carbon chart selection guidance](https://v10.carbondesignsystem.com/data-visualization/chart-types/) and [NN/g dashboard perception guidance](https://www.nngroup.com/articles/dashboards-preattentive/): choose charts for the comparison, label values directly, use consistent colors, and keep exact records reachable.
+
+Presentation checks passed for 30 dashboard views at 1440/390/320px, including revenue measure/source switching. Focused browser checks also passed unified revenue search, custom India-time date ranges, empty state and reset. TypeScript and touched-file lint checks passed.

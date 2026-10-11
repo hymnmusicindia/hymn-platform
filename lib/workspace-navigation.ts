@@ -1,4 +1,4 @@
-import { Disc3, Folder, Headphones, LayoutGrid, LifeBuoy, Megaphone, Music2, Plus, Settings, ShieldCheck, Store, TrendingUp, Users, Wallet, HelpCircle, MessageCircle } from "lucide-react";
+import { Disc3, Folder, Headphones, LayoutGrid, LifeBuoy, Megaphone, Music2, Plus, Settings, ShieldCheck, Store, TrendingUp, Users, Wallet } from "lucide-react";
 
 // Shared by the home rail and every artist/producer workspace frame.
 export const workspaceNavigation = [
@@ -18,12 +18,9 @@ export const workspaceNavigation = [
   { key:"studio", label:"Find an engineer", group:"Mixing / Mastering", href:"/studio", icon:Headphones },
   { key:"studio-orders", label:"My projects", group:"Mixing / Mastering", href:"/dashboard/studio", icon:LayoutGrid },
   { key:"managed-services", label:"Artist services", group:"Mixing / Mastering", href:"/managed-services", icon:Music2 },
-  { key:"settings", label:"Settings", group:"Account", href:"/dashboard?tab=settings", icon:Settings },
-  { key:"artist-profiles", label:"Artist profiles", group:"Account", href:"/dashboard?tab=settings", icon:Users },
+  { key:"settings", label:"Settings & profiles", group:"Account", href:"/dashboard?tab=settings", icon:Settings },
   { key:"referral", label:"Referrals", group:"Account", href:"/dashboard?tab=referral", icon:Users },
   { key:"support", label:"Help & support", group:"Support", href:"/dashboard?tab=support", icon:LifeBuoy },
-  { key:"faq", label:"FAQ", group:"Support", href:"/faq", icon:HelpCircle },
-  { key:"contact", label:"Contact HYMN", group:"Support", href:"/contact", icon:MessageCircle }
 ];
 
 export const workspaceGroups = Array.from(new Set(workspaceNavigation.map(item=>item.group)))
@@ -41,7 +38,7 @@ export function consistentWorkspaceNavigation(items: NavItem[]): NavItem[] {
     const existing = items.find(item=>item.group!=="Business" && (item.label===canonical.label
       || (canonical.key==="earnings" && item.key==="earnings")
       || (canonical.key==="studio" && item.label==="Browse services")
-      || (canonical.key==="artist-profiles" && item.label==="Artist Profiles")
+      || (canonical.key==="settings" && item.key==="settings")
       || (canonical.key==="support" && item.label==="Help & FAQ")
       || (canonical.key==="overview" && item.group==="Home")));
     if(existing) matched.add(existing);
@@ -49,7 +46,7 @@ export function consistentWorkspaceNavigation(items: NavItem[]): NavItem[] {
     const local = producer && canonical.key==="settings" && existing && !existing.href;
     return {...canonical,...existing,key:existing?.key ?? (items.some(item=>item.key===canonical.key) ? `workspace-${canonical.key}` : canonical.key),label:canonical.label,group:canonical.group,href:local ? undefined : canonical.href};
   });
-  const extras = items.filter(item=>!matched.has(item) && !(item.group==="Distribution" && ["payouts", "earnings"].includes(item.key))).map(item=>({...item,
+  const extras = items.filter(item=>!matched.has(item) && !(item.group==="Account" && item.href==="/dashboard?tab=settings") && !(item.group==="Distribution" && ["payouts", "earnings"].includes(item.key))).map(item=>({...item,
     group:item.group==="Business" ? "Beatstore" : item.group==="Profile" ? "Account" : item.group}));
   return [...new Set([...shared.map(item=>item.group),...extras.map(item=>item.group)])]
     .flatMap(group=>[...shared.filter(item=>item.group===group),...extras.filter(item=>item.group===group)]);

@@ -1,3 +1,4 @@
+import { listPlatformRevenue } from "@/lib/platform-revenue";
 import { listSubscriptionRevenue } from "@/lib/subscription-revenue";
 import { adminModuleAllowed } from "@/lib/admin-workspace-navigation";
 import { redirect } from "next/navigation";
@@ -87,6 +88,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const [orders, applications, leads] = await Promise.all([canReadCommerce?listAllOrders():Promise.resolve([]), canReadServices?listProducerApplications():Promise.resolve([]), canReadServices?listPartnershipLeads():Promise.resolve([])]);
   const [distributionOrders, artistProfiles] = await Promise.all([canReadCommerce?listAllDistributionOrders():Promise.resolve([]), canReadUsers?listAllArtistProfiles():Promise.resolve([])]);
   const [siteSettings, notifications, supportTickets] = await Promise.all([getSiteSettings(), canReadSystem?listLatestNotifications(50):Promise.resolve([]), canReadServices?listAllSupportTickets():Promise.resolve([])]);
+  const revenueEntries = permissions.some(permission => ["payouts.review", "royalties.reconcile"].includes(permission)) ? await listPlatformRevenue(distributionOrders, orders, subscriptionRevenue) : [];
   const requestedTabCandidate = resolvedSearchParams?.tab && ADMIN_TABS.includes(resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) ? (resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) : undefined;
   const requestedTab = requestedTabCandidate && !adminModuleAllowed(requestedTabCandidate,permissions) ? "overview" : requestedTabCandidate;
 
@@ -106,6 +108,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         initialLeads={leads}
         initialDistributionOrders={distributionOrders}
         initialSubscriptionRevenue={subscriptionRevenue}
+        initialRevenueEntries={revenueEntries}
         initialArtistProfiles={artistProfiles}
         initialSiteSettings={siteSettings}
         initialNotifications={notifications}

@@ -13,8 +13,7 @@ export const adminWorkspaceNavigation:Item[]=[
         { key: "fraud", label: "Fraud Detection", description: "Risk monitoring and investigations", group: "Distribution Operations", href: "/admin/fraud" },
         { key: "referrals-admin", label: "Referrals", description: "Attribution, credits and abuse review", group: "Money Operations", href: "/admin/referrals" },
         { key: "growth", label: "Growth", description: "Campaigns, inquiries and repeat releases", group: "Money Operations", href: "/admin/growth" },
-        { key: "payments", label: "Payments", description: "Checkout records", group: "Money Operations" },
-        { key: "revenue", label: "Revenue", description: "Revenue overview", group: "Money Operations" },
+        { key: "revenue", label: "HYMN Revenue", description: "Collections, commissions and payment records", group: "Command Center" },
         { key: "royalties", label: "Payouts", description: "Withdrawal controls", group: "Money Operations" },
         { key: "earnings-entry", label: "Royalty Management", description: "Import reports and manage ledgers", group: "Money Operations", href: "/admin/royalties" },
         { key: "reconciliation", label: "Reconciliation", description: "Resolve unmatched statement rows", group: "Money Operations", href: "/admin/royalties/reconciliation" },
@@ -40,8 +39,7 @@ export const adminWorkspaceNavigation:Item[]=[
         { key: "users", label: "Users", description: "Accounts, catalogue and activity", group: "Platform" },
         { key: "team", label: "Team", description: "Staff operations", group: "Platform" },
         { key: "activity", label: "Activity and Logs", description: "Active admins and session history", group: "Platform" },
-        { key: "integrations", label: "Integrations", description: "Provider configuration", group: "Platform", href: "/admin/integrations/direnote" },
-        { key: "health", label: "System Health", description: "Readiness and provider state", group: "Platform", href: "/admin/integrations/direnote" },
+        { key: "integrations", label: "Integrations & health", description: "Provider configuration and readiness", group: "Platform", href: "/admin/integrations/direnote" },
         { key: "settings", label: "Settings", description: "Platform config", group: "Platform" }
       ];
 const required:Record<string,AdminPermissionKey[]>={

@@ -1,6 +1,8 @@
 ﻿"use client";
 
 import { AdminSubscriptionRevenue } from "@/components/admin-subscription-revenue";
+import { AdminRevenueWorkspace } from "@/components/admin-revenue-workspace";
+import { summarizeRevenue, type RevenueEntry } from "@/lib/revenue-report";
 import type { SubscriptionRevenueRow } from "@/lib/subscription-revenue";
 
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
@@ -540,6 +542,7 @@ export function AdminControlCenter({
   initialLeads,
   initialDistributionOrders,
   initialSubscriptionRevenue = [],
+  initialRevenueEntries = [],
   initialArtistProfiles,
   initialSiteSettings,
   initialNotifications,
@@ -557,6 +560,7 @@ export function AdminControlCenter({
   initialLeads: PartnershipLead[];
   initialDistributionOrders: DistributionOrder[];
   initialSubscriptionRevenue?: SubscriptionRevenueRow[];
+  initialRevenueEntries?: RevenueEntry[];
   initialArtistProfiles: ArtistProfile[];
   initialSiteSettings: SiteSettings;
   initialNotifications: Notification[];
@@ -715,6 +719,7 @@ export function AdminControlCenter({
     }
   }
 
+  const revenueSummary = summarizeRevenue(initialRevenueEntries);
   const distributionRevenue = initialDistributionOrders.filter((order) => order.paymentStatus === "paid").reduce((sum, order) => sum + order.amount, 0);
   const commerceRevenue = initialOrders.filter((order) => order.paymentStatus === "paid").reduce((sum, order) => sum + order.amount, 0);
   const pendingReviews = releases.filter((release) => ["submitted", "in_queue", "under_review"].includes(release.status.toLowerCase())).length;
@@ -1111,7 +1116,7 @@ export function AdminControlCenter({
       title="HYMN Command Center"
       subtitle={<span className="admin-identity"><span className="admin-identity-line"><span className="admin-online-dot" />{currentAdmin.name}<span className="admin-active-label">Active</span></span><span className="admin-identity-meta">{currentAdmin.email} · {todayLabel}</span></span>}
       navItems={adminNavigation(adminAccess.permissions)}
-      activeKey={activeTab}
+      activeKey={activeTab === "payments" ? "revenue" : activeTab}
       onSelect={selectAdminTab}
       searchValue={moduleSearch}
       onSearchChange={setModuleSearch}
@@ -1139,7 +1144,7 @@ export function AdminControlCenter({
             <OverviewMetric label="Release reviews" value={hasPermission("releases.read")||hasPermission("releases.review")?pendingReviews:"Restricted"} detail="Submitted, queued or in review" icon={<Music2 />} onClick={() => selectAdminTab("distribution-queue")} />
             <OverviewMetric label="Beat reviews" value={hasPermission("services.manage")?pendingBeatReviews:"Restricted"} detail="Awaiting marketplace approval" icon={<Disc3 />} onClick={() => selectAdminTab("operations")} />
             <OverviewMetric label="Open support" value={hasPermission("services.manage")?openSupportTickets:"Restricted"} detail="Open or in progress" icon={<Bell />} onClick={() => selectAdminTab("support")} />
-            <OverviewMetric label="Recorded revenue" value={hasPermission("payouts.review")||hasPermission("royalties.reconcile")?formatMoney(distributionRevenue + commerceRevenue):"Restricted"} detail="Paid distribution & commerce orders" icon={<Wallet />} onClick={() => selectAdminTab("revenue")} />
+            <OverviewMetric label="Recorded revenue" value={hasPermission("payouts.review")||hasPermission("royalties.reconcile")?formatMoney(revenueSummary.receipts):"Restricted"} detail="All sources ? includes manually paid receipts" icon={<Wallet />} onClick={() => selectAdminTab("revenue")} />
           </div>
           <div className={overviewStyles.grid}>
             <OverviewPanel title="Operations workboard"><div className={overviewStyles.queues}>{operationalQueues.filter(queue => adminModuleAllowed(queue.tab,adminAccess.permissions) && !["Releases awaiting QC", "Open support tickets", "Beats awaiting approval"].includes(queue.label)).map(queue => <button className={overviewStyles.queue} key={queue.label} data-urgent={queue.count > 0} onClick={() => selectAdminTab(queue.tab)}><strong>{queue.count}</strong><span>{queue.label}</span><small>{queue.oldest}</small></button>)}<button className={overviewStyles.queue} data-urgent={pendingProducerApplications > 0} onClick={() => selectAdminTab("operations")}><strong>{pendingProducerApplications}</strong><span>Producer applications</span><small>Awaiting review</small></button></div></OverviewPanel>
@@ -1380,9 +1385,11 @@ export function AdminControlCenter({
 
       {activeTab === "royalties" ? <div className="grid gap-6"><AdminPayoutManager /><AdminPayoutReports /></div> : null}
 
-      {(["overview", "payments", "revenue"].includes(activeTab) && (hasPermission("payouts.review") || hasPermission("royalties.reconcile"))) ? <AdminSubscriptionRevenue rows={initialSubscriptionRevenue} /> : null}
+      {(["payments"].includes(activeTab) && (hasPermission("payouts.review") || hasPermission("royalties.reconcile"))) ? <AdminSubscriptionRevenue rows={initialSubscriptionRevenue} /> : null}
 
-      {(activeTab === "payments" || activeTab === "revenue") ? (
+      {activeTab === "revenue" ? <AdminRevenueWorkspace entries={initialRevenueEntries} search={moduleSearch} onPayments={() => selectAdminTab("payments")} /> : null}
+
+      {activeTab === "payments" ? (
         <div className="grid gap-6">
           <section className="surface-card admin-module-section fade-up p-5 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1618,7 +1625,7 @@ export function AdminControlCenter({
       {activeTab === "reviews" ? <AdminReviewManager /> : null}
       {activeTab === "team" ? <AdminTeamAccessManager users={users} canManage={hasPermission("system.manage")} /> : null}
       {activeTab === "analytics" ? <SurfaceSection title="Operational reporting" description="Current stored records. Counts describe this catalogue snapshot; revenue is paid order value across the loaded history.">
-        <div className="grid gap-4 sm:grid-cols-3"><StatCard label="Catalogue records" value={releases.length}/><StatCard label="Open support" value={openSupportTickets}/><StatCard label="Recorded order revenue" value={formatMoney(distributionRevenue+commerceRevenue)}/></div>
+        <div className="grid gap-4 sm:grid-cols-3"><StatCard label="Catalogue records" value={releases.length}/><StatCard label="Open support" value={openSupportTickets}/><StatCard label="Gross collected" value={formatMoney(revenueSummary.receipts)}/><StatCard label="HYMN earned" value={formatMoney(revenueSummary.hymn)}/></div>
         <div className="workspace-module-layout mt-5"><OverviewPanel title="Release workflow"><OverviewPipeline stages={Array.from(new Set(releases.map(row=>row.status))).map(status=>({label:status.replaceAll("_"," "),count:releases.filter(row=>row.status===status).length,color:status==="live"?"#8ac5ac":"#a6b9ed",onClick:()=>selectAdminTab("releases")}))}/></OverviewPanel><OverviewPanel title="Support workload"><OverviewPipeline stages={Array.from(new Set(supportTickets.map(row=>row.status))).map(status=>({label:status.replaceAll("_"," "),count:supportTickets.filter(row=>row.status===status).length,color:status==="resolved"?"#8ac5ac":"#e0b781",onClick:()=>selectAdminTab("support")}))}/></OverviewPanel></div>
         <WorkspaceRecords rows={releases} rowKey={row=>row.id} searchText={row=>`${row.releaseTitle} ${row.artistName} ${row.ownerEmail} ${row.status}`} noun="releases" externalSearch={moduleSearch} columns={[
           {key:"title",label:"Release",primary:true,value:row=>adminReleaseTitle(row),render:row=><><strong>{adminReleaseTitle(row)}</strong><small>{row.artistName}</small></>},

@@ -3,6 +3,7 @@
 import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
+import { WorkspaceGuidance, type GuideStep } from "@/components/workspace-guidance";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
@@ -353,6 +354,16 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
     form.reset();
   }
 
+  const guideRelease = releases.find(release => ["draft", "draft_metadata", "draft_tracks", "draft_assets", "changes_requested", "correction_requested"].includes(release.status)) ?? releases[0];
+  const guideStatus = guideRelease?.status || "";
+  const guideLive = guideStatus === "live";
+  const guideSubmitted = !!guideRelease && !["draft", "draft_metadata", "draft_tracks", "draft_assets", "changes_requested", "correction_requested"].includes(guideStatus);
+  const releaseGuide: GuideStep[] = [
+    {label:"Prepare",href:guideRelease ? "/dashboard/releases" : "/distribution/start",state:guideSubmitted ? "done" : "current",hint:guideRelease ? "Continue your release" : "Audio, artwork, credits"},
+    {label:"HYMN review",href:"/dashboard/releases",state:guideLive ? "done" : guideSubmitted ? "current" : "next",hint:"Track checks & delivery"},
+    {label:"Live & earning",href:guideLive ? "/payout" : "/dashboard/releases",state:guideLive ? "current" : "next",hint:guideLive ? "View reports & payouts" : "Store status & reports"}
+  ];
+
   return (
     <DashboardFrame
       title={`Welcome back, ${user.name}`}
@@ -397,6 +408,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       workspaceAction={user.role === "producer" ? <WorkspaceSwitcher current="customer" available={["customer", "producer"]} /> : user.role === "admin" ? <WorkspaceSwitcher current="customer" available={["customer", "producer", "admin"]} /> : undefined}
     >
       <FirstLoginReferralPrompt />
+      {["overview", "upload", "releases"].includes(activeTab) && <WorkspaceGuidance title={guideRelease ? `Release path: ${guideRelease.releaseTitle || guideRelease.trackName || "Your music"}` : "Bring your first release to life"} steps={releaseGuide}/>}
       <AccountRestrictionNotice user={user} />
       {producerAccessDisabled ? (
         <section role="alert" className="flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "color-mix(in srgb, var(--danger) 45%, var(--border))", background: "color-mix(in srgb, var(--danger-soft) 72%, var(--card))" }}>

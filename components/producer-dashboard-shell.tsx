@@ -3,6 +3,7 @@
 import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
+import { WorkspaceGuidance, type GuideStep } from "@/components/workspace-guidance";
 import dynamic from "next/dynamic";
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { DashboardFrame } from "@/components/dashboard-frame";
@@ -280,6 +281,17 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
     });
   }
 
+  const guideBeat = catalog.find(beat => ["DRAFT", "CHANGES_REQUESTED"].includes(beat.status || "")) ?? catalog[0];
+  const guidePublished = guideBeat?.status === "PUBLISHED";
+  const guideListed = guidePublished && !!guideBeat?.enabled;
+  const guideSubmitted = !!guideBeat && !["DRAFT", "CHANGES_REQUESTED"].includes(guideBeat.status || "DRAFT");
+  const beatGuide: GuideStep[] = [
+    {label:"Upload",href:"/producer/dashboard?tab=upload",state:guideSubmitted ? "done" : "current",hint:"Audio, artwork, pricing"},
+    {label:"Review",href:"/producer/dashboard?tab=catalog",state:guidePublished ? "done" : guideSubmitted ? "current" : "next",hint:"Check feedback"},
+    {label:"Publish",href:"/producer/dashboard?tab=catalog",state:guideListed ? "done" : guidePublished ? "current" : "next",hint:guidePublished ? "Manage store visibility" : "After HYMN approval"},
+    {label:"Earn",href:"/producer/dashboard?tab=earnings",state:guideListed ? "current" : "next",hint:"Sales, shares, payouts"}
+  ];
+
   return (
     <DashboardFrame
       eyebrow="Producer dashboard"
@@ -290,10 +302,8 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
         {key:"catalog",label:"My beats",description:"Inventory, pricing and review status",group:"Beatstore"},
         {key:"upload",label:"Upload beat",group:"Beatstore"},
         {key:"profile",label:"My storefront",group:"Beatstore"},
-        {key:"sales",label:"Sales",group:"Business"},
-        {key:"licensing",label:"Licences & agreements",group:"Business"},
+        {key:"sales",label:"Sales & licences",group:"Business"},
         {key:"earnings",label:"Earnings & payouts",group:"Business"},
-        {key:"ledger",label:"Wallet history",group:"Business"},
         {key:"analytics",label:"Performance",group:"Business"},
         {key:"collaborations",label:"Credited tracks",group:"Business"},
         {key:"releases",label:"My releases",group:"Distribution",href:"/dashboard/releases"},
@@ -304,9 +314,8 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
         {key:"messages",label:"Notifications",group:"Account"},
         {key:"settings",label:"Settings",group:"Account"},
         {key:"help",label:"Help & support",group:"Support",href:"/dashboard?tab=support"},
-        {key:"faq",label:"FAQ",group:"Support",href:"/faq"}
       ]}
-      activeKey={activeTab}
+      activeKey={activeTab === "licensing" || activeTab === "contracts" ? "sales" : activeTab === "ledger" || activeTab === "payout" ? "earnings" : activeTab}
       onSelect={selectProducerTab}
       newAction={{label:"Upload beat",onClick:()=>selectProducerTab("upload")}}
       searchValue={dashboardSearch}
@@ -318,6 +327,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
       compactOverview
     >
       <FirstLoginReferralPrompt />
+      {["overview", "catalog", "upload"].includes(activeTab) && <WorkspaceGuidance title={guideBeat ? `Beat path: ${guideBeat.title}` : "Build your first beat listing"} steps={beatGuide}/>}
       {activeTab === "overview" ? <ProducerHome user={user} beats={catalog} finance={{ ...finance, profile: producerProfile }} notifications={producerNotifications} onTab={(tab) => selectProducerTab(tab)} /> : null}
       {false && activeTab === "overview" ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Catalog size" value={catalog.length} />
@@ -449,17 +459,18 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
 
       {activeTab === "earnings" || activeTab === "payout" ? <Panel title="Earnings & payouts" description="Your recorded producer share, available balance, and withdrawals."><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Your sale earnings" value={formatMoney(finance.producerEarnings)}/><StatCard label="Available to withdraw" value={formatMoney(finance.availableBalance)}/><StatCard label="Payouts pending" value={formatMoney(finance.pendingPayout)}/><StatCard label="Paid to date" value={formatMoney(finance.lifetimePaid)}/></div><div className="workspace-money-summary"><div><h3>Revenue share</h3><div className="workspace-share-bar" aria-label="Producer 70%, HYMN 30%"><span style={{width:"70%"}}>Your share 70%</span><span>HYMN 30%</span></div><p>Gross recorded sales {formatMoney(finance.grossRevenue)}. The ledger records the actual share credited for each sale.</p></div><div><h3>Withdraw your earnings</h3><p>Review payout eligibility, payment details, and withdrawal requests in your payout workspace.</p><Link className="btn-primary" href="/payout">Open payouts</Link><button className="btn-outline" onClick={()=>selectProducerTab("ledger")}>Wallet history</button></div></div></Panel>:null}
 
-      {activeTab === "ledger" ? <Panel title="Wallet ledger" description="Recorded producer credits and balance movements."><WorkspaceRecords searchable={false} externalSearch={dashboardSearch} rows={(finance.ledger||[]) as Array<{id:number;type:string;note?:string;referenceId?:string;amount:number;balanceAfter:number;createdAt:string}>} rowKey={entry=>entry.id} searchText={entry=>`${entry.type} ${entry.note} ${entry.referenceId}`} noun="entries" initialSort="date" columns={[
+      {["ledger", "earnings", "payout"].includes(activeTab) ? <Panel title="Wallet ledger" description="Recorded producer credits and balance movements."><WorkspaceRecords searchable={false} externalSearch={dashboardSearch} rows={(finance.ledger||[]) as Array<{id:number;type:string;note?:string;referenceId?:string;amount:number;balanceAfter:number;createdAt:string}>} rowKey={entry=>entry.id} searchText={entry=>`${entry.type} ${entry.note} ${entry.referenceId}`} noun="entries" initialSort="date" columns={[
         {key:"type",label:"Movement",primary:true,render:entry=><><strong>{entry.type.replaceAll("_"," ")}</strong><small>{entry.note||entry.referenceId}</small></>},
         {key:"amount",label:"Amount",value:entry=>Number(entry.amount),render:entry=>formatMoney(Number(entry.amount))},
         {key:"balance",label:"Balance after",render:entry=>formatMoney(Number(entry.balanceAfter))},
         {key:"date",label:"Recorded",value:entry=>Date.parse(entry.createdAt),render:entry=>new Date(entry.createdAt).toLocaleString("en-IN")}
       ]}/></Panel>:null}
 
-      {activeTab === "sales" ? <Panel title="Sales history" description="One row per verified sale. Your share comes from the recorded ledger."><WorkspaceRecords searchable={false} rows={filteredLicenseRows} rowKey={row=>`${row.order.id}-${row.item.beatId}-${row.item.licenseType}`} searchText={row=>`${row.order.id} ${row.item.beatTitle} ${row.order.buyerEmail} ${row.item.licenseType}`} noun="sales" initialSort="date" columns={[
+      {activeTab === "sales" ? <Panel title="Sales & licences" description="One row per verified sale. Your share comes from the recorded ledger."><WorkspaceRecords searchable={false} rows={filteredLicenseRows} rowKey={row=>`${row.order.id}-${row.item.beatId}-${row.item.licenseType}`} searchText={row=>`${row.order.id} ${row.item.beatTitle} ${row.order.buyerEmail} ${row.item.licenseType}`} noun="sales" initialSort="date" columns={[
         {key:"beat",label:"Sale",primary:true,value:row=>row.item.beatTitle||"",render:row=><><strong>{row.item.beatTitle||`Beat #${row.item.beatId}`}</strong><small>Order #{row.order.id} / {row.item.licenseType}</small></>},
         {key:"buyer",label:"Buyer",render:row=>row.order.buyerName||row.order.buyerEmail||`User #${row.order.userId}`},
         {key:"gross",label:"Item price",value:row=>row.item.price,render:row=>formatMoney(row.item.price)},
+        {key:"agreement",label:"Licence document",render:row=>row.item.licenseUrl?<a className="btn-outline" href={row.item.licenseUrl}>Open licence</a>:"Document pending"},
         {key:"share",label:"Your recorded share",render:row=>{const sale=finance.sales?.find((entry:any)=>entry.orderId===row.order.id&&entry.beatId===row.item.beatId&&entry.licenseType===row.item.licenseType);return sale?formatMoney(Number(sale.producerEarningAmount)):"Ledger pending";}},
         {key:"date",label:"Date",value:row=>Date.parse(row.order.createdAt),render:row=>new Date(row.order.createdAt).toLocaleDateString("en-IN")}
       ]}/></Panel>:null}
