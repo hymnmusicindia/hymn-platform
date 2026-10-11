@@ -3,7 +3,7 @@
 import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
-import { ProducerSetupGuide } from "@/components/producer-setup-guide";
+import { ProducerStorefrontEditor } from "@/components/producer-storefront-editor";
 import { producerSetup, producerSetupTab } from "@/lib/producer-setup";
 import { WorkspaceGuidance, type GuideStep } from "@/components/workspace-guidance";
 import dynamic from "next/dynamic";
@@ -100,28 +100,6 @@ function Timeline({ items }: { items: Array<{ label: string; detail?: string; ac
   );
 }
 
-function ProducerProfileWorkspace({ user, profile, onSubmit, pending, feedback }: { user: User; profile: any; onSubmit: (event: FormEvent<HTMLFormElement>) => void; pending: boolean; feedback: string | null }) {
-  return <div className="grid gap-6 xl:grid-cols-[0.75fr,1.25fr]">
-    <Panel title="Your storefront preview" description="Give artists a clear first impression of your sound.">
-      <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-        {profile?.coverPhotoUrl ? <img src={profile.coverPhotoUrl} alt="Producer cover" className="aspect-[16/7] w-full object-cover" /> : <div className="flex aspect-[16/7] items-center justify-center text-sm text-[var(--text-muted)]">Your cover image goes here</div>}
-        <div className="p-5">{profile?.avatarUrl && <img src={profile.avatarUrl} alt="Producer profile" className="mb-3 h-16 w-16 rounded-full object-cover"/>}<h3 className="text-2xl font-semibold">{profile?.displayName || user.name}</h3><p className="mt-2 text-sm text-[var(--text-muted)]">{profile?.bio || "Your beats. Your identity."}</p></div>
-      </div>
-    </Panel>
-    <Panel title="Set up your storefront" description="Three essentials to get started. You can refine everything later.">
-      <form onSubmit={onSubmit} className="grid gap-5">
-        <label className="grid gap-2 text-sm">Producer name<input name="displayName" required minLength={2} defaultValue={profile?.displayName || user.name} className="field" /><small className="text-[var(--text-muted)]">The name artists see beside your beats.</small></label>
-        <div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-2 text-sm">Profile image<input name="avatar" required={!profile?.avatarUrl} type="file" accept="image/jpeg,image/png,image/webp" className="field"/><small className="text-[var(--text-muted)]">A square portrait or your producer logo.</small></label><label className="grid gap-2 text-sm">Cover image<input name="coverPhoto" required={!profile?.coverPhotoUrl} type="file" accept="image/jpeg,image/png,image/webp" className="field"/><small className="text-[var(--text-muted)]">A wide image that represents your sound.</small></label></div>
-        <details className="rounded-xl border border-[var(--border)] p-4"><summary className="cursor-pointer text-sm font-semibold">Add more personality <span className="font-normal text-[var(--text-muted)]">(optional)</span></summary><div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <label className="grid gap-2 text-sm sm:col-span-2">Bio<textarea name="bio" defaultValue={profile?.bio || ""} className="field min-h-28"/></label><label className="grid gap-2 text-sm">Location<input name="location" defaultValue={profile?.location || ""} className="field"/></label><label className="grid gap-2 text-sm">Your sound<input name="producerTags" defaultValue={Array.isArray(profile?.tags) ? profile.tags.join(", ") : profile?.specialty || ""} className="field" placeholder="Hip-Hop, Trap, R&B"/></label>
-          {[["instagramUrl","Instagram"],["youtubeUrl","YouTube"],["spotifyUrl","Spotify"],["websiteUrl","Website"]].map(([name,label])=><label key={name} className="grid gap-2 text-sm">{label}<input name={name} type="url" defaultValue={profile?.[name] || ""} className="field"/></label>)}
-        </div></details>
-        {feedback && <p role="status" className="text-sm text-[var(--text-muted)]">{customerMessage(feedback)}</p>}
-        <button type="submit" disabled={pending} className="btn-primary pressable">{pending ? "Saving storefront..." : "Save storefront & continue"}</button>
-      </form>
-    </Panel>
-  </div>;
-}
 export function ProducerDashboardShell({ user, beats, orders, earnings, finance }: { user: User; beats: Beat[]; orders: Order[]; earnings: { totalSales: number; totalRevenue: number; beatsSold: number }; finance: any }) {
   const [requestedTab, setActiveTab] = useState<"overview" | "profile" | "catalog" | "collaborations" | "placements" | "contracts" | "earnings" | "payout" | "ledger" | "upload" | "licensing" | "messages" | "analytics" | "settings" | "manage" | "sales">("overview");
   const [catalog, setCatalog] = useState(beats);
@@ -137,7 +115,8 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
   const [beatUploadStep, setBeatUploadStep] = useState(1);
   const [producerProfile, setProducerProfile] = useState(finance.profile ?? null);
   const setup = producerSetup(producerProfile, catalog);
-  const activeTab = producerSetupTab(requestedTab, setup) as typeof requestedTab;
+  const allowedTab = producerSetupTab(requestedTab, setup) as typeof requestedTab;
+  const activeTab = !setup.complete && allowedTab === "overview" ? setup.storefrontReady ? "upload" : "profile" : allowedTab;
   const [producerNotifications, setProducerNotifications] = useState<Notification[]>([]);
   const enabledBeats = catalog.filter((beat) => beat.enabled);
   const disabledBeats = catalog.filter((beat) => !beat.enabled);
@@ -370,9 +349,8 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
       compactOverview
     >
       {setup.complete && <FirstLoginReferralPrompt />}
-      {!setup.complete && activeTab !== "overview" && <div className="surface-card flex flex-wrap items-center justify-between gap-3 p-4"><div><strong>Launch your store</strong><p className="text-xs text-[var(--text-muted)]">{setup.completedSteps}/2 complete - Storefront, then first beat</p></div><button className="btn-outline" onClick={() => selectProducerTab("overview")}>View setup guide</button></div>}
+      {!setup.complete && <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-muted)]" role="group" aria-label="Producer setup steps"><button className="btn-outline" aria-current={activeTab === "profile" ? "step" : undefined} onClick={() => selectProducerTab("profile")}>{setup.storefrontReady ? "Done: " : "1. "}Storefront</button><span aria-hidden="true">&rarr;</span><button className="btn-outline" disabled={!setup.storefrontReady} aria-current={activeTab === "upload" ? "step" : undefined} onClick={() => selectProducerTab("upload")}>2. First beat</button></div>}
       {setup.complete && ["overview", "catalog", "upload"].includes(activeTab) && <WorkspaceGuidance title={guideBeat ? `Beat path: ${guideBeat.title}` : "Build your first beat listing"} steps={beatGuide}/>}
-      {activeTab === "overview" && !setup.complete ? <ProducerSetupGuide setup={setup} profile={producerProfile} name={user.name} onTab={selectProducerTab}/> : null}
       {activeTab === "overview" && setup.complete ? <ProducerHome user={user} beats={catalog} finance={{ ...finance, profile: producerProfile }} notifications={producerNotifications} onTab={(tab) => selectProducerTab(tab)} /> : null}
       {false && activeTab === "overview" ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Catalog size" value={catalog.length} />
@@ -411,7 +389,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
         </div>
       ) : null}
 
-      {activeTab === "profile" ? <ProducerProfileWorkspace user={user} profile={producerProfile} onSubmit={saveProducerProfile} pending={isPending} feedback={feedback} /> : null}
+      {activeTab === "profile" ? <ProducerStorefrontEditor name={user.name} profile={producerProfile} onSubmit={saveProducerProfile} pending={isPending} feedback={feedback} /> : null}
 
       {activeTab === "upload" ? (
         <Panel title="Upload Beat" description="Complete five short steps. Your master stays private; only an optional preview is public.">

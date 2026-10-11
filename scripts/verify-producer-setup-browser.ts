@@ -26,19 +26,31 @@ async function main() {
         if (url.pathname === "/api/notifications") return route.fulfill({ json: { notifications: [] } });
         if (url.pathname === "/api/producer/profile") { fixture.profile = profile; return route.fulfill({ json: { profile } }); }
         if (url.pathname === "/api/producer/beats") { fixture.beats = [beat]; return route.fulfill({ json: { beat } }); }
-        return route.fulfill({ contentType: "text/html", body: `<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style><style>body{background:#11151b;color:#edf0f7;--card:#1b2029;--border:#343b48;--text:#edf0f7;--text-muted:#aeb7c6;--bg-soft:#252c38;--accent:#a6b6ff;--accent-soft:#252e48}#app{padding:16px}</style></head><body><div id="app"></div><script>window.fixture=${JSON.stringify(fixture)}</script></body></html>` });
+        return route.fulfill({ contentType: "text/html", body: `<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style><style>body{background:#11151b;color:#edf0f7;--card:#1b2029;--border:#343b48;--text:#edf0f7;--text-muted:#aeb7c6;--bg-soft:#252c38;--accent:#a6b6ff;--accent-soft:#252e48}#app{padding:16px}</style></head><body class="hymn-portal-root"><div class="hymn-portal"><div id="app"></div></div><script>window.fixture=${JSON.stringify(fixture)}</script></body></html>` });
       });
       async function load(tab = "overview") { await page.goto(`http://producer.fixture/producer/dashboard?tab=${tab}`); await page.addScriptTag({ path: ".cache/producer-setup-browser.js" }); }
       await load("analytics");
-      await page.getByRole("heading", { name: "Your sound deserves a storefront." }).waitFor();
+      await page.getByRole("heading", { name: "Set up your storefront" }).waitFor({timeout:5000});
       assert.equal(await page.getByRole("heading", { name: "Catalogue performance" }).count(), 0);
       assert.equal(await page.getByRole("button", { name: "Performance", exact: true }).count(), 0);
-      assert.equal(await page.getByRole("button", { name: "Upload first beat", exact: true }).isDisabled(), true);
+      assert.equal(await page.getByRole("button", { name: "2. First beat", exact: true }).isDisabled(), true);
       await page.screenshot({ path: `.cache/producer-launch-${width}.png`, fullPage: true });
-      await page.getByRole("button", { name: "Make it yours" }).click();
       await page.getByRole("heading", { name: "Set up your storefront" }).waitFor();
-      await page.locator('input[name="coverPhoto"]').setInputFiles({ name: "cover.png", mimeType: "image/png", buffer: Buffer.from("fixture") });
-      await page.locator('input[name="avatar"]').setInputFiles({ name: "avatar.png", mimeType: "image/png", buffer: Buffer.from("fixture") });
+      await page.locator('input[name="coverPhoto"]').setInputFiles({ name: "cover.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ioAAAAASUVORK5CYII=", "base64") });
+      await page.locator('input[name="avatar"]').setInputFiles({ name: "avatar.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ioAAAAASUVORK5CYII=", "base64") });
+      await page.locator('input[name="displayName"]').fill("New Producer Name");
+      const preview = page.getByRole("complementary", {name:"Live storefront preview"});
+      await preview.getByRole("heading", {name:"New Producer Name"}).waitFor();
+      assert((await preview.getByAltText("Storefront cover preview").getAttribute("src"))?.startsWith("blob:"));
+      assert((await preview.getByAltText("Producer image preview").getAttribute("src"))?.startsWith("blob:"));
+      if (width === 1440) {
+        const editor = await page.getByRole("region", {name:"Storefront editor"}).boundingBox();
+        const card = await preview.boundingBox();
+        const form = await page.locator("form").boundingBox();
+        assert(card && form && card.x > form.x + form.width,"Preview is to the right of the form");
+        assert(editor && editor.y + editor.height < 900,"Default desktop setup fits a single screen");
+      }
+      await page.screenshot({path:`.cache/producer-live-preview-${width}.png`,fullPage:true});
       await page.getByRole("button", { name: "Save storefront & continue" }).click();
       await page.getByRole("heading", { name: "Upload Beat", exact: true }).waitFor();
       assert.equal(await page.getByRole("button", { name: "Performance", exact: true }).count(), 0);
