@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
     const partner = await prisma.growthPartner.findUnique({ where: { code } });
     if (partner?.status === "approved") {
       const response = NextResponse.redirect(destination);
+      response.cookies.delete(REFERRAL_ATTRIBUTION_COOKIE);
       response.cookies.set(PARTNER_COOKIE, code, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: REFERRAL_ATTRIBUTION_MAX_AGE_SECONDS });
       return response;
     }
@@ -32,6 +33,7 @@ export async function GET(request: NextRequest) {
   await prisma.referralVisit.create({ data: { referrerId: referrer.id, referralCode: normalized, visitorHash } });
   destination.searchParams.set("ref", normalized);
   const response = NextResponse.redirect(destination);
+  response.cookies.delete(PARTNER_COOKIE);
   response.cookies.set(REFERRAL_ATTRIBUTION_COOKIE, normalized, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: REFERRAL_ATTRIBUTION_MAX_AGE_SECONDS });
   return response;
 }

@@ -1,3 +1,4 @@
+import { reviewSubscriptionReferralPayment } from "@/lib/referral-payment-review";
 import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -16,7 +17,7 @@ export function validateObservedPayment(expected: { amountMinor: number; currenc
 }
 
 export function redactRazorpayPayload(payload: RazorpayPayload): Prisma.InputJsonObject {
-  const entity = payload.payload?.payment?.entity ?? payload.payload?.order?.entity ?? payload.payload?.refund?.entity ?? {};
+  const entity = payload.event?.startsWith("refund.") ? payload.payload?.refund?.entity ?? {} : payload.payload?.payment?.entity ?? payload.payload?.order?.entity ?? {};
   const subscription = payload.payload?.subscription?.entity;
   const payment = payload.payload?.payment?.entity;
   return { event: payload.event ?? "unknown", entity: { id: entity.id ?? null, order_id: entity.order_id ?? null, amount: entity.amount ?? null, currency: entity.currency ?? null, status: entity.status ?? null, error_code: entity.error_code ?? null }, subscription: subscription ? { id: subscription.id ?? null, plan_id: subscription.plan_id ?? null, status: subscription.status ?? null, current_start: subscription.current_start ?? null, current_end: subscription.current_end ?? null, start_at: subscription.start_at ?? null, ended_at: subscription.ended_at ?? null, charge_at: subscription.charge_at ?? null } : null, payment: payment ? { id: payment.id ?? null, invoice_id: payment.invoice_id ?? null, amount: payment.amount ?? null, currency: payment.currency ?? null, status: payment.status ?? null, created_at: payment.created_at ?? null } : null };
@@ -24,7 +25,7 @@ export function redactRazorpayPayload(payload: RazorpayPayload): Prisma.InputJso
 
 export async function receiveRazorpayEvent(rawBody: Buffer, payload: RazorpayPayload) {
   const payloadHash = crypto.createHash("sha256").update(rawBody).digest("hex");
-  const entity = payload.payload?.payment?.entity ?? payload.payload?.order?.entity ?? payload.payload?.refund?.entity ?? {};
+  const entity = payload.event?.startsWith("refund.") ? payload.payload?.refund?.entity ?? {} : payload.payload?.payment?.entity ?? payload.payload?.order?.entity ?? {};
   const subscriptionEntity = payload.payload?.subscription?.entity;
   const razorpaySubscriptionId = subscriptionEntity?.id ?? payload.payload?.payment?.entity?.subscription_id ?? null;
   const razorpayOrderId = entity.order_id ?? (payload.payload?.order?.entity?.id || null);
@@ -78,6 +79,7 @@ export async function processRazorpayEvent(eventId: number) {
       resolvedOrderId = distribution?.razorpayOrderId ?? checkout?.razorpayOrderId ?? studio?.razorpayOrderId ?? null;
     }
     if (event.eventType in nonFulfilmentStates) {
+      await prisma.$transaction(tx => reviewSubscriptionReferralPayment(tx, event));
       if (resolvedOrderId) await applyPaymentState({ razorpayOrderId: resolvedOrderId, paymentId: event.paymentId, state: nonFulfilmentStates[event.eventType], eventId: event.id, amountMinor: event.amountMinor });
       return prisma.paymentWebhookEvent.update({ where: { id: event.id }, data: { attemptCount: { increment: 1 }, processingState: "processed", processedAt: new Date() } });
     }

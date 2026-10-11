@@ -1,89 +1,48 @@
 "use client";
-
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { ArrowRight, Check, Copy, Gift, Link2, RefreshCw, Share2, Users } from "lucide-react";
 import { customerMessage } from "@/lib/customer-message";
-
-import { useEffect, useMemo, useState } from "react";
-import { Check, Copy, Gift, IndianRupee, Link2, Send, Users } from "lucide-react";
-import { ContextualHelp } from "@/components/contextual-help";
 import { GrowthReminderPreference } from "@/components/growth-reminder-preference";
-import type { ReferralDashboard } from "@/lib/types";
-
-const money = (value: number) => `₹${Number(value || 0).toLocaleString("en-IN")}`;
-const date = (value: string) => new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
-
+import type { ReferralDashboard, ReferralActivity } from "@/lib/types";
+import "@/app/styles/referral-center.css";
+const money=(value:number)=>new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(value||0);
+const date=(value:string)=>new Intl.DateTimeFormat("en-IN",{day:"numeric",month:"short",year:"numeric"}).format(new Date(value));
+function progress(item:ReferralActivity) {
+  if(item.riskStatus==="review_required") return {label:"Under review",detail:"A payment or eligibility check needs attention.",step:1};
+  if(item.status==="REWARDED")return {label:"Credit earned",detail:"Your reward is available in your HYMN balance.",step:3};
+  if(item.status==="REVERSED")return {label:"Reward reversed",detail:"The qualifying payment was reversed.",step:-1};
+  if(item.status==="REJECTED")return {label:"Not eligible",detail:"This referral did not meet the reward requirements.",step:-1};
+  if(item.status==="QUALIFIED")return {label:"Verifying purchase",detail:item.eligibleAt ? `Review eligible from ${date(item.eligibleAt)}. Approval is required.`:"Payment received. Verification and approval are pending.",step:2};
+  return {label:"Joined HYMN",detail:"Waiting for an eligible purchase.",step:1};
+}
 export function ReferralPanel() {
-  const [data, setData] = useState<ReferralDashboard | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch("/api/referrals/me", { signal: controller.signal })
-      .then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body.error); return body; })
-      .then(payload => setData(payload.referral))
-      .catch(error => { if (error.name !== "AbortError") setFeedback(error.message || "Referral data could not be loaded."); });
-    return () => controller.abort();
-  }, []);
-
-  const shareText = useMemo(() => data ? `I'm using HYMN for music distribution. If you're planning a release, you can check it out here: ${data.referralLink}` : "", [data]);
-
-  async function copy(value: string, label: string) {
-    await navigator.clipboard.writeText(value);
-    if (label === "Referral link") void fetch("/api/referrals/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event: "referral_link_copied" }) });
-    setFeedback(`${label} copied.`);
+  const [data,setData]=useState<ReferralDashboard|null>(null);
+  const [error,setError]=useState("");const [feedback,setFeedback]=useState("");const [loading,setLoading]=useState(true);
+  const [morePending,setMorePending]=useState(false);
+  const [tab,setTab]=useState<"referrals"|"credits">("referrals");const [filter,setFilter]=useState("all");
+  const load=useCallback(async(signal?:AbortSignal)=>{setLoading(true);setError("");try{const response=await fetch("/api/referrals/me",{cache:"no-store",signal});const body=await response.json();if(!response.ok)throw new Error(body.error||"Referrals could not be loaded.");setData(body.referral);}catch(e){if(!(e instanceof Error&&e.name==="AbortError"))setError(e instanceof Error?e.message:"Referrals could not be loaded.");}finally{if(!signal?.aborted)setLoading(false);}},[]);
+  useEffect(()=>{const controller=new AbortController();void load(controller.signal);return()=>controller.abort();},[load]);
+  const track=(event:string)=>{void fetch("/api/referrals/events",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({event})}).catch(()=>undefined);};
+  async function copy(value:string,label:string){try{await navigator.clipboard.writeText(value);setFeedback(`${label} copied.`);if(label==="Referral link")track("referral_link_copied");}catch{setFeedback("Copy isn't available here. Select and copy the link or code below.");}}
+  async function share(){if(!data)return;try{if(navigator.share){await navigator.share({title:"Make your next move with HYMN",text:"Join me on HYMN for your next music release.",url:data.referralLink});track("referral_link_shared");setFeedback("Invitation shared.");}else await copy(data.referralLink,"Referral link");}catch(e){if(!(e instanceof Error&&e.name==="AbortError"))setFeedback("Sharing isn't available. You can copy your invitation link instead.");}}
+  async function loadMore(kind:"referrals"|"credits") {
+    if(!data||morePending)return;setMorePending(true);setError("");
+    try { const cursor=kind==="referrals"?data.nextActivityCursor:data.nextCreditCursor;const response=await fetch(`/api/referrals/me?${kind==="referrals"?"activityCursor":"creditCursor"}=${cursor}`,{cache:"no-store"});const body=await response.json();if(!response.ok)throw new Error(body.error||"Could not load more activity.");const next:ReferralDashboard=body.referral;setData(current=>current?{...current,...(kind==="referrals"?{activities:[...current.activities,...next.activities],nextActivityCursor:next.nextActivityCursor}:{creditHistory:[...current.creditHistory,...next.creditHistory],nextCreditCursor:next.nextCreditCursor})}:current);}
+    catch(e){setError(e instanceof Error?e.message:"Could not load more activity.");}finally{setMorePending(false);}
   }
-
-  async function share() {
-    if (!data) return;
-    if (navigator.share) { await navigator.share({ title: "Join HYMN", text: shareText, url: data.referralLink }); void fetch("/api/referrals/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event: "referral_link_shared" }) }); }
-    else await copy(data.referralLink, "Referral link");
-  }
-
-  if (!data) return <section className="surface-card p-6"><p className="text-sm" style={{ color: "var(--text-muted)" }}>{feedback ?? "Loading referrals…"}</p></section>;
-
-  const stats = [
-    { label: "Invited", value: data.totalReferrals, icon: Users },
-    { label: "Rewarded", value: data.successfulReferrals, icon: Check },
-    { label: "Pending", value: data.pendingReferrals, icon: Gift },
-    { label: "Available credit", value: money(data.availableCredit), icon: IndianRupee }
-  ];
-
-  return (
-    <section className="surface-card overflow-hidden">
-      <GrowthReminderPreference />
-      <div className="border-b p-5 sm:p-7" style={{ borderColor: "var(--border)" }}>
-        <p className="eyebrow">Refer artists. Earn verified credit.</p>
-        <h2 className="mt-2 max-w-3xl text-2xl font-semibold tracking-tight sm:text-3xl" style={{ color: "var(--text)" }}>
-          Earn {money(data.referrerReward)} HYMN credit when a new referral purchases an eligible recurring plan.
-          <ContextualHelp faqId="referral-rewards" label="Referral rewards">Rewards require a verified payment, a verification period and admin approval. Earlier referrals retain their original terms.</ContextualHelp>
-        </h2>
-        <p className="mt-3 text-sm leading-6" style={{ color: "var(--text-muted)" }}>Attribution is locked to the new account. Rewards are verified server-side and issued once.</p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 p-5 sm:p-7 lg:grid-cols-4">
-        {stats.map(({ label, value, icon: Icon }) => <div key={label} className="rounded-2xl border p-4 transition-transform hover:-translate-y-0.5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><Icon className="h-4 w-4" style={{ color: "var(--text-soft)" }} /><p className="mt-5 text-xl font-semibold" style={{ color: "var(--text)" }}>{value}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{label}</p></div>)}
-      </div>
-
-      <div className="grid gap-4 px-5 pb-5 sm:px-7 sm:pb-7 lg:grid-cols-[1fr_.7fr]">
-        <div className="rounded-3xl border p-4 sm:p-5" style={{ borderColor: "var(--border)" }}>
-          <div className="flex items-center gap-2"><Link2 className="h-4 w-4" /><h3 className="font-semibold">Share your invitation</h3></div>
-          <div className="mt-4 rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><p className="text-xs" style={{ color: "var(--text-soft)" }}>Referral link</p><p className="mt-1 truncate text-sm">{data.referralLink}</p></div>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:flex">
-            <a className="btn-outline" href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer">WhatsApp</a>
-            <button className="btn-primary pressable" type="button" onClick={share}><Send className="h-4 w-4" /> Share</button>
-            <button className="btn-outline pressable" type="button" onClick={() => copy(data.referralLink, "Referral link")}><Copy className="h-4 w-4" /> Copy link</button>
-          </div>
-        </div>
-        <div className="rounded-3xl border p-4 sm:p-5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-          <p className="text-xs uppercase tracking-[.16em]" style={{ color: "var(--text-soft)" }}>Your permanent code</p>
-          <div className="mt-5 flex items-center justify-between gap-3"><strong className="text-2xl tracking-[.08em]">{data.referralCode}</strong><button type="button" aria-label="Copy referral code" className="grid h-10 w-10 place-items-center rounded-full border" style={{ borderColor: "var(--border)" }} onClick={() => copy(data.referralCode, "Referral code")}><Copy className="h-4 w-4" /></button></div>
-        </div>
-      </div>
-
-      <div className="grid gap-4 border-t p-5 sm:p-7 lg:grid-cols-2" style={{ borderColor: "var(--border)" }}>
-          <div><h3 className="font-semibold">Referral journey</h3><div className="mt-3 grid gap-2">{data.activities.map(item => <div key={item.id} className="flex items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)" }}><div><p>{item.person ?? "Referred artist"}</p><p className="mt-1 text-xs" style={{ color: "var(--text-soft)" }}>{date(item.createdAt)}</p></div><div className="text-right"><span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: "var(--bg-soft)" }}>{item.status.toLowerCase().replaceAll("_", " ")}</span>{item.earnings > 0 && <p className="mt-1 text-xs">+{money(item.earnings)}</p>}</div></div>)}{!data.activities.length && <p className="rounded-2xl border p-4 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>No invitations yet. Share your link when you are ready.</p>}</div></div>
-        <div><h3 className="font-semibold">Credit history</h3><div className="mt-3 grid gap-2">{data.creditHistory.map(item => <div key={item.id} className="flex items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)" }}><div><p>{item.description}</p><p className="mt-1 text-xs" style={{ color: "var(--text-soft)" }}>{date(item.createdAt)}</p></div><strong>{item.direction === "credit" ? "+" : "−"}{money(item.amount)}</strong></div>)}{!data.creditHistory.length && <p className="rounded-2xl border p-4 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>Verified credits and redemptions will appear here.</p>}</div></div>
-      </div>
-      {feedback && <p role="status" className="px-5 pb-5 text-sm sm:px-7" style={{ color: "var(--text-soft)" }}>{customerMessage(feedback)}</p>}
-    </section>
-  );
+  if(!data)return <section className="referral-center referral-loading" aria-busy={loading}><Gift size={26}/><h2>{error?"Let's try that again.":"Getting your invitations ready..."}</h2>{error?<><p role="alert">{customerMessage(error)}</p><button className="referral-primary" onClick={()=>void load()}><RefreshCw size={15}/> Try again</button></>:<p>Your referral link and reward activity will appear here.</p>}</section>;
+  const activities=data.activities.filter(item=>filter==="all"||(filter==="rewarded"?item.status==="REWARDED":["PENDING","REGISTERED","ATTRIBUTED","QUALIFIED"].includes(item.status)));
+  return <section className="referral-center">
+    <header className="referral-hero"><div><p className="referral-kicker"><Gift size={15}/> REFER A FRIEND</p><h2>Good music deserves<br/><span>good company.</span></h2><p>Invite an artist to HYMN. Earn <strong>{money(data.referrerReward)} in HYMN credit</strong> when their eligible recurring-plan purchase is verified and approved.</p></div><div className="referral-hero-art" aria-hidden="true"><Users size={57} strokeWidth={1}/><span>Grow together.</span></div></header>
+    <div className="referral-invite"><div className="referral-invite-heading"><Link2 size={19}/><div><h3>Your invitation. Their next chapter.</h3><p>Share your personal link, or let your friend enter your code during signup.</p></div></div><div className="referral-share-link"><input aria-label="Your referral link" value={data.referralLink} readOnly onFocus={e=>e.target.select()}/><button type="button" className="referral-primary" onClick={()=>void copy(data.referralLink,"Referral link")}><Copy size={15}/> Copy link</button></div><div className="referral-share-actions"><span>YOUR CODE <button type="button" title="Copy referral code" aria-label={`Copy referral code ${data.referralCode}`} onClick={()=>void copy(data.referralCode,"Referral code")}><strong>{data.referralCode}</strong><Copy size={13}/></button></span><div><a href={`https://wa.me/?text=${encodeURIComponent(`Join me on HYMN for your next music release: ${data.referralLink}`)}`} target="_blank" rel="noopener noreferrer" onClick={()=>track("referral_link_shared")}>WhatsApp <ArrowRight size={13}/></a><button type="button" onClick={()=>void share()}><Share2 size={14}/> Share invitation</button></div></div><p className="referral-feedback" role="status">{feedback}</p></div>
+    <div className="referral-stats">{[{label:"Friends joined",value:data.totalReferrals},{label:"Awaiting reward",value:data.pendingReferrals},{label:"Rewards approved",value:data.successfulReferrals},{label:"Available HYMN credit",value:money(data.availableCredit)}].map(stat=><div key={stat.label}><strong>{stat.value}</strong><span>{stat.label}</span></div>)}</div>
+    <ol className="referral-steps">{[{title:"Share your link",text:"Your friend creates a new account with your invitation."},{title:"They make their next move",text:`A purchase of ${data.eligiblePlans?.join(", ") || "an eligible recurring plan"} qualifies.`},{title:"You earn verified credit",text:`After ${data.coolingDays}-day verification and approval, the reward lands in your account.`}].map((step,index)=><li key={step.title}><span>0{index+1}</span><div><strong>{step.title}</strong><p>{step.text}</p></div></li>)}</ol>
+    <div className="referral-history"><div className="referral-history-toolbar"><div role="group" aria-label="Referral history view"><button type="button" aria-pressed={tab==="referrals"} onClick={()=>setTab("referrals")}>Your referrals <span>{data.totalReferrals}</span></button><button type="button" aria-pressed={tab==="credits"} onClick={()=>setTab("credits")}>Credit history</button></div><button type="button" aria-label="Refresh referral activity" disabled={loading} onClick={()=>void load()}><RefreshCw size={15} className={loading?"animate-spin":""}/></button></div>
+    {error?<p className="referral-error" role="alert">{customerMessage(error)}</p>:null}
+    {tab==="referrals"?<><div className="referral-history-filter"><label>Show <select value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">All referrals</option><option value="pending">Awaiting reward</option><option value="rewarded">Rewarded</option></select></label><span>Earned to date: {money(data.totalCreditsEarned)}</span></div>{activities.length?activities.map(item=>{const state=progress(item);return <article className="referral-person" key={item.id}><div className="referral-person-avatar"><Users size={17}/></div><div className="referral-person-copy"><strong>{item.person||"Referred artist"}</strong><small>Joined {date(item.createdAt)}</small><p>{state.detail}</p><div className="referral-progress" aria-label={state.label}>{[1,2,3].map(step=><span key={step} className={state.step>=step?"complete":""}/>)}</div></div><div className="referral-person-status"><span className={item.status==="REWARDED"?"is-earned":""}>{state.label}</span><strong>{item.status==="REWARDED"?"+":""}{money(item.status==="REWARDED"||item.status==="REVERSED"?item.earnings:item.status==="REJECTED"?0:item.expectedReward||0)}</strong><small>{item.status==="REWARDED"?"Earned":item.status==="REVERSED"?"Reversed":item.status==="REJECTED"?"Not earned":"Potential reward"}</small></div></article>;}):<div className="referral-empty"><Users size={26}/><h3>{filter==="all"?"Your circle starts here.":"No referrals in this view."}</h3><p>{filter==="all"?"Share your invitation with an artist whose next chapter you believe in.":"Try another filter to see your other referrals."}</p>{filter==="all"?<button type="button" onClick={()=>void copy(data.referralLink,"Referral link")}>Copy your invitation <ArrowRight size={14}/></button>:null}</div>}{data.nextActivityCursor?<button type="button" className="referral-more" disabled={morePending} onClick={()=>void loadMore("referrals")}>{morePending?"Loading...":"Load more referrals"}</button>:null}</>:<>{data.creditHistory.length?data.creditHistory.map(item=><div className="referral-credit-row" key={item.id}><span><strong>{item.description}</strong><small>{date(item.createdAt)}</small></span><strong>{item.direction==="credit"?"+":"-"}{money(item.amount)}</strong></div>):<div className="referral-empty"><Check size={26}/><h3>A clear record of every credit.</h3><p>Rewards, checkout redemptions and reversals will appear here.</p></div>}{data.nextCreditCursor?<button type="button" className="referral-more" disabled={morePending} onClick={()=>void loadMore("credits")}>{morePending?"Loading...":"Load more credit history"}</button>:null}</>}
+    </div>
+    <details className="referral-terms"><summary>How rewards and credits work</summary><div><p>One referrer per new account. Apply a code at signup or within 24 hours, before the first order or subscription payment. Existing accounts, self-referrals and circular referrals are ineligible.</p><p>New referrals qualify through eligible paid recurring plans. A signup or link share alone does not earn credit. Rewards follow the terms recorded when the referral joined; earlier referrals keep their original terms.</p><p>HYMN credit can be used where the checkout offers credit redemption. It is separate from royalty earnings and is not a cash payout. Refunds, disputes or abuse can hold or reverse rewards.</p><Link href="/dashboard?tab=support">Need help with a referral? <ArrowRight size={14}/></Link></div></details>
+    <GrowthReminderPreference/>
+  </section>;
 }

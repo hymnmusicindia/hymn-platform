@@ -22,7 +22,7 @@ assert.deepEqual(consistentWorkspaceNavigation(admin),admin);
 const browser=await chromium.launch();
 try {
  const page=await browser.newPage();
- for(const width of [1440,390]) {
+ for(const width of [1440,390,320]) {
   await page.setViewportSize({width,height:900});
   await page.goto('http://localhost:3015/faq',{waitUntil:'domcontentloaded',timeout:120000});
   await expect(page.locator('.dashboard-os-group-toggle').first()).toBeAttached({timeout:30000});
@@ -30,6 +30,17 @@ try {
   const links=page.locator('a[data-nav-key]');
   assert.deepEqual(await links.evaluateAll(nodes=>nodes.map(node=>({label:node.textContent?.trim(),href:node.getAttribute('href')}))),workspaceNavigation.filter(item=>item.group!=='Home').map(item=>({label:item.label,href:item.href})));
   await expect(page.locator('a.workspace-home-link')).toHaveAttribute('href','/');
+  await page.waitForFunction(()=>Object.keys(document.querySelector('.workspace-footer button')||{}).some(key=>key.startsWith('__reactProps$')));
+  await page.waitForTimeout(1000);
+  if(width<1024) await page.evaluate(()=>window.dispatchEvent(new Event('hymn-toggle-navigation')));
+  const gift=page.locator('.workspace-footer').getByRole('link',{name:'Refer a friend',exact:true});
+  await expect(gift).toBeInViewport();
+  await page.locator('.workspace-footer').getByRole('button',{name:'More links'}).click();
+  const terms=page.getByRole('link',{name:'Terms of service',exact:true}).filter({visible:true}).first();
+  await expect(terms).toBeInViewport();
+  await expect(terms).toHaveAttribute('href','/terms-of-service');
+  await page.keyboard.press('Escape');
+
  }
  console.log('Navigation passed: canonical desktop/mobile order, labels, URLs, direct Home link, support grouping, producer tab preservation, unique keys and admin isolation.');
 } finally { await browser.close(); }

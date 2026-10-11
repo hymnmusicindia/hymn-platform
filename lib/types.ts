@@ -592,6 +592,9 @@ export interface Coupon {
 }
 
 export interface ReferralActivity {
+  expectedReward?: number;
+  riskStatus?: string;
+  eligibleAt?: string | null;
   id: number;
   userId?: number;
   referredUserId?: number | null;
@@ -606,6 +609,11 @@ export interface ReferralActivity {
 }
 
 export interface ReferralDashboard {
+  coolingDays: number;
+  eligiblePlans: string[];
+  visits: number;
+  nextActivityCursor?: number | null;
+  nextCreditCursor?: number | null;
   referralCode: string;
   referralLink: string;
   availableCredit: number;

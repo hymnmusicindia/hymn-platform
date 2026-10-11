@@ -32,14 +32,15 @@ export async function createUniqueReferralCode(tx: Tx, name: string) {
 }
 
 export async function registerReferralForNewUser(tx: Tx, input: { referredUserId: number; referredEmail: string; referralCode?: string | null }) {
+  await tx.$queryRaw`SELECT id FROM users WHERE id = ${input.referredUserId} FOR UPDATE`;
   const code = normalizeReferralCode(input.referralCode);
   if (!code) return null;
   const [referredUser, referrer, existing] = await Promise.all([
-    tx.user.findUnique({ where: { id: input.referredUserId }, select: { id: true, email: true, referredById: true, createdAt: true } }),
+    tx.user.findUnique({ where: { id: input.referredUserId }, select: { id: true, email: true, status: true, referredById: true, createdAt: true } }),
     tx.user.findFirst({ where: { referralCode: { equals: code, mode: "insensitive" } }, select: { id: true, email: true, referralCode: true, status: true } }),
     tx.referral.findUnique({ where: { referredUserId: input.referredUserId } })
   ]);
-  if (!referredUser) throw new Error("Referred account was not found.");
+  if (!referredUser || referredUser.status !== "ACTIVE") throw new Error("Referred account was not found.");
   if (!referrer || referrer.status !== "ACTIVE") throw new Error("This referral code isn't valid.");
   if (existing || referredUser.referredById) throw new Error("A referral has already been associated with this account.");
   if (await tx.partnerReferral.findUnique({ where: { userId: input.referredUserId } })) throw new Error("A partner referral has already been associated with this account.");
@@ -47,6 +48,12 @@ export async function registerReferralForNewUser(tx: Tx, input: { referredUserId
 
   const reverse = await tx.referral.findFirst({ where: { userId: input.referredUserId, referredUserId: referrer.id }, select: { id: true } });
   if (reverse) throw new Error("Circular referrals are not eligible.");
+  const ancestors = await tx.$queryRaw<Array<{ id: number }>>`WITH RECURSIVE ancestry AS (
+    SELECT id, referred_by, ARRAY[id] AS visited FROM users WHERE id = ${referrer.id}
+    UNION ALL SELECT u.id, u.referred_by, a.visited || u.id FROM users u JOIN ancestry a ON u.id = a.referred_by WHERE NOT u.id = ANY(a.visited)
+  ) SELECT id FROM ancestry WHERE id = ${input.referredUserId}`;
+  if (ancestors.length) throw new Error("Circular referrals are not eligible.");
+
 
   await tx.user.update({ where: { id: input.referredUserId }, data: { referredById: referrer.id, onboardingReferralCode: referrer.referralCode } });
   const referral = await tx.referral.create({ data: {
@@ -80,6 +87,7 @@ export async function qualifyReferralInTransaction(tx: Tx, input: { referredUser
   });
   if (claimed.count !== 1) return { qualified: false as const, reason: "already_claimed" as const };
 
+  for (const id of [referral.userId, input.referredUserId].sort((a,b)=>a-b)) await tx.$queryRaw`SELECT id FROM users WHERE id = ${id} FOR UPDATE`;
   const [referrer, referred] = await Promise.all([
     tx.user.findUniqueOrThrow({ where: { id: referral.userId }, select: { referralCredits: true } }),
     tx.user.findUniqueOrThrow({ where: { id: input.referredUserId }, select: { referralCredits: true } })
@@ -107,31 +115,37 @@ export async function sendReferralRewardEmails(referralId: number) {
   const referral = await prisma.referral.findUnique({ where: { id: referralId }, include: { owner: { select: { id: true, name: true, email: true } }, referredUser: { select: { id: true, name: true, email: true } } } });
   if (!referral?.referredUser || referral.status !== "REWARDED") return;
   const url = new URL("/dashboard?tab=referral", getPublicAppUrl()).toString();
-  await Promise.all([
-    sendTransactionalEmail({ to: referral.owner.email, userId: referral.owner.id, subject: "Your HYMN referral reward is ready", template: "referral_reward_earned", eventKey: `referral:${referral.id}:referrer-reward:email`, entityType: "referral", entityId: referral.id, html: `<p>Hi ${referral.owner.name},</p><p>Your referral qualified and Rs ${REFERRER_REWARD_INR} HYMN referral credit was added to your account.</p><p><a href="${url}">View referrals</a></p>`, text: `Your referral qualified. Rs ${REFERRER_REWARD_INR} HYMN referral credit was added. ${url}` }),
-    sendTransactionalEmail({ to: referral.referredUser.email, userId: referral.referredUser.id, subject: "Your HYMN release credit is active", template: "referred_user_bonus", eventKey: `referral:${referral.id}:referred-reward:email`, entityType: "referral", entityId: referral.id, html: `<p>Hi ${referral.referredUser.name},</p><p>Rs ${REFERRED_USER_REWARD_INR} HYMN release credit was added to your account.</p><p><a href="${url}">View credits</a></p>`, text: `Rs ${REFERRED_USER_REWARD_INR} HYMN release credit was added to your account. ${url}` })
-  ]);
+  const { emailLayout } = await import("@/lib/email/email-templates");
+  const rewards = [{ user: referral.owner, amount: referral.earnings, audience: "referrer", subject: "Your HYMN referral reward is ready" }, { user: referral.referredUser, amount: referral.referredReward, audience: "referred", subject: "Your HYMN release credit is active" }];
+  await Promise.all(rewards.filter(reward => reward.amount > 0).map(({ user, amount, audience, subject }) => {
+    const body = `Rs ${amount} HYMN credit was added to your account. View your credit history for details.`;
+    return sendTransactionalEmail({ to: user.email, userId: user.id, subject, template: audience === "referrer" ? "referral_reward_earned" : "referred_user_bonus", eventKey: `referral:${referral.id}:${audience}-reward:email`, entityType: "referral", entityId: referral.id, html: emailLayout({ title: subject, greeting: `Hi ${user.name},`, body, ctaLabel: "View referrals", ctaUrl: url }), text: `${body} ${url}` });
+  }));
 }
 
 export async function reverseReferralForTransactionInTransaction(tx: Tx, input: { transactionType: "checkout_order" | "distribution_order" | "subscription_payment"; transactionId: string | number; reason: "refunded" | "charged_back" }) {
+  await tx.$queryRaw`SELECT id FROM referrals WHERE qualifying_transaction_type = ${input.transactionType} AND qualifying_transaction_id = ${String(input.transactionId)} FOR UPDATE`;
   const referral = await tx.referral.findFirst({ where: { qualifyingTransactionType: input.transactionType, qualifyingTransactionId: String(input.transactionId), status: "REWARDED" } });
   if (!referral || !referral.referredUserId) return { reversed: false as const };
+  const userIds = [referral.userId, referral.referredUserId].sort((a,b)=>a-b);
+  for (const id of userIds) await tx.$queryRaw`SELECT id FROM users WHERE id = ${id} FOR UPDATE`;
   const [referrer, referred] = await Promise.all([
     tx.user.findUniqueOrThrow({ where: { id: referral.userId }, select: { referralCredits: true } }),
     tx.user.findUniqueOrThrow({ where: { id: referral.referredUserId }, select: { referralCredits: true } })
   ]);
   if (referrer.referralCredits < referral.earnings || referred.referralCredits < referral.referredReward) {
     await tx.referral.update({ where: { id: referral.id }, data: { riskStatus: "review_required" } });
-    await tx.fraudAlert.create({ data: { category: "referral_abuse", severity: "high", riskScore: 70, entityType: "referral", entityId: String(referral.id), userId: referral.referredUserId, summary: `Referral reward reversal required after ${input.reason}; credited balance has already been spent.` } });
+    const existingAlert = await tx.fraudAlert.findFirst({ where: { category: "referral_abuse", entityType: "referral", entityId: String(referral.id), summary: `Referral reward reversal required after ${input.reason}; credited balance has already been spent.` } });
+    if (!existingAlert) await tx.fraudAlert.create({ data: { category: "referral_abuse", severity: "high", riskScore: 70, entityType: "referral", entityId: String(referral.id), userId: referral.referredUserId, summary: `Referral reward reversal required after ${input.reason}; credited balance has already been spent.` } });
     await tx.auditLog.create({ data: { action: "REFERRAL_REVERSAL_REVIEW_REQUIRED", entity: "referral", entityId: String(referral.id), riskLevel: "high", metadata: { reason: input.reason } } });
     return { reversed: false as const, reviewRequired: true as const };
   }
   const referrerAfter = referrer.referralCredits - referral.earnings;
   const referredAfter = referred.referralCredits - referral.referredReward;
   await tx.creditLedgerEntry.createMany({ data: [
-    { userId: referral.userId, type: "REFERRAL_REVERSAL", bucket: "REFERRAL_REWARD", amount: referral.earnings, direction: "debit", sourceType: "referral", sourceId: String(referral.id), description: `Referral reward reversal: ${input.reason}`, idempotencyKey: `REFERRAL_REVERSAL:${referral.id}:REFERRER`, balanceAfter: referrerAfter },
+    { userId: referral.userId, type: "REFERRAL_REVERSAL", bucket: referral.rewardPolicy ? "HYMN_CREDIT" : "REFERRAL_REWARD", amount: referral.earnings, direction: "debit", sourceType: "referral", sourceId: String(referral.id), description: `Referral reward reversal: ${input.reason}`, idempotencyKey: `REFERRAL_REVERSAL:${referral.id}:REFERRER`, balanceAfter: referrerAfter },
     { userId: referral.referredUserId, type: "REFERRAL_REVERSAL", bucket: "HYMN_CREDIT", amount: referral.referredReward, direction: "debit", sourceType: "referral", sourceId: String(referral.id), description: `HYMN credit reversal: ${input.reason}`, idempotencyKey: `REFERRAL_REVERSAL:${referral.id}:REFERRED`, balanceAfter: referredAfter }
-  ] });
+  ].filter(entry => entry.amount > 0) });
   await Promise.all([
     tx.user.update({ where: { id: referral.userId }, data: { referralCredits: { decrement: referral.earnings } } }),
     tx.user.update({ where: { id: referral.referredUserId }, data: { referralCredits: { decrement: referral.referredReward } } }),

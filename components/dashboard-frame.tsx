@@ -2,6 +2,7 @@
 
 import { Bell, ChevronDown, ChevronUp, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, X, Plus, Disc3, TrendingUp, Wallet, Music2, Headphones, Settings, Users, LifeBuoy, Store, LayoutGrid, Upload, Home } from "lucide-react";
 import clsx from "clsx";
+import { WorkspaceFooter } from "@/components/workspace-footer";
 import { consistentWorkspaceNavigation, workspaceNavigation } from "@/lib/workspace-navigation";
 import Link from "next/link";
 import { SubscriptionButton, openSubscriptions } from "@/components/subscription-options";
@@ -270,6 +271,7 @@ export function DashboardFrame<T extends string>({
           <button type="button" onClick={() => scrollNavigation(-1)} disabled={!navScroll.canUp} aria-label="Scroll navigation up"><ChevronUp className="h-4 w-4" /></button>
           <button type="button" onClick={() => scrollNavigation(1)} disabled={!navScroll.canDown} aria-label="Scroll navigation down"><ChevronDown className="h-4 w-4" /></button>
         </div>
+        <WorkspaceFooter onNavigate={() => setMobileOpen(false)} />
       </aside>
 
       <div className="portal-workspace grid gap-6">

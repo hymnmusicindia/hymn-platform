@@ -5,12 +5,12 @@ import { prisma } from "@/lib/prisma";
 
 export default async function AdminReferralsPage() {
   const admin = await requireAdminPermission("fraud.read"); if ("error" in admin) redirect("/admin/login");
-  const [rows, grouped, flagged, visits] = await Promise.all([
+  const [rows, grouped, flagged, visits, credited] = await Promise.all([
     prisma.referral.findMany({ include: { owner: { select: { name: true, email: true } }, referredUser: { select: { name: true, email: true } } }, orderBy: { createdAt: "desc" }, take: 250 }),
-    prisma.referral.groupBy({ by: ["status"], _count: true }), prisma.referral.count({ where: { riskStatus: { not: "clear" } } }), prisma.referralVisit.count()
+    prisma.referral.groupBy({ by: ["status"], _count: true }), prisma.referral.count({ where: { riskStatus: { not: "clear" } } }), prisma.referralVisit.count(), prisma.referral.aggregate({ where: { status: "REWARDED" }, _sum: { earnings: true, referredReward: true } })
   ]);
   const counts = Object.fromEntries(grouped.map(item => [item.status, item._count])); const rewarded = counts.REWARDED || 0;
-  const metrics = [["Referral visits", visits], ["Signups", rows.length], ["Pending", (counts.PENDING || 0) + (counts.REGISTERED || 0)], ["Rewarded", rewarded], ["Credits issued", `₹${rewarded * 8}`], ["Flagged", flagged]];
+  const metrics = [["Referral visits", visits], ["Signups", grouped.reduce((sum,item)=>sum+item._count,0)], ["Pending", (counts.PENDING || 0) + (counts.REGISTERED || 0)], ["Rewarded", rewarded], ["Credits issued", `₹${(credited._sum.earnings || 0) + (credited._sum.referredReward || 0)}`], ["Flagged", flagged]];
   return <main className="mx-auto min-h-screen max-w-[1500px] px-5 pb-16 pt-28 sm:px-8 sm:pt-32">
     <p className="eyebrow">Admin workspace · Growth operations</p><h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Referrals</h1><p className="mt-3 max-w-3xl text-sm leading-6" style={{ color: "var(--text-muted)" }}>Inspect attribution, qualification, issued platform credit, reversals, and referral-abuse review signals.</p>
     <section className="mt-7 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">{metrics.map(([label, value]) => <div key={String(label)} className="surface-card p-4"><p className="text-xs" style={{ color: "var(--text-soft)" }}>{label}</p><strong className="mt-3 block text-xl">{value}</strong></div>)}</section>
