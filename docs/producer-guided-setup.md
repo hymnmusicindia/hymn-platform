@@ -14,3 +14,7 @@ Research informing the design:
 - NN/g recommends contextual help at the point of action: https://www.nngroup.com/articles/onboarding-tutorials/
 
 Validation: `node --import tsx scripts/verify-producer-setup.ts` covers readiness and deep-link rules. `node --import tsx scripts/verify-producer-setup-browser.ts` exercises the actual dashboard shell with browser fixtures at desktop and mobile widths. No live uploads or account changes are performed by those checks.
+
+## Compact beat upload
+
+Four steps: Files, Details, Pricing and Review. File tiles replace long upload rows; master format is inferred from the selected extension. Artwork is part of Files. A sticky live beat card shows artwork, title, metadata chips and only the separately selected public preview audio. Private masters are never attached to a public-facing player. Prices use four licence cards, with an explicit suggested-prices action. Optional metadata and licence explanations are collapsed. Final review shows the actual files, beat facts and prices with edit actions, followed by sample declaration. Invalid exclusive pricing or missing sample disclosure blocks submission. Failures retain files and field values for retry.

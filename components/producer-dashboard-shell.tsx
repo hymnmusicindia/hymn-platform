@@ -3,6 +3,7 @@
 import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
+import { ProducerBeatUploader } from "@/components/producer-beat-uploader";
 import { ProducerStorefrontEditor } from "@/components/producer-storefront-editor";
 import { producerSetup, producerSetupTab } from "@/lib/producer-setup";
 import { WorkspaceGuidance, type GuideStep } from "@/components/workspace-guidance";
@@ -107,12 +108,9 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
   const [isPending, startTransition] = useTransition();
   const [editingBeat, setEditingBeat] = useState<Beat | null>(null);
   const [deletingBeat, setDeletingBeat] = useState<Beat | null>(null);
-  const [audioFormat, setAudioFormat] = useState<string>("");
   const [dashboardSearch, setDashboardSearch] = useState("");
   const [catalogStatusFilter, setCatalogStatusFilter] = useState("all");
   const [catalogGenreFilter, setCatalogGenreFilter] = useState("all");
-  const [selectedAudioFile, setSelectedAudioFile] = useState<File | null>(null);
-  const [beatUploadStep, setBeatUploadStep] = useState(1);
   const [producerProfile, setProducerProfile] = useState(finance.profile ?? null);
   const setup = producerSetup(producerProfile, catalog);
   const allowedTab = producerSetupTab(requestedTab, setup) as typeof requestedTab;
@@ -177,46 +175,14 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
     });
   }
 
-  function handleBeatUpload(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (beatUploadStep !== 5) return;
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    setFeedback(null);
-
-    const format = formData.get("audioFormat") as string;
-    const file = formData.get("file") as File | null;
-    if (file && format) {
-      const isMp3 = file.name.toLowerCase().endsWith(".mp3") || file.type === "audio/mpeg" || file.type === "audio/mp3";
-      const isWav = file.name.toLowerCase().endsWith(".wav") || file.type === "audio/wav";
-      if (format === "MP3" && !isMp3) {
-        setFeedback("Please upload a valid MP3 file.");
-        return;
-      }
-      if (format === "WAV" && !isWav) {
-        setFeedback("Please upload a valid WAV file.");
-        return;
-      }
-    }
-
-    startTransition(async () => {
-      try {
-        setFeedback("Uploading and securely organizing beat assets…");
-        const response = await fetch("/api/producer/beats", { method: "POST", body: formData });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.error || `Beat upload failed (HTTP ${response.status}).`);
-        if (!data.beat?.id) throw new Error("The server did not return the finalized beat. Please retry; no duplicate was added to this page.");
-        setCatalog((items) => [data.beat, ...items.filter((item) => item.id !== data.beat.id)]);
-        setFeedback(`Beat uploaded and submitted for review: ${data.beat.title}`);
-        form.reset();
-        setSelectedAudioFile(null);
-        setAudioFormat("");
-        setBeatUploadStep(1);
-        if (!setup.complete && setup.storefrontReady) window.location.assign("/producer/dashboard?tab=overview");
-      } catch (error) {
-        setFeedback(error instanceof Error ? error.message : "Could not upload beat. Please retry.");
-      }
-    });
+  async function handleBeatUpload(formData: FormData) {
+    const response = await fetch("/api/producer/beats", { method: "POST", body: formData });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Upload failed. Please retry.");
+    if (!data.beat?.id) throw new Error("Upload could not be confirmed. Please check your catalogue before retrying.");
+    setCatalog(items => [data.beat, ...items.filter(item => item.id !== data.beat.id)]);
+    if (!setup.complete && setup.storefrontReady) window.location.assign("/producer/dashboard?tab=overview");
+    else { selectProducerTab("catalog"); setFeedback(`Submitted for review: ${data.beat.title}`); }
   }
 
   function handleBeatUpdate(beat: Beat, patch: Partial<Beat>) {
@@ -349,7 +315,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
       compactOverview
     >
       {setup.complete && <FirstLoginReferralPrompt />}
-      {!setup.complete && <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-muted)]" role="group" aria-label="Producer setup steps"><button className="btn-outline" aria-current={activeTab === "profile" ? "step" : undefined} onClick={() => selectProducerTab("profile")}>{setup.storefrontReady ? "Done: " : "1. "}Storefront</button><span aria-hidden="true">&rarr;</span><button className="btn-outline" disabled={!setup.storefrontReady} aria-current={activeTab === "upload" ? "step" : undefined} onClick={() => selectProducerTab("upload")}>2. First beat</button></div>}
+      {!setup.complete && <nav style={{display:"flex",alignItems:"center",gap:10,fontSize:11,color:"var(--text-muted)"}} aria-label="Producer setup steps"><button style={{padding:"5px 8px",width:"auto"}} aria-current={activeTab === "profile" ? "step" : undefined} onClick={() => selectProducerTab("profile")}>{setup.storefrontReady ? "Done: " : "1. "}Storefront</button><span aria-hidden="true">&rarr;</span><button style={{padding:"5px 8px",width:"auto"}} disabled={!setup.storefrontReady} aria-current={activeTab === "upload" ? "step" : undefined} onClick={() => selectProducerTab("upload")}>2. First beat</button></nav>}
       {setup.complete && ["overview", "catalog", "upload"].includes(activeTab) && <WorkspaceGuidance title={guideBeat ? `Beat path: ${guideBeat.title}` : "Build your first beat listing"} steps={beatGuide}/>}
       {activeTab === "overview" && setup.complete ? <ProducerHome user={user} beats={catalog} finance={{ ...finance, profile: producerProfile }} notifications={producerNotifications} onTab={(tab) => selectProducerTab(tab)} /> : null}
       {false && activeTab === "overview" ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -391,20 +357,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
 
       {activeTab === "profile" ? <ProducerStorefrontEditor name={user.name} profile={producerProfile} onSubmit={saveProducerProfile} pending={isPending} feedback={feedback} /> : null}
 
-      {activeTab === "upload" ? (
-        <Panel title="Upload Beat" description="Complete five short steps. Your master stays private; only an optional preview is public.">
-          <form onSubmit={handleBeatUpload} className="mx-auto grid max-w-2xl gap-5">
-            <div><div className="flex justify-between text-xs"><span>Step {beatUploadStep} of 5</span><span>{["Audio", "Beat information", "Artwork", "Pricing & licences", "Review"][beatUploadStep - 1]}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--border)]"><span className="block h-full bg-[var(--accent)] transition-all" style={{ width: `${beatUploadStep * 20}%` }} /></div></div>
-            <fieldset hidden={beatUploadStep !== 1} className="grid gap-4"><legend className="mb-4 text-xl font-semibold">Audio</legend><select name="audioFormat" required className="field w-full" value={audioFormat} onChange={(e) => setAudioFormat(e.target.value)}><option value="">Master format</option><option value="MP3">High-quality MP3</option><option value="WAV">Lossless WAV</option></select><label className="text-sm font-medium">Private master / delivery file<input name="file" required type="file" accept={audioFormat === "MP3" ? ".mp3,audio/mpeg" : audioFormat === "WAV" ? ".wav,audio/wav" : "audio/*,.wav,.mp3"} className="field mt-2" onChange={(event) => setSelectedAudioFile(event.target.files?.[0] ?? null)} /></label>{selectedAudioFile ? <p className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: "var(--border)" }}>{selectedAudioFile.name} · {(selectedAudioFile.size / 1048576).toFixed(2)} MB</p> : null}<label className="text-sm font-medium">Public preview (optional)<input name="preview" type="file" accept="audio/mpeg,.mp3" className="field mt-2" /></label><p className="text-xs text-[var(--text-soft)]">If no preview is supplied, the private master is never exposed. You can add a preview later.</p></fieldset>
-            <fieldset hidden={beatUploadStep !== 2} className="grid gap-4 sm:grid-cols-2"><legend className="mb-4 text-xl font-semibold">Beat information</legend><input name="title" required className="field sm:col-span-2" placeholder="Beat title" /><input name="bpm" required type="number" min="40" max="300" className="field" placeholder="BPM" /><input name="keySignature" required className="field" placeholder="Key (for example F# Minor)" /><input name="genre" required className="field" placeholder="Genre" /><input name="subgenre" className="field" placeholder="Subgenre" /><input name="mood" required className="field" placeholder="Mood" /><input name="tags" className="field" placeholder="Tags, separated by commas" /><textarea name="description" className="field min-h-28 sm:col-span-2" placeholder="Description" /><label className="sm:col-span-2 text-sm font-medium">Does this beat contain samples you do not own or control?<select name="sampleDeclaration" required className="field mt-2"><option value="">Choose an answer</option><option value="NO_UNCONTROLLED_SAMPLES">No</option><option value="CONTAINS_UNCONTROLLED_SAMPLES">Yes — I will disclose them below</option></select></label><textarea name="sampleDisclosure" className="field min-h-24 sm:col-span-2" placeholder="Required when you answered Yes: identify the samples and clearance status" /></fieldset>
-            <fieldset hidden={beatUploadStep !== 3} className="grid gap-4"><legend className="mb-4 text-xl font-semibold">Artwork</legend><label className="text-sm font-medium">Beat artwork (optional)<input name="artwork" type="file" accept="image/jpeg,image/png,image/webp" className="field mt-2" /></label><p className="text-xs text-[var(--text-soft)]">JPEG, PNG or WebP. HYMN uses a clean fallback if you skip artwork.</p></fieldset>
-            <fieldset hidden={beatUploadStep !== 4} className="grid gap-4 sm:grid-cols-2"><legend className="mb-4 text-xl font-semibold">Pricing & licences</legend><div className="rounded-xl border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2 text-sm"><span className="block font-medium">MP3 Licence</span><span className="text-xs text-[var(--text-soft)]">Fixed HYMN standard: ₹120 · General · No Content ID</span></div><label className="text-sm font-medium">WAV Licence price<input name="generalPrice" required type="number" min="1" className="field mt-2" placeholder="₹500" /></label><label className="text-sm font-medium">Stem Files Licence price<input name="stemPrice" required type="number" min="1" className="field mt-2" placeholder="₹999" /></label><label className="text-sm font-medium">Stems Exclusive Licence price<input name="exclusivePrice" required type="number" min="2" className="field mt-2" placeholder="₹5000" /></label><input name="price" type="hidden" value="120" /><p className="sm:col-span-2 text-xs text-[var(--text-soft)]">MP3 is fixed at ₹120. WAV, Stem Files, and Stems Exclusive prices can be changed. General licences do not include Content ID; Stems Exclusive includes WAV and Content ID.</p></fieldset>
-            <fieldset hidden={beatUploadStep !== 5} className="grid gap-3"><legend className="mb-4 text-xl font-semibold">Review</legend><div className="rounded-2xl border p-4 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><p className="font-semibold">Ready to submit for HYMN review</p><p className="mt-2 text-[var(--text-muted)]">We will validate the audio, artwork, metadata, prices, and sample declaration. The beat is not public until approved.</p></div></fieldset>
-            <div className="flex items-center justify-between gap-3 border-t pt-4" style={{ borderColor: "var(--border)" }}><button type="button" className="btn-outline" disabled={beatUploadStep === 1 || isPending} onClick={() => setBeatUploadStep((step) => Math.max(1, step - 1))}>Back</button>{beatUploadStep < 5 ? <button type="button" className="btn-primary" onClick={(event) => { event.preventDefault(); const current = event.currentTarget.form?.querySelector<HTMLFieldSetElement>(`fieldset:not([hidden])`); const invalid = current ? Array.from(current.elements).find((element): element is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement => "checkValidity" in element && !(element as HTMLInputElement).checkValidity()) : null; if (invalid) return invalid.reportValidity(); setBeatUploadStep((step) => Math.min(5, step + 1)); }}>Continue</button> : <button type="submit" disabled={isPending} className="btn-primary pressable">{isPending ? "Uploading..." : "Submit for review"}</button>}</div>
-            {feedback ? <p className="text-sm" style={{ color: "var(--text)" }}>{customerMessage(feedback)}</p> : null}
-          </form>
-        </Panel>
-      ) : null}
+      {activeTab === "upload" ? <ProducerBeatUploader producerName={producerProfile?.displayName || user.name} onUpload={handleBeatUpload}/> : null}
       {(activeTab === "manage" || activeTab === "catalog") ? (
         <Panel title="Manage beats" description="Enable, disable, and price your catalog without desktop-only controls.">
           <div className="mb-5 grid gap-3 md:grid-cols-[0.8fr,0.8fr,1fr]">

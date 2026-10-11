@@ -21,11 +21,12 @@ async function main() {
       const page = await browser.newPage({ viewport: { width, height: 1000 } });
       const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
       const fixture: {profile: typeof profile | null; beats: typeof beat[]} = { profile: null, beats: [] };
+      let uploadAttempts = 0;
       await page.route("http://producer.fixture/**", async route => {
         const url = new URL(route.request().url());
         if (url.pathname === "/api/notifications") return route.fulfill({ json: { notifications: [] } });
         if (url.pathname === "/api/producer/profile") { fixture.profile = profile; return route.fulfill({ json: { profile } }); }
-        if (url.pathname === "/api/producer/beats") { fixture.beats = [beat]; return route.fulfill({ json: { beat } }); }
+        if (url.pathname === "/api/producer/beats") { uploadAttempts++; if (uploadAttempts === 1) return route.fulfill({status:503,json:{error:"Temporary upload failure. Retry."}}); const payload=route.request().postData() || ""; assert(payload.includes('name="audioFormat"')); assert(payload.includes("MP3")); assert(payload.includes("master.mp3")); fixture.beats = [beat]; return route.fulfill({ json: { beat } }); }
         return route.fulfill({ contentType: "text/html", body: `<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style><style>body{background:#11151b;color:#edf0f7;--card:#1b2029;--border:#343b48;--text:#edf0f7;--text-muted:#aeb7c6;--bg-soft:#252c38;--accent:#a6b6ff;--accent-soft:#252e48}#app{padding:16px}</style></head><body class="hymn-portal-root"><div class="hymn-portal"><div id="app"></div></div><script>window.fixture=${JSON.stringify(fixture)}</script></body></html>` });
       });
       async function load(tab = "overview") { await page.goto(`http://producer.fixture/producer/dashboard?tab=${tab}`); await page.addScriptTag({ path: ".cache/producer-setup-browser.js" }); }
@@ -52,19 +53,36 @@ async function main() {
       }
       await page.screenshot({path:`.cache/producer-live-preview-${width}.png`,fullPage:true});
       await page.getByRole("button", { name: "Save storefront & continue" }).click();
-      await page.getByRole("heading", { name: "Upload Beat", exact: true }).waitFor();
+      await page.getByRole("heading", { name: "Upload beat", exact: true }).waitFor();
       assert.equal(await page.getByRole("button", { name: "Performance", exact: true }).count(), 0);
-      await page.locator('select[name="audioFormat"]').selectOption("MP3");
+      await page.getByRole("button", {name:"Continue",exact:true}).click();
+      await page.getByRole("alert").filter({hasText:"Choose a WAV or MP3 master."}).waitFor();
+      if(width===1440) {
+        const workspace=await page.getByRole("region",{name:"Beat upload workspace"}).boundingBox();
+        assert(workspace && workspace.y+workspace.height<900,"Default upload fits desktop screen");
+      }
+      await page.screenshot({path:`.cache/producer-upload-files-${width}.png`,fullPage:true});
       await page.locator('input[name="file"]').setInputFiles({ name: "master.mp3", mimeType: "audio/mpeg", buffer: Buffer.from("fixture") });
       await page.getByRole("button", { name: "Continue", exact: true }).click();
+      assert.equal(await page.locator("audio").count(),0,"Master must never become a playable storefront preview");
       for (const [name, value] of Object.entries({ title: "First beat", bpm: "140", keySignature: "F minor", genre: "Trap", mood: "Dark" })) await page.locator(`[name="${name}"]`).fill(value);
+      await page.getByRole("button", { name: "Continue", exact: true }).click();
+      await page.getByRole("button",{name:"Use suggested prices"}).click();
+      await page.locator('[name="exclusivePrice"]').fill("50");
+      await page.getByRole("button",{name:"Continue",exact:true}).click();
+      await page.getByRole("alert").filter({hasText:"Exclusive price must be higher"}).waitFor();
+      await page.locator('[name="exclusivePrice"]').fill("5000");
+      await page.screenshot({path:`.cache/producer-upload-pricing-${width}.png`,fullPage:true});
+      await page.getByRole("button", { name: "Continue", exact: true }).click();
+      await page.locator('[name="sampleDeclaration"]').selectOption("CONTAINS_UNCONTROLLED_SAMPLES");
+      await page.getByRole("button",{name:"Submit for review",exact:true}).click();
+      assert.equal(uploadAttempts,0,"Sample disclosure is required before upload");
       await page.locator('[name="sampleDeclaration"]').selectOption("NO_UNCONTROLLED_SAMPLES");
-      await page.getByRole("button", { name: "Continue", exact: true }).click();
-      await page.getByRole("button", { name: "Continue", exact: true }).click();
-      for (const [name, value] of Object.entries({ generalPrice: "500", stemPrice: "999", exclusivePrice: "5000" })) await page.locator(`[name="${name}"]`).fill(value);
-      await page.getByRole("button", { name: "Continue", exact: true }).click();
       assert.equal(fixture.beats.length,0,"Continue must not submit the final upload automatically");
       await page.getByRole("button", { name: "Submit for review", exact: true }).click();
+      await page.getByRole("alert").filter({hasText:"Temporary upload failure"}).waitFor();
+      assert.equal(await page.locator('input[name="file"]').evaluate((input:HTMLInputElement)=>input.files?.[0]?.name),"master.mp3","Retry preserves the selected master");
+      await page.getByRole("button", {name:"Submit for review",exact:true}).click();
       await page.waitForURL("**/producer/dashboard?tab=overview");
       await page.addScriptTag({ path: ".cache/producer-setup-browser.js" });
       await page.getByRole("heading", { name: "Your sound. Your business." }).waitFor();
@@ -73,7 +91,7 @@ async function main() {
       assert.deepEqual(errors, []);
       await page.close();
     }
-    console.log("PASS actual producer shell: deep-link gates, storefront save, five-step first upload and automatic unlock at desktop/mobile widths");
+    console.log("PASS actual producer shell: deep-link gates, storefront save, compact four-step first upload and automatic unlock at desktop/mobile widths");
   } finally { await browser.close(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

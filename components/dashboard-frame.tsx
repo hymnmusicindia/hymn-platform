@@ -286,7 +286,7 @@ export function DashboardFrame<T extends string>({
       <div className="portal-workspace grid gap-6">
         <div className="dashboard-os-topbar">
           <span className="portal-section-label">{activeGroup?.label ?? "Workspace"}</span>
-          {!(compactOverview && isOverview) ? <div className="dashboard-os-search">
+          {!setupMode && !(compactOverview && isOverview) ? <div className="dashboard-os-search">
             <Search className="h-4 w-4" style={{ color: "var(--text-muted)" }} />
             <input
               aria-label="Search dashboard"
