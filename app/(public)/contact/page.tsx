@@ -1,41 +1,27 @@
+import Link from "next/link";
 import { ContactForm } from "@/components/contact-form";
-import { ArrowRight, MessageCircle, Send } from "lucide-react";
+import { ArrowUpRight, LifeBuoy, MessageCircle, BookOpen, AudioLines } from "lucide-react";
 import { getSession } from "@/lib/session";
 import type { Metadata } from "next";
+import "@/app/styles/contact-center.css";
 
-export const metadata: Metadata = { title: "Contact", description: "Contact HYMN Music for music distribution, beat licensing, release support, partnerships, mixing and mastering.", alternates: { canonical: "/contact" } };
+export const metadata: Metadata = { title: "Contact", description: "Talk to HYMN Music about distribution, studio services, release support and partnerships.", alternates: { canonical: "/contact" } };
 
 export default async function ContactPage() {
   const session = await getSession();
-  return (
-    <main className="relative overflow-hidden py-12 sm:py-16 lg:py-20">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_5%,color-mix(in_srgb,var(--accent)_10%,transparent),transparent_28%),radial-gradient(circle_at_88%_18%,color-mix(in_srgb,var(--money)_10%,transparent),transparent_24%)]" />
-      <div className="shell relative">
-        <div className="grid gap-8 lg:grid-cols-[0.78fr_1.22fr] lg:items-start lg:gap-12">
-          <section className="lg:sticky lg:top-28">
-            <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-soft)]"><Send className="h-3.5 w-3.5" /> Contact HYMN</span>
-            <h1 className="mt-5 max-w-xl text-4xl font-semibold leading-[1.02] tracking-[-0.045em] text-[var(--text)] sm:text-5xl lg:text-6xl">Let&apos;s move your music forward.</h1>
-            <p className="mt-5 max-w-lg text-sm leading-7 text-[var(--text-muted)] sm:text-base">Reach the HYMN team for distribution, services, release support, and partnership conversations.</p>
-
-            <a href="https://wa.me/918793643228" target="_blank" rel="noreferrer" className="group mt-8 flex max-w-lg items-center gap-4 rounded-2xl border p-4 transition duration-300 hover:-translate-y-1" style={{ borderColor: "var(--border)", background: "color-mix(in srgb, var(--card) 78%, transparent)", boxShadow: "var(--shadow-soft)" }}>
-              <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full" style={{ background: "var(--text)", color: "var(--bg)" }}><MessageCircle className="h-5 w-5" /></span>
-              <span className="min-w-0 flex-1"><strong className="block text-sm text-[var(--text)]">Chat on WhatsApp</strong><span className="mt-1 block text-xs leading-5 text-[var(--text-soft)]">Quick support and partnership conversations.</span></span>
-              <ArrowRight className="h-4 w-4 shrink-0 text-[var(--text-muted)] transition-transform group-hover:translate-x-1" />
-            </a>
-          </section>
-
-          <section className="overflow-hidden rounded-[2rem] border p-5 shadow-[var(--shadow-strong)] backdrop-blur-xl sm:p-8" style={{ borderColor: "var(--border)", background: "color-mix(in srgb, var(--card) 86%, transparent)" }}>
-            <div className="mb-7 border-b pb-6" style={{ borderColor: "var(--border)" }}>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-soft)]">Inquiry desk</p>
-              <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-[var(--text)] sm:text-3xl">Tell us what you&apos;re building.</h2>
-            </div>
-            <ContactForm initialName={session?.name} initialEmail={session?.email} />
-          </section>
-        </div>
-      </div>
-    </main>
-  );
+  return <main className="contact-center"><div className="contact-inner">
+    <header className="contact-hero"><p className="contact-kicker"><AudioLines size={15} /> CONTACT HYMN</p>
+      <h1>Good music starts<br />with a <span>conversation.</span></h1>
+      <p>Have a release in mind, a question, or a bigger idea? Let&apos;s find your next move.</p>
+    </header>
+    <div className="contact-layout"><aside className="contact-channels" aria-label="Ways to reach HYMN">
+      <p className="contact-kicker">THE RIGHT PLACE TO START</p>
+      <Link href="/dashboard?tab=support" className="contact-channel"><LifeBuoy size={21} strokeWidth={1.5}/><span><strong>Help with your account or release</strong><small>Create a support request and follow its progress.</small></span><ArrowUpRight size={17}/></Link>
+      <Link href="/faq" className="contact-channel"><BookOpen size={21} strokeWidth={1.5}/><span><strong>A quick answer</strong><small>Explore distribution, royalties, licensing and more.</small></span><ArrowUpRight size={17}/></Link>
+      <a href="https://wa.me/918793643228" target="_blank" rel="noopener noreferrer" className="contact-channel"><MessageCircle size={21} strokeWidth={1.5}/><span><strong>Start a WhatsApp conversation</strong><small>Speak with HYMN about your music or next project.</small></span><ArrowUpRight size={17}/></a>
+      <div className="contact-aside-note"><span>MADE FOR YOUR NEXT CHAPTER</span><p>Independent artists.<br />Ambitious producers.<br /><em>One shared love for music.</em></p></div>
+    </aside>
+    <section className="contact-compose" aria-labelledby="contact-form-heading"><div className="contact-compose-heading"><p className="contact-kicker">LET&apos;S TALK</p><h2 id="contact-form-heading">Tell us what you have in mind.</h2><p>A few details will help us point you in the right direction.</p></div><ContactForm initialName={session?.name} initialEmail={session?.email}/></section>
+    </div>
+  </div></main>;
 }
-
-
-// vercel trigger 2
