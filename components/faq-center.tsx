@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Clock3, LifeBuoy, Search, Star } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowRight, ArrowUpRight, BookOpen, LifeBuoy, Link2, Plus, Search, X } from "lucide-react";
 
 type Article = { id: string; category: string; question: string; answer: string; tags: string; updated?: boolean };
 
@@ -56,60 +56,53 @@ export const faqArticles: Article[] = [
   { id: "privacy-security", category: "Security", question: "How does HYMN protect private files and account data?", answer: "HYMN uses authenticated sessions, role-based permissions, private asset download routes, audit records, validation, and operational access controls. No online service can guarantee absolute security; report suspected account misuse promptly.", tags: "privacy security private assets permissions" }
 ];
 
-const popularIds = ["release-review", "upc", "royalty-imports", "quarterly-payouts", "payout-pending", "beat-licensing"];
+const popularIds = ["release-review", "payout-pending", "beat-licensing"];
+const topicOrder = ["Distribution", "Uploads", "Metadata", "Plans & Payments", "Beat Store", "Royalties & Splits", "Payouts", "Accounts", "Copyright", "Security", "Notifications", "Referrals & Credits"];
+const topicLabels:Record<string,string> = {"Beat Store":"Beatstore", "Uploads":"Audio & artwork", "Metadata":"Credits & metadata", "Accounts":"Your account"};
 
 export function FaqCenter() {
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("All");
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [highlightId, setHighlightId] = useState<string | null>(null);
-  const categories = ["All", ...Array.from(new Set(faqArticles.map((article) => article.category)))];
-
-  useEffect(() => {
-    const openHash = () => {
-      const id = decodeURIComponent(window.location.hash.slice(1));
-      if (!id || !faqArticles.some((article) => article.id === id)) return;
-      setQuery(""); setCategory("All"); setOpenId(id); setHighlightId(id);
-      window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
-      window.setTimeout(() => document.getElementById(`${id}-trigger`)?.focus({ preventScroll: true }), 520);
-      window.setTimeout(() => setHighlightId(null), 2000);
-    };
-    openHash();
-    window.addEventListener("hashchange", openHash);
-    return () => window.removeEventListener("hashchange", openHash);
-  }, []);
-
-  const shown = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    return faqArticles.filter((article) => (category === "All" || article.category === category) && (!term || `${article.question} ${article.answer} ${article.tags} ${article.category}`.toLowerCase().includes(term)));
-  }, [query, category]);
-
-  const renderArticle = (article: Article) => {
-    const open = openId === article.id;
-    return (
-      <article id={article.id} key={article.id} className={`faq-article surface-card overflow-hidden ${highlightId === article.id ? "faq-article-highlight" : ""}`}>
-        <h3>
-          <button id={`${article.id}-trigger`} type="button" className="flex w-full items-start justify-between gap-4 p-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset" aria-expanded={open} aria-controls={`${article.id}-panel`} onClick={() => setOpenId(open ? null : article.id)}>
-            <span><span className="chip">{article.category}</span><span className="mt-3 block text-lg font-semibold">{article.question}</span></span>
-            <ChevronDown className={`mt-1 h-5 w-5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" />
-          </button>
-        </h3>
-        {open ? <div id={`${article.id}-panel`} role="region" aria-labelledby={`${article.id}-trigger`} className="border-t p-5 text-sm leading-7" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>{article.answer}</div> : null}
-      </article>
-    );
-  };
-
-  return (
-    <div className="space-y-8">
-      <section className="surface-card p-5 sm:p-6">
-        <div className="flex items-center gap-3"><LifeBuoy aria-hidden="true" /><div><h2 className="text-2xl font-semibold">HYMN Help Center</h2><p className="text-sm" style={{ color: "var(--text-muted)" }}>Search platform guidance by workflow or question.</p></div></div>
-        <div className="relative mt-5"><Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2" aria-hidden="true" /><input className="field pl-12" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search FAQ..." aria-label="Search FAQ" /></div>
-        <div className="mt-4 flex flex-wrap gap-2" aria-label="FAQ categories">{categories.map((item) => <button key={item} type="button" className="rounded-full border px-3 py-2 text-xs font-medium" style={{ borderColor: category === item ? "var(--accent)" : "var(--border)", background: category === item ? "var(--accent-soft)" : "var(--card)" }} aria-pressed={category === item} onClick={() => setCategory(item)}>{item}</button>)}</div>
-      </section>
-
-      {!query && category === "All" ? <div className="grid gap-6 lg:grid-cols-2"><section><h2 className="mb-3 flex items-center gap-2 text-xl font-semibold"><Star className="h-5 w-5" aria-hidden="true" /> Popular Questions</h2><div className="grid gap-3">{faqArticles.filter((article) => popularIds.includes(article.id)).map(renderArticle)}</div></section><section><h2 className="mb-3 flex items-center gap-2 text-xl font-semibold"><Clock3 className="h-5 w-5" aria-hidden="true" /> Recently Updated</h2><div className="grid gap-3">{faqArticles.filter((article) => article.updated).slice(0, 6).map(renderArticle)}</div></section></div> : null}
-
-      <section aria-live="polite"><h2 className="mb-3 text-xl font-semibold">{query || category !== "All" ? `${shown.length} result${shown.length === 1 ? "" : "s"}` : "All Questions"}</h2><div className="grid gap-3">{shown.map(renderArticle)}{shown.length === 0 ? <div className="surface-card p-8 text-center"><h3 className="text-xl font-semibold">No matching answer found</h3><p className="mt-2" style={{ color: "var(--text-muted)" }}>Try another term or send the relevant account, release, payment, payout, or purchase reference to support.</p><Link href="/contact" className="btn-primary mt-5">Contact Support</Link></div> : null}</div></section>
+  const [query,setQuery]=useState("");
+  const [category,setCategory]=useState("All");
+  const [openId,setOpenId]=useState<string|null>(null);
+  const [highlightId,setHighlightId]=useState<string|null>(null);
+  const searchRef=useRef<HTMLInputElement>(null);
+  const categories=["All",...topicOrder.filter(topic=>faqArticles.some(article=>article.category===topic))];
+  useEffect(()=>{
+    let scrollTimer:ReturnType<typeof setTimeout>;
+    let highlightTimer:ReturnType<typeof setTimeout>;
+    function openHash() {
+      let id="";try {id=decodeURIComponent(window.location.hash.slice(1));}catch{return;}
+      const article=faqArticles.find(item=>item.id===id);if(!article)return;
+      clearTimeout(scrollTimer);clearTimeout(highlightTimer);
+      setQuery("");setCategory(article.category);setOpenId(id);setHighlightId(id);
+      scrollTimer=setTimeout(()=>{
+        const trigger=document.getElementById(`${id}-trigger`);
+        trigger?.scrollIntoView({behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",block:"center"});
+        trigger?.focus({preventScroll:true});
+      },100);
+      highlightTimer=setTimeout(()=>setHighlightId(null),2200);
+    }
+    openHash();window.addEventListener("hashchange",openHash);
+    return ()=>{clearTimeout(scrollTimer);clearTimeout(highlightTimer);window.removeEventListener("hashchange",openHash);};
+  },[]);
+  const shown=useMemo(()=>{
+    const terms=query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    return faqArticles.filter(article=>(category==="All" || article.category===category) && terms.every(term=>`${article.question} ${article.answer} ${article.tags} ${article.category}`.toLowerCase().includes(term)));
+  },[query,category]);
+  function choose(topic:string) {setCategory(topic);setOpenId(null);setHighlightId(null);}
+  function toggle(id:string) {
+    const next=openId===id ? null : id;setOpenId(next);
+    const url=new URL(window.location.href);url.hash=next || "";window.history.replaceState(null,"",url);
+  }
+  return <div className="faq-center">
+    <header className="faq-hero"><span className="faq-kicker"><BookOpen size={14}/> HYMN HELP CENTER</span><h1>More clarity.<br/><span>More time for music.</span></h1><p>Find your answer. Get back to creating.</p>
+      <label className="faq-search"><Search size={20}/><input ref={searchRef} value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search releases, payments, royalties…" aria-label="Search FAQ"/>{query ? <button type="button" aria-label="Clear FAQ search" onClick={()=>{setQuery("");searchRef.current?.focus();}}><X size={17}/></button> : <span>Ask a question</span>}</label>
+      <div className="faq-shortcuts"><span>Quick answers</span>{popularIds.map(id=>{return <a key={id} href={`#${id}`}>{id==="release-review" ? "Release review" : id==="payout-pending" ? "Pending payouts" : "Beat licenses"}<ArrowUpRight size={12}/></a>;})}</div>
+    </header>
+    <div className="faq-layout"><aside className="faq-topics"><span className="faq-kicker">BROWSE BY TOPIC</span><nav aria-label="FAQ categories">{categories.map(topic=><button type="button" key={topic} aria-pressed={category===topic} onClick={()=>choose(topic)}><span>{topic==="All" ? "All topics" : topicLabels[topic] || topic}</span><small>{topic==="All" ? faqArticles.length : faqArticles.filter(article=>article.category===topic).length}</small></button>)}</nav><div className="faq-sidebar-help"><LifeBuoy size={22} strokeWidth={1.4}/><strong>A little more help?</strong><p>Share the details with our team.</p><Link href="/dashboard?tab=support">Create a request <ArrowRight size={14}/></Link></div></aside>
+      <section className="faq-results" aria-labelledby="faq-results-title"><header><div><span className="faq-kicker">{query.trim() ? "SEARCH RESULTS" : "THE ANSWERS, SIMPLY"}</span><h2 id="faq-results-title">{query.trim() ? `Answers for “${query.trim()}”` : category==="All" ? "Frequently asked. Clearly answered." : topicLabels[category] || category}</h2></div><span role="status">{shown.length} answer{shown.length===1 ? "" : "s"}</span></header>
+      {shown.length ? <div className="faq-answer-list">{shown.map(article=>{const open=openId===article.id;return <article id={article.id} key={article.id} className={`faq-article ${highlightId===article.id ? "faq-answer-highlight" : ""}`}><h3><button id={`${article.id}-trigger`} type="button" aria-expanded={open} aria-controls={`${article.id}-panel`} onClick={()=>toggle(article.id)}><span>{category==="All" ? <small>{topicLabels[article.category] || article.category}</small> : null}{article.question}</span><Plus size={18} className={open ? "is-open" : ""}/></button></h3><div id={`${article.id}-panel`} role="region" aria-labelledby={`${article.id}-trigger`} hidden={!open}><p>{article.answer}</p><a className="faq-answer-link" href={`#${article.id}`}><Link2 size={13}/> Link to this answer</a></div></article>;})}</div> : <div className="faq-no-results"><Search size={30} strokeWidth={1.3}/><h3>No matching answer yet.</h3><p>Try a shorter search or browse all topics.</p><button type="button" onClick={()=>{setQuery("");choose("All");searchRef.current?.focus();}}>Reset search <ArrowRight size={15}/></button><Link href="/dashboard?tab=support">Ask HYMN support</Link></div>}
+      <footer className="faq-contact"><div><span className="faq-kicker">LET’S KEEP YOU MOVING</span><h3>Still need a hand?</h3><p>Tell us what’s happening. Track your request in one place.</p></div><Link href="/dashboard?tab=support">Help &amp; support <ArrowRight size={16}/></Link></footer></section>
     </div>
-  );
+  </div>;
 }

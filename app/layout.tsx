@@ -21,6 +21,7 @@ import "./styles/subscription-options.css";
 import "./styles/home-goal-workspace.css";
 import "./styles/home-editorial.css";
 import "./styles/support-workspace.css";
+import "./styles/faq-center.css";
 import { SmartHelpLayer } from "@/components/smart-help-layer";
 
 export const metadata: Metadata = {
