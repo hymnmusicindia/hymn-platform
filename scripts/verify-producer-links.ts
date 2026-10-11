@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { parseBioCart } from "../lib/bio-cart";
 import { featuredProducerBeats, producerSocialLinks } from "../lib/producer-links";
 import type { StorefrontBeat } from "../lib/beat-store";
 import type { ProducerProfile } from "../lib/types";
@@ -14,3 +15,9 @@ assert.deepEqual(producerSocialLinks(profile).map(link=>link.id),["instagram"]);
 assert.equal(producerSocialLinks({} as ProducerProfile).length,0);
 assert.equal(producerSocialLinks({...profile,websiteUrl:"https://example.com"}).length,2);
 console.log("PASS six-beat sales ranking, newest fallback, deterministic ties and safe social links");
+
+assert.deepEqual(parseBioCart("invalid"),[]);
+assert.deepEqual(parseBioCart('{"beatId":1}'),[]);
+assert.deepEqual(parseBioCart(JSON.stringify([{beatId:1,licenseType:"mp3",price:1},{beatId:1,licenseType:"wav"},{beatId:-2,licenseType:"wav"},{beatId:3,licenseType:"unsupported"}])),[{beatId:1,licenseType:"wav"}]);
+assert.deepEqual(parseBioCart(JSON.stringify([{beatId:4,licenseType:"general"}]))[0].licenseType,"wav");
+console.log("PASS malformed cart, duplicate beats, legacy licence normalization and untrusted-price removal");

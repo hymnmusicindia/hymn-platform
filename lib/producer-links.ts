@@ -18,7 +18,10 @@ export function producerSocialLinks(profile: ProducerProfile) {
 }
 
 /** Verified paid licence sales first; recent releases break ties. No invented play counts. */
-export function featuredProducerBeats(beats: StorefrontBeat[], sales: Map<number, number>) {
+export function featuredProducerBeats(beats: StorefrontBeat[], sales: Map<number, number>, limit = 6) {
   return [...beats].sort((a, b) => (sales.get(b.id) || 0) - (sales.get(a.id) || 0)
-    || (Date.parse(b.createdAt || "") || 0) - (Date.parse(a.createdAt || "") || 0) || b.id - a.id).slice(0, 6);
+    || (Date.parse(b.createdAt || "") || 0) - (Date.parse(a.createdAt || "") || 0) || b.id - a.id).slice(0, limit);
 }
+
+export type BioBeat = { id: number; title: string; bpm: number; genre: string; artwork: string; audio: string; mood?: string; keySignature?: string; price: number; generalPrice?: number; stemPrice?: number; exclusivePrice?: number };
+export type BioViewer = { name: string; email: string; avatarUrl?: string | null };

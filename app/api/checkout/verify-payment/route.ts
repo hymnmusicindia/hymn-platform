@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { getCheckoutOrderByRazorpayId } from "@/lib/db";
-import { verifyRazorpaySignature } from "@/lib/razorpay";
+import { verifyRazorpaySignature, verifyCapturedRazorpayPayment } from "@/lib/razorpay";
 import { getSession } from "@/lib/session";
 import { checkoutVerifySchema } from "@/lib/validation";
 import { prisma } from "@/lib/prisma";
-import { emailAppUrl, sendBeatEmailEvent } from "@/lib/email/email-events";
 import { confirmCheckoutPayment } from "@/lib/payment-webhooks";
 import { consumeRateLimit } from "@/lib/rate-limit";
 
@@ -24,15 +23,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Order not found." }, { status: 404 });
     }
 
+    await verifyCapturedRazorpayPayment({ orderId:payload.razorpay_order_id, paymentId:payload.razorpay_payment_id, amountMinor:Math.round(Number(existing.finalAmount)*100), currency:"INR" });
+
     const order = await confirmCheckoutPayment({ razorpayOrderId: payload.razorpay_order_id, paymentId: payload.razorpay_payment_id, userId: session.sub, source: "browser" });
-    if (order?.paymentStatus === "paid") {
-      for (const item of order.items) {
-        const purchase = await prisma.beatPurchase.findFirst({ where: { userId: order.userId, beatId: item.beatId, licenseType: item.licenseType, paymentId: payload.razorpay_payment_id } });
-        const beat = purchase ? await prisma.beat.findUnique({ where: { id: item.beatId }, select: { title: true } }) : null;
-        if (purchase && beat) await sendBeatEmailEvent({ event: "beat_purchase_success", to: session.email, userId: session.sub, purchaseId: purchase.id, userName: session.name, beatTitle: beat.title, url: emailAppUrl("/dashboard?module=purchases") });
-      }
-    }
-    return NextResponse.json({ success: true, order, reviewEligibility: order?.paymentStatus === "paid" ? { purchaseType: "beat", purchaseId: order.id, label: "Beat Store purchase" } : null });
+    if (order?.paymentStatus !== "paid") throw new Error("Payment confirmation is still pending.");
+    const purchases = await prisma.beatPurchase.findMany({ where:{userId:session.sub,paymentId:payload.razorpay_payment_id,hasAccess:true},select:{id:true} });
+    const logs = await prisma.emailLog.findMany({where:{userId:session.sub,eventKey:{in:purchases.map(purchase=>`beat:${purchase.id}:beat_purchase_success:email`)}},select:{status:true}}).catch(()=>[]);
+    const delivery = { email:session.email, status:purchases.length>0 && logs.length===purchases.length && logs.every(log=>log.status==="sent") ? "sent" : "pending" };
+    return NextResponse.json({ success: true, order, delivery, reviewEligibility: { purchaseType: "beat", purchaseId: order.id, label: "Beat Store purchase" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Payment verification failed.";
     return NextResponse.json({ error: message }, { status: 400 });

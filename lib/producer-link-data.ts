@@ -13,9 +13,11 @@ export const getProducerLinkData = cache(async (slug: string) => {
     name: result.producer.name, slug: profile.slug, bio: profile.description,
     avatar: result.producer.avatarUrl, banner: result.producer.imageUrl,
     socials: producerSocialLinks(profile),
-    beats: featuredProducerBeats(result.beats, sales).map(beat => ({
+    beats: featuredProducerBeats(result.beats, sales, result.beats.length).map(beat => ({
       id: beat.id, title: beat.title, bpm: beat.bpm, genre: beat.genre,
-      artwork: beat.coverImage, audio: beat.previewUrl || beat.fileUrl
+      artwork: beat.coverImage, audio: beat.previewUrl || beat.fileUrl,
+      mood: beat.mood, keySignature: beat.keySignature, price: beat.price,
+      generalPrice: beat.generalPrice, stemPrice: beat.stemPrice, exclusivePrice: beat.exclusivePrice
     }))
   };
 });

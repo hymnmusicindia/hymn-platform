@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getProducerLinkData } from "@/lib/producer-link-data";
 import { ProducerLinkPage } from "@/components/producer-link-page";
+import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 }
 
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
-  const data = await getProducerLinkData((await params).slug);
+  const [data, session] = await Promise.all([getProducerLinkData((await params).slug), getSession()]);
   if (!data) notFound();
-  return <ProducerLinkPage {...data}/>;
+  return <ProducerLinkPage key={data.slug} {...data} beats={data.beats.slice(0,6)} totalBeats={data.beats.length} initialViewer={session ? { name:session.name, email:session.email, avatarUrl:session.avatarUrl } : null}/>;
 }

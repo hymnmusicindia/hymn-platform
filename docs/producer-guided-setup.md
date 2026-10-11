@@ -32,3 +32,16 @@ Active producer profiles are resolved by owner user ID, including administrators
 The page links to the complete standalone beat store and saved Instagram, YouTube, Spotify and website URLs. Missing or unsafe URLs are omitted. The share button uses the device share sheet when available and clipboard otherwise. The footer links to HYMN with the existing white logo. Active profiles get a bio-link entry in their storefront editor; the full storefront links back to the bio page. Canonical and social-preview metadata use the same saved identity. No database migration is required.
 
 Validation: `node --import tsx scripts/verify-producer-links.ts` and `node --import tsx scripts/verify-producer-link-browser.ts` check sales ranking, safe links, mobile widths (320/390/430), desktop, empty and single-beat profiles, playback switching, sharing, logo loading and touch targets.
+
+
+## Bio page shopping and open layout
+
+Bio-link beats remain public without sign-in. Small social icons sit below the producer identity; beat rows, load-more and the full-store link use open layouts with thin dividers. Six beats load initially; the public `/api/producer-bio/{slug}/beats?offset=6` endpoint supplies the next six without requiring authentication.
+
+Add to cart and Instant buy use the existing Google Identity Services button in a focused dialog. Login stays on the bio page, restores the selected action and shows the authenticated Google avatar at the top right. Cart entries use the existing HYMN cart; amounts are never trusted from browser storage. Instant buy offers MP3, WAV, stems and exclusive licences with a server quote. The shared create-order/verify-payment APIs create and confirm the purchase. The native dialog closes before Razorpay opens.
+
+Verification checks the signature, order owner and the payment's captured status, amount, currency and order ID before fulfilment. Existing webhook/reconciliation fulfilment handles captured payments if the browser closes. Purchase emails are attempted during fulfilment with licensed files attached within the existing 10 MiB attachment budget and authenticated download access for larger files. The receipt only claims email delivery when the email log is sent; email failure leaves purchased downloads available and reports delivery pending. An unconfirmed signed payment and its cart items are retained per buyer in session storage so a refresh can check the same payment instead of charging again. Completing Instant buy removes only the purchased cart entry, preserving unrelated beats.
+
+Razorpay reference: https://razorpay.com/docs/server-integration/python/test-app/ (signature verification, capture and API confirmation alongside webhooks).
+
+Validation: the producer-link browser script tests the real Google callback against a fixture server, public pagination, login/cart resume, avatar, licence quote, direct and cart checkout, pending capture after refresh and honest delivery status. `scripts/verify-bio-checkout-verification.ts` exercises actual signature/capture checks with a mocked provider; mismatched amounts/currencies/orders, unauthorized owners and uncaptured payments cannot fulfil. No live charges or test emails are made.
