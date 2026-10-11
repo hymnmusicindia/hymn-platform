@@ -10,6 +10,9 @@ import { AdminTimedPlaylistManager } from "@/components/admin-timed-playlist-man
 import { AdminActivityAndLogs } from "@/components/admin-activity-and-logs";
 import { AdminUserManagement } from "@/components/admin-user-management";
 import { AdminTeamAccessManager } from "@/components/admin-team-access-manager";
+import overviewStyles from "./dashboard-overview.module.css";
+import { OverviewMetric, OverviewPanel, OverviewPipeline } from "./simplified-dashboard-home";
+import { Disc3, Wallet, Bell, Music2, ArrowRight } from "lucide-react";
 import { DashboardFrame } from "@/components/dashboard-frame";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { DireNoteDiagnostics } from "@/components/direnote-diagnostics";
@@ -689,7 +692,6 @@ export function AdminControlCenter({
   const pendingReviews = releases.filter((release) => ["submitted", "in_queue", "under_review"].includes(release.status.toLowerCase())).length;
   const changesRequested = releases.filter((release) => release.status === "changes_requested").length;
   const failedDistributionJobs = releases.filter((release) => ["failed", "rejected"].includes(release.status.toLowerCase())).length;
-  const sentToDireNote = releases.filter((release) => ["sent", "sent_to_distributor", "processing", "delivered", "live"].includes(release.status.toLowerCase())).length;
   const openSupportTickets = supportTickets.filter((ticket) => ["open", "in_progress"].includes(ticket.status)).length;
   const pendingProducerApplications = applications.filter((application) => application.status === "pending").length;
   const pendingBeatReviews = beats.filter((beat) => beat.status === "PENDING_REVIEW").length;
@@ -715,7 +717,7 @@ export function AdminControlCenter({
     { label: "Failed distributor submissions", count: failedDistributionJobs, urgency: failedDistributionJobs ? "Critical" : "Clear", oldest: oldestWaiting(releases.filter((release) => ["failed", "rejected"].includes(release.status)).map((release) => release.createdAt)), tab: "distribution-queue" as AdminTab },
     { label: "Awaiting live confirmation", count: releases.filter((release) => ["awaiting_live_confirmation", "partially_live"].includes(release.status)).length, urgency: "Normal", oldest: oldestWaiting(releases.filter((release) => ["awaiting_live_confirmation", "partially_live"].includes(release.status)).map((release) => release.distributedAt || release.createdAt)), tab: "releases" as AdminTab },
     { label: "Failed payment events", count: initialDistributionOrders.filter((order) => order.paymentStatus === "failed").length, urgency: initialDistributionOrders.some((order) => order.paymentStatus === "failed") ? "Critical" : "Clear", oldest: oldestWaiting(initialDistributionOrders.filter((order) => order.paymentStatus === "failed").map((order) => order.createdAt)), tab: "payments" as AdminTab },
-    { label: "Overdue support tickets", count: openSupportTickets, urgency: openSupportTickets ? "Attention" : "Clear", oldest: oldestWaiting(supportTickets.filter((ticket) => ["open", "in_progress"].includes(ticket.status)).map((ticket) => ticket.createdAt)), tab: "support" as AdminTab },
+    { label: "Open support tickets", count: openSupportTickets, urgency: openSupportTickets ? "Attention" : "Clear", oldest: oldestWaiting(supportTickets.filter((ticket) => ["open", "in_progress"].includes(ticket.status)).map((ticket) => ticket.createdAt)), tab: "support" as AdminTab },
     { label: "Beats awaiting approval", count: pendingBeatReviews, urgency: pendingBeatReviews ? "High" : "Clear", oldest: oldestWaiting(beats.filter((beat) => beat.status === "PENDING_REVIEW").map((beat) => beat.createdAt)), tab: "operations" as AdminTab },
   ];
   const direNoteCooldownSeconds = selectedRelease
@@ -1125,24 +1127,34 @@ export function AdminControlCenter({
           <button type="button" onClick={() => selectAdminTab("royalties")} className="btn-outline pressable px-4 py-2 text-sm">Manage Payouts</button>
         </>
       }
+      compactOverview
       workspaceAction={<WorkspaceSwitcher current="admin" available={["customer", "producer", "admin"]} />}
     >
       <AdminActivityAndLogs currentPage={activeTab} visible={activeTab === "activity"} />
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div><span style={{ color: "var(--text-muted)" }}>Signed in as </span><strong>{currentAdmin.name}</strong><span style={{ color: "var(--text-muted)" }}> · Admin role: </span><strong className="capitalize">{adminAccess.role.replace(/_/g, " ")}</strong></div><span className="status-pill">{adminAccess.permissions.length} permissions</span></div>
-      {activeTab === "overview" ? <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{operationalQueues.map((queue) => <button key={queue.label} type="button" onClick={() => selectAdminTab(queue.tab)} className="surface-list-item pressable min-h-32 p-4 text-left"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold">{queue.label}</p><p className="mt-2 text-3xl font-semibold">{queue.count}</p></div><StatusPill label={queue.urgency} active={queue.count > 0} /></div><p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>{queue.oldest}</p></button>)}</section> : null}
-      {activeTab === "overview" ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <button type="button" onClick={() => selectAdminTab("releases")} className="text-left"><StatCard label="Pending reviews" value={pendingReviews} detail="Submitted, queued, or under review" /></button>
-        <button type="button" onClick={() => selectAdminTab("releases")} className="text-left"><StatCard label="Changes requested" value={changesRequested} detail="Correction flow needs follow-up" /></button>
-        <button type="button" onClick={() => selectAdminTab("distribution-queue")} className="text-left"><StatCard label="Sent for distribution" value={sentToDireNote} detail="Sent, processing, delivered, or live" /></button>
-        <button type="button" onClick={() => selectAdminTab("revenue")} className="text-left"><StatCard label="Revenue" value={formatMoney(distributionRevenue + commerceRevenue)} detail={`${formatMoney(distributionRevenue)} distribution + ${formatMoney(commerceRevenue)} commerce`} /></button>
-      </section> : null}
-
       {feedback ? <div role="status" className="flex items-start justify-between gap-4 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text)" }}><p className="leading-6">{feedback}</p><button type="button" onClick={() => setFeedback(null)} className="pressable shrink-0 rounded-lg p-1" aria-label="Dismiss message"><X className="h-4 w-4" /></button></div> : null}
 
       {activeTab === "overview" ? (
-        <div className="grid gap-6 xl:grid-cols-[1.15fr,0.85fr]">
+        <div className={overviewStyles.root}>
+          <header className={overviewStyles.header}><div><p className={overviewStyles.eyebrow}>Admin / Operations</p><h1>A clear view of what moves next.</h1><p className={overviewStyles.description}>Review, resolve, and keep the platform moving.</p></div><button className={overviewStyles.primary} onClick={() => selectAdminTab("distribution-queue")}>Open review queue <ArrowRight /></button></header>
+          <div className={overviewStyles.metrics}>
+            <OverviewMetric label="Release reviews" value={pendingReviews} detail="Submitted, queued or in review" icon={<Music2 />} onClick={() => selectAdminTab("distribution-queue")} />
+            <OverviewMetric label="Beat reviews" value={pendingBeatReviews} detail="Awaiting marketplace approval" icon={<Disc3 />} onClick={() => selectAdminTab("operations")} />
+            <OverviewMetric label="Open support" value={openSupportTickets} detail="Open or in progress" icon={<Bell />} onClick={() => selectAdminTab("support")} />
+            <OverviewMetric label="Recorded revenue" value={formatMoney(distributionRevenue + commerceRevenue)} detail="Paid distribution & commerce orders" icon={<Wallet />} onClick={() => selectAdminTab("revenue")} />
+          </div>
+          <div className={overviewStyles.grid}>
+            <OverviewPanel title="Operations workboard"><div className={overviewStyles.queues}>{operationalQueues.filter(queue => !["Releases awaiting QC", "Open support tickets", "Beats awaiting approval"].includes(queue.label)).map(queue => <button className={overviewStyles.queue} key={queue.label} data-urgent={queue.count > 0} onClick={() => selectAdminTab(queue.tab)}><strong>{queue.count}</strong><span>{queue.label}</span><small>{queue.oldest}</small></button>)}<button className={overviewStyles.queue} data-urgent={pendingProducerApplications > 0} onClick={() => selectAdminTab("operations")}><strong>{pendingProducerApplications}</strong><span>Producer applications</span><small>Awaiting review</small></button></div></OverviewPanel>
+            <OverviewPanel title="Distribution pipeline"><OverviewPipeline stages={[
+              { label: "Live", count: releases.filter(item => item.status === "live").length, color: "#8ac5ac" },
+              { label: "Review", count: pendingReviews, color: "#b8c9ff" },
+              { label: "Corrections / failed", count: changesRequested + failedDistributionJobs, color: "#e0b781" },
+              { label: "Other stages", count: releases.length - releases.filter(item => item.status === "live").length - pendingReviews - changesRequested - failedDistributionJobs, color: "#c4a9e7" }
+            ].map(item => ({ ...item, onClick: () => selectAdminTab("releases") }))} /><p className={overviewStyles.description}>{releases.length} releases across the platform</p></OverviewPanel>
+          </div>
+          <div className={overviewStyles.adminDetails}>
           <SurfaceSection title="Today's Action Queue" description="Live admin tasks assembled from releases, payouts, support, and producer applications.">
-            <div className="mb-4 grid gap-2 border-b pb-4 sm:grid-cols-2" style={{ borderColor: "var(--border)" }}><select className="field" value={taskPriorityFilter} onChange={(event) => setTaskPriorityFilter(event.target.value)}><option value="all">All priorities</option><option value="high">High priority</option><option value="normal">Normal priority</option><option value="active">Active</option><option value="critical">Critical</option></select><select className="field" value={taskTypeFilter} onChange={(event) => setTaskTypeFilter(event.target.value)}><option value="all">All queue types</option>{Array.from(new Set([...persistedTasks.map((item) => item.type), ...actionQueue.map((item) => item.type)])).sort().map((type) => <option key={type} value={type}>{type}</option>)}</select></div>
+            <div className="mb-4 grid gap-2 border-b pb-4 sm:grid-cols-2" style={{ borderColor: "var(--border)" }}><select className="field" value={taskPriorityFilter} onChange={(event) => setTaskPriorityFilter(event.target.value)}><option value="all">All priorities</option><option value="high">High priority</option><option value="normal">Normal priority</option><option value="critical">Critical</option></select><select className="field" value={taskTypeFilter} onChange={(event) => setTaskTypeFilter(event.target.value)}><option value="all">All queue types</option>{Array.from(new Set([...persistedTasks.map((item) => item.type), ...actionQueue.map((item) => item.type)])).sort().map((type) => <option key={type} value={type}>{type}</option>)}</select></div>
             <div className="grid gap-4">
               {filteredPersistedTasks.map((item) => (
                 <article key={`task-${item.id}`} className="surface-list-item p-4" style={item.priority === "critical" ? { borderColor: "var(--danger)" } : undefined}>
@@ -1168,16 +1180,7 @@ export function AdminControlCenter({
             </div>
           </SurfaceSection>
 
-          <SurfaceSection title="Pipeline Snapshot" description="The fastest read on operations pressure today.">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <StatCard label="Failed / rejected" value={failedDistributionJobs} detail="Needs correction or retry" />
-              <StatCard label="Open support" value={openSupportTickets} detail="Open or in progress" />
-              <StatCard label="Producer applications" value={pendingProducerApplications} detail="Awaiting review" />
-              <StatCard label="Total users" value={users.length} detail="All HYMN accounts" />
-            </div>
-          </SurfaceSection>
-
-          <SurfaceSection title="Recent distribution payments" description="Track pay-per-release and subscription checkout states.">
+          <details className={overviewStyles.disclosure}><summary>Payment history & filters</summary><div><SurfaceSection title="Recent distribution payments" description="Track pay-per-release and subscription checkout states.">
             <div className="mb-4 grid gap-2 border-b pb-4 sm:grid-cols-2" style={{ borderColor: "var(--border)" }}><select className="field" value={paymentStatusFilter} onChange={(event) => setPaymentStatusFilter(event.target.value)}><option value="all">All payment statuses</option>{Array.from(new Set(initialDistributionOrders.map((order) => order.paymentStatus))).sort().map((status) => <option key={status} value={status}>{status.replace(/_/g, " ")}</option>)}</select><select className="field" value={paymentPlanFilter} onChange={(event) => setPaymentPlanFilter(event.target.value)}><option value="all">All plans</option>{Array.from(new Set(initialDistributionOrders.map((order) => order.plan))).sort().map((plan) => <option key={plan} value={plan}>{plan.replace(/_/g, " ")}</option>)}</select><select className="field" value={paymentPeriodFilter} onChange={(event) => setPaymentPeriodFilter(event.target.value)}><option value="all">Any date</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option></select><select className="field" value={paymentSort} onChange={(event) => setPaymentSort(event.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="amount-high">Highest amount</option><option value="amount-low">Lowest amount</option></select></div>
             <div className="grid gap-4">
               {filteredDistributionPayments.slice(0, 8).map((order) => (
@@ -1193,9 +1196,9 @@ export function AdminControlCenter({
               ))}
               {filteredDistributionPayments.length === 0 ? <EmptyState copy="No distribution payments match the selected filters." /> : null}
             </div>
-          </SurfaceSection>
+          </SurfaceSection></div></details>
 
-          <SurfaceSection title="Recent activity" description="Latest release and commerce events from existing platform data.">
+          <details className={overviewStyles.disclosure}><summary>Recent platform activity</summary><div><SurfaceSection title="Recent activity" description="Latest release and commerce events from existing platform data.">
             <div className="mb-4 grid gap-2 border-b pb-4 sm:grid-cols-3" style={{ borderColor: "var(--border)" }}><select className="field" value={activityTypeFilter} onChange={(event) => setActivityTypeFilter(event.target.value)}><option value="all">All activity</option><option value="release">Releases</option><option value="commerce">Commerce</option></select><select className="field" value={activityStatusFilter} onChange={(event) => setActivityStatusFilter(event.target.value)}><option value="all">All statuses</option>{Array.from(new Set([...releases.map((release) => release.status), ...initialOrders.map((order) => order.paymentStatus)])).sort().map((status) => <option key={status} value={status}>{status.replace(/_/g, " ")}</option>)}</select><select className="field" value={activitySort} onChange={(event) => setActivitySort(event.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></div>
             <div className="grid gap-4">
               {recentActivityItems.slice(0, 8).map((item) => (
@@ -1206,7 +1209,8 @@ export function AdminControlCenter({
               ))}
               {recentActivityItems.length === 0 ? <EmptyState copy="No activity matches the selected filters." /> : null}
             </div>
-          </SurfaceSection>
+          </SurfaceSection></div></details>
+          </div>
         </div>
       ) : null}
 

@@ -133,6 +133,24 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
     fetch("/api/notifications?limit=30", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => setProducerNotifications(Array.isArray(data?.notifications) ? data.notifications : [])).catch(() => undefined);
   }, []);
 
+  useEffect(() => {
+    const readTab = () => {
+      const tab = new URLSearchParams(window.location.search).get("tab");
+      const valid = ["overview", "profile", "catalog", "collaborations", "placements", "contracts", "earnings", "payout", "ledger", "upload", "licensing", "messages", "analytics", "settings", "manage", "sales"];
+      setActiveTab(tab && valid.includes(tab) ? tab as typeof activeTab : "overview");
+    };
+    readTab();
+    window.addEventListener("popstate", readTab);
+    return () => window.removeEventListener("popstate", readTab);
+  }, []);
+
+  function selectProducerTab(tab: typeof activeTab) {
+    setActiveTab(tab);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", tab);
+    window.history.pushState({}, "", url);
+  }
+
   function saveProducerProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -283,17 +301,17 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
         { key: "help", label: "Help & FAQ", description: "Guidance and support", group: "Support", href: "/faq" }
       ]}
       activeKey={activeTab}
-      onSelect={setActiveTab}
+      onSelect={selectProducerTab}
       searchValue={dashboardSearch}
       onSearchChange={setDashboardSearch}
       searchPlaceholder={activeTab === "catalog" ? "Search beats, genre, mood, BPM..." : activeTab === "licensing" || activeTab === "sales" ? "Search buyers, orders, licenses..." : "Search catalog and sales..."}
       workspaceAction={<WorkspaceSwitcher current="producer" available={user.role === "admin" ? ["customer", "producer", "admin"] : ["customer", "producer"]} />}
-      onNotificationsClick={() => setActiveTab("messages")}
+      onNotificationsClick={() => selectProducerTab("messages")}
       notificationCount={producerNotifications.filter((notification) => !notification.readAt).length}
       compactOverview
     >
       <FirstLoginReferralPrompt />
-      {activeTab === "overview" ? <ProducerHome user={user} beats={catalog} finance={finance} notifications={producerNotifications} onTab={(tab) => setActiveTab(tab)} /> : null}
+      {activeTab === "overview" ? <ProducerHome user={user} beats={catalog} finance={{ ...finance, profile: producerProfile }} notifications={producerNotifications} onTab={(tab) => selectProducerTab(tab)} /> : null}
       {false && activeTab === "overview" ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Catalog size" value={catalog.length} />
         <StatCard label="Enabled beats" value={enabledBeats.length} />
@@ -308,9 +326,9 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
         <div className="grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
           <Panel title="Creative collaboration workspace" description="Catalog, placements, licensing, and artist requests in one premium producer OS.">
             <div className="grid gap-3 sm:grid-cols-3">
-              <button type="button" onClick={() => setActiveTab("upload")} className="btn-primary pressable">Upload Beat</button>
-              <button type="button" onClick={() => setActiveTab("catalog")} className="btn-outline pressable">Manage Catalog</button>
-              <button type="button" onClick={() => setActiveTab("licensing")} className="btn-outline pressable">Licensing</button>
+              <button type="button" onClick={() => selectProducerTab("upload")} className="btn-primary pressable">Upload Beat</button>
+              <button type="button" onClick={() => selectProducerTab("catalog")} className="btn-outline pressable">Manage Catalog</button>
+              <button type="button" onClick={() => selectProducerTab("licensing")} className="btn-outline pressable">Licensing</button>
             </div>
             <div className="mt-6 grid gap-4">
               {catalog.slice(0, 4).map((beat) => (
@@ -482,7 +500,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
         </Panel>
       ) : null}
 
-      {activeTab === "payout" ? <Panel title="Producer payout" description="Producer sale balances use the existing secure payout request and quarterly processing system."><div className="grid gap-4 sm:grid-cols-3"><StatCard label="Available balance" value={formatMoney(finance.availableBalance)} /><StatCard label="Pending payout" value={formatMoney(finance.pendingPayout)} /><StatCard label="Lifetime paid" value={formatMoney(finance.lifetimePaid)} /></div><div className="mt-5 flex flex-wrap gap-3"><Link href="/payout" className="btn-primary pressable">Open payout dashboard</Link><button type="button" onClick={() => setActiveTab("ledger")} className="btn-outline pressable">View producer ledger</button></div>{!finance.payouts?.length ? <div className="mt-5"><EmptyState copy="No producer payout activity yet. Your available balance will appear after beat sales are credited." /></div> : null}</Panel> : null}
+      {activeTab === "payout" ? <Panel title="Producer payout" description="Producer sale balances use the existing secure payout request and quarterly processing system."><div className="grid gap-4 sm:grid-cols-3"><StatCard label="Available balance" value={formatMoney(finance.availableBalance)} /><StatCard label="Pending payout" value={formatMoney(finance.pendingPayout)} /><StatCard label="Lifetime paid" value={formatMoney(finance.lifetimePaid)} /></div><div className="mt-5 flex flex-wrap gap-3"><Link href="/payout" className="btn-primary pressable">Open payout dashboard</Link><button type="button" onClick={() => selectProducerTab("ledger")} className="btn-outline pressable">View producer ledger</button></div>{!finance.payouts?.length ? <div className="mt-5"><EmptyState copy="No producer payout activity yet. Your available balance will appear after beat sales are credited." /></div> : null}</Panel> : null}
 
       {activeTab === "ledger" ? <Panel title="Producer wallet ledger" description="Immutable credits created from verified beat sales. Commission percentages cannot be edited here."><div className="grid gap-3">{finance.ledger?.map((entry: any) => <article key={entry.id} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">{entry.type.replace(/_/g, " ")}</p><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{entry.note || `Reference ${entry.referenceId}`}</p><p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>{new Date(entry.createdAt).toLocaleString("en-IN")}</p></div><div className="text-right"><p className="font-semibold" style={{ color: "var(--success)" }}>+{formatMoney(Number(entry.amount))}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Balance {formatMoney(Number(entry.balanceAfter))}</p></div></div></article>)}{!finance.ledger?.length ? <EmptyState copy="No producer ledger entries yet. Verified beat sales will be credited automatically." /> : null}</div></Panel> : null}
 
