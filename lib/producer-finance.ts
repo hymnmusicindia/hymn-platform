@@ -90,7 +90,7 @@ export async function getProducerFinanceSummary(userId: number) {
   const [profile, sales, ledger, payoutBalance, payouts, identity] = await Promise.all([
     prisma.producerProfile.findUnique({ where: { userId } }),
     prisma.beatSale.findMany({ where: { producerUserId: userId }, include: { beat: { select: { title: true } } }, orderBy: { createdAt: "desc" } }),
-    prisma.walletTransaction.findMany({ where: { userId, referenceType: "beat_sale" }, orderBy: { createdAt: "desc" } }),
+    prisma.walletTransaction.findMany({ where: { userId, referenceType: { in: ["beat_sale", "route_earning", "route_transfer"] } }, orderBy: { createdAt: "desc" } }),
     prisma.artistPayoutBalance.findUnique({ where: { userId } }),
     prisma.payoutRequest.findMany({ where: { userId, sourceType: { in: ["producer_beat_sales", "mixed"] } }, orderBy: { requestedAt: "desc" } }),
     prisma.contributorParty.findUnique({ where: { claimedByUserId: userId }, include: { contributions: { include: { track: { include: { release: { select: { id: true, title: true, artistName: true, status: true, releaseDate: true } } } } }, orderBy: [{ createdAt: "desc" }] } } })

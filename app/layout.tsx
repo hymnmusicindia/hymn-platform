@@ -1,4 +1,5 @@
 import "./styles/royalty-splits.css";
+import "./styles/gateway-finance.css";
 ﻿import type { Metadata } from "next";
 import "./globals.css";
 import { GrowthTracker } from "@/components/growth-tracker";

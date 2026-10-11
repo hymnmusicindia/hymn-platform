@@ -7,9 +7,11 @@ import { qualifyReferralInTransaction, reverseReferralForTransactionInTransactio
 import { synchronizeProviderSubscription, synchronizeSubscriptionPayment } from "@/lib/subscription-billing";
 import { normalizeBeatLicenseType } from "@/lib/beat-store";
 import { confirmStudioPayment } from "@/lib/studio-services";
+import { syncSettlement } from "@/lib/gateway-settlements";
+import { refreshRouteSettlement, refreshRouteTransfer } from "@/lib/razorpay-route";
 
 type RazorpayEntity = { id?: string; order_id?: string; payment_id?: string; subscription_id?: string; invoice_id?: string; plan_id?: string; amount?: number; currency?: string; status?: string; error_code?: string; error_description?: string; current_start?: number | null; current_end?: number | null; start_at?: number | null; ended_at?: number | null; charge_at?: number | null; created_at?: number; notes?: Record<string, unknown> };
-type RazorpayPayload = { event?: string; id?: string; payload?: { payment?: { entity?: RazorpayEntity }; order?: { entity?: RazorpayEntity }; refund?: { entity?: RazorpayEntity }; subscription?: { entity?: RazorpayEntity } } };
+type RazorpayPayload = { event?: string; id?: string; payload?: { settlement?: { entity?: RazorpayEntity }; transfer?: { entity?: RazorpayEntity }; payment?: { entity?: RazorpayEntity }; order?: { entity?: RazorpayEntity }; refund?: { entity?: RazorpayEntity }; subscription?: { entity?: RazorpayEntity } } };
 
 export function validateObservedPayment(expected: { amountMinor: number; currency: string }, observed: { amountMinor?: number; currency?: string }) {
   if (observed.currency && observed.currency.toUpperCase() !== expected.currency.toUpperCase()) throw new Error("Payment currency does not match the persisted order.");
@@ -17,6 +19,7 @@ export function validateObservedPayment(expected: { amountMinor: number; currenc
 }
 
 export function redactRazorpayPayload(payload: RazorpayPayload): Prisma.InputJsonObject {
+  if (payload.event?.startsWith("settlement.") || payload.event?.startsWith("transfer.")) return { event: payload.event, financeEntityId: payload.payload?.settlement?.entity?.id || payload.payload?.transfer?.entity?.id || null };
   const entity = payload.event?.startsWith("refund.") ? payload.payload?.refund?.entity ?? {} : payload.payload?.payment?.entity ?? payload.payload?.order?.entity ?? {};
   const subscription = payload.payload?.subscription?.entity;
   const payment = payload.payload?.payment?.entity;
@@ -47,6 +50,18 @@ export async function processRazorpayEvent(eventId: number) {
     if (event.processingState === "processed") return event;
     const claim = await prisma.paymentWebhookEvent.updateMany({ where: { id: event.id, processingState: { in: ["received", "failed"] } }, data: { processingState: "processing" } });
     if (claim.count !== 1) return event;
+    if (event.eventType.startsWith("settlement.") || event.eventType.startsWith("transfer.")) {
+      const snapshot = event.payloadRedacted as Record<string, unknown>;
+      if (typeof snapshot.financeEntityId !== "string") throw new Error("Financial webhook is missing its entity identifier.");
+      if (event.eventType.startsWith("settlement.")) {
+        if (!await refreshRouteSettlement(snapshot.financeEntityId)) await syncSettlement(snapshot.financeEntityId);
+      }
+      else {
+        const transfer = await prisma.routeTransfer.findUnique({ where: { transferId: snapshot.financeEntityId } });
+        if (transfer) await refreshRouteTransfer(transfer.id);
+      }
+      return prisma.paymentWebhookEvent.update({ where: { id: event.id }, data: { attemptCount: { increment: 1 }, processingState: "processed", processedAt: new Date(), errorCode: null, errorMessage: null } });
+    }
     if (event.eventType.startsWith("subscription.")) {
       const snapshot = (event.payloadRedacted || {}) as Record<string, any>;
       if (!snapshot.subscription?.id || snapshot.subscription.id !== event.razorpaySubscriptionId) throw new Error("Subscription webhook does not identify a persisted provider subscription.");

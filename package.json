@@ -29,6 +29,7 @@
     "test:audit-log-schema": "tsx scripts/verify-audit-log-schema.ts",
     "test:postgres-canonical": "tsx scripts/verify-postgres-canonical.ts",
     "test:razorpay": "tsx scripts/verify-razorpay-signatures.ts",
+    "test:gateway-finance": "tsx scripts/verify-gateway-finance-isolated.ts",
     "test:subscriptions": "tsx scripts/verify-razorpay-subscriptions.ts",
     "test:payment-enforcement": "tsx scripts/verify-distribution-payment-enforcement.ts && tsx scripts/verify-checkout-boundaries.ts",
     "test:payments-integration": "tsx scripts/verify-payment-webhooks-integration.ts",

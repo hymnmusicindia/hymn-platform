@@ -134,8 +134,10 @@ enum StudioPaymentPurpose {
 }
 
 model User {
-  handle UserHandle?
-  handleReservations UserHandleReservation[]
+  routeLinkedAccount            RouteLinkedAccount?
+  routeTransfers                RouteTransfer[]
+  handle                        UserHandle?
+  handleReservations            UserHandleReservation[]
   id                            Int                                 @id @default(autoincrement())
   googleId                      String                              @unique @map("google_id")
   name                          String
@@ -2805,6 +2807,90 @@ model StudioEarning {
   @@map("studio_earnings")
 }
 
+// Provider financial records are separate from revenue and royalty entitlements.
+model GatewaySettlement {
+  id          String   @id
+  amountMinor Int
+  status      String
+  utr         String?
+  createdAt   DateTime
+  syncedAt    DateTime @default(now())
+
+  @@map("gateway_settlements")
+}
+
+model GatewayReconEntry {
+  key          String    @id
+  entityId     String
+  type         String
+  paymentId    String?
+  settlementId String?
+  currency     String
+  amountMinor  Int
+  creditMinor  Int
+  debitMinor   Int
+  feeMinor     Int
+  taxMinor     Int
+  settled      Boolean
+  onHold       Boolean
+  createdAt    DateTime
+  settledAt    DateTime?
+  syncedAt     DateTime  @default(now())
+
+  @@index([settlementId])
+  @@index([paymentId])
+  @@map("gateway_recon_entries")
+}
+
+model GatewaySyncRun {
+  id          Int       @id @default(autoincrement())
+  month       String
+  status      String
+  records     Int       @default(0)
+  error       String?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@map("gateway_sync_runs")
+}
+
+model RouteLinkedAccount {
+  userId     Int      @id
+  accountId  String   @unique
+  productId  String
+  status     String
+  verifiedAt DateTime
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@map("route_linked_accounts")
+}
+
+model RouteTransfer {
+  id             Int       @id @default(autoincrement())
+  sourceKey      String
+  paymentId      String
+  userId         Int
+  accountId      String
+  amountMinor    Int
+  transferId     String?   @unique
+  status         String    @default("reserved")
+  providerStatus String?
+  onHold         Boolean   @default(true)
+  reversedMinor  Int       @default(0)
+  settlementId   String?
+  accountedAt    DateTime?
+  error          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([sourceKey, paymentId])
+  @@index([paymentId])
+  @@index([status])
+  @@map("route_transfers")
+}
+
 model StudioReview {
   id         Int                @id @default(autoincrement())
   orderId    Int                @unique @map("order_id")
@@ -2967,17 +3053,20 @@ model ReleaseTrackBeatLink {
 // vercel trigger 2
 
 model UserHandle {
-  userId Int @id @map("user_id")
-  tag String @unique
+  userId    Int      @id @map("user_id")
+  tag       String   @unique
   updatedAt DateTime @updatedAt @map("updated_at")
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("user_handles")
 }
+
 model UserHandleReservation {
-  tag String @id
-  userId Int @map("user_id")
+  tag       String   @id
+  userId    Int      @map("user_id")
   createdAt DateTime @default(now()) @map("created_at")
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@map("user_handle_reservations")
 }

@@ -8,6 +8,7 @@
     { "path": "/api/cron/direnote-release-sync", "schedule": "0 * * * *" },
     { "path": "/api/cron/direnote-revenue-sync", "schedule": "55 1 2 * *" },
     { "path": "/api/cron/payment-reconciliation", "schedule": "35 1 * * *" },
+    { "path": "/api/cron/gateway-finance", "schedule": "50 1 * * *" },
     { "path": "/api/cron/draft-nudges", "schedule": "45 8 * * *" },
     { "path": "/api/cron/quarterly-payout-reset", "schedule": "10 1 * * *" }
     ,{ "path": "/api/cron/account-deletion-cleanup", "schedule": "20 2 * * *" }

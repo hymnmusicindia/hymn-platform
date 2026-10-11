@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, CircleDollarSign, ShieldCheck } from "lucide-react";
 import { monthlyRevenue, revenueChannels, summarizeRevenue, type RevenueEntry, type RevenueChannel } from "@/lib/revenue-report";
 import { WorkspaceRecords } from "@/components/workspace-records";
+import { GatewayFinanceWorkspace } from "@/components/gateway-finance-workspace";
 
 const colors = ["#7687e8", "#41a98b", "#d49b44", "#b17bd4", "#4aa9c4", "#d57e91"];
 const money = (n: number) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(n);
@@ -23,6 +24,7 @@ export function AdminRevenueWorkspace({ entries, onPayments, search = "" }: { en
   const slices = summary.channels.map((row, index) => { const value = row[measure]; const start = progress; progress += positiveTotal > 0 ? Math.max(0, value) / positiveTotal * 100 : 0; return { ...row, color: colors[index], start, end: progress }; });
   const donut = positiveTotal > 0 ? `conic-gradient(${slices.map(row => `${row.color} ${row.start}% ${row.end}%`).join(",")})` : "var(--border)";
   return <div className="revenue-workspace">
+    <GatewayFinanceWorkspace />
     <header className="revenue-heading"><div><p className="workspace-kicker">Command Center</p><h2>HYMN Revenue</h2><p>Collections, platform share, and the records behind them.</p></div><button className="btn-outline" onClick={onPayments}>Checkout attempts <ArrowUpRight size={15}/></button></header>
     <div className="revenue-toolbar"><label>Period<select className="field" aria-label="Revenue period" value={period} onChange={e => setPeriod(e.target.value)}><option value="all">All recorded history</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 12 months</option><option value="custom">Choose dates</option></select></label><label>Source<select className="field" aria-label="Revenue source" value={channel} onChange={e => setChannel(e.target.value as typeof channel)}><option value="all">All sources</option>{revenueChannels.map(name => <option key={name}>{name}</option>)}</select></label>{period === "custom" && <><label>From<input className="field" type="date" value={from} onChange={e => setFrom(e.target.value)}/></label><label>To<input className="field" type="date" min={from} value={to} onChange={e => setTo(e.target.value)}/></label></>}</div>
     <div className="revenue-metrics">{[
