@@ -53,6 +53,9 @@ try {
   assert.ok(await home.evaluate(node=>node.getBoundingClientRect().height)>=40);
   const newsletter=page.getByRole('form',{name:'Newsletter signup'});
   await expect(newsletter).toBeInViewport();
+  await expect(newsletter.getByRole('textbox')).toBeHidden();
+  assert.ok(await newsletter.evaluate(node=>node.getBoundingClientRect().height)<45);
+  await newsletter.locator('summary').click();
   newsletterFail=true;
   await newsletter.getByRole('textbox',{name:'Newsletter email address'}).fill('artist@example.com');
   await newsletter.getByRole('button',{name:'Subscribe to newsletter'}).click();
@@ -61,7 +64,11 @@ try {
   newsletterFail=false;
   await newsletter.getByRole('button',{name:'Subscribe to newsletter'}).click();
   await expect(newsletter.getByText('Subscribed',{exact:true})).toBeVisible();
-  assert.ok(await newsletter.evaluate(node=>node.getBoundingClientRect().height)<100);
+  await newsletter.locator('summary').click();
+  await expect(newsletter.locator('summary')).toContainText("You're subscribed to our newsletter");
+  await expect(newsletter.getByRole('button',{name:'Unsubscribe',exact:true})).toBeHidden();
+  assert.ok(await newsletter.evaluate(node=>node.getBoundingClientRect().height)<45);
+  await newsletter.locator('summary').click();
   await newsletter.getByRole('button',{name:'Unsubscribe',exact:true}).click();
   await expect(newsletter.getByRole('textbox')).toBeVisible();
   const gift=page.locator('.workspace-footer').getByRole('link',{name:'Refer a friend',exact:true});

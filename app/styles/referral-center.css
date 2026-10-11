@@ -89,17 +89,23 @@
 .workspace-footer-container { position:relative; margin-top:auto; flex-shrink:0; padding-top:6px; min-width:0; }
 .workspace-footer-container .workspace-footer { margin-top:6px; padding-top:6px; }
 .workspace-newsletter-expand { display:none; }
-.sidebar-newsletter { min-width:0; padding:10px 8px; border:0; border-top:1px solid #ffffff12; border-radius:0; background:none; color:#eef2f9; }
-.sidebar-newsletter-heading { display:flex; align-items:center; gap:6px; }
+.sidebar-newsletter { min-width:0; padding:3px 8px; border:0; border-top:1px solid #ffffff12; border-radius:0; background:none; color:#eef2f9; }
+.sidebar-newsletter-heading { display:flex; align-items:center; gap:5px; min-height:32px; cursor:pointer; list-style:none; }
+.sidebar-newsletter-heading::-webkit-details-marker { display:none; }
+.sidebar-newsletter-heading:focus-visible { outline:2px solid #b6c6df; outline-offset:2px; }
+.sidebar-newsletter-heading strong { flex:1; min-width:0; }
+.sidebar-newsletter-chevron { transition:transform .15s; }
+.sidebar-newsletter-disclosure[open] .sidebar-newsletter-chevron { transform:rotate(180deg); }
+.sidebar-newsletter-content { padding-bottom:5px; }
 .sidebar-newsletter-heading svg { flex-shrink:0; color:#b3c5df; }
 .sidebar-newsletter-heading strong { font-size:10px; font-weight:550; line-height:1.4; }
-.sidebar-newsletter > p { margin-top:4px; color:#afb9c9; font-size:9px; line-height:1.4; }
+.sidebar-newsletter-content > p { margin-top:4px; color:#afb9c9; font-size:9px; line-height:1.4; }
 .sidebar-newsletter-input { display:flex; align-items:center; margin-top:8px; background:#0e131b; border:1px solid #3a4659; border-radius:7px; overflow:hidden; }
 .sidebar-newsletter-input input { min-width:0; width:100%; padding:8px; background:transparent; border:0; color:#eef2f9; font-size:11px; outline:none; }
 .sidebar-newsletter-input input::placeholder { color:#9aa7bb; }
 .sidebar-newsletter-input button { display:grid; place-items:center; width:36px; min-height:32px; flex-shrink:0; background:#e7edf7; color:#17202d; }
 .sidebar-newsletter-input:focus-within { outline:2px solid #b6c6df; outline-offset:2px; }
-.sidebar-newsletter > small { display:block; font-size:9px; color:#9aa7bb; margin-top:4px; }
+.sidebar-newsletter-content > small { display:block; font-size:9px; color:#9aa7bb; margin-top:4px; }
 .sidebar-newsletter button:disabled { opacity:.6; }
 .sidebar-newsletter-retry,.sidebar-newsletter-subscribed button { min-height:28px; font-size:9px; color:#ccd8e9; text-decoration:underline; }
 .sidebar-newsletter-subscribed { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:0 8px; margin-top:4px; }

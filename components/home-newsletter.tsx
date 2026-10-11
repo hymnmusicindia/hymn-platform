@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useId, useState } from "react";
-import { ArrowRight, Check, Mail, Sparkles } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Mail, Sparkles } from "lucide-react";
 
 export function HomeNewsletter({ accountEmail, compact = false }: { accountEmail?: string | null; compact?: boolean }) {
   const emailId = useId();
@@ -88,10 +88,13 @@ export function HomeNewsletter({ accountEmail, compact = false }: { accountEmail
   }
 
   if (compact) return <form onSubmit={subscribe} className="sidebar-newsletter" aria-label="Newsletter signup">
-    <div className="sidebar-newsletter-heading"><Mail size={16} aria-hidden="true"/><strong>Stay in the HYMN loop</strong></div>
+    <details className="sidebar-newsletter-disclosure">
+    <summary className="sidebar-newsletter-heading"><Mail size={13} aria-hidden="true"/><strong>{checking ? "Checking newsletter..." : checkFailed ? "Check newsletter subscription" : subscription ? "You're subscribed to our newsletter" : "Sign up to newsletter"}</strong><ChevronDown size={12} className="sidebar-newsletter-chevron" aria-hidden="true"/></summary>
+    <div className="sidebar-newsletter-content">
     {!subscription && !checking ? <p>Artist news &amp; updates.</p> : null}
     {checking ? <p role="status">Checking your subscription...</p> : checkFailed ? <button type="button" className="sidebar-newsletter-retry" onClick={()=>setCheckVersion(value=>value+1)}>Retry subscription check</button> : subscription ? <div className="sidebar-newsletter-subscribed"><span><Check size={13} aria-hidden="true"/>Subscribed</span><small title={subscription.email}>{subscription.email}</small><button type="button" onClick={unsubscribe} disabled={sending}>{sending ? "Unsubscribing..." : "Unsubscribe"}</button></div> : <><label className="sr-only" htmlFor={emailId}>Newsletter email address</label><div className="sidebar-newsletter-input"><input id={emailId} name="email" type="email" required placeholder="Your email address" defaultValue={accountEmail || ""} autoComplete="email"/><button type="submit" aria-label="Subscribe to newsletter" title="Subscribe to newsletter" disabled={sending}>{sending ? <span aria-hidden="true">...</span> : <ArrowRight size={16} aria-hidden="true"/>}</button></div><small>Unsubscribe anytime.</small></>}
     {message ? <p role="status" className="sidebar-newsletter-message">{message}</p> : null}
+    </div></details>
   </form>;
 
   return (
