@@ -73,8 +73,8 @@ header.hymn-studio-header>div:first-child { display:flex; justify-content:flex-s
 @media(prefers-reduced-motion:reduce) { .hymn-studio-header *,.landing-nav-link { transition:none; } }
 
 /* Home is a destination, consistently placed above the service accordions. */
-html body .workspace-home-link { display:flex; align-items:center; gap:12px; min-height:40px; padding:8px 12px; color:#aeb5c0; font-size:13px; font-weight:600; text-decoration:none; background:none; border:0; box-shadow:none; }
-html body .workspace-home-link svg { flex-shrink:0; stroke-width:1.5; }
+html body .workspace-home-link { display:flex; align-items:center; justify-content:center; gap:12px; min-height:56px; padding:12px; margin-bottom:8px; color:#e2e7ef; font-size:17px; font-weight:650; text-decoration:none; background:#ffffff05; border:1px solid #ffffff0c; border-radius:10px; box-shadow:none; }
+html body .workspace-home-link svg { width:20px; height:20px; flex-shrink:0; stroke-width:1.7; }
 html body .workspace-home-link:is(:hover,:focus-visible,.is-active) { color:#fff; text-shadow:none; }
 html body .workspace-home-link:focus-visible { outline:1px solid #c8ced8; outline-offset:2px; }
 .rail-collapsed .workspace-home-link > span { display:none; }
@@ -86,5 +86,5 @@ html body .workspace-home-link:focus-visible { outline:1px solid #c8ced8; outlin
 @media(max-width:1023px) {
  .hymn-landing .landing-nav-group .landing-nav-link,
  .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-nav-item { min-height:44px; }
- html body .workspace-home-link { min-height:44px; }
+ html body .workspace-home-link { min-height:56px; }
 }

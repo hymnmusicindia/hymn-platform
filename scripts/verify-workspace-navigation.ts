@@ -22,6 +22,9 @@ assert.deepEqual(consistentWorkspaceNavigation(admin),admin);
 const browser=await chromium.launch();
 try {
  const page=await browser.newPage();
+ let newsletterFail=false;
+ await page.route("**/api/newsletter/subscribe",route=>route.fulfill({status:route.request().method()==="POST" && newsletterFail?503:200,json:route.request().method()==="GET"?{subscription:null}:newsletterFail?{error:"Newsletter is temporarily unavailable."}:{subscribed:true,unsubscribeToken:"test-token"}}));
+ await page.route("**/api/newsletter/unsubscribe",route=>route.fulfill({json:{unsubscribed:true}}));
  for(const width of [1440,390,320]) {
   await page.setViewportSize({width,height:900});
   await page.goto('http://localhost:3015/faq',{waitUntil:'domcontentloaded',timeout:120000});
@@ -44,6 +47,22 @@ try {
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.evaluate(()=>window.dispatchEvent(new CustomEvent('hymn-workspace-breadcrumbs',{detail:{group:'Support',label:'FAQ',href:'/faq'}})));
   if(width<1024) await page.evaluate(()=>window.dispatchEvent(new Event('hymn-toggle-navigation')));
+  const home=page.locator('a.workspace-home-link');
+  assert.equal(await home.evaluate(node=>getComputedStyle(node).justifyContent),'center');
+  assert.ok(await home.evaluate(node=>parseFloat(getComputedStyle(node).fontSize))>=17);
+  assert.ok(await home.evaluate(node=>node.getBoundingClientRect().height)>=56);
+  const newsletter=page.getByRole('form',{name:'Newsletter signup'});
+  await expect(newsletter).toBeInViewport();
+  newsletterFail=true;
+  await newsletter.getByRole('textbox',{name:'Newsletter email address'}).fill('artist@example.com');
+  await newsletter.getByRole('button',{name:'Subscribe to newsletter'}).click();
+  await expect(newsletter.getByRole('status')).toContainText('temporarily unavailable');
+  await expect(newsletter.getByRole('textbox')).toHaveValue('artist@example.com');
+  newsletterFail=false;
+  await newsletter.getByRole('button',{name:'Subscribe to newsletter'}).click();
+  await expect(newsletter.getByText('Subscribed',{exact:true})).toBeVisible();
+  await newsletter.getByRole('button',{name:'Unsubscribe',exact:true}).click();
+  await expect(newsletter.getByRole('textbox')).toBeVisible();
   const gift=page.locator('.workspace-footer').getByRole('link',{name:'Refer a friend',exact:true});
   await expect(gift).toBeInViewport();
   await page.locator('.workspace-footer').getByRole('button',{name:'More links'}).click();
@@ -51,6 +70,13 @@ try {
   await expect(terms).toBeInViewport();
   await expect(terms).toHaveAttribute('href','/terms-of-service');
   await page.keyboard.press('Escape');
+  if(width===1440) {
+    await page.evaluate(()=>window.dispatchEvent(new Event('hymn-toggle-navigation')));
+    await expect(page.getByRole('button',{name:'Open newsletter signup',exact:true})).toBeVisible();
+    await page.getByRole('button',{name:'Open newsletter signup',exact:true}).click();
+    await expect(newsletter).toBeVisible();
+  }
+  await page.screenshot({path:`.cache/sidebar-${width}.png`,fullPage:true});
 
  }
  console.log('Navigation passed: canonical desktop/mobile order, labels, URLs, direct Home link, support grouping, producer tab preservation, unique keys and admin isolation.');

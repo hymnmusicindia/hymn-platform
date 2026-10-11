@@ -274,7 +274,7 @@ export function DashboardFrame<T extends string>({
           <button type="button" onClick={() => scrollNavigation(-1)} disabled={!navScroll.canUp} aria-label="Scroll navigation up"><ChevronUp className="h-4 w-4" /></button>
           <button type="button" onClick={() => scrollNavigation(1)} disabled={!navScroll.canDown} aria-label="Scroll navigation down"><ChevronDown className="h-4 w-4" /></button>
         </div>
-        <WorkspaceFooter onNavigate={() => setMobileOpen(false)} />
+        <WorkspaceFooter collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
       </aside>
 
       <div className="portal-workspace grid gap-6">

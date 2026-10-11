@@ -1,14 +1,15 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useId, useState } from "react";
 import { ArrowRight, Check, Mail, Sparkles } from "lucide-react";
 
-export function HomeNewsletter({ accountEmail }: { accountEmail?: string | null }) {
+export function HomeNewsletter({ accountEmail, compact = false }: { accountEmail?: string | null; compact?: boolean }) {
+  const emailId = useId();
   const [message, setMessage] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [useDifferentEmail, setUseDifferentEmail] = useState(!accountEmail);
   const [subscription, setSubscription] = useState<{ email: string; token: string } | null>(null);
-  const [checking, setChecking] = useState(Boolean(accountEmail));
+  const [checking, setChecking] = useState(Boolean(accountEmail) || compact);
   const [checkFailed, setCheckFailed] = useState(false);
   const [checkVersion, setCheckVersion] = useState(0);
 
@@ -18,7 +19,7 @@ export function HomeNewsletter({ accountEmail }: { accountEmail?: string | null 
     setUseDifferentEmail(!accountEmail);
     setCheckFailed(false);
     setMessage(null);
-    if (!accountEmail) { setChecking(false); return; }
+    if (!accountEmail && !compact) { setChecking(false); return; }
     setChecking(true);
     void fetch("/api/newsletter/subscribe", { cache: "no-store", signal: controller.signal })
       .then(async response => {
@@ -31,19 +32,19 @@ export function HomeNewsletter({ accountEmail }: { accountEmail?: string | null 
       })
       .finally(() => { if (!controller.signal.aborted) setChecking(false); });
     return () => controller.abort();
-  }, [accountEmail, checkVersion]);
+  }, [accountEmail, checkVersion, compact]);
 
   useEffect(() => {
-    const refresh = () => { if (accountEmail && !sending && !useDifferentEmail) setCheckVersion(value => value + 1); };
+    const refresh = () => { if (!compact && accountEmail && !sending && !useDifferentEmail) setCheckVersion(value => value + 1); };
     window.addEventListener("focus", refresh);
     return () => window.removeEventListener("focus", refresh);
-  }, [accountEmail, sending, useDifferentEmail]);
+  }, [accountEmail, sending, useDifferentEmail, compact]);
 
   async function subscribe(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (sending || checking || checkFailed) return;
     const form = event.currentTarget;
-    const email = useDifferentEmail
+    const email = compact || useDifferentEmail
       ? String(new FormData(form).get("email") || "").trim()
       : accountEmail?.trim() || "";
     setSending(true);
@@ -86,6 +87,13 @@ export function HomeNewsletter({ accountEmail }: { accountEmail?: string | null 
     }
   }
 
+  if (compact) return <form onSubmit={subscribe} className="sidebar-newsletter" aria-label="Newsletter signup">
+    <div className="sidebar-newsletter-heading"><Mail size={16} aria-hidden="true"/><strong>Stay in the HYMN loop</strong></div>
+    <p>Artist news, releases and opportunities.</p>
+    {checking ? <p role="status">Checking your subscription...</p> : checkFailed ? <button type="button" className="sidebar-newsletter-retry" onClick={()=>setCheckVersion(value=>value+1)}>Retry subscription check</button> : subscription ? <div className="sidebar-newsletter-subscribed"><span><Check size={13} aria-hidden="true"/>Subscribed</span><small title={subscription.email}>{subscription.email}</small><button type="button" onClick={unsubscribe} disabled={sending}>{sending ? "Unsubscribing..." : "Unsubscribe"}</button></div> : <><label className="sr-only" htmlFor={emailId}>Newsletter email address</label><div className="sidebar-newsletter-input"><input id={emailId} name="email" type="email" required placeholder="Your email address" defaultValue={accountEmail || ""} autoComplete="email"/><button type="submit" aria-label="Subscribe to newsletter" title="Subscribe to newsletter" disabled={sending}>{sending ? <span aria-hidden="true">...</span> : <ArrowRight size={16} aria-hidden="true"/>}</button></div><small>Unsubscribe anytime.</small></>}
+    {message ? <p role="status" className="sidebar-newsletter-message">{message}</p> : null}
+  </form>;
+
   return (
     <form onSubmit={subscribe} className="w-full max-w-lg">
       <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.025))] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,.08),0_20px_55px_rgba(0,0,0,.22)] sm:p-6">
@@ -121,8 +129,8 @@ export function HomeNewsletter({ accountEmail }: { accountEmail?: string | null 
           <div className="relative">
             <div className="mb-4 flex items-center justify-between gap-4"><div><p className="text-base font-semibold text-white">Choose your newsletter email</p><p className="mt-1 text-xs text-white/50">You can unsubscribe whenever you want.</p></div>{accountEmail ? <button type="button" onClick={() => { setUseDifferentEmail(false); setMessage(null); }} className="shrink-0 text-xs font-medium text-white/60 underline decoration-white/25 underline-offset-4 hover:text-white">Use Google email</button> : null}</div>
             <div className="flex overflow-hidden rounded-xl border border-white/15 bg-white shadow-[0_8px_24px_rgba(0,0,0,.18)] focus-within:ring-2 focus-within:ring-white/25">
-              <label className="sr-only" htmlFor="home-newsletter-email">Email address</label>
-              <input id="home-newsletter-email" name="email" type="email" required autoFocus={Boolean(accountEmail)} defaultValue={accountEmail || ""} placeholder="Enter your email" className="min-w-0 flex-1 border-0 bg-white px-4 py-3.5 text-sm text-[#131313] outline-none placeholder:text-[#777]" />
+              <label className="sr-only" htmlFor={emailId}>Email address</label>
+              <input id={emailId} name="email" type="email" required autoFocus={Boolean(accountEmail)} defaultValue={accountEmail || ""} placeholder="Enter your email" className="min-w-0 flex-1 border-0 bg-white px-4 py-3.5 text-sm text-[#131313] outline-none placeholder:text-[#777]" />
               <button type="submit" disabled={sending} className="shrink-0 border-l border-black/10 bg-[#f1f3f6] px-5 py-3.5 text-sm font-semibold text-[#131313] transition hover:bg-[#e6e9ee] disabled:opacity-60">{sending ? "Subscribing…" : "Subscribe"}</button>
             </div>
           </div>
