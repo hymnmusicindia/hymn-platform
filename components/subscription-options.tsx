@@ -25,6 +25,8 @@ export function SubscriptionButton({ className }: { className?: string }) {
 
 /** The shared header owns this dialog; eligibility refreshes every time it opens. */
 export function SubscriptionOptions() {
+  const subscriptionLabel = useSubscriptionLabel();
+  const currentPlan = ({ "Half-Yearly": "half_yearly", "Yearly": "yearly", "Yearly+": "yearly_plus" } as Record<string, string>)[subscriptionLabel] ?? null;
   const [open, setOpen] = useState(false);
   const [offer, setOffer] = useState<OfferState>("loading");
   const close = () => setOpen(false);
@@ -35,7 +37,7 @@ export function SubscriptionOptions() {
     return () => window.removeEventListener("hymn-open-subscriptions", show);
   }, []);
   useEffect(() => {
-    if (!open) return;
+    if (!open || currentPlan) return;
     const controller = new AbortController();
     setOffer("loading");
     fetch("/api/promotions/first-release", { cache: "no-store", signal: controller.signal })
@@ -50,7 +52,7 @@ export function SubscriptionOptions() {
       })
       .catch(() => { if (!controller.signal.aborted) setOffer("unverified"); });
     return () => controller.abort();
-  }, [open]);
+  }, [open, currentPlan]);
 
   const gift = offer === "gift" || offer === "reserved";
   const bannerTitle = offer === "loading" ? "Finding your release options…"
@@ -68,7 +70,7 @@ export function SubscriptionOptions() {
           <button type="button" onClick={close} aria-label="Close subscriptions"><X size={21} /></button>
         </header>
         <div className="subscription-dialog-content">
-          <section className="subscription-first-release" data-offer={offer} aria-busy={offer === "loading"}>
+          {!currentPlan && <section className="subscription-first-release" data-offer={offer} aria-busy={offer === "loading"}>
             <div className={`subscription-offer-icon ${gift ? "is-gift" : "is-lightning"}`} aria-hidden="true">
               {gift ? <Gift size={28} /> : <Zap size={27} />}
             </div>
@@ -85,14 +87,14 @@ export function SubscriptionOptions() {
             {offer !== "loading" ? <Link className="subscription-offer-action" href={bannerHref} onClick={close}>
               {offer === "gift" ? "Start free" : offer === "reserved" ? "Continue release" : "Choose one-time release"}<ArrowRight size={17} />
             </Link> : null}
-          </section>
+          </section>}
           <div className="subscription-comparison-heading"><h3>More music. One subscription.</h3><p>Compare the full price and artist capacity.</p></div>
           <div className="subscription-shared-benefits"><span>Every subscription includes</span><ul>{sharedBenefits.map(feature => <li key={feature.label}><Check size={13} />{feature.label}</li>)}</ul></div>
           <div className="subscription-comparison-grid">
-            {subscriptions.map(plan => <article key={plan.key} className="distribution-plan-card subscription-comparison-card" data-featured={plan.featured}>
-              <header><span>{plan.key === "half_yearly" ? "FLEXIBLE START" : plan.key === "yearly" ? "MOST POPULAR" : "FOR LABELS & TEAMS"}</span><h3>{plan.title}</h3><p>{plan.key === "half_yearly" ? "Build your release rhythm." : plan.key === "yearly" ? "Plan a full year of music." : "Grow a multi-artist catalogue."}</p></header>
+            {subscriptions.map(plan => <article key={plan.key} className="distribution-plan-card subscription-comparison-card" data-featured={plan.featured} data-current={plan.key === currentPlan}>
+              <header><span>{plan.key === currentPlan ? "YOUR CURRENT PLAN" : plan.key === "half_yearly" ? "FLEXIBLE START" : plan.key === "yearly" ? "MOST POPULAR" : "FOR LABELS & TEAMS"}</span><h3>{plan.title}</h3><p>{plan.key === "half_yearly" ? "Build your release rhythm." : plan.key === "yearly" ? "Plan a full year of music." : "Grow a multi-artist catalogue."}</p></header>
               <div className="subscription-price"><strong>₹{plan.price.toLocaleString("en-IN")}</strong><span> / {plan.cadence}</span><small>Total subscription price</small></div>
-              <Link href={`/checkout?product=subscription-${plan.key}`} onClick={close} className="subscription-plan-action">{plan.cta}<ArrowRight size={16} /></Link>
+              {plan.key === currentPlan ? <Link href="/dashboard?tab=subscription" onClick={close} className="subscription-plan-action"><span><Check size={15} /> Your current plan</span><ArrowRight size={16} /></Link> : <Link href={`/checkout?product=subscription-${plan.key}`} onClick={close} className="subscription-plan-action">{plan.cta}<ArrowRight size={16} /></Link>}
               <dl><div><dt>Artist profiles</dt><dd>{plan.artistLimit}</dd></div><div><dt>Support</dt><dd>{plan.key === "half_yearly" ? "Standard" : plan.key === "yearly" ? "Faster response" : "24/7 priority"}</dd></div><div><dt>Custom label name</dt><dd>{plan.label_editable ? "Included" : "Not included"}</dd></div></dl>
               {plan.key === "yearly" ? <p className="subscription-value-note">Save ₹{(distributionPlanCards[1].price * 2 - plan.price).toLocaleString("en-IN")} vs two 6-month subscriptions</p> : <p className="subscription-value-note">{plan.key === "half_yearly" ? "A shorter commitment" : "Your label. Your artists."}</p>}
             </article>)}

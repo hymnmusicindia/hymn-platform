@@ -1,4 +1,4 @@
-﻿/* Focused offer strip and comparable subscription choices. */
+ï»¿/* Focused offer strip and comparable subscription choices. */
 html body .customer-overlay:has(.subscription-dialog) { z-index:2300; }
 .subscription-backdrop { position:fixed; inset:0; display:grid; place-items:center; padding:20px; background:rgba(3,5,9,.8); backdrop-filter:blur(14px); }
 .subscription-dialog { display:flex; flex-direction:column; width:min(1120px,100%); max-height:calc(100dvh - 40px); min-height:0; overflow:hidden; border:1px solid #414753; border-radius:10px; background:linear-gradient(140deg,#272c36,#171b22 65%); color:#f4f5f7; box-shadow:0 30px 120px #0009; outline:none; }
@@ -78,3 +78,8 @@ html body .subscription-dialog :is(button,a,summary):focus-visible { outline:2px
  html body .subscription-dialog .subscription-comparison-card { width:100%; min-width:0; }
 }
 @media(prefers-reduced-motion:reduce) { .subscription-offer-icon svg,.subscription-offer-icon svg > * { animation:none!important; } }
+
+/* Active membership stays distinct from the merchandising highlight. */
+html body .subscription-dialog .subscription-comparison-card[data-current="true"] { border-color:#9dc9b0!important; background:linear-gradient(150deg,#293632,#1c2525)!important; }
+.subscription-comparison-card[data-current="true"] header > span { color:#b4dec5; }
+.subscription-comparison-card[data-current="true"] .subscription-plan-action > span { display:flex; align-items:center; gap:8px; color:#b4dec5; }
