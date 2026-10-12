@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { readImageDimensions, validatePrivateUpload, type PrivateUploadInput } from "../lib/private-storage";
+import { AudioRangeNotSatisfiableError, audioByteRange, readImageDimensions, validatePrivateUpload, type PrivateUploadInput } from "../lib/private-storage";
 
 const base: PrivateUploadInput = { ownerUserId: 1, assetType: "private_cover_licence", fileName: "licence.pdf", mimeType: "application/pdf", bytes: Buffer.from("%PDF-1.7 safe fixture") };
 assert.equal(validatePrivateUpload(base), "licence.pdf");
@@ -9,6 +9,10 @@ assert.throws(() => validatePrivateUpload({ ...base, fileName: "licence.exe.pdf"
 assert.throws(() => validatePrivateUpload({ ...base, mimeType: "application/x-msdownload" }), /MIME/);
 assert.throws(() => validatePrivateUpload({ ...base, bytes: Buffer.from("not a PDF") }), /content/);
 assert.throws(() => validatePrivateUpload({ ...base, bytes: Buffer.alloc(21 * 1024 * 1024) }), /size/);
+assert.deepEqual(audioByteRange("bytes=0-", 3_000_000), { start: 0, end: 1_048_575, header: "bytes=0-1048575", contentRange: "bytes 0-1048575/3000000" });
+assert.deepEqual(audioByteRange("bytes=4-7", 10), { start: 4, end: 7, header: "bytes=4-7", contentRange: "bytes 4-7/10" });
+assert.deepEqual(audioByteRange("bytes=-3", 10), { start: 7, end: 9, header: "bytes=7-9", contentRange: "bytes 7-9/10" });
+assert.throws(() => audioByteRange("bytes=10-", 10), AudioRangeNotSatisfiableError);
 const wav = Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WAVEfmt ")]);
 assert.equal(validatePrivateUpload({ ownerUserId: 1, assetType: "private_audio_master", fileName: "master.wav", mimeType: "audio/wav", bytes: wav }), "master.wav");
 assert.throws(() => validatePrivateUpload({ ownerUserId: 1, assetType: "private_audio_master", fileName: "fake.wav", mimeType: "audio/wav", bytes: Buffer.from("not audio") }), /content/);

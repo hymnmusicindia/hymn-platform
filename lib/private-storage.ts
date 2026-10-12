@@ -49,14 +49,43 @@ function privateStorageCandidateRoots() {
   return [...new Set([...configured, ...legacy].map((value) => path.resolve(/* turbopackIgnore: true */ value)))];
 }
 
-async function readLocalAsset(objectKey: string, relativePath?: string | null) {
+export class AudioRangeNotSatisfiableError extends Error {
+  constructor(readonly size: number) { super("Requested audio range is unavailable."); }
+}
+
+export function audioByteRange(header: string, size: number) {
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(header.trim());
+  if (!match || (!match[1] && !match[2]) || size < 1) throw new AudioRangeNotSatisfiableError(size);
+  const suffix = !match[1];
+  const start = suffix ? Math.max(0, size - Number(match[2])) : Number(match[1]);
+  const requestedEnd = suffix || !match[2] ? size - 1 : Number(match[2]);
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(requestedEnd) || start >= size || requestedEnd < start || (suffix && Number(match[2]) < 1)) throw new AudioRangeNotSatisfiableError(size);
+  const end = Math.min(requestedEnd, size - 1, start + 1024 * 1024 - 1);
+  return { start, end, header: `bytes=${start}-${end}`, contentRange: `bytes ${start}-${end}/${size}` };
+}
+
+async function readLocalAsset(objectKey: string, relativePath?: string | null, range?: { start: number; end: number }, expectedSize?: number) {
   const keys = [...new Set([objectKey, relativePath].filter((value): value is string => Boolean(value)))];
   let missing: NodeJS.ErrnoException | null = null;
   for (const root of privateStorageCandidateRoots()) {
     for (const key of keys) {
       const target = path.resolve(/* turbopackIgnore: true */ root, key);
       if (target === root || !target.startsWith(`${root}${path.sep}`)) continue;
-      try { return await fs.readFile(target); }
+      try {
+        if (!range) return await fs.readFile(target);
+        const handle = await fs.open(target, "r");
+        try {
+          if ((await handle.stat()).size !== expectedSize) throw new Error("Stored asset size does not match its record.");
+          const bytes = Buffer.alloc(range.end - range.start + 1);
+          let offset = 0;
+          while (offset < bytes.length) {
+            const read = await handle.read(bytes, offset, bytes.length - offset, range.start + offset);
+            if (!read.bytesRead) throw new Error("Stored audio ended before the requested range.");
+            offset += read.bytesRead;
+          }
+          return bytes;
+        } finally { await handle.close(); }
+      }
       catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
         missing = error as NodeJS.ErrnoException;
@@ -165,25 +194,28 @@ export const localPrivateStorage: PrivateStorageAdapter = {
       const studioParticipant = asset.studioFile && (asset.studioFile.order.customerId === input.requesterUserId || asset.studioFile.order.engineerParty.claimedByUserId === input.requesterUserId);
       if (!purchased && !studioParticipant) throw new Error("Forbidden.");
     }
+    const audioRange = input.range && asset.mimeType.startsWith("audio/") ? audioByteRange(input.range, asset.byteSize) : null;
     if (asset.storageProvider === "vercel_blob" || asset.objectKey.startsWith("http://") || asset.objectKey.startsWith("https://")) {
       try {
-        const blob = await get(asset.objectKey, { access: "private", headers: input.range ? { Range: input.range } : undefined });
+        const blob = await get(asset.objectKey, { access: "private", headers: audioRange ? { Range: audioRange.header } : input.range ? { Range: input.range } : undefined });
         const statusCode = Number(blob?.statusCode);
         if (!blob || ![200, 206].includes(statusCode) || !blob.stream) throw new Error("Could not fetch remote private asset.");
-        const buf = Buffer.from(await new Response(blob.stream).arrayBuffer());
+        let buf = Buffer.from(await new Response(blob.stream).arrayBuffer());
+        if (audioRange && statusCode === 200) buf = buf.subarray(audioRange.start, audioRange.end + 1);
+        if (audioRange && buf.length !== audioRange.end - audioRange.start + 1) throw new Error("Remote audio range is incomplete.");
         if (!input.range && crypto.createHash("sha256").update(buf).digest("hex") !== asset.checksum) throw new Error("Stored private asset failed its SHA-256 integrity check.");
-        return { bytes: buf, mimeType: asset.mimeType, fileName: asset.safeFilename, contentRange: blob.headers.get("content-range"), contentLength: blob.headers.get("content-length") };
+        return { bytes: buf, mimeType: asset.mimeType, fileName: asset.safeFilename, contentRange: audioRange?.contentRange ?? blob.headers.get("content-range"), contentLength: audioRange ? String(buf.length) : blob.headers.get("content-length") };
       } catch (remoteError) {
         // A local copy is retained for recovery when mirrored remote storage is enabled.
         if (!asset.relativePath) throw remoteError;
-        const buf = await readLocalAsset(asset.relativePath, asset.relativePath);
+        const buf = await readLocalAsset(asset.relativePath, asset.relativePath, audioRange ?? undefined, asset.byteSize);
         if (!input.range && crypto.createHash("sha256").update(buf).digest("hex") !== asset.checksum) throw new Error("Stored private asset failed its SHA-256 integrity check.");
-        return { bytes: buf, mimeType: asset.mimeType, fileName: asset.safeFilename };
+        return { bytes: buf, mimeType: asset.mimeType, fileName: asset.safeFilename, contentRange: audioRange?.contentRange, contentLength: audioRange ? String(buf.length) : undefined };
       }
     }
-    const bytes = await readLocalAsset(asset.objectKey, asset.relativePath);
-    if (crypto.createHash("sha256").update(bytes).digest("hex") !== asset.checksum) throw new Error("Stored private asset failed its SHA-256 integrity check.");
-    return { bytes, mimeType: asset.mimeType, fileName: asset.safeFilename };
+    const bytes = await readLocalAsset(asset.objectKey, asset.relativePath, audioRange ?? undefined, asset.byteSize);
+    if (!audioRange && crypto.createHash("sha256").update(bytes).digest("hex") !== asset.checksum) throw new Error("Stored private asset failed its SHA-256 integrity check.");
+    return { bytes, mimeType: asset.mimeType, fileName: asset.safeFilename, contentRange: audioRange?.contentRange, contentLength: audioRange ? String(bytes.length) : undefined };
   },
   async delete(input) {
     const asset = await prisma.storedAsset.findUnique({ where: { id: input.assetId } });
