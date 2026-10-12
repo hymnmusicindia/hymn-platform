@@ -32,6 +32,7 @@ header.hymn-studio-header>div:first-child { display:flex; justify-content:flex-s
 .hymn-landing .landing-rail-top { margin:0; min-height:0; }
 .hymn-landing .landing-new { margin-bottom:20px; }
 .hymn-landing .landing-group-title { padding:0 7px 6px; color:#d5d8de; font-size:13px; font-weight:600; }
+.hymn-landing .landing-group-title > svg,.workspace-v2 .dashboard-os-group-toggle > svg { display:none; }
 .hymn-landing .landing-nav-group { margin-top:12px; }
 .hymn-landing .landing-nav-link { position:relative; min-height:34px; padding:8px 12px; gap:12px; border:0; border-radius:0; background:none; color:#969da9; font-size:13px; font-weight:450; box-shadow:none; transition:color .2s,text-shadow .2s; }
 .hymn-landing .landing-nav-link:hover,.hymn-landing .landing-nav-link.is-active { border:0; background:none; color:#fff; box-shadow:none; text-shadow:0 0 14px #dce9f970,0 0 3px #ffffff70; }
@@ -89,7 +90,7 @@ html body .workspace-home-link:focus-visible { outline:1px solid #c8ced8; outlin
 .rail-collapsed .workspace-home-link > span { display:none; }
 .rail-collapsed .workspace-home-link { justify-content:center; }
 .hymn-landing .landing-nav-group .landing-nav-link,
-.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-nav-item { font-size:12px; min-height:30px; padding:6px 12px; gap:10px; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-nav-item { font-size:13px; min-height:30px; padding:6px 12px; gap:10px; }
 .hymn-portal-root.hymn-portal-root .hymn-portal .portal-nav-icon,
 .hymn-landing .landing-nav-group .landing-nav-link svg { width:14px; height:14px; }
 @media(max-width:1023px) {

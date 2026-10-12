@@ -7,7 +7,7 @@
 .workspace-v2 .dashboard-os-group-toggle{font-size:11px!important;letter-spacing:.04em!important;text-transform:none!important;min-height:32px!important;padding:6px 10px!important;color:var(--text-muted)!important;font-weight:600!important;line-height:1.4!important}
 .workspace-v2 .dashboard-os-group-toggle>span{display:block;overflow:hidden}
 .workspace-v2 .dashboard-os-group-toggle small{display:none}
-.workspace-v2 .dashboard-os-nav-item{min-height:32px!important;padding:6px 10px!important;border-radius:999px!important;font-size:12px!important;border:0!important;background:transparent!important;color:var(--text-muted)!important;box-shadow:none!important;transform:none!important}
+.workspace-v2 .dashboard-os-nav-item{min-height:32px!important;padding:6px 10px!important;border-radius:999px!important;font-size:13px!important;border:0!important;background:transparent!important;color:var(--text-muted)!important;box-shadow:none!important;transform:none!important}
 .workspace-v2 .dashboard-os-nav-item.is-active{background:var(--accent-soft)!important;color:var(--text)!important}
 .workspace-v2 .dashboard-os-nav-item:hover{background:var(--bg-soft)!important;color:var(--text)!important}
 .workspace-v2 .dashboard-os-nav-item .font-semibold{font-weight:500!important;white-space:normal!important;line-height:1.4}
