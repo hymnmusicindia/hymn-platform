@@ -1,0 +1,28 @@
+.beat-store-hero .beat-hero-stage{height:250px;touch-action:pan-y}
+.beat-store-hero .beat-hero-copy{padding:20px 32px 66px;gap:0}
+.beat-store-hero .beat-hero-copy :is(h1,h2){margin:0;font-size:clamp(25px,3.4vw,36px);line-height:1.04;letter-spacing:-.045em}
+.beat-store-hero .beat-hero-copy p{margin-top:10px;font-size:12px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.beat-store-hero .beat-hero-copy>p:first-child{margin:0 0 8px;font-size:9px;display:flex}
+.beat-store-hero .beat-hero-copy :is(.mt-7,.mt-6){margin-top:12px}
+.beat-store-hero .beat-hero-copy :is(button,a){padding:8px 12px;min-height:36px;font-size:11px}
+.beat-store-hero .beat-hero-journey{gap:24px;max-width:none}
+.beat-store-hero .beat-hero-journey h2{font-size:28px}
+.beat-store-hero .beat-hero-journey p{-webkit-line-clamp:1}
+.beat-store-hero .beat-hero-steps svg{margin-top:12px;width:22px;height:22px}
+.beat-store-hero .beat-hero-steps strong{margin-top:12px;font-size:10px}
+.beat-store-hero .beat-hero-steps span:last-child{font-size:10px;line-height:1.45}
+.beat-store-hero .beat-hero-controls{position:absolute;inset:auto 24px 10px;z-index:20;display:flex;align-items:center;gap:8px;color:#fff}
+.beat-store-hero .beat-hero-controls button{display:flex;align-items:center;justify-content:center;flex-shrink:0;min-height:44px;cursor:pointer;transition:background .18s,transform .18s}
+.beat-store-hero .beat-hero-controls button:focus-visible{outline:2px solid #fff;outline-offset:3px}
+.beat-store-hero .beat-hero-previous{width:44px;border:1px solid #ffffff40;border-radius:50%;background:#090b1099;color:#fff;backdrop-filter:blur(12px)}
+.beat-store-hero .beat-hero-previous:hover{background:#ffffff26}
+.beat-store-hero .beat-hero-next{gap:14px;padding:0 17px;border:0;border-radius:999px;background:#f4f7fb;color:#11161c!important;font-size:12px;font-weight:700}
+.beat-store-hero .beat-hero-next:hover{background:#fff;transform:translateX(2px)}
+.beat-store-hero .beat-hero-pagination{display:flex;align-items:center;gap:0}
+.beat-store-hero .beat-hero-pagination button{width:30px;padding:0;border:0;background:transparent!important}
+.beat-store-hero .beat-hero-pagination span{height:5px;width:6px;border-radius:999px;background:#ffffff70;transition:width .2s,background .2s}
+.beat-store-hero .beat-hero-pagination [aria-current=true] span{width:24px;background:#fff}
+.beat-store-hero .beat-hero-count{margin-left:auto;margin-right:4px;font-size:10px;font-variant-numeric:tabular-nums;color:#e0e4ea}
+@media(max-width:1023px){.beat-store-hero .beat-hero-steps{display:none}.beat-store-hero .beat-hero-journey p{display:none}}
+@media(max-width:600px){.beat-store-hero{border-radius:20px}.beat-store-hero .beat-hero-copy{padding:16px 18px 66px}.beat-store-hero .beat-hero-copy :is(h1,h2){font-size:27px}.beat-store-hero .beat-hero-copy p{font-size:11px;margin-top:8px}.beat-store-hero .beat-hero-copy :is(.mt-7,.mt-6){margin-top:10px;gap:6px}.beat-store-hero .beat-hero-copy :is(button,a){min-height:36px;padding:7px 10px;font-size:10px}.beat-store-hero .beat-hero-copy>div>button:nth-child(n+3):not(:last-child){display:none}.beat-store-hero .beat-hero-journey p{display:none}.beat-store-hero .beat-hero-controls{left:14px;right:14px;bottom:8px;gap:4px}.beat-store-hero .beat-hero-next{gap:10px;padding:0 15px}}
+@media(prefers-reduced-motion:reduce){.beat-store-hero article,.beat-store-hero .beat-hero-controls button,.beat-store-hero .beat-hero-pagination span{transition:none}}
