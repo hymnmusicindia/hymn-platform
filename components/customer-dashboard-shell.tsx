@@ -636,18 +636,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
 
       {activeTab === "support" ? <SupportWorkspace loading={supportLoading} tickets={supportTickets} releases={releases.map(release=>({id:release.id,label:releaseTitle(release)}))} purchases={beatPurchases.map(purchase=>({id:purchase.id,label:`Purchase #${purchase.id} ? Beat #${purchase.beatId}`}))} payouts={(payoutSummary?.payoutHistory || []).map(payout=>({id:payout.id,label:`Payout #${payout.id} ? ${payout.status}`}))} error={dataErrors.support} externalSearch={dashboardSearch} onRetry={()=>setReloadKey(value=>value+1)} onCreated={ticket=>setSupportTickets(items=>[ticket,...items])}/> : null}
 
-      {activeTab === "settings" ? (
-        <Panel title="Account settings" description="Profile, subscription, and security state.">
-          <ProfilePreferencesForm user={user} />
-          <div className="mt-5 grid gap-3 md:grid-cols-2">
-            <div className="summary-card"><span>Name</span><span>{user.name}</span></div>
-            <div className="summary-card"><span>Email</span><span>{user.email}</span></div>
-            <div className="summary-card"><span>Role</span><span className="capitalize">{user.role}</span></div>
-            <div className="summary-card"><span>Subscription</span><span>{subscription ? `${subscription.plan} / ${formatDate(subscriptionExpiry)}` : "None"}</span></div>
-            <div className="summary-card"><span>Password changes</span><span>Unavailable for Google-only accounts</span></div>
-          </div>
-        </Panel>
-      ) : null}
+      {activeTab === "settings" ? <ProfilePreferencesForm user={user} /> : null}
 
       {activeTab === "purchases" ? (
         <Panel title="Bought beats, downloads, and licenses" description="Review verified orders, payment state, and the assets you unlocked.">

@@ -422,16 +422,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
         </Panel>
       ) : null}
 
-      {activeTab === "settings" ? (
-        <Panel title="Producer settings" description="Profile facts and storefront status. Admin-managed public producer profiles remain protected.">
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="summary-card"><span>Name</span><span>{user.name}</span></div>
-            <div className="summary-card"><span>Email</span><span>{user.email}</span></div>
-            <div className="summary-card"><span>Role</span><span className="capitalize">{user.role}</span></div>
-            <div className="summary-card"><span>Catalog visibility</span><span>{enabledBeats.length} enabled beats</span></div>
-          </div>
-        </Panel>
-      ) : null}
+      {activeTab === "settings" ? <ProfilePreferencesForm user={user} /> : null}
 
       {activeTab === "earnings" || activeTab === "payout" ? <Panel title="Earnings & payouts" description="Your recorded producer share, available balance, and withdrawals."><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Your sale earnings" value={formatMoney(finance.producerEarnings)}/><StatCard label="Available to withdraw" value={formatMoney(finance.availableBalance)}/><StatCard label="Payouts pending" value={formatMoney(finance.pendingPayout)}/><StatCard label="Paid to date" value={formatMoney(finance.lifetimePaid)}/></div><div className="workspace-money-summary"><div><h3>Revenue share</h3><div className="workspace-share-bar" aria-label="Producer 70%, HYMN 30%"><span style={{width:"70%"}}>Your share 70%</span><span>HYMN 30%</span></div><p>Gross recorded sales {formatMoney(finance.grossRevenue)}. The ledger records the actual share credited for each sale.</p></div><div><h3>Withdraw your earnings</h3><p>Review payout eligibility, payment details, and withdrawal requests in your payout workspace.</p><Link className="btn-primary" href="/payout">Open payouts</Link><button className="btn-outline" onClick={()=>selectProducerTab("ledger")}>Wallet history</button></div></div></Panel>:null}
 
