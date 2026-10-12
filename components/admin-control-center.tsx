@@ -567,7 +567,9 @@ export function AdminControlCenter({
   initialSupportTickets: SupportTicket[];
 }) {
   const hasPermission = (permission: AdminPermissionKey) => adminAccess.permissions.includes(permission);
-  const [activeTab, setActiveTab] = useState<AdminTab>(initialTab ?? "overview");
+  const defaultReleaseTab: AdminTab = hasPermission("releases.read") ? "releases" : hasPermission("releases.review") ? "distribution-queue" : "delivery-failed";
+  const [activeTab, setActiveTab] = useState<AdminTab>(initialTab === "releases" ? defaultReleaseTab : initialTab ?? "overview");
+  const isReleaseWorkspace = ["releases", "distribution-queue", "delivery-failed"].includes(activeTab);
   const [releases, setReleases] = useState(initialReleases);
   const [beats, setBeats] = useState(initialBeats);
   const [orders] = useState(initialOrders);
@@ -606,7 +608,6 @@ export function AdminControlCenter({
   const [isSubmittingToDireNote, setIsSubmittingToDireNote] = useState(false);
   const [direNoteCooldowns, setDireNoteCooldowns] = useState<Record<number, number>>({});
   const [cooldownClock, setCooldownClock] = useState(() => Date.now());
-  const [queueSearch, setQueueSearch] = useState("");
   const [queueStatus, setQueueStatus] = useState("all");
   const [supportStatusFilter,setSupportStatusFilter]=useState("all");
   const [selectedTicketId,setSelectedTicketId]=useState<number|null>(null);
@@ -758,7 +759,7 @@ export function AdminControlCenter({
     : 0;
   const direNoteCooldownLabel = `${Math.floor(direNoteCooldownSeconds / 60)}:${String(direNoteCooldownSeconds % 60).padStart(2, "0")}`;
   const queueReleases = useMemo(() => releases.filter((release) => {
-    const query = queueSearch.trim().toLowerCase();
+    const query = moduleSearch.trim().toLowerCase();
     const searchable = [release.releaseTitle, release.trackName, release.artistName, release.upcCode, release.ownerEmail, ...(release.tracks ?? []).map((track) => track.isrc)].filter(Boolean).join(" ").toLowerCase();
     const belongsToModule = activeTab === "distribution-queue"
       ? REVIEW_QUEUE_STATUSES.includes(release.status as typeof REVIEW_QUEUE_STATUSES[number])
@@ -766,7 +767,7 @@ export function AdminControlCenter({
         ? DELIVERY_FAILED_STATUSES.includes(release.status as typeof DELIVERY_FAILED_STATUSES[number])
         : true;
     return belongsToModule && (!query || searchable.includes(query)) && (queueStatus === "all" || release.status === queueStatus) && (queueType === "all" || release.releaseType === queueType);
-  }), [activeTab, queueSearch, queueStatus, queueType, releases]);
+  }), [activeTab, moduleSearch, queueStatus, queueType, releases]);
   const catalogReleases = useMemo(() => releases.filter(release => (activeTab !== "delivery" || CATALOG_STATUSES.includes(release.status as typeof CATALOG_STATUSES[number])) && searchMatch(release.releaseTitle,release.trackName,release.artistName,release.upcCode,release.ownerEmail)), [releases,activeTab,moduleSearch]);
   const selectedCatalogRelease = catalogReleases.find((release) => release.id === selectedReleaseId) ?? catalogReleases[0] ?? null;
   const today = new Date();
@@ -887,9 +888,12 @@ export function AdminControlCenter({
 
   function selectAdminTab(tab: AdminTab) {
     if (!adminModuleAllowed(tab, adminAccess.permissions)) return;
+    if (tab === "releases") tab = defaultReleaseTab;
     setActiveTab(tab);
+    setQueueStatus("all");
+    setQueueType("all");
     if (tab === "delivery") setCatalogTab("distribution");
-    setModuleSearch("");
+    if (!(isReleaseWorkspace && ["releases", "distribution-queue", "delivery-failed"].includes(tab))) setModuleSearch("");
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       url.searchParams.set("tab", tab);
@@ -1116,11 +1120,11 @@ export function AdminControlCenter({
       title="HYMN Command Center"
       subtitle={<span className="admin-identity"><span className="admin-identity-line"><span className="admin-online-dot" />{currentAdmin.name}<span className="admin-active-label">Active</span></span><span className="admin-identity-meta">{currentAdmin.email} · {todayLabel}</span></span>}
       navItems={adminNavigation(adminAccess.permissions)}
-      activeKey={activeTab === "payments" ? "revenue" : activeTab}
+      activeKey={isReleaseWorkspace ? "releases" : activeTab === "payments" ? "revenue" : activeTab}
       onSelect={selectAdminTab}
       searchValue={moduleSearch}
       onSearchChange={setModuleSearch}
-      searchPlaceholder={`Search ${activeTab.replace(/-/g, " ")}...`}
+      searchPlaceholder={isReleaseWorkspace ? "Search releases..." : `Search ${activeTab.replace(/-/g, " ")}...`}
       onNotificationsClick={hasPermission("system.manage")?()=>selectAdminTab("notifications"):undefined}
       notificationCount={initialNotifications.filter((notification) => !notification.readAt).length}
       quickActions={
@@ -1136,6 +1140,13 @@ export function AdminControlCenter({
       <AdminActivityAndLogs currentPage={activeTab} visible={activeTab === "activity"} />
       <div className="admin-role-strip flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div><span style={{ color: "var(--text-muted)" }}>Signed in as </span><strong>{currentAdmin.name}</strong><span style={{ color: "var(--text-muted)" }}> · Admin role: </span><strong className="capitalize">{adminAccess.role.replace(/_/g, " ")}</strong></div><span className="status-pill">{adminAccess.permissions.length} permissions</span></div>
       {feedback ? <div role="status" className="flex items-start justify-between gap-4 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text)" }}><p className="leading-6">{feedback}</p><button type="button" onClick={() => setFeedback(null)} className="pressable shrink-0 rounded-lg p-1" aria-label="Dismiss message"><X className="h-4 w-4" /></button></div> : null}
+      {isReleaseWorkspace ? <nav className="flex flex-wrap items-center gap-2" aria-label="Release workspace views">
+        {([
+          { key: "releases", label: "All releases", permission: "releases.read", count: releases.length },
+          { key: "distribution-queue", label: "QC queue", permission: "releases.review", count: releases.filter(release => REVIEW_QUEUE_STATUSES.includes(release.status as typeof REVIEW_QUEUE_STATUSES[number])).length },
+          { key: "delivery-failed", label: "Delivery failed", permission: "distribution.retry", count: releases.filter(release => DELIVERY_FAILED_STATUSES.includes(release.status as typeof DELIVERY_FAILED_STATUSES[number])).length },
+        ] as const).filter(view => hasPermission(view.permission)).map(view => <button key={view.key} type="button" onClick={() => selectAdminTab(view.key)} aria-pressed={activeTab === view.key} className="inline-flex min-h-11 items-center gap-3 rounded-full border px-4 py-2 text-sm font-semibold transition-colors" style={{ borderColor: activeTab === view.key ? "var(--text)" : "var(--border)", background: activeTab === view.key ? "var(--text)" : "transparent", color: activeTab === view.key ? "var(--bg)" : "var(--text-muted)" }}>{view.label}<span className="text-xs tabular-nums opacity-75">{view.count}</span></button>)}
+      </nav> : null}
 
       {activeTab === "overview" ? (
         <div className={overviewStyles.root}>
@@ -1220,10 +1231,10 @@ export function AdminControlCenter({
 
       {activeTab === "releases" || activeTab === "delivery" ? (
         <div className="workspace-module-layout">
-          <SurfaceSection title={activeTab === "delivery" ? "Distributor Delivery" : "Releases"} description={activeTab === "delivery" ? "Track distribution processing, delivery state, store availability, and live confirmation." : "Manage approved, scheduled, distributed, and live catalog releases."}>
+          <SurfaceSection title={activeTab === "delivery" ? "Distributor Delivery" : "All releases"} description={activeTab === "delivery" ? "Track distribution processing, delivery state, store availability, and live confirmation." : "Every release, from submission to live."}>
             <div className="grid gap-3">
               {catalogReleases.map((release) => <button key={release.id} type="button" onClick={() => { setSelectedReleaseId(release.id); setCatalogTab("overview"); }} className="surface-list-item pressable p-4 text-left" style={selectedCatalogRelease?.id === release.id ? { borderColor: "var(--accent)", background: "var(--accent-soft)" } : undefined}><div className="flex gap-3">{release.artworkUrl ? <img src={release.artworkUrl} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" /> : <div className="h-16 w-16 shrink-0 rounded-xl border border-dashed" style={{ borderColor: "var(--border)" }} />}<div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold">{release.releaseTitle || release.trackName}</p><p className="mt-1 truncate text-sm" style={{ color: "var(--text-muted)" }}>{release.artistName} · {release.releaseType.toUpperCase()} · {release.tracks?.length ?? 0} tracks</p></div><StatusPill label={adminReleaseStatusLabel(release.status, release.direNoteStatus)} active /></div><div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-soft)" }}><span>Release {release.releaseDate || "—"}</span><span>UPC {release.upcCode || "Pending"}</span><span>{release.distributionStores?.filter((store) => store.status === "Live").length ?? 0} stores live</span></div></div></div></button>)}
-              {catalogReleases.length === 0 ? <EmptyState copy="No approved or live releases yet. Releases will appear here after they are sent for distribution or marked live." /> : null}
+              {catalogReleases.length === 0 ? <EmptyState copy="No releases match this view." /> : null}
             </div>
           </SurfaceSection>
           <SurfaceSection title={activeTab === "delivery" ? "Delivery Details" : "Catalog Details"} description="Distribution state, identifiers, stores, links, and reporting for the selected release.">
@@ -1247,10 +1258,10 @@ export function AdminControlCenter({
 
       {activeTab === "distribution-queue" || activeTab === "delivery-failed" ? (
         <div className="grid gap-6 xl:grid-cols-[0.92fr,1.08fr]">
-          <SurfaceSection title={activeTab === "delivery-failed" ? "Delivery Failed" : "All Submissions"} description={activeTab === "delivery-failed" ? "Failed DireNote handoffs. Return a release to HYMN QC only after reviewing the recorded failure." : "Review submitted releases, inspect readiness, and open the complete operations record."}>
+          <SurfaceSection title={activeTab === "delivery-failed" ? "Delivery Failed" : "QC queue"} description={activeTab === "delivery-failed" ? "Review the failure before returning a release to QC." : "Review submissions and release readiness."}>
             <div className="grid gap-4">
               <div className="grid gap-3 rounded-2xl border p-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-                <input className="field" value={queueSearch} onChange={(event) => setQueueSearch(event.target.value)} placeholder="Search title, artist, UPC, ISRC, or user email" aria-label="Search submissions" />
+                <input className="field" value={moduleSearch} onChange={(event) => setModuleSearch(event.target.value)} placeholder="Search title, artist, UPC, ISRC, or user email" aria-label="Search submissions" />
                 <div className="grid gap-3 sm:grid-cols-2">
                   <select className="field" value={queueStatus} onChange={(event) => setQueueStatus(event.target.value)} aria-label="Filter by status"><option value="all">All statuses</option>{Array.from(new Set(releases.map((release) => release.status))).map((status) => <option key={status} value={status}>{status.replace(/_/g, " ")}</option>)}</select>
                   <select className="field" value={queueType} onChange={(event) => setQueueType(event.target.value)} aria-label="Filter by release type"><option value="all">All release types</option><option value="single">Single</option><option value="ep">EP</option><option value="album">Album</option></select>
