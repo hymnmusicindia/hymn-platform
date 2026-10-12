@@ -10,13 +10,12 @@ import Link from "next/link";
 import { WorkspaceRecords } from "@/components/workspace-records";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, ChevronDown, Clock3, Copy, ExternalLink, Filter, Grid2X2, List, Pencil, Search, Share2, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, ChevronDown, Clock3, Copy, ExternalLink, Filter, Grid2X2, Headphones, List, Pencil, Search, Share2, Sparkles } from "lucide-react";
 import { Release } from "@/lib/types";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import {
   getReleasePortalAction,
   getReleasePortalDateLabel,
-  getReleasePortalDateTitle,
   getReleasePortalSortKey,
   getReleasePortalStage,
   getReleasePortalTrackCount,
@@ -24,6 +23,8 @@ import {
 } from "@/lib/release-portal";
 import { automaticStatusCopy } from "@/lib/release-status-engine";
 import { ReleaseSummaryCard } from "@/components/release-summary-card";
+
+import detailStyles from "./release-detail.module.css";
 
 const PAGE_SIZE = 12;
 const STATUS_OPTIONS = [
@@ -61,7 +62,7 @@ function ReleaseCard({ release, selected = false }: { release: Release; selected
   return <ReleaseSummaryCard release={release} href={action.href} actionLabel={action.label} selected={selected} />;
 }
 
-const DETAIL_TABS = ["overview", "information", "tracks", "distribution", "corrections", "splits", "promolink", "earnings", "requests", "activity"] as const;
+const DETAIL_TABS = ["information", "splits", "distribution", "promolink", "overview", "tracks", "corrections", "earnings", "requests", "activity"] as const;
 type DetailTab = (typeof DETAIL_TABS)[number];
 const DETAIL_TAB_LABELS: Record<DetailTab, string> = {
   overview: "Overview",
@@ -208,9 +209,10 @@ function ChangeRequestWorkspace({ release, requests, onCreated }: { release: Rel
 
 export function ReleaseManage({ release, initialTab }: { release: Release; initialTab?: string | null }) {
   const router = useRouter();
-  const [tab, setTab] = useState<DetailTab>(DETAIL_TABS.includes(initialTab as DetailTab) ? initialTab as DetailTab : "overview");
+  const [tab, setTab] = useState<DetailTab>(DETAIL_TABS.includes(initialTab as DetailTab) ? initialTab as DetailTab : "information");
   const [editWarningOpen, setEditWarningOpen] = useState(false);
   const [editError, setEditError] = useState("");
+  const [shareStatus, setShareStatus] = useState("");
   const [correctionField, setCorrectionField] = useState<string | undefined>();
   const [isEditing, startEditing] = useTransition();
   const editDialogRef = useAccessibleDialog(editWarningOpen, () => { if (!isEditing) setEditWarningOpen(false); });
@@ -244,30 +246,49 @@ export function ReleaseManage({ release, initialTab }: { release: Release; initi
     });
   }
 
-  return <div className="release-manage-page grid gap-6">
-    <Link href="/dashboard/releases" className="inline-flex w-fit items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-muted)" }}><ArrowLeft className="h-4 w-4" /> My Releases</Link>
-    <section className="surface-card overflow-hidden p-5 sm:p-6">
-      <div className="mb-5 flex items-start gap-3 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: release.status === "rejected" || release.status === "changes_requested" ? "color-mix(in srgb, var(--danger) 40%, var(--border))" : "var(--border)", background: "var(--bg-soft)", color: "var(--text-muted)" }}>
-        <Clock3 className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--money)" }} />
-        <p>{releaseStatusMessage(release)}</p>
-      </div>
-      <div className="grid gap-6 md:grid-cols-[220px,1fr] md:items-center">
-        <div className="relative aspect-square overflow-hidden rounded-2xl border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{release.artworkUrl ? <Image src={release.artworkUrl} alt={title} fill sizes="(max-width: 767px) 100vw, 220px" className="object-cover" unoptimized /> : <div className="flex h-full items-center justify-center"><Sparkles className="h-10 w-10" /></div>}</div>
-        <div className="min-w-0">
-          <div className="flex flex-wrap gap-2"><span className="status-pill status-pill-active">{release.status.replace(/_/g, " ")}</span><span className="status-pill capitalize">{release.releaseType}</span></div>
-          <h1 className="mt-4 truncate text-3xl font-semibold sm:text-4xl" style={{ color: "var(--text)" }}>{title}</h1>
-          <p className="mt-2" style={{ color: "var(--text-muted)" }}>{release.artistName} · {getReleasePortalTrackCount(release)} track{getReleasePortalTrackCount(release) === 1 ? "" : "s"}</p>
-          <div className="mt-4 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2" style={{ color: "var(--text-muted)" }}><p>{getReleasePortalDateTitle(release)}: <strong style={{ color: "var(--text)" }}>{getReleasePortalDateLabel(release)}</strong></p><p>Label: <strong style={{ color: "var(--text)" }}>{display(release.labelDisplayName || release.labelName)}</strong></p><p>Genre: <strong style={{ color: "var(--text)" }}>{display([release.primaryGenre || release.genre, release.secondaryGenre].filter(Boolean).join(" / "))}</strong></p><p>UPC: <strong style={{ color: "var(--text)" }}>{resolvedUpc(release)}</strong></p></div>
-          <div className="mt-5 flex flex-wrap gap-2">{canEdit ? <button type="button" onClick={() => release.status === "draft" ? router.push(`/distribution/start?edit=${release.id}`) : setEditWarningOpen(true)} className="btn-primary pressable inline-flex items-center gap-2"><Pencil className="h-4 w-4" />{release.status === "draft" ? "Continue editing" : editingDuringReview ? "Edit metadata" : "Fix release"}</button> : null}{promoLink ? <a href={promoLink} target="_blank" rel="noreferrer" className="btn-outline pressable inline-flex items-center gap-2">Promolink <ExternalLink className="h-4 w-4" /></a> : null}<Link href={`/contact?releaseId=${release.id}`} className="btn-outline pressable">Contact support</Link><button type="button" className="btn-outline pressable" aria-label="Share release"><Share2 className="h-4 w-4" /></button></div>
+  async function shareRelease() {
+    const url = promoLink || window.location.href;
+    try {
+      if (navigator.share) await navigator.share({ title, text: release.artistName, url });
+      else { await navigator.clipboard.writeText(url); setShareStatus("Release link copied."); }
+    } catch (error) { if (!(error instanceof DOMException && error.name === "AbortError")) setShareStatus("Could not share. Copy the page address to share this release."); }
+  }
+
+  return <div className={`release-manage-page grid gap-6 ${detailStyles.page}`}>
+    <section className={detailStyles.hero} aria-label="Release summary">
+      {release.artworkUrl ? <div className={detailStyles.backdrop} aria-hidden="true"><Image src={release.artworkUrl} alt="" fill sizes="100vw" unoptimized /></div> : null}
+      <div className={detailStyles.shade} aria-hidden="true" />
+      <Link href="/dashboard/releases" className={detailStyles.back}><ArrowLeft size={19} />My Releases</Link>
+      <div className={detailStyles.identity}>
+        <div className={detailStyles.cover}>{release.artworkUrl ? <Image src={release.artworkUrl} alt={`${title} cover artwork`} fill sizes="(max-width: 600px) 160px, 280px" className="object-cover" unoptimized /> : <Sparkles size={44}/>}</div>
+        <div className={detailStyles.summary}>
+          <div className={detailStyles.badges}><span>{release.status.replace(/_/g, " ")}</span><span>{release.releaseType}</span></div>
+          <h1>{title}</h1>
+          <p className={detailStyles.byline}><strong>{release.artistName}</strong><span>{getReleasePortalDateLabel(release)}</span><span>{getReleasePortalTrackCount(release)} track{getReleasePortalTrackCount(release) === 1 ? "" : "s"}</span></p>
+          <div className={detailStyles.bottom}>
+            <div className={detailStyles.actions}>
+              {canEdit ? <button type="button" onClick={() => release.status === "draft" ? router.push(`/distribution/start?edit=${release.id}`) : setEditWarningOpen(true)} className="btn-primary"><Pencil size={17}/>{release.status === "draft" ? "Continue editing" : editingDuringReview ? "Edit metadata" : "Fix release"}</button> : null}
+              {promoLink ? <a href={promoLink} target="_blank" rel="noreferrer" className="btn-outline">Promolink<ExternalLink size={16}/></a> : null}
+              <Link href={`/contact?releaseId=${release.id}`} className="btn-outline"><Headphones size={17}/>Support</Link>
+              <button type="button" onClick={shareRelease} className="btn-outline" aria-label="Share release" title="Share release"><Share2 size={18}/></button>
+            </div>
+            <dl className={detailStyles.metrics}><div><dt>UPC</dt><dd>{resolvedUpc(release)}</dd></div>{release.analytics?.streams_total != null ? <div><dt>Streams</dt><dd>{release.analytics.streams_total.toLocaleString()}</dd></div> : null}</dl>
+          </div>
+          {shareStatus ? <p className={detailStyles.feedback} role="status">{shareStatus}</p> : null}
         </div>
       </div>
+      <div className={detailStyles.statusNote}><Clock3 size={15}/><p>{releaseStatusMessage(release)}</p></div>
+      <nav className={detailStyles.tabs} aria-label="Release sections">{relevantTabs.map(item => <button key={item} type="button" onClick={() => setTab(item)} aria-current={tab === item ? "page" : undefined}>{DETAIL_TAB_LABELS[item]}</button>)}</nav>
     </section>
-    <div className="overflow-x-auto border-b" style={{ borderColor: "var(--border)" }}><div className="flex min-w-max gap-7">{relevantTabs.map((item) => <button key={item} type="button" onClick={() => setTab(item)} aria-current={tab === item ? "page" : undefined} className="border-b-2 px-1 py-4 text-sm font-semibold" style={{ borderColor: tab === item ? "var(--accent)" : "transparent", color: tab === item ? "var(--text)" : "var(--text-muted)" }}>{DETAIL_TAB_LABELS[item]}</button>)}</div></div>
     {tab === "overview" ? <div className="grid gap-6"><section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{[["Current Status", release.status.replace(/_/g, " ")], ["Release Date", getReleasePortalDateLabel(release)], ["UPC", resolvedUpc(release)], ["Total Tracks", getReleasePortalTrackCount(release)], ["Distribution Stage", hasDistribution ? "In distribution" : "Not sent"], ["Review Stage", release.reviewedAt ? "Reviewed" : release.submittedAt ? "In review" : "Not submitted"]].map(([label, value]) => <div key={label} className="metric-card p-4"><p className="text-xs uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>{label}</p><p className="mt-2 font-semibold capitalize">{value}</p></div>)}</section><section className="surface-card"><h2 className="text-xl font-semibold">Release progress</h2><div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">{["Draft", "Submitted", "HYMN Review", "Sent to Distributor", "Scheduled", "Live"].map((label, index) => { const stageIndex = release.status === "draft" ? 0 : !hasDistribution ? 2 : release.status === "scheduled" ? 4 : release.status === "live" ? 5 : 3; const complete = index < stageIndex; const current = index === stageIndex; return <div key={label} className="relative"><span className="inline-flex h-3 w-3 rounded-full" style={{ background: complete || current ? "var(--accent)" : "var(--border)", boxShadow: current ? "0 0 0 5px color-mix(in srgb, var(--accent) 18%, transparent)" : undefined }} /><p className="mt-3 text-xs font-semibold" style={{ color: current ? "var(--text)" : "var(--text-muted)" }}>{label}</p><p className="mt-1 text-[11px]" style={{ color: "var(--text-soft)" }}>{complete ? "Completed" : current ? "Current" : "Upcoming"}</p></div>; })}</div></section></div> : null}
     {tab === "overview" ? <section className="surface-card"><h2 className="text-xl font-semibold">Identifiers</h2><div className="mt-5 divide-y" style={{ borderColor: "var(--border)" }}><div className="flex flex-wrap items-center justify-between gap-3 py-4"><p className="text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>UPC</p><IdentifierValue value={resolvedUpc(release)} /></div>{(release.tracks ?? []).map((track, index) => <div key={track.id} className="flex flex-wrap items-center justify-between gap-3 py-4"><div><p className="text-sm font-semibold">{track.trackTitle || `Track ${index + 1}`}</p><p className="mt-1 text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>ISRC</p></div><IdentifierValue value={resolvedIsrc(release, track, index)} /></div>)}</div><p className="mt-4 text-xs" style={{ color: "var(--text-soft)" }}>Assigned by HYMN distribution</p></section> : null}
     {tab === "information" ? <div className="release-manage-information grid gap-6 lg:grid-cols-[1.15fr,0.85fr]">
-      <section className="surface-card"><h2 className="text-xl font-semibold">Tracks</h2><div className="mt-4 grid gap-3">{(release.tracks ?? []).map((track, index) => <details key={track.id} open={index === 0} className="rounded-xl border p-4" style={{ borderColor: "var(--border)" }}><summary className="cursor-pointer font-semibold">{String(track.trackNumber || index + 1).padStart(2, "0")} {track.trackTitle}</summary><div className="mt-4 grid gap-2">{[["Track Title", track.trackTitle], ["Genre", release.primaryGenre], ["Subgenre", release.secondaryGenre], ["Primary Artist(s)", track.primaryArtist], ["Featured Artist(s)", track.featuredArtists], ["Composition Type", (track.metadata as any)?.compositionType], ["Original Composer(s)", track.composers], ["Producer", track.producers], ["ISRC", resolvedIsrc(release, track, index)], ["Explicit Content", track.explicitContent ? "Yes" : "No"], ["Preview Start", (track.metadata as any)?.previewStart], ["Language of Lyrics", release.language], ["Lyricists", track.songwriters], ["Mood", release.mood]].map(([label, value]) => <div key={label} className="summary-card"><span>{label}</span><span className="text-right">{display(value)}</span></div>)}</div></details>)}{!release.tracks?.length ? <p style={{ color: "var(--text-muted)" }}>No track metadata available yet.</p> : null}</div></section>
-      <section className="surface-card"><h2 className="text-xl font-semibold">Release Info</h2><div className="mt-4 grid gap-2">{[["Title", title], ["Catalog Number", release.distributorReleaseId], ["Language", release.language], ["Composition Owner", release.copyrightOwner], ["Year of Composition", (releaseMetadata(release) as any).yearOfComposition], ["Master Recording Owner", release.publishingRights || release.copyrightOwner], ["Year of Recording", (releaseMetadata(release) as any).yearOfRecording], ["Universal Product Code (UPC)", resolvedUpc(release)], ["Label", release.labelDisplayName || release.labelName], ["Mood", release.mood]].map(([label, value]) => <div key={label} className="summary-card"><span>{label}</span><span className="text-right">{display(value)}</span></div>)}</div></section>
+      <section className="surface-card"><h2 className="text-xl font-semibold">Tracks</h2><div className="mt-4 grid gap-3">{(release.tracks ?? []).map((track, index) => <details key={track.id} className="rounded-xl border p-4" style={{ borderColor: "var(--border)" }}><summary className={detailStyles.trackSummary}><span className={detailStyles.trackNumber}>{String(track.trackNumber || index + 1).padStart(2, "0")}</span>{release.artworkUrl ? <span className={detailStyles.trackCover}><Image src={release.artworkUrl} alt="" fill sizes="40px" unoptimized /></span> : null}<span className={detailStyles.trackTitle}><strong>{track.trackTitle}</strong><small>{track.primaryArtist || release.artistName}</small></span>{track.explicitContent ? <span className={detailStyles.explicit} title="Explicit">E</span> : null}<ChevronDown size={17}/></summary><div className="mt-4 grid gap-2">{[["Track Title", track.trackTitle], ["Genre", release.primaryGenre], ["Subgenre", release.secondaryGenre], ["Primary Artist(s)", track.primaryArtist], ["Featured Artist(s)", track.featuredArtists], ["Composition Type", (track.metadata as any)?.compositionType], ["Original Composer(s)", track.composers], ["Producer", track.producers], ["ISRC", resolvedIsrc(release, track, index)], ["Explicit Content", track.explicitContent ? "Yes" : "No"], ["Preview Start", (track.metadata as any)?.previewStart], ["Language of Lyrics", release.language], ["Lyricists", track.songwriters], ["Mood", release.mood]].map(([label, value]) => <div key={label} className="summary-card"><span>{label}</span><span className="text-right">{display(value)}</span></div>)}</div></details>)}{!release.tracks?.length ? <p style={{ color: "var(--text-muted)" }}>No track metadata available yet.</p> : null}</div></section>
+      <section className="surface-card"><h2 className="text-xl font-semibold">Release Info</h2><div className={detailStyles.infoGroups}>{[
+        { title: "General", rows: [["Title", title], ["Language", release.language], ["Label", release.labelDisplayName || release.labelName || metadata.labelName], ["Genre", release.primaryGenre || release.genre], ["Mood", release.mood]] },
+        { title: "Rights", rows: [["Composition", metadata.cLine || release.copyrightOwner], ["Recording", metadata.pLine || release.publishingRights || release.copyrightOwner]] },
+        { title: "Identifiers", rows: [["UPC", resolvedUpc(release)], ["Catalogue number", release.distributorReleaseId]] }
+      ].map(group => <div key={group.title}><h3>{group.title}</h3>{group.rows.map(([label, value]) => <div key={label} className="summary-card"><span>{label}</span><span className="text-right">{display(value)}</span></div>)}</div>)}</div></section>
     </div> : null}
     {tab === "tracks" ? <section className="surface-card"><h2 className="text-2xl font-semibold">Tracks</h2><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Submitted audio, credits, rights, and identifier details.</p><div className="mt-5 grid gap-3">{(release.tracks ?? []).map((track, index) => <details key={track.id} open={index === 0} className="rounded-xl border p-4" style={{ borderColor: "var(--border)" }}><summary className="cursor-pointer font-semibold">{String(track.trackNumber || index + 1).padStart(2, "0")} · {track.trackTitle}</summary><div className="mt-4 grid gap-2 sm:grid-cols-2">{[["Track Title", track.trackTitle], ["Version", track.version], ["Primary Artist", track.primaryArtist], ["Featured Artist", track.featuredArtists], ["Producer", track.producers], ["Songwriter", track.songwriters], ["Composer", track.composers], ["Genre", release.primaryGenre || release.genre], ["Subgenre", release.secondaryGenre], ["Language", release.language], ["Mood", release.mood], ["Explicit Content", track.explicitContent ? "Yes" : "No"], ["Lyrics Status", track.lyrics || track.trackLyrics ? "Provided" : "Not provided"], ["Audio File Status", track.audioUrl ? "Uploaded" : "Missing"], ["ISRC", resolvedIsrc(release, track, index)], ["Preview Start", (track.metadata as any)?.previewStart], ["Composition Type", (track.metadata as any)?.compositionType], ["License Proof", track.coverLicenseUrl || release.licenseDocumentUrl], ["AI / Suno Proof", release.sunoReceiptUrl || release.suno_receipt_url]].map(([label, value]) => <div key={label} className="summary-card"><span>{label}</span><span className="text-right">{display(value)}</span></div>)}</div></details>)}{!release.tracks?.length ? <p className="rounded-xl border p-5 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>No track metadata is available for this release.</p> : null}</div></section> : null}
     {tab === "corrections" ? release.direNoteStatus ? <ProviderCorrectionWorkspace release={release} onFix={(field) => router.push(`/distribution/start?edit=${release.id}${field ? `&correctionField=${encodeURIComponent(field)}` : ""}`)} /> : <CorrectionWorkspace release={release} onFix={(field) => { setCorrectionField(field); setEditWarningOpen(true); }} /> : null}
