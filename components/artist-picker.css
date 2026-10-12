@@ -61,3 +61,20 @@ html body .release-artist-next{display:grid;place-items:center;width:52px;height
 @media(max-width:600px){html body .artist-library{padding:18px;border-radius:20px}.artist-library.is-focused{max-height:88dvh}.artist-profile-modal-header,.artist-profile-modal-body{padding:18px}.artist-profile-live-identity>.artist-platform-links{gap:4px}.artist-profile-live-identity>.artist-platform-links a{width:30px;height:30px}}
 @media(prefers-reduced-motion:reduce){.release-artist-next{transition:none}}
 .artist-profile-steps{display:flex;align-items:center;gap:8px;margin-top:20px}.artist-profile-steps>span{display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--border);border-radius:50%;color:var(--text-soft);font-size:11px}.artist-profile-steps>span>span{display:grid;place-items:center}.artist-profile-steps>span.is-current{outline:2px solid var(--text);outline-offset:3px;color:var(--text)}.artist-profile-steps>span.is-complete{background:var(--accent-soft);color:#9bdfbd}.artist-profile-steps img{padding:2px;background:#fff;border-radius:4px;filter:none!important}
+/* Monochrome platform marks and a shorter profile card. */
+html body .artist-platform-links a{width:32px;height:32px;background:transparent;border:0;color:var(--text);border-radius:50%}
+.artist-platform-links a:hover{background:var(--accent-soft);color:var(--text)}
+.artist-platform-links svg{display:block;width:18px;height:18px}
+.artist-library-row{position:relative;padding:6px 10px}
+html body .artist-library-select{min-height:48px;padding-right:0}
+.artist-library-row-details{min-height:30px;margin-top:-8px;padding-left:52px;padding-right:0}
+html body .artist-library-edit{position:absolute;right:8px;bottom:3px;width:32px;height:32px}
+.artist-library-row-details .artist-platform-links{gap:2px}
+.artist-profile-steps>span.is-complete{color:var(--text)}
+.artist-profile-steps svg{display:block;width:16px;height:16px}
+/* One baseline and one diameter for selected artists and the add control. */
+.release-artist-avatar-picker{align-items:center;flex-wrap:wrap}
+.release-artist-avatar-picker .release-selected-artists{align-items:center;gap:.65rem}
+.release-artist-avatar-picker .release-primary-artist-sort-item{padding:0;align-self:center}
+.release-artist-avatar-picker .artist-picker-focused{display:flex;align-items:center;align-self:center;gap:0;margin:0;padding:0}
+html body .release-workflow.is-artist-step .release-selected-artist,html body .release-artist-avatar-picker .artist-picker-add-trigger{box-sizing:border-box;width:54px;height:54px;min-height:54px;margin:0;flex-shrink:0}

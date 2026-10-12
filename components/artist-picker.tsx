@@ -5,7 +5,7 @@ import { customerMessage } from "@/lib/customer-message";
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
-import { ArrowLeft, ArrowRight, Check, LoaderCircle, Music2, Pencil, Plus, Search, UserRound, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, Check, Disc3, Instagram, LoaderCircle, Music2, Pencil, Plus, Search, SlidersHorizontal, UserRound, X, Youtube } from "lucide-react";
 import type { ArtistProfile, SpotifyArtistResult } from "@/lib/types";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import "./artist-picker.css";
@@ -53,13 +53,20 @@ function ArtistAvatar({ name, imageUrl }: { name: string; imageUrl?: string | nu
   );
 }
 
+function ArtistPlatformIcon({ platform }: { platform: string }) {
+  if (platform === "instagram") return <Instagram size={18} aria-hidden="true" />;
+  if (platform === "youtube") return <Youtube size={18} aria-hidden="true" />;
+  if (platform === "spotify") return <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor" /><g stroke="var(--bg-elevated)" strokeLinecap="round"><path d="M6.5 9c4-1.2 7.5-.8 11 1" strokeWidth="1.8"/><path d="M7.2 12c3.4-1 6.5-.6 9.3.8" strokeWidth="1.6"/><path d="M8 15c2.6-.7 5-.4 7.5.7" strokeWidth="1.4"/></g></svg>;
+  return <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M20 2v14.3c0 2-1.7 3.7-3.8 3.7-1.8 0-3.2-1-3.2-2.5 0-1.7 1.7-3 4-3 .4 0 .7 0 1 .1V6.8L9 8.7v10.1C9 20.7 7.3 22 5.3 22 3.4 22 2 21 2 19.5 2 17.8 3.7 16.5 6 16.5c.4 0 .7 0 1 .1V5z"/></svg>;
+}
+
 function ArtistPlatformLinks({ profile }: { profile: Pick<ArtistProfile, "spotifyUrl" | "appleUrl" | "instagramUrl"> }) {
   const links = [
     { name: "Spotify", url: profile.spotifyUrl, icon: "spotify" },
     { name: "Apple Music", url: profile.appleUrl, icon: "apple" },
     { name: "Instagram", url: profile.instagramUrl, icon: "instagram" }
   ];
-  return <div className="artist-platform-links">{links.filter(link => link.url).map(link => <a key={link.name} href={link.name === "Instagram" && !link.url?.startsWith("http") ? `https://www.instagram.com/${link.url?.replace(/^@/, "")}` : link.url!} target="_blank" rel="noopener noreferrer" aria-label={`Open ${link.name} profile`} title={link.name}><Image src={`/assets/store-logos/symbol-${link.icon}.png`} width={20} height={20} alt="" /></a>)}</div>;
+  return <div className="artist-platform-links">{links.filter(link => link.url).map(link => <a key={link.name} href={link.name === "Instagram" && !link.url?.startsWith("http") ? `https://www.instagram.com/${link.url?.replace(/^@/, "")}` : link.url!} target="_blank" rel="noopener noreferrer" aria-label={`Open ${link.name} profile`} title={link.name}><ArtistPlatformIcon platform={link.icon} /></a>)}</div>;
 }
 
 export function ArtistPicker({
@@ -491,7 +498,7 @@ export function ArtistPicker({
               <button type="button" className="artist-profile-close" aria-label="Close artist profile" disabled={saving} onClick={() => setCreateOpen(false)}><X size={18} /></button>
             </div>
 
-            <div className="artist-profile-steps" aria-label="Profile progress">{profileSteps.map((stage, index) => <span key={stage} className={index === profileStep ? "is-current" : index < profileStep ? "is-complete" : ""} aria-current={index === profileStep ? "step" : undefined} title={stage === "liveMusic" ? "Artist type" : stage === "legal" ? "Legal name" : stage}><span>{index < profileStep ? <Check size={14} /> : ["spotify", "apple", "instagram"].includes(stage) ? <Image src={`/assets/store-logos/symbol-${stage}.png`} alt={stage} width={16} height={16} /> : stage === "name" ? <UserRound size={16} /> : stage === "liveMusic" ? <Music2 size={16} /> : <span>{index + 1}</span>}</span></span>)}</div>
+            <div className="artist-profile-steps" aria-label="Profile progress">{profileSteps.map((stage, index) => <span key={stage} className={index === profileStep ? "is-current" : index < profileStep ? "is-complete" : ""} aria-current={index === profileStep ? "step" : undefined} title={stage === "liveMusic" ? "Artist type" : stage === "legal" ? "Legal name" : stage}><span>{index < profileStep ? <Check size={14} /> : ["spotify", "apple", "instagram"].includes(stage) ? <ArtistPlatformIcon platform={stage} /> : stage === "name" ? <UserRound size={16} /> : stage === "liveMusic" ? <Disc3 size={16} /> : stage === "youtube" ? <Youtube size={16} /> : stage === "producer" ? <SlidersHorizontal size={16} /> : <BadgeCheck size={16} />}</span></span>)}</div>
             </div>
 
             <div className="artist-profile-modal-body" key={activeProfileStep}>
