@@ -23,6 +23,8 @@ async function main() {
   } }] });
   const modulePath = "../.cache/checkout-create-order.cjs";
   const { POST } = await import(modulePath);
+  process.env.RAZORPAY_KEY_ID="rzp_test_server_fixture";
+  process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID="rzp_test_stale_public_fixture";
   const state = globalThis as typeof globalThis & { createOrderFixture: any };
   const request = () => POST(new Request("http://localhost/api/checkout/create-order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: [{ type: "beat", beatId: 5, licenseType: "mp3" }] }) }));
   for (const code of ["P2028", "P2024", "P1001", "P1002", "P1017"]) {
@@ -35,6 +37,7 @@ async function main() {
   state.createOrderFixture = { calls: [], failure: null };
   const response = await request(); const data = await response.json();
   assert.equal(response.status, 200); assert.equal(data.orderId, "order_fixture"); assert.equal(data.amount, 12000);
+  assert.equal(data.key, "rzp_test_server_fixture", "Checkout must use the key that created the order, even when the public build key is stale");
   assert.deepEqual(state.createOrderFixture.calls, ["provider-order", "persist"]);
   console.log("PASS transient database failures return safe retry messages; Razorpay checkout starts only after order persistence; no live charges");
 }

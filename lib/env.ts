@@ -21,7 +21,7 @@ export function getAdminSessionSecret() {
 export function requireRazorpayConfiguration() {
   const keyId = requiredProductionValue("RAZORPAY_KEY_ID", process.env.RAZORPAY_KEY_ID);
   const keySecret = requiredProductionValue("RAZORPAY_KEY_SECRET", process.env.RAZORPAY_KEY_SECRET);
-  return { keyId, keySecret, publicKey: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim() || keyId };
+  return { keyId, keySecret, publicKey: keyId };
 }
 
 export function getProductionReadinessIssues() {

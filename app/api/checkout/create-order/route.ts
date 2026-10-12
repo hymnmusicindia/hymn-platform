@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const item = payload.items[0];
     if (item.type === "distribution" && isSubscriptionProduct(item.plan)) {
       const created = await createProviderSubscription(session.sub, item.plan);
-      return NextResponse.json({ requiresPayment: true, billingType: "subscription", subscriptionId: created.provider.id, amount: created.version.amount, currency: created.version.currency, quote, key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || "" });
+      return NextResponse.json({ requiresPayment: true, billingType: "subscription", subscriptionId: created.provider.id, amount: created.version.amount, currency: created.version.currency, quote, key: process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "" });
     }
     const amountPaise = Math.round(quote.finalAmount * 100);
 
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
       amount: amountPaise,
       currency: "INR",
       quote,
-      key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || (process.env.NODE_ENV !== "production" ? "dev_razorpay_key" : "")
+      key: process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || (process.env.NODE_ENV !== "production" ? "dev_razorpay_key" : "")
     });
   } catch (error) {
     const code = error && typeof error === "object" && "code" in error ? error.code : null;

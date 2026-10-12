@@ -86,7 +86,7 @@ export async function POST(request: Request) {
         currency: created.version.currency,
         displayAmount: created.version.amount / 100,
         requiresPayment: true,
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || ""
+        key: process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ""
       });
     }
     const normalAmount = getDistributionPricing(payload.plan, payload.trackCount, payload.releaseType, payload.platforms, { youtubeContentIdEnabled: payload.youtubeContentIdEnabled });
@@ -189,7 +189,7 @@ export async function POST(request: Request) {
           requiresPayment: true,
           resumedOrder: true,
           creditsUsed: resumableUnpaidOrder.creditsUsed,
-          key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || "",
+          key: process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "",
         });
       }
     }
@@ -223,7 +223,7 @@ export async function POST(request: Request) {
       promotion,
       ugcAddOnAmount: getUgcAddonPrice(payload.platforms, payload.plan, { youtubeContentIdEnabled: payload.youtubeContentIdEnabled }),
       trackPricing: payload.plan === "one_time" ? getTrackPricingQuote(payload.trackCount) : null,
-      key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || ""
+      key: process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ""
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not create distribution payment order.";

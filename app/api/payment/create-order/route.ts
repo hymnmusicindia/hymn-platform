@@ -46,7 +46,7 @@ export async function POST(request: Request) {
       orderId: order.id,
       amount: amountPaise,
       currency: "INR",
-      key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || (process.env.NODE_ENV !== "production" ? "dev_razorpay_key" : "")
+      key: process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || (process.env.NODE_ENV !== "production" ? "dev_razorpay_key" : "")
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not create payment order.";
