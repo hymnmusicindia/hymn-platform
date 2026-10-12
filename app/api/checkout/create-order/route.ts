@@ -90,6 +90,11 @@ export async function POST(request: Request) {
       key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || (process.env.NODE_ENV !== "production" ? "dev_razorpay_key" : "")
     });
   } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? error.code : null;
+    if (["P2028", "P2024", "P1001", "P1002", "P1017"].includes(String(code))) {
+      console.error("Checkout database unavailable", { code });
+      return NextResponse.json({ error: "Checkout is taking longer than usual. Please try again. No payment was taken by this checkout attempt.", code: "CHECKOUT_TEMPORARILY_UNAVAILABLE" }, { status: 503 });
+    }
     const message = error instanceof Error ? error.message : "Could not create checkout order.";
     if (error instanceof SubscriptionPlanConfigurationError) {
       console.error("Subscription plan configuration mismatch", { message });
