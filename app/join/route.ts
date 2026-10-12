@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getPublicAppUrl } from "@/lib/public-app-url";
 import { PARTNER_COOKIE } from "@/lib/growth-partners";
 import { consumeRateLimit, requestIdentity } from "@/lib/rate-limit";
 import { normalizeReferralCode, REFERRAL_ATTRIBUTION_COOKIE, REFERRAL_ATTRIBUTION_MAX_AGE_SECONDS } from "@/lib/referrals";
@@ -9,7 +10,7 @@ export async function GET(request: NextRequest) {
   const rate = await consumeRateLimit({ scope: "referral.resolve", identity: requestIdentity(request), limit: 60, windowSeconds: 60 });
   if (!rate.allowed) return new NextResponse("Please try again later.", { status: 429 });
   const code = normalizeReferralCode(request.nextUrl.searchParams.get("ref"));
-  const destination = new URL("/login", request.url);
+  const destination = new URL("/login", getPublicAppUrl(request.url));
   destination.searchParams.set("mode", "signup");
   if (!code) {
     destination.searchParams.set("referralError", "invalid");
