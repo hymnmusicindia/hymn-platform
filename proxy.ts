@@ -32,6 +32,8 @@ export async function proxy(request: NextRequest) {
       const destination = request.nextUrl.clone();
       destination.protocol = "https:";
       destination.host = canonicalHostname;
+      // Assigning a bare hostname keeps the port the app listens on, which is not reachable from outside.
+      destination.port = "";
       return NextResponse.redirect(destination, 308);
     }
   }
