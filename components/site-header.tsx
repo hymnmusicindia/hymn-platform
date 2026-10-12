@@ -5,11 +5,12 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { AlertCircle, Bell, CheckCircle2, ChevronDown, ChevronRight, Disc3, Headphones, HelpCircle, LayoutDashboard, LogOut, MessageCircle, Music2, PackageCheck, PanelLeft, ShieldCheck, ShoppingCart, UserRound, WalletCards, X } from "lucide-react";
+import { AlertCircle, Bell, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, Disc3, Headphones, HelpCircle, LayoutDashboard, LogOut, MessageCircle, Music2, PackageCheck, PanelLeft, ShieldCheck, ShoppingCart, UserRound, WalletCards, X } from "lucide-react";
 import clsx from "clsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { workspaceBreadcrumbs, type WorkspaceCrumb } from "@/lib/workspace-breadcrumbs";
 import "@/app/styles/workspace-breadcrumbs.css";
+import "@/app/styles/notification-popup.css";
 import { mainNav } from "@/lib/site";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { SessionPayload } from "@/lib/types";
@@ -439,13 +440,10 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           >
             <div className="site-notification-heading flex items-start justify-between gap-3 border-b pb-3">
               <div>
-                <p className="site-notification-eyebrow">Your activity</p>
-                <p className="site-notification-title">Notifications</p>
+                <p className="site-notification-title">Notifications{unreadCount > 0 && <span className="site-notification-count">{unreadCount}</span>}</p>
                 <p className="site-notification-subtitle">{unreadCount ? `${unreadCount} unread ${unreadCount === 1 ? "update" : "updates"}` : "All caught up"}</p>
               </div>
-              <button type="button" onClick={markAllNotificationsRead} disabled={unreadCount === 0} className="site-notification-mark-all rounded-full border px-3 py-1 text-xs font-semibold disabled:opacity-40">
-                Mark all as read
-              </button>
+              <div className="site-notification-heading-actions"><button type="button" onClick={markAllNotificationsRead} disabled={unreadCount === 0} className="site-notification-mark-all" aria-label="Mark all as read" title="Mark all as read"><CheckCheck size={16} /><span>Read all</span></button><button type="button" className="site-notification-close" aria-label="Close notifications" onClick={() => setNotificationsOpen(false)}><X size={18}/></button></div>
             </div>
             <div className="site-notification-list mt-3 grid max-h-[28rem] gap-2 overflow-y-auto pr-1">
               {notificationsLoading && notifications.length === 0 ? <p className="site-notification-empty px-2 py-6 text-center text-sm">Loading notifications...</p> : null}
@@ -462,10 +460,10 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-start justify-between gap-2">
-                          <span className="text-sm font-semibold">{notification.title}</span>
-                          {unread ? <span className="site-notification-unread-dot mt-1 h-2 w-2 shrink-0 rounded-full" /> : <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: "var(--text-soft)" }} />}
+                          <span className="site-notification-item-title text-sm font-semibold">{notification.title}</span>
+                          {unread ? <span className="site-notification-unread-dot mt-1 h-2 w-2 shrink-0 rounded-full" aria-label="Unread" /> : null}
                         </span>
-                        <span className="mt-1 block text-xs leading-5" style={{ color: "var(--text-muted)" }}>{customerMessage(notification.body)}</span>
+                        <span className="site-notification-body mt-1 block text-xs leading-5" style={{ color: "var(--text-muted)" }}>{customerMessage(notification.body)}</span>
                         <span className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px]" style={{ color: "var(--text-soft)" }}>
                           <span>{notificationTimeAgo(notification.createdAt)}</span>
                           {notification.href ? <span className="site-notification-action font-semibold">{notification.actionLabel || "Open"} →</span> : null}
