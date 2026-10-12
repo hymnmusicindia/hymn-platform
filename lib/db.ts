@@ -1917,7 +1917,7 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
           create: { userId: order.userId, beatId: item.beatId, producerPartyId: item.beat.producerPartyId, licenseType: normalizedLicenseType, paymentId, checkoutOrderItemId: item.id, hasAccess: true, licenseVersion: "2026-09-05", licenseTermsSnapshot: licenceSnapshot },
           update: { paymentId, producerPartyId: item.beat.producerPartyId, hasAccess: true }
         });
-        const existingSale = await tx.beatSale.findUnique({ where: { orderId_beatId_licenseType: { orderId: order.id, beatId: item.beatId, licenseType: item.licenseType } } });
+        const existingSale = await tx.beatSale.findUnique({ where: { orderId_beatId_licenseType: { orderId: order.id, beatId: item.beatId, licenseType: normalizedLicenseType } } });
         if (!existingSale) {
           const grossAmount = new Prisma.Decimal(item.price);
           const netSaleAmount = Number(order.originalPrice) > 0 ? grossAmount.mul(order.finalAmount).div(order.originalPrice).toDecimalPlaces(2) : new Prisma.Decimal(0);
@@ -1939,7 +1939,7 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
         if (fulfilled.count !== 1) throw new Error("Order was fulfilled concurrently.");
       }
       return !alreadyPaid ? qualifyReferralInTransaction(tx, { referredUserId: order.userId, transactionType: "checkout_order", transactionId: order.id, paymentId, paidAmountInr: Number(order.finalAmount), source: "verified_payment" }) : { qualified: false as const, reason: "already_paid" as const };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 20000 });
     if (qualification.qualified) await sendReferralRewardEmails(qualification.referralId).catch(() => undefined);
     return getCheckoutOrderByRazorpayId(razorpayOrderId);
   }

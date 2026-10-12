@@ -37,7 +37,7 @@ async function main() {
   const producerParty = await prisma.contributorParty.create({ data: { publicId: `HYM_PRODUCER_${stamp}`, professionalName: "Beat Producer", displayName: "Beat Producer", claimedByUserId: producerUser.id, createdByUserId: producerUser.id, identityState: "CLAIMED" } });
   const beatUpload = await prisma.upload.create({ data: { userId: producerUser.id, kind: "AUDIO", storageKey: `studio/${stamp}/asmaan.mp3`, fileName: "asmaan.mp3", mimeType: "audio/mpeg", sizeBytes: 100 } });
   const beat = await prisma.beat.create({ data: { userId: producerUser.id, producerPartyId: producerParty.id, title: "Asmaan", bpm: 96, genre: "Hip-Hop", mood: "Atmospheric", keySignature: "C Minor", priceCents: 25000, generalPriceCents: 25000, exclusivePriceCents: 200000, status: "PUBLISHED", enabled: true, audioUploadId: beatUpload.id } });
-  const purchase = await prisma.beatPurchase.create({ data: { userId: customer.id, beatId: beat.id, producerPartyId: producerParty.id, licenseType: "general", licenseUrl: `/api/beat-purchases/general-${stamp}/license`, licenseUploadedAt: new Date(), hasAccess: true } });
+  const purchase = await prisma.beatPurchase.create({ data: { userId: customer.id, beatId: beat.id, producerPartyId: producerParty.id, licenseType: "general", licenseUrl: `/api/beat-purchases/general-${stamp}/license`, licenseUploadedAt: new Date(), licenseTermsSnapshot: { version: "fixture", licenseType: "wav", rights: { commercialUse: true } }, hasAccess: true } });
 
   const order = await createStudioOrder({ customerId: customer.id, listingPublicId: listing.publicId, projectTitle: "Integration Song", beatPurchaseId: purchase.id, idempotencyKey: `quote-${stamp}`, termsAccepted: true });
   const duplicateOrder = await createStudioOrder({ customerId: customer.id, listingPublicId: listing.publicId, projectTitle: "Ignored duplicate", idempotencyKey: `quote-${stamp}`, termsAccepted: true });
@@ -99,6 +99,8 @@ async function main() {
   await transitionStudioOrder({ orderId: order.id, to: "IN_PROGRESS", actorUserId: engineerUser.id, actorType: "ENGINEER", reason: "Paid revision work started", correlationId: `revision-work-3-${stamp}` });
   const amendment = await proposeStudioAmendment({ orderPublicId: order.publicId, engineerUserId: engineerUser.id, description: "Create instrumental alternate", amount: 300 });
   const amendmentPayment = await createStudioAmendmentPayment({ orderPublicId: order.publicId, customerId: customer.id, amendmentPublicId: amendment.publicId, idempotencyKey: `amendment-payment-${stamp}` });
+  const resumedAmendment = await createStudioAmendmentPayment({ orderPublicId: order.publicId, customerId: customer.id, amendmentPublicId: amendment.publicId, idempotencyKey: `amendment-retry-${stamp}` });
+  assert.equal(resumedAmendment.id, amendmentPayment.id, "Cancelled amendment checkout resumes its existing unpaid payment");
   await confirmPersistedPayment({ razorpayOrderId: amendmentPayment.razorpayOrderId, paymentId: `pay-amendment-${stamp}`, amountMinor: 30000, currency: "INR", source: "webhook" });
   assert.equal((await prisma.studioAmendment.findUniqueOrThrow({ where: { id: amendment.id } })).status, "ACCEPTED");
   const delivery4 = await delivery(4);
@@ -150,7 +152,7 @@ async function main() {
     return { ready, result, release: await prisma.release.findUniqueOrThrow({ where: { id: result.releaseId } }), provenance: await prisma.studioReleaseHandoff.findUniqueOrThrow({ where: { orderId: ready.id } }) };
   }
   const exclusiveBeat = await prisma.beat.create({ data: { userId: producerUser.id, producerPartyId: producerParty.id, title: "Asmaan Exclusive", bpm: 96, genre: "Hip-Hop", mood: "Atmospheric", keySignature: "C Minor", priceCents: 25000, generalPriceCents: 25000, exclusivePriceCents: 200000, status: "EXCLUSIVELY_SOLD", enabled: false, audioUploadId: beatUpload.id } });
-  const exclusivePurchase = await prisma.beatPurchase.create({ data: { userId: customer.id, beatId: exclusiveBeat.id, producerPartyId: producerParty.id, licenseType: "exclusive", licenseUrl: `/api/beat-purchases/exclusive-${stamp}/license`, licenseUploadedAt: new Date(), hasAccess: true } });
+  const exclusivePurchase = await prisma.beatPurchase.create({ data: { userId: customer.id, beatId: exclusiveBeat.id, producerPartyId: producerParty.id, licenseType: "exclusive", licenseUrl: `/api/beat-purchases/exclusive-${stamp}/license`, licenseUploadedAt: new Date(), licenseTermsSnapshot: { version: "fixture", licenseType: "wav", rights: { commercialUse: true } }, hasAccess: true } });
   const exclusiveHandoff = await completedHandoff("Exclusive Studio Song", exclusivePurchase.id);
   assert.equal((exclusiveHandoff.release.metadata as Record<string, unknown>).contentType, "Exclusive Licensed");
   assert.equal(exclusiveHandoff.provenance.rightsMapping, "BEAT_LICENSE:exclusive");

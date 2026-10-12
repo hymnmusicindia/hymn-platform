@@ -132,7 +132,7 @@ export async function proposeStudioAmendment(input: { orderPublicId: string; eng
 }
 
 export async function createStudioAmendmentPayment(input: { orderPublicId: string; customerId: number; amendmentPublicId: string; idempotencyKey: string }) {
-  const amendment = await prisma.studioAmendment.findFirst({ where: { publicId: input.amendmentPublicId, order: { publicId: input.orderPublicId, customerId: input.customerId }, status: "PROPOSED" }, include: { order: true, payment: true } });
+  const amendment = await prisma.studioAmendment.findFirst({ where: { publicId: input.amendmentPublicId, order: { publicId: input.orderPublicId, customerId: input.customerId }, status: { in: ["PROPOSED", "AWAITING_PAYMENT"] } }, include: { order: true, payment: true } });
   if (!amendment) throw new Error("This scope amendment is unavailable.");
   if (amendment.payment) return amendment.payment;
   const amountMinor = Number(amendment.amount.mul(100).toFixed(0));

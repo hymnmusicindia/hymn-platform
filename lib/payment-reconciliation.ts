@@ -38,29 +38,20 @@ export async function reconcilePayments() {
   const distributionOrders = await prisma.distributionOrder.findMany({ where: { paymentStatus: "paid" } });
   for (const order of distributionOrders) {
     if (order.razorpayPaymentId) await confirmDistributionPayment({ razorpayOrderId: order.razorpayOrderId, paymentId: order.razorpayPaymentId, source: "reconciliation" });
-    const release = await prisma.release.findFirst({ where: { userId: order.userId, paymentStatus: "paid", createdAt: { gte: new Date(order.createdAt.getTime() - 60_000) } } });
+    const release = await prisma.release.findFirst({ where: { id: order.releaseId ?? -1, userId: order.userId, paymentStatus: "paid" } });
     if (!release) {
       const key = `payment:distribution:${order.id}`;
       issues.push({ key, type: "distribution", message: `Paid distribution order #${order.id} has no fulfilled release.`, autoRepaired: false });
       await createAdminTaskOnce({ eventKey: key, type: "Payment Mismatch", priority: "critical", title: "Paid distribution order is unfulfilled", body: issues.at(-1)!.message, href: "/admin?tab=distribution-orders", entityType: "distribution_order", entityId: order.id });
     }
-    if (order.plan !== "one_time") {
+    if (order.plan !== "one_time" && !order.razorpayOrderId.startsWith("sub_entitlement_")) {
       const entitlement = await prisma.subscription.findFirst({ where: { userId: order.userId, status: "active", expiryDate: { gt: new Date() } } });
       if (!entitlement) {
         const key = `payment:subscription:${order.id}`;
-        // The term runs from the purchase, never from today. Anchoring to today
-        // cannot tell an unfulfilled order from one whose plan simply expired,
-        // so it renewed lapsed plans for free on every run.
-        const expiryDate = new Date(order.createdAt.getTime() + (order.plan === "half_yearly" ? 180 : 365) * 86_400_000);
-        const artistLimit = order.plan === "yearly_plus" ? 15 : order.plan === "yearly" ? 7 : 5;
-        if (expiryDate > new Date()) {
-          await prisma.subscription.upsert({ where: { userId: order.userId }, create: { userId: order.userId, plan: order.plan, planName: order.plan, expiryDate, status: "active", artistLimit }, update: { plan: order.plan, planName: order.plan, expiryDate, status: "active", artistLimit, currentPeriodStart: null, currentPeriodEnd: null } });
-          issues.push({ key, type: "subscription", message: `Restored missing ${order.plan} entitlement from paid order #${order.id}, expiring ${expiryDate.toISOString().slice(0, 10)} as originally purchased.`, autoRepaired: true });
-          await resolveAdminTask(key, "Subscription entitlement was restored automatically.");
-        } else {
-          issues.push({ key, type: "subscription", message: `Paid ${order.plan} order #${order.id} has no entitlement and its term ended on ${expiryDate.toISOString().slice(0, 10)}. Grant a new term manually only if the customer never received this plan.`, autoRepaired: false });
-          await createAdminTaskOnce({ eventKey: key, type: "Payment Mismatch", priority: "high", title: "Lapsed paid subscription order has no entitlement", body: issues.at(-1)!.message, href: "/admin?tab=distribution-orders", entityType: "distribution_order", entityId: order.id });
-        }
+        // Recurring entitlements must come from verified provider subscription
+        // state. A paid release order is not evidence of a recurring mandate.
+        issues.push({ key, type: "subscription", message: `Paid legacy order #${order.id} has no active subscription. Verify its provider subscription before restoring access.`, autoRepaired: false });
+        await createAdminTaskOnce({ eventKey: key, type: "Payment Mismatch", priority: "high", title: "Subscription entitlement needs provider verification", body: issues.at(-1)!.message, href: "/admin?tab=distribution-orders", entityType: "distribution_order", entityId: order.id });
       }
     }
   }

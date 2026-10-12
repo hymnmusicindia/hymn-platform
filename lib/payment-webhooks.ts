@@ -131,7 +131,7 @@ export async function confirmDistributionPayment(input: { razorpayOrderId: strin
     if (!alreadyPaid) await tx.auditLog.create({ data: { actorId: input.userId ?? null, action: "DISTRIBUTION_PAYMENT_CONFIRMED", entity: "distribution_order", entityId: String(order.id), metadata: { source: input.source, paymentId: input.paymentId } } });
     const qualification = !alreadyPaid ? await qualifyReferralInTransaction(tx, { referredUserId: order.userId, transactionType: "distribution_order", transactionId: order.id, paymentId: input.paymentId, paidAmountInr: order.amount, source: input.source }) : { qualified: false as const, reason: "already_paid" as const };
     return { updated, qualification };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 20000 });
   if (result.qualification.qualified) await sendReferralRewardEmails(result.qualification.referralId).catch(() => undefined);
   return result.updated;
 }
@@ -143,7 +143,7 @@ export async function confirmDistributionEntitlement(input: { razorpayOrderId: s
     if (order.amount !== 0 || order.currency !== "INR") throw new Error("A paid order cannot use an entitlement checkout.");
     if (order.fulfilledAt) throw new Error("This distribution entitlement has already been used.");
     return tx.distributionOrder.update({ where: { id: order.id }, data: { paymentStatus: "paid", razorpayPaymentId: input.paymentId } });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 20000 });
 }
 
 export async function claimDistributionOrderForSubmission(input: { razorpayOrderId: string; userId: number }) {
@@ -246,7 +246,7 @@ async function applyPaymentState(input: { razorpayOrderId: string; paymentId: st
       }
     }
     await tx.auditLog.create({ data: { action: `RAZORPAY_${state.toUpperCase()}`, entity: "checkout_order", entityId: String(checkout.id), metadata: { eventId: input.eventId, paymentId: input.paymentId, amountMinor: input.amountMinor } } });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 20000 });
 }
 
 export function ignoreStalePaymentState(current: string, incoming: string) {

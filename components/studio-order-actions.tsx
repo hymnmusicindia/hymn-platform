@@ -1,4 +1,5 @@
 ﻿"use client";
+import { loadBioRazorpay as loadRazorpay } from "@/lib/client-razorpay";
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -12,17 +13,7 @@ async function post(path: string, body: unknown) {
   return data;
 }
 
-function loadRazorpay() {
-  return new Promise<void>((resolve, reject) => {
-    if (window.Razorpay) return resolve();
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Razorpay could not be loaded."));
-    document.body.appendChild(script);
-  });
-}
+
 
 export function StudioOrderActions({ orderPublicId, status, customer, reviewed, amendments }: { orderPublicId: string; status: string; customer: boolean; reviewed: boolean; amendments: Amendment[] }) {
   const router = useRouter();
@@ -37,7 +28,7 @@ export function StudioOrderActions({ orderPublicId, status, customer, reviewed, 
     const payment = await post(`/api/studio/orders/${orderPublicId}/amendments/${item.publicId}/payment`, { idempotencyKey: crypto.randomUUID() });
     await loadRazorpay();
     if (!window.Razorpay) throw new Error("Razorpay is unavailable.");
-    const checkout = new window.Razorpay({ key: payment.key, amount: payment.amount, currency: payment.currency, name: "HYMN Studio", description: `Scope amendment · ${item.description}`, order_id: payment.orderId, handler: async (result: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => { await post("/api/studio/payments/verify", result); router.refresh(); } });
+    const checkout = new window.Razorpay({ key: payment.key, amount: payment.amount, currency: payment.currency, name: "HYMN Studio", description: `Scope amendment · ${item.description}`, order_id: payment.orderId, handler: async (result: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => { try { await post("/api/studio/payments/verify", result); router.refresh(); } catch (error) { setError(error instanceof Error ? error.message : "Payment confirmation pending. Do not pay again."); } } });
     checkout.on("payment.failed", response => setError(response.error?.description || "Payment failed."));
     checkout.open();
   };

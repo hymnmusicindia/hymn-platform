@@ -139,9 +139,17 @@ async function resolvePlanVersion(product: SubscriptionProduct) {
 export async function createProviderSubscription(userId: number, product: SubscriptionProduct) {
   if (!razorpay) throw new Error("Razorpay is not configured.");
   const existing = await prisma.subscription.findUnique({ where: { userId } });
-  if (existing?.razorpaySubscriptionId && !["cancelled", "completed", "expired", "halted"].includes(existing.status)) throw new Error("An active or pending subscription already exists for this account.");
   const policy = SUBSCRIPTION_POLICIES[product];
   const version = await resolvePlanVersion(product);
+  if (existing?.razorpaySubscriptionId && !["cancelled", "completed", "expired", "halted"].includes(existing.status)) {
+    if (existing.plan === product && ["created", "authenticated"].includes(existing.status)) {
+      const provider = await razorpay.subscriptions.fetch(existing.razorpaySubscriptionId);
+      if (["created", "authenticated"].includes(provider.status) && provider.plan_id === version.razorpayPlanId) {
+        return { local: existing, provider, policy, version };
+      }
+    }
+    throw new Error("An active or pending subscription already exists for this account. Check its status before starting another payment.");
+  }
   const provider = await razorpay.subscriptions.create({ plan_id: version.razorpayPlanId, total_count: policy.totalCount, quantity: 1, customer_notify: true, notes: { hymn_user_id: String(userId), hymn_product: product, hymn_plan_version_id: String(version.id) } });
   const now = new Date();
   const local = await prisma.subscription.upsert({

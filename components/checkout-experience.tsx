@@ -1,4 +1,5 @@
 "use client";
+import { loadBioRazorpay as loadRazorpayScript } from "@/lib/client-razorpay";
 
 import { customerMessage } from "@/lib/customer-message";
 import { cancelUnpaidCheckout } from "@/lib/client-checkout-reservation";
@@ -73,24 +74,7 @@ function readBeatCart(): CheckoutItem[] {
   }
 }
 
-function loadRazorpayScript() {
-  return new Promise<void>((resolve, reject) => {
-    if (typeof window === "undefined") return reject(new Error("Browser checkout is unavailable."));
-    if (window.Razorpay) return resolve();
-    const existing = document.querySelector<HTMLScriptElement>('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
-    if (existing) {
-      existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener("error", () => reject(new Error("Razorpay could not be loaded.")), { once: true });
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Razorpay could not be loaded."));
-    document.body.appendChild(script);
-  });
-}
+
 
 export function CheckoutExperience({ product }: { product?: string | null }) {
   const [items, setItems] = useState<CheckoutItem[]>(() => product === "beatstore" ? [] : defaultItems(product));

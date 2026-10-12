@@ -1,4 +1,5 @@
 "use client";
+import { loadBioRazorpay as loadRazorpayCheckout } from "@/lib/client-razorpay";
 
 import { customerMessage } from "@/lib/customer-message";
 import { checkoutPlan } from "@/lib/distribution-checkout-plan";
@@ -299,23 +300,7 @@ declare global {
   }
 }
 
-function loadRazorpayCheckout() {
-  return new Promise<void>((resolve, reject) => {
-    if (window.Razorpay) return resolve();
-    const src = "https://checkout.razorpay.com/v1/checkout.js";
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);
-    const script = existing ?? document.createElement("script");
-    const onLoad = () => window.Razorpay ? resolve() : reject(new Error("Razorpay checkout could not be initialized."));
-    const onError = () => reject(new Error("Razorpay checkout could not be loaded. Check your connection and try again."));
-    script.addEventListener("load", onLoad, { once: true });
-    script.addEventListener("error", onError, { once: true });
-    if (!existing) {
-      script.src = src;
-      script.async = true;
-      document.body.appendChild(script);
-    }
-  });
-}
+
 
 const steps = [
   "Add music",
@@ -3304,7 +3289,7 @@ export function ReleaseForm({
           modal: { ondismiss: () => reject(new Error("Checkout cancelled.")) },
           theme: { color: "#7db7ff" },
         });
-        razorpay.on("payment.failed", (response) => reject(new Error(response.error?.description || "Payment failed. Please try again.")));
+        razorpay.on("payment.failed", (response) => setStatus(response.error?.description || "Payment failed. Retry in the payment window or close it."));
         razorpay.open();
       });
     } catch (error) {

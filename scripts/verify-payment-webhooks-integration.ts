@@ -104,10 +104,13 @@ async function main() {
   assert.ok(exclusivePurchase.licenseTermsSnapshot, "Exclusive licence terms must be snapshotted.");
 
   const distributionId = `distribution_${suffix}`;
-  await prisma.distributionOrder.create({ data: { userId: buyer.id, plan: "basic", amount: 700, razorpayOrderId: distributionId, currency: "INR" } });
+  await prisma.distributionOrder.create({ data: { userId: buyer.id, plan: "one_time", amount: 700, razorpayOrderId: distributionId, currency: "INR" } });
   const distributionEvent = await receive(captured(`evt_distribution_${suffix}`, distributionId, `pay_distribution_${suffix}`, 70000));
   await processRazorpayEvent(distributionEvent.id);
-  assert.equal((await prisma.subscription.findUniqueOrThrow({ where: { userId: buyer.id } })).status, "active");
+  const paidDistribution = await prisma.distributionOrder.findUniqueOrThrow({ where: { razorpayOrderId: distributionId } });
+  assert.equal(paidDistribution.paymentStatus, "paid");
+  assert.equal(paidDistribution.razorpayPaymentId, `pay_distribution_${suffix}`);
+  assert.equal(await prisma.subscription.findUnique({ where: { userId: buyer.id } }), null, "One-time release payments must never create a recurring entitlement");
 
   console.log("Razorpay webhook integration verification passed.");
 }
