@@ -1,4 +1,4 @@
-import { Disc3, Folder, Headphones, LayoutGrid, LifeBuoy, Megaphone, Music2, Plus, Settings, ShieldCheck, Store, TrendingUp, Users, Wallet } from "lucide-react";
+import { Disc3, Folder, Headphones, LayoutGrid, Megaphone, Music2, Plus, Settings, ShieldCheck, Store, TrendingUp, Users, Wallet } from "lucide-react";
 
 // Shared by the home rail and every artist/producer workspace frame.
 export const workspaceNavigation = [
@@ -20,7 +20,6 @@ export const workspaceNavigation = [
   { key:"managed-services", label:"Artist services", group:"Mixing / Mastering", href:"/managed-services", icon:Music2 },
   { key:"settings", label:"Settings & profiles", group:"Account", href:"/dashboard?tab=settings", icon:Settings },
   { key:"referral", label:"Referrals", group:"Account", href:"/dashboard?tab=referral", icon:Users },
-  { key:"support", label:"Help & support", group:"Support", href:"/dashboard?tab=support", icon:LifeBuoy },
 ];
 
 export const workspaceGroups = Array.from(new Set(workspaceNavigation.map(item=>item.group)))
@@ -31,6 +30,7 @@ type NavItem = {key:string;label:string;group?:string;href?:string;description?:
 export function consistentWorkspaceNavigation(items: NavItem[]): NavItem[] {
   // Administrative operations have a separate, permission-specific information architecture.
   if(items.some(item=>item.group==="Command Center")) return items;
+  items = items.filter(item => item.group !== "Support");
   const producer = items.some(item=>item.key==="catalog" && item.group==="Beatstore");
   if (producer) return items;
   const matched = new Set<NavItem>();
@@ -39,7 +39,6 @@ export function consistentWorkspaceNavigation(items: NavItem[]): NavItem[] {
       || (canonical.key==="earnings" && item.key==="earnings")
       || (canonical.key==="studio" && item.label==="Browse services")
       || (canonical.key==="settings" && item.key==="settings")
-      || (canonical.key==="support" && item.label==="Help & FAQ")
       || (canonical.key==="overview" && item.group==="Home")));
     if(existing) matched.add(existing);
     // Producer preferences belong to that workspace; shared services use canonical URLs.
