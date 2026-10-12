@@ -173,7 +173,21 @@ function httpErrorMode(status: number, providerReason?: string) {
 export async function submitRelease(releaseId: number, options: { actorId?: number | null; siteUrl?: string; retry?: boolean; adminConfirmedExistingArtists?: boolean; correctionReingest?: boolean } = {}) {
   return prisma.$transaction(async lock => {
     const rows = await lock.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(81422028, ${releaseId}::integer) AS locked`;
-    if (!rows[0]?.locked) throw new Error("DireNote release is already being synchronized or submitted.");
+    if (!rows[0]?.locked) {
+      const [release, accepted] = await Promise.all([
+        getDetailedReleaseById(releaseId),
+        prisma.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: "direnote", isCurrent: true, state: "submitted" }, select: { id: true } })
+      ]);
+      return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: Boolean(accepted), duplicate: true, inProgress: !accepted, retryable: false, error: accepted ? undefined : "DireNote is already processing this release. Its status will update shortly." };
+    }
+    const syncing = await lock.$queryRaw<Array<{ active: boolean }>>`SELECT EXISTS (SELECT 1 FROM "cron_leases" WHERE "lease_key" = ${`direnote-release-sync:${releaseId}`} AND "leased_until" > NOW()) AS active`;
+    if (syncing[0]?.active) {
+      const [release, accepted] = await Promise.all([
+        getDetailedReleaseById(releaseId),
+        prisma.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: "direnote", isCurrent: true, state: "submitted" }, select: { id: true } })
+      ]);
+      return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: Boolean(accepted), duplicate: true, inProgress: !accepted, retryable: false, error: accepted ? undefined : "DireNote synchronization is in progress. Its status will update shortly." };
+    }
     return submitLockedRelease(releaseId, options);
   }, { timeout: 180_000, maxWait: 5000 });
 }
@@ -214,7 +228,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
   // block every recovery retry.
   if (!options.correctionReingest) {
     const accepted = await prisma.distributionSubmissionAttempt.findFirst({
-      where: { releaseId, provider: "direnote", OR: [{ state: "submitted" }, { isCurrent: true }] },
+      where: { releaseId, provider: "direnote", isCurrent: true, state: "submitted" },
       select: { id: true }
     });
     const activeSubmissionStatus = [
@@ -234,7 +248,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
       return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: true, duplicate: true, retryable: false };
     }
     if (!options.retry && activeSubmissionStatus.includes(release.status)) {
-      return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: false, duplicate: true, retryable: false, error: "A distribution attempt is already in progress. Check its status before retrying." };
+      return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: false, duplicate: true, inProgress: true, retryable: false, error: "DireNote is already processing this release. Its status will update shortly." };
     }
   }
   if (!options.correctionReingest && !["under_review", "approved", "queued_for_distribution", "delivery_failed", "failed"].includes(release.status)) throw new Error("This release is not eligible for partner submission in its current state.");

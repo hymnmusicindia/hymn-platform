@@ -43,23 +43,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (!currentRelease) return NextResponse.json({ error: "Release not found." }, { status: 404 });
       const distributionPermission = await requireAdminPermission("distribution.submit");
       if ("error" in distributionPermission) return distributionPermission.error;
-      // Approval is the delivery authorization. We mark the stage as approved before
-      // the provider accepts the actual submission so the queue stays truthful while
-      // the provider-side delivery check and handoff run.
-      const approvalQueueEntry = await syncQueueStage(Number(id), "approved", actorId, "HYMN approval queued this release for DireNote delivery.", { syncReleaseStatus: false });
       // submitRelease performs a fresh provider-readiness check under its advisory lock
       // before it creates the provider attempt.
       const submission = await submitRelease(Number(id), { actorId, siteUrl: getPublicAppUrl(request.url) });
+      if ("inProgress" in submission && submission.inProgress) return NextResponse.json({ release: submission.release, inProgress: true, message: submission.error }, { status: 202 });
       if (!submission.submitted) {
         const messages = submission.validation.issues.map((issue) => issue.message);
         return NextResponse.json(
-          { release: submission.release, error: submission.error ?? messages[0] ?? "DireNote delivery did not complete.", validation: submission.validation, retryable: submission.retryable, retryAfterSeconds: submission.retryAfterSeconds },
+          { release: submission.release, error: submission.error ?? messages[0] ?? "DireNote delivery did not complete.", validation: submission.validation, retryable: submission.retryable, retryAfterSeconds: "retryAfterSeconds" in submission ? submission.retryAfterSeconds : undefined },
           { status: submission.validation.ok ? 502 : 400 }
         );
       }
-      const queueEntry = await syncQueueStage(Number(id), "sent_to_direnote", actorId, "HYMN approval automatically delivered this release to DireNote.", { syncReleaseStatus: false });
-      await createReleaseAuditLog({ releaseId: Number(id), userId: actorId, action: "RELEASE_APPROVED_AND_AUTO_DELIVERED", details: { note: payload.note ?? null, approvalQueueEntryId: approvalQueueEntry?.id ?? null } });
-      return NextResponse.json({ release: submission.release, queueEntry, validation: submission.validation, warnings: submission.warnings ?? [] });
+      const queueEntry = submission.duplicate ? null : await syncQueueStage(Number(id), "sent_to_direnote", actorId, "HYMN approval automatically delivered this release to DireNote.", { syncReleaseStatus: false });
+      if (!submission.duplicate) await createReleaseAuditLog({ releaseId: Number(id), userId: actorId, action: "RELEASE_APPROVED_AND_AUTO_DELIVERED", details: { note: payload.note ?? null } });
+      return NextResponse.json({ release: submission.release, queueEntry, validation: submission.validation, warnings: "warnings" in submission ? submission.warnings ?? [] : [] });
     }
     if (payload.status === "sent") {
       const origin = getPublicAppUrl(request.url);
@@ -69,14 +66,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const distributionPermission = await requireAdminPermission(retry ? "distribution.retry" : "distribution.submit");
       if ("error" in distributionPermission) return distributionPermission.error;
       const submission = await submitRelease(Number(id), { actorId, siteUrl: origin, retry });
+      if ("inProgress" in submission && submission.inProgress) return NextResponse.json({ release: submission.release, inProgress: true, message: submission.error }, { status: 202 });
       if (!submission.submitted) {
         const messages = submission.validation.issues.map((issue) => issue.message);
         return NextResponse.json(
-          { release: submission.release, error: submission.error ?? messages[0] ?? "Distributor submission did not complete.", validation: submission.validation, retryable: submission.retryable, retryAfterSeconds: submission.retryAfterSeconds },
+          { release: submission.release, error: submission.error ?? messages[0] ?? "Distributor submission did not complete.", validation: submission.validation, retryable: submission.retryable, retryAfterSeconds: "retryAfterSeconds" in submission ? submission.retryAfterSeconds : undefined },
           { status: submission.validation.ok ? 502 : 400 }
         );
       }
-      return NextResponse.json({ release: submission.release, validation: submission.validation, warnings: submission.warnings ?? [] });
+      return NextResponse.json({ release: submission.release, validation: submission.validation, warnings: "warnings" in submission ? submission.warnings ?? [] : [] });
     }
     const requiresReview = payload.status === "rejected" || payload.status === "changes_requested";
     const statusReason = payload.note?.trim() || payload.reason?.trim();

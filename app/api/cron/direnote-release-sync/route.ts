@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { syncDireNoteArtistInformation, syncDireNoteRelease, syncDireNoteSongwriterInformation } from "@/lib/direnote-service";
+import { submitRelease } from "@/lib/distribution-service";
+import { getPublicAppUrl } from "@/lib/public-app-url";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -45,6 +47,27 @@ export async function GET(request: Request) {
     // The provider attempt is the synchronization identity. Release status is
     // a customer-facing projection repaired by syncDireNoteRelease.
     await prisma.direNoteSyncRun.create({ data: { runId } });
+    // Recover a verified, QC-passed release if its request ended before the
+    // background handoff ran. The submission lock and attempt state prevent duplicates.
+    const autoQcCandidates = await prisma.release.findMany({
+      where: { archivedAt: null, paymentStatus: "paid", status: { in: ["UNDER_REVIEW", "APPROVED", "QUEUED_FOR_DISTRIBUTION"] }, metadata: { path: ["autoQc", "status"], equals: "passed" }, distributionSubmissions: { none: { provider: "direnote", state: { in: ["submitted", "reconciliation_required", "processing", "failed"] } } } },
+      select: { id: true, status: true, distributionSubmissions: { where: { provider: "direnote" }, select: { state: true }, orderBy: { startedAt: "desc" }, take: 1 } },
+      orderBy: { id: "asc" }, take: 5
+    });
+    const autoQcResults: Array<{ releaseId: number; outcome: string }> = [];
+    for (const candidate of autoQcCandidates) {
+      if (Date.now() - started > 90_000) break;
+      const attemptState = candidate.distributionSubmissions[0]?.state;
+      if (attemptState === "submitted" || attemptState === "reconciliation_required" || attemptState === "processing" || attemptState === "failed") continue;
+      if (candidate.status === "QUEUED_FOR_DISTRIBUTION" && attemptState !== "retryable") continue;
+      try {
+        const result = await submitRelease(candidate.id, { siteUrl: getPublicAppUrl(request.url), retry: attemptState === "retryable" });
+        autoQcResults.push({ releaseId: candidate.id, outcome: result.submitted ? "submitted" : "inProgress" in result && result.inProgress ? "in_progress" : result.retryable ? "retryable" : "failed" });
+      } catch (error) {
+        console.error("Auto QC DireNote recovery failed", { releaseId: candidate.id, error });
+        autoQcResults.push({ releaseId: candidate.id, outcome: "failed" });
+      }
+    }
     const candidates = await prisma.distributionSubmissionAttempt.findMany({
       where: {
         provider: "direnote", isCurrent: true, state: "submitted", release: { archivedAt: null },
@@ -89,7 +112,7 @@ export async function GET(request: Request) {
     const artists = [...pendingArtists, ...staleArtists];
     const identityResults = await Promise.allSettled([...artists.map(item => syncDireNoteArtistInformation(item.id)), ...songwriters.map(item => syncDireNoteSongwriterInformation(item.id))]);
     const identityErrors = identityResults.filter(item => item.status === "rejected").length;
-    const summary = { runId, candidateCount: candidates.length, providerRequestCount: results.length + identityResults.length, processedCount: results.length, changedCount: results.filter(result => result.success).length, identifierRepairCount: results.filter(result => result.success && Boolean(result.upc)).length, statusRepairCount: results.filter(result => result.success && Boolean(result.status)).length, correctionCount: results.filter(result => result.status === "changes_required").length, identityRefreshCount: identityResults.length - identityErrors, identityErrorCount: identityErrors, errorCount: results.filter(result => !result.success).length + identityErrors, deferredCount: candidates.length - results.length, durationMs: Date.now() - started, eligible: candidates.length, checked: results.length };
+    const summary = { runId, candidateCount: candidates.length, autoQcRecoveryCount: autoQcResults.length, autoQcResults, providerRequestCount: results.length + identityResults.length + autoQcResults.length, processedCount: results.length, changedCount: results.filter(result => result.success).length, identifierRepairCount: results.filter(result => result.success && Boolean(result.upc)).length, statusRepairCount: results.filter(result => result.success && Boolean(result.status)).length, correctionCount: results.filter(result => result.status === "changes_required").length, identityRefreshCount: identityResults.length - identityErrors, identityErrorCount: identityErrors, errorCount: results.filter(result => !result.success).length + identityErrors + autoQcResults.filter(result => result.outcome === "failed").length, deferredCount: candidates.length - results.length, durationMs: Date.now() - started, eligible: candidates.length, checked: results.length };
     await prisma.direNoteSyncRun.update({ where: { runId }, data: { status: summary.errorCount ? "completed_with_errors" : "completed", completedAt: new Date(), candidateCount: summary.candidateCount, providerRequestCount: summary.providerRequestCount, processedCount: summary.processedCount, changedCount: summary.changedCount, identifierRepairCount: summary.identifierRepairCount, statusRepairCount: summary.statusRepairCount, correctionCount: summary.correctionCount, errorCount: summary.errorCount, deferredCount: summary.deferredCount, durationMs: summary.durationMs, summary } });
     await prisma.direNoteLog.create({ data: { action: "hourly_status_sync", success: summary.errorCount === 0, responseJson: summary } });
     return NextResponse.json({ success: true, ...summary, results });

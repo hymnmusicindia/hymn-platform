@@ -17,7 +17,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const correction = attempt.corrections as { status?: string } | null;
     if (correction?.status !== "customer_resolved") return NextResponse.json({ error: "Save the corrected release metadata before submitting corrections." }, { status: 409 });
     const result = await submitRelease(id, { actorId: user.session.sub, correctionReingest: true });
-    return NextResponse.json(result, { status: result.submitted ? 200 : 409 });
+    return NextResponse.json(result, { status: "inProgress" in result && result.inProgress ? 202 : result.submitted ? 200 : 409 });
   }
   const updated = await updateDetailedReleaseStatus(id, "resubmitted", "User corrected and resubmitted the release.");
   await Promise.all([

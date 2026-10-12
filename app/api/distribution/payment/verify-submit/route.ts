@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { submitRelease } from "@/lib/distribution-service";
 import { getSession } from "@/lib/session";
 import { getDetailedReleaseById, getDetailedReleaseByUserId, getDistributionPricing, submitPaidDistributionRelease, updatePaidDistributionRelease } from "@/lib/distribution-db";
 import { createNotification, getSubscriptionByUserId, listArtistProfilesByUser, touchArtistProfiles } from "@/lib/db";
@@ -19,6 +20,9 @@ import { releaseReviewSnapshotHash } from "@/lib/release-review-snapshot";
 import { findReleaseIdentifierConflicts } from "@/lib/release-identifier-conflicts";
 import { validateReleaseForDireNote } from "@/lib/direnote-readiness";
 import { getPublicAppUrl } from "@/lib/public-app-url";
+
+export const runtime = "nodejs";
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -259,6 +263,14 @@ export async function POST(request: Request) {
           const autoQc = { status: readiness.ready ? "passed" : "issues_found", checkedAt: new Date().toISOString(), issueCount: readiness.issues.length, warningCount: readiness.warnings.length };
           await prisma.release.update({ where: { id: release.id }, data: { metadata: { ...previousMetadata, autoQc } as any } });
           release = await getDetailedReleaseByUserId(session.sub, release.id) ?? release;
+          if (readiness.ready) {
+            const releaseId = release.id;
+            const siteUrl = getPublicAppUrl(request.url);
+            after(async () => {
+              try { await submitRelease(releaseId, { siteUrl }); }
+              catch (error) { console.error("Automatic DireNote submission failed", { releaseId, error }); }
+            });
+          }
         }
       } catch (error) {
         console.error("Automatic DireNote QC could not be recorded", { releaseId: release.id, error });

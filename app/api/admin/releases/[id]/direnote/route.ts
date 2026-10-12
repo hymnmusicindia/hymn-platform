@@ -60,7 +60,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     ? await retrySubmission(resolved.releaseId, { actorId, siteUrl })
     : await submitRelease(resolved.releaseId, { actorId, siteUrl, adminConfirmedExistingArtists });
 
-  return NextResponse.json(result, { status: result.submitted ? 200 : result.validation.ok ? 502 : 400 });
+  return NextResponse.json(result, { status: "inProgress" in result && result.inProgress ? 202 : result.submitted ? 200 : result.validation.ok ? 502 : 400 });
 }
 
 // vercel trigger

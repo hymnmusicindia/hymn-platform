@@ -8,7 +8,7 @@ import type { SubscriptionRevenueRow } from "@/lib/subscription-revenue";
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { ReleaseSubmissionHistory } from "@/components/release-submission-history";
 import { adminReleaseStatusLabel } from "@/lib/release-status-presentation";
-import { CheckCircle2, CreditCard, RotateCcw, Search, X, XCircle } from "lucide-react";
+import { CheckCircle2, Clock3, CreditCard, RotateCcw, Search, X, XCircle } from "lucide-react";
 import { AdminContentManager } from "@/components/admin-content-manager";
 import { AdminReviewManager } from "@/components/admin-review-manager";
 import { AdminTimedPlaylistManager } from "@/components/admin-timed-playlist-manager";
@@ -604,7 +604,7 @@ export function AdminControlCenter({
   const [reviewInternalNote, setReviewInternalNote] = useState("");
   const [reviewError, setReviewError] = useState("");
   const [confirmStatusAction, setConfirmStatusAction] = useState<Release["status"] | null>(null);
-  const [direNoteResult, setDireNoteResult] = useState<{ type: "success" | "error"; title: string; message: string } | null>(null);
+  const [direNoteResult, setDireNoteResult] = useState<{ type: "success" | "pending" | "error"; title: string; message: string } | null>(null);
   const [isSubmittingToDireNote, setIsSubmittingToDireNote] = useState(false);
   const [direNoteCooldowns, setDireNoteCooldowns] = useState<Record<number, number>>({});
   const [cooldownClock, setCooldownClock] = useState(() => Date.now());
@@ -916,6 +916,13 @@ export function AdminControlCenter({
           body: JSON.stringify({ status, note: `Status set to ${status}` })
         });
         const data = await response.json().catch(() => ({}));
+        if (data.inProgress) {
+          if (data.release) setReleases((items) => items.map((item) => item.id === id ? data.release : item));
+          const message = data.message || "DireNote is processing this release. Its status will update shortly.";
+          setFeedback(message);
+          setDireNoteResult({ type: "pending", title: "Distribution in progress", message });
+          return;
+        }
         if (!response.ok) {
           const issueMessages = Array.isArray(data.validation?.issues)
             ? data.validation.issues.map((issue: { message?: string }) => issue.message).filter(Boolean)
@@ -967,6 +974,11 @@ export function AdminControlCenter({
       try {
         const response = await fetch(`/api/admin/releases/${id}/direnote/sync`, { method: "POST" });
         const data = await response.json().catch(() => ({}));
+        if (data.inProgress) {
+          const message = data.message || "DireNote is processing this release. Its status will update shortly.";
+          setFeedback(message); setDireNoteResult({ type: "pending", title: "Distribution in progress", message });
+          return;
+        }
         if (!response.ok) {
           const message = data.error || "Distribution sync could not be completed.";
           setFeedback(message); setDireNoteResult({ type: "error", title: "Distribution sync failed", message });
@@ -1701,11 +1713,11 @@ export function AdminControlCenter({
           <section role="alertdialog" aria-modal="true" aria-labelledby="direnote-result-title" className="w-full max-w-md rounded-[1.5rem] border p-6 shadow-2xl sm:p-7" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex min-w-0 items-start gap-3">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full" style={{ background: direNoteResult.type === "success" ? "var(--success-soft)" : "var(--danger-soft)", color: direNoteResult.type === "success" ? "var(--success)" : "var(--danger)" }}>
-                  {direNoteResult.type === "success" ? <CheckCircle2 className="h-6 w-6" /> : <XCircle className="h-6 w-6" />}
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full" style={{ background: direNoteResult.type === "success" ? "var(--success-soft)" : direNoteResult.type === "pending" ? "var(--surface-2)" : "var(--danger-soft)", color: direNoteResult.type === "success" ? "var(--success)" : direNoteResult.type === "pending" ? "var(--text)" : "var(--danger)" }}>
+                  {direNoteResult.type === "success" ? <CheckCircle2 className="h-6 w-6" /> : direNoteResult.type === "pending" ? <Clock3 className="h-6 w-6" /> : <XCircle className="h-6 w-6" />}
                 </span>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: direNoteResult.type === "success" ? "var(--success)" : "var(--danger)" }}>{direNoteResult.type === "success" ? "Submission complete" : "Action required"}</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: direNoteResult.type === "success" ? "var(--success)" : direNoteResult.type === "pending" ? "var(--text-muted)" : "var(--danger)" }}>{direNoteResult.type === "success" ? "Submission complete" : direNoteResult.type === "pending" ? "Processing" : "Action required"}</p>
                   <h2 id="direnote-result-title" className="mt-1 text-xl font-semibold" style={{ color: "var(--text)" }}>{direNoteResult.title}</h2>
                 </div>
               </div>

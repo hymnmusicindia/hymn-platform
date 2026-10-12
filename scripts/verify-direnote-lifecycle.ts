@@ -39,7 +39,7 @@ const server = createServer(async (request, response) => {
     assert.equal(request.method, "POST");
     ingestPayloads.push(body);
     ingests++;
-    response.end(JSON.stringify({ success: true, upc: body.upc || oldUpc, tracks: [1, 2].map((n, index) => ({ track_name: `Track ${n}`, isrc: body.tracks[index].isrc || oldIsrcs[index], status: "Pending" })) }));
+    response.end(JSON.stringify({ success: true, upc: body.upc || oldUpc, tracks: body.tracks.map((track: { isrc?: string }, index: number) => ({ track_name: `Track ${index + 1}`, isrc: track.isrc || oldIsrcs[index], status: "Pending" })) }));
     return;
   }
   statusUpcs.push(body.upc);
@@ -74,6 +74,13 @@ async function main() {
     tracks: { create: [1, 2].map(n => ({ title: n === 1 ? "purple" : "pink", trackNumber: n, primaryArtist: "gxrry", audioUrl: `https://cdn.example.test/track${n}.wav`, metadata: { metadata: { artistProfileIds: [artist.id] }, language: "Hindi", version: "Original", songwriters: "Fixture Artist", composers: "Fixture Artist", producers: "Fixture Artist", duration: "180", explicitContent: false } })) }
   }, include: { tracks: true } });
   await prisma.track.update({ where: { id: release.tracks[0].id }, data: { metadata: { ...(release.tracks[0].metadata as object), explicitContent: true } } });
+  await prisma.$transaction(async lock => {
+    await lock.$executeRaw`SELECT pg_advisory_xact_lock(81422028, ${release.id}::integer)`;
+    const busy = await submitRelease(release.id);
+    assert.equal(busy.submitted, false);
+    assert.equal("inProgress" in busy && busy.inProgress, true);
+    assert.equal(ingests, 0, "A competing submission must never ingest twice.");
+  });
   const initial = await submitRelease(release.id);
   assert.equal(initial.submitted, true, JSON.stringify(initial));
   assert.equal(ingests, 1);
@@ -228,7 +235,7 @@ async function main() {
     assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: paidDraft.id } })).paymentStatus, "pending", "Another customer's payment must never restore entitlement.");
   }
   const single = await prisma.release.create({ data: {
-    userId: user.id, artistProfileId: artist.id, title: "HARADO TEST fixture", artistName: "gxrry", genre: "Pop", releaseType: "single", releaseDate: new Date("2099-01-10"), status: "APPROVED", paymentStatus: "paid", artworkUrl: "https://cdn.example.test/cover.jpg",
+    userId: user.id, artistProfileId: artist.id, title: "HARADO TEST fixture", artistName: "gxrry", genre: "Pop", releaseType: "single", releaseDate: new Date("2099-01-10"), status: "APPROVED", paymentStatus: "paid", upc: "3473620313527", artworkUrl: "https://cdn.example.test/cover.jpg",
     metadata: { ...(release.metadata as object), releaseTitle: "HARADO TEST fixture", language: "English", mood: "" },
     tracks: { create: [{ title: "HARADO TEST fixture", trackNumber: 1, primaryArtist: "gxrry", audioUrl: "https://cdn.example.test/track1.wav", metadata: { language: "English", version: "Original", songwriters: "Fixture Artist", composers: "Fixture Artist" } }] }
   } });
@@ -263,6 +270,14 @@ async function main() {
       assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: derived.id } })).status, "SENT_TO_DISTRIBUTOR");
     }
   }
+  await prisma.release.update({ where: { id: single.id }, data: { metadata: { ...(single.metadata as object), autoQc: { status: "passed", checkedAt: new Date().toISOString() } } } });
+  const beforeAutoQc = ingests;
+  const autoQcCycle = await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));
+  const autoQcSummary = await autoQcCycle.json();
+  assert.equal(autoQcSummary.autoQcResults?.some((item: { releaseId: number; outcome: string }) => item.releaseId === single.id && item.outcome === "submitted"), true, JSON.stringify(autoQcSummary.autoQcResults));
+  assert.equal(ingests, beforeAutoQc + 1, "Passed Auto QC must hand the release to DireNote exactly once.");
+  await submitRelease(single.id);
+  assert.equal(ingests, beforeAutoQc + 1, "Auto QC recovery and manual replay must share the provider attempt.");
   // Exercise the actual hourly handler against documented artist links returned by the mock.
   await prisma.release.updateMany({ where: { id: { not: release.id } }, data: { archivedAt: new Date() } });
   const unrelated = await prisma.artistCard.create({ data: { userId: user.id, artistName: "Unattached Artist" } });
