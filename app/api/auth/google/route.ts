@@ -1,5 +1,6 @@
 import { deliverReferralMail } from "@/lib/referral-mail";
 import { Prisma } from "@prisma/client";
+import { referralWelcomeForSignup } from "@/lib/referral-welcome";
 import { after, NextResponse } from "next/server";
 import { destinationAfterLogin } from "@/lib/routes";
 import { profileAvatarDataUrl } from "@/lib/avatar";
@@ -14,6 +15,7 @@ import { apiRequestId } from "@/lib/api-response";
 import { requestIdentity } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
+  const startedAt = new Date();
   const requestId = apiRequestId(request);
   const ipAddress = requestIdentity(request);
   const userAgent = request.headers.get("user-agent")?.slice(0, 1000) || undefined;
@@ -47,7 +49,9 @@ export async function POST(request: Request) {
     after(() => deliverReferralMail().then(() => undefined));
     await createBirthdayNotificationForUser(user.id).catch((error) => console.error("Birthday notification check failed", error));
     const redirectPath = payload.loginContext === "admin" ? "/admin" : destinationAfterLogin(user.role);
-    return NextResponse.json({ user, redirectPath });
+    const referralWelcome = payload.referralCode || attributedCode
+      ? await referralWelcomeForSignup(user.id, startedAt).catch(() => null) : null;
+    return NextResponse.json({ user, redirectPath, referralWelcome });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError || error instanceof Prisma.PrismaClientInitializationError || error instanceof Prisma.PrismaClientUnknownRequestError) {
       console.error("Google account persistence failed", { requestId, code: "code" in error ? error.code : error.name });

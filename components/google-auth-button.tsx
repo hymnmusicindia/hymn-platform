@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { profileAvatarDataUrl } from "@/lib/avatar";
+import { queueReferralWelcome } from "@/lib/referral-welcome-client";
 
 const GOOGLE_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
@@ -77,6 +78,8 @@ export function GoogleAuthButton({
         if (!res.ok) {
           throw new Error(data?.error ?? "Google authentication failed.");
         }
+
+        queueReferralWelcome(data?.referralWelcome);
 
         if (onAuthenticated) {
           await onAuthenticated(data);

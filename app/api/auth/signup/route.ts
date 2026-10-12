@@ -1,5 +1,6 @@
 import { deliverReferralMail } from "@/lib/referral-mail";
 import { Prisma } from "@prisma/client";
+import { referralWelcomeForSignup } from "@/lib/referral-welcome";
 ﻿import bcrypt from "bcrypt";
 import { after, NextResponse } from "next/server";
 import { destinationAfterLogin } from "@/lib/routes";
@@ -11,6 +12,7 @@ import { cookies } from "next/headers";
 import { REFERRAL_ATTRIBUTION_COOKIE } from "@/lib/referrals";
 
 export async function POST(request: Request) {
+  const startedAt = new Date();
   try {
     const payload = userSignupSchema.parse(await request.json());
     const cookieStore = await cookies();
@@ -30,7 +32,8 @@ export async function POST(request: Request) {
     await createSession({ sub: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: profileAvatarDataUrl(user.name, user.role) });
     cookieStore.delete(REFERRAL_ATTRIBUTION_COOKIE);
     after(() => deliverReferralMail().then(() => undefined));
-    return NextResponse.json({ user, redirectPath: destinationAfterLogin(user.role) }, { status: 201 });
+    const referralWelcome = await referralWelcomeForSignup(user.id, startedAt).catch(() => null);
+    return NextResponse.json({ user, redirectPath: destinationAfterLogin(user.role), referralWelcome }, { status: 201 });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError || error instanceof Prisma.PrismaClientInitializationError || error instanceof Prisma.PrismaClientUnknownRequestError) {
       console.error("Signup persistence failed", { code: "code" in error ? error.code : error.name });

@@ -3,6 +3,7 @@ import "./styles/gateway-finance.css";
 ﻿import type { Metadata } from "next";
 import "./globals.css";
 import { GrowthTracker } from "@/components/growth-tracker";
+import { ReferralWelcome } from "@/components/referral-welcome";
 import "./styles/dashboard.css";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 import "./styles/distribution.css";
@@ -84,7 +85,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           }}
         />
       </head>
-      <body suppressHydrationWarning>{children}<SmartHelpLayer />{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</body>
+      <body suppressHydrationWarning>{children}<SmartHelpLayer /><ReferralWelcome />{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</body>
     </html>
   );
 }
