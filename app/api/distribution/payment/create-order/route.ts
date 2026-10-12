@@ -45,13 +45,12 @@ export async function POST(request: Request) {
     }
     const subscription = await getSubscriptionByUserId(session.sub);
     const hasActiveSubscription = subscriptionHasEntitlement(subscription);
-    if (hasActiveSubscription && payload.paymentModel === "subscription") {
-      if (payload.plan !== checkoutPlan(subscription!, "one_time")) return NextResponse.json({ error: "The selected plan does not match your active subscription." }, { status: 400 });
-      if (!subscriptionHasReleaseAllowance(subscription)) return NextResponse.json({ error: "Your subscription release allowance has been used." }, { status: 409 });
+    // Issues the zero-value order that lets an active plan cover this release.
+    const coverWithSubscription = async (plan: typeof payload.plan) => {
       const existingEntitlement = payload.draftReleaseId
         ? await prisma.distributionOrder.findUnique({ where: { releaseId: payload.draftReleaseId } })
         : null;
-      if (existingEntitlement?.userId === session.sub && existingEntitlement.fulfilledAt == null && existingEntitlement.plan === payload.plan && existingEntitlement.amount === 0 && existingEntitlement.creditsUsed === 0 && existingEntitlement.razorpayOrderId.startsWith("sub_entitlement_")) {
+      if (existingEntitlement?.userId === session.sub && existingEntitlement.fulfilledAt == null && existingEntitlement.plan === plan && existingEntitlement.amount === 0 && existingEntitlement.creditsUsed === 0 && existingEntitlement.razorpayOrderId.startsWith("sub_entitlement_")) {
         return NextResponse.json({
           orderId: existingEntitlement.razorpayOrderId,
           plan: existingEntitlement.plan,
@@ -64,16 +63,21 @@ export async function POST(request: Request) {
         });
       }
       const entitlementOrderId = `sub_entitlement_${session.sub}_${Date.now()}`;
-      await createDistributionOrder({ userId: session.sub, plan: payload.plan, amount: 0, razorpayOrderId: entitlementOrderId, releaseId: payload.draftReleaseId });
+      await createDistributionOrder({ userId: session.sub, plan, amount: 0, razorpayOrderId: entitlementOrderId, releaseId: payload.draftReleaseId });
       return NextResponse.json({
         orderId: entitlementOrderId,
-        plan: payload.plan,
+        plan,
         amount: 0,
         currency: "INR",
         displayAmount: 0,
         requiresPayment: false,
         subscriptionCovered: true,
       });
+    };
+    if (hasActiveSubscription && payload.paymentModel === "subscription") {
+      if (payload.plan !== checkoutPlan(subscription!, "one_time")) return NextResponse.json({ error: "The selected plan does not match your active subscription." }, { status: 400 });
+      if (!subscriptionHasReleaseAllowance(subscription)) return NextResponse.json({ error: "Your subscription release allowance has been used." }, { status: 409 });
+      return coverWithSubscription(payload.plan);
     }
     if (payload.plan !== "one_time") {
       if (!isSubscriptionProduct(payload.plan)) return NextResponse.json({ error: "Invalid subscription product." }, { status: 400 });
@@ -98,6 +102,10 @@ export async function POST(request: Request) {
       promotion = calculateFirstReleasePrice({ plan: payload.plan, releaseType: payload.releaseType, trackCount: payload.trackCount, normalAmount });
       amount = promotion.finalAmount;
     }
+    // The release page picks the plan when it loads, so a page opened before a plan was activated
+    // still asks for the one-time fee. Never start a new charge for a release the plan already covers;
+    // the first-release gift keeps its own order so the plan allowance is saved for a later release.
+    const coveringPlan = !promotion && hasActiveSubscription && subscriptionHasReleaseAllowance(subscription) ? checkoutPlan(subscription!, "one_time") : "one_time";
     const priceBeforeCredits = amount;
     const creditAccount = payload.useHymnCredits && amount > 0
       ? await prisma.user.findUnique({ where: { id: session.sub }, select: { referralCredits: true } })
@@ -178,6 +186,7 @@ export async function POST(request: Request) {
         });
       }
       if (providerReconciliationFailed) return NextResponse.json({ error: "HYMN could not safely reconcile your previous checkout. No new charge was created. Please retry shortly or contact HYMN support." }, { status: 503 });
+      if (coveringPlan !== "one_time") return coverWithSubscription(coveringPlan);
       const resumableUnpaidOrder = recentUnfulfilledOrders.find((candidate) => candidate.amount === amount && candidate.creditsUsed === creditsUsed);
       if (resumableUnpaidOrder) {
         return NextResponse.json({
@@ -194,6 +203,7 @@ export async function POST(request: Request) {
       }
     }
 
+    if (coveringPlan !== "one_time") return coverWithSubscription(coveringPlan);
     const order = amountPaise === 0
       ? { id: creditsUsed > 0 ? `credit_distribution_${session.sub}_${Date.now()}` : `free_first_release_${session.sub}_${Date.now()}`, amount: 0, currency: "INR" }
       : await razorpay!.orders.create({ amount: amountPaise, currency: "INR", receipt: `hymn-dist-${Date.now()}` });

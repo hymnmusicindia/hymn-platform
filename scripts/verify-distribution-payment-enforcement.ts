@@ -42,6 +42,9 @@ assert.match(createOrder, /creditsUsed/);
 assert.match(createOrder, /existingEntitlement/);
 assert.match(createOrder, /hasActiveSubscription && payload\.paymentModel === "subscription"/);
 assert.match(createOrder, /resumedOrder: true/);
+assert.match(createOrder, /const coveringPlan = !promotion && hasActiveSubscription && subscriptionHasReleaseAllowance\(subscription\)/);
+assert.ok(createOrder.lastIndexOf("return coverWithSubscription(coveringPlan)") < createOrder.indexOf("razorpay!.orders.create"), "An active plan must cover the release before a one-time charge is created.");
+assert.ok(createOrder.indexOf("return coverWithSubscription(coveringPlan)") < createOrder.indexOf("const resumableUnpaidOrder"), "An active plan must cover the release before an unpaid one-time checkout is resumed.");
 assert.doesNotMatch(createOrder, /dev_dist_order|dev_razorpay_key|BYPASS_DISTRIBUTION_PAYMENT/);
 
 assert.match(verifySubmit, /verifyRazorpaySignature/);

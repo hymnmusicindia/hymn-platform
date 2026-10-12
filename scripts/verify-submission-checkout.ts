@@ -110,12 +110,23 @@ export async function verifySubmissionCheckout() {
       assert.equal(await prisma.creditLedgerEntry.count({ where: { userId: account.user.id, type: "DISTRIBUTION_PURCHASE" } }), 1);
     }
 
-    const stale = await make(99); await stale.subscription("yearly", 18); const item = await stale.draft();
+    // A release already paid one-time before the plan was activated keeps its paid order.
+    const stale = await make(99); const item = await stale.draft();
     const original = await stale.create(item.release.id, "one_time", { useHymnCredits: true }); passed(original, 200);
+    await stale.subscription("yearly", 18);
     const resumed = await stale.create(item.release.id, "yearly"); passed(resumed, 200);
     assert.equal(resumed.body.orderId, original.body.orderId);
     passed(await stale.submit(item, resumed.body, "yearly"), 400);
     passed(await stale.submit(item, resumed.body, checkoutPlan(resumed.body, "yearly")));
+
+    // A page opened before the plan was activated still asks for the one-time fee; the plan covers it instead.
+    const covered = await make(99); const coveredSub = await covered.subscription("yearly", 18); const coveredDraft = await covered.draft();
+    const coveredOrder = await covered.create(coveredDraft.release.id, "one_time", { useHymnCredits: true }); passed(coveredOrder, 200);
+    assert.equal(coveredOrder.body.subscriptionCovered, true); assert.equal(coveredOrder.body.requiresPayment, false); assert.equal(coveredOrder.body.plan, "yearly");
+    passed(await covered.submit(coveredDraft, coveredOrder.body, checkoutPlan(coveredOrder.body, "one_time")));
+    assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: covered.user.id } })).referralCredits, 99);
+    assert.equal(await prisma.subscriptionReleaseUsage.count({ where: { subscriptionId: coveredSub.id } }), 1);
+    assert.equal(await prisma.distributionOrder.count({ where: { userId: covered.user.id, plan: "one_time" } }), 0);
 
     const unlimited = await make(); const unlimitedSub = await unlimited.subscription("yearly_plus", null);
     const unlimitedDraft = await unlimited.draft(); const unlimitedOrder = await unlimited.create(unlimitedDraft.release.id, "yearly_plus");
