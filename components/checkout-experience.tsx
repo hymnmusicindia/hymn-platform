@@ -1,6 +1,7 @@
 "use client";
 
 import { customerMessage } from "@/lib/customer-message";
+import { cancelUnpaidCheckout } from "@/lib/client-checkout-reservation";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -156,6 +157,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
     if (!quote || loading || paying || !items.length) return;
     setPaying(true);
     setFeedback(null);
+    let createdOrderId: string | null = null;
     try {
       const response = await fetch("/api/checkout/create-order", {
         method: "POST",
@@ -177,9 +179,11 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
         return;
       }
 
+      if (product === "beatstore") createdOrderId = data.orderId;
       await loadRazorpayScript();
       if (!window.Razorpay) throw new Error("Razorpay is unavailable.");
 
+      let paymentReturned = false;
       const checkout = new window.Razorpay({
         key: data.key,
         amount: data.amount,
@@ -188,6 +192,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
         description: "Secure HYMN checkout",
         ...(data.billingType === "subscription" ? { subscription_id: data.subscriptionId } : { order_id: data.orderId }),
         handler: async (payment: RazorpayResponse) => {
+          paymentReturned = true;
           try {
             const verifyResponse = await fetch(data.billingType === "subscription" ? "/api/subscriptions/create" : "/api/checkout/verify-payment", {
               method: "POST",
@@ -209,15 +214,18 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
           }
         },
         modal: {
-          ondismiss: () => setPaying(false)
+          ondismiss: () => {
+            if (!paymentReturned && createdOrderId) void cancelUnpaidCheckout(createdOrderId).finally(() => setPaying(false));
+            else if (!paymentReturned) setPaying(false);
+          }
         }
       });
       checkout.on("payment.failed", (response) => {
         setFeedback(response.error?.description || "Payment failed. Please try again.");
-        setPaying(false);
       });
       checkout.open();
     } catch (error) {
+      if (createdOrderId) await cancelUnpaidCheckout(createdOrderId);
       setFeedback(error instanceof Error ? error.message : "Checkout failed.");
       setPaying(false);
     }

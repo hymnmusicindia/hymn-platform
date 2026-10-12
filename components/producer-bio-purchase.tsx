@@ -6,6 +6,7 @@ import { GoogleAuthButton } from "@/components/google-auth-button";
 import { beatLicensePrice, type BeatStoreLicenseType } from "@/lib/beat-store";
 import { parseBioCart, readBioCart, type BioCartItem } from "@/lib/bio-cart";
 import { loadBioRazorpay } from "@/lib/client-razorpay";
+import { cancelUnpaidCheckout } from "@/lib/client-checkout-reservation";
 import type { BioBeat, BioViewer } from "@/lib/producer-links";
 import s from "./producer-bio-purchase.module.css";
 
@@ -107,20 +108,22 @@ export function useProducerBioPurchase(initialViewer: BioViewer | null) {
     if(unconfirmed){await confirm(unconfirmed);return;}
     if(!viewer||!quote||!items.length)return;
     paying.current=true;setBusy(true);setError("");checkedItems.current=[...items];
+    let createdOrderId:string|null=null;
     try {
       const response=await fetch("/api/checkout/create-order",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:items.map(item=>({type:"beat",beatId:item.beatId,licenseType:item.licenseType})),useReferralCredits:false})});
       const data=await response.json();
       if(response.status===401){setViewer(null);setPending(buyBeat?{action:"buy",beat:buyBeat,licence}:{action:"checkout"});setPanel("login");throw new Error("Please sign in again to continue.");}
       if(!response.ok)throw new Error(data.error||"Could not start checkout.");
       if(!data.requiresPayment)throw new Error("This checkout needs a paid order.");
+      createdOrderId=data.orderId;
       await loadBioRazorpay();if(!window.Razorpay)throw new Error("Payment checkout is unavailable.");
       // Native modal must close before Razorpay opens its own payment dialog.
       dialog.current?.close();setPanel(null);
       let failed=false;let returned=false;
-      const checkout=new window.Razorpay({key:data.key,order_id:data.orderId,amount:data.amount,currency:data.currency,name:"HYMN Music",description:buyBeat?.title||"Beat licences",prefill:{name:viewer.name,email:viewer.email},handler:(payment:Payment)=>{returned=true;setUnconfirmed(payment);void confirm(payment);},modal:{ondismiss:()=>{if(!returned&&!verifying.current){paying.current=false;setBusy(false);if(failed)setPanel("checkout");}}}});
+      const checkout=new window.Razorpay({key:data.key,order_id:data.orderId,amount:data.amount,currency:data.currency,name:"HYMN Music",description:buyBeat?.title||"Beat licences",prefill:{name:viewer.name,email:viewer.email},handler:(payment:Payment)=>{returned=true;setUnconfirmed(payment);void confirm(payment);},modal:{ondismiss:()=>{if(!returned&&!verifying.current){void cancelUnpaidCheckout(data.orderId).finally(()=>{paying.current=false;setBusy(false);if(failed)setPanel("checkout");});}}}});
       // Keep Razorpay's retry UI usable; show our error sheet only after it closes.
       checkout.on("payment.failed",event=>{failed=true;setError(event.error?.description||"Payment failed. No beat has been purchased.");});checkout.open();
-    } catch(error){setError(error instanceof Error?error.message:"Checkout failed.");setBusy(false);paying.current=false;}
+    } catch(error){if(createdOrderId)await cancelUnpaidCheckout(createdOrderId);setError(error instanceof Error?error.message:"Checkout failed.");setBusy(false);paying.current=false;}
   }
 
   const sheet=<dialog ref={dialog} className={s.dialog} onCancel={()=>setPanel(null)} onClose={()=>setPanel(null)} aria-label={panel==="login"?"Quick Google sign-in":panel==="success"?"Purchase complete":"Instant buy checkout"}>

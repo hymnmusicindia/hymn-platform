@@ -53,7 +53,8 @@ async function buildLineItems(input: CheckoutInput): Promise<CheckoutLineItem[]>
       if (!beat || !beat.enabled) throw new Error("One of the selected beats is unavailable.");
       const licenseType = normalizeBeatLicenseType(item.licenseType);
       const reservationActive = beat.status === "EXCLUSIVE_RESERVED" && (!beat.exclusiveReservationExpiresAt || new Date(beat.exclusiveReservationExpiresAt).getTime() > Date.now());
-      if (!beat.enabled || (!["PUBLISHED", "EXCLUSIVE_RESERVED"].includes(String(beat.status))) || (licenseType !== "exclusive" && reservationActive)) throw new Error("This beat is not available for licensing.");
+      if (reservationActive) throw new Error(`“${beat.title}” is temporarily held by an exclusive checkout. If you closed that checkout, wait for its reservation to clear before trying again.`);
+      if (!beat.enabled || (!["PUBLISHED", "EXCLUSIVE_RESERVED"].includes(String(beat.status)))) throw new Error("This beat is not available for licensing.");
       const unitPrice = beatLicensePrice(beat, licenseType);
       if (!Number.isFinite(unitPrice) || unitPrice <= 0) throw new Error("This licence is not available.");
       return {
