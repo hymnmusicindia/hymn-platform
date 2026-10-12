@@ -6,7 +6,7 @@
 .rc button{cursor:pointer}
 .rc button:focus-visible,.rc textarea:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .rc-tabs button{display:flex;align-items:center;gap:7px;font-size:12px;border:0;background:none;color:var(--text-muted);padding:9px 13px;border-radius:20px;white-space:nowrap}
-.rc-tabs button[aria-pressed=true]{background:var(--text);color:var(--bg)}
+.rc .rc-tabs button[aria-pressed=true]{background:var(--accent);color:var(--accent-foreground)!important}
 .rc-people{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .rc-person{display:flex;align-items:center;gap:13px;text-align:left;padding:18px;border:1px solid var(--border);border-radius:18px;background:var(--bg-soft);color:inherit;min-width:0;transition:transform .2s,border-color .2s}
 .rc-person:hover{transform:translateY(-2px);border-color:var(--text-muted)}
@@ -15,7 +15,7 @@
 .rc-person-copy{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
 .rc-person-copy strong{font-size:14px}
 .rc-person-copy small,.rc-person-copy>span{font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rc-badge{background:var(--accent);color:var(--bg);min-width:22px;padding:3px 6px;border-radius:20px;font-size:11px;text-align:center}
+.rc-badge{background:var(--accent);color:var(--accent-foreground);min-width:22px;padding:3px 6px;border-radius:20px;font-size:11px;text-align:center}
 .rc-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px;padding:35px 16px;color:var(--text-muted);grid-column:1/-1}
 .rc-empty strong{color:var(--text);font-size:14px}
 .rc-empty p{margin:0;font-size:12px;max-width:280px}
@@ -45,12 +45,13 @@
 .rc-chat>header button{padding:6px;color:var(--text-muted)}
 .rc-messages{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:20px;display:flex;flex-direction:column;gap:12px}
 .rc-message{align-self:flex-start;max-width:85%;padding:12px 15px;border-radius:16px 16px 16px 4px;background:var(--bg-soft);border:1px solid var(--border)}
-.rc-message.mine{align-self:flex-end;border-radius:16px 16px 4px 16px;background:var(--text);color:var(--bg)}
+.rc-message.mine{align-self:flex-end;border-radius:16px 16px 4px 16px;background:var(--accent);color:var(--accent-foreground)}
+.rc-message.mine :is(p,time){color:inherit}
 .rc-message p{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.6;margin:0 0 5px}
 .rc-message time{font-size:9px;opacity:.7}
 .rc-chat form{display:flex;gap:10px;align-items:center;padding:14px;border-top:1px solid var(--border)}
 .rc-chat textarea{resize:none;flex:1;min-width:0;background:var(--bg-soft);color:var(--text);border:1px solid var(--border);border-radius:14px;padding:12px;font-size:13px}
-.rc-chat form button{border-radius:50%;height:42px;width:42px;display:grid;place-items:center;background:var(--text);color:var(--bg)}
+.rc-chat form button{border-radius:50%;height:42px;width:42px;display:grid;place-items:center;background:var(--accent);color:var(--accent-foreground)}
 .rc-chat button:disabled{opacity:.45}
 .rc-chat>.rc-note{padding:14px}
 .rc-people>p{grid-column:1/-1}
