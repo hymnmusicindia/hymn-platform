@@ -13,7 +13,7 @@ import type { UserRole } from "@/lib/types";
 import "@/app/styles/producer-onboarding.css";
 
 type Profile = ProducerSetupProfile & { slug?: string; bio?: string | null; location?: string | null; specialty?: string | null; tags?: string[]; instagramUrl?: string | null; youtubeUrl?: string | null; spotifyUrl?: string | null; websiteUrl?: string | null };
-type Props = { user: { name: string; role: UserRole; status?: string } | null; initialProfile: Profile | null; uploaded: boolean };
+type Props = { user: { name: string; role: UserRole; status?: string; avatarUrl?: string | null } | null; initialProfile: Profile | null; uploaded: boolean };
 
 async function responseBody(response: Response) {
   const body = await response.json().catch(() => null);
@@ -28,6 +28,7 @@ export function ProducerOnboarding({ user, initialProfile, uploaded }: Props) {
   const [submitted, setSubmitted] = useState(uploaded);
   const [editingStore, setEditingStore] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const setup = producerSetup(profile, []);
   const blocked = Boolean(user?.status && user.status !== "active") || setup.restricted;
@@ -63,7 +64,7 @@ export function ProducerOnboarding({ user, initialProfile, uploaded }: Props) {
   }
 
   return <main className="producer-entry" data-theme="dark">
-    <header className="producer-entry-header"><Link href="/" aria-label="HYMN home"><Image src="/assets/hymnlogowhite.png" alt="HYMN Music" width={120} height={40} priority /></Link><span>PRODUCER START</span>{user && <span className="producer-entry-name">{user.name}</span>}</header>
+    <header className="producer-entry-header"><Link href="/" aria-label="HYMN home"><Image src="/assets/hymnlogowhite.png" alt="HYMN Music" width={120} height={40} priority /></Link>{user && <span className="producer-entry-user-avatar" title={user.name} aria-label={`Signed in as ${user.name}`}>{user.avatarUrl && !avatarFailed ? <Image src={user.avatarUrl} alt="" width={40} height={40} unoptimized onError={() => setAvatarFailed(true)} /> : user.name.trim().slice(0, 1).toUpperCase()}</span>}</header>
     <nav className="producer-entry-progress" aria-label="Producer onboarding progress">{[[LogIn, "Sign in"], [Store, "Your store"], [Upload, "First beat"]].map(([Icon, label], index) => {
       const done = index === 0 ? Boolean(user) : index === 1 ? setup.storefrontReady : finished;
       return <div key={String(label)} aria-current={!finished && index === step ? "step" : undefined} data-done={done}><span>{done ? <Check size={16} /> : <Icon size={16} />}</span><strong>{String(label)}</strong>{index < 2 && <i aria-hidden="true" />}</div>;

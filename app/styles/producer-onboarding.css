@@ -1,8 +1,8 @@
 .producer-entry{--bg:#0c0e12;--bg-soft:#191d24;--card:#14181f;--text:#f4f7fb;--text-muted:#aeb7c5;--text-soft:#aeb7c5;--accent:#f4f7fb;--accent-foreground:#11161c;--border:#313844;--input:#191d24;min-height:100svh;padding:0 max(24px,calc((100vw - 1120px)/2));background:radial-gradient(ellipse at 80% 20%,#26303b66,transparent 60%),var(--bg);color:var(--text);color-scheme:dark}
 .producer-entry-header{display:flex;align-items:center;gap:24px;min-height:84px;border-bottom:1px solid var(--border)}
 .producer-entry-header img{width:104px;height:auto;filter:none}
-.producer-entry-header>span{font-size:9px;letter-spacing:.16em;color:var(--text-muted)}
-.producer-entry-header .producer-entry-name{margin-left:auto;letter-spacing:0;font-size:12px;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.producer-entry-header .producer-entry-user-avatar{display:grid;place-items:center;margin-left:auto;width:40px;height:40px;flex:none;border-radius:50%;overflow:hidden;background:var(--bg-soft);border:1px solid var(--border);color:var(--text);font-size:16px;font-weight:600}
+.producer-entry-header .producer-entry-user-avatar img{width:100%;height:100%;object-fit:cover}
 .producer-entry-progress{display:flex;max-width:580px;margin:28px auto 36px;gap:16px}
 .producer-entry-progress>div{display:flex;align-items:center;gap:8px;flex:1;min-width:0;color:var(--text-muted)}
 .producer-entry-progress>div>span{display:grid;place-items:center;flex:none;width:28px;height:28px;border:1px solid var(--border);border-radius:50%}
