@@ -43,7 +43,7 @@ import { resolveGoogleAccountRole } from "@/lib/auth-role";
 import { normalizeBeatLicenseType } from "@/lib/beat-store";
 import { normalizePublicUploadUrl } from "@/lib/storage";
 import { canonicalReleaseArtworkUrl } from "@/lib/release-media";
-import { effectiveSubscriptionReleaseLimit, subscriptionEntitlementEnd } from "@/lib/subscription-billing";
+import { effectiveSubscriptionReleaseLimit, subscriptionEntitlementEnd, subscriptionTermLapsed } from "@/lib/subscription-billing";
 
 type MemoryState = {
   users: User[];
@@ -3331,7 +3331,7 @@ export async function getSubscriptionByUserId(userId: number) {
     const now = new Date();
     // A stale currentPeriodEnd from an earlier term must not expire a plan whose expiryDate was extended.
     const daysRemaining = Math.max(0, Math.floor((subscriptionEntitlementEnd(sub) - now.getTime()) / (1000 * 60 * 60 * 24)));
-    const status = sub.razorpaySubscriptionId ? sub.status : (daysRemaining > 0 ? sub.status : "expired");
+    const status = subscriptionTermLapsed(sub, now) ? "expired" : sub.razorpaySubscriptionId ? sub.status : (daysRemaining > 0 ? sub.status : "expired");
     const effectiveReleaseLimit = effectiveSubscriptionReleaseLimit(sub);
     
     return {

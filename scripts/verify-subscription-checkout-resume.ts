@@ -12,12 +12,13 @@ async function main() {
   const state: any = { status: "created", providerStatus: "created", providerPlan: "plan_half_fixture", creates: 0 };
   (globalThis as any).subscriptionResume = {
     db: {
-      subscription: { findUnique: async () => ({ id: 7, userId: 18, plan: "half_yearly", razorpaySubscriptionId: "sub_fixture", status: state.status }), upsert: async () => { throw new Error("Retry must not overwrite a subscription"); } },
+      subscription: { findUnique: async () => ({ id: 7, userId: 18, plan: "half_yearly", razorpaySubscriptionId: "sub_fixture", status: state.status, autoRenewal: state.autoRenewal, expiryDate: state.expiryDate, currentPeriodEnd: null }), upsert: async () => { if (!state.lapsed) throw new Error("Retry must not overwrite a subscription"); return { id: 7 }; } },
+      auditLog: { create: async () => ({}) },
       subscriptionPlanVersion: { upsert: async () => ({ id: 3, razorpayPlanId: "plan_half_fixture", amount: 69900, currency: "INR" }) }
     },
     provider: { plans: { fetch: async () => ({ item: { amount: 69900, currency: "INR" }, period: "monthly", interval: 6 }) }, subscriptions: {
       fetch: async () => ({ id: "sub_fixture", plan_id: state.providerPlan, status: state.providerStatus }),
-      create: async () => { state.creates++; throw new Error("Retry must not create another mandate"); }
+      create: async () => { state.creates++; if (!state.lapsed) throw new Error("Retry must not create another mandate"); return { id: "sub_renewed", status: "created" }; }
     } }
   };
   const modulePath = "../.cache/subscription-resume.cjs";
@@ -34,6 +35,13 @@ async function main() {
   state.status = "active"; state.providerPlan = "plan_half_fixture";
   await assert.rejects(createProviderSubscription(18, "half_yearly"), /active or pending/);
   assert.equal(state.creates, 0);
+  // A cancelled plan still inside its paid period stays protected; once that period is over a new payment may start.
+  state.autoRenewal = false; state.expiryDate = new Date(Date.now() + 86_400_000);
+  await assert.rejects(createProviderSubscription(18, "half_yearly"), /active or pending/);
+  assert.equal(state.creates, 0);
+  state.expiryDate = new Date(Date.now() - 86_400_000); state.lapsed = true;
+  assert.equal((await createProviderSubscription(18, "half_yearly")).provider.id, "sub_renewed");
+  assert.equal(state.creates, 1);
   console.log("PASS cancelled subscription checkout resumes the same mandate; active and mismatched plans remain protected");
 }
 void main();

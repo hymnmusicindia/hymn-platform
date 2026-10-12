@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { prisma } from "../lib/prisma";
-import { createOrder } from "../lib/db";
+import { createOrder, getSubscriptionByUserId } from "../lib/db";
+import { subscriptionHasEntitlement, subscriptionTermLapsed } from "../lib/subscription-billing";
 import { confirmCheckoutPayment, confirmPersistedPayment, processRazorpayEvent, receiveRazorpayEvent } from "../lib/payment-webhooks";
 
 type EventPayload = { id: string; event: string; payload: Record<string, { entity: Record<string, unknown> }> };
@@ -75,6 +76,17 @@ async function main() {
   await processRazorpayEvent(retryEvent.id);
   assert.equal((await prisma.paymentWebhookEvent.findUniqueOrThrow({ where: { id: retryEvent.id } })).processingState, "processed");
 
+  // A subscription charge is paid against Razorpay's invoice order, which is never a HYMN order.
+  const invoicePayment = { id: `pay_invoice_${suffix}`, order_id: `order_invoice_${suffix}`, invoice_id: `inv_${suffix}`, amount: 69900, currency: "INR", status: "captured" };
+  for (const payload of [
+    { id: `evt_invoice_captured_${suffix}`, event: "payment.captured", payload: { payment: { entity: invoicePayment } } },
+    { id: `evt_invoice_paid_${suffix}`, event: "order.paid", payload: { payment: { entity: invoicePayment }, order: { entity: { id: invoicePayment.order_id, amount: 69900, currency: "INR", status: "paid" } } } }
+  ] satisfies EventPayload[]) {
+    const invoiceEvent = await receive(payload);
+    await processRazorpayEvent(invoiceEvent.id);
+    assert.equal((await prisma.paymentWebhookEvent.findUniqueOrThrow({ where: { id: invoiceEvent.id } })).processingState, "processed");
+  }
+
   const refundPayload: EventPayload = { id: `evt_refund_${suffix}`, event: "refund.processed", payload: { refund: { entity: { id: `refund_${suffix}`, order_id: webhookFirstId, payment_id: `pay_first_${suffix}`, amount: 1000, currency: "INR", status: "processed" } } } };
   const refund = await receive(refundPayload);
   await processRazorpayEvent(refund.id);
@@ -111,6 +123,43 @@ async function main() {
   assert.equal(paidDistribution.paymentStatus, "paid");
   assert.equal(paidDistribution.razorpayPaymentId, `pay_distribution_${suffix}`);
   assert.equal(await prisma.subscription.findUnique({ where: { userId: buyer.id } }), null, "One-time release payments must never create a recurring entitlement");
+
+  // Subscription lifecycle: a plan cancelled at Razorpay keeps the period that was already paid for.
+  const subscriptionEvent = (id: string, event: string, entity: Record<string, unknown>): EventPayload => ({ id, event, payload: { subscription: { entity } } });
+  const unix = (date: Date) => Math.floor(date.getTime() / 1000);
+  const periodStart = new Date(Date.now() - 60_000); const periodEnd = new Date(Date.now() + 180 * 86_400_000);
+  const paidSubId = `sub_paid_${suffix}`;
+  const paidSub = await prisma.subscription.create({ data: { userId: buyer.id, plan: "half_yearly", status: "created", expiryDate: new Date(), razorpaySubscriptionId: paidSubId, autoRenewal: true } });
+  await processRazorpayEvent((await receive(subscriptionEvent(`evt_sub_active_${suffix}`, "subscription.activated", { id: paidSubId, status: "active", current_start: unix(periodStart), current_end: unix(periodEnd), charge_at: unix(periodEnd) }))).id);
+  const activated = await prisma.subscription.findUniqueOrThrow({ where: { id: paidSub.id } });
+  assert.equal(activated.status, "active"); assert.equal(activated.autoRenewal, true);
+  await processRazorpayEvent((await receive(subscriptionEvent(`evt_sub_cancel_${suffix}`, "subscription.cancelled", { id: paidSubId, status: "cancelled", current_start: unix(periodStart), current_end: unix(periodEnd), ended_at: unix(new Date()) }))).id);
+  const paidThrough = await prisma.subscription.findUniqueOrThrow({ where: { id: paidSub.id } });
+  assert.equal(paidThrough.status, "active", "A paid period survives the provider cancellation.");
+  assert.equal(paidThrough.cancelAtPeriodEnd, true); assert.equal(paidThrough.autoRenewal, false); assert.equal(paidThrough.nextRenewalDate, null);
+  assert.ok(paidThrough.cancelledAt, "The provider cancellation time is still recorded.");
+  assert.equal(subscriptionHasEntitlement(paidThrough), true);
+  assert.equal(subscriptionTermLapsed(paidThrough), false);
+  // Once the paid period is over there is no renewal: access ends and only a new payment restores it.
+  const afterPeriod = new Date(periodEnd.getTime() + 1000);
+  assert.equal(subscriptionHasEntitlement(paidThrough, afterPeriod), false);
+  assert.equal(subscriptionTermLapsed(paidThrough, afterPeriod), true);
+  await prisma.subscription.update({ where: { id: paidSub.id }, data: { expiryDate: new Date(Date.now() - 1000), currentPeriodEnd: new Date(Date.now() - 1000) } });
+  assert.equal((await getSubscriptionByUserId(buyer.id))?.status, "expired");
+  // A cancellation delivered again after the period ended must not bring the plan back.
+  await processRazorpayEvent((await receive(subscriptionEvent(`evt_sub_cancel_late_${suffix}`, "subscription.cancelled", { id: paidSubId, status: "cancelled", ended_at: unix(new Date()) }))).id);
+  assert.equal((await prisma.subscription.findUniqueOrThrow({ where: { id: paidSub.id } })).status, "cancelled");
+
+  // A subscription that was never paid, or one an admin removed, gets no paid-period grace.
+  const unpaidSubId = `sub_unpaid_${suffix}`;
+  const unpaidSub = await prisma.subscription.create({ data: { userId: producer.id, plan: "half_yearly", status: "created", expiryDate: new Date(), razorpaySubscriptionId: unpaidSubId, autoRenewal: true } });
+  await processRazorpayEvent((await receive(subscriptionEvent(`evt_sub_unpaid_${suffix}`, "subscription.cancelled", { id: unpaidSubId, status: "cancelled", ended_at: unix(new Date()) }))).id);
+  const unpaid = await prisma.subscription.findUniqueOrThrow({ where: { id: unpaidSub.id } });
+  assert.equal(unpaid.status, "cancelled"); assert.equal(subscriptionHasEntitlement(unpaid), false);
+  await prisma.subscription.update({ where: { id: unpaidSub.id }, data: { status: "cancelled", expiryDate: new Date(), currentPeriodEnd: new Date(), cancelAtPeriodEnd: false } });
+  await processRazorpayEvent((await receive(subscriptionEvent(`evt_sub_revoked_${suffix}`, "subscription.cancelled", { id: unpaidSubId, status: "cancelled", current_start: unix(periodStart), current_end: unix(periodEnd), ended_at: unix(new Date()) + 1 }))).id);
+  const revoked = await prisma.subscription.findUniqueOrThrow({ where: { id: unpaidSub.id } });
+  assert.equal(revoked.status, "cancelled"); assert.equal(subscriptionHasEntitlement(revoked), false);
 
   console.log("Razorpay webhook integration verification passed.");
 }

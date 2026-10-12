@@ -51,6 +51,11 @@ export function subscriptionHasEntitlement(subscription: { status: string; curre
   return subscriptionEntitlementEnd(subscription) > now.getTime();
 }
 
+/** A plan that will not renew and whose paid term is over. Only a new payment restores access. */
+export function subscriptionTermLapsed(subscription: { status: string; autoRenewal?: boolean | null; currentPeriodEnd?: Date | string | null; expiryDate?: Date | string | null }, now = new Date()) {
+  return String(subscription.status ?? "").trim().toLowerCase() === "active" && subscription.autoRenewal === false && subscriptionEntitlementEnd(subscription) <= now.getTime();
+}
+
 export function effectiveSubscriptionReleaseLimit(subscription: { plan?: string | null; releaseLimit?: number | null } | null | undefined) {
   if (!subscription) return null;
   const plan = String(subscription.plan ?? "").trim().toLowerCase();
@@ -141,7 +146,7 @@ export async function createProviderSubscription(userId: number, product: Subscr
   const existing = await prisma.subscription.findUnique({ where: { userId } });
   const policy = SUBSCRIPTION_POLICIES[product];
   const version = await resolvePlanVersion(product);
-  if (existing?.razorpaySubscriptionId && !["cancelled", "completed", "expired", "halted"].includes(existing.status)) {
+  if (existing?.razorpaySubscriptionId && !["cancelled", "completed", "expired", "halted"].includes(existing.status) && !subscriptionTermLapsed(existing)) {
     if (existing.plan === product && ["created", "authenticated"].includes(existing.status)) {
       const provider = await razorpay.subscriptions.fetch(existing.razorpaySubscriptionId);
       if (["created", "authenticated"].includes(provider.status) && provider.plan_id === version.razorpayPlanId) {
@@ -169,18 +174,24 @@ export async function synchronizeProviderSubscription(entity: ProviderSubscripti
   const existing = await prisma.subscription.findUnique({ where: { razorpaySubscriptionId: entity.id } });
   if (!existing) throw new Error("Razorpay subscription is not linked to a HYMN account.");
   if (entity.plan_id && existing.razorpayPlanId && entity.plan_id !== existing.razorpayPlanId) throw new Error("Razorpay plan does not match the persisted subscription.");
-  const status = String(entity.status || existing.status).toLowerCase();
+  const providerStatus = String(entity.status || existing.status).toLowerCase();
   const currentStart = fromUnix(entity.current_start) || existing.currentPeriodStart;
   const currentEnd = fromUnix(entity.current_end) || existing.currentPeriodEnd;
   const expiryDate = currentEnd || existing.expiryDate;
   const now = new Date();
+  // Razorpay reports a subscription as cancelled the moment AutoPay is switched off, but the
+  // customer has already paid for the running period. Keep the plan until that period ends and
+  // stop renewal; once it ends, access returns only with a new payment. A plan that was not
+  // active (never paid, pending, halted, revoked) gets no such grace.
+  const paidThrough = providerStatus === "cancelled" && subscriptionHasEntitlement(existing, now) && expiryDate.getTime() > now.getTime();
+  const status = paidThrough ? "active" : providerStatus;
   const daysRemaining = Math.max(0, Math.ceil((expiryDate.getTime() - now.getTime()) / 86_400_000));
-  const cancelledAt = status === "cancelled" ? (fromUnix(entity.ended_at) || now) : existing.cancelledAt;
+  const cancelledAt = providerStatus === "cancelled" ? (fromUnix(entity.ended_at) || now) : existing.cancelledAt;
   const billingPeriodRenewed = subscriptionPeriodAdvanced(existing.currentPeriodStart, currentStart);
   const subscription = await prisma.$transaction(async tx => {
-    const updated = await tx.subscription.update({ where: { id: existing.id }, data: { status, currentPeriodStart: currentStart, currentPeriodEnd: currentEnd, expiryDate, nextRenewalDate: ["active", "pending"].includes(status) ? (fromUnix(entity.charge_at) || currentEnd) : null, startedAt: existing.startedAt || fromUnix(entity.start_at) || currentStart, cancelledAt, daysRemaining, ...(billingPeriodRenewed ? { releasesUsed: 0 } : {}), autoRenewal: !["cancelled", "completed", "expired"].includes(status) && !existing.cancelAtPeriodEnd, providerSyncedAt: now } });
+    const updated = await tx.subscription.update({ where: { id: existing.id }, data: { status, currentPeriodStart: currentStart, currentPeriodEnd: currentEnd, expiryDate, nextRenewalDate: !paidThrough && ["active", "pending"].includes(status) ? (fromUnix(entity.charge_at) || currentEnd) : null, startedAt: existing.startedAt || fromUnix(entity.start_at) || currentStart, cancelledAt, daysRemaining, ...(billingPeriodRenewed ? { releasesUsed: 0 } : {}), autoRenewal: !paidThrough && !["cancelled", "completed", "expired"].includes(status) && !existing.cancelAtPeriodEnd, ...(paidThrough ? { cancelAtPeriodEnd: true } : {}), providerSyncedAt: now } });
     if (payment?.id) await tx.subscriptionPayment.upsert({ where: { razorpayPaymentId: payment.id }, create: { subscriptionId: existing.id, razorpayPaymentId: payment.id, razorpayInvoiceId: payment.invoice_id || null, amount: Number(payment.amount || 0), currency: String(payment.currency || "INR").toUpperCase(), status: String(payment.status || "captured"), billingPeriodStart: currentStart, billingPeriodEnd: currentEnd, createdAt: fromUnix(payment.created_at) || now }, update: { status: String(payment.status || "captured"), razorpayInvoiceId: payment.invoice_id || undefined } });
-    await tx.auditLog.create({ data: { action: "SUBSCRIPTION_PROVIDER_SYNCHRONIZED", entity: "subscriptions", entityId: String(existing.id), metadata: { providerStatus: status, paymentId: payment?.id || null, billingPeriodRenewed, releaseAllowanceReset: billingPeriodRenewed } as Prisma.InputJsonObject } });
+    await tx.auditLog.create({ data: { action: "SUBSCRIPTION_PROVIDER_SYNCHRONIZED", entity: "subscriptions", entityId: String(existing.id), metadata: { providerStatus, paidThrough, paymentId: payment?.id || null, billingPeriodRenewed, releaseAllowanceReset: billingPeriodRenewed } as Prisma.InputJsonObject } });
     return updated;
   });
   if (payment?.id && payment.status === "captured") {

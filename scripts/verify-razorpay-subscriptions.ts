@@ -5,7 +5,7 @@ import fs from "node:fs";
 process.env.RAZORPAY_KEY_SECRET = "subscription-test-secret";
 
 async function main() {
-const { isSubscriptionProduct, subscriptionEntitlementEnd, subscriptionHasEntitlement, subscriptionPeriodAdvanced, verifySubscriptionCheckoutSignature } = await import("../lib/subscription-billing");
+const { isSubscriptionProduct, subscriptionEntitlementEnd, subscriptionHasEntitlement, subscriptionPeriodAdvanced, subscriptionTermLapsed, verifySubscriptionCheckoutSignature } = await import("../lib/subscription-billing");
 
 assert.equal(isSubscriptionProduct("half_yearly"), true);
 assert.equal(isSubscriptionProduct("yearly"), true);
@@ -33,6 +33,11 @@ assert.equal(subscriptionHasEntitlement({ status: "cancelled", currentPeriodEnd:
 assert.equal(subscriptionHasEntitlement({ status: "active", currentPeriodEnd: past, expiryDate: future }), true);
 assert.equal(subscriptionEntitlementEnd({ currentPeriodEnd: past, expiryDate: future }), future.getTime());
 assert.doesNotMatch(fs.readFileSync("lib/db.ts", "utf8"), /sub\.currentPeriodEnd \|\| sub\.expiryDate/);
+// A non-renewing plan lapses when its paid term ends; a renewing plan waits for the provider instead.
+assert.equal(subscriptionTermLapsed({ status: "active", autoRenewal: false, expiryDate: past }), true);
+assert.equal(subscriptionTermLapsed({ status: "active", autoRenewal: false, expiryDate: future }), false);
+assert.equal(subscriptionTermLapsed({ status: "active", autoRenewal: true, expiryDate: past }), false);
+assert.equal(subscriptionTermLapsed({ status: "pending", autoRenewal: false, expiryDate: past }), false);
 assert.equal(subscriptionPeriodAdvanced(new Date("2026-01-01"), new Date("2026-02-01")), true);
 assert.equal(subscriptionPeriodAdvanced(new Date("2026-02-01"), new Date("2026-02-01")), false);
 assert.equal(subscriptionPeriodAdvanced(null, new Date("2026-02-01")), false);

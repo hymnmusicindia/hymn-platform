@@ -103,6 +103,13 @@ export async function processRazorpayEvent(eventId: number) {
     }
     if (!resolvedOrderId) throw new Error("Webhook does not identify an order.");
     if (!event.paymentId) throw new Error("Webhook does not identify a payment.");
+    // A subscription charge is paid against Razorpay's own invoice order, which HYMN never created.
+    // subscription.charged carries the same payment and records it, so there is nothing to fulfil here;
+    // failing would only make Razorpay retry an event that can never succeed.
+    const invoiceId = (event.payloadRedacted as Record<string, any> | null)?.payment?.invoice_id;
+    if (invoiceId && !(await persistedOrderExists(resolvedOrderId))) {
+      return prisma.paymentWebhookEvent.update({ where: { id: event.id }, data: { attemptCount: { increment: 1 }, processingState: "processed", processedAt: new Date(), errorCode: null, errorMessage: null } });
+    }
     const result = await confirmPersistedPayment({ razorpayOrderId: resolvedOrderId, paymentId: event.paymentId, amountMinor: event.amountMinor ?? undefined, currency: event.currency ?? undefined, source: "webhook" });
     return prisma.paymentWebhookEvent.update({ where: { id: event.id }, data: { distributionOrderId: result.kind === "distribution" ? result.order.id : null, checkoutOrderId: result.kind === "checkout" ? result.order.id : null, attemptCount: { increment: 1 }, processingState: "processed", processedAt: new Date(), errorCode: null, errorMessage: null } });
   } catch (error) {
@@ -179,6 +186,15 @@ export async function confirmCheckoutPayment(input: { razorpayOrderId: string; p
     }
   }
   return order;
+}
+
+async function persistedOrderExists(razorpayOrderId: string) {
+  const [distribution, checkout, studio] = await Promise.all([
+    prisma.distributionOrder.findUnique({ where: { razorpayOrderId }, select: { id: true } }),
+    prisma.checkoutOrder.findUnique({ where: { razorpayOrderId }, select: { id: true } }),
+    prisma.studioPayment.findUnique({ where: { razorpayOrderId }, select: { id: true } })
+  ]);
+  return Boolean(distribution || checkout || studio);
 }
 
 export async function confirmPersistedPayment(input: { razorpayOrderId: string; paymentId: string; userId?: number; amountMinor?: number; currency?: string; source: "browser" | "webhook" | "reconciliation" | "admin_replay" }) {
