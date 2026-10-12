@@ -1,8 +1,17 @@
 /* Standalone chrome: a quiet rail and luminous type, using HYMN's silver palette. */
 header.hymn-studio-header.hymn-studio-header {
   height:58px; background:#08090b!important; border:0!important; box-shadow:none!important;
+  /* The workspace chrome stays dark even when its page uses the light theme. */
+  color-scheme:dark; color:var(--text);
   --text:#f5f7fa; --text-muted:#b0b3bd; --text-soft:#969daa; --logo-filter:none;
-  --bg-soft:#1c2026; --card:#22262d; --card-strong:#22262d; --border:#353b45;
+  --text-primary:var(--text); --text-secondary:var(--text-muted); --text-tertiary:var(--text-soft);
+  --foreground:var(--text); --bg:#08090b; --bg-elevated:#14171c;
+  --bg-soft:#1c2026; --card:#22262d; --card-strong:#22262d; --surface:#22262d; --input:#1c2026;
+  --border:#353b45; --border-strong:#555d69;
+  --accent:#f4f7fb; --accent-strong:#fff; --accent-foreground:#11161c; --accent-soft:rgba(199,213,223,.12);
+  --success:#8cdbb0; --danger:#ffb4b4; --info:#a9c5ff; --focus:#c7d5df;
+  --glass-bg:#1c2026; --glass-bg-strong:#22262d; --glass-border:#353b45;
+  --header-bg:#08090b; --header-bg-solid:#08090b; --header-border:#25272d;
 }
 header.hymn-studio-header>div:first-child { display:flex; justify-content:flex-start; max-width:none; height:58px; min-height:58px; padding:0 20px; gap:0; }
 .hymn-studio-header .header-brand { flex:0 0 204px; }

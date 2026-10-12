@@ -1639,6 +1639,7 @@ html[data-theme="light"] .producer-panel-shell .dashboard-os-sidebar img {
 }
 
 .site-header-bare-icon {
+  color: var(--text);
   transition: color 180ms ease, background 180ms ease, transform 180ms ease;
 }
 

@@ -15,9 +15,9 @@ html body :is(.btn-primary,.btn-outline,.btn-secondary,.premium-cta,.premium-gho
 html body :is(.landing-nav-link,.dashboard-os-nav-item,.release-dashboard-tab,.hymn-mobile-page-link) { text-shadow:none!important; box-shadow:none!important; }
 html body :is(.landing-nav-link,.dashboard-os-nav-item) svg { filter:none!important; }
 html body :is(.landing-nav-link,.dashboard-os-nav-item):is(:hover,:focus-visible),
-html body :is(.landing-nav-link.is-active,.dashboard-os-nav-item.is-active) { color:#fff!important; text-shadow:none!important; }
+html body :is(.landing-nav-link.is-active,.dashboard-os-nav-item.is-active) { color:var(--text)!important; text-shadow:none!important; }
 html body .landing-group-title { cursor:pointer; transition:color .18s; }
-html body .landing-group-title:hover { color:#fff; }
+html body .landing-group-title:hover { color:var(--text); }
 html body .landing-group-title svg { transition:transform .18s; }
 html body .landing-group-title[aria-expanded="false"] svg { transform:rotate(-90deg); }
 html body .rail-collapsed .landing-group-title { display:flex; justify-content:center; font-size:0; min-height:30px; }

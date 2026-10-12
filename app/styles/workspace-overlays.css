@@ -1,5 +1,5 @@
 /* Body-mounted overlays keep their own HYMN theme and sit above all chrome. */
-.hymn-overlay { --bg:#15171c; --bg-soft:#24272e; --card:#20232a; --card-strong:#24272e; --bg-elevated:#1b1e24; --border:#383c45; --text:#f5f7fa; --text-muted:#b0b5bf; --text-soft:#8b929f; --accent:#f5f7fa; --focus:#c7d5df; color:var(--text); color-scheme:dark; }
+.hymn-overlay { --bg:#15171c; --bg-soft:#24272e; --card:#20232a; --card-strong:#24272e; --bg-elevated:#1b1e24; --border:#383c45; --border-strong:#555d69; --text:#f5f7fa; --text-muted:#b0b5bf; --text-soft:#a3aab6; --accent:#f5f7fa; --accent-strong:#fff; --accent-foreground:#11161c; --accent-soft:rgba(199,213,223,.12); --text-primary:var(--text); --text-secondary:var(--text-muted); --text-tertiary:var(--text-soft); --danger:#ffb4b4; --success:#8cdbb0; --focus:#c7d5df; color:var(--text); color-scheme:dark; }
 html body .site-cart-layer { z-index:2000; }
 .site-cart-layer > button { background:rgba(0,0,0,.65); backdrop-filter:blur(5px); }
 html body .site-cart-layer .site-cart-drawer { width:min(460px,100vw); max-width:460px; padding:28px; border-color:var(--border); background:linear-gradient(155deg,#252933,#17191f 65%); color:var(--text); box-shadow:-20px 0 70px #0006; }
