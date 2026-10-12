@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { HomeNewsletter } from "@/components/home-newsletter";
-import { Gift, Headset, HelpCircle, Mail, MoreHorizontal } from "lucide-react";
+import { Headset, HelpCircle, Mail, MoreHorizontal, Users } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import "@/app/styles/referral-center.css";
 
@@ -18,7 +18,7 @@ export function WorkspaceFooter({ onNavigate, collapsed = false, workspace = "cr
     <button className="workspace-newsletter-expand" type="button" aria-label="Open newsletter signup" title="Newsletter" onClick={()=>window.dispatchEvent(new Event("hymn-toggle-navigation"))}><Mail size={19}/></button>
     <div className="workspace-footer" ref={root}>
     <Link href="/dashboard?tab=support" aria-label="Help & support" title="Help & support" onClick={navigate}><Headset size={19} strokeWidth={1.75}/></Link>
-    <Link href="/dashboard?tab=referral" aria-label="Refer a friend" title="Refer a friend" onClick={navigate}><Gift size={17}/></Link>
+    <Link href="/dashboard?tab=referral" aria-label="Refer a friend" title="Refer a friend" onClick={navigate}><Users size={19} strokeWidth={1.75}/></Link>
     <button type="button" ref={trigger} className="workspace-footer-more" aria-label="More links" aria-expanded={open} onClick={()=>setOpen(value=>!value)}><MoreHorizontal size={19}/></button>
     {open ? <nav className="workspace-footer-links" aria-label="More HYMN links"><Link href="/terms-of-service" onClick={navigate}>Terms of service</Link><Link href="/privacy-policy" onClick={navigate}>Privacy</Link><Link href="/policies" onClick={navigate}>Policy center</Link><Link href="/contact" onClick={navigate}>Contact HYMN</Link></nav>:null}
   </div></div>;

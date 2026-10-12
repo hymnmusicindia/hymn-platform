@@ -584,7 +584,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
               </div> : null}
             </div>
             <div className="mt-3 grid gap-1">
-              <Link href={user.role === "producer" ? "/producer/dashboard" : "/dashboard"} onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
+              <Link href={user.role === "producer" ? "/producer/dashboard?tab=settings" : "/dashboard?tab=settings"} onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
                 <UserRound className="h-4 w-4" />
                 Update personal details
               </Link>

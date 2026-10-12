@@ -1,4 +1,4 @@
-import { Disc3, Folder, Headphones, LayoutGrid, Megaphone, Music2, Plus, Settings, ShieldCheck, Store, TrendingUp, Users, Wallet } from "lucide-react";
+import { Disc3, Folder, Headphones, LayoutGrid, Megaphone, Music2, Plus, ShieldCheck, Store, TrendingUp, Users, Wallet } from "lucide-react";
 
 // Shared by the home rail and every artist/producer workspace frame.
 export const workspaceNavigation = [
@@ -18,8 +18,6 @@ export const workspaceNavigation = [
   { key:"studio", label:"Find an engineer", group:"Mixing / Mastering", href:"/studio", icon:Headphones },
   { key:"studio-orders", label:"My projects", group:"Mixing / Mastering", href:"/dashboard/studio", icon:LayoutGrid },
   { key:"managed-services", label:"Artist services", group:"Mixing / Mastering", href:"/managed-services", icon:Music2 },
-  { key:"settings", label:"Settings & profiles", group:"Account", href:"/dashboard?tab=settings", icon:Settings },
-  { key:"referral", label:"Referrals", group:"Account", href:"/dashboard?tab=referral", icon:Users },
 ];
 
 export const workspaceGroups = Array.from(new Set(workspaceNavigation.map(item=>item.group)))
@@ -30,7 +28,7 @@ type NavItem = {key:string;label:string;group?:string;href?:string;description?:
 export function consistentWorkspaceNavigation(items: NavItem[]): NavItem[] {
   // Administrative operations have a separate, permission-specific information architecture.
   if(items.some(item=>item.group==="Command Center")) return items;
-  items = items.filter(item => item.group !== "Support");
+  items = items.filter(item => item.group !== "Support" && item.group !== "Account");
   const producer = items.some(item=>item.key==="catalog" && item.group==="Beatstore");
   if (producer) return items;
   const matched = new Set<NavItem>();
@@ -38,12 +36,9 @@ export function consistentWorkspaceNavigation(items: NavItem[]): NavItem[] {
     const existing = items.find(item=>item.group!=="Business" && (item.label===canonical.label
       || (canonical.key==="earnings" && item.key==="earnings")
       || (canonical.key==="studio" && item.label==="Browse services")
-      || (canonical.key==="settings" && item.key==="settings")
       || (canonical.key==="overview" && item.group==="Home")));
     if(existing) matched.add(existing);
-    // Producer preferences belong to that workspace; shared services use canonical URLs.
-    const local = producer && canonical.key==="settings" && existing && !existing.href;
-    return {...canonical,...existing,key:existing?.key ?? (items.some(item=>item.key===canonical.key) ? `workspace-${canonical.key}` : canonical.key),label:canonical.label,group:canonical.group,href:local ? undefined : canonical.href};
+    return {...canonical,...existing,key:existing?.key ?? (items.some(item=>item.key===canonical.key) ? `workspace-${canonical.key}` : canonical.key),label:canonical.label,group:canonical.group,href:canonical.href};
   });
   const extras = items.filter(item=>!matched.has(item) && !(item.group==="Account" && item.href==="/dashboard?tab=settings") && !(item.group==="Distribution" && ["payouts", "earnings"].includes(item.key))).map(item=>({...item,
     group:item.group==="Business" ? "Beatstore" : item.group==="Profile" ? "Account" : item.group}));
