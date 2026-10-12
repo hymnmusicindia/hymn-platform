@@ -4232,13 +4232,13 @@ export function ReleaseForm({
                         </div>
                         <div
                           ref={registerField(`track-${index}-audio`)}
-                          className={clsx("audio-upload-stage grid gap-3 rounded-[1.3rem] border p-3", track.audioPreviewUrl && track.audioUploadStatus === "uploaded" && "is-ready")}
+                          className={clsx("audio-upload-stage release-track-library-audio grid gap-3 rounded-[1.3rem] border p-3", track.audioPreviewUrl && track.audioUploadStatus === "uploaded" && "is-ready")}
                           style={{
                             borderColor: "var(--border)",
                             background: "var(--bg-soft)",
                           }}
                         >
-                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs"><strong>{audioReady ? "Audio ready" : track.audioUploadStatus === "uploading" ? "Audio uploading" : "Audio needed"}</strong><button type="button" className="font-semibold text-[var(--accent)]" onClick={() => goToStep(0)}>{audioReady ? "Replace in Music" : "Add in Music"} →</button></div>
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs"><div className="min-w-0"><strong className="block truncate">{audioReady ? (track.trackTitle || track.audioFileName || `Track ${index + 1}`) : track.audioUploadStatus === "uploading" ? "Audio uploading" : "Audio needed"}</strong>{audioReady ? <span className="block text-[var(--text-muted)]">Audio ready</span> : null}</div><button type="button" className="font-semibold text-[var(--accent)]" onClick={() => goToStep(0)}>{audioReady ? "Replace in Music" : "Add in Music"} →</button></div>
                           {showErrors && issue?.key === `track-${index}-audio` ? <p className="text-xs text-[var(--danger)]">{issue.message}</p> : null}
                           {track.audioUploadStatus === "uploading" || track.audioUploadStatus === "failed" ? (
                             <div className="grid gap-2 rounded-[1rem] border px-3 py-3" style={{ borderColor: track.audioUploadStatus === "failed" ? "color-mix(in srgb,var(--danger) 38%,var(--border))" : "var(--border)", background: "var(--card)" }} aria-live="polite">
@@ -4257,7 +4257,7 @@ export function ReleaseForm({
                             </div>
                           ) : null}
                           {track.audioPreviewUrl && track.audioUploadStatus === "uploaded" ? <div
-                            className="audio-preview-reveal rounded-[1.1rem] border p-3"
+                            className="audio-preview-reveal release-track-library-preview rounded-[1.1rem] border p-3"
                             style={{
                               borderColor: "var(--border)",
                               background: "var(--card)",
@@ -4281,6 +4281,7 @@ export function ReleaseForm({
                                   .join(" • ") || "Upload audio to preview"
                               }
                               compact
+                              compactMinimal
                             />
                           </div> : null}
                         </div>

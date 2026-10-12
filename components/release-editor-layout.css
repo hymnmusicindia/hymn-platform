@@ -1,5 +1,10 @@
-/* Release setup uses the page as its only scroll area. */
+/* Release setup uses one scroll area per hosting layout. */
 html body:has(.release-workflow){height:auto!important;min-height:100dvh;overflow-y:auto!important;overflow-x:hidden}
+html:has(body .release-workflow){height:100%!important;min-height:100%;overflow-y:auto!important}
+/* The portal owns a fixed-height workspace, so its content is the scroll container. */
+html body .portal-page-content:has(.distribution-start-page .release-workflow){overflow-y:auto!important;overflow-x:hidden;overscroll-behavior-y:contain;scrollbar-width:thin}
+html body .portal-page-content .distribution-start-page:has(.release-workflow){height:auto!important;min-height:100%!important;overflow:visible!important}
+@media(max-width:1023px){html body .portal-workspace:has(.distribution-start-page .release-workflow){height:auto!important;overflow:visible!important}html body .portal-page-content:has(.distribution-start-page .release-workflow){height:auto!important;overflow:visible!important}}
 html body .distribution-start-page:has(.release-workflow),html body .distribution-start-page:has(.release-workflow)>.shell{height:auto!important;min-height:100dvh;overflow:visible!important;align-items:start;padding-block:0!important}
 html body .release-workflow.release-workflow:not(.is-artist-step){height:auto!important;max-height:none!important;min-height:0!important;overflow:visible!important;grid-template-rows:auto!important;align-content:start}
 html body .release-workflow.release-workflow .release-workflow-content{height:auto!important;max-height:none!important;min-height:0;overflow:visible!important;grid-row:auto!important;align-self:start}
@@ -36,6 +41,17 @@ html body .release-workflow .release-track-artist-avatar-picker .artist-picker-f
 html body .release-workflow .release-track-selected-artist,html body .release-workflow .release-track-artist-avatar-picker .artist-picker-add-trigger{position:relative;display:grid;place-items:center;box-sizing:border-box;width:48px;height:48px;min-height:48px;border-radius:50%!important;padding:0;overflow:hidden;margin:0;flex:none}
 html body .release-workflow .release-track-selected-artist>img,html body .release-workflow .release-track-selected-artist>.release-selected-artist-avatar{width:100%;height:100%;object-fit:cover;border-radius:50%}
 html body .release-workflow .release-track-panel{padding:18px 22px}
+/* Track audio borrows the quiet, full-width player used by Audio Library. */
+html body .release-workflow .release-track-library-audio.is-ready{grid-template-columns:minmax(0,1fr);align-items:center;gap:8px}
+html body .release-workflow .release-track-library-audio.is-ready>.audio-preview-reveal{min-width:0;padding:4px 0!important}
+html body .release-workflow .release-track-library-preview .audio-waveform-inline-minimal{display:grid;grid-template-columns:26px minmax(0,1fr);gap:12px;width:100%;min-width:0;margin:0;min-height:36px;padding:0;background:none}
+html body .release-workflow .release-track-library-preview .audio-waveform-inline-play{width:26px;height:32px;min-height:32px;padding:0;border:0;border-radius:0;background:none;color:#a4adbb;transform:none}
+html body .release-workflow .release-track-library-preview .audio-waveform-inline-play:hover{background:none;color:#fff}
+html body .release-workflow .release-track-library-preview .audio-waveform-inline-play svg{width:12px;height:12px}
+html body .release-workflow .release-track-library-preview .audio-waveform-inline-track{height:28px;filter:none;min-width:0}
+html body .release-workflow .release-track-library-preview .audio-waveform-live{height:28px;transform:scaleY(.55);opacity:.7;gap:2px}
+html body .release-workflow .release-track-library-preview .audio-waveform-live>span{flex:1;min-width:1px;max-width:2px;border-radius:0}
+html body .release-workflow .release-track-library-preview .audio-waveform-playhead{background:#e5edf6;box-shadow:none}
 @media(min-width:1024px){html body .release-workflow.release-premium-editor{grid-template-columns:132px minmax(0,1fr);column-gap:28px;padding:16px 20px!important}html body .release-workflow.release-premium-editor.is-tracklist-step{grid-template-columns:112px minmax(0,1fr);column-gap:24px}html body .release-workflow.release-premium-editor .release-footer-mobile-actions{position:static!important}html body .release-premium-editor[data-editor-stage="4"] .release-artwork-stage{min-height:260px}}
 @media(max-width:767px){html body .release-workflow.release-workflow.is-audio-upload-step .audio-waveform-inline{grid-template-columns:40px minmax(0,1fr) 64px;grid-template-rows:auto 30px;gap:8px 10px}html body .release-workflow.release-workflow.is-audio-upload-step .audio-waveform-inline-track{grid-column:2/4;grid-row:2}html body .release-workflow.release-workflow.is-audio-upload-step .audio-waveform-inline-time{grid-column:3;grid-row:1}html body .release-workflow.release-workflow.is-audio-upload-step .release-audio-queue-item{grid-template-columns:18px minmax(0,1fr) 28px;gap:8px;padding:12px;min-height:96px}html body .release-workflow .release-track-panel{padding:14px}html body .release-premium-editor .release-artwork-stage{grid-template-columns:1fr;gap:14px}html body .release-workflow.release-workflow .release-workflow-nav{position:static}}
 @media(max-height:700px) and (min-width:768px){html body .release-premium-editor .release-artwork-stage>div:first-child>div:first-child>button{max-width:210px}html body .release-premium-editor .release-artwork-stage{min-height:0}html body .release-premium-editor .release-step-intro h2{font-size:26px}}
