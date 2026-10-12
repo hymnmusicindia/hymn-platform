@@ -1,22 +1,22 @@
 /* The public artist hub. HYMN graphite, porcelain and brushed silver. */
-body:has(.hymn-landing) {
+body:has(:is(.hymn-landing, .hymn-home-theme)) {
   --bg:#08090b; --bg-elevated:#191c22; --bg-soft:#25282e; --card:#22252b; --surface:#22252b;
   --text:#f5f7fa; --text-muted:#b0b3bd; --text-soft:#999faa; --accent:#f4f7fb; --accent-foreground:#11161c;
   --border:#34373e; --border-strong:#535964; --logo-filter:none;
   --material-selected:linear-gradient(165deg,#fff,#e5ebee 58%,#bbc8d1); --material-selected-text:#11161c;
   background:#08090b; color:#f5f7fa;
 }
-body:has(.hymn-landing)>header { background:#08090b!important; border-color:#292c32!important; box-shadow:none!important; }
-body:has(.hymn-landing)>header>div:first-child { max-width:none; padding-inline:24px; }
-body:has(.hymn-landing)>header img { filter:none!important; }
-body:has(.hymn-landing)>footer { background:#101318!important; border-color:#30353e!important; }
-body:has(.hymn-landing)>footer .ios-collapse { background:#1c2129; border:1px solid #343b46; }
+body:has(:is(.hymn-landing, .hymn-home-theme))>header { background:#08090b!important; border-color:#292c32!important; box-shadow:none!important; }
+body:has(:is(.hymn-landing, .hymn-home-theme))>header>div:first-child { max-width:none; padding-inline:24px; }
+body:has(:is(.hymn-landing, .hymn-home-theme))>header img { filter:none!important; }
+body:has(:is(.hymn-landing, .hymn-home-theme))>footer { background:#101318!important; border-color:#30353e!important; }
+body:has(:is(.hymn-landing, .hymn-home-theme))>footer .ios-collapse { background:#1c2129; border:1px solid #343b46; }
 .hymn-landing .landing-career>div { border-radius:12px; padding:32px; box-shadow:none; }
 .hymn-landing .landing-career h2 { max-width:700px; font-size:clamp(28px,3vw,44px); line-height:1.15; }
 .hymn-landing .landing-career p { color:#b0b7c2!important; }
-body:has(.hymn-landing)>header .hymn-page-selector { background:#14171c; border-color:#34373e; box-shadow:none; }
-body:has(.hymn-landing)>header .site-nav-item { color:#b0b3bd; }
-body:has(.hymn-landing)>header .site-nav-item[aria-current="page"] { color:#11161c; background:linear-gradient(165deg,#fff,#c7d5df); }
+body:has(:is(.hymn-landing, .hymn-home-theme))>header .hymn-page-selector { background:#14171c; border-color:#34373e; box-shadow:none; }
+body:has(:is(.hymn-landing, .hymn-home-theme))>header .site-nav-item { color:#b0b3bd; }
+body:has(:is(.hymn-landing, .hymn-home-theme))>header .site-nav-item[aria-current="page"] { color:#11161c; background:linear-gradient(165deg,#fff,#c7d5df); }
 .hymn-landing { --landing-rail:224px; background:#08090b; color:#f5f7fa; min-height:100dvh; padding:0 12px 20px 0; }
 .landing-workspace { display:grid; grid-template-columns:var(--landing-rail) minmax(0,1fr); align-items:start; }
 .landing-rail { position:sticky; top:76px; display:flex; flex-direction:column; height:calc(100dvh - 76px); padding:24px 16px 20px; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#545962 transparent; }
@@ -79,7 +79,7 @@ body:has(.hymn-landing)>header .site-nav-item[aria-current="page"] { color:#1116
 .hymn-landing .landing-canvas>.shell { width:100%; max-width:none; margin:0; padding:32px; }
 .hymn-landing .home-store-destination-layout { padding:16px 0; background:none; }
 .hymn-landing .home-store-destination-words { font-size:clamp(24px,3vw,42px); color:#c7d5df; background:none; -webkit-text-fill-color:currentColor; }
-body:has(.hymn-landing) .home-store-logo { filter:grayscale(1) invert(1)!important; mix-blend-mode:normal!important; opacity:.8; }
+body:has(:is(.hymn-landing, .hymn-home-theme)) .home-store-logo { filter:grayscale(1) invert(1)!important; mix-blend-mode:normal!important; opacity:.8; }
 .hymn-landing #label { margin:16px 32px; padding:34px 26px; overflow:hidden; border:1px solid #3b414a; border-radius:10px; }
 .hymn-landing #label>.shell { width:100%; padding:0; }
 .hymn-landing #label h2 { font-size:clamp(28px,3vw,40px); line-height:1.1; }

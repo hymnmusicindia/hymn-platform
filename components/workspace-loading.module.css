@@ -7,7 +7,7 @@
   justify-content: center;
   gap: 14px;
   padding: 24px;
-  color: #aeb7c5;
+  color: var(--text-muted, #aeb7c5);
 }
 .loading p {
   margin: 0;
@@ -19,13 +19,13 @@
   position: fixed;
   inset: 0;
   z-index: 90;
-  background: #10151e;
+  background: var(--bg, #10151e);
 }
 .spinner {
   width: 28px;
   height: 28px;
-  border: 2px solid #ffffff20;
-  border-top-color: #c3cbd7;
+  border: 2px solid var(--border, #ffffff20);
+  border-top-color: var(--text-muted, #c3cbd7);
   border-radius: 50%;
   animation: spin .85s linear infinite;
 }
