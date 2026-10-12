@@ -16,8 +16,14 @@ export function FirstLoginReferralPrompt() {
   async function skip() {
     if (pending) return;
     setPending(true); setError("");
-    try { const response = await fetch("/api/referrals/onboarding", { method: "POST" }); if (!response.ok) throw new Error(); setOpen(false); }
-    catch { setError("Could not save your choice. Please try again."); }
+    try {
+      const response = await fetch("/api/referrals/onboarding", { method: "POST" });
+      const data = await response.json().catch(() => null);
+      if (response.status === 401) throw new Error("Your session has expired. Please sign in again.");
+      if (!response.ok || data?.success !== true) throw new Error(data?.error || "Could not save your choice. Please try again.");
+      setOpen(false);
+    }
+    catch (error) { setError(error instanceof Error ? error.message : "Could not connect. Please try again."); }
     finally { setPending(false); }
   }
   async function apply(event: FormEvent) {

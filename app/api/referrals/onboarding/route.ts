@@ -1,3 +1,4 @@
+import { getPublicAppUrl } from "@/lib/public-app-url";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { referralOnboardingEligible } from "@/lib/referral-eligibility";
@@ -14,9 +15,16 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  if (request.headers.get("origin") && request.headers.get("origin") !== new URL(request.url).origin) return NextResponse.json({ error: "Invalid origin." }, { status: 403 });
+  const origin = request.headers.get("origin");
+  if (origin && ![new URL(request.url).origin, getPublicAppUrl(request.url)].includes(origin)) return NextResponse.json({ error: "Invalid origin." }, { status: 403 });
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  await prisma.user.update({ where: { id: session.sub }, data: { referralPromptCompletedAt: new Date() } });
-  return NextResponse.json({ success: true });
+  try {
+    // Repeated clicks should preserve the original choice timestamp.
+    const updated = await prisma.user.updateMany({ where: { id: session.sub, referralPromptCompletedAt: null }, data: { referralPromptCompletedAt: new Date() } });
+    if (!updated.count && !await prisma.user.findUnique({ where: { id: session.sub }, select: { id: true } })) return NextResponse.json({ error: "Account not found. Please sign in again." }, { status: 404 });
+    return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json({ error: "We could not save your choice right now. Please try again." }, { status: 503 });
+  }
 }

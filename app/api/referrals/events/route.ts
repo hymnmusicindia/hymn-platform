@@ -1,3 +1,4 @@
+import { getPublicAppUrl } from "@/lib/public-app-url";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -6,7 +7,8 @@ import { getSession } from "@/lib/session";
 
 const schema = z.object({ event: z.enum(["referral_link_copied", "referral_link_shared"]) });
 export async function POST(request: Request) {
-  if (request.headers.get("origin") && request.headers.get("origin") !== new URL(request.url).origin) return NextResponse.json({ error: "Invalid origin." }, { status: 403 });
+  const origin = request.headers.get("origin");
+  if (origin && ![new URL(request.url).origin, getPublicAppUrl(request.url)].includes(origin)) return NextResponse.json({ error: "Invalid origin." }, { status: 403 });
   const session = await getSession(); if (!session) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   const rate = await consumeRateLimit({ scope: "referral.events", identity: `${session.sub}:${requestIdentity(request)}`, limit: 60, windowSeconds: 60 });
   if (!rate.allowed) return NextResponse.json({ error: "Too many events." }, { status: 429 });
