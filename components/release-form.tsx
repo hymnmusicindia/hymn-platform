@@ -3364,7 +3364,7 @@ export function ReleaseForm({
     setSubmittedRelease(null);
   }
 
-  function startReleaseJourney() {
+  const startReleaseJourney = useCallback(() => {
     if (journeyExiting) return;
     setJourneyExiting(true);
     if (journeyTransitionTimerRef.current != null) window.clearTimeout(journeyTransitionTimerRef.current);
@@ -3375,7 +3375,13 @@ export function ReleaseForm({
       setHasStartedEditing(true);
       journeyTransitionTimerRef.current = null;
     }, 340);
-  }
+  }, [journeyExiting]);
+
+  useEffect(() => {
+    if (!journeyIntro || journeyExiting || submittedRelease) return;
+    const timer = window.setTimeout(startReleaseJourney, 4500);
+    return () => window.clearTimeout(timer);
+  }, [journeyIntro, journeyExiting, submittedRelease, startReleaseJourney]);
 
   if (submittedRelease) {
     return (
