@@ -7,6 +7,7 @@ import { WorkspaceFooter } from "@/components/workspace-footer";
 import { consistentWorkspaceNavigation, workspaceNavigation } from "@/lib/workspace-navigation";
 import Link from "next/link";
 import { SubscriptionButton, openSubscriptions } from "@/components/subscription-options";
+import { useSubscriptionLabel } from "@/components/subscription-label-context";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -70,6 +71,7 @@ export function DashboardFrame<T extends string>({
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const subscriptionLabel = useSubscriptionLabel();
   const [newOpen, setNewOpen] = useState(false);
   const newMenuRef = useRef<HTMLDivElement>(null);
   const newDialogRef = useAccessibleDialog(newOpen, () => setNewOpen(false));
@@ -257,9 +259,10 @@ export function DashboardFrame<T extends string>({
                 <div className={clsx("grid gap-1.5", closed ? "hidden" : "")}>
                   {group.items.map((item) => {
                     const active = item.key === activeKey;
+                    const itemLabel = item.key === "plans" || item.key === "subscriptions" ? subscriptionLabel : item.label;
                     const Icon = workspaceNavigation.find(entry => entry.label === item.label)?.icon ?? (/notification|message/.test(item.key)?Bell:/user|artist|producer|team|collaborator|referral|contributor/.test(item.key)?Users:/fraud/.test(item.key)?ShieldCheck:/contract/.test(item.key)?FileText:/activity|audit|health/.test(item.key)?Activity:/review|queue/.test(item.key)?ClipboardCheck:/release|catalog|delivery/.test(item.key)?Disc3:/analytics|sales|growth/.test(item.key)?TrendingUp:/payment|revenue|royalt|earning|payout|reconcil|ledger/.test(item.key)?Wallet:/upload/.test(item.key)?Upload:/studio|mix|master/.test(item.key)?Headphones:/store|purchase/.test(item.key)?Store:/setting|profile|account|integration/.test(item.key)?Settings:/support|help/.test(item.key)?LifeBuoy:/email|newsletter|webhook/.test(item.key)?FileText:item.key==="overview"?LayoutGrid:Music2);
-                    const content = <><Icon className="portal-nav-icon" /><span className={clsx("min-w-0", collapsed ? "lg:hidden" : "")}><span className="block truncate font-semibold">{item.label}</span></span></>;
-                    return item.href ? <Link key={item.key} href={item.href} data-guide-route={item.href} data-nav-key={item.key} aria-current={active ? "page" : undefined} onClick={(event) => { setMobileOpen(false); if (item.key === "plans" || item.key === "subscriptions") { event.preventDefault(); openSubscriptions(); } }} className={clsx("dashboard-os-nav-item pressable hover-lift", active ? "is-active" : "is-idle")} title={collapsed ? item.label : undefined}>{content}</Link> : (
+                    const content = <><Icon className="portal-nav-icon" /><span className={clsx("min-w-0", collapsed ? "lg:hidden" : "")}><span className="block truncate font-semibold">{itemLabel}</span></span></>;
+                    return item.href ? <Link key={item.key} href={item.href} data-guide-route={item.href} data-nav-key={item.key} aria-current={active ? "page" : undefined} onClick={(event) => { setMobileOpen(false); if (item.key === "plans" || item.key === "subscriptions") { event.preventDefault(); openSubscriptions(); } }} className={clsx("dashboard-os-nav-item pressable hover-lift", active ? "is-active" : "is-idle")} title={collapsed ? itemLabel : undefined}>{content}</Link> : (
                       <button
                         key={item.key}
                         data-nav-key={item.key}
@@ -267,7 +270,7 @@ export function DashboardFrame<T extends string>({
                         onClick={() => handleSelect(item.key)}
                         className={clsx("dashboard-os-nav-item pressable hover-lift", active ? "is-active" : "is-idle")}
                         aria-current={active ? "page" : undefined}
-                        title={collapsed ? item.label : undefined}
+                        title={collapsed ? itemLabel : undefined}
                       >
                         {content}
                       </button>

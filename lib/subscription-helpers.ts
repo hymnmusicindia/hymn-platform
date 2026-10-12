@@ -29,6 +29,17 @@ export async function getSubscriptionStatus(userId: number) {
   };
 }
 
+export async function getSubscriptionMenuLabel(userId?: number) {
+  if (!userId) return "Subscriptions";
+  const { hasActiveSubscription, plan } = await getSubscriptionStatus(userId);
+  if (!hasActiveSubscription || !plan) return "Subscriptions";
+  const labels: Record<string, string> = {
+    half_yearly: "Half-Yearly", yearly: "Yearly", yearly_plus: "Yearly+",
+    basic: "Half-Yearly", pro: "Yearly", elite: "Yearly+",
+  };
+  return labels[plan] ?? "Subscriptions";
+}
+
 export function shouldBypassPayment(userId: number, plan: string): boolean {
   // If selecting a subscription plan (half_yearly, yearly, yearly_plus)
   // and user already has an active subscription, they might be eligible for renewal

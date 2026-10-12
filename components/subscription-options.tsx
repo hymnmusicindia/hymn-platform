@@ -7,6 +7,7 @@ import { CustomerOverlay } from "@/components/customer-overlay";
 import { planPerks } from "@/components/distribution-pricing-strip";
 import { distributionPlanCards } from "@/lib/distribution-plans";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
+import { useSubscriptionLabel } from "@/components/subscription-label-context";
 
 const subscriptions = distributionPlanCards.filter(plan => plan.key !== "one_time");
 const sharedBenefits = planPerks.half_yearly.filter(feature => feature.included &&
@@ -18,7 +19,8 @@ export function openSubscriptions() {
 }
 
 export function SubscriptionButton({ className }: { className?: string }) {
-  return <button type="button" className={className} onClick={openSubscriptions} aria-haspopup="dialog"><Crown size={16} /> Subscriptions</button>;
+  const label = useSubscriptionLabel();
+  return <button type="button" className={className} onClick={openSubscriptions} aria-haspopup="dialog"><Crown size={16} /> {label}</button>;
 }
 
 /** The shared header owns this dialog; eligibility refreshes every time it opens. */
