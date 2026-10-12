@@ -36,7 +36,7 @@ import {
   UserRole
 } from "@/lib/types";
 import { buildAnalyticsSummary, ensureReleaseAnalytics } from "@/lib/analytics";
-import { createUniqueReferralCode, qualifyReferralInTransaction, registerReferralForNewUser, sendReferralRewardEmails } from "@/lib/referrals";
+import { createUniqueReferralCode, qualifyReferralInTransaction, registerReferralForNewUser, sendReferralRewardEmails, REFERRAL_SIGNUP_TRANSACTION_OPTIONS } from "@/lib/referrals";
 import { sampleBeats, sampleReleases } from "@/lib/site";
 import { searchSpotifyTracks } from "@/lib/spotify";
 import { PRODUCER_COMMISSION_CONFIG } from "@/lib/finance-config";
@@ -426,7 +426,7 @@ export async function createPasswordUser(input: {
       } });
       await registerReferralForNewUser(tx, { referredUserId: user.id, referredEmail: user.email, referralCode: input.referralCode });
       return mapPrismaUser(user);
-    });
+    }, REFERRAL_SIGNUP_TRANSACTION_OPTIONS);
   }
   const pool = getPool();
   const referrer = await resolveReferrer(input.referralCode);
@@ -1170,7 +1170,7 @@ export async function upsertGoogleUser(input: Pick<User, "name" | "email" | "goo
       if (!existing) await registerReferralForNewUser(tx, { referredUserId: user.id, referredEmail: user.email, referralCode: input.referralCode });
       await tx.auditLog.create({ data: { actorId: user.id, action: existing ? "LOGIN" : "USER_CREATED_WITH_GOOGLE", entity: "users", entityId: String(user.id), metadata: { authenticationProvider: "google" } } });
       return mapPrismaUser(user);
-    });
+    }, REFERRAL_SIGNUP_TRANSACTION_OPTIONS);
   }
 
   const pool = getPool();

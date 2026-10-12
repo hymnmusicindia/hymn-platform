@@ -1,4 +1,5 @@
 import { deliverReferralMail } from "@/lib/referral-mail";
+import { Prisma } from "@prisma/client";
 import { after, NextResponse } from "next/server";
 import { destinationAfterLogin } from "@/lib/routes";
 import { profileAvatarDataUrl } from "@/lib/avatar";
@@ -48,6 +49,10 @@ export async function POST(request: Request) {
     const redirectPath = payload.loginContext === "admin" ? "/admin" : destinationAfterLogin(user.role);
     return NextResponse.json({ user, redirectPath });
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError || error instanceof Prisma.PrismaClientInitializationError || error instanceof Prisma.PrismaClientUnknownRequestError) {
+      console.error("Google account persistence failed", { requestId, code: "code" in error ? error.code : error.name });
+      return NextResponse.json({ error: "We couldn't finish signing you in. Please try again." }, { status: 503 });
+    }
     const message = error instanceof Error ? error.message : "Google authentication failed.";
     return NextResponse.json({ error: message }, { status: 400 });
   }

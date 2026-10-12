@@ -18,6 +18,7 @@ async function main() {
   if (!reuse) await pg.initialise(); await pg.start();
   try {
     if (!reuse) await pg.createDatabase("referral_fixture");
+    if (process.argv.includes("--auth-only")) { await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-auth-timeout.ts"]); return; }
     if (process.argv.includes("--mail-only")) { await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-mail.ts"]); return; }
     await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", "prisma/schema.prisma", "--skip-generate", "--force-reset"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-lifetime-referral-migration.ts"]);

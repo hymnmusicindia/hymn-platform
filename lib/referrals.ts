@@ -13,6 +13,14 @@ export const REFERRAL_ATTRIBUTION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 export type ReferralStatus = "ATTRIBUTED" | "REGISTERED" | "PENDING" | "QUALIFIED" | "REWARDED" | "REVERSED" | "REJECTED";
 type Tx = Prisma.TransactionClient;
 
+// Referral signup performs several atomic writes across a remote database.
+// Keep the budget bounded, but above Prisma's five-second default.
+export const REFERRAL_SIGNUP_TRANSACTION_OPTIONS = { maxWait: 10_000, timeout: 30_000 } as const;
+
+export async function lockReferralGraph(tx: Tx) {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(842667301)::text`;
+}
+
 export function normalizeReferralCode(value?: string | null) {
   return value?.trim().toUpperCase().replace(/[^A-Z0-9]/g, "") || "";
 }
@@ -36,7 +44,7 @@ export async function registerReferralForNewUser(tx: Tx, input: { referredUserId
   const code = normalizeReferralCode(input.referralCode);
   if (!code) return null;
   // Serialize graph mutations so concurrent reciprocal invitations cannot form a cycle.
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(842667301)::text`;
+  await lockReferralGraph(tx);
   await tx.$queryRaw`SELECT id FROM users WHERE id = ${input.referredUserId} FOR UPDATE`;
   const [referredUser, referrer, existing] = await Promise.all([
     tx.user.findUnique({ where: { id: input.referredUserId }, select: { id: true, email: true, status: true, referredById: true, createdAt: true } }),

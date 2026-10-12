@@ -6,7 +6,7 @@ import { Prisma } from "@prisma/client";
 import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit, requestIdentity } from "@/lib/rate-limit";
-import { registerReferralForNewUser } from "@/lib/referrals";
+import { registerReferralForNewUser, lockReferralGraph, REFERRAL_SIGNUP_TRANSACTION_OPTIONS } from "@/lib/referrals";
 import { getSession } from "@/lib/session";
 
 export async function POST(request: Request) {
@@ -18,6 +18,7 @@ export async function POST(request: Request) {
   try {
     const body = z.object({ referralCode: z.string().trim().min(2).max(64).regex(/^[a-zA-Z0-9]+$/) }).parse(await request.json());
     const referral = await prisma.$transaction(async tx => {
+      await lockReferralGraph(tx);
       await tx.$queryRaw`SELECT id FROM users WHERE id = ${session.sub} FOR UPDATE`;
       const account = await tx.user.findUnique({ where: { id: session.sub }, select: { id: true, email: true, createdAt: true, referredById: true, _count: { select: { checkoutOrders: true, distributionOrders: true } }, subscription: { select: { _count: { select: { payments: true } } } } } });
       if (!account) throw new Error("Account not found.");
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
       await tx.user.update({ where: { id: account.id }, data: { referralPromptCompletedAt: new Date() } });
       await tx.auditLog.create({ data: { actorType: "user", actorId: account.id, actorRole: session.role, action: "REFERRAL_MANUALLY_APPLIED", entity: "referral", entityId: String(attached.id), metadata: { source: "onboarding" } } });
       return attached;
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    }, { ...REFERRAL_SIGNUP_TRANSACTION_OPTIONS, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     after(() => deliverReferralMail().then(() => undefined));
     return NextResponse.json({ applied: true, referralId: referral.id });
   } catch (error) {

@@ -1,4 +1,5 @@
 import { deliverReferralMail } from "@/lib/referral-mail";
+import { Prisma } from "@prisma/client";
 ﻿import bcrypt from "bcrypt";
 import { after, NextResponse } from "next/server";
 import { destinationAfterLogin } from "@/lib/routes";
@@ -31,6 +32,10 @@ export async function POST(request: Request) {
     after(() => deliverReferralMail().then(() => undefined));
     return NextResponse.json({ user, redirectPath: destinationAfterLogin(user.role) }, { status: 201 });
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError || error instanceof Prisma.PrismaClientInitializationError || error instanceof Prisma.PrismaClientUnknownRequestError) {
+      console.error("Signup persistence failed", { code: "code" in error ? error.code : error.name });
+      return NextResponse.json({ error: "We couldn't finish creating your account. Please try again." }, { status: 503 });
+    }
     const message = error instanceof Error ? error.message : "Sign up failed.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
