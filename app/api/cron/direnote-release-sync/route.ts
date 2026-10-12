@@ -73,10 +73,20 @@ export async function GET(request: Request) {
     };
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, candidates.length) }, worker));
     const staleBefore = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const [artists, songwriters] = await Promise.all([
-      prisma.artistCard.findMany({ where: { direNoteArtistId: { not: null }, archivedAt: null, OR: [{ direNoteLastSyncedAt: null }, { direNoteLastSyncedAt: { lt: staleBefore } }] }, select: { id: true }, take: 3, orderBy: { direNoteLastSyncedAt: { sort: "asc", nulls: "first" } } }),
-      prisma.contributorParty.findMany({ where: { direNoteSongwriterId: { not: null }, mergedIntoId: null, OR: [{ direNoteLastSyncedAt: null }, { direNoteLastSyncedAt: { lt: staleBefore } }] }, select: { id: true }, take: 3, orderBy: { direNoteLastSyncedAt: { sort: "asc", nulls: "first" } } })
+    const identityBudget = Date.now() - started < 250_000 ? 10 : 0;
+    // Newly provisioned artists can gain their store pages days apart. Keep asking
+    // check_artist hourly until both music identities arrive, then refresh weekly.
+    const pendingArtists = identityBudget ? await prisma.artistCard.findMany({
+      where: { direNoteArtistId: { not: null }, archivedAt: null, AND: [
+        { OR: [{ spotifyProfileUrl: null }, { spotifyProfileUrl: "" }, { appleMusicProfileUrl: null }, { appleMusicProfileUrl: "" }] },
+        { OR: [{ direNoteLastSyncedAt: null }, { direNoteLastSyncedAt: { lte: new Date(Date.now() - 60 * 60 * 1000) } }] }
+      ] }, select: { id: true }, take: identityBudget, orderBy: { direNoteLastSyncedAt: { sort: "asc", nulls: "first" } }
+    }) : [];
+    const [staleArtists, songwriters] = await Promise.all([
+      identityBudget > pendingArtists.length ? prisma.artistCard.findMany({ where: { id: { notIn: pendingArtists.map(item => item.id) }, direNoteArtistId: { not: null }, archivedAt: null, OR: [{ direNoteLastSyncedAt: null }, { direNoteLastSyncedAt: { lt: staleBefore } }] }, select: { id: true }, take: identityBudget - pendingArtists.length, orderBy: { direNoteLastSyncedAt: { sort: "asc", nulls: "first" } } }) : Promise.resolve([]),
+      identityBudget ? prisma.contributorParty.findMany({ where: { direNoteSongwriterId: { not: null }, mergedIntoId: null, OR: [{ direNoteLastSyncedAt: null }, { direNoteLastSyncedAt: { lt: staleBefore } }] }, select: { id: true }, take: 3, orderBy: { direNoteLastSyncedAt: { sort: "asc", nulls: "first" } } }) : Promise.resolve([])
     ]);
+    const artists = [...pendingArtists, ...staleArtists];
     const identityResults = await Promise.allSettled([...artists.map(item => syncDireNoteArtistInformation(item.id)), ...songwriters.map(item => syncDireNoteSongwriterInformation(item.id))]);
     const identityErrors = identityResults.filter(item => item.status === "rejected").length;
     const summary = { runId, candidateCount: candidates.length, providerRequestCount: results.length + identityResults.length, processedCount: results.length, changedCount: results.filter(result => result.success).length, identifierRepairCount: results.filter(result => result.success && Boolean(result.upc)).length, statusRepairCount: results.filter(result => result.success && Boolean(result.status)).length, correctionCount: results.filter(result => result.status === "changes_required").length, identityRefreshCount: identityResults.length - identityErrors, identityErrorCount: identityErrors, errorCount: results.filter(result => !result.success).length + identityErrors, deferredCount: candidates.length - results.length, durationMs: Date.now() - started, eligible: candidates.length, checked: results.length };

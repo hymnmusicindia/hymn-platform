@@ -47,6 +47,7 @@ async function main() {
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-first-release-http.ts"]);
     }
     else await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-direnote-lifecycle.ts", ...(process.argv.includes("--build") || process.argv.includes("--browser") ? ["--browser"] : [])]);
+    await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-direnote-artist-enrichment.ts"]);
   } finally {
     if (process.platform === "win32") await run(["-D", databaseDir, "-m", "fast", "-w", "stop"], path.resolve("node_modules/@embedded-postgres/windows-x64/native/bin/pg_ctl.exe"));
     else await pg.stop();

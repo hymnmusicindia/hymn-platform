@@ -47,3 +47,26 @@ artist links and checks attachment boundaries, partial discovery, stored IDs,
 conflicting links, idempotency and malformed URLs. Deployment scheduling still
 requires an actual hourly Hostinger/hPanel trigger when hosted on Hostinger;
 the repository's Vercel cron configuration alone does not configure Hostinger.
+
+## DireNote artist endpoint enrichment
+
+The existing `check_artist` endpoint is called after submission once DireNote
+returns an artist ID. The hourly release-sync handler now prioritizes up to ten
+associated artist cards missing Spotify or Apple Music URLs, retrying no sooner
+than one hour after a successful lookup. Fully linked cards retain the weekly
+refresh. This handles store pages that are created several days after ingestion.
+The artist endpoint fills validated Spotify/Apple artist URLs and IDs, YouTube
+channel URLs, and Instagram links when missing. Partial results stay on the same
+artist card and appear in the artist picker on its next fetch.
+
+All matched tracks are processed even when an earlier artist changed. Provider
+artist-ID conflicts stop link propagation for that record. Endpoint updates use
+compare-and-set writes so concurrent artist edits are preserved. No migration
+or new credentials are required. Hostinger still needs the existing authenticated
+hourly `/api/cron/direnote-release-sync` job to be scheduled.
+
+`npm run test:direnote-virtual` includes the isolated PostgreSQL regression
+`verify-direnote-artist-enrichment.ts`: multiple track identities, staged provider
+links, hourly retries, duplicate prevention, mismatched names and concurrent edits.
+All provider calls in that regression are intercepted locally; it sends no real
+releases or emails.
