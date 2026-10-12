@@ -1,3 +1,4 @@
+import { accrueReferralCommission } from "@/lib/referral-commissions";
 import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import mysql from "mysql2/promise";
@@ -1938,6 +1939,7 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
         const fulfilled = await tx.checkoutOrder.updateMany({ where: { id: order.id, paymentStatus: { in: ["created", "authorized"] } }, data: { paymentStatus: "paid", razorpayPaymentId: paymentId, fulfilledAt: new Date() } });
         if (fulfilled.count !== 1) throw new Error("Order was fulfilled concurrently.");
       }
+      await accrueReferralCommission(tx, "checkout_order", order.id);
       return !alreadyPaid ? qualifyReferralInTransaction(tx, { referredUserId: order.userId, transactionType: "checkout_order", transactionId: order.id, paymentId, paidAmountInr: Number(order.finalAmount), source: "verified_payment" }) : { qualified: false as const, reason: "already_paid" as const };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 20000 });
     if (qualification.qualified) await sendReferralRewardEmails(qualification.referralId).catch(() => undefined);

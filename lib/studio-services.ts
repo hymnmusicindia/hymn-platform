@@ -1,4 +1,5 @@
-﻿import { Prisma, StudioOrderStatus } from "@prisma/client";
+import { accrueReferralCommission } from "@/lib/referral-commissions";
+import { Prisma, StudioOrderStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ACTIVE_STUDIO_ORDER_STATUSES, assertStudioOrderTransition } from "@/lib/studio-services-state";
 import { razorpay, verifyCapturedRazorpayPayment, verifyRazorpaySignature } from "@/lib/razorpay";
@@ -161,6 +162,7 @@ export async function confirmStudioPayment(input: { razorpayOrderId: string; pay
       if (current.order.status !== "REVISION_PAYMENT_REQUIRED") throw new Error("This revision payment is no longer applicable.");
       const revision = await tx.studioRevision.findFirstOrThrow({ where: { paymentId: current.id, orderId: current.orderId, status: "PAYMENT_REQUIRED" } });
       await tx.studioPayment.update({ where: { id: current.id }, data: { status: "CAPTURED", razorpayPaymentId: input.paymentId, capturedAt: new Date() } });
+      await accrueReferralCommission(tx, "studio_payment", current.id);
       await tx.studioRevision.update({ where: { id: revision.id }, data: { status: "REQUESTED", paymentRequired: false } });
       const updated = await tx.studioServiceOrder.update({ where: { id: current.orderId }, data: { status: "REVISION_REQUESTED" } });
       await tx.studioOrderStatusEvent.create({ data: { orderId: current.orderId, previousStatus: "REVISION_PAYMENT_REQUIRED", newStatus: "REVISION_REQUESTED", actorType: "PAYMENT", reason: `Revision #${revision.sequence} payment received`, correlationId: `payment:${input.paymentId}:revision` } });
@@ -171,6 +173,7 @@ export async function confirmStudioPayment(input: { razorpayOrderId: string; pay
     if (current.purpose === "AMENDMENT") {
       const amendment = await tx.studioAmendment.findFirstOrThrow({ where: { paymentId: current.id, orderId: current.orderId, status: "AWAITING_PAYMENT" } });
       await tx.studioPayment.update({ where: { id: current.id }, data: { status: "CAPTURED", razorpayPaymentId: input.paymentId, capturedAt: new Date() } });
+      await accrueReferralCommission(tx, "studio_payment", current.id);
       await tx.studioAmendment.update({ where: { id: amendment.id }, data: { status: "ACCEPTED", acceptedAt: new Date() } });
       await tx.studioMessage.create({ data: { orderId: current.orderId, kind: "SYSTEM", body: `Scope amendment accepted: ${amendment.description}`, idempotencyKey: `amendment-payment:${input.paymentId}` } });
       return current.order;
@@ -183,6 +186,7 @@ export async function confirmStudioPayment(input: { razorpayOrderId: string; pay
     const next: StudioOrderStatus = atCapacity ? "REFUND_PENDING" : current.order.serviceListing.instantAccept ? "ACCEPTED" : "AWAITING_ENGINEER_ACCEPTANCE";
     const now = new Date();
     await tx.studioPayment.update({ where: { id: current.id }, data: { status: "CAPTURED", razorpayPaymentId: input.paymentId, capturedAt: now } });
+    await accrueReferralCommission(tx, "studio_payment", current.id);
     const updated = await tx.studioServiceOrder.update({ where: { id: current.orderId }, data: { status: next, paymentStatus: "HELD", paidAt: now, acceptedAt: next === "ACCEPTED" ? now : undefined, acceptanceExpiresAt: next === "AWAITING_ENGINEER_ACCEPTANCE" ? new Date(now.getTime() + 24 * 60 * 60 * 1000) : undefined } });
     await tx.studioOrderStatusEvent.createMany({ data: [
       { orderId: current.orderId, previousStatus: "AWAITING_PAYMENT", newStatus: "PAID", actorType: "PAYMENT", reason: "Payment captured", correlationId: `payment:${input.paymentId}:paid` },

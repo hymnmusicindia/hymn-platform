@@ -1,3 +1,4 @@
+import { accrueReferralCommission, refreshReferralCommission } from "@/lib/referral-commissions";
 import { reviewSubscriptionReferralPayment } from "@/lib/referral-payment-review";
 import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
@@ -94,7 +95,10 @@ export async function processRazorpayEvent(eventId: number) {
       resolvedOrderId = distribution?.razorpayOrderId ?? checkout?.razorpayOrderId ?? studio?.razorpayOrderId ?? null;
     }
     if (event.eventType in nonFulfilmentStates) {
-      await prisma.$transaction(tx => reviewSubscriptionReferralPayment(tx, event));
+      await prisma.$transaction(async tx => {
+        if (event.paymentId) await refreshReferralCommission(tx, event.paymentId);
+        await reviewSubscriptionReferralPayment(tx, event);
+      });
       if (resolvedOrderId) await applyPaymentState({ razorpayOrderId: resolvedOrderId, paymentId: event.paymentId, state: nonFulfilmentStates[event.eventType], eventId: event.id, amountMinor: event.amountMinor });
       return prisma.paymentWebhookEvent.update({ where: { id: event.id }, data: { attemptCount: { increment: 1 }, processingState: "processed", processedAt: new Date() } });
     }
@@ -136,6 +140,7 @@ export async function confirmDistributionPayment(input: { razorpayOrderId: strin
     }
     const updated = alreadyPaid ? order : await tx.distributionOrder.update({ where: { id: order.id }, data: { paymentStatus: "paid", razorpayPaymentId: input.paymentId } });
     if (!alreadyPaid) await tx.auditLog.create({ data: { actorId: input.userId ?? null, action: "DISTRIBUTION_PAYMENT_CONFIRMED", entity: "distribution_order", entityId: String(order.id), metadata: { source: input.source, paymentId: input.paymentId } } });
+    await accrueReferralCommission(tx, "distribution_order", order.id);
     const qualification = !alreadyPaid ? await qualifyReferralInTransaction(tx, { referredUserId: order.userId, transactionType: "distribution_order", transactionId: order.id, paymentId: input.paymentId, paidAmountInr: order.amount, source: input.source }) : { qualified: false as const, reason: "already_paid" as const };
     return { updated, qualification };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 20000 });

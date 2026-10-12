@@ -193,6 +193,7 @@ model User {
   receivedReferral              Referral?                           @relation("ReferralRecipient")
   creditLedgerEntries           CreditLedgerEntry[]
   referralVisits                ReferralVisit[]
+  referralCommissionPayouts     ReferralCommissionPayout[]
   beats                         Beat[]
   producerProfile               ProducerProfile?
   artistCards                   ArtistCard[]
@@ -1747,6 +1748,7 @@ model SubscriptionPayment {
   amount             Int
   currency           String          @default("INR")
   status             String
+  planSnapshot       String?         @map("plan_snapshot")
   billingPeriodStart DateTime?       @map("billing_period_start")
   billingPeriodEnd   DateTime?       @map("billing_period_end")
   createdAt          DateTime        @default(now()) @map("created_at")
@@ -1960,6 +1962,7 @@ model Referral {
   referralCode              String    @map("referral_code")
   signupEmail               String    @map("signup_email")
   rewardPolicy              Json?     @map("reward_policy")
+  commissionRates           Json?     @map("commission_rates")
   status                    String    @default("PENDING")
   purchaseAmount            Int       @default(0) @map("purchase_amount")
   earnings                  Int       @default(0)
@@ -1978,11 +1981,59 @@ model Referral {
   updatedAt                 DateTime  @updatedAt @map("updated_at")
   owner                     User      @relation("ReferralOwner", fields: [userId], references: [id], onDelete: Restrict)
   referredUser              User?     @relation("ReferralRecipient", fields: [referredUserId], references: [id], onDelete: Restrict)
+  commissions               ReferralCommission[]
 
   @@unique([qualifyingTransactionType, qualifyingTransactionId])
   @@index([userId, status])
   @@index([status, createdAt])
   @@map("referrals")
+}
+
+model ReferralProgram {
+  id          Int      @id @default(1)
+  effectiveAt DateTime @default(now()) @map("effective_at")
+  @@map("referral_program")
+}
+
+model ReferralCommission {
+  id                Int      @id @default(autoincrement())
+  referralId        Int      @map("referral_id")
+  paymentId         String   @unique @map("payment_id")
+  sourceType        String   @map("source_type")
+  sourceId          String   @map("source_id")
+  category          String
+  paidMinor         Int      @map("paid_minor")
+  baseMinor         Int      @map("base_minor")
+  rateBps           Int      @map("rate_bps")
+  originalMinor     Int      @map("original_minor")
+  netMinor          Int      @map("net_minor")
+  refundedMinor     Int      @default(0) @map("refunded_minor")
+  status            String   @default("PENDING")
+  eligibleAt        DateTime @map("eligible_at")
+  capturedAt        DateTime @map("captured_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  referral          Referral @relation(fields: [referralId], references: [id], onDelete: Restrict)
+  @@index([status, eligibleAt])
+  @@index([referralId, id])
+  @@unique([sourceType, sourceId])
+  @@map("referral_commissions")
+}
+
+model ReferralCommissionPayout {
+  id                 Int      @id @default(autoincrement())
+  userId             Int      @map("user_id")
+  amountMinor        Int      @map("amount_minor")
+  status             String   @default("REQUESTED")
+  destination        Json
+  paymentReference   String?  @unique @map("payment_reference")
+  adminNote          String?  @map("admin_note")
+  paidAt             DateTime? @map("paid_at")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+  user               User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@index([userId, status])
+  @@map("referral_commission_payouts")
 }
 
 model CreditLedgerEntry {

@@ -1,3 +1,5 @@
+import { accrueReferralCommission } from "@/lib/referral-commissions";
+import { REFERRAL_COMMISSION_RATES, REFERRAL_HOLD_DAYS } from "@/lib/referral-commission-policy";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -8,18 +10,21 @@ export const rewardPolicySchema = z.object({
   coolingDays: z.number().int().min(1).max(90), payoutMinimum: z.number().int().min(0).max(100000)
 });
 export async function newReferralRewardPolicy(tx: Prisma.TransactionClient) {
-  const policy = await tx.growthRewardPolicy.findUniqueOrThrow({ where: { id: 1 } });
-  return { version: 2, amount: policy.artistCredit, coolingDays: policy.coolingDays, plans: ["half_yearly", "yearly", "yearly_plus"] };
+  void tx;
+  return { version: 3, rates: REFERRAL_COMMISSION_RATES, coolingDays: REFERRAL_HOLD_DAYS, lifetime: true };
 }
 export const referralPolicySnapshotSchema = z.object({ version: z.literal(2), amount: z.number().int().min(0).max(10000), coolingDays: z.number().int().min(1).max(90), plans: z.array(z.string()) });
 
 export async function qualifyRecurringReferral(paymentId: number) {
   return prisma.$transaction(async tx => {
+    await accrueReferralCommission(tx, "subscription_payment", paymentId);
     const payment = await tx.subscriptionPayment.findUniqueOrThrow({ where: { id: paymentId }, include: { subscription: true } });
     if (payment.status !== "captured" || payment.amount <= 0 || payment.currency !== "INR") return;
     const referral = await tx.referral.findUnique({ where: { referredUserId: payment.subscription.userId } });
     if (!referral?.rewardPolicy || referral.status !== "PENDING") return;
-    const policy = referralPolicySnapshotSchema.parse(referral.rewardPolicy);
+    const parsed = referralPolicySnapshotSchema.safeParse(referral.rewardPolicy);
+    if (!parsed.success) return;
+    const policy = parsed.data;
     const adverse = await tx.paymentWebhookEvent.findFirst({ where: { paymentId: payment.razorpayPaymentId, signatureValid: true, eventType: { in: ["refund.created", "refund.processed", "payment.dispute.created", "payment.dispute.lost"] } } });
     if (adverse) return;
     if (!policy.plans.includes(payment.subscription.plan) || payment.createdAt < referral.createdAt || referral.userId === payment.subscription.userId) return;

@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 import { newReferralRewardPolicy } from "@/lib/referral-reward-policy";
+import { REFERRAL_COMMISSION_RATES } from "@/lib/referral-commission-policy";
 
 export const REFERRER_REWARD_INR = 5;
 export const REFERRED_USER_REWARD_INR = 3;
@@ -62,6 +63,7 @@ export async function registerReferralForNewUser(tx: Tx, input: { referredUserId
     referralCode: referrer.referralCode || code,
     signupEmail: input.referredEmail.toLowerCase(),
     rewardPolicy: await newReferralRewardPolicy(tx),
+    commissionRates: REFERRAL_COMMISSION_RATES,
     status: "PENDING",
     registeredAt: new Date()
   } });

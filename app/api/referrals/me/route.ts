@@ -4,6 +4,7 @@ import { getSession } from "@/lib/session";
 import { createUniqueReferralCode } from "@/lib/referrals";
 import { referralPolicySnapshotSchema } from "@/lib/referral-reward-policy";
 import { getPublicAppUrl } from "@/lib/public-app-url";
+import { REFERRAL_COMMISSION_RATES, REFERRAL_HOLD_DAYS, REFERRAL_MINIMUM_PAYOUT_MINOR } from "@/lib/referral-commission-policy";
 
 function maskEmail(value: string) {
   const [name, domain = ""] = value.split("@");
@@ -17,6 +18,7 @@ export async function GET(request: Request) {
   const query = new URL(request.url).searchParams;
   const cursor = (name: string) => { const raw = query.get(name); return raw && /^[1-9][0-9]{0,9}$/.test(raw) ? Number(raw) : undefined; };
   const activityCursor = cursor("activityCursor"); const creditCursor = cursor("creditCursor");
+  const commissionCursor = cursor("commissionCursor");
   const user = await prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM users WHERE id = ${session.sub} FOR UPDATE`;
     const account = await tx.user.findUnique({ where: { id: session.sub }, select: { id: true, name: true, referralCode: true, referralCredits: true } });
@@ -36,7 +38,27 @@ export async function GET(request: Request) {
     prisma.referralVisit.count({ where: { referrerId: user.id } })
   ]);
 
+  const [commissionGroups, commissionHistory, cashPayouts, payoutGroups, perReferral] = await Promise.all([
+    prisma.referralCommission.groupBy({ by: ["status"], where: { referral: { userId: user.id } }, _sum: { netMinor: true } }),
+    prisma.referralCommission.findMany({ where: { referral: { userId: user.id }, status: { not: "EXCLUDED" }, ...(commissionCursor ? { id: { lt: commissionCursor } } : {}) }, orderBy: { id: "desc" }, take: 26 }),
+    prisma.referralCommissionPayout.findMany({ where: { userId: user.id }, orderBy: { id: "desc" }, take: 25, select: { id: true, amountMinor: true, status: true, paymentReference: true, createdAt: true } }),
+    prisma.referralCommissionPayout.groupBy({ by: ["status"], where: { userId: user.id }, _sum: { amountMinor: true } }),
+    prisma.referralCommission.groupBy({ by: ["referralId"], where: { referral: { userId: user.id } }, _sum: { netMinor: true } }),
+  ]);
+  const earned = (status: string) => (commissionGroups.find(row => row.status === status)?._sum.netMinor || 0) / 100;
+  const paid = (payoutGroups.find(row => row.status === "PAID")?._sum.amountMinor || 0) / 100;
+  const requested = (payoutGroups.find(row => row.status === "REQUESTED")?._sum.amountMinor || 0) / 100;
+  const balance = earned("AVAILABLE") - paid - requested;
   return NextResponse.json({ referral: {
+    commission: {
+      pending: earned("PENDING"), held: earned("HELD"), available: Math.max(0, balance), recovery: Math.max(0, -balance), paid, requested,
+      total: commissionGroups.reduce((sum, row) => sum + (row._sum.netMinor || 0), 0) / 100,
+      minimumPayout: REFERRAL_MINIMUM_PAYOUT_MINOR / 100, holdDays: REFERRAL_HOLD_DAYS,
+      rates: Object.entries(REFERRAL_COMMISSION_RATES).map(([category, rate]) => ({ category, percent: rate / 100, basis: ["beats", "studio"].includes(category) ? "HYMN share" : "payment collected" })),
+      history: commissionHistory.slice(0,25).map(row => ({ id: row.id, category: row.category, paid: row.paidMinor / 100, base: row.baseMinor / 100, rate: row.rateBps / 100, amount: row.netMinor / 100, status: row.status, eligibleAt: row.eligibleAt.toISOString(), createdAt: row.createdAt.toISOString() })),
+      nextCursor: commissionHistory.length > 25 ? commissionHistory[24].id : null,
+      payouts: cashPayouts.map(row => ({ id: row.id, amount: row.amountMinor / 100, status: row.status, reference: row.paymentReference, createdAt: row.createdAt.toISOString() })),
+    },
     referralCode: user.referralCode,
     referralLink: `${getPublicAppUrl(request.url)}/join?ref=${encodeURIComponent(user.referralCode)}`,
     availableCredit: Number(user.referralCredits),
@@ -52,7 +74,9 @@ export async function GET(request: Request) {
     activities: activities.slice(0,25).map(item => {
       const snapshot = referralPolicySnapshotSchema.safeParse(item.rewardPolicy);
       const eligibleAt = item.qualifiedAt && snapshot.success ? new Date(item.qualifiedAt.getTime() + snapshot.data.coolingDays * 86400000).toISOString() : null;
-      return { id: item.id, person: maskEmail(item.signupEmail), status: item.status, earnings: item.earnings, expectedReward: snapshot.success ? snapshot.data.amount : 5, riskStatus: item.riskStatus, eligibleAt, createdAt: item.createdAt.toISOString(), rewardedAt: item.rewardedAt?.toISOString() ?? null };
+      const lifetime = (item.rewardPolicy as { version?: number } | null)?.version === 3;
+      const commissionEarned = (perReferral.find(row => row.referralId === item.id)?._sum.netMinor || 0) / 100;
+      return { id: item.id, lifetime, commissionEarned, person: maskEmail(item.signupEmail), status: item.status, earnings: item.earnings, expectedReward: lifetime ? 0 : snapshot.success ? snapshot.data.amount : 5, riskStatus: item.riskStatus, eligibleAt, createdAt: item.createdAt.toISOString(), rewardedAt: item.rewardedAt?.toISOString() ?? null };
     }),
     nextActivityCursor: activities.length > 25 ? activities[24].id : null,
     nextCreditCursor: ledger.length > 25 ? ledger[24].id : null,

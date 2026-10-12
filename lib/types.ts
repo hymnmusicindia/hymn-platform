@@ -595,6 +595,8 @@ export interface Coupon {
 }
 
 export interface ReferralActivity {
+  lifetime?: boolean;
+  commissionEarned?: number;
   expectedReward?: number;
   riskStatus?: string;
   eligibleAt?: string | null;
@@ -612,6 +614,14 @@ export interface ReferralActivity {
 }
 
 export interface ReferralDashboard {
+  commission?: {
+    pending: number; held: number; available: number; recovery: number; paid: number; requested: number; total: number;
+    minimumPayout: number; holdDays: number;
+    rates: Array<{ category: string; percent: number; basis: string }>;
+    history: Array<{ id: number; category: string; paid: number; base: number; rate: number; amount: number; status: string; eligibleAt: string; createdAt: string }>;
+    payouts: Array<{ id: number; amount: number; status: string; reference: string | null; createdAt: string }>;
+    nextCursor: number | null;
+  };
   coolingDays: number;
   eligiblePlans: string[];
   visits: number;

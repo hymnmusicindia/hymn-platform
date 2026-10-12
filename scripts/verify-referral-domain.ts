@@ -3,10 +3,16 @@ import { Prisma } from "@prisma/client";
 import assert from "node:assert/strict";
 import { receiveRazorpayEvent, processRazorpayEvent } from "../lib/payment-webhooks";
 import { prisma } from "../lib/prisma";
-import { registerReferralForNewUser, qualifyReferralInTransaction, reverseReferralForTransactionInTransaction } from "../lib/referrals";
+import { registerReferralForNewUser as registerNewReferral, qualifyReferralInTransaction, reverseReferralForTransactionInTransaction } from "../lib/referrals";
 import { approveRecurringReferral, qualifyRecurringReferral } from "../lib/referral-reward-policy";
 import { referralOnboardingEligible, REFERRAL_ONBOARDING_WINDOW_MS } from "../lib/referral-eligibility";
 import { reviewSubscriptionReferralPayment } from "../lib/referral-payment-review";
+// Keep explicit historical v2 fixtures: new signups now use lifetime v3 terms.
+async function registerReferralForNewUser(...args: Parameters<typeof registerNewReferral>) {
+ const referral = await registerNewReferral(...args);
+ if (referral) await args[0].referral.update({where:{id:referral.id},data:{rewardPolicy:{version:2,amount:100,coolingDays:7,plans:["half_yearly","yearly","yearly_plus"]}}});
+ return referral;
+}
 async function main(){
  assert.match(process.env.DATABASE_URL||"", /127\.0\.0\.1:55452\/referral_fixture/,"Only the isolated referral database is allowed.");
  await prisma.growthRewardPolicy.create({data:{id:1,artistCredit:100,coolingDays:7}});
