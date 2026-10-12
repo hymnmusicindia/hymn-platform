@@ -45,6 +45,7 @@ export function DashboardFrame<T extends string>({
   notificationCount = 0,
   compactOverview = false,
   setupMode = false,
+  hideWorkspaceHeader = false,
   children
 }: {
   eyebrow?: string;
@@ -65,6 +66,7 @@ export function DashboardFrame<T extends string>({
   notificationCount?: number;
   compactOverview?: boolean;
   setupMode?: boolean;
+  hideWorkspaceHeader?: boolean;
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -284,7 +286,7 @@ export function DashboardFrame<T extends string>({
       </aside>
 
       <div className="portal-workspace grid gap-6">
-        <div className="dashboard-os-topbar">
+        {!hideWorkspaceHeader && <div className="dashboard-os-topbar">
           <span className="portal-section-label">{activeGroup?.label ?? "Workspace"}</span>
           {!setupMode && !(compactOverview && isOverview) ? <div className="dashboard-os-search">
             <Search className="h-4 w-4" style={{ color: "var(--text-muted)" }} />
@@ -305,9 +307,9 @@ export function DashboardFrame<T extends string>({
               {notificationCount > 0 ? <span /> : null}
             </button>
           </div>
-        </div>
+        </div>}
 
-        {!(compactOverview && isOverview) ? <section className="dashboard-os-hero">
+        {!hideWorkspaceHeader && !(compactOverview && isOverview) ? <section className="dashboard-os-hero">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em]" style={{ color: "var(--accent)" }}>{activeGroup?.label ?? eyebrow}</p>
             <h1 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-foreground sm:text-5xl">{isOverview ? title : activeItem?.label}</h1>

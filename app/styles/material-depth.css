@@ -52,7 +52,6 @@ html[data-theme="dark"] .home-store-logo,html[data-theme="dark"] .home-store-log
 .distribution-hero-eyebrow,.is-review-mode .review-page-heading > p:first-of-type { color:var(--material-ink); }
 .beat-store-hero { box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 20px 45px -25px rgba(0,0,0,.45); }
 .beat-store-hero h1 > span { color:#c7d5df; text-shadow:0 2px 18px rgba(0,0,0,.35); }
-.beat-store-hero button[aria-current="true"] { background:#c7d5df; box-shadow:0 0 10px rgba(199,213,223,.25); }
 .release-summary-tile { box-shadow:inset 0 1px 0 var(--material-edge),0 8px 20px -12px var(--material-shadow); }
 .review-submit-bar { box-shadow:inset 0 1px 0 var(--material-edge),0 6px 20px var(--material-shadow) !important; }
 @media (prefers-reduced-motion:reduce) { .hymn-page-selector .site-nav-item { transition:none; } }
