@@ -1,4 +1,5 @@
 "use client";
+import "./release-welcome.css";
 import { loadBioRazorpay as loadRazorpayCheckout } from "@/lib/client-razorpay";
 
 import { customerMessage } from "@/lib/customer-message";
@@ -302,6 +303,8 @@ declare global {
 }
 
 
+
+const RELEASE_WELCOME_MS = 2400;
 
 const steps = [
   "Add music",
@@ -3372,7 +3375,7 @@ export function ReleaseForm({
 
   useEffect(() => {
     if (!journeyIntro || journeyExiting || submittedRelease) return;
-    const timer = window.setTimeout(startReleaseJourney, 4500);
+    const timer = window.setTimeout(startReleaseJourney, RELEASE_WELCOME_MS);
     return () => window.clearTimeout(timer);
   }, [journeyIntro, journeyExiting, submittedRelease, startReleaseJourney]);
 
@@ -3396,6 +3399,10 @@ export function ReleaseForm({
         <p className="release-journey-eyebrow">YOUR RELEASE JOURNEY</p>
           <h1 id="release-journey-heading">Hello{userName?.trim() ? `, ${userName.trim().split(/\s+/)[0]}` : ""}.</h1>
           <p>Let’s get your music ready for listeners. We’ll guide you through each part and save your work as you go.</p>
+          <div className="release-welcome-progress" role="status" aria-label="Artist setup opens automatically">
+            <span className="release-welcome-track" aria-hidden="true"><span style={{ animationDuration: `${RELEASE_WELCOME_MS}ms` }} /></span>
+            <ArrowRight size={16} aria-hidden="true" />
+          </div>
       </div>
     </section>
   );
@@ -3588,7 +3595,6 @@ export function ReleaseForm({
         <div className="release-editor-panels">
         {step === 1 ? (
           <section className={clsx("release-artist-stage", stepMotion)}>
-            <button type="button" className="release-change-format" onClick={() => setJourneyIntro("welcome")}>← Back</button>
             <div className="release-focused-intro">
               <h2>Who are the primary artists on this release?</h2>
             </div>

@@ -1,0 +1,10 @@
+/* Show the short welcome advancing into artist setup, without a looping loader. */
+.release-welcome-progress { display:flex;align-items:center;gap:12px;margin-top:28px;color:var(--text-muted); }
+.release-welcome-track { display:block;width:112px;height:3px;overflow:hidden;border-radius:3px;background:var(--border-strong); }
+.release-welcome-track>span { display:block;width:100%;height:100%;border-radius:inherit;background:var(--text);transform-origin:left;animation:release-welcome-advance linear both; }
+html body .release-journey-intro.is-exiting-to-music { animation:release-welcome-forward .34s cubic-bezier(.4,0,.2,1) both; }
+@keyframes release-welcome-advance { from { transform:scaleX(0); } to { transform:scaleX(1); } }
+@keyframes release-welcome-forward { to { opacity:0;transform:translateX(-24px); } }
+@media(prefers-reduced-motion:reduce) {
+  html body .release-welcome-track>span,html body .release-journey-intro.is-exiting-to-music { animation:none!important;transform:none!important; }
+}
