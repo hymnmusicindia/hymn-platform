@@ -33,9 +33,11 @@ export async function createUniqueReferralCode(tx: Tx, name: string) {
 }
 
 export async function registerReferralForNewUser(tx: Tx, input: { referredUserId: number; referredEmail: string; referralCode?: string | null }) {
-  await tx.$queryRaw`SELECT id FROM users WHERE id = ${input.referredUserId} FOR UPDATE`;
   const code = normalizeReferralCode(input.referralCode);
   if (!code) return null;
+  // Serialize graph mutations so concurrent reciprocal invitations cannot form a cycle.
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(842667301)::text`;
+  await tx.$queryRaw`SELECT id FROM users WHERE id = ${input.referredUserId} FOR UPDATE`;
   const [referredUser, referrer, existing] = await Promise.all([
     tx.user.findUnique({ where: { id: input.referredUserId }, select: { id: true, email: true, status: true, referredById: true, createdAt: true } }),
     tx.user.findFirst({ where: { referralCode: { equals: code, mode: "insensitive" } }, select: { id: true, email: true, referralCode: true, status: true } }),
@@ -72,6 +74,11 @@ export async function registerReferralForNewUser(tx: Tx, input: { referredUserId
     create: { userId: referrer.id, title: "A referral joined HYMN", body: "Someone joined HYMN using your referral. Their reward remains pending until a qualifying purchase is verified.", type: "account", href: "/dashboard?tab=referral", actionLabel: "View referrals", eventKey: `referral:${referral.id}:registered`, metadata: { referralId: referral.id } },
     update: {}
   });
+  await tx.referralMailJob.createMany({ data: [
+    { eventKey: `referral:${referral.id}:accepted:owner`, userId: referrer.id, subject: "Your invitation was accepted", body: "A new member joined HYMN through your invitation. Your referral connection is active. Say hello in your referral centre. Commission is earned only on eligible paid purchases." },
+    { eventKey: `referral:${referral.id}:accepted:follower`, userId: referredUser.id, subject: "Your HYMN referral is connected", body: "Your referral invitation was accepted and linked to your account. You can message your referrer in the referral centre. Joining alone does not earn commission." }
+  ], skipDuplicates: true });
+  await tx.notification.upsert({ where: { eventKey: `referral:${referral.id}:accepted:follower` }, update: {}, create: { userId: referredUser.id, title: "Your referral is connected", body: "Meet your referrer in your referral centre.", type: "account", href: "/dashboard?tab=referral", eventKey: `referral:${referral.id}:accepted:follower` } });
   await tx.auditLog.create({ data: { actorType: "user", actorId: input.referredUserId, actorRole: "customer", action: "REFERRAL_SIGNUP_COMPLETED", entity: "referral", entityId: String(referral.id), metadata: { referralCode: referral.referralCode } } });
   return referral;
 }

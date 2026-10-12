@@ -22,15 +22,15 @@ async function main() {
   const first = await distribution("cash_first", 99);
   await confirmDistributionPayment({ razorpayOrderId: first.razorpayOrderId, paymentId: "pay_cash_first", source: "fixture", amountMinor: 9900, currency: "INR" });
   await confirmDistributionPayment({ razorpayOrderId: first.razorpayOrderId, paymentId: "pay_cash_first", source: "fixture", amountMinor: 9900, currency: "INR" });
-  assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { paymentId: "pay_cash_first" } })).netMinor, 990);
+  assert.equal((await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: "pay_cash_first" } })).netMinor, 990);
   assert.equal(await prisma.referralCommission.count({ where: { paymentId: "pay_cash_first" } }), 1);
   await prisma.referral.update({ where: { id: referral!.id }, data: { status: "REWARDED" } });
   const repeat = await distribution("cash_repeat", 200, { paymentStatus: "paid", razorpayPaymentId: "pay_cash_repeat" });
   await prisma.$transaction(tx => accrueReferralCommission(tx, "distribution_order", repeat.id));
-  assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { paymentId: "pay_cash_repeat" } })).netMinor, 2000, "Rewards continue after the first reward.");
+  assert.equal((await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: "pay_cash_repeat" } })).netMinor, 2000, "Rewards continue after the first reward.");
   const hybrid = await distribution("cash_hybrid", 49, { creditsUsed: 50, paymentStatus: "paid", razorpayPaymentId: "pay_cash_hybrid" });
   await prisma.$transaction(tx => accrueReferralCommission(tx, "distribution_order", hybrid.id));
-  assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { paymentId: "pay_cash_hybrid" } })).netMinor, 490);
+  assert.equal((await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: "pay_cash_hybrid" } })).netMinor, 490);
   const zero = await distribution("cash_zero", 0, { paymentStatus: "paid", razorpayPaymentId: "pay_cash_zero" });
   const pending = await distribution("cash_unpaid", 99, { razorpayPaymentId: "pay_cash_unpaid" });
   const before = await distribution("cash_before", 99, { paymentStatus: "paid", razorpayPaymentId: "pay_cash_before", createdAt: new Date(0) });
@@ -41,19 +41,19 @@ async function main() {
   await prisma.$transaction(tx => accrueReferralCommission(tx, "distribution_order", testPayment.id));
   process.env.RAZORPAY_KEY_ID = "";
   await prisma.$transaction(tx => accrueReferralCommission(tx, "distribution_order", testPayment.id));
-  assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { paymentId: "pay_cash_test" } })).status, "EXCLUDED", "Switching to live mode cannot commission an already observed test payment.");
+  assert.equal((await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: "pay_cash_test" } })).status, "EXCLUDED", "Switching to live mode cannot commission an already observed test payment.");
   const sub = await prisma.subscription.create({ data: { userId: buyer.id, plan: "yearly_plus", expiryDate: new Date(Date.now() + 86400000), status: "active" } });
   for (const id of ["pay_cash_sub1", "pay_cash_sub2"]) {
     const payment = await prisma.subscriptionPayment.create({ data: { subscriptionId: sub.id, razorpayPaymentId: id, amount: 69900, planSnapshot: "half_yearly", status: "captured" } });
     await qualifyRecurringReferral(payment.id); await qualifyRecurringReferral(payment.id);
-    assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { paymentId: id } })).netMinor, 5592, "Renewals and the purchased plan snapshot are honoured.");
+    assert.equal((await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: id } })).netMinor, 5592, "Renewals and the purchased plan snapshot are honoured.");
   }
   const upload = await prisma.upload.create({ data: { userId: seller.id, kind: "AUDIO", storageKey: "commission/audio", fileName: "beat.mp3", mimeType: "audio/mpeg", sizeBytes: 1 } });
   const beat = await prisma.beat.create({ data: { userId: seller.id, title: "Cash Beat", bpm: 100, genre: "test", mood: "test", keySignature: "C", priceCents: 10000, status: "PUBLISHED", audioUploadId: upload.id } });
   const beatOrder = await createOrder({ userId: buyer.id, productId: "beatstore", originalPrice: 100, finalAmount: 100, razorpayOrderId: "order_cash_beat", amount: 100, paymentStatus: "created", items: [{ beatId: beat.id, licenseType: "general", price: 100 }] });
   await completeCheckoutOrder("order_cash_beat", "pay_cash_beat");
   const sale = await prisma.beatSale.findFirstOrThrow({ where: { orderId: beatOrder!.id } });
-  assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { paymentId: "pay_cash_beat" } })).netMinor, commissionMinor(Number(sale.hymnCommissionAmount.mul(100)), 2000));
+  assert.equal((await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: "pay_cash_beat" } })).netMinor, commissionMinor(Number(sale.hymnCommissionAmount.mul(100)), 500));
   assert.equal(Number(sale.netSaleAmount), Number(sale.producerEarningAmount.add(sale.hymnCommissionAmount)), "Seller share remains intact.");
   const party = await prisma.contributorParty.create({ data: { publicId: "HYM_CASH_ENGINEER", professionalName: "Cash Engineer", displayName: "Cash Engineer", claimedByUserId: seller.id, createdByUserId: seller.id, identityState: "CLAIMED" } });
   const engineer = await prisma.engineerProfile.create({ data: { contributorPartyId: party.id, slug: "cash-engineer", professionalName: "Cash Engineer", availability: "AVAILABLE", maxActiveOrders: 5, verificationState: "VERIFIED" } });
@@ -61,25 +61,25 @@ async function main() {
   const studioOrder = await createStudioOrder({ customerId: buyer.id, listingPublicId: listing.publicId, projectTitle: "Cash Song", idempotencyKey: "cash-studio-order", termsAccepted: true });
   const studioPayment = await createStudioPayment({ customerId: buyer.id, orderPublicId: studioOrder.publicId, idempotencyKey: "cash-studio-payment" });
   await confirmStudioPayment({ razorpayOrderId: studioPayment.razorpayOrderId, paymentId: "pay_cash_studio", source: "fixture", amountMinor: 200000, currency: "INR" });
-  assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { paymentId: "pay_cash_studio" } })).netMinor, 6000, "15% of the 20% HYMN share, not 15% of seller revenue.");
+  assert.equal((await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: "pay_cash_studio" } })).netMinor, 2000, "5% of HYMN share preserves seller revenue.");
   async function event(id: string, type: string, amount: number, refundId = id, paymentId = "pay_cash_first") {
     const payload = { id, event: type, payload: type.startsWith("refund.") ? { refund: { entity: { id: refundId, payment_id: paymentId, amount } } } : { payment: { entity: { id: paymentId, amount } } } };
     const stored = await receiveRazorpayEvent(Buffer.from(JSON.stringify(payload)), payload); await processRazorpayEvent(stored.id);
   }
   await event("cash_refund_pending", "refund.created", 4950, "rfnd_cash_1");
-  assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { paymentId: "pay_cash_first" } })).status, "HELD");
+  assert.equal((await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: "pay_cash_first" } })).status, "HELD");
   await event("cash_refund_processed", "refund.processed", 4950, "rfnd_cash_1");
   await event("cash_refund_processed_copy", "refund.processed", 4950, "rfnd_cash_1");
-  assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { paymentId: "pay_cash_first" } })).netMinor, 495, "Refund ID replay is deduplicated.");
+  assert.equal((await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: "pay_cash_first" } })).netMinor, 495, "Refund ID replay is deduplicated.");
   await event("cash_refund_second", "refund.processed", 4950, "rfnd_cash_2");
-  assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { paymentId: "pay_cash_first" } })).netMinor, 0);
+  assert.equal((await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: "pay_cash_first" } })).netMinor, 0);
   await event("cash_dispute_created", "payment.dispute.created", 4900, "", "pay_cash_hybrid");
-  assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { paymentId: "pay_cash_hybrid" } })).status, "HELD");
+  assert.equal((await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: "pay_cash_hybrid" } })).status, "HELD");
   await event("cash_dispute_won", "payment.dispute.won", 4900, "", "pay_cash_hybrid");
   await event("cash_dispute_delayed", "payment.dispute.created", 4900, "", "pay_cash_hybrid");
-  assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { paymentId: "pay_cash_hybrid" } })).status, "PENDING", "Delayed opening event cannot overwrite a terminal outcome.");
+  assert.equal((await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: "pay_cash_hybrid" } })).status, "PENDING", "Delayed opening event cannot overwrite a terminal outcome.");
   await event("cash_dispute_lost", "payment.dispute.lost", 4900, "", "pay_cash_hybrid");
-  assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { paymentId: "pay_cash_hybrid" } })).netMinor, 0);
+  assert.equal((await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: "pay_cash_hybrid" } })).netMinor, 0);
   await assert.rejects(requestReferralPayout(owner.id), /Verify your payout profile/);
   await prisma.payoutCredential.create({ data: { userId: owner.id, method: "UPI", status: "verified", legalName: "Fixture Owner", upiIdMasked: "ca***@fixture", upiIdEncrypted: "fixture-encrypted" } });
   await assert.rejects(requestReferralPayout(owner.id), /At least Rs 500/);

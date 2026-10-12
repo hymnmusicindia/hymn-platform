@@ -1,5 +1,6 @@
+import { deliverReferralMail } from "@/lib/referral-mail";
 ﻿import bcrypt from "bcrypt";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { destinationAfterLogin } from "@/lib/routes";
 import { profileAvatarDataUrl } from "@/lib/avatar";
 import { createPasswordUser } from "@/lib/db";
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
 
     await createSession({ sub: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: profileAvatarDataUrl(user.name, user.role) });
     cookieStore.delete(REFERRAL_ATTRIBUTION_COOKIE);
+    after(() => deliverReferralMail().then(() => undefined));
     return NextResponse.json({ user, redirectPath: destinationAfterLogin(user.role) }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Sign up failed.";

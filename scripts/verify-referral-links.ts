@@ -30,7 +30,7 @@ async function main() {
   assert.deepEqual(state.referralFixture.queries[0], { where: { referralCode: { equals: "ADITYA1234", mode: "insensitive" }, status: "ACTIVE" }, select: { referralCode: true } });
   reset(); assert.equal((await track("https://attacker.invalid")).status, 403); assert.equal(state.referralFixture.queries.length, 0);
   reset(); state.referralFixture.user = null; response = await join("BADCODE");
-  assert.equal(response.headers.get("location"), "https://hymnmusic.fun/login?mode=signup&referralError=invalid"); assert.equal(response.cookies.get("hymn_referral_attribution"), undefined);
+  assert.equal(response.headers.get("location"), "https://hymnmusic.fun/login?mode=signup&referralError=invalid"); assert.equal(response.cookies.get("hymn_referral_attribution")?.value, "");
   assert.equal((await track()).status, 404);
   reset(); state.referralFixture.user = null; state.referralFixture.partner = { status: "approved" }; response = await join("PARTNER123");
   assert.equal(response.headers.get("location"), "https://hymnmusic.fun/login?mode=signup"); assert.equal(response.cookies.get("hymn_partner_attribution")?.value, "PARTNER123");

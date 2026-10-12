@@ -18,10 +18,13 @@ async function main() {
   if (!reuse) await pg.initialise(); await pg.start();
   try {
     if (!reuse) await pg.createDatabase("referral_fixture");
+    if (process.argv.includes("--mail-only")) { await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-mail.ts"]); return; }
     await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", "prisma/schema.prisma", "--skip-generate", "--force-reset"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-lifetime-referral-migration.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-domain.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-lifetime-referrals.ts"]);
+    await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-network.ts"]);
+    await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-mail.ts"]);
     if (process.argv.includes("--payments")) for (const script of ["verify-payment-webhooks-integration", "verify-studio-services-integration"]) await run(["--conditions=react-server", "--import", "tsx", `scripts/${script}.ts`]);
   } finally {
     if (process.platform === "win32") await run(["-D", databaseDir, "-m", "fast", "-w", "stop"], path.resolve("node_modules/@embedded-postgres/windows-x64/native/bin/pg_ctl.exe"));

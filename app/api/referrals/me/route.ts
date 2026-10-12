@@ -1,3 +1,4 @@
+import { clearedReferralMinor } from "@/lib/referral-commissions";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
@@ -32,39 +33,40 @@ export async function GET(request: Request) {
   const [activities, ledger, policy, counts, totals, visits] = await Promise.all([
     prisma.referral.findMany({ where: { userId: user.id, ...(activityCursor ? { id: { lt: activityCursor } } : {}) }, orderBy: { id: "desc" }, take: 26 }),
     prisma.creditLedgerEntry.findMany({ where: { userId: user.id, ...(creditCursor ? { id: { lt: creditCursor } } : {}) }, orderBy: { id: "desc" }, take: 26 }),
-    prisma.growthRewardPolicy.findUniqueOrThrow({ where: { id: 1 } }),
+    prisma.growthRewardPolicy.findUnique({ where: { id: 1 } }),
     prisma.referral.groupBy({ by: ["status"], where: { userId: user.id }, _count: true }),
     prisma.referral.aggregate({ where: { userId: user.id, status: "REWARDED" }, _sum: { earnings: true } }),
     prisma.referralVisit.count({ where: { referrerId: user.id } })
   ]);
 
-  const [commissionGroups, commissionHistory, cashPayouts, payoutGroups, perReferral] = await Promise.all([
+  const [commissionGroups, commissionHistory, cashPayouts, payoutGroups, perReferral, clearedMinor] = await Promise.all([
     prisma.referralCommission.groupBy({ by: ["status"], where: { referral: { userId: user.id } }, _sum: { netMinor: true } }),
     prisma.referralCommission.findMany({ where: { referral: { userId: user.id }, status: { not: "EXCLUDED" }, ...(commissionCursor ? { id: { lt: commissionCursor } } : {}) }, orderBy: { id: "desc" }, take: 26 }),
     prisma.referralCommissionPayout.findMany({ where: { userId: user.id }, orderBy: { id: "desc" }, take: 25, select: { id: true, amountMinor: true, status: true, paymentReference: true, createdAt: true } }),
     prisma.referralCommissionPayout.groupBy({ by: ["status"], where: { userId: user.id }, _sum: { amountMinor: true } }),
     prisma.referralCommission.groupBy({ by: ["referralId"], where: { referral: { userId: user.id } }, _sum: { netMinor: true } }),
+    prisma.$transaction(tx => clearedReferralMinor(tx, user.id)),
   ]);
   const earned = (status: string) => (commissionGroups.find(row => row.status === status)?._sum.netMinor || 0) / 100;
   const paid = (payoutGroups.find(row => row.status === "PAID")?._sum.amountMinor || 0) / 100;
   const requested = (payoutGroups.find(row => row.status === "REQUESTED")?._sum.amountMinor || 0) / 100;
-  const balance = earned("AVAILABLE") - paid - requested;
+  const balance = clearedMinor / 100 - paid - requested;
   return NextResponse.json({ referral: {
     commission: {
-      pending: earned("PENDING"), held: earned("HELD"), available: Math.max(0, balance), recovery: Math.max(0, -balance), paid, requested,
+      pending: earned("PENDING"), held: earned("HELD") + Math.max(0, earned("AVAILABLE") - clearedMinor / 100), available: Math.max(0, balance), recovery: Math.max(0, -balance), paid, requested,
       total: commissionGroups.reduce((sum, row) => sum + (row._sum.netMinor || 0), 0) / 100,
       minimumPayout: REFERRAL_MINIMUM_PAYOUT_MINOR / 100, holdDays: REFERRAL_HOLD_DAYS,
       rates: Object.entries(REFERRAL_COMMISSION_RATES).map(([category, rate]) => ({ category, percent: rate / 100, basis: ["beats", "studio"].includes(category) ? "HYMN share" : "payment collected" })),
-      history: commissionHistory.slice(0,25).map(row => ({ id: row.id, category: row.category, paid: row.paidMinor / 100, base: row.baseMinor / 100, rate: row.rateBps / 100, amount: row.netMinor / 100, status: row.status, eligibleAt: row.eligibleAt.toISOString(), createdAt: row.createdAt.toISOString() })),
+      history: commissionHistory.slice(0,25).map(row => ({ id: row.id, level: row.level, category: row.category, paid: row.paidMinor / 100, base: row.baseMinor / 100, rate: row.rateBps / 100, amount: row.netMinor / 100, status: row.status, eligibleAt: row.eligibleAt.toISOString(), createdAt: row.createdAt.toISOString() })),
       nextCursor: commissionHistory.length > 25 ? commissionHistory[24].id : null,
       payouts: cashPayouts.map(row => ({ id: row.id, amount: row.amountMinor / 100, status: row.status, reference: row.paymentReference, createdAt: row.createdAt.toISOString() })),
     },
     referralCode: user.referralCode,
     referralLink: `${getPublicAppUrl(request.url)}/join?ref=${encodeURIComponent(user.referralCode)}`,
     availableCredit: Number(user.referralCredits),
-    referrerReward: policy.artistCredit,
+    referrerReward: policy?.artistCredit || 0,
     referredReward: 0,
-    coolingDays: policy.coolingDays,
+    coolingDays: policy?.coolingDays || REFERRAL_HOLD_DAYS,
     eligiblePlans: ["Half-yearly", "Yearly", "Yearly Plus"],
     totalReferrals: counts.reduce((sum, item) => sum + item._count, 0),
     successfulReferrals: counts.find(item => item.status === "REWARDED")?._count || 0,

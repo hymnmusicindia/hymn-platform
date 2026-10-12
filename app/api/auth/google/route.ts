@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { deliverReferralMail } from "@/lib/referral-mail";
+import { after, NextResponse } from "next/server";
 import { destinationAfterLogin } from "@/lib/routes";
 import { profileAvatarDataUrl } from "@/lib/avatar";
 import { createSession } from "@/lib/session";
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
 
     await createSession({ sub: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: profile.picture || profileAvatarDataUrl(user.name, user.role) }, { ipAddress, userAgent, requestId });
     cookieStore.delete(REFERRAL_ATTRIBUTION_COOKIE);
+    after(() => deliverReferralMail().then(() => undefined));
     await createBirthdayNotificationForUser(user.id).catch((error) => console.error("Birthday notification check failed", error));
     const redirectPath = payload.loginContext === "admin" ? "/admin" : destinationAfterLogin(user.role);
     return NextResponse.json({ user, redirectPath });

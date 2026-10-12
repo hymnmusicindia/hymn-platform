@@ -18,7 +18,8 @@ export async function reconcileReferralQualifications(deadline = Date.now() + 40
       AND c.payment_id LIKE 'pay_%' AND NOT EXISTS (SELECT 1 FROM referral_commissions r WHERE r.payment_id = c.payment_id)
       ORDER BY c.created_at, c.id LIMIT 100`;
     for (const row of missing) { if (Date.now() >= deadline) break; await prisma.$transaction(tx => accrueReferralCommission(tx, row.source, row.id), { timeout: 20000 }); commissions++; }
-    const due = await prisma.referralCommission.findMany({ where: { OR: [{ status: { in: ["PENDING", "HELD"] }, eligibleAt: { lte: new Date() } }, { status: "AVAILABLE", referral: { OR: [{ riskStatus: { not: "clear" } }, { status: "REJECTED" }, { owner: { status: { not: "ACTIVE" } } }, { referredUser: { status: { not: "ACTIVE" } } }] } }] }, orderBy: { updatedAt: "asc" }, take: 100 });
+    // Rotate cleared entries too: an intermediate account can be held after capture.
+    const due = await prisma.referralCommission.findMany({ where: { OR: [{ status: { in: ["PENDING", "HELD"] }, eligibleAt: { lte: new Date() } }, { status: "AVAILABLE" }] }, orderBy: { updatedAt: "asc" }, take: 100 });
     for (const row of due) { if (Date.now() >= deadline) break; await prisma.$transaction(tx => refreshReferralCommission(tx, row.paymentId)); }
   }
   const payments = await prisma.$queryRaw<Array<{ id: number }>>`SELECT p.id FROM subscription_payments p

@@ -134,6 +134,8 @@ enum StudioPaymentPurpose {
 }
 
 model User {
+  referralMessages ReferralMessage[]
+  referralMailJobs ReferralMailJob[]
   routeLinkedAccount            RouteLinkedAccount?
   routeTransfers                RouteTransfer[]
   handle                        UserHandle?
@@ -1981,7 +1983,13 @@ model Referral {
   updatedAt                 DateTime  @updatedAt @map("updated_at")
   owner                     User      @relation("ReferralOwner", fields: [userId], references: [id], onDelete: Restrict)
   referredUser              User?     @relation("ReferralRecipient", fields: [referredUserId], references: [id], onDelete: Restrict)
-  commissions               ReferralCommission[]
+  commissions               ReferralCommission[] @relation("CommissionBeneficiary")
+  originatedCommissions     ReferralCommission[] @relation("CommissionOrigin")
+  messages                  ReferralMessage[]
+  ownerReadAt               DateTime? @map("owner_read_at")
+  followerReadAt            DateTime? @map("follower_read_at")
+  ownerBlocked              Boolean @default(false) @map("owner_blocked")
+  followerBlocked           Boolean @default(false) @map("follower_blocked")
 
   @@unique([qualifyingTransactionType, qualifyingTransactionId])
   @@index([userId, status])
@@ -1990,6 +1998,7 @@ model Referral {
 }
 
 model ReferralProgram {
+  networkEffectiveAt DateTime? @map("network_effective_at")
   id          Int      @id @default(1)
   effectiveAt DateTime @default(now()) @map("effective_at")
   @@map("referral_program")
@@ -1998,7 +2007,7 @@ model ReferralProgram {
 model ReferralCommission {
   id                Int      @id @default(autoincrement())
   referralId        Int      @map("referral_id")
-  paymentId         String   @unique @map("payment_id")
+  paymentId         String   @map("payment_id")
   sourceType        String   @map("source_type")
   sourceId          String   @map("source_id")
   category          String
@@ -2013,10 +2022,14 @@ model ReferralCommission {
   capturedAt        DateTime @map("captured_at")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
-  referral          Referral @relation(fields: [referralId], references: [id], onDelete: Restrict)
+  level             Int @default(1)
+  originReferralId  Int? @map("origin_referral_id")
+  originReferral    Referral? @relation("CommissionOrigin", fields: [originReferralId], references: [id], onDelete: Restrict)
+  referral          Referral @relation("CommissionBeneficiary", fields: [referralId], references: [id], onDelete: Restrict)
   @@index([status, eligibleAt])
   @@index([referralId, id])
-  @@unique([sourceType, sourceId])
+  @@unique([paymentId, referralId])
+  @@unique([sourceType, sourceId, referralId])
   @@map("referral_commissions")
 }
 
@@ -3120,4 +3133,34 @@ model UserHandleReservation {
 
   @@index([userId])
   @@map("user_handle_reservations")
+}
+
+model ReferralMessage {
+  id Int @id @default(autoincrement())
+  referralId Int @map("referral_id")
+  senderId Int @map("sender_id")
+  sender User @relation(fields: [senderId], references: [id], onDelete: Restrict)
+  body String @db.VarChar(2000)
+  clientKey String @map("client_key")
+  createdAt DateTime @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')")) @map("created_at")
+  referral Referral @relation(fields: [referralId], references: [id], onDelete: Restrict)
+  @@unique([referralId, senderId, clientKey])
+  @@index([referralId, id])
+  @@map("referral_messages")
+}
+model ReferralMailJob {
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  id Int @id @default(autoincrement())
+  eventKey String @unique @map("event_key")
+  userId Int @map("user_id")
+  subject String
+  body String
+  status String @default("PENDING")
+  attempts Int @default(0)
+  availableAt DateTime @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')")) @map("available_at")
+  lockedAt DateTime? @map("locked_at")
+  sentAt DateTime? @map("sent_at")
+  createdAt DateTime @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')")) @map("created_at")
+  @@index([status, availableAt])
+  @@map("referral_mail_jobs")
 }

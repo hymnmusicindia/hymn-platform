@@ -10,12 +10,13 @@ function mailbox(value?: string) {
   return (value?.match(/<([^>]+)>/)?.[1] || value || "").trim().toLowerCase();
 }
 
-export function getEmailClient(): { emails: { send(input: EmailSendInput): Promise<EmailSendResult> } } | null {
+export function getEmailClient(options?: { timeoutMs?: number }): { emails: { send(input: EmailSendInput): Promise<EmailSendResult> } } | null {
   const config = getEmailConfig();
   if (!config.enabled) return null;
   return { emails: { send: async (input: EmailSendInput): Promise<EmailSendResult> => {
+    const timeout = Math.max(1000, Math.min(30000, options?.timeoutMs || 30000));
     const port = Number(process.env.SMTP_PORT || 465);
-    const transport = nodemailer.createTransport({ host: process.env.SMTP_HOST?.trim() || "smtp.gmail.com", port, secure: port === 465, requireTLS: true, auth: { user: process.env.SMTP_USER?.trim(), pass: process.env.SMTP_APP_PASSWORD?.replace(/\s/g, "") }, connectionTimeout: 15000, greetingTimeout: 15000, socketTimeout: 30000, disableFileAccess: true, disableUrlAccess: true });
+    const transport = nodemailer.createTransport({ host: process.env.SMTP_HOST?.trim() || "smtp.gmail.com", port, secure: port === 465, requireTLS: true, auth: { user: process.env.SMTP_USER?.trim(), pass: process.env.SMTP_APP_PASSWORD?.replace(/\s/g, "") }, connectionTimeout: Math.min(15000, timeout), greetingTimeout: Math.min(15000, timeout), socketTimeout: timeout, disableFileAccess: true, disableUrlAccess: true });
     const result = await transport.sendMail(input);
     if (!result.accepted.length) throw new Error("SMTP did not accept the recipient.");
     return { data: { id: result.messageId }, error: null };

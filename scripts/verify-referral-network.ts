@@ -1,0 +1,63 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { prisma } from "../lib/prisma";
+import { registerReferralForNewUser } from "../lib/referrals";
+import { accrueReferralCommission, clearedReferralMinor, refreshReferralCommission } from "../lib/referral-commissions";
+import { referralConversation, sendReferralMessage } from "../lib/referral-chat";
+import { deliverReferralMail } from "../lib/referral-mail";
+import { referralReleaseLabel } from "../lib/referral-commission-policy";
+
+async function main() {
+  assert.match(process.env.DATABASE_URL || "", /127\.0\.0\.1:55452\/referral_fixture/);
+  const chain = [];
+  for (let n = 0; n < 9; n++) {
+    const user = await prisma.user.create({ data: { name: `Network ${n}`, email: `network${n}@fixture.invalid`, googleId: `network${n}`, referralCode: `NETWORK${n}` } });
+    if (n) await prisma.$transaction(tx => registerReferralForNewUser(tx, { referredUserId: user.id, referredEmail: user.email, referralCode: chain[n - 1].referralCode }));
+    chain.push(user);
+  }
+  assert.equal(await prisma.referralMailJob.count({ where: { userId: { in: chain.map(user => user.id) } } }), 16, "Acceptance emails for both ends are committed with each connection.");
+  assert.equal((await deliverReferralMail()).deferred, true, "Disabled SMTP retains queued acceptance emails.");
+  const buyer = chain[8];
+  const order = await prisma.distributionOrder.create({ data: { userId: buyer.id, plan: "one_time", amount: 1000, razorpayOrderId: "order_network", razorpayPaymentId: "pay_network", paymentStatus: "paid" } });
+  await prisma.$transaction(tx => accrueReferralCommission(tx, "distribution_order", order.id));
+  await prisma.$transaction(tx => accrueReferralCommission(tx, "distribution_order", order.id));
+  let entries = await prisma.referralCommission.findMany({ where: { paymentId: "pay_network" }, orderBy: { level: "asc" }, include: { referral: true } });
+  assert.equal(entries.length, 7, "Depth is bounded at seven; webhook replay does not duplicate allocations.");
+  assert.deepEqual(entries.map(row => row.netMinor), [10000, 100, 50, 50, 50, 50, 50]);
+  assert.deepEqual(entries.map(row => row.referral.userId), chain.slice(1, 8).reverse().map(user => user.id));
+  assert.equal(await prisma.referralCommission.count({ where: { referral: { userId: chain[0].id } } }), 0, "Level eight does not earn.");
+  const replaySource = await prisma.checkoutOrder.create({ data: { userId: chain[7].id, originalPrice: 1000, finalAmount: 1000, razorpayOrderId: "order_network_cross", razorpayPaymentId: "pay_network", paymentStatus: "paid" } });
+  await prisma.$transaction(tx => accrueReferralCommission(tx, "checkout_order", replaySource.id));
+  assert.equal(await prisma.referralCommission.count({ where: { paymentId: "pay_network" } }), 7, "A second source/account cannot reuse a provider payment.");
+  await prisma.referralCommission.updateMany({ where: { paymentId: "pay_network" }, data: { eligibleAt: new Date(Date.now() - 1000) } });
+  await prisma.$transaction(tx => refreshReferralCommission(tx, "pay_network"));
+  assert.equal(await prisma.$transaction(tx => clearedReferralMinor(tx, chain[1].id)), 50);
+  await prisma.user.update({ where: { id: chain[4].id }, data: { status: "SUSPENDED" } });
+  assert.equal(await prisma.$transaction(tx => clearedReferralMinor(tx, chain[1].id)), 0, "An inactive intermediate account blocks upstream withdrawal immediately.");
+  assert.equal(await prisma.$transaction(tx => clearedReferralMinor(tx, chain[7].id)), 10000, "Unaffected direct earnings remain available.");
+  await prisma.$transaction(tx => refreshReferralCommission(tx, "pay_network"));
+  assert.equal((await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: "pay_network", level: 7 } })).status, "HELD");
+  await prisma.user.update({ where: { id: chain[4].id }, data: { status: "ACTIVE" } });
+  await prisma.paymentWebhookEvent.create({ data: { providerEventId: "network_refund", payloadHash: "fixture-network-refund", provider: "razorpay", eventType: "refund.processed", paymentId: "pay_network", signatureValid: true, amountMinor: 50000, payloadRedacted: { entity: { id: "rfnd_network" } }, processingState: "processed" } });
+  await prisma.$transaction(tx => refreshReferralCommission(tx, "pay_network"));
+  entries = await prisma.referralCommission.findMany({ where: { paymentId: "pay_network" }, orderBy: { level: "asc" }, include: { referral: true } });
+  assert.deepEqual(entries.map(row => row.netMinor), [5000, 50, 25, 25, 25, 25, 25], "Refunds proportionally reverse every beneficiary.");
+  const direct = entries[0].referral;
+  assert.ok(await referralConversation(direct.id, buyer.id));
+  assert.equal(await referralConversation(direct.id, chain[0].id), null, "Unrelated users cannot read a referral chat.");
+  assert.equal(await sendReferralMessage(direct.id, chain[0].id, "intrusion", randomUUID()), null);
+  const key = randomUUID();
+  const first = await sendReferralMessage(direct.id, buyer.id, "Hello <script>plain text</script>", key);
+  const replay = await sendReferralMessage(direct.id, buyer.id, "Hello <script>plain text</script>", key);
+  assert.equal(first!.id, replay!.id, "A network retry cannot duplicate a message.");
+  await sendReferralMessage(direct.id, direct.userId, "Welcome to HYMN", randomUUID());
+  assert.equal(await prisma.referralMessage.count({ where: { referralId: direct.id } }), 2);
+  await prisma.referral.update({ where: { id: direct.id }, data: { followerBlocked: true } });
+  await assert.rejects(() => sendReferralMessage(direct.id, direct.userId, "blocked", randomUUID()), /paused/);
+  const now = Date.now();
+  assert.equal(referralReleaseLabel(new Date(now + 1000).toISOString(), now), "Less than 24 hours");
+  assert.equal(referralReleaseLabel(new Date(now - 1000).toISOString(), now), "Final checks pending");
+  assert.equal(referralReleaseLabel(new Date(now + 86400001).toISOString(), now), "2 days remaining");
+  console.log("PASS seven-level allocations, replay, refund, full-path withdrawal checks, private chat, blocking, email outbox and sub-day labels.");
+}
+main().finally(() => prisma.$disconnect());

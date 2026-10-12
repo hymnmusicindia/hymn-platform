@@ -1,3 +1,5 @@
+> Updated by [Referral centre and network commissions](referral-network.md): new marketplace payments use the 5% cap, and the new migration adds seven-level sale-based allocations and private referral chat. Previously earned amounts stay unchanged.
+
 # Lifetime referral commissions
 
 Referral owners earn withdrawable INR commission on each eligible future purchase by their referred account. Attribution has no time expiry. This is separate from HYMN spending credits, artist royalties and producer/engineer earnings.

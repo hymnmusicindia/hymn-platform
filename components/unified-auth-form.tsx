@@ -14,21 +14,30 @@ export function UnifiedAuthForm({
   initialRole = "customer",
   initialMode = "login",
   initialReferralCode,
+  referralError,
+  invitedBy,
 }: {
   initialRole?: AuthRole;
   initialMode?: AuthMode;
   initialReferralCode?: string;
+  referralError?: string;
+  invitedBy?: string;
 }) {
   const [code, setCode] = useState(initialReferralCode || "");
   const [appliedCode, setAppliedCode] = useState(initialReferralCode || "");
-  const [referralState, setReferralState] = useState<string | null>(initialReferralCode ? "Referral code applied" : null);
+  const [applying, setApplying] = useState(false);
+  const [referralState, setReferralState] = useState<string | null>(referralError ? "This invitation is unavailable. Ask your friend for a new link, or continue without a referral." : initialReferralCode ? "Referral code applied" : null);
 
   async function applyReferralCode() {
-    setReferralState(null);
-    const response = await fetch("/api/referrals/track", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ referralCode: code }) });
-    const body = await response.json();
-    if (!response.ok) { setAppliedCode(""); setReferralState(body.error || "Referral code is not valid."); return; }
-    setAppliedCode(body.referralCode); setCode(body.referralCode); setReferralState("Referral code applied");
+    if (applying) return;
+    setApplying(true); setReferralState(null);
+    try {
+      const response = await fetch("/api/referrals/track", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ referralCode: code }) });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Referral code is not valid.");
+      setAppliedCode(body.referralCode); setCode(body.referralCode); setReferralState("Referral code applied");
+    } catch (error) { setReferralState(error instanceof Error ? error.message : "Could not check this code. Try again."); }
+    finally { setApplying(false); }
   }
 
   return (
@@ -42,10 +51,12 @@ export function UnifiedAuthForm({
         <Image src="/assets/hymnlogowhite.png" alt="HYMN" width={184} height={60} priority className="h-auto w-36 object-contain sm:w-44" style={{ filter: "var(--logo-filter)" }} />
       </div>
       <div className="mt-10 border-t border-[var(--border)] pt-8">
-        {initialMode === "signup" || initialReferralCode ? <details className="mb-4 rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} open={Boolean(initialReferralCode)}>
+        {invitedBy ? <div className="mb-6 flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--bg-soft)] text-lg font-semibold">{invitedBy.slice(0, 1).toUpperCase()}</span><div><p className="text-sm font-medium">{invitedBy} invited you to HYMN</p><p className="mt-1 text-xs text-[var(--text-muted)]">Create your account. Your referral connects automatically.</p></div></div> : null}
+        {initialMode === "signup" || initialReferralCode || referralError ? <details className="mb-4 rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} open={Boolean(initialReferralCode || referralError)}>
           <summary className="cursor-pointer text-sm font-medium">Have a referral code? <span className="font-normal" style={{ color: "var(--text-soft)" }}>Optional</span></summary>
-          <div className="mt-3 flex gap-2"><input className="field min-w-0 flex-1 uppercase" value={code} onChange={event => { setCode(event.target.value); setAppliedCode(""); setReferralState(null); }} placeholder="Enter code" maxLength={24} /><button type="button" className="btn-outline pressable" onClick={applyReferralCode}>Apply</button></div>
-          {referralState ? <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: appliedCode ? "var(--success)" : "var(--danger)" }}>{appliedCode ? <Check className="h-3.5 w-3.5" /> : null}{referralState}</p> : null}
+          <div className="mt-3 flex gap-2"><input className="field min-w-0 flex-1 uppercase" value={code} onChange={event => { setCode(event.target.value); setReferralState(null); }} placeholder="Enter code" maxLength={24} /><button type="button" className="btn-outline pressable" disabled={applying} onClick={applyReferralCode}>{applying ? "Checking..." : "Apply"}</button></div>
+          {appliedCode && code !== appliedCode ? <p className="mt-2 text-xs">{appliedCode} stays applied until you apply a new code.</p> : null}
+          {referralState ? <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: referralState === "Referral code applied" ? "var(--success)" : "var(--danger)" }}>{referralState === "Referral code applied" ? <Check className="h-3.5 w-3.5" /> : null}{referralState}</p> : null}
         </details> : null}
         <GoogleAuthButton label="Continue with Google" className="w-full" appearance="quiet" expectedRole={initialRole} referralCode={appliedCode || undefined} autoPrompt />
       </div>

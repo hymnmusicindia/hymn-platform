@@ -1,3 +1,5 @@
+> Current implementation: [Referral centre and network commissions](referral-network.md). This document also describes the legacy credit programme retained for existing promises.
+
 # Referral system audit and revamp
 
 The sidebar uses a shared footer on home and workspace pages: Help & support, Refer a friend (gift), and More links (Terms of service, Privacy, Policy center, Contact). The footer stays outside the scrolling service navigation; links close mobile navigation. The policy disclosure closes with Escape or an outside click.
