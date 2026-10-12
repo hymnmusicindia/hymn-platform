@@ -1,5 +1,6 @@
 "use client";
 import "./release-welcome.css";
+import "./release-editor-layout.css";
 import { loadBioRazorpay as loadRazorpayCheckout } from "@/lib/client-razorpay";
 
 import { customerMessage } from "@/lib/customer-message";
@@ -1135,7 +1136,6 @@ export function ReleaseForm({
   const [expandedTrack, setExpandedTrack] = useState(correctionTrackIndex ?? 0);
   const [artistRemovalCandidateId, setArtistRemovalCandidateId] = useState<number | null>(null);
   const [trackArtistRemovalCandidate, setTrackArtistRemovalCandidate] = useState<string | null>(null);
-  const [trackArtistEditorIndex, setTrackArtistEditorIndex] = useState<number | null>(null);
   const audioPreviewObjectUrlsRef = useRef<Set<string>>(new Set());
   const [draggedTrackIndex, setDraggedTrackIndex] = useState<number | null>(null);
   const [versionPickerTrack, setVersionPickerTrack] = useState<number | null>(null);
@@ -2538,7 +2538,7 @@ export function ReleaseForm({
   function stepButtonStyles(index: number) {
     const hasCorrection = stepHasCorrection(index);
     const rawValidity = hasCorrection ? "invalid" : stepValidity[index];
-    const validity = rawValidity === "invalid" && !visitedSteps.has(index) && !hasCorrection ? "neutral" : rawValidity;
+    const validity = rawValidity;
     const isCurrent = step === index;
     const style =
       validity === "complete"
@@ -4050,7 +4050,6 @@ export function ReleaseForm({
                           <div className="grid gap-3 md:gap-4 lg:grid-cols-3">
                             <div className="release-track-artist-field">
                               <span className="release-track-artist-label">Primary Artist</span>
-                              {trackArtistEditorIndex !== index ? <button type="button" className="release-track-artist-summary" onClick={() => setTrackArtistEditorIndex(index)}><strong>{namesFor(track.primaryArtistIds) || "Artist needed"}</strong><span>Change for this track →</span></button> : <>
                               <div className="release-track-artist-avatar-picker">
                                 {track.primaryArtistIds.map((profileId, artistIndex) => {
                                   const profile = knownProfiles[profileId];
@@ -4085,9 +4084,6 @@ export function ReleaseForm({
                                   onRemove={() => undefined}
                                 />
                               </div>
-                              <small>Up to 3 artist profiles</small>
-                              <button type="button" className="release-track-artist-done" onClick={() => setTrackArtistEditorIndex(null)}>Done</button>
-                              </>}
                             </div>
                             <div>
                               <label
@@ -4757,6 +4753,7 @@ export function ReleaseForm({
               }
             >
               <ArtworkSquareDropzone
+                minimalFeedback
                 previewUrl={artworkPreview}
                 fileName={artworkFile?.name}
                 fileType={fileFormat(artworkFile)}
@@ -4784,7 +4781,6 @@ export function ReleaseForm({
               {artworkWarning ? (
                 <ArtworkWarning warning={artworkWarning} />
               ) : null}
-               <div className="mt-6 border-t pt-5" style={{ borderColor: "var(--border)" }}><div className="flex items-center justify-between gap-3"><div><p className="font-semibold">Audio masters</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{tracks.filter((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl)).length} of {tracks.length} uploaded</p></div><button type="button" className="pressable py-2 text-xs font-semibold" style={{ color: "var(--text-muted)" }} onClick={() => goToStep(0)}>Review audio</button></div><div className="mt-4 grid gap-3">{tracks.map((track, index) => <div key={`${track.id}-asset-status`} className="flex items-center justify-between gap-3 text-xs"><span className="truncate">{index + 1}. {track.trackTitle || "Untitled track"}</span><span style={{ color: track.audioFile || track.existingAudioUrl || track.audioPreviewUrl ? "var(--success)" : "var(--danger)" }}>{track.audioFile || track.existingAudioUrl || track.audioPreviewUrl ? "Ready" : "Missing"}</span></div>)}</div></div>
             </div>
             <div
               className="artwork-requirements overflow-hidden"

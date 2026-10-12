@@ -1,0 +1,46 @@
+/* Release setup uses the page as its only scroll area. */
+html body:has(.release-workflow){height:auto!important;min-height:100dvh;overflow-y:auto!important;overflow-x:hidden}
+html body .distribution-start-page:has(.release-workflow),html body .distribution-start-page:has(.release-workflow)>.shell{height:auto!important;min-height:100dvh;overflow:visible!important;align-items:start;padding-block:0!important}
+html body .release-workflow.release-workflow:not(.is-artist-step){height:auto!important;max-height:none!important;min-height:0!important;overflow:visible!important;grid-template-rows:auto!important;align-content:start}
+html body .release-workflow.release-workflow .release-workflow-content{height:auto!important;max-height:none!important;min-height:0;overflow:visible!important;grid-row:auto!important;align-self:start}
+html body .release-workflow.release-workflow .release-editor-panels{height:auto!important;max-height:none!important;overflow:visible!important;flex:none;min-height:0;gap:16px;padding-right:0}
+html body .release-workflow.release-workflow .release-workflow-nav{grid-row:auto;position:sticky;top:76px}
+html body .release-workflow.release-workflow.is-audio-upload-step .release-audio-stage{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto;gap:18px;padding:12px 0;min-height:0;align-content:start}
+html body .release-workflow.release-workflow.is-audio-upload-step :is(.release-onboarding-assets,.release-onboarding-audio){height:auto;max-height:none;min-height:0}
+html body .release-workflow.release-workflow.is-audio-upload-step .release-audio-queue{display:grid;gap:12px;height:auto;min-height:0;max-height:none!important;overflow:visible!important;padding:0;scrollbar-gutter:auto}
+html body .release-workflow.release-workflow.is-audio-upload-step .release-audio-queue-item{min-height:96px;border-radius:16px;padding:16px;align-items:center}
+html body .release-workflow.release-workflow.is-audio-upload-step .audio-waveform-inline{overflow:visible;grid-template-columns:40px minmax(0,.9fr) minmax(120px,1fr) 76px}
+/* A clear artwork preview, paired with compact guidance. */
+html body .release-premium-editor[data-editor-stage="4"] .release-editor-panels{gap:12px}
+html body .release-premium-editor[data-editor-stage="4"] .release-step-intro{padding-bottom:10px}
+html body .release-premium-editor .release-artwork-stage{grid-template-columns:minmax(180px,.7fr) minmax(260px,1fr);gap:24px;align-items:start}
+html body .release-premium-editor .release-artwork-stage>div:first-child>div:first-child>button{display:block;width:min(100%,260px);max-width:260px;margin-inline:auto;aspect-ratio:1;box-shadow:none!important}
+html body .release-premium-editor .artwork-requirements{padding:16px;border:0!important;background:transparent!important}
+html body .release-premium-editor .artwork-requirements-header{padding-bottom:10px}
+html body .release-premium-editor .artwork-requirements-body{padding-top:0}
+html body .release-premium-editor .artwork-requirement-item{padding:8px 0}
+html body .release-premium-editor .artwork-validation{padding-top:10px;margin-top:8px}
+/* Stage state is conveyed by colour, never a filled selection box. */
+html body .release-workflow.release-workflow .release-step-button,html body .release-workflow.release-workflow .release-step-button:is(.is-current,:hover,:focus-visible){background:transparent!important;background-image:none!important;border:0!important;box-shadow:none!important;text-shadow:none!important;transform:none!important}
+html body .release-workflow.release-workflow .release-step-button.is-complete{color:#8cdbb0!important}
+html body .release-workflow.release-workflow .release-step-button.is-invalid{color:#ffb4b4!important}
+html body .release-workflow.release-workflow .release-step-button.is-current{font-weight:750;text-decoration:underline;text-underline-offset:6px;text-decoration-thickness:1px}
+/* No idle glow. A subtle highlight belongs to an intentional interaction. */
+html body .release-workflow button{box-shadow:none!important;text-shadow:none!important;filter:none!important}
+html body .release-workflow button::before,html body .release-workflow button::after{box-shadow:none!important;filter:none!important}
+html body .release-workflow .release-footer-action:is(:hover,:focus-visible),html body .release-workflow .release-focused-actions>button:is(:hover,:focus-visible){text-shadow:0 0 8px #ffffff38!important;color:var(--text)!important}
+/* Track artists match the initial artist step. */
+html body .release-workflow .release-track-artist-avatar-picker{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:8px 0}
+html body .release-workflow .release-track-artist-avatar-picker .release-primary-artist-sort-item{padding:0}
+html body .release-workflow .release-track-artist-avatar-picker .artist-picker-focused{display:flex;align-items:center;gap:0;padding:0;margin:0}
+html body .release-workflow .release-track-selected-artist,html body .release-workflow .release-track-artist-avatar-picker .artist-picker-add-trigger{position:relative;display:grid;place-items:center;box-sizing:border-box;width:48px;height:48px;min-height:48px;border-radius:50%!important;padding:0;overflow:hidden;margin:0;flex:none}
+html body .release-workflow .release-track-selected-artist>img,html body .release-workflow .release-track-selected-artist>.release-selected-artist-avatar{width:100%;height:100%;object-fit:cover;border-radius:50%}
+html body .release-workflow .release-track-panel{padding:18px 22px}
+@media(min-width:1024px){html body .release-workflow.release-premium-editor{grid-template-columns:132px minmax(0,1fr);column-gap:28px;padding:16px 20px!important}html body .release-workflow.release-premium-editor.is-tracklist-step{grid-template-columns:112px minmax(0,1fr);column-gap:24px}html body .release-workflow.release-premium-editor .release-footer-mobile-actions{position:static!important}html body .release-premium-editor[data-editor-stage="4"] .release-artwork-stage{min-height:260px}}
+@media(max-width:767px){html body .release-workflow.release-workflow.is-audio-upload-step .audio-waveform-inline{grid-template-columns:40px minmax(0,1fr) 64px;grid-template-rows:auto 30px;gap:8px 10px}html body .release-workflow.release-workflow.is-audio-upload-step .audio-waveform-inline-track{grid-column:2/4;grid-row:2}html body .release-workflow.release-workflow.is-audio-upload-step .audio-waveform-inline-time{grid-column:3;grid-row:1}html body .release-workflow.release-workflow.is-audio-upload-step .release-audio-queue-item{grid-template-columns:18px minmax(0,1fr) 28px;gap:8px;padding:12px;min-height:96px}html body .release-workflow .release-track-panel{padding:14px}html body .release-premium-editor .release-artwork-stage{grid-template-columns:1fr;gap:14px}html body .release-workflow.release-workflow .release-workflow-nav{position:static}}
+@media(max-height:700px) and (min-width:768px){html body .release-premium-editor .release-artwork-stage>div:first-child>div:first-child>button{max-width:210px}html body .release-premium-editor .release-artwork-stage{min-height:0}html body .release-premium-editor .release-step-intro h2{font-size:26px}}
+@media (min-width:768px) and (max-width:1023px){html body .release-workflow.release-premium-editor{grid-template-columns:minmax(0,1fr)!important}html body .release-workflow.release-premium-editor .release-workflow-content{grid-column:1!important}html body .release-workflow.release-premium-editor .release-mobile-step-menu{width:100%;max-width:none}html body .release-premium-editor[data-editor-stage="4"] .release-artwork-stage{grid-template-columns:minmax(180px,220px) minmax(0,1fr)}}
+@media (min-width:768px) and (max-width:1023px){html body .release-workflow.release-premium-editor .release-mobile-step-menu{display:none!important}html body .release-workflow.release-premium-editor .release-footer-mobile-actions{position:static!important}}
+@media (min-width:768px) and (max-width:1023px){html body .release-workflow.release-premium-editor > .release-mobile-step-menu{display:none!important}}
+@media (min-width:768px) and (max-width:1023px){html body .release-workflow.release-workflow.release-premium-editor:not(.is-review-mode) > .release-mobile-step-menu{display:none!important}}
+@media (min-width:768px) and (max-width:1023px) and (max-height:700px){html body .release-workflow.release-workflow.release-premium-editor{gap:10px;padding:12px 16px!important}html body .release-premium-editor[data-editor-stage="4"] .release-editor-panels{padding-bottom:0}}

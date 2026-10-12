@@ -112,10 +112,12 @@ export function ArtworkSquareDropzone({ previewUrl, fileName, fileType, dimensio
       >
         {previewUrl ? <img src={previewUrl} alt="Artwork preview" decoding="async" className="absolute inset-0 h-full w-full object-cover" /> : null}
         <div className="absolute inset-0 transition-colors duration-300 group-hover:bg-white/[.025]" />
-        {!previewUrl || processing ? <div className="relative grid h-full place-items-center">
+        {!previewUrl ? <div className="relative grid h-full place-items-center">
           <UploadCloud className="h-8 w-8 text-[var(--text-muted)] transition-[transform,color,filter] duration-300 group-hover:scale-105 group-hover:text-[var(--text)] group-hover:drop-shadow-[0_0_14px_rgba(255,255,255,.2)]" aria-hidden="true" />
         </div> : null}
       </button>
+
+      {processing ? <p className="text-xs" role="status" style={{ color: "var(--text-muted)" }}>Reading artwork...</p> : null}
 
       {!minimalFeedback && previewUrl && fileName ? (
         <div className="rounded-xl border px-3 py-2.5 text-xs" style={{ borderColor: "rgba(34,197,94,0.35)", background: "rgba(34,197,94,0.09)", color: "var(--text)" }}>
