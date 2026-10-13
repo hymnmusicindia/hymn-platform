@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ENGINEER_GENRES, ENGINEER_SPECIALTIES } from "@/lib/engineer-applications";
+import { ENGINEER_GENRES, ENGINEER_SPECIALTIES, engineerWorkSchema } from "@/lib/engineer-applications";
 
 const link = z.string().trim().max(1000).url().refine(value => value.startsWith("https://"), "Use an HTTPS link.").or(z.literal(""));
 const imageLink = z.string().trim().max(1000).url().refine(value => {
@@ -15,5 +15,7 @@ export const studioProfileSchema = z.object({
   youtube: link,
   specialties: z.array(z.enum(ENGINEER_SPECIALTIES)).min(1).max(4),
   genres: z.array(z.enum(ENGINEER_GENRES)).min(1).max(5),
+  works: z.array(engineerWorkSchema).max(8).optional(),
+  experience: z.object({ level: z.enum(["STARTING", "WORKING", "ESTABLISHED"]), years: z.number().int().min(0).max(60).nullable() }).strict().optional(),
 }).strict();
 export type StudioProfileInput = z.infer<typeof studioProfileSchema>;

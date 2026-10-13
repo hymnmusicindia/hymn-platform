@@ -1,25 +1,24 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight, BadgeCheck, Check, Clock3, ExternalLink, Headphones, Instagram, Music2, RotateCcw, ShieldCheck, Star, Youtube } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, Check, Clock3, Headphones, Instagram, RotateCcw, ShieldCheck, Star, Youtube } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { StudioTrustProfile } from "@/components/studio-trust-profile";
 import { StudioReport, StudioShareLink } from "@/components/studio-trust-actions";
 import { EngineerShareProfile } from "@/components/engineer-share-profile";
 import styles from "./profile.module.css";
+import { EngineerWorkShowcase } from "@/components/engineer-work-showcase";
+import { portfolioWorks } from "@/lib/engineer-portfolio";
 
 export const dynamic = "force-dynamic";
-type WorkItem = { title: string; url: string };
+
 function safeUrl(value: unknown) { return typeof value === "string" && /^https?:\/\//i.test(value) ? value : null; }
 function portfolioData(value: unknown) {
   const record = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
   const socialRecord = record.socials && typeof record.socials === "object" && !Array.isArray(record.socials) ? record.socials as Record<string, unknown> : {};
-  const rawWorks = Array.isArray(value) ? value : Array.isArray(record.works) ? record.works : [];
-  const works: WorkItem[] = rawWorks.flatMap(item => {
-    if (!item || typeof item !== "object") return [];
-    const entry = item as Record<string, unknown>, url = safeUrl(entry.url) ?? safeUrl(entry.afterUrl);
-    return url ? [{ title: typeof entry.title === "string" ? entry.title : "Featured work", url }] : [];
-  });
-  return { works, introVideoUrl: safeUrl(record.introVideoUrl), banner: safeUrl(record.banner), instagram: safeUrl(socialRecord.instagram), youtube: safeUrl(socialRecord.youtube) };
+  const works = portfolioWorks(value);
+  const experience = record.experience as { years?: unknown } | undefined;
+  const years = typeof experience?.years === "number" && Number.isInteger(experience.years) && experience.years > 0 && experience.years <= 60 ? experience.years : null;
+  return { works, years, introVideoUrl: safeUrl(record.introVideoUrl), banner: safeUrl(record.banner), instagram: safeUrl(socialRecord.instagram), youtube: safeUrl(socialRecord.youtube) };
 }
 function deliverableFiles(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return [];
@@ -27,7 +26,6 @@ function deliverableFiles(value: unknown) {
   return Array.isArray(files) ? files.filter((item): item is string => typeof item === "string" && Boolean(item.trim())) : [];
 }
 function naturalList(items: string[]) { return new Intl.ListFormat("en", { style: "long", type: "conjunction" }).format(items); }
-function platform(url: string) { try { return new URL(url).hostname.replace(/^www\./, "").replace("open.spotify.com", "Spotify").replace("youtube.com", "YouTube").replace("youtu.be", "YouTube").replace("soundcloud.com", "SoundCloud"); } catch { return "Listen"; } }
 function money(value: unknown) { return `₹${Number(value).toLocaleString("en-IN")}`; }
 
 export default async function EngineerPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ beatPurchaseId?: string }> }) {
@@ -55,7 +53,7 @@ export default async function EngineerPage({ params, searchParams }: { params: P
           <div className={styles.actions}><EngineerShareProfile/>{portfolio.instagram ? <a href={portfolio.instagram} target="_blank" rel="noreferrer"><Instagram size={16}/> Instagram</a> : null}{portfolio.youtube ? <a href={portfolio.youtube} target="_blank" rel="noreferrer"><Youtube size={16}/> YouTube</a> : null}</div>
         </div>
       </section>
-      {portfolio.works.length ? <section className={styles.section}><p className={styles.kicker}>THE SOUND</p><h2>Selected work</h2><p className={styles.sectionIntro}>Listen to what {engineer.professionalName} can bring to your record.</p><div className={styles.workGrid}>{portfolio.works.map((item,index) => { const directAudio = /\.(?:mp3|wav|m4a|aac|ogg|flac)(?:\?|$)/i.test(item.url); return <article key={`${item.title}-${item.url}`} className={styles.work}><div className={styles.workArt}><span>0{index+1}</span><Music2 size={29}/></div><div className={styles.workBody}><small>{platform(item.url)}</small><h3>{item.title}</h3>{directAudio ? <audio controls preload="metadata" src={item.url}/> : <a href={item.url} target="_blank" rel="noreferrer" className={styles.listen}>Listen to this work <ExternalLink size={15}/></a>}</div></article>; })}</div></section> : null}
+      {portfolio.works.length ? <EngineerWorkShowcase works={portfolio.works} name={engineer.professionalName} years={portfolio.years}/> : null}
       <section className={styles.section}><p className={styles.kicker}>THE SERVICE</p><h2>Made for your music</h2><p className={styles.serviceText}>{listing.description}</p>
         {listing.sourceRequirements && typeof listing.sourceRequirements === "object" && !Array.isArray(listing.sourceRequirements) && Array.isArray((listing.sourceRequirements as {required?:unknown}).required) ? <div className={styles.prep}><h3>Before we start</h3><ul>{((listing.sourceRequirements as {required:string[]}).required).filter(item=>typeof item==="string").map(item=><li key={item}><Check size={15}/>{item}</li>)}</ul></div> : null}
         <div className={styles.deliverables}><h3><Headphones size={20}/> What you’ll receive</h3>{deliverables.length ? <><p>Your finished package includes {naturalList(deliverables)}, prepared for release and easy sharing.</p><ul>{deliverables.map(item=><li key={item}><Check size={15}/>{item}</li>)}</ul></> : <p>Your engineer will provide the finished masters described in the project agreement.</p>}</div>

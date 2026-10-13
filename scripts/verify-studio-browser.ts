@@ -75,6 +75,15 @@ async function main() {
   assert.equal(afterEdit.profilePhotoUrl, profileInput.profilePhotoUrl);
   assert.equal(afterEdit.verificationState, beforeEdit.verificationState);
   assert.deepEqual((afterEdit.portfolio as { works: unknown }).works, (beforeEdit.portfolio as { works: unknown }).works, "Editing identity must preserve work samples.");
+  const credits = [
+    { title: "Vocal Mix Study", artist: "Fixture Artist", year: "2025", role: "Mixing", note: "A close vocal mix with a controlled low end.", url: "https://open.spotify.com/track/0Lr4kGOYn9l83EjuK6cZFQ" },
+    { title: "Mastering Study", artist: "Fixture Artist", year: "2026", role: "Mastering", note: "Dynamics and translation across listening systems.", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" },
+  ];
+  assert.equal((await directPost(profileUrl, engineerCookie, JSON.stringify({ ...profileInput, works: [{ ...credits[0], year: "invalid" }] }), {}, "PATCH")).status, 400);
+  assert.equal((await directPost(profileUrl, engineerCookie, JSON.stringify({ ...profileInput, works: credits, experience: { level: "ESTABLISHED", years: 7 } }), {}, "PATCH")).status, 200);
+  const savedExperience = await prisma.engineerProfile.findUniqueOrThrow({ where: { slug: apiSlug } });
+  assert.deepEqual((savedExperience.portfolio as { works: unknown }).works, credits);
+  assert.deepEqual((savedExperience.portfolio as { experience: unknown }).experience, { level: "ESTABLISHED", years: 7 });
   assert.match((await directGet(`http://127.0.0.1:55910/studio/engineers/${apiSlug}`, "")).body, /Updated API Engineer/);
   assert.match((await directGet("http://127.0.0.1:55910/studio/engineer/profile", engineerCookie)).body, /Make it yours/);
   assert.match((await directGet("http://127.0.0.1:55910/studio/engineer", engineerCookie)).body, /Edit profile/);
@@ -105,10 +114,25 @@ async function main() {
         await page.getByRole("textbox", { name: "Professional name", exact: true }).fill("Updated API Engineer");
         await page.getByRole("button", { name: "Save profile", exact: true }).click();
         await page.getByRole("status").filter({ hasText: "Your public profile is updated." }).waitFor();
+        await page.getByRole("button", { name: "Experience", exact: true }).click();
+        await page.getByRole("textbox", { name: "Work 1 title", exact: true }).fill("Updated Vocal Mix Study");
+        await page.getByRole("button", { name: "Move work later", exact: true }).click();
+        await page.getByRole("button", { name: "Save profile", exact: true }).click();
+        await page.getByRole("status").filter({ hasText: "Your public profile is updated." }).waitFor();
+        const reordered = await prisma.engineerProfile.findUniqueOrThrow({ where: { slug: apiSlug } });
+        assert.equal((reordered.portfolio as { works: { title: string }[] }).works[1].title, "Updated Vocal Mix Study");
         const savedProfile = await prisma.engineerProfile.findUniqueOrThrow({ where: { slug: apiSlug } });
         assert.match(savedProfile.profilePhotoUrl || "", /\/site\/engineers\/.+\/photo\//);
         assert.match((savedProfile.portfolio as { banner: string }).banner, /\/site\/engineers\/.+\/banner\//);
         await page.screenshot({ path: path.join(output, `profile-editor-${width}.png`), fullPage: true });
+        await page.goto(`${baseUrl}/studio/engineers/${apiSlug}`, { waitUntil: "load", timeout: 60000 });
+        assert.equal(await page.locator('iframe').count(), 0, "External players must load only on request.");
+        await page.getByRole("button", { name: "Mastering", exact: true }).click();
+        await page.route("https://www.youtube-nocookie.com/**", route => route.abort());
+        await page.getByRole("button", { name: "Load YouTube player", exact: false }).click();
+        assert.match(await page.locator('iframe').getAttribute('src') || '', /^https:\/\/www.youtube-nocookie.com\/embed\//);
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth) <= 2, `Public showcase overflow at ${width}px.`);
+        await page.screenshot({ path: path.join(output, `profile-showcase-${width}.png`), fullPage: true });
         await context.close();
       }
       const context = await browser.newContext();
@@ -136,7 +160,8 @@ async function main() {
       const sessionResponse = await context.request.post(`${baseUrl}/api/uploads/sessions`, { data: { releaseId: draft.id, assetCategory: "TRACK_AUDIO_MASTER", originalFilename: "browser-master.wav", mimeType: "", totalSize: wave.length, chunkHashes: [createHash("sha256").update(wave).digest("hex")] } });
       assert.equal(sessionResponse.status(), 201, await sessionResponse.text());
       const session = (await sessionResponse.json()).session;
-      assert.equal((await context.request.put(`${baseUrl}/api/uploads/sessions/${session.id}/chunks/0`, { data: wave })).status(), 202);
+      // The local development server may compile this route on its first request.
+      assert.equal((await context.request.put(`${baseUrl}/api/uploads/sessions/${session.id}/chunks/0`, { data: wave, timeout: 90000 })).status(), 202);
       const finalized = await context.request.post(`${baseUrl}/api/uploads/sessions/${session.id}/complete`);
       assert.equal(finalized.status(), 201, await finalized.text());
       const master = await prisma.storedAsset.findUniqueOrThrow({ where: { id: (await finalized.json()).asset.id } });

@@ -8,14 +8,15 @@ export async function PATCH(request: Request) {
   const auth = await requireUser();
   if ("error" in auth) return auth.error;
   try {
-    const { banner, instagram, youtube, ...fields } = studioProfileSchema.parse(await request.json());
+    const { banner, instagram, youtube, works, experience, ...fields } = studioProfileSchema.parse(await request.json());
+    const portfolioPatch = { banner, ...(works !== undefined ? { works } : {}), ...(experience !== undefined ? { experience } : {}) };
     const profile = await prisma.engineerProfile.findFirst({ where: { contributorParty: { claimedByUserId: auth.user.id }, sellerState: "ACTIVE" }, select: { id: true } });
     if (!profile) return NextResponse.json({ error: "An active approved engineer profile is required." }, { status: 403 });
     // Merge only editable portfolio keys atomically so other profile settings survive.
     const changed = await prisma.$executeRaw`
       UPDATE engineer_profiles SET professional_name=${fields.professionalName}, bio=${fields.bio},
       profile_photo_url=${fields.profilePhotoUrl || null}, specialties=${fields.specialties}::text[], genres=${fields.genres}::text[],
-      portfolio=(CASE WHEN jsonb_typeof(portfolio)='array' THEN jsonb_build_object('works', portfolio) ELSE COALESCE(portfolio, '{}'::jsonb) END) || jsonb_build_object('banner', ${banner}::text, 'socials',
+      portfolio=(CASE WHEN jsonb_typeof(portfolio)='array' THEN jsonb_build_object('works', portfolio) ELSE COALESCE(portfolio, '{}'::jsonb) END) || ${JSON.stringify(portfolioPatch)}::jsonb || jsonb_build_object('socials',
         COALESCE(portfolio->'socials', '{}'::jsonb) || jsonb_build_object('instagram', ${instagram}::text, 'youtube', ${youtube}::text)),
       updated_at=NOW()
       WHERE id=${profile.id} AND seller_state='ACTIVE' AND contributor_party_id IN
