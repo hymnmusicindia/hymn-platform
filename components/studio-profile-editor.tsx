@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { upload } from "@vercel/blob/client";
+import { uploadEngineerImage } from "@/lib/engineer-image-upload";
 import { Camera, ImagePlus, Headphones } from "lucide-react";
 import { ENGINEER_GENRES, ENGINEER_SPECIALTIES } from "@/lib/engineer-applications";
 import type { StudioProfileInput } from "@/lib/studio-profile";
@@ -14,10 +14,9 @@ export function StudioProfileEditor({ initial, slug }: { initial: StudioProfileI
   function update(patch: Partial<StudioProfileInput>) { setDraft(current => ({ ...current, ...patch })); setFeedback(""); }
   async function image(file: File | undefined, key: "banner" | "profilePhotoUrl") {
     if (!file) return;
-    if (!["image/jpeg", "image/png"].includes(file.type) || file.size > 5 * 1024 * 1024) { setFeedback("Choose a JPG or PNG under 5 MB."); return; }
     setUploading(key); setFeedback("");
-    try { const blob = await upload(`engineers/${crypto.randomUUID()}/${file.name}`, file, { access: "public", handleUploadUrl: "/api/upload" }); update({ [key]: blob.url }); }
-    catch { setFeedback("Image upload failed. Please try again."); }
+    try { update({ [key]: await uploadEngineerImage(file, key === "banner" ? "banner" : "photo") }); }
+    catch (error) { setFeedback(error instanceof Error ? error.message : "Image upload failed. Please try again."); }
     finally { setUploading(""); }
   }
   return <form onSubmit={async event => {
@@ -27,8 +26,8 @@ export function StudioProfileEditor({ initial, slug }: { initial: StudioProfileI
     finally { setBusy(false); }
   }} className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
     <fieldset disabled={busy || Boolean(uploading)} className="min-w-0 space-y-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 sm:p-7">
-      <div><h2 className="text-xl font-semibold">Photo & banner</h2><p className="mt-2 text-sm text-[var(--text-muted)]">Public images · JPG or PNG · up to 5 MB each</p></div>
-      <div className="grid gap-4 sm:grid-cols-2">{(["profilePhotoUrl", "banner"] as const).map(key => <div key={key}><label className="flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-dashed border-[var(--border)] p-4 hover:bg-[var(--bg-soft)]">{key === "banner" ? <ImagePlus/> : <Camera/>}<span className="text-sm font-semibold">{uploading === key ? "Uploading…" : key === "banner" ? "Change banner" : "Change profile photo"}</span><input className="sr-only" type="file" accept="image/jpeg,image/png" onChange={event => { void image(event.target.files?.[0], key); event.target.value = ""; }}/></label>{draft[key] ? <button type="button" className="mt-2 text-xs underline" onClick={() => update({ [key]: "" })}>Remove {key === "banner" ? "banner" : "photo"}</button> : null}</div>)}</div>
+      <div><h2 className="text-xl font-semibold">Photo & banner</h2><p className="mt-2 text-sm text-[var(--text-muted)]">Public images · JPG, PNG or WebP · up to 5 MB each</p></div>
+      <div className="grid gap-4 sm:grid-cols-2">{(["profilePhotoUrl", "banner"] as const).map(key => <div key={key}><label className="flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-dashed border-[var(--border)] p-4 hover:bg-[var(--bg-soft)]">{key === "banner" ? <ImagePlus/> : <Camera/>}<span className="text-sm font-semibold">{uploading === key ? "Uploading…" : key === "banner" ? "Change banner" : "Change profile photo"}</span><input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={event => { void image(event.target.files?.[0], key); event.target.value = ""; }}/></label>{draft[key] ? <button type="button" className="mt-2 text-xs underline" onClick={() => update({ [key]: "" })}>Remove {key === "banner" ? "banner" : "photo"}</button> : null}</div>)}</div>
       <label className="block text-sm">Professional name<input className="field mt-2 w-full" required minLength={2} maxLength={120} value={draft.professionalName} onChange={event => update({ professionalName: event.target.value })}/></label>
       <label className="block text-sm">Bio<textarea className="field mt-2 min-h-32 w-full" required minLength={20} maxLength={320} value={draft.bio} onChange={event => update({ bio: event.target.value })}/><span className="mt-1 block text-xs text-[var(--text-muted)]">{draft.bio.length}/320 · Tell clients about your sound and approach.</span></label>
       {(["specialties", "genres"] as const).map(key => <div key={key}><h3 className="mb-3 text-sm font-semibold">{key === "genres" ? "Genres · choose up to 5" : "Specialties · choose up to 4"}</h3><div className="flex flex-wrap gap-2">{(key === "genres" ? ENGINEER_GENRES : ENGINEER_SPECIALTIES).map(value => { const selected = (draft[key] as string[]).includes(value); return <button key={value} type="button" aria-pressed={selected} className={`rounded-full border px-3 py-2 text-sm transition-colors ${selected ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]" : "border-[var(--border)]"}`} onClick={() => { const values = selected ? draft[key].filter(item => item !== value) : [...draft[key], value]; if (values.length <= (key === "genres" ? 5 : 4)) update({ [key]: values } as Partial<StudioProfileInput>); }}>{value}</button>; })}</div></div>)}

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import sharp from "sharp";
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import http from "node:http";
@@ -81,6 +82,7 @@ async function main() {
   assert.equal((await directPost(profileUrl, engineerCookie, JSON.stringify(profileInput), {}, "PATCH")).status, 403, "Paused profiles cannot bypass approval controls.");
   await prisma.engineerProfile.update({ where: { id: afterEdit.id }, data: { sellerState: "ACTIVE" } });
   if (process.argv.includes("--profile-only")) {
+    const imageBytes = await sharp({ create: { width: 640, height: 400, channels: 3, background: "#3d547a" } }).png().toBuffer();
     const browser = await chromium.launch({ headless: true });
     try {
       for (const width of [1440, 390]) {
@@ -90,12 +92,42 @@ async function main() {
         await page.route("https://example.com/**", route => route.abort());
         await page.goto(`${baseUrl}/studio/engineer/profile`, { waitUntil: "load", timeout: 60000 });
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth) <= 2, `Editor overflow at ${width}px.`);
+        for (const index of [0, 1]) {
+          const responsePromise = page.waitForResponse(response => response.url().endsWith("/api/studio/images") && response.request().method() === "POST");
+          await page.locator('input[type="file"]').nth(index).setInputFiles({ name: `image-${index}.png`, mimeType: "image/png", buffer: imageBytes });
+          const response = await responsePromise;
+          assert.equal(response.status(), 200, await response.text());
+          const uploaded = await response.json();
+          const asset = await context.request.get(uploaded.url);
+          assert.equal(asset.status(), 200, "Uploaded photo/banner must be publicly readable.");
+          assert.equal((await sharp(await asset.body()).metadata()).format, "webp");
+        }
         await page.getByRole("textbox", { name: "Professional name", exact: true }).fill("Updated API Engineer");
         await page.getByRole("button", { name: "Save profile", exact: true }).click();
         await page.getByRole("status").filter({ hasText: "Your public profile is updated." }).waitFor();
+        const savedProfile = await prisma.engineerProfile.findUniqueOrThrow({ where: { slug: apiSlug } });
+        assert.match(savedProfile.profilePhotoUrl || "", /\/site\/engineers\/.+\/photo\//);
+        assert.match((savedProfile.portfolio as { banner: string }).banner, /\/site\/engineers\/.+\/banner\//);
         await page.screenshot({ path: path.join(output, `profile-editor-${width}.png`), fullPage: true });
         await context.close();
       }
+      const context = await browser.newContext();
+      await context.addCookies([{ name: "hymn_session", value: token, url: baseUrl }]);
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/studio/apply`, { waitUntil: "load", timeout: 60000 });
+      for (const index of [0, 1]) {
+        const responsePromise = page.waitForResponse(response => response.url().endsWith("/api/studio/images"));
+        await page.locator('input[type="file"]').nth(index).setInputFiles({ name: "onboarding.png", mimeType: "image/png", buffer: imageBytes });
+        const response = await responsePromise;
+        assert.equal(response.status(), 200, await response.text());
+        assert.equal((await context.request.get((await response.json()).url)).status(), 200);
+      }
+      const corrupt = await context.request.post(`${baseUrl}/api/studio/images`, { multipart: { kind: "photo", image: { name: "bad.png", mimeType: "image/png", buffer: Buffer.from("not an image") } } });
+      assert.equal(corrupt.status(), 400);
+      await context.clearCookies();
+      const unauthorized = await context.request.post(`${baseUrl}/api/studio/images`, { multipart: { kind: "banner", image: { name: "image.png", mimeType: "image/png", buffer: imageBytes } } });
+      assert.equal(unauthorized.status(), 401);
+      await context.close();
     } finally { await browser.close(); }
     console.log("Engineer profile ownership, permissions, persistence, public rendering, desktop/mobile editor and save checks passed.");
     return;
