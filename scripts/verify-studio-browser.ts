@@ -58,6 +58,48 @@ async function main() {
   }));
   assert.equal(appointmentResponse.status, 201, appointmentResponse.body);
   assert.equal((await directGet(`http://127.0.0.1:55910/studio/engineers/${apiSlug}`, "")).status, 200);
+  const engineerSid = randomUUID();
+  await prisma.session.create({ data: { userId: apiEngineerUser.id, tokenHash: createHash("sha256").update(engineerSid).digest("hex"), expiresAt: new Date(Date.now() + 3600000) } });
+  const engineerToken = jwt.sign({ sub: apiEngineerUser.id, email: apiEngineerUser.email, name: apiEngineerUser.name, role: "customer", sid: engineerSid }, process.env.JWT_SECRET!, { expiresIn: "1h" });
+  const engineerCookie = `hymn_session=${engineerToken}`;
+  const profileInput = { professionalName: "Updated API Engineer", bio: "A new public biography describing my vocal mixing approach.", profilePhotoUrl: "https://example.com/photo.jpg", banner: "https://example.com/banner.jpg", instagram: "https://instagram.com/updated", youtube: "", specialties: ["Mixing"], genres: ["Hip-Hop"] };
+  const profileUrl = "http://127.0.0.1:55910/api/studio/engineer/profile";
+  assert.equal((await directPost(profileUrl, `hymn_session=${token}`, JSON.stringify(profileInput), {}, "PATCH")).status, 403, "A client cannot edit an engineer profile.");
+  assert.equal((await directPost(profileUrl, engineerCookie, JSON.stringify({ ...profileInput, verificationState: "VERIFIED" }), {}, "PATCH")).status, 400, "Privileged fields must be rejected.");
+  const beforeEdit = await prisma.engineerProfile.findUniqueOrThrow({ where: { slug: apiSlug } });
+  const editResult = await directPost(profileUrl, engineerCookie, JSON.stringify(profileInput), {}, "PATCH");
+  assert.equal(editResult.status, 200, editResult.body);
+  const afterEdit = await prisma.engineerProfile.findUniqueOrThrow({ where: { slug: apiSlug } });
+  assert.equal(afterEdit.bio, profileInput.bio);
+  assert.equal(afterEdit.profilePhotoUrl, profileInput.profilePhotoUrl);
+  assert.equal(afterEdit.verificationState, beforeEdit.verificationState);
+  assert.deepEqual((afterEdit.portfolio as { works: unknown }).works, (beforeEdit.portfolio as { works: unknown }).works, "Editing identity must preserve work samples.");
+  assert.match((await directGet(`http://127.0.0.1:55910/studio/engineers/${apiSlug}`, "")).body, /Updated API Engineer/);
+  assert.match((await directGet("http://127.0.0.1:55910/studio/engineer/profile", engineerCookie)).body, /Make it yours/);
+  assert.match((await directGet("http://127.0.0.1:55910/studio/engineer", engineerCookie)).body, /Edit profile/);
+  await prisma.engineerProfile.update({ where: { id: afterEdit.id }, data: { sellerState: "PAUSED" } });
+  assert.equal((await directPost(profileUrl, engineerCookie, JSON.stringify(profileInput), {}, "PATCH")).status, 403, "Paused profiles cannot bypass approval controls.");
+  await prisma.engineerProfile.update({ where: { id: afterEdit.id }, data: { sellerState: "ACTIVE" } });
+  if (process.argv.includes("--profile-only")) {
+    const browser = await chromium.launch({ headless: true });
+    try {
+      for (const width of [1440, 390]) {
+        const context = await browser.newContext({ viewport: { width, height: 900 } });
+        await context.addCookies([{ name: "hymn_session", value: engineerToken, url: baseUrl }]);
+        const page = await context.newPage();
+        await page.route("https://example.com/**", route => route.abort());
+        await page.goto(`${baseUrl}/studio/engineer/profile`, { waitUntil: "load", timeout: 60000 });
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth) <= 2, `Editor overflow at ${width}px.`);
+        await page.getByRole("textbox", { name: "Professional name", exact: true }).fill("Updated API Engineer");
+        await page.getByRole("button", { name: "Save profile", exact: true }).click();
+        await page.getByRole("status").filter({ hasText: "Your public profile is updated." }).waitFor();
+        await page.screenshot({ path: path.join(output, `profile-editor-${width}.png`), fullPage: true });
+        await context.close();
+      }
+    } finally { await browser.close(); }
+    console.log("Engineer profile ownership, permissions, persistence, public rendering, desktop/mobile editor and save checks passed.");
+    return;
+  }
   const vouch=await prisma.studioVouch.findFirstOrThrow({where:{engineerProfileId:order.engineerProfileId}}),credit=await prisma.studioShowcase.findFirstOrThrow({where:{engineerProfileId:order.engineerProfileId}}),review=await prisma.studioReview.findUniqueOrThrow({where:{orderId:order.id}});
   for(const [type,id]of [["VOUCH",vouch.id],["CREDIT",credit.id]] as const){const result=await directPost("http://127.0.0.1:55910/api/admin/studio/trust",adminCookie,JSON.stringify({type,id,approve:true}),{},"PATCH");assert.equal(result.status,200,result.body);}
   const publicVouch=await directGet(`http://127.0.0.1:55910/studio/share/vouch/${vouch.id}`,"");assert.equal(publicVouch.status,200);assert.match(publicVouch.body,/community collaborator/);

@@ -34,7 +34,7 @@ async function main() {
           const inspect = (chunk: Buffer) => { const value = chunk.toString(); process.stdout.write(value); if (/Ready in|Local:/i.test(value)) { clearTimeout(timeout); resolve(); } };
           server.stdout?.on("data", inspect); server.stderr?.on("data", chunk => process.stderr.write(chunk)); server.on("exit", code => reject(new Error(`Studio review server exited ${code}`)));
         });
-        await run(["--import", "tsx", "scripts/verify-studio-browser.ts", ...(serverMode === "start" ? ["--http-only"] : [])]);
+        await run(["--import", "tsx", "scripts/verify-studio-browser.ts", ...(serverMode === "start" ? ["--http-only"] : []), ...(process.argv.includes("--profile-only") ? ["--profile-only"] : [])]);
       } finally { server.kill(); }
     }
   } finally {
