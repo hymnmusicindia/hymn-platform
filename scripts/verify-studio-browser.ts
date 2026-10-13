@@ -126,7 +126,8 @@ async function main() {
         assert.match((savedProfile.portfolio as { banner: string }).banner, /\/site\/engineers\/.+\/banner\//);
         await page.screenshot({ path: path.join(output, `profile-editor-${width}.png`), fullPage: true });
         await page.goto(`${baseUrl}/studio/engineers/${apiSlug}`, { waitUntil: "load", timeout: 60000 });
-        assert.equal(await page.locator('iframe').count(), 0, "External players must load only on request.");
+        await page.getByRole("button", { name: "Mixing", exact: true }).click();
+        assert.match(await page.locator('iframe').getAttribute('src') || '', /^https:\/\/open.spotify.com\/embed\//, "Spotify must load automatically for the selected credit.");
         await page.getByRole("button", { name: "Mastering", exact: true }).click();
         await page.route("https://www.youtube-nocookie.com/**", route => route.abort());
         await page.getByRole("button", { name: "Load YouTube player", exact: false }).click();
