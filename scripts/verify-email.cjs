@@ -39,6 +39,19 @@ async function main() {
   assert.ok(html.includes('role="presentation"'));
   assert.ok(html.includes("https://example.com/assets/hymnlogowhite.png"));
   assert.ok(html.includes("What next?"));
+  const blockHtml = templates.emailLayout({ title: "Under review", greeting: "Hi Deepit,", body: "", ctaLabel: "", ctaUrl: "https://example.com/dashboard", blocks: [
+    { type: "paragraph", text: "First paragraph\nSecond line <script>" },
+    { type: "button", label: "View release", url: "https://example.com/release?a=1&b=2" },
+    { type: "notice", text: "UPC: 123\nPending" },
+    { type: "button", label: "Unsafe", url: "javascript:alert(1)" }
+  ] });
+  assert.ok(blockHtml.includes("First paragraph<br>Second line &lt;script&gt;"));
+  assert.ok(blockHtml.indexOf("First paragraph") < blockHtml.indexOf("View release"));
+  assert.ok(blockHtml.indexOf("View release") < blockHtml.indexOf("UPC: 123"));
+  assert.ok(blockHtml.includes("release?a=1&amp;b=2"));
+  assert.ok(!blockHtml.includes("javascript:"));
+  assert.ok(!blockHtml.includes("Unsafe"));
+  assert.ok(templates.emailText({ title: "Test", body: "", ctaLabel: "", ctaUrl: "", blocks: [{ type: "button", label: "View", url: "https://example.com" }] }).includes("View: https://example.com"));
 
   let purchase = { user: { email: "buyer@example.com" }, licenseType: "mp3", licenseAsset: { id: 1, byteSize: 3 }, beat: { deliverableAsset: { id: 2, byteSize: 4, mimeType: "audio/wav" } } };
   let reads = 0;

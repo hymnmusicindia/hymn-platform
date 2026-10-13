@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { manualEmailSchema, savedManualEmailSchema } from "../lib/manual-email";
+const valid = { requestId: "d17c3091-0778-465f-a116-38b866c20081", to: "deepitkamboj09@gmail.com", subject: "Under review", title: "Your release is under review", greeting: "Hi Deepit,", blocks: [{ type: "paragraph", text: "Your release was delivered." }, { type: "button", label: "View release", url: "https://hymnmusic.fun/dashboard/releases/81" }] };
+assert.equal(manualEmailSchema.safeParse(valid).success, true);
+assert.equal(savedManualEmailSchema.safeParse({ ...valid, to: "", title: "", subject: "", blocks: [{ type: "button", label: "", url: "" }] }).success, true, "Incomplete drafts can be saved without becoming sendable.");
+for (const url of ["javascript:alert(1)", "data:text/html,test", "/dashboard", "https://"]) assert.equal(manualEmailSchema.safeParse({ ...valid, blocks: [{ type: "button", label: "Open", url }] }).success, false);
+assert.equal(manualEmailSchema.safeParse({ ...valid, to: "invalid" }).success, false);
+assert.equal(manualEmailSchema.safeParse({ ...valid, blocks: [] }).success, false);
+assert.equal(manualEmailSchema.safeParse({ ...valid, blocks: [{ type: "button", label: "", url: "https://example.com" }] }).success, false);
+console.log("Manual email recipient, block and button URL validation passed.");
