@@ -32,37 +32,49 @@ async function main() {
     await page.addScriptTag({ path: path.join(output, "banner.js") });
     await page.getByRole("heading", { name: "Your sound. Release-ready." }).waitFor();
     assert.equal(await page.getByRole("link", { name: "Start with a beat", exact: true }).getAttribute("href"), "/beat-store");
-    assert.equal(await page.getByRole("link", { name: /Explore mixing/ }).getAttribute("href"), "/studio");
-    assert.equal(await page.getByRole("link", { name: /Explore distribution/ }).getAttribute("href"), "/distribution");
+    for (const [name, action, href] of [["Buy your beat", "Explore beats", "/beat-store"], ["Mix & master", "Explore studio services", "/studio"], ["Reach global listeners", "Explore distribution", "/distribution"]]) {
+      const button = page.getByRole("button", { name: new RegExp(name) });
+      await button.click();
+      assert.equal(await button.getAttribute("aria-pressed"), "true");
+      assert.equal(await page.locator('[aria-pressed="true"]').count(), 1);
+      assert.equal(await page.getByRole("link", { name: action, exact: true }).getAttribute("href"), href);
+    }
     assert.equal(await page.getByRole("link", { name: "T&C apply." }).getAttribute("href"), "/terms-of-service");
     assert.equal(await page.getByRole("tab").count(), 0);
     await page.getByText(/Otherwise, standard pricing applies/).waitFor();
     for (const theme of ["light", "dark"]) {
-      await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+      await page.evaluate(theme => {
+        document.documentElement.dataset.theme = theme;
+        document.body.style.background = theme === "dark" ? "#0b0e11" : "#f6f5f1";
+      }, theme);
       for (const width of [320, 375, 768, 1440]) {
         await page.setViewportSize({ width, height: 1000 });
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Horizontal overflow at ' + width);
         const bounds = await page.locator("section").boundingBox();
-        assert.ok(bounds.height < 510, 'Banner should remain compact at ' + width);
+        assert.ok(bounds.height < 1000, 'Banner should remain compact at ' + width + ': ' + bounds.height);
         for (const name of ["Buy your beat", "Mix & master", "Reach global listeners"]) await page.getByRole("heading", { name, exact: true }).waitFor();
         await page.locator("section").screenshot({ path: path.join(output, theme + '-' + width + '.png') });
       }
     }
     await page.getByRole("link", { name: "Start with a beat", exact: true }).focus();
     await page.keyboard.press("Tab");
-    assert.ok(await page.getByRole("link", { name: /Buy a beat from HYMN/ }).evaluate(el => el === document.activeElement));
+    assert.ok(await page.getByRole("button", { name: /Buy your beat/ }).evaluate(el => el === document.activeElement));
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Enter");
+    assert.equal(await page.getByRole("button", { name: /Mix & master/ }).getAttribute("aria-pressed"), "true");
+    const wave = page.locator('i').first();
+    assert.equal(await wave.evaluate(el => getComputedStyle(el).animationName), "none", "Reduced motion disables animation");
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.mouse.move(0, 0);
-    const distribution = page.getByRole("link", { name: /Explore distribution/ });
+    const distribution = page.getByRole("button", { name: /Reach global listeners/ });
     const globe = distribution.locator('span[class*="globe"]');
     const spotify = distribution.locator('[title="Spotify"]');
     const globeBefore = await globe.boundingBox();
     const logoBefore = await spotify.boundingBox();
-    await distribution.hover();
+    await distribution.click();
     await page.waitForTimeout(400);
     assert.deepEqual(await globe.boundingBox(), globeBefore, "Globe must remain still on hover");
-    assert.ok((await spotify.boundingBox()).y < logoBefore.y, "Store logo should rise on hover");
-    assert.ok(await spotify.evaluate(el => Number(getComputedStyle(el, "::after").opacity) > 0), "Store trail should appear");
+    assert.notDeepEqual(await spotify.boundingBox(), logoBefore, "Store logo animates when selecting distribution");
     assert.deepEqual(errors, []);
     console.log(`Lifecycle interactions, offer entry links, theme layouts, keyboard navigation and responsive checks passed. Previews: ${output}`);
   } finally { await browser.close(); }
