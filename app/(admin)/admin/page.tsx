@@ -17,6 +17,7 @@ import {
   listUsers
 } from "@/lib/db";
 import { listAllDistributionOrders, listAllDetailedReleases } from "@/lib/distribution-db";
+import { prisma } from "@/lib/prisma";
 
 const ADMIN_TABS = [
   "overview",
@@ -88,6 +89,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const [orders, applications, leads] = await Promise.all([canReadCommerce?listAllOrders():Promise.resolve([]), canReadServices?listProducerApplications():Promise.resolve([]), canReadServices?listPartnershipLeads():Promise.resolve([])]);
   const [distributionOrders, artistProfiles] = await Promise.all([canReadCommerce?listAllDistributionOrders():Promise.resolve([]), canReadUsers?listAllArtistProfiles():Promise.resolve([])]);
   const [siteSettings, notifications, supportTickets] = await Promise.all([getSiteSettings(), canReadSystem?listLatestNotifications(50):Promise.resolve([]), canReadServices?listAllSupportTickets():Promise.resolve([])]);
+  const pendingEngineerApplications = canReadServices ? await prisma.engineerApplication.count({ where: { status: "PENDING" } }) : 0;
   const revenueEntries = permissions.some(permission => ["payouts.review", "royalties.reconcile"].includes(permission)) ? await listPlatformRevenue(distributionOrders, orders, subscriptionRevenue) : [];
   const requestedTabCandidate = resolvedSearchParams?.tab && ADMIN_TABS.includes(resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) ? (resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) : undefined;
   const requestedTab = requestedTabCandidate && !adminModuleAllowed(requestedTabCandidate,permissions) ? "overview" : requestedTabCandidate;
@@ -95,6 +97,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   return (
     <main className="admin-panel-shell py-6 sm:py-8">
       {canReadSystem ? <div className="mb-4 flex justify-end"><a className="btn-secondary" href="/admin/releases/manual">Manual release</a></div> : null}
+      {canReadServices && pendingEngineerApplications > 0 ? <a href="/admin/studio" className="mb-4 flex items-center justify-between rounded-2xl border border-[var(--border-strong)] bg-[var(--card)] p-4 transition hover:border-[var(--accent)]"><span><strong className="block">Mix / Master engineer approvals</strong><small className="mt-1 block text-[var(--text-muted)]">Review profiles, work samples and pricing before publishing.</small></span><span className="rounded-full bg-[var(--accent)] px-3 py-1 text-sm font-semibold text-white">{pendingEngineerApplications} pending</span></a> : null}
       <AdminControlCenter
         currentAdmin={currentAdmin}
         adminAccess={adminAccess ?? { role: "admin", permissions: [] }}

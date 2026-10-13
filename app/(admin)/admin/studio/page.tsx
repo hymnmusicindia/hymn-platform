@@ -13,7 +13,7 @@ export default async function AdminStudioPage() {
     prisma.engineerProfile.findMany({ include: { listings: { orderBy: { createdAt: "asc" } }, contributorParty: { include: { claimedBy: { select: { id: true, name: true, email: true, avatar: true } } } } }, orderBy: { professionalName: "asc" } }), prisma.beatPurchase.count({ where: { hasAccess: true } }),
     prisma.studioPayment.findMany({ where: { status: "CAPTURED" }, select: { amount: true, purpose: true } }), prisma.studioEarning.aggregate({ _sum: { commissionAmount: true } }), prisma.studioReleaseHandoff.count(), prisma.studioRevision.count(),
     prisma.user.findMany({ where: { status: "ACTIVE", OR: [{ claimedContributorParty: null }, { claimedContributorParty: { is: { engineerProfile: null } } }] }, select: { id: true, name: true, email: true, avatar: true }, orderBy: [{ name: "asc" }, { email: "asc" }], take: 1000 }),
-    prisma.engineerApplication.findMany({ include: { user: { select: { name: true, email: true, avatar: true } } }, orderBy: [{ status: "asc" }, { updatedAt: "desc" }], take: 100 }),
+    prisma.engineerApplication.findMany({ include: { user: { select: { name: true, email: true, avatar: true } } }, orderBy: { updatedAt: "desc" }, take: 250 }),
   ]);
   const total=orders.length, completed=orders.filter(o=>o.status==="COMPLETED"), cancelled=orders.filter(o=>o.status==="CANCELLED").length, refunded=orders.filter(o=>o.status==="REFUNDED").length, beatLinked=orders.filter(o=>o.sourceBeatPurchaseId).length;
   const gmv=payments.reduce((sum,row)=>sum+Number(row.amount),0), paidRevisionRevenue=payments.filter(row=>row.purpose==="ADDITIONAL_REVISION").reduce((sum,row)=>sum+Number(row.amount),0);
