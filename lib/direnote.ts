@@ -1,4 +1,5 @@
 import type { ArtistProfile, Release } from "@/lib/types";
+import { normalizeInstagramUrl } from "@/lib/validation";
 import { upcFromDireNoteResponse } from "@/lib/direnote-upc";
 import { assertContentIdEligibility, getContentIdEligibility } from "@/lib/content-id-eligibility";
 import { readTrackLanguage } from "@/lib/track-language";
@@ -220,7 +221,7 @@ function toDireNoteArtist(name: string, profiles: ArtistProfile[] = [], release?
     // Duplicated releases may contain an old video/album URL. Do not send it
     // as an artist identity link; DireNote correctly rejects those URLs.
     youtube_url: verifiedYoutube,
-    instagram_url: profile?.instagramUrl ?? artistMeta.instagram_url ?? artistMeta.instagramUrl ?? meta.instagramUrl ?? undefined
+    instagram_url: (profile?.instagramUrl ?? artistMeta.instagram_url ?? artistMeta.instagramUrl ?? meta.instagramUrl) ? normalizeInstagramUrl(String(profile?.instagramUrl ?? artistMeta.instagram_url ?? artistMeta.instagramUrl ?? meta.instagramUrl)) : undefined
   };
 }
 
@@ -380,7 +381,7 @@ function validateArtists(issues: DireNoteValidationIssue[], artists: DireNoteArt
       continue;
     }
     pushMissing(issues, `${path}.${index}.name`, artist.name, "Artist name is required.");
-    if (requireInstagram) pushMissing(issues, `${path}.${index}.instagram_url`, artist.instagram_url, "Instagram profile link is required for artist verification and DireNote artist provisioning.");
+    if (requireInstagram) pushMissing(issues, `${path}.${index}.instagram_url`, artist.instagram_url, `Add Instagram to the saved artist profile for ${artist.name || "this artist"} before submitting.`);
     for (const [field, value] of Object.entries(artist).filter(([field]) => field.endsWith("_url"))) {
       if (value && !isPublicHttpUrl(value)) issues.push({ field: `${path}.${index}.${field}`, message: `${field} must be a public HTTP(S) URL.` });
     }

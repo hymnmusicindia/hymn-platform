@@ -38,10 +38,10 @@ export async function POST(request: Request) {
     }
     const savedArtistIds = new Set((await listArtistProfilesByUser(existingRelease.userId)).map((profile) => profile.id));
     const invalidPrimaryArtist = parsed.metadata.tracks.some((track) =>
-      track.artistProfileIds.some((id) => !savedArtistIds.has(id)),
+      [...track.artistProfileIds, ...(track.featuredArtistProfileIds ?? []), ...(track.remixerProfileIds ?? [])].some((id) => !savedArtistIds.has(id)),
     );
     if (invalidPrimaryArtist) {
-      return NextResponse.json({ error: "Select primary artists from your saved artist cards before submitting." }, { status: 400 });
+      return NextResponse.json({ error: "Select primary, featured and remixer artists from your saved artist cards before submitting." }, { status: 400 });
     }
 
     if (parsed.metadata.releaseTiming === "schedule_release") {

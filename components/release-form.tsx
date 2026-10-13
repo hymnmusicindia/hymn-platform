@@ -32,6 +32,7 @@ import { CustomerOverlay } from "@/components/customer-overlay";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import NextImage from "next/image";
 import { useRouter } from "next/navigation";
+import { artistCreditNames, artistSelectionIssue, selectedArtistCreditNames, restoreArtistProfileIds } from "@/lib/release-artist-validation";
 import { ArtistPicker } from "@/components/artist-picker";
 import { AudioWaveform } from "@/components/audio-waveform";
 import { GenreSelector } from "@/components/genre-selector";
@@ -209,7 +210,11 @@ type TrackDraft = {
   primaryArtistIds: number[];
   primaryArtistQuery: string;
   featuredArtists: string;
+  featuredArtistIds: number[];
+  featuredArtistQuery: string;
   remixers: string;
+  remixerIds: number[];
+  remixerQuery: string;
   songwriters: ContributorDraft[];
   composers: ContributorDraft[];
   producers: ContributorDraft[];
@@ -371,7 +376,11 @@ function createTrack(trackNumber = 1): TrackDraft {
     primaryArtistIds: [],
     primaryArtistQuery: "",
     featuredArtists: "",
+    featuredArtistIds: [],
+    featuredArtistQuery: "",
     remixers: "",
+    remixerIds: [],
+    remixerQuery: "",
     songwriters: [createContributor()],
     composers: [createContributor()],
     producers: [createContributor()],
@@ -738,7 +747,11 @@ function createTracksFromRelease(
       primaryArtistIds: savedPrimaryArtistIds,
       primaryArtistQuery: "",
       featuredArtists: track?.featuredArtists?.trim() || "",
+      featuredArtistIds: restoreArtistProfileIds(track?.featuredArtistProfileIds ?? trackMetadata.featuredArtistProfileIds ?? nestedTrackMetadata.featuredArtistProfileIds),
+      featuredArtistQuery: artistCreditNames(track?.featuredArtists || "")[0] || "",
       remixers: track?.additionalPrimaryArtists?.trim() || "",
+      remixerIds: restoreArtistProfileIds(track?.remixerProfileIds ?? trackMetadata.remixerProfileIds ?? nestedTrackMetadata.remixerProfileIds),
+      remixerQuery: artistCreditNames(track?.additionalPrimaryArtists || "")[0] || "",
       songwriters: splitContributorNames(track?.songwriters, "songwriter", track?.contributors),
       composers: splitContributorNames(track?.composers, "composer", track?.contributors),
       producers: splitContributorNames(track?.producers, "producer", track?.contributors),
@@ -1581,6 +1594,8 @@ export function ReleaseForm({
             .filter(Boolean)
             .join(", "),
           artistProfileIds: track.primaryArtistIds,
+          featuredArtistProfileIds: track.featuredArtistIds,
+          remixerProfileIds: track.remixerIds,
           featuredArtists: track.featuredArtists,
           additionalPrimaryArtists: track.remixers,
           songwriters: contributorNames(track.songwriters),
@@ -2237,10 +2252,33 @@ export function ReleaseForm({
     }));
   }
 
+  function trackArtistIssue(track: TrackDraft, index: number): ValidationIssue | null {
+    for (const [role, names, ids] of [["primary", namesFor(track.primaryArtistIds), track.primaryArtistIds], ["featured", track.featuredArtists, track.featuredArtistIds], ["remixer", track.remixers, track.remixerIds]] as const) {
+      const message = artistSelectionIssue(names, ids, Object.values(knownProfiles), role, role === "primary");
+      if (message) return { step: 3, key: `track-${index}-${role === "primary" ? "artists" : role}`, trackIndex: index, message: `Track ${index + 1} (${track.trackTitle || "Untitled"}): ${message}` };
+    }
+    return null;
+  }
+  function selectTrackCredit(index: number, role: "featured" | "remixer", profile: ArtistProfile) {
+    const track = tracks[index], ids = role === "featured" ? track.featuredArtistIds : track.remixerIds;
+    const previous = profilesFor(ids), selected = [...previous.filter(item => item.id !== profile.id), profile];
+    const names = selectedArtistCreditNames(role === "featured" ? track.featuredArtists : track.remixers, previous, selected);
+    upsertKnownProfile(profile);
+    updateTrack(index, role === "featured" ? { featuredArtistIds: selected.map(item => item.id), featuredArtists: names, featuredArtistQuery: "" } : { remixerIds: selected.map(item => item.id), remixers: names, remixerQuery: "" });
+  }
+  function removeTrackCredit(index: number, role: "featured" | "remixer", id: number) {
+    const track = tracks[index], ids = role === "featured" ? track.featuredArtistIds : track.remixerIds;
+    const previous = profilesFor(ids), selected = previous.filter(item => item.id !== id);
+    const names = selectedArtistCreditNames(role === "featured" ? track.featuredArtists : track.remixers, previous, selected);
+    updateTrack(index, role === "featured" ? { featuredArtistIds: selected.map(item => item.id), featuredArtists: names } : { remixerIds: selected.map(item => item.id), remixers: names });
+  }
+
   function trackIssue(
     track: TrackDraft,
     index: number,
   ): ValidationIssue | null {
+    const artistIssue = trackArtistIssue(track, index);
+    if (artistIssue) return artistIssue;
     if (track.versionPreset !== "Instrumental" && !(DIRENOTE_LANGUAGES as readonly string[]).includes(track.titleLanguage))
       return { step: 3, key: `track-${index}-title-language`, trackIndex: index, message: `Select a language for Track ${index + 1}.` };
     if (!track.trackTitle.trim() || isPlaceholderTrackTitle(track.trackTitle))
@@ -2459,7 +2497,10 @@ export function ReleaseForm({
   const destinationsIssue = (): ValidationIssue | null =>
     destinationsIssues()[0] ?? null;
 
+  const primaryArtistProblem = artistSelectionIssue(namesFor(tracks[0]?.primaryArtistIds ?? []), tracks[0]?.primaryArtistIds ?? [], Object.values(knownProfiles), "primary", true);
+  const primaryArtistIssue: ValidationIssue | null = primaryArtistProblem ? { step: 1, key: "release-primary-artists", message: primaryArtistProblem } : null;
   const validationIssues = [
+    primaryArtistIssue,
     ...tracks
       .map((track, index) => trackIssue(track, index))
       .filter((issue): issue is ValidationIssue => Boolean(issue)),
@@ -2467,7 +2508,7 @@ export function ReleaseForm({
     artworkIssue(),
     ...destinationsIssues(),
   ].filter((issue): issue is ValidationIssue => Boolean(issue));
-  const primaryArtistComplete = Boolean(tracks[0]?.primaryArtistIds.length);
+  const primaryArtistComplete = !primaryArtistIssue;
   const audioAssetsComplete = tracks.every((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl));
   const uploadedMusicTracks = tracks.filter((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl)).length;
   const canAddMusic = (!singleReleaseGift || uploadedMusicTracks === 0) && tracks.length < 30;
@@ -2509,7 +2550,7 @@ export function ReleaseForm({
 
   function firstIssueForStep(stepIndex: number): ValidationIssue | null {
     if (stepIndex === 0) return !audioComplete ? { step: 0, key: "audio-upload", message: "Upload every audio master before continuing." } : null;
-    if (stepIndex === 1 && !primaryArtistComplete) return { step: 1, key: "release-primary-artists", message: "Select at least one saved primary artist profile." };
+    if (stepIndex === 1) return primaryArtistIssue;
     if (stepIndex === 2) return releaseInfoIssue();
     if (stepIndex === 3)
       return (
@@ -2573,6 +2614,9 @@ export function ReleaseForm({
   }
 
   function jumpToStep(index: number) {
+    const movingForward = visibleStepIndexes.findIndex(value => value === index) > visibleStepIndexes.findIndex(value => value === step);
+    const artistBlock = movingForward && step === 1 ? primaryArtistIssue : movingForward && step === 3 ? tracks.map((track, i) => trackArtistIssue(track, i)).find(Boolean) : null;
+    if (artistBlock) { setStatus(artistBlock.message); triggerFieldFocus(artistBlock); return; }
     const issue = visitedSteps.has(index) ? firstIssueForStep(index) : null;
     goToStep(index);
     if (issue) {
@@ -2647,7 +2691,7 @@ export function ReleaseForm({
   async function continueFromArtists() {
     if (stepTransitionRef.current) return;
     if (!primaryArtistComplete) {
-      const issue = { step: 1, key: "release-primary-artists", message: "Select at least one saved primary artist profile." };
+      const issue = primaryArtistIssue!;
       setAttemptedStep(1);
       setValidationErrorKeys((current) => new Set([...current, issue.key]));
       setStatus(issue.message);
@@ -2869,6 +2913,8 @@ export function ReleaseForm({
           language: track.titleLanguage,
           lyrics: track.lyrics,
           artistProfileIds: track.primaryArtistIds,
+          featuredArtistProfileIds: track.featuredArtistIds,
+          remixerProfileIds: track.remixerIds,
           uploadedAudioUrl: uploaded.trackAudioUrls[index],
           uploadedCoverLicenseUrl: uploaded.trackLicenseUrls[index],
         })),
@@ -2989,6 +3035,8 @@ export function ReleaseForm({
             language: track.titleLanguage,
             lyrics: track.lyrics,
             artistProfileIds: track.primaryArtistIds,
+          featuredArtistProfileIds: track.featuredArtistIds,
+          remixerProfileIds: track.remixerIds,
             uploadedAudioUrl: uploaded.trackAudioUrls[index],
             uploadedCoverLicenseUrl: uploaded.trackLicenseUrls[index],
           })),
@@ -3120,6 +3168,8 @@ export function ReleaseForm({
           language: track.titleLanguage,
           lyrics: track.lyrics,
           artistProfileIds: track.primaryArtistIds,
+          featuredArtistProfileIds: track.featuredArtistIds,
+          remixerProfileIds: track.remixerIds,
           uploadedAudioUrl: uploaded.trackAudioUrls[index],
           uploadedCoverLicenseUrl: uploaded.trackLicenseUrls[index],
         })),
@@ -3173,7 +3223,7 @@ export function ReleaseForm({
       const confirmation = await confirmationResponse.json().catch(() => ({}));
       if (!confirmationResponse.ok) {
         const details = Array.isArray(confirmation.errors) ? confirmation.errors.map((item: { message?: unknown }) => String(item?.message || "")).filter(Boolean) : [];
-        throw new Error(details.length ? details.join(" · ") : confirmation.error || "Could not save review confirmation.");
+        throw new Error(details.length ? [...new Set(details)].join(" · ") : confirmation.error || "Could not save review confirmation.");
       }
 
       if (typeof confirmation.updatedAt === "string") draftVersionRef.current = confirmation.updatedAt;
@@ -3624,11 +3674,12 @@ export function ReleaseForm({
                 focused
                 required={showErrors && !primaryArtistComplete}
                 onQueryChange={(value) => updateTrack(0, { primaryArtistQuery: value })}
-                onSelect={(profile) => { if (tracks[0].primaryArtistIds.length >= 3) return; upsertKnownProfile(profile); selectPrimaryArtistForAllTracks(profile); }}
+                onSelect={(profile) => { if (tracks[0].primaryArtistIds.length >= 3 && !tracks[0].primaryArtistIds.includes(profile.id)) return; upsertKnownProfile(profile); selectPrimaryArtistForAllTracks(profile); }}
                 onRemove={() => undefined}
               />
               </div>
             </div>
+            {primaryArtistIssue && (tracks[0]?.primaryArtistIds.length ?? 0) > 0 ? <p role="alert" className="mt-3 text-sm" style={{ color: "var(--danger)" }}>{primaryArtistIssue.message}</p> : null}
             {primaryArtistComplete ? <button type="button" onClick={continueFromArtists} disabled={stepTransitioning} aria-label="Continue to upload music" title="Upload music" className="release-artist-next"><ArrowRight size={23} aria-hidden="true" /></button> : null}
           </section>
         ) : null}
@@ -3865,7 +3916,7 @@ export function ReleaseForm({
             {tracks.map((track, index) => {
               const expanded = expandedTrack === index;
               const issue = showErrors ? trackIssue(track, index) : null;
-              const metadataReady = Boolean(track.trackTitle.trim() && !isPlaceholderTrackTitle(track.trackTitle) && track.primaryArtistIds.length && contributorsValid(track.songwriters) && contributorsValid(track.composers) && producersValid(track.producers));
+              const metadataReady = Boolean(track.trackTitle.trim() && !isPlaceholderTrackTitle(track.trackTitle) && track.primaryArtistIds.length && contributorsValid(track.songwriters) && contributorsValid(track.composers) && producersValid(track.producers) && !trackArtistIssue(track, index));
               const audioReady = Boolean(track.existingAudioUrl || (track.audioPreviewUrl && track.audioUploadStatus === "uploaded"));
               const trackReady = metadataReady && audioReady;
               const audioStatusLabel = track.audioUploadStatus === "uploading"
@@ -4085,42 +4136,19 @@ export function ReleaseForm({
                                 />
                               </div>
                             </div>
-                            <div>
-                              <label
-                                className="mb-2 block px-[.8rem] text-xs font-medium md:text-sm"
-                                style={{ color: "var(--text-muted)" }}
-                              >
-                                Featured artists
-                              </label>
-                              <input
-                                className="field"
-                                value={track.featuredArtists}
-                                onChange={(event) =>
-                                  updateTrack(index, {
-                                    featuredArtists: event.target.value,
-                                  })
-                                }
-                                placeholder="Featured artist names only"
-                              />
-                            </div>
-                            <div>
-                              <label
-                                className="mb-2 block px-[.8rem] text-xs font-medium md:text-sm"
-                                style={{ color: "var(--text-muted)" }}
-                              >
-                                Remixer
-                              </label>
-                              <input
-                                className="field"
-                                value={track.remixers}
-                                onChange={(event) =>
-                                  updateTrack(index, {
-                                    remixers: event.target.value,
-                                  })
-                                }
-                                placeholder="Remixer names only"
-                              />
-                            </div>
+                            {(["featured", "remixer"] as const).map(role => {
+                              const ids = role === "featured" ? track.featuredArtistIds : track.remixerIds;
+                              const names = role === "featured" ? track.featuredArtists : track.remixers;
+                              const unlinked = artistCreditNames(names).filter(name => !profilesFor(ids).some(profile => profile.name.toLowerCase() === name.toLowerCase()));
+                              return <div key={role} ref={registerField(`track-${index}-${role}`)}>
+                                <ArtistPicker label={role === "featured" ? "Featured artists" : "Remixer"} helper="Optional. Select a saved profile or create one with Instagram details."
+                                  valueIds={profilesFor(ids)} query={role === "featured" ? track.featuredArtistQuery : track.remixerQuery}
+                                  onQueryChange={value => updateTrack(index, role === "featured" ? { featuredArtistQuery: value } : { remixerQuery: value })}
+                                  onSelect={profile => selectTrackCredit(index, role, profile)} onRemove={id => removeTrackCredit(index, role, id)}
+                                  required={showErrors && issue?.key === `track-${index}-${role}`}/>
+                                {unlinked.map(name => <div key={name} className="mt-2 flex items-start justify-between gap-3 text-xs" style={{ color: "var(--danger)" }}><span>{name} needs a saved artist profile with Instagram.</span><button type="button" className="shrink-0 underline" onClick={() => updateTrack(index, role === "featured" ? { featuredArtists: artistCreditNames(names).filter(item => item !== name).join(", ") } : { remixers: artistCreditNames(names).filter(item => item !== name).join(", ") })}>Remove {name}</button></div>)}
+                              </div>;
+                            })}
                           </div>
                         </div>
                         <div

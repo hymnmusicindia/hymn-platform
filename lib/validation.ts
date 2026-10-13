@@ -58,7 +58,7 @@ export const userRoleUpdateSchema = z.object({
 });
 
 const spotifyArtistUrlPattern = /^(?:https?:\/\/)?open\.spotify\.com\/artist\/[A-Za-z0-9]+(?:[/?#].*)?$|^spotify:artist:[A-Za-z0-9]+$/i;
-const instagramProfilePattern = /^(?:https?:\/\/)?(?:www\.)?instagram\.com\/[A-Za-z0-9._]+\/?(?:[?#].*)?$|^@[A-Za-z0-9._]+$/i;
+export const instagramProfilePattern = /^(?:https?:\/\/)?(?:www\.)?instagram\.com\/[A-Za-z0-9._]+\/?(?:[?#].*)?$|^@[A-Za-z0-9._]+$/i;
 const appleArtistUrlPattern = /^(?:https?:\/\/)?music\.apple\.com\/[a-z]{2}\/artist\/[^/]+\/\d+(?:[/?#].*)?$/i;
 
 const artistProfileFields = z.object({

@@ -1,6 +1,7 @@
 "use client";
 
 import { customerMessage } from "@/lib/customer-message";
+import { hasArtistInstagram } from "@/lib/release-artist-validation";
 
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -282,6 +283,7 @@ export function ArtistPicker({
   }
 
   function selectSaved(profile: ArtistProfile) {
+    if (!hasArtistInstagram(profile)) { openEditModal(profile); setProfileStep(profile.isLinked ? 4 : 2); return; }
     onSelect(profile);
     setRecent((current) => [profile, ...current.filter((item) => item.id !== profile.id)].slice(0, 6));
     onQueryChange("");

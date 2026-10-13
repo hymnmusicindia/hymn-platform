@@ -7,6 +7,10 @@ on:
       - 'lib/distribution-*.ts'
       - 'lib/release-*.ts'
       - 'lib/contributor-*.ts'
+      - 'lib/validation.ts'
+      - 'lib/direnote.ts'
+      - 'components/release-form.tsx'
+      - 'components/artist-picker.tsx'
       - 'prisma/**'
       - 'scripts/verify-release-*.ts'
       - 'scripts/verify-contributor-sync.ts'
@@ -20,6 +24,10 @@ on:
       - 'lib/distribution-*.ts'
       - 'lib/release-*.ts'
       - 'lib/contributor-*.ts'
+      - 'lib/validation.ts'
+      - 'lib/direnote.ts'
+      - 'components/release-form.tsx'
+      - 'components/artist-picker.tsx'
       - 'prisma/**'
       - 'scripts/verify-release-*.ts'
       - 'scripts/verify-contributor-sync.ts'
@@ -49,4 +57,6 @@ jobs:
       - run: npm ci
       - run: npx prisma generate
       - run: node --import tsx scripts/verify-contributor-sync.ts
+      - run: node --import tsx scripts/verify-release-artist-selection.ts
+      - run: node --import tsx scripts/verify-artist-profile-validation.ts
       - run: node --import tsx scripts/verify-direnote-virtual.ts --release-save-only
