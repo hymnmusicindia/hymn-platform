@@ -33,7 +33,7 @@ export function WorkspacePageTransition() {
       clearPending();
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
       root.dataset.workspaceSwipe = direction!;
-      timer = window.setTimeout(() => { delete root.dataset.workspaceSwipe; }, 360);
+      timer = window.setTimeout(() => { delete root.dataset.workspaceSwipe; }, 200);
     }
     observer.current = new MutationObserver(revealReadyPage);
     observer.current.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "hidden", "class"] });
@@ -59,15 +59,19 @@ export function WorkspacePageTransition() {
       cover.inert = true;
       function preserve(element: HTMLElement) {
         const rect = element.getBoundingClientRect();
+        const scrollPositions = [element, ...element.querySelectorAll<HTMLElement>("*")].flatMap((node, index) => {
+          const top = node.scrollTop, left = node.scrollLeft;
+          return top || left ? [{ index, top, left }] : [];
+        });
         const copy = element.cloneNode(true) as HTMLElement;
         copy.removeAttribute("id");
         copy.querySelectorAll("[id]").forEach(node => node.removeAttribute("id"));
         copy.style.cssText += `;position:absolute;top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;margin:0;`;
         cover.appendChild(copy);
         return () => {
-          const originalNodes = [element, ...element.querySelectorAll<HTMLElement>("*")];
+          if (!scrollPositions.length) return;
           const copiedNodes = [copy, ...copy.querySelectorAll<HTMLElement>("*")];
-          originalNodes.forEach((node, index) => { if (copiedNodes[index]) { copiedNodes[index].scrollTop = node.scrollTop; copiedNodes[index].scrollLeft = node.scrollLeft; } });
+          scrollPositions.forEach(({ index, top, left }) => { if (copiedNodes[index]) { copiedNodes[index].scrollTop = top; copiedNodes[index].scrollLeft = left; } });
         };
       }
       const restoreContentScroll = preserve(content);
