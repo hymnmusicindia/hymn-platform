@@ -1,0 +1,13 @@
+.section{margin-top:30px;padding:30px 0;border-top:1px solid var(--border)}
+.banner{position:relative;overflow:hidden;display:grid;grid-template-columns:1fr 135px;gap:24px;padding:31px;background:linear-gradient(120deg,var(--bg-elevated),var(--card));border-radius:14px}
+.eyebrow{color:var(--text-soft);font-size:10px;font-weight:800;letter-spacing:.17em}
+.banner h2{max-width:420px;margin-top:10px;font-size:clamp(25px,3vw,35px);line-height:1.15;letter-spacing:-.04em}
+.intro{max-width:430px;margin-top:13px;color:var(--text-muted);font-size:13px;line-height:1.7}
+.art{display:flex;align-items:center;justify-content:center;position:relative;align-self:center;width:130px;height:130px;border-radius:50%;border:1px solid var(--border);color:var(--text)}
+.art:before,.art:after{content:"";position:absolute;border:1px solid var(--border);border-radius:50%;inset:13px}.art:after{inset:27px}.art svg{width:31px;height:31px;fill:var(--accent-soft)}
+.art span{position:absolute;right:7px;top:15px;width:26px;height:26px;display:grid;place-items:center;background:var(--card);border-radius:50%}.art span svg{width:15px;height:15px;fill:none}
+.banner button{min-height:43px;border:0;border-radius:6px;background:var(--accent);color:var(--accent-foreground);padding:10px 15px;font-weight:750;font-size:12px}.banner button:hover{background:var(--accent-strong)}
+.banner form button{background:transparent;color:var(--text)}.banner form button[type=submit],.banner form button:last-child{background:var(--accent);color:var(--accent-foreground)}
+.note{margin-top:17px;max-width:580px;color:var(--text-soft);font-size:11px;line-height:1.6}.empty{margin-top:19px;color:var(--text-muted);font-size:13px}
+.list{display:grid;gap:0;margin-top:8px}.vouch{padding:24px 0;border-bottom:1px solid var(--border)}.heading{display:flex;justify-content:space-between;gap:15px;align-items:center}.heading strong{font-size:14px}.rating{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text)}.rating svg{width:13px;height:13px}.meta{margin-top:6px;color:var(--text-soft);font-size:11px}.quote{margin-top:14px;font-size:15px;line-height:1.7;color:var(--text)}.strengths{margin-top:12px;color:var(--text-muted);font-size:12px}.actions{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;font-size:11px}
+@media(max-width:560px){.banner{padding:23px;grid-template-columns:1fr;gap:0}.art{position:absolute;right:-35px;top:-35px;opacity:.18;width:150px;height:150px;pointer-events:none}.banner>div:first-child{position:relative;z-index:1}.banner h2{max-width:270px}.section{padding-top:22px}}

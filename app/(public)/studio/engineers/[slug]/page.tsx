@@ -1,6 +1,6 @@
 ﻿import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight, BadgeCheck, Check, Clock3, ExternalLink, Headphones, Instagram, Music2, RotateCcw, ShieldCheck, Sparkles, Star, Youtube } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, Check, Clock3, ExternalLink, Headphones, Instagram, Music2, RotateCcw, ShieldCheck, Star, Youtube } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { StudioTrustProfile } from "@/components/studio-trust-profile";
 import { StudioReport, StudioShareLink } from "@/components/studio-trust-actions";
@@ -45,7 +45,7 @@ export default async function EngineerPage({ params, searchParams }: { params: P
     <Link href="/studio" className={styles.back}><ArrowLeft size={16}/> Explore engineers</Link>
     <div className={styles.layout}><div className={styles.content}>
       <section className={styles.hero}>
-        <div className={styles.cover}>{portfolio.banner ? <img src={portfolio.banner} alt={`${engineer.professionalName} studio banner`}/> : null}<span className={styles.coverLabel}><Sparkles size={13}/> HYMN STUDIO</span></div>
+        <div className={styles.cover}>{portfolio.banner ? <img src={portfolio.banner} alt={`${engineer.professionalName} studio banner`}/> : null}</div>
         <div className={styles.identity}><div className={styles.identityTop}>
           <div className={styles.avatar}>{photo ? <img src={photo} alt={`${engineer.professionalName} profile`} referrerPolicy="no-referrer"/> : <Headphones size={35}/>}</div>
           <div className={styles.titleBlock}><p className={styles.eyebrow}>MIXING & MASTERING ENGINEER</p><h1>{engineer.professionalName}{engineer.verificationState === "VERIFIED" ? <BadgeCheck size={24} className={styles.verified} aria-label="Verified engineer"/> : null}</h1><p className={styles.specialties}>{engineer.specialties.join(" · ")}</p></div>
