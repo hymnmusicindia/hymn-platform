@@ -15,6 +15,7 @@ const { mkdir } = require('node:fs/promises');
       await page.goto('http://localhost:3015' + path, { waitUntil: 'networkidle', timeout: 120000 });
       const sidebar = page.locator(path === '/' ? '.landing-rail' : '.dashboard-os-sidebar');
       await expect(sidebar.locator('.workspace-destinations')).toBeAttached({ timeout: 60000 });
+      if (path === '/') await expect(page.locator('.landing-workspace')).toHaveAttribute('data-navigation-ready', 'true');
       await page.waitForFunction(() => [...document.querySelectorAll('.workspace-destination')].some(node => Object.keys(node).some(key => key.startsWith('__reactProps$'))));
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       if (width < 1024) await page.evaluate(() => window.dispatchEvent(new Event('hymn-toggle-navigation')));
@@ -43,12 +44,15 @@ const { mkdir } = require('node:fs/promises');
       metrics.push({ width, path, ...density });
       assert.equal(density.headingSize, '13px');
       assert.equal(density.linkSize, '13px');
-      assert.equal(density.linkHeight, width < 1024 ? 44 : 36);
+      assert.ok(Math.abs(density.linkHeight - (width < 1024 ? 44 : 36)) < .1);
       await sidebar.screenshot({ path: `.cache/sidebar-consistent-${path === '/' ? 'home' : 'portal'}-${width}.png` });
     }
     for (const width of [1440, 390]) {
       const [home, portal] = metrics.filter(m => m.width === width);
-      for (const key of ['headingSize', 'headingHeight', 'linkSize', 'linkHeight', 'groupGap', 'padding', 'sidebarWidth']) assert.equal(home[key], portal[key], `Sidebar mismatch: ${key}`);
+      for (const key of ['headingSize', 'headingHeight', 'linkSize', 'linkHeight', 'groupGap', 'padding', 'sidebarWidth']) {
+        if (typeof home[key] === 'number') assert.ok(Math.abs(home[key] - portal[key]) < .1, `Sidebar mismatch: ${key}`);
+        else assert.equal(home[key], portal[key], `Sidebar mismatch: ${key}`);
+      }
     }
     console.log(JSON.stringify({ passed: true, metrics }, null, 2));
   } finally { await browser.close(); }

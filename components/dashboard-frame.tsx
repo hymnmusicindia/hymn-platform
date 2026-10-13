@@ -326,7 +326,7 @@ export function DashboardFrame<T extends string>({
         </section> : null}
         
 
-        <div className="portal-page-content">{children}</div>
+        <div className="portal-page-content" data-workspace-page={isOverview && navItems.some(item => item.key === "overview" && !item.href) ? "dashboard" : undefined}>{children}</div>
       </div>
     </div>
   );

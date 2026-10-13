@@ -35,6 +35,6 @@ export function LandingWorkspace({ children, workspaceHref }: {children:React.Re
       <div className="landing-rail-bottom"><Link href={workspaceHref}>Your workspace <ArrowUpRight size={15}/></Link><Link href="/contact">Talk to HYMN <ArrowUpRight size={15}/></Link><span>Independent music. Shared ambition.</span></div>
       <WorkspaceFooter collapsed={collapsed} onNavigate={()=>setOpen(false)}/>
     </aside>
-    <div className="landing-canvas">{children}</div>
+    <div className="landing-canvas"><div className="landing-page-content" data-workspace-page="home">{children}</div></div>
   </div>;
 }

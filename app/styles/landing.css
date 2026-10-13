@@ -76,7 +76,7 @@ body:has(:is(.hymn-landing, .hymn-home-theme))>header .site-nav-item[aria-curren
 .landing-signup h2>span+span::before { content:" "; }
 .landing-signup>aside>div.relative>div.my-5 { display:none; }
 .landing-signup>aside>div.relative>p { grid-column:2; margin-top:0; white-space:normal; font-size:9px; }
-.hymn-landing .landing-canvas>.shell { width:100%; max-width:none; margin:0; padding:32px; }
+.hymn-landing :is(.landing-canvas,.landing-page-content)>.shell { width:100%; max-width:none; margin:0; padding:32px; }
 .hymn-landing .home-store-destination-layout { padding:16px 0; background:none; }
 .hymn-landing .home-store-destination-words { font-size:clamp(24px,3vw,42px); color:#c7d5df; background:none; -webkit-text-fill-color:currentColor; }
 body:has(:is(.hymn-landing, .hymn-home-theme)) .home-store-logo { filter:grayscale(1) invert(1)!important; mix-blend-mode:normal!important; opacity:.8; }
@@ -107,7 +107,7 @@ body:has(:is(.hymn-landing, .hymn-home-theme)) .home-store-logo { filter:graysca
   .landing-journey { order:6; }
   .landing-releases { order:7; }
   .landing-producers { order:8; }
-  .landing-canvas>#label { order:9; }
+  :is(.landing-canvas,.landing-page-content)>#label { order:9; }
   .landing-artists { order:10; }
   .landing-career { order:11; }
   .landing-newsletter { order:12; }
@@ -153,7 +153,7 @@ body:has(:is(.hymn-landing, .hymn-home-theme)) .home-store-logo { filter:graysca
   .landing-service>div { margin-bottom:15px; }
   .landing-service>svg { display:none; }
   .landing-service h3 { margin-top:0; }
-  .hymn-landing .landing-canvas>.shell { padding:28px 16px; }
+  .hymn-landing :is(.landing-canvas,.landing-page-content)>.shell { padding:28px 16px; }
   .hymn-landing #label { margin:16px; padding:24px 18px; }
   .landing-newsletter { margin:16px; }
   .landing-newsletter>.shell { padding:24px 18px; }

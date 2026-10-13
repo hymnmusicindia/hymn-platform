@@ -1,11 +1,12 @@
 /* Slide only the content canvas: navigation remains anchored. */
+.landing-page-content {display:flex;flex-direction:column;min-width:0;}
 html[data-workspace-navigation="pending"] [data-workspace-loading] {display:none!important;}
-[data-workspace-transition-snapshot] {position:fixed;inset:0;overflow:hidden;z-index:60;pointer-events:none;background:var(--bg,#08090b);}
+[data-workspace-transition-snapshot] {position:fixed;inset:0;overflow:hidden;z-index:2000;pointer-events:none;background:var(--bg,#08090b);}
 html[data-workspace-swipe] {overflow-x:clip;}
-html[data-workspace-swipe="right"] :is(.landing-canvas,.portal-workspace) {animation:workspace-swipe-right 320ms cubic-bezier(.22,.7,.2,1) both;}
-html[data-workspace-swipe="left"] :is(.landing-canvas,.portal-workspace) {animation:workspace-swipe-left 320ms cubic-bezier(.22,.7,.2,1) both;}
+html[data-workspace-swipe="right"] [data-workspace-page="dashboard"] {animation:workspace-swipe-right 320ms cubic-bezier(.22,.7,.2,1) both;}
+html[data-workspace-swipe="left"] [data-workspace-page="home"] {animation:workspace-swipe-left 320ms cubic-bezier(.22,.7,.2,1) both;}
 @keyframes workspace-swipe-right {from {transform:translateX(-48px);opacity:.35;} to {transform:translateX(0);opacity:1;}}
 @keyframes workspace-swipe-left {from {transform:translateX(48px);opacity:.35;} to {transform:translateX(0);opacity:1;}}
 @media(prefers-reduced-motion:reduce) {
-  html[data-workspace-swipe] :is(.landing-canvas,.portal-workspace) {animation:none;}
+  html[data-workspace-swipe] [data-workspace-page] {animation:none;}
 }

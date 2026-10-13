@@ -26,7 +26,7 @@ export function WorkspacePageTransition() {
     let revealed = false;
     function revealReadyPage() {
       if (revealed) return;
-      const selector = direction === "right" ? ".portal-workspace" : ".landing-canvas";
+      const selector = `[data-workspace-page="${direction === "right" ? "dashboard" : "home"}"]`;
       const ready = [...document.querySelectorAll<HTMLElement>(selector)].some(node => !node.closest("[data-workspace-transition-snapshot]") && node.getClientRects().length && !node.querySelector("[data-workspace-loading]"));
       if (!ready) return;
       revealed = true;
@@ -53,17 +53,29 @@ export function WorkspacePageTransition() {
       clearPending();
       const content = document.querySelector<HTMLElement>(".hymn-landing, .hymn-portal-root, main");
       if (!content) return;
-      const rect = content.getBoundingClientRect();
-      const copy = content.cloneNode(true) as HTMLElement;
-      copy.removeAttribute("id");
-      copy.querySelectorAll("[id]").forEach(node => node.removeAttribute("id"));
-      copy.style.cssText += `;position:absolute;top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;margin:0;`;
       const cover = document.createElement("div");
       cover.dataset.workspaceTransitionSnapshot = "";
       cover.setAttribute("aria-hidden", "true");
       cover.inert = true;
-      cover.appendChild(copy);
+      function preserve(element: HTMLElement) {
+        const rect = element.getBoundingClientRect();
+        const copy = element.cloneNode(true) as HTMLElement;
+        copy.removeAttribute("id");
+        copy.querySelectorAll("[id]").forEach(node => node.removeAttribute("id"));
+        copy.style.cssText += `;position:absolute;top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;margin:0;`;
+        cover.appendChild(copy);
+        return () => {
+          const originalNodes = [element, ...element.querySelectorAll<HTMLElement>("*")];
+          const copiedNodes = [copy, ...copy.querySelectorAll<HTMLElement>("*")];
+          originalNodes.forEach((node, index) => { if (copiedNodes[index]) { copiedNodes[index].scrollTop = node.scrollTop; copiedNodes[index].scrollLeft = node.scrollLeft; } });
+        };
+      }
+      const restoreContentScroll = preserve(content);
+      // On Home, SiteHeader is a sibling of the page, not inside its main.
+      const header = document.querySelector<HTMLElement>("header.hymn-studio-header, body header");
+      const restoreHeaderScroll = header && !content.contains(header) ? preserve(header) : null;
       document.body.appendChild(cover);
+      restoreContentScroll(); restoreHeaderScroll?.();
       snapshot.current = cover;
       targetPath.current = target.pathname;
       document.documentElement.dataset.workspaceNavigation = "pending";
