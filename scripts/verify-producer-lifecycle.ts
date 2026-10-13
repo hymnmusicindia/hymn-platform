@@ -30,7 +30,7 @@ assert.match(identity, /Both identities are claimed by different accounts/);
 assert.match(identity, /Historical credits remain linked|trackContributionSnapshot|snapshots preserved|snapshot/i);
 assert.match(startRelease, /releaseTrackBeatLink\.create/);
 assert.match(startRelease, /syncTrackContributions/);
-assert.match(distribution, /syncTrackContributions/);
+assert.match(distribution, /syncReleaseContributions/);
 assert.match(producerRoleRoute, /prisma\.\$transaction/, "Producer role and identity changes must be atomic.");
 assert.match(producerRoleRoute, /contributorPartyId: party\.id/, "Producer profiles must link to the account's canonical contributor identity.");
 assert.match(producerRoleRoute, /beat\.updateMany[\s\S]*enabled: false/, "Revoking producer access must remove its inventory from sale.");

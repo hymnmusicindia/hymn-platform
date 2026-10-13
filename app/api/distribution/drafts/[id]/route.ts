@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { saveReleaseTracks, releaseSaveFailure } from "@/lib/release-track-save";
+import { releaseSaveTransactionOptions } from "@/lib/release-contributor-sync";
+export const maxDuration = 180;
 import { requireUser } from "@/lib/access";
 import { getDetailedReleaseByUserId } from "@/lib/distribution-db";
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -44,19 +47,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }, select: { id: true, updatedAt: true } });
   if (Array.isArray((metadata as any).tracks)) {
     const tracks = (metadata as any).tracks as any[];
-    for (const [index, track] of tracks.entries()) {
-      const data = { title: String(track.trackTitle || `Track ${index + 1}`), trackNumber: index + 1, primaryArtist: String(track.primaryArtist || body.artistName || ""), audioUrl: typeof track.audioUrl === "string" ? track.audioUrl : null, metadata: track };
-      const existingTrack = current.tracks.find(item => item.trackNumber === index + 1);
-      if (existingTrack) await tx.track.update({ where: { id: existingTrack.id }, data });
-      else await tx.track.create({ data: { ...data, releaseId: id } });
-    }
+    await saveReleaseTracks(tx, id, tracks.map((track, index) => ({ title: String(track.trackTitle || `Track ${index + 1}`), trackNumber: index + 1, primaryArtist: String(track.primaryArtist || body.artistName || ""), audioUrl: typeof track.audioUrl === "string" ? track.audioUrl : null, metadata: track })), current.tracks);
     await tx.track.deleteMany({ where: { releaseId: id, trackNumber: { gt: tracks.length } } });
   }
   return { conflict: false as const, updated };
-  }, { timeout: 30_000 });
+  }, releaseSaveTransactionOptions);
   if (updated.conflict) return NextResponse.json({ error: "This draft was updated elsewhere. Reload the latest version before editing.", code: "DRAFT_VERSION_CONFLICT", latestUpdatedAt: updated.latestUpdatedAt }, { status: 409 });
   return NextResponse.json({ draft: updated.updated, savedAt: updated.updated.updatedAt.toISOString() });
   } catch (error) {
+    const transient = releaseSaveFailure(error);
+    if (transient) { console.error("Release autosave failed", { releaseId: id, error }); return NextResponse.json(transient, { status: 503 }); }
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to save draft." }, { status: 409 });
   }
 }

@@ -1,0 +1,52 @@
+name: Release save regression
+
+on:
+  pull_request:
+    paths:
+      - 'app/api/distribution/**'
+      - 'lib/distribution-*.ts'
+      - 'lib/release-*.ts'
+      - 'lib/contributor-*.ts'
+      - 'prisma/**'
+      - 'scripts/verify-release-*.ts'
+      - 'scripts/verify-contributor-sync.ts'
+      - 'scripts/verify-direnote-virtual.ts'
+      - 'package*.json'
+      - '.github/workflows/release-save-regression.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/api/distribution/**'
+      - 'lib/distribution-*.ts'
+      - 'lib/release-*.ts'
+      - 'lib/contributor-*.ts'
+      - 'prisma/**'
+      - 'scripts/verify-release-*.ts'
+      - 'scripts/verify-contributor-sync.ts'
+      - 'scripts/verify-direnote-virtual.ts'
+      - 'package*.json'
+      - '.github/workflows/release-save-regression.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-save-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-save:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://fixture:fixture@127.0.0.1:55439/direnote_virtual
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: node --import tsx scripts/verify-contributor-sync.ts
+      - run: node --import tsx scripts/verify-direnote-virtual.ts --release-save-only

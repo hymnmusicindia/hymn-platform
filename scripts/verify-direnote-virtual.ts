@@ -42,6 +42,7 @@ async function main() {
     if (process.argv.includes("--release-save-only")) {
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-release-pipeline-integration.ts"]);
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-release-credit-batch.ts"]);
+      await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-release-change-requests-integration.ts"]);
       return;
     }
     if (process.argv.includes("--storage-only")) {

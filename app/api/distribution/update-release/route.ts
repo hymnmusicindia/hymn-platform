@@ -1,3 +1,4 @@
+import { releaseSaveFailure } from "@/lib/release-track-save";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { localPrivateStorage, type PrivateAssetType } from "@/lib/private-storage";
@@ -194,6 +195,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ release });
   } catch (error) {
+    const transient = releaseSaveFailure(error);
+    if (transient) { console.error("Release persistence failed", { error }); return NextResponse.json(transient, { status: 503 }); }
     const message = error instanceof Error ? error.message : "Could not update distribution release.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
