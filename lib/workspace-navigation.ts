@@ -2,7 +2,7 @@ import { Disc3, Folder, Headphones, LayoutGrid, Megaphone, Music2, Plus, ShieldC
 
 // Shared by the home rail and every artist/producer workspace frame.
 export const workspaceNavigation = [
-  { key:"overview", label:"Overview", group:"Home", href:"/dashboard", icon:LayoutGrid },
+  { key:"overview", label:"Dashboard", group:"Home", href:"/dashboard", icon:LayoutGrid },
   { key:"files", label:"My files", group:"Library", href:"/audio-library", icon:Folder },
   { key:"upload", label:"Add release", group:"Distribution", href:"/distribution/start", icon:Plus },
   { key:"releases", label:"My releases", group:"Distribution", href:"/dashboard/releases", icon:Disc3 },

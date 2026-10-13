@@ -26,6 +26,8 @@ import "./styles/home-editorial.css";
 import "./styles/support-workspace.css";
 import "./styles/faq-center.css";
 import "./styles/sidebar-consistency.css";
+import "./styles/workspace-page-transition.css";
+import { WorkspacePageTransition } from "@/components/workspace-page-transition";
 import { SmartHelpLayer } from "@/components/smart-help-layer";
 
 export const metadata: Metadata = {
@@ -86,7 +88,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           }}
         />
       </head>
-      <body suppressHydrationWarning>{children}<SmartHelpLayer /><ReferralWelcome />{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</body>
+      <body suppressHydrationWarning>{children}<WorkspacePageTransition /><SmartHelpLayer /><ReferralWelcome />{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</body>
     </html>
   );
 }

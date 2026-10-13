@@ -1,7 +1,7 @@
 import type { AdminPermissionKey } from "@/lib/access";
 type Item={key:string;label:string;description:string;group:string;href?:string};
 export const adminWorkspaceNavigation:Item[]=[
-        { key: "overview", label: "Operations Overview", description: "Queues requiring attention", group: "Command Center" },
+        { key: "overview", label: "Operations Dashboard", description: "Queues requiring attention", group: "Command Center" },
         { key: "notifications", label: "Notifications", description: "Operations feed", group: "Command Center" },
         { key: "analytics", label: "Operational Reporting", description: "Persisted platform activity", group: "Command Center" },
         {key:"manual-catalogue",label:"Manual catalogue",description:"Assigned and imported release records",group:"Distribution Operations",href:"/admin/releases/manual"},

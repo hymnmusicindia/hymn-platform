@@ -21,7 +21,7 @@ const { mkdir } = require('node:fs/promises');
       await expect(sidebar).toBeInViewport();
       const destinations = sidebar.locator('.workspace-destination');
       await expect(destinations).toHaveCount(2);
-      assert.deepEqual(await destinations.allTextContents(), ['Home', 'Overview']);
+      assert.deepEqual(await destinations.allTextContents(), ['Home', 'Dashboard']);
       const boxes = await destinations.evaluateAll(nodes => nodes.map(n => { const r = n.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; }));
       assert.ok(Math.abs(boxes[0].width - boxes[1].width) < 1, 'Home/Overview must split equally');
       assert.equal(boxes[0].y, boxes[1].y, 'Destinations must be adjacent');
