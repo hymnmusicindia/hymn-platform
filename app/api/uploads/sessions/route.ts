@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
+import { normalizeUploadMime } from "@/lib/upload-mime";
 import { requireUser } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { createSafeAssetFolderName, uploadConfig, type AssetCategory } from "@/lib/storage-service";
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const releaseId = Number(body.releaseId), trackId = body.trackId ? Number(body.trackId) : null;
     const category = String(body.assetCategory || "") as AssetCategory;
-    const originalFilename = String(body.originalFilename || ""), mimeType = String(body.mimeType || ""), totalSize = Number(body.totalSize);
+    const originalFilename = String(body.originalFilename || ""), mimeType = normalizeUploadMime(String(body.mimeType || ""), originalFilename), totalSize = Number(body.totalSize);
     const chunkHashes: string[] | undefined = body.chunkHashes;
     if (!Number.isInteger(releaseId) || !categories.has(category) || !mimeTypes.has(mimeType)) throw new Error("Invalid upload session metadata.");
     if (category === "RELEASE_COVER_ART" && (mimeType !== "image/jpeg" || !/\.(jpe?g)$/i.test(originalFilename))) throw new Error("Cover artwork must be a JPG/JPEG file.");

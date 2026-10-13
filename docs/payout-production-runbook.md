@@ -5,7 +5,7 @@
 - `DATABASE_URL`: production PostgreSQL connection.
 - `PAYOUT_ENCRYPTION_KEY`: stable high-entropy secret used for AES-256-GCM payout credential encryption. Back it up securely; rotating it requires a controlled re-encryption job.
 - `CRON_SECRET`: protects automatic quarterly closing.
-- `BLOB_READ_WRITE_TOKEN`: private immutable Excel report storage.
+- Payout reports use immutable, checksum-verified files under the managed private storage root (`Reports/Payouts`). No external object-storage token is required.
 - `PAYOUT_CYCLE=quarterly`.
 - `ALLOW_PAYOUT_REQUESTS_DURING_OPEN_QUARTER=false` unless finance explicitly approves rolling withdrawals.
 - Optional Google Sheets mirror variables from `.env.example`. Sheets are never authoritative.
@@ -24,7 +24,7 @@
 
 ## Excel report location
 
-Generated files are stored privately in Vercel Blob under `payout-reports/`. The `payout_reports.storage_path` column records the private object URL. Users and admins download through `/api/payout/reports/{reportId}/download`; the application checks authorization before proxying the private object. Files are not committed to the repository or exposed through a public Blob URL.
+Generated files are stored privately under the managed storage root at `Reports/Payouts/`. The `payout_reports.storage_path` column records the relative file path. Users and admins download through `/api/payout/reports/{reportId}/download`; the application checks authorization and the file checksum before serving it. Files are not committed to the repository or exposed publicly.
 
 ## Quarter-close recovery
 
@@ -42,7 +42,7 @@ Alert finance/engineering when:
 - unmatched royalty rows remain before quarter end;
 - the quarterly cron returns a non-2xx response;
 - available or pending balances become negative;
-- private Blob storage or Google Sheets mirroring fails.
+- managed private storage or Google Sheets mirroring fails.
 
 ## Dependency audit exception
 

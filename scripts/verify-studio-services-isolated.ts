@@ -23,6 +23,7 @@ async function main() {
     await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", previousSchema, "--skip-generate"]);
     await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261014120000_studio_conversation_trust/migration.sql", "--schema", "prisma/schema.prisma"]);
     await run(["--import", "tsx", "scripts/verify-studio-services-integration.ts"]);
+    await run(["--import", "tsx", "scripts/verify-managed-uploads.ts"]);
     if (process.argv.includes("--build")) await run(["node_modules/next/dist/bin/next", "build", "--webpack"]);
     if (process.argv.includes("--browser")) {
       const serverMode = process.argv.includes("--production") ? "start" : "dev";

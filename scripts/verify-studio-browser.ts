@@ -124,6 +124,26 @@ async function main() {
       }
       const corrupt = await context.request.post(`${baseUrl}/api/studio/images`, { multipart: { kind: "photo", image: { name: "bad.png", mimeType: "image/png", buffer: Buffer.from("not an image") } } });
       assert.equal(corrupt.status(), 400);
+      const managedOrder = await prisma.studioServiceOrder.findFirstOrThrow({ where: { projectTitle: "Managed Upload Fixture" } });
+      const wave = Buffer.alloc(44 + 17640); wave.write("RIFF"); wave.writeUInt32LE(wave.length - 8, 4); wave.write("WAVEfmt ", 8); wave.writeUInt32LE(16, 16); wave.writeUInt16LE(1, 20); wave.writeUInt16LE(2, 22); wave.writeUInt32LE(44100, 24); wave.writeUInt32LE(176400, 28); wave.writeUInt16LE(4, 32); wave.writeUInt16LE(16, 34); wave.write("data", 36); wave.writeUInt32LE(wave.length - 44, 40);
+      await page.goto(`${baseUrl}/studio/orders/${managedOrder.publicId}`, { waitUntil: "load", timeout: 60000 });
+      await page.getByRole("button", { name: "Attach files", exact: true }).click();
+      const uploadFinished = page.waitForResponse(async response => response.url().endsWith("/api/studio/uploads") && response.request().postData()?.includes('"action":"complete"') === true);
+      await page.locator('input[type="file"]').setInputFiles({ name: "browser-source.wav", mimeType: "audio/wav", buffer: wave });
+      assert.equal((await uploadFinished).status(), 201);
+      await page.getByRole("log").getByRole("link", { name: "browser-source.wav" }).waitFor();
+      const draft = await prisma.release.findFirstOrThrow({ where: { userId: order.customerId } });
+      const sessionResponse = await context.request.post(`${baseUrl}/api/uploads/sessions`, { data: { releaseId: draft.id, assetCategory: "TRACK_AUDIO_MASTER", originalFilename: "browser-master.wav", mimeType: "", totalSize: wave.length, chunkHashes: [createHash("sha256").update(wave).digest("hex")] } });
+      assert.equal(sessionResponse.status(), 201, await sessionResponse.text());
+      const session = (await sessionResponse.json()).session;
+      assert.equal((await context.request.put(`${baseUrl}/api/uploads/sessions/${session.id}/chunks/0`, { data: wave })).status(), 202);
+      const finalized = await context.request.post(`${baseUrl}/api/uploads/sessions/${session.id}/complete`);
+      assert.equal(finalized.status(), 201, await finalized.text());
+      const master = await prisma.storedAsset.findUniqueOrThrow({ where: { id: (await finalized.json()).asset.id } });
+      assert.equal(master.storageProvider, "LOCAL");
+      assert.equal(master.checksum, createHash("sha256").update(wave).digest("hex"));
+      const download = await context.request.get(`${baseUrl}/api/assets/${master.id}/download`, { headers: { Range: "bytes=0-3" } });
+      assert.equal(download.status(), 206); assert.equal((await download.body()).toString(), "RIFF");
       await context.clearCookies();
       const unauthorized = await context.request.post(`${baseUrl}/api/studio/images`, { multipart: { kind: "banner", image: { name: "image.png", mimeType: "image/png", buffer: imageBytes } } });
       assert.equal(unauthorized.status(), 401);

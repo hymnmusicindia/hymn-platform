@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import ExcelJS from "exceljs";
-import { put } from "@vercel/blob";
+import { savePayoutReport } from "@/lib/payout/report-storage";
 import { prisma } from "@/lib/prisma";
 import { logAuditEvent } from "@/lib/audit-log";
 
@@ -25,8 +25,7 @@ export async function generatePayoutWorkbook(input: Request) {
   addSheet(workbook,"Royalty Line Items",royalties);addSheet(workbook,"Split Records",splits);addSheet(workbook,"Split Recipients",recipients);addSheet(workbook,"Split Earnings",earnings);addSheet(workbook,"Producer Sales",producerSales.map((sale:any)=>({beatSaleId:sale.id,beatId:sale.beatId,beatTitle:sale.beat?.title,producerUserId:sale.producerUserId,producerDisplayName:sale.producer?.name,buyerUserId:sale.buyerUserId,buyerName:sale.buyer?.name,orderId:sale.orderId,paymentId:sale.paymentId,grossAmount:n(sale.grossAmount),hymnCommission30:n(sale.hymnCommissionAmount),producerEarning70:n(sale.producerEarningAmount),currency:sale.currency,licenseType:sale.licenseType,saleStatus:sale.status,earningSource:"beat_sale",createdAt:sale.createdAt})));addSheet(workbook,"Producer Ledger",producerLedger);addSheet(workbook,"Producer Payouts",producerPayouts);addSheet(workbook,"Wallet Ledger",wallet);addSheet(workbook,"Payout Requests",payouts);addSheet(workbook,"Paid Payouts",payouts.filter((r:any)=>r.status==="PAID"));addSheet(workbook,"Carry Forward",carry);addSheet(workbook,"Unmatched UPC ISRC",unmatched);addSheet(workbook,"Audit Logs",audits);
   const buffer=Buffer.from(await workbook.xlsx.writeBuffer());const checksum=createHash("sha256").update(buffer).digest("hex"); const name=fileName(input);
   let storagePath:string|null=null;
-  if(input.persist!==false&&process.env.BLOB_READ_WRITE_TOKEN){const blob=await put(`payout-reports/${checksum}-${name}`,buffer,{access:"private",addRandomSuffix:false,contentType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});storagePath=blob.url;}
-  else if(input.persist!==false&&process.env.NODE_ENV==="production")throw new Error("Private report storage is not configured.");
+  if(input.persist!==false) storagePath=await savePayoutReport(buffer,name);
   const report=input.persist===false?{id:0,type:input.type,userId:input.userId??null,month:input.month??null,quarter:input.quarter??null,year:input.year,fileName:name,status:"generated",checksum,storagePath,generatedAt:new Date()}:await (prisma as any).payoutReport.create({data:{type:input.type,userId:input.userId??null,month:input.month??null,quarter:input.quarter??null,year:input.year,fileName:name,storagePath,generatedByAdminId:input.actorId??null,status:"generated",checksum}});
   if(input.persist!==false)await logAuditEvent({actorType:input.actorId?"admin":input.userId?"user":"system",actorId:input.actorId??input.userId??null,entityType:"payout_report",entityId:report.id,action:`${input.type}.report_generated`,newValue:{fileName:name,checksum}});
   return {...report,buffer};

@@ -1,6 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
+import sharp from "sharp";
+import { normalizeUploadMime } from "@/lib/upload-mime";
 import { CANONICAL_HOSTINGER_PUBLIC_STORAGE_ROOT, publicMediaStorageRoot } from "@/lib/hostinger-storage";
 
 const maxAudioBytes = 50 * 1024 * 1024;
@@ -98,6 +100,9 @@ export function normalizePublicUploadUrl(value: string | null | undefined) {
 }
 
 export async function saveUploadedFile(file: File, directory: string, kind: "audio" | "image" | "file") {
+  const normalizedMime = normalizeUploadMime(file.type, file.name);
+  if (normalizedMime !== file.type) file = new File([await file.arrayBuffer()], file.name, { type: normalizedMime });
+  if (!file.size) throw new Error("Choose a file that is not empty.");
   const allowedAudio = [
     "audio/mpeg",
     "audio/mp3",
@@ -126,6 +131,16 @@ export async function saveUploadedFile(file: File, directory: string, kind: "aud
   const canonicalImageExtension: Record<string, string> = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp" };
   const ext = kind === "image" ? canonicalImageExtension[file.type] : path.extname(file.name).toLowerCase();
   const fileName = `${randomUUID()}${ext}`;
+  const publicUrl = publicUploadUrl(`${directory}/${fileName}`);
+  const bytes = Buffer.from(await file.arrayBuffer());
+  if (kind === "image") {
+    try {
+      const metadata = await sharp(bytes, { limitInputPixels: 40_000_000 }).metadata();
+      const expected = { "image/jpeg": "jpeg", "image/png": "png", "image/webp": "webp" }[file.type];
+      if (metadata.format !== expected || !metadata.width || !metadata.height) throw new Error("Invalid image");
+      await sharp(bytes, { limitInputPixels: 40_000_000 }).stats();
+    } catch { throw new Error("This image cannot be read. Export it as JPG, PNG or WebP and try again."); }
+  }
   
   const root = publicMediaStorageRoot();
   const folder = path.join(/* turbopackIgnore: true */ root, directory);
@@ -133,14 +148,13 @@ export async function saveUploadedFile(file: File, directory: string, kind: "aud
 
   const filePath = path.join(folder, fileName);
   const temporaryPath = `${filePath}.${randomUUID()}.pending`;
-  const bytes = Buffer.from(await file.arrayBuffer());
   await fs.writeFile(temporaryPath, bytes, { flag: "wx" });
   await fs.rename(temporaryPath, filePath).catch(async (error) => {
     await fs.unlink(temporaryPath).catch(() => undefined);
     throw error;
   });
 
-  return publicUploadUrl(`${directory}/${fileName}`);
+  return publicUrl;
 }
 
 export async function deleteUploadedFileByUrl(value: string | null | undefined) {

@@ -1,11 +1,11 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { del, get } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { beatAssetRelativePath, finalRelativePath, localStorageProvider } from "@/lib/storage-service";
 import { CANONICAL_HOSTINGER_STORAGE_ROOT, managedStorageRoot } from "@/lib/hostinger-storage";
 import { verifyArtworkIntegrity, verifyAudioIntegrity } from "@/lib/media-integrity";
+import { normalizeUploadMime } from "@/lib/upload-mime";
 
 export type PrivateAssetType = "private_audio_master" | "private_studio_source" | "private_studio_delivery" | "private_beat_deliverable" | "private_beat_license" | "private_cover_licence" | "private_ownership_proof" | "private_ai_receipt" | "private_royalty_statement" | "private_payout_report" | "private_payout_proof" | "private_kyc_document" | "private_unreleased_artwork";
 export type PrivateUploadInput = { ownerUserId: number; ownerName?: string; releaseId?: number; beatPurchaseId?: number; beatId?: number; beatTitle?: string; assetType: PrivateAssetType; fileName: string; mimeType: string; bytes: Buffer; retentionUntil?: Date };
@@ -155,6 +155,7 @@ export function validatePrivateUpload(input: PrivateUploadInput) {
 
 export const localPrivateStorage: PrivateStorageAdapter = {
   async upload(input) {
+    input = { ...input, mimeType: normalizeUploadMime(input.mimeType, input.fileName) };
     const safeFilename = validatePrivateUpload(input);
     if (input.assetType === "private_audio_master") await verifyAudioIntegrity(input.bytes, input.mimeType);
     if (input.assetType === "private_unreleased_artwork") await verifyArtworkIntegrity(input.bytes);
@@ -195,25 +196,7 @@ export const localPrivateStorage: PrivateStorageAdapter = {
       if (!purchased && !studioParticipant) throw new Error("Forbidden.");
     }
     const audioRange = input.range && asset.mimeType.startsWith("audio/") ? audioByteRange(input.range, asset.byteSize) : null;
-    if (asset.storageProvider === "vercel_blob" || asset.objectKey.startsWith("http://") || asset.objectKey.startsWith("https://")) {
-      try {
-        const blob = await get(asset.objectKey, { access: "private", headers: audioRange ? { Range: audioRange.header } : input.range ? { Range: input.range } : undefined });
-        const statusCode = Number(blob?.statusCode);
-        if (!blob || ![200, 206].includes(statusCode) || !blob.stream) throw new Error("Could not fetch remote private asset.");
-        let buf = Buffer.from(await new Response(blob.stream).arrayBuffer());
-        if (audioRange && statusCode === 200) buf = buf.subarray(audioRange.start, audioRange.end + 1);
-        if (audioRange && buf.length !== audioRange.end - audioRange.start + 1) throw new Error("Remote audio range is incomplete.");
-        if (!input.range && crypto.createHash("sha256").update(buf).digest("hex") !== asset.checksum) throw new Error("Stored private asset failed its SHA-256 integrity check.");
-        return { bytes: buf, mimeType: asset.mimeType, fileName: asset.safeFilename, contentRange: audioRange?.contentRange ?? blob.headers.get("content-range"), contentLength: audioRange ? String(buf.length) : blob.headers.get("content-length") };
-      } catch (remoteError) {
-        // A local copy is retained for recovery when mirrored remote storage is enabled.
-        if (!asset.relativePath) throw remoteError;
-        const buf = await readLocalAsset(asset.relativePath, asset.relativePath, audioRange ?? undefined, asset.byteSize);
-        if (!input.range && crypto.createHash("sha256").update(buf).digest("hex") !== asset.checksum) throw new Error("Stored private asset failed its SHA-256 integrity check.");
-        return { bytes: buf, mimeType: asset.mimeType, fileName: asset.safeFilename, contentRange: audioRange?.contentRange, contentLength: audioRange ? String(buf.length) : undefined };
-      }
-    }
-    const bytes = await readLocalAsset(asset.objectKey, asset.relativePath, audioRange ?? undefined, asset.byteSize);
+    const bytes = await readLocalAsset(asset.relativePath || asset.objectKey, asset.relativePath, audioRange ?? undefined, asset.byteSize);
     if (!audioRange && crypto.createHash("sha256").update(bytes).digest("hex") !== asset.checksum) throw new Error("Stored private asset failed its SHA-256 integrity check.");
     return { bytes, mimeType: asset.mimeType, fileName: asset.safeFilename, contentRange: audioRange?.contentRange, contentLength: audioRange ? String(bytes.length) : undefined };
   },
@@ -221,17 +204,8 @@ export const localPrivateStorage: PrivateStorageAdapter = {
     const asset = await prisma.storedAsset.findUnique({ where: { id: input.assetId } });
     if (!asset || (!input.isAdmin && asset.ownerUserId !== input.requesterUserId)) throw new Error("Forbidden.");
     await prisma.storedAsset.update({ where: { id: asset.id }, data: { deletedAt: new Date(), uploadStatus: "deleted" } });
-    if (asset.storageProvider === "vercel_blob" || asset.objectKey.startsWith("http://") || asset.objectKey.startsWith("https://")) {
-      await del(asset.objectKey).catch(() => undefined);
-      if (asset.relativePath) {
-        const root = privateStorageRootPath();
-        const backup = path.resolve(/* turbopackIgnore: true */ root, asset.relativePath);
-        if (backup.startsWith(`${root}${path.sep}`)) await fs.unlink(backup).catch(() => undefined);
-      }
-      return;
-    }
     const root = privateStorageRootPath();
-    const target = path.resolve(/* turbopackIgnore: true */ root, asset.objectKey);
+    const target = path.resolve(/* turbopackIgnore: true */ root, asset.relativePath || asset.objectKey);
     if (target.startsWith(`${root}${path.sep}`)) await fs.unlink(target).catch(() => undefined);
   }
 };

@@ -1,0 +1,9 @@
+# Upload and storage audit
+
+HYMN stores public media under the managed public root and private source files, deliveries, release masters and payout reports under the managed private root. Studio files and release masters use 8 MB authenticated chunks, per-chunk checksums and final SHA-256 validation. Public JPG, PNG and WebP uploads are decoded before writing; common browser MIME aliases and missing MIME values are normalized from filenames and then verified against file content.
+
+Removed the `@vercel/blob` package and its client/server upload paths. Retired upload handshakes respond with a refresh instruction for open tabs using old JavaScript. Studio attachments now use `/api/studio/uploads` with role and paid-project checks at initiation, chunk write and completion; upload tokens expire after 48 hours. The storage cleanup cron removes expired temporary Studio chunks. Release upload finalization now retains the canonical managed copy without requiring an external mirror. Payout reports use immutable checksum-addressed files and verify their checksum on download.
+
+Production database audit before removal: 73 active stored assets (72 `LOCAL`, one `private_local`), zero active `vercel_blob` assets, zero payout reports with a remote storage path, and zero `vercel-storage.com` references in users, producer profiles, engineer profiles/applications, uploads, releases, tracks, payout reports and stored assets. The read-only audit script is `scripts/audit-storage-providers.ts`. It reports counts only.
+
+Verification includes a real Studio conversation attachment, a two-chunk private source upload with retry and replay, access control, a release master upload and ranged playback, public JPG/PNG/WebP uploads, invalid image rejection, and immutable payout-report reads. Isolated PostgreSQL and browser fixtures are used; live customer files and payments are untouched.

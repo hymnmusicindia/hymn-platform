@@ -1,5 +1,5 @@
 "use client";
-import { upload } from "@vercel/blob/client";
+import { uploadStudioFile } from "@/lib/studio-upload-client";
 import { useRouter } from "next/navigation";
 import { UploadDropzone } from "@/components/upload-dropzone";
 
@@ -12,23 +12,7 @@ export function StudioFileUpload({ orderPublicId, role, onUploaded }: { orderPub
     description={source ? "Upload consolidated stems, multitracks, or a ZIP package" : "Upload the final WAV, MP3, or delivery ZIP"}
     helperLines={source ? ["Private", "WAV, FLAC, MP3, ZIP", "Resumable upload"] : ["Private", "Release-ready audio", "Versioned delivery"]}
     onSelect={async (file, controls) => {
-      const assetType = source ? "private_studio_source" : "private_studio_delivery";
-      const blob = await upload(`studio/${orderPublicId}/${crypto.randomUUID()}-${file.name}`, file, {
-        access: "private",
-        handleUploadUrl: "/api/assets/client-upload",
-        multipart: file.size > 5 * 1024 * 1024,
-        clientPayload: JSON.stringify({ studioOrderId: orderPublicId, assetType, mimeType: file.type || "application/octet-stream", originalFilename: file.name, byteSize: file.size }),
-        onUploadProgress: event => controls.reportProgress(event.loaded, event.total),
-      });
-      if (controls.signal.aborted) throw new DOMException("Upload cancelled", "AbortError");
-      for (let attempt=0;attempt<6;attempt++) {
-        if (controls.signal.aborted) throw new DOMException("Upload cancelled", "AbortError");
-        const response = await fetch("/api/assets/client-upload/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: blob.url }), signal: controls.signal });
-        const data = await response.json();
-        if (response.ok) break;
-        if (response.status !== 409 || attempt === 5) throw new Error(data.error || "The uploaded file could not be attached.");
-        await new Promise(resolve=>setTimeout(resolve,400*(attempt+1)));
-      }
+      await uploadStudioFile(file, orderPublicId, role, controls);
       if (onUploaded) onUploaded(); else router.refresh();
     }}
   />;

@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { localStorageProvider } from "@/lib/storage-service";
 import { localPrivateStorage } from "@/lib/private-storage";
+import { cleanExpiredStudioUploads } from "@/lib/studio-uploads";
 
 export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   const now = new Date();
+  await cleanExpiredStudioUploads();
   const staleCutoff = new Date(now.getTime() - 15 * 60 * 1000);
   const staleFinalizations = await prisma.uploadSession.findMany({ where: { updatedAt: { lte: staleCutoff }, status: { in: ["ASSEMBLING", "VERIFYING"] } }, select: { id: true, status: true } });
   let recovered = 0;
