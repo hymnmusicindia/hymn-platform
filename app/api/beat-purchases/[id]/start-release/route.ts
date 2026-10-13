@@ -11,12 +11,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const purchase = await prisma.beatPurchase.findUnique({ where: { id: purchaseId } });
   if (!purchase || purchase.userId !== user.user.id || !purchase.hasAccess) return NextResponse.json({ error: "Beat purchase not found." }, { status: 404 });
   if (!purchase.licenseUrl) return NextResponse.json({ error: "The beat license must be generated before starting a release." }, { status: 409 });
-  if (purchase.releaseId) return NextResponse.json({ releaseId: purchase.releaseId, href: `/distribution/start?draft=${purchase.releaseId}` });
+  if (purchase.releaseId) return NextResponse.json({ releaseId: purchase.releaseId, href: `/distribution/start?resume=${purchase.releaseId}` });
   const beat = await prisma.beat.findUnique({ where: { id: purchase.beatId }, include: { producerParty: true } });
   if (!beat) return NextResponse.json({ error: "Beat not found." }, { status: 404 });
   const producer = await prisma.user.findUnique({ where: { id: beat.userId } });
   const producerParty = beat.producerParty ?? await ensureClaimedContributorParty(beat.userId, producer?.name ?? `Producer #${beat.userId}`);
   const release = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${purchase.id})`;
+    const current = await tx.beatPurchase.findFirst({ where: { id: purchase.id, userId: user.user.id, hasAccess: true } });
+    if (!current?.licenseUrl) throw new Error("Beat licence is no longer available.");
+    if (current.releaseId) return tx.release.findFirstOrThrow({ where: { id: current.releaseId, userId: user.user.id } });
     const created = await tx.release.create({ data: {
       userId: user.user.id, title: beat.title, artistName: user.user.name, genre: beat.genre, releaseDate: new Date(), status: "DRAFT", releaseType: "single", paymentStatus: "pending",
       metadata: { mood: beat.mood, beatPurchaseId: purchase.id, license_receipt_url: purchase.licenseUrl, licenseAgreementUrl: `/licenses/${purchase.id}`, contentType: purchase.licenseType === "exclusive" ? "Exclusive Licensed" : "Non-Exclusive Licensed", beatTitle: beat.title, bpm: beat.bpm, musicalKey: beat.keySignature, producerCredit: producerParty.professionalName, producerPartyId: producerParty.publicId, licenseType: purchase.licenseType }
@@ -28,8 +32,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     return created;
   });
   await Promise.all([
-    createNotificationOnce({ eventKey: `release:${release.id}:created_from_beat`, userId: user.user.id, title: "Release draft created", body: `Your ${beat.title} draft includes the beat license and producer credit.`, type: "release", href: `/distribution/start?draft=${release.id}`, actionLabel: "Continue release" }),
+    createNotificationOnce({ eventKey: `release:${release.id}:created_from_beat`, userId: user.user.id, title: "Release draft created", body: `Your ${beat.title} draft includes the beat license and producer credit.`, type: "release", href: `/distribution/start?resume=${release.id}`, actionLabel: "Continue release" }),
     logAuditEvent({ actorType: "user", actorId: user.user.id, entityType: "release", entityId: release.id, action: "release.created_from_beat", newValue: { beatPurchaseId: purchase.id } })
   ]);
-  return NextResponse.json({ releaseId: release.id, href: `/distribution/start?draft=${release.id}` }, { status: 201 });
+  return NextResponse.json({ releaseId: release.id, href: `/distribution/start?resume=${release.id}` }, { status: 201 });
 }

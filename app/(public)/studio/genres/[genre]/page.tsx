@@ -1,0 +1,9 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import type { Metadata } from "next";
+import { ENGINEER_GENRES } from "@/lib/engineer-applications";
+import { listStudioEngineers } from "@/lib/studio-services";
+const genreSlug=(genre:string)=>genre.toLowerCase().replace(/[^a-z0-9]+/g,"-");
+export const dynamic="force-dynamic";
+export async function generateMetadata({params}:{params:Promise<{genre:string}>}):Promise<Metadata>{const p=await params,g=ENGINEER_GENRES.find(g=>genreSlug(g)===p.genre);return {title:g?`${g} Mixing & Mastering Engineers | HYMN`:"HYMN Studio",description:"Compare engineer work, verified client vouches, turnaround and prices."};}
+export default async function GenrePage({params}:{params:Promise<{genre:string}>}){const p=await params,g=ENGINEER_GENRES.find(g=>genreSlug(g)===p.genre);if(!g)notFound();const engineers=await listStudioEngineers({genre:g});return <main className="shell py-12"><p className="hymn-kicker">Find your sound</p><h1 className="mt-3 text-4xl font-semibold">{g} mixing & mastering</h1><p className="mt-4 max-w-2xl text-[var(--text-muted)]">Hear the work. Read client vouches. Choose a sound partner for your next record.</p><Link href="/studio/readiness" className="btn-outline mt-6">Check your mix readiness</Link><div className="mt-8 grid gap-5 md:grid-cols-3">{engineers.map(e=><Link className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6" key={e.id} href={`/studio/engineers/${e.slug}`}><h2 className="text-xl font-semibold">{e.professionalName}</h2><p className="mt-3 text-sm text-[var(--text-muted)]">{e.bio}</p><p className="mt-4 text-xs">{e.completedOrderCount} completed projects · {e.ratingCount} client vouches</p></Link>)}</div>{!engineers.length?<p className="mt-8 text-[var(--text-muted)]">Our {g} roster is growing. Browse all engineers for more options.</p>:null}<Link href="/studio" className="btn-primary mt-8">Explore Studio</Link></main>}

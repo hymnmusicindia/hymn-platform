@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { createCommunityVouch, createShowcase, confirmShowcase, createConsultationSlot, bookConsultation } from "../lib/studio-trust";
 import { prisma } from "../lib/prisma";
 import { localPrivateStorage } from "../lib/private-storage";
 import { confirmPersistedPayment } from "../lib/payment-webhooks";
 import { appointStudioEngineer, updateStudioEngineer } from "../lib/admin-studio-engineers";
 import { approveStudioDelivery, assertStudioParticipant, cancelStudioOrder, confirmStudioPayment, createStudioAmendmentPayment, createStudioDelivery, createStudioOrder, createStudioPayment, createStudioRevisionPayment, handoffStudioOrderToRelease, proposeStudioAmendment, requestStudioRevision, respondToStudioOrder, reviewStudioOrder, runStudioAutomation, sendStudioMessage, transitionStudioOrder } from "../lib/studio-services";
 
+function fixtureWav() { const bytes=Buffer.alloc(44+17640);bytes.write("RIFF",0);bytes.writeUInt32LE(bytes.length-8,4);bytes.write("WAVEfmt ",8);bytes.writeUInt32LE(16,16);bytes.writeUInt16LE(1,20);bytes.writeUInt16LE(2,22);bytes.writeUInt32LE(44100,24);bytes.writeUInt32LE(176400,28);bytes.writeUInt16LE(4,32);bytes.writeUInt16LE(16,34);bytes.write("data",36);bytes.writeUInt32LE(bytes.length-44,40);return bytes; }
 async function main() {
   assert.match(process.env.DATABASE_URL ?? "", /^postgres(?:ql)?:\/\//i);
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -49,6 +51,8 @@ async function main() {
   assert.equal((await assertStudioParticipant(order.publicId, customer.id)).id, order.id);
   assert.equal((await assertStudioParticipant(order.publicId, engineerUser.id)).id, order.id);
   const payment = await createStudioPayment({ orderPublicId: order.publicId, customerId: customer.id, idempotencyKey: `initial-payment-${stamp}` });
+  const parallelCheckout=await Promise.all([createStudioPayment({orderPublicId:order.publicId,customerId:customer.id,idempotencyKey:`initial-retry-a-${stamp}`}),createStudioPayment({orderPublicId:order.publicId,customerId:customer.id,idempotencyKey:`initial-retry-b-${stamp}`})]);
+  assert.equal(parallelCheckout[0].id,payment.id);assert.equal(parallelCheckout[1].id,payment.id,"Checkout retries must use the same payable provider order.");
   await confirmStudioPayment({ razorpayOrderId: payment.razorpayOrderId, paymentId: `pay-initial-${stamp}`, amountMinor: 150000, currency: "INR", source: "webhook" });
   await respondToStudioOrder({ orderPublicId: order.publicId, engineerUserId: engineerUser.id, accept: true });
   assert.equal((await prisma.studioServiceOrder.findUniqueOrThrow({ where: { id: order.id } })).status, "AWAITING_SOURCE_FILES");
@@ -56,10 +60,10 @@ async function main() {
   await prisma.studioFile.create({ data: { orderId: order.id, assetId: sourceUpload.id, uploaderId: customer.id, category: "SOURCE", version: 1 } });
   await transitionStudioOrder({ orderId: order.id, to: "IN_PROGRESS", actorUserId: customer.id, actorType: "CUSTOMER", reason: "Source files uploaded", correlationId: `source-${stamp}` });
   await sendStudioMessage({ orderPublicId: order.publicId, userId: customer.id, body: "The vocal stems are uploaded and ready.", idempotencyKey: `message-${stamp}` });
-  assert.equal(await prisma.studioMessage.count({ where: { orderId: order.id, idempotencyKey: `message-${stamp}` } }), 1);
+  assert.equal(await prisma.studioMessage.count({ where: { orderId: order.id, idempotencyKey: `chat:${order.id}:${customer.id}:message-${stamp}` } }), 1);
 
   async function delivery(version: number) {
-    const uploaded = await localPrivateStorage.upload({ ownerUserId: engineerUser.id, assetType: "private_studio_delivery", fileName: `delivery-${version}.zip`, mimeType: "application/zip", bytes: Buffer.from(`PK fixture delivery ${version} ${stamp}`) });
+    const uploaded = await localPrivateStorage.upload({ ownerUserId: engineerUser.id, assetType: "private_studio_delivery", fileName: `delivery-${version}.wav`, mimeType: "audio/wav", bytes: fixtureWav() });
     const asset = await prisma.storedAsset.findUniqueOrThrow({ where: { id: uploaded.id } });
     const file = await prisma.studioFile.create({ data: { orderId: order.id, assetId: asset.id, uploaderId: engineerUser.id, category: "DELIVERY", version } });
     if (version === 1) {
@@ -105,6 +109,11 @@ async function main() {
   assert.equal((await prisma.studioAmendment.findUniqueOrThrow({ where: { id: amendment.id } })).status, "ACCEPTED");
   const delivery4 = await delivery(4);
   await approveStudioDelivery({ orderPublicId: order.publicId, customerId: customer.id, idempotencyKey: `approval-${stamp}` });
+  assert.equal(await prisma.studioEarning.count({ where: { orderId: order.id } }),0,"Client approval alone must not release funds.");
+  await assert.rejects(()=>approveStudioDelivery({orderPublicId:order.publicId,customerId:outsider.id,idempotencyKey:`outsider-${stamp}`}),/cannot be approved/);
+  await assert.rejects(()=>approveStudioDelivery({orderPublicId:order.publicId,customerId:engineerUser.id,deliveryId:delivery1.id,idempotencyKey:`stale-${stamp}`}),/newer delivery/);
+  await assert.rejects(()=>approveStudioDelivery({orderPublicId:order.publicId,customerId:customer.id,automatic:true,idempotencyKey:`auto-${stamp}`}),/explicitly confirm/);
+  await approveStudioDelivery({orderPublicId:order.publicId,customerId:engineerUser.id,deliveryId:delivery4.id,idempotencyKey:`engineer-approve-${stamp}`});
   const retainedFiles = await prisma.studioFile.findMany({ where: { orderId: order.id }, include: { asset: true } });
   assert.ok(retainedFiles.filter(file => file.category === "DELIVERY" && file.version < 4).every(file => file.asset.retentionUntil instanceof Date), "Superseded deliveries must receive a cleanup date.");
   assert.equal(retainedFiles.find(file => file.category === "DELIVERY" && file.version === 4)?.asset.retentionUntil, null, "The approved master must remain durable for distribution.");
@@ -144,7 +153,7 @@ async function main() {
   assert.equal((await prisma.studioPayment.findUniqueOrThrow({ where: { id: cancellationPayment.id } })).status, "REFUNDED");
   async function completedHandoff(projectTitle: string, beatPurchaseId?: number) {
     const ready = await createStudioOrder({ customerId: customer.id, listingPublicId: listing.publicId, projectTitle, beatPurchaseId, idempotencyKey: `handoff-${projectTitle}-${stamp}`, termsAccepted: true });
-    const uploaded = await localPrivateStorage.upload({ ownerUserId: engineerUser.id, assetType: "private_studio_delivery", fileName: `${projectTitle}.zip`, mimeType: "application/zip", bytes: Buffer.from(`PK ${projectTitle} ${stamp}`) });
+    const uploaded = await localPrivateStorage.upload({ ownerUserId: engineerUser.id, assetType: "private_studio_delivery", fileName: `${projectTitle}.wav`, mimeType: "audio/wav", bytes: fixtureWav() });
     const file = await prisma.studioFile.create({ data: { orderId: ready.id, assetId: uploaded.id, uploaderId: engineerUser.id, category: "DELIVERY", version: 1 } });
     await prisma.studioDelivery.create({ data: { orderId: ready.id, version: 1, files: { create: { studioFileId: file.id, role: "MASTER" } } } });
     await prisma.studioServiceOrder.update({ where: { id: ready.id }, data: { status: "COMPLETED", currentDeliveryVersion: 1, completedAt: new Date() } });
@@ -177,6 +186,18 @@ async function main() {
   assert.equal(capacityStates.filter(order => order.status === "AWAITING_ENGINEER_ACCEPTANCE").length, 1, "Capacity one must admit exactly one paid order.");
   assert.equal(capacityStates.filter(order => order.status === "REFUND_PENDING").length, 1, "The capacity race loser must be routed to refund.");
   await prisma.engineerProfile.update({ where: { id: engineer.id }, data: { maxActiveOrders: 10 } });
+  await assert.rejects(()=>createStudioOrder({customerId:outsider.id,listingPublicId:listing.publicId,projectTitle:"Stolen retry",idempotencyKey:`quote-${stamp}`,termsAccepted:true}),/different request/);
+  await assert.rejects(()=>sendStudioMessage({orderPublicId:capacityOrderA.publicId,userId:outsider.id,body:"Read another order",idempotencyKey:`message-${stamp}`}),/not found/);
+  const vouchInput={rating:5,comment:"Excellent communication and a powerful clean mix.",relationship:"Artist",workUrl:"https://example.com/record",strengths:["Vocal clarity"],publicName:"Public Artist",publicNameConsent:false};
+  await assert.rejects(()=>createCommunityVouch(engineer.id,engineerUser.id,vouchInput),/own profile/);
+  const vouch=await createCommunityVouch(engineer.id,outsider.id,vouchInput);assert.equal(vouch.status,"PENDING");assert.equal(vouch.publicName,null,"A public name requires explicit consent.");
+  await assert.rejects(()=>createCommunityVouch(engineer.id,outsider.id,vouchInput));
+  const work=await createShowcase(engineerUser.id,{title:"Integration credit",role:"Mixing",artistEmail:customer.email,beforeUrl:"https://example.com/before.wav",afterUrl:"https://example.com/after.wav",breakdown:"Cleaned the vocal stems and balanced low-end for the artist reference.",rightsConfirmed:true});
+  await assert.rejects(()=>confirmShowcase(work.id,outsider.id,true),/not found/);
+  await confirmShowcase(work.id,customer.id,true);assert.ok((await prisma.studioShowcase.findUniqueOrThrow({where:{id:work.id}})).artistConfirmedAt);assert.equal((await prisma.studioShowcase.findUniqueOrThrow({where:{id:work.id}})).status,"PENDING","Artist consent does not bypass moderation.");
+  const slot=await createConsultationSlot(engineerUser.id,new Date(Date.now()+3*3600000).toISOString());
+  await assert.rejects(()=>bookConsultation(slot.id,engineerUser.id,{phone:"+919999999999",note:"Discuss our next song."}),/own consultation/);
+  const bookings=await Promise.allSettled([bookConsultation(slot.id,customer.id,{phone:"+919999999999",note:"Discuss vocal mix."}),bookConsultation(slot.id,outsider.id,{phone:"+918888888888",note:"Discuss mastering."})]);assert.equal(bookings.filter(r=>r.status==="fulfilled").length,1,"Only one client can book a slot.");
   console.log("Studio lifecycle integration passed: idempotent quote/payment, acceptance, 2 included revisions, paid revision, delivery, settlement, and release handoff.");
 }
 main().finally(() => prisma.$disconnect());

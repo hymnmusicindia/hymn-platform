@@ -1,3 +1,4 @@
+import { studioError } from "@/lib/studio-errors";
 import { requireAdminPermission } from "@/lib/access";
 import { appointStudioEngineer, studioEngineerInputSchema } from "@/lib/admin-studio-engineers";
 import { apiFailure, apiRequestId, apiSuccess } from "@/lib/api-response";
@@ -12,7 +13,7 @@ export async function POST(request: Request) {
     const profile = await appointStudioEngineer(parsed.data, "sub" in admin ? Number(admin.sub) || null : null, requestId);
     return apiSuccess(requestId, { id: profile.id }, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not appoint engineer.";
+    const message = studioError(error, "Could not appoint engineer.");
     return apiFailure(requestId, "ENGINEER_APPOINTMENT_FAILED", message.includes("Unique constraint") ? "That engineer slug is already in use." : message, 400);
   }
 }

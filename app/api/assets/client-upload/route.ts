@@ -34,6 +34,7 @@ export async function POST(request: Request): Promise<NextResponse> {
          if (!policy || !policy.allowedContentTypes.includes(payload.mimeType)) throw new Error("Unsupported private asset type.");
          const studioAsset = payload.assetType === 'private_studio_source' || payload.assetType === 'private_studio_delivery';
          if (studioAsset !== Boolean(payload.studioOrderId)) throw new Error("Studio uploads require exactly one Studio order context.");
+         if (studioAsset && payload.releaseId) throw new Error("Studio assets cannot be assigned to a release during upload.");
          if (!Number.isFinite(payload.byteSize) || payload.byteSize < 1 || payload.byteSize > policy.maximumSizeInBytes) throw new Error("Private asset size is invalid.");
          if (payload.releaseId) {
            const ownedRelease = await prisma.release.count({ where: { id: Number(payload.releaseId), userId: result.user.id } });
@@ -44,6 +45,8 @@ export async function POST(request: Request): Promise<NextResponse> {
            const participant = order && (order.customerId === result.user.id || order.engineerParty.claimedByUserId === result.user.id);
            const expected = payload.assetType === 'private_studio_source' ? order?.customerId : order?.engineerParty.claimedByUserId;
            if (!participant || expected !== result.user.id) throw new Error("Studio order not found or upload role is invalid.");
+           const allowed = payload.assetType === 'private_studio_source' ? ['ACCEPTED','AWAITING_SOURCE_FILES','IN_PROGRESS','REVISION_REQUESTED','DELIVERED'] : ['ACCEPTED','AWAITING_SOURCE_FILES','IN_PROGRESS','REVISION_REQUESTED'];
+           if (!order || !allowed.includes(order.status) || !order.paidAt) throw new Error("Uploads are unavailable in this project state.");
          }
 
          const tokenPayload = JSON.stringify({ userId: result.user.id, assetType: payload.assetType, releaseId: payload.releaseId, studioOrderId: payload.studioOrderId, mimeType: payload.mimeType, originalFilename: payload.originalFilename, byteSize: payload.byteSize });
@@ -86,9 +89,11 @@ export async function POST(request: Request): Promise<NextResponse> {
          });
          if (studioOrderId) {
            await prisma.$transaction(async tx => {
-             const order = await tx.studioServiceOrder.findUniqueOrThrow({ where: { publicId: String(studioOrderId) } });
-             await tx.$executeRaw`SELECT pg_advisory_xact_lock(${order.id})`;
+             await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${String(studioOrderId)}))`;
+             const order = await tx.studioServiceOrder.findUniqueOrThrow({ where: { publicId: String(studioOrderId) }, include: { engineerParty: { select: { claimedByUserId: true } } } });
              const category = assetType === 'private_studio_source' ? 'SOURCE' : 'DELIVERY';
+             const allowed = category === 'SOURCE' ? ['ACCEPTED','AWAITING_SOURCE_FILES','IN_PROGRESS','REVISION_REQUESTED','DELIVERED'] : ['ACCEPTED','AWAITING_SOURCE_FILES','IN_PROGRESS','REVISION_REQUESTED'];
+             if (!allowed.includes(order.status) || (category === 'SOURCE' ? order.customerId : order.engineerParty.claimedByUserId) !== Number(userId)) throw new Error("Project closed or upload permission changed.");
              const latest = await tx.studioFile.findFirst({ where: { orderId: order.id, category }, orderBy: { version: 'desc' }, select: { version: true } });
              await tx.studioFile.upsert({ where: { assetId: asset.id }, create: { orderId: order.id, assetId: asset.id, uploaderId: Number(userId), category, version: (latest?.version ?? 0) + 1 }, update: { status: 'READY' } });
              if (category === 'SOURCE' && ['ACCEPTED', 'AWAITING_SOURCE_FILES'].includes(order.status)) {

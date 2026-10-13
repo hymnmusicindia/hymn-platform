@@ -1,0 +1,8 @@
+import { prisma } from "@/lib/prisma";
+export async function getStudioShareCard(type:string,id:number) {
+ if(!Number.isSafeInteger(id)||id<1)return null;
+ if(type==="vouch") {const v=await prisma.studioVouch.findFirst({where:{id,status:"APPROVED",engineerProfile:{sellerState:"ACTIVE"}},include:{author:{select:{name:true}},engineerProfile:true}});return v?{title:`${v.publicName || "A community collaborator"} vouched for ${v.engineerProfile.professionalName}`,subtitle:"Community vouch · external collaboration",body:v.comment,score:`${v.rating}/5`,name:v.engineerProfile.professionalName,slug:v.engineerProfile.slug,workUrl:v.workUrl}:null;}
+ if(type==="client") {const v=await prisma.studioReview.findFirst({where:{id,status:"PUBLISHED",order:{status:"COMPLETED",engineerProfile:{sellerState:"ACTIVE"}}},include:{customer:{select:{name:true}},order:{include:{engineerProfile:true}}}});return v?{title:`A verified client vouched for ${v.order.engineerProfile.professionalName}`,subtitle:"Verified HYMN client · completed project",body:v.comment||"A completed project, a sound worth sharing.",score:`${v.rating}/5`,name:v.order.engineerProfile.professionalName,slug:v.order.engineerProfile.slug,workUrl:null}:null;}
+ if(type==="credit") {const w=await prisma.studioShowcase.findFirst({where:{id,status:"APPROVED",rightsConfirmed:true,artistConfirmedAt:{not:null},engineerProfile:{sellerState:"ACTIVE"}},include:{artist:{select:{name:true}},engineerProfile:true}});return w?{title:w.title,subtitle:`${w.role} by ${w.engineerProfile.professionalName} · Artist-confirmed credit`,body:w.breakdown,score:"Artist confirmed",name:w.engineerProfile.professionalName,slug:w.engineerProfile.slug,workUrl:w.releaseUrl||w.afterUrl}:null;}
+ return null;
+}

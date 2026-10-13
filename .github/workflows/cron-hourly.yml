@@ -32,4 +32,5 @@ jobs:
           run_job release-status-sync GET
           run_job growth-sync GET
           run_job storage-cleanup POST
+          run_job studio-automation GET
           exit $failed

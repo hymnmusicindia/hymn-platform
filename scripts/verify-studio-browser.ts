@@ -18,10 +18,10 @@ function directGet(url: string, cookie: string) {
   });
 }
 
-function directPost(url: string, cookie: string, body: string, headers: Record<string, string> = {}) {
+function directPost(url: string, cookie: string, body: string, headers: Record<string, string> = {}, method = "POST") {
   return new Promise<{ status: number; body: string }>((resolve, reject) => {
     const parsed = new URL(url);
-    const request = http.request({ hostname: "127.0.0.1", port: 55910, path: `${parsed.pathname}${parsed.search}`, method: "POST", headers: { Cookie: cookie, Host: "127.0.0.1:55910", Origin: "http://127.0.0.1:55910", "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body), ...headers } }, response => {
+    const request = http.request({ hostname: "127.0.0.1", port: 55910, path: `${parsed.pathname}${parsed.search}`, method, headers: { Cookie: cookie, Host: "127.0.0.1:55910", Origin: "https://127.0.0.1", "X-Forwarded-Host": "127.0.0.1", "X-Forwarded-Proto": "https", "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body), ...headers } }, response => {
       const chunks: Buffer[] = [];
       response.on("data", chunk => chunks.push(Buffer.from(chunk)));
       response.on("end", () => resolve({ status: response.statusCode || 0, body: Buffer.concat(chunks).toString("utf8") }));
@@ -42,6 +42,8 @@ async function main() {
     { name: "discovery", url: "/studio" },
     { name: "profile", url: `/studio/engineers/${order.engineerProfile.slug}` },
     { name: "workspace", url: `/studio/orders/${order.publicId}` },
+    { name: "readiness", url: "/studio/readiness" },
+    { name: "client-projects", url: "/dashboard/studio" },
   ];
   const adminToken = jwt.sign({ username: "admin", role: "admin", sid: randomUUID() }, process.env.ADMIN_JWT_SECRET!, { expiresIn: "1h" });
   const adminCookie = `hymn_admin_session=${adminToken}`;
@@ -56,6 +58,17 @@ async function main() {
   }));
   assert.equal(appointmentResponse.status, 201, appointmentResponse.body);
   assert.equal((await directGet(`http://127.0.0.1:55910/studio/engineers/${apiSlug}`, "")).status, 200);
+  const vouch=await prisma.studioVouch.findFirstOrThrow({where:{engineerProfileId:order.engineerProfileId}}),credit=await prisma.studioShowcase.findFirstOrThrow({where:{engineerProfileId:order.engineerProfileId}}),review=await prisma.studioReview.findUniqueOrThrow({where:{orderId:order.id}});
+  for(const [type,id]of [["VOUCH",vouch.id],["CREDIT",credit.id]] as const){const result=await directPost("http://127.0.0.1:55910/api/admin/studio/trust",adminCookie,JSON.stringify({type,id,approve:true}),{},"PATCH");assert.equal(result.status,200,result.body);}
+  const publicVouch=await directGet(`http://127.0.0.1:55910/studio/share/vouch/${vouch.id}`,"");assert.equal(publicVouch.status,200);assert.match(publicVouch.body,/community collaborator/);
+  const publicCredit=await directGet(`http://127.0.0.1:55910/studio/share/credit/${credit.id}`,"");assert.equal(publicCredit.status,200);
+  const clientCard=await directGet(`http://127.0.0.1:55910/studio/share/client/${review.id}`,"");const imageMatch=clientCard.body.match(/<meta[^>]*property="og:image"[^>]*content="([^"]+)"/);assert.ok(imageMatch,"The card must expose an Open Graph image.");const imagePath=new URL(imageMatch[1].replaceAll("&amp;","&")).pathname;const image=await directGet(`http://127.0.0.1:55910${imagePath}`,"");assert.equal(image.status,200);
+  const revoke=await directPost(`http://127.0.0.1:55910/api/studio/credits/${credit.id}`,`hymn_session=${token}`,JSON.stringify({approve:false}));assert.equal(revoke.status,200,revoke.body);
+  const withdrawn=await prisma.studioShowcase.findUniqueOrThrow({where:{id:credit.id}});assert.equal(withdrawn.artistConfirmedAt,null);assert.equal(withdrawn.status,"REJECTED");
+  const withdrawnPage=await directGet(`http://127.0.0.1:55910/studio/share/credit/${credit.id}`,"");
+  assert.ok(!withdrawnPage.body.includes(credit.title),"Revoked permission must immediately remove the public credit content.");
+  assert.ok(withdrawnPage.status===404||/NEXT_HTTP_ERROR_FALLBACK;404|not be found/i.test(withdrawnPage.body),"A withdrawn share card must render the not-found result, including streamed 200 responses.");
+  targets.push({name:"client-vouch",url:`/studio/share/client/${review.id}`},{name:"genre",url:"/studio/genres/hip-hop"});
   if (process.argv.includes("--http-only")) {
     const requestBaseUrl = "http://127.0.0.1:55910";
     for (const target of targets) {
@@ -63,7 +76,19 @@ async function main() {
       assert.equal(response.status, 200, `${target.url} should render successfully in production mode.`);
       assert.match(response.body, /HYMN|Studio/i);
     }
-    console.log("Production-mode Studio discovery, profile, and authenticated workspace routes passed.");
+    const browser = await chromium.launch({headless:true});
+    try {for(const viewport of [{name:"desktop",width:1440,height:1000},{name:"mobile",width:390,height:844}]){
+      const context=await browser.newContext({viewport,extraHTTPHeaders:{"X-Forwarded-Host":"127.0.0.1","X-Forwarded-Proto":"https"}});
+      await context.addCookies([{name:"hymn_session",value:token,url:baseUrl,httpOnly:true,sameSite:"Lax"}]);
+      const page=await context.newPage();await page.goto(`${baseUrl}/studio/orders/${order.publicId}`,{waitUntil:"load"});
+      await page.waitForResponse(response=>response.url().endsWith(`/studio/orders/${order.publicId}/workspace`)&&response.status()===200,{timeout:20000});
+      const composer=page.getByRole("textbox",{name:"Project message",exact:true}),width=await composer.evaluate(element=>element.getBoundingClientRect().width);
+      assert.ok(width>=140,`The ${viewport.name} composer is too narrow: ${width}px.`);
+      assert.ok(await page.getByRole("log").evaluate(element=>element.scrollHeight>element.clientHeight),"The history must scroll.");
+      await page.screenshot({path:path.join(output,`production-${viewport.name}-workspace.png`),fullPage:true});
+      await context.close();
+    }}finally{await browser.close();}
+    console.log("Production-mode Studio, trust moderation, share artwork, consent withdrawal, and responsive conversation checks passed.");
     return;
   }
   const listing = await prisma.studioServiceListing.findFirstOrThrow({ where: { engineerProfileId: order.engineerProfileId, active: true } });
@@ -96,6 +121,19 @@ async function main() {
         assert.ok(overflow <= 2, `${target.url} has ${overflow}px horizontal overflow at ${viewport.name}.`);
         await page.screenshot({ path: path.join(output, `${viewport.name}-${target.name}.png`), fullPage: true });
       }
+      await page.goto(`${baseUrl}/studio/orders/${order.publicId}`, { waitUntil: "networkidle" });
+      const testMessage=`Fast conversation ${viewport.name} ${randomUUID()}`;
+      await page.route(`**/api/studio/orders/${order.publicId}/messages`, async route => { await new Promise(resolve=>setTimeout(resolve,900)); await route.continue(); });
+      await page.getByRole("textbox",{name:"Project message",exact:true}).fill(testMessage);
+      await page.getByRole("button",{name:"Send",exact:true}).click();
+      await page.getByRole("log").getByText(testMessage,{exact:true}).waitFor({state:"visible",timeout:500});
+      await page.waitForResponse(response=>response.url().endsWith(`/studio/orders/${order.publicId}/messages`)&&response.request().method()==="POST",{timeout:20000});
+      await page.unroute(`**/api/studio/orders/${order.publicId}/messages`);
+      const stored=await prisma.studioMessage.findFirstOrThrow({where:{orderId:order.id,body:testMessage}});
+      assert.equal(stored.senderUserId,order.customerId);
+      const historyBox=page.getByRole("log");
+      const scrollable=await historyBox.evaluate(element=>element.scrollHeight>element.clientHeight);
+      assert.ok(scrollable,"Conversation history must scroll without hiding the composer.");
       await page.goto(`${baseUrl}/studio`, { waitUntil: "domcontentloaded", timeout: 120000 });
       await page.waitForLoadState("load");
       const launcherButton = page.getByRole("button", { name: "Open HYMN apps" });

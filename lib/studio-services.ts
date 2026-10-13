@@ -21,6 +21,7 @@ async function studioSerializable<T>(work: (tx: Prisma.TransactionClient) => Pro
 async function studioEvent(tx: Prisma.TransactionClient, input: { event: string; key: string; userId?: number; orderId?: number; properties?: Prisma.InputJsonObject }) { await tx.growthEvent.createMany({ data: [{ event: input.event, key: input.key, source: "server", userId: input.userId, properties: { studio_order_id: input.orderId ?? null, ...(input.properties ?? {}) } }], skipDuplicates: true }); }
 
 export async function listStudioEngineers(filters: { genre?: string; maxPrice?: number; maxTurnaround?: number } = {}) {
+  const listingWhere: Prisma.StudioServiceListingWhereInput = { active: true, paused: false, serviceType: "MIXING_MASTERING", ...(filters.maxPrice ? { standardPrice: { lte: filters.maxPrice } } : {}), ...(filters.maxTurnaround ? { turnaroundDays: { lte: filters.maxTurnaround } } : {}), ...(filters.genre ? { acceptedGenres: { has: filters.genre } } : {}) };
   return prisma.engineerProfile.findMany({
     where: {
       sellerState: "ACTIVE", availability: "AVAILABLE",
@@ -29,7 +30,7 @@ export async function listStudioEngineers(filters: { genre?: string; maxPrice?: 
         ...(filters.maxTurnaround ? { turnaroundDays: { lte: filters.maxTurnaround } } : {}),
         ...(filters.genre ? { acceptedGenres: { has: filters.genre } } : {}) } },
     },
-    include: { listings: { where: { active: true, paused: false, serviceType: "MIXING_MASTERING" }, orderBy: { sortOrder: "asc" } }, contributorParty: { include: { claimedBy: { select: { avatar: true } } } } },
+    include: { listings: { where: listingWhere, orderBy: { sortOrder: "asc" } }, contributorParty: { include: { claimedBy: { select: { avatar: true } } } } },
     orderBy: [{ verificationState: "desc" }, { ratingAverage: "desc" }, { completedOrderCount: "desc" }],
   });
 }
@@ -38,9 +39,13 @@ export async function createStudioOrder(input: { customerId: number; listingPubl
   if (!input.termsAccepted) throw new Error("You must accept the Studio Services Terms.");
   return studioSerializable(async (tx) => {
     const prior = await tx.studioOrderStatusEvent.findFirst({ where: { correlationId: input.idempotencyKey }, include: { order: true } });
-    if (prior) return prior.order;
+    if (prior) {
+      if (prior.order.customerId !== input.customerId || prior.order.serviceListingId !== (await tx.studioServiceListing.findUnique({ where: { publicId: input.listingPublicId }, select: { id: true } }))?.id) throw new Error("Retry key belongs to a different request.");
+      return prior.order;
+    }
     const listing = await tx.studioServiceListing.findUnique({ where: { publicId: input.listingPublicId }, include: { engineerProfile: { include: { contributorParty: true } } } });
     if (!listing || !listing.active || listing.paused || listing.engineerProfile.sellerState !== "ACTIVE" || listing.engineerProfile.availability !== "AVAILABLE") throw new Error("This Studio service is not currently available.");
+    if (listing.engineerProfile.contributorParty.claimedByUserId === input.customerId) throw new Error("You cannot purchase your own service.");
     const active = await tx.studioServiceOrder.count({ where: { engineerProfileId: listing.engineerProfileId, status: { in: ACTIVE_STUDIO_ORDER_STATUSES } } });
     if (active >= listing.engineerProfile.maxActiveOrders) throw new Error("This engineer is currently at capacity.");
     const beatPurchase = input.beatPurchaseId ? await tx.beatPurchase.findFirst({ where: { id: input.beatPurchaseId, userId: input.customerId, hasAccess: true }, include: { beat: true, checkoutOrderItem: { select: { orderId: true } } } }) : null;
@@ -91,39 +96,31 @@ export async function assertStudioParticipant(orderPublicId: string, userId: num
 }
 
 export async function createStudioPayment(input: { orderPublicId: string; customerId: number; idempotencyKey: string }) {
-  const order = await prisma.studioServiceOrder.findFirst({ where: { publicId: input.orderPublicId, customerId: input.customerId }, include: { payments: { where: { purpose: "INITIAL_ORDER", status: { in: ["CREATED", "CAPTURED"] } }, orderBy: { id: "desc" }, take: 1 } } });
-  if (!order) throw new Error("Studio order not found.");
-  if (order.status !== "AWAITING_PAYMENT") throw new Error("This Studio order is not awaiting payment.");
+ return studioSerializable(async tx => {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.orderPublicId}))`;
+  const order = await tx.studioServiceOrder.findFirst({ where: { publicId: input.orderPublicId, customerId: input.customerId }, include: { payments: { where: { purpose: "INITIAL_ORDER", status: { in: ["CREATED", "CAPTURED"] } }, orderBy: { id: "desc" }, take: 1 } } });
+  if (!order || order.status !== "AWAITING_PAYMENT") throw new Error("This Studio order is not awaiting payment.");
   if (order.payments[0]) return order.payments[0];
-  const amountMinor = Number(order.finalPrice.mul(100).toFixed(0));
+  if (await tx.studioPayment.count({ where: { idempotencyKey: input.idempotencyKey } })) throw new Error("Retry key belongs to another payment.");
   if (process.env.NODE_ENV === "production" && !razorpay) throw new Error("Payment service is not configured.");
-  const provider = razorpay ? await razorpay.orders.create({ amount: amountMinor, currency: "INR", receipt: `studio-${order.publicId.slice(0, 24)}`, notes: { studioOrderId: order.publicId } }) : { id: `dev_studio_${order.publicId}_${Date.now()}` };
-  try {
-    return await prisma.studioPayment.create({ data: { orderId: order.id, purpose: "INITIAL_ORDER", amount: order.finalPrice, razorpayOrderId: provider.id, idempotencyKey: input.idempotencyKey } });
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return prisma.studioPayment.findUniqueOrThrow({ where: { idempotencyKey: input.idempotencyKey } });
-    throw error;
-  }
+  const provider = razorpay ? await razorpay.orders.create({ amount: Number(order.finalPrice.mul(100).toFixed(0)), currency: "INR", receipt: `studio-${order.publicId.slice(0,24)}`, notes: { studioOrderId: order.publicId } }) : { id: `dev_studio_${order.publicId}_${Date.now()}` };
+  return tx.studioPayment.create({ data: { orderId: order.id, purpose: "INITIAL_ORDER", amount: order.finalPrice, razorpayOrderId: provider.id, idempotencyKey: input.idempotencyKey } });
+ }, 30000, Prisma.TransactionIsolationLevel.ReadCommitted);
 }
 
 export async function createStudioRevisionPayment(input: { orderPublicId: string; customerId: number; revisionId: number; idempotencyKey: string }) {
-  const order = await prisma.studioServiceOrder.findFirst({ where: { publicId: input.orderPublicId, customerId: input.customerId }, include: { revisions: { where: { id: input.revisionId }, include: { payment: true } } } });
-  const revision = order?.revisions[0];
-  if (!order || !revision || !revision.paymentRequired || revision.status !== "PAYMENT_REQUIRED") throw new Error("This revision does not require a new payment.");
+ return studioSerializable(async tx => {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.orderPublicId}))`;
+  const order = await tx.studioServiceOrder.findFirst({ where: { publicId: input.orderPublicId, customerId: input.customerId }, include: { revisions: { where: { id: input.revisionId }, include: { payment: true } } } });
+  const revision=order?.revisions[0];
+  if (!order || !revision || order.status !== "REVISION_PAYMENT_REQUIRED" || !revision.paymentRequired || revision.status !== "PAYMENT_REQUIRED") throw new Error("This revision does not require a new payment.");
   if (revision.payment) return revision.payment;
-  const amountMinor = Number(order.additionalRevisionPrice.mul(100).toFixed(0));
+  if (await tx.studioPayment.count({ where: { idempotencyKey: input.idempotencyKey } })) throw new Error("Retry key belongs to another payment.");
   if (process.env.NODE_ENV === "production" && !razorpay) throw new Error("Payment service is not configured.");
-  const provider = razorpay ? await razorpay.orders.create({ amount: amountMinor, currency: "INR", receipt: `studio-revision-${revision.id}`, notes: { studioOrderId: order.publicId, revisionId: String(revision.id) } }) : { id: `dev_studio_revision_${revision.id}_${Date.now()}` };
-  try {
-    return await prisma.$transaction(async tx => {
-      const payment = await tx.studioPayment.create({ data: { orderId: order.id, purpose: "ADDITIONAL_REVISION", amount: order.additionalRevisionPrice, razorpayOrderId: provider.id, idempotencyKey: input.idempotencyKey } });
-      await tx.studioRevision.update({ where: { id: revision.id }, data: { paymentId: payment.id } });
-      return payment;
-    });
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return prisma.studioPayment.findUniqueOrThrow({ where: { idempotencyKey: input.idempotencyKey } });
-    throw error;
-  }
+  const provider=razorpay?await razorpay.orders.create({ amount:Number(order.additionalRevisionPrice.mul(100).toFixed(0)),currency:"INR",receipt:`studio-revision-${revision.id}`,notes:{studioOrderId:order.publicId,revisionId:String(revision.id)} }):{id:`dev_studio_revision_${revision.id}_${Date.now()}`};
+  const payment=await tx.studioPayment.create({data:{orderId:order.id,purpose:"ADDITIONAL_REVISION",amount:order.additionalRevisionPrice,razorpayOrderId:provider.id,idempotencyKey:input.idempotencyKey}});
+  await tx.studioRevision.update({where:{id:revision.id},data:{paymentId:payment.id}});return payment;
+ },30000,Prisma.TransactionIsolationLevel.ReadCommitted);
 }
 
 export async function proposeStudioAmendment(input: { orderPublicId: string; engineerUserId: number; description: string; amount: number }) {
@@ -133,13 +130,17 @@ export async function proposeStudioAmendment(input: { orderPublicId: string; eng
 }
 
 export async function createStudioAmendmentPayment(input: { orderPublicId: string; customerId: number; amendmentPublicId: string; idempotencyKey: string }) {
-  const amendment = await prisma.studioAmendment.findFirst({ where: { publicId: input.amendmentPublicId, order: { publicId: input.orderPublicId, customerId: input.customerId }, status: { in: ["PROPOSED", "AWAITING_PAYMENT"] } }, include: { order: true, payment: true } });
-  if (!amendment) throw new Error("This scope amendment is unavailable.");
-  if (amendment.payment) return amendment.payment;
-  const amountMinor = Number(amendment.amount.mul(100).toFixed(0));
-  if (process.env.NODE_ENV === "production" && !razorpay) throw new Error("Payment service is not configured.");
-  const provider = razorpay ? await razorpay.orders.create({ amount: amountMinor, currency: "INR", receipt: `studio-amendment-${amendment.id}`, notes: { studioOrderId: amendment.order.publicId, amendmentId: amendment.publicId } }) : { id: `dev_studio_amendment_${amendment.id}_${Date.now()}` };
-  return prisma.$transaction(async tx => { const payment = await tx.studioPayment.create({ data: { orderId: amendment.orderId, purpose: "AMENDMENT", amount: amendment.amount, razorpayOrderId: provider.id, idempotencyKey: input.idempotencyKey } }); await tx.studioAmendment.update({ where: { id: amendment.id }, data: { paymentId: payment.id, status: "AWAITING_PAYMENT" } }); return payment; });
+ return studioSerializable(async tx => {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.orderPublicId}))`;
+  const amendment=await tx.studioAmendment.findFirst({where:{publicId:input.amendmentPublicId,order:{publicId:input.orderPublicId,customerId:input.customerId,status:{in:ACTIVE_STUDIO_ORDER_STATUSES}},status:{in:["PROPOSED","AWAITING_PAYMENT"]}},include:{order:true,payment:true}});
+  if(!amendment)throw new Error("This scope amendment is unavailable.");
+  if(amendment.payment)return amendment.payment;
+  if(await tx.studioPayment.count({where:{idempotencyKey:input.idempotencyKey}}))throw new Error("Retry key belongs to another payment.");
+  if(process.env.NODE_ENV==="production"&&!razorpay)throw new Error("Payment service is not configured.");
+  const provider=razorpay?await razorpay.orders.create({amount:Number(amendment.amount.mul(100).toFixed(0)),currency:"INR",receipt:`studio-amendment-${amendment.id}`,notes:{studioOrderId:amendment.order.publicId,amendmentId:amendment.publicId}}):{id:`dev_studio_amendment_${amendment.id}_${Date.now()}`};
+  const payment=await tx.studioPayment.create({data:{orderId:amendment.orderId,purpose:"AMENDMENT",amount:amendment.amount,razorpayOrderId:provider.id,idempotencyKey:input.idempotencyKey}});
+  await tx.studioAmendment.update({where:{id:amendment.id},data:{paymentId:payment.id,status:"AWAITING_PAYMENT"}});return payment;
+ },30000,Prisma.TransactionIsolationLevel.ReadCommitted);
 }
 
 export async function confirmStudioPayment(input: { razorpayOrderId: string; paymentId: string; signature?: string; customerId?: number; amountMinor?: number; currency?: string; source: "browser" | "webhook" }) {
@@ -157,7 +158,8 @@ export async function confirmStudioPayment(input: { razorpayOrderId: string; pay
   if (razorpay) await verifyCapturedRazorpayPayment({ orderId: payment.razorpayOrderId, paymentId: input.paymentId, amountMinor: expectedMinor, currency: payment.currency });
   return studioSerializable(async (tx) => {
     const current = await tx.studioPayment.findUniqueOrThrow({ where: { id: payment.id }, include: { order: { include: { serviceListing: true, engineerParty: true } } } });
-    if (current.status === "CAPTURED") return current.order;
+    if (current.status === "CAPTURED") { if (current.razorpayPaymentId !== input.paymentId) throw new Error("Payment already captured with a different identifier."); return current.order; }
+    if (current.status !== "CREATED") throw new Error("This payment is no longer payable.");
     if (current.purpose === "ADDITIONAL_REVISION") {
       if (current.order.status !== "REVISION_PAYMENT_REQUIRED") throw new Error("This revision payment is no longer applicable.");
       const revision = await tx.studioRevision.findFirstOrThrow({ where: { paymentId: current.id, orderId: current.orderId, status: "PAYMENT_REQUIRED" } });
@@ -171,6 +173,7 @@ export async function confirmStudioPayment(input: { razorpayOrderId: string; pay
       return updated;
     }
     if (current.purpose === "AMENDMENT") {
+      if (!ACTIVE_STUDIO_ORDER_STATUSES.includes(current.order.status)) throw new Error("This project is no longer accepting paid changes.");
       const amendment = await tx.studioAmendment.findFirstOrThrow({ where: { paymentId: current.id, orderId: current.orderId, status: "AWAITING_PAYMENT" } });
       await tx.studioPayment.update({ where: { id: current.id }, data: { status: "CAPTURED", razorpayPaymentId: input.paymentId, capturedAt: new Date() } });
       await accrueReferralCommission(tx, "studio_payment", current.id);
@@ -212,17 +215,20 @@ export async function getStudioWorkspace(orderPublicId: string, userId: number) 
   return prisma.studioServiceOrder.findUniqueOrThrow({ where: { publicId: orderPublicId }, include: {
     engineerProfile: { select: { professionalName: true, profilePhotoUrl: true, verificationState: true } },
     engineerParty: { select: { claimedByUserId: true } },
-    sourceBeat: { select: { title: true } }, messages: { include: { sender: { select: { id: true, name: true, avatar: true } } }, orderBy: { createdAt: "asc" }, take: 500 },
+    sourceBeat: { select: { title: true } }, messages: { include: { sender: { select: { id: true, name: true, avatar: true } } }, orderBy: { id: "desc" }, take: 100 },
     files: { include: { asset: { select: { id: true, safeFilename: true, mimeType: true, byteSize: true } } }, orderBy: [{ category: "asc" }, { version: "desc" }] },
     deliveries: { include: { files: { include: { studioFile: { include: { asset: { select: { id: true, safeFilename: true, mimeType: true, byteSize: true } } } } } }, revision: true }, orderBy: { version: "desc" } },
-    revisions: { orderBy: { sequence: "asc" } }, statusEvents: { orderBy: { createdAt: "asc" } }, amendments: { orderBy: { createdAt: "desc" } }, review: true,
+    revisions: { orderBy: { sequence: "asc" } }, payments: { where: { status: { in: ["CAPTURED", "REFUNDED"] } }, orderBy: { id: "asc" } }, statusEvents: { orderBy: { createdAt: "asc" } }, amendments: { orderBy: { createdAt: "desc" } }, review: true,
   } });
 }
 
-export async function sendStudioMessage(input: { orderPublicId: string; userId: number; body: string; idempotencyKey: string }) {
+export async function sendStudioMessage(input: { orderPublicId: string; userId: number; body: string; idempotencyKey: string; callbackPhone?: string }) {
   const order = await assertStudioParticipant(input.orderPublicId, input.userId);
   if (["CANCELLED", "REFUNDED", "EXPIRED"].includes(order.status)) throw new Error("This workspace is closed.");
-  return prisma.studioMessage.upsert({ where: { idempotencyKey: input.idempotencyKey }, create: { orderId: order.id, senderUserId: input.userId, body: input.body.trim(), idempotencyKey: input.idempotencyKey }, update: {} });
+  if (!order.paidAt) throw new Error("Pay for the service to open the conversation.");
+  if (input.callbackPhone && (order.customerId !== input.userId || !/^\+?[0-9 ()-]{8,20}$/.test(input.callbackPhone))) throw new Error("Only the client can request a callback with a valid phone number.");
+  const key = `chat:${order.id}:${input.userId}:${input.idempotencyKey}`;
+  return prisma.studioMessage.upsert({ where: { idempotencyKey: key }, create: { orderId: order.id, senderUserId: input.userId, kind: input.callbackPhone ? "CALLBACK" : "USER", body: input.body.trim(), metadata: input.callbackPhone ? { phone: input.callbackPhone, state: "REQUESTED" } : undefined, idempotencyKey: key }, update: {}, include: { sender: { select: { name: true } } } });
 }
 
 export async function createStudioDelivery(input: { orderPublicId: string; engineerUserId: number; studioFileIds: number[]; note?: string; idempotencyKey: string }) {
@@ -230,15 +236,16 @@ export async function createStudioDelivery(input: { orderPublicId: string; engin
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.orderPublicId}))`;
     const order = await tx.studioServiceOrder.findUnique({ where: { publicId: input.orderPublicId }, include: { engineerParty: true } });
     if (!order || order.engineerParty.claimedByUserId !== input.engineerUserId) throw new Error("Studio order not found.");
-    if (!["ACCEPTED", "AWAITING_SOURCE_FILES", "IN_PROGRESS", "REVISION_REQUESTED"].includes(order.status)) throw new Error("A delivery cannot be created in the current state.");
     const existingEvent = await tx.studioOrderStatusEvent.findFirst({ where: { orderId: order.id, correlationId: input.idempotencyKey } });
     if (existingEvent) return tx.studioDelivery.findFirstOrThrow({ where: { orderId: order.id }, orderBy: { version: "desc" } });
-    const files = await tx.studioFile.findMany({ where: { id: { in: [...new Set(input.studioFileIds)] }, orderId: order.id, uploaderId: input.engineerUserId, category: "DELIVERY", status: "READY" } });
+    if (!["ACCEPTED", "AWAITING_SOURCE_FILES", "IN_PROGRESS", "REVISION_REQUESTED"].includes(order.status)) throw new Error("A delivery cannot be created in the current state.");
+    const files = await tx.studioFile.findMany({ where: { id: { in: [...new Set(input.studioFileIds)] }, orderId: order.id, uploaderId: input.engineerUserId, category: "DELIVERY", status: "READY", asset: { deletedAt: null }, deliveryFiles: { none: {} } } });
     if (!files.length || files.length !== new Set(input.studioFileIds).size) throw new Error("Every delivery file must belong to this order and engineer.");
     const version = order.currentDeliveryVersion + 1;
     const delivery = await tx.studioDelivery.create({ data: { orderId: order.id, version, note: input.note?.trim() || null, files: { create: files.map(file => ({ studioFileId: file.id, role: "MASTER" })) } } });
     const now = new Date();
-    await tx.studioServiceOrder.update({ where: { id: order.id }, data: { status: "DELIVERED", currentDeliveryVersion: version, deliveredAt: now, autoCompleteAt: new Date(now.getTime() + 7 * 86400000) } });
+    await tx.studioServiceOrder.update({ where: { id: order.id }, data: { status: "DELIVERED", currentDeliveryVersion: version, deliveredAt: now, autoCompleteAt: null } });
+    await tx.studioRevision.updateMany({ where: { orderId: order.id, status: "REQUESTED" }, data: { status: "RESOLVED", resolvedAt: now } });
     await tx.studioOrderStatusEvent.create({ data: { orderId: order.id, previousStatus: order.status, newStatus: "DELIVERED", actorUserId: input.engineerUserId, actorType: "ENGINEER", reason: `Engineer uploaded Delivery v${version}`, correlationId: input.idempotencyKey } });
     await tx.studioMessage.create({ data: { orderId: order.id, kind: "SYSTEM", body: `Engineer uploaded Delivery v${version}`, idempotencyKey: `delivery:${input.idempotencyKey}` } });
     await studioEvent(tx, { event: "delivery_created", key: `studio:${order.id}:delivery:${version}`, userId: input.engineerUserId, orderId: order.id, properties: { version } });
@@ -251,16 +258,18 @@ export async function requestStudioRevision(input: { orderPublicId: string; cust
   return studioSerializable(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.orderPublicId}))`;
     const order = await tx.studioServiceOrder.findFirst({ where: { publicId: input.orderPublicId, customerId: input.customerId } });
-    if (!order || order.status !== "DELIVERED") throw new Error("This delivery cannot be revised.");
+    if (!order) throw new Error("This delivery cannot be revised.");
     const existing = await tx.studioMessage.findUnique({ where: { idempotencyKey: `revision:${input.idempotencyKey}` } });
     if (existing) return tx.studioRevision.findFirstOrThrow({ where: { orderId: order.id }, orderBy: { sequence: "desc" } });
+    if (order.status !== "DELIVERED") throw new Error("This delivery cannot be revised.");
     const delivery = await tx.studioDelivery.findFirst({ where: { id: input.deliveryId, orderId: order.id, version: order.currentDeliveryVersion } });
     if (!delivery) throw new Error("Only the current delivery can be revised.");
     const sequence = await tx.studioRevision.count({ where: { orderId: order.id } }).then(count => count + 1);
-    const included = sequence <= order.includedRevisions;
+    const included = sequence <= order.includedRevisions || order.additionalRevisionPrice.eq(0);
     const revision = await tx.studioRevision.create({ data: { orderId: order.id, deliveryId: delivery.id, requestedById: input.customerId, sequence, feedback: input.feedback.trim(), included, paymentRequired: !included, status: included ? "REQUESTED" : "PAYMENT_REQUIRED" } });
     const next: StudioOrderStatus = included ? "REVISION_REQUESTED" : "REVISION_PAYMENT_REQUIRED";
     await tx.studioServiceOrder.update({ where: { id: order.id }, data: { status: next, activeRevisionCount: sequence, autoCompleteAt: null } });
+    await tx.studioDelivery.update({ where: { id: delivery.id }, data: { customerConfirmedAt: null, engineerConfirmedAt: null } });
     const body = included ? `Customer requested Revision #${sequence}` : `Additional revision #${sequence} payment required`;
     await tx.studioOrderStatusEvent.create({ data: { orderId: order.id, previousStatus: "DELIVERED", newStatus: next, actorUserId: input.customerId, actorType: "CUSTOMER", reason: body, correlationId: input.idempotencyKey } });
     await tx.studioMessage.create({ data: { orderId: order.id, kind: "SYSTEM", body, idempotencyKey: `revision:${input.idempotencyKey}` } });
@@ -271,28 +280,37 @@ export async function requestStudioRevision(input: { orderPublicId: string; cust
   }, 10_000, Prisma.TransactionIsolationLevel.ReadCommitted);
 }
 
-export async function approveStudioDelivery(input: { orderPublicId: string; customerId: number; idempotencyKey: string; automatic?: boolean }) {
+export async function approveStudioDelivery(input: { orderPublicId: string; customerId: number; idempotencyKey: string; automatic?: boolean; deliveryId?: number }) {
+  if (input.automatic) throw new Error("Both participants must explicitly confirm completion.");
   return studioSerializable(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.orderPublicId}))`;
-    const order = await tx.studioServiceOrder.findFirst({ where: { publicId: input.orderPublicId, customerId: input.customerId }, include: { engineerParty: true } });
+    const order = await tx.studioServiceOrder.findFirst({ where: { publicId: input.orderPublicId, OR: [{ customerId: input.customerId }, { engineerParty: { claimedByUserId: input.customerId } }] }, include: { engineerParty: true } });
     if (!order || !["DELIVERED", "CUSTOMER_APPROVED", "COMPLETED"].includes(order.status)) throw new Error("This delivery cannot be approved.");
     const existing = await tx.studioEarning.findUnique({ where: { orderId: order.id } });
     if (existing) return tx.studioServiceOrder.findUniqueOrThrow({ where: { id: order.id } });
+    const delivery = await tx.studioDelivery.findFirstOrThrow({ where: { orderId: order.id, version: order.currentDeliveryVersion } });
+    if (input.deliveryId !== undefined && delivery.id !== input.deliveryId) throw new Error("A newer delivery is available. Review it before confirming.");
+    const isCustomer = order.customerId === input.customerId;
+    const confirmed = await tx.studioDelivery.update({ where: { id: delivery.id }, data: isCustomer ? { customerConfirmedAt: delivery.customerConfirmedAt ?? new Date() } : { engineerConfirmedAt: delivery.engineerConfirmedAt ?? new Date() } });
+    await tx.studioMessage.upsert({ where: { idempotencyKey: `completion:${delivery.id}:${input.customerId}` }, create: { orderId: order.id, kind: "SYSTEM", body: `${isCustomer ? "Client" : "Engineer"} confirmed Delivery v${delivery.version} is complete.`, idempotencyKey: `completion:${delivery.id}:${input.customerId}` }, update: {} });
+    if (!confirmed.customerConfirmedAt || !confirmed.engineerConfirmedAt) return order;
     const engineerUserId = order.engineerParty.claimedByUserId;
     if (!engineerUserId) throw new Error("Engineer payout identity is not connected.");
+    if (await tx.studioAmendment.count({ where: { orderId: order.id, status: "AWAITING_PAYMENT", payment: { status: "CREATED" } } })) throw new Error("A scope-change checkout is still awaiting payment. Finish that payment or ask HYMN to resolve the scope before completing the project.");
     const captured = await tx.studioPayment.aggregate({ where: { orderId: order.id, status: "CAPTURED", purpose: { in: ["INITIAL_ORDER", "ADDITIONAL_REVISION", "AMENDMENT"] } }, _sum: { amount: true } });
-    const gross = captured._sum.amount ?? order.finalPrice;
+    const gross = captured._sum.amount;
+    if (!gross || gross.lte(0) || order.paymentStatus !== "HELD") throw new Error("Captured payment is required before releasing earnings.");
     const commission = gross.mul(order.commissionRate).toDecimalPlaces(2);
     const net = gross.sub(commission);
     await tx.studioEarning.create({ data: { orderId: order.id, engineerPartyId: order.engineerPartyId, grossAmount: gross, commissionAmount: commission, netAmount: net, idempotencyKey: `studio-order:${order.id}:earning` } });
     const balance = await tx.artistPayoutBalance.upsert({ where: { userId: engineerUserId }, create: { userId: engineerUserId, availableBalance: net, lifetimeEarnings: net }, update: { availableBalance: { increment: net }, lifetimeEarnings: { increment: net }, lastUpdatedAt: new Date() } });
     await tx.walletTransaction.create({ data: { userId: engineerUserId, type: "studio_service_credit", amount: net, direction: "credit", referenceType: "studio_order", referenceId: String(order.id), idempotencyKey: `studio-order:${order.id}:wallet`, balanceAfter: balance.availableBalance, note: `${order.projectTitle} Studio service engineer share.` } });
     const now = new Date();
-    const expiringFiles = await tx.studioFile.findMany({ where: { orderId: order.id, OR: [{ category: "SOURCE" }, { category: "DELIVERY", version: { lt: order.currentDeliveryVersion } }] }, select: { assetId: true } });
+    const expiringFiles = await tx.studioFile.findMany({ where: { orderId: order.id, deliveryFiles: { none: { deliveryId: delivery.id } } }, select: { assetId: true } });
     if (expiringFiles.length) await tx.storedAsset.updateMany({ where: { id: { in: expiringFiles.map(file => file.assetId) }, retentionUntil: null }, data: { retentionUntil: new Date(now.getTime() + 90 * 86400000) } });
     const updated = await tx.studioServiceOrder.update({ where: { id: order.id }, data: { status: "COMPLETED", paymentStatus: "RELEASED", approvedAt: now, completedAt: now, autoCompleteAt: null } });
     await tx.engineerProfile.update({ where: { id: order.engineerProfileId }, data: { completedOrderCount: { increment: 1 } } });
-    const approvalCopy = input.automatic ? "Delivery auto-approved after the review window" : "Final master approved";
+    const approvalCopy = "Both participants approved the final master";
     await tx.studioOrderStatusEvent.createMany({ data: [{ orderId: order.id, previousStatus: "DELIVERED", newStatus: "CUSTOMER_APPROVED", actorUserId: input.automatic ? null : input.customerId, actorType: input.automatic ? "SYSTEM" : "CUSTOMER", reason: approvalCopy, correlationId: `${input.idempotencyKey}:approved` }, { orderId: order.id, previousStatus: "CUSTOMER_APPROVED", newStatus: "COMPLETED", actorType: "SYSTEM", reason: "Project completed and engineer earnings released", correlationId: `${input.idempotencyKey}:completed` }] });
     await tx.studioMessage.create({ data: { orderId: order.id, kind: "SYSTEM", body: `${approvalCopy}. Project completed.`, idempotencyKey: `approval:${input.idempotencyKey}` } });
     await tx.notification.upsert({ where: { eventKey: `studio:${order.id}:completed` }, create: { userId: engineerUserId, title: "Studio project completed", body: `Your earnings for ${order.projectTitle} are now available.`, type: "payout", href: "/payout", actionLabel: "View earnings", eventKey: `studio:${order.id}:completed` }, update: {} });
@@ -301,24 +319,34 @@ export async function approveStudioDelivery(input: { orderPublicId: string; cust
   }, 10_000, Prisma.TransactionIsolationLevel.ReadCommitted);
 }
 
-export async function runStudioAutomation(now = new Date()) {
+export async function runStudioAutomation(now = new Date(), deadline = Date.now() + 20000) {
   const [due, expired] = await Promise.all([
-    prisma.studioServiceOrder.findMany({ where: { status: "DELIVERED", autoCompleteAt: { lte: now } }, select: { publicId: true, customerId: true, id: true }, take: 100 }),
+    Promise.resolve([] as Array<{ publicId: string; customerId: number; id: number }>),
     prisma.studioServiceOrder.findMany({ where: { status: "AWAITING_ENGINEER_ACCEPTANCE", acceptanceExpiresAt: { lte: now } }, select: { id: true }, take: 100 }),
   ]);
   let completed = 0;
   for (const order of due) { await approveStudioDelivery({ orderPublicId: order.publicId, customerId: order.customerId, idempotencyKey: `auto-complete:${order.id}`, automatic: true }); completed += 1; }
   let refundPending = 0;
-  for (const order of expired) { await transitionStudioOrder({ orderId: order.id, to: "REFUND_PENDING", actorType: "SYSTEM", reason: "Engineer acceptance window expired", correlationId: `acceptance-expired:${order.id}` }); refundPending += 1; }
+  for (const order of expired) { if(Date.now()>deadline)break; await transitionStudioOrder({ orderId: order.id, to: "REFUND_PENDING", actorType: "SYSTEM", reason: "Engineer acceptance window expired", correlationId: `acceptance-expired:${order.id}` }); refundPending += 1; }
   const refunds = await prisma.studioServiceOrder.findMany({ where: { status: "REFUND_PENDING" }, include: { payments: { where: { status: "CAPTURED" } } }, take: 100 });
   let refunded = 0;
   for (const order of refunds) {
+    if(Date.now()>deadline)break;
     for (const payment of order.payments) {
+      if(Date.now()>deadline)break;
       if (!payment.razorpayPaymentId) continue;
-      if (razorpay) await razorpay.payments.refund(payment.razorpayPaymentId, { amount: Number(payment.amount.mul(100).toFixed(0)), notes: { studioOrderId: order.publicId } });
+      if (process.env.NODE_ENV === "production" && !razorpay) throw new Error("Refund service is not configured.");
+      if (razorpay) {
+       const response = await fetch(`https://api.razorpay.com/v1/payments/${encodeURIComponent(payment.razorpayPaymentId)}/refund`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Basic ${Buffer.from(process.env.RAZORPAY_KEY_ID + ":" + process.env.RAZORPAY_KEY_SECRET).toString("base64")}`, "X-Refund-Idempotency": `hymn-studio-refund-${payment.id}` }, body: JSON.stringify({ amount: Number(payment.amount.mul(100).toFixed(0)), notes: { studioOrderId: order.publicId } }), signal: AbortSignal.timeout(12000) });
+       if (!response.ok) throw new Error("The refund provider could not confirm this refund. It will be retried with the same key.");
+       const refund = await response.json();
+       if (refund.status !== "processed") continue;
+      }
       await prisma.$transaction(async tx => {
         const claimed = await tx.studioPayment.updateMany({ where: { id: payment.id, status: "CAPTURED" }, data: { status: "REFUNDED", refundedAt: now } });
         if (!claimed.count) return;
+        const remaining = await tx.studioPayment.count({ where: { orderId: order.id, status: "CAPTURED" } });
+        if (remaining) return;
         await tx.studioServiceOrder.update({ where: { id: order.id }, data: { status: "REFUNDED", paymentStatus: "REFUNDED" } });
         await tx.studioOrderStatusEvent.create({ data: { orderId: order.id, previousStatus: "REFUND_PENDING", newStatus: "REFUNDED", actorType: "PAYMENT", reason: "Studio payment refunded", correlationId: `refund:${payment.id}` } });
         await tx.notification.upsert({ where: { eventKey: `studio:${order.id}:refunded` }, create: { userId: order.customerId, title: "Studio payment refunded", body: `Your payment for ${order.projectTitle} was refunded.`, type: "system", href: `/studio/orders/${order.publicId}`, eventKey: `studio:${order.id}:refunded` }, update: {} });
@@ -329,11 +357,11 @@ export async function runStudioAutomation(now = new Date()) {
   return { completed, refundPending, refunded };
 }
 
-export async function reviewStudioOrder(input: { orderPublicId: string; customerId: number; rating: number; comment?: string }) {
+export async function reviewStudioOrder(input: { orderPublicId: string; customerId: number; rating: number; comment?: string; strengths?: string[] }) {
   return prisma.$transaction(async tx => {
     const order = await tx.studioServiceOrder.findFirst({ where: { publicId: input.orderPublicId, customerId: input.customerId, status: "COMPLETED" } });
     if (!order) throw new Error("Only a completed Studio project can be reviewed.");
-    const review = await tx.studioReview.create({ data: { orderId: order.id, customerId: input.customerId, rating: input.rating, comment: input.comment?.trim() || null } });
+    const review = await tx.studioReview.upsert({ where: { orderId: order.id }, create: { orderId: order.id, customerId: input.customerId, rating: input.rating, comment: input.comment?.trim() || null, strengths: input.strengths ?? [] }, update: {} });
     const aggregate = await tx.studioReview.aggregate({ where: { order: { engineerProfileId: order.engineerProfileId }, status: "PUBLISHED" }, _avg: { rating: true }, _count: { rating: true } });
     await tx.engineerProfile.update({ where: { id: order.engineerProfileId }, data: { ratingAverage: aggregate._avg.rating ?? null, ratingCount: aggregate._count.rating } });
     return review;
@@ -363,16 +391,19 @@ export async function handoffStudioOrderToRelease(input: { orderPublicId: string
   const preflight = await prisma.studioServiceOrder.findFirst({ where: { publicId: input.orderPublicId, customerId: input.customerId }, include: { sourceBeat: { include: { producerParty: true, user: { select: { name: true } } } } } });
   const ensuredProducerParty = preflight?.sourceBeat && !preflight.sourceBeat.producerParty ? await ensureClaimedContributorParty(preflight.sourceBeat.userId, preflight.sourceBeat.user.name || `Producer #${preflight.sourceBeat.userId}`) : preflight?.sourceBeat?.producerParty ?? null;
   return studioSerializable(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.orderPublicId}))`;
     const order = await tx.studioServiceOrder.findFirst({ where: { publicId: input.orderPublicId, customerId: input.customerId }, include: { sourceBeatPurchase: true, sourceBeat: { include: { producerParty: true } }, customer: true, engineerParty: true, releaseHandoff: true } });
     if (!order || order.status !== "COMPLETED") throw new Error("Only a completed Studio project can start a release.");
     if (order.releaseHandoff) return { releaseId: order.releaseHandoff.releaseId, href: `/distribution/start?resume=${order.releaseHandoff.releaseId}` };
     const finalFile = await tx.studioFile.findFirst({ where: { id: input.finalStudioFileId, orderId: order.id, category: "DELIVERY", deliveryFiles: { some: { delivery: { version: order.currentDeliveryVersion } } } }, include: { asset: true } });
     if (!finalFile) throw new Error("Choose a final file from the latest delivery.");
+    if (!finalFile.asset.mimeType.startsWith("audio/") || !/\.(wav|flac|mp3)$/i.test(finalFile.asset.safeFilename)) throw new Error("Choose an audio master, rather than a ZIP package, for distribution.");
     const purchase = order.sourceBeatPurchase;
     const existingRelease = purchase?.releaseId ? await tx.release.findFirst({ where: { id: purchase.releaseId, userId: input.customerId }, include: { tracks: { orderBy: { trackNumber: "asc" }, take: 1 } } }) : null;
     let releaseId: number;
     let trackId: number;
     if (existingRelease) {
+      if (existingRelease.status !== "DRAFT") throw new Error("The linked release is already submitted. Create an update request instead of replacing its audio.");
       releaseId = existingRelease.id;
       if (!existingRelease.tracks[0]) throw new Error("The existing Beat release draft has no track.");
       trackId = existingRelease.tracks[0].id;

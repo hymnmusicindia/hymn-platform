@@ -1,0 +1,3 @@
+"use client";
+import { useState } from "react";
+export function StudioEmailPreferences({token}:{token:string}){const [message,setMessage]=useState(""),[busy,setBusy]=useState(false);return <div><button className="btn-primary" disabled={busy} onClick={async()=>{setBusy(true);try{const response=await fetch("/api/studio/email-preferences",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token})});const data=await response.json();setMessage(response.ok?"Optional Studio recommendation emails are turned off.":data.error);}catch{setMessage("Could not update. Please retry.");}finally{setBusy(false);}}}>Stop optional Studio emails</button><p role="status" className="mt-4 text-sm">{message}</p></div>}

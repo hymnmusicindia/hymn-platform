@@ -14,16 +14,16 @@ const run = (args: string[], executable = process.execPath) => new Promise<void>
 
 async function main() {
   const previousSchema = path.join(fixture, "schema-before-studio.prisma");
-  const studioMigrationCommit = execFileSync("git", ["log", "-n", "1", "--format=%H", "--diff-filter=A", "--", "prisma/migrations/20260923190000_studio_services/migration.sql"], { encoding: "utf8", windowsHide: true }).trim();
-  if (!studioMigrationCommit) throw new Error("Could not locate the commit that introduced the Studio migration.");
-  writeFileSync(previousSchema, execFileSync("git", ["show", `${studioMigrationCommit}^:prisma/schema.prisma`], { encoding: "utf8", windowsHide: true }));
+  const migrationCommit = execFileSync("git", ["log", "-n", "1", "--format=%H", "--diff-filter=A", "--", "prisma/migrations/20261014120000_studio_conversation_trust/migration.sql"], { encoding: "utf8", windowsHide: true }).trim();
+  writeFileSync(previousSchema, execFileSync("git", ["show", `${migrationCommit ? migrationCommit + "^" : "HEAD"}:prisma/schema.prisma`], { encoding: "utf8", windowsHide: true }));
   const pg = new EmbeddedPostgres({ databaseDir, port, user: "fixture", password: "fixture", persistent: true, initdbFlags: ["--encoding=UTF8", "--locale=C"], postgresFlags: ["-h", "127.0.0.1"] });
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase(database);
     await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", previousSchema, "--skip-generate"]);
-    await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20260923190000_studio_services/migration.sql", "--schema", "prisma/schema.prisma"]);
+    await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261014120000_studio_conversation_trust/migration.sql", "--schema", "prisma/schema.prisma"]);
     await run(["--import", "tsx", "scripts/verify-studio-services-integration.ts"]);
+    if (process.argv.includes("--build")) await run(["node_modules/next/dist/bin/next", "build", "--webpack"]);
     if (process.argv.includes("--browser")) {
       const serverMode = process.argv.includes("--production") ? "start" : "dev";
       const serverArgs = ["node_modules/next/dist/bin/next", serverMode, "-p", String(webPort), ...(serverMode === "dev" ? ["--webpack"] : [])];

@@ -1,3 +1,4 @@
+import { studioError } from "@/lib/studio-errors";
 import { requireAdminPermission } from "@/lib/access";
 import { studioEngineerInputSchema, updateStudioEngineer } from "@/lib/admin-studio-engineers";
 import { apiFailure, apiRequestId, apiSuccess } from "@/lib/api-response";
@@ -14,7 +15,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const profile = await updateStudioEngineer(profileId, parsed.data, "sub" in admin ? Number(admin.sub) || null : null, requestId);
     return apiSuccess(requestId, { id: profile.id });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not update engineer.";
+    const message = studioError(error, "Could not update engineer.");
     return apiFailure(requestId, "ENGINEER_UPDATE_FAILED", message.includes("Unique constraint") ? "That engineer slug is already in use." : message, message.includes("not found") ? 404 : 400);
   }
 }

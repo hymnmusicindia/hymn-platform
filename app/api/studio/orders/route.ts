@@ -1,3 +1,4 @@
+import { studioError } from "@/lib/studio-errors";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/access";
@@ -14,6 +15,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ order }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: "Invalid Studio order details.", issues: error.flatten() }, { status: 400 });
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not create Studio order." }, { status: 409 });
+    return NextResponse.json({ error: studioError(error, "Could not create Studio order.") }, { status: 409 });
   }
 }

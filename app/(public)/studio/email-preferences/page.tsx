@@ -1,0 +1,3 @@
+import { StudioEmailPreferences } from "@/components/studio-email-preferences";
+export const metadata={title:"Studio email preferences",robots:{index:false,follow:false}};
+export default async function Page({searchParams}:{searchParams:Promise<{token?:string}>}){const p=await searchParams;return <main className="shell py-16"><section className="mx-auto max-w-xl rounded-2xl border border-[var(--border)] bg-[var(--card)] p-8"><h1 className="mb-4 text-3xl font-semibold">Studio email preferences</h1><p className="mb-6 text-sm text-[var(--text-muted)]">Control optional engineer recommendations and beat-to-mix reminders. Payment receipts and messages about your active projects still reach you.</p><StudioEmailPreferences token={p.token||""}/></section></main>}

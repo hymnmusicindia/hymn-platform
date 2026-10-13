@@ -1,3 +1,5 @@
+import { StudioBeatJourney } from "@/components/studio-beat-journey";
+import { ENGINEER_GENRES } from "@/lib/engineer-applications";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BadgeCheck, Clock3, Headphones, SlidersHorizontal } from "lucide-react";
@@ -12,6 +14,8 @@ export default async function StudioPage({ searchParams }: { searchParams: Promi
   const engineers = await listStudioEngineers({ genre: query.genre, maxPrice: Number(query.maxPrice) || undefined, maxTurnaround: Number(query.turnaround) || undefined });
   return <main className="shell pb-20 pt-8 sm:pt-12">
     <section className="overflow-hidden rounded-[2rem] border border-[var(--border)] bg-[radial-gradient(circle_at_75%_15%,rgba(91,140,255,.18),transparent_34%),var(--card)] px-6 py-12 sm:px-10 lg:px-14"><p className="hymn-kicker">HYMN Studio</p><h1 className="mt-3 max-w-3xl text-4xl font-semibold tracking-[-.04em] sm:text-6xl">Mix & master your track with a professional engineer.</h1><p className="mt-5 max-w-2xl text-base leading-7 text-[var(--text-muted)]">Private source files, clear delivery dates, two included revisions, and one workspace from rough vocals to final master.</p><div className="mt-7 flex flex-wrap gap-3"><Link href="#engineers" className="btn-primary">Find your engineer</Link><Link href="/studio/apply" className="btn-outline">Become an engineer</Link></div></section>
+    {query.beatPurchaseId ? <StudioBeatJourney purchaseId={Number(query.beatPurchaseId)}/> : null}
+    <div className="my-6 flex flex-wrap gap-3"><Link href="/studio/readiness" className="btn-outline">Free mix-readiness check</Link>{ENGINEER_GENRES.map(g => <Link key={g} className="rounded-full border border-[var(--border)] px-3 py-2 text-xs" href={`/studio/genres/${g.toLowerCase().replace(/[^a-z0-9]+/g,"-")}`}>{g}</Link>)}</div>
     <form className="mt-8 grid gap-3 rounded-[1.75rem] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--card)_82%,transparent),color-mix(in_srgb,var(--bg-soft)_66%,transparent))] p-3 shadow-[inset_0_1px_0_color-mix(in_srgb,var(--text)_5%,transparent),0_18px_55px_rgba(0,0,0,.12)] sm:grid-cols-[auto_minmax(0,1fr)_auto_auto] sm:items-center sm:gap-2" aria-label="Studio filters">
       {query.beatPurchaseId ? <input type="hidden" name="beatPurchaseId" value={query.beatPurchaseId}/> : null}
       <span className="flex items-center gap-2 px-2 text-sm font-semibold text-[var(--text-muted)] sm:pr-3"><span className="grid h-8 w-8 place-items-center rounded-full bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-[var(--accent)]"><SlidersHorizontal className="h-4 w-4"/></span>Filters</span>

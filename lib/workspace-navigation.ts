@@ -16,6 +16,8 @@ export const workspaceNavigation = [
   { key:"purchases", label:"My purchases", group:"Beatstore", href:"/dashboard?tab=purchases", icon:Music2 },
   { key:"sell-beats", label:"Sell beats", group:"Beatstore", href:"/producer/dashboard", icon:Users },
   { key:"studio", label:"Find an engineer", group:"Mixing / Mastering", href:"/studio", icon:Headphones },
+  { key:"studio-engineer", label:"Engineer workspace", group:"Mixing / Mastering", href:"/studio/engineer", icon:Headphones },
+  { key:"studio-readiness", label:"Mix-readiness check", group:"Mixing / Mastering", href:"/studio/readiness", icon:Music2 },
   { key:"studio-orders", label:"My projects", group:"Mixing / Mastering", href:"/dashboard/studio", icon:LayoutGrid },
   { key:"studio-apply", label:"Become an engineer", group:"Mixing / Mastering", href:"/studio/apply", icon:Users },
   { key:"managed-services", label:"Artist services", group:"Mixing / Mastering", href:"/managed-services", icon:Music2 },

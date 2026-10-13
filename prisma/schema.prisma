@@ -134,6 +134,11 @@ enum StudioPaymentPurpose {
 }
 
 model User {
+  studioTipsEnabled Boolean @default(true) @map("studio_tips_enabled")
+  studioVouches StudioVouch[]
+  studioShowcaseCredits StudioShowcase[] @relation("ShowcaseArtist")
+  studioConsultations StudioConsultation[]
+  studioTrustReports StudioTrustReport[]
   referralMessages ReferralMessage[]
   referralMailJobs ReferralMailJob[]
   routeLinkedAccount            RouteLinkedAccount?
@@ -2458,6 +2463,7 @@ model ExternalIdentifierHistory {
 }
 
 model BeatPurchase {
+  studioNudgeSentAt DateTime? @map("studio_nudge_sent_at")
   id                   Int       @id @default(autoincrement())
   userId               Int       @map("user_id")
   beatId               Int       @map("beat_id")
@@ -2588,6 +2594,9 @@ model ContributorParty {
 }
 
 model EngineerProfile {
+  vouches StudioVouch[]
+  showcases StudioShowcase[]
+  consultationSlots StudioConsultation[]
   id                  Int                    @id @default(autoincrement())
   publicId            String                 @unique @default(uuid()) @map("public_id")
   contributorPartyId  Int                    @unique @map("contributor_party_id")
@@ -2640,6 +2649,76 @@ model EngineerApplication {
 
   @@index([status, createdAt])
   @@map("engineer_applications")
+}
+
+model StudioVouch {
+  publicName String? @map("public_name")
+  id Int @id @default(autoincrement())
+  engineerProfileId Int @map("engineer_profile_id")
+  authorId Int @map("author_id")
+  rating Int
+  comment String
+  relationship String
+  workUrl String @map("work_url")
+  strengths String[] @default([])
+  status String @default("PENDING")
+  createdAt DateTime @default(now()) @map("created_at")
+  engineerProfile EngineerProfile @relation(fields: [engineerProfileId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  @@unique([engineerProfileId, authorId])
+  @@index([status, createdAt])
+  @@map("studio_vouches")
+}
+
+model StudioShowcase {
+  id Int @id @default(autoincrement())
+  engineerProfileId Int @map("engineer_profile_id")
+  artistId Int @map("artist_id")
+  title String
+  role String
+  beforeUrl String? @map("before_url")
+  afterUrl String @map("after_url")
+  releaseUrl String? @map("release_url")
+  breakdown String
+  rightsConfirmed Boolean @default(false) @map("rights_confirmed")
+  artistConfirmedAt DateTime? @map("artist_confirmed_at")
+  status String @default("PENDING")
+  createdAt DateTime @default(now()) @map("created_at")
+  engineerProfile EngineerProfile @relation(fields: [engineerProfileId], references: [id], onDelete: Cascade)
+  artist User @relation("ShowcaseArtist", fields: [artistId], references: [id], onDelete: Restrict)
+  @@index([engineerProfileId, status])
+  @@map("studio_showcases")
+}
+
+model StudioConsultation {
+  id Int @id @default(autoincrement())
+  engineerProfileId Int @map("engineer_profile_id")
+  startsAt DateTime @map("starts_at")
+  durationMinutes Int @default(15) @map("duration_minutes")
+  bookedById Int? @map("booked_by_id")
+  phone String?
+  note String?
+  status String @default("AVAILABLE")
+  createdAt DateTime @default(now()) @map("created_at")
+  engineerProfile EngineerProfile @relation(fields: [engineerProfileId], references: [id], onDelete: Cascade)
+  bookedBy User? @relation(fields: [bookedById], references: [id], onDelete: SetNull)
+  @@unique([engineerProfileId, startsAt])
+  @@index([status, startsAt])
+  @@map("studio_consultations")
+}
+
+model StudioTrustReport {
+  id Int @id @default(autoincrement())
+  reporterId Int @map("reporter_id")
+  targetType String @map("target_type")
+  targetId Int @map("target_id")
+  reason String
+  status String @default("OPEN")
+  createdAt DateTime @default(now()) @map("created_at")
+  reporter User @relation(fields: [reporterId], references: [id], onDelete: Restrict)
+  @@unique([reporterId, targetType, targetId])
+  @@index([status, createdAt])
+  @@map("studio_trust_reports")
 }
 
 model StudioServiceListing {
@@ -2757,6 +2836,7 @@ model StudioOrderStatusEvent {
 }
 
 model StudioMessage {
+  metadata       Json?
   id             Int                @id @default(autoincrement())
   orderId        Int                @map("order_id")
   senderUserId   Int?               @map("sender_user_id")
@@ -2792,6 +2872,8 @@ model StudioFile {
 }
 
 model StudioDelivery {
+  engineerConfirmedAt DateTime? @map("engineer_confirmed_at")
+  customerConfirmedAt DateTime? @map("customer_confirmed_at")
   id          Int                  @id @default(autoincrement())
   orderId     Int                  @map("order_id")
   version     Int
@@ -2984,6 +3066,7 @@ model RouteTransfer {
 }
 
 model StudioReview {
+  strengths String[] @default([])
   id         Int                @id @default(autoincrement())
   orderId    Int                @unique @map("order_id")
   customerId Int                @map("customer_id")

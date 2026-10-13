@@ -25,7 +25,9 @@ export async function sendPayoutEmailEvent(input: Parameters<typeof payoutEmail>
 }
 
 export async function sendBeatEmailEvent(input: Parameters<typeof beatEmail>[0] & { to: string; userId: number; purchaseId: number }) {
-  const template = beatEmail(input);
+  const { studioBeatSections } = await import("@/lib/studio-beat-followups");
+  const sections = input.event === "beat_purchase_success" ? await studioBeatSections(input.purchaseId, input.userId).catch(() => []) : [];
+  const template = beatEmail({ ...input, studioSections: sections });
   return sendTransactionalEmail({ ...template, to: input.to, template: input.event, eventKey: `beat:${input.purchaseId}:${input.event}:email`, userId: input.userId, entityType: "beat_purchase", entityId: input.purchaseId });
 }
 

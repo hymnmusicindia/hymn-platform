@@ -3,7 +3,7 @@ import { upload } from "@vercel/blob/client";
 import { useRouter } from "next/navigation";
 import { UploadDropzone } from "@/components/upload-dropzone";
 
-export function StudioFileUpload({ orderPublicId, role }: { orderPublicId: string; role: "SOURCE" | "DELIVERY" }) {
+export function StudioFileUpload({ orderPublicId, role, onUploaded }: { orderPublicId: string; role: "SOURCE" | "DELIVERY"; onUploaded?: () => void }) {
   const router = useRouter();
   const source = role === "SOURCE";
   return <UploadDropzone
@@ -21,10 +21,15 @@ export function StudioFileUpload({ orderPublicId, role }: { orderPublicId: strin
         onUploadProgress: event => controls.reportProgress(event.loaded, event.total),
       });
       if (controls.signal.aborted) throw new DOMException("Upload cancelled", "AbortError");
-      const response = await fetch("/api/assets/client-upload/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: blob.url }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "The uploaded file could not be attached.");
-      router.refresh();
+      for (let attempt=0;attempt<6;attempt++) {
+        if (controls.signal.aborted) throw new DOMException("Upload cancelled", "AbortError");
+        const response = await fetch("/api/assets/client-upload/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: blob.url }), signal: controls.signal });
+        const data = await response.json();
+        if (response.ok) break;
+        if (response.status !== 409 || attempt === 5) throw new Error(data.error || "The uploaded file could not be attached.");
+        await new Promise(resolve=>setTimeout(resolve,400*(attempt+1)));
+      }
+      if (onUploaded) onUploaded(); else router.refresh();
     }}
   />;
 }
