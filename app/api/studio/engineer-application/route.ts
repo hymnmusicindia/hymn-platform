@@ -18,8 +18,8 @@ export async function POST(request: Request) {
   if (!user || user.status !== "ACTIVE") return NextResponse.json({ error: "Your account must be active to apply." }, { status: 403 });
   const application = await prisma.engineerApplication.upsert({
     where: { userId: user.id },
-    create: { userId: user.id, ...parsed.data, instagramUrl: parsed.data.instagramUrl || null },
-    update: { ...parsed.data, instagramUrl: parsed.data.instagramUrl || null, status: "PENDING", reviewNote: null, reviewedAt: null, reviewedById: null },
+    create: { userId: user.id, ...parsed.data, profileExtras: parsed.data.profileExtras ?? undefined, instagramUrl: parsed.data.instagramUrl || null },
+    update: { ...parsed.data, profileExtras: parsed.data.profileExtras ?? undefined, instagramUrl: parsed.data.instagramUrl || null, status: "PENDING", reviewNote: null, reviewedAt: null, reviewedById: null },
     select: { id: true, updatedAt: true },
   });
   await prisma.auditLog.create({ data: { actorId: user.id, actorType: "user", actorRole: session.role, action: "STUDIO_ENGINEER_APPLICATION_SUBMITTED", entity: "engineer_application", entityId: String(application.id), metadata: { specialties: parsed.data.specialties, genres: parsed.data.genres } } });

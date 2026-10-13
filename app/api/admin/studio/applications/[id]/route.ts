@@ -21,15 +21,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!application) return NextResponse.json({ error: "Application not found." }, { status: 404 });
   if (application.status === "APPROVED") return NextResponse.json({ success: true, status: "APPROVED" });
   const actorId = "sub" in admin ? Number(admin.sub) || null : null;
+  const extras = application.profileExtras as { photo?: string; banner?: string; works?: { title: string; url: string; role?: string }[] } | null;
   let profileId: number | null = null;
   if (parsed.data.decision === "APPROVE") {
     const existingProfile = await prisma.engineerProfile.findFirst({ where: { contributorParty: { claimedByUserId: application.userId } }, select: { id: true } });
     const profile = existingProfile ?? await appointStudioEngineer({
-      userId: application.userId, professionalName: application.professionalName, slug: engineerSlug(application.professionalName, application.userId), profilePhotoUrl: application.user.avatar, bio: application.bio, specialties: application.specialties, genres: application.genres,
-      socialLinks: { instagram: application.instagramUrl, youtube: null }, portfolioItems: [{ title: "Featured work", url: application.portfolioUrl }], availability: "AVAILABLE", maxActiveOrders: 3, verificationState: "VERIFIED", sellerState: "ACTIVE", payoutState: "NOT_CONFIGURED",
+      userId: application.userId, professionalName: application.professionalName, slug: engineerSlug(application.professionalName, application.userId), profilePhotoUrl: extras?.photo || application.user.avatar, bio: application.bio, specialties: application.specialties, genres: application.genres,
+      socialLinks: { instagram: application.instagramUrl, youtube: null }, portfolioItems: extras?.works?.length ? extras.works : [{ title: "Featured work", url: application.portfolioUrl }], availability: "AVAILABLE", maxActiveOrders: 3, verificationState: "VERIFIED", sellerState: "ACTIVE", payoutState: "NOT_CONFIGURED",
       listing: { title: `${application.professionalName} · Mix & Master`, description: application.bio, standardPrice: Number(application.startingPrice), beatCustomerPrice: null, includedRevisions: 2, additionalRevisionPrice: 399, turnaroundDays: application.turnaroundDays, sourceRequirements: ["Consolidated stems or multitracks", "Rough reference mix", "Tempo and sample rate"], deliverables: ["24-bit WAV master", "320 kbps MP3"], instantAccept: false, active: true, paused: false },
     }, actorId, apiRequestId(request));
     profileId = profile.id;
+    await prisma.engineerProfile.update({ where: { id: profile.id }, data: { portfolio: { socials: { instagram: application.instagramUrl }, works: extras?.works?.length ? extras.works : [{ title: "Featured work", url: application.portfolioUrl }], banner: extras?.banner || "" } } });
   }
   const status = parsed.data.decision === "APPROVE" ? "APPROVED" : "REJECTED";
   await prisma.engineerApplication.update({ where: { id }, data: { status, reviewNote: parsed.data.note || null, reviewedById: actorId, reviewedAt: new Date() } });

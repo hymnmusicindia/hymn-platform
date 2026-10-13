@@ -4,6 +4,11 @@ export const ENGINEER_SPECIALTIES = ["Mixing", "Mastering", "Vocal tuning", "Ste
 export const ENGINEER_GENRES = ["Hip-Hop", "Pop", "R&B", "Punjabi", "Bollywood", "EDM", "Rock", "Indie"] as const;
 
 export const engineerApplicationSchema = z.object({
+  profileExtras: z.object({
+    photo: z.string().url().max(1000).or(z.literal("")),
+    banner: z.string().url().max(1000).or(z.literal("")),
+    works: z.array(z.object({ title: z.string().trim().min(2).max(120), url: z.string().url().max(1000), role: z.enum(ENGINEER_SPECIALTIES) })).min(1).max(8),
+  }).optional(),
   professionalName: z.string().trim().min(2).max(120),
   bio: z.string().trim().min(20).max(320),
   specialties: z.array(z.enum(ENGINEER_SPECIALTIES)).min(1).max(4),

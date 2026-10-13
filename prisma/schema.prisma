@@ -2617,6 +2617,7 @@ model EngineerProfile {
 }
 
 model EngineerApplication {
+  profileExtras    Json?    @map("profile_extras")
   id               Int      @id @default(autoincrement())
   userId           Int      @unique @map("user_id")
   professionalName String   @map("professional_name")
