@@ -1,4 +1,6 @@
 /* Slide only the content canvas: navigation remains anchored. */
+html[data-workspace-navigation="pending"] [data-workspace-loading] {display:none!important;}
+[data-workspace-transition-snapshot] {position:fixed;inset:0;overflow:hidden;z-index:60;pointer-events:none;background:var(--bg,#08090b);}
 html[data-workspace-swipe] {overflow-x:clip;}
 html[data-workspace-swipe="right"] :is(.landing-canvas,.portal-workspace) {animation:workspace-swipe-right 320ms cubic-bezier(.22,.7,.2,1) both;}
 html[data-workspace-swipe="left"] :is(.landing-canvas,.portal-workspace) {animation:workspace-swipe-left 320ms cubic-bezier(.22,.7,.2,1) both;}
