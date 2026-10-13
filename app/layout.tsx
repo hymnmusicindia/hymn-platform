@@ -25,6 +25,7 @@ import "./styles/home-goal-workspace.css";
 import "./styles/home-editorial.css";
 import "./styles/support-workspace.css";
 import "./styles/faq-center.css";
+import "./styles/sidebar-consistency.css";
 import { SmartHelpLayer } from "@/components/smart-help-layer";
 
 export const metadata: Metadata = {

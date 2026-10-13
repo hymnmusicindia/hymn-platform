@@ -39,7 +39,7 @@
 
 /* Override the older portal skin's highly specific inherited headings. */
 .workspace-v2.hymn-portal-frame.dashboard-os-shell .dashboard-os-sidebar{background:var(--bg)!important;backdrop-filter:none!important}
-.workspace-v2.hymn-portal-frame.dashboard-os-shell .dashboard-os-group-toggle span{font-size:11px!important;letter-spacing:0!important;font-weight:600!important;text-transform:none!important;line-height:1.5!important}
+.workspace-v2.hymn-portal-frame.dashboard-os-shell .dashboard-os-group-toggle span{font-size:var(--sidebar-label-size,13px)!important;letter-spacing:0!important;font-weight:600!important;text-transform:none!important;line-height:20px!important}
 html[data-theme="light"] .workspace-v2 .dashboard-os-sidebar img{filter:brightness(0)!important}
 html[data-theme="dark"] .workspace-v2 .dashboard-os-sidebar img{filter:none!important}
 .workspace-v2.hymn-portal-frame .workspace-task-layout .surface-list-item{padding:12px 14px!important;border-radius:8px!important}

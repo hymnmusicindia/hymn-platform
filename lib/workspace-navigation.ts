@@ -33,15 +33,14 @@ export function consistentWorkspaceNavigation(items: NavItem[]): NavItem[] {
   if(items.some(item=>item.group==="Command Center")) return items;
   items = items.filter(item => item.group !== "Support" && item.group !== "Account");
   const producer = items.some(item=>item.key==="catalog" && item.group==="Beatstore");
-  if (producer) return items;
   const matched = new Set<NavItem>();
   const shared = workspaceNavigation.map(canonical=>{
     const existing = items.find(item=>item.group!=="Business" && (item.label===canonical.label
       || (canonical.key==="earnings" && item.key==="earnings")
       || (canonical.key==="studio" && item.label==="Browse services")
-      || (canonical.key==="overview" && item.group==="Home")));
+      || (canonical.key==="overview" && item.key==="overview")));
     if(existing) matched.add(existing);
-    return {...canonical,...existing,key:existing?.key ?? (items.some(item=>item.key===canonical.key) ? `workspace-${canonical.key}` : canonical.key),label:canonical.label,group:canonical.group,href:canonical.href};
+    return {...canonical,...existing,key:existing?.key ?? (items.some(item=>item.key===canonical.key) ? `workspace-${canonical.key}` : canonical.key),label:canonical.label,group:canonical.group,href:producer && existing ? existing.href : canonical.href};
   });
   const extras = items.filter(item=>!matched.has(item) && !(item.group==="Account" && item.href==="/dashboard?tab=settings") && !(item.group==="Distribution" && ["payouts", "earnings"].includes(item.key))).map(item=>({...item,
     group:item.group==="Business" ? "Beatstore" : item.group==="Profile" ? "Account" : item.group}));

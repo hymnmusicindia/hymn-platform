@@ -1,9 +1,10 @@
 "use client";
 
-import { Bell, ChevronDown, ChevronUp, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, X, Plus, Disc3, TrendingUp, Wallet, Music2, Headphones, Settings, Users, LifeBuoy, Store, LayoutGrid, Upload, Home, FileText, Activity, ShieldCheck, ClipboardCheck } from "lucide-react";
+import { Bell, ChevronDown, ChevronUp, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, X, Plus, Disc3, TrendingUp, Wallet, Music2, Headphones, Settings, Users, LifeBuoy, Store, LayoutGrid, Upload, FileText, Activity, ShieldCheck, ClipboardCheck } from "lucide-react";
 import clsx from "clsx";
 import "@/app/styles/workspace-system.css";
 import { WorkspaceFooter } from "@/components/workspace-footer";
+import { WorkspaceDestinations } from "@/components/workspace-destinations";
 import { consistentWorkspaceNavigation, workspaceNavigation } from "@/lib/workspace-navigation";
 import Link from "next/link";
 import { SubscriptionButton, openSubscriptions } from "@/components/subscription-options";
@@ -159,7 +160,7 @@ export function DashboardFrame<T extends string>({
   }, [updateNavScroll, visibleGroups, openGroup, mobileOpen, collapsed]);
   const activeItem = useMemo(() => flatItems.find((item) => item.key === activeKey), [activeKey, flatItems]);
   const activeGroup = useMemo(() => groups.find((group) => group.items.some((item) => item.key === activeKey)), [activeKey, groups]);
-  useEffect(() => { setOpenGroup(activeGroup?.label ?? null); }, [activeGroup?.label]);
+  useEffect(() => { setOpenGroup(activeGroup?.label === "Home" ? "Distribution" : activeGroup?.label ?? "Distribution"); }, [activeGroup?.label]);
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       window.dispatchEvent(new CustomEvent("hymn-workspace-section", { detail: activeGroup?.label ?? "Workspace" }));
@@ -179,6 +180,7 @@ export function DashboardFrame<T extends string>({
 
   const isOverview = activeKey === "overview";
   const adminWorkspace = navItems.some(item => item.group === "Command Center");
+  const overviewItem = navItems.find(item => item.key === "overview");
 
   return (
     <div data-workspace={adminWorkspace ? "admin" : "creator"} data-collapsed={collapsed} className="workspace-v2 hymn-portal-frame dashboard-os-shell lg:grid-cols-[var(--dashboard-sidebar-width,236px),minmax(0,1fr)]" style={{ "--dashboard-sidebar-width": collapsed ? "76px" : "236px" } as React.CSSProperties}>
@@ -237,9 +239,11 @@ export function DashboardFrame<T extends string>({
           ].map(action => <Link key={action.href} href={action.href} onClick={() => { setNewOpen(false); setMobileOpen(false); }}><action.icon /><span><strong>{action.title}</strong><small>{action.copy}</small></span></Link>)}</div></section></div>, document.body) : null}
         </div> : null}
 
+        <WorkspaceDestinations overviewActive={isOverview} overviewHref={overviewItem?.href} onOverview={overviewItem && !overviewItem.href ? () => handleSelect(overviewItem.key) : undefined} onNavigate={() => setMobileOpen(false)} />
         <div ref={navScrollRef} onScroll={updateNavScroll} className="dashboard-nav-scroll mt-4 min-h-0 flex-1 content-start gap-3 overflow-x-hidden overflow-y-auto pr-1 grid">
           {visibleGroups.map((group) => {
-            if (group.label === "Home") return <div key="Home"><Link href="/" aria-label="Home" className="workspace-home-link" title={collapsed ? "Home" : undefined} onClick={() => setMobileOpen(false)}><Home size={16} /><span className={clsx(collapsed ? "lg:hidden" : "")}>Home</span></Link><Link href="/dashboard" className="dashboard-nav-link" aria-current={activeKey === "overview" ? "page" : undefined}><LayoutGrid size={16}/><span className={clsx(collapsed ? "lg:hidden" : "")}>Overview</span></Link></div>;
+            const groupItems = group.items.filter(item => item.key !== "overview");
+            if (!groupItems.length) return null;
             const closed = openGroup !== group.label;
             return (
               <div key={group.label} className="dashboard-os-nav-group">
@@ -257,7 +261,7 @@ export function DashboardFrame<T extends string>({
                   <ChevronDown className={clsx("h-3.5 w-3.5 transition", closed ? "-rotate-90" : "rotate-0", collapsed ? "lg:hidden" : "")} />
                 </button>
                 <div className={clsx("grid gap-1.5", closed ? "hidden" : "")}>
-                  {group.items.map((item) => {
+                  {groupItems.map((item) => {
                     const active = item.key === activeKey;
                     const itemLabel = item.key === "plans" || item.key === "subscriptions" ? subscriptionLabel : item.label;
                     const Icon = workspaceNavigation.find(entry => entry.label === item.label)?.icon ?? (/notification|message/.test(item.key)?Bell:/user|artist|producer|team|collaborator|referral|contributor/.test(item.key)?Users:/fraud/.test(item.key)?ShieldCheck:/contract/.test(item.key)?FileText:/activity|audit|health/.test(item.key)?Activity:/review|queue/.test(item.key)?ClipboardCheck:/release|catalog|delivery/.test(item.key)?Disc3:/analytics|sales|growth/.test(item.key)?TrendingUp:/payment|revenue|royalt|earning|payout|reconcil|ledger/.test(item.key)?Wallet:/upload/.test(item.key)?Upload:/studio|mix|master/.test(item.key)?Headphones:/store|purchase/.test(item.key)?Store:/setting|profile|account|integration/.test(item.key)?Settings:/support|help/.test(item.key)?LifeBuoy:/email|newsletter|webhook/.test(item.key)?FileText:item.key==="overview"?LayoutGrid:Music2);
