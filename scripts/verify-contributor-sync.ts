@@ -50,7 +50,7 @@ async function main() {
   await assert.rejects(syncTrackContributions(db, { trackId: 1, actorUserId: 7, contributions: [{ partyId: 404, role: "COMPOSER", legalName: "Missing" }] }), /unavailable/);
   await assert.rejects(syncTrackContributions(db, { trackId: 1, actorUserId: 7, contributions: [{ role: "INVALID", name: "Artist" }] }), /Unsupported/);
   const source = readFileSync("lib/distribution-db.ts", "utf8").split("export async function updatePaidDistributionRelease")[1];
-  assert.match(source, /timeout: 30_000/, "The atomic paid release save needs an explicit transaction budget");
+  assert.match(source, /releaseSaveTransactionOptions/, "The atomic paid release save needs an explicit transaction budget");
   console.log("Contributor sync regression checks passed.");
 }
 

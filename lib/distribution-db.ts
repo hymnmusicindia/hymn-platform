@@ -11,6 +11,7 @@ import type { Prisma } from "@prisma/client";
 import { redactDireNoteDiagnostic } from "@/lib/direnote";
 import { findDistributionPlan } from "@/lib/distribution-plans";
 import { syncTrackContributions } from "@/lib/contributor-identity";
+import { syncReleaseContributions, releaseSaveTransactionOptions } from "@/lib/release-contributor-sync";
 
 export function isPostgresPrisma() {
   return /^postgres(?:ql)?:\/\//i.test(process.env.DATABASE_URL?.trim() || "");
@@ -1087,6 +1088,7 @@ export async function saveDraftDistributionRelease(input: {
         const numbers = tracks.map((track, index) => track.trackNumber || index + 1);
         if (new Set(numbers).size !== numbers.length) throw new Error("Every track must have a unique track number.");
         const retainedIds: number[] = [];
+        const creditTracks: Parameters<typeof syncReleaseContributions>[1]["tracks"] = [];
         for (const [i, t] of tracks.entries()) {
           const trackRest = { ...t } as any;
           delete trackRest.id;
@@ -1097,12 +1099,13 @@ export async function saveDraftDistributionRelease(input: {
             ? await tx.track.update({ where: { id: previous.id }, data: trackData })
             : await tx.track.create({ data: trackData });
           retainedIds.push(savedTrack.id);
-          await syncTrackContributions(tx, { trackId: savedTrack.id, actorUserId: input.userId, contributions: t.contributors ?? [] });
+          creditTracks.push({ trackId: savedTrack.id, contributions: t.contributors ?? [] });
         }
+        await syncReleaseContributions(tx, { actorUserId: input.userId, tracks: creditTracks });
         await tx.track.deleteMany({ where: { releaseId: saved.id, id: { notIn: retainedIds } } });
         await tx.auditLog.create({ data: { actorId: input.userId, actorType: "user", action: "RELEASE_DRAFT_SAVED", entity: "release", entityId: String(saved.id), metadata: { trackCount: retainedIds.length } } });
         return saved;
-      }, { timeout: 30_000 });
+      }, releaseSaveTransactionOptions);
       return (await getDetailedReleaseByUserId(input.userId, dbRelease.id)) as any;
     }
     const draft: Release = {
@@ -1467,6 +1470,7 @@ export async function updatePaidDistributionRelease(input: {
           },
           select: { id: true }
         });
+        const creditTracks: Parameters<typeof syncReleaseContributions>[1]["tracks"] = [];
         for (const [index, track] of tracks.entries()) {
               const previous = saved.tracks.find(item => item.trackNumber === track.trackNumber);
               const trackMetadata = { ...(typeof previous?.metadata === "object" && previous.metadata ? previous.metadata : {}), ...track, isrc: previous?.isrc ?? track.isrc } as any;
@@ -1482,14 +1486,15 @@ export async function updatePaidDistributionRelease(input: {
               const savedTrack = previous
                 ? await tx.track.update({ where: { id: previous.id }, data })
                 : await tx.track.create({ data });
-              await syncTrackContributions(tx, { trackId: savedTrack.id, actorUserId: input.userId, contributions: track.contributors ?? [] });
+              creditTracks.push({ trackId: savedTrack.id, contributions: track.contributors ?? [] });
         }
+        await syncReleaseContributions(tx, { actorUserId: input.userId, tracks: creditTracks });
         if (!providerCorrection) await tx.track.deleteMany({ where: { releaseId: input.releaseId, trackNumber: { notIn: tracks.map(track => track.trackNumber) } } });
         if (providerCorrection) {
           const attempt = await tx.distributionSubmissionAttempt.findFirst({ where: { releaseId: input.releaseId, provider: "direnote", isCurrent: true } });
           if (attempt) await tx.distributionSubmissionAttempt.update({ where: { id: attempt.id }, data: { corrections: { ...(typeof attempt.corrections === "object" && attempt.corrections ? attempt.corrections : {}), status: "customer_resolved", artistResolvedAt: new Date().toISOString() } } });
         }
-      }, { timeout: 30_000 });
+      }, releaseSaveTransactionOptions);
       const reviewReason = "Paid release metadata was submitted for review.";
       const currentStatus = String(existingRelease.status ?? "").trim().toLowerCase();
       if (currentStatus === "changes_requested" || currentStatus === "rejected") await updateDetailedReleaseStatus(input.releaseId, "resubmitted", reviewReason);

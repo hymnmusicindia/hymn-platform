@@ -8,6 +8,8 @@ import { recordGrowthEvent } from "@/lib/growth";
 import { prisma } from "@/lib/prisma";
 import { firstReleaseAttribution } from "@/lib/first-release-flow";
 
+export const maxDuration = 180;
+
 export async function POST(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
@@ -174,6 +176,10 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ release }, { status: 201 });
   } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2028") {
+      console.error("Save Draft transaction timeout:", error);
+      return NextResponse.json({ error: "Saving this release took too long. Your previously saved draft is safe. Please retry.", code: "DRAFT_SAVE_TIMEOUT" }, { status: 503 });
+    }
     console.error("Save Draft Error:", error);
     const message = error instanceof Error ? error.message : "Could not save draft release.";
     const conflict = message.includes("updated elsewhere");
