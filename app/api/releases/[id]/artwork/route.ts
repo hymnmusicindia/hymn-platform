@@ -5,6 +5,8 @@ import { localPrivateStorage } from "@/lib/private-storage";
 import { missingImageResponseHeaders, missingImageSvg } from "@/lib/media-placeholder";
 import { storedAssetIdFromUrl } from "@/lib/release-media";
 import { getSiteSettings } from "@/lib/db";
+import { requestedArtworkWidth } from "@/lib/artwork-preview";
+import { artworkThumbnail } from "@/lib/artwork-thumbnail";
 
 export const runtime = "nodejs";
 
@@ -42,7 +44,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     select: { id: true, releaseId: true, ownerUserId: true },
     orderBy: { createdAt: "desc" }
   });
-  const linkedAsset = linkedAssetId ? await prisma.storedAsset.findFirst({
+  const linkedAsset = !releaseCoverAsset && linkedAssetId ? await prisma.storedAsset.findFirst({
     where: {
       id: linkedAssetId,
       mimeType: { startsWith: "image/" },
@@ -52,17 +54,19 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     },
     select: { id: true, releaseId: true, ownerUserId: true }
   }) : null;
-  const legacyReleaseAsset = await prisma.storedAsset.findFirst({
+  const legacyReleaseAsset = !releaseCoverAsset && !linkedAsset ? await prisma.storedAsset.findFirst({
     where: { releaseId, ownerUserId, mimeType: { startsWith: "image/" }, deletedAt: null, uploadStatus: "ready" },
     select: { id: true, releaseId: true, ownerUserId: true },
     orderBy: [{ assetType: "asc" }, { createdAt: "desc" }]
-  });
+  }) : null;
   const releaseAsset = releaseCoverAsset ?? linkedAsset ?? legacyReleaseAsset;
 
   if (releaseAsset) {
     try {
       const asset = await localPrivateStorage.createAuthorizedRead({ assetId: releaseAsset.id, requesterUserId: user?.sub ?? 0, isAdmin: Boolean(admin) || userIsAdmin || releaseAsset.releaseId === releaseId || isPublicShowcaseArtwork });
-      return new NextResponse(new Uint8Array(asset.bytes), { headers: { "Content-Type": asset.mimeType, "Content-Length": String(asset.bytes.length), "Cache-Control": "private, max-age=300", "X-Content-Type-Options": "nosniff", "X-HYMN-Release-Asset": String(releaseAsset.id) } });
+      const width = requestedArtworkWidth(_request);
+      const bytes = width ? await artworkThumbnail(asset.bytes, width).catch(() => asset.bytes) : asset.bytes;
+      return new NextResponse(new Uint8Array(bytes), { headers: { "Content-Type": bytes === asset.bytes ? asset.mimeType : "image/webp", "Content-Length": String(bytes.length), "Cache-Control": "private, max-age=300", "Vary": "Cookie", "X-Content-Type-Options": "nosniff", "X-HYMN-Release-Asset": String(releaseAsset.id) } });
     } catch (error) {
       console.error("Release artwork source could not be read", { releaseId, assetId: releaseAsset.id, error: error instanceof Error ? error.message : "Unknown storage error" });
     }

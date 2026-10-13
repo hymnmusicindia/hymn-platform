@@ -11,8 +11,12 @@ let status = "LIVE";
 let archivedAt = null;
 let featured = true;
 let reads = 0;
+let transforms = 0;
 const bytes = new Uint8Array([255, 216, 255, 217]);
+const previewBytes = new Uint8Array([1, 2, 3]);
 const mocks = {
+  "@/lib/artwork-preview": { requestedArtworkWidth: request => new URL(request.url).searchParams.get("w") === "192" ? 192 : null },
+  "@/lib/artwork-thumbnail": { artworkThumbnail: async (_bytes, width) => { transforms++; assert.equal(width, 192); return previewBytes; } },
   "next/server": { NextResponse: Response },
   "@/lib/session": { getSession: async () => user, getAdminSession: async () => admin },
   "@/lib/prisma": { prisma: {
@@ -37,7 +41,7 @@ const sandbox = { exports: {}, require: (name) => {
   return mocks[name];
 }, Uint8Array, console };
 vm.runInNewContext(compiled, sandbox);
-const request = () => sandbox.exports.GET(new Request("https://hymn.local/api/releases/42/artwork"), { params: Promise.resolve({ id: "42" }) });
+const request = (query = "") => sandbox.exports.GET(new Request("https://hymn.local/api/releases/42/artwork" + query), { params: Promise.resolve({ id: "42" }) });
 
 async function expectArtwork() {
   const response = await request();
@@ -46,10 +50,12 @@ async function expectArtwork() {
 }
 async function expectDenied() {
   const before = reads;
-  const response = await request();
+  const beforeTransforms = transforms;
+  const response = await request("?w=192");
   assert.equal(await response.text(), "placeholder");
   assert.equal(response.headers.get("Cache-Control"), "no-store");
   assert.equal(reads, before, "Denied requests must not read private storage");
+  assert.equal(transforms, beforeTransforms, "Denied requests must not generate previews");
 }
 async function main() {
   // Exercise homepage selection with and without manually featured IDs.
@@ -78,6 +84,11 @@ async function main() {
     assert.deepEqual(Array.from(result.featuredReleases, (release) => release.id), selection.length === 3 ? [] : [10]);
   }
   await expectArtwork(); // Anonymous homepage visitor.
+  const preview = await request("?w=192");
+  assert.equal(preview.headers.get("Content-Type"), "image/webp");
+  assert.equal(preview.headers.get("Cache-Control"), "private, max-age=300");
+  assert.equal(preview.headers.get("Vary"), "Cookie");
+  assert.deepEqual(new Uint8Array(await preview.arrayBuffer()), previewBytes);
   user = { sub: 88 };
   await expectArtwork(); // Signed-in visitor who does not own the release.
   user = null;

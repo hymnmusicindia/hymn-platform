@@ -1,5 +1,6 @@
 "use client";
 
+import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
@@ -375,7 +376,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
             </div>
           </div>
           <WorkspaceRecords searchable={false} rows={filteredCatalog} rowKey={beat=>beat.id} noun="beats" searchText={beat=>`${beat.title} ${beat.genre} ${beat.bpm} ${beat.status}`} searchPlaceholder="Search catalogue" columns={[
-            {key:"beat",label:"Beat",primary:true,value:beat=>beat.title,render:beat=><div className="record-identity">{beat.artworkUrl?<img src={beat.artworkUrl} alt=""/>:<span className="record-art"/>}<div><strong>{beat.title}</strong><small>{beat.genre} / {beat.bpm} BPM</small>{beat.reviewIssues?.reason&&<small style={{color:"var(--danger)"}}>{beat.reviewIssues.reason}</small>}</div></div>},
+            {key:"beat",label:"Beat",primary:true,value:beat=>beat.title,render:beat=><div className="record-identity">{beat.artworkUrl?<img src={artworkPreviewUrl(beat.artworkUrl, 320)} alt=""/>:<span className="record-art"/>}<div><strong>{beat.title}</strong><small>{beat.genre} / {beat.bpm} BPM</small>{beat.reviewIssues?.reason&&<small style={{color:"var(--danger)"}}>{beat.reviewIssues.reason}</small>}</div></div>},
             {key:"status",label:"Review",value:beat=>beat.status||"",render:beat=><StatusPill label={beat.status||"DRAFT"}/>},
             {key:"price",label:"Starting price",value:beat=>beat.price,render:beat=>formatMoney(beat.generalPrice??beat.price)},
             {key:"listed",label:"Visibility",render:beat=>beat.enabled&&beat.status==="PUBLISHED"?"Published":"Not listed"},

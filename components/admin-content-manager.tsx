@@ -1,5 +1,6 @@
 "use client";
 
+import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import { FormEvent, useMemo, useState, useTransition } from "react";
 import type { Release, SiteSettings } from "@/lib/types";
 
@@ -116,7 +117,7 @@ export function AdminContentManager({
               const checked = selectedReleaseIds.includes(release.id);
               return (
                 <label key={release.id} className="group grid cursor-pointer grid-cols-[74px,1fr] gap-3 rounded-2xl border p-3 transition" style={{ borderColor: checked ? "var(--accent)" : "var(--border)", background: checked ? "color-mix(in srgb, var(--accent) 12%, var(--bg-soft))" : "var(--bg-soft)" }}>
-                  <img src={release.artworkUrl} alt={`${release.releaseTitle || release.trackName} artwork`} loading="lazy" decoding="async" className="aspect-square rounded-xl object-cover" />
+                  <img src={artworkPreviewUrl(release.artworkUrl, 320)} alt={`${release.releaseTitle || release.trackName} artwork`} loading="lazy" decoding="async" className="aspect-square rounded-xl object-cover" />
                   <span className="min-w-0">
                     <span className="flex items-start justify-between gap-3">
                       <span className="min-w-0">

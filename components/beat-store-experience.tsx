@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
 import { useSearchParams } from "next/navigation";
@@ -148,7 +149,7 @@ function CartDrawer({
             cartDetails.map(({ item, beat }) => (
               <div key={`${item.beatId}-${item.licenseType}`} className="flex items-center gap-3 rounded-[18px] border border-[var(--border)] bg-[var(--card)] p-3">
                 <div className="relative h-16 w-16 overflow-hidden rounded-[12px] border border-[var(--border)]">
-                  <img src={beat.coverImage} alt={beat.title} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" onError={(event) => replaceBrokenImage(event, getFallbackImage(beat.id))} />
+                  <img src={artworkPreviewUrl(beat.coverImage, 320)} alt={beat.title} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" onError={(event) => replaceBrokenImage(event, getFallbackImage(beat.id))} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-[var(--text)]">{beat.title}</p>

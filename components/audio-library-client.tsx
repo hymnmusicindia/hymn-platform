@@ -1,5 +1,6 @@
 "use client";
 
+import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import Link from "next/link";
 import { Download, MoreHorizontal, Music2, Search, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -28,7 +29,7 @@ export function AudioLibraryClient({ assets }: { assets: LibraryAsset[] }) {
     <div className="master-library-toolbar"><span>All files</span><label className="master-library-search"><Search size={16}/><input aria-label="Search audio library" value={query} onChange={event=>setQuery(event.target.value)} placeholder="Search by name"/></label><span className="master-library-count">{filtered.length} {filtered.length===1?"file":"files"}</span></div>
     <div className="master-library-list"><div className="master-library-columns"><span>Name</span><span>Preview</span><span>Modified</span><span/></div>
       {filtered.map(asset=><article key={asset.id} className="master-library-row">
-        <div className="master-library-file"><span className="master-library-icon">{asset.coverArtUrl?<img src={asset.coverArtUrl} alt="" loading="lazy"/>:<Music2 size={17}/>}</span><div><h2 title={asset.originalFilename}>{asset.originalFilename}</h2><p>Original{asset.released?<span className="master-library-released">Released</span>:null}</p></div></div>
+        <div className="master-library-file"><span className="master-library-icon">{asset.coverArtUrl?<img src={artworkPreviewUrl(asset.coverArtUrl, 96)} alt="" loading="lazy"/>:<Music2 size={17}/>}</span><div><h2 title={asset.originalFilename}>{asset.originalFilename}</h2><p>Original{asset.released?<span className="master-library-released">Released</span>:null}</p></div></div>
         <div className="master-library-preview"><AudioWaveform src={asset.audioUrl} title={asset.originalFilename} compact compactMinimal/></div>
         <time className="master-library-date" dateTime={asset.createdAt}>{formatDate(asset.createdAt)}</time>
         <div className="master-library-actions" ref={menuId===asset.id?menuRef:undefined}><button type="button" aria-label={`Actions for ${asset.originalFilename}`} aria-expanded={menuId===asset.id} aria-controls={`master-actions-${asset.id}`} onClick={()=>setMenuId(menuId===asset.id?null:asset.id)}><MoreHorizontal size={18}/></button>{menuId===asset.id?<div id={`master-actions-${asset.id}`} className="master-library-menu"><a href={`/api/assets/${asset.id}/download?filename=${encodeURIComponent(asset.safeFilename)}&download=1`} onClick={()=>setMenuId(null)}><Download size={15}/> Download</a><Link href={`/distribution/start?audioAssetId=${asset.id}`} onClick={()=>setMenuId(null)}><Music2 size={15}/> Use in release</Link></div>:null}</div>

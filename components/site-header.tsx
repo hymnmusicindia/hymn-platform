@@ -1,5 +1,6 @@
 "use client";
 
+import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import { AccountHandle } from "@/components/account-handle";
 import Link from "next/link";
 import Image from "next/image";
@@ -718,7 +719,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
             {cartItems.length ? cartItems.map((item) => {
               const beat = cartBeats.find((entry) => entry.id === item.beatId);
               return <div key={`${item.beatId}-${item.licenseType}`} className="site-cart-drawer-item flex items-center gap-3 border-b border-[var(--border)] py-3">
-                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-[var(--bg-soft)]">{beat?.artworkUrl ? <Image src={beat.artworkUrl} alt="" fill sizes="56px" className="object-cover" /> : <Disc3 className="absolute inset-0 m-auto h-5 w-5 text-[var(--text-soft)]" />}</div>
+                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-[var(--bg-soft)]">{beat?.artworkUrl ? <Image src={artworkPreviewUrl(beat.artworkUrl, 320)} alt="" fill sizes="56px" className="object-cover" /> : <Disc3 className="absolute inset-0 m-auto h-5 w-5 text-[var(--text-soft)]" />}</div>
                 <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-[var(--text)]">{beat?.title ?? `Beat ${item.beatId}`}</p><p className="mt-1 truncate text-xs text-[var(--text-soft)]">{beat?.producerName ?? "Beat licence"}</p><p className="mt-1 text-[11px] text-[var(--text-muted)]">{beatLicenseLabel(item.licenseType)} licence</p></div>
                 <div className="text-right"><p className="text-sm font-semibold text-[var(--text)]">₹{Number(item.price).toLocaleString("en-IN")}</p><button type="button" onClick={() => removeCartItem(item.beatId, item.licenseType)} className="site-cart-remove mt-2 text-xs">Remove</button></div>
               </div>;

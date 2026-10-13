@@ -1,5 +1,6 @@
 "use client";
 
+import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import { useRef, type PointerEvent } from "react";
 import { Pause, Play } from "lucide-react";
 import s from "./producer-link-page.module.css";
@@ -50,7 +51,7 @@ export function BeatMusicWheel({ title, artwork, enabled, playing, current, dura
       if (target !== null) { event.preventDefault(); if (duration) onSeek(Math.max(0, Math.min(duration, target))); }
     }}>
     <svg className={s.wheelProgress} viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="26" pathLength="100" strokeDasharray={`${duration ? current / duration * 100 : 0} 100`}/></svg>
-    <img src={artwork} alt="" loading="lazy" draggable={false} style={{ transform: `rotate(${current * 12}deg)` }}/>
+    <img src={artworkPreviewUrl(artwork, 320)} alt="" loading="lazy" draggable={false} style={{ transform: `rotate(${current * 12}deg)` }}/>
     {playing ? <Pause size={17} fill="currentColor"/> : <Play size={17} fill="currentColor"/>}
   </button>;
 }

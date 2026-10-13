@@ -1,5 +1,6 @@
 "use client";
 
+import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import styles from "./beat-card.module.css";
 import Link from "next/link";
 import { Check, Disc3, Pause, Play, ShoppingBag } from "lucide-react";
@@ -18,12 +19,12 @@ export function BeatCard({ beat, active = false, playing = false, onPlay, onAdd,
   const artwork = beat.coverImage && !coverFailed ? beat.coverImage : "";
 
   return <article className={`${styles.card} force-dark group relative grid min-h-[98px] grid-cols-[78px_minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-2xl border bg-[#101216] p-3 text-white transition duration-200 hover:-translate-y-0.5 hover:border-white/25 hover:shadow-[0_16px_38px_rgba(0,0,0,.22)] sm:grid-cols-[78px_minmax(190px,1.4fr)_minmax(190px,.8fr)_auto] sm:gap-4 ${active ? "border-white/35 ring-1 ring-white/10" : "border-white/10"}`} id={`beat-${beat.id}`}>
-    {artwork ? <img src={artwork} alt="" loading="lazy" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-25 blur-[2px] transition duration-500 group-hover:scale-[1.14] group-hover:opacity-30" onError={() => setCoverFailed(true)} /> : null}
+    {artwork ? <img src={artworkPreviewUrl(artwork, 96)} alt="" loading="lazy" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-25 blur-[2px] transition duration-500 group-hover:scale-[1.14] group-hover:opacity-30" onError={() => setCoverFailed(true)} /> : null}
     <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(7,8,10,.68),rgba(10,11,14,.90)_42%,rgba(10,11,14,.97))]" />
 
     <div className={`relative h-[74px] w-[74px] rounded-full bg-[repeating-radial-gradient(circle_at_center,#2b2e34_0_2px,#111318_3px_5px)] shadow-[0_10px_25px_rgba(0,0,0,.48)] ring-1 ring-white/15 transition-transform duration-700 group-hover:rotate-[16deg] ${playing ? "animate-[spin_5s_linear_infinite]" : ""}`}>
       <div className="absolute inset-[20px] overflow-hidden rounded-full border border-black/80 bg-black">
-        {artwork ? <img src={artwork} alt="" loading="lazy" className="h-full w-full object-cover" onError={() => setCoverFailed(true)} /> : <Disc3 className="h-full w-full p-1.5 text-white/55" />}
+        {artwork ? <img src={artworkPreviewUrl(artwork, 96)} alt="" loading="lazy" className="h-full w-full object-cover" onError={() => setCoverFailed(true)} /> : <Disc3 className="h-full w-full p-1.5 text-white/55" />}
       </div>
       <button type="button" onClick={onPlay} className="absolute inset-0 grid place-items-center rounded-full" aria-label={playing ? `Pause ${beat.title}` : `Play ${beat.title}`}>
         <span className={`${styles.play} grid h-9 w-9 place-items-center rounded-full bg-black/45 text-white backdrop-blur-sm transition ${active ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}>{playing ? <Pause className="h-4 w-4" fill="currentColor" /> : <Play className="ml-0.5 h-4 w-4" fill="currentColor" />}</span>

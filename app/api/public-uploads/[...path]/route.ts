@@ -3,6 +3,8 @@ import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { resolvePublicUploadPaths } from "@/lib/storage";
 import { missingImageResponseHeaders, missingImageSvg } from "@/lib/media-placeholder";
+import { requestedArtworkWidth } from "@/lib/artwork-preview";
+import { artworkThumbnail } from "@/lib/artwork-thumbnail";
 
 export const runtime = "nodejs";
 
@@ -36,9 +38,12 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ pa
       if (bytes) break;
     }
     if (!bytes) throw Object.assign(new Error("Public media not found."), { code: "ENOENT" });
+    const width = imageTypes[path.extname(relativePath).toLowerCase()] ? requestedArtworkWidth(_request) : null;
+    const originalBytes = bytes;
+    if (width) bytes = await artworkThumbnail(bytes, width).catch(() => originalBytes);
     return new NextResponse(new Uint8Array(bytes), {
       headers: {
-        "Content-Type": mimeType,
+        "Content-Type": bytes === originalBytes ? mimeType : "image/webp",
         "Content-Length": String(bytes.length),
         "Cache-Control": "public, max-age=31536000, immutable",
         "X-Content-Type-Options": "nosniff"

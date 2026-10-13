@@ -1,5 +1,6 @@
 "use client";
 
+import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -101,7 +102,7 @@ export function ReleaseSummaryCard({
         <div className="h-full w-full overflow-hidden rounded-[6px]">
         {release.artworkUrl ? (
           <Image
-            src={release.artworkUrl}
+            src={artworkPreviewUrl(release.artworkUrl, 320)}
             alt={`${title} artwork`}
             fill
             sizes="(max-width: 640px) 46vw, (max-width: 1280px) 25vw, 240px"

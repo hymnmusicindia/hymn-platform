@@ -4,6 +4,8 @@ import { AudioRangeNotSatisfiableError, localPrivateStorage } from "@/lib/privat
 import { prisma } from "@/lib/prisma";
 import { missingImageResponseHeaders, missingImageSvg } from "@/lib/media-placeholder";
 import { requireAdminPermission } from "@/lib/access";
+import { requestedArtworkWidth } from "@/lib/artwork-preview";
+import { artworkThumbnail } from "@/lib/artwork-thumbnail";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const [user, admin] = await Promise.all([getSession(), getAdminSession()]);
@@ -20,6 +22,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       }
     }
     const asset = await localPrivateStorage.createAuthorizedRead({ assetId, requesterUserId: user?.sub ?? 0, isAdmin: Boolean(admin) || releaseAdmin, range: request.headers.get("range") });
+    const width = !downloadRequested && asset.mimeType.startsWith("image/") ? requestedArtworkWidth(request) : null;
+    if (width) {
+      const bytes = await artworkThumbnail(asset.bytes, width).catch(() => asset.bytes);
+      return new NextResponse(new Uint8Array(bytes), { headers: { "Content-Type": bytes === asset.bytes ? asset.mimeType : "image/webp", "Content-Length": String(bytes.length), "Cache-Control": "private, max-age=300", "Vary": "Cookie", "X-Content-Type-Options": "nosniff", "X-Robots-Tag": "noindex, nofollow" } });
+    }
     if (user) {
       const stored = await prisma.storedAsset.findUnique({ where: { id: assetId }, select: { assetType: true, beatId: true, beatPurchaseId: true } });
       const purchase = stored?.beatPurchaseId ? await prisma.beatPurchase.findFirst({ where: { id: stored.beatPurchaseId, userId: user.sub, hasAccess: true }, select: { id: true } }) : stored?.assetType === "private_beat_deliverable" && stored.beatId ? await prisma.beatPurchase.findFirst({ where: { beatId: stored.beatId, userId: user.sub, hasAccess: true }, orderBy: { purchasedAt: "desc" }, select: { id: true } }) : null;

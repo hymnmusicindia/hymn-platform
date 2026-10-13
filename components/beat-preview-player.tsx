@@ -1,5 +1,6 @@
 "use client";
 
+import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
@@ -82,7 +83,7 @@ function PlayerArtwork({ beat, size = "small" }: { beat: StorefrontBeat; size?: 
   return (
     <div className={`relative shrink-0 overflow-hidden border border-white/10 bg-white/[0.04] ${className}`}>
       {!failed && beat.coverImage ? (
-        <img src={beat.coverImage} alt={`${beat.title} cover artwork`} className="absolute inset-0 h-full w-full object-cover" onError={() => setFailed(true)} />
+        <img src={artworkPreviewUrl(beat.coverImage, 96)} alt={`${beat.title} cover artwork`} className="absolute inset-0 h-full w-full object-cover" onError={() => setFailed(true)} />
       ) : (
         <div className="grid h-full w-full place-items-center bg-[linear-gradient(145deg,#11151b,#2f343d)] text-white/55">
           <Disc3 className={size === "large" ? "h-16 w-16" : "h-6 w-6"} />

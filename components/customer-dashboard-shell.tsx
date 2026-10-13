@@ -1,5 +1,6 @@
 "use client";
 
+import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
@@ -500,7 +501,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
             ))}
           </div>
           <WorkspaceRecords rows={filteredReleases} rowKey={release=>release.id} searchText={release=>`${releaseTitle(release)} ${release.artistName} ${release.status} ${release.upcCode}`} noun="releases" columns={[
-            {key:"release",label:"Release",primary:true,value:release=>releaseTitle(release),render:release=><div className="record-identity">{release.artworkUrl&&<img src={release.artworkUrl} alt=""/>}<div><strong>{releaseTitle(release)}</strong><small>{release.artistName} / {release.releaseType}</small>{release.status==="draft"&&<small>{release.draftCompletionPercent??0}% complete</small>}</div></div>},
+            {key:"release",label:"Release",primary:true,value:release=>releaseTitle(release),render:release=><div className="record-identity">{release.artworkUrl&&<img src={artworkPreviewUrl(release.artworkUrl, 320)} alt=""/>}<div><strong>{releaseTitle(release)}</strong><small>{release.artistName} / {release.releaseType}</small>{release.status==="draft"&&<small>{release.draftCompletionPercent??0}% complete</small>}</div></div>},
             {key:"status",label:"Status",value:release=>release.status,render:release=><StatusPill label={release.status}/>},
             {key:"payment",label:"Payment",render:release=>release.paymentStatus||"Not recorded"},
             {key:"date",label:"Release date",render:release=>formatDate(release.releaseDate)},
@@ -696,7 +697,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
             </div>
             <div className="mt-6 grid gap-6 lg:grid-cols-[0.85fr,1.15fr]">
               <div>
-                {selectedRelease.artworkUrl ? <img src={selectedRelease.artworkUrl} alt={releaseTitle(selectedRelease)} className="aspect-square w-full rounded-2xl object-cover" /> : <div className="aspect-square rounded-2xl border border-dashed" style={{ borderColor: "var(--border)" }} />}
+                {selectedRelease.artworkUrl ? <img src={artworkPreviewUrl(selectedRelease.artworkUrl, 320)} alt={releaseTitle(selectedRelease)} className="aspect-square w-full rounded-2xl object-cover" /> : <div className="aspect-square rounded-2xl border border-dashed" style={{ borderColor: "var(--border)" }} />}
                 <div className="mt-4 grid gap-2 text-sm">
                   <div className="summary-card"><span>Status</span><span>{selectedRelease.status.replace(/_/g, " ")}</span></div>
                   <div className="summary-card"><span>Payment</span><span>{selectedRelease.paymentStatus ?? "pending"}</span></div>

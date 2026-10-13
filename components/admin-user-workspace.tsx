@@ -1,5 +1,6 @@
 "use client";
 
+import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Disc3, History, LifeBuoy, Wallet } from "lucide-react";
@@ -29,7 +30,7 @@ export function AdminUserWorkspace({userId,onBack}:{userId:number;onBack:()=>voi
     <div className="user-summary-grid">{[["Live releases",data.access.catalogue?data.counts.live||0:"Restricted"],["Drafts",data.access.catalogue?data.counts.draft||0:"Restricted"],["Catalogue",data.access.catalogue?data.totals.releases:"Restricted"],["Member since",date(data.user.createdAt)]].map(([label,value])=><div className="metric-card" key={label}><p>{label}</p><p>{value}</p></div>)}</div>
     <nav className="workspace-tabs" aria-label="User record sections">{[{key:"catalogue",label:"Releases & beats",icon:Disc3,visible:data.access.catalogue},{key:"support",label:"Support",icon:LifeBuoy,visible:data.access.support},{key:"finance",label:"Purchases & payouts",icon:Wallet,visible:data.access.finance},{key:"activity",label:"Activity history",icon:History,visible:data.access.audit},{key:"account",label:"Account facts",icon:History,visible:true}].filter(item=>item.visible).map(item=><button key={item.key} aria-pressed={tab===item.key} onClick={()=>setTab(item.key)}><item.icon size={15}/>{item.label}</button>)}</nav>
     {tab==="catalogue"&&<><div className="workspace-filter-chips">{["all",...Object.keys(data.counts)].map(value=><button key={value} aria-pressed={releaseFilter===value} onClick={()=>setReleaseFilter(value)}>{value.replaceAll("_"," ")} <span>{value==="all"?data.totals.releases:data.counts[value]}</span></button>)}</div><WorkspaceRecords rows={data.releases.filter(row=>releaseFilter==="all"||row.status.toLowerCase()===releaseFilter)} rowKey={row=>row.id} searchText={row=>`${row.id} ${row.title} ${row.artistName} ${row.upc||""} ${row.status}`} noun="loaded releases" searchPlaceholder="Search title, artist, UPC or status" columns={[
-      {key:"title",label:"Release",primary:true,value:row=>row.title,render:row=><div className="record-identity">{row.artworkUrl&&<img src={row.artworkUrl} alt=""/>}<div><strong>{row.title}</strong><small>{row.artistName} / #{row.id}</small></div></div>},
+      {key:"title",label:"Release",primary:true,value:row=>row.title,render:row=><div className="record-identity">{row.artworkUrl&&<img src={artworkPreviewUrl(row.artworkUrl, 320)} alt=""/>}<div><strong>{row.title}</strong><small>{row.artistName} / #{row.id}</small></div></div>},
       {key:"status",label:"Status",value:row=>row.status,render:row=>status(row.status)},
       {key:"date",label:"Release date",value:row=>Date.parse(row.releaseDate),render:row=>date(row.releaseDate)},
       {key:"upc",label:"UPC",render:row=>row.upc||"Not assigned"},

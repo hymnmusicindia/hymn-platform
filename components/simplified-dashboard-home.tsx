@@ -1,4 +1,5 @@
 "use client";
+import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -29,7 +30,7 @@ function Activity({ notifications, producer=false }: { notifications:Notificatio
   const href=producer?"/producer/dashboard?tab=messages":"/dashboard?tab=messages";
   return <OverviewPanel title="Activity" action={<Link className={s.link} href={href}>View all <ArrowRight/></Link>}>{newest(notifications).slice(0,4).map(item=><div className={s.row} key={item.id}><span className={s.icon}><Bell/></span><div className={s.rowCopy}><Link href={item.href||href}><strong>{item.title}</strong></Link><small>{item.body}</small></div><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleDateString("en-IN",{day:"numeric",month:"short"})}</time></div>)}{!notifications.length && <OverviewEmpty title="You're up to date">Account updates will appear here.</OverviewEmpty>}</OverviewPanel>;
 }
-function Artwork({ src }: {src?:string}) { return <span className={s.art}>{src?<Image src={src} alt="" width={240} height={240} unoptimized/>:<Disc3/>}</span>; }
+function Artwork({ src }: {src?:string}) { return <span className={s.art}>{src?<Image src={artworkPreviewUrl(src, 96)} alt="" width={240} height={240} unoptimized/>:<Disc3/>}</span>; }
 type ArtistWorkspaceSummary={releaseCount:number;needsAttention:number;plan:string;planDaysRemaining:number|null;credit:number};
 export function CustomerHome({ user,releases,attention,earnings,notifications,tickets,onEarnings,workspaceSummary }: {user:User;releases:Release[];attention:Array<{title:string;detail:string;cta:string;href?:string}>;earnings?:{totalEarnings:number;availableBalance:number;pendingBalance:number}|null;notifications:Notification[];tickets:SupportTicket[];onEarnings:()=>void;workspaceSummary:ArtistWorkspaceSummary}) {
   const router=useRouter();

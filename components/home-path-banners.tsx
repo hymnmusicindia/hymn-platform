@@ -1,3 +1,5 @@
+import { artworkPreviewUrl } from "@/lib/artwork-preview";
+import { CoverArt } from "@/components/cover-art";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Headphones } from "lucide-react";
@@ -71,7 +73,7 @@ export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{
                     {[...row.items, ...row.items].map((release, index) => (
                       <article key={`${rowIndex}-${release.id}-${index}`} data-release-id={release.id} aria-hidden={index >= row.items.length ? true : undefined} className="group relative w-[140px] shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/[0.06] shadow-[0_18px_60px_rgba(0,0,0,0.32)] sm:w-[170px]">
                         <div className="aspect-square overflow-hidden">
-                          <img src={release.artworkUrl} alt={`${release.title} artwork`} loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
+                          <CoverArt src={release.artworkUrl} previewWidth={192} width={135} height={135} alt={`${release.title} artwork`} loading={index < row.items.length ? "eager" : "lazy"} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
                         </div>
                         <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,transparent_0%,rgba(0,0,0,0.58)_30%,rgba(0,0,0,0.94)_100%)] px-3 pb-3 pt-12 text-white">
                           <p className="line-clamp-1 text-xs font-extrabold uppercase tracking-[-0.02em] drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)]">{release.title}</p>
@@ -92,7 +94,7 @@ export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{
           {catalog.slice(0, 4).map((beat) => (
             <article key={beat.id} className="overflow-hidden rounded-[1.35rem] border border-border bg-card/76 p-3 shadow-[0_16px_50px_rgba(0,0,0,0.22)]">
               <div className="relative overflow-hidden rounded-[1rem] border border-border">
-                <Image src={beat.coverImage} alt={beat.title} width={900} height={900} className="aspect-square w-full object-cover transition duration-500 hover:scale-[1.03]" />
+                <Image src={artworkPreviewUrl(beat.coverImage, 320)} alt={beat.title} width={900} height={900} className="aspect-square w-full object-cover transition duration-500 hover:scale-[1.03]" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/72 via-transparent to-transparent" />
                 <Link href="/beat-store" aria-label={`Explore ${beat.title}`} className="absolute left-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.15] bg-black/[0.35] text-white backdrop-blur-md">
                   <Headphones className="h-3.5 w-3.5" />

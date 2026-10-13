@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import clsx from "clsx";
 import { CustomerOverlay } from "@/components/customer-overlay";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
@@ -671,7 +672,7 @@ export function SuccessState({ release, onReset, isResubmission = false, resetLa
 
           <aside className="hymn-success-summary hymn-success-surface hymn-success-enter-delayed h-full rounded-[1.4rem] border p-4">
             <div className="flex gap-4 lg:block">
-              <Image src={artworkUrl} alt={`${releaseTitle} artwork`} width={480} height={480} className="hymn-success-artwork h-24 w-24 shrink-0 rounded-xl border object-cover lg:h-auto lg:w-full lg:aspect-square" style={{ borderColor: "var(--border)" }} unoptimized />
+              <Image src={artworkPreviewUrl(artworkUrl, 320)} alt={`${releaseTitle} artwork`} width={480} height={480} className="hymn-success-artwork h-24 w-24 shrink-0 rounded-xl border object-cover lg:h-auto lg:w-full lg:aspect-square" style={{ borderColor: "var(--border)" }} unoptimized />
               <div className="hymn-release-summary-copy min-w-0 lg:mt-5">
                 <h2 className="hymn-success-heading truncate text-2xl font-semibold tracking-[-0.035em]">{releaseTitle}</h2>
                 <p className="hymn-success-muted mt-1.5 truncate text-sm">by <strong>{artistName}</strong></p>
