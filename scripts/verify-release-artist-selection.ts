@@ -28,4 +28,9 @@ assert.equal(linked.featuring_artists?.[0].instagram_url, "https://instagram.com
 assert.equal(linked.tracks[0].featuring_artists?.[0].instagram_url, "https://instagram.com/dzee", "Feature profile identity and normalized Instagram must reach track delivery.");
 const unlinked = buildDireNotePayload({ ...release, tracks: release.tracks.map(track => ({ ...track, metadata: { artistProfileIds: [1] } })) }, { artistProfiles: [judge, dzee] });
 assert.ok(validateDireNotePayload(unlinked).issues.some(issue => issue.field.includes("instagram") && issue.message.includes("DZEE")), "Unlinked featured credits must identify the affected artist rather than borrowing a same-name profile.");
-console.log("Release artist selection checks passed: primary/featured/remixer Instagram gates, legacy text credits, explicit identity selection, rename/removal and resume IDs.");
+const lyricistOnly = buildDireNotePayload({ ...release, tracks: release.tracks.map(track => ({ ...track, featuredArtists: "", songwriters: "", contributors: [{ role: "LYRICIST", creditedName: "Dzee Kumar" }], metadata: { artistProfileIds: [1] } })) } as unknown as Release, { artistProfiles: [judge] });
+assert.equal(lyricistOnly.featuring_artists?.length, 0, "Lyricists must not become featured artists.");
+assert.equal(lyricistOnly.tracks[0].songwriters[0]?.name, "Dzee Kumar", "Canonical LYRICIST credits must reach DireNote's songwriter list.");
+assert.equal(lyricistOnly.tracks[0].songwriters[0]?.instagram_url, undefined, "Lyricist Instagram is optional.");
+assert.equal(validateDireNotePayload(lyricistOnly).issues.some(issue => issue.field.includes("instagram")), false, "Lyricist-only credits must not trigger artist Instagram requirements.");
+console.log("Release artist selection checks passed: artist Instagram gates, optional lyricist Instagram, canonical lyricist delivery, legacy text credits, explicit identity selection, rename/removal and resume IDs.");

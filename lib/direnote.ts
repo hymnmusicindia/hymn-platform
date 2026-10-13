@@ -226,7 +226,7 @@ function toDireNoteArtist(name: string, profiles: ArtistProfile[] = [], release?
 }
 
 function contributors(value?: string | null, structured?: Array<Record<string, any>>, role?: string): DireNoteContributor[] {
-  const matching = structured?.filter((item) => !role || item.role === role) ?? [];
+  const matching = structured?.filter((item) => !role || mapContributorToDireNote(item)?.role === role) ?? [];
   if (matching.length) return matching.flatMap((item) => {
     const mapped = mapContributorToDireNote(item);
     return mapped ? [mapped.contributor] : [];
