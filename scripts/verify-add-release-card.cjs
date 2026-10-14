@@ -14,11 +14,11 @@ const { chromium, expect } = require('@playwright/test');
     await page.addStyleTag({content:'*{box-sizing:border-box}body{margin:0;padding:24px;background:#202227;font-family:Arial;--text:#f3f5f8;--text-muted:#b2bac7;--text-soft:#8d98a9;--border:#35373e;--card:#23252b;--bg-soft:#1b1e24}a{text-decoration:none}.release-library-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px;max-width:900px}.existing{min-height:380px;border:1px solid var(--border);color:var(--text);padding:20px}@media(max-width:767px){.release-summary-tile{display:grid;grid-template-columns:84px minmax(0,1fr);column-gap:12px;max-width:none;height:auto;padding:10px}.release-summary-tile>div:first-child{grid-column:1;grid-row:1/span 4;width:84px}.release-summary-tile>div:nth-child(2){grid-column:2;grid-row:1;margin-top:0}.release-summary-tile>h3{grid-column:2;grid-row:2;margin-top:6px}.release-summary-tile>p{grid-column:2;grid-row:3}.release-summary-tile>div:nth-of-type(3){grid-column:2;grid-row:4;margin-top:6px}}'});
     await page.addStyleTag({path:path.join(output,'card.css')});
     await page.addScriptTag({path:path.join(output,'card.js')});
-    const card=page.getByRole('link',{name:'Add your release — open distribution portal'});
-    await expect(card).toHaveAttribute('href','/distribution');
+    const card=page.getByRole('link',{name:'Add your release — open release wizard'});
+    await expect(card).toHaveAttribute('href','/distribution/start');
     await expect(card).not.toContainText('Open distribution');
     await expect(card).not.toContainText('Start here');
-    await expect(page.locator('.release-library-grid > :first-child')).toHaveAttribute('href','/distribution');
+    await expect(page.locator('.release-library-grid > :first-child')).toHaveAttribute('href','/distribution/start');
     for(const width of [1440,768,390,320]) {
       await page.setViewportSize({width,height:900});
       await expect(card.getByRole('heading',{name:'Add your release'})).toBeVisible();
