@@ -2,6 +2,15 @@ import { z } from "zod";
 
 export const REVIEW_TERMS_VERSION = "playlist-review-2026-10-15-v2";
 export const HYMN_REVIEW_FEE_MINOR = 5000;
+export const PLAYLIST_CATALOGUE_STATUSES = ["UNDER_REVIEW", "APPROVED", "QUEUED_FOR_DISTRIBUTION", "SUBMITTING_TO_DISTRIBUTOR", "SENT_TO_DISTRIBUTOR", "DISTRIBUTOR_PROCESSING", "SCHEDULED", "PROCESSING", "AWAITING_LIVE_CONFIRMATION", "PARTIALLY_LIVE", "DELIVERED", "SENT", "LIVE", "DISTRIBUTED"] as const;
+export function playlistCatalogueStatus(status: string) {
+  if (["LIVE", "DISTRIBUTED"].includes(status)) return "Released on HYMN";
+  if (status === "UNDER_REVIEW") return "Under review";
+  if (status === "APPROVED") return "Approved";
+  if (status === "SCHEDULED") return "Scheduled";
+  if (["QUEUED_FOR_DISTRIBUTION", "SUBMITTING_TO_DISTRIBUTOR"].includes(status)) return "Preparing delivery";
+  return "Sent for distribution";
+}
 export const EXTERNAL_REVIEW_FEE_MINOR = 8000;
 export function reviewFeeMinor(isHymn: boolean, curatorFee: number, verifiedHymnTrack: boolean) {
   return isHymn ? verifiedHymnTrack ? HYMN_REVIEW_FEE_MINOR : EXTERNAL_REVIEW_FEE_MINOR : curatorFee;

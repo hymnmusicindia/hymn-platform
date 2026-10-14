@@ -65,6 +65,12 @@ async function main() {
   await assert.rejects(createReviewCheckout(stranger.id, { ...linkedInput, requestKey: crypto.randomUUID() }), /own HYMN catalogue/);
   await assert.rejects(createReviewCheckout(customer.id, { ...linkedInput, trackId: undefined }), /source changed/);
   const catalogueSnapshot = await playlistReviewSnapshot(customer.id); assert.equal(catalogueSnapshot.releasedTracks.length, 1);
+  for (const status of ["UNDER_REVIEW", "APPROVED", "SENT_TO_DISTRIBUTOR"] as const) {
+    await prisma.release.update({ where: { id: liveRelease.id }, data: { status } });
+    assert.equal((await playlistReviewSnapshot(customer.id)).releasedTracks[0].release.status, status);
+    const checkout = await createReviewCheckout(customer.id, { ...linkedInput, requestKey: crypto.randomUUID() });
+    assert.equal(checkout.amount, 5000);
+  }
   await prisma.release.update({ where: { id: liveRelease.id }, data: { status: "DRAFT" } });
   await assert.rejects(createReviewCheckout(customer.id, { ...linkedInput, requestKey: crypto.randomUUID() }), /own HYMN catalogue/);
   assert.equal((await playlistReviewSnapshot(customer.id)).releasedTracks.length, 0);

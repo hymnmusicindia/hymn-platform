@@ -137,8 +137,8 @@ test and confirmation that the deployed Hostinger startup loop is logging succes
 runs; these are not inferred from a local build or a Git push.
 # Catalogue-linked pricing (15 October 2026)
 
-Submission defaults to the signed-in customer's LIVE HYMN tracks. The server loads
-the selected recording and its parent release, verifies ownership and live status,
+Submission defaults to the signed-in customer's live, approved, under-review and delivery-stage HYMN tracks. The server loads
+the selected recording and its parent release, verifies ownership and eligible release status,
 and uses canonical title/artist values. HYMN playlists charge ₹50 for these verified
 catalogue selections, ₹80 for external submissions. Independent playlist fees remain
 curator-controlled. Spotify recording links are required for listening in both paths;
