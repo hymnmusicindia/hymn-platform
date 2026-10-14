@@ -6,5 +6,8 @@
 .card .title { margin:24px 0 0; font-size:17px; line-height:1.3; font-weight:650; letter-spacing:-.025em; text-align:center; }
 .card .description { margin:8px 0 24px; color:var(--text-muted); font-size:12px; line-height:1.7; text-align:center; white-space:normal; text-wrap:balance; }
 .card:focus-visible { outline:2px solid var(--text); outline-offset:4px; }
+.card .description { display:grid; justify-items:center; gap:4px; margin-top:6px; }
+.formats { color:var(--text-muted); font-size:12px; font-weight:500; line-height:1.5; }
+.invitation { color:var(--text-soft); font-size:11px; line-height:1.5; }
 @media(max-width:767px) { .card { display:grid; grid-template-columns:84px minmax(0,1fr); grid-template-rows:1fr 1fr; column-gap:12px; max-width:none; height:auto; padding:14px 10px; } .card .art { grid-column:1; grid-row:1 / span 2; width:84px; align-self:center; } .card .title { grid-column:2; grid-row:1; margin:0; align-self:end; font-size:15px; } .card .description { grid-column:2; grid-row:2; margin:6px 0 0; align-self:start; } .plus { width:44px; height:44px; } .plus svg { width:28px; height:28px; } }
 @media(prefers-reduced-motion:reduce) { .card,.plus { transition:none; } .card:hover .plus,.card:focus-visible .plus { transform:none; } }

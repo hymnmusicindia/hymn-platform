@@ -12,9 +12,11 @@ const assert = require('node:assert/strict');
       const result = await page.evaluate(() => {
         const card = document.querySelector('.release-summary-tile').getBoundingClientRect();
         const art = document.querySelector('.release-summary-artwork').getBoundingClientRect();
-        return {width:card.width, square:Math.abs(art.width-art.height)<1, badge:getComputedStyle(document.querySelector('.release-summary-badge')).borderRadius, columns:getComputedStyle(document.querySelector('.release-library-grid')).gridTemplateColumns.split(' ').length, overflow:document.documentElement.scrollWidth>innerWidth};
+        const action = getComputedStyle(document.querySelector('.release-summary-action-button'));
+        return {width:card.width, square:Math.abs(art.width-art.height)<1, badge:getComputedStyle(document.querySelector('.release-summary-badge')).borderRadius, actionBorder:action.borderTopWidth, actionBorderStyle:action.borderTopStyle, columns:getComputedStyle(document.querySelector('.release-library-grid')).gridTemplateColumns.split(' ').length, overflow:document.documentElement.scrollWidth>innerWidth};
       });
       assert.ok(result.width < 220); assert.ok(result.square); assert.equal(result.badge,'3px'); assert.ok(result.columns >= (width===900?4:5)); assert.equal(result.overflow,false);
+      assert.equal(result.actionBorder,'1px'); assert.equal(result.actionBorderStyle,'solid');
       console.log(`PASS compact release catalogue at ${width}px (${result.columns} cards per row)`);
     }
     assert.ok(!readFileSync('components/release-summary-card.tsx','utf8').includes('release-summary-date'), 'Card-only timing copy removed');
