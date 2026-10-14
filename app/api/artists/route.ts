@@ -6,6 +6,7 @@ import { artistProfileCreateSchema, normalizeInstagramUrl } from "@/lib/validati
 import { getUserEntitlements } from "@/lib/entitlements";
 import { ensureClaimedContributorParty } from "@/lib/contributor-identity";
 import { prisma } from "@/lib/prisma";
+import { refreshSpotifyArtistPhoto } from "@/lib/spotify-artist-photos";
 
 const LIMIT_MESSAGE = "You have reached your artist profile limit for your current plan. Upgrade to add more artist profiles.";
 
@@ -76,6 +77,13 @@ export async function POST(request: Request) {
     if (payload.isProducer) {
       const party = await ensureClaimedContributorParty(result.user.id, name);
       await prisma.artistCard.update({ where: { id: profile.id }, data: { contributorPartyId: party.id } });
+    }
+
+    if (spotifyUrl) {
+      try {
+        const photo = await refreshSpotifyArtistPhoto(profile.id);
+        if (photo.imageUrl) profile.imageUrl = photo.imageUrl;
+      } catch { /* Daily refresh retries without preventing profile creation. */ }
     }
 
     return NextResponse.json({ profile, ...(await usage(result.user.id)) }, { status: 201 });

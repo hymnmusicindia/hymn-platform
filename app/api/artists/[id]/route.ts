@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/access";
 import { archiveArtistProfile, updateArtistProfile } from "@/lib/db";
 import { parseAppleArtistId, parseSpotifyArtistId } from "@/lib/spotify";
 import { artistProfileUpdateSchema, normalizeInstagramUrl } from "@/lib/validation";
+import { refreshSpotifyArtistPhoto } from "@/lib/spotify-artist-photos";
 
 function profileId(params: { id: string }) {
   const id = Number(params.id);
@@ -27,6 +28,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     };
     const profile = await updateArtistProfile(result.user.id, id, patch);
     if (!profile) return NextResponse.json({ error: "Artist profile not found." }, { status: 404 });
+    if (payload.spotifyUrl) {
+      try {
+        const photo = await refreshSpotifyArtistPhoto(id);
+        if (photo.imageUrl) profile.imageUrl = photo.imageUrl;
+      } catch { /* Keep the existing photo and retry from the daily job. */ }
+    }
     return NextResponse.json({ profile });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not update artist profile." }, { status: 400 });

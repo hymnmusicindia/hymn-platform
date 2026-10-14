@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { refreshMissingSpotifyArtistPhotos, refreshSpotifyArtistPhoto } from "@/lib/spotify-artist-photos";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { getDireNoteArtistInformation, getDireNoteReleaseInformation, getDireNoteReleaseInformationByReference, getDireNoteRevenueReport, getDireNoteSongwriterInformation, redactDireNoteDiagnostic } from "@/lib/direnote";
@@ -69,7 +70,7 @@ export async function syncDireNoteArtistInformation(artistCardId: number, actorI
     }
   }
   // Do not let a delayed provider response overwrite a link edited in the meantime.
-  return prisma.$transaction(async tx => {
+  const updatedCard = await prisma.$transaction(async tx => {
     const identity = { id: card.id, archivedAt: null, direNoteArtistId: card.direNoteArtistId };
     const values = [
       ["spotifyProfileUrl", card.spotifyProfileUrl, links.spotify?.url, "spotifyArtistId", links.spotify?.id],
@@ -84,6 +85,11 @@ export async function syncDireNoteArtistInformation(artistCardId: number, actorI
     await tx.artistCard.updateMany({ where: identity, data: { direNoteLastSyncedAt: new Date() } });
     return tx.artistCard.findUniqueOrThrow({ where: { id: card.id } });
   });
+  if (!card.spotifyProfileUrl && updatedCard.spotifyProfileUrl) {
+    try { await refreshSpotifyArtistPhoto(card.id); }
+    catch { /* Daily Spotify refresh retries transient provider errors. */ }
+  }
+  return updatedCard;
 }
 
 /** Refreshes one canonical songwriter/composer identity from DireNote v2.3. */
@@ -464,6 +470,9 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     await tx.release.update({ where: { id: releaseId }, data: { ...(remoteUpc ? { upc: remoteUpc } : {}), direNoteStatus: aggregateStatus.provider, direNoteLastSyncedAt: new Date(), direNoteSyncError: null, metadata: json({ ...(record(release.metadata)), direNote: { ...previousDireNote, lastSyncedAt: new Date().toISOString(), status: aggregateStatus.provider, release: redactDireNoteDiagnostic(remoteRelease), correctionMessages } }) } });
   }, { timeout: 60_000, maxWait: 10_000 });
   const previousStatus = release.status.toLowerCase() as ReleaseStatus;
+  if (artistLinksChanged) {
+    await refreshMissingSpotifyArtistPhotos(release.userId).catch(() => undefined);
+  }
   const staleRegression =
     ["takedown_requested", "takedown_processing", "taken_down", "archived"].includes(previousStatus) ||
     (previousStatus === "live" && aggregateStatus.canonical !== "live") ||

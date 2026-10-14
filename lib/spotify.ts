@@ -192,11 +192,12 @@ async function requestSpotifyToken(body: URLSearchParams) {
       "Content-Type": "application/x-www-form-urlencoded"
     },
     body: body.toString(),
+    signal: AbortSignal.timeout(15_000),
     cache: "no-store"
   });
 
   if (!response.ok) {
-    throw new Error(spotifyApiError("Could not authenticate with Spotify."));
+    throw Object.assign(new Error(spotifyApiError("Could not authenticate with Spotify.")), { status: response.status, spotifyAuthenticationFailed: true });
   }
 
   return parseSpotifyTokenResponse(await response.json() as SpotifyTokenResponse);
@@ -204,7 +205,7 @@ async function requestSpotifyToken(body: URLSearchParams) {
 
 export async function getSpotifyAccessToken() {
   if (!spotifyConfigured()) {
-    throw new Error("Spotify credentials are missing. Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET.");
+    throw Object.assign(new Error("Spotify credentials are missing. Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET."), { spotifyAuthenticationFailed: true });
   }
 
   if (globalState.hymnSpotifyToken && globalState.hymnSpotifyToken.expiresAt > Date.now() + 30_000) {
@@ -386,21 +387,22 @@ export async function searchSpotifyTracks(query: string) {
   return results;
 }
 
-export async function getSpotifyArtistById(artistId: string) {
+export async function getSpotifyArtistById(artistId: string, options: { forceRefresh?: boolean } = {}) {
   const normalized = artistId.trim();
   const cached = getCached(artistCache, normalized);
-  if (cached) return cached;
+  if (cached && !options.forceRefresh) return cached;
 
   const token = await getSpotifyAccessToken();
   const response = await fetch(`https://api.spotify.com/v1/artists/${encodeURIComponent(normalized)}`, {
     headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(15_000),
     cache: "no-store"
   });
   if (response.status === 404) {
     setCached(artistCache, normalized, null);
     return null;
   }
-  if (!response.ok) throw new Error("Spotify artist lookup failed.");
+  if (!response.ok) throw Object.assign(new Error(`Spotify artist lookup failed (HTTP ${response.status}).`), { status: response.status });
   const data = await response.json() as { id: string; name: string; images?: Array<{ url: string }>; followers?: { total?: number }; external_urls?: { spotify?: string } };
   const result = toSpotifyArtistResult(data);
   setCached(artistCache, normalized, result);
