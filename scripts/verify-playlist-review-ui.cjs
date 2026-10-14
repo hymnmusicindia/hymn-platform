@@ -18,6 +18,7 @@ const { chromium, expect } = require('@playwright/test');
     await page.goto('https://hymn.fixture/');
     await page.addStyleTag({ content: '*{box-sizing:border-box}body{margin:0;padding:20px;background:#1d2025;font-family:Arial;--bg:#1d2025;--bg-soft:#25292f;--card:#21252a;--border:#383d46;--text:#f4f4f4;--text-muted:#bac0ca;--text-soft:#919ba8}#root{max-width:1200px;margin:auto}a{color:inherit;text-decoration:none}button{cursor:pointer}input,textarea,select{font-family:inherit}' });
     await page.addStyleTag({ path: path.join(output, 'marketplace.css') });
+    await page.addStyleTag({ path: 'app/styles/heading-hierarchy.css' });
     await page.addScriptTag({ path: path.join(output, 'marketplace.js') });
     for (const width of [1440, 768, 390, 320]) {
       await page.setViewportSize({ width, height: 900 });
@@ -35,6 +36,8 @@ const { chromium, expect } = require('@playwright/test');
       await page.getByRole('button', { name: 'Select Released song by Catalogue artist' }).click();
       await expect(page.getByRole('button', { name: 'Select Released song by Catalogue artist' })).toHaveAttribute('aria-pressed', 'true');
       await expect(page.getByAltText('Released single cover')).toBeVisible();
+      assert.ok(await page.locator('.playlist-track-card').first().evaluate(card => card.getBoundingClientRect().width <= 144), 'Release cards should remain compact');
+      await expect(page.locator('.playlist-catalogue-heading .playlist-eyebrow')).toBeHidden();
       assert.ok(await page.getByAltText('Released single cover').evaluate(img => img.complete && img.naturalWidth > 0), 'Cover art must load');
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Submission cards must not overflow at ${width}`);
       await expect(page.getByLabel('Track title', { exact: true })).toHaveValue('Released song');

@@ -1,0 +1,10 @@
+/* Decorative context labels are intentionally omitted site-wide. Match the
+   shared naming convention and CSS-module variants, not uppercase typography:
+   functional field labels, status badges, navigation and prices stay visible. */
+html body :is([class*="eyebrow"], [class*="kicker"], [class*="overline"]) {
+  display:none!important;
+}
+/* The release review's legacy context label predates the shared convention. */
+html body .record-review-heading > div > p {
+  display:none!important;
+}
