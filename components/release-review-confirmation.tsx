@@ -7,9 +7,14 @@ import { CoverArt } from "@/components/cover-art";
 import type { Release } from "@/lib/types";
 import styles from "./release-review-confirmation.module.css";
 import { ReleaseCurationInvitation } from "./release-curation-invitation";
+import { markReviewConfirmationEntered, markReviewConfirmationLeft } from "@/lib/purchase-review-timing";
 
 export function ReleaseReviewConfirmation({ release, onReset, isResubmission = false, resetLabel = "Submit another release" }: { release: Release; onReset: () => void; isResubmission?: boolean; resetLabel?: string }) {
   const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    markReviewConfirmationEntered();
+    return () => { requestAnimationFrame(markReviewConfirmationLeft); };
+  }, [release.id]);
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       heading.current?.focus({ preventScroll: true });
