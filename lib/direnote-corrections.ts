@@ -55,7 +55,7 @@ export function extractDireNoteCorrections(payload: Row, tracks: LocalTrack[], r
       const namedTrack = scope === "direnote" ? message.match(/\btrack\s+(\d+)\b/i) : null;
       const namedIndex = namedTrack ? tracks.findIndex((track, index) => (track.trackNumber ?? index + 1) === Number(namedTrack[1])) : -1;
       const target = namedIndex >= 0 ? `tracks.${namedIndex}` : scope;
-      const trackLanguage = /^tracks\.\d+$/.test(target) && /\btrack language\b/i.test(message);
+      const trackLanguage = /^tracks\.\d+$/.test(target) && /\btrack[\s_-]+language\b/i.test(message);
       const contentIdRights = /content\s*id|copyright detection|ownership|exclusive rights?|licen[cs]e|rights clarification/i.test(message);
       issues.push({
         field: trackLanguage ? `${target}.trackLanguage` : contentIdRights ? "rights.contentId" : `${target}.providerCorrection.${fingerprint.slice(0, 12)}`,

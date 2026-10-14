@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "The release being edited was not found." }, { status: 404 });
     }
     if (existingRelease && existingRelease.status !== "draft") {
-      return NextResponse.json({ error: "Move this release to Draft before saving changes." }, { status: 409 });
+      return NextResponse.json({ error: "This release is no longer a draft. Open its release dashboard to see the current review status; corrections must be submitted through the correction workflow.", code: "RELEASE_NOT_DRAFT", currentStatus: existingRelease.status }, { status: 409 });
     }
     const rejectPublicDeliverable = (value: unknown) => {
       const url = String(value || "");

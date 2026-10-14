@@ -1,0 +1,6 @@
+.language-field-help { display:inline-block; vertical-align:middle; margin-left:8px; }
+.language-field-help summary { display:inline-flex; align-items:center; justify-content:center; min-width:28px; min-height:28px; cursor:pointer; list-style:none; color:var(--text-muted); }
+.language-field-help summary::-webkit-details-marker { display:none; }
+.language-field-help summary:focus-visible { outline:2px solid var(--text); outline-offset:2px; border-radius:4px; }
+.language-field-help[open] { display:block; margin:6px 0 10px; }
+.language-field-help p { padding:12px; border:1px solid var(--border); border-radius:8px; background:var(--bg-soft); color:var(--text-muted); font-size:12px; font-weight:400; line-height:1.8; max-width:65ch; }

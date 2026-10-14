@@ -197,6 +197,8 @@ import type {
 } from "@/lib/types";
 import { DIRENOTE_LANGUAGES, DIRENOTE_CONTENT_TYPES, normalizeDireNoteContentType } from "@/lib/direnote-config";
 import { readTrackLanguage } from "@/lib/track-language";
+import { releaseAlreadyInReview } from "@/lib/release-correction-workflow";
+import { LanguageFieldHelp } from "@/components/language-field-help";
 import type { ReleasePrefillSuggestion } from "@/lib/release-prefill";
 
 type TrackDraft = {
@@ -969,6 +971,7 @@ function SearchableSelect({
   placeholder,
   invalid,
   correctionRequired,
+  help,
   onChange,
 }: {
   label: string;
@@ -977,6 +980,7 @@ function SearchableSelect({
   placeholder: string;
   invalid?: boolean;
   correctionRequired?: boolean;
+  help?: ReactNode;
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -1021,13 +1025,14 @@ function SearchableSelect({
 
   return (
     <div>
-      <label
+      <div
         className="mb-2 block text-sm font-medium"
         style={{ color: "var(--text-muted)" }}
       >
         {label}
         {correctionRequired ? <span className="release-correction-required" aria-label="Correction required">*</span> : null}
-      </label>
+        {help}
+      </div>
       <button
         type="button"
         className={clsx(
@@ -1316,7 +1321,7 @@ export function ReleaseForm({
     createTracksFromRelease(initialRelease, audioLibraryPrefill),
   );
   const [submittedRelease, setSubmittedRelease] = useState<Release | null>(
-    null,
+    initialRelease && releaseAlreadyInReview(initialRelease.status) ? initialRelease : null,
   );
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [shakingField, setShakingField] = useState<string | null>(null);
@@ -1584,7 +1589,7 @@ export function ReleaseForm({
           clientTrackId: track.id,
           trackTitle: track.trackTitle,
           suggestedTitleUnconfirmed: track.suggestedTitleUnconfirmed,
-          language: track.titleLanguage,
+          language: readTrackLanguage({ language: track.titleLanguage, version: track.versionPreset === "Other" ? track.customVersion : track.versionPreset }),
           lyrics: track.lyrics,
           version: track.versionPreset === "Other" ? track.customVersion : track.versionPreset,
           isrc: track.existingIsrcCode,
@@ -1706,6 +1711,7 @@ export function ReleaseForm({
   }, [autosaveEligible, autosaveSnapshot, draftConflict, draftReleaseId, reviewMetadataFingerprint, submittedRelease, submitting, initialRelease]);
 
   async function retryAutosave() {
+    if (initialRelease && initialRelease.status !== "draft") return false;
     if (draftConflict || submitting) return false;
     if (!draftReleaseId) {
       await saveDraftRelease();
@@ -1731,7 +1737,7 @@ export function ReleaseForm({
   async function quitReleaseJourney() {
     if (submitting) return;
     await autosavePendingRef.current.catch(() => undefined);
-    if (autosaveEligible && hasUnsavedChanges) {
+    if (autosaveEligible && hasUnsavedChanges && (!initialRelease || initialRelease.status === "draft")) {
       const saved = await retryAutosave();
       if (!saved) return;
       if (!draftReleaseId) return;
@@ -1763,14 +1769,16 @@ export function ReleaseForm({
     fieldRefs.current[key] = node;
   };
   useEffect(() => {
-    if (correctionTrackIndex === null || !initialCorrectionField?.endsWith(".trackLanguage")) return;
+    if (correctionTrackIndex === null || !initialRelease?.reviewIssues?.fields.some((issue) =>
+      issue.field === initialCorrectionField && /track[\s_-]*language/i.test(`${issue.field} ${issue.note}`),
+    )) return;
     const timer = window.setTimeout(() => {
       const field = fieldRefs.current[`track-${correctionTrackIndex}-title-language`];
       field?.scrollIntoView({ block: "center", behavior: "smooth" });
       field?.querySelector("button")?.focus({ preventScroll: true });
     }, 450);
     return () => window.clearTimeout(timer);
-  }, [correctionTrackIndex, initialCorrectionField]);
+  }, [correctionTrackIndex, initialCorrectionField, initialRelease]);
   const clearCorrectionField = (...keys: string[]) => {
     if (!keys.length) return;
     setClearedCorrectionFields((current) => {
@@ -1789,6 +1797,13 @@ export function ReleaseForm({
   const correctionFieldActive = (key: string) => {
     if (!initialRelease?.reviewIssues?.fields?.length) return false;
     if (clearedCorrectionFields.has(key)) return false;
+    const trackLanguageMatch = key.match(/^tracks\.(\d+)\.trackLanguage$/);
+    if (trackLanguageMatch) return initialRelease.reviewIssues.fields.some((issue) =>
+      issue.field.startsWith(`tracks.${trackLanguageMatch[1]}.`) && /track[\s_-]*language/i.test(`${issue.field} ${issue.note}`),
+    );
+    if (key === "language") return initialRelease.reviewIssues.fields.some((issue) =>
+      !issue.field.startsWith("tracks.") && /language/i.test(`${issue.field} ${issue.note}`),
+    );
     const patterns: Record<string, RegExp> = {
       "release-title": /release.*title|albumname|album name|track.*title|trackname/i,
       "record-label": /label|labelname/i,
@@ -2706,22 +2721,24 @@ export function ReleaseForm({
     // starts, otherwise a fast upload and reload can reopen a draft without its
     // selected profile IDs.
     try {
-      const id = await ensureUploadDraft();
-      setAutosaveStatus("saving");
-      autosavePendingRef.current = autosavePendingRef.current.catch(() => undefined).then(async () => {
-        const response = await fetch(`/api/distribution/drafts/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...autosaveSnapshot, expectedUpdatedAt: draftVersionRef.current }),
+      if (!initialRelease || initialRelease.status === "draft") {
+        const id = await ensureUploadDraft();
+        setAutosaveStatus("saving");
+        autosavePendingRef.current = autosavePendingRef.current.catch(() => undefined).then(async () => {
+          const response = await fetch(`/api/distribution/drafts/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...autosaveSnapshot, expectedUpdatedAt: draftVersionRef.current }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (data.code === "DRAFT_VERSION_CONFLICT") setDraftConflict(true);
+          if (!response.ok) throw new Error(data.error || "Could not save the selected artists.");
+          draftVersionRef.current = typeof data.savedAt === "string" ? data.savedAt : draftVersionRef.current;
         });
-        const data = await response.json().catch(() => ({}));
-        if (data.code === "DRAFT_VERSION_CONFLICT") setDraftConflict(true);
-        if (!response.ok) throw new Error(data.error || "Could not save the selected artists.");
-        draftVersionRef.current = typeof data.savedAt === "string" ? data.savedAt : draftVersionRef.current;
-      });
-      await autosavePendingRef.current;
-      lastSavedFingerprintRef.current = reviewMetadataFingerprint;
-      setAutosaveStatus("saved");
+        await autosavePendingRef.current;
+        lastSavedFingerprintRef.current = reviewMetadataFingerprint;
+        setAutosaveStatus("saved");
+      }
     } catch (error) {
       setAutosaveStatus("error");
       setStatus(error instanceof Error ? error.message : "Could not save the selected artists. Try again.");
@@ -2910,7 +2927,7 @@ export function ReleaseForm({
           duration: track.duration,
           explicitContent: track.explicitContent,
           dolbyAtmos: track.dolbyAtmos,
-          language: track.titleLanguage,
+          language: readTrackLanguage({ language: track.titleLanguage, version: track.versionPreset === "Other" ? track.customVersion : track.versionPreset }),
           lyrics: track.lyrics,
           artistProfileIds: track.primaryArtistIds,
           featuredArtistProfileIds: track.featuredArtistIds,
@@ -3032,7 +3049,7 @@ export function ReleaseForm({
             duration: track.duration,
             explicitContent: track.explicitContent,
             dolbyAtmos: track.dolbyAtmos,
-            language: track.titleLanguage,
+            language: readTrackLanguage({ language: track.titleLanguage, version: track.versionPreset === "Other" ? track.customVersion : track.versionPreset }),
             lyrics: track.lyrics,
             artistProfileIds: track.primaryArtistIds,
           featuredArtistProfileIds: track.featuredArtistIds,
@@ -3078,7 +3095,10 @@ export function ReleaseForm({
       }
     }
   }
-  async function saveDraftRelease() { await persistDraftRelease(); }
+  async function saveDraftRelease() {
+    if (initialRelease && initialRelease.status !== "draft") return;
+    await persistDraftRelease();
+  }
 
   async function submitRelease(
     orderId: string,
@@ -3165,7 +3185,7 @@ export function ReleaseForm({
           duration: track.duration,
           explicitContent: track.explicitContent,
           dolbyAtmos: track.dolbyAtmos,
-          language: track.titleLanguage,
+          language: readTrackLanguage({ language: track.titleLanguage, version: track.versionPreset === "Other" ? track.customVersion : track.versionPreset }),
           lyrics: track.lyrics,
           artistProfileIds: track.primaryArtistIds,
           featuredArtistProfileIds: track.featuredArtistIds,
@@ -4319,12 +4339,16 @@ export function ReleaseForm({
                           >
                             <SearchableSelect
                               label="Track Language"
+                              help={<LanguageFieldHelp track />}
+                              correctionRequired={correctionFieldActive(`tracks.${index}.trackLanguage`)}
+                              invalid={correctionFieldActive(`tracks.${index}.trackLanguage`) || validationErrorKeys.has(`track-${index}-title-language`)}
                               value={track.titleLanguage}
                               options={languageOptions}
                               placeholder="Select track language"
-                              onChange={(value) =>
-                                updateTrack(index, { titleLanguage: value })
-                              }
+                              onChange={(value) => {
+                                clearCorrectionField(`tracks.${index}.trackLanguage`);
+                                updateTrack(index, { titleLanguage: value });
+                              }}
                             />
                           </div> : null}
                           <label
@@ -4661,7 +4685,8 @@ export function ReleaseForm({
                 }
               >
                 <SearchableSelect
-                  label="Language"
+                  label="Release language"
+                  help={<LanguageFieldHelp />}
                   correctionRequired={correctionFieldActive("language")}
                   value={release.language}
                   options={languageOptions}
@@ -6048,6 +6073,8 @@ export function ReleaseForm({
                 type="button"
                 disabled={submitting}
                 onClick={saveDraftRelease}
+                hidden={Boolean(initialRelease && initialRelease.status !== "draft")}
+                style={initialRelease && initialRelease.status !== "draft" ? { display: "none" } : undefined}
                 className="release-footer-action is-draft w-full sm:ml-auto sm:w-auto"
               >
                 Draft
@@ -6099,6 +6126,8 @@ export function ReleaseForm({
               type="button"
               disabled={submitting}
               onClick={saveDraftRelease}
+              hidden={Boolean(initialRelease && initialRelease.status !== "draft")}
+              style={initialRelease && initialRelease.status !== "draft" ? { display: "none" } : undefined}
               className="release-footer-action is-draft w-full whitespace-nowrap disabled:opacity-60 md:ml-auto md:w-auto"
             >
               Draft

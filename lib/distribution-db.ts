@@ -1403,6 +1403,7 @@ export async function submitPaidDistributionRelease(input: {
 }
 
 export async function updatePaidDistributionRelease(input: {
+  submissionKey?: string;
   userId: number;
   releaseId: number;
   verifiedOrderId?: string;
@@ -1451,7 +1452,7 @@ export async function updatePaidDistributionRelease(input: {
             audioUrl: input.metadata.tracks[0]?.audioUrl || existingRelease.audioUrl || null,
             releaseDate: input.metadata.releaseDate ? new Date(input.metadata.releaseDate) : new Date(existingRelease.releaseDate),
             paymentStatus: "paid",
-            metadata: { ...(typeof saved.metadata === "object" && saved.metadata ? saved.metadata : {}), ...rest, ...(firstReleaseRedemption ? { promotionCode: "FIRST_RELEASE_FREE" } : {}), upcCode: saved.upc, submittedAt: new Date().toISOString() } as any,
+            metadata: { ...(typeof saved.metadata === "object" && saved.metadata ? saved.metadata : {}), ...rest, ...(input.submissionKey ? { correctionSubmissionKey: input.submissionKey } : {}), ...(firstReleaseRedemption ? { promotionCode: "FIRST_RELEASE_FREE" } : {}), upcCode: saved.upc, submittedAt: new Date().toISOString() } as any,
             lastEditedAt: new Date()
           },
           select: { id: true }

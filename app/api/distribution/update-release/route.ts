@@ -1,4 +1,6 @@
 import { releaseSaveFailure } from "@/lib/release-track-save";
+import { createHash } from "node:crypto";
+import { matchesReceivedCorrection } from "@/lib/release-correction-workflow";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { localPrivateStorage, type PrivateAssetType } from "@/lib/private-storage";
@@ -21,16 +23,21 @@ type EditTrackPayload = Omit<ReleaseTrack, "id" | "releaseId" | "createdAt"> & {
 export async function POST(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  let submissionKey = "";
+  let editedReleaseId = 0;
 
   try {
     const formData = await request.formData();
     const payload = JSON.parse(String(formData.get("payload") || "{}"));
     const parsed = distributionEditSchema.parse(payload);
+    editedReleaseId = parsed.metadata.editReleaseId;
+    submissionKey = createHash("sha256").update(JSON.stringify(parsed.metadata)).digest("hex");
 
     const existingRelease = await getDetailedReleaseById(parsed.metadata.editReleaseId);
     if (!existingRelease || existingRelease.userId !== session.sub) {
       return NextResponse.json({ error: "Release not found." }, { status: 404 });
     }
+    if (matchesReceivedCorrection(existingRelease, submissionKey)) return NextResponse.json({ release: existingRelease, alreadyReceived: true });
     const existingStatus = String(existingRelease.status ?? "").trim().toLowerCase();
     const existingPaymentStatus = String(existingRelease.paymentStatus ?? "").trim().toLowerCase();
     if (!["draft", "awaiting_payment", "changes_requested", "rejected", "resubmitted"].includes(existingStatus) || existingPaymentStatus !== "paid") {
@@ -133,6 +140,7 @@ export async function POST(request: Request) {
       ? parsed.metadata.tracks[0]?.trackTitle?.trim() || parsed.metadata.releaseTitle?.trim() || "Untitled release"
       : parsed.metadata.releaseTitle?.trim() || parsed.metadata.tracks[0]?.trackTitle || "Untitled release";
     const release = await updatePaidDistributionRelease({
+      submissionKey,
       userId: existingRelease.userId,
       releaseId: parsed.metadata.editReleaseId,
       metadata: {
@@ -195,6 +203,15 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ release });
   } catch (error) {
+    // A response/queue failure after the save must not report a failed submission.
+    // Recover only this exact owned payload, never another tab's different changes.
+    if (editedReleaseId && submissionKey) {
+      const received = await getDetailedReleaseById(editedReleaseId).catch(() => null);
+      if (received?.userId === session.sub && matchesReceivedCorrection(received, submissionKey)) {
+        console.warn("Correction saved; recovered response after post-save failure", { releaseId: editedReleaseId });
+        return NextResponse.json({ release: received, alreadyReceived: true });
+      }
+    }
     const transient = releaseSaveFailure(error);
     if (transient) { console.error("Release persistence failed", { error }); return NextResponse.json(transient, { status: 503 }); }
     const message = error instanceof Error ? error.message : "Could not update distribution release.";
