@@ -60,23 +60,26 @@ async function main() {
   let transitions = 0;
   let notificationWrites = 0;
   const db = prisma as any;
-  const attempts: any[] = [];
+  const attempts: any[] = [{ id: 1, releaseId: 19, provider: "direnote", state: "submitted", isCurrent: true, upc: release.upc, trackIdentifiers: tracks, rawStatusPayload: {}, responseRedacted: {} }];
   db.distributionSubmissionAttempt.findFirst = async ({ where }: any) => structuredClone(attempts.find(item => (!where.id || item.id === where.id) && (!where.isCurrent || item.isCurrent) && (!where.state || item.state === where.state)) ?? null);
   db.distributionSubmissionAttempt.findMany = async ({ where }: any) => structuredClone(attempts.filter(item => (!where.id || item.id === where.id) && (!where.isCurrent || item.isCurrent) && (!where.state || item.state === where.state)));
   db.distributionSubmissionAttempt.create = async ({ data }: any) => { const row = { id: attempts.length + 1, ...data }; attempts.push(row); return structuredClone(row); };
   db.distributionSubmissionAttempt.update = async ({ where, data }: any) => { const row = attempts.find(item => item.id === where.id); Object.assign(row, data); return structuredClone(row); };
-  db.$transaction = async (fn: any) => fn(db);
+  let reconciliationTimeout = 0;
+  db.$transaction = async (fn: any, options?: any) => { if (options?.timeout === 60_000) reconciliationTimeout = options.timeout; return fn(db); };
   db.$executeRaw = async () => 1;
-  db.$queryRaw = async (query: any) => String(query).includes("pg_try_advisory") ? [{ locked: true }] : [structuredClone(release)];
+  db.$queryRaw = async (query: any, ...values: any[]) => String(query).includes("pg_try_advisory") ? [{ locked: true }] : String(query).includes("cron_leases") ? [{ run_id: values[1] }] : [structuredClone(release)];
   db.release.findUnique = db.release.findUniqueOrThrow = async () => structuredClone(release);
   db.release.update = async ({ data }: any) => { Object.assign(release, data); return structuredClone(release); };
   db.release.updateMany = async ({ data }: any) => { const { version, ...rest } = data; Object.assign(release, rest); if (version) release.version++; return { count: 1 }; };
   db.track.findMany = async () => structuredClone(release.tracks);
+  db.trackContribution.findMany = async () => [];
   db.track.update = async ({ where, data }: any) => Object.assign(release.tracks.find((track: any) => track.id === where.id), data);
   db.direNoteLog.count = async () => 0;
   db.direNoteLog.findFirst = async () => null;
   db.direNoteLog.create = async () => ({});
   db.direNoteReconciliationDiscrepancy.findFirst = async () => null;
+  db.direNoteReconciliationDiscrepancy.findMany = async () => [];
   db.direNoteReconciliationDiscrepancy.create = async () => ({});
   db.releaseStatusTransition.create = async () => { transitions++; return {}; };
   db.auditLog.create = async () => ({});
@@ -90,6 +93,7 @@ async function main() {
   };
   db.adminTask.findUnique = async ({ where }: any) => tasks.get(where.eventKey) ?? null;
   db.adminTask.create = async ({ data }: any) => { const task = { id: tasks.size + 1, ...data }; tasks.set(data.eventKey, task); return task; };
+  db.adminTask.updateMany = async () => ({ count: 0 });
   db.adminTaskHistory.create = async () => ({});
   try {
     await syncDireNoteRelease(19);
@@ -120,6 +124,7 @@ async function main() {
     attempts[0].upc = null;
     await assert.rejects(() => syncDireNoteRelease(19), /Awaiting UPC/);
     assert.equal(release.upc, "auto-generated");
+    release.upc = null; // Invalid historical identities require explicit repair, not silent overwrite.
     const requested: string[] = [];
     db.externalIdentifierHistory.create = async () => ({});
     globalThis.fetch = async (_url, init) => {
@@ -146,6 +151,30 @@ async function main() {
     assert.equal(release.upc, null);
     assert.equal(release.status, "CHANGES_REQUESTED");
     assert.equal(notifications.length, 1);
+    release.upc = "8901234567890";
+    attempts[0].upc = release.upc;
+    release.status = "DISTRIBUTOR_PROCESSING";
+    release.metadata = {};
+    const rightsRemark = "Our system flagged a possible copyright match. If you've got proof of rights (like a beat license or authorization letter), just reply with it.";
+    globalThis.fetch = async () => new Response(JSON.stringify({ ...payload, release: { upc_code: release.upc }, tracks: payload.tracks.map(track => ({ ...track, status: "Rejected", remarks: rightsRemark })) }), { status: 200 });
+    await syncDireNoteRelease(19);
+    assert.equal(release.status, "CHANGES_REQUESTED", "Rejected with rights-review instructions is a fixable correction, not a final rejection");
+    assert.match(release.correctionReason, /proof of rights/);
+    assert.equal(reconciliationTimeout, 60_000, "Album reconciliation must not inherit Prisma's five-second timeout");
+    const beforeRepeat = notifications.length;
+    await syncDireNoteRelease(19);
+    assert.equal(notifications.length, beforeRepeat, "Repeated copyright correction must not notify twice");
+    const transaction = db.$transaction;
+    db.$transaction = async (fn: any, options?: any) => {
+      if (options?.timeout === 60_000) throw new Error("P2028: transaction expired");
+      return transaction(fn, options);
+    };
+    await assert.rejects(() => syncDireNoteRelease(19), /P2028/);
+    assert.match(release.direNoteSyncError, /P2028/, "Post-fetch transaction failures must be visible on the release");
+    db.$transaction = transaction;
+    globalThis.fetch = async () => new Response(JSON.stringify({ ...payload, release: { upc_code: release.upc }, tracks: payload.tracks.map(track => ({ ...track, status: "Rejected", remarks: "NONE" })) }), { status: 200 });
+    await syncDireNoteRelease(19);
+    assert.equal(release.status, "REJECTED", "Bare rejection without correction instructions remains rejected");
     console.log("DireNote correction parser and sync regression verification passed.");
   } finally { globalThis.fetch = originalFetch; }
 }

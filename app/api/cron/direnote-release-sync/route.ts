@@ -32,7 +32,7 @@ async function releaseLease(runId: string) {
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
-  if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ error: "Unauthorized." }, { status: 401, headers: { "X-HYMN-DireNote-Sync-Version": "corrections-v2" } });
   if (process.env.DIRENOTE_RELEASE_SYNC_ENABLED === "false") return NextResponse.json({ success: true, skipped: "disabled" });
 
   const runId = crypto.randomUUID();
@@ -113,8 +113,9 @@ export async function GET(request: Request) {
     const identityResults = await Promise.allSettled([...artists.map(item => syncDireNoteArtistInformation(item.id)), ...songwriters.map(item => syncDireNoteSongwriterInformation(item.id))]);
     const identityErrors = identityResults.filter(item => item.status === "rejected").length;
     const summary = { runId, candidateCount: candidates.length, autoQcRecoveryCount: autoQcResults.length, autoQcResults, providerRequestCount: results.length + identityResults.length + autoQcResults.length, processedCount: results.length, changedCount: results.filter(result => result.success).length, identifierRepairCount: results.filter(result => result.success && Boolean(result.upc)).length, statusRepairCount: results.filter(result => result.success && Boolean(result.status)).length, correctionCount: results.filter(result => result.status === "changes_required").length, identityRefreshCount: identityResults.length - identityErrors, identityErrorCount: identityErrors, errorCount: results.filter(result => !result.success).length + identityErrors + autoQcResults.filter(result => result.outcome === "failed").length, deferredCount: candidates.length - results.length, durationMs: Date.now() - started, eligible: candidates.length, checked: results.length };
-    await prisma.direNoteSyncRun.update({ where: { runId }, data: { status: summary.errorCount ? "completed_with_errors" : "completed", completedAt: new Date(), candidateCount: summary.candidateCount, providerRequestCount: summary.providerRequestCount, processedCount: summary.processedCount, changedCount: summary.changedCount, identifierRepairCount: summary.identifierRepairCount, statusRepairCount: summary.statusRepairCount, correctionCount: summary.correctionCount, errorCount: summary.errorCount, deferredCount: summary.deferredCount, durationMs: summary.durationMs, summary } });
-    await prisma.direNoteLog.create({ data: { action: "hourly_status_sync", success: summary.errorCount === 0, responseJson: summary } });
+    const diagnosticSummary = { ...summary, syncVersion: "corrections-v2", results };
+    await prisma.direNoteSyncRun.update({ where: { runId }, data: { status: summary.errorCount ? "completed_with_errors" : "completed", completedAt: new Date(), candidateCount: summary.candidateCount, providerRequestCount: summary.providerRequestCount, processedCount: summary.processedCount, changedCount: summary.changedCount, identifierRepairCount: summary.identifierRepairCount, statusRepairCount: summary.statusRepairCount, correctionCount: summary.correctionCount, errorCount: summary.errorCount, deferredCount: summary.deferredCount, durationMs: summary.durationMs, summary: diagnosticSummary } });
+    await prisma.direNoteLog.create({ data: { action: "hourly_status_sync", success: summary.errorCount === 0, responseJson: diagnosticSummary } });
     return NextResponse.json({ success: true, ...summary, results });
   } catch (error) {
     const message = error instanceof Error ? error.message : "DireNote reconciliation run failed.";

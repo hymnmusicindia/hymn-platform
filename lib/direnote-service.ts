@@ -270,6 +270,12 @@ export async function syncDireNoteRelease(releaseId: number, actorId?: number | 
   }, { timeout: 10_000, maxWait: 5_000 });
   if (!acquired) throw new Error("DireNote release is already being synchronized or submitted.");
   try { return await syncCurrentDireNoteRelease(releaseId, actorId); }
+  catch (error) {
+    const message = String(redactDireNoteDiagnostic(error instanceof Error ? error.message : "DireNote synchronization failed.")).slice(0, 1000);
+    await prisma.release.update({ where: { id: releaseId }, data: { direNoteSyncError: message, direNoteLastAttemptedAt: new Date() } }).catch(() => undefined);
+    await prisma.direNoteLog.create({ data: { releaseId, action: "release_sync_failed", success: false, errorMessage: message, createdByAdminId: actorId ?? null } }).catch(() => undefined);
+    throw error;
+  }
   finally {
     await prisma.$executeRaw`UPDATE "cron_leases" SET "leased_until" = NOW(), "updated_at" = NOW() WHERE "lease_key" = ${leaseKey} AND "run_id" = ${runId}`;
   }
@@ -354,11 +360,13 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   const providerCorrections = extractDireNoteCorrections(redactDireNoteDiagnostic(payload) as RecordValue, mappingTracks, releaseId, attempt.id);
   const explicitProviderStatus = rejectOrCorrectionStatus(payload) ?? rejectOrCorrectionStatus(remoteRelease) ?? rejectOrCorrectionStatus(remoteTracks);
   const lifecycleStatus = aggregateReleaseStatus(remoteTracks, remoteRelease.status ?? payload.status, release.releaseDate);
-  const aggregateStatus = explicitProviderStatus === "rejected"
-    ? { provider: "rejected", canonical: "rejected" as ReleaseStatus }
-    : explicitProviderStatus === "changes_required" || providerCorrections.length
+  // DireNote uses Rejected for fixable review requests too. Actionable remarks
+  // must enter the correction workflow; a bare rejection remains a rejection.
+  const aggregateStatus = explicitProviderStatus === "changes_required" || providerCorrections.length
       ? { provider: "changes_required", canonical: "changes_requested" as ReleaseStatus }
-      : lifecycleStatus;
+      : explicitProviderStatus === "rejected"
+        ? { provider: "rejected", canonical: "rejected" as ReleaseStatus }
+        : lifecycleStatus;
   const correctionMessages = providerCorrections.map(issue => `${issue.label}: ${issue.note}`);
   const correctionFingerprint = direNoteCorrectionFingerprint(providerCorrections);
   const previousDireNote = record(record(release.metadata).direNote);
@@ -391,6 +399,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     const stillCurrent = await tx.distributionSubmissionAttempt.findFirst({ where: { id: attempt.id, isCurrent: true } });
     if (!stillCurrent) throw new Error("DireNote attempt was superseded during status lookup. Retry the current attempt.");
     const currentRelease = await tx.release.findUniqueOrThrow({ where: { id: releaseId }, include: { tracks: true } });
+    const openDiscrepancies = new Set((await tx.direNoteReconciliationDiscrepancy.findMany({ where: { releaseId, status: "open" }, select: { field: true } })).map(item => item.field));
     const receivedUpc = normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc;
     if (receivedUpc && (!validReleaseBarcode(receivedUpc) || (currentRelease.upc && currentRelease.upc !== receivedUpc))) {
       throw new Error("DireNote UPC conflicts with the stored release identity or has an invalid check digit. No identifiers were changed.");
@@ -430,8 +439,10 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
         const hymnValue = text(localValue); const direNoteValue = text(remoteValue);
         if (!hymnValue || !direNoteValue || normalized(hymnValue) === normalized(direNoteValue)) continue;
         const field = `track_${track.id}_${property}`;
-        const existing = await tx.direNoteReconciliationDiscrepancy.findFirst({ where: { releaseId, field, status: "open" } });
-        if (!existing) await tx.direNoteReconciliationDiscrepancy.create({ data: { releaseId, trackId: track.id, field, hymnValue, direNoteValue, severity: "warning" } });
+        if (!openDiscrepancies.has(field)) {
+          await tx.direNoteReconciliationDiscrepancy.create({ data: { releaseId, trackId: track.id, field, hymnValue, direNoteValue, severity: "warning" } });
+          openDiscrepancies.add(field);
+        }
       }
     }
     const remoteUpc = normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc;
@@ -444,12 +455,14 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       { field: "track_count", hymn: String(release.tracks.length), external: String(remoteTracks.length), severity: "warning" }
     ].filter(item => item.external && normalized(item.hymn ?? "") !== normalized(item.external));
     for (const comparison of comparisons) {
-      const existing = await tx.direNoteReconciliationDiscrepancy.findFirst({ where: { releaseId, field: comparison.field, status: "open" } });
-      if (!existing) await tx.direNoteReconciliationDiscrepancy.create({ data: { releaseId, field: comparison.field, hymnValue: comparison.hymn ?? Prisma.JsonNull, direNoteValue: comparison.external ?? Prisma.JsonNull, severity: comparison.severity } });
+      if (!openDiscrepancies.has(comparison.field)) {
+        await tx.direNoteReconciliationDiscrepancy.create({ data: { releaseId, field: comparison.field, hymnValue: comparison.hymn ?? Prisma.JsonNull, direNoteValue: comparison.external ?? Prisma.JsonNull, severity: comparison.severity } });
+        openDiscrepancies.add(comparison.field);
+      }
     }
     if (remoteUpc && remoteUpc !== release.upc) await tx.externalIdentifierHistory.create({ data: { releaseId, provider: "direnote", identifierType: "upc", previousValue: release.upc, canonicalValue: remoteUpc, source: "release_information_sync" } });
     await tx.release.update({ where: { id: releaseId }, data: { ...(remoteUpc ? { upc: remoteUpc } : {}), direNoteStatus: aggregateStatus.provider, direNoteLastSyncedAt: new Date(), direNoteSyncError: null, metadata: json({ ...(record(release.metadata)), direNote: { ...previousDireNote, lastSyncedAt: new Date().toISOString(), status: aggregateStatus.provider, release: redactDireNoteDiagnostic(remoteRelease), correctionMessages } }) } });
-  });
+  }, { timeout: 60_000, maxWait: 10_000 });
   const previousStatus = release.status.toLowerCase() as ReleaseStatus;
   const staleRegression =
     ["takedown_requested", "takedown_processing", "taken_down", "archived"].includes(previousStatus) ||
