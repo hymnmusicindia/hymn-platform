@@ -22,11 +22,17 @@ export async function POST(request: Request) {
   try {
     const response = await runSync(new Request(new URL("/api/cron/direnote-release-sync", request.url), { headers: { authorization: `Bearer ${secret}` } }));
     const result = redactDireNoteDiagnostic(await response.json());
-    await prisma.auditLog.update({ where: { id: audit.id }, data: { metadata: { state: "finished", role: admin.adminRole, httpStatus: response.status, result } as never } });
-    return NextResponse.json(result, { status: response.status, headers: { "Cache-Control": "no-store" } });
+    // Audit rows are immutable. Append a linked outcome without modifying the request.
+    const recorded = await prisma.auditLog.create({ data: { actorId, actorType: "admin", action: "MANUAL_RELEASE_STATUS_CRON_FINISHED", entity: "cron", entityId: "direnote-release-sync", metadata: { requestAuditId: audit.id, state: "finished", role: admin.adminRole, httpStatus: response.status, result } as never } }).then(() => true).catch(() => {
+      console.error("Manual release-status CRON finished but its outcome audit could not be appended", { requestAuditId: audit.id });
+      return false;
+    });
+    return NextResponse.json(result, { status: response.status, headers: { "Cache-Control": "no-store", "X-HYMN-Audit-Status": recorded ? "recorded" : "failed" } });
   } catch (error) {
     const message = String(redactDireNoteDiagnostic(error instanceof Error ? error.message : "Release-status sync failed."));
-    await prisma.auditLog.update({ where: { id: audit.id }, data: { metadata: { state: "failed", error: message } } }).catch(() => undefined);
+    await prisma.auditLog.create({ data: { actorId, actorType: "admin", action: "MANUAL_RELEASE_STATUS_CRON_FAILED", entity: "cron", entityId: "direnote-release-sync", metadata: { requestAuditId: audit.id, state: "failed", role: admin.adminRole, error: message } } }).catch(() => {
+      console.error("Manual release-status CRON failure audit could not be appended", { requestAuditId: audit.id });
+    });
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }
