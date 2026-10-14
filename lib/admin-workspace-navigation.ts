@@ -19,6 +19,7 @@ export const adminWorkspaceNavigation:Item[]=[
         { key: "managed-services", label: "Managed Services", description: "CRBT, OAC and Content ID", group: "Growth / Content", href: "/admin/managed-services" },
         { key: "artists", label: "Artists", description: "Profiles and creators", group: "Growth / Content" },
         { key: "promotions", label: "Promotions", description: "Campaign operations and redemptions", group: "Growth / Content", href:"/admin/campaigns" },
+        { key: "playlist-reviews", label: "Playlist reviews", description: "Curator approval and paid-feedback operations", group: "Growth / Content", href: "/admin/playlist-reviews" },
         { key: "timed-playlists", label: "Timed Playlists", description: "Playlist scheduling", group: "Growth / Content" },
         { key: "content", label: "Content Settings", description: "Site and producer content", group: "Growth / Content" },
         { key: "newsletter", label: "Newsletter", description: "Audience and email campaigns", group: "Growth / Content", href: "/admin/newsletter" },
@@ -46,7 +47,7 @@ const required:Record<string,AdminPermissionKey[]>={
   releases:["releases.read","releases.review","distribution.retry"],"distribution-queue":["releases.review"],"delivery-failed":["distribution.retry"],delivery:["releases.read"],updates:["updates.review","takedowns.review"],takedowns:["takedowns.review"],fraud:["fraud.read"],
   payments:["payouts.review","royalties.reconcile"],revenue:["payouts.review","royalties.reconcile"],royalties:["payouts.review"],"earnings-entry":["royalties.import"],reconciliation:["royalties.reconcile"],kyc:["kyc.review"],
   settings:["system.manage"],integrations:["system.manage"],health:["system.manage"],content:["system.manage"],newsletter:["system.manage"],
-  "managed-services":["services.manage"],operations:["services.manage"],reviews:["services.manage"],support:["services.manage"],promotions:["system.manage"],"timed-playlists":["services.manage"],contracts:["services.manage"],growth:["audit.read"],"referrals-admin":["fraud.read","wallets.adjust"]
+  "managed-services":["services.manage"],"playlist-reviews":["services.manage"],operations:["services.manage"],reviews:["services.manage"],support:["services.manage"],promotions:["system.manage"],"timed-playlists":["services.manage"],contracts:["services.manage"],growth:["audit.read"],"referrals-admin":["fraud.read","wallets.adjust"]
 };
 export function adminModuleAllowed(key:string,permissions:readonly string[]){return !required[key]||required[key].some(permission=>permissions.includes(permission));}
 export function adminNavigation(permissions:readonly string[]){return adminWorkspaceNavigation.filter(item=>adminModuleAllowed(item.key,permissions));}

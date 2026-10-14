@@ -16,6 +16,7 @@ import { Beat, BeatPurchase, Notification, Order, Release, SupportTicket, User }
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { CustomerHome, ProducerHome } from "@/components/simplified-dashboard-home";
 import { FirstLoginReferralPrompt } from "@/components/first-login-referral-prompt";
+const PlaylistReviewMarketplace = dynamic(() => import("@/components/playlist-review-marketplace").then(module => module.PlaylistReviewMarketplace));
 
 const AnalyticsDashboard = dynamic(() => import("@/components/analytics-dashboard").then((module) => module.AnalyticsDashboard));
 const ReferralPanel = dynamic(() => import("@/components/referral-panel").then((module) => module.ReferralPanel));
@@ -574,10 +575,10 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       ) : null}
 
       {activeTab === "promotions" ? (
-        <Panel title="Promotion request center" description="Submit real campaign requests into HYMN support instead of a dead campaign card.">
+        <><PlaylistReviewMarketplace /><Panel title="Other promotion enquiries" description="Ask HYMN about advertising, release campaigns, and creative promotion support.">
           <form onSubmit={submitSupportTicket} className="grid gap-4 lg:grid-cols-[0.8fr,1.2fr]">
-            <select name="subject" className="field" defaultValue="Playlisting campaign request">
-              <option>Playlisting campaign request</option>
+            <select name="subject" className="field" defaultValue="Curator review support">
+              <option>Curator review support</option>
               <option>Meta ads campaign request</option>
               <option>Release campaign request</option>
               <option>Influencer/reel campaign request</option>
@@ -587,7 +588,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
             <button type="submit" className="btn-primary pressable lg:col-span-2">Submit promotion request</button>
           </form>
           {supportFeedback ? <p className="mt-3 text-sm" style={{ color: "var(--text)" }}>{supportFeedback}</p> : null}
-        </Panel>
+        </Panel></>
       ) : null}
 
       {activeTab === "collaborators" ? <SplitsDashboard releases={releases} /> : null}

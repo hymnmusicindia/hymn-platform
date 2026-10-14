@@ -52,6 +52,7 @@
     "test:direnote-virtual": "node --import tsx scripts/verify-direnote-virtual.ts",
     "test:direnote-e2e": "node --import tsx scripts/verify-direnote-virtual.ts --build",
     "test:managed-services": "tsx scripts/verify-managed-services.ts",
+    "test:playlist-reviews": "node --import tsx scripts/verify-playlist-reviews-isolated.ts && node scripts/verify-playlist-review-routes.cjs && node scripts/verify-playlist-review-ui.cjs",
     "test:studio-services": "tsx scripts/verify-studio-services.ts",
     "test:studio-services-integration": "tsx scripts/verify-studio-services-integration.ts",
     "test:studio-services-isolated": "tsx scripts/verify-studio-services-isolated.ts",

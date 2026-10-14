@@ -246,6 +246,9 @@ model User {
 
   @@index([role])
   @@index([email])
+  playlistReviewListings PlaylistReviewListing[] @relation("PlaylistReviewCurator")
+  playlistReviewRequests PlaylistReviewRequest[] @relation("PlaylistReviewCustomer")
+  playlistReviewMail PlaylistReviewMail[] @relation("PlaylistReviewRecipient")
   @@map("users")
 }
 
@@ -3274,4 +3277,73 @@ model ReferralMailJob {
   createdAt DateTime @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')")) @map("created_at")
   @@index([status, availableAt])
   @@map("referral_mail_jobs")
+}
+
+model PlaylistReviewListing {
+  owner User? @relation("PlaylistReviewCurator", fields: [ownerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  id Int @id @default(autoincrement())
+  slug String @unique
+  ownerId Int? @map("owner_id")
+  name String
+  playlistUrl String @map("playlist_url")
+  description String
+  genres String
+  feeMinor Int @map("fee_minor")
+  status String @default("PENDING")
+  isHymn Boolean @default(false) @map("is_hymn")
+  capacity Int @default(20)
+  moderationNote String? @map("moderation_note")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  reviews PlaylistReviewRequest[]
+  @@index([status, ownerId])
+  @@map("playlist_review_listings")
+}
+
+model PlaylistReviewRequest {
+  customer User @relation("PlaylistReviewCustomer", fields: [customerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  id Int @id @default(autoincrement())
+  requestKey String @unique @map("request_key")
+  listingId Int @map("listing_id")
+  customerId Int @map("customer_id")
+  trackTitle String @map("track_title")
+  artistName String @map("artist_name")
+  trackUrl String @map("track_url")
+  pitch String
+  amountMinor Int @map("amount_minor")
+  termsVersion String @map("terms_version")
+  status String @default("AWAITING_PAYMENT")
+  razorpayOrderId String? @unique @map("razorpay_order_id")
+  razorpayPaymentId String? @unique @map("razorpay_payment_id")
+  paidAt DateTime? @map("paid_at")
+  dueAt DateTime? @map("due_at")
+  reviewedAt DateTime? @map("reviewed_at")
+  remark String?
+  nextStep String? @map("next_step")
+  refundId String? @unique @map("refund_id")
+  refundReason String? @map("refund_reason")
+  payoutStatus String @default("NOT_EARNED") @map("payout_status")
+  payoutReference String? @map("payout_reference")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  listing PlaylistReviewListing @relation(fields: [listingId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  @@index([customerId, createdAt])
+  @@index([status, dueAt])
+  @@map("playlist_review_requests")
+}
+
+model PlaylistReviewMail {
+  user User? @relation("PlaylistReviewRecipient", fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  id Int @id @default(autoincrement())
+  eventKey String @unique @map("event_key")
+  userId Int? @map("user_id")
+  toEmail String @map("to_email")
+  subject String
+  body String
+  status String @default("PENDING")
+  attempts Int @default(0)
+  availableAt DateTime @default(now()) @map("available_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([status, availableAt])
+  @@map("playlist_review_mail")
 }

@@ -1,0 +1,49 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
+const { build } = require('esbuild');
+const { chromium, expect } = require('@playwright/test');
+(async () => {
+  const output = await fs.mkdtemp(path.join(os.tmpdir(), 'hymn-playlist-ui-'));
+  await build({ stdin: { contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {PlaylistReviewMarketplace} from './components/playlist-review-marketplace';createRoot(document.getElementById('root')).render(<PlaylistReviewMarketplace/>);`, loader: 'tsx', resolveDir: process.cwd() }, bundle: true, outfile: path.join(output, 'marketplace.js'), jsx: 'automatic', define: { 'process.env.NODE_ENV': '"production"' } });
+  const hymn = { id: 1, name: 'Dusk Till Dawn', playlistUrl: 'https://open.spotify.com/playlist/2soKoURWSXnWJ48ygivet8', description: 'Listen to the playlist, check the fit, and send your track for a thoughtful HYMN review.', genres: 'Explore playlist', feeMinor: 5000, isHymn: true, capacity: 20, status: 'APPROVED' };
+  const independent = { ...hymn, id: 2, name: 'Independent Stories', isHymn: false, feeMinor: 12500 };
+  const review = { id: 1, listing: hymn, trackTitle: 'Keep creating', artistName: 'Fixture artist', trackUrl: 'https://open.spotify.com/track/1234567890123456789012', pitch: 'A thoughtful recording for reflective listeners.', amountMinor: 5000, status: 'NOT_A_FIT', remark: 'The soft vocal works well, but this playlist focuses on upbeat dance recordings.', nextStep: 'Try reflective Hindi-pop curators who feature acoustic recordings.', payoutStatus: 'HELD' };
+  const snapshot = { listings: [hymn, independent], requests: [review], ownListings: [independent], inbox: [{ ...review, id: 2, listing: independent, status: 'IN_REVIEW' }], checkoutAvailable: true };
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ reducedMotion: 'reduce' }); const errors = [];page.on('pageerror', e => errors.push(e.message));
+    await page.route('https://hymn.fixture/**', async route => { const url = new URL(route.request().url()); if (url.pathname === '/api/playlist-reviews') return route.fulfill({ json: snapshot }); if (url.pathname.startsWith('/assets/playlist-images/previews/')) return route.fulfill({ body: await fs.readFile(path.join('public', url.pathname)), contentType: 'image/webp' }); return route.fulfill({ body: '<div id="root"></div>', contentType: 'text/html' }); });
+    await page.goto('https://hymn.fixture/');
+    await page.addStyleTag({ content: '*{box-sizing:border-box}body{margin:0;padding:20px;background:#1d2025;font-family:Arial;--bg:#1d2025;--bg-soft:#25292f;--card:#21252a;--border:#383d46;--text:#f4f4f4;--text-muted:#bac0ca;--text-soft:#919ba8}#root{max-width:1200px;margin:auto}a{color:inherit;text-decoration:none}button{cursor:pointer}input,textarea,select{font-family:inherit}' });
+    await page.addStyleTag({ path: path.join(output, 'marketplace.css') });
+    await page.addScriptTag({ path: path.join(output, 'marketplace.js') });
+    for (const width of [1440, 768, 390, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.getByRole('button', { name: 'Discover playlists', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Dusk Till Dawn', exact: true })).toBeVisible();
+      await expect(page.getByText('₹50', { exact: true })).toBeVisible();
+      await expect(page.getByText('₹125', { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Independent', exact: true }).click();
+      await expect(page.locator('.playlist-listing')).toHaveCount(1);
+      await page.getByRole('button', { name: 'All curators', exact: true }).click();
+      await page.getByRole('button', { name: /Send a track/ }).first().click();
+      await expect(page.getByLabel('Track title', { exact: true })).toBeFocused();
+      await expect(page.getByRole('button', { name: 'Continue to payment · ₹50', exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Close submission form' }).click();
+      await page.getByRole('button', { name: /My submissions/ }).click();
+      await expect(page.getByText(/not a verdict on your music/)).toBeVisible();
+      await expect(page.getByText(review.remark, { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Curator studio', exact: true }).click();
+      await expect(page.getByLabel('Your listening notes')).toHaveAttribute('minlength', '30');
+      await expect(page.getByLabel('One practical next step')).toHaveAttribute('required', '');
+      await expect(page.getByLabel('Review fee (₹)').last()).toBeVisible();
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `No overflow at ${width}`);
+      await page.getByRole('button', { name: 'Discover playlists', exact: true }).click();
+      await page.screenshot({ path: path.join(output, `marketplace-${width}.png`), fullPage: true });
+    }
+    assert.deepEqual(errors, []);
+    console.log('PASS marketplace UI: ₹50/custom pricing, filtering, focused submission form, constructive decline, required curator remarks, responsive layout. Previews: ' + output);
+  } finally { await browser.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });
