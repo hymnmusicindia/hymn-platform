@@ -3,13 +3,8 @@
 .art { position:relative; display:grid; place-items:center; width:100%; aspect-ratio:1; border:1px dashed color-mix(in srgb,var(--text-muted) 35%,transparent); border-radius:12px; background:radial-gradient(ellipse at center,color-mix(in srgb,var(--text) 6%,transparent),transparent 70%),var(--bg-soft); }
 .plus { display:grid; place-items:center; width:80px; height:80px; border:1px solid var(--border); border-radius:50%; background:color-mix(in srgb,var(--text) 3%,var(--card)); color:var(--text-muted); transition:color .18s ease,transform .18s ease,border-color .18s ease; }
 .card:hover .plus,.card:focus-visible .plus { color:var(--text); transform:scale(1.06); border-color:var(--text-soft); }
-.artLabel { position:absolute; bottom:22px; color:var(--text-soft); font-size:9px; font-weight:600; letter-spacing:.15em; text-transform:uppercase; }
-.badgeRow { display:flex; align-items:center; min-height:24px; margin-top:12px; }
-.badge { padding:5px 8px; border-radius:20px; background:color-mix(in srgb,var(--text) 6%,transparent); color:var(--text-muted); font-size:9px; font-weight:650; letter-spacing:.09em; text-transform:uppercase; }
-.title { margin:12px 0 0; font-size:17px; line-height:1.3; font-weight:650; letter-spacing:-.025em; }
-.description { margin:5px 0 0; color:var(--text-muted); font-size:12px; line-height:1.6; }
-.action { display:flex; align-items:center; gap:8px; min-height:40px; margin-top:auto; padding:20px 12px 6px; color:var(--text-muted); font-size:12px; font-weight:600; }
-.card:hover .action { color:var(--text); }
+.card .title { margin:24px 0 0; font-size:17px; line-height:1.3; font-weight:650; letter-spacing:-.025em; text-align:center; }
+.card .description { margin:8px 0 24px; color:var(--text-muted); font-size:12px; line-height:1.7; text-align:center; white-space:normal; text-wrap:balance; }
 .card:focus-visible { outline:2px solid var(--text); outline-offset:4px; }
-@media(max-width:767px) { .card { display:grid; grid-template-columns:84px minmax(0,1fr); column-gap:12px; max-width:none; height:auto; padding:10px; } .card .art { grid-column:1; grid-row:1 / span 4; width:84px; align-self:center; } .card .badgeRow { grid-column:2; grid-row:1; margin-top:0; min-height:20px; } .card .title { grid-column:2; grid-row:2; margin-top:6px; font-size:15px; } .card .description { grid-column:2; grid-row:3; white-space:normal; } .card .action { grid-column:2; grid-row:4; padding:5px 0; margin-top:6px; } .plus { width:44px; height:44px; } .plus svg { width:28px; height:28px; } .artLabel { display:none; } }
+@media(max-width:767px) { .card { display:grid; grid-template-columns:84px minmax(0,1fr); grid-template-rows:1fr 1fr; column-gap:12px; max-width:none; height:auto; padding:14px 10px; } .card .art { grid-column:1; grid-row:1 / span 2; width:84px; align-self:center; } .card .title { grid-column:2; grid-row:1; margin:0; align-self:end; font-size:15px; } .card .description { grid-column:2; grid-row:2; margin:6px 0 0; align-self:start; } .plus { width:44px; height:44px; } .plus svg { width:28px; height:28px; } }
 @media(prefers-reduced-motion:reduce) { .card,.plus { transition:none; } .card:hover .plus,.card:focus-visible .plus { transform:none; } }

@@ -16,10 +16,14 @@ const { chromium, expect } = require('@playwright/test');
     await page.addScriptTag({path:path.join(output,'card.js')});
     const card=page.getByRole('link',{name:'Add your release — open distribution portal'});
     await expect(card).toHaveAttribute('href','/distribution');
+    await expect(card).not.toContainText('Open distribution');
+    await expect(card).not.toContainText('Start here');
     await expect(page.locator('.release-library-grid > :first-child')).toHaveAttribute('href','/distribution');
     for(const width of [1440,768,390,320]) {
       await page.setViewportSize({width,height:900});
       await expect(card.getByRole('heading',{name:'Add your release'})).toBeVisible();
+      assert.equal(await card.getByRole('heading').evaluate(el=>getComputedStyle(el).textAlign),'center');
+      assert.equal(await card.locator('p').evaluate(el=>getComputedStyle(el).textAlign),'center');
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
       await card.focus();
       assert.equal(await card.evaluate(el=>getComputedStyle(el).outlineStyle),'solid');
