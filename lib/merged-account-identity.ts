@@ -6,7 +6,8 @@ export function mergedIdentityHash(value: string) { return createHash("sha256").
 
 // Only hashes are retained in the immutable merge event, not the retired email
 // or Google credential. Prevent a later sign-in/signup from recreating that account.
-export async function assertNotMergedIdentity(input: { email: string; googleId?: string }, db: Pick<PrismaClient, "auditLog"> = prisma) {
+export async function assertNotMergedIdentity(input: { email: string; googleId?: string }, db: Pick<PrismaClient, "auditLog" | "$executeRaw"> = prisma, lock = false) {
+  if (lock) await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`account-identity:${input.email.trim().toLowerCase()}`}))`;
   const hashes = [{ metadata: { path: ["sourceEmailHash"], equals: mergedIdentityHash(input.email.trim().toLowerCase()) } }, ...(input.googleId ? [{ metadata: { path: ["sourceGoogleIdHash"], equals: mergedIdentityHash(input.googleId) } }] : [])];
   const merged = await db.auditLog.findFirst({ where: { action: "ACCOUNT_MERGED", OR: hashes }, select: { id: true } });
   if (merged) throw new Error("This login is no longer available. Sign in with your updated account or contact HYMN support.");

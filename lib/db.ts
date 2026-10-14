@@ -418,7 +418,7 @@ export async function createPasswordUser(input: {
   if (usesPostgresPrisma()) {
     const normalizedEmail = input.email.trim().toLowerCase();
     return prisma.$transaction(async tx => {
-      await assertNotMergedIdentity({ email: normalizedEmail }, tx);
+      await assertNotMergedIdentity({ email: normalizedEmail }, tx, true);
       const existing = await tx.user.findFirst({ where: { email: { equals: normalizedEmail, mode: "insensitive" } } });
       if (existing) return null;
       const permanentReferralCode = await createUniqueReferralCode(tx, input.name);
@@ -1163,7 +1163,7 @@ export async function upsertGoogleUser(input: Pick<User, "name" | "email" | "goo
   if (usesPostgresPrisma()) {
     return prisma.$transaction(async tx => {
       const normalizedEmail = input.email.trim().toLowerCase();
-      await assertNotMergedIdentity({ email: normalizedEmail, googleId: input.googleId }, tx);
+      await assertNotMergedIdentity({ email: normalizedEmail, googleId: input.googleId }, tx, true);
       const existing = await tx.user.findFirst({ where: { OR: [{ googleId: input.googleId }, { email: { equals: normalizedEmail, mode: "insensitive" } }] } });
       const role = resolveGoogleAccountRole(normalizedEmail, existing?.role);
       const permanentReferralCode = existing?.referralCode || await createUniqueReferralCode(tx, input.name);

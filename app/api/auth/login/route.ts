@@ -1,6 +1,6 @@
 ﻿import bcrypt from "bcrypt";
 import { NextResponse } from "next/server";
-import { assertNotMergedIdentity } from "@/lib/merged-account-identity";
+import { assertNotMergedIdentity, mergedIdentityHash } from "@/lib/merged-account-identity";
 import { destinationAfterLogin } from "@/lib/routes";
 import { profileAvatarDataUrl } from "@/lib/avatar";
 import { findUserByEmail } from "@/lib/db";
@@ -12,7 +12,7 @@ import { logAuditEvent } from "@/lib/audit-log";
 
 // Deployment readiness only; never exposes accounts or authentication secrets.
 export async function GET() {
-  return NextResponse.json({ accountMergeGuard: "v1" }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ accountMergeGuard: "v2" }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request) {
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     const user = await findUserByEmail(payload.email);
 
     if (!user || !user.passwordHash) {
-      await logAuditEvent({ actorType: "system", entityType: "authentication", entityId: payload.email.toLowerCase(), action: "login.failed", reason: "invalid_credentials", requestId, ipAddress, userAgent, riskLevel: "high" });
+      await logAuditEvent({ actorType: "system", entityType: "authentication", entityId: mergedIdentityHash(payload.email.trim().toLowerCase()), action: "login.failed", reason: "invalid_credentials", requestId, ipAddress, userAgent, riskLevel: "high" });
       return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
     }
 
