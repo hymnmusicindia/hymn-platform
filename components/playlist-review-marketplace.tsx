@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { CustomerOverlay } from "@/components/customer-overlay";
+import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import { ArrowUpRight, AudioLines, Check, Clock3, Headphones, Search, ShieldCheck, Sparkles, X } from "lucide-react";
 import { loadBioRazorpay } from "@/lib/client-razorpay";
 import { REVIEW_TERMS_VERSION, REVIEW_NOT_A_FIT_COPY, reviewFeeMinor } from "@/lib/playlist-review-domain";
@@ -15,6 +17,25 @@ const hymnCovers: Record<string, string> = { "Dusk Till Dawn": "1", "Indie Hits"
 const statusLabel: Record<string, string> = { AWAITING_PAYMENT: "Payment not completed", IN_REVIEW: "Listening & reviewing", SHORTLISTED: "Caught the curator’s attention", NOT_A_FIT: "Not a fit for this playlist", REFUND_PENDING: "Refund in progress", REFUNDED: "Fee refunded", DISPUTED: "HYMN is reviewing your concern" };
 
 export function PlaylistReviewMarketplace({ admin = false }: { admin?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const carousel = useRef<HTMLDivElement>(null);
+  const dialogRef = useAccessibleDialog(open, () => setOpen(false));
+  useEffect(() => {
+    if (["curator", "submissions"].includes(new URLSearchParams(window.location.search).get("reviewView") || "")) setOpen(true);
+  }, []);
+  if (admin) return <PlaylistReviewWorkspace admin />;
+  const covers = [{ name: "Dusk Till Dawn", image: "1" }, { name: "Indie Hits", image: "2" }, { name: "Ungatekept Gems", image: "3" }, { name: "Fresh Releases", image: "4" }];
+  return <>
+    <section className="playlist-invitation" aria-labelledby="playlist-invitation-title">
+      <div className="playlist-invitation-main"><div className="playlist-invitation-copy"><Headphones size={30} strokeWidth={1.5} /><h2 id="playlist-invitation-title">Looking for your next playlist?</h2><p>Find your sound’s next home.<br />Meet curators. Get a thoughtful review.</p><button type="button" className="playlist-invitation-cta" onClick={() => setOpen(true)} aria-haspopup="dialog">Find my playlist <ArrowUpRight size={18} /></button><small>HYMN tracks ₹50 · External tracks ₹80<br />Feedback, not guaranteed placement.</small></div>
+      <div className="playlist-invitation-gallery"><div className="playlist-invitation-covers" ref={carousel} aria-label="Explore HYMN playlists">{covers.map(cover => <button type="button" key={cover.image} onClick={() => setOpen(true)} aria-label={`Explore ${cover.name}`}><img src={`/assets/playlist-images/previews/${cover.image}.webp`} width={240} height={240} loading="lazy" decoding="async" alt={`${cover.name} playlist cover`} /><span>{cover.name}<ArrowUpRight size={14} /></span></button>)}</div><div className="playlist-carousel-controls"><span>Discover HYMN selects</span><div><button type="button" aria-label="Previous playlists" onClick={() => carousel.current?.scrollBy({ left: -220, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })}>←</button><button type="button" aria-label="Next playlists" onClick={() => carousel.current?.scrollBy({ left: 220, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })}>→</button></div></div></div></div>
+      <div className="playlist-invitation-benefits" aria-label="What your review includes">{[[Headphones, "A real listen", "Your recording, heard by a curator."], [AudioLines, "Useful feedback", "Specific notes. A practical next step."], [Clock3, "Seven-day window", "No review on time? Your fee is refunded."]].map(([Icon, title, text]) => { const Symbol = Icon as typeof Headphones; return <div key={String(title)}><Symbol size={20} /><span><strong>{String(title)}</strong><small>{String(text)}</small></span></div>; })}</div>
+    </section>
+    <CustomerOverlay open={open}><div className="playlist-dialog-backdrop" onClick={event => { if (event.target === event.currentTarget) setOpen(false); }}><section ref={dialogRef} className="playlist-review-dialog" role="dialog" aria-modal="true" aria-labelledby="playlist-dialog-title" tabIndex={-1}><header className="playlist-dialog-heading"><div><h2 id="playlist-dialog-title">Find your next curator</h2><p>Choose a playlist. Send your song. Get feedback.</p></div><button type="button" onClick={() => setOpen(false)} aria-label="Close playlist workspace"><X size={22} /></button></header><div className="playlist-dialog-content"><PlaylistReviewWorkspace /></div></section></div></CustomerOverlay>
+  </>;
+}
+
+function PlaylistReviewWorkspace({ admin = false }: { admin?: boolean }) {
   const [data, setData] = useState<Snapshot | null>(null);
   const [tab, setTab] = useState("discover"); const [query, setQuery] = useState(""); const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState<Listing | null>(null); const [busy, setBusy] = useState(false); const [message, setMessage] = useState("");
