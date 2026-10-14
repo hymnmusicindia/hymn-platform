@@ -94,6 +94,8 @@ html body .release-workflow .release-focused-actions { position:sticky!important
   html body .hymn-portal-frame:has(.distribution-start-page) { height:calc(100dvh - 58px); min-height:0!important; padding-bottom:10px; }
   html body .portal-workspace:has(.distribution-start-page) { height:100%; }
   html body .portal-page-content:has(.distribution-start-page) { flex:1; height:100%; min-height:0; overflow:hidden; }
+  /* Submission confirmation replaces the wizard and needs its own scroll owner. */
+  html body .portal-page-content:has([data-release-review-confirmation]) { overflow-y:auto!important; overflow-x:hidden!important; overscroll-behavior-y:contain; scrollbar-width:thin; }
   html body .distribution-start-page:has(.release-journey-intro),
   html body .distribution-start-page:has(.release-journey-intro) > .shell,
   html body .distribution-start-page:has(.release-journey-intro) > .shell > div,
