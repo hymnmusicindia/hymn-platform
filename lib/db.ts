@@ -1,5 +1,6 @@
 import { accrueReferralCommission } from "@/lib/referral-commissions";
 import bcrypt from "bcrypt";
+import { assertNotMergedIdentity } from "@/lib/merged-account-identity";
 import { randomUUID } from "crypto";
 import mysql from "mysql2/promise";
 import { Prisma } from "@prisma/client";
@@ -417,6 +418,7 @@ export async function createPasswordUser(input: {
   if (usesPostgresPrisma()) {
     const normalizedEmail = input.email.trim().toLowerCase();
     return prisma.$transaction(async tx => {
+      await assertNotMergedIdentity({ email: normalizedEmail }, tx);
       const existing = await tx.user.findFirst({ where: { email: { equals: normalizedEmail, mode: "insensitive" } } });
       if (existing) return null;
       const permanentReferralCode = await createUniqueReferralCode(tx, input.name);
@@ -1161,6 +1163,7 @@ export async function upsertGoogleUser(input: Pick<User, "name" | "email" | "goo
   if (usesPostgresPrisma()) {
     return prisma.$transaction(async tx => {
       const normalizedEmail = input.email.trim().toLowerCase();
+      await assertNotMergedIdentity({ email: normalizedEmail, googleId: input.googleId }, tx);
       const existing = await tx.user.findFirst({ where: { OR: [{ googleId: input.googleId }, { email: { equals: normalizedEmail, mode: "insensitive" } }] } });
       const role = resolveGoogleAccountRole(normalizedEmail, existing?.role);
       const permanentReferralCode = existing?.referralCode || await createUniqueReferralCode(tx, input.name);

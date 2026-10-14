@@ -6,6 +6,7 @@ import { getAdminSessionSecret, getUserSessionSecret } from "@/lib/env";
 import { logAuditEvent } from "@/lib/audit-log";
 import { identifyGrowthUser } from "@/lib/growth";
 import { attachPartnerReferral } from "@/lib/growth-partners";
+import { assertNotMergedAccount } from "@/lib/merged-account-identity";
 
 const USER_SESSION_COOKIE = "hymn_session";
 const ADMIN_SESSION_COOKIE = "hymn_admin_session";
@@ -24,6 +25,7 @@ async function getCookieStore() {
 }
 
 export async function createSession(payload: SessionPayload, context: { ipAddress?: string; userAgent?: string; requestId?: string } = {}) {
+  if (usesPostgresPrisma()) await assertNotMergedAccount(payload.sub);
   const sessionId = randomUUID();
   const token = jwt.sign({ ...payload, sid: sessionId }, getUserSessionSecret(), { expiresIn: "7d" });
   const store = await getCookieStore();
@@ -59,9 +61,14 @@ export async function getSession() {
     const decoded = jwt.verify(value, getUserSessionSecret());
     if (typeof decoded === "string") return null;
     if (!("sub" in decoded) || !("email" in decoded) || !("name" in decoded) || !("role" in decoded)) return null;
+    const subject = (decoded as Record<string, unknown>).sub;
+    if (usesPostgresPrisma() && typeof subject !== "number") return null;
     if (usesPostgresPrisma() && "sid" in decoded && typeof decoded.sid === "string") {
       const session = await prisma.session.findUnique({ where: { tokenHash: hashToken(decoded.sid) } });
-      if (!session || session.revokedAt || session.expiresAt.getTime() <= Date.now()) return null;
+      if (!session || session.userId !== subject || session.revokedAt || session.expiresAt.getTime() <= Date.now()) return null;
+    } else if (usesPostgresPrisma()) {
+      if (typeof subject !== "number") return null;
+      await assertNotMergedAccount(subject);
     }
     return decoded as unknown as SessionPayload;
   } catch {

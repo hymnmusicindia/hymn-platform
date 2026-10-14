@@ -1,5 +1,6 @@
 ﻿import bcrypt from "bcrypt";
 import { NextResponse } from "next/server";
+import { assertNotMergedIdentity } from "@/lib/merged-account-identity";
 import { destinationAfterLogin } from "@/lib/routes";
 import { profileAvatarDataUrl } from "@/lib/avatar";
 import { findUserByEmail } from "@/lib/db";
@@ -9,6 +10,11 @@ import { consumeRateLimit, requestIdentity } from "@/lib/rate-limit";
 import { apiRequestId } from "@/lib/api-response";
 import { logAuditEvent } from "@/lib/audit-log";
 
+// Deployment readiness only; never exposes accounts or authentication secrets.
+export async function GET() {
+  return NextResponse.json({ accountMergeGuard: "v1" }, { headers: { "Cache-Control": "no-store" } });
+}
+
 export async function POST(request: Request) {
   const requestId = apiRequestId(request);
   const ipAddress = requestIdentity(request);
@@ -17,6 +23,7 @@ export async function POST(request: Request) {
   if (!rate.allowed) return NextResponse.json({ error: "Too many login attempts. Try again later.", requestId }, { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds), "X-Request-ID": requestId } });
   try {
     const payload = userLoginSchema.parse(await request.json());
+    await assertNotMergedIdentity({ email: payload.email });
     const user = await findUserByEmail(payload.email);
 
     if (!user || !user.passwordHash) {
