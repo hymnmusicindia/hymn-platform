@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { CustomerOverlay } from "./customer-overlay";
+import { useAccessibleDialog } from "./ui/use-accessible-dialog";
 import { PlaylistFeedbackPrompt, PlaylistTestimonials } from "./playlist-service-feedback";
 import { useDriftingRail } from "./ui/use-drifting-rail";
 import { ArrowUpRight, AudioLines, Check, Clock3, Headphones, Search, ShieldCheck, Sparkles, X } from "lucide-react";
@@ -40,6 +42,7 @@ function PlaylistReviewWorkspace({ admin = false }: { admin?: boolean }) {
   const [data, setData] = useState<Snapshot | null>(null);
   const [tab, setTab] = useState("discover"); const [query, setQuery] = useState(""); const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState<Listing | null>(null); const [busy, setBusy] = useState(false); const [message, setMessage] = useState("");
+  const submissionDialog = useAccessibleDialog(Boolean(selected) && !busy, () => { if (!busy) setSelected(null); });
   const [requestKey, setRequestKey] = useState("");
   const [trackSource, setTrackSource] = useState<"hymn" | "external">("hymn");
   const [catalogueId, setCatalogueId] = useState("");
@@ -58,9 +61,6 @@ function PlaylistReviewWorkspace({ admin = false }: { admin?: boolean }) {
     setTrackSource("hymn");
     const invitedReleaseId = new URLSearchParams(window.location.search).get("releaseId");
     setCatalogueId(String(data?.releasedTracks?.find(track => String(track.release.id) === invitedReleaseId)?.id || ""));
-    const form = document.getElementById("playlist-submission-form");
-    form?.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
-    form?.querySelector<HTMLButtonElement>(".playlist-track-card, .playlist-external-toggle")?.focus({ preventScroll: true });
   }, [selected]);
   async function action(body: Record<string, unknown>) {
     const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -100,8 +100,9 @@ function PlaylistReviewWorkspace({ admin = false }: { admin?: boolean }) {
       <div className="playlist-toolbar"><label><Search size={17} /><input aria-label="Search playlists" placeholder="Find a playlist or genre…" value={query} onChange={event => setQuery(event.target.value)} /></label><div>{[["all", "All curators"], ["hymn", "HYMN"], ["independent", "Independent"]].map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>)}</div></div>
       <div className="playlist-catalogue">{listings.map((listing, index) => <article className="playlist-listing" key={listing.id}><div className="playlist-art" data-tone={index % 4}>{listing.isHymn && hymnCovers[listing.name] ? <img src={`/assets/playlist-images/previews/${hymnCovers[listing.name]}.webp`} alt={`${listing.name} playlist cover`} width={480} height={480} loading="lazy" decoding="async" /> : <AudioLines size={68} strokeWidth={1} />}<span>{listing.isHymn ? "HYMN SELECTS" : "INDEPENDENT CURATOR"}</span><a href={listing.playlistUrl} target="_blank" rel="noreferrer" aria-label={`Listen to ${listing.name}`}><ArrowUpRight size={18} /></a></div><div className="playlist-listing-body"><span className="playlist-owner"><ShieldCheck size={13} />{listing.isHymn ? "HYMN curator" : "Ownership reviewed · independent"}</span><h3>{listing.name}</h3><p>{listing.description}</p><span className="playlist-genre">{listing.genres}</span><footer><div><strong>{money(listing.feeMinor)}</strong><small>per track review</small></div><button type="button" disabled={busy || !data.checkoutAvailable || admin} aria-expanded={selected?.id === listing.id} aria-controls="playlist-submission-form" onClick={() => { setSelected(listing); setRequestKey(crypto.randomUUID()); }}>Send a track <ArrowUpRight size={16} /></button></footer></div></article>)}</div>
       {!listings.length ? <div className="playlist-empty">No playlists match yet. Try another search or curator filter.</div> : null}
-      {selected ? <form id="playlist-submission-form" className="playlist-form" onSubmit={submitReview}>
-        <header><div><span className="playlist-eyebrow">Your next chapter</span><h3>Send your track to {selected.name}</h3><p>Listening and written feedback within seven days after your live track and listening link are ready. No recurring charge or paid placement.</p></div><button type="button" aria-label="Close submission form" onClick={() => !busy && setSelected(null)}><X /></button></header>
+      {selected ? <CustomerOverlay><div className="playlist-dialog-backdrop" onClick={event => { if (!busy && event.target === event.currentTarget) setSelected(null); }}><section ref={submissionDialog} className="playlist-review-dialog playlist-submission-dialog" role="dialog" aria-modal="true" aria-labelledby="playlist-submit-title" tabIndex={-1}><div className="playlist-dialog-content"><form id="playlist-submission-form" className="playlist-form" onSubmit={submitReview}>
+        <header><div><span className="playlist-eyebrow">Your next chapter</span><h3 id="playlist-submit-title">Send your track to {selected.name}</h3><p>Listening and written feedback within seven days after your live track and listening link are ready. No recurring charge or paid placement.</p></div><button type="button" aria-label="Close submission form" disabled={busy} onClick={() => !busy && setSelected(null)}><X /></button></header>
+        {message ? <p role="status">{message}</p> : null}
         <fieldset className="playlist-source" disabled={busy}><legend>Choose your track</legend>
           <div className="playlist-catalogue-heading"><div><span className="playlist-eyebrow">Your distribution catalogue</span><h4>Choose a HYMN song</h4><p>Select a recording. We’ll bring its title and artist with it.</p></div><span className="playlist-catalogue-rate">{money(reviewFeeMinor(selected.isHymn, selected.feeMinor, true))}<small>per review</small></span></div>
           <div className="playlist-track-grid" role="group" aria-label="Your released HYMN tracks">{(data?.releasedTracks || []).map(track => {
@@ -115,7 +116,7 @@ function PlaylistReviewWorkspace({ admin = false }: { admin?: boolean }) {
         <label className="playlist-check"><input name="accepted" type="checkbox" required />I control this music and accept the <a href="/playlist-review-terms" target="_blank" rel="noreferrer">review terms</a>. I understand I’m paying for feedback, not placement or streams; a timely review is chargeable even if my song isn’t selected.</label>
         <div className="playlist-source-total" aria-live="polite"><span>{trackSource === "hymn" ? "HYMN catalogue review" : "External-track review"}<small>One track · one review · no recurring charge</small></span><strong>{money(reviewPrice)}</strong></div>
         <button className="playlist-primary" disabled={busy || (trackSource === "hymn" && !catalogueTrack)}>{busy ? "Opening secure checkout…" : `Continue to payment · ${money(reviewPrice)}`}</button>
-      </form> : null}
+      </form></div></section></div></CustomerOverlay> : null}
       <p className="playlist-disclaimer"><ShieldCheck size={16} />Research each playlist before submitting. Independent curators make their own editorial decisions. HYMN offers reporting and dispute support, but does not guarantee their audience, placement, streams, or results.</p>
     </> : null}
     {data && tab === "submissions" ? <div className="playlist-review-list"><header><h3>Every listen is a step forward.</h3><p>Track your reviews, read the feedback, and decide what comes next.</p></header>{!data.requests.length ? <div className="playlist-empty"><Sparkles /><h3>Your first thoughtful listen starts here.</h3><p>Explore a playlist and introduce your song. You stay in control of where you pitch.</p><button type="button" className="playlist-primary" onClick={() => setTab("discover")}>Discover playlists</button></div> : null}{data.requests.map(row => <article className="playlist-review-card" key={row.id}><header><div><span className="playlist-eyebrow">{row.listing.name} · {money(row.amountMinor)}</span><h3>{row.trackTitle}</h3><p>{row.artistName}</p></div><span className="playlist-status" data-status={row.status}>{statusLabel[row.status] || row.status}</span></header>{row.status === "IN_REVIEW" && row.dueAt ? <p><Clock3 size={14} /> Feedback due {new Date(row.dueAt).toLocaleString("en-IN")}</p> : null}{row.status === "NOT_A_FIT" ? <p className="playlist-encouragement">{REVIEW_NOT_A_FIT_COPY}</p> : null}{row.remark ? <div className="playlist-feedback"><h4>From your curator</h4><p>{row.remark}</p><h4>Your next step</h4><p>{row.nextStep}</p></div> : null}{["IN_REVIEW", "NOT_A_FIT", "SHORTLISTED"].includes(row.status) ? <details className="playlist-dispute"><summary>Need help with this review?</summary><form onSubmit={event => formAction(event, "dispute", row.id)}><label>Tell HYMN what happened<textarea name="reason" required minLength={20} maxLength={1500} /></label><button className="btn-outline" disabled={busy}>Ask HYMN to review</button></form></details> : null}</article>)}</div> : null}

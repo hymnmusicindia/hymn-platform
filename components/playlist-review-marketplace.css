@@ -109,3 +109,5 @@
 .playlist-feedback-prompt label:not(.playlist-check) { display:grid; gap:8px; font-size:12px; }
 .playlist-feedback-prompt :is(select,textarea) { width:100%; padding:12px; background:var(--bg-soft); color:var(--text); border:1px solid var(--border); border-radius:8px; }
 @media(max-width:700px) { .playlist-testimonials { padding:18px 22px; } }
+.playlist-submission-dialog { max-width:860px; }
+.playlist-submission-dialog .playlist-form { margin:0; padding:0; border:0; background:transparent; }
