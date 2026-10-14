@@ -1,4 +1,26 @@
 /* Compact monochrome discovery banner; imported after the marketplace styles. */
+.playlist-invitation { background:#0b0d10!important; border-color:#272b32; }
+.playlist-invitation .playlist-invitation-main { position:relative; isolation:isolate; padding:20px 26px; gap:24px; grid-template-columns:minmax(240px,1fr) minmax(0,1.45fr); }
+.playlist-invitation .playlist-invitation-main::before { content:""; position:absolute; inset:0; z-index:-1; pointer-events:none; background:linear-gradient(100deg,#080a0eee 10%,#101319a8 55%,transparent),radial-gradient(ellipse at 100% 0%,#3b424d45,transparent 65%); }
+.playlist-invitation .playlist-cover-wall { display:grid; gap:8px; mask-image:linear-gradient(90deg,transparent,#000 8%,#000 90%,transparent); }
+.playlist-invitation .playlist-cover-wall .playlist-invitation-covers { gap:10px; padding:0; mask-image:none; }
+.playlist-invitation .playlist-cover-wall .playlist-invitation-covers > button { flex:0 0 106px; transform:none; position:relative; border-radius:10px; overflow:hidden; }
+.playlist-invitation .playlist-cover-wall img { display:block; border-radius:10px; filter:brightness(.83); }
+.playlist-invitation .playlist-cover-wall button > span { position:absolute; inset:auto 0 0; padding:22px 8px 8px; font-size:10px; background:linear-gradient(transparent,#000e); }
+.playlist-invitation .playlist-cover-wall .playlist-invitation-covers:nth-child(2) { padding-left:36px; }
+.playlist-invitation .playlist-invitation-gallery .playlist-carousel-controls { margin:8px 0 0; }
+.playlist-invitation .playlist-invitation-gallery .playlist-carousel-controls > button { width:auto; height:28px; padding:0 10px; font-size:10px; border-radius:20px; }
+.playlist-invitation .playlist-invitation-gallery .playlist-testimonials { scroll-snap-type:none; scrollbar-width:none; padding:8px 4px 0; }
+.playlist-invitation .playlist-testimonials::-webkit-scrollbar { display:none; }
+.playlist-invitation .playlist-invitation-gallery .playlist-testimonials figure { flex-basis:220px; padding:10px 12px; background:#15181daa; border-color:#2b3038; }
+.playlist-invitation .playlist-invitation-gallery .playlist-testimonials figure > div { display:flex; align-items:center; gap:8px; }
+.playlist-invitation .playlist-invitation-gallery .playlist-testimonials figure > div > small { display:none; }
+.playlist-invitation .playlist-invitation-gallery .playlist-testimonials blockquote { font-size:11px; line-height:1.4; -webkit-line-clamp:2; margin:7px 0; }
+.playlist-invitation .playlist-invitation-gallery .playlist-testimonials img,.playlist-invitation .playlist-invitation-gallery .playlist-review-initial { width:24px; height:24px; }
+.playlist-invitation .playlist-invitation-gallery .playlist-testimonials figcaption { font-size:10px; gap:7px; }
+.playlist-invitation .playlist-invitation-benefits { padding-block:12px!important; background:#0c0e11; }
+.playlist-invitation .playlist-invitation-benefits small { display:none; }
+@media(max-width:700px) { .playlist-invitation .playlist-invitation-main { grid-template-columns:1fr; padding:18px; gap:16px; } .playlist-invitation .playlist-cover-wall .playlist-invitation-covers > button { flex-basis:94px; } }
 .playlist-rating { display:flex; align-items:center; gap:8px; }
 .playlist-stars-base { position:relative; display:inline-block; color:#606773; letter-spacing:2px; white-space:nowrap; }
 .playlist-stars-base > span { position:absolute; inset:0 auto 0 0; overflow:hidden; color:#e8c981; white-space:nowrap; }
