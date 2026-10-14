@@ -12,7 +12,7 @@ import Link from "next/link";
 import { WorkspaceRecords } from "@/components/workspace-records";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, ChevronDown, Clock3, Copy, ExternalLink, Filter, Grid2X2, Headphones, List, Pencil, Search, Share2, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, ArrowDownUp, CalendarDays, Disc3, CircleDot, UserRound, RotateCcw, ChevronDown, Clock3, Copy, ExternalLink, Filter, Grid2X2, Headphones, List, Pencil, Search, Share2, Sparkles } from "lucide-react";
 import { Release } from "@/lib/types";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import {
@@ -426,7 +426,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
     <>
       <label className="release-filter-control grid gap-2 text-sm">
         <span className="release-filter-label flex items-center gap-2 uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>
-          <Filter className="h-3.5 w-3.5" />
+          <CircleDot aria-hidden="true" className="h-3.5 w-3.5" />
           Status
         </span>
         <select className="field" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
@@ -438,7 +438,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
 
       <label className="release-filter-control grid gap-2 text-sm">
         <span className="release-filter-label flex items-center gap-2 uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>
-          <Filter className="h-3.5 w-3.5" />
+          <CalendarDays aria-hidden="true" className="h-3.5 w-3.5" />
           Release date
         </span>
         <select className="field" value={dateFilter} onChange={(event) => setDateFilter(event.target.value as typeof dateFilter)}>
@@ -451,18 +451,18 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
 
       <label className="release-filter-control grid gap-2 text-sm">
         <span className="release-filter-label flex items-center gap-2 uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>
-          <Filter className="h-3.5 w-3.5" />
+          <Disc3 aria-hidden="true" className="h-3.5 w-3.5" />
           Release type
         </span>
         <select className="field" value={releaseTypeFilter} onChange={(event) => setReleaseTypeFilter(event.target.value)}>
           <option value="all">All Types</option>
-          {releaseTypes.map((releaseType) => <option key={releaseType} value={releaseType}>{releaseType.replace(/_/g, " ")}</option>)}
+          {releaseTypes.map((releaseType) => <option key={releaseType} value={releaseType}>{releaseType.toLowerCase() === "ep" ? "EP" : releaseType.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())}</option>)}
         </select>
       </label>
 
       <label className="release-filter-control grid gap-2 text-sm">
         <span className="release-filter-label flex items-center gap-2 uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>
-          <Filter className="h-3.5 w-3.5" />
+          <ArrowDownUp aria-hidden="true" className="h-3.5 w-3.5" />
           Sort
         </span>
         <select className="field" value={sortOrder} onChange={(event) => setSortOrder(event.target.value as typeof sortOrder)}>
@@ -475,7 +475,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
 
       <label className="release-filter-control grid gap-2 text-sm">
         <span className="release-filter-label flex items-center gap-2 uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>
-          <Filter className="h-3.5 w-3.5" />
+          <UserRound aria-hidden="true" className="h-3.5 w-3.5" />
           Artist
         </span>
         <select className="field" value={artistFilter} onChange={(event) => setArtistFilter(event.target.value)}>
@@ -487,8 +487,8 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
       </label>
 
       <div className="release-visible-meter release-filter-count" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-        <p className="text-xs uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>Visible now</p>
-        <p className="mt-2 text-lg font-semibold" style={{ color: "var(--text)" }}>{Math.min(visibleCount, filteredReleases.length)} / {filteredReleases.length}</p>
+        <p className="release-results-count" role="status" aria-live="polite"><strong>{Math.min(visibleCount, filteredReleases.length)}</strong> of {filteredReleases.length} releases</p>
+        {(statusFilter !== "all" || dateFilter !== "all" || releaseTypeFilter !== "all" || artistFilter !== "all" || sortOrder !== "pipeline") ? <button type="button" className="release-filters-reset" onClick={() => { setStatusFilter("all"); setDateFilter("all"); setReleaseTypeFilter("all"); setArtistFilter("all"); setSortOrder("pipeline"); }}><RotateCcw aria-hidden="true" size={13} /> Reset filters</button> : null}
       </div>
     </>
   );
