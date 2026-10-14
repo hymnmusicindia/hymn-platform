@@ -11,7 +11,6 @@ import type { Release } from "@/lib/types";
 import { showFirstReleaseBadge } from "@/lib/first-release-flow";
 import {
   getReleasePortalBadgeStyle,
-  getReleasePortalDateLabel,
   getReleasePortalStage,
   getReleasePortalStageLabel,
   getReleasePortalTrackCount
@@ -134,9 +133,6 @@ export function ReleaseSummaryCard({
           style={getReleasePortalBadgeStyle(stage)}
         >
           {getReleasePortalStageLabel(stage)}
-        </span>
-        <span className="release-summary-date truncate text-xs" style={{ color: "var(--text-muted)" }}>
-          {getReleasePortalDateLabel(release)}
         </span>
       </div>
 
