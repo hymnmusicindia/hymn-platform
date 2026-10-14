@@ -24,6 +24,7 @@ import {
 } from "@/lib/release-portal";
 import { automaticStatusCopy } from "@/lib/release-status-engine";
 import { ReleaseSummaryCard } from "@/components/release-summary-card";
+import { AddReleaseCard } from "@/components/add-release-card";
 
 import detailStyles from "./release-detail.module.css";
 
@@ -583,7 +584,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
       </section>
 
       <section>
-        {filteredReleases.length === 0 ? (
+        {filteredReleases.length === 0 && viewMode === "list" ? (
           <EmptyState
             title="No releases match your filters"
             description="Try a different title, artist, or status filter to bring your catalogue back into view."
@@ -601,6 +602,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
           ]}/>
         ) : (
           <div className="release-library-grid grid grid-cols-1 justify-items-center gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <AddReleaseCard />
             {visibleReleases.map((release) => <ReleaseCard key={release.id} release={release} selected={release.id === selectedReleaseId} />)}
           </div>
         )}
