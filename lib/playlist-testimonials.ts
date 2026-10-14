@@ -15,11 +15,12 @@ export async function submitPlaylistTestimonial(userId: number, input: unknown) 
 }
 
 export async function playlistTestimonials() {
-  const events = await prisma.auditLog.findMany({ where: { action: "PLAYLIST_SERVICE_TESTIMONIAL" }, orderBy: { createdAt: "desc" }, take: 30 });
-  const users = await prisma.user.findMany({ where: { id: { in: events.flatMap(row => row.actorId ? [row.actorId] : []) }, status: "ACTIVE" }, select: { id: true, name: true, avatar: true } });
+  const events = await prisma.auditLog.findMany({ where: { action: { in: ["PLAYLIST_SERVICE_TESTIMONIAL", "PLAYLIST_ARTIST_TESTIMONIAL_APPROVED"] } }, orderBy: { createdAt: "desc" }, take: 30 });
+  const subjectId = (row: typeof events[number]) => row.action === "PLAYLIST_SERVICE_TESTIMONIAL" ? row.actorId : (row.metadata as { subjectUserId?: number } | null)?.subjectUserId;
+  const users = await prisma.user.findMany({ where: { id: { in: events.flatMap(row => subjectId(row) ? [subjectId(row)!] : []) }, status: "ACTIVE" }, select: { id: true, name: true, avatar: true } });
   return events.flatMap(row => {
-    const user = users.find(user => user.id === row.actorId);
+    const user = users.find(user => user.id === subjectId(row));
     const value = row.metadata as { rating?: number; quote?: string; publicConsent?: boolean } | null;
-    return user && value?.publicConsent && value.quote && value.rating ? [{ id: row.id, name: user.name, avatar: user.avatar, rating: value.rating, quote: value.quote }] : [];
+    return user && value?.publicConsent && value.quote && value.rating && value.rating >= 1 && value.rating <= 5 ? [{ id: row.id, name: user.name, avatar: user.avatar, rating: value.rating, quote: value.quote, verifiedService: row.action === "PLAYLIST_SERVICE_TESTIMONIAL" }] : [];
   });
 }

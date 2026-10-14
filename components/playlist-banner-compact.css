@@ -1,4 +1,8 @@
 /* Compact monochrome discovery banner; imported after the marketplace styles. */
+.playlist-rating { display:flex; align-items:center; gap:8px; }
+.playlist-stars-base { position:relative; display:inline-block; color:#606773; letter-spacing:2px; white-space:nowrap; }
+.playlist-stars-base > span { position:absolute; inset:0 auto 0 0; overflow:hidden; color:#e8c981; white-space:nowrap; }
+.playlist-rating b { font-size:11px; font-weight:500; letter-spacing:0; color:var(--text-muted); }
 .playlist-invitation .playlist-invitation-main { grid-template-columns:minmax(240px,1fr) minmax(0,1.35fr); padding:24px 28px; gap:28px; }
 .playlist-invitation .playlist-invitation-copy > svg { color:#d2d7df; width:24px; height:24px; margin-bottom:10px; }
 .playlist-invitation .playlist-invitation-copy h2 { font-size:clamp(29px,3.5vw,44px); font-weight:800; line-height:1.04; letter-spacing:-.055em; max-width:17ch; background:linear-gradient(120deg,#fff 20%,#c0c6d0 70%,#8e97a6); background-clip:text; -webkit-background-clip:text; color:transparent; }
