@@ -56,7 +56,7 @@ const { chromium, expect } = require('@playwright/test');
       await page.getByRole('button', { name: 'Select Released song by Catalogue artist' }).click();
       await expect(page.getByRole('button', { name: 'Select Released song by Catalogue artist' })).toHaveAttribute('aria-pressed', 'true');
       await expect(page.getByAltText('Released single cover')).toBeVisible();
-      assert.ok(await page.locator('.playlist-track-card').first().evaluate(card => card.getBoundingClientRect().width <= 144), 'Release cards should remain compact');
+      assert.ok(await page.locator('.playlist-track-card').first().evaluate(card => card.getBoundingClientRect().width <= 120), 'Release cards should remain compact');
       await expect(page.locator('.playlist-catalogue-heading .playlist-eyebrow')).toBeHidden();
       assert.ok(await page.getByAltText('Released single cover').evaluate(img => img.complete && img.naturalWidth > 0), 'Cover art must load');
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Submission cards must not overflow at ${width}`);
