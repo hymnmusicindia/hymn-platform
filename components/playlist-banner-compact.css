@@ -9,16 +9,16 @@
 .playlist-invitation .playlist-invitation-gallery .playlist-testimonials .playlist-rating { gap:4px; font-size:11px; }
 .playlist-invitation .playlist-testimonials .playlist-stars-base { letter-spacing:1px; }
 .playlist-invitation .playlist-invitation-main.playlist-invitation-main { padding:16px 24px; gap:20px; }
-.playlist-invitation .playlist-invitation-copy.playlist-invitation-copy h2 { font-size:clamp(28px,3.2vw,40px); }
+.playlist-invitation .playlist-invitation-copy.playlist-invitation-copy h2 { font-size:clamp(28px,3.2vw,40px); line-height:1.16; padding-bottom:.14em; overflow:visible; }
 .playlist-invitation .playlist-invitation-copy > svg { display:none; }
 .playlist-invitation .playlist-cover-wall .playlist-invitation-covers > button { flex-basis:86px!important; }
 .playlist-invitation .playlist-cover-wall .playlist-invitation-covers { position:relative; }
 .playlist-invitation .playlist-cover-wall .playlist-invitation-covers:nth-child(2) { padding-left:0; }
 .playlist-invitation .playlist-cover-wall { gap:6px; }
-.playlist-invitation .playlist-cover-wall,.playlist-invitation .playlist-invitation-gallery .playlist-testimonials { mask-image:linear-gradient(90deg,transparent,#000 12%,#000 86%,transparent); }
+.playlist-invitation .playlist-invitation-gallery .playlist-cover-wall,.playlist-invitation .playlist-invitation-gallery .playlist-testimonials { mask-image:linear-gradient(90deg,transparent 0%,#0000000a 2%,#00000035 5%,#00000085 9%,#000000d6 14%,#000 20%,#000 80%,#000000d6 86%,#00000085 91%,#00000035 95%,#0000000a 98%,transparent 100%); }
 .playlist-invitation .playlist-invitation-gallery .playlist-testimonials { position:relative; margin-top:10px; }
 .playlist-invitation .playlist-invitation-gallery .playlist-testimonials.playlist-testimonials figure { flex-basis:206px; padding:8px 10px; }
-.playlist-invitation .playlist-invitation-gallery { background:linear-gradient(90deg,#080a0e90,transparent 15%,transparent 85%,#080a0e90); }
+.playlist-invitation .playlist-invitation-gallery { background:transparent; }
 .playlist-invitation .playlist-invitation-benefits { padding-block:9px!important; }
 .playlist-invitation { background:#0b0d10!important; border-color:#272b32; }
 .playlist-invitation .playlist-invitation-main { position:relative; isolation:isolate; padding:20px 26px; gap:24px; grid-template-columns:minmax(240px,1fr) minmax(0,1.45fr); }

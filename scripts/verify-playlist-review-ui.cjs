@@ -22,6 +22,11 @@ const { chromium, expect } = require('@playwright/test');
     await page.addStyleTag({ path: 'app/styles/heading-hierarchy.css' });
     await page.addScriptTag({ path: path.join(output, 'marketplace.js') });
     await expect(page.getByRole('heading', { name: /Your sound.*A new discovery/ })).toBeVisible();
+    const headlineMetrics = await page.locator('#playlist-invitation-title').evaluate(el => {
+      const style = getComputedStyle(el);
+      return { line: parseFloat(style.lineHeight), font: parseFloat(style.fontSize), bottom: parseFloat(style.paddingBottom) };
+    });
+    assert.ok(headlineMetrics.line >= headlineMetrics.font * 1.15 && headlineMetrics.bottom > 0, 'Gradient headline must leave room for descenders');
     await expect(page.getByRole('dialog')).toHaveCount(0);
     const testimonial = page.locator('.playlist-testimonials figure').first();
     await expect(testimonial).toBeVisible();
