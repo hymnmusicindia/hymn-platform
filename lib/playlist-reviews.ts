@@ -6,10 +6,87 @@ import { REVIEW_TERMS_VERSION, PLAYLIST_CATALOGUE_STATUSES, reviewFeeMinor, revi
 import { sendTransactionalEmail } from "@/lib/email/send-transactional-email";
 import { emailLayout, emailText } from "@/lib/email/email-templates";
 import { getPublicAppUrl } from "@/lib/public-app-url";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, PlaylistReviewRequest, PlaylistReviewListing } from "@prisma/client";
+import { trackUrlSchema } from "@/lib/playlist-review-domain";
 
 const reviewInclude = { listing: true } as const;
 type Tx = Prisma.TransactionClient;
+const liveStatuses = ["LIVE", "DISTRIBUTED"];
+function storedTrackSpotifyLink(metadata: unknown): string | null {
+  const links = new Set<string>();
+  const visit = (value: unknown, depth: number) => {
+    if (depth > 4 || !value || typeof value !== 'object' || Array.isArray(value)) return;
+    for (const [key, child] of Object.entries(value)) {
+      if (!/^(spotify|spotifyUrl|spotifyTrackUrl|spotify_url|spotify_track_url|platformLinks|streamingLinks|links)$/i.test(key)) continue;
+      if (typeof child === 'string' && trackUrlSchema.safeParse(child).success) links.add(child);
+      else visit(child, depth + 1);
+    }
+  };
+  visit(metadata, 0);
+  return links.size === 1 ? [...links][0] : null;
+}
+async function reviewReadiness(tx: Tx, row: PlaylistReviewRequest) {
+  const event = await tx.auditLog.findFirst({ where: { action: "PLAYLIST_REVIEW_CHECKOUT_CREATED", entity: "playlist_review", entityId: String(row.id) } });
+  const trackId = (event?.metadata as { trackId?: number } | null)?.trackId;
+  if (!trackId) return { status: trackUrlSchema.safeParse(row.trackUrl).success ? "IN_REVIEW" : "WAITING_FOR_LINK" };
+  const track = await tx.track.findFirst({ where: { id: trackId, release: { userId: row.customerId } }, include: { release: true } });
+  if (!track || ["REJECTED", "TAKEN_DOWN", "ARCHIVED", "DELETED"].includes(track.release.status)) return { status: "REFUND_PENDING" };
+  const recordingIsLive = liveStatuses.includes(track.release.status) || (track.release.status === 'PARTIALLY_LIVE' && /^(live|released|distributed)$/i.test(track.distributorStatus || ''));
+  if (!recordingIsLive) return { status: "WAITING_FOR_RELEASE" };
+  const trackUrl = row.trackUrl || storedTrackSpotifyLink(track.metadata) || '';
+  return { status: trackUrlSchema.safeParse(trackUrl).success ? "IN_REVIEW" : "WAITING_FOR_LINK", trackUrl };
+}
+async function notifyReviewReady(tx: Tx, row: PlaylistReviewRequest, listing: PlaylistReviewListing) {
+  const artist = await tx.user.findUniqueOrThrow({ where: { id: row.customerId } });
+  const curator = listing.ownerId ? await tx.user.findUniqueOrThrow({ where: { id: listing.ownerId } }) : null;
+  const href = '/dashboard/playlists?reviewView=submissions';
+  await mail(tx, `review:${row.id}:ready:artist`, artist.email, "Your playlist review has started", `${row.trackTitle} is ready for ${listing.name}. Feedback is due by ${row.dueAt!.toISOString()}. The fee pays for listening and feedback, not placement.`, artist.id);
+  await mail(tx, `review:${row.id}:paid:curator`, curator?.email || 'hymnmusicindia@gmail.com', "A live track is waiting for your review", `Review ${row.trackTitle} by ${row.artistName} for ${listing.name} by ${row.dueAt!.toISOString()}. Listen: ${row.trackUrl}`, curator?.id);
+  for (const target of [artist, ...(curator ? [curator] : await tx.user.findMany({ where: { role: 'ADMIN', status: 'ACTIVE' }, select: { id: true } }))]) {
+    await tx.notification.upsert({ where: { eventKey: `playlist:${row.id}:ready:${target.id}` }, create: { eventKey: `playlist:${row.id}:ready:${target.id}`, userId: target.id, title: 'Playlist review ready', body: `${row.trackTitle} is ready for listening and feedback.`, type: 'playlist_review', href: target.id === artist.id ? href : listing.isHymn ? '/admin/playlist-reviews' : '/dashboard/playlists?reviewView=curator' }, update: {} });
+  }
+}
+export async function updateReviewListeningLink(userId: number, id: number, url: string) {
+  const trackUrl = trackUrlSchema.parse(url);
+  return prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422061, ${id}::integer)`;
+    const row = await tx.playlistReviewRequest.findUniqueOrThrow({ where: { id }, include: reviewInclude });
+    if (row.customerId !== userId || !['WAITING_FOR_RELEASE', 'WAITING_FOR_LINK'].includes(row.status)) throw Error('This review is not waiting for a listening link.');
+    const ready = await reviewReadiness(tx, { ...row, trackUrl });
+    const result = await tx.playlistReviewRequest.update({ where: { id }, data: { trackUrl, status: ready.status, dueAt: ready.status === 'IN_REVIEW' ? reviewDeadline(new Date()) : null } });
+    await audit(tx, userId, 'PLAYLIST_LISTENING_LINK_UPDATED', id, { trackUrl });
+    if (result.status === 'IN_REVIEW') await notifyReviewReady(tx, result, row.listing);
+    return result;
+  }, { timeout: 30000 });
+}
+async function advanceScheduledPlaylistReviews() {
+  const pending = await prisma.playlistReviewRequest.findMany({ where: { status: { in: ['WAITING_FOR_RELEASE', 'WAITING_FOR_LINK'] } }, orderBy: { updatedAt: 'asc' }, take: 100 });
+  for (const candidate of pending) await prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422061, ${candidate.id}::integer)`;
+    const row = await tx.playlistReviewRequest.findUniqueOrThrow({ where: { id: candidate.id }, include: reviewInclude });
+    if (!['WAITING_FOR_RELEASE', 'WAITING_FOR_LINK'].includes(row.status)) return;
+    const readiness = await reviewReadiness(tx, row);
+    const expired = row.paidAt && Date.now() - row.paidAt.getTime() > 90 * 86400000;
+    const status = expired || row.listing.status === 'DECLINED' ? 'REFUND_PENDING' : readiness.status;
+    const result = await tx.playlistReviewRequest.update({ where: { id: row.id }, data: { status, ...(readiness.trackUrl ? { trackUrl: readiness.trackUrl } : {}), dueAt: status === 'IN_REVIEW' ? reviewDeadline(new Date()) : null, updatedAt: new Date(), ...(status === 'REFUND_PENDING' ? { refundReason: 'Scheduled review could not start within 90 days or its release/curator became unavailable.' } : {}) } });
+    if (status === 'IN_REVIEW') await notifyReviewReady(tx, result, row.listing);
+    if (row.status === 'WAITING_FOR_RELEASE' && ['WAITING_FOR_LINK', 'IN_REVIEW'].includes(status)) {
+      const artist = await tx.user.findUniqueOrThrow({ where: { id: row.customerId } });
+      const href = '/dashboard/playlists?reviewView=submissions';
+      await mail(tx, `review:${row.id}:live-reminder`, artist.email, 'Your release is live — your playlist review is next', `${row.trackTitle} is now live. ${status === 'WAITING_FOR_LINK' ? 'Add the Spotify track link to start your reserved review.' : 'Your curator has been notified and the review window has started.'} ${getPublicAppUrl()}${href}`, artist.id);
+      await tx.notification.upsert({ where: { eventKey: `playlist:${row.id}:live` }, create: { eventKey: `playlist:${row.id}:live`, userId: artist.id, title: 'Your release is live', body: status === 'WAITING_FOR_LINK' ? 'Add your Spotify track link to start the playlist review.' : 'Your reserved playlist review has started.', type: 'playlist_review', href }, update: {} });
+    }
+  }, { timeout: 30000 });
+}
+export async function cancelScheduledPlaylistReview(userId: number, id: number) {
+  return prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422061, ${id}::integer)`;
+    const row = await tx.playlistReviewRequest.findUniqueOrThrow({ where: { id } });
+    if (row.customerId !== userId || !['WAITING_FOR_RELEASE', 'WAITING_FOR_LINK'].includes(row.status)) throw Error('Only your not-yet-started review can be cancelled here.');
+    await audit(tx, userId, 'PLAYLIST_SCHEDULE_CANCELLED', id);
+    return tx.playlistReviewRequest.update({ where: { id }, data: { status: 'REFUND_PENDING', refundReason: 'Artist cancelled before the review started.', payoutStatus: 'NOT_EARNED' } });
+  });
+}
 export async function playlistGatewayCall<T>(operation: Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try { return await Promise.race([operation, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Payment provider response timed out. Do not pay again if charged; reconciliation will recover the result.")), 20000); })]); }
@@ -87,7 +164,7 @@ export async function createReviewCheckout(userId: number, input: unknown) {
     if (row && (row.customerId !== userId || row.listingId !== value.listingId || row.trackUrl !== value.trackUrl || row.trackTitle !== value.trackTitle || row.pitch !== value.pitch || row.artistName !== value.artistName)) throw new Error("This checkout key belongs to different submission details. Start a new submission.");
     if (row && row.status !== "AWAITING_PAYMENT") throw new Error("This review has already been paid or closed. Check My submissions.");
     if (!row) {
-      const active = await tx.playlistReviewRequest.count({ where: { listingId: listing.id, OR: [{ status: "IN_REVIEW" }, { status: "AWAITING_PAYMENT", createdAt: { gt: new Date(Date.now() - 30 * 60000) } }] } });
+      const active = await tx.playlistReviewRequest.count({ where: { listingId: listing.id, OR: [{ status: { in: ["IN_REVIEW", "WAITING_FOR_RELEASE", "WAITING_FOR_LINK"] } }, { status: "AWAITING_PAYMENT", createdAt: { gt: new Date(Date.now() - 30 * 60000) } }] } });
       if (active >= listing.capacity) throw new Error("This curator’s review queue is full. Please try another curator or return later.");
       row = await tx.playlistReviewRequest.create({ data: { requestKey: value.requestKey, listingId: listing.id, customerId: userId, trackTitle: value.trackTitle, artistName: value.artistName, trackUrl: value.trackUrl, pitch: value.pitch, termsVersion: value.termsVersion, amountMinor: reviewFeeMinor(listing.isHymn, listing.feeMinor, Boolean(linkedTrack)) } });
       await audit(tx, userId, "PLAYLIST_REVIEW_CHECKOUT_CREATED", row.id, { amountMinor: row.amountMinor, termsVersion: value.termsVersion, accepted: true, trackId: linkedTrack?.id || null, releaseId: linkedTrack?.releaseId || null, trackSource: linkedTrack ? "hymn_catalogue" : "external" });
@@ -109,12 +186,14 @@ export async function confirmReviewPayment(orderId: string, paymentId: string, c
     const row = await tx.playlistReviewRequest.findUniqueOrThrow({ where: { id: initial.id } });
     if (row.razorpayPaymentId && row.razorpayPaymentId !== paymentId) throw new Error("Conflicting payment identifier.");
     if (row.status !== "AWAITING_PAYMENT") return row;
-    const result = await tx.playlistReviewRequest.update({ where: { id: row.id }, data: { status: "IN_REVIEW", razorpayPaymentId: paymentId, paidAt, dueAt: reviewDeadline(paidAt) } });
-    const artist = await tx.user.findUniqueOrThrow({ where: { id: row.customerId } });
-    const curator = initial.listing.ownerId ? await tx.user.findUniqueOrThrow({ where: { id: initial.listing.ownerId } }) : null;
-    await mail(tx, `review:${row.id}:paid:artist`, artist.email, "Your music is ready for a thoughtful review", `${row.trackTitle} has been submitted to ${initial.listing.name}. Feedback is due within seven days of payment. Your fee pays for listening and feedback, not playlist placement.`, artist.id);
-    await mail(tx, `review:${row.id}:paid:curator`, curator?.email || "hymnmusicindia@gmail.com", "A new track is waiting for your review", `Review ${row.trackTitle} by ${row.artistName} for ${initial.listing.name} by ${result.dueAt!.toISOString()}. Listen at ${row.trackUrl}. Leave a specific remark and an actionable next step, whether or not it fits.`, curator?.id);
-    await audit(tx, row.customerId, "PLAYLIST_REVIEW_PAYMENT_CONFIRMED", row.id, { amountMinor: row.amountMinor, dueAt: result.dueAt!.toISOString() });
+    const readiness = await reviewReadiness(tx, row);
+    const result = await tx.playlistReviewRequest.update({ where: { id: row.id }, data: { status: readiness.status, ...(readiness.trackUrl ? { trackUrl: readiness.trackUrl } : {}), razorpayPaymentId: paymentId, paidAt, dueAt: readiness.status === "IN_REVIEW" ? reviewDeadline(paidAt) : null, ...(readiness.status === "REFUND_PENDING" ? { refundReason: "The linked release is no longer eligible." } : {}) } });
+    if (result.status === "IN_REVIEW") await notifyReviewReady(tx, result, initial.listing);
+    else {
+      const artist = await tx.user.findUniqueOrThrow({ where: { id: row.customerId } });
+      await mail(tx, `review:${row.id}:scheduled`, artist.email, "Your playlist review is reserved", `${row.trackTitle}: ${result.status === "WAITING_FOR_RELEASE" ? "waiting for your release to go live" : result.status === "WAITING_FOR_LINK" ? "add your live Spotify track link" : "a refund is being arranged"}. The seven-day review window starts only once your track is live and its listening link is available. Manage: ${getPublicAppUrl()}/dashboard/playlists?reviewView=submissions`, artist.id);
+    }
+    await audit(tx, row.customerId, "PLAYLIST_REVIEW_PAYMENT_CONFIRMED", row.id, { amountMinor: row.amountMinor, dueAt: result.dueAt?.toISOString() || null, status: result.status });
     return result;
   });
 }
@@ -183,6 +262,7 @@ export async function recordCuratorSettlement(actorId: number | null, id: number
 }
 
 export async function runPlaylistReviewAutomation() {
+  await advanceScheduledPlaylistReviews();
   const result = { reconciled: 0, expired: 0, refunded: 0, reminders: 0, sent: 0, errors: [] as string[] };
   const stopAt = Date.now() + 240000;
   // Reconcile even when a browser closes before payment verification.
@@ -206,7 +286,7 @@ export async function runPlaylistReviewAutomation() {
       await prisma.$transaction(async tx => {
         await tx.playlistReviewRequest.update({ where: { id: row.id }, data: { status: "REFUNDED", refundId: refund.id, payoutStatus: "NOT_EARNED" } });
         const user = await tx.user.findUniqueOrThrow({ where: { id: row.customerId } });
-        await mail(tx, `review:${row.id}:refund`, user.email, "Your review fee has been refunded", `The curator did not complete your review in seven days. Your ₹${row.amountMinor / 100} fee was refunded to the original payment method; bank processing times may vary. This missed deadline says nothing about your music.`, user.id);
+        await mail(tx, `review:${row.id}:refund`, user.email, "Your review fee has been refunded", `${row.refundReason || "Your review could not be completed."} Your ₹${row.amountMinor / 100} fee was refunded to the original payment method; bank processing times may vary. This missed deadline says nothing about your music.`, user.id);
         await audit(tx, null, "PLAYLIST_REVIEW_REFUNDED", row.id, { refundId: refund.id });
       }); result.refunded++;
     } catch { result.errors.push(`Refund needs attention for review ${row.id}`); }
@@ -219,7 +299,7 @@ export async function runPlaylistReviewAutomation() {
   for (const job of await prisma.playlistReviewMail.findMany({ where: { status: "PENDING", availableAt: { lte: new Date() }, attempts: { lt: 8 } }, orderBy: { id: "asc" }, take: 100 })) {
     if (Date.now() > stopAt) { result.errors.push("Automation budget reached; remaining work is deferred."); return result; }
     const curatorMail = /:(curator|deadline)$/.test(job.eventKey);
-    const target = !job.userId ? "/admin/playlist-reviews" : curatorMail ? "/dashboard?tab=promotions&reviewView=curator" : "/dashboard?tab=promotions&reviewView=submissions";
+    const target = !job.userId ? "/admin/playlist-reviews" : curatorMail ? "/dashboard/playlists?reviewView=curator" : "/dashboard/playlists?reviewView=submissions";
     const model = { title: job.subject, body: job.body, ctaLabel: "Open your review workspace", ctaUrl: `${getPublicAppUrl()}${target}` };
     const delivery = await sendTransactionalEmail({ to: job.toEmail, subject: job.subject, template: "playlist-review", html: emailLayout(model), text: emailText(model), eventKey: `${job.eventKey}:attempt:${job.attempts}`, userId: job.userId ?? undefined, entityType: "playlist_review" });
     const existing = delivery.status === "duplicate_skipped" ? await prisma.emailLog.findUnique({ where: { eventKey: `${job.eventKey}:attempt:${job.attempts}` }, select: { status: true } }) : null;

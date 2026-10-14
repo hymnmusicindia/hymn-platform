@@ -52,7 +52,9 @@ completed review → seven-day dispute hold → manual verified settlement
 artist concern / provider dispute → disputed → support resolution / refund
 ```
 
-The review clock starts at payment time, never at playlist inclusion. A curator
+For live tracks with listening links the review clock starts at payment. A scheduled
+HYMN track waits until live status and its Spotify link are ready, never until
+playlist inclusion. A curator
 must listen, leave at least 30 characters of specific feedback, and provide an
 actionable next step of at least 10 characters for either decision. Customer copy
 frames a decline as a playlist/audience mismatch, not a judgement of talent.
@@ -148,5 +150,31 @@ Checkout creation appends track/release IDs and source to the immutable audit tr
 Retries cannot switch the linked track or source under an existing request key.
 Amounts remain snapshotted on requests/orders; payment verification, refunds and
 settlement use the original amount, never current pricing. No schema migration is
-required. Terms version is `playlist-review-2026-10-15-v2`.
+required for catalogue pricing. Scheduling requires migration
+`20261015023000_playlist_release_scheduling`; terms version is
+`playlist-review-2026-10-15-v3`.
+
+## Release-to-curation journey
+
+Successful new submissions show a dismissible invitation after 3.5 seconds,
+deduplicated per release per browser session. The CTA passes the release ID to
+`/dashboard/playlists`, an authenticated standalone workspace. The promotions
+banner links to that page; it no longer opens a marketplace modal.
+
+Captured payment for a linked unreleased song enters WAITING_FOR_RELEASE with no
+deadline. Automation watches the linked recording through its immutable checkout
+audit entry and checks current release ownership/status. Live songs without a
+Spotify recording link enter WAITING_FOR_LINK. Artist email/in-app reminders are
+deduplicated; the artist can add the listening link in My submissions. Curator
+email and in-app notifications, including the HYMN admin queue, are created only
+when the review enters IN_REVIEW. Its seven-day deadline starts at activation.
+Already-live tracks with links activate at verified payment immediately.
+
+Waiting reservations count against curator capacity, can be cancelled by their
+owner for a full refund, and expire after 90 days. Missing/deleted or rejected
+releases and declined curator listings also queue refunds. The existing payment
+reconciliation, refund recovery and email outbox remain authoritative. Hostinger's
+15-minute scheduled automation activates waiting reviews on its next successful
+run; reminders are not instantaneous provider webhooks. No live customer payments
+are created by the automated test fixtures.
 

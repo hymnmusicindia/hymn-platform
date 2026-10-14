@@ -6,6 +6,7 @@ import { ArrowRight, Check, CheckCircle2, Clock3, Disc3, HelpCircle } from "luci
 import { CoverArt } from "@/components/cover-art";
 import type { Release } from "@/lib/types";
 import styles from "./release-review-confirmation.module.css";
+import { ReleaseCurationInvitation } from "./release-curation-invitation";
 
 export function ReleaseReviewConfirmation({ release, onReset, isResubmission = false, resetLabel = "Submit another release" }: { release: Release; onReset: () => void; isResubmission?: boolean; resetLabel?: string }) {
   const heading = useRef<HTMLHeadingElement>(null);
@@ -34,6 +35,7 @@ export function ReleaseReviewConfirmation({ release, onReset, isResubmission = f
     { question: "Where can I track updates?", answer: "Open your release dashboard to see the latest status, review notes and distribution progress. You can safely leave this page—your submission is saved." }
   ];
   return <section className={styles.page} data-release-review-confirmation aria-labelledby="release-review-heading">
+    {!isResubmission ? <ReleaseCurationInvitation releaseId={release.id} /> : null}
     <header className={styles.header}>
       <div><p className={styles.eyebrow}><CheckCircle2 size={15} aria-hidden="true" /> {isResubmission ? "Updates received" : "Submission received"}<span>Release #{release.id}</span></p>
         <h1 id="release-review-heading" ref={heading} tabIndex={-1}>{isResubmission ? "Your changes are back in review" : "Your release is under review"}</h1>

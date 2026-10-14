@@ -6,6 +6,7 @@ import { applyCuratorListing, moderateCuratorListing, createReviewCheckout, conf
 import { REVIEW_TERMS_VERSION, reviewDecisionSchema, reviewDeadline, trackUrlSchema } from "../lib/playlist-review-domain";
 import { processPlaylistReviewWebhook } from "../lib/playlist-review-webhook";
 import { submitPlaylistTestimonial, playlistTestimonials } from "../lib/playlist-testimonials";
+import { updateReviewListeningLink, cancelScheduledPlaylistReview } from "../lib/playlist-reviews";
 
 async function main() {
   assert.match(process.env.DATABASE_URL || "", /@127\.0\.0\.1:\d+\/playlist_fixture$/, "Only an isolated database may run this test");
@@ -36,7 +37,7 @@ async function main() {
   await assert.rejects(confirmReviewPayment(checkout.orderId!, paymentId, stranger.id), /customer/);
   payments.get(paymentId)!.amount = 50; await assert.rejects(confirmReviewPayment(checkout.orderId!, paymentId, customer.id), /amount/); payments.get(paymentId)!.amount = 12500;
   const paid = await confirmReviewPayment(checkout.orderId!, paymentId, customer.id); assert.equal(paid.status, "IN_REVIEW"); assert.equal(paid.dueAt!.getTime(), reviewDeadline(paid.paidAt!).getTime());
-  await confirmReviewPayment(checkout.orderId!, paymentId, customer.id); assert.equal(await prisma.playlistReviewMail.count({ where: { eventKey: { startsWith: `review:${paid.id}:paid:` } } }), 2);
+  await confirmReviewPayment(checkout.orderId!, paymentId, customer.id); assert.equal(await prisma.playlistReviewMail.count({ where: { eventKey: { in: [`review:${paid.id}:paid:curator`, `review:${paid.id}:ready:artist`] } } }), 2);
   assert.equal(reviewDecisionSchema.safeParse({ status: "NOT_A_FIT", remark: "No", nextStep: "" }).success, false);
   assert.equal(trackUrlSchema.safeParse("https://evil.example/track/1234567890123456789012").success, false);
   const decision = { status: "NOT_A_FIT", remark: "The soft vocal works well, but our playlist focuses on high-energy dance recordings.", nextStep: "Try reflective Hindi-pop curators who feature acoustic recordings." };
@@ -71,6 +72,21 @@ async function main() {
     const checkout = await createReviewCheckout(customer.id, { ...linkedInput, requestKey: crypto.randomUUID() });
     assert.equal(checkout.amount, 5000);
   }
+  const scheduledCheckout = await createReviewCheckout(customer.id, { ...linkedInput, trackUrl: '', requestKey: crypto.randomUUID() });
+  payments.set('pay_scheduled', { id: 'pay_scheduled', order_id: scheduledCheckout.orderId!, status: 'captured', amount: 5000, currency: 'INR', created_at: Math.floor(Date.now() / 1000) });
+  const reserved = await confirmReviewPayment(scheduledCheckout.orderId!, 'pay_scheduled', customer.id);
+  assert.equal(reserved.status, 'WAITING_FOR_RELEASE'); assert.equal(reserved.dueAt, null);
+  assert.equal(await prisma.playlistReviewMail.count({ where: { eventKey: `review:${reserved.id}:paid:curator` } }), 0);
+  await assert.rejects(decideReview(curator.id, reserved.id, decision, true), /unpaid|already completed/);
+  await prisma.release.update({ where: { id: liveRelease.id }, data: { status: 'LIVE' } });
+  await runPlaylistReviewAutomation();
+  assert.equal((await prisma.playlistReviewRequest.findUniqueOrThrow({ where: { id: reserved.id } })).status, 'WAITING_FOR_LINK');
+  assert.equal(await prisma.playlistReviewMail.count({ where: { eventKey: `review:${reserved.id}:live-reminder` } }), 1);
+  await assert.rejects(updateReviewListeningLink(stranger.id, reserved.id, input.trackUrl), /not waiting/);
+  const activated = await updateReviewListeningLink(customer.id, reserved.id, input.trackUrl);
+  assert.equal(activated.status, 'IN_REVIEW'); assert.ok(activated.dueAt && activated.dueAt > new Date());
+  await runPlaylistReviewAutomation();
+  assert.equal(await prisma.playlistReviewMail.count({ where: { eventKey: `review:${reserved.id}:paid:curator` } }), 1);
   await prisma.release.update({ where: { id: liveRelease.id }, data: { status: "DRAFT" } });
   await assert.rejects(createReviewCheckout(customer.id, { ...linkedInput, requestKey: crypto.randomUUID() }), /own HYMN catalogue/);
   assert.equal((await playlistReviewSnapshot(customer.id)).releasedTracks.length, 0);
@@ -86,6 +102,19 @@ async function main() {
   await assert.rejects(resolveReviewConcern(curator.id, paid.id, "UPHOLD", "Fixture attempts to uphold a payment already refunded."), /already been refunded/);
   assert.equal(await processPlaylistReviewWebhook({ event: "payment.captured", payload: { payment: { entity: { id: "unrelated", order_id: "unrelated_order" } } } }), false);
   const snapshot = await playlistReviewSnapshot(stranger.id); assert.equal(snapshot.requests.length, 0); assert.equal(snapshot.inbox.length, 0); assert.ok(!("moderationNote" in snapshot.listings[0]));
+  await prisma.release.update({ where: { id: liveRelease.id }, data: { status: 'SCHEDULED' } });
+  const cancellation = await createReviewCheckout(customer.id, { ...linkedInput, trackUrl: '', requestKey: crypto.randomUUID() });
+  payments.set('pay_cancel', { id: 'pay_cancel', order_id: cancellation.orderId!, status: 'captured', amount: 5000, currency: 'INR', created_at: Math.floor(Date.now() / 1000) });
+  await confirmReviewPayment(cancellation.orderId!, 'pay_cancel', customer.id);
+  await assert.rejects(cancelScheduledPlaylistReview(stranger.id, cancellation.reviewId), /Only your/);
+  assert.equal((await cancelScheduledPlaylistReview(customer.id, cancellation.reviewId)).status, 'REFUND_PENDING');
+  await assert.rejects(cancelScheduledPlaylistReview(customer.id, cancellation.reviewId), /Only your/);
+  await prisma.release.update({ where: { id: liveRelease.id }, data: { status: 'LIVE' } });
+  await prisma.track.update({ where: { id: linkedInput.trackId }, data: { metadata: { spotifyTrackUrl: input.trackUrl } } });
+  const automaticLink = await createReviewCheckout(customer.id, { ...linkedInput, trackUrl: '', requestKey: crypto.randomUUID() });
+  payments.set('pay_auto_link', { id: 'pay_auto_link', order_id: automaticLink.orderId!, status: 'captured', amount: 5000, currency: 'INR', created_at: Math.floor(Date.now() / 1000) });
+  const automaticallyReady = await confirmReviewPayment(automaticLink.orderId!, 'pay_auto_link', customer.id);
+  assert.equal(automaticallyReady.status, 'IN_REVIEW'); assert.equal(automaticallyReady.trackUrl, input.trackUrl);
   console.log("PASS real PostgreSQL: migration/seeds, ₹50/custom fees, moderated listings, ownership, checkout idempotency, captured-payment amount checks, deadline, required constructive feedback, duplicate decisions, disputes, one-time refunds, expiry, email outbox and data isolation. All gateway calls mocked.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => prisma.$disconnect());

@@ -6,7 +6,7 @@ const { build } = require('esbuild');
 const { chromium, expect } = require('@playwright/test');
 (async () => {
   const output = await fs.mkdtemp(path.join(os.tmpdir(), 'hymn-playlist-ui-'));
-  await build({ stdin: { contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {PlaylistReviewMarketplace} from './components/playlist-review-marketplace';createRoot(document.getElementById('root')).render(<PlaylistReviewMarketplace/>);`, loader: 'tsx', resolveDir: process.cwd() }, bundle: true, outfile: path.join(output, 'marketplace.js'), jsx: 'automatic', define: { 'process.env.NODE_ENV': '"production"' } });
+  await build({ stdin: { contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {PlaylistReviewMarketplace} from './components/playlist-review-marketplace';function Fixture(){const [page,setPage]=React.useState(false);window.renderPlaylistPage=setPage;return <PlaylistReviewMarketplace page={page}/>;}createRoot(document.getElementById('root')).render(<Fixture/>);`, loader: 'tsx', resolveDir: process.cwd() }, bundle: true, outfile: path.join(output, 'marketplace.js'), jsx: 'automatic', define: { 'process.env.NODE_ENV': '"production"' } });
   const hymn = { id: 1, name: 'Dusk Till Dawn', playlistUrl: 'https://open.spotify.com/playlist/2soKoURWSXnWJ48ygivet8', description: 'Listen to the playlist, check the fit, and send your track for a thoughtful HYMN review.', genres: 'Explore playlist', feeMinor: 5000, isHymn: true, capacity: 20, status: 'APPROVED' };
   const independent = { ...hymn, id: 2, name: 'Independent Stories', isHymn: false, feeMinor: 12500 };
   const review = { id: 1, listing: hymn, trackTitle: 'Keep creating', artistName: 'Fixture artist', trackUrl: 'https://open.spotify.com/track/1234567890123456789012', pitch: 'A thoughtful recording for reflective listeners.', amountMinor: 5000, status: 'NOT_A_FIT', remark: 'The soft vocal works well, but this playlist focuses on upbeat dance recordings.', nextStep: 'Try reflective Hindi-pop curators who feature acoustic recordings.', payoutStatus: 'HELD' };
@@ -38,8 +38,7 @@ const { chromium, expect } = require('@playwright/test');
     });
     assert.ok(Math.abs(positions.authorY - positions.ratingY) < 10, 'Author and rating share the top row');
     assert.ok(positions.quoteY > positions.authorY, 'Review message sits below the author');
-    await page.getByRole('button', { name: 'Explore playlists', exact: true }).click();
-    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.evaluate(() => window.renderPlaylistPage(true));
     for (const width of [1440, 768, 390, 320]) {
       await page.setViewportSize({ width, height: 900 });
       await page.getByRole('button', { name: 'Discover playlists', exact: true }).click();
@@ -78,9 +77,9 @@ const { chromium, expect } = require('@playwright/test');
       await page.screenshot({ path: path.join(output, `marketplace-${width}.png`), fullPage: true });
     }
     assert.deepEqual(errors, []);
-    await page.keyboard.press('Escape');
+    await page.evaluate(() => window.renderPlaylistPage(false));
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Explore playlists', exact: true })).toBeFocused();
+    await expect(page.getByRole('button', { name: 'Explore playlists', exact: true })).toBeVisible();
     await expect(page.locator('.playlist-cover-wall .playlist-invitation-covers')).toHaveCount(2);
     await expect(page.getByRole('button', { name: /Pause motion|Play motion/ })).toHaveCount(0);
     await expect(page.locator('.playlist-cover-wall [data-loop-start]')).toHaveCount(2);

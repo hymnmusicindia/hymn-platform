@@ -6,6 +6,7 @@ import { applyCuratorListing, createReviewCheckout, playlistReviewSnapshot, conf
 import { verifyRazorpaySignature } from "@/lib/razorpay";
 import { z } from "zod";
 import { playlistTestimonials, submitPlaylistTestimonial } from "@/lib/playlist-testimonials";
+import { updateReviewListeningLink, cancelScheduledPlaylistReview } from "@/lib/playlist-reviews";
 
 export async function GET(request: Request) {
   const access = await requireUser(); if ("error" in access) return access.error;
@@ -19,6 +20,8 @@ export async function POST(request: Request) {
   if (!rate.allowed) return NextResponse.json({ error: "Too many attempts. Please try again later." }, { status: 429 });
   try {
     const body = await request.json();
+    if (body.action === "cancel-scheduled") return NextResponse.json({ review: await cancelScheduledPlaylistReview(access.user.id, z.number().int().positive().parse(body.id)) });
+    if (body.action === "listening-link") return NextResponse.json({ review: await updateReviewListeningLink(access.user.id, z.number().int().positive().parse(body.id), z.string().parse(body.trackUrl)) });
     if (body.action === "testimonial") return NextResponse.json(await submitPlaylistTestimonial(access.user.id, body));
     if (body.action === "apply") return NextResponse.json({ listing: await applyCuratorListing(access.user.id, body) });
     if (body.action === "pricing") return NextResponse.json({ listing: await updateCuratorPricing(access.user.id, z.number().int().positive().parse(body.id), z.number().parse(body.feeRupees), z.number().parse(body.capacity)) });
