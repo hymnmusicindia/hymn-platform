@@ -2,7 +2,7 @@ import "server-only";
 import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { razorpay, verifyCapturedRazorpayPayment } from "@/lib/razorpay";
-import { REVIEW_TERMS_VERSION, HYMN_REVIEW_FEE_MINOR, reviewDeadline, mayReview, REVIEW_NOT_A_FIT_COPY, listingSchema, reviewSubmissionSchema, reviewDecisionSchema } from "@/lib/playlist-review-domain";
+import { REVIEW_TERMS_VERSION, reviewFeeMinor, reviewDeadline, mayReview, REVIEW_NOT_A_FIT_COPY, listingSchema, reviewSubmissionSchema, reviewDecisionSchema } from "@/lib/playlist-review-domain";
 import { sendTransactionalEmail } from "@/lib/email/send-transactional-email";
 import { emailLayout, emailText } from "@/lib/email/email-templates";
 import { getPublicAppUrl } from "@/lib/public-app-url";
@@ -22,16 +22,17 @@ async function audit(tx: Tx, actorId: number | null, action: string, id: number,
   await tx.auditLog.create({ data: { actorId, actorType: actorId ? "user" : "system", action, entity: "playlist_review", entityId: String(id), metadata } });
 }
 export async function playlistReviewSnapshot(userId: number, admin = false) {
-  const [listings, requests, ownListings, inbox] = await Promise.all([
+  const [listings, requests, ownListings, inbox, releasedTracks] = await Promise.all([
     prisma.playlistReviewListing.findMany({ where: { status: "APPROVED" }, orderBy: [{ isHymn: "desc" }, { name: "asc" }], take: 200 }),
     prisma.playlistReviewRequest.findMany({ where: { customerId: userId }, include: reviewInclude, orderBy: { id: "desc" }, take: 100 }),
     prisma.playlistReviewListing.findMany({ where: admin ? {} : { ownerId: userId }, orderBy: { id: "desc" }, take: 200 }),
     prisma.playlistReviewRequest.findMany({ where: { status: { not: "AWAITING_PAYMENT" }, ...(admin ? {} : { listing: { ownerId: userId } }) }, include: reviewInclude, orderBy: [{ dueAt: "asc" }, { id: "desc" }], take: 200 }),
+    prisma.track.findMany({ where: { release: { userId, status: "LIVE" } }, select: { id: true, title: true, primaryArtist: true, isrc: true, release: { select: { id: true, title: true, artistName: true, artworkUrl: true } } }, orderBy: [{ releaseId: "desc" }, { trackNumber: "asc" }] }),
   ]);
   // Never expose provider payment identifiers to another curator or the catalogue.
   const safe = (rows: typeof requests) => rows.map(({ razorpayPaymentId: _payment, razorpayOrderId: _order, requestKey: _key, ...row }) => row);
   const owners = admin ? await prisma.user.findMany({ where: { id: { in: ownListings.flatMap(row => row.ownerId ? [row.ownerId] : []) } }, select: { id: true, name: true, email: true } }) : [];
-  return { listings: listings.map(({ moderationNote: _note, ...row }) => row), requests: safe(requests), ownListings: ownListings.map(row => ({ ...row, ...(admin ? { curator: owners.find(owner => owner.id === row.ownerId) || null } : {}) })), inbox: safe(inbox), termsVersion: REVIEW_TERMS_VERSION, checkoutAvailable: Boolean(razorpay) };
+  return { releasedTracks, listings: listings.map(({ moderationNote: _note, ...row }) => row), requests: safe(requests), ownListings: ownListings.map(row => ({ ...row, ...(admin ? { curator: owners.find(owner => owner.id === row.ownerId) || null } : {}) })), inbox: safe(inbox), termsVersion: REVIEW_TERMS_VERSION, checkoutAvailable: Boolean(razorpay) };
 }
 export async function applyCuratorListing(userId: number, input: unknown) {
   const value = listingSchema.parse(input);
@@ -74,14 +75,22 @@ export async function createReviewCheckout(userId: number, input: unknown) {
     const listing = await tx.playlistReviewListing.findUniqueOrThrow({ where: { id: value.listingId } });
     if (listing.status !== "APPROVED") throw new Error("This curator is not accepting submissions.");
     if (listing.ownerId === userId) throw new Error("You cannot buy a review of your own music from yourself.");
+    const linkedTrack = value.trackId ? await tx.track.findFirst({ where: { id: value.trackId, release: { userId, status: "LIVE" } }, include: { release: true } }) : null;
+    if (value.trackId && !linkedTrack) throw new Error("Choose a released track from your own HYMN catalogue, or use the external-track option.");
+    if (linkedTrack) { value.trackTitle = linkedTrack.title; value.artistName = linkedTrack.primaryArtist || linkedTrack.release.artistName; }
     let row = await tx.playlistReviewRequest.findUnique({ where: { requestKey: value.requestKey } });
+    if (row) {
+      const created = await tx.auditLog.findFirst({ where: { action: "PLAYLIST_REVIEW_CHECKOUT_CREATED", entity: "playlist_review", entityId: String(row.id) } });
+      const previousTrackId = (created?.metadata as { trackId?: number } | null)?.trackId || null;
+      if (previousTrackId !== (value.trackId || null)) throw new Error("Track source changed. Start a new submission before paying.");
+    }
     if (row && (row.customerId !== userId || row.listingId !== value.listingId || row.trackUrl !== value.trackUrl || row.trackTitle !== value.trackTitle || row.pitch !== value.pitch || row.artistName !== value.artistName)) throw new Error("This checkout key belongs to different submission details. Start a new submission.");
     if (row && row.status !== "AWAITING_PAYMENT") throw new Error("This review has already been paid or closed. Check My submissions.");
     if (!row) {
       const active = await tx.playlistReviewRequest.count({ where: { listingId: listing.id, OR: [{ status: "IN_REVIEW" }, { status: "AWAITING_PAYMENT", createdAt: { gt: new Date(Date.now() - 30 * 60000) } }] } });
       if (active >= listing.capacity) throw new Error("This curator’s review queue is full. Please try another curator or return later.");
-      row = await tx.playlistReviewRequest.create({ data: { requestKey: value.requestKey, listingId: listing.id, customerId: userId, trackTitle: value.trackTitle, artistName: value.artistName, trackUrl: value.trackUrl, pitch: value.pitch, termsVersion: value.termsVersion, amountMinor: listing.isHymn ? HYMN_REVIEW_FEE_MINOR : listing.feeMinor } });
-      await audit(tx, userId, "PLAYLIST_REVIEW_CHECKOUT_CREATED", row.id, { amountMinor: row.amountMinor, termsVersion: value.termsVersion, accepted: true });
+      row = await tx.playlistReviewRequest.create({ data: { requestKey: value.requestKey, listingId: listing.id, customerId: userId, trackTitle: value.trackTitle, artistName: value.artistName, trackUrl: value.trackUrl, pitch: value.pitch, termsVersion: value.termsVersion, amountMinor: reviewFeeMinor(listing.isHymn, listing.feeMinor, Boolean(linkedTrack)) } });
+      await audit(tx, userId, "PLAYLIST_REVIEW_CHECKOUT_CREATED", row.id, { amountMinor: row.amountMinor, termsVersion: value.termsVersion, accepted: true, trackId: linkedTrack?.id || null, releaseId: linkedTrack?.releaseId || null, trackSource: linkedTrack ? "hymn_catalogue" : "external" });
     }
     if (!row.razorpayOrderId) {
       const order = await playlistGatewayCall(razorpay!.orders.create({ amount: row.amountMinor, currency: "INR", receipt: `playlist_review_${row.id}`, notes: { product: "playlist_review", reviewId: String(row.id), customerId: String(userId) } }));

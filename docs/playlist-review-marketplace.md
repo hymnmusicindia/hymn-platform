@@ -135,3 +135,18 @@ desktop/mobile discovery, fee displays, filtering, form focus and decline feedba
 Operational rollout still needs a real authorised small-value payment/refund smoke
 test and confirmation that the deployed Hostinger startup loop is logging successful
 runs; these are not inferred from a local build or a Git push.
+# Catalogue-linked pricing (15 October 2026)
+
+Submission defaults to the signed-in customer's LIVE HYMN tracks. The server loads
+the selected recording and its parent release, verifies ownership and live status,
+and uses canonical title/artist values. HYMN playlists charge ₹50 for these verified
+catalogue selections, ₹80 for external submissions. Independent playlist fees remain
+curator-controlled. Spotify recording links are required for listening in both paths;
+selecting a catalogue track does not claim to independently verify an external URL.
+
+Checkout creation appends track/release IDs and source to the immutable audit trail.
+Retries cannot switch the linked track or source under an existing request key.
+Amounts remain snapshotted on requests/orders; payment verification, refunds and
+settlement use the original amount, never current pricing. No schema migration is
+required. Terms version is `playlist-review-2026-10-15-v2`.
+
