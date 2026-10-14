@@ -91,6 +91,61 @@ html body .release-record-review .payment-lines { display:grid; gap:12px; margin
 
 /* Final review: a compact summary followed by scannable, consistent sections.
    Scope every override to this step; editing and post-submission views are unchanged. */
+/* The editor normally reserves column one for its rail. Review owns both columns,
+   with the existing functional section buttons repurposed as a horizontal toolbar. */
+html body .release-workflow.release-workflow.release-premium-editor.is-review-mode {
+  grid-template-columns:minmax(0,1fr)!important;
+  grid-template-rows:auto!important;
+  column-gap:0;
+}
+html body .release-workflow.release-premium-editor.is-review-mode > .release-workflow-nav {
+  display:flex!important;
+  grid-column:1 / -1!important;
+  grid-row:auto!important;
+  position:static;
+  flex-wrap:wrap;
+  gap:6px;
+  width:100%;
+  padding:8px;
+  margin:0 0 16px;
+  border:1px solid #3a414b;
+  border-radius:12px;
+  background:#23272e;
+}
+html body .release-workflow.release-premium-editor.is-review-mode > .release-workflow-nav > button {
+  flex:1 1 100px;
+  min-height:44px;
+  padding:10px 14px!important;
+  border:1px solid transparent;
+  border-radius:8px;
+  color:#bdc5d1;
+  background:transparent;
+  font-size:12px;
+  transition:background .15s ease,color .15s ease,border-color .15s ease;
+}
+html body .release-workflow.release-premium-editor.is-review-mode > .release-workflow-nav > button:hover {
+  color:#fff;
+  background:#303741;
+  border-color:#495362;
+}
+html body .release-workflow.release-premium-editor.is-review-mode > .release-workflow-nav > button[aria-current="step"] {
+  color:#e1f3e8;
+  background:#30483b;
+  border-color:#517660;
+}
+html body .release-workflow.release-premium-editor.is-review-mode > .release-workflow-nav > button:focus-visible {
+  outline:2px solid #a8dec0;
+  outline-offset:2px;
+}
+html body .release-workflow.release-workflow.release-premium-editor.is-review-mode > .release-workflow-content {
+  grid-column:1 / -1!important;
+  grid-row:auto!important;
+  width:100%;
+  max-width:none;
+}
+@media(prefers-reduced-motion:reduce) {
+  html body .release-workflow.release-premium-editor.is-review-mode > .release-workflow-nav > button { transition:none; }
+}
 html body .release-premium-editor .release-record-review {
   gap:24px;
   width:100%;
