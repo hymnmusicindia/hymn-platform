@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CustomerOverlay } from "@/components/customer-overlay";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
+import { PlaylistFeedbackPrompt, PlaylistTestimonials } from "./playlist-service-feedback";
 import { ArrowUpRight, AudioLines, Check, Clock3, Headphones, Search, ShieldCheck, Sparkles, X } from "lucide-react";
 import { loadBioRazorpay } from "@/lib/client-razorpay";
 import { REVIEW_TERMS_VERSION, REVIEW_NOT_A_FIT_COPY, reviewFeeMinor } from "@/lib/playlist-review-domain";
@@ -13,7 +14,7 @@ type Review = { id: number; listing: Listing; trackTitle: string; artistName: st
 type CatalogueTrack = { id: number; title: string; primaryArtist: string | null; isrc: string | null; release: { id: number; title: string; artistName: string; artworkUrl: string | null } };
 type Snapshot = { releasedTracks?: CatalogueTrack[]; listings: Listing[]; requests: Review[]; ownListings: Listing[]; inbox: Review[]; checkoutAvailable: boolean };
 const money = (minor: number) => `₹${(minor / 100).toLocaleString("en-IN")}`;
-const hymnCovers: Record<string, string> = { "Dusk Till Dawn": "1", "Indie Hits": "2", "Ungatekept Gems": "3", "Fresh Releases": "4" };
+const hymnCovers: Record<string, string> = { "Dusk Till Dawn": "1", "Indie Hits": "2", "Ungatekept Gems": "4", "Fresh Releases": "3" };
 const statusLabel: Record<string, string> = { AWAITING_PAYMENT: "Payment not completed", IN_REVIEW: "Listening & reviewing", SHORTLISTED: "Caught the curator’s attention", NOT_A_FIT: "Not a fit for this playlist", REFUND_PENDING: "Refund in progress", REFUNDED: "Fee refunded", DISPUTED: "HYMN is reviewing your concern" };
 
 export function PlaylistReviewMarketplace({ admin = false }: { admin?: boolean }) {
@@ -21,15 +22,38 @@ export function PlaylistReviewMarketplace({ admin = false }: { admin?: boolean }
   const carousel = useRef<HTMLDivElement>(null);
   const dialogRef = useAccessibleDialog(open, () => setOpen(false));
   useEffect(() => {
+    if (admin || open) return;
+    const rail = carousel.current; if (!rail) return;
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let frame = 0; let previous = 0; let direction = 1; let paused = false; let position = rail.scrollLeft;
+    const pause = () => { paused = true; }; const resume = () => { position = rail.scrollLeft; paused = false; };
+    const tick = (now: number) => {
+      const elapsed = previous ? Math.min(now - previous, 50) : 0; previous = now;
+      if (!paused && !motion.matches && !document.hidden && !rail.contains(document.activeElement)) {
+        const max = rail.scrollWidth - rail.clientWidth;
+        if (rail.scrollLeft >= max - 1) direction = -1;
+        if (rail.scrollLeft <= 1) direction = 1;
+        position = Math.max(0, Math.min(max, position + direction * elapsed * .025));
+        rail.scrollLeft = position;
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    rail.addEventListener('pointerenter', pause); rail.addEventListener('pointerleave', resume);
+    rail.addEventListener('touchstart', pause, { passive: true }); rail.addEventListener('touchend', resume);
+    frame = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(frame); rail.removeEventListener('pointerenter', pause); rail.removeEventListener('pointerleave', resume); rail.removeEventListener('touchstart', pause); rail.removeEventListener('touchend', resume); };
+  }, [admin, open]);
+  useEffect(() => {
     if (["curator", "submissions"].includes(new URLSearchParams(window.location.search).get("reviewView") || "")) setOpen(true);
   }, []);
   if (admin) return <PlaylistReviewWorkspace admin />;
-  const covers = [{ name: "Dusk Till Dawn", image: "1" }, { name: "Indie Hits", image: "2" }, { name: "Ungatekept Gems", image: "3" }, { name: "Fresh Releases", image: "4" }];
+  const covers = [{ name: "Dusk Till Dawn", image: "1" }, { name: "Indie Hits", image: "2" }, { name: "Ungatekept Gems", image: "4" }, { name: "Fresh Releases", image: "3" }];
   return <>
     <section className="playlist-invitation" aria-labelledby="playlist-invitation-title">
-      <div className="playlist-invitation-main"><div className="playlist-invitation-copy"><Headphones size={30} strokeWidth={1.5} /><h2 id="playlist-invitation-title">Looking for your next playlist?</h2><p>Find your sound’s next home.<br />Meet curators. Get a thoughtful review.</p><button type="button" className="playlist-invitation-cta" onClick={() => setOpen(true)} aria-haspopup="dialog">Find my playlist <ArrowUpRight size={18} /></button><small>HYMN tracks ₹50 · External tracks ₹80<br />Feedback, not guaranteed placement.</small></div>
+      <div className="playlist-invitation-main"><div className="playlist-invitation-copy"><Headphones size={30} strokeWidth={1.5} /><h2 id="playlist-invitation-title">Your sound.<br />A new discovery.</h2><p>Discover playlists that fit your music.<br />Get heard. Take your next step.</p><button type="button" className="playlist-invitation-cta" onClick={() => setOpen(true)} aria-haspopup="dialog">Explore playlists <ArrowUpRight size={18} /></button><small>Reviews from ₹50 for HYMN releases<br />₹80 for external tracks · No paid placement</small></div>
       <div className="playlist-invitation-gallery"><div className="playlist-invitation-covers" ref={carousel} aria-label="Explore HYMN playlists">{covers.map(cover => <button type="button" key={cover.image} onClick={() => setOpen(true)} aria-label={`Explore ${cover.name}`}><img src={`/assets/playlist-images/previews/${cover.image}.webp`} width={240} height={240} loading="lazy" decoding="async" alt={`${cover.name} playlist cover`} /><span>{cover.name}<ArrowUpRight size={14} /></span></button>)}</div><div className="playlist-carousel-controls"><span>Discover HYMN selects</span><div><button type="button" aria-label="Previous playlists" onClick={() => carousel.current?.scrollBy({ left: -220, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })}>←</button><button type="button" aria-label="Next playlists" onClick={() => carousel.current?.scrollBy({ left: 220, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })}>→</button></div></div></div></div>
       <div className="playlist-invitation-benefits" aria-label="What your review includes">{[[Headphones, "A real listen", "Your recording, heard by a curator."], [AudioLines, "Useful feedback", "Specific notes. A practical next step."], [Clock3, "Seven-day window", "No review on time? Your fee is refunded."]].map(([Icon, title, text]) => { const Symbol = Icon as typeof Headphones; return <div key={String(title)}><Symbol size={20} /><span><strong>{String(title)}</strong><small>{String(text)}</small></span></div>; })}</div>
+      <PlaylistTestimonials />
     </section>
     <CustomerOverlay open={open}><div className="playlist-dialog-backdrop" onClick={event => { if (event.target === event.currentTarget) setOpen(false); }}><section ref={dialogRef} className="playlist-review-dialog" role="dialog" aria-modal="true" aria-labelledby="playlist-dialog-title" tabIndex={-1}><header className="playlist-dialog-heading"><div><h2 id="playlist-dialog-title">Find your next curator</h2><p>Choose a playlist. Send your song. Get feedback.</p></div><button type="button" onClick={() => setOpen(false)} aria-label="Close playlist workspace"><X size={22} /></button></header><div className="playlist-dialog-content"><PlaylistReviewWorkspace /></div></section></div></CustomerOverlay>
   </>;
@@ -89,6 +113,7 @@ function PlaylistReviewWorkspace({ admin = false }: { admin?: boolean }) {
     <header className="playlist-marketplace-hero"><div><span className="playlist-eyebrow"><AudioLines size={14} /> A thoughtful next listen</span><h2>Your sound.<br /><span>Meet your next curator.</span></h2><p>Real ears. Useful feedback. Independent decisions.<br />Start with a ₹50 HYMN review, or discover an independent curator.</p><div className="playlist-trust"><span><Headphones size={14} /> Listening + written feedback</span><span><Clock3 size={14} /> Seven-day response window</span></div></div><aside><span className="playlist-orbit"><Headphones size={42} /></span><strong>Feedback, not a promise.</strong><p>No bought playlist slots. No guaranteed streams. Just a fair chance to be heard.</p></aside></header>
     <nav className="playlist-marketplace-nav" aria-label="Playlist review workspace">{[["discover", "Discover playlists"], ["submissions", "My submissions"], ["curator", admin ? "Curator operations" : "Curator studio"]].map(([key, label]) => <button type="button" key={key} aria-current={tab === key ? "page" : undefined} onClick={() => { setTab(key); setSelected(null); }}>{label}{key === "submissions" && data?.requests.length ? <span>{data.requests.length}</span> : null}</button>)}<a href="/playlist-review-terms" target="_blank" rel="noreferrer">How it works & terms <ArrowUpRight size={14} /></a></nav>
     {message ? <div className="playlist-message" role="status">{message}<button type="button" aria-label="Dismiss message" onClick={() => setMessage("")}><X size={15} /></button></div> : null}
+    {!admin && tab === "submissions" ? data?.requests.filter(row => row.reviewedAt && ["SHORTLISTED", "NOT_A_FIT"].includes(row.status)).map(row => <PlaylistFeedbackPrompt key={row.id} reviewId={row.id} trackTitle={row.trackTitle} />) : null}
     {!data ? <div className="playlist-empty">{message ? <><p>The marketplace couldn’t load.</p><button className="btn-outline" onClick={() => { void refresh().catch(error => setMessage(error.message)); }}>Try again</button></> : "Loading your review workspace…"}</div> : null}
     {data && tab === "discover" ? <>
       <p className="playlist-source-note">HYMN reviews: ₹50 for your released HYMN catalogue tracks · ₹80 for external tracks. Independent curators set their own fees.</p>

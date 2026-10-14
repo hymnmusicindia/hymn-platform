@@ -5,6 +5,7 @@ import { razorpay } from "../lib/razorpay";
 import { applyCuratorListing, moderateCuratorListing, createReviewCheckout, confirmReviewPayment, decideReview, raiseReviewConcern, resolveReviewConcern, recordCuratorSettlement, runPlaylistReviewAutomation, playlistReviewSnapshot, updateCuratorPricing } from "../lib/playlist-reviews";
 import { REVIEW_TERMS_VERSION, reviewDecisionSchema, reviewDeadline, trackUrlSchema } from "../lib/playlist-review-domain";
 import { processPlaylistReviewWebhook } from "../lib/playlist-review-webhook";
+import { submitPlaylistTestimonial, playlistTestimonials } from "../lib/playlist-testimonials";
 
 async function main() {
   assert.match(process.env.DATABASE_URL || "", /@127\.0\.0\.1:\d+\/playlist_fixture$/, "Only an isolated database may run this test");
@@ -41,6 +42,12 @@ async function main() {
   const decision = { status: "NOT_A_FIT", remark: "The soft vocal works well, but our playlist focuses on high-energy dance recordings.", nextStep: "Try reflective Hindi-pop curators who feature acoustic recordings." };
   await assert.rejects(decideReview(stranger.id, paid.id, decision), /assigned curator/);
   const reviewed = await decideReview(curator.id, paid.id, decision); assert.equal(reviewed.status, "NOT_A_FIT"); assert.equal(reviewed.payoutStatus, "HELD");
+  const feedback = { reviewId: paid.id, rating: 3, quote: "The listening notes were specific and gave me a useful next step.", consent: true };
+  await assert.rejects(submitPlaylistTestimonial(stranger.id, feedback), /Only your completed/);
+  await assert.rejects(submitPlaylistTestimonial(customer.id, { ...feedback, consent: false }));
+  await submitPlaylistTestimonial(customer.id, feedback);
+  await assert.rejects(submitPlaylistTestimonial(customer.id, feedback), /already shared/);
+  const testimonials = await playlistTestimonials(); assert.equal(testimonials[0].rating, 3); assert.equal(testimonials[0].name, customer.name); assert.ok(!('email' in testimonials[0]));
   await assert.rejects(decideReview(curator.id, paid.id, decision), /already completed/);
   assert.equal((await prisma.playlistReviewMail.findUniqueOrThrow({ where: { eventKey: `review:${paid.id}:decision` } })).body.includes("not a verdict"), true);
   await assert.rejects(raiseReviewConcern(stranger.id, paid.id, "The feedback did not address the recording."), /not found/);

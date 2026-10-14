@@ -20,9 +20,9 @@ const { chromium, expect } = require('@playwright/test');
     await page.addStyleTag({ path: path.join(output, 'marketplace.css') });
     await page.addStyleTag({ path: 'app/styles/heading-hierarchy.css' });
     await page.addScriptTag({ path: path.join(output, 'marketplace.js') });
-    await expect(page.getByRole('heading', { name: 'Looking for your next playlist?' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Your sound.*A new discovery/ })).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Find my playlist' }).click();
+    await page.getByRole('button', { name: 'Explore playlists', exact: true }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
     for (const width of [1440, 768, 390, 320]) {
       await page.setViewportSize({ width, height: 900 });
@@ -64,7 +64,12 @@ const { chromium, expect } = require('@playwright/test');
     assert.deepEqual(errors, []);
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Find my playlist' })).toBeFocused();
+    await expect(page.getByRole('button', { name: 'Explore playlists', exact: true })).toBeFocused();
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.mouse.move(0, 0);
+    const rail = page.locator('.playlist-invitation-covers');
+    const start = await rail.evaluate(el => el.scrollLeft);
+    await expect.poll(() => rail.evaluate(el => el.scrollLeft)).not.toBe(start);
     console.log('PASS marketplace UI: ₹50/custom pricing, filtering, focused submission form, constructive decline, required curator remarks, responsive layout. Previews: ' + output);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

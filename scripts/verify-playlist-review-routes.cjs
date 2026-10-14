@@ -13,6 +13,7 @@ const mocks = {
   '@/lib/public-app-url': { getPublicAppUrl: () => 'https://hymn.fixture' },
   '@/lib/rate-limit': { consumeRateLimit: async () => ({ allowed: true }) },
   '@/lib/playlist-reviews': business,
+  '@/lib/playlist-testimonials': business,
   '@/lib/razorpay': { verifyRazorpaySignature: () => false, verifyRazorpayWebhookSignature: () => authenticated },
 };
 function load(file) {

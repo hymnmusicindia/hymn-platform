@@ -132,6 +132,7 @@ export async function decideReview(actorId: number | null, id: number, input: un
     const opening = value.status === "NOT_A_FIT" ? REVIEW_NOT_A_FIT_COPY : "Your music caught this curator’s attention. This is a shortlist, not a promise of placement or streams.";
     await mail(tx, `review:${id}:decision`, user.email, value.status === "NOT_A_FIT" ? "Your curator feedback—and your next step" : "Your track caught a curator’s attention", `${opening}\n\n${row.trackTitle} · ${row.listing.name}\n\nCurator feedback: ${value.remark}\n\nYour next step: ${value.nextStep}`, user.id);
     await audit(tx, actorId, "PLAYLIST_REVIEW_COMPLETED", id, { decision: value.status });
+    await mail(tx, `review:${id}:feedback-invite`, user.email, "How was your HYMN playlist review?", `Your review of ${row.trackTitle} is complete. Share an honest rating and a few words about the service at ${getPublicAppUrl()}/dashboard?tab=promotions&reviewView=submissions. All ratings are welcome. Public display of your name, profile photo and review is optional and requires your consent.`, user.id);
     return result;
   });
 }

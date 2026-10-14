@@ -5,10 +5,11 @@ import { consumeRateLimit } from "@/lib/rate-limit";
 import { applyCuratorListing, createReviewCheckout, playlistReviewSnapshot, confirmReviewPayment, decideReview, raiseReviewConcern, updateCuratorPricing } from "@/lib/playlist-reviews";
 import { verifyRazorpaySignature } from "@/lib/razorpay";
 import { z } from "zod";
+import { playlistTestimonials, submitPlaylistTestimonial } from "@/lib/playlist-testimonials";
 
-export async function GET() {
+export async function GET(request: Request) {
   const access = await requireUser(); if ("error" in access) return access.error;
-  try { return NextResponse.json(await playlistReviewSnapshot(access.user.id)); }
+  try { return NextResponse.json(new URL(request.url).searchParams.get("view") === "testimonials" ? { testimonials: await playlistTestimonials() } : await playlistReviewSnapshot(access.user.id)); }
   catch { return NextResponse.json({ error: "The review marketplace is not ready yet. Please try again later; no payment has been taken." }, { status: 503 }); }
 }
 export async function POST(request: Request) {
@@ -18,6 +19,7 @@ export async function POST(request: Request) {
   if (!rate.allowed) return NextResponse.json({ error: "Too many attempts. Please try again later." }, { status: 429 });
   try {
     const body = await request.json();
+    if (body.action === "testimonial") return NextResponse.json(await submitPlaylistTestimonial(access.user.id, body));
     if (body.action === "apply") return NextResponse.json({ listing: await applyCuratorListing(access.user.id, body) });
     if (body.action === "pricing") return NextResponse.json({ listing: await updateCuratorPricing(access.user.id, z.number().int().positive().parse(body.id), z.number().parse(body.feeRupees), z.number().parse(body.capacity)) });
     if (body.action === "checkout") return NextResponse.json(await createReviewCheckout(access.user.id, body));

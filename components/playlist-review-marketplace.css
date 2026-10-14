@@ -84,3 +84,25 @@
 .playlist-review-dialog .playlist-listing-body > p { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .playlist-invitation button:focus-visible,.playlist-review-dialog button:focus-visible { outline:2px solid #a8dec0; outline-offset:3px; }
 @media(max-width:700px) { .playlist-invitation-main { grid-template-columns:1fr; padding:22px; gap:24px; } .playlist-invitation-copy h2 { max-width:20ch; } .playlist-invitation-benefits { grid-template-columns:1fr; padding:20px 22px; gap:18px; } .playlist-dialog-backdrop { padding:10px; } .playlist-review-dialog { max-height:calc(100dvh - 20px); } .playlist-dialog-heading { padding:16px; } .playlist-dialog-content { padding:16px; } }
+.playlist-invitation .playlist-invitation-covers { scroll-snap-type:none; scrollbar-width:none; mask-image:linear-gradient(to right,transparent,#000 3%,#000 95%,transparent); }
+.playlist-invitation-covers::-webkit-scrollbar { display:none; }
+.playlist-invitation-covers > button:nth-child(even) { transform:translateY(12px) rotate(2deg); }
+.playlist-invitation-covers > button:nth-child(odd) { transform:rotate(-2deg); }
+.playlist-invitation .playlist-invitation-covers { padding:18px 10px 26px; }
+.playlist-invitation .playlist-invitation-copy h2 { max-width:15ch; font-size:clamp(30px,3.8vw,48px); }
+.playlist-testimonials { display:flex; gap:16px; overflow-x:auto; padding:20px 32px; border-top:1px solid var(--border); scroll-snap-type:x mandatory; scrollbar-width:thin; }
+.playlist-testimonials figure { flex:0 0 min(300px,85%); margin:0; padding:18px; border:1px solid var(--border); border-radius:12px; background:var(--bg-soft); scroll-snap-align:start; }
+.playlist-testimonials figure > div { display:grid; gap:6px; }
+.playlist-rating { color:#e8c981; letter-spacing:3px; }
+.playlist-testimonials small,.playlist-testimonial-empty > span { font-size:11px; color:var(--text-muted); line-height:1.7; }
+.playlist-testimonials blockquote { margin:14px 0; font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
+.playlist-testimonials figcaption { display:flex; gap:10px; align-items:center; font-size:12px; }
+.playlist-testimonials img,.playlist-review-initial { border-radius:50%; width:30px; height:30px; object-fit:cover; }
+.playlist-review-initial { display:grid; place-items:center; background:var(--border); }
+.playlist-testimonial-empty { display:grid; gap:6px; font-size:13px; }
+.playlist-feedback-prompt { padding:18px; border:1px solid var(--border); border-radius:12px; }
+.playlist-feedback-prompt summary { cursor:pointer; font-size:14px; }
+.playlist-feedback-prompt form { display:grid; gap:14px; margin-top:16px; }
+.playlist-feedback-prompt label:not(.playlist-check) { display:grid; gap:8px; font-size:12px; }
+.playlist-feedback-prompt :is(select,textarea) { width:100%; padding:12px; background:var(--bg-soft); color:var(--text); border:1px solid var(--border); border-radius:8px; }
+@media(max-width:700px) { .playlist-testimonials { padding:18px 22px; } }
