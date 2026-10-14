@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import type { CSSProperties } from "react";
 import {
   ArrowRight,
@@ -143,7 +144,7 @@ function PlaylistVisual() {
                 } as CSSProperties
               }
             >
-              <Image src={cover.src} alt={cover.alt} fill sizes="192px" className="object-cover transition duration-700 group-hover/service:scale-[1.04]" />
+              <Image src={artworkPreviewUrl(cover.src, 320)} alt={cover.alt} fill sizes="192px" className="object-cover transition duration-700 group-hover/service:scale-[1.04]" />
               <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgba(9,11,16,0.58)_100%)]" />
             </a>
           ))}

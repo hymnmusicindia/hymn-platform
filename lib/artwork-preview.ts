@@ -9,6 +9,9 @@ export function artworkPreviewUrl(src: string, width: number) {
   }
   // Only endpoints that already enforce their own public/private access policy.
   const localPath = src.replace(/^https:\/\/(?:www\.)?hymnmusic\.fun(?=\/)/, "");
+  if (/^\/(?:assets|images)\/[^?#]+\.(?:png|jpe?g|webp)$/i.test(localPath) && !localPath.includes("..") && !localPath.includes("\\")) {
+    return `/api/image-preview?src=${encodeURIComponent(localPath)}&w=${size}`;
+  }
   if (!/^\/api\/(?:releases\/\d+\/artwork|assets\/\d+\/download|public-uploads\/[^?]+)(?:\?|$)/.test(localPath)) return src;
   const url = new URL(src, "https://hymn.local");
   if (url.searchParams.get("download") === "1") return src;

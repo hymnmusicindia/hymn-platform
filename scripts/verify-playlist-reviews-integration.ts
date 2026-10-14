@@ -21,7 +21,10 @@ async function main() {
   const curator = await prisma.user.create({ data: { googleId: "playlist-curator", name: "Curator", email: "curator@example.test" } });
   const stranger = await prisma.user.create({ data: { googleId: "playlist-stranger", name: "Stranger", email: "stranger@example.test" } });
   const hymn = await prisma.playlistReviewListing.findFirstOrThrow({ where: { isHymn: true } }); assert.equal(hymn.feeMinor, 5000);
-  const listing = await applyCuratorListing(curator.id, { name: "Independent fixture", playlistUrl: "https://open.spotify.com/playlist/1234567890123456789012", genres: "Hindi pop", description: "Thoughtful listening for independent Hindi pop recordings.", feeRupees: 125, capacity: 2, ownershipConfirmed: true, termsVersion: REVIEW_TERMS_VERSION });
+  const listing = await applyCuratorListing(curator.id, { name: "Independent fixture", playlistUrl: "https://open.spotify.com/playlist/1234567890123456789012", genres: "Hindi pop", coverUrl: `/api/public-uploads/site/playlists/${curator.id}/12345678-1234-1234-1234-123456789abc.webp`, moods: "Reflective, mellow", languages: "Hindi", audience: "Independent Hindi pop listeners", description: "Thoughtful listening for independent Hindi pop recordings.", feeRupees: 125, capacity: 2, ownershipConfirmed: true, termsVersion: REVIEW_TERMS_VERSION });
+  const profileSnapshot = await playlistReviewSnapshot(curator.id);
+  assert.equal(profileSnapshot.ownListings[0].moods, "Reflective, mellow");
+  assert.ok(profileSnapshot.ownListings[0].coverUrl?.includes(`/playlists/${curator.id}/`));
   assert.equal(listing.status, "PENDING"); assert.equal(listing.feeMinor, 12500);
   const input = { listingId: listing.id, requestKey: crypto.randomUUID(), trackTitle: "Artist’s song", artistName: "Artist", trackUrl: "https://open.spotify.com/track/1234567890123456789012", pitch: "A heartfelt Hindi pop recording for a reflective audience.", accepted: true, termsVersion: REVIEW_TERMS_VERSION };
   await assert.rejects(createReviewCheckout(customer.id, input), /not accepting/);

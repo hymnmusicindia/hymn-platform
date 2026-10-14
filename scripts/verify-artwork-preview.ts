@@ -17,6 +17,14 @@ async function main() {
   assert.equal(artworkPreviewUrl("https://is1-ssl.mzstatic.com/image/thumb/Music/a/1200x1200bb.jpg", 192), "https://is1-ssl.mzstatic.com/image/thumb/Music/a/192x192bb.jpg");
   assert.equal(requestedArtworkWidth(new Request("https://hymn.local/?w=99999")), null);
   assert.equal(requestedArtworkWidth(new Request("https://hymn.local/?w=192")), 192);
+  assert.equal(artworkPreviewUrl("/assets/playlist-images/previews/1.webp", 112), "/api/image-preview?src=%2Fassets%2Fplaylist-images%2Fpreviews%2F1.webp&w=192");
+  const { GET: staticPreview } = await import("../app/api/image-preview/route");
+  const staticImage = await staticPreview(new Request("https://hymn.local/api/image-preview?src=%2Fassets%2Fplaylist-images%2Fpreviews%2F1.webp&w=192"));
+  assert.equal(staticImage.status, 200);
+  assert.equal((await sharp(Buffer.from(await staticImage.arrayBuffer())).metadata()).width, 192);
+  for (const src of ["https://evil.example/image.jpg", "/assets/../../.env.jpg", "/api/releases/1/artwork", "/assets/image.svg"]) {
+    assert.equal((await staticPreview(new Request(`https://hymn.local/api/image-preview?src=${encodeURIComponent(src)}&w=192`))).status, 400);
+  }
   const markup = renderToStaticMarkup(createElement(CoverArt, { src: "/api/releases/25/artwork?filename=cover.jpg", previewWidth: 192, alt: "Tere Bin cover", loading: "eager", width: 135, height: 135 }));
   assert.match(markup, /w=192/);
   assert.match(markup, /w=640.*2x/);

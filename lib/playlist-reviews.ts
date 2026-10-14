@@ -8,6 +8,7 @@ import { emailLayout, emailText } from "@/lib/email/email-templates";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 import type { Prisma, PlaylistReviewRequest, PlaylistReviewListing } from "@prisma/client";
 import { trackUrlSchema } from "@/lib/playlist-review-domain";
+import { playlistListingProfiles } from "@/lib/playlist-listing-profiles";
 
 const reviewInclude = { listing: true } as const;
 type Tx = Prisma.TransactionClient;
@@ -109,10 +110,12 @@ export async function playlistReviewSnapshot(userId: number, admin = false) {
   // Never expose provider payment identifiers to another curator or the catalogue.
   const safe = (rows: typeof requests) => rows.map(({ razorpayPaymentId: _payment, razorpayOrderId: _order, requestKey: _key, ...row }) => row);
   const owners = admin ? await prisma.user.findMany({ where: { id: { in: ownListings.flatMap(row => row.ownerId ? [row.ownerId] : []) } }, select: { id: true, name: true, email: true } }) : [];
-  return { releasedTracks, listings: listings.map(({ moderationNote: _note, ...row }) => row), requests: safe(requests), ownListings: ownListings.map(row => ({ ...row, ...(admin ? { curator: owners.find(owner => owner.id === row.ownerId) || null } : {}) })), inbox: safe(inbox), termsVersion: REVIEW_TERMS_VERSION, checkoutAvailable: Boolean(razorpay) };
+  const profiles = await playlistListingProfiles([...listings, ...ownListings].map(row => row.id));
+  return { releasedTracks, listings: listings.map(({ moderationNote: _note, ...row }) => ({ ...row, ...profiles.get(row.id) })), requests: safe(requests), ownListings: ownListings.map(row => ({ ...row, ...profiles.get(row.id), ...(admin ? { curator: owners.find(owner => owner.id === row.ownerId) || null } : {}) })), inbox: safe(inbox), termsVersion: REVIEW_TERMS_VERSION, checkoutAvailable: Boolean(razorpay) };
 }
 export async function applyCuratorListing(userId: number, input: unknown) {
   const value = listingSchema.parse(input);
+  if (!value.coverUrl.startsWith(`/api/public-uploads/site/playlists/${userId}/`)) throw new Error("Upload a cover from your own curator account.");
   const url = new URL(value.playlistUrl); url.search = "";
   return prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${url.toString()}))`;
@@ -120,7 +123,7 @@ export async function applyCuratorListing(userId: number, input: unknown) {
     const existing = await tx.playlistReviewListing.findFirst({ where: { playlistUrl: url.toString(), status: { in: ["PENDING", "APPROVED"] } } });
     if (existing) throw new Error("This playlist is already listed or awaiting review.");
     const row = await tx.playlistReviewListing.create({ data: { name: value.name, playlistUrl: url.toString(), description: value.description, genres: value.genres, feeMinor: value.feeRupees * 100, capacity: value.capacity, ownerId: userId, slug: `curator-${crypto.randomUUID()}` } });
-    await audit(tx, userId, "PLAYLIST_CURATOR_APPLIED", row.id, { termsVersion: value.termsVersion, ownershipDeclared: true });
+    await audit(tx, userId, "PLAYLIST_CURATOR_APPLIED", row.id, { termsVersion: value.termsVersion, ownershipDeclared: true, profile: { coverUrl: value.coverUrl, moods: value.moods, languages: value.languages, audience: value.audience } });
     return row;
   });
 }

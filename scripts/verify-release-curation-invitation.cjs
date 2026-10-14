@@ -13,6 +13,7 @@ const os = require('node:os');
       const url = new URL(route.request().url());
       if (url.pathname === '/api/playlist-reviews') return route.fulfill({ json: { recommendations: [{ id: 1, name:'Dusk Till Dawn', image:'1', reason:'Explore a late-night listening mood' }, { id: 2, name:'Indie Hits', image:'2', reason:'Explore independent voices' }] } });
       if (url.pathname.startsWith('/assets/playlist-images/previews/')) return route.fulfill({ body:await fs.readFile(path.join('public',url.pathname)), contentType:'image/webp' });
+      if (url.pathname === '/api/image-preview') return route.fulfill({ body:await fs.readFile(path.join('public', url.searchParams.get('src'))), contentType:'image/webp' });
       return route.fulfill({ body: '<style>body{margin:0;background:#11151b;font-family:Arial}*{box-sizing:border-box}button,a,input{font-family:inherit}#root{min-height:100vh}</style><div id="root"></div>', contentType: 'text/html' });
     });
     await page.goto('https://hymn.fixture/');
