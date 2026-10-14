@@ -1,0 +1,24 @@
+/* Compact monochrome discovery banner; imported after the marketplace styles. */
+.playlist-invitation .playlist-invitation-main { grid-template-columns:minmax(240px,1fr) minmax(0,1.35fr); padding:24px 28px; gap:28px; }
+.playlist-invitation .playlist-invitation-copy > svg { color:#d2d7df; width:24px; height:24px; margin-bottom:10px; }
+.playlist-invitation .playlist-invitation-copy h2 { font-size:clamp(29px,3.5vw,44px); font-weight:800; line-height:1.04; letter-spacing:-.055em; max-width:17ch; background:linear-gradient(120deg,#fff 20%,#c0c6d0 70%,#8e97a6); background-clip:text; -webkit-background-clip:text; color:transparent; }
+.playlist-invitation .playlist-invitation-copy p { font-size:13px; line-height:1.5; margin:10px 0; }
+.playlist-invitation .playlist-invitation-cta { background:#f1f2f4; color:#17191d; border-color:#f1f2f4; margin:16px 0 10px; padding:11px 18px; box-shadow:0 4px 16px #0002; }
+.playlist-invitation .playlist-invitation-cta:hover { background:#fff; }
+.playlist-invitation .playlist-invitation-covers > button { flex-basis:clamp(120px,14vw,150px); }
+.playlist-invitation .playlist-invitation-covers { padding-block:10px 16px; gap:12px; mask-image:linear-gradient(to right,transparent,#000 6%,#000 92%,transparent); }
+.playlist-invitation .playlist-carousel-controls { margin-bottom:8px; }
+.playlist-invitation .playlist-carousel-controls button { width:30px; height:30px; }
+.playlist-invitation .playlist-testimonials { padding:10px 6px; gap:10px; border-top:0; mask-image:linear-gradient(to right,transparent,#000 3%,#000 96%,transparent); }
+.playlist-invitation .playlist-testimonials figure { flex-basis:min(260px,90%); padding:12px 14px; border-radius:10px; }
+.playlist-invitation .playlist-testimonials blockquote { font-size:12px; margin:8px 0; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.playlist-invitation .playlist-testimonial-empty { padding:10px; font-size:12px; }
+.playlist-invitation .playlist-invitation-benefits { padding:16px 28px; gap:16px; }
+.playlist-invitation .playlist-invitation-benefits svg { color:#c9d0da; }
+.playlist-invitation button:focus-visible { outline-color:#e2e5ea; }
+@media(max-width:700px) {
+  .playlist-invitation .playlist-invitation-main { grid-template-columns:1fr; gap:16px; padding:20px; }
+  .playlist-invitation .playlist-invitation-copy h2 { font-size:34px; }
+  .playlist-invitation .playlist-invitation-covers > button { flex-basis:120px; }
+  .playlist-invitation .playlist-invitation-benefits { padding:16px 20px; }
+}

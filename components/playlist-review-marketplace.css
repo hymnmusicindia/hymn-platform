@@ -51,7 +51,7 @@
 .playlist-catalogue-empty { display:grid; justify-items:center; text-align:center; gap:12px; padding:28px 16px; border:1px dashed var(--border); border-radius:12px; }
 @media(max-width:480px) { .playlist-track-grid { grid-template-columns:repeat(2,minmax(0,144px)); gap:10px; } .playlist-track-copy { padding-inline:2px; } .playlist-track-live { font-size:9px; } .playlist-catalogue-heading { gap:10px; } .playlist-external-toggle { padding:12px; } }
 @media(prefers-reduced-motion:reduce) { .playlist-track-card { transition:none; } }
-.playlist-invitation { overflow:hidden; border:1px solid var(--border); border-radius:20px; background:radial-gradient(ellipse at 90% 0%,#3b4d4438,transparent 60%),var(--card); }
+.playlist-invitation { overflow:hidden; border:1px solid var(--border); border-radius:20px; background:radial-gradient(ellipse at 90% 0%,#ffffff09,transparent 60%),var(--card); }
 .playlist-invitation-main { display:grid; grid-template-columns:minmax(230px,.85fr) minmax(0,1.4fr); gap:32px; padding:32px; align-items:center; }
 .playlist-invitation-copy > svg { color:#a8dec0; margin-bottom:16px; }
 .playlist-invitation-copy h2 { font-size:clamp(25px,3vw,38px); line-height:1.12; letter-spacing:-.04em; margin:0 0 14px; max-width:12ch; }
