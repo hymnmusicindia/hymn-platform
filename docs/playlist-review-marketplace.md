@@ -156,6 +156,25 @@ required for catalogue pricing. Scheduling requires migration
 
 ## Release-to-curation journey
 
+The invitation is visual: two selectable playlist covers, source release tags,
+three workflow icons and one CTA. Suggestions are computed from the owned
+release's genre, format and available mood metadata, using approved HYMN
+listings only. They are starting points, not audio analysis or a guaranteed fit.
+The curated-theme rules live in `lib/playlist-recommendations.ts`; listings with
+declared genres take precedence over theme-based associations. Review cost,
+editorial independence and audience-growth uncertainty remain visible.
+
+Selecting a suggestion carries `playlistId` and `releaseId` to the dedicated
+workspace, where that listing's submission form opens with the source release
+selected. Missing or unavailable recommendations fall back to exploring all
+available playlists; no purchase is created by the recommendation itself.
+Example screenshots in `docs/previews/playlist-curation-invitation-*.png` use
+fixture metadata (Indie Pop / Romantic / Single), not a claimed audio analysis.
+
+Design rationale: [recognition over recall](https://www.nngroup.com/articles/recognition-and-recall/)
+and [progressive disclosure](https://www.nngroup.com/articles/progressive-disclosure/)
+support visible covers, short explanations and a single primary action.
+
 Successful new submissions show a dismissible invitation after 3.5 seconds,
 deduplicated per release per browser session. The CTA passes the release ID to
 `/dashboard/playlists`, an authenticated standalone workspace. The promotions

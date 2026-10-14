@@ -50,6 +50,14 @@ function PlaylistReviewWorkspace({ admin = false }: { admin?: boolean }) {
   const reviewPrice = selected ? reviewFeeMinor(selected.isHymn, selected.feeMinor, trackSource === "hymn") : 0;
   function changeSource(source: "hymn" | "external") { setTrackSource(source); setRequestKey(crypto.randomUUID()); }
   const endpoint = admin ? "/api/admin/playlist-reviews" : "/api/playlist-reviews";
+  const recommendationOpened = useRef(false);
+  useEffect(() => {
+    if (!data || admin || recommendationOpened.current) return;
+    recommendationOpened.current = true;
+    const id = Number(new URLSearchParams(window.location.search).get('playlistId'));
+    const listing = data.listings.find(row => row.id === id);
+    if (listing) { setSelected(listing); setRequestKey(crypto.randomUUID()); }
+  }, [data, admin]);
   useEffect(() => { const view = new URLSearchParams(window.location.search).get("reviewView"); if (view === "curator" || view === "submissions") setTab(view); }, []);
   async function refresh() {
     const response = await fetch(endpoint); const value = await response.json();

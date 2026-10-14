@@ -35,7 +35,7 @@ export function ReleaseReviewConfirmation({ release, onReset, isResubmission = f
     { question: "Where can I track updates?", answer: "Open your release dashboard to see the latest status, review notes and distribution progress. You can safely leave this page—your submission is saved." }
   ];
   return <section className={styles.page} data-release-review-confirmation aria-labelledby="release-review-heading">
-    {!isResubmission ? <ReleaseCurationInvitation releaseId={release.id} /> : null}
+    {!isResubmission ? <ReleaseCurationInvitation releaseId={release.id} context={{ genre: release.primaryGenre || release.genre, mood: release.mood, releaseType: release.releaseType }} /> : null}
     <header className={styles.header}>
       <div><p className={styles.eyebrow}><CheckCircle2 size={15} aria-hidden="true" /> {isResubmission ? "Updates received" : "Submission received"}<span>Release #{release.id}</span></p>
         <h1 id="release-review-heading" ref={heading} tabIndex={-1}>{isResubmission ? "Your changes are back in review" : "Your release is under review"}</h1>

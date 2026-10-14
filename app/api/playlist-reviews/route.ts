@@ -7,9 +7,17 @@ import { verifyRazorpaySignature } from "@/lib/razorpay";
 import { z } from "zod";
 import { playlistTestimonials, submitPlaylistTestimonial } from "@/lib/playlist-testimonials";
 import { updateReviewListeningLink, cancelScheduledPlaylistReview } from "@/lib/playlist-reviews";
+import { releasePlaylistRecommendations } from "@/lib/playlist-recommendations-server";
 
 export async function GET(request: Request) {
   const access = await requireUser(); if ("error" in access) return access.error;
+  const query = new URL(request.url).searchParams;
+  if (query.get('view') === 'recommendations') {
+    const id = Number(query.get('releaseId'));
+    if (!Number.isSafeInteger(id) || id < 1) return NextResponse.json({ error: 'Invalid release.' }, { status: 400 });
+    try { return NextResponse.json(await releasePlaylistRecommendations(access.user.id, id)); }
+    catch { return NextResponse.json({ error: 'Recommendations unavailable.' }, { status: 404 }); }
+  }
   try { return NextResponse.json(new URL(request.url).searchParams.get("view") === "testimonials" ? { testimonials: await playlistTestimonials() } : await playlistReviewSnapshot(access.user.id)); }
   catch { return NextResponse.json({ error: "The review marketplace is not ready yet. Please try again later; no payment has been taken." }, { status: 503 }); }
 }

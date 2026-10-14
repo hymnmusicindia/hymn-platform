@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { recommendPlaylists } from '../lib/playlist-recommendations';
+const rows = ['dusk-till-dawn','indie-hits','ungatekept-gems','fresh-releases'].map((slug,index) => ({ id:index+1, slug, name:slug, genres:'Explore playlist', isHymn:true, feeMinor:5000 }));
+assert.equal(recommendPlaylists(rows, { genre:'Indie folk', mood:'Acoustic', releaseType:'EP' })[0].slug,'indie-hits');
+assert.equal(recommendPlaylists(rows, { genre:'Pop', mood:'Romantic' })[0].slug,'dusk-till-dawn');
+assert.equal(recommendPlaylists(rows, { genre:'Hip Hop' })[0].slug,'ungatekept-gems');
+assert.equal(recommendPlaylists(rows, { genre:'Pop', releaseType:'Single' })[0].slug,'fresh-releases');
+assert.equal(recommendPlaylists([], {}).length,0);
+assert.equal(recommendPlaylists(rows, {}).length,2);
+assert.ok(recommendPlaylists(rows, {}).every(row => !('score' in row)), 'Do not present heuristic scores as confidence claims');
+console.log('PASS genre, mood, format ranking, generic fallback and empty catalogue. No audio-analysis or placement claims.');

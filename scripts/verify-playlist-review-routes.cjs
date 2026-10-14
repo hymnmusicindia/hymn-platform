@@ -14,6 +14,7 @@ const mocks = {
   '@/lib/rate-limit': { consumeRateLimit: async () => ({ allowed: true }) },
   '@/lib/playlist-reviews': business,
   '@/lib/playlist-testimonials': business,
+  '@/lib/playlist-recommendations-server': business,
   '@/lib/razorpay': { verifyRazorpaySignature: () => false, verifyRazorpayWebhookSignature: () => authenticated },
 };
 function load(file) {
@@ -28,6 +29,9 @@ const request = body => new Request('https://hymn.fixture/api/playlist-reviews',
   authenticated = true;origin = 'https://evil.example';assert.equal((await customer.POST(request({ action:'apply' }))).status,403);assert.equal(writes,0);
   origin='https://hymn.fixture';assert.equal((await customer.POST(request({ action:'verify', orderId:'order_123', paymentId:'pay_123', signature:'bad' }))).status,400);assert.equal(writes,0);
   await customer.POST(request({ action:'apply' }));assert.equal(calls.at(-1)[1],9);
+  assert.equal((await customer.GET(new Request('https://hymn.fixture/api/playlist-reviews?view=recommendations&releaseId=bad'))).status,400);
+  assert.equal((await customer.GET(new Request('https://hymn.fixture/api/playlist-reviews?view=recommendations&releaseId=83'))).status,200);
+  assert.equal(calls.at(-1)[0],'releasePlaylistRecommendations');assert.equal(calls.at(-1)[1],9);assert.equal(calls.at(-1)[2],83);
   const admin = load('app/api/admin/playlist-reviews/route.ts');
   allowed=false;assert.equal((await admin.GET()).status,403);assert.equal((await admin.POST(request({ action:'moderate' }))).status,403);
   allowed=true;const before=writes;assert.equal((await admin.POST(request({ action:'settle',id:1,reference:'real_transfer_123' }))).status,403);assert.equal(writes,before);
