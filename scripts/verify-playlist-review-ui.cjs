@@ -15,6 +15,7 @@ const { chromium, expect } = require('@playwright/test');
   try {
     const page = await browser.newPage({ reducedMotion: 'reduce' }); const errors = [];page.on('pageerror', e => errors.push(e.message));
     await page.route('https://hymn.fixture/**', async route => { const url = new URL(route.request().url()); if (url.pathname === '/api/playlist-reviews') return route.fulfill({ json: snapshot }); if (url.pathname.startsWith('/assets/playlist-images/previews/')) return route.fulfill({ body: await fs.readFile(path.join('public', url.pathname)), contentType: 'image/webp' }); return route.fulfill({ body: '<div id="root"></div>', contentType: 'text/html' }); });
+    await page.route('https://hymn.fixture/api/playlist-reviews?view=testimonials', route => route.fulfill({ json: { testimonials: [{ id: 101, name: 'Fixture artist', avatar: null, rating: 4.5, quote: 'Specific listening notes helped me choose my next step.', verifiedService: true }] } }));
     await page.goto('https://hymn.fixture/');
     await page.addStyleTag({ content: '*{box-sizing:border-box}body{margin:0;padding:20px;background:#1d2025;font-family:Arial;--bg:#1d2025;--bg-soft:#25292f;--card:#21252a;--border:#383d46;--text:#f4f4f4;--text-muted:#bac0ca;--text-soft:#919ba8}#root{max-width:1200px;margin:auto}a{color:inherit;text-decoration:none}button{cursor:pointer}input,textarea,select{font-family:inherit}' });
     await page.addStyleTag({ path: path.join(output, 'marketplace.css') });
@@ -22,6 +23,16 @@ const { chromium, expect } = require('@playwright/test');
     await page.addScriptTag({ path: path.join(output, 'marketplace.js') });
     await expect(page.getByRole('heading', { name: /Your sound.*A new discovery/ })).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
+    const testimonial = page.locator('.playlist-testimonials figure').first();
+    await expect(testimonial).toBeVisible();
+    const positions = await testimonial.evaluate(card => {
+      const author = card.querySelector('figcaption').getBoundingClientRect();
+      const rating = card.querySelector('.playlist-rating').getBoundingClientRect();
+      const quote = card.querySelector('blockquote').getBoundingClientRect();
+      return { authorY: author.y, ratingY: rating.y, quoteY: quote.y };
+    });
+    assert.ok(Math.abs(positions.authorY - positions.ratingY) < 10, 'Author and rating share the top row');
+    assert.ok(positions.quoteY > positions.authorY, 'Review message sits below the author');
     await page.getByRole('button', { name: 'Explore playlists', exact: true }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
     for (const width of [1440, 768, 390, 320]) {

@@ -23,8 +23,8 @@ export function PlaylistReviewMarketplace({ admin = false }: { admin?: boolean }
   const [open, setOpen] = useState(false);
   const carousel = useRef<HTMLDivElement>(null);
   const secondCarousel = useRef<HTMLDivElement>(null);
-  useDriftingRail(carousel, 25, admin || open);
-  useDriftingRail(secondCarousel, 16, admin || open);
+  useDriftingRail(carousel, 12, admin || open);
+  useDriftingRail(secondCarousel, 8, admin || open);
   const dialogRef = useAccessibleDialog(open, () => setOpen(false));
   useEffect(() => {
     if (["curator", "submissions"].includes(new URLSearchParams(window.location.search).get("reviewView") || "")) setOpen(true);
