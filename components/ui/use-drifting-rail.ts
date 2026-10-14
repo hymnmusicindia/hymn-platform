@@ -4,16 +4,19 @@ export function useDriftingRail(ref: RefObject<HTMLDivElement | null>, speed = 2
   useEffect(() => {
     const rail = ref.current; if (!rail || stopped) return;
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
-    let frame = 0, last = 0, position = rail.scrollLeft, direction = 1;
+    let frame = 0, last = 0, position = rail.scrollLeft;
     let hovered = false;
     const pause = () => { hovered = true; }; const resume = () => { hovered = false; position = rail.scrollLeft; };
     const tick = (now: number) => {
       const elapsed = last ? Math.min(now - last, 50) : 0; last = now;
       if (!hovered && !motion.matches && !document.hidden && !rail.contains(document.activeElement)) {
         const max = Math.max(0, rail.scrollWidth - rail.clientWidth);
-        if (position >= max) direction = -1;
-        if (position <= 0) direction = 1;
-        position = Math.max(0, Math.min(max, position + direction * elapsed * speed / 1000));
+        const marker = rail.querySelector<HTMLElement>('[data-loop-start]');
+        const first = rail.firstElementChild as HTMLElement | null;
+        const loop = marker && first ? marker.offsetLeft - first.offsetLeft : max;
+        position += elapsed * speed / 1000;
+        if (loop > 0 && position >= loop) position %= loop;
+        if (max === 0) position = 0;
         rail.scrollLeft = position;
       }
       frame = requestAnimationFrame(tick);

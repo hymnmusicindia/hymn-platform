@@ -1,4 +1,16 @@
 /* Compact monochrome discovery banner; imported after the marketplace styles. */
+.playlist-invitation .playlist-invitation-main.playlist-invitation-main { padding:16px 24px; gap:20px; }
+.playlist-invitation .playlist-invitation-copy.playlist-invitation-copy h2 { font-size:clamp(28px,3.2vw,40px); }
+.playlist-invitation .playlist-invitation-copy > svg { display:none; }
+.playlist-invitation .playlist-cover-wall .playlist-invitation-covers > button { flex-basis:86px!important; }
+.playlist-invitation .playlist-cover-wall .playlist-invitation-covers { position:relative; }
+.playlist-invitation .playlist-cover-wall .playlist-invitation-covers:nth-child(2) { padding-left:0; }
+.playlist-invitation .playlist-cover-wall { gap:6px; }
+.playlist-invitation .playlist-cover-wall,.playlist-invitation .playlist-invitation-gallery .playlist-testimonials { mask-image:linear-gradient(90deg,transparent,#000 12%,#000 86%,transparent); }
+.playlist-invitation .playlist-invitation-gallery .playlist-testimonials { position:relative; margin-top:10px; }
+.playlist-invitation .playlist-invitation-gallery .playlist-testimonials.playlist-testimonials figure { flex-basis:206px; padding:8px 10px; }
+.playlist-invitation .playlist-invitation-gallery { background:linear-gradient(90deg,#080a0e90,transparent 15%,transparent 85%,#080a0e90); }
+.playlist-invitation .playlist-invitation-benefits { padding-block:9px!important; }
 .playlist-invitation { background:#0b0d10!important; border-color:#272b32; }
 .playlist-invitation .playlist-invitation-main { position:relative; isolation:isolate; padding:20px 26px; gap:24px; grid-template-columns:minmax(240px,1fr) minmax(0,1.45fr); }
 .playlist-invitation .playlist-invitation-main::before { content:""; position:absolute; inset:0; z-index:-1; pointer-events:none; background:linear-gradient(100deg,#080a0eee 10%,#101319a8 55%,transparent),radial-gradient(ellipse at 100% 0%,#3b424d45,transparent 65%); }
