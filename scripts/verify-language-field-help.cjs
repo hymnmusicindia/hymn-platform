@@ -16,16 +16,24 @@ const { chromium, expect } = require('@playwright/test');
     for (const width of [320, 1440]) {
       await page.setViewportSize({ width, height: 700 });
       const track = page.getByLabel('What does track language mean?');
+      const before = await page.locator('main').boundingBox();
       await track.focus();
       await page.keyboard.press('Enter');
-      await expect(page.getByText(/Choose the language actually sung or spoken/)).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Track language help' })).toBeVisible();
+      assert.deepEqual(await page.locator('main').boundingBox(), before, 'Popup must not shift field layout');
+      const bounds = await page.getByRole('dialog', { name: 'Track language help' }).boundingBox();
+      assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width, 'Popup stays within viewport');
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
       await page.keyboard.press('Enter');
-      await expect(page.getByText(/Choose the language actually sung or spoken/)).not.toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Track language help' })).not.toBeVisible();
       const release = page.getByLabel('What does release language mean?');
       await release.click();
-      await expect(page.getByText(/Choose the main language of the release as a whole/)).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Release language help' })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(release).toHaveAttribute('aria-expanded', 'false');
       await release.click();
+      await page.mouse.click(width - 5, 650);
+      await expect(page.getByRole('dialog', { name: 'Release language help' })).not.toBeVisible();
     }
     console.log('PASS language help: keyboard and pointer toggle, distinct explanations, mobile and desktop overflow.');
   } finally { await browser.close(); }
