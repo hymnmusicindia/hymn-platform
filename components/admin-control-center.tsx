@@ -18,6 +18,7 @@ import { WorkspaceRecords } from "@/components/workspace-records";
 import { AdminUserManagement } from "@/components/admin-user-management";
 import { AdminTeamAccessManager } from "@/components/admin-team-access-manager";
 import overviewStyles from "./dashboard-overview.module.css";
+import { AdminManualCron } from "./admin-manual-cron";
 import { OverviewMetric, OverviewPanel, OverviewPipeline } from "./simplified-dashboard-home";
 import { Disc3, Wallet, Bell, Music2, ArrowRight } from "lucide-react";
 import { adminNavigation, adminModuleAllowed } from "@/lib/admin-workspace-navigation";
@@ -1164,6 +1165,7 @@ export function AdminControlCenter({
       {activeTab === "overview" ? (
         <div className={overviewStyles.root}>
           <header className={overviewStyles.header}><div><p className={overviewStyles.eyebrow}>Admin / Operations</p><h1>A clear view of what moves next.</h1><p className={overviewStyles.description}>Review, resolve, and keep the platform moving.</p></div><button disabled={!hasPermission("releases.review")} className={overviewStyles.primary} onClick={() => selectAdminTab("distribution-queue")}>Open review queue <ArrowRight /></button></header>
+          {["super_admin", "owner"].includes(adminAccess.role) && hasPermission("system.manage") ? <AdminManualCron /> : null}
           <div className={overviewStyles.metrics}>
             <OverviewMetric label="Release reviews" value={hasPermission("releases.read")||hasPermission("releases.review")?pendingReviews:"Restricted"} detail="Submitted, queued or in review" icon={<Music2 />} onClick={() => selectAdminTab("distribution-queue")} />
             <OverviewMetric label="Beat reviews" value={hasPermission("services.manage")?pendingBeatReviews:"Restricted"} detail="Awaiting marketplace approval" icon={<Disc3 />} onClick={() => selectAdminTab("operations")} />
