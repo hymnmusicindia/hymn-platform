@@ -6,6 +6,7 @@
     "node": ">=20.19.0"
   },
   "scripts": {
+    "test:admin-os": "tsx scripts/verify-team-os-isolated.ts --admin",
     "test:team-os": "tsx scripts/verify-team-os-isolated.ts",
     "test:team-os:browser": "tsx scripts/verify-team-os-isolated.ts --browser",
     "dev": "next dev --webpack",

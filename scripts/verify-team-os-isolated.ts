@@ -21,7 +21,9 @@ async function main() {
     await run(["--import", "tsx", "scripts/verify-team-owner-bootstrap.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-os.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-os-advanced.ts"]);
+    if (process.argv.includes("--admin")) await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-admin-workspace.ts"]);
     if (process.argv.includes("--browser")) await run(["--import", "tsx", "scripts/verify-team-os-browser.ts"]);
+    if (process.argv.includes("--admin")) await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-admin-workspace-browser.ts"]);
   } finally {
     if (process.platform === "win32") await run(["-D", databaseDir, "-m", "fast", "-w", "stop"], path.resolve("node_modules/@embedded-postgres/windows-x64/native/bin/pg_ctl.exe")); else await pg.stop();
     console.log("Isolated database stopped. Production data and accounts were not touched.");

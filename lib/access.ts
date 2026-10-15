@@ -32,7 +32,11 @@ export async function requireRole(roles: UserRole[]) {
 
 export async function requireAdminIdentity() {
   const userResult = await requireRole(["admin"]);
-  if (!("error" in userResult)) return userResult.session;
+  if (!("error" in userResult)) {
+    const account = await prisma.user.findUnique({ where: { id: userResult.user.id }, select: { status: true } });
+    if (account?.status !== "ACTIVE") return { error: NextResponse.json({ error: "Administrator account is not active." }, { status: 403 }) };
+    return userResult.session;
+  }
 
   const session = await getAdminSession();
   if (!session) return { error: NextResponse.json({ error: "Forbidden." }, { status: 403 }) };

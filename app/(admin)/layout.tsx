@@ -5,5 +5,5 @@ import { getSession } from "@/lib/session";
 
 export default async function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const [session,access] = await Promise.all([getSession(),getAdminAccessForPage()]);
-  return <div className="hymn-portal-root force-dark admin-dark-workspace" data-theme="dark"><SiteHeader user={session} /><div className="hymn-portal" data-theme="dark"><AdminPortalLayout permissions={access?.permissions||[]}>{children}</AdminPortalLayout></div></div>;
+  return <div className="force-dark" data-theme="dark"><SiteHeader user={session} /><AdminPortalLayout permissions={access?.permissions||[]} role={access?.role} name={session?.name}>{children}</AdminPortalLayout></div>;
 }

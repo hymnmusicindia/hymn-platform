@@ -1,13 +1,33 @@
 "use client";
-import { usePathname, useRouter } from "next/navigation";
-import { DashboardFrame } from "@/components/dashboard-frame";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { ArrowUpRight, ChevronLeft, Menu, Search, ShieldCheck, X, LayoutDashboard, Disc3, Wallet, Users, Settings, Headphones, Radio } from "lucide-react";
 import { adminNavigation } from "@/lib/admin-workspace-navigation";
-
-export function AdminPortalLayout({children,permissions}:{children:React.ReactNode;permissions:string[]}) {
-  const pathname=usePathname();
-  const router=useRouter();
-  if(pathname==="/admin"||pathname==="/admin/login")return children;
-  const nav=adminNavigation(permissions).map(item=>({...item,href:item.href||`/admin?tab=${item.key}`}));
-  const current=[...nav].filter(item=>item.href?.startsWith("/admin/")&&pathname.startsWith(item.href)).sort((a,b)=>(b.href?.length||0)-(a.href?.length||0))[0];
-  return <div className="admin-panel-shell py-6"><DashboardFrame title="Admin workspace" subtitle="Platform operations" navItems={nav} activeKey={current?.key||"settings"} onSelect={key=>router.push(`/admin?tab=${key}`)} compactOverview>{children}</DashboardFrame></div>;
+import { adminRoleGuidance } from "@/lib/admin-role-policy";
+import { InternalWorkspaceSwitcher } from "./internal-workspace-switcher";
+import team from "./team/workspace.module.css";
+import styles from "./admin-workspace.module.css";
+const icons: Record<string, typeof ShieldCheck> = { "Command Center": LayoutDashboard, "Distribution Operations": Radio, "Money Operations": Wallet, "Growth / Content": Users, Marketplace: Disc3, "Support / Legal": Headphones, Platform: Settings };
+export function AdminPortalLayout({ children, permissions, role = "unassigned", name = "Administrator" }: { children: React.ReactNode; permissions: string[]; role?: string; name?: string }) {
+  const pathname = usePathname(), query = useSearchParams();
+  const [collapsed, setCollapsed] = useState(false), [mobile, setMobile] = useState(false), [search, setSearch] = useState(""); const searchRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { const saved = localStorage.getItem("hymn-admin-sidebar"); setCollapsed(saved === "collapsed"); }, []);
+  useEffect(() => { setMobile(false); }, [pathname, query]);
+  useEffect(() => {
+    const toggle = () => { if (innerWidth <= 1000) setMobile(value => !value); else setCollapsed(value => !value); };
+    window.addEventListener("hymn-toggle-navigation", toggle);
+    return () => window.removeEventListener("hymn-toggle-navigation", toggle);
+  }, []);
+  useEffect(() => { const key = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setCollapsed(false); if (innerWidth <= 1000) setMobile(true); requestAnimationFrame(() => searchRef.current?.focus()); } if (e.key === "Escape") setMobile(false); }; window.addEventListener("keydown", key); return () => window.removeEventListener("keydown", key); }, []);
+  if (pathname === "/admin/login") return children;
+  if (!permissions.length) return <section className={styles.denied}><ShieldCheck /><h1>Admin Workspace access required</h1><p>An active platform administrator role is required. Team OS membership does not grant admin access.</p><Link href="/admin/login">Sign in as administrator</Link><Link href="/team">Return to Team OS</Link></section>;
+  const nav = adminNavigation(permissions).map(n => ({ ...n, href: n.href || `/admin?tab=${n.key}` }));
+  const active = pathname === "/admin" ? query.get("tab") || "overview" : nav.filter(n => n.href.startsWith("/admin/") && pathname.startsWith(n.href)).sort((a,b) => b.href.length - a.href.length)[0]?.key;
+  const current = nav.find(n => n.key === active) || nav[0]; const groups = [...new Set(nav.map(n => n.group))]; const guidance = adminRoleGuidance[role];
+  return <div className={`${team.workspace} ${styles.workspace} ${collapsed ? team.collapsed : ""}`} data-admin-workspace>
+    {mobile ? <button className={styles.backdrop} aria-label="Close admin navigation" onClick={() => setMobile(false)} /> : null}
+    <aside className={`${team.sidebar} ${styles.sidebar} ${mobile ? team.mobileOpen : ""}`}><div className={team.brand}><span>HYMN <small>ADMIN OS</small></span><button aria-label={collapsed ? "Expand admin sidebar" : "Collapse admin sidebar"} onClick={() => { setCollapsed(!collapsed); localStorage.setItem("hymn-admin-sidebar", collapsed ? "expanded" : "collapsed"); }}><ChevronLeft size={18} /></button><button className={team.mobileClose} aria-label="Close navigation" onClick={() => setMobile(false)}><X size={18} /></button></div><div className={styles.switcher}><InternalWorkspaceSwitcher current="admin" name="HYMN Admin OS" /></div><div className={styles.finder}><Search size={15} /><input ref={searchRef} aria-label="Find admin module" placeholder="Find a module · ⌘K" value={search} onChange={e => { setSearch(e.target.value); setCollapsed(false); }} /></div><nav aria-label="Admin workspace">{groups.map(group => { const items = nav.filter(n => n.group === group && `${n.label} ${n.description} ${n.group}`.toLowerCase().includes(search.toLowerCase())); const Icon = icons[group] || ShieldCheck; return items.length ? <section key={group}><h2>{group}</h2>{items.map(n => <Link key={n.key} href={n.href} aria-current={active === n.key || active === "distribution-queue" && n.key === "releases" || active === "delivery-failed" && n.key === "releases" ? "page" : undefined} title={n.description}><Icon size={17} /><span>{n.label}</span></Link>)}</section> : null; })}{search && !nav.some(n => `${n.label} ${n.description} ${n.group}`.toLowerCase().includes(search.toLowerCase())) ? <p role="status">No authorised modules match.</p> : null}</nav><Link href="/" className={team.return}><ArrowUpRight size={16} /><span>Back to HYMN</span></Link></aside>
+    <div className={team.main}><header className={team.topbar}><button className={team.mobileMenu} aria-label="Open admin navigation" onClick={() => setMobile(true)}><Menu size={20} /></button><div><span className={team.eyebrow}>Admin Workspace / {current?.group}</span><p>{current?.label || "Administration"}</p></div><div className={styles.identity}><ShieldCheck size={16} /><div><strong>{name}</strong><span>{role.replaceAll("_", " ")} · {permissions.length} permissions</span></div></div></header><div className={`${team.content} ${styles.content}`}><div className={styles.access}><ShieldCheck size={15} /><p><strong>{guidance?.purpose || "Explicit administrator permissions"}</strong> {guidance?.boundary || "Only the modules and actions assigned to your role are available."}</p>{permissions.includes("system.manage") ? <Link href="/admin?tab=team">View access map</Link> : null}</div>{children}</div></div>
+  </div>;
 }

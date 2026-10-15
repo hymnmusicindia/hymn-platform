@@ -19,11 +19,12 @@ import { AdminUserManagement } from "@/components/admin-user-management";
 import { AdminTeamAccessManager } from "@/components/admin-team-access-manager";
 import overviewStyles from "./dashboard-overview.module.css";
 import { AdminManualCron } from "./admin-manual-cron";
-import { OverviewMetric, OverviewPanel, OverviewPipeline } from "./simplified-dashboard-home";
-import { Disc3, Wallet, Bell, Music2, ArrowRight } from "lucide-react";
+import { OverviewPanel, OverviewPipeline } from "./simplified-dashboard-home";
+import { AdminCommandOverview } from "./admin-command-overview";
 import { adminNavigation, adminModuleAllowed } from "@/lib/admin-workspace-navigation";
-import { DashboardFrame } from "@/components/dashboard-frame";
-import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { AdminModuleToolbar } from "@/components/admin-module-toolbar";
+import { useSearchParams } from "next/navigation";
+import { isAdminAuthority } from "@/lib/admin-role-policy";
 import { DireNoteDiagnostics } from "@/components/direnote-diagnostics";
 import type { AdminPayoutRequest } from "@/lib/payout";
 import type { AdminPermissionKey } from "@/lib/access";
@@ -572,6 +573,12 @@ export function AdminControlCenter({
   const hasPermission = (permission: AdminPermissionKey) => adminAccess.permissions.includes(permission);
   const defaultReleaseTab: AdminTab = hasPermission("releases.read") ? "releases" : hasPermission("releases.review") ? "distribution-queue" : "delivery-failed";
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab === "releases" ? defaultReleaseTab : initialTab ?? "overview");
+  const routeTab = useSearchParams().get("tab");
+  useEffect(() => {
+    const internal = adminNavigation(adminAccess.permissions).some(item => item.key === routeTab && !item.href) || ["distribution-queue", "delivery-failed", "payments"].includes(routeTab || "");
+    const next = internal && routeTab && adminModuleAllowed(routeTab, adminAccess.permissions) ? routeTab as AdminTab : initialTab || "overview";
+    setActiveTab(next === "releases" ? defaultReleaseTab : next);
+  }, [routeTab, initialTab, defaultReleaseTab, adminAccess.permissions]);
   const isReleaseWorkspace = ["releases", "distribution-queue", "delivery-failed"].includes(activeTab);
   const [releases, setReleases] = useState(initialReleases);
   const [beats, setBeats] = useState(initialBeats);
@@ -737,8 +744,6 @@ export function AdminControlCenter({
   }
 
   const revenueSummary = summarizeRevenue(initialRevenueEntries);
-  const distributionRevenue = initialDistributionOrders.filter((order) => order.paymentStatus === "paid").reduce((sum, order) => sum + order.amount, 0);
-  const commerceRevenue = initialOrders.filter((order) => order.paymentStatus === "paid").reduce((sum, order) => sum + order.amount, 0);
   const pendingReviews = releases.filter((release) => ["submitted", "in_queue", "under_review"].includes(release.status.toLowerCase())).length;
   const changesRequested = releases.filter((release) => release.status === "changes_requested").length;
   const failedDistributionJobs = releases.filter((release) => ["failed", "rejected"].includes(release.status.toLowerCase())).length;
@@ -786,8 +791,6 @@ export function AdminControlCenter({
   }), [activeTab, moduleSearch, queueStatus, queueType, releases]);
   const catalogReleases = useMemo(() => releases.filter(release => (activeTab !== "delivery" || CATALOG_STATUSES.includes(release.status as typeof CATALOG_STATUSES[number])) && searchMatch(release.releaseTitle,release.trackName,release.artistName,release.upcCode,release.ownerEmail)), [releases,activeTab,moduleSearch]);
   const selectedCatalogRelease = catalogReleases.find((release) => release.id === selectedReleaseId) ?? catalogReleases[0] ?? null;
-  const today = new Date();
-  const todayLabel = `${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][today.getUTCDay()]}, ${today.getUTCDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][today.getUTCMonth()]} ${today.getUTCFullYear()}`;
   const notificationCountsByType = useMemo(() => {
     const counts = new Map<string, number>();
     initialNotifications.forEach((notification) => counts.set(notification.type, (counts.get(notification.type) ?? 0) + 1));
@@ -1144,17 +1147,10 @@ export function AdminControlCenter({
   }
 
   return (
-    <DashboardFrame
-      title="HYMN Command Center"
-      subtitle={<span className="admin-identity"><span className="admin-identity-line"><span className="admin-online-dot" />{currentAdmin.name}<span className="admin-active-label">Active</span></span><span className="admin-identity-meta">{currentAdmin.email} · {todayLabel}</span></span>}
-      navItems={adminNavigation(adminAccess.permissions)}
-      activeKey={isReleaseWorkspace ? "releases" : activeTab === "payments" ? "revenue" : activeTab}
-      onSelect={selectAdminTab}
+    <AdminModuleToolbar
       searchValue={moduleSearch}
       onSearchChange={setModuleSearch}
       searchPlaceholder={isReleaseWorkspace ? "Search releases..." : `Search ${activeTab.replace(/-/g, " ")}...`}
-      onNotificationsClick={hasPermission("system.manage")?()=>selectAdminTab("notifications"):undefined}
-      notificationCount={initialNotifications.filter((notification) => !notification.readAt).length}
       quickActions={
         <>
           {adminModuleAllowed("releases",adminAccess.permissions)?<button type="button" onClick={() => selectAdminTab("releases")} className="btn-outline pressable px-4 py-2 text-sm">Browse releases</button>:null}
@@ -1162,8 +1158,6 @@ export function AdminControlCenter({
           {adminModuleAllowed("royalties",adminAccess.permissions)?<button type="button" onClick={() => selectAdminTab("royalties")} className="btn-outline pressable px-4 py-2 text-sm">Manage Payouts</button>:null}
         </>
       }
-      compactOverview
-      workspaceAction={<WorkspaceSwitcher current="admin" available={["customer", "producer", "admin"]} />}
     >
       <AdminActivityAndLogs currentPage={activeTab} visible={activeTab === "activity"} />
       <div className="admin-role-strip flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div><span style={{ color: "var(--text-muted)" }}>Signed in as </span><strong>{currentAdmin.name}</strong><span style={{ color: "var(--text-muted)" }}> · Admin role: </span><strong className="capitalize">{adminAccess.role.replace(/_/g, " ")}</strong></div><span className="status-pill">{adminAccess.permissions.length} permissions</span></div>
@@ -1178,23 +1172,8 @@ export function AdminControlCenter({
 
       {activeTab === "overview" ? (
         <div className={overviewStyles.root}>
-          <header className={overviewStyles.header}><div><p className={overviewStyles.eyebrow}>Admin / Operations</p><h1>A clear view of what moves next.</h1><p className={overviewStyles.description}>Review, resolve, and keep the platform moving.</p></div><button disabled={!hasPermission("releases.review")} className={overviewStyles.primary} onClick={() => selectAdminTab("distribution-queue")}>Open review queue <ArrowRight /></button></header>
-          {["super_admin", "owner"].includes(adminAccess.role) && hasPermission("system.manage") ? <AdminManualCron /> : null}
-          <div className={overviewStyles.metrics}>
-            <OverviewMetric label="Release reviews" value={hasPermission("releases.read")||hasPermission("releases.review")?pendingReviews:"Restricted"} detail="Submitted, queued or in review" icon={<Music2 />} onClick={() => selectAdminTab("distribution-queue")} />
-            <OverviewMetric label="Beat reviews" value={hasPermission("services.manage")?pendingBeatReviews:"Restricted"} detail="Awaiting marketplace approval" icon={<Disc3 />} onClick={() => selectAdminTab("operations")} />
-            <OverviewMetric label="Open support" value={hasPermission("services.manage")?openSupportTickets:"Restricted"} detail="Open or in progress" icon={<Bell />} onClick={() => selectAdminTab("support")} />
-            <OverviewMetric label="Recorded revenue" value={hasPermission("payouts.review")||hasPermission("royalties.reconcile")?formatMoney(revenueSummary.receipts):"Restricted"} detail="All sources ? includes manually paid receipts" icon={<Wallet />} onClick={() => selectAdminTab("revenue")} />
-          </div>
-          <div className={overviewStyles.grid}>
-            <OverviewPanel title="Operations workboard"><div className={overviewStyles.queues}>{operationalQueues.filter(queue => adminModuleAllowed(queue.tab,adminAccess.permissions) && !["Releases awaiting QC", "Open support tickets", "Beats awaiting approval"].includes(queue.label)).map(queue => <button className={overviewStyles.queue} key={queue.label} data-urgent={queue.count > 0} onClick={() => selectAdminTab(queue.tab)}><strong>{queue.count}</strong><span>{queue.label}</span><small>{queue.oldest}</small></button>)}<button className={overviewStyles.queue} data-urgent={pendingProducerApplications > 0} onClick={() => selectAdminTab("operations")}><strong>{pendingProducerApplications}</strong><span>Producer applications</span><small>Awaiting review</small></button></div></OverviewPanel>
-            <OverviewPanel title="Distribution pipeline"><OverviewPipeline stages={[
-              { label: "Live", count: releases.filter(item => item.status === "live").length, color: "#8ac5ac" },
-              { label: "Review", count: pendingReviews, color: "#b8c9ff" },
-              { label: "Corrections / failed", count: changesRequested + failedDistributionJobs, color: "#e0b781" },
-              { label: "Other stages", count: releases.length - releases.filter(item => item.status === "live").length - pendingReviews - changesRequested - failedDistributionJobs, color: "#c4a9e7" }
-            ].map(item => ({ ...item, onClick: () => selectAdminTab("releases") }))} /><p className={overviewStyles.description}>{releases.length} releases across the platform</p></OverviewPanel>
-          </div>
+          <AdminCommandOverview releases={releases} queues={operationalQueues.filter(q => adminModuleAllowed(q.tab, adminAccess.permissions))} permissions={adminAccess.permissions} beats={pendingBeatReviews} support={openSupportTickets} producers={pendingProducerApplications} revenue={formatMoney(revenueSummary.receipts)} navigate={tab => selectAdminTab(tab as AdminTab)} />
+          {isAdminAuthority(adminAccess.role) && hasPermission("system.manage") ? <AdminManualCron /> : null}
           <div className="workspace-task-layout">
           <SurfaceSection title="Today's Action Queue" description="Live admin tasks assembled from releases, payouts, support, and producer applications.">
             <div className="mb-4 grid gap-2 border-b pb-4 sm:grid-cols-2" style={{ borderColor: "var(--border)" }}><select className="field" value={taskPriorityFilter} onChange={(event) => setTaskPriorityFilter(event.target.value)}><option value="all">All priorities</option><option value="high">High priority</option><option value="normal">Normal priority</option><option value="critical">Critical</option></select><select className="field" value={taskTypeFilter} onChange={(event) => setTaskTypeFilter(event.target.value)}><option value="all">All queue types</option>{Array.from(new Set([...persistedTasks.map((item) => item.type), ...actionQueue.map((item) => item.type)])).sort().map((type) => <option key={type} value={type}>{type}</option>)}</select></div>
@@ -1418,7 +1397,7 @@ export function AdminControlCenter({
       ) : null}
 
       {activeTab === "users" ? (
-        <AdminUserManagement externalSearch={moduleSearch} onResetSearch={()=>setModuleSearch("")} initialUsers={users} releaseCounts={Object.fromEntries(releaseCountByUser)} latestActivity={Object.fromEntries(latestUserActivity)} permissions={adminAccess.permissions} onUserChange={(updated) => setUsers((items) => items.map((item) => item.id === updated.id ? { ...item, ...updated } : item))} />
+        <AdminUserManagement adminRole={adminAccess.role} externalSearch={moduleSearch} onResetSearch={()=>setModuleSearch("")} initialUsers={users} releaseCounts={Object.fromEntries(releaseCountByUser)} latestActivity={Object.fromEntries(latestUserActivity)} permissions={adminAccess.permissions} onUserChange={(updated) => setUsers((items) => items.map((item) => item.id === updated.id ? { ...item, ...updated } : item))} />
       ) : null}
 
       {activeTab === "earnings-entry" ? <AdminEarningsEntry users={users} releases={releases} /> : null}
@@ -1663,7 +1642,7 @@ export function AdminControlCenter({
         </div>
       ) : null}
       {activeTab === "reviews" ? <AdminReviewManager /> : null}
-      {activeTab === "team" ? <AdminTeamAccessManager users={users} canManage={hasPermission("system.manage")} /> : null}
+      {activeTab === "team" ? <AdminTeamAccessManager users={users} canManage={hasPermission("system.manage") && isAdminAuthority(adminAccess.role)} /> : null}
       {activeTab === "analytics" ? <SurfaceSection title="Operational reporting" description="Current stored records. Counts describe this catalogue snapshot; revenue is paid order value across the loaded history.">
         <div className="grid gap-4 sm:grid-cols-3"><StatCard label="Catalogue records" value={releases.length}/><StatCard label="Open support" value={openSupportTickets}/><StatCard label="Gross collected" value={formatMoney(revenueSummary.receipts)}/><StatCard label="HYMN earned" value={formatMoney(revenueSummary.hymn)}/></div>
         <div className="workspace-module-layout mt-5"><OverviewPanel title="Release workflow"><OverviewPipeline stages={Array.from(new Set(releases.map(row=>row.status))).map(status=>({label:status.replaceAll("_"," "),count:releases.filter(row=>row.status===status).length,color:status==="live"?"#8ac5ac":"#a6b9ed",onClick:()=>selectAdminTab("releases")}))}/></OverviewPanel><OverviewPanel title="Support workload"><OverviewPipeline stages={Array.from(new Set(supportTickets.map(row=>row.status))).map(status=>({label:status.replaceAll("_"," "),count:supportTickets.filter(row=>row.status===status).length,color:status==="resolved"?"#8ac5ac":"#e0b781",onClick:()=>selectAdminTab("support")}))}/></OverviewPanel></div>
@@ -1773,7 +1752,7 @@ export function AdminControlCenter({
           </section>
         </div>
       ) : null}
-    </DashboardFrame>
+    </AdminModuleToolbar>
   );
 }
 
