@@ -58,3 +58,51 @@ html body .landing-rail .landing-new {margin-bottom:0;}
   html body :is(.landing-rail,.dashboard-os-sidebar) :is(.workspace-destination,.landing-group-title,.dashboard-os-group-toggle) {min-height:44px!important;}
 }
 @media(prefers-reduced-motion:reduce) {html body .workspace-destination {transition:none;}}
+
+/* A single elastic launch row: New, Home, Dashboard. */
+html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row {
+  display:flex;align-items:center;gap:4px;flex:none;width:100%;min-width:0;margin:14px 0 12px;
+}
+html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row .workspace-destinations {
+  display:contents!important;padding:0;margin:0;border:0;background:none;box-shadow:none;
+}
+html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row :is(.portal-create,.landing-new,.workspace-destination) {
+  flex:1 1 0;min-width:44px;margin:0;padding:0;border:0!important;box-shadow:none!important;
+  transition:flex-grow .24s ease;
+}
+html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row .portal-create {position:relative;}
+html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row :is(.landing-new,.portal-new-button,.workspace-destination) {
+  display:flex;align-items:center;justify-content:center;gap:0;min-height:44px;height:44px;width:auto;
+  padding:0 10px;border:0!important;border-radius:9px;background:none!important;box-shadow:none!important;
+  color:#bcc9da;font-size:12px;text-shadow:none;overflow:hidden;white-space:nowrap;text-decoration:none;
+}
+html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row .portal-new-button {width:100%;border-radius:0;}
+html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row svg {width:19px;height:19px;flex:none;stroke-width:1.7;}
+html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row :is(.landing-new,.portal-new-button,.workspace-destination)>span {
+  display:inline-block;max-width:0;opacity:0;overflow:hidden;white-space:nowrap;
+  transition:max-width .24s ease,opacity .18s ease,margin-left .24s ease;margin-left:0;
+}
+html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row .workspace-destination[aria-current="page"] {
+  color:#fff;background:#263348!important;box-shadow:inset 0 -2px #a9c5ed!important;
+}
+html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row :is(.portal-create,.landing-new,.workspace-destination):is(:hover,:focus-within) {flex-grow:2.8;}
+html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row :is(.landing-new,.portal-new-button,.workspace-destination):is(:hover,:focus-visible)>span {
+  max-width:105px;opacity:1;margin-left:8px;
+}
+html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row :is(.landing-new,.portal-new-button):is(:hover,:focus-visible) {background:none!important;color:#fff;}
+html body :is(.landing-rail,.dashboard-os-sidebar) {--sidebar-row-height:44px;}
+html body .workspace-v2.workspace-v2 .dashboard-os-nav-item,
+html body :is(.landing-rail,.dashboard-os-sidebar) :is(.landing-group-title,.dashboard-os-group-toggle) {min-height:44px!important;}
+@media(min-width:1024px){
+  html body :is(.rail-collapsed,[data-collapsed="true"]) .workspace-launch-row {flex-direction:column;}
+  html body :is(.rail-collapsed,[data-collapsed="true"]) .workspace-launch-row>*,
+  html body :is(.rail-collapsed,[data-collapsed="true"]) .workspace-launch-row .workspace-destination {flex:0 0 44px;width:100%;}
+  html body :is(.rail-collapsed,[data-collapsed="true"]) .workspace-launch-row :is(.landing-new,.portal-new-button,.workspace-destination)>span {display:none;}
+}
+@media(hover:none),(pointer:coarse){
+  html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row :is(.landing-new,.portal-new-button,.workspace-destination) {flex-direction:column;gap:4px;min-height:58px;height:58px;padding:7px 4px;}
+  html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row :is(.landing-new,.portal-new-button,.workspace-destination)>span {max-width:100%;opacity:1;margin-left:0!important;font-size:10px;}
+  html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row :is(.portal-create,.landing-new,.workspace-destination):is(:hover,:focus-within) {flex-grow:1;}
+  html body :is(.landing-rail,.dashboard-os-sidebar) {--sidebar-row-height:48px;}
+}
+@media(prefers-reduced-motion:reduce){html body .workspace-launch-row *,html body .workspace-launch-row *::before{transition:none!important;}}
