@@ -45,7 +45,9 @@
 @keyframes wave-level { 0%,100% { transform:scaleY(1); } 50% { transform:scaleY(.35); } }
 @keyframes platform-arrive { 0% { transform:translateY(8px) scale(.85); opacity:.4; } 60% { transform:translateY(-4px) scale(1.06); } 100% { transform:none; opacity:1; } }
 .connector { display:grid; place-items:center; color:#657184; }
-.art { isolation:isolate; height:170px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; background:radial-gradient(ellipse at center,#a4b5d20a,transparent 68%); }
+/* Let the blurred light dissipate outside the art instead of clipping it into
+   horizontal bars at the top and bottom. The artwork itself stays unmasked. */
+.art { isolation:isolate; height:170px; display:flex; align-items:center; justify-content:center; position:relative; overflow:visible; background:radial-gradient(ellipse at center,#a4b5d20a,transparent 68%); }
 .caption { display:flex; gap:10px; align-items:flex-start; padding:20px 8px 10px; border:0; }
 .caption > svg { margin-left:auto; flex-shrink:0; color:#8b98aa; margin-top:5px; }
 .number { font-size:10px; line-height:26px; font-variant-numeric:tabular-nums; color:#7d8ba1; }
