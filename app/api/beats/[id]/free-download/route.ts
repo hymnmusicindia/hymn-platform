@@ -4,10 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import { resolvePublicUploadPaths } from "@/lib/storage";
 import { FREE_BEAT_TERMS_VERSION } from "@/lib/beat-free-download";
+import { isSameAppOrigin } from "@/lib/request-origin";
 export const runtime="nodejs";
 export async function POST(request:Request,{params}:{params:Promise<{id:string}>}) {
-  const origin=request.headers.get("origin");
-  if(origin && origin!==new URL(request.url).origin) return NextResponse.json({error:"Use the HYMN download agreement."},{status:403});
+  if(!isSameAppOrigin(request)) return NextResponse.json({error:"Use the HYMN download agreement."},{status:403});
   const body=await request.json().catch(()=>null);
   if(body?.accepted!==true || body?.termsVersion!==FREE_BEAT_TERMS_VERSION) return NextResponse.json({error:"Accept the personal-use agreement before downloading."},{status:400});
   const id=Number((await params).id);

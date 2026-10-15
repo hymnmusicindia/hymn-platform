@@ -46,6 +46,19 @@ export function AdminOpsPanel({ initialBeats, initialOrders }: { initialBeats: B
     });
   }
 
+  function removeBeat(beat: Beat) {
+    if (!window.confirm(`Remove “${beat.title}” from the marketplace? Purchases and files will be preserved.`)) return;
+    startTransition(async () => {
+      try {
+        const response = await fetch(`/api/admin/beats/${beat.id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmation: "DELETE" }) });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) { setFeedback(data.error || "Could not remove beat."); return; }
+        setBeats(items => items.filter(item => item.id !== beat.id));
+        setFeedback(`${beat.title} removed. Purchase history preserved.`);
+      } catch { setFeedback("Could not remove beat. Please retry."); }
+    });
+  }
+
   function toggleBeat(beat: Beat) {
     startTransition(async () => {
       const response = await fetch(`/api/admin/beats/${beat.id}`, {
@@ -121,6 +134,7 @@ export function AdminOpsPanel({ initialBeats, initialOrders }: { initialBeats: B
                 >
                   {beat.enabled ? "Enabled" : "Disabled"}
                 </button>
+                <button type="button" onClick={() => removeBeat(beat)} disabled={isPending} className="rounded-full border border-border px-4 py-2 text-sm text-red-300 disabled:opacity-40">Remove beat</button>
               </div>
             </div>
           ))}
