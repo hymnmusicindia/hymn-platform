@@ -134,6 +134,7 @@ enum StudioPaymentPurpose {
 }
 
 model User {
+  teamMemberships TeamMember[]
   studioTipsEnabled Boolean @default(true) @map("studio_tips_enabled")
   studioVouches StudioVouch[]
   studioShowcaseCredits StudioShowcase[] @relation("ShowcaseArtist")
@@ -483,6 +484,7 @@ model CampaignSpend {
 }
 
 model GrowthLead {
+  teamProspect TeamProspect?
   id          Int      @id @default(autoincrement())
   kind        String
   name        String
@@ -3263,6 +3265,367 @@ model ReferralMessage {
   @@index([referralId, id])
   @@map("referral_messages")
 }
+model TeamWorkspace {
+  id String @id @default(cuid())
+  name String @default("HYMN Team OS")
+  createdAt DateTime @default(now())
+  roles TeamRole[]
+  members TeamMember[]
+  invites TeamInvitation[]
+  projects TeamProject[]
+  tasks TeamTask[]
+  channels TeamChannel[]
+  prospects TeamProspect[]
+  audits TeamAudit[]
+  @@map("team_workspaces")
+}
+
+model TeamRole {
+  id String @id @default(cuid())
+  workspaceId String
+  name String
+  permissions String[] @default([])
+  owner Boolean @default(false)
+  workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  members TeamMember[]
+  invites TeamInvitation[]
+  @@unique([workspaceId, name])
+  @@map("team_roles")
+}
+
+model TeamMember {
+  managerId String?
+  preferences Json @default("{}")
+  lastActiveAt DateTime @default(now())
+  id String @id @default(cuid())
+  workspaceId String
+  userId Int
+  roleId String
+  status String @default("ACTIVE")
+  department String @default("Operations")
+  jobTitle String @default("Team member")
+  responsibilities String @default("")
+  availability String @default("AVAILABLE")
+  joinedAt DateTime @default(now())
+  workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  role TeamRole @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  tasks TeamTask[] @relation("TeamTaskOwner")
+  createdTasks TeamTask[] @relation("TeamTaskCreator")
+  messages TeamMessage[]
+  comments TeamComment[]
+  notifications TeamNotification[]
+  prospects TeamProspect[]
+  outreach TeamOutreach[]
+  reports TeamWeeklyReport[]
+  @@unique([workspaceId, userId])
+  @@index([userId, status])
+  @@map("team_memberships")
+}
+
+model TeamInvitation {
+  id String @id @default(cuid())
+  workspaceId String
+  email String
+  roleId String
+  department String
+  jobTitle String
+  tokenHash String @unique
+  expiresAt DateTime
+  acceptedAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  role TeamRole @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  @@index([workspaceId, email])
+  @@map("team_invitations")
+}
+
+model TeamProject {
+  milestones Json @default("[]")
+  workflow String[] @default(["BACKLOG", "TODO", "IN_PROGRESS", "IN_REVIEW", "BLOCKED", "COMPLETED", "CANCELLED"])
+  id String @id @default(cuid())
+  workspaceId String
+  title String
+  description String @default("")
+  department String
+  memberIds String[] @default([])
+  status String @default("ACTIVE")
+  dueAt DateTime?
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  tasks TeamTask[]
+  @@index([workspaceId, status])
+  @@map("team_projects")
+}
+
+model TeamTask {
+  parentId String?
+  collaboratorIds String[] @default([])
+  recurrenceDays Int?
+  archivedAt DateTime?
+  id String @id @default(cuid())
+  workspaceId String
+  title String
+  description String @default("")
+  creatorId String
+  ownerId String
+  projectId String?
+  status String @default("TODO")
+  priority String @default("NORMAL")
+  dueAt DateTime?
+  completedAt DateTime?
+  approvalRequired Boolean @default(false)
+  evidence String @default("")
+  blocker String @default("")
+  checklist Json @default("[]")
+  dependencyIds String[] @default([])
+  recordType String?
+  recordId Int?
+  eventKey String? @unique
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  owner TeamMember @relation("TeamTaskOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  creator TeamMember @relation("TeamTaskCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  project TeamProject? @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  comments TeamComment[]
+  @@index([workspaceId, status, dueAt])
+  @@index([ownerId, status])
+  @@index([recordType, recordId])
+  @@map("team_tasks")
+}
+
+model TeamComment {
+  id String @id @default(cuid())
+  taskId String
+  authorId String
+  body String
+  createdAt DateTime @default(now())
+  task TeamTask @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  author TeamMember @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  @@index([taskId, createdAt])
+  @@map("team_task_comments")
+}
+
+model TeamChannel {
+  id String @id @default(cuid())
+  workspaceId String
+  name String
+  private Boolean @default(true)
+  memberIds String[] @default([])
+  createdAt DateTime @default(now())
+  workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  messages TeamMessage[]
+  @@index([workspaceId])
+  @@map("team_channels")
+}
+
+model TeamMessage {
+  parentId String?
+  editedAt DateTime?
+  deletedAt DateTime?
+  pinned Boolean @default(false)
+  reactions Json @default("{}")
+  readMemberIds String[] @default([])
+  id String @id @default(cuid())
+  channelId String
+  authorId String
+  body String
+  clientKey String @unique
+  createdAt DateTime @default(now())
+  channel TeamChannel @relation(fields: [channelId], references: [id], onDelete: Restrict)
+  author TeamMember @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  @@index([channelId, createdAt, id])
+  @@map("team_messages")
+}
+
+model TeamNotification {
+  id String @id @default(cuid())
+  memberId String
+  title String
+  href String
+  readAt DateTime?
+  createdAt DateTime @default(now())
+  member TeamMember @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  @@index([memberId, readAt, createdAt])
+  @@map("team_notifications")
+}
+
+model TeamAudit {
+  id String @id @default(cuid())
+  workspaceId String
+  actorId String
+  action String
+  entityId String
+  detail Json
+  createdAt DateTime @default(now())
+  workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  @@index([workspaceId, createdAt])
+  @@map("team_activity_logs")
+}
+
+model TeamProspect {
+  leadId Int? @unique
+  lead GrowthLead? @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  id String @id @default(cuid())
+  workspaceId String
+  ownerId String
+  name String
+  email String?
+  contactUrl String?
+  sourceUrl String
+  evidence String
+  buyingSignal String @default("")
+  categories String[] @default([])
+  score Json
+  stage String @default("NEW")
+  verified Boolean @default(false)
+  suppressed Boolean @default(false)
+  followUpAt DateTime?
+  notes String @default("")
+  customerUserId Int?
+  identityKey String
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  owner TeamMember @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  outreach TeamOutreach[]
+  @@unique([workspaceId, identityKey])
+  @@index([ownerId, stage, followUpAt])
+  @@map("team_prospects")
+}
+
+model TeamOutreach {
+  id String @id @default(cuid())
+  prospectId String
+  actorId String
+  kind String
+  body String
+  evidence String
+  occurredAt DateTime
+  createdAt DateTime @default(now())
+  prospect TeamProspect @relation(fields: [prospectId], references: [id], onDelete: Restrict)
+  actor TeamMember @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  @@index([prospectId, occurredAt])
+  @@index([actorId, kind, occurredAt])
+  @@map("team_outreach_events")
+}
+
+model TeamAttachment {
+  sensitive Boolean @default(false)
+  id String @id @default(cuid())
+  workspaceId String
+  uploadedById String
+  taskId String?
+  projectId String?
+  assetId Int @unique
+  filename String
+  mimeType String
+  sizeBytes Int
+  createdAt DateTime @default(now())
+  @@index([workspaceId, taskId, projectId])
+  @@map("team_attachments")
+}
+
+model TeamApproval {
+  id String @id @default(cuid())
+  workspaceId String
+  requesterId String
+  approverId String
+  type String
+  recordType String
+  recordId Int
+  reason String
+  evidence String
+  status String @default("PENDING")
+  decision String?
+  decidedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([workspaceId, approverId, status])
+  @@map("team_approval_requests")
+}
+
+model TeamDocument {
+  id String @id @default(cuid())
+  workspaceId String
+  authorId String
+  title String
+  body String
+  type String @default("SOP")
+  approved Boolean @default(false)
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([workspaceId, type])
+  @@map("team_documents")
+}
+
+model TeamWorkflowRule {
+  id String @id @default(cuid())
+  workspaceId String
+  name String
+  eventType String
+  ownerId String
+  enabled Boolean @default(true)
+  createdAt DateTime @default(now())
+  @@unique([workspaceId, eventType])
+  @@map("team_workflow_rules")
+}
+
+model TeamWorkflowEvent {
+  id String @id @default(cuid())
+  workspaceId String
+  eventKey String @unique
+  taskId String?
+  createdAt DateTime @default(now())
+  @@index([workspaceId, createdAt])
+  @@map("team_workflow_events")
+}
+
+model TeamSavedView {
+  id String @id @default(cuid())
+  workspaceId String
+  memberId String
+  name String
+  filters Json
+  createdAt DateTime @default(now())
+  @@index([memberId])
+  @@map("team_saved_views")
+}
+
+model TeamExpense {
+  id String @id @default(cuid())
+  workspaceId String
+  creatorId String
+  category String
+  description String
+  amountCents Int
+  currency String @default("INR")
+  incurredAt DateTime
+  createdAt DateTime @default(now())
+  @@index([workspaceId, incurredAt])
+  @@map("team_expenses")
+}
+
+model TeamWeeklyReport {
+  id String @id @default(cuid())
+  memberId String
+  weekStart DateTime @db.Date
+  metrics Json
+  summary String
+  blockers String
+  nextWeek String
+  createdAt DateTime @default(now())
+  member TeamMember @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  @@unique([memberId, weekStart])
+  @@map("team_weekly_reports")
+}
+
 model ReferralMailJob {
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
   id Int @id @default(autoincrement())

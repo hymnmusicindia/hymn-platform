@@ -85,6 +85,18 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [teamAccess, setTeamAccess] = useState(false);
+  useEffect(() => {
+    if (!user || !profileOpen) return;
+    let cancelled = false;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const check = async (attempt = 0) => {
+      try { const response = await fetch("/api/team/session", { cache: "no-store" }); if (!cancelled) { setTeamAccess(response.ok); if (response.status >= 500 && attempt < 2) retry = setTimeout(() => void check(attempt + 1), 3000); } }
+      catch { if (!cancelled) { setTeamAccess(false); if (attempt < 2) retry = setTimeout(() => void check(attempt + 1), 3000); } }
+    };
+    void check();
+    return () => { cancelled = true; clearTimeout(retry); };
+  }, [user, profileOpen]);
   const [presence, setPresence] = useState<PresenceStatus>("online");
   const [presenceSaving, setPresenceSaving] = useState(false);
   const [presenceExpanded, setPresenceExpanded] = useState(false);
@@ -585,6 +597,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
               </div> : null}
             </div>
             <div className="mt-3 grid gap-1">
+              {teamAccess ? <Link href="/team" role="menuitem" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]"><LayoutDashboard className="h-4 w-4" />Team Workspace</Link> : null}
               <Link href={user.role === "producer" ? "/producer/dashboard?tab=settings" : "/dashboard?tab=settings"} onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
                 <UserRound className="h-4 w-4" />
                 Update personal details

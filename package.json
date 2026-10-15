@@ -6,6 +6,8 @@
     "node": ">=20.19.0"
   },
   "scripts": {
+    "test:team-os": "tsx scripts/verify-team-os-isolated.ts",
+    "test:team-os:browser": "tsx scripts/verify-team-os-isolated.ts --browser",
     "dev": "next dev --webpack",
     "build": "prisma generate && next build --webpack",
     "build:release": "prisma generate && tsx scripts/deploy-production-migrations.ts && next build --webpack",

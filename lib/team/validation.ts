@@ -1,0 +1,18 @@
+import { z } from "zod";
+import { categories, permissions, pipeline, statuses } from "./policy";
+const id = z.string().min(1).max(80);
+const text = z.string().trim().max(10000);
+const date = z.string().datetime({ offset: true }).nullable().optional();
+const publicUrl = z.string().url().max(1000).refine(value => /^https?:\/\//i.test(value), "Use an HTTP or HTTPS public source URL.");
+export const linkSchema = z.object({ recordType: z.enum(["beat", "release", "engineer", "studio"]).nullable().optional(), recordId: z.number().int().positive().nullable().optional() });
+export const taskSchema = z.object({ title: text.min(3).max(200), description: text.default(""), ownerId: id, projectId: id.nullable().optional(), priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).default("NORMAL"), dueAt: date, approvalRequired: z.boolean().default(false), dependencyIds: z.array(id).max(30).default([]), checklist: z.array(z.object({ text: text.min(1).max(200), done: z.boolean() })).max(40).default([]) }).merge(linkSchema);
+export const taskUpdateSchema = taskSchema.partial().extend({ version: z.number().int().positive(), status: z.enum(statuses).optional(), evidence: text.optional(), blocker: text.optional() });
+export const projectSchema = z.object({ title: text.min(3).max(200), description: text.default(""), department: text.min(1).max(100), memberIds: z.array(id).min(1).max(100), dueAt: date });
+export const inviteSchema = z.object({ email: z.string().email().max(254).transform(v => v.toLowerCase()), roleId: id, department: text.min(1).max(100), jobTitle: text.min(1).max(150) });
+export const roleSchema = z.object({ name: text.min(2).max(80), permissions: z.array(z.enum(permissions)).max(permissions.length) });
+export const prospectSchema = z.object({ name: text.min(2).max(150), ownerId: id, email: z.string().email().max(254).nullable().optional(), contactUrl: publicUrl.nullable().optional(), sourceUrl: publicUrl, evidence: text.min(10), buyingSignal: text.default(""), categories: z.array(z.enum(categories)).min(1), verified: z.boolean().default(false), score: z.object({ intent: z.number().int().min(0).max(30), relevance: z.number().int().min(0).max(25), recency: z.number().int().min(0).max(15), contactability: z.number().int().min(0).max(15), fit: z.number().int().min(0).max(15) }), notes: text.default("") }).refine(v => !!v.email || !!v.contactUrl, "Add an actual public business contact route.");
+export const prospectUpdateSchema = z.object({ version: z.number().int().positive(), stage: z.enum(pipeline).optional(), ownerId: id.optional(), notes: text.optional(), followUpAt: date, suppressed: z.boolean().optional(), customerUserId: z.number().int().positive().optional() });
+export const outreachSchema = z.object({ prospectId: id, kind: z.enum(["DRAFT", "CONTACT", "REPLY", "OBJECTION"]), body: text.min(3), evidence: text.min(3), occurredAt: z.string().datetime({ offset: true }) });
+export const messageSchema = z.object({ channelId: id, body: text.min(1).max(4000), clientKey: z.string().uuid(), parentId: id.nullable().optional(), mentions: z.array(id).max(10).default([]) });
+export const channelSchema = z.object({ name: text.min(2).max(100), private: z.boolean().default(true), memberIds: z.array(id).min(1).max(100) });
+export const reportSchema = z.object({ summary: text.min(10), blockers: text.default(""), nextWeek: text.min(3) });

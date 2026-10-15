@@ -7,7 +7,7 @@ let cacheBytes = 0;
 const MAX_CACHE_BYTES = 32 * 1024 * 1024;
 
 /** Call only AFTER source authorization. Content hash invalidates replaced artwork. */
-export async function artworkThumbnail(bytes: Buffer, width: number) {
+export async function artworkThumbnail(bytes: Buffer, width: number): Promise<Buffer> {
   const key = `${createHash("sha256").update(bytes).digest("hex")}:${width}`;
   const cached = cache.get(key);
   if (cached) {
@@ -17,7 +17,7 @@ export async function artworkThumbnail(bytes: Buffer, width: number) {
   }
   const existing = pending.get(key);
   if (existing) return existing;
-  const job = sharp(bytes, { limitInputPixels: 40_000_000 }).rotate().resize({ width, height: width, fit: "inside", withoutEnlargement: true }).webp({ quality: 80, effort: 3 }).toBuffer().then(result => {
+  const job = sharp(bytes, { limitInputPixels: 40_000_000 }).rotate().resize({ width, height: width, fit: "inside", withoutEnlargement: true }).webp({ quality: 80, effort: 3 }).toBuffer().then((result: Buffer) => {
     while (cacheBytes + result.length > MAX_CACHE_BYTES && cache.size) {
       const oldest = cache.keys().next().value!;
       cacheBytes -= cache.get(oldest)!.length;
