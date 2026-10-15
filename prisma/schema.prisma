@@ -2106,6 +2106,7 @@ model Beat {
   keySignature                  String    @map("key_signature")
   priceCents                    Int       @map("price_cents")
   generalPriceCents             Int       @default(25000) @map("general_price_cents")
+  mp3PriceCents                 Int       @default(12000) @map("mp3_price_cents")
   exclusivePriceCents           Int       @default(210000) @map("exclusive_price_cents")
   description                   String    @default("")
   subgenre                      String    @default("")

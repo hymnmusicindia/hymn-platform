@@ -1367,6 +1367,7 @@ export async function createBeat(input: Omit<Beat, "id" | "createdAt" | "produce
           mood: input.mood,
           keySignature: input.keySignature ?? "Cm",
           priceCents: Math.round((input.stemPrice ?? input.price) * 100),
+          mp3PriceCents: Math.round(input.price * 100),
           generalPriceCents: Math.round((input.generalPrice ?? input.price) * 100),
           exclusivePriceCents: Math.round((input.exclusivePrice ?? Math.max(input.price * 8, input.price + 100)) * 100),
           description: input.description ?? "",
@@ -1454,7 +1455,7 @@ export async function updateBeat(id: number, input: Partial<Pick<Beat, "title" |
       if (input.genre !== undefined) data.genre = input.genre;
       if (input.mood !== undefined) data.mood = input.mood;
       if (input.keySignature !== undefined) data.keySignature = input.keySignature;
-      if (input.price !== undefined) data.priceCents = Math.round(input.price * 100);
+      if (input.price !== undefined) data.mp3PriceCents = Math.round(input.price * 100);
       if (input.generalPrice !== undefined) data.generalPriceCents = Math.round(input.generalPrice * 100);
       if (input.stemPrice !== undefined) data.priceCents = Math.round(input.stemPrice * 100);
       if (input.exclusivePrice !== undefined) data.exclusivePriceCents = Math.round(input.exclusivePrice * 100);
@@ -3726,7 +3727,7 @@ export function mapPrismaBeat(prismaBeat: any): Beat {
     genre: prismaBeat.genre,
     mood: prismaBeat.mood,
     keySignature: prismaBeat.keySignature,
-    price: 120,
+    price: (prismaBeat.mp3PriceCents ?? 12000) / 100,
     generalPrice: prismaBeat.generalPriceCents / 100,
     stemPrice: prismaBeat.priceCents / 100,
     exclusivePrice: prismaBeat.exclusivePriceCents / 100,

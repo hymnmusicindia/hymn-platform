@@ -56,7 +56,7 @@ export function beatLicenseLabel(value?: string | null) {
 }
 
 export function beatLicensePrice(beat: Pick<Beat, "price" | "generalPrice" | "stemPrice" | "exclusivePrice"> & { startingPrice?: number }, licenseType: BeatStoreLicenseType) {
-  if (licenseType === "mp3") return MP3_LICENSE_PRICE;
+  if (licenseType === "mp3") return Number(beat.price ?? MP3_LICENSE_PRICE);
   if (licenseType === "wav") return Number(beat.generalPrice ?? beat.startingPrice ?? beat.price ?? 0);
   if (licenseType === "stems") return Number(beat.stemPrice ?? beat.generalPrice ?? beat.startingPrice ?? beat.price ?? 0);
   return Number(beat.exclusivePrice ?? 0);
@@ -74,7 +74,7 @@ export const beatLicenseOptions: Array<{
     key: "mp3",
     label: "MP3 Licence",
     price: MP3_LICENSE_PRICE,
-    note: "Fixed HYMN standard price",
+    note: "Price set by the producer",
     badge: "Standard",
     bullets: ["MP3 file", "General licence", "No Content ID", "Beat remains available"]
   },
@@ -251,7 +251,7 @@ export function buildBeatStorefront(beats: Beat[], producerProfiles: ProducerPro
       cartsNow: 0,
       weeklySales: 0,
       plays: 0,
-      startingPrice: MP3_LICENSE_PRICE,
+      startingPrice: Number(beat.price ?? MP3_LICENSE_PRICE),
       shortHook: `${beat.genre} · ${beat.mood} · ${beat.bpm} BPM`,
       producerName: producer.name,
       producerId: beat.producerId
