@@ -237,4 +237,3 @@ export async function advancedRead(a: Actor, resource: string, params: URLSearch
   }
   throw new TeamError("Unknown team resource.", 404);
 }
-

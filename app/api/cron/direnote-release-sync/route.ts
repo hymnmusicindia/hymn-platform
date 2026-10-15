@@ -11,6 +11,10 @@ export const maxDuration = 300;
 
 const LEASE_KEY = "direnote-release-sync";
 const CONCURRENCY = Math.max(1, Math.min(Number(process.env.DIRENOTE_RELEASE_SYNC_CONCURRENCY || 3), 5));
+// Hostinger's edge abandons a request after 60s. Stop starting new provider work
+// at 30s so in-flight calls and the run summary finish inside that window;
+// releases left over are checked first on the next run.
+const START_WORK_UNTIL_MS = 30_000;
 // Provider polling continues for "SCHEDULED", "AWAITING_LIVE_CONFIRMATION",
 // and "PARTIALLY_LIVE" via the current attempt's providerStatus.
 
@@ -56,7 +60,7 @@ export async function GET(request: Request) {
     });
     const autoQcResults: Array<{ releaseId: number; outcome: string }> = [];
     for (const candidate of autoQcCandidates) {
-      if (Date.now() - started > 90_000) break;
+      if (Date.now() - started > 10_000) break;
       const attemptState = candidate.distributionSubmissions[0]?.state;
       if (attemptState === "submitted" || attemptState === "reconciliation_required" || attemptState === "processing" || attemptState === "failed") continue;
       if (candidate.status === "QUEUED_FOR_DISTRIBUTION" && attemptState !== "retryable") continue;
@@ -85,7 +89,7 @@ export async function GET(request: Request) {
     const results: Array<{ releaseId: number; title: string; success: boolean; error?: string; upc?: string | null; status?: string }> = [];
     let cursor = 0;
     const worker = async () => {
-      while (cursor < candidates.length && Date.now() - started < 280_000) {
+      while (cursor < candidates.length && Date.now() - started < START_WORK_UNTIL_MS) {
         const candidate = candidates[cursor++];
         try {
           const outcome = await syncDireNoteRelease(candidate.releaseId);
@@ -94,23 +98,33 @@ export async function GET(request: Request) {
         catch (error) { results.push({ releaseId: candidate.releaseId, title: candidate.release.title, success: false, error: error instanceof Error ? error.message : "Sync failed." }); }
       }
     };
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, candidates.length) }, worker));
     const staleBefore = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const identityBudget = Date.now() - started < 250_000 ? 10 : 0;
-    // Newly provisioned artists can gain their store pages days apart. Keep asking
-    // check_artist hourly until both music identities arrive, then refresh weekly.
-    const pendingArtists = identityBudget ? await prisma.artistCard.findMany({
-      where: { direNoteArtistId: { not: null }, archivedAt: null, AND: [
-        { OR: [{ spotifyProfileUrl: null }, { spotifyProfileUrl: "" }, { appleMusicProfileUrl: null }, { appleMusicProfileUrl: "" }] },
-        { OR: [{ direNoteLastSyncedAt: null }, { direNoteLastSyncedAt: { lte: new Date(Date.now() - 60 * 60 * 1000) } }] }
-      ] }, select: { id: true }, take: identityBudget, orderBy: { direNoteLastSyncedAt: { sort: "asc", nulls: "first" } }
-    }) : [];
-    const [staleArtists, songwriters] = await Promise.all([
-      identityBudget > pendingArtists.length ? prisma.artistCard.findMany({ where: { id: { notIn: pendingArtists.map(item => item.id) }, direNoteArtistId: { not: null }, archivedAt: null, OR: [{ direNoteLastSyncedAt: null }, { direNoteLastSyncedAt: { lt: staleBefore } }] }, select: { id: true }, take: identityBudget - pendingArtists.length, orderBy: { direNoteLastSyncedAt: { sort: "asc", nulls: "first" } } }) : Promise.resolve([]),
-      identityBudget ? prisma.contributorParty.findMany({ where: { direNoteSongwriterId: { not: null }, mergedIntoId: null, OR: [{ direNoteLastSyncedAt: null }, { direNoteLastSyncedAt: { lt: staleBefore } }] }, select: { id: true }, take: 3, orderBy: { direNoteLastSyncedAt: { sort: "asc", nulls: "first" } } }) : Promise.resolve([])
+    const identityBudget = 10;
+    const refreshIdentities = async () => {
+      // Newly provisioned artists can gain their store pages days apart. Keep asking
+      // check_artist hourly until both music identities arrive, then refresh weekly.
+      const pendingArtists = await prisma.artistCard.findMany({
+        where: { direNoteArtistId: { not: null }, archivedAt: null, AND: [
+          { OR: [{ spotifyProfileUrl: null }, { spotifyProfileUrl: "" }, { appleMusicProfileUrl: null }, { appleMusicProfileUrl: "" }] },
+          { OR: [{ direNoteLastSyncedAt: null }, { direNoteLastSyncedAt: { lte: new Date(Date.now() - 60 * 60 * 1000) } }] }
+        ] }, select: { id: true }, take: identityBudget, orderBy: { direNoteLastSyncedAt: { sort: "asc", nulls: "first" } }
+      });
+      const [staleArtists, songwriters] = await Promise.all([
+        identityBudget > pendingArtists.length ? prisma.artistCard.findMany({ where: { id: { notIn: pendingArtists.map(item => item.id) }, direNoteArtistId: { not: null }, archivedAt: null, OR: [{ direNoteLastSyncedAt: null }, { direNoteLastSyncedAt: { lt: staleBefore } }] }, select: { id: true }, take: identityBudget - pendingArtists.length, orderBy: { direNoteLastSyncedAt: { sort: "asc", nulls: "first" } } }) : Promise.resolve([]),
+        prisma.contributorParty.findMany({ where: { direNoteSongwriterId: { not: null }, mergedIntoId: null, OR: [{ direNoteLastSyncedAt: null }, { direNoteLastSyncedAt: { lt: staleBefore } }] }, select: { id: true }, take: 3, orderBy: { direNoteLastSyncedAt: { sort: "asc", nulls: "first" } } })
+      ]);
+      const artists = [...pendingArtists, ...staleArtists];
+      return Promise.allSettled([...artists.map(item => syncDireNoteArtistInformation(item.id)), ...songwriters.map(item => syncDireNoteSongwriterInformation(item.id))]);
+    };
+    // Runs alongside the release syncs so a full release batch cannot use up the
+    // time budget and starve identity refresh. allSettled keeps a failed identity
+    // lookup from leaving the release workers running after the response.
+    const [, identity] = await Promise.allSettled([
+      Promise.all(Array.from({ length: Math.min(CONCURRENCY, candidates.length) }, worker)),
+      refreshIdentities()
     ]);
-    const artists = [...pendingArtists, ...staleArtists];
-    const identityResults = await Promise.allSettled([...artists.map(item => syncDireNoteArtistInformation(item.id)), ...songwriters.map(item => syncDireNoteSongwriterInformation(item.id))]);
+    if (identity.status === "rejected") throw identity.reason;
+    const identityResults = identity.value;
     const identityErrors = identityResults.filter(item => item.status === "rejected").length;
     const summary = { runId, candidateCount: candidates.length, autoQcRecoveryCount: autoQcResults.length, autoQcResults, providerRequestCount: results.length + identityResults.length + autoQcResults.length, processedCount: results.length, changedCount: results.filter(result => result.success).length, identifierRepairCount: results.filter(result => result.success && Boolean(result.upc)).length, statusRepairCount: results.filter(result => result.success && Boolean(result.status)).length, correctionCount: results.filter(result => result.status === "changes_required").length, identityRefreshCount: identityResults.length - identityErrors, identityErrorCount: identityErrors, errorCount: results.filter(result => !result.success).length + identityErrors + autoQcResults.filter(result => result.outcome === "failed").length, deferredCount: candidates.length - results.length, durationMs: Date.now() - started, eligible: candidates.length, checked: results.length };
     const diagnosticSummary = { ...summary, syncVersion: "corrections-v2", results };
