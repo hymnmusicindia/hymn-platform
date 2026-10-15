@@ -442,6 +442,7 @@ function AdminPayoutManager() {
             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div>
                 <p className="font-semibold" style={{ color: "var(--text)" }}>{request.userName}</p>
+                <p className="text-xs" style={{color:"var(--info)"}}>Income: {(request.sourceType ?? "artist_royalty").replaceAll("_", " ")}</p>
                 <p className="mt-1 text-sm" style={{ color: "var(--text-soft)" }}>{request.userEmail} / User #{request.userId}</p>
                 <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4" style={{ color: "var(--text-muted)" }}>
                   <span>Requested: {formatMoney(request.requestedAmount)}{request.requestedAmountUsd !== null ? ` · $${request.requestedAmountUsd.toFixed(2)}` : ""}</span>
@@ -1379,7 +1380,7 @@ export function AdminControlCenter({
                     </div>
                   ) : null}
                 </div> : null}
-                {selectedRelease.direNoteStatus ? <ReleaseSubmissionHistory releaseId={selectedRelease.id} admin /> : null}
+                <ReleaseSubmissionHistory key={selectedRelease.id} releaseId={selectedRelease.id} admin />
                 <div className="sticky bottom-3 z-10 grid gap-3 rounded-2xl border p-3 shadow-xl sm:grid-cols-2 xl:grid-cols-3" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
                   {["submitted", "in_queue", "changes_requested", "failed", "draft"].includes(selectedRelease.status) ? <button type="button" disabled={isPending || !hasPermission("releases.review")} title={!hasPermission("releases.review") ? "Requires releases.review permission" : undefined} onClick={() => updateReleaseStatus(selectedRelease.id, "under_review")} className="btn-outline pressable disabled:opacity-45">Start Review</button> : null}
                   {selectedRelease.status === "under_review" ? <button type="button" disabled={isPending || isSubmittingToDireNote || direNoteCooldownSeconds > 0 || direNoteReadiness?.ready !== true || !hasPermission("releases.review") || !hasPermission("distribution.submit")} title={direNoteCooldownSeconds > 0 ? `DireNote cooldown: ${direNoteCooldownLabel} remaining` : direNoteReadiness?.ready !== true ? "Wait for this release's readiness check to pass" : !hasPermission("releases.review") || !hasPermission("distribution.submit") ? "Requires release review and distribution submit permissions" : undefined} onClick={() => setConfirmStatusAction("approved")} className="btn-primary pressable disabled:opacity-45">{isSubmittingToDireNote ? "Approving & Sending..." : direNoteCooldownSeconds > 0 ? `Try again in ${direNoteCooldownLabel}` : "Approve & Send to DireNote"}</button> : null}

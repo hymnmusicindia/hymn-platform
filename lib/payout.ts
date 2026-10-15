@@ -11,6 +11,8 @@ import { emailAppUrl, sendPayoutEmailEvent } from "@/lib/email/email-events";
 import { PAYOUT_CONFIG } from "@/lib/payout/config";
 import { getLatestUsdInrRate, getPublicPayoutConfig } from "@/lib/payout/exchange-rates";
 import { inrToUsd } from "@/lib/payout/currency";
+import { INCOME_MINIMUM_INR, WALLET_SOURCES, walletIncomeBalances } from "@/lib/income-policy";
+import { getIncomeSummary } from "@/lib/income-summary";
 
 const PAYOUT_SERVICE_FEE_RATE = PAYOUT_CONFIG.payoutServiceFeePercent / 100;
 
@@ -47,6 +49,7 @@ export type PayoutSummary = {
   trackBreakdown: Array<{ trackTitle: string; isrc: string; streamsDownloads: number | null; netEarnings: number }>;
   platformBreakdown: Array<{ platform: string; earnings: number }>;
   payoutHistory: Array<{
+    sourceType?: string;
     id: number;
     requestDate: string;
     requestedAmount: number;
@@ -70,6 +73,7 @@ export type PayoutSummary = {
 };
 
 export type AdminPayoutRequest = {
+  sourceType?: string;
   id: number;
   userId: number;
   userName: string;
@@ -189,6 +193,7 @@ function aggregate<T extends Record<string, unknown>>(
 function mapRequest(row: any): PayoutSummary["payoutHistory"][number] {
   return {
     id: row.id,
+    sourceType: row.sourceType,
     requestDate: row.requestedAt.toISOString(),
     requestedAmount: toNumber(row.amount),
     requestedAmountUsd: row.requestedAmountUsd == null ? null : toNumber(row.requestedAmountUsd),
@@ -214,8 +219,7 @@ export async function getPayoutSummary(userId: number): Promise<PayoutSummary> {
   if (!usesPostgresPrisma()) return emptySummary();
 
   const currentQuarter = getCurrentQuarter();
-  const [balance, lineItems, requests, splitEarnings, carryForward, period, reports, credential] = await Promise.all([
-    (prisma as any).artistPayoutBalance.findUnique({ where: { userId } }),
+  const [lineItems, requests, splitEarnings, carryForward, period, reports, credential] = await Promise.all([
     (prisma as any).royaltyLineItem.findMany({
       where: { userId },
       include: { release: true, track: true },
@@ -236,13 +240,12 @@ export async function getPayoutSummary(userId: number): Promise<PayoutSummary> {
   const requestHistory = requests.map(mapRequest);
   const heldRequests = requestHistory.filter((request: PayoutSummary["payoutHistory"][number]) => ["requested", "under_review", "approved", "processing"].includes(request.status));
   const paidRequests = requestHistory.filter((request: PayoutSummary["payoutHistory"][number]) => request.status === "paid");
-  const lineNet = money(lineItems.reduce((sum: number, item: any) => sum + toNumber(item.netRevenue), 0));
-  const heldAmount = money(heldRequests.reduce((sum: number, request: PayoutSummary["payoutHistory"][number]) => sum + request.requestedAmount, 0));
-  const paidAmount = money(paidRequests.reduce((sum: number, request: PayoutSummary["payoutHistory"][number]) => sum + request.netPayout, 0));
-  const availableBalance = balance ? toNumber(balance.availableBalance) : Math.max(0, lineNet - heldAmount - paidAmount);
-  const pendingBalance = balance ? toNumber(balance.pendingBalance) : heldAmount;
-  const totalEarnings = balance ? toNumber(balance.lifetimeEarnings) : lineNet;
-  const paidTillDate = balance ? toNumber(balance.lifetimePaid) : paidAmount;
+  const income = await getIncomeSummary(userId);
+  const distributionIncome = income.sources.find(source => source.key === "artist_royalty")!;
+  const availableBalance = distributionIncome.available;
+  const pendingBalance = distributionIncome.held;
+  const totalEarnings = distributionIncome.earned;
+  const paidTillDate = paidRequests.filter((request: PayoutSummary["payoutHistory"][number]) => requests.find((row:any) => row.id === request.id)?.sourceType === "artist_royalty").reduce((sum:number,request:PayoutSummary["payoutHistory"][number])=>sum+request.netPayout,0);
   const currentKey = monthKey(new Date());
   const currentMonthEarnings = money(lineItems
     .filter((item: any) => monthKey(item.statementMonth) === currentKey)
@@ -477,18 +480,22 @@ export async function createPayoutRequest(userId: number, input: {
   bankAccountNumber?: string;
   ifsc?: string;
   userNote?: string;
-  sourceType?: "artist_royalty" | "producer_beat_sales" | "mixed";
+  sourceType?: "artist_royalty" | "producer_beat_sales" | "studio" | "other" | "mixed";
 }) {
   if (!usesPostgresPrisma()) throw new Error("Payout requests require a persistent database.");
 
   const amount = money(Number(input.amount));
+  const source = input.sourceType ?? "artist_royalty";
+  if (!(WALLET_SOURCES as readonly string[]).includes(source)) throw new Error("Choose a specific income source for withdrawal.");
+  const distribution = source === "artist_royalty";
+  const sourceMinimum = distribution ? null : INCOME_MINIMUM_INR[source as "studio" | "producer_beat_sales" | "other"];
+  if(sourceMinimum && amount < sourceMinimum) throw new Error(`Minimum withdrawal for this income source is Rs ${sourceMinimum}.`);
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be greater than 0.");
   const exchangeRate = await getLatestUsdInrRate();
-  if (!exchangeRate) throw new Error("Payout requests are temporarily unavailable while the exchange rate is refreshed.");
-  if (exchangeRate.stale) throw new Error("Payout requests are temporarily unavailable because the exchange rate is stale.");
-  const requestedAmountUsd = inrToUsd(amount, exchangeRate.rate);
-  if (requestedAmountUsd.lt(PAYOUT_CONFIG.minimumPayoutUsd)) throw new Error(`HYMN's minimum payout threshold is $${PAYOUT_CONFIG.minimumPayoutUsd} USD (approximately Rs ${Math.round(PAYOUT_CONFIG.minimumPayoutUsd * exchangeRate.rate).toLocaleString("en-IN")}).`);
-  if ((process.env.PAYOUT_CYCLE ?? "quarterly") === "quarterly" && process.env.ALLOW_PAYOUT_REQUESTS_DURING_OPEN_QUARTER !== "true") {
+  if (distribution && (!exchangeRate || exchangeRate.stale)) throw new Error("Distribution payouts require a current exchange rate.");
+  const requestedAmountUsd = exchangeRate && !exchangeRate.stale ? inrToUsd(amount, exchangeRate.rate) : null;
+  if (distribution && requestedAmountUsd!.lt(PAYOUT_CONFIG.minimumPayoutUsd)) throw new Error(`HYMN's distribution minimum is $${PAYOUT_CONFIG.minimumPayoutUsd} USD.`);
+  if (distribution && (process.env.PAYOUT_CYCLE ?? "quarterly") === "quarterly" && process.env.ALLOW_PAYOUT_REQUESTS_DURING_OPEN_QUARTER !== "true") {
     const current = getCurrentQuarter();
     const payoutWindow = await (prisma as any).quarterCarryForward.findFirst({ where: { userId, toQuarter: current.quarter, toYear: current.year } });
     if (!payoutWindow) throw new Error("Payout requests open after the current quarter closes.");
@@ -507,6 +514,14 @@ export async function createPayoutRequest(userId: number, input: {
     await tx.$queryRaw`SELECT id FROM artist_payout_balances WHERE user_id = ${userId} FOR UPDATE`;
     const current = await tx.artistPayoutBalance.findUnique({ where: { userId } });
     if (!current || new Prisma.Decimal(current.availableBalance).lt(amount)) throw new Error("Amount cannot exceed available balance.");
+    const [ledger, priorRequests, routes] = await Promise.all([
+      tx.walletTransaction.findMany({where:{userId,currency:"INR"},select:{type:true,amount:true,direction:true}}),
+      tx.payoutRequest.findMany({where:{userId},select:{sourceType:true,amount:true,status:true}}),
+      tx.routeTransfer.findMany({where:{userId,status:{not:"cancelled"}},select:{sourceKey:true,amountMinor:true}})
+    ]);
+    const sourceBalances = walletIncomeBalances(Number(current.lifetimeEarnings), Number(current.availableBalance), ledger.map((row:any)=>({...row,amount:Number(row.amount)})),[...priorRequests.map((row:any)=>({...row,amount:Number(row.amount)})),...routes.map((row:any)=>({sourceType:row.sourceKey.startsWith("studio:")?"studio":row.sourceKey.startsWith("beat:")?"producer_beat_sales":"mixed",amount:row.amountMinor/100,status:"REQUESTED"}))]);
+    if(sourceBalances.unresolved) throw new Error("Your historical mixed withdrawals need source reconciliation before a new withdrawal.");
+    if(amount > sourceBalances.spendable[source as keyof typeof sourceBalances.spendable]) throw new Error("Amount exceeds the available balance for the selected income source.");
     const balance = await tx.artistPayoutBalance.update({ where: { userId }, data: { availableBalance: { decrement: amount }, pendingBalance: { increment: amount }, lastUpdatedAt: new Date() } });
     const created = await tx.payoutRequest.create({
       data: {
@@ -516,11 +531,11 @@ export async function createPayoutRequest(userId: number, input: {
         netAmount,
         requestedAmountInr: amount,
         requestedAmountUsd,
-        minimumPayoutUsd: PAYOUT_CONFIG.minimumPayoutUsd,
-        usdToInrRate: exchangeRate.rate,
-        exchangeRateId: exchangeRate.id,
-        exchangeRateProvider: exchangeRate.provider,
-        exchangeRateFetchedAt: exchangeRate.fetchedAt,
+        minimumPayoutUsd: distribution ? PAYOUT_CONFIG.minimumPayoutUsd : null,
+        usdToInrRate: exchangeRate?.rate ?? null,
+        exchangeRateId: exchangeRate?.id ?? null,
+        exchangeRateProvider: exchangeRate?.provider ?? null,
+        exchangeRateFetchedAt: exchangeRate?.fetchedAt ?? null,
         method,
         sourceType: input.sourceType ?? "artist_royalty",
         upiId: null,
@@ -531,7 +546,7 @@ export async function createPayoutRequest(userId: number, input: {
       }
     });
     await tx.walletTransaction.create({ data: { userId, type: "payout_reservation", amount: 0, direction: "hold", idempotencyKey: `payout:${created.id}:reservation`, referenceType: "payout_request", referenceId: String(created.id), balanceAfter: balance.availableBalance, availabilityStatus: "held", auditMetadata: { reservedAmount: String(amount), pendingBalance: balance.pendingBalance.toString() }, note: "Funds reserved for payout request." } });
-    await tx.payoutRequestEvent.create({ data: { payoutRequestId: created.id, actorType: "user", actorId: userId, previousStatus: null, newStatus: "requested", note: input.userNote?.trim() || "Payout requested.", metadata: { requestedAmountInr: String(amount), requestedAmountUsd: requestedAmountUsd.toString(), minimumPayoutUsd: PAYOUT_CONFIG.minimumPayoutUsd, usdToInrRate: exchangeRate.rate, exchangeRateId: exchangeRate.id, serviceFee: String(serviceFee), netAmount: String(netAmount) } } });
+    await tx.payoutRequestEvent.create({ data: { payoutRequestId: created.id, actorType: "user", actorId: userId, previousStatus: null, newStatus: "requested", note: input.userNote?.trim() || "Payout requested.", metadata: { sourceType:source, minimumInr:sourceMinimum, requestedAmountInr: String(amount), requestedAmountUsd: requestedAmountUsd?.toString() ?? null, serviceFee: String(serviceFee), netAmount: String(netAmount) } } });
     return created;
   });
 
@@ -544,7 +559,7 @@ export async function createPayoutRequest(userId: number, input: {
     body: `Your payout request of Rs ${amount.toLocaleString("en-IN")} has been submitted. Processing usually takes 24-48 hours.`,
     type: "payout",
     href: "/payout"
-  }), prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } }).then((user) => user ? sendPayoutEmailEvent({ event: "payout_request_submitted", to: user.email, userId, payoutId: request.id, userName: user.name, requestedAmount: amount, serviceFee, netAmount, url: emailAppUrl("/payout") }) : undefined), createAdminTaskOnce({ eventKey: `payout:${request.id}:pending`, type: "Payout Pending", priority: "high", title: `Payout #${request.id} needs review`, body: `User #${userId} requested Rs ${amount.toLocaleString("en-IN")} ($${requestedAmountUsd.toFixed(2)} at ${exchangeRate.rate} INR/USD); net after the separate 2% fee is Rs ${netAmount.toLocaleString("en-IN")}.`, href: `/admin?tab=payouts&requestId=${request.id}`, entityType: "payout_request", entityId: request.id }), logAuditEvent({ actorType: "user", actorId: userId, entityType: "payout_request", entityId: request.id, action: "payout.requested", newValue: { requestedAmountInr: amount, requestedAmountUsd: requestedAmountUsd.toString(), minimumPayoutUsd: PAYOUT_CONFIG.minimumPayoutUsd, usdToInrRate: exchangeRate.rate, exchangeRateId: exchangeRate.id, serviceFee, netAmount, method } })]);
+  }), prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } }).then((user) => user ? sendPayoutEmailEvent({ event: "payout_request_submitted", to: user.email, userId, payoutId: request.id, userName: user.name, requestedAmount: amount, serviceFee, netAmount, url: emailAppUrl("/payout") }) : undefined), createAdminTaskOnce({ eventKey: `payout:${request.id}:pending`, type: "Payout Pending", priority: "high", title: `Payout #${request.id} needs review`, body: `User #${userId} requested Rs ${amount.toLocaleString("en-IN")} from ${source}; net after the separate 2% fee is Rs ${netAmount.toLocaleString("en-IN")}.`, href: `/admin?tab=payouts&requestId=${request.id}`, entityType: "payout_request", entityId: request.id }), logAuditEvent({ actorType: "user", actorId: userId, entityType: "payout_request", entityId: request.id, action: "payout.requested", newValue: { sourceType:source, requestedAmountInr: amount, requestedAmountUsd: requestedAmountUsd?.toString() ?? null, minimumInr:sourceMinimum, serviceFee, netAmount, method } })]);
 
   return mapRequest(request);
 }
@@ -558,6 +573,7 @@ export async function listAdminPayoutRequests(): Promise<AdminPayoutRequest[]> {
   });
 
   return requests.map((request: any) => ({
+    sourceType: request.sourceType,
     id: request.id,
     userId: request.userId,
     userName: request.user?.name ?? `User #${request.userId}`,

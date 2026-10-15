@@ -1,6 +1,7 @@
 "use client";
 
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
+import { BeatFreeDownload } from "@/components/beat-free-download";
 import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
@@ -269,6 +270,7 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
         </div>
 
         <div className="flex items-center justify-end gap-1">
+            <BeatFreeDownload key={beat.id} id={beat.id} title={beat.title}/>
             <button type="button" onClick={() => value.setMuted(!value.muted)} className="hidden h-9 w-9 place-items-center rounded-full text-white/55 transition hover:bg-white/10 hover:text-white md:grid" aria-label={value.muted ? "Unmute audio" : "Mute audio"}>{value.muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}</button>
             <input type="range" min={0} max={1} step={0.01} value={value.volume} onChange={(event) => value.setVolume(Number(event.target.value))} className="beat-volume-range hidden w-16 lg:block" aria-label="Preview volume" />
             <div className="relative">

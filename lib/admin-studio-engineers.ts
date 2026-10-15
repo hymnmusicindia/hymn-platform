@@ -148,7 +148,7 @@ export async function updateStudioEngineer(profileId: number, input: StudioEngin
         bio: input.bio,
         specialties: input.specialties,
         genres: input.genres,
-        portfolio: { socials: input.socialLinks, works: input.portfolioItems } as Prisma.InputJsonObject,
+        portfolio: { ...(current.portfolio && typeof current.portfolio === "object" && !Array.isArray(current.portfolio) ? current.portfolio : {}), socials: input.socialLinks, works: input.portfolioItems } as Prisma.InputJsonObject,
         availability: input.availability,
         maxActiveOrders: input.maxActiveOrders,
         verificationState: input.verificationState,

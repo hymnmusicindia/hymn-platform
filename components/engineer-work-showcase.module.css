@@ -3,4 +3,5 @@
 @media(max-width:980px){.room{grid-template-columns:1fr}.queue{order:-1}.queue>button{padding:13px 9px}.record{height:140px}.workEditor{grid-template-columns:1fr}.editorList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}}
 @media(max-width:560px){.showcase{padding-top:22px}.room{gap:19px}.heading>svg{display:none}.load span{display:none}.editorList{grid-template-columns:1fr}.fieldPair{grid-template-columns:minmax(0,1fr) 95px}}
 .showcase{container-type:inline-size}
+.players{display:grid;gap:18px;margin-top:23px}.players .player{margin-top:0}
 @container(max-width:540px){.room{grid-template-columns:1fr}.queue{order:-1}.record{height:140px}.load span{display:none}.heading>svg{display:none}}

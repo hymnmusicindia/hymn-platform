@@ -122,7 +122,7 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
           <div className={styles.signature}><span>Here’s to your first of many,</span><strong>The HYMN team</strong></div>
           <p className={styles.terms}>One single. Base distribution covered. Optional add-ons cost extra.</p>
           <motion.div className={styles.action} inert={!actionVisible} aria-hidden={!actionVisible} animate={{ opacity: actionVisible ? 1 : 0 }} transition={{ duration: reduceMotion ? 0 : .22 }}>
-            {eligibility.authenticated ? <button type="button" onClick={claim}>{eligibility.draftId && eligibility.eligible ? "CONTINUE MY FREE RELEASE" : state.cta}<ArrowRight aria-hidden="true" /></button> : <GoogleAuthButton label={state.cta} expectedRole="customer" referralCode={referralCode} appearance="quiet" onAuthenticated={() => { void track("first_release_auth_started"); void track("first_release_auth_completed"); router.refresh(); }} />}
+            {eligibility.authenticated ? <button type="button" onClick={claim}>{eligibility.draftId && eligibility.eligible ? "CONTINUE MY FREE RELEASE" : state.cta}<ArrowRight aria-hidden="true" /></button> : <GoogleAuthButton showActionCue={actionVisible} label={state.cta} expectedRole="customer" referralCode={referralCode} appearance="quiet" onAuthenticated={() => { void track("first_release_auth_started"); void track("first_release_auth_completed"); router.refresh(); }} />}
           </motion.div>
           <div className={styles.status}><Sparkles size={12} aria-hidden="true" />{state.status}</div>
         </motion.section>}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { EngineerDawSelector } from "@/components/engineer-daw-selector";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { uploadEngineerImage } from "@/lib/engineer-image-upload";
@@ -10,8 +11,8 @@ import { studioProfileSchema, type StudioProfileInput } from "@/lib/studio-profi
 import { EngineerWorkEditor, EngineerWorkShowcase } from "@/components/engineer-work-showcase";
 import styles from "./studio-profile-editor.module.css";
 
-export function StudioProfileEditor({ initial, slug }: { initial: StudioProfileInput; slug: string }) {
-  const [draft, setDraft] = useState({ ...initial, works: initial.works ?? [], experience: initial.experience ?? { level: "WORKING" as const, years: null } });
+export function StudioProfileEditor({ initial, slug, initialDaws }: { initial: StudioProfileInput; slug: string; initialDaws?: string[] }) {
+  const [draft, setDraft] = useState({ ...initial, daws: initialDaws ?? initial.daws, works: initial.works ?? [], experience: initial.experience ?? { level: "WORKING" as const, years: null } });
   const [tab, setTab] = useState("identity"), [busy, setBusy] = useState(false), [uploading, setUploading] = useState(""), [feedback, setFeedback] = useState(""), [dirty, setDirty] = useState(false);
   const [workChanged, setWorkChanged] = useState(false), [experienceChanged, setExperienceChanged] = useState(false);
   const router = useRouter();
@@ -36,6 +37,7 @@ export function StudioProfileEditor({ initial, slug }: { initial: StudioProfileI
   }}>
     <div className={styles.topbar}><nav aria-label="Profile editor sections">{[["identity", "Identity", UserRound], ["sound", "Sound & style", Headphones], ["experience", "Experience", Disc3]].map(([key, label, Icon]) => { const SectionIcon = Icon as typeof UserRound; return <button type="button" key={String(key)} aria-pressed={tab === key} onClick={() => setTab(String(key))}><SectionIcon size={16}/>{String(label)}</button>; })}</nav><Link href={`/studio/engineers/${slug}`} target="_blank" rel="noreferrer">View public profile <ArrowUpRight size={15}/></Link></div>
     <div className={styles.grid}><fieldset disabled={busy || Boolean(uploading)} className={styles.fields}>
+      {tab === "sound" ? <EngineerDawSelector value={draft.daws ?? []} onChange={daws => update({ daws })}/> : null}
       <div hidden={tab !== "identity"}>
         <header className={styles.sectionHeading}><span>01 / IDENTITY</span><h2>Your studio, at first glance.</h2><p>Make your profile feel like you. Your images and introduction appear at the top of your public page.</p></header>
         <div className={styles.images}><label className={styles.banner} style={draft.banner ? { backgroundImage: `url("${draft.banner}")` } : undefined}><span><ImagePlus size={17}/>{uploading === "banner" ? "Uploading…" : "Change banner"}</span><input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" aria-label="Upload banner" onChange={event => { void image(event.target.files?.[0], "banner"); event.target.value = ""; }}/></label><label className={styles.photo}>{draft.profilePhotoUrl ? <img src={draft.profilePhotoUrl} alt="Profile photo"/> : <Headphones/>}<span><Camera size={14}/></span><input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" aria-label="Upload profile photo" onChange={event => { void image(event.target.files?.[0], "profilePhotoUrl"); event.target.value = ""; }}/></label></div>

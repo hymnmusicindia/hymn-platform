@@ -1,32 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpRight, Check, Disc3, Headphones, Music2, Play, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpRight, Check, Headphones, Music2, Play, Plus, Trash2 } from "lucide-react";
 import { ENGINEER_SPECIALTIES, type EngineerWork } from "@/lib/engineer-applications";
 import { workPlayer } from "@/lib/engineer-portfolio";
 import styles from "./engineer-work-showcase.module.css";
 
 export function EngineerWorkShowcase({ works, name, years }: { works: EngineerWork[]; name?: string; years?: number | null }) {
-  const [selected, setSelected] = useState(0);
   const [filter, setFilter] = useState("All");
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded] = useState<Record<number, boolean>>({});
   const roles = [...new Set(works.map(work => work.role).filter(Boolean))];
   const visible = works.map((work, index) => ({ work, index })).filter(({ work }) => filter === "All" || work.role === filter);
-  const active = visible.find(({ index }) => index === selected) ?? visible[0];
-  if (!active) return null;
-  const work = active.work, player = workPlayer(work.url);
-  function select(index: number) { setSelected(index); setLoaded(false); }
+  if (!visible.length) return null;
   return <section className={styles.showcase} aria-label="Engineer experience and work">
     <header className={styles.heading}><div><p className={styles.kicker}>THE LISTENING ROOM</p><h2>Experience you can hear.</h2><p>{years && years > 0 ? `${years} ${years === 1 ? "year" : "years"} in audio · Self-reported experience. ` : ""}A closer listen to {name ? `${name}’s` : "your"} work and the craft behind it.</p></div><Headphones size={25}/></header>
-    {roles.length > 1 ? <div className={styles.filters} aria-label="Filter work by role">{["All", ...roles].map(role => <button type="button" key={role} aria-pressed={filter === role} onClick={() => { setFilter(role); setLoaded(false); }}>{role}</button>)}</div> : null}
-    <div className={styles.room}><div className={styles.spotlight}>
-      <div className={styles.record} aria-hidden="true"><Disc3/><span>{String(active.index + 1).padStart(2, "0")}</span></div>
-      <div className={styles.credit}><p className={styles.kicker}>{work.role || "Work sample"}{work.year ? ` / ${work.year}` : ""}</p><h3>{work.title}</h3>{work.artist ? <p className={styles.artist}>{work.artist}</p> : null}{work.note ? <p className={styles.note}>{work.note}</p> : <p className={styles.note}>A work sample shared by the engineer.</p>}</div>
-      <div className={styles.player} key={work.url}>
-        {player.audio ? <audio controls preload="none" src={player.audio} aria-label={`Listen to ${work.title}`}/> : player.embed ? loaded || player.platform === "Spotify" ? <iframe title={`${player.platform}: ${work.title}`} src={player.embed} width="100%" height={player.platform === "Spotify" ? 152 : 230} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen loading={player.platform === "Spotify" ? "eager" : "lazy"} referrerPolicy="strict-origin-when-cross-origin"/> : <button type="button" className={styles.load} onClick={() => setLoaded(true)}><Play size={17}/> Load {player.platform} player <span>No autoplay</span></button> : null}
+    {roles.length > 1 ? <div className={styles.filters} aria-label="Filter work by role">{["All", ...roles].map(role => <button type="button" key={role} aria-pressed={filter === role} onClick={() => setFilter(role)}>{role}</button>)}</div> : null}
+    <div className={styles.players}>{visible.map(({ work, index }) => {
+      const player = workPlayer(work.url);
+      return <div className={styles.player} key={`${index}-${work.url}`}>
+        {player.audio ? <audio controls preload="none" src={player.audio} aria-label={`Listen to ${work.title}`}/> : player.embed ? loaded[index] || player.platform === "Spotify" ? <iframe title={`${player.platform}: ${work.title}`} src={player.embed} width="100%" height={player.platform === "Spotify" ? 152 : 230} allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen loading={player.platform === "Spotify" ? "eager" : "lazy"} referrerPolicy="strict-origin-when-cross-origin"/> : <button type="button" className={styles.load} onClick={() => setLoaded(current => ({ ...current, [index]: true }))}><Play size={17}/> Load {player.platform} player <span>No autoplay</span></button> : null}
         <a href={work.url} target="_blank" rel="noreferrer" className={styles.external}>Open on {player.platform}<ArrowUpRight size={15}/></a>
-      </div>
-    </div><div className={styles.queue} aria-label="Select a work sample"><p className={styles.queueLabel}>{visible.length} {visible.length === 1 ? "SELECTED CREDIT" : "SELECTED CREDITS"}</p>{visible.map(({ work: item, index }) => <button type="button" key={`${index}-${item.url}`} aria-pressed={active.index === index} onClick={() => select(index)}><span className={styles.number}>{String(index + 1).padStart(2, "0")}</span><span className={styles.queueText}><strong>{item.title}</strong><small>{[item.artist, item.role, item.year].filter(Boolean).join(" · ")}</small></span>{active.index === index ? <span className={styles.equalizer} aria-label="Selected"><i/><i/><i/></span> : <ArrowUpRight size={15}/>}</button>)}</div></div>
+      </div>;
+    })}</div>
   </section>;
 }
 

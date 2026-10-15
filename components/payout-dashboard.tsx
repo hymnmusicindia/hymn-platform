@@ -6,6 +6,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState, useTransition } fr
 import { ArrowUpRight, RefreshCw, X } from "lucide-react";
 import { EarningsRecords, WithdrawalRecords } from "@/components/earnings-records";
 import { EarningsBalance, EarningsOverview } from "@/components/earnings-overview";
+import { IncomeSources } from "@/components/income-sources";
 import { moneyLabel, payoutReadiness, recentEarningMonths } from "@/lib/earnings-presentation";
 import styles from "./earnings-center.module.css";
 import { ContextualHelp } from "@/components/contextual-help";
@@ -50,7 +51,7 @@ function PayoutModal({ summary, onClose, onSuccess }: { summary: PayoutSummary; 
 
     startTransition(async () => {
       try {
-        const response = await fetch("/api/payout/request", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({...payload, amount:requestedAmount}) });
+        const response = await fetch("/api/payout/request", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({...payload, amount:requestedAmount, sourceType:"artist_royalty"}) });
         const data = await response.json();
         if (!response.ok) { setFeedback(data.error || "Could not submit payout request."); return; }
         // Reserve the accepted amount locally if the subsequent refresh is unavailable.
@@ -170,6 +171,7 @@ export function PayoutDashboard({ initialSummary }: { initialSummary: PayoutSumm
       <header className={styles.heading}><div><h1>Earnings & payouts</h1><p>Your reported royalties, available funds and withdrawals, together.{refreshedAt ? ` Updated ${refreshedAt}.` : ""}</p></div><button className={styles.refresh} type="button" disabled={refreshing} onClick={()=>void refresh()}><RefreshCw size={14} aria-hidden="true"/>{refreshing ? "Refreshing..." : "Refresh balances"}</button></header>
       {refreshError ? <p className={styles.feedback} role="alert">{refreshError}</p> : null}
       <span className="sr-only" role="status">{refreshing ? "Refreshing balances" : refreshedAt ? `Balances refreshed at ${refreshedAt}` : "Balances loaded"}</span>
+      <IncomeSources/>
       <EarningsBalance summary={summary} onSection={selectTab} onWithdraw={()=>setModalOpen(true)}/>
       <nav className={styles.tabs} aria-label="Earnings and payout sections">
         {(["overview", "monthly", "quarterly", "statements", "requests", "details"] as const).map(tab=><button key={tab} type="button" onClick={()=>selectTab(tab)} aria-current={activeTab===tab ? "page" : undefined}>{({overview:"Overview",monthly:"Earnings history",quarterly:"Quarter summary",statements:"Statements",requests:"Withdrawals",details:"Payout details"})[tab]}</button>)}

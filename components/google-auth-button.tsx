@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
+import { MousePointer2, Hand } from "lucide-react";
+import cueStyles from "./google-login-cue.module.css";
 import { profileAvatarDataUrl } from "@/lib/avatar";
 import { queueReferralWelcome } from "@/lib/referral-welcome-client";
 
@@ -20,6 +22,7 @@ interface GoogleAuthButtonProps {
   onAuthenticated?: (data: { redirectPath?: string }) => Promise<void> | void;
   appearance?: "default" | "quiet";
   autoPrompt?: boolean;
+  showActionCue?: boolean;
 }
 
 export function GoogleAuthButton({
@@ -30,10 +33,13 @@ export function GoogleAuthButton({
   loginContext,
   onAuthenticated,
   appearance = "default",
-  autoPrompt = false
+  autoPrompt = false,
+  showActionCue = false
 }: GoogleAuthButtonProps) {
   const router = useRouter();
   const [scriptReady, setScriptReady] = useState(false);
+  const [inAppBrowser, setInAppBrowser] = useState(false);
+  useEffect(() => { setInAppBrowser(/Instagram|FBAN|FBAV/i.test(navigator.userAgent)); }, []);
   const [scriptError, setScriptError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [buttonError, setButtonError] = useState<string | null>(null);
@@ -218,7 +224,7 @@ export function GoogleAuthButton({
   const disabled = processing || Boolean(scriptError) || (!useLocalGoogleDemo && (!scriptReady || !GOOGLE_CLIENT_ID));
 
   return (
-    <div className="flex flex-col gap-3 text-center">
+    <div className={clsx("flex flex-col gap-3 text-center", showActionCue && cueStyles.host)}>
       {GOOGLE_CLIENT_ID && scriptReady && !scriptError ? (
         <div
           ref={googleButtonRef}
@@ -250,6 +256,8 @@ export function GoogleAuthButton({
         </span>
         <span className="relative">{processing ? "Signing in..." : label}</span>
       </button>}
+      {showActionCue && !disabled ? <><span className={cueStyles.cue} aria-hidden="true"><span className={cueStyles.ring}/><MousePointer2 className={cueStyles.cursor}/><Hand className={cueStyles.tap}/></span><p className={cueStyles.hint}><span className={cueStyles.desktop}>Click above to sign in and claim your gift.</span><span className={cueStyles.mobile}>Tap above to sign in and claim your gift.</span></p></> : null}
+      {showActionCue && inAppBrowser ? <p className={cueStyles.hint}>If Google sign-in doesn’t open, use your browser’s menu → Open in browser, then continue here.</p> : null}
       {helperText ? (
         <p
           className={clsx(

@@ -1,4 +1,5 @@
 import "server-only";
+import { INCOME_MINIMUM_INR } from "@/lib/income-policy";
 import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { razorpay, verifyCapturedRazorpayPayment } from "@/lib/razorpay";
@@ -251,16 +252,24 @@ export async function resolveReviewConcern(actorId: number | null, id: number, r
   });
 }
 
-export async function recordCuratorSettlement(actorId: number | null, id: number, reference: string) {
+export async function recordCuratorSettlement(actorId: number | null, id: number, reference: string, paidAmount?: number) {
   if (reference.trim().length < 8 || reference.length > 200) throw new Error("Provide the real bank/provider settlement reference.");
   return prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422061, ${id}::integer)`;
     const row = await tx.playlistReviewRequest.findUniqueOrThrow({ where: { id }, include: reviewInclude });
     if (row.listing.isHymn || !["NOT_A_FIT", "SHORTLISTED"].includes(row.status) || row.payoutStatus !== "HELD" || !row.reviewedAt || Date.now() - row.reviewedAt.getTime() <= 7 * 86400000) throw new Error("Only completed independent reviews past the seven-day dispute hold can be settled.");
+    if(!row.listing.ownerId) throw new Error("Curator account is missing.");
+    await tx.$queryRaw`SELECT id FROM users WHERE id=${row.listing.ownerId} FOR UPDATE`;
+    const eligible=await tx.playlistReviewRequest.findMany({where:{listing:{ownerId:row.listing.ownerId,isHymn:false},status:{in:["NOT_A_FIT","SHORTLISTED"]},payoutStatus:"HELD",reviewedAt:{lt:new Date(Date.now()-7*86400000)}}});
+    const totalMinor=eligible.reduce((sum,item)=>sum+item.amountMinor,0);
+    if(!Number.isFinite(paidAmount) || Math.round(paidAmount! * 100)!==totalMinor) throw new Error(`Confirm the actual payment matches the full cleared batch: Rs ${totalMinor/100}.`);
+    if(totalMinor<INCOME_MINIMUM_INR.curator*100) throw new Error(`Curator settlements require at least Rs ${INCOME_MINIMUM_INR.curator} in cleared reviews.`);
     const credential = row.listing.ownerId ? await tx.payoutCredential.findUnique({ where: { userId: row.listing.ownerId } }) : null;
     if (credential?.status !== "verified" || !credential.verifiedAt) throw new Error("Verify the curator’s payout credentials before recording settlement.");
-    await audit(tx, actorId, "PLAYLIST_CURATOR_SETTLEMENT_RECORDED", id, { reference, amountMinor: row.amountMinor, curatorId: row.listing.ownerId });
-    return tx.playlistReviewRequest.update({ where: { id }, data: { payoutStatus: "PAID", payoutReference: reference } });
+    await audit(tx, actorId, "PLAYLIST_CURATOR_SETTLEMENT_RECORDED", id, { reference, amountMinor: totalMinor, reviewIds:eligible.map(item=>item.id), curatorId: row.listing.ownerId });
+    const changed=await tx.playlistReviewRequest.updateMany({where:{id:{in:eligible.map(item=>item.id)},payoutStatus:"HELD",status:{in:["NOT_A_FIT","SHORTLISTED"]}},data:{payoutStatus:"PAID",payoutReference:reference}});
+    if(changed.count!==eligible.length) throw new Error("The curator batch changed during settlement. Refresh and review the payment allocation.");
+    return tx.playlistReviewRequest.findUniqueOrThrow({where:{id}});
   });
 }
 

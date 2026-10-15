@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/access";
 import { createPayoutRequest } from "@/lib/payout";
+import { WALLET_SOURCES, type WalletSource } from "@/lib/income-policy";
 
 export const runtime = "nodejs";
 
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
       bankAccountNumber: typeof body.bankAccountNumber === "string" ? body.bankAccountNumber : undefined,
       ifsc: typeof body.ifsc === "string" ? body.ifsc : undefined,
       userNote: typeof body.userNote === "string" ? body.userNote : undefined
-      ,sourceType: result.user.role === "producer" ? "producer_beat_sales" : "artist_royalty"
+      ,sourceType: body.sourceType === undefined ? (result.user.role === "producer" ? "producer_beat_sales" : "artist_royalty") : (WALLET_SOURCES as readonly string[]).includes(body.sourceType) ? body.sourceType as WalletSource : "mixed"
     });
 
     return NextResponse.json({ request: payoutRequest }, { status: 201 });

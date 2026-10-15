@@ -11,7 +11,10 @@ export type EmailLayoutInput = { title: string; greeting?: string; body: string;
 
 function emailButton(label: string, url: string) {
   if (!label || !/^https?:\/\//i.test(url)) return "";
-  return `<table role="presentation" cellspacing="0" cellpadding="0" style="margin:22px 0 0"><tr><td bgcolor="#202020"><a href="${escapeHtml(url)}" style="display:inline-block;border:14px solid #202020;padding:0 6px;color:#ffffff;text-decoration:none;font-size:12px;line-height:18px;font-weight:bold;mso-padding-alt:0">${escapeHtml(label)} &rarr;</a></td></tr></table>`;
+  const whatsapp = url.startsWith("https://wa.me/");
+  const color = whatsapp ? "#147d46" : "#202020";
+  const icon = whatsapp ? '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-label="WhatsApp" style="vertical-align:middle;margin-right:6px"><path fill="none" stroke="#fff" stroke-width="1.7" d="M20.5 11.5a8.5 8.5 0 0 1-12.7 7.4L3 20l1.2-4.6A8.5 8.5 0 1 1 20.5 11.5Z"/><path fill="#fff" d="M8.3 6.8c-.5 0-1.3.8-1.3 1.8 0 2.8 3.6 6.4 6.4 6.4 1 0 1.8-.8 1.8-1.3l-2-1.2-.9.9c-1.1-.4-2.5-1.8-2.9-2.9l.9-.9-1.2-2Z"/></svg>' : "";
+  return `<table role="presentation" cellspacing="0" cellpadding="0" style="margin:22px 0 0"><tr><td bgcolor="${color}" style="border-radius:12px"><a href="${escapeHtml(url)}" style="display:inline-block;border:14px solid ${color};border-radius:12px;padding:0 9px;color:#ffffff;text-decoration:none;font-size:14px;line-height:20px;font-weight:bold;mso-padding-alt:0">${icon}${escapeHtml(label)} &rarr;</a></td></tr></table>`;
 }
 
 function emailBlocks(blocks: ManualEmailBlock[]) {
@@ -34,14 +37,16 @@ export function emailLayout(input: EmailLayoutInput) {
 <body style="margin:0;background:#f5f4f1;color:#202020;font-family:Arial,Helvetica,sans-serif">
 <div style="display:none;max-height:0;overflow:hidden;mso-hide:all">${escapeHtml(preheader)}</div>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:32px 12px">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border:1px solid #e7e4df;overflow:hidden">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border:1px solid #e7e4df;border-radius:20px;overflow:hidden;box-shadow:0 16px 48px rgba(20,20,20,.08)">
 <tr><td align="center" style="background:#151515;padding:24px 30px"><img src="${logoUrl}" width="112" alt="HYMN Music" style="display:block;width:112px;max-width:100%;height:auto;border:0"><div style="margin-top:8px;font-size:8px;letter-spacing:2.8px;color:#bdbdbd">YOUR MUSIC. MOVING FORWARD.</div></td></tr>
 <tr><td style="padding:34px 30px 24px"><h1 style="font-size:25px;line-height:1.25;letter-spacing:-.5px;margin:0 0 22px">${escapeHtml(input.title)}</h1>${input.greeting ? `<p style="font-size:14px;line-height:1.7;margin:0 0 16px">${escapeHtml(input.greeting)}</p>` : ""}${timeline}${body}${notice}${emailButton(input.ctaLabel, input.ctaUrl)}${blocks}</td></tr>
 ${sections}
+<tr><td style="padding:24px 30px;background:#f3f7f4;border-top:1px solid #e1e9e3"><p style="margin:0;color:#202020;font-size:17px;font-weight:bold">Let's move your music forward.</p><p style="margin:8px 0 0;color:#545e57;font-size:13px;line-height:21px">Talk to the HYMN team about your next step.</p>${emailButton("Chat with HYMN on WhatsApp", "https://wa.me/918793643228")}<p style="margin:12px 0 0;color:#545e57;font-size:12px">WhatsApp &middot; +91 8793643228</p></td></tr>
 <tr><td style="border-top:1px solid #ece9e4;padding:20px 30px;text-align:center;font-size:10px;line-height:1.7;color:#88837d">This transactional message relates to your HYMN account, purchase or release.<br>Need help? Reply to this email.<br><a href="${url}" style="color:#777;word-break:break-all">Open in HYMN</a></td></tr></table></td></tr></table></body></html>`;
 }
 
 export function emailText(input: EmailLayoutInput) {
+  input = { ...input, sections: [...(input.sections ?? []), { title: "Contact HYMN on WhatsApp", body: "+91 8793643228", linkLabel: "Chat with us", linkUrl: "https://wa.me/918793643228" }] };
   return [input.title, input.greeting, input.body, input.notice, ...(input.blocks ?? []).map(block => block.type === "button" ? `${block.label}: ${block.url}` : block.text), ...(input.sections || []).map((section) => `${section.title}\n${section.body}${section.linkLabel && section.linkUrl ? `\n${section.linkLabel}: ${section.linkUrl}` : ""}`), input.ctaLabel && input.ctaUrl ? `${input.ctaLabel}: ${input.ctaUrl}` : "", "This transactional message relates to your HYMN account, purchase or release. Reply if you need help."].filter(Boolean).join("\n\n");
 }
 // vercel trigger 6

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { engineerDawsSchema } from "@/lib/engineer-daws";
 
 export const ENGINEER_SPECIALTIES = ["Mixing", "Mastering", "Vocal tuning", "Stem mixing", "Dolby Atmos", "Podcast audio"] as const;
 export const ENGINEER_GENRES = ["Hip-Hop", "Pop", "R&B", "Punjabi", "Bollywood", "EDM", "Rock", "Indie"] as const;
@@ -15,6 +16,7 @@ export type EngineerWork = z.infer<typeof engineerWorkSchema>;
 
 export const engineerApplicationSchema = z.object({
   profileExtras: z.object({
+    daws: engineerDawsSchema.optional(),
     photo: z.string().url().max(1000).or(z.literal("")),
     banner: z.string().url().max(1000).or(z.literal("")),
     works: z.array(engineerWorkSchema).min(1).max(8),

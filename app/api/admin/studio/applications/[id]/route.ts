@@ -8,6 +8,7 @@ import { apiRequestId } from "@/lib/api-response";
 import { emailLayout, emailText } from "@/lib/email/email-templates";
 import { sendTransactionalEmail } from "@/lib/email/send-transactional-email";
 import { getPublicAppUrl } from "@/lib/public-app-url";
+import { portfolioDaws } from "@/lib/engineer-daws";
 
 const schema = z.object({ decision: z.enum(["APPROVE", "REJECT"]), note: z.string().trim().max(500).optional() });
 
@@ -31,7 +32,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       listing: { title: `${application.professionalName} · Mix & Master`, description: application.bio, standardPrice: Number(application.startingPrice), beatCustomerPrice: null, includedRevisions: 2, additionalRevisionPrice: 399, turnaroundDays: application.turnaroundDays, sourceRequirements: ["Consolidated stems or multitracks", "Rough reference mix", "Tempo and sample rate"], deliverables: ["24-bit WAV master", "320 kbps MP3"], instantAccept: false, active: true, paused: false },
     }, actorId, apiRequestId(request));
     profileId = profile.id;
-    await prisma.engineerProfile.update({ where: { id: profile.id }, data: { portfolio: { socials: { instagram: application.instagramUrl }, works: extras?.works?.length ? extras.works : [{ title: "Featured work", url: application.portfolioUrl }], banner: extras?.banner || "" } } });
+    await prisma.engineerProfile.update({ where: { id: profile.id }, data: { portfolio: { socials: { instagram: application.instagramUrl }, works: extras?.works?.length ? extras.works : [{ title: "Featured work", url: application.portfolioUrl }], banner: extras?.banner || "", daws: portfolioDaws(extras) } } });
   }
   const status = parsed.data.decision === "APPROVE" ? "APPROVED" : "REJECTED";
   await prisma.engineerApplication.update({ where: { id }, data: { status, reviewNote: parsed.data.note || null, reviewedById: actorId, reviewedAt: new Date() } });

@@ -167,7 +167,7 @@ export async function requestReferralPayout(userId: number) {
     if (await tx.referralCommissionPayout.findFirst({ where: { userId, status: "REQUESTED" } })) throw new Error("A referral payout is already pending.");
     await refreshDueForOwner(tx, userId);
     const amountMinor = await cashBalance(tx, userId);
-    if (amountMinor < REFERRAL_MINIMUM_PAYOUT_MINOR) throw new Error("At least Rs 500 in cleared commission is required.");
+    if (amountMinor < REFERRAL_MINIMUM_PAYOUT_MINOR) throw new Error(`At least Rs ${REFERRAL_MINIMUM_PAYOUT_MINOR / 100} in cleared commission is required.`);
     const credential = user.payoutCredential;
     const destination = { method: credential.method, legalName: credential.legalName, upiIdMasked: credential.upiIdMasked, upiIdEncrypted: credential.upiIdEncrypted, bankAccountMasked: credential.bankAccountMasked, bankAccountEncrypted: credential.bankAccountEncrypted, accountHolderName: credential.accountHolderName, ifscMasked: credential.ifscMasked, ifscEncrypted: credential.ifscEncrypted };
     const payout = await tx.referralCommissionPayout.create({ data: { userId, amountMinor, destination } });

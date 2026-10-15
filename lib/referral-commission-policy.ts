@@ -1,12 +1,13 @@
 // Basis points, frozen on each commission. Marketplace rates apply only to
 // HYMN's recorded share, never to the producer/engineer's earnings.
+import { INCOME_MINIMUM_INR } from "@/lib/income-policy";
 export const REFERRAL_COMMISSION_RATES = {
   one_time: 1000, half_yearly: 800, yearly: 700, yearly_plus: 500,
   beats: 500, studio: 500,
 } as const;
 export type ReferralCommissionCategory = keyof typeof REFERRAL_COMMISSION_RATES;
 export const REFERRAL_HOLD_DAYS = 14;
-export const REFERRAL_MINIMUM_PAYOUT_MINOR = 50000;
+export const REFERRAL_MINIMUM_PAYOUT_MINOR = INCOME_MINIMUM_INR.referral * 100;
 export function commissionMinor(baseMinor: number, rateBps: number) {
   if (!Number.isSafeInteger(baseMinor) || baseMinor < 0 || !Number.isInteger(rateBps) || rateBps < 0 || rateBps > 10000) throw new Error("Invalid commission amount or rate.");
   return Number(BigInt(baseMinor) * BigInt(rateBps) / 10000n);

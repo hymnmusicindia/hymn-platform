@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { engineerDawsSchema } from "@/lib/engineer-daws";
 import { ENGINEER_GENRES, ENGINEER_SPECIALTIES, engineerWorkSchema } from "@/lib/engineer-applications";
 
 const link = z.string().trim().max(1000).url().refine(value => value.startsWith("https://"), "Use an HTTPS link.").or(z.literal(""));
@@ -7,6 +8,7 @@ const imageLink = z.string().trim().max(1000).url().refine(value => {
   return url.protocol === "https:" || (process.env.NODE_ENV !== "production" && url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname));
 }, "Use an HTTPS image link.").or(z.literal(""));
 export const studioProfileSchema = z.object({
+  daws: engineerDawsSchema.optional(),
   professionalName: z.string().trim().min(2).max(120),
   bio: z.string().trim().min(20).max(320),
   profilePhotoUrl: imageLink,

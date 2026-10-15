@@ -1,0 +1,2 @@
+export const FREE_BEAT_TERMS_VERSION = "personal-preview-v1";
+export const FREE_BEAT_TERMS = "This free MP3 is for private, personal, non-commercial use only, including listening and private practice. It grants no commercial licence, ownership, resale, redistribution, monetisation, public release or distribution rights. Buy the appropriate HYMN beat licence before commercially using or releasing a recording made with this beat. The producer retains ownership of the beat.";

@@ -11,7 +11,7 @@ export function EarningsBalance({ summary, onSection, onWithdraw }: { summary:Pa
   const hasReports=summary.monthlyEarnings.length>0;
   const progress=summary.availableBalanceUsd===null || summary.exchangeRate.rateStatus!=="active" || summary.minimumPayoutUsd<=0 ? null : Math.min(100,Math.max(0,summary.availableBalanceUsd/summary.minimumPayoutUsd*100));
   return <section className={styles.balance} aria-label="Your money at a glance">
-    <div><span className={styles.kicker}><WalletCards size={16} aria-hidden="true" />Available balance</span><p className={styles.amount}>{moneyLabel(summary.availableBalance)}</p><p className={styles.muted}>After existing payout reservations. Withdrawal fees apply.</p>
+    <div><span className={styles.kicker}><WalletCards size={16} aria-hidden="true" />Distribution royalty balance</span><p className={styles.amount}>{moneyLabel(summary.availableBalance)}</p><p className={styles.muted}>Distribution only. Other income and its withdrawal limits are shown separately above.</p>
       <div className={styles.balanceStats}><div><span>In progress</span><strong>{moneyLabel(summary.pendingBalance)}</strong><small>Reserved for withdrawals</small></div><div><span>Paid to you</span><strong>{moneyLabel(summary.paidTillDate)}</strong><small>Completed payments, after fees</small></div><div><span>Lifetime earnings</span><strong>{hasReports || summary.totalEarnings>0 ? moneyLabel(summary.totalEarnings) : "Awaiting reports"}</strong><small>Verified earnings, before withdrawal fees</small></div></div>
     </div>
     <aside className={styles.readiness} data-ready={readiness.ready}><span className={styles.kicker}>Your next move</span><h2>{readiness.title}</h2><p>{readiness.detail}</p>
