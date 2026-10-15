@@ -58,3 +58,5 @@ html body .workspace-v2 .module-search-empty {padding:18px 10px;color:var(--text
   html body .workspace-v2.workspace-v2 .dashboard-os-mobile-head {padding:14px;color:#f3f5f8;background:#0c0e12;}
 }
 @media(max-width:600px){html body .workspace-v2.workspace-v2 .portal-workspace{padding:14px!important;}html body .workspace-v2.workspace-v2 .dashboard-os-topbar {gap:12px;}.workspace-switcher-option{min-height:40px;}}
+html body .workspace-v2.workspace-v2 .dashboard-os-nav-item{min-height:44px!important;}
+@media(hover:none),(pointer:coarse){html body .workspace-v2.workspace-v2 .dashboard-os-nav-item{min-height:48px!important;}}

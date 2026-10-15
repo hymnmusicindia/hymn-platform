@@ -247,8 +247,9 @@ export function DashboardFrame<T extends string>({
           </div>
         </div>
 
+        <div className="workspace-launch-row">
         {!adminWorkspace ? <div className="portal-create" ref={newMenuRef}>
-          <button type="button" className="portal-new-button" aria-expanded={newAction?undefined:newOpen} aria-controls={newAction?undefined:"portal-create-menu"} onClick={() => {if(newAction){newAction.onClick();setMobileOpen(false);}else setNewOpen(value => !value);}}><Plus size={18} /><span>{newAction?.label||"New"}</span></button>
+          <button type="button" className="portal-new-button" aria-label={newAction?.label || "New"} aria-expanded={newAction?undefined:newOpen} aria-controls={newAction?undefined:"portal-create-menu"} onClick={() => {if(newAction){newAction.onClick();setMobileOpen(false);}else setNewOpen(value => !value);}}><Plus size={18} /><span>{newAction?.label||"New"}</span></button>
           {newOpen ? createPortal(<div className="hymn-overlay create-overlay"><button className="create-overlay-backdrop" type="button" aria-label="Dismiss create menu" onClick={() => setNewOpen(false)} /><section ref={newDialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="portal-create-title" id="portal-create-menu" className="portal-create-menu" style={{ ...createPosition, maxHeight: `calc(100dvh - ${createPosition.top + 16}px)` }}><div className="portal-create-heading"><span id="portal-create-title">Create something new</span><button type="button" aria-label="Close create menu" onClick={() => setNewOpen(false)}><X size={18} /></button></div><div className="portal-create-grid">{[
             { href: "/distribution/start", icon: Disc3, title: "Music release", copy: "Get your music ready for worldwide distribution." },
             { href: "/beat-store", icon: Store, title: "Find a beat", copy: "Explore sounds for your next release." },
@@ -258,6 +259,7 @@ export function DashboardFrame<T extends string>({
         </div> : null}
 
         <WorkspaceDestinations overviewActive={isOverview} overviewHref={overviewItem?.href} onOverview={overviewItem && !overviewItem.href ? () => handleSelect(overviewItem.key) : undefined} onNavigate={() => setMobileOpen(false)} />
+        </div>
         {!collapsed ? <label className="admin-module-search"><Search aria-hidden="true"/><input ref={adminModuleSearchRef} value={localSearch} onChange={event => setLocalSearch(event.target.value)} placeholder="Find a module..." aria-label="Find a workspace module"/>{localSearch ? <button type="button" onClick={() => setLocalSearch("")} aria-label="Clear module search"><X/></button> : <kbd>/</kbd>}</label> : null}
         <div ref={navScrollRef} onScroll={updateNavScroll} className="dashboard-nav-scroll mt-4 min-h-0 flex-1 content-start gap-3 overflow-x-hidden overflow-y-auto pr-1 grid">
           {!visibleGroups.some(group => group.items.some(item => item.key !== "overview")) ? <p className="module-search-empty" role="status">No modules match “{localSearch}”. Try a service name or clear your search.</p> : null}
