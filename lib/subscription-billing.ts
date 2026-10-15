@@ -56,14 +56,19 @@ export function subscriptionTermLapsed(subscription: { status: string; autoRenew
   return String(subscription.status ?? "").trim().toLowerCase() === "active" && subscription.autoRenewal === false && subscriptionEntitlementEnd(subscription) <= now.getTime();
 }
 
-export function effectiveSubscriptionReleaseLimit(subscription: { plan?: string | null; releaseLimit?: number | null } | null | undefined) {
+export function effectiveSubscriptionReleaseLimit(subscription: { plan?: string | null; releaseLimit?: number | null; availableFeatures?: string | string[]; razorpaySubscriptionId?: string | null } | null | undefined) {
   if (!subscription) return null;
+  // Manual grants explicitly promise unlimited releases. Preserve legacy grants
+  // written with ["all"] rather than silently falling back to a provider quota.
+  let features: string[] = [];
+  try { features = typeof subscription.availableFeatures === "string" ? JSON.parse(subscription.availableFeatures) : subscription.availableFeatures ?? []; } catch { /* Malformed legacy features are not an unlimited grant. */ }
+  if (!subscription.razorpaySubscriptionId && subscription.releaseLimit == null && Array.isArray(features) && (features.includes("manual_unlimited_releases") || features.includes("all"))) return null;
   const plan = String(subscription.plan ?? "").trim().toLowerCase();
   if (plan === "yearly_plus" || plan === "elite") return null;
   return subscription.releaseLimit ?? SUBSCRIPTION_POLICIES[plan as SubscriptionProduct]?.releaseLimit ?? null;
 }
 
-export function subscriptionHasReleaseAllowance(subscription: { plan?: string | null; releaseLimit?: number | null; releasesUsed?: number | null } | null | undefined) {
+export function subscriptionHasReleaseAllowance(subscription: { plan?: string | null; releaseLimit?: number | null; releasesUsed?: number | null; availableFeatures?: string | string[]; razorpaySubscriptionId?: string | null } | null | undefined) {
   if (!subscription) return false;
   const limit = effectiveSubscriptionReleaseLimit(subscription);
   return limit == null || Number(subscription.releasesUsed ?? 0) < limit;

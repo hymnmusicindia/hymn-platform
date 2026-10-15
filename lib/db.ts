@@ -3337,7 +3337,7 @@ export async function getSubscriptionByUserId(userId: number) {
     const now = new Date();
     // A stale currentPeriodEnd from an earlier term must not expire a plan whose expiryDate was extended.
     const daysRemaining = Math.max(0, Math.floor((subscriptionEntitlementEnd(sub) - now.getTime()) / (1000 * 60 * 60 * 24)));
-    const status = subscriptionTermLapsed(sub, now) ? "expired" : sub.razorpaySubscriptionId ? sub.status : (daysRemaining > 0 ? sub.status : "expired");
+    const status = subscriptionTermLapsed(sub, now) ? "expired" : sub.razorpaySubscriptionId ? sub.status : (subscriptionEntitlementEnd(sub) > now.getTime() ? sub.status : "expired");
     const effectiveReleaseLimit = effectiveSubscriptionReleaseLimit(sub);
     
     return {

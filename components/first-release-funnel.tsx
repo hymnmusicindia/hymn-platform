@@ -18,6 +18,7 @@ type RevealState = "sealed" | "pressed" | "sealBreaking" | "opening" | "glowing"
 function releaseState(eligibility: Eligibility) {
   if (!eligibility.authenticated) return { status: "UNCLAIMED", cta: "CLAIM MY FREE RELEASE", event: "first_release_primary_cta_clicked" };
   if (eligibility.eligible) return { status: "READY TO CLAIM", cta: "START MY FREE RELEASE", event: "first_release_primary_cta_clicked" };
+  if (eligibility.reason === "active_subscription") return { status: "MEMBER", cta: "RELEASE WITH MY PLAN", event: "first_release_plan_cta_clicked" };
   if (eligibility.reason === "reserved") return { status: "IN PROGRESS", cta: "CONTINUE MY RELEASE", event: "first_release_resumed" };
   if (eligibility.reason === "release_already_submitted" || eligibility.reason === "already_redeemed") return { status: "CLAIMED", cta: "START ANOTHER RELEASE — ₹99", event: "first_release_plan_cta_clicked" };
   return { status: "MEMBER", cta: "START NEW RELEASE", event: "first_release_primary_cta_clicked" };
@@ -38,6 +39,7 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
   const state = releaseState(eligibility);
   const isUsed = state.status === "CLAIMED" || state.status === "MEMBER";
   const unavailable = ["promotion_inactive", "promotion_exhausted"].includes(eligibility.reason);
+  const subscriber = eligibility.reason === "active_subscription";
   useEffect(() => {
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -94,8 +96,8 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
       <div className={styles.emptyArt}><Image src="/assets/first-release-empty-envelope.png" alt="An empty open envelope with a housefly leaving a dotted trail" width={1280} height={1280} priority /></div>
       <div className={styles.emptyCopy}>
         <p className={styles.emptyEyebrow}>{unavailable ? "FIRST RELEASE PASS · UNAVAILABLE" : "FIRST RELEASE PASS · ALREADY USED"}</p>
-        <h1 id="first-release-empty-offer-title">{unavailable ? "The offer is unavailable." : "Nothing left in here."}<br /><span>Plenty ahead of you.</span></h1>
-        <p>{unavailable ? "The free-release campaign is not accepting claims right now. You can still explore our distribution plans." : "Your first-release gift has already been used. Your next record is a new chapter."}</p>
+        <h1 id="first-release-empty-offer-title">{subscriber ? "Your plan comes first." : unavailable ? "The offer is unavailable." : "Nothing left in here."}<br /><span>Plenty ahead of you.</span></h1>
+        <p>{subscriber ? "You already have a distribution subscription. Start your release using your plan?no first-release gift is needed. The gift is only for artists without an active subscription." : unavailable ? "The free-release campaign is not accepting claims right now. You can still explore our distribution plans." : "Your first-release gift has already been used. Your next record is a new chapter."}</p>
         <Link href="/distribution/start" className={styles.emptyCta}>Start your next release<ArrowRight size={16} /></Link>
         <p className={styles.emptyHelp}>Something doesn’t look right? <Link href="/contact">Talk to us</Link></p>
       </div>

@@ -1,0 +1,9 @@
+# Draft release reminders
+
+The production startup process calls `/api/cron/draft-reminders` hourly (and two minutes after startup). External schedulers can call the same GET endpoint with `Authorization: Bearer <CRON_SECRET>`. Configure `CRON_SECRET`, `EMAIL_ENABLED=true`, `SMTP_USER`, `SMTP_APP_PASSWORD`, `SMTP_HOST`, `SMTP_PORT`, `EMAIL_FROM`, `EMAIL_REPLY_TO` and the canonical public app URL in deployment secrets. No passwords are stored in source. Set `DRAFT_REMINDERS_ENABLED=false` to stop automation.
+
+Only active customers' editable, unarchived customer-submission DRAFTs created strictly more than 96 hours ago qualify. Reopened submitted releases are excluded. Age means draft creation, not last edit. Each draft gets one automatic attempt, with a rolling 24-hour mailbox limit and per-account database advisory locking. A run sends at most five attempts; repeated hourly runs drain the backlog. Existing unique EmailLog event keys prevent duplicate sends for the same release across instances. A crash after SMTP acceptance cannot be proven delivered: queued/failed attempts require operator inspection rather than automatic resending. Existing admin email-log tools support reviewing and explicitly retrying failed sends.
+
+Free wording requires the saved FIRST_RELEASE_FREE campaign, single format, at most one track and current server-side promotion eligibility. It explicitly states base distribution is FREE, not optional add-ons. Eligibility/prices are rechecked by the real submission workflow; the reminder does not reserve an offer. Other drafts receive neutral pricing wording. HYMN's shared template includes the WhatsApp button and personalised name/title. No newsletter subscriptions are added.
+
+Check: `node --conditions=react-server --import tsx scripts/verify-draft-reminders.ts`. This tests rendering and disabled-email behaviour, not real SMTP delivery. No database migration required (uses existing EmailLog).

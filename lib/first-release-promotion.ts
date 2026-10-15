@@ -1,6 +1,7 @@
 import { Prisma, ReleaseStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { FIRST_RELEASE_BASE_DISCOUNT } from "@/lib/first-release-pricing";
+import { subscriptionHasEntitlement } from "@/lib/subscription-billing";
 
 export const FIRST_RELEASE_PROMOTION_CODE = "FIRST_RELEASE_FREE";
 export { FIRST_RELEASE_BASE_DISCOUNT };
@@ -34,6 +35,8 @@ async function promotion() {
 }
 
 export async function getFirstReleaseEligibility(userId: number) {
+  const subscription = await prisma.subscription.findUnique({ where: { userId } });
+  if (subscriptionHasEntitlement(subscription)) return { eligible: false as const, reason: "active_subscription" as const };
   const offer = await promotion();
   if (!offer) return { eligible: false as const, reason: "promotion_inactive" as const };
   if (offer.maxRedemptions != null) {
@@ -58,6 +61,8 @@ export function calculateFirstReleasePrice(input: { plan: string; releaseType: s
 
 export async function reserveFirstRelease(input: { userId: number; originalAmount: number; discountAmount: number; finalAmount: number; attribution?: CampaignAttribution }) {
   return prisma.$transaction(async (tx) => {
+    const subscription = await tx.subscription.findUnique({ where: { userId: input.userId } });
+    if (subscriptionHasEntitlement(subscription)) throw new Error("Your active subscription already covers distribution. The first-release offer is for non-subscribers only.");
     const offer = await tx.promotion.findUnique({ where: { code: FIRST_RELEASE_PROMOTION_CODE } });
     const now = new Date();
     if (!offer || !offer.active || (offer.startsAt && offer.startsAt > now) || (offer.endsAt && offer.endsAt <= now)) throw new Error("The first-release offer is not available.");

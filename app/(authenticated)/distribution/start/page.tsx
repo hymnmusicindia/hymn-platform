@@ -46,8 +46,7 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
   );
   const campaignEligibility = user && campaignDraftEligible ? await getFirstReleaseEligibility(user.id) : null;
   const explicitCampaign = firstValue(params.campaign) === "first-release" || editingMetadata.promotionCode === "FIRST_RELEASE_FREE";
-  // Every eligible first release uses the gift, including releases started from the standard portal.
-  // This preserves any subscription allowance for a later release.
+  // The acquisition gift is only for non-subscribers; active plans take precedence.
   if (campaignEligibility?.eligible && campaignDraftEligible && attachedOrder?.paymentStatus !== "paid") selectedPlan = "one_time";
   const firstReleaseOffer = Boolean(selectedPlan === "one_time" && campaignEligibility?.eligible && campaignDraftEligible);
   const savedAttribution = editingMetadata.campaignAttribution && typeof editingMetadata.campaignAttribution === "object" ? editingMetadata.campaignAttribution as Record<string, unknown> : {};

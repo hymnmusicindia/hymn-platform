@@ -1,0 +1,84 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
+import { mkdirSync } from "node:fs";
+import jwt from "jsonwebtoken";
+import { chromium, expect as playwrightExpect } from "@playwright/test";
+import { prisma } from "../lib/prisma";
+import { grantManualSubscription } from "../lib/admin-subscription-service";
+import { getFirstReleaseEligibility, reserveFirstRelease } from "../lib/first-release-promotion";
+import { effectiveSubscriptionReleaseLimit, subscriptionHasReleaseAllowance } from "../lib/subscription-billing";
+import { ALL_ADMIN_PERMISSIONS } from "../lib/access";
+const expect = playwrightExpect.configure({ timeout: 90000 });
+
+async function main() {
+  assert.equal(process.env.DATABASE_URL, "postgresql://fixture:fixture@127.0.0.1:55467/manual_plans");
+  const artist = await prisma.user.create({ data: { email: "artist@example.test", name: "Fixture Artist", googleId: "fixture-artist", role: "CUSTOMER", onboardingDone: true, avatar: "/assets/hymnlogowhite.png" } });
+  await prisma.promotion.create({ data: { code: "FIRST_RELEASE_FREE", name: "Fixture gift", product: "distribution", discountType: "fixed", discountValue: 99 } });
+  assert.equal((await getFirstReleaseEligibility(artist.id)).eligible, true);
+  let sub = await grantManualSubscription(artist.id, null, { plan: "half_yearly", durationDays: 180, mode: "replace", note: "Fixture manual grant", expectedUpdatedAt: null });
+  assert.equal((await getFirstReleaseEligibility(artist.id)).reason, "active_subscription");
+  await assert.rejects(reserveFirstRelease({ userId: artist.id, originalAmount: 99, discountAmount: 99, finalAmount: 0 }), /active subscription/);
+  assert.equal(effectiveSubscriptionReleaseLimit(sub), null);
+  assert.equal(subscriptionHasReleaseAllowance({ ...sub, releasesUsed: 999 }), true);
+  assert.equal(effectiveSubscriptionReleaseLimit({ plan: "half_yearly", releaseLimit: null, availableFeatures: '["all"]', razorpaySubscriptionId: null }), null);
+  assert.equal(effectiveSubscriptionReleaseLimit({ plan: "half_yearly", releaseLimit: null, availableFeatures: '["all"]', razorpaySubscriptionId: "sub_provider" }), 6);
+  const firstExpiry = sub.expiryDate.getTime(); const version = sub.updatedAt.toISOString();
+  sub = await grantManualSubscription(artist.id, null, { plan: "half_yearly", durationDays: 30, mode: "extend", note: "Fixture extension", expectedUpdatedAt: version });
+  assert.equal(sub.expiryDate.getTime(), firstExpiry + 30 * 86400000);
+  await assert.rejects(grantManualSubscription(artist.id, null, { plan: "half_yearly", durationDays: 10, mode: "extend", note: "Stale edit", expectedUpdatedAt: version }), /changed/);
+  await assert.rejects(grantManualSubscription(artist.id, null, { plan: "yearly", durationDays: 10, mode: "extend", note: "Invalid extension", expectedUpdatedAt: sub.updatedAt.toISOString() }), /same plan/);
+  sub = await prisma.subscription.update({ where: { id: sub.id }, data: { razorpaySubscriptionId: "sub_active_fixture" } });
+  await assert.rejects(grantManualSubscription(artist.id, null, { plan: "yearly", durationDays: 365, mode: "replace", note: "Do not orphan billing", expectedUpdatedAt: sub.updatedAt.toISOString() }), /provider-billed/);
+  sub = await prisma.subscription.update({ where: { id: sub.id }, data: { status: "cancelled", cancelledAt: new Date(), nextRenewalDate: new Date(), cancelAtPeriodEnd: true, currentPeriodEnd: new Date(0) } });
+  sub = await grantManualSubscription(artist.id, null, { plan: "half_yearly", durationDays: 180, mode: "replace", note: "Restore manual access", expectedUpdatedAt: sub.updatedAt.toISOString() });
+  assert.equal(sub.razorpaySubscriptionId, null); assert.equal(sub.cancelAtPeriodEnd, false); assert.equal(sub.nextRenewalDate, null); assert.equal(sub.currentPeriodEnd, null);
+  assert.equal(await prisma.auditLog.count({ where: { action: "subscription.admin_granted" } }), 3);
+  await prisma.subscription.update({ where: { id: sub.id }, data: { expiryDate: new Date(Date.now() - 1000) } });
+  assert.equal((await getFirstReleaseEligibility(artist.id)).eligible, true);
+  await prisma.subscription.update({ where: { id: sub.id }, data: { expiryDate: sub.expiryDate } });
+  const draft = await prisma.release.create({ data: { userId: artist.id, title: "Saved gift draft", artistName: artist.name, genre: "Pop", releaseDate: new Date(), releaseType: "single", metadata: { promotionCode: "FIRST_RELEASE_FREE" } } });
+  console.log("PASS: active subscribers denied gifts/reservations, unlimited legacy/new manual grants, extension, stale-edit rejection, provider protection, restored billing fields and atomic audits.");
+  if (!process.argv.includes("--browser")) return;
+  const owner = await prisma.user.create({ data: { email: "owner@example.test", name: "Fixture Owner", googleId: "fixture-owner", role: "ADMIN" } });
+  const role = await prisma.adminRole.create({ data: { key: "super_admin", name: "Super administrator" } });
+  for (const key of ALL_ADMIN_PERMISSIONS) { const permission = await prisma.adminPermission.create({ data: { key } }); await prisma.adminRolePermission.create({ data: { roleId: role.id, permissionId: permission.id } }); }
+  await prisma.adminMembership.create({ data: { userId: owner.id, roleId: role.id } });
+  const origin = process.env.APP_URL!;
+  const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--webpack", "--port", "35467", "--hostname", "127.0.0.1"], { env: process.env, stdio: "ignore", windowsHide: true });
+  const browser = await chromium.launch();
+  try {
+    for (let attempt = 0; attempt < 120; attempt++) { try { if ((await fetch(origin + "/api/workspaces")).status === 401) break; } catch {} if (attempt === 119) throw Error("Fixture server unavailable"); await new Promise(resolve => setTimeout(resolve, 1000)); }
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const cookie = (user: typeof owner, role: string) => ({ name: "hymn_session", value: jwt.sign({ sub: user.id, email: user.email, name: user.name, role }, process.env.JWT_SECRET!, { expiresIn: "1h" }), url: origin });
+    await context.addCookies([cookie(owner, "admin")]); const page = await context.newPage(); page.setDefaultTimeout(90000); page.setDefaultNavigationTimeout(120000);
+    await page.goto(origin + "/admin?tab=users"); await page.getByRole("searchbox", { name: "Search users" }).fill("artist@example.test");
+    await page.getByRole("button", { name: "View account", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Account details: Fixture Artist" }); await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Plan & checkout credits" })).toBeVisible();
+    await expect(dialog.getByText("Manual grants: unlimited releases", { exact: false })).toBeVisible();
+    await expect(dialog.getByText("Saved gift draft", { exact: true })).toBeVisible();
+    mkdirSync(".cache", { recursive: true }); await page.screenshot({ path: ".cache/admin-users-drawer-desktop.png" });
+    await page.keyboard.press("Escape"); await expect(dialog).not.toBeVisible(); await expect(page.getByRole("searchbox", { name: "Search users" })).toHaveValue("artist@example.test");
+    const headers = { Origin: origin }; const requestId = randomUUID();
+    const payload = { kind: "checkout_credit", amount: 25, note: "Fixture retry protection", requestId };
+    for (let i = 0; i < 2; i++) assert.equal((await context.request.post(`${origin}/api/admin/users/${artist.id}/benefits`, { headers, data: payload })).status(), 200);
+    assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: artist.id } })).referralCredits, 25);
+    assert.equal((await context.request.post(`${origin}/api/admin/users/${artist.id}/benefits`, { headers: { Origin: "https://untrusted.test" }, data: payload })).status(), 403);
+    console.log("PASS: desktop drawer, credit retry protection and cross-origin denial.");
+    await page.setViewportSize({ width: 390, height: 844 }); await page.getByRole("button", { name: "View account", exact: true }).click(); await expect(dialog).toBeVisible();
+    await expect(dialog.getByText("Manual grants: unlimited releases", { exact: false })).toBeVisible();
+    assert.equal(await dialog.evaluate(el => el.scrollWidth > el.clientWidth), false);
+    const box = await dialog.boundingBox(); assert.ok(box && Math.abs(box.y) < 2 && box.width === 390 && box.height === 844);
+    const close = await dialog.getByRole("button", { name: "Close user details" }).boundingBox(); assert.ok(close && close.width <= 48);
+    await page.screenshot({ path: ".cache/admin-users-drawer-mobile.png" });
+    console.log("PASS: loaded mobile drawer is viewport-aligned, has a compact close action and no horizontal overflow.");
+    const artistContext = await browser.newContext(); await artistContext.addCookies([cookie(artist, "customer")]); const artistPage = await artistContext.newPage(); artistPage.setDefaultNavigationTimeout(120000);
+    const eligibility = await (await artistContext.request.get(origin + "/api/promotions/first-release")).json(); assert.equal(eligibility.reason, "active_subscription");
+    await artistPage.goto(`${origin}/distribution/start?edit=${draft.id}&campaign=first-release`);
+    assert.equal(await artistPage.getByText("Your first release on us.", { exact: true }).count(), 0);
+    assert.equal((await artistContext.request.get(`${origin}/api/admin/users/${artist.id}/benefits`)).status(), 403);
+    console.log("PASS: searchable directory, in-page desktop/mobile dialog, saved draft and plan details, Escape/filter retention, idempotent credit, cross-origin denial and subscriber eligibility API.");
+  } finally { await browser.close(); if (process.platform === "win32" && server.pid) await new Promise<void>(resolve => { const child = spawn("taskkill", ["/PID", String(server.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true }); child.on("exit", () => resolve()); }); else server.kill(); }
+}
+main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => prisma.$disconnect());

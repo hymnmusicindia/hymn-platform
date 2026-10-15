@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { Copy, Disc3, Gift, MoreHorizontal, Pencil, Settings, Trash2, X } from "lucide-react";
 import type { Release } from "@/lib/types";
 import { showFirstReleaseBadge } from "@/lib/first-release-flow";
+import { useSubscriptionLabel } from "@/components/subscription-label-context";
 import {
   getReleasePortalBadgeStyle,
   getReleasePortalStage,
@@ -40,7 +41,8 @@ export function ReleaseSummaryCard({
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const canDelete = release.status === "draft";
   const releaseMetadata = release.metadata && typeof release.metadata === "object" ? release.metadata as Record<string, unknown> : {};
-  const showFreeReleaseTag = showFirstReleaseBadge(release.status, releaseMetadata);
+  const subscriptionLabel = useSubscriptionLabel();
+  const showFreeReleaseTag = subscriptionLabel === "Subscriptions" && showFirstReleaseBadge(release.status, releaseMetadata);
 
   useEffect(() => {
     if (!menuOpen) return;

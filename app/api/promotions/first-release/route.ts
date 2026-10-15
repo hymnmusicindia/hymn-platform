@@ -6,7 +6,7 @@ import { consumeRateLimit, requestIdentity } from "@/lib/rate-limit";
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ authenticated: false, eligible: false, reason: "authentication_required" });
-  return NextResponse.json({ authenticated: true, ...(await getFirstReleaseEligibility(session.sub)) });
+  return NextResponse.json({ authenticated: true, ...(await getFirstReleaseEligibility(session.sub)) }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(request: Request) {

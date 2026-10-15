@@ -1148,6 +1148,7 @@ export function AdminControlCenter({
 
   return (
     <AdminModuleToolbar
+      hideSearch={activeTab === "users"}
       searchValue={moduleSearch}
       onSearchChange={setModuleSearch}
       searchPlaceholder={isReleaseWorkspace ? "Search releases..." : `Search ${activeTab.replace(/-/g, " ")}...`}
@@ -1397,7 +1398,7 @@ export function AdminControlCenter({
       ) : null}
 
       {activeTab === "users" ? (
-        <AdminUserManagement adminRole={adminAccess.role} externalSearch={moduleSearch} onResetSearch={()=>setModuleSearch("")} initialUsers={users} releaseCounts={Object.fromEntries(releaseCountByUser)} latestActivity={Object.fromEntries(latestUserActivity)} permissions={adminAccess.permissions} onUserChange={(updated) => setUsers((items) => items.map((item) => item.id === updated.id ? { ...item, ...updated } : item))} />
+        <AdminUserManagement adminRole={adminAccess.role} initialUsers={users} releaseCounts={Object.fromEntries(releaseCountByUser)} latestActivity={Object.fromEntries(latestUserActivity)} permissions={adminAccess.permissions} onUserChange={(updated) => setUsers((items) => items.map((item) => item.id === updated.id ? { ...item, ...updated } : item))} />
       ) : null}
 
       {activeTab === "earnings-entry" ? <AdminEarningsEntry users={users} releases={releases} /> : null}

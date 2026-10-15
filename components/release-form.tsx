@@ -1135,7 +1135,7 @@ export function ReleaseForm({
     const saved = initialRelease?.metadata && typeof initialRelease.metadata === "object" ? (initialRelease.metadata as Record<string, unknown>).wizardFormatIntent : null;
     return firstReleaseOffer ? "single" : saved === "single" || saved === "ep" || saved === "album" ? saved : initialRelease?.releaseType ?? "single";
   });
-  const singleReleaseGift = firstReleaseOffer || (initialRelease?.metadata && typeof initialRelease.metadata === "object" && (initialRelease.metadata as Record<string, unknown>).promotionCode === "FIRST_RELEASE_FREE");
+  const singleReleaseGift = !hasActiveSubscription && (firstReleaseOffer || (initialRelease?.metadata && typeof initialRelease.metadata === "object" && (initialRelease.metadata as Record<string, unknown>).promotionCode === "FIRST_RELEASE_FREE"));
   const trackCampaignEvent = (event: string, metadata?: Record<string, unknown>) => {
     if (!firstReleaseOffer) return;
     void fetch("/api/promotions/first-release", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event, attribution: campaignAttribution, metadata }) }).catch(() => undefined);
