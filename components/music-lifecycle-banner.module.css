@@ -9,13 +9,17 @@
 .cta:hover svg { transform:translateX(4px); }
 .journey { display:grid; grid-template-columns:minmax(0,1fr) 30px minmax(0,1fr) 30px minmax(0,1fr); align-items:center; margin:28px 0 22px; }
 .stage { position:relative; isolation:isolate; min-width:0; width:100%; padding:0; border:0; border-radius:12px; background:none; text-decoration:none; text-align:left; color:inherit; font:inherit; cursor:pointer; transition:background .3s; }
-.stage:hover,.stage:focus-visible { background:#a4b5d208; }
+.stage:hover,.stage:focus-visible { background:none; }
 /* The light belongs to the artwork, not the button's changing text height.
    Angular falloff and blur replace the hard polygon edge; the second layer
    combines reflected floor light with a darker contact shadow. */
 .art::before,.art::after { content:""; position:absolute; z-index:-1; pointer-events:none; opacity:0; transition:opacity .45s ease; }
 .art::before { inset:-24px -12px 0; background:conic-gradient(from 145deg at 50% -8%,transparent 0deg,#dce9ff08 9deg,#e7efff28 24deg,#f4f7ff38 35deg,#e7efff28 46deg,#dce9ff08 61deg,transparent 70deg); mask-image:radial-gradient(ellipse 65% 90% at 50% 38%,#000 18%,transparent 80%); filter:blur(12px); }
 .art::after { left:8%; right:8%; bottom:0; height:44px; border-radius:50%; background:radial-gradient(ellipse 30% 22% at 50% 40%,#000b,transparent 100%),radial-gradient(ellipse at center,#dbe8ff55,#b9d3ff18 40%,transparent 72%); filter:blur(5px); }
+@media(hover:hover) and (pointer:fine) {
+ .stage:hover .art::before,.stage:hover .art::after { opacity:.65; }
+}
+.stage:focus-visible .art::before,.stage:focus-visible .art::after { opacity:.65; }
 .stage[aria-pressed="true"] .art::before,.stage[aria-pressed="true"] .art::after { opacity:1; }
 .stage[aria-pressed="true"] :is(.sleeve,.console) { border-color:#8594aa; box-shadow:inset 0 1px 0 #eff5ff55,inset 1px 0 0 #dce9ff20,8px 18px 20px #0009,0 0 22px #c9ddff0c; }
 .stage[aria-pressed="true"] .record { box-shadow:inset 0 1px 0 #eff5ff40,6px 15px 20px #0009; }
