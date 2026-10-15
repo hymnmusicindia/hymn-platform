@@ -1,0 +1,28 @@
+﻿Category,ID,Name,City / Address,Email,Phone / WhatsApp,Contact purpose / Type,Source URL,Priority
+Artist,A001,Leo Wordz,"Mumbai, Maharashtra",management.leowordz@gmail.com,Not found publicly,Management/collaboration enquiry; site includes contact form,https://leowordz.wixsite.com/leo-wordz,High
+Artist,A002,Azayal,India (location not confirmed on contact page),info@azayal.com,Not found publicly,Website contact: “Write us”; artist presents as independent,https://azayal.com/,High after requalification
+Artist,A003,Trap-B / TRAP B / Sumit Jha,Bihar (artist bio),Sumitjha708@gmail.com,+91 8179290965,Artist page lists email and phone; exact contact purpose not explicitly limited to booking,https://trapb.my.canva.site/,High after requalification
+Artist,A004,Yayavar,"Bengaluru, Karnataka",yayavarecords@gmail.com,+91 98219 77898,Website says collaborations / enquiries / live performance booking,https://yayavar.b12sites.com/,Medium-high
+Artist,A005,RAMbow,Tamil rap; location not confirmed on contact page,theartistsriram@gmail.com,WhatsApp link exists; number not surfaced on page,Collaboration contact; site also promotes custom rap commissions,https://www.rambowstudio.in/,Medium
+Artist,A006,Prince Sanam,"Patna, Bihar",pdmanwd@gmail.com,Not found publicly,Explicitly listed for collaborations and bookings,https://linktr.ee/official.princesanam,Medium
+Artist,A007,AFT / SIRAAFAT,"New Delhi, Delhi",iamaafat@gmail.com; aftsena@gmail.com,Not found publicly,Profile says mail for other queries,https://open.spotify.com/artist/0L2l4t7GrM6pSiWpv1eF5n,Medium-low
+Artist,A008,Indian Ibex,"Mumbai, Maharashtra",hiphopibex@gmail.com,+91 8108562835,Contact page lists mobile and email,https://ianhunt313.wixsite.com/indianibex/about,Medium-low
+Artist,A009,Ankee / Ankur Malia,"Ghaziabad, Uttar Pradesh",official.ankee@gmail.com,+91 97118 83993,Explicitly labelled “For bookings”,https://soundcloud.com/ankeeofficial,Low / requalify
+Artist,A010,Sonu Parit / Sønu,"Howrah / Kolkata, West Bengal",Sonuparit3415@gmail.com,Not found publicly,Self-published contact email on artist bio,https://sonuparit.blogspot.com/,Low / verify
+Artist,A011,Poet Shaf,"Pune, Maharashtra (official site)",info@poetshaf.com,Not found publicly,Current site labels the email for booking / enquiries,https://www.poetshaf.com/,Low for cold sales
+Artist,A012,Rupa Gill,"Ahmedabad, Gujarat",Not found publicly,Not found publicly,Public social/streaming links; no email or phone surfaced,https://linktr.ee/rupagill,Medium via social
+Artist,A013,NaaR,"Mumbai, Maharashtra",naarthemasterfader@gmail.com,Not found publicly,Explicitly labelled bookings and enquiries,https://soundcloud.com/naarcist,Partner prospect
+Artist,A014,DJ AFRON,"Mumbai, Maharashtra",djafronbooking@gmail.com,Not found publicly,Explicitly labelled bookings and enquiries,https://soundcloud.com/dj-afron,Partner prospect
+Partner,P001,Pune Recording Studio / Onlyraps,"Pune, Maharashtra",punerecordingstudio@gmail.com,+91 77093 03289,Recording studio / beat producer,https://onlyraps.com/about,High for referral test
+Partner,P002,Madebyreko Studio,"Kalyan, Maharashtra; online service",business@madebyreko.com,+91 83691 36903,Studio / mixing and mastering,https://madebyreko.com/,High for partnership
+Partner,P003,Dark Side Music Studio,India; remote artists accepted,darksidemusicstudio1@gmail.com,+91 79823 08475,Music studio / audio engineering,https://www.thedarksidemusic.com/,Medium-high
+Partner,P004,Ekam Studios & Academy,"Kondhwa, Pune",music@ekamstudios.com,+91 95187 27508; landline +91 20412 35599,Recording / production studio,https://ekamstudios.com/contact-us.html,High local partnership
+Partner,P005,Backstreets Music Academy & Recording Studio,Chandigarh–Mohali,Not found publicly,+91 97799 22367,Recording studio / music academy,https://www.backstreetsacademy.com/,Medium
+Partner,P006,RYKARA Management,Worldwide; India contact,mada.mgmnt@gmail.com,+91 90038 85583,Artist / producer / DJ management,https://rykara.com/epk,Medium
+Partner,P007,Devil Inside Records,India; underground label,info@devilinsiderecords.in; demos@devilinsiderecords.in; siva@devilinsiderecords.in,Not found publicly,Independent underground label,https://www.devilinsiderecords.in/,High for label partnership
+Partner,P008,ForeVision Digital,India; distributor / promotion,connect@forevisiondigital.com; admin@forevisiondigital.com; promotions@forevisiondigital.com,+91 97354 26321; promotion/content contacts also listed,Distribution / promotion company,https://forevisiondigital.com/contact-us/,Low for customer acquisition; medium for partnership
+Partner,P009,Western Beats,India,contact@westernbeats.com,+91 70876 77767,Music distribution company,https://www.westernbeats.com/,Low as client; benchmark
+Partner,P010,Grootin Music Distribution,Mumbai / Delhi,hello@grootin.in; support@grootin.in,+91 77009 34877 (WhatsApp),Music distribution company,https://www.grootin.in/contact,Low as client; benchmark
+Partner,P011,TuneIND Music,India,musicdistributionindia.in@gmail.com; care@tuneind.in,011-69652811; +91 77427 89827 (WhatsApp),Music distribution company,https://app.tuneind.in/,Low as client; benchmark
+Partner,P012,WM Records,"Wakad, Pune",support@wmrecords.in,+91 83900 00221; +91 83900 00211,Distributor / studio / music services,https://www.wmrecords.in/,Low as client; benchmark
+Partner,P013,Dole's Music,"Andheri West, Mumbai",Email appears masked in page extraction; do not guess,+91 72593 56149,Music production studio,https://dolesmusic.com/artists/,Medium

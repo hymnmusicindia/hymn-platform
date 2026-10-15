@@ -1,4 +1,5 @@
-﻿"use client";
+"use client";
+import { isAdminAuthority } from "@/lib/admin-role-policy";
 
 import { useEffect, useMemo, useState } from "react";
 import { Check, ChevronDown, Loader2, ShieldCheck, UserRound, UsersRound, X } from "lucide-react";
@@ -15,7 +16,7 @@ type AccessData = { roles: AdminRole[]; memberships: Membership[]; legacyAdmins:
 function accountLabel(status?: User["status"]) { return String(status || "active").replaceAll("_", " "); }
 function initials(name: string) { return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase(); }
 
-export function AdminUserManagement({ initialUsers, releaseCounts, latestActivity, permissions, onUserChange, externalSearch="", onResetSearch }: { initialUsers: User[]; releaseCounts: Record<number, number>; latestActivity: Record<number, string>; permissions: AdminPermissionKey[]; onUserChange: (user: User) => void; externalSearch?:string; onResetSearch?:()=>void }) {
+export function AdminUserManagement({ initialUsers, releaseCounts, latestActivity, permissions, adminRole = "unassigned", onUserChange, externalSearch="", onResetSearch }: { initialUsers: User[]; releaseCounts: Record<number, number>; latestActivity: Record<number, string>; permissions: AdminPermissionKey[]; adminRole?: string; onUserChange: (user: User) => void; externalSearch?:string; onResetSearch?:()=>void }) {
   const [users, setUsers] = useState(initialUsers);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   useEffect(() => {
@@ -34,7 +35,7 @@ export function AdminUserManagement({ initialUsers, releaseCounts, latestActivit
   const [pendingUserId, setPendingUserId] = useState<number | null>(null);
   const [notice, setNotice] = useState<{ kind: "success" | "error"; text: string } | null>(null);
   const canManageUsers = permissions.includes("users.manage");
-  const canManageAdmins = permissions.includes("system.manage");
+  const canManageAdmins = permissions.includes("system.manage") && isAdminAuthority(adminRole);
   const membershipByUser = useMemo(() => new Map(access.memberships.map((membership) => [membership.userId, membership])), [access.memberships]);
 
   useEffect(() => {

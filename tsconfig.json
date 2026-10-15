@@ -46,7 +46,19 @@
     ".next-dev-admin-local-test/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     ".next-direnote-virtual/types/**/*.ts",
-    ".next-direnote-virtual/dev/types/**/*.ts"
+    ".next-direnote-virtual/dev/types/**/*.ts",
+    ".next-dev-landing/types/**/*.ts",
+    ".next-dev-landing/dev/types/**/*.ts",
+    ".next-studio-review/types/**/*.ts",
+    ".next-studio-review/dev/types/**/*.ts",
+    ".next-verify-manual-email/types/**/*.ts",
+    ".next-verify-manual-email/dev/types/**/*.ts",
+    ".next-sidebar-dev/types/**/*.ts",
+    ".next-sidebar-dev/dev/types/**/*.ts",
+    ".next-team-browser/types/**/*.ts",
+    ".next-team-browser/dev/types/**/*.ts",
+    ".next-admin-os-browser/types/**/*.ts",
+    ".next-admin-os-browser/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

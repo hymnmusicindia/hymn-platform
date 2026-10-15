@@ -10,6 +10,7 @@ import { validateBeatReadiness } from "@/lib/beat-readiness";
 import { createAdminTaskOnce } from "@/lib/task-queue";
 import { prisma } from "@/lib/prisma";
 import { producerSetup } from "@/lib/producer-setup";
+import { beatMutationSchema } from "@/lib/validation";
 
 function normalizedAudioMime(file: File) {
   const extension = file.name.toLowerCase().split(".").pop();
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
     const generalPrice = Number(formData.get("generalPrice") || price);
     const stemPrice = Number(formData.get("stemPrice") || generalPrice);
     const exclusivePrice = Number(formData.get("exclusivePrice"));
+    beatMutationSchema.parse({ price, generalPrice, stemPrice, exclusivePrice });
     const file = formData.get("file");
     const preview = formData.get("preview");
     const artwork = formData.get("artwork");

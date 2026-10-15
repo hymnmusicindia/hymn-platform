@@ -7,7 +7,7 @@ import { CANONICAL_HOSTINGER_STORAGE_ROOT, managedStorageRoot } from "@/lib/host
 import { verifyArtworkIntegrity, verifyAudioIntegrity } from "@/lib/media-integrity";
 import { normalizeUploadMime } from "@/lib/upload-mime";
 
-export type PrivateAssetType = "private_audio_master" | "private_studio_source" | "private_studio_delivery" | "private_beat_deliverable" | "private_beat_license" | "private_cover_licence" | "private_ownership_proof" | "private_ai_receipt" | "private_royalty_statement" | "private_payout_report" | "private_payout_proof" | "private_kyc_document" | "private_unreleased_artwork";
+export type PrivateAssetType = "private_team_attachment" | "private_audio_master" | "private_studio_source" | "private_studio_delivery" | "private_beat_deliverable" | "private_beat_license" | "private_cover_licence" | "private_ownership_proof" | "private_ai_receipt" | "private_royalty_statement" | "private_payout_report" | "private_payout_proof" | "private_kyc_document" | "private_unreleased_artwork";
 export type PrivateUploadInput = { ownerUserId: number; ownerName?: string; releaseId?: number; beatPurchaseId?: number; beatId?: number; beatTitle?: string; assetType: PrivateAssetType; fileName: string; mimeType: string; bytes: Buffer; retentionUntil?: Date };
 export type AuthorizedReadInput = { assetId: number; requesterUserId: number; isAdmin: boolean; range?: string | null };
 export type StoredPrivateAsset = { id: number; downloadPath: string; checksum: string; byteSize: number };
@@ -19,6 +19,7 @@ export interface PrivateStorageAdapter {
 }
 
 const policies: Record<PrivateAssetType, { max: number; mime: string[] }> = {
+  private_team_attachment: { max: 25 * 1024 * 1024, mime: ["application/pdf", "image/jpeg", "image/png", "text/plain", "text/csv", "audio/mpeg", "audio/wav", "audio/x-wav", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"] },
   private_audio_master: { max: 500 * 1024 * 1024, mime: ["audio/wav", "audio/x-wav", "audio/mpeg"] },
   private_studio_source: { max: 2 * 1024 * 1024 * 1024, mime: ["audio/wav", "audio/x-wav", "audio/flac", "audio/mpeg", "application/zip"] },
   private_studio_delivery: { max: 500 * 1024 * 1024, mime: ["audio/wav", "audio/x-wav", "audio/flac", "audio/mpeg", "application/zip"] },
@@ -141,7 +142,9 @@ export function validatePrivateUpload(input: PrivateUploadInput) {
     base = `${namePart}${base.slice(extIndex)}`;
   }
   const magic = input.bytes.subarray(0, 12);
-  const validMagic = input.mimeType === "application/pdf" ? magic.subarray(0, 4).toString() === "%PDF" : input.mimeType === "image/png" ? magic.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")) : input.mimeType === "image/jpeg" ? magic.subarray(0, 3).equals(Buffer.from("ffd8ff", "hex")) : input.mimeType === "image/webp" ? magic.subarray(0, 4).toString() === "RIFF" && input.bytes.subarray(8, 12).toString() === "WEBP" : input.mimeType === "application/zip" || input.mimeType.includes("spreadsheetml") ? magic.subarray(0, 2).toString() === "PK" : hasValidAudioMagic(input.mimeType, input.bytes);
+  const teamText = input.assetType === "private_team_attachment" && ["text/plain", "text/csv"].includes(input.mimeType);
+  if (teamText) { try { new TextDecoder("utf-8", { fatal: true }).decode(input.bytes); } catch { throw new Error("Text attachments must use UTF-8."); } if (input.bytes.includes(0)) throw new Error("Text attachment contains binary data."); }
+  const validMagic = teamText || (input.assetType === "private_team_attachment" && input.mimeType.includes("wordprocessingml") ? magic.subarray(0, 2).toString() === "PK" : input.mimeType === "application/pdf" ? magic.subarray(0, 4).toString() === "%PDF" : input.mimeType === "image/png" ? magic.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")) : input.mimeType === "image/jpeg" ? magic.subarray(0, 3).equals(Buffer.from("ffd8ff", "hex")) : input.mimeType === "image/webp" ? magic.subarray(0, 4).toString() === "RIFF" && input.bytes.subarray(8, 12).toString() === "WEBP" : input.mimeType === "application/zip" || input.mimeType.includes("spreadsheetml") ? magic.subarray(0, 2).toString() === "PK" : hasValidAudioMagic(input.mimeType, input.bytes));
   if (!validMagic) throw new Error("File content does not match its MIME type.");
   if (input.assetType === "private_unreleased_artwork") {
     if (input.mimeType !== "image/jpeg" || !/\.(jpe?g)$/i.test(input.fileName)) throw new Error("Artwork must be a JPG/JPEG file.");

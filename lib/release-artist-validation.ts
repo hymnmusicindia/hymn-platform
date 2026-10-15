@@ -9,8 +9,8 @@ export function artistSelectionIssue(names: string, ids: number[], profiles: Art
   const selected = ids.map(id => profiles.find(profile => profile.id === id && !profile.archivedAt));
   if (selected.some(profile => !profile)) return `Select an available saved ${role} artist profile.`;
   if (required && !ids.length) return `Select at least one saved ${role} artist profile.`;
-  for (const name of artistCreditNames(names)) if (!selected.some(profile => profile && sameName(profile.name, name))) return `Select or create a saved ${role} artist profile for ${name}, including their Instagram profile.`;
-  const incomplete = selected.find(profile => profile && !hasArtistInstagram(profile));
+  for (const name of artistCreditNames(names)) if (!selected.some(profile => profile && sameName(profile.name, name))) return `Select or create a saved ${role} artist profile for ${name}.`;
+  const incomplete = selected.find(profile => profile && profile.instagramUrl?.trim() && !hasArtistInstagram(profile));
   return incomplete ? `Add a valid Instagram profile to ${incomplete.name}'s saved artist profile before continuing.` : null;
 }
 // Keep unresolved legacy credits visible until the user links or removes them.

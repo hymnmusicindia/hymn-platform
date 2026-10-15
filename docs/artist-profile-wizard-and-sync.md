@@ -27,9 +27,9 @@ replacing a verified identity. Saved cards expose links when reloaded/opened.
 
 Provider contract checked: https://distribution.direnotemedia.com/dnm_api
 (v2.2, checked 2026-09-09). The status response documents artist links. Section
-5b also states that Instagram is mandatory when DireNote provisions a new artist.
-Both artist creation paths require Instagram, matching provider provisioning
-requirements. The provider submission preflight remains intact. No live ingestion
+Instagram is optional in artist creation, editing, selection, and delivery preflight.
+Supplied social links are still validated; existing artists still need a store link.
+Other provider submission requirements remain intact. No live ingestion
 is used for testing.
 
 Verification commands:

@@ -43,11 +43,11 @@ export const adminWorkspaceNavigation:Item[]=[
       ];
 const required:Record<string,AdminPermissionKey[]>={
  "manual-catalogue":["system.manage"],"studio-admin":["services.manage"],"contributors-admin":["users.read"],"campaign-redemptions":["users.read"],"leads-admin":["users.manage"],"audit-admin":["audit.read"],"email-admin":["system.manage"],"webhooks-admin":["system.manage"],
-  notifications:["system.manage"],users:["users.read"],artists:["users.read"],producers:["users.read"],team:["system.manage"],activity:["audit.read"],analytics:["audit.read"],
+  notifications:["system.manage"],users:["users.read"],artists:["users.read"],producers:["users.read","services.manage"],team:["system.manage"],activity:["audit.read"],analytics:["audit.read"],
   releases:["releases.read","releases.review","distribution.retry"],"distribution-queue":["releases.review"],"delivery-failed":["distribution.retry"],delivery:["releases.read"],updates:["updates.review","takedowns.review"],takedowns:["takedowns.review"],fraud:["fraud.read"],
   payments:["payouts.review","royalties.reconcile"],revenue:["payouts.review","royalties.reconcile"],royalties:["payouts.review"],"earnings-entry":["royalties.import"],reconciliation:["royalties.reconcile"],kyc:["kyc.review"],
   settings:["system.manage"],integrations:["system.manage"],health:["system.manage"],content:["system.manage"],newsletter:["system.manage"],
   "managed-services":["services.manage"],"playlist-reviews":["services.manage"],operations:["services.manage"],reviews:["services.manage"],support:["services.manage"],promotions:["system.manage"],"timed-playlists":["services.manage"],contracts:["services.manage"],growth:["audit.read"],"referrals-admin":["fraud.read","wallets.adjust"]
 };
-export function adminModuleAllowed(key:string,permissions:readonly string[]){return !required[key]||required[key].some(permission=>permissions.includes(permission));}
+export function adminModuleAllowed(key:string,permissions:readonly string[]){return key === "overview" ? permissions.length > 0 : Boolean(required[key]?.some(permission=>permissions.includes(permission)));}
 export function adminNavigation(permissions:readonly string[]){return adminWorkspaceNavigation.filter(item=>adminModuleAllowed(item.key,permissions));}

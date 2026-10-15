@@ -9,6 +9,12 @@ function fixtureWav() {
   bytes.writeUInt32LE(16, 16); bytes.writeUInt16LE(1, 20); bytes.writeUInt16LE(2, 22);
   bytes.writeUInt32LE(44100, 24); bytes.writeUInt32LE(176400, 28); bytes.writeUInt16LE(4, 32); bytes.writeUInt16LE(16, 34);
   bytes.write("data", 36); bytes.writeUInt32LE(bytes.length - 44, 40);
+  for (let sample = 0; sample < 44100; sample++) {
+    const envelope = 0.2 + 0.75 * Math.abs(Math.sin(sample * Math.PI / 11025));
+    const value = Math.round(Math.sin(sample * 2 * Math.PI * 220 / 44100) * envelope * 18000);
+    bytes.writeInt16LE(value, 44 + sample * 4);
+    bytes.writeInt16LE(value, 46 + sample * 4);
+  }
   return bytes;
 }
 
@@ -80,9 +86,22 @@ export async function startDireNoteBrowser(userId: number) {
           { name: "First Light.wav", mimeType: "audio/wav", buffer: audio },
         ]);
         await expect(page.locator(".release-audio-queue-item.is-ready")).toHaveCount(2, { timeout: 60000 });
+        const waveform = page.locator(".release-audio-queue-item.is-ready").first().locator(".audio-waveform-inline-track");
+        await expect.poll(async () => (await waveform.boundingBox())?.width ?? 0).toBeGreaterThan(320);
+        await expect.poll(async () => waveform.locator(".audio-waveform-live > span").count()).toBeGreaterThan(70);
+        const audioSource = await waveform.locator("..").locator("audio").getAttribute("src");
+        expect(audioSource).toMatch(/^\/api\/assets\/\d+\/download/);
+        expect((await context.request.get(`${origin}${audioSource}`)).ok()).toBe(true);
+        await expect(waveform.locator(".audio-waveform-live")).not.toHaveClass(/is-pending/, { timeout: 60000 });
+        const heights = await waveform.locator(".audio-waveform-live > span").evaluateAll((bars) => bars.map((bar) => Number.parseFloat((bar as HTMLElement).style.height)));
+        expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(4);
         await page.screenshot({ path: ".cache/release-clean-single.png", fullPage: true });
         await expect(page.locator(".release-music-format")).toContainText("EP");
         await expect(page.locator(".release-audio-stage input[type=text]")).toHaveCount(0);
+        await page.setViewportSize({ width: 375, height: 844 });
+        await expect.poll(async () => (await waveform.boundingBox())?.width ?? 0).toBeGreaterThan(120);
+        await page.screenshot({ path: ".cache/release-waveform-mobile.png", fullPage: true });
+        await page.setViewportSize({ width: 1440, height: 1000 });
         await page.screenshot({ path: ".cache/release-clean-ep.png", fullPage: true });
         await page.getByRole("button", { name: "Continue to cover artwork" }).click();
         await expect(page.getByRole("heading", { name: "Prepare your cover artwork" })).toBeVisible();
@@ -194,9 +213,6 @@ export async function startDireNoteBrowser(userId: number) {
         await expect(dialog.getByRole("textbox")).toHaveValue("Browser Debut Artist");
         await dialog.getByRole("button", { name: "Continue", exact: true }).click();
         await expect(dialog.getByText("Step 3 of 3", { exact: true })).toBeVisible();
-        await dialog.getByRole("button", { name: "Create profile", exact: true }).click();
-        await expect(dialog.getByText("Instagram profile link is required for artist verification.", { exact: true })).toBeVisible();
-        await dialog.getByRole("textbox", { name: "Add the Instagram profile" }).fill("@browser_debut");
         const saved = page.waitForResponse(response => response.url().endsWith("/api/artists") && response.request().method() === "POST");
         await dialog.getByRole("button", { name: "Create profile", exact: true }).click();
         const response = await saved;
@@ -204,7 +220,7 @@ export async function startDireNoteBrowser(userId: number) {
         const { profile } = await response.json();
         expect(profile.spotifyUrl).toBeNull();
         expect(profile.appleUrl).toBeNull();
-        expect(profile.instagramUrl).toBe("https://instagram.com/browser_debut");
+        expect(profile.instagramUrl || "").toBe("");
         await page.reload();
         await page.setViewportSize({ width: 1440, height: 1000 });
         const persisted = await (await context.request.get(`${origin}/api/artists`)).json();

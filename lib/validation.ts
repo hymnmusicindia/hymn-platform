@@ -85,7 +85,6 @@ function requireExistingArtistStoreLink(value: { hasLiveMusic?: boolean; spotify
       context.addIssue({ code: z.ZodIssueCode.custom, path: ["spotifyUrl"], message: "Add at least one store link for an artist that already has music live in stores." });
     }
   }
-  if (!value.instagramUrl) context.addIssue({ code: z.ZodIssueCode.custom, path: ["instagramUrl"], message: "Instagram profile link is required for artist verification." });
 }
 
 function requireProducerLegalName(value: { isProducer?: boolean; producerLegalName?: string }, context: z.RefinementCtx) {
@@ -111,12 +110,11 @@ export const paymentVerifySchema = z.object({
   items: z.array(orderItemSchema).min(1)
 });
 
-export const artistProfileUpdateSchema = artistProfileFields.partial().extend({
-  instagramUrl: z.string().min(1).refine((value) => instagramProfilePattern.test(value.trim()), { message: "Instagram profile link is required for artist verification." }).optional()
-}).superRefine(requireProducerLegalName);
+export const artistProfileUpdateSchema = artistProfileFields.partial().superRefine(requireProducerLegalName);
 
 export function normalizeInstagramUrl(value: string) {
   const normalized = value.trim();
+  if (!normalized) return "";
   if (normalized.startsWith("@")) return `https://instagram.com/${normalized.slice(1)}`;
   if (!/^https?:\/\//i.test(normalized)) return `https://${normalized}`;
   return normalized;
@@ -330,10 +328,10 @@ export const beatMutationSchema = z.object({
   genre: z.string().min(2).optional(),
   mood: z.string().min(2).optional(),
   keySignature: z.string().min(1).max(40).optional(),
-  price: z.coerce.number().positive().optional(),
-  generalPrice: z.coerce.number().positive().optional(),
-  stemPrice: z.coerce.number().positive().optional(),
-  exclusivePrice: z.coerce.number().positive().optional(),
+  price: z.coerce.number().finite().positive().max(21000000).refine(v => Math.abs(v * 100 - Math.round(v * 100)) < 0.000001, "Use at most two decimal places.").optional(),
+  generalPrice: z.coerce.number().finite().nonnegative().max(21000000).refine(v => Math.abs(v * 100 - Math.round(v * 100)) < 0.000001, "Use at most two decimal places.").optional(),
+  stemPrice: z.coerce.number().finite().nonnegative().max(21000000).refine(v => Math.abs(v * 100 - Math.round(v * 100)) < 0.000001, "Use at most two decimal places.").optional(),
+  exclusivePrice: z.coerce.number().finite().nonnegative().max(21000000).refine(v => Math.abs(v * 100 - Math.round(v * 100)) < 0.000001, "Use at most two decimal places.").optional(),
   description: z.string().max(2000).optional(),
   subgenre: z.string().max(80).optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),

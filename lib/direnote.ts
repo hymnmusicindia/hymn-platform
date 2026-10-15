@@ -370,7 +370,7 @@ function validatePublicPdf(issues: DireNoteValidationIssue[], field: string, val
   if (!/\.pdf$/i.test(assetFileName(value))) issues.push({ field, message: `${field} must link to a PDF file.` });
 }
 
-function validateArtists(issues: DireNoteValidationIssue[], artists: DireNoteArtist[] | undefined, path: string, requireInstagram: boolean) {
+function validateArtists(issues: DireNoteValidationIssue[], artists: DireNoteArtist[] | undefined, path: string) {
   if (artists != null && !Array.isArray(artists)) {
     issues.push({ field: path, message: "Artists must be an array of artist records." });
     return;
@@ -381,7 +381,6 @@ function validateArtists(issues: DireNoteValidationIssue[], artists: DireNoteArt
       continue;
     }
     pushMissing(issues, `${path}.${index}.name`, artist.name, "Artist name is required.");
-    if (requireInstagram) pushMissing(issues, `${path}.${index}.instagram_url`, artist.instagram_url, `Add Instagram to the saved artist profile for ${artist.name || "this artist"} before submitting.`);
     for (const [field, value] of Object.entries(artist).filter(([field]) => field.endsWith("_url"))) {
       if (value && !isPublicHttpUrl(value)) issues.push({ field: `${path}.${index}.${field}`, message: `${field} must be a public HTTP(S) URL.` });
     }
@@ -491,12 +490,9 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
   // URL before this validation runs.
   validatePublicPdf(issues, "license_receipt_url", payload.license_receipt_url);
 
-  // DireNote needs Instagram only when it must provision an artist. A trusted
-  // admin may confirm that a linked profile already exists; customers cannot
-  // set this server-side option themselves.
-  const requireInstagram = !options.adminConfirmedExistingArtists;
-  validateArtists(issues, payload.artists, "artists", requireInstagram);
-  validateArtists(issues, payload.featuring_artists, "featuring_artists", requireInstagram);
+  // Social profiles are optional, including for an artist's first release.
+  validateArtists(issues, payload.artists, "artists");
+  validateArtists(issues, payload.featuring_artists, "featuring_artists");
 
   payload.tracks.forEach((track, index) => {
     const number = index + 1;
@@ -516,8 +512,8 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
     const missingLanguage = pushMissing(issues, `tracks.${index}.trackLanguage`, track.trackLanguage, `Track ${number} requires its own track language. Select it in track metadata.`);
     if (!missingLanguage && !DIRENOTE_LANGUAGES.includes(track.trackLanguage as any)) issues.push({ field: `tracks.${index}.trackLanguage`, message: `Track ${number} language is not DireNote-compatible.` });
     if (!missingLanguage && /^instrumental$/i.test(track.trackVersion?.trim() ?? "") && track.trackLanguage !== "Instrumental") issues.push({ field: `tracks.${index}.trackLanguage`, message: `Track ${number} is marked Instrumental. Select Instrumental as its track language.` });
-    validateArtists(issues, track.artists, `tracks.${index}.artists`, requireInstagram);
-    validateArtists(issues, track.featuring_artists, `tracks.${index}.featuring_artists`, requireInstagram);
+    validateArtists(issues, track.artists, `tracks.${index}.artists`);
+    validateArtists(issues, track.featuring_artists, `tracks.${index}.featuring_artists`);
     for (const contributor of [...track.songwriters, ...track.composers]) {
       if (!hasFirstAndLastName(contributor?.name)) issues.push({ field: `tracks.${index}.credits`, message: "Songwriter/Composer must include first and last name. Stage names or mononyms are not accepted by DireNote." });
     }

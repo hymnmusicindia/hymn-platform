@@ -288,11 +288,17 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     validation,
     submitted: false,
     duplicate: true,
-    retryable: true,
+    retryable: claim.attempt.state === "retryable",
     retryAfterSeconds: claim.retryAfterSeconds,
     error: claim.retryAfterSeconds
       ? `DireNote submission is cooling down. Try again in ${Math.ceil(claim.retryAfterSeconds / 60)} minute${Math.ceil(claim.retryAfterSeconds / 60) === 1 ? "" : "s"}.`
-      : "An identical DireNote submission is already processing.",
+      : claim.attempt.state === "reconciliation_required"
+        ? "The previous DireNote delivery outcome is unconfirmed. Open Submission history and record the partner's non-receipt confirmation before retrying."
+        : claim.attempt.state === "processing"
+          ? "A previous DireNote submission is unresolved. Check Submission history before retrying."
+          : claim.attempt.attemptCount >= 5
+            ? "This submission has reached its retry limit. Review Submission history and contact support."
+            : "The previous submission requires review before it can be retried. Check Submission history for the recorded error.",
   };
   await snapshotTrackContributions(claim.attempt.id, releaseId);
 

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { artistProfileCreateSchema, artistProfileUpdateSchema } from "../lib/validation";
+import { artistProfileCreateSchema, artistProfileUpdateSchema, normalizeInstagramUrl } from "../lib/validation";
 import { attachedArtistProfileIds, verifiedArtistStoreLinks } from "../lib/artist-store-links";
 
 const artist = { name: "New Artist Test", instagramUrl: "@newartisttest" };
-assert.equal(artistProfileCreateSchema.safeParse({ name: "Debut Artist", hasLiveMusic: false }).success, false);
+assert.equal(artistProfileCreateSchema.safeParse({ name: "Debut Artist", hasLiveMusic: false }).success, true);
 assert.equal(artistProfileCreateSchema.safeParse({ name: "   ", hasLiveMusic: false }).success, false);
 assert.equal(artistProfileCreateSchema.safeParse({ ...artist, hasLiveMusic: false }).success, true);
 assert.equal(artistProfileCreateSchema.safeParse({ ...artist, hasLiveMusic: true }).success, false);
@@ -24,6 +24,9 @@ assert.equal(verifiedArtistStoreLinks({ spotify: "https://open.spotify.com/artis
 assert.equal(verifiedArtistStoreLinks({ apple: "https://music.apple.com/us/artist/test/1800353038" }).apple?.id, "1800353038");
 console.log("Artist link validation and canonical relationship guards passed.");
 
-assert.equal(artistProfileCreateSchema.safeParse({ ...artist, hasLiveMusic: false, instagramUrl: " " }).success, false);
+assert.equal(artistProfileCreateSchema.safeParse({ ...artist, hasLiveMusic: false, instagramUrl: " " }).success, true);
+assert.equal(artistProfileUpdateSchema.safeParse({ instagramUrl: "" }).success, true);
+assert.equal(artistProfileUpdateSchema.safeParse({ instagramUrl: "invalid" }).success, false);
+assert.equal(normalizeInstagramUrl(" "), "", "Clearing an optional profile must not persist an invalid https:// URL.");
 assert.equal(artistProfileCreateSchema.safeParse({ ...artist, hasLiveMusic: false, instagramUrl: "invalid" }).success, false);
 assert.equal(artistProfileUpdateSchema.safeParse({ instagramUrl: "@debut_artist" }).success, true);

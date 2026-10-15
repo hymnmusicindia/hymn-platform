@@ -8,9 +8,24 @@
 .cta svg { transition:transform .2s; }
 .cta:hover svg { transform:translateX(4px); }
 .journey { display:grid; grid-template-columns:minmax(0,1fr) 30px minmax(0,1fr) 30px minmax(0,1fr); align-items:center; margin:28px 0 22px; }
-.stage { min-width:0; width:100%; padding:0; border:0; border-bottom:2px solid transparent; border-radius:12px 12px 0 0; background:none; text-decoration:none; text-align:left; color:inherit; font:inherit; cursor:pointer; transition:background .2s,border-color .2s; }
-.stage:hover,.stage:focus-visible { background:#a4b5d208; }
-.stage[aria-pressed="true"] { border-bottom-color:#aebfd9; background:linear-gradient(0deg,#a4b5d20b,transparent 65%); }
+.stage { position:relative; isolation:isolate; min-width:0; width:100%; padding:0; border:0; border-radius:12px; background:none; text-decoration:none; text-align:left; color:inherit; font:inherit; cursor:pointer; transition:background .3s; }
+.stage:hover,.stage:focus-visible { background:none; }
+/* The light belongs to the artwork, not the button's changing text height.
+   Angular falloff and blur replace the hard polygon edge; the second layer
+   combines reflected floor light with a darker contact shadow. */
+.art::before,.art::after { content:""; position:absolute; z-index:-1; pointer-events:none; opacity:0; transition:opacity .45s ease; }
+.art::before { inset:-24px -12px 0; background:conic-gradient(from 145deg at 50% -8%,transparent 0deg,#dce9ff08 9deg,#e7efff28 24deg,#f4f7ff38 35deg,#e7efff28 46deg,#dce9ff08 61deg,transparent 70deg); mask-image:radial-gradient(ellipse 65% 90% at 50% 38%,#000 8%,#0009 42%,transparent 80%); filter:blur(18px); }
+.art::after { left:8%; right:8%; bottom:6px; height:44px; border-radius:50%; background:radial-gradient(ellipse 30% 22% at 50% 40%,#000b,transparent 100%),radial-gradient(ellipse at center,#dbe8ff55,#b9d3ff18 40%,transparent 72%); filter:blur(8px); }
+@media(hover:hover) and (pointer:fine) {
+ .stage:hover .art::before,.stage:hover .art::after { opacity:.65; }
+}
+.stage:focus-visible .art::before,.stage:focus-visible .art::after { opacity:.65; }
+.stage[aria-pressed="true"] .art::before,.stage[aria-pressed="true"] .art::after { opacity:1; }
+.stage[aria-pressed="true"] .art::before { filter:blur(18px) brightness(1.8); }
+.stage[aria-pressed="true"] .art::after { filter:blur(8px) brightness(1.5); }
+.stage[aria-pressed="true"] :is(.sleeve,.console) { border-color:#8594aa; box-shadow:inset 0 1px 0 #eff5ff55,inset 1px 0 0 #dce9ff20,8px 18px 20px #0009,0 0 22px #c9ddff0c; }
+.stage[aria-pressed="true"] .record { box-shadow:inset 0 1px 0 #eff5ff40,6px 15px 20px #0009; }
+.stage[aria-pressed="true"] .globe { filter:brightness(1.15) drop-shadow(5px 12px 8px #0009); }
 .hint { margin:22px 0 0; color:#c1cbd9; font-size:11px; line-height:1.7; }
 .hint span { color:#94a3b8; margin-left:8px; }
 .detail { display:flex; align-items:center; justify-content:space-between; gap:24px; min-height:100px; padding:18px 20px; margin-bottom:22px; border:1px solid #ffffff12; border-radius:12px; background:#a4b5d207; }
@@ -30,7 +45,9 @@
 @keyframes wave-level { 0%,100% { transform:scaleY(1); } 50% { transform:scaleY(.35); } }
 @keyframes platform-arrive { 0% { transform:translateY(8px) scale(.85); opacity:.4; } 60% { transform:translateY(-4px) scale(1.06); } 100% { transform:none; opacity:1; } }
 .connector { display:grid; place-items:center; color:#657184; }
-.art { height:170px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; background:radial-gradient(ellipse at center,#a4b5d20a,transparent 68%); }
+/* Let the blurred light dissipate outside the art instead of clipping it into
+   horizontal bars at the top and bottom. The artwork itself stays unmasked. */
+.art { isolation:isolate; height:170px; display:flex; align-items:center; justify-content:center; position:relative; overflow:visible; background:radial-gradient(ellipse at center,#a4b5d20a,transparent 68%); }
 .caption { display:flex; gap:10px; align-items:flex-start; padding:20px 8px 10px; border:0; }
 .caption > svg { margin-left:auto; flex-shrink:0; color:#8b98aa; margin-top:5px; }
 .number { font-size:10px; line-height:26px; font-variant-numeric:tabular-nums; color:#7d8ba1; }
@@ -55,9 +72,14 @@
 .terms { padding-top:18px; border-top:1px solid #ffffff0e; font-size:11px; line-height:1.75; color:#8d9bb0; }
 .terms a { text-decoration:underline; text-underline-offset:3px; white-space:nowrap; color:#c4cfdf; }
 .banner a:focus-visible,.stage:focus-visible { outline:2px solid #cbd7e9; outline-offset:5px; }
-:global(html[data-theme="light"]) .banner .heading p,:global(html[data-theme="light"]) .banner .caption p,:global(html[data-theme="light"]) .banner .detail p,:global(html[data-theme="light"]) .banner .hint,:global(html[data-theme="light"]) .banner .hint span,:global(html[data-theme="light"]) .banner .terms { color:#526176; }
-:global(html[data-theme="light"]) .banner .cta,:global(html[data-theme="light"]) .banner .detailAction,:global(html[data-theme="light"]) .banner .terms a { color:#26364d; }
-:global(html[data-theme="light"]) .banner .detail { border-color:#26364d26; background:#26364d06; }
+/* This composition lives on the dark landing canvas, including when a saved
+   light preference remains on <html>. Do not inherit its light text palette. */
+:global(html) .banner { color:#eef2f7; }
+:global(html) .banner .heading h2,:global(html) .banner .caption h3,:global(html) .banner .detail h3 { color:#eef2f7; }
+:global(html) .banner .heading h2 span,:global(html) .banner .heading p,:global(html) .banner .caption p,:global(html) .banner .detail p { color:#b8c3d2; }
+:global(html) .banner .hint,:global(html) .banner .hint span,:global(html) .banner .terms,:global(html) .banner .number,:global(html) .banner .detailNumber { color:#aab8cc; }
+:global(html) .banner .cta,:global(html) .banner .detailAction,:global(html) .banner .terms a { color:#e3ecfa; }
+:global(html) .banner .detail { border-color:#ffffff1c; background:#11161d; }
 @media(max-width:1000px) and (min-width:641px) {
  .heading { align-items:flex-start; }
  .heading h2 { font-size:34px; }
@@ -78,6 +100,10 @@
  .journey { grid-template-columns:1fr; gap:4px; margin:20px 0; }
  .connector { display:none; }
  .stage { display:grid; grid-template-columns:100px minmax(0,1fr); align-items:center; padding:8px 0; }
+ .art::before { inset:-12px -6px 0; filter:blur(9px); }
+ .art::after { height:24px; filter:blur(5px); }
+ .stage[aria-pressed="true"] .art::before { filter:blur(9px) brightness(1.8); }
+ .stage[aria-pressed="true"] .art::after { filter:blur(5px) brightness(1.5); }
  .art { height:100px; }
  .caption { padding:12px 0 12px 12px; gap:8px; }
  .caption h3 { font-size:16px; }
@@ -103,4 +129,4 @@
  .detailCopy { gap:10px; }
  .detailAction { padding-left:0; }
 }
-@media(prefers-reduced-motion:reduce) { .banner * { transition:none!important; animation:none!important; } .stage:hover .record { transform:rotate(20deg); } }
+@media(prefers-reduced-motion:reduce) { .banner *,.art::before,.art::after { transition:none!important; animation:none!important; } .stage:hover .record { transform:rotate(20deg); } }

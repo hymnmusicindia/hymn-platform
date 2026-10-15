@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { requireAdminPermission } from "@/lib/access";
+import { requireAdminPermission, requireRecentAdminPermission } from "@/lib/access";
+import { isAdminAuthority } from "@/lib/admin-role-policy";
 import { createNotification } from "@/lib/db";
 import { userRoleUpdateSchema } from "@/lib/validation";
 import { prisma } from "@/lib/prisma";
@@ -17,6 +18,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   try {
     const body = await request.json();
+    const targetAccount = await prisma.user.findUnique({ where: { id: Number(id) }, select: { role: true } });
+    if (!targetAccount) return NextResponse.json({ error: "User not found." }, { status: 404 });
+    if (targetAccount.role === "ADMIN") {
+      if (!body.accountStatus) return NextResponse.json({ error: "Use the audited administrator membership controls to change admin access." }, { status: 409 });
+      const authority = await requireRecentAdminPermission("system.manage");
+      if ("error" in authority) return authority.error;
+      if (!isAdminAuthority(authority.adminRole)) return NextResponse.json({ error: "Only a founder or super administrator may restrict another administrator." }, { status: 403 });
+    }
     if (body.accountStatus) {
       const allowed = ["active", "paused", "under_review", "suspended", "deletion_scheduled", "banned"] as const;
       const accountStatus = String(body.accountStatus).toLowerCase() as typeof allowed[number];
@@ -43,8 +52,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const userId = Number(id);
     const actorId = "sub" in result ? Number(result.sub) || null : null;
     const user = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(187462902)`;
       const existing = await tx.user.findUnique({ select:safeUserSelect, where: { id: userId } });
       if (!existing) return null;
+      if (existing.role === "ADMIN") throw new Error("Use administrator membership controls to change admin access.");
       if(existing.role === (payload.role === "producer" ? "PRODUCER" : "CUSTOMER"))return existing;
       const updated = await tx.user.update({ select: safeUserSelect, where: { id: userId }, data: { role: payload.role === "producer" ? "PRODUCER" : "CUSTOMER" } });
       if (payload.role === "producer") {

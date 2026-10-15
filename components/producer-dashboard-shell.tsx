@@ -217,6 +217,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
       mood: String(formData.get("mood") || ""),
       keySignature: String(formData.get("keySignature") || ""),
       generalPrice: Number(formData.get("generalPrice")),
+      price: Number(formData.get("price")),
       stemPrice: Number(formData.get("stemPrice")),
       exclusivePrice: Number(formData.get("exclusivePrice")),
       description: String(formData.get("description") || ""),
@@ -473,10 +474,11 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
                 </div>
                 <div>
                   <label className="text-sm font-medium mb-1 block">WAV Licence price (Rs)</label>
-                  <input name="generalPrice" type="number" defaultValue={editingBeat.generalPrice ?? editingBeat.price} required className="field" />
+                  <input name="generalPrice" type="number" min="0" step="0.01" defaultValue={editingBeat.generalPrice ?? editingBeat.price} required className="field" />
                 </div>
-                <div><label className="text-sm font-medium mb-1 block">Stem Files Licence price (Rs)</label><input name="stemPrice" type="number" defaultValue={editingBeat.stemPrice ?? editingBeat.generalPrice ?? editingBeat.price} required className="field" /></div>
-                <div><label className="text-sm font-medium mb-1 block">Stems Exclusive Licence price (Rs)</label><input name="exclusivePrice" type="number" defaultValue={editingBeat.exclusivePrice} required className="field" /></div>
+                <div><label className="text-sm font-medium mb-1 block">Stem Files Licence price (Rs)</label><input name="stemPrice" type="number" min="0" step="0.01" defaultValue={editingBeat.stemPrice ?? editingBeat.generalPrice ?? editingBeat.price} required className="field" /></div>
+                <div><label className="text-sm font-medium mb-1 block" htmlFor="beat-mp3-price">MP3 Licence price (Rs)</label><input id="beat-mp3-price" name="price" type="number" min="0.01" step="0.01" defaultValue={editingBeat.price} required className="field" /></div>
+                <div><label className="text-sm font-medium mb-1 block">Stems Exclusive Licence price (Rs)</label><input name="exclusivePrice" type="number" min="0" step="0.01" defaultValue={editingBeat.exclusivePrice} required className="field" /></div>
               </div>
               <div><label className="text-sm font-medium mb-1 block">Description</label><textarea name="description" defaultValue={editingBeat.description} className="field min-h-24" /></div>
               <label className="grid gap-2 text-sm"><span className="font-medium">Replace cover artwork <span style={{ color: "var(--text-soft)" }}>(optional)</span></span><input name="artwork" type="file" accept="image/jpeg,image/png,image/webp" className="field" /><span className="text-xs leading-5" style={{ color: "var(--text-soft)" }}>JPEG, PNG, or WebP up to 10 MB. After a successful replacement, the previous cover is permanently deleted from storage with no backup.</span></label>

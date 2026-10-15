@@ -268,13 +268,15 @@ button:disabled, [aria-disabled="true"] { cursor: not-allowed; opacity: 0.52; }
 }
 
 .audio-waveform-inline-track {
+  position: relative;
   display: flex;
   align-items: center;
-  height: 2rem;
+  height: 2.5rem;
   min-width: 0;
   cursor: pointer;
   transition: filter 160ms ease;
 }
+.audio-waveform-inline-track:focus-visible { outline:2px solid var(--focus); outline-offset:3px; border-radius:.3rem; }
 
 .audio-waveform-inline:not(.is-disabled) .audio-waveform-inline-track:hover {
   filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 22%, transparent));
@@ -298,19 +300,21 @@ button:disabled, [aria-disabled="true"] { cursor: not-allowed; opacity: 0.52; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0;
+  gap: 2px;
   width: 100%;
-  height: 1.65rem;
+  height: 2.5rem;
 }
 
 .audio-waveform-live > span {
   flex: 1;
-  min-width: 1px;
-  max-width: 3px;
+  min-width: 2px;
+  max-width: 5px;
   border-radius: 999px;
-  transition: height 70ms linear, background 120ms ease;
-  box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 8%, transparent);
+  opacity:.76;
+  transition: background 120ms ease;
 }
+.audio-waveform-live.is-pending > span { opacity:.28; }
+.audio-waveform-playhead { position:absolute; top:1px; bottom:1px; width:1px; background:var(--accent); box-shadow:0 0 8px color-mix(in srgb,var(--accent) 55%,transparent); pointer-events:none; }
 
 .audio-waveform-inline.is-disabled {
   opacity: 1;
@@ -339,7 +343,7 @@ html[data-theme="light"] .audio-waveform-inline .audio-waveform-flat-line {
   }
   .audio-waveform-inline-play { width:2.35rem; height:2.35rem; }
   .audio-waveform-inline-time { display:none; }
-  .audio-waveform-live { gap:1px; }
+  .audio-waveform-live { gap:2px; }
 }
 
 .release-review .release-details-review-grid .review-detail-row {
@@ -1381,13 +1385,7 @@ html[data-theme="light"] .release-dolby-logo { filter:none; }
 .release-focused-card { display:grid; gap:.5rem; border:0; border-radius:0; padding:0; background:transparent; box-shadow:none; }
 .release-artist-avatar-picker { display:flex; align-items:center; justify-content:center; gap:.65rem; }
 .release-selected-artists { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:.65rem; }
-.release-primary-artist-sort-item { position:relative; display:grid; place-items:center; padding:.25rem .15rem 1.1rem; }
-.release-primary-artist-position { position:absolute; z-index:3; top:-.15rem; left:-.15rem; display:grid; width:1.25rem; height:1.25rem; place-items:center; border:2px solid var(--card); border-radius:50%; background:var(--text); color:var(--bg); font-size:.65rem; font-weight:800; line-height:1; }
-.release-primary-artist-drag-handle { position:absolute; z-index:3; bottom:0; left:50%; display:grid; width:1.75rem; height:1.15rem; min-height:0 !important; translate:-50% 0; touch-action:none; cursor:grab; place-items:center; border:1px solid var(--border) !important; border-radius:999px !important; padding:0 !important; background:var(--card) !important; color:var(--text-muted); box-shadow:0 3px 9px color-mix(in srgb,var(--shadow) 12%,transparent); }
-.release-primary-artist-drag-handle:active { cursor:grabbing; color:var(--text); }
-.release-primary-artist-drag-handle svg { width:.8rem; height:.8rem; }
-.release-primary-artist-sort-item.is-track-artist { padding-bottom:.95rem; }
-.release-primary-artist-sort-item.is-track-artist .release-primary-artist-position { top:-.2rem; left:-.2rem; width:1.15rem; height:1.15rem; font-size:.6rem; }
+.release-primary-artist-sort-item { position:relative; display:grid; place-items:center; padding:.15rem; }
 .release-workflow.is-artist-step .release-selected-artist { position:relative; display:grid; width:3.4rem; height:3.4rem; min-height:0; place-items:center; overflow:hidden; border:2px solid var(--card); border-radius:50%; padding:0; background:var(--bg-elevated); box-shadow:0 0 0 1px var(--border),0 8px 22px color-mix(in srgb,var(--shadow) 12%,transparent); transition:transform .18s ease,box-shadow .18s ease; }
 .release-workflow.is-artist-step .release-selected-artist:hover { transform:translateY(-2px); box-shadow:0 0 0 1px var(--border-strong),0 12px 26px color-mix(in srgb,var(--shadow) 16%,transparent); }
 .release-workflow.is-artist-step .release-selected-artist > img,.release-workflow.is-artist-step .release-selected-artist-avatar { width:100%; height:100%; border-radius:50%; object-fit:cover; }
@@ -3786,6 +3784,16 @@ body:has(.release-workflow.is-audio-upload-step) { height:auto; min-height:100sv
 .release-workflow.release-workflow.is-audio-upload-step .release-batch-upload small { display:inline; font-size:.7rem; white-space:nowrap; }
 .release-workflow.release-workflow.is-audio-upload-step .release-audio-queue { gap:8px; }
 .release-workflow.release-workflow.is-audio-upload-step .release-audio-queue-item { min-height:78px; border-radius:12px; }
+.release-workflow.release-workflow.is-audio-upload-step .audio-waveform-inline { grid-template-columns:2.5rem minmax(9rem,14rem) minmax(12rem,1fr) auto; gap:clamp(.65rem,1.2vw,1.1rem); width:100%; overflow:visible; }
+.release-workflow.release-workflow.is-audio-upload-step .audio-waveform-inline-track { width:100%; }
+.release-workflow.release-workflow.is-audio-upload-step .audio-waveform-inline-time { display:block; min-width:5.4rem; text-align:right; }
+@media(max-width:700px) {
+  .release-workflow.release-workflow.is-audio-upload-step .audio-waveform-inline { grid-template-columns:2.5rem minmax(0,1fr) auto; grid-template-rows:auto auto; row-gap:.45rem; }
+  .release-workflow.release-workflow.is-audio-upload-step .audio-waveform-inline-play { grid-column:1; grid-row:1; }
+  .release-workflow.release-workflow.is-audio-upload-step .audio-waveform-inline-copy { grid-column:2; grid-row:1; }
+  .release-workflow.release-workflow.is-audio-upload-step .audio-waveform-inline-time { grid-column:3; grid-row:1; min-width:0; font-size:.62rem; }
+  .release-workflow.release-workflow.is-audio-upload-step .audio-waveform-inline-track { grid-column:1 / -1; grid-row:2; }
+}
 .release-multiple-tracks-prompt { justify-content:flex-start; gap:.35rem; width:fit-content; min-height:38px; margin-top:8px; border:0; padding:0 2px; color:var(--text-muted); font-size:.75rem; font-weight:650; }
 .release-multiple-tracks-prompt:hover { color:var(--text); }
 .release-audio-conversion-dialog { padding:28px; }

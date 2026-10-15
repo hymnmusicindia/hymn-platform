@@ -7,6 +7,7 @@ import { createAdminTaskOnce } from "@/lib/task-queue";
 import { Prisma } from "@prisma/client";
 import { localPrivateStorage } from "@/lib/private-storage";
 import { deleteUploadedFileByUrl } from "@/lib/storage";
+import { beatMetadataRequiresReview } from "@/lib/beat-price-policy";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const result = await requireRole(["producer", "admin"]);
@@ -25,12 +26,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   try {
     const payload = beatMutationSchema.parse(await request.json());
+    beatMutationSchema.parse({ price: payload.price ?? prismaBeat.mp3PriceCents / 100, generalPrice: payload.generalPrice ?? prismaBeat.generalPriceCents / 100, stemPrice: payload.stemPrice ?? prismaBeat.priceCents / 100, exclusivePrice: payload.exclusivePrice ?? prismaBeat.exclusivePriceCents / 100 });
     if (result.user.role === "producer" && payload.enabled === true && prismaBeat.status !== "PUBLISHED") return NextResponse.json({ error: "This beat must be approved before it can be enabled." }, { status: 409 });
     const updated = await updateBeat(beatId, payload);
     if (!updated) {
       return NextResponse.json({ error: "Failed to update beat in database." }, { status: 500 });
     }
-    const metadataChanged = result.user.role === "producer" && [payload.title, payload.bpm, payload.genre, payload.mood, payload.price, payload.generalPrice, payload.stemPrice, payload.exclusivePrice, payload.description, payload.subgenre, payload.tags, payload.sampleDeclaration, payload.sampleDisclosure].some((value) => value !== undefined);
+    const metadataChanged = result.user.role === "producer" && beatMetadataRequiresReview(prismaBeat, payload);
     if (metadataChanged) {
       await prisma.beat.update({ where: { id: beatId }, data: { status: "PENDING_REVIEW", enabled: false, reviewIssues: Prisma.JsonNull } });
       await createAdminTaskOnce({ eventKey: `producer:${result.user.id}:beat:${beatId}:review`, type: "Beat Awaiting Approval", priority: "normal", title: `Updated beat ready for review: ${updated.title}`, body: "Producer updated beat metadata. Review the current files and fields.", href: `/admin?tab=operations&beatId=${beatId}`, entityType: "beat", entityId: beatId });

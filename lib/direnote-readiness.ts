@@ -16,10 +16,10 @@ function categoryFor(field: string): DireNoteReadinessIssue["category"] {
   if (/mood|genre|language|title|label/i.test(field)) return "Metadata";
   if (/artist|instagram/i.test(field)) return "Artists";
   if (/contributor|composer|producer|writer/i.test(field)) return "Contributors";
+  if (/contenttype|license|receipt|rights|copyright|suno|cLine|pLine/i.test(field)) return "Rights";
   if (/artwork|audio|url/i.test(field)) return "Assets";
   if (/date/i.test(field)) return "Dates";
   if (/upc|isrc/i.test(field)) return "UPC/ISRC";
-  if (/contenttype|license|receipt|rights|copyright|suno/i.test(field)) return "Rights";
   return "Tracks";
 }
 
@@ -34,7 +34,7 @@ export async function validateReleaseForDireNote(release: Release, options: { si
       : field === "cover_art_url" ? "Check Artwork & Audio for this release. Link its ready JPEG artwork asset, then validate again."
       : track ? `Open Track ${Number(track[1]) + 1} > Track language and select the language of that audio.`
       : `Review ${field} for this release and validate again.`;
-    return { field, label: field === "contenttype" ? "Content ownership" : field.split(".").pop()?.replace(/_/g, " ") ?? field, message, severity, category: categoryFor(field), fixSuggestion: issue.fixSuggestion ?? issue.suggestion ?? suggestion, userFacing: issue.userFacing !== false };
+    return { field, label: field === "contenttype" ? "Content ownership" : field.split(".").pop()?.replace(/_/g, " ") ?? field, message, severity, category: categoryFor(field), fixSuggestion: issue.fixSuggestion ?? issue.suggestion ?? suggestion, userFacing: issue.userFacing !== false && !["pin", "client_id", "endpoint"].includes(field) };
   };
   const issues = result.issues.map((issue: any) => normalize(issue, "error"));
   const warnings = result.warnings.map((issue: any) => normalize(typeof issue === "string" ? { message: issue, field: "release" } : issue, "warning"));

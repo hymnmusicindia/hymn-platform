@@ -2095,13 +2095,15 @@ export function ReleaseForm({
         audioFile: null,
         audioFileName: file.name,
         existingAudioUrl: downloadPath,
-        audioPreviewUrl: previewUrl,
+        audioPreviewUrl: downloadPath,
         duration,
         audioUploadStatus: "uploaded",
         audioUploadProgress: 100,
         audioBytesUploaded: file.size,
         audioTotalBytes: file.size,
       });
+      safeRevokePreviewUrl(previewUrl);
+      audioPreviewObjectUrlsRef.current.delete(previewUrl);
       trackCampaignEvent("audio_uploaded", { trackIndex: index });
       setPendingAudioUploads((current) => current.filter((session) => session.clientTrackId !== (clientTrackId ?? currentTrack?.id)));
     } catch (error) {
@@ -3788,7 +3790,7 @@ export function ReleaseForm({
                       ) : hasAudio ? (
                         <div className="release-audio-inline-details">
                           <AudioWaveform
-                            src={track.audioPreviewUrl || track.existingAudioUrl}
+                            src={track.existingAudioUrl || track.audioPreviewUrl}
                             title={track.audioFileName || `Track ${index + 1}`}
                             subtitle={["Original master", track.duration, fileFormat(track.audioFile, track.audioFileName)].filter(Boolean).join(" • ")}
                             compact
@@ -4312,7 +4314,7 @@ export function ReleaseForm({
                             }}
                           >
                             <AudioWaveform
-                              src={track.audioPreviewUrl}
+                              src={track.existingAudioUrl || track.audioPreviewUrl}
                               title={
                                 track.trackTitle || `Track ${index + 1} preview`
                               }
