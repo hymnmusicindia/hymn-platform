@@ -14,13 +14,15 @@
    Angular falloff and blur replace the hard polygon edge; the second layer
    combines reflected floor light with a darker contact shadow. */
 .art::before,.art::after { content:""; position:absolute; z-index:-1; pointer-events:none; opacity:0; transition:opacity .45s ease; }
-.art::before { inset:-24px -12px 0; background:conic-gradient(from 145deg at 50% -8%,transparent 0deg,#dce9ff08 9deg,#e7efff28 24deg,#f4f7ff38 35deg,#e7efff28 46deg,#dce9ff08 61deg,transparent 70deg); mask-image:radial-gradient(ellipse 65% 90% at 50% 38%,#000 18%,transparent 80%); filter:blur(12px); }
-.art::after { left:8%; right:8%; bottom:0; height:44px; border-radius:50%; background:radial-gradient(ellipse 30% 22% at 50% 40%,#000b,transparent 100%),radial-gradient(ellipse at center,#dbe8ff55,#b9d3ff18 40%,transparent 72%); filter:blur(5px); }
+.art::before { inset:-24px -12px 0; background:conic-gradient(from 145deg at 50% -8%,transparent 0deg,#dce9ff08 9deg,#e7efff28 24deg,#f4f7ff38 35deg,#e7efff28 46deg,#dce9ff08 61deg,transparent 70deg); mask-image:radial-gradient(ellipse 65% 90% at 50% 38%,#000 8%,#0009 42%,transparent 80%); filter:blur(18px); }
+.art::after { left:8%; right:8%; bottom:6px; height:44px; border-radius:50%; background:radial-gradient(ellipse 30% 22% at 50% 40%,#000b,transparent 100%),radial-gradient(ellipse at center,#dbe8ff55,#b9d3ff18 40%,transparent 72%); filter:blur(8px); }
 @media(hover:hover) and (pointer:fine) {
  .stage:hover .art::before,.stage:hover .art::after { opacity:.65; }
 }
 .stage:focus-visible .art::before,.stage:focus-visible .art::after { opacity:.65; }
 .stage[aria-pressed="true"] .art::before,.stage[aria-pressed="true"] .art::after { opacity:1; }
+.stage[aria-pressed="true"] .art::before { filter:blur(18px) brightness(1.8); }
+.stage[aria-pressed="true"] .art::after { filter:blur(8px) brightness(1.5); }
 .stage[aria-pressed="true"] :is(.sleeve,.console) { border-color:#8594aa; box-shadow:inset 0 1px 0 #eff5ff55,inset 1px 0 0 #dce9ff20,8px 18px 20px #0009,0 0 22px #c9ddff0c; }
 .stage[aria-pressed="true"] .record { box-shadow:inset 0 1px 0 #eff5ff40,6px 15px 20px #0009; }
 .stage[aria-pressed="true"] .globe { filter:brightness(1.15) drop-shadow(5px 12px 8px #0009); }
@@ -96,8 +98,10 @@
  .journey { grid-template-columns:1fr; gap:4px; margin:20px 0; }
  .connector { display:none; }
  .stage { display:grid; grid-template-columns:100px minmax(0,1fr); align-items:center; padding:8px 0; }
- .art::before { inset:-12px -6px 0; filter:blur(6px); }
- .art::after { height:24px; filter:blur(3px); }
+ .art::before { inset:-12px -6px 0; filter:blur(9px); }
+ .art::after { height:24px; filter:blur(5px); }
+ .stage[aria-pressed="true"] .art::before { filter:blur(9px) brightness(1.8); }
+ .stage[aria-pressed="true"] .art::after { filter:blur(5px) brightness(1.5); }
  .art { height:100px; }
  .caption { padding:12px 0 12px 12px; gap:8px; }
  .caption h3 { font-size:16px; }
