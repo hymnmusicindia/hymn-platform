@@ -9,7 +9,7 @@ async function main() {
   const member = await prisma.teamMember.findFirstOrThrow({ where: { workspace: { name: { startsWith: "Contact fixture" } }, role: { owner: true } }, include: { user: true } });
   const existing = await prisma.teamClient.findFirstOrThrow({ where: { workspaceId: member.workspaceId, name: "Existing Artist" } });
   const origin = "http://127.0.0.1:35469", secret = "team-client-browser-test-secret";
-  const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--webpack", "--port", "35469", "--hostname", "127.0.0.1"], { env: { ...process.env, JWT_SECRET: secret, NEXT_DIST_DIR: ".next-team-client-review", NEXT_PUBLIC_APP_URL: origin, EMAIL_ENABLED: "false" }, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+  const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--webpack", "--port", "35469", "--hostname", "127.0.0.1"], { env: { ...process.env, JWT_SECRET: secret, NEXT_DIST_DIR: ".next-team-appointments-review", NEXT_PUBLIC_APP_URL: origin, EMAIL_ENABLED: "false" }, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
   const browser = await chromium.launch();
   try {
     await new Promise<void>((resolve, reject) => { const timer = setTimeout(() => reject(new Error("Calendar test server did not start")), 120000); server.stdout?.on("data", chunk => { if (/Ready in/.test(chunk.toString())) { clearTimeout(timer); resolve(); } }); server.stderr?.on("data", chunk => process.stderr.write(chunk)); server.on("exit", () => reject(new Error("Calendar test server exited"))); });
@@ -20,6 +20,14 @@ async function main() {
     await page.getByRole("button", { name: "Schedule event", exact: true }).click();
     const dialog = page.locator("dialog[open]");
     await page.getByLabel("Event title").fill("Start-only browser appointment");
+    await dialog.getByRole("button", { name: "+ Add client card here", exact: true }).click();
+    await page.getByLabel("New client name", { exact: true }).fill("Inline browser client");
+    await page.getByLabel("New client email", { exact: true }).fill(`inline-${member.id}@example.test`);
+    const [createdResponse] = await Promise.all([page.waitForResponse(r => r.url().includes("/api/team/clients-save") && r.request().method() === "POST"), dialog.getByRole("button", { name: "Create & select client", exact: true }).click()]);
+    assert.equal(createdResponse.status(), 200);
+    await expect(dialog.locator('select[name="clientId"]')).not.toHaveValue("", { timeout: 120000 });
+    await expect(page.getByLabel("Event title", { exact: true })).toHaveValue("Start-only browser appointment");
+    await expect(dialog.getByRole("combobox", { name: "Type", exact: true })).toHaveValue("CALL");
     await expect(page.getByLabel("Start time hour", { exact: true })).toHaveValue("");
     await expect(page.getByLabel("End time hour", { exact: true })).toHaveValue("");
     await dialog.getByRole("button", { name: "Save", exact: true }).click();
@@ -66,6 +74,7 @@ async function main() {
     await page.locator(`a[href*="task=${task.id}"]`).first().click();
     await expect(page.getByRole("dialog").getByRole("heading", { name: "Calendar browser My Work task", exact: true })).toBeVisible();
     console.log("PASS: day-cell quick scheduling, task creation, type filters, My Work deep link and mobile interaction.");
+    console.log("PASS: inline client creation selects the card, defaults to CALL and preserves appointment form fields.");
     console.log("PASS: blank AM/PM controls, required-start browser validation, start-only save/midnight conversion, account matching and mobile dial layout.");
   } finally {
     await browser.close();

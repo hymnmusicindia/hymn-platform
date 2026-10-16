@@ -21,6 +21,7 @@ export async function GET(request: Request) {
         const now = new Date(); const local = new Date(now.getTime() + 330 * 60000); const day = local.getUTCDay(); const week = weekStartIndia(now).toISOString().slice(0, 10);
         const appointments = await tx.teamCalendarEvent.findMany({ where: { workspaceId: a.workspaceId, status: "SCHEDULED", remindedAt: null, OR: [{ endsAt: { gt: now } }, { endsAt: null }], startsAt: { gte: new Date(now.getTime() - 15 * 60000), lte: new Date(now.getTime() + 7 * 86400000) } }, take: 1000 });
         for (const appointment of appointments) {
+          if (appointment.kind === "CALL") continue; // Dedicated minute queue uses a fixed 40-minute representative reminder.
           if (appointment.startsAt.getTime() - now.getTime() <= appointment.reminderMinutes * 60000) {
             await notify(tx, appointment.assigneeId, `Upcoming ${appointment.kind.toLowerCase()}: ${appointment.title}`, "/team?module=calendar");
             await tx.teamCalendarEvent.update({ where: { id: appointment.id }, data: { remindedAt: now } });

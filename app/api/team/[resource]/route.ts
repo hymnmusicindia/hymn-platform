@@ -38,6 +38,10 @@ export async function POST(request: Request, context: Context) {
       const clientId = String(result.id);
       after(async () => { const { processClientWelcomes } = await import("@/lib/team/client-welcome"); await processClientWelcomes(clientId, 1); });
     }
+    if (["calendar-save", "calendar-handoff"].includes(resource) && result && typeof result === "object" && "id" in result) {
+      const eventId = String(result.id);
+      after(async () => { const { processAppointments } = await import("@/lib/team/appointments"); await processAppointments(eventId, 4); });
+    }
     return NextResponse.json(result, { headers });
   } catch (error) { return failure(error); }
 }

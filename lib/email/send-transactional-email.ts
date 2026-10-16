@@ -6,7 +6,7 @@ import { purchaseAttachments } from "@/lib/email/purchase-attachments";
 
 const recipientSchema = z.string().trim().email().max(320);
 export type EmailDeliveryStatus = "sent" | "failed" | "skipped" | "duplicate_skipped";
-export type TransactionalEmailInput = { to: string; subject: string; template: string; html: string; text: string; eventKey: string; userId?: number; entityType?: string; entityId?: string | number; forceRetry?: boolean };
+export type TransactionalEmailInput = { to: string; subject: string; template: string; html: string; text: string; eventKey: string; userId?: number; entityType?: string; entityId?: string | number; forceRetry?: boolean; timeoutMs?: number };
 
 export async function sendTransactionalEmail(input: TransactionalEmailInput): Promise<{ status: EmailDeliveryStatus; logId?: number; providerMessageId?: string; error?: string }> {
   const config = getEmailConfig();
@@ -20,7 +20,7 @@ export async function sendTransactionalEmail(input: TransactionalEmailInput): Pr
     const status = !config.enabled || !email.success ? "skipped" : "queued";
     const log = await emailLog.create({ data: { userId: input.userId ?? null, toEmail: recipient ?? String(input.to || "invalid"), subject: input.subject, template: input.template, eventKey, entityType: input.entityType ?? null, entityId: input.entityId == null ? null : String(input.entityId), provider: config.provider, status, errorMessage: !recipient ? "Invalid recipient email." : !config.enabled ? "Transactional email is disabled or not configured." : null, payload: { html: input.html, text: input.text } } });
     if (status === "skipped") return { status: "skipped", logId: log.id };
-    const client = getEmailClient();
+    const client = getEmailClient({ timeoutMs: input.timeoutMs });
     if (!client || !recipient) return { status: "skipped", logId: log.id };
     try {
       const attachments = input.entityType === "beat_purchase" && input.userId && input.entityId
@@ -45,16 +45,22 @@ export async function retryTransactionalEmail(logId: number) {
   const original = await emailLog.findUnique({ where: { id: logId } });
   if (!original) throw new Error("Email log not found.");
   if (original.status !== "failed") throw new Error("Only failed emails can be retried.");
+  if (original.template === "team_appointment") {
+    const { assertAppointmentRetryAllowed } = await import("@/lib/team/appointments");
+    await assertAppointmentRetryAllowed(String(original.entityId), original.toEmail);
+  }
   if (original.template === "team_client_welcome") {
     const { assertClientWelcomeRetryAllowed } = await import("@/lib/team/client-welcome");
     await assertClientWelcomeRetryAllowed(original.toEmail);
   }
   const payload = original.payload && typeof original.payload === "object" ? original.payload as { html?: string; text?: string } : {};
   if (!payload.html || !payload.text) throw new Error("This email attempt does not contain retryable content.");
+  if (original.template === "team_appointment" && !(await prisma.teamAppointmentMessage.updateMany({ where: { id: String(original.entityId), status: "REVIEW" }, data: { status: "SENDING" } })).count) throw new Error("Appointment email is already being retried or was delivered.");
   const retryNumber = Number(original.retryCount || 0) + 1;
   await emailLog.update({ where: { id: original.id }, data: { retryCount: retryNumber } });
   const result = await sendTransactionalEmail({ to: original.toEmail, subject: original.subject, template: original.template, html: payload.html, text: payload.text, eventKey: `${original.eventKey}:retry:${retryNumber}`, userId: original.userId ?? undefined, entityType: original.entityType ?? undefined, entityId: original.entityId ?? undefined });
   if (original.template === "team_client_welcome") await prisma.teamClientWelcome.updateMany({ where: { email: original.toEmail.toLowerCase() }, data: { status: result.status === "sent" ? "SENT" : "REVIEW", error: result.error || null } });
+  if (original.template === "team_appointment") await prisma.teamAppointmentMessage.updateMany({ where: { id: String(original.entityId) }, data: { status: result.status === "sent" ? "SENT" : "REVIEW", error: result.error || null } });
   return result;
 }
 // vercel trigger 6

@@ -3776,6 +3776,7 @@ model TeamCalendarEvent {
   status String @default("SCHEDULED")
   reminderMinutes Int @default(30)
   remindedAt DateTime?
+  scheduleRevision Int @default(1)
   version Int @default(1)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3783,9 +3784,26 @@ model TeamCalendarEvent {
   creator TeamMember @relation("CalendarCreator", fields: [creatorId], references: [id], onDelete: Restrict)
   assignee TeamMember @relation("CalendarAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
   client TeamClient? @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  appointmentMessages TeamAppointmentMessage[]
   @@index([workspaceId, startsAt, endsAt])
   @@index([assigneeId, status, startsAt])
   @@map("team_calendar_events")
+}
+
+model TeamAppointmentMessage {
+  id String @id @default(cuid())
+  eventId String
+  revision Int
+  kind String
+  dueAt DateTime
+  status String @default("PENDING")
+  notifiedAt DateTime?
+  error String?
+  updatedAt DateTime @updatedAt
+  event TeamCalendarEvent @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  @@unique([eventId, revision, kind])
+  @@index([status, dueAt])
+  @@map("team_appointment_messages")
 }
 
 model TeamClientWelcome {
