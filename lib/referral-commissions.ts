@@ -98,6 +98,17 @@ export async function refreshReferralCommission(tx: Tx, paymentId: string, now =
     if (event.eventType === "refund.processed") { refunds.set(refundId, Math.max(refunds.get(refundId) || 0, event.amountMinor)); pendingRefunds.delete(refundId); }
     else if (!refunds.has(refundId)) pendingRefunds.add(refundId);
   }
+  const studioFunding = await tx.studioPayment.findUnique({ where: { razorpayPaymentId: paymentId }, include: { refunds: true } });
+  if (studioFunding) {
+    refunds.clear(); pendingRefunds.clear(); unknownRefund = false;
+    for (const refund of studioFunding.refunds) {
+      const key = refund.providerRefundId || refund.id;
+      if (refund.status === "PROCESSED") { refunds.set(key, refund.amountMinor); pendingRefunds.delete(key); }
+      else if (["REQUESTED", "PENDING"].includes(refund.status)) pendingRefunds.add(key);
+      else if (refund.status === "FAILED") pendingRefunds.delete(key);
+    }
+    if (studioFunding.status === "DISPUTED" && !dispute.endsWith("lost")) dispute = "payment.dispute.created";
+  }
   for (const row of rows) {
   if (row.status === "EXCLUDED") continue;
   let validPath = true;

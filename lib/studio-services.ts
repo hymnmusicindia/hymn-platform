@@ -1,9 +1,11 @@
 import { accrueReferralCommission } from "@/lib/referral-commissions";
 import { Prisma, StudioOrderStatus } from "@prisma/client";
+import { assertStudioActiveUser } from "@/lib/studio-access";
 import { prisma } from "@/lib/prisma";
 import { ACTIVE_STUDIO_ORDER_STATUSES, assertStudioOrderTransition } from "@/lib/studio-services-state";
 import { razorpay, verifyCapturedRazorpayPayment, verifyRazorpaySignature } from "@/lib/razorpay";
 import { ensureClaimedContributorParty } from "@/lib/contributor-identity";
+import { processStudioRefunds, type StudioGateway } from "@/lib/studio-payment-recovery";
 
 const COMMISSION_RATE = new Prisma.Decimal("0.20");
 async function studioSerializable<T>(work: (tx: Prisma.TransactionClient) => Promise<T>, timeout = 10_000, isolationLevel: Prisma.TransactionIsolationLevel = Prisma.TransactionIsolationLevel.Serializable): Promise<T> {
@@ -36,6 +38,7 @@ export async function listStudioEngineers(filters: { genre?: string; maxPrice?: 
 }
 
 export async function createStudioOrder(input: { customerId: number; listingPublicId: string; projectTitle: string; beatPurchaseId?: number; idempotencyKey: string; termsAccepted: boolean }) {
+  await assertStudioActiveUser(input.customerId);
   if (!input.termsAccepted) throw new Error("You must accept the Studio Services Terms.");
   return studioSerializable(async (tx) => {
     const prior = await tx.studioOrderStatusEvent.findFirst({ where: { correlationId: input.idempotencyKey }, include: { order: true } });
@@ -90,15 +93,17 @@ export async function transitionStudioOrder(input: { orderId: number; to: Studio
 }
 
 export async function assertStudioParticipant(orderPublicId: string, userId: number) {
+  await assertStudioActiveUser(userId);
   const order = await prisma.studioServiceOrder.findUnique({ where: { publicId: orderPublicId }, include: { engineerParty: { select: { claimedByUserId: true } } } });
   if (!order || (order.customerId !== userId && order.engineerParty.claimedByUserId !== userId)) throw new Error("Studio order not found.");
   return order;
 }
 
 export async function createStudioPayment(input: { orderPublicId: string; customerId: number; idempotencyKey: string }) {
+  await assertStudioActiveUser(input.customerId);
  return studioSerializable(async tx => {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.orderPublicId}))`;
-  const order = await tx.studioServiceOrder.findFirst({ where: { publicId: input.orderPublicId, customerId: input.customerId }, include: { payments: { where: { purpose: "INITIAL_ORDER", status: { in: ["CREATED", "CAPTURED"] } }, orderBy: { id: "desc" }, take: 1 } } });
+  const order = await tx.studioServiceOrder.findFirst({ where: { publicId: input.orderPublicId, customerId: input.customerId }, include: { payments: { where: { purpose: "INITIAL_ORDER", status: { in: ["CREATED", "AUTHORIZED", "FAILED", "CAPTURED"] } }, orderBy: { id: "desc" }, take: 1 } } });
   if (!order || order.status !== "AWAITING_PAYMENT") throw new Error("This Studio order is not awaiting payment.");
   if (order.payments[0]) return order.payments[0];
   if (await tx.studioPayment.count({ where: { idempotencyKey: input.idempotencyKey } })) throw new Error("Retry key belongs to another payment.");
@@ -109,6 +114,7 @@ export async function createStudioPayment(input: { orderPublicId: string; custom
 }
 
 export async function createStudioRevisionPayment(input: { orderPublicId: string; customerId: number; revisionId: number; idempotencyKey: string }) {
+  await assertStudioActiveUser(input.customerId);
  return studioSerializable(async tx => {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.orderPublicId}))`;
   const order = await tx.studioServiceOrder.findFirst({ where: { publicId: input.orderPublicId, customerId: input.customerId }, include: { revisions: { where: { id: input.revisionId }, include: { payment: true } } } });
@@ -124,12 +130,14 @@ export async function createStudioRevisionPayment(input: { orderPublicId: string
 }
 
 export async function proposeStudioAmendment(input: { orderPublicId: string; engineerUserId: number; description: string; amount: number }) {
+  await assertStudioActiveUser(input.engineerUserId);
   const order = await prisma.studioServiceOrder.findUnique({ where: { publicId: input.orderPublicId }, include: { engineerParty: true } });
   if (!order || order.engineerParty.claimedByUserId !== input.engineerUserId || !ACTIVE_STUDIO_ORDER_STATUSES.includes(order.status)) throw new Error("Studio order not found or closed.");
   return prisma.studioAmendment.create({ data: { orderId: order.id, proposedById: input.engineerUserId, description: input.description.trim(), amount: new Prisma.Decimal(input.amount) } });
 }
 
 export async function createStudioAmendmentPayment(input: { orderPublicId: string; customerId: number; amendmentPublicId: string; idempotencyKey: string }) {
+  await assertStudioActiveUser(input.customerId);
  return studioSerializable(async tx => {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.orderPublicId}))`;
   const amendment=await tx.studioAmendment.findFirst({where:{publicId:input.amendmentPublicId,order:{publicId:input.orderPublicId,customerId:input.customerId,status:{in:ACTIVE_STUDIO_ORDER_STATUSES}},status:{in:["PROPOSED","AWAITING_PAYMENT"]}},include:{order:true,payment:true}});
@@ -159,7 +167,15 @@ export async function confirmStudioPayment(input: { razorpayOrderId: string; pay
   return studioSerializable(async (tx) => {
     const current = await tx.studioPayment.findUniqueOrThrow({ where: { id: payment.id }, include: { order: { include: { serviceListing: true, engineerParty: true } } } });
     if (current.status === "CAPTURED") { if (current.razorpayPaymentId !== input.paymentId) throw new Error("Payment already captured with a different identifier."); return current.order; }
-    if (current.status !== "CREATED") throw new Error("This payment is no longer payable.");
+    if (!["CREATED", "AUTHORIZED", "FAILED"].includes(current.status)) throw new Error("This payment is no longer payable.");
+    const participants = await tx.user.count({ where: { id: { in: [current.order.customerId, current.order.engineerParty.claimedByUserId ?? -1] }, status: "ACTIVE" } });
+    const staleScope = current.purpose === "INITIAL_ORDER" ? current.order.status !== "AWAITING_PAYMENT" : current.purpose === "ADDITIONAL_REVISION" ? current.order.status !== "REVISION_PAYMENT_REQUIRED" : !ACTIVE_STUDIO_ORDER_STATUSES.includes(current.order.status);
+    if (participants !== 2 || staleScope) {
+      await tx.studioPayment.update({ where: { id: current.id }, data: { status: "CAPTURED", razorpayPaymentId: input.paymentId, capturedAt: new Date() } });
+      const next = await tx.studioServiceOrder.update({ where: { id: current.orderId }, data: { status: current.order.paidAt ? "DISPUTED" : "REFUND_PENDING", paymentStatus: current.order.paidAt ? "DISPUTED" : "REFUND_PENDING", autoCompleteAt: null } });
+      await tx.adminTask.upsert({ where: { eventKey: `studio-finance:${current.orderId}` }, create: { eventKey: `studio-finance:${current.orderId}`, type: "Payment Mismatch", priority: "critical", title: "Late Studio payment requires review", body: "Payment was captured after eligibility or scope changed. No delivery entitlement was granted.", href: `/admin/studio/orders/${current.order.publicId}`, entityType: "studio_order", entityId: String(current.orderId) }, update: { status: "open", resolvedAt: null } });
+      return next;
+    }
     if (current.purpose === "ADDITIONAL_REVISION") {
       if (current.order.status !== "REVISION_PAYMENT_REQUIRED") throw new Error("This revision payment is no longer applicable.");
       const revision = await tx.studioRevision.findFirstOrThrow({ where: { paymentId: current.id, orderId: current.orderId, status: "PAYMENT_REQUIRED" } });
@@ -202,6 +218,7 @@ export async function confirmStudioPayment(input: { razorpayOrderId: string; pay
 }
 
 export async function respondToStudioOrder(input: { orderPublicId: string; engineerUserId: number; accept: boolean }) {
+  await assertStudioActiveUser(input.engineerUserId);
   const order = await prisma.studioServiceOrder.findUnique({ where: { publicId: input.orderPublicId }, include: { engineerParty: true } });
   if (!order || order.engineerParty.claimedByUserId !== input.engineerUserId) throw new Error("Studio order not found.");
   if (order.status !== "AWAITING_ENGINEER_ACCEPTANCE") throw new Error("This Studio request is no longer awaiting a response.");
@@ -218,7 +235,7 @@ export async function getStudioWorkspace(orderPublicId: string, userId: number) 
     sourceBeat: { select: { title: true } }, messages: { include: { sender: { select: { id: true, name: true, avatar: true } } }, orderBy: { id: "desc" }, take: 100 },
     files: { include: { asset: { select: { id: true, safeFilename: true, mimeType: true, byteSize: true } } }, orderBy: [{ category: "asc" }, { version: "desc" }] },
     deliveries: { include: { files: { include: { studioFile: { include: { asset: { select: { id: true, safeFilename: true, mimeType: true, byteSize: true } } } } } }, revision: true }, orderBy: { version: "desc" } },
-    revisions: { orderBy: { sequence: "asc" } }, payments: { where: { status: { in: ["CAPTURED", "REFUNDED"] } }, orderBy: { id: "asc" } }, statusEvents: { orderBy: { createdAt: "asc" } }, amendments: { orderBy: { createdAt: "desc" } }, review: true,
+    revisions: { orderBy: { sequence: "asc" } }, payments: { where: { capturedAt: { not: null } }, orderBy: { id: "asc" } }, statusEvents: { orderBy: { createdAt: "asc" } }, amendments: { orderBy: { createdAt: "desc" } }, review: true,
   } });
 }
 
@@ -232,6 +249,7 @@ export async function sendStudioMessage(input: { orderPublicId: string; userId: 
 }
 
 export async function createStudioDelivery(input: { orderPublicId: string; engineerUserId: number; studioFileIds: number[]; note?: string; idempotencyKey: string }) {
+  await assertStudioActiveUser(input.engineerUserId);
   return studioSerializable(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.orderPublicId}))`;
     const order = await tx.studioServiceOrder.findUnique({ where: { publicId: input.orderPublicId }, include: { engineerParty: true } });
@@ -255,6 +273,7 @@ export async function createStudioDelivery(input: { orderPublicId: string; engin
 }
 
 export async function requestStudioRevision(input: { orderPublicId: string; customerId: number; deliveryId: number; feedback: string; idempotencyKey: string }) {
+  await assertStudioActiveUser(input.customerId);
   return studioSerializable(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.orderPublicId}))`;
     const order = await tx.studioServiceOrder.findFirst({ where: { publicId: input.orderPublicId, customerId: input.customerId } });
@@ -281,6 +300,7 @@ export async function requestStudioRevision(input: { orderPublicId: string; cust
 }
 
 export async function approveStudioDelivery(input: { orderPublicId: string; customerId: number; idempotencyKey: string; automatic?: boolean; deliveryId?: number }) {
+  await assertStudioActiveUser(input.customerId);
   if (input.automatic) throw new Error("Both participants must explicitly confirm completion.");
   return studioSerializable(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.orderPublicId}))`;
@@ -296,7 +316,7 @@ export async function approveStudioDelivery(input: { orderPublicId: string; cust
     if (!confirmed.customerConfirmedAt || !confirmed.engineerConfirmedAt) return order;
     const engineerUserId = order.engineerParty.claimedByUserId;
     if (!engineerUserId) throw new Error("Engineer payout identity is not connected.");
-    if (await tx.studioAmendment.count({ where: { orderId: order.id, status: "AWAITING_PAYMENT", payment: { status: "CREATED" } } })) throw new Error("A scope-change checkout is still awaiting payment. Finish that payment or ask HYMN to resolve the scope before completing the project.");
+    if (await tx.studioAmendment.count({ where: { orderId: order.id, status: "AWAITING_PAYMENT", payment: { status: { not: "CAPTURED" } } } })) throw new Error("A scope-change checkout is still awaiting payment. Finish that payment or ask HYMN to resolve the scope before completing the project.");
     const captured = await tx.studioPayment.aggregate({ where: { orderId: order.id, status: "CAPTURED", purpose: { in: ["INITIAL_ORDER", "ADDITIONAL_REVISION", "AMENDMENT"] } }, _sum: { amount: true } });
     const gross = captured._sum.amount;
     if (!gross || gross.lte(0) || order.paymentStatus !== "HELD") throw new Error("Captured payment is required before releasing earnings.");
@@ -319,7 +339,7 @@ export async function approveStudioDelivery(input: { orderPublicId: string; cust
   }, 10_000, Prisma.TransactionIsolationLevel.ReadCommitted);
 }
 
-export async function runStudioAutomation(now = new Date(), deadline = Date.now() + 20000) {
+export async function runStudioAutomation(now = new Date(), deadline = Date.now() + 20000, gateway?: StudioGateway) {
   const [due, expired] = await Promise.all([
     Promise.resolve([] as Array<{ publicId: string; customerId: number; id: number }>),
     prisma.studioServiceOrder.findMany({ where: { status: "AWAITING_ENGINEER_ACCEPTANCE", acceptanceExpiresAt: { lte: now } }, select: { id: true }, take: 100 }),
@@ -328,36 +348,12 @@ export async function runStudioAutomation(now = new Date(), deadline = Date.now(
   for (const order of due) { await approveStudioDelivery({ orderPublicId: order.publicId, customerId: order.customerId, idempotencyKey: `auto-complete:${order.id}`, automatic: true }); completed += 1; }
   let refundPending = 0;
   for (const order of expired) { if(Date.now()>deadline)break; await transitionStudioOrder({ orderId: order.id, to: "REFUND_PENDING", actorType: "SYSTEM", reason: "Engineer acceptance window expired", correlationId: `acceptance-expired:${order.id}` }); refundPending += 1; }
-  const refunds = await prisma.studioServiceOrder.findMany({ where: { status: "REFUND_PENDING" }, include: { payments: { where: { status: "CAPTURED" } } }, take: 100 });
-  let refunded = 0;
-  for (const order of refunds) {
-    if(Date.now()>deadline)break;
-    for (const payment of order.payments) {
-      if(Date.now()>deadline)break;
-      if (!payment.razorpayPaymentId) continue;
-      if (process.env.NODE_ENV === "production" && !razorpay) throw new Error("Refund service is not configured.");
-      if (razorpay) {
-       const response = await fetch(`https://api.razorpay.com/v1/payments/${encodeURIComponent(payment.razorpayPaymentId)}/refund`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Basic ${Buffer.from(process.env.RAZORPAY_KEY_ID + ":" + process.env.RAZORPAY_KEY_SECRET).toString("base64")}`, "X-Refund-Idempotency": `hymn-studio-refund-${payment.id}` }, body: JSON.stringify({ amount: Number(payment.amount.mul(100).toFixed(0)), notes: { studioOrderId: order.publicId } }), signal: AbortSignal.timeout(12000) });
-       if (!response.ok) throw new Error("The refund provider could not confirm this refund. It will be retried with the same key.");
-       const refund = await response.json();
-       if (refund.status !== "processed") continue;
-      }
-      await prisma.$transaction(async tx => {
-        const claimed = await tx.studioPayment.updateMany({ where: { id: payment.id, status: "CAPTURED" }, data: { status: "REFUNDED", refundedAt: now } });
-        if (!claimed.count) return;
-        const remaining = await tx.studioPayment.count({ where: { orderId: order.id, status: "CAPTURED" } });
-        if (remaining) return;
-        await tx.studioServiceOrder.update({ where: { id: order.id }, data: { status: "REFUNDED", paymentStatus: "REFUNDED" } });
-        await tx.studioOrderStatusEvent.create({ data: { orderId: order.id, previousStatus: "REFUND_PENDING", newStatus: "REFUNDED", actorType: "PAYMENT", reason: "Studio payment refunded", correlationId: `refund:${payment.id}` } });
-        await tx.notification.upsert({ where: { eventKey: `studio:${order.id}:refunded` }, create: { userId: order.customerId, title: "Studio payment refunded", body: `Your payment for ${order.projectTitle} was refunded.`, type: "system", href: `/studio/orders/${order.publicId}`, eventKey: `studio:${order.id}:refunded` }, update: {} });
-      });
-      refunded += 1;
-    }
-  }
+  const refunded = await processStudioRefunds(deadline, gateway);
   return { completed, refundPending, refunded };
 }
 
 export async function reviewStudioOrder(input: { orderPublicId: string; customerId: number; rating: number; comment?: string; strengths?: string[] }) {
+  await assertStudioActiveUser(input.customerId);
   return prisma.$transaction(async tx => {
     const order = await tx.studioServiceOrder.findFirst({ where: { publicId: input.orderPublicId, customerId: input.customerId, status: "COMPLETED" } });
     if (!order) throw new Error("Only a completed Studio project can be reviewed.");
@@ -369,6 +365,7 @@ export async function reviewStudioOrder(input: { orderPublicId: string; customer
 }
 
 export async function cancelStudioOrder(input: { orderPublicId: string; customerId: number; reason: string; idempotencyKey: string }) {
+  await assertStudioActiveUser(input.customerId);
   return prisma.$transaction(async tx => {
     const order = await tx.studioServiceOrder.findFirst({ where: { publicId: input.orderPublicId, customerId: input.customerId }, include: { engineerParty: true } });
     if (!order) throw new Error("Studio order not found.");
@@ -388,6 +385,7 @@ export async function cancelStudioOrder(input: { orderPublicId: string; customer
 }
 
 export async function handoffStudioOrderToRelease(input: { orderPublicId: string; customerId: number; finalStudioFileId: number }) {
+  await assertStudioActiveUser(input.customerId);
   const preflight = await prisma.studioServiceOrder.findFirst({ where: { publicId: input.orderPublicId, customerId: input.customerId }, include: { sourceBeat: { include: { producerParty: true, user: { select: { name: true } } } } } });
   const ensuredProducerParty = preflight?.sourceBeat && !preflight.sourceBeat.producerParty ? await ensureClaimedContributorParty(preflight.sourceBeat.userId, preflight.sourceBeat.user.name || `Producer #${preflight.sourceBeat.userId}`) : preflight?.sourceBeat?.producerParty ?? null;
   return studioSerializable(async (tx) => {

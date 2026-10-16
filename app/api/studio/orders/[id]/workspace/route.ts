@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/access";
+import { requireStudioUser as requireUser } from "@/lib/studio-access";
 import { getStudioWorkspace } from "@/lib/studio-services";
 import { studioWorkspaceView } from "@/lib/studio-workspace-view";
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {

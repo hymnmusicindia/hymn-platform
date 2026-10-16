@@ -22,6 +22,7 @@ async function main() {
     await run(["--import", "tsx", "scripts/verify-team-owner-bootstrap.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-os.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-os-advanced.ts"]);
+    if (process.argv.includes("--live-chat")) await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-live-chat-browser.ts"]);
     if (process.argv.includes("--upgrade")) {
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-admin-workspace.ts"]);
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-workspace-upgrade.ts"]);

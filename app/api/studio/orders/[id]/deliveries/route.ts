@@ -1,7 +1,7 @@
 import { studioError } from "@/lib/studio-errors";
 import { after, NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/access";
+import { requireStudioUser as requireUser } from "@/lib/studio-access";
 import { createStudioDelivery } from "@/lib/studio-services";
 import { sendStudioEmail } from "@/lib/studio-email";
 const schema = z.object({ studioFileIds: z.array(z.number().int().positive()).min(1).max(12), note: z.string().trim().max(2000).optional(), idempotencyKey: z.string().trim().min(8).max(160) });

@@ -2960,6 +2960,9 @@ model StudioPayment {
   idempotencyKey    String               @unique @map("idempotency_key")
   capturedAt        DateTime?            @map("captured_at")
   refundedAt        DateTime?            @map("refunded_at")
+  refundedAmount    Decimal              @default(0) @map("refunded_amount") @db.Decimal(12, 2)
+  refunds           StudioRefund[]
+  reconciledAt      DateTime? @map("reconciled_at")
   createdAt         DateTime             @default(now()) @map("created_at")
   order             StudioServiceOrder   @relation(fields: [orderId], references: [id], onDelete: Restrict)
   revision          StudioRevision?      @relation("StudioRevisionPayment")
@@ -2976,6 +2979,9 @@ model StudioEarning {
   grossAmount      Decimal            @map("gross_amount") @db.Decimal(12, 2)
   commissionAmount Decimal            @map("commission_amount") @db.Decimal(12, 2)
   netAmount        Decimal            @map("net_amount") @db.Decimal(12, 2)
+  reversedNetAmount Decimal           @default(0) @map("reversed_net_amount") @db.Decimal(12, 2)
+  heldNetAmount Decimal               @default(0) @map("held_net_amount") @db.Decimal(12, 2)
+  reversedCommissionAmount Decimal    @default(0) @map("reversed_commission_amount") @db.Decimal(12, 2)
   currency         String             @default("INR")
   status           String             @default("AVAILABLE")
   idempotencyKey   String             @unique @map("idempotency_key")
@@ -2985,6 +2991,20 @@ model StudioEarning {
 
   @@index([engineerPartyId, createdAt])
   @@map("studio_earnings")
+}
+
+model StudioRefund {
+  id String @id @default(cuid())
+  paymentId Int @map("payment_id")
+  providerRefundId String? @unique @map("provider_refund_id")
+  amountMinor Int @map("amount_minor")
+  currency String @default("INR")
+  status String @default("REQUESTED")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  payment StudioPayment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  @@index([paymentId, status])
+  @@map("studio_refunds")
 }
 
 // Provider financial records are separate from revenue and royalty entitlements.

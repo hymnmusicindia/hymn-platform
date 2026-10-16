@@ -5,11 +5,14 @@ import { logAuditEvent } from "@/lib/audit-log";
 import { generateBeatLicense } from "@/lib/beat-license";
 import { confirmCheckoutPayment, confirmDistributionPayment } from "@/lib/payment-webhooks";
 import { normalizeBeatLicenseType } from "@/lib/beat-store";
+import { recoverStudioPayments } from "@/lib/studio-payment-recovery";
 
-export type PaymentReconciliationIssue = { key: string; type: "beat" | "distribution" | "subscription" | "duplicate"; message: string; autoRepaired: boolean };
+export type PaymentReconciliationIssue = { key: string; type: "beat" | "distribution" | "subscription" | "duplicate" | "studio"; message: string; autoRepaired: boolean };
 
 export async function reconcilePayments() {
   const issues: PaymentReconciliationIssue[] = [];
+  const studio = await recoverStudioPayments(Date.now() + 20000);
+  issues.push(...studio.issues.map((message, index) => ({ key: `studio:${index}`, type: "studio" as const, message, autoRepaired: false })));
   const orders = await listAllOrders();
   const paid = orders.filter((order) => order.paymentStatus === "paid");
   const paymentIds = new Map<string, number[]>();

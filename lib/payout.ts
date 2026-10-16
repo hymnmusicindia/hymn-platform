@@ -12,6 +12,7 @@ import { PAYOUT_CONFIG } from "@/lib/payout/config";
 import { getLatestUsdInrRate, getPublicPayoutConfig } from "@/lib/payout/exchange-rates";
 import { inrToUsd } from "@/lib/payout/currency";
 import { INCOME_MINIMUM_INR, WALLET_SOURCES, walletIncomeBalances } from "@/lib/income-policy";
+import { assertStudioPayoutClear } from "@/lib/studio-payout-guard";
 import { getIncomeSummary } from "@/lib/income-summary";
 
 const PAYOUT_SERVICE_FEE_RATE = PAYOUT_CONFIG.payoutServiceFeePercent / 100;
@@ -513,6 +514,8 @@ export async function createPayoutRequest(userId: number, input: {
     if (active) throw new Error("You already have a payout request in progress.");
     await tx.$queryRaw`SELECT id FROM artist_payout_balances WHERE user_id = ${userId} FOR UPDATE`;
     const current = await tx.artistPayoutBalance.findUnique({ where: { userId } });
+    await assertStudioPayoutClear(tx, userId);
+    if (await tx.studioServiceOrder.count({ where: { engineerParty: { claimedByUserId: userId }, OR: [{ status: "DISPUTED" }, { earning: { heldNetAmount: { gt: 0 } } }] } })) throw new Error("Studio financial review must be resolved before requesting a payout.");
     if (!current || new Prisma.Decimal(current.availableBalance).lt(amount)) throw new Error("Amount cannot exceed available balance.");
     const [ledger, priorRequests, routes] = await Promise.all([
       tx.walletTransaction.findMany({where:{userId,currency:"INR"},select:{type:true,amount:true,direction:true}}),
@@ -616,6 +619,12 @@ export async function updatePayoutRequestStatus(input: { requestId: number; stat
   }
 
   const updated = await (prisma as any).$transaction(async (tx: any) => {
+    await tx.$queryRaw`SELECT id FROM artist_payout_balances WHERE user_id = ${existing.userId} FOR UPDATE`;
+    if (["approved", "processing", "paid"].includes(nextStatus)) {
+      await assertStudioPayoutClear(tx, existing.userId);
+      const balance = await tx.artistPayoutBalance.findUniqueOrThrow({ where: { userId: existing.userId } });
+      if (Number(balance.availableBalance) < 0 || await tx.studioServiceOrder.count({ where: { engineerParty: { claimedByUserId: existing.userId }, OR: [{ status: "DISPUTED" }, { earning: { heldNetAmount: { gt: 0 } } }] } })) throw new Error("Resolve Studio financial holds and negative balances before releasing this payout.");
+    }
     if (nextStatus === "paid" && currentStatus !== "paid") {
       const balance = await tx.artistPayoutBalance.update({ where: { userId: existing.userId }, data: { pendingBalance: { decrement: requestedAmount }, lifetimePaid: { increment: netAmount }, lastUpdatedAt: now } });
       await tx.walletTransaction.create({ data: { userId: existing.userId, type: "payout_debit", amount: -netAmount, direction: "debit", idempotencyKey: `payout:${existing.id}:debit`, referenceType: "payout_request", referenceId: String(existing.id), balanceAfter: balance.availableBalance, effectiveAt: input.paymentDate, auditMetadata: { paymentReference: input.paymentReference, paymentMethod: input.paymentMethod, paidAmount: input.paidAmount }, note: `Manual payout ${input.paymentReference}` } });

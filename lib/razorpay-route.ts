@@ -1,5 +1,6 @@
 import { Prisma, type RouteTransfer } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { assertStudioPayoutClear } from "@/lib/studio-payout-guard";
 import { gatewayPages, gatewayRequest } from "@/lib/gateway-provider";
 import { allocateCreatorShare, minor, rupeesToMinor } from "@/lib/gateway-finance-domain";
 
@@ -42,7 +43,7 @@ async function allocation(tx: Prisma.TransactionClient, sourceKey: string) {
     const earning = await tx.studioEarning.findUniqueOrThrow({ where: { id }, include: { engineerParty: true, order: true } });
     if (earning.status !== "AVAILABLE" || earning.order.status !== "COMPLETED" || earning.currency !== "INR" || !earning.engineerParty.claimedByUserId) throw new Error("Studio earnings must be completed, available and assigned to a HYMN account.");
     const payments = await tx.studioPayment.findMany({ where: { orderId: earning.orderId, purpose: { in: ["INITIAL_ORDER", "ADDITIONAL_REVISION", "AMENDMENT"] } }, orderBy: { id: "asc" } });
-    if (!payments.length || payments.some(row => row.status !== "CAPTURED" || row.currency !== "INR" || !row.razorpayPaymentId) || payments.reduce((sum, row) => sum + rupeesToMinor(row.amount), 0) !== rupeesToMinor(earning.grossAmount)) throw new Error("Studio funding does not match the earning ledger.");
+    if (!payments.length || payments.some(row => row.status !== "CAPTURED" || !row.refundedAmount.isZero() || row.currency !== "INR" || !row.razorpayPaymentId) || payments.reduce((sum, row) => sum + rupeesToMinor(row.amount), 0) !== rupeesToMinor(earning.grossAmount)) throw new Error("Studio funding does not match the earning ledger.");
     const shares = allocateCreatorShare(payments.map(row => ({ paymentId: row.razorpayPaymentId!, amountMinor: rupeesToMinor(row.amount) })), rupeesToMinor(earning.netAmount));
     return { userId: earning.engineerParty.claimedByUserId, createdAt: earning.createdAt, payments: shares.map(row => { const payment = payments.find(item => item.razorpayPaymentId === row.paymentId)!; return { ...row, orderId: payment.razorpayOrderId, grossMinor: rupeesToMinor(payment.amount) }; }) };
   }
@@ -55,6 +56,7 @@ export async function reserveRouteEarning(sourceKey: string, actorId: number | n
     const existing = await tx.routeTransfer.findMany({ where: { sourceKey } });
     if (existing.length) return existing; // A source cannot be dispatched again, including cancelled sources.
     const source = await allocation(tx, sourceKey);
+    await assertStudioPayoutClear(tx, source.userId);
     const user = await tx.user.findUniqueOrThrow({ where: { id: source.userId }, select: { status: true } });
     if (user.status !== "ACTIVE") throw new Error("Creator account is not active.");
     const account = await tx.routeLinkedAccount.findUniqueOrThrow({ where: { userId: source.userId } });
@@ -134,6 +136,7 @@ export async function submitRouteTransfer(id: number, actorId: number | null) {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`route-payment:${intent.paymentId}`}))`;
     if (await tx.routeTransfer.count({ where: { paymentId: intent.paymentId, id: { not: id }, status: { in: ["submitting", "review"] } } })) throw new Error("Another transfer for this payment needs reconciliation.");
     await allocation(tx, intent.sourceKey);
+    await assertStudioPayoutClear(tx, intent.userId);
     return tx.routeTransfer.updateMany({ where: { id, status: "reserved" }, data: { status: "submitting", error: null } });
   });
   if (claimed.count !== 1) return refreshRouteTransfer(id);
@@ -152,7 +155,7 @@ export async function submitRouteTransfer(id: number, actorId: number | null) {
 export async function releaseRouteTransfer(id: number, actorId: number | null) {
   enabled(); const intent = await refreshRouteTransfer(id);
   if (!intent.transferId || intent.status !== "held" || intent.reversedMinor > 0) throw new Error("Only verified, unreversed held transfers can be released.");
-  await prisma.$transaction(tx => allocation(tx, intent.sourceKey));
+  await prisma.$transaction(async tx => { await allocation(tx, intent.sourceKey); await assertStudioPayoutClear(tx, intent.userId); });
   if ((await prisma.user.findUniqueOrThrow({ where: { id: intent.userId }, select: { status: true } })).status !== "ACTIVE") throw new Error("Creator account is not active.");
   const account = await prisma.routeLinkedAccount.findUniqueOrThrow({ where: { userId: intent.userId } });
   await verifiedAccount(account.accountId, account.productId);

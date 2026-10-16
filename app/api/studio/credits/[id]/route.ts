@@ -1,7 +1,7 @@
 import { studioError } from "@/lib/studio-errors";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/access";
+import { requireStudioUser as requireUser } from "@/lib/studio-access";
 import { confirmShowcase } from "@/lib/studio-trust";
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
  const auth = await requireUser(); if ("error" in auth) return auth.error;

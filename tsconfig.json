@@ -58,7 +58,11 @@
     ".next-team-browser/types/**/*.ts",
     ".next-team-browser/dev/types/**/*.ts",
     ".next-admin-os-browser/types/**/*.ts",
-    ".next-admin-os-browser/dev/types/**/*.ts"
+    ".next-admin-os-browser/dev/types/**/*.ts",
+    ".next-workspace-release/types/**/*.ts",
+    ".next-workspace-release/dev/types/**/*.ts",
+    ".next-live-chat/types/**/*.ts",
+    ".next-live-chat/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

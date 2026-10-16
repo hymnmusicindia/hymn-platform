@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/access";
+import { requireStudioUser as requireUser } from "@/lib/studio-access";
 import { prisma } from "@/lib/prisma";
 import { studioError } from "@/lib/studio-errors";
 import { studioProfileSchema } from "@/lib/studio-profile";

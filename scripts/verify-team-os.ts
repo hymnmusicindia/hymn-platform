@@ -41,6 +41,13 @@ async function main() {
   const message = { channelId: channel.id, body: "Artist needs help with metadata", clientKey: "2a75349e-8f6b-4c85-a503-0a86fa6b468f" };
   await teamMutation(growth, "messages", message); await teamMutation(growth, "messages", message);
   assert.equal(await prisma.teamMessage.count({ where: { channelId: channel.id } }), 1);
+  const sent = await prisma.teamMessage.findFirstOrThrow({ where: { channelId: channel.id } });
+  await rejected(() => teamMutation(marketplace, "messages-read", { channelId: channel.id, ids: [sent.id] }), 404);
+  await teamMutation(growth, "messages-read", { channelId: channel.id, ids: [sent.id] });
+  await teamMutation(growth, "messages-read", { channelId: channel.id, ids: [sent.id] });
+  assert.deepEqual((await prisma.teamMessage.findUniqueOrThrow({ where: { id: sent.id } })).readMemberIds, [growth.id]);
+  const chatSnapshot = await teamRead(growth, "messages", new URLSearchParams({ channel: channel.id }));
+  assert.ok("readers" in chatSnapshot && chatSnapshot.readers?.some(p => p.id === growth.id));
   const beat = await prisma.beat.create({ data: { userId: marketplace.userId, title: "Unpublished fixture beat", bpm: 93, genre: "Hip hop", mood: "Bold", keySignature: "D Minor", priceCents: 12000, generalPriceCents: 0, enabled: false, status: "CHANGES_REQUESTED" } });
   const auditTask = await teamMutation(marketplace, "tasks", { title: "Audit beat without publishing", ownerId: marketplace.id, recordType: "beat", recordId: beat.id, approvalRequired: false });
   assert.ok(auditTask && "approvalRequired" in auditTask); assert.equal(auditTask.approvalRequired, true);

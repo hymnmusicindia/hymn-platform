@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/access";
+import { requireStudioUser as requireUser } from "@/lib/studio-access";
 import { createStudioUpload, verifyStudioUpload, studioUploadStatus, writeStudioChunk, completeStudioUpload, studioChunkSize } from "@/lib/studio-uploads";
 import { studioError } from "@/lib/studio-errors";
 import { consumeRateLimit } from "@/lib/rate-limit";

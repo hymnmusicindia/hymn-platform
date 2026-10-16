@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/access";
+import { requireStudioUser as requireUser } from "@/lib/studio-access";
 import { publicWebUrl } from "@/lib/studio-trust";
 import { ownEngineer } from "@/lib/studio-trust";
 import { prisma } from "@/lib/prisma";

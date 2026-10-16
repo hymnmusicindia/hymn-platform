@@ -22,10 +22,16 @@ async function main() {
     await pg.createDatabase(database);
     await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", previousSchema, "--skip-generate"]);
     await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261014120000_studio_conversation_trust/migration.sql", "--schema", "prisma/schema.prisma"]);
+    await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261016160000_studio_refund_recovery/migration.sql", "--schema", "prisma/schema.prisma"]);
+    // The historical migration fixture must also include subsequent additive fields.
+    // This targets only the freshly-created, isolated database above.
+    await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", "prisma/schema.prisma", "--skip-generate"]);
     await run(["--import", "tsx", "scripts/verify-studio-services-integration.ts"]);
     await run(["--import", "tsx", "scripts/verify-managed-uploads.ts"]);
+    if (process.argv.includes("--chat-audit")) await run(["--import", "tsx", "scripts/audit-studio-workflow.ts"]);
+    await run(["--import", "tsx", "scripts/verify-studio-financial-recovery.ts"]);
     if (process.argv.includes("--build")) await run(["node_modules/next/dist/bin/next", "build", "--webpack"]);
-    if (process.argv.includes("--browser")) {
+    if (process.argv.includes("--browser") || process.argv.includes("--chat-audit")) {
       const serverMode = process.argv.includes("--production") ? "start" : "dev";
       const serverArgs = ["node_modules/next/dist/bin/next", serverMode, "-p", String(webPort), ...(serverMode === "dev" ? ["--webpack"] : [])];
       const server = spawn(process.execPath, serverArgs, { env: environment, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
@@ -35,8 +41,11 @@ async function main() {
           const inspect = (chunk: Buffer) => { const value = chunk.toString(); process.stdout.write(value); if (/Ready in|Local:/i.test(value)) { clearTimeout(timeout); resolve(); } };
           server.stdout?.on("data", inspect); server.stderr?.on("data", chunk => process.stderr.write(chunk)); server.on("exit", code => reject(new Error(`Studio review server exited ${code}`)));
         });
-        await run(["--import", "tsx", "scripts/verify-studio-browser.ts", ...(serverMode === "start" ? ["--http-only"] : []), ...(process.argv.includes("--profile-only") ? ["--profile-only"] : [])]);
-      } finally { server.kill(); }
+        await run(["--import", "tsx", process.argv.includes("--chat-audit") ? "scripts/verify-studio-live-chat.ts" : "scripts/verify-studio-browser.ts", ...(serverMode === "start" ? ["--http-only"] : []), ...(process.argv.includes("--profile-only") ? ["--profile-only"] : [])]);
+      } finally {
+        if (process.platform === "win32" && server.pid) await new Promise<void>(resolve => { const cleanup = spawn("taskkill", ["/PID", String(server.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true }); cleanup.on("exit", () => resolve()); });
+        else server.kill();
+      }
     }
   } finally {
     if (process.platform === "win32") await run(["-D", databaseDir, "-m", "fast", "-w", "stop"], path.resolve("node_modules/@embedded-postgres/windows-x64/native/bin/pg_ctl.exe")); else await pg.stop();

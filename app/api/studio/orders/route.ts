@@ -1,7 +1,7 @@
 import { studioError } from "@/lib/studio-errors";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/access";
+import { requireStudioUser as requireUser } from "@/lib/studio-access";
 import { createStudioOrder } from "@/lib/studio-services";
 
 const schema = z.object({ listingPublicId: z.string().uuid(), projectTitle: z.string().trim().min(1).max(160), beatPurchaseId: z.number().int().positive().optional(), idempotencyKey: z.string().trim().min(8).max(160), termsAccepted: z.literal(true) });

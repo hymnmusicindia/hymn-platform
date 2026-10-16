@@ -191,6 +191,10 @@ export const localPrivateStorage: PrivateStorageAdapter = {
     return { id: asset.id, downloadPath: `/api/assets/${asset.id}/download?filename=${encodeURIComponent(safeFilename)}`, checksum, byteSize: input.bytes.length };
   },
   async createAuthorizedRead(input) {
+    if (!input.isAdmin) {
+      const account = await prisma.user.findUnique({ where: { id: input.requesterUserId }, select: { status: true } });
+      if (!account || account.status !== "ACTIVE") throw new Error("Forbidden.");
+    }
     const asset = await prisma.storedAsset.findUnique({ where: { id: input.assetId }, include: { studioFile: { include: { order: { include: { engineerParty: { select: { claimedByUserId: true } } } } } } } });
     if (!asset || asset.deletedAt || (asset.retentionUntil && asset.retentionUntil <= new Date())) throw new Error("Asset is unavailable.");
     if (!input.isAdmin && asset.ownerUserId !== input.requesterUserId) {

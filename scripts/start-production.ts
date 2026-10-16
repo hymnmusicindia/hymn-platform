@@ -20,6 +20,20 @@ async function main() {
   let teamRunning = false;
   let draftRunning = false;
   let engineerRunning = false;
+  let studioRunning = false;
+  const tickStudio = async () => {
+    if (studioRunning || !process.env.CRON_SECRET) return;
+    studioRunning = true;
+    try {
+      const port = Number(process.env.PORT || 3000);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) return;
+      const response = await fetch(`http://127.0.0.1:${port}/api/cron/studio-automation`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` }, signal: AbortSignal.timeout(60000) });
+      if (!response.ok) console.error("Studio recovery automation needs attention.");
+    } catch { console.error("Studio recovery automation will retry on the next tick."); }
+    finally { studioRunning = false; }
+  };
+  const studioStartup = process.env.CRON_SECRET && process.env.STUDIO_AUTOMATION_ENABLED !== "false" ? setTimeout(() => { void tickStudio(); }, 180000) : undefined;
+  const studioTimer = process.env.CRON_SECRET && process.env.STUDIO_AUTOMATION_ENABLED !== "false" ? setInterval(() => { void tickStudio(); }, 15 * 60000) : undefined;
   const tickEngineers = async () => {
     if (engineerRunning || !process.env.CRON_SECRET) return;
     engineerRunning = true;
@@ -65,7 +79,7 @@ async function main() {
   }
   for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => child.kill(signal));
   child.on("error", (error) => { throw error; });
-  child.on("exit", (code, signal) => { clearInterval(engineerTimer); clearTimeout(engineerStartup); clearInterval(draftTimer); clearTimeout(draftStartup); clearInterval(reviewTimer); clearTimeout(reviewStartup); clearInterval(teamTimer); clearTimeout(teamStartup); process.exitCode = code ?? (signal ? 1 : 0); });
+  child.on("exit", (code, signal) => { clearInterval(studioTimer); clearTimeout(studioStartup); clearInterval(engineerTimer); clearTimeout(engineerStartup); clearInterval(draftTimer); clearTimeout(draftStartup); clearInterval(reviewTimer); clearTimeout(reviewStartup); clearInterval(teamTimer); clearTimeout(teamStartup); process.exitCode = code ?? (signal ? 1 : 0); });
 }
 
 main().catch((error) => { console.error(error instanceof Error ? error.message : "Production startup failed safely."); process.exitCode = 1; });

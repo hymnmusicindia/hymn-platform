@@ -1,7 +1,7 @@
 import { studioError } from "@/lib/studio-errors";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/access";
+import { requireStudioUser as requireUser } from "@/lib/studio-access";
 import { reviewStudioOrder } from "@/lib/studio-services";
 import { VOUCH_STRENGTHS } from "@/lib/studio-trust-domain";
 const schema=z.object({rating:z.number().int().min(1).max(5),strengths:z.array(z.enum(VOUCH_STRENGTHS)).max(5).optional(),comment:z.string().trim().max(2000).optional()});

@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { localStorageProvider, storageRootPath } from "@/lib/storage-service";
 import { validatePrivateUpload } from "@/lib/private-storage";
 import { verifyAudioIntegrity } from "@/lib/media-integrity";
+import { assertStudioActiveUser } from "@/lib/studio-access";
 
 export const studioChunkSize = 8 * 1024 * 1024;
 const schema = z.object({ orderId: z.string().uuid(), role: z.enum(["SOURCE", "DELIVERY"]), filename: z.string().min(1).max(240), mime: z.enum(["audio/wav", "audio/x-wav", "audio/mpeg", "audio/flac", "application/zip"]), size: z.number().int().positive().max(2 * 1024 ** 3) });
@@ -16,6 +17,7 @@ function secret() { if (!process.env.JWT_SECRET) throw new Error("Upload signing
 function temp(upload: Upload) { return `studio-${upload.id}`; }
 function key(upload: Upload) { return `Studio/${upload.orderId}/${upload.id}/${upload.filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`; }
 async function allowed(upload: Upload) {
+  await assertStudioActiveUser(upload.userId);
   const order = await prisma.studioServiceOrder.findUnique({ where: { publicId: upload.orderId }, include: { engineerParty: { select: { claimedByUserId: true } } } });
   const states = upload.role === "SOURCE" ? ["ACCEPTED", "AWAITING_SOURCE_FILES", "IN_PROGRESS", "REVISION_REQUESTED", "DELIVERED"] : ["ACCEPTED", "AWAITING_SOURCE_FILES", "IN_PROGRESS", "REVISION_REQUESTED"];
   if (!order || !order.paidAt || (upload.role === "SOURCE" ? order.customerId : order.engineerParty.claimedByUserId) !== upload.userId || !states.includes(order.status)) throw new Error("Uploads are unavailable for your role or the current project state.");
@@ -49,9 +51,11 @@ export async function writeStudioChunk(upload: Upload, index: number, bytes: Buf
 }
 async function checksumFile(file: string) { const hash = createHash("sha256"); for await (const bytes of createReadStream(file)) hash.update(bytes); return hash.digest("hex"); }
 export async function completeStudioUpload(upload: Upload) {
+  await assertStudioActiveUser(upload.userId);
   const objectKey = key(upload);
   const result = await prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${upload.orderId}))`;
+    if (!await tx.user.count({ where: { id: upload.userId, status: "ACTIVE" } })) throw new Error("An active account is required to finish an upload.");
     const prior = await tx.storedAsset.findUnique({ where: { objectKey }, include: { studioFile: true } });
     if (prior && prior.ownerUserId === upload.userId && prior.studioFile && !prior.deletedAt) return prior;
     // Read project state after acquiring the same lock used by delivery/approval.

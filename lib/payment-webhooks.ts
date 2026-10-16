@@ -8,11 +8,12 @@ import { qualifyReferralInTransaction, reverseReferralForTransactionInTransactio
 import { synchronizeProviderSubscription, synchronizeSubscriptionPayment } from "@/lib/subscription-billing";
 import { normalizeBeatLicenseType } from "@/lib/beat-store";
 import { confirmStudioPayment } from "@/lib/studio-services";
+import { applyStudioDispute, recordStudioRefund } from "@/lib/studio-refunds";
 import { syncSettlement } from "@/lib/gateway-settlements";
 import { refreshRouteSettlement, refreshRouteTransfer } from "@/lib/razorpay-route";
 
 type RazorpayEntity = { id?: string; order_id?: string; payment_id?: string; subscription_id?: string; invoice_id?: string; plan_id?: string; amount?: number; currency?: string; status?: string; error_code?: string; error_description?: string; current_start?: number | null; current_end?: number | null; start_at?: number | null; ended_at?: number | null; charge_at?: number | null; created_at?: number; notes?: Record<string, unknown> };
-type RazorpayPayload = { event?: string; id?: string; payload?: { settlement?: { entity?: RazorpayEntity }; transfer?: { entity?: RazorpayEntity }; payment?: { entity?: RazorpayEntity }; order?: { entity?: RazorpayEntity }; refund?: { entity?: RazorpayEntity }; subscription?: { entity?: RazorpayEntity } } };
+type RazorpayPayload = { event?: string; id?: string; payload?: { dispute?: { entity?: RazorpayEntity }; settlement?: { entity?: RazorpayEntity }; transfer?: { entity?: RazorpayEntity }; payment?: { entity?: RazorpayEntity }; order?: { entity?: RazorpayEntity }; refund?: { entity?: RazorpayEntity }; subscription?: { entity?: RazorpayEntity } } };
 
 export function validateObservedPayment(expected: { amountMinor: number; currency: string }, observed: { amountMinor?: number; currency?: string }) {
   if (observed.currency && observed.currency.toUpperCase() !== expected.currency.toUpperCase()) throw new Error("Payment currency does not match the persisted order.");
@@ -21,22 +22,22 @@ export function validateObservedPayment(expected: { amountMinor: number; currenc
 
 export function redactRazorpayPayload(payload: RazorpayPayload): Prisma.InputJsonObject {
   if (payload.event?.startsWith("settlement.") || payload.event?.startsWith("transfer.")) return { event: payload.event, financeEntityId: payload.payload?.settlement?.entity?.id || payload.payload?.transfer?.entity?.id || null };
-  const entity = payload.event?.startsWith("refund.") ? payload.payload?.refund?.entity ?? {} : payload.payload?.payment?.entity ?? payload.payload?.order?.entity ?? {};
+  const entity = payload.event?.startsWith("refund.") ? payload.payload?.refund?.entity ?? {} : payload.event?.startsWith("payment.dispute.") ? payload.payload?.dispute?.entity ?? payload.payload?.payment?.entity ?? {} : payload.payload?.payment?.entity ?? payload.payload?.order?.entity ?? {};
   const subscription = payload.payload?.subscription?.entity;
   const payment = payload.payload?.payment?.entity;
-  return { event: payload.event ?? "unknown", entity: { id: entity.id ?? null, order_id: entity.order_id ?? null, amount: entity.amount ?? null, currency: entity.currency ?? null, status: entity.status ?? null, error_code: entity.error_code ?? null }, subscription: subscription ? { id: subscription.id ?? null, plan_id: subscription.plan_id ?? null, status: subscription.status ?? null, current_start: subscription.current_start ?? null, current_end: subscription.current_end ?? null, start_at: subscription.start_at ?? null, ended_at: subscription.ended_at ?? null, charge_at: subscription.charge_at ?? null } : null, payment: payment ? { id: payment.id ?? null, invoice_id: payment.invoice_id ?? null, amount: payment.amount ?? null, currency: payment.currency ?? null, status: payment.status ?? null, created_at: payment.created_at ?? null } : null };
+  return { event: payload.event ?? "unknown", entity: { id: entity.id ?? null, order_id: entity.order_id ?? null, amount: entity.amount ?? null, currency: entity.currency ?? null, status: entity.status ?? null, error_code: entity.error_code ?? null, refundKey: typeof entity.notes?.hymnStudioRefundKey === "string" ? entity.notes.hymnStudioRefundKey : null }, subscription: subscription ? { id: subscription.id ?? null, plan_id: subscription.plan_id ?? null, status: subscription.status ?? null, current_start: subscription.current_start ?? null, current_end: subscription.current_end ?? null, start_at: subscription.start_at ?? null, ended_at: subscription.ended_at ?? null, charge_at: subscription.charge_at ?? null } : null, payment: payment ? { id: payment.id ?? null, invoice_id: payment.invoice_id ?? null, amount: payment.amount ?? null, currency: payment.currency ?? null, status: payment.status ?? null, created_at: payment.created_at ?? null } : null };
 }
 
 export async function receiveRazorpayEvent(rawBody: Buffer, payload: RazorpayPayload) {
   const payloadHash = crypto.createHash("sha256").update(rawBody).digest("hex");
-  const entity = payload.event?.startsWith("refund.") ? payload.payload?.refund?.entity ?? {} : payload.payload?.payment?.entity ?? payload.payload?.order?.entity ?? {};
+  const entity = payload.event?.startsWith("refund.") ? payload.payload?.refund?.entity ?? {} : payload.event?.startsWith("payment.dispute.") ? payload.payload?.dispute?.entity ?? payload.payload?.payment?.entity ?? {} : payload.payload?.payment?.entity ?? payload.payload?.order?.entity ?? {};
   const subscriptionEntity = payload.payload?.subscription?.entity;
   const razorpaySubscriptionId = subscriptionEntity?.id ?? payload.payload?.payment?.entity?.subscription_id ?? null;
   const razorpayOrderId = entity.order_id ?? (payload.payload?.order?.entity?.id || null);
   const existing = await prisma.paymentWebhookEvent.findFirst({ where: { OR: [{ payloadHash }, ...(payload.id ? [{ providerEventId: payload.id }] : [])] } });
   if (existing) return existing;
   try {
-    return await prisma.paymentWebhookEvent.create({ data: { providerEventId: payload.id || null, eventType: payload.event || "unknown", payloadHash, signatureValid: true, razorpayOrderId, razorpaySubscriptionId, paymentId: payload.payload?.payment?.entity?.id ?? payload.payload?.refund?.entity?.payment_id ?? null, amountMinor: entity.amount ?? null, currency: entity.currency?.toUpperCase() ?? null, payloadRedacted: redactRazorpayPayload(payload) } });
+    return await prisma.paymentWebhookEvent.create({ data: { providerEventId: payload.id || null, eventType: payload.event || "unknown", payloadHash, signatureValid: true, razorpayOrderId, razorpaySubscriptionId, paymentId: payload.payload?.dispute?.entity?.payment_id ?? payload.payload?.payment?.entity?.id ?? payload.payload?.refund?.entity?.payment_id ?? null, amountMinor: entity.amount ?? null, currency: entity.currency?.toUpperCase() ?? null, payloadRedacted: redactRazorpayPayload(payload) } });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       return prisma.paymentWebhookEvent.findFirstOrThrow({ where: { OR: [{ payloadHash }, ...(payload.id ? [{ providerEventId: payload.id }] : [])] } });
@@ -80,6 +81,7 @@ export async function processRazorpayEvent(eventId: number) {
       "payment.failed": "failed",
       "refund.created": "refund_pending",
       "refund.processed": "refunded",
+      "refund.failed": "refund_failed",
       "payment.dispute.created": "disputed",
       "payment.dispute.won": "paid",
       "payment.dispute.lost": "charged_back"
@@ -95,11 +97,11 @@ export async function processRazorpayEvent(eventId: number) {
       resolvedOrderId = distribution?.razorpayOrderId ?? checkout?.razorpayOrderId ?? studio?.razorpayOrderId ?? null;
     }
     if (event.eventType in nonFulfilmentStates) {
+      if (resolvedOrderId) await applyPaymentState({ razorpayOrderId: resolvedOrderId, paymentId: event.paymentId, state: nonFulfilmentStates[event.eventType], eventId: event.id, amountMinor: event.amountMinor });
       await prisma.$transaction(async tx => {
         if (event.paymentId) await refreshReferralCommission(tx, event.paymentId);
         await reviewSubscriptionReferralPayment(tx, event);
       });
-      if (resolvedOrderId) await applyPaymentState({ razorpayOrderId: resolvedOrderId, paymentId: event.paymentId, state: nonFulfilmentStates[event.eventType], eventId: event.id, amountMinor: event.amountMinor });
       return prisma.paymentWebhookEvent.update({ where: { id: event.id }, data: { attemptCount: { increment: 1 }, processingState: "processed", processedAt: new Date() } });
     }
     if (!["payment.captured", "order.paid"].includes(event.eventType)) {
@@ -216,6 +218,19 @@ export async function confirmPersistedPayment(input: { razorpayOrderId: string; 
 }
 
 async function applyPaymentState(input: { razorpayOrderId: string; paymentId: string | null; state: string; eventId: number; amountMinor: number | null }) {
+  const studioPayment = await prisma.studioPayment.findUnique({ where: { razorpayOrderId: input.razorpayOrderId } });
+  if (studioPayment) {
+    if (await prisma.distributionOrder.count({ where: { razorpayOrderId: input.razorpayOrderId } }) || await prisma.checkoutOrder.count({ where: { razorpayOrderId: input.razorpayOrderId } })) throw new Error("Ambiguous persisted Razorpay order identifier.");
+    if (!input.paymentId || studioPayment.razorpayPaymentId && studioPayment.razorpayPaymentId !== input.paymentId) throw new Error("Payment event does not match the captured Studio payment.");
+    const event = await prisma.paymentWebhookEvent.findUniqueOrThrow({ where: { id: input.eventId } });
+    const entity = (event.payloadRedacted as { entity?: { id?: string; currency?: string; refundKey?: string } })?.entity;
+    if (["refunded", "refund_pending", "refund_failed", "charged_back"].includes(input.state)) {
+      await recordStudioRefund(studioPayment.id, { id: input.state === "charged_back" ? `chargeback-${studioPayment.id}` : entity?.id || "", payment_id: input.paymentId, amount: input.amountMinor ?? 0, currency: entity?.currency || "", status: input.state === "refund_pending" ? "pending" : input.state === "refund_failed" ? "failed" : "processed", notes: { hymnStudioRefundKey: entity?.refundKey } });
+    } else if (["disputed", "paid"].includes(input.state)) await applyStudioDispute(studioPayment.id, input.state, String(event.id));
+    else if (["authorized", "failed"].includes(input.state) && !studioPayment.capturedAt) await prisma.studioPayment.updateMany({ where: { id: studioPayment.id, capturedAt: null, status: { in: ["CREATED", "AUTHORIZED", "FAILED"] } }, data: { status: input.state.toUpperCase() } });
+    return;
+  }
+  if (input.state === "refund_failed") return;
   await prisma.$transaction(async tx => {
     const distribution = await tx.distributionOrder.findUnique({ where: { razorpayOrderId: input.razorpayOrderId } });
     const checkout = await tx.checkoutOrder.findUnique({ where: { razorpayOrderId: input.razorpayOrderId }, include: { items: true } });
@@ -232,14 +247,7 @@ async function applyPaymentState(input: { razorpayOrderId: string; paymentId: st
       await tx.auditLog.create({ data: { action: `RAZORPAY_${input.state.toUpperCase()}`, entity: "distribution_order", entityId: String(distribution.id), metadata: { eventId: input.eventId, paymentId: input.paymentId } } });
       return;
     }
-    if (studio) {
-      if (studio.razorpayPaymentId && input.paymentId && studio.razorpayPaymentId !== input.paymentId) throw new Error("Payment event does not match the captured Studio payment.");
-      const mapped = input.state === "refunded" ? "REFUNDED" : input.state === "refund_pending" ? "REFUND_PENDING" : input.state === "disputed" || input.state === "charged_back" ? "DISPUTED" : input.state.toUpperCase();
-      await tx.studioPayment.update({ where: { id: studio.id }, data: { status: mapped, refundedAt: mapped === "REFUNDED" ? new Date() : undefined } });
-      if (["REFUND_PENDING", "REFUNDED", "DISPUTED"].includes(mapped)) await tx.studioServiceOrder.update({ where: { id: studio.orderId }, data: { paymentStatus: mapped, status: mapped as "REFUND_PENDING" | "REFUNDED" | "DISPUTED" } });
-      await tx.auditLog.create({ data: { action: `RAZORPAY_${mapped}`, entity: "studio_payment", entityId: String(studio.id), metadata: { eventId: input.eventId, paymentId: input.paymentId } } });
-      return;
-    }
+    if (studio) throw new Error("Studio payment changed during processing. Retry the event.");
     if (!checkout) return;
     if (ignoreStalePaymentState(checkout.paymentStatus, input.state)) return;
     if (checkout.razorpayPaymentId && input.paymentId && checkout.razorpayPaymentId !== input.paymentId) throw new Error("Payment event does not match the captured order payment.");

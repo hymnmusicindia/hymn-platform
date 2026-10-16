@@ -1,7 +1,7 @@
 import { studioError } from "@/lib/studio-errors";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/access";
+import { requireStudioUser as requireUser } from "@/lib/studio-access";
 import { assertStudioParticipant, sendStudioMessage } from "@/lib/studio-services";
 import { prisma } from "@/lib/prisma";
 const schema = z.object({ body: z.string().trim().min(1).max(5000), idempotencyKey: z.string().trim().min(8).max(120), callbackPhone: z.string().trim().regex(/^\+?[0-9 ()-]{8,20}$/).optional() });

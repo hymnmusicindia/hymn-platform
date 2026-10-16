@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import sharp from "sharp";
-import { requireUser } from "@/lib/access";
+import { requireStudioUser as requireUser } from "@/lib/studio-access";
 import { saveUploadedFile } from "@/lib/storage";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 

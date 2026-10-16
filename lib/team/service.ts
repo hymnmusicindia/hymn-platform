@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { can, demand, TeamError, statuses, onboardingTemplates, assertAcyclic, assertTaskTransition, weekStartIndia, type Actor, type Permission } from "./policy";
 import { taskSchema, taskUpdateSchema, projectSchema, inviteSchema, roleSchema, prospectSchema, prospectUpdateSchema, outreachSchema, messageSchema, channelSchema, reportSchema } from "./validation";
@@ -153,6 +154,13 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
       for (const memberId of data.mentions) await notify(tx, memberId, "You were mentioned in a team conversation", `/team?module=chat&channel=${data.channelId}`);
       return row;
     }
+    if (resource === "messages-read") {
+      demand(a, "chat.use");
+      const data = z.object({ channelId: z.string().min(1).max(80), ids: z.array(z.string().min(1).max(80)).max(50) }).parse(input);
+      if (!await tx.teamChannel.findFirst({ where: { ...channelScope(a), id: data.channelId } })) throw new TeamError("Conversation unavailable.", 404);
+      await tx.teamMessage.updateMany({ where: { channelId: data.channelId, id: { in: data.ids }, deletedAt: null, NOT: { readMemberIds: { has: a.id } } }, data: { readMemberIds: { push: a.id } } });
+      return { ok: true };
+    }
     if (resource === "notifications") { await tx.teamNotification.updateMany({ where: { memberId: a.id, ...(id ? { id } : {}), readAt: null }, data: { readAt: new Date() } }); return { ok: true }; }
     if (resource === "prospects") {
       demand(a, "crm.prospects.create"); const data = prospectSchema.parse(input);
@@ -257,8 +265,12 @@ export async function teamRead(a: Actor, resource: string, params: URLSearchPara
   if (resource === "channels") { demand(a, "chat.use"); return { items: await prisma.teamChannel.findMany({ where: channelScope(a), ...page, orderBy: { createdAt: "asc" } }) }; }
   if (resource === "messages") {
     demand(a, "chat.use"); const channelId = params.get("channel") ?? "";
-    if (!await prisma.teamChannel.findFirst({ where: { ...channelScope(a), id: channelId } })) throw new TeamError("Conversation unavailable.", 404);
-    const items = await prisma.teamMessage.findMany({ where: { channelId }, ...page, orderBy: [{ createdAt: "desc" }, { id: "desc" }], include: { author: { select: memberSelect } } }); return { items: items.reverse() };
+    const channel = await prisma.teamChannel.findFirst({ where: { ...channelScope(a), id: channelId } });
+    if (!channel) throw new TeamError("Conversation unavailable.", 404);
+    const items = await prisma.teamMessage.findMany({ where: { channelId }, ...page, orderBy: [{ createdAt: "desc" }, { id: "desc" }], include: { author: { select: memberSelect } } });
+    const readerIds = [...new Set(items.flatMap(m => m.readMemberIds))].filter(id => !channel.private || channel.memberIds.includes(id));
+    const readers = readerIds.length ? await prisma.teamMember.findMany({ where: { workspaceId: a.workspaceId, status: "ACTIVE", user: { status: "ACTIVE" }, id: { in: readerIds } }, select: { id: true, user: { select: { name: true, avatar: true } } } }) : [];
+    return { items: items.reverse(), readers };
   }
   if (resource === "notifications") return { items: await prisma.teamNotification.findMany({ where: { memberId: a.id }, ...page, orderBy: { createdAt: "desc" } }) };
   if (resource === "prospects") { demand(a, "crm.prospects.view"); const items = await prisma.teamProspect.findMany({ where: prospectScope(a), ...page, orderBy: { updatedAt: "desc" }, include: { lead: true, owner: { select: memberSelect } } }); return { items: items.map(({ lead, ...p }) => ({ ...p, name: lead?.name ?? p.name, email: lead?.email || p.email, notes: lead?.notes ?? p.notes, stage: lead ? lead.status === "closed" ? "LOST" : lead.status.toUpperCase() : p.stage, customerUserId: lead?.userId ?? p.customerUserId })) }; }

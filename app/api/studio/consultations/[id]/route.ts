@@ -1,6 +1,6 @@
 import { studioError } from "@/lib/studio-errors";
 import { after, NextResponse } from "next/server";
-import { requireUser } from "@/lib/access";
+import { requireStudioUser as requireUser } from "@/lib/studio-access";
 import { bookConsultation } from "@/lib/studio-trust";
 import { prisma } from "@/lib/prisma";
 import { emailLayout, emailText } from "@/lib/email/email-templates";

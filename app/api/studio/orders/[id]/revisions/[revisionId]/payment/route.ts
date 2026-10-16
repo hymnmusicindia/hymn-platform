@@ -1,7 +1,7 @@
 import { studioError } from "@/lib/studio-errors";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/access";
+import { requireStudioUser as requireUser } from "@/lib/studio-access";
 import { createStudioRevisionPayment } from "@/lib/studio-services";
 const schema = z.object({ idempotencyKey: z.string().trim().min(8).max(160) });
 export async function POST(request: Request, context: { params: Promise<{ id: string; revisionId: string }> }) {

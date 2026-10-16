@@ -3,6 +3,7 @@ import { createCommunityVouch, createShowcase, confirmShowcase, createConsultati
 import { prisma } from "../lib/prisma";
 import { localPrivateStorage } from "../lib/private-storage";
 import { confirmPersistedPayment } from "../lib/payment-webhooks";
+import { studioFixtureGateway } from "./studio-fixture-gateway";
 import { appointStudioEngineer, updateStudioEngineer } from "../lib/admin-studio-engineers";
 import { approveStudioDelivery, assertStudioParticipant, cancelStudioOrder, confirmStudioPayment, createStudioAmendmentPayment, createStudioDelivery, createStudioOrder, createStudioPayment, createStudioRevisionPayment, handoffStudioOrderToRelease, proposeStudioAmendment, requestStudioRevision, respondToStudioOrder, reviewStudioOrder, runStudioAutomation, sendStudioMessage, transitionStudioOrder } from "../lib/studio-services";
 
@@ -148,7 +149,7 @@ async function main() {
   await confirmStudioPayment({ razorpayOrderId: cancellationPayment.razorpayOrderId, paymentId: `pay-cancel-${stamp}`, amountMinor: 200000, currency: "INR", source: "webhook" });
   await cancelStudioOrder({ orderPublicId: paidCancellation.publicId, customerId: customer.id, reason: "Cancelled before work began", idempotencyKey: `cancel-paid-${stamp}` });
   assert.equal((await prisma.studioServiceOrder.findUniqueOrThrow({ where: { id: paidCancellation.id } })).status, "REFUND_PENDING");
-  await runStudioAutomation();
+  await runStudioAutomation(new Date(), Date.now() + 20000, studioFixtureGateway());
   assert.equal((await prisma.studioServiceOrder.findUniqueOrThrow({ where: { id: paidCancellation.id } })).status, "REFUNDED");
   assert.equal((await prisma.studioPayment.findUniqueOrThrow({ where: { id: cancellationPayment.id } })).status, "REFUNDED");
   async function completedHandoff(projectTitle: string, beatPurchaseId?: number) {

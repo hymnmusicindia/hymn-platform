@@ -20,6 +20,9 @@ export function StudioWorkspace({ workspace: initial, userId }: { workspace: Stu
  const [pending, setPending] = useState(""), [error, setError] = useState(""), [offline, setOffline] = useState(false);
  const [older, setOlder] = useState<ChatMessage[]>([]), [hasOlder, setHasOlder] = useState(initial.messages.length === 100);
  const bottom = useRef<HTMLDivElement>(null), scroll = useRef<HTMLDivElement>(null), first = useRef(true);
+ const nextOutgoingId = useRef(-1);
+ const chatStream = useRef<EventSource | null>(null), sending = useRef(0);
+ const [connectionEpoch, setConnectionEpoch] = useState(0);
  const customer = workspace.customerId === userId, base = `/api/studio/orders/${workspace.publicId}`;
  const latest = workspace.deliveries[0], closed = ["CANCELLED", "REFUNDED", "EXPIRED"].includes(workspace.status);
  const refresh = useCallback(async () => {
@@ -32,13 +35,33 @@ export function StudioWorkspace({ workspace: initial, userId }: { workspace: Stu
  }, [initial.publicId, userId]);
  useEffect(() => { setWorkspace(initial); }, [initial]);
  useEffect(() => {
-  let stopped = false; let timer: ReturnType<typeof setTimeout>;
-  async function poll() { if (stopped) return; if (!document.hidden) await refresh().catch(() => { if (!stopped) setOffline(true); }); if (!stopped) timer = setTimeout(poll, 2500); }
-  timer = setTimeout(poll, 1000);
-  const visible = () => { if (!document.hidden) void refresh().catch(() => setOffline(true)); };
-  document.addEventListener("visibilitychange", visible);
-  return () => { stopped = true;  clearTimeout(timer); document.removeEventListener("visibilitychange", visible); };
- }, [refresh]);
+  let stopped = false, connected = false, refreshing = false;
+  let source: EventSource | undefined, state = "";
+  const reload = async () => { if (stopped || document.hidden || refreshing || sending.current) return; refreshing = true; try { await refresh(); } catch { if (!stopped) setOffline(true); } finally { refreshing = false; } };
+  const connect = () => {
+   source?.close(); connected = false;
+   if (stopped || document.hidden || sending.current) return;
+   source = new EventSource(`/api/studio/orders/${initial.publicId}/stream`);
+   chatStream.current = source;
+   source.onmessage = event => {
+    if (stopped) return;
+    try {
+     const data = JSON.parse(event.data) as { messages: ChatMessage[]; state: string };
+     connected = true; setOffline(false);
+     setWorkspace(current => ({ ...current, messages: Array.from(new Map([...current.messages, ...data.messages].map(m => [m.id, m])).values()).sort((a,b) => a.id-b.id) }));
+     setOutbox(items => items.filter(item => !data.messages.some(m => m.senderUserId === userId && m.idempotencyKey?.endsWith(`:${item.retryBody.idempotencyKey}`))));
+     if (state !== data.state) { state = data.state; void reload(); }
+    } catch { setOffline(true); }
+   };
+   source.onerror = () => { connected = false; if (!stopped) setOffline(true); };
+   source.addEventListener("unavailable", () => { source?.close(); connected = false; setOffline(true); });
+  };
+  let elapsed = 0;
+  const timer = setInterval(() => { elapsed++; if (!connected || elapsed % 15 === 0) void reload(); }, 1000);
+  const visible = () => { if (document.hidden) source?.close(); else { void reload(); connect(); } };
+  connect(); document.addEventListener("visibilitychange", visible); window.addEventListener("online", visible);
+  return () => { stopped = true; source?.close(); clearInterval(timer); document.removeEventListener("visibilitychange", visible); window.removeEventListener("online", visible); };
+ }, [refresh, initial.publicId, userId, connectionEpoch]);
  useEffect(() => {
   const nearEnd = !scroll.current || scroll.current.scrollHeight - scroll.current.scrollTop - scroll.current.clientHeight < 180;
   if (first.current || nearEnd) { bottom.current?.scrollIntoView({ behavior: first.current ? "instant" : "smooth", block: "end" }); first.current = false; }
@@ -51,20 +74,24 @@ export function StudioWorkspace({ workspace: initial, userId }: { workspace: Stu
   finally { setPending(""); }
  }
  async function transmit(item: Outgoing) {
+  // Give outbound messages priority on HTTP/1 hosts with limited browser
+  // connection slots. Reopen the receive stream after the request settles.
+  sending.current++; chatStream.current?.close();
   setOutbox(items => items.map(m => m.id === item.id ? { ...m, state: "sending" } : m));
   try {
-   const response = await fetch(`${base}/messages`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item.retryBody) });
+   const response = await fetch(`${base}/messages`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item.retryBody), signal: AbortSignal.timeout(20000) });
    const data = await response.json(); if (!response.ok) throw new Error(data.error || "Message failed.");
    setWorkspace(current => ({ ...current, messages: [...current.messages.filter(m => m.id !== data.message.id), data.message].sort((a,b) => a.id-b.id) }));
    setOutbox(items => items.filter(m => m.id !== item.id));
   } catch (e) { setOutbox(items => items.map(m => m.id === item.id ? { ...m, state: "failed" } : m)); setError(e instanceof Error ? e.message : "Could not send message."); }
+  finally { sending.current--; setConnectionEpoch(value => value + 1); }
  }
  async function send(event: React.FormEvent) {
   event.preventDefault(); if (!message.trim()) return;
   if (mode === "revision" && latest) { const data = await action(`${base}/revisions`, { deliveryId: latest.id, feedback: message, idempotencyKey: crypto.randomUUID() }, "Requesting revision"); if (data) { setMessage(""); setMode("message"); } return; }
   if (mode === "callback" && !/^\+?[0-9 ()-]{8,20}$/.test(phone)) { setError("Add a valid callback number, including country code."); return; }
   const key = crypto.randomUUID(), body = { body: message.trim(), idempotencyKey: key, ...(mode === "callback" ? { callbackPhone: phone } : {}) };
-  const item: Outgoing = { id: -Date.now(), senderUserId: userId, senderName: customer ? "You" : workspace.engineerName, body: body.body, kind: mode === "callback" ? "CALLBACK" : "USER", metadata: mode === "callback" ? { phone } : null, createdAt: new Date().toISOString(), idempotencyKey: `chat:${initial.publicId}:${key}`, retryBody: body, state: "sending" };
+  const item: Outgoing = { id: nextOutgoingId.current--, senderUserId: userId, senderName: customer ? "You" : workspace.engineerName, body: body.body, kind: mode === "callback" ? "CALLBACK" : "USER", metadata: mode === "callback" ? { phone } : null, createdAt: new Date().toISOString(), idempotencyKey: `chat:${initial.publicId}:${key}`, retryBody: body, state: "sending" };
   setOutbox(items => [...items, item]); setMessage(""); setPhone(""); setMode("message"); setError(""); void transmit(item);
  }
  async function pay(path: string, description: string) {
@@ -78,7 +105,7 @@ export function StudioWorkspace({ workspace: initial, userId }: { workspace: Stu
  const allMessages = Array.from(new Map([...older, ...workspace.messages].map(m => [m.id,m])).values());
  const timeline = [
   ...allMessages.map(item => ({ key: `m${item.id}`, time: item.createdAt, node: item.kind === "SYSTEM" ? <p className="studio-system-event">{item.body}</p> : <div className={`studio-chat-bubble ${item.senderUserId === userId ? "is-mine" : ""}`}><small>{item.senderUserId === userId ? "You" : item.senderName}</small>{item.kind === "CALLBACK" ? <strong><Phone size={14}/>Callback · {item.metadata?.state || "REQUESTED"} · {item.metadata?.phone}</strong> : null}<p>{item.body}</p>{item.kind === "CALLBACK" && !customer && item.metadata?.state !== "DONE" ? <div className="mt-2 flex gap-2"><button className="text-xs underline" onClick={() => action(`${base}/callbacks/${item.id}`,{state:item.metadata?.state==="ACCEPTED"?"DONE":"ACCEPTED"},"Updating callback")}>{item.metadata?.state==="ACCEPTED"?"Mark call done":"Accept callback"}</button></div>:null}<time>{date(item.createdAt)}</time></div> })),
-  ...workspace.payments.map(item => ({ key: `p${item.id}`, time: item.createdAt, node: <article className="studio-receipt"><Wallet/><small>{item.purpose === "INITIAL_ORDER" ? "Service fee" : item.purpose === "ADDITIONAL_REVISION" ? "Additional revision" : "Scope change"} · {item.status === "REFUNDED" ? "Refunded" : "Paid securely"}</small><strong>{money(item.amount)}</strong><time>{date(item.createdAt)}</time><span><ShieldCheck size={13}/>Verified by HYMN</span></article> })),
+  ...workspace.payments.map(item => ({ key: `p${item.id}`, time: item.createdAt, node: <article className="studio-receipt"><Wallet/><small>{item.purpose === "INITIAL_ORDER" ? "Service fee" : item.purpose === "ADDITIONAL_REVISION" ? "Additional revision" : "Scope change"} · {item.status === "REFUNDED" ? "Refunded" : item.status === "DISPUTED" ? "Financial review" : item.refundedAmount > 0 ? "Partially refunded" : "Paid securely"}</small><strong>{money(item.amount)}</strong>{item.refundedAmount > 0 ? <small>Refunded {money(item.refundedAmount)} / Net {money(item.amount - item.refundedAmount)}</small> : null}<time>{date(item.createdAt)}</time><span><ShieldCheck size={13}/>Verified by HYMN</span></article> })),
   ...workspace.files.map(file => ({ key: `f${file.id}`, time: file.createdAt, node: <article className={`studio-file-event ${file.uploaderId === userId ? "is-mine" : ""}`}><FileAudio/><div><small>{file.category === "SOURCE" ? "Source attachment" : "Engineer attachment"}</small><a href={`/api/assets/${file.assetId}/download`}>{file.name}<Download size={14}/></a><time>{date(file.createdAt)}</time></div></article> })),
   ...workspace.revisions.map(r => ({ key: `r${r.id}`, time: r.createdAt, node: <article className="studio-ticket-event"><strong><Ticket size={16}/>Revision #{r.sequence}<span>{r.included ? "Included" : money(workspace.additionalRevisionPrice)}</span></strong><p>{r.feedback}</p><small>{r.status.replaceAll("_"," ")} · {date(r.createdAt)}</small>{customer && r.status === "PAYMENT_REQUIRED" ? <button disabled={Boolean(pending)} className="btn-primary" onClick={() => pay(`${base}/revisions/${r.id}/payment`, "Additional revision")}>Pay {money(workspace.additionalRevisionPrice)} securely</button> : null}</article> })),
   ...workspace.amendments.map(a => ({ key: `a${a.publicId}`, time: a.createdAt, node: <article className="studio-ticket-event"><strong>Scope change · {money(a.amount)}</strong><p>{a.description}</p><small>{a.status.replaceAll("_"," ")}</small>{customer && ["PROPOSED","AWAITING_PAYMENT"].includes(a.status) ? <button className="btn-outline" disabled={Boolean(pending)} onClick={() => pay(`${base}/amendments/${a.publicId}/payment`, a.description)}>Accept and pay</button> : null}</article> })),
