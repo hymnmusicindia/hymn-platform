@@ -21,6 +21,7 @@ export function CalendarDay({ day, events, tasks, members, actorId, workspaceId,
       <header><h4>{event.title}</h4><span>{event.kind.replaceAll("_", " ")} · {event.status.replaceAll("_", " ")}</span></header>
       <p><strong>{format(event.startsAt)} IST</strong>{event.endsAt && <> → {format(event.endsAt)} IST</>}</p>
       <p>Assigned to {name(event.assigneeId)}</p>
+      {event.kind === "CALL" && <small>Representative reserved for 30 minutes from the start. The end time does not extend this availability hold.</small>}
       {event.client && <div><strong>{event.client.name}</strong>{event.client.phone && <p><a href={`tel:${event.client.phone}`}>{event.client.phone}</a></p>}{event.client.email && <p><a href={`mailto:${event.client.email}`}>{event.client.email}</a></p>}</div>}
       {event.notes && <div><small>Research / footnotes</small><p className={styles.dayNotes}>{event.notes}</p></div>}
       {event.outcome && <div><small>Outcome / next step</small><p className={styles.dayNotes}>{event.outcome}</p></div>}

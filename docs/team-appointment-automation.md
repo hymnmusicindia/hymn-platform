@@ -13,6 +13,8 @@ Times are explicitly India time (IST), displayed in AM/PM. No saved phone: the c
 
 ## Queue and delivery
 
+Call availability is reserved for exactly 30 minutes from the start, regardless of a blank, shorter or multi-day recorded end time. A 4:00 pm call permits the next call at 4:30 pm, not 4:29 pm. This same rule applies to creation, edits and handoffs. Other events with explicit end times retain their full reserved duration; start-only events reserve 30 minutes. Recorded end times are not rewritten.
+
 The appointment and its outbox records commit together. Schedule revisions invalidate obsolete jobs on reschedule, reassignment, cancellation or status/client/type changes. The worker rechecks event status, revision, client contact preference and representative/account status. Atomic conditional claims prevent concurrent workers from sending the same job. EmailLog provides a second deduplication key. Interrupted or uncertain SMTP attempts become REVIEW, not blind retries; inspect the admin email log. Manual failed-email retries revalidate the current appointment. Successful retries update the job state.
 
 The event dialog shows delivery statuses. Disabled SMTP keeps emails pending; in-app representative reminders still work. Cancelling a client card's contact permission cancels its future scheduled events. These are requested appointment notices, not newsletter campaigns; newsletter unsubscribe alone does not cancel a scheduled appointment.

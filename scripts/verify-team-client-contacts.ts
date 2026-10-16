@@ -146,6 +146,20 @@ async function main() {
   await assert.rejects(teamMutation(actor, "calendar-save", { ...callInput, id: deleteCall.id, version: deleteCall.version + 1 }));
   assert.equal(await prisma.teamAudit.count({ where: { entityId: deleteCall.id, action: "calendar.deleted" } }), 1);
   console.log("PASS: scoped event deletion, stale-edit rejection, hidden deleted records, stopped reminders and retained audit history.");
+  await prisma.teamMember.update({ where: { id: rep.id }, data: { availability: "AVAILABLE" } });
+  const reservationBase = { title: "Reservation test", kind: "CALL", clientId: linked.id, assigneeId: rep.id };
+  await teamMutation(actor, "calendar-save", { ...reservationBase, startsAt: "2027-02-16T21:30:00+05:30", endsAt: "2027-02-18T22:30:00+05:30" });
+  const mohit = await teamMutation(actor, "calendar-save", { ...reservationBase, title: "Mohit handoff", assigneeId: actor.id, startsAt: "2027-02-17T16:00:00+05:30" }) as { id: string; version: number };
+  await teamMutation(actor, "calendar-handoff", { ...mohit, assigneeId: rep.id, reason: "Available half-hour call slot" });
+  for (const startsAt of ["2027-02-17T15:31:00+05:30", "2027-02-17T16:29:00+05:30"]) await assert.rejects(teamMutation(actor, "calendar-save", { ...reservationBase, startsAt }));
+  await teamMutation(actor, "calendar-save", { ...reservationBase, startsAt: "2027-02-17T15:30:00+05:30" });
+  await teamMutation(actor, "calendar-save", { ...reservationBase, startsAt: "2027-02-17T16:30:00+05:30", endsAt: "2027-02-17T16:40:00+05:30" });
+  await assert.rejects(teamMutation(actor, "calendar-save", { ...reservationBase, startsAt: "2027-02-17T16:45:00+05:30" }));
+  await teamMutation(actor, "calendar-save", { ...reservationBase, startsAt: "2027-02-17T17:00:00+05:30" });
+  await teamMutation(actor, "calendar-save", { ...reservationBase, kind: "MEETING", startsAt: "2027-02-19T10:00:00+05:30", endsAt: "2027-02-19T12:00:00+05:30" });
+  await assert.rejects(teamMutation(actor, "calendar-save", { ...reservationBase, startsAt: "2027-02-19T11:00:00+05:30" }));
+  await teamMutation(actor, "calendar-save", { ...reservationBase, startsAt: "2027-02-19T12:00:00+05:30" });
+  console.log("PASS: multi-day call end does not block next-day handoff, 29-minute overlaps rejected, exact 30-minute boundaries allowed, short call ends still reserve 30 minutes and explicit meeting durations respected.");
   console.log("PASS: appointment confirmations, exact 40/30-minute queues, concurrent dedup, registered signup suppression, scoped rep handoff, stale retry rejection and cancellation. No real email sent.");
   console.log("PASS: account matching, primary/secondary dedup, interests/location, one-time personalised email, late-signup/DNC suppression, required start, nullable end, point-event range/conflicts. No real email sent.");
 }

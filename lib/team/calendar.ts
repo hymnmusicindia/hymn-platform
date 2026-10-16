@@ -7,6 +7,7 @@ import { audit, eligible, notify, taskScope } from "./service";
 import { CLIENT_INTERESTS } from "./client-interests";
 import { taskSchema } from "./validation";
 import { queueAppointment } from "./appointments";
+import { reservationEnd, reservationsOverlap } from "./calendar-reservations";
 const id = z.string().min(1).max(80);
 const email = z.union([z.string().trim().email().max(320), z.literal("")]).transform(value => value.toLowerCase());
 const clientSchema = z.object({ id: id.optional(), version: z.number().int().positive().optional(), name: z.string().trim().min(1).max(160), phone: z.string().trim().max(40).regex(/^[+\d\s().-]*$/).default(""), email: email.default(""), secondaryEmail: email.default(""), interests: z.array(z.enum(Object.keys(CLIENT_INTERESTS) as [keyof typeof CLIENT_INTERESTS, ...(keyof typeof CLIENT_INTERESTS)[]])).max(6).default([]), state: z.string().trim().max(100).default(""), city: z.string().trim().max(100).default(""), notes: z.string().trim().max(10000).default(""), ownerId: id, status: z.enum(["ACTIVE", "DO_NOT_CONTACT", "ARCHIVED"]).default("ACTIVE") });
@@ -102,9 +103,9 @@ async function saveEvent(tx: Prisma.TransactionClient, a: Actor, input: unknown,
   if (endsAt && (endsAt <= startsAt || endsAt.getTime() - startsAt.getTime() > 7 * 86400000)) throw new TeamError("Choose an end after the start, within seven days.");
   if (data.status === "COMPLETED" && !data.outcome.trim()) throw new TeamError("Record the outcome before completing the event.");
   if (data.status === "SCHEDULED") {
-    const nearby = await tx.teamCalendarEvent.findMany({ where: { workspaceId: a.workspaceId, assigneeId: data.assigneeId, id: { not: data.id }, status: "SCHEDULED", startsAt: { gte: new Date(startsAt.getTime() - 7 * 86400000), lte: endsAt || startsAt } }, select: { startsAt: true, endsAt: true } });
-    // Start-only events are point appointments, not silently invented durations.
-    if (nearby.some(event => endsAt ? event.endsAt ? event.startsAt < endsAt && event.endsAt > startsAt : event.startsAt >= startsAt && event.startsAt < endsAt : event.endsAt ? event.startsAt <= startsAt && event.endsAt > startsAt : event.startsAt.getTime() === startsAt.getTime())) throw new TeamError("This teammate already has a scheduled event in that time slot.", 409);
+    const slot = { kind: data.kind, startsAt, endsAt };
+    const nearby = await tx.teamCalendarEvent.findMany({ where: { workspaceId: a.workspaceId, assigneeId: data.assigneeId, id: { not: data.id }, status: "SCHEDULED", startsAt: { gte: new Date(startsAt.getTime() - 7 * 86400000), lt: reservationEnd(slot) } }, select: { kind: true, startsAt: true, endsAt: true } });
+    if (nearby.some(event => reservationsOverlap(slot, event))) throw new TeamError("This teammate has an overlapping reservation. Calls reserve 30 minutes from their start; choose a free slot or another representative.", 409);
   }
   const fields = { title: data.title, kind: data.kind, clientId: data.clientId, assigneeId: data.assigneeId, startsAt, endsAt, notes: data.notes, outcome: data.outcome, status: data.status, reminderMinutes: data.reminderMinutes, ...(old && (old.startsAt.getTime() !== startsAt.getTime() || old.assigneeId !== data.assigneeId || old.reminderMinutes !== data.reminderMinutes) ? { remindedAt: null } : {}) };
   const scheduleChanged = !old || old.assigneeId !== data.assigneeId || old.clientId !== data.clientId || old.kind !== data.kind || old.status !== data.status || old.startsAt.getTime() !== startsAt.getTime();
