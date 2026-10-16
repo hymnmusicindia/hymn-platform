@@ -2,7 +2,9 @@ import { timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { teamMutation, teamWrite, notify } from "@/lib/team/service";
 import { weekStartIndia } from "@/lib/team/policy";
+import { processClientWelcomes } from "@/lib/team/client-welcome";
 export const runtime = "nodejs";
+export const maxDuration = 300;
 export async function GET(request: Request) {
   const expected = Buffer.from(`Bearer ${process.env.CRON_SECRET || ""}`); const actual = Buffer.from(request.headers.get("authorization") || "");
   if (!process.env.CRON_SECRET || actual.length !== expected.length || !timingSafeEqual(actual, expected)) return Response.json({ error: "Unauthorized." }, { status: 401 });
@@ -16,7 +18,7 @@ export async function GET(request: Request) {
       await teamMutation(owner, "workflow-sync", {});
       await teamWrite(owner, async (tx, a) => {
         const now = new Date(); const local = new Date(now.getTime() + 330 * 60000); const day = local.getUTCDay(); const week = weekStartIndia(now).toISOString().slice(0, 10);
-        const appointments = await tx.teamCalendarEvent.findMany({ where: { workspaceId: a.workspaceId, status: "SCHEDULED", remindedAt: null, endsAt: { gt: now }, startsAt: { gte: new Date(now.getTime() - 15 * 60000), lte: new Date(now.getTime() + 7 * 86400000) } }, take: 1000 });
+        const appointments = await tx.teamCalendarEvent.findMany({ where: { workspaceId: a.workspaceId, status: "SCHEDULED", remindedAt: null, OR: [{ endsAt: { gt: now } }, { endsAt: null }], startsAt: { gte: new Date(now.getTime() - 15 * 60000), lte: new Date(now.getTime() + 7 * 86400000) } }, take: 1000 });
         for (const appointment of appointments) {
           if (appointment.startsAt.getTime() - now.getTime() <= appointment.reminderMinutes * 60000) {
             await notify(tx, appointment.assigneeId, `Upcoming ${appointment.kind.toLowerCase()}: ${appointment.title}`, "/team?module=calendar");
@@ -35,6 +37,6 @@ export async function GET(request: Request) {
         }
       }); workspaces++;
     }
-    return Response.json({ workspaces });
+    return Response.json({ workspaces, welcomeEmails: await processClientWelcomes() });
   } catch { return Response.json({ error: "Team automation did not complete; it will retry safely." }, { status: 503 }); }
 }

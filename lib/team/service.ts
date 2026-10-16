@@ -243,7 +243,7 @@ export async function acceptTeamInvitation(user: { id: number; email: string }, 
 }
 
 export async function teamRead(a: Actor, resource: string, params: URLSearchParams) {
-  if (["clients", "calendar"].includes(resource)) return (await import("./calendar")).calendarRead(a, resource, params);
+  if (["clients", "calendar", "client-account-match"].includes(resource)) return (await import("./calendar")).calendarRead(a, resource, params);
   const offset = Math.max(0, Math.min(100000, Number(params.get("offset")) || 0));
   const page = { take: 50, skip: offset };
   if (resource === "session") return { memberId: a.id, workspaceId: a.workspaceId, owner: a.role.owner, permissions: a.role.permissions };

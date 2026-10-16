@@ -1,5 +1,5 @@
 import { isSameAppOrigin } from "@/lib/request-origin";
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { ZodError } from "zod";
 import { Prisma } from "@prisma/client";
 import { teamActor, teamIdentity } from "@/lib/team/access";
@@ -8,6 +8,7 @@ import { teamMutation, teamRead, acceptTeamInvitation } from "@/lib/team/service
 import { consumeRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 const headers = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" };
 function failure(error: unknown) {
   if (error instanceof TeamError) return NextResponse.json({ error: error.message }, { status: error.status, headers });
@@ -33,6 +34,10 @@ export async function POST(request: Request, context: Context) {
     if (!limit.allowed) throw new TeamError("Too many changes. Try again shortly.", 429);
     const { resource } = await context.params;
     const result = resource === "accept" ? await acceptTeamInvitation(user, typeof (body as { token?: unknown })?.token === "string" ? (body as { token: string }).token : "") : await teamMutation(await teamActor(new URL(request.url).searchParams.get("workspace") || undefined), resource, body);
+    if (resource === "clients-save" && result && typeof result === "object" && "id" in result) {
+      const clientId = String(result.id);
+      after(async () => { const { processClientWelcomes } = await import("@/lib/team/client-welcome"); await processClientWelcomes(clientId, 1); });
+    }
     return NextResponse.json(result, { headers });
   } catch (error) { return failure(error); }
 }

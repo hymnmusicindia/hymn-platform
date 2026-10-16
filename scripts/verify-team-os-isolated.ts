@@ -19,9 +19,12 @@ async function main() {
     if (process.argv.includes("--generate-advanced")) await run(["node_modules/prisma/build/index.js", "migrate", "diff", "--from-url", env.DATABASE_URL, "--to-schema-datamodel", "prisma/schema.prisma", "--script", "--output", "prisma/migrations/20261015220000_team_os_complete/migration.sql"]);
     await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261015220000_team_os_complete/migration.sql", "--schema", "prisma/schema.prisma"]);
     await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261016090000_team_calendar_clients/migration.sql", "--schema", "prisma/schema.prisma"]);
+    await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261017010000_team_client_contacts/migration.sql", "--schema", "prisma/schema.prisma"]);
     await run(["--import", "tsx", "scripts/verify-team-owner-bootstrap.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-os.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-os-advanced.ts"]);
+    await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-client-contacts.ts"]);
+    if (process.argv.includes("--contacts-browser")) await run(["--import", "tsx", "scripts/verify-team-client-browser.ts"]);
     if (process.argv.includes("--live-chat")) await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-live-chat-browser.ts"]);
     if (process.argv.includes("--upgrade")) {
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-admin-workspace.ts"]);

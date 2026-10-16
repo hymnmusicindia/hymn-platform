@@ -3744,6 +3744,10 @@ model TeamClient {
   name String
   phone String @default("")
   email String @default("")
+  secondaryEmail String @default("")
+  interests String[] @default([])
+  state String @default("")
+  city String @default("")
   notes String @default("")
   status String @default("ACTIVE")
   version Int @default(1)
@@ -3752,6 +3756,7 @@ model TeamClient {
   workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   owner TeamMember @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   events TeamCalendarEvent[]
+  welcomeJobs TeamClientWelcome[]
   @@index([workspaceId, status])
   @@map("team_clients")
 }
@@ -3765,7 +3770,7 @@ model TeamCalendarEvent {
   title String
   kind String @default("EVENT")
   startsAt DateTime
-  endsAt DateTime
+  endsAt DateTime?
   notes String @default("")
   outcome String @default("")
   status String @default("SCHEDULED")
@@ -3781,4 +3786,17 @@ model TeamCalendarEvent {
   @@index([workspaceId, startsAt, endsAt])
   @@index([assigneeId, status, startsAt])
   @@map("team_calendar_events")
+}
+
+model TeamClientWelcome {
+  id String @id @default(cuid())
+  clientId String
+  email String @unique
+  status String @default("PENDING")
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  client TeamClient @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  @@index([status, createdAt])
+  @@map("team_client_welcomes")
 }

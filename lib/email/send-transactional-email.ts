@@ -45,10 +45,16 @@ export async function retryTransactionalEmail(logId: number) {
   const original = await emailLog.findUnique({ where: { id: logId } });
   if (!original) throw new Error("Email log not found.");
   if (original.status !== "failed") throw new Error("Only failed emails can be retried.");
+  if (original.template === "team_client_welcome") {
+    const { assertClientWelcomeRetryAllowed } = await import("@/lib/team/client-welcome");
+    await assertClientWelcomeRetryAllowed(original.toEmail);
+  }
   const payload = original.payload && typeof original.payload === "object" ? original.payload as { html?: string; text?: string } : {};
   if (!payload.html || !payload.text) throw new Error("This email attempt does not contain retryable content.");
   const retryNumber = Number(original.retryCount || 0) + 1;
   await emailLog.update({ where: { id: original.id }, data: { retryCount: retryNumber } });
-  return sendTransactionalEmail({ to: original.toEmail, subject: original.subject, template: original.template, html: payload.html, text: payload.text, eventKey: `${original.eventKey}:retry:${retryNumber}`, userId: original.userId ?? undefined, entityType: original.entityType ?? undefined, entityId: original.entityId ?? undefined });
+  const result = await sendTransactionalEmail({ to: original.toEmail, subject: original.subject, template: original.template, html: payload.html, text: payload.text, eventKey: `${original.eventKey}:retry:${retryNumber}`, userId: original.userId ?? undefined, entityType: original.entityType ?? undefined, entityId: original.entityId ?? undefined });
+  if (original.template === "team_client_welcome") await prisma.teamClientWelcome.updateMany({ where: { email: original.toEmail.toLowerCase() }, data: { status: result.status === "sent" ? "SENT" : "REVIEW", error: result.error || null } });
+  return result;
 }
 // vercel trigger 6
