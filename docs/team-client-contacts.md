@@ -11,3 +11,11 @@ The introduction uses the saved name, interests and optional location, with hone
 Verification: `node --import tsx scripts/verify-team-os-isolated.ts --contacts-browser`, TypeScript, targeted ESLint and migration safety checks. Financial and email provider tests use isolated fixtures and injected delivery, never real customer emails.
 
 Design references: [Material time pickers](https://m3.material.io/components/time-pickers/) and [WAI dialog/date-picker keyboard guidance](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/examples/datepicker-dialog/).
+
+## Interactive calendar and My Work
+
+The entire day surface is a keyboard/touch-accessible scheduling button; event chips open their own details and task chips open My Work without triggering the date composer. Client-card drag/drop is retained. The board offers month/selected-day agenda views, event-type and teammate filters, title/client search, closed-event visibility, today highlighting and overflow-to-agenda controls. Multi-day events appear on each day they overlap.
+
+Choose “Task in My Work” in the day composer to create a canonical TeamTask at the selected due time. No second calendar-event copy is created. Retries use a stable per-composer UUID, checked under the workspace lock. Existing task creation/assignment permissions, visibility rules, status transitions and audit logs are retained. Changes to a task's due time or completion in My Work are reflected by calendar reads. The Team OS cron sends one in-app due reminder per task/due-time combination; the cron's 15-minute cadence determines delivery timing. This release adds no schema migration or external calendar sync.
+
+Interaction references: [FullCalendar date selection](https://fullcalendar.io/docs/date-clicking-selecting-demo) and [Google Calendar task scheduling](https://support.google.com/calendar/answer/9901136).

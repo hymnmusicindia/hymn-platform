@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { teamMutation, teamWrite, notify } from "@/lib/team/service";
 import { weekStartIndia } from "@/lib/team/policy";
 import { processClientWelcomes } from "@/lib/team/client-welcome";
+import { remindCalendarTasks } from "@/lib/team/calendar";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 export async function GET(request: Request) {
@@ -25,6 +26,7 @@ export async function GET(request: Request) {
             await tx.teamCalendarEvent.update({ where: { id: appointment.id }, data: { remindedAt: now } });
           }
         }
+        await remindCalendarTasks(tx, a, now);
         const members = await tx.teamMember.findMany({ where: { workspaceId: a.workspaceId, status: "ACTIVE", user: { status: "ACTIVE" } } });
         for (const member of members) {
           const preferences = member.preferences as { digest?: string; fridayReminder?: boolean };

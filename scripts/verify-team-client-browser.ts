@@ -43,6 +43,29 @@ async function main() {
     await expect(page.getByLabel("Start time hour", { exact: true })).toHaveValue("3");
     await expect(page.getByLabel("Start time minute", { exact: true })).toHaveValue("15");
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2));
+    await page.getByRole("button", { name: "Close calendar form" }).click();
+    const date = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+    await page.getByRole("button", { name: /Start-only browser appointment/ }).first().click();
+    await expect(dialog.getByRole("heading", { name: "Event details", exact: true })).toBeVisible();
+    await expect(page.getByLabel("Schedule item type", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Close calendar form" }).click();
+    // Click the date/blank surface, not an overlaid event chip's centre.
+    await page.getByRole("button", { name: `Schedule on ${date}`, exact: true }).click({ position: { x: 8, y: 8 } });
+    await page.getByLabel("Schedule item type", { exact: true }).selectOption("TASK");
+    await page.getByLabel("Task title", { exact: true }).fill("Calendar browser My Work task");
+    await page.getByLabel("Start time hour", { exact: true }).selectOption("4");
+    await page.getByLabel("Start time minute", { exact: true }).selectOption("15");
+    await page.getByLabel("Start time AM or PM", { exact: true }).selectOption("PM");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(dialog).toHaveCount(0, { timeout: 120000 });
+    const task = await prisma.teamTask.findFirstOrThrow({ where: { workspaceId: member.workspaceId, title: "Calendar browser My Work task" } });
+    await expect(page.locator(`a[href*="task=${task.id}"]`).first()).toBeVisible();
+    await page.getByLabel("Filter calendar type", { exact: true }).selectOption("CALL");
+    await expect(page.locator(`a[href*="task=${task.id}"]`)).toHaveCount(0);
+    await page.getByLabel("Filter calendar type", { exact: true }).selectOption("TASK");
+    await page.locator(`a[href*="task=${task.id}"]`).first().click();
+    await expect(page.getByRole("dialog").getByRole("heading", { name: "Calendar browser My Work task", exact: true })).toBeVisible();
+    console.log("PASS: day-cell quick scheduling, task creation, type filters, My Work deep link and mobile interaction.");
     console.log("PASS: blank AM/PM controls, required-start browser validation, start-only save/midnight conversion, account matching and mobile dial layout.");
   } finally {
     await browser.close();

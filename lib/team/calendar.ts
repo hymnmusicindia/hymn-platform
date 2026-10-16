@@ -5,11 +5,29 @@ import { prisma } from "@/lib/prisma";
 import { demand, can, TeamError, type Actor } from "./policy";
 import { audit, eligible, notify, taskScope } from "./service";
 import { CLIENT_INTERESTS } from "./client-interests";
+import { taskSchema } from "./validation";
 const id = z.string().min(1).max(80);
 const email = z.union([z.string().trim().email().max(320), z.literal("")]).transform(value => value.toLowerCase());
 const clientSchema = z.object({ id: id.optional(), version: z.number().int().positive().optional(), name: z.string().trim().min(1).max(160), phone: z.string().trim().max(40).regex(/^[+\d\s().-]*$/).default(""), email: email.default(""), secondaryEmail: email.default(""), interests: z.array(z.enum(Object.keys(CLIENT_INTERESTS) as [keyof typeof CLIENT_INTERESTS, ...(keyof typeof CLIENT_INTERESTS)[]])).max(6).default([]), state: z.string().trim().max(100).default(""), city: z.string().trim().max(100).default(""), notes: z.string().trim().max(10000).default(""), ownerId: id, status: z.enum(["ACTIVE", "DO_NOT_CONTACT", "ARCHIVED"]).default("ACTIVE") });
 const eventSchema = z.object({ id: id.optional(), version: z.number().int().positive().optional(), title: z.string().trim().min(1).max(200), kind: z.enum(["CALL", "EMAIL", "MEETING", "FOLLOW_UP", "EVENT"]), clientId: id.nullable(), assigneeId: id, startsAt: z.string().datetime({ offset: true }), endsAt: z.string().datetime({ offset: true }).nullish(), notes: z.string().trim().max(10000).default(""), outcome: z.string().trim().max(10000).default(""), status: z.enum(["SCHEDULED", "COMPLETED", "CANCELLED"]).default("SCHEDULED"), reminderMinutes: z.number().int().min(0).max(10080).default(30) });
 export async function calendarMutation(tx: Prisma.TransactionClient, a: Actor, resource: string, input: unknown) {
+  if (resource === "calendar-task") {
+    demand(a, "tasks.create");
+    const data = taskSchema.pick({ title: true, description: true, ownerId: true, priority: true }).extend({ startsAt: z.string().datetime({ offset: true }), clientKey: z.string().uuid() }).parse(input);
+    if (data.ownerId !== a.id) demand(a, "tasks.assign");
+    await eligible(tx, a, [data.ownerId]);
+    const eventKey = `calendar-task:${a.workspaceId}:${a.id}:${data.clientKey}`;
+    const dueAt = new Date(data.startsAt);
+    const prior = await tx.teamTask.findUnique({ where: { eventKey } });
+    if (prior) {
+      if (prior.title !== data.title || prior.ownerId !== data.ownerId || prior.description !== data.description || prior.priority !== data.priority || prior.dueAt?.getTime() !== dueAt.getTime()) throw new TeamError("This retry key belongs to a different scheduled task.", 409);
+      return prior;
+    }
+    const task = await tx.teamTask.create({ data: { workspaceId: a.workspaceId, creatorId: a.id, ownerId: data.ownerId, title: data.title, description: data.description, priority: data.priority, dueAt, eventKey } });
+    await audit(tx, a, "calendar.task.created", task.id, { dueAt: dueAt.toISOString(), ownerId: task.ownerId });
+    await notify(tx, task.ownerId, `Scheduled task: ${task.title}`, `/team?workspace=${a.workspaceId}&module=work&task=${task.id}`);
+    return task;
+  }
   if (resource === "clients-save") {
     demand(a, "clients.manage"); const data = clientSchema.parse(input); await eligible(tx, a, [data.ownerId]);
     const old = data.id ? await tx.teamClient.findFirst({ where: { id: data.id, workspaceId: a.workspaceId } }) : null;
@@ -55,6 +73,16 @@ export async function calendarMutation(tx: Prisma.TransactionClient, a: Actor, r
   if (!old || old.assigneeId !== row.assigneeId || old.startsAt.getTime() !== row.startsAt.getTime()) await notify(tx, row.assigneeId, `Scheduled: ${row.title}`, "/team?module=calendar");
   return row;
 }
+export async function remindCalendarTasks(tx: Prisma.TransactionClient, a: Actor, now: Date) {
+  const tasks = await tx.teamTask.findMany({ where: { workspaceId: a.workspaceId, archivedAt: null, status: { notIn: ["COMPLETED", "CANCELLED"] }, dueAt: { gte: new Date(now.getTime() - 15 * 60000), lte: new Date(now.getTime() + 15 * 60000) }, owner: { status: "ACTIVE", user: { status: "ACTIVE" } } }, take: 1000 });
+  for (const task of tasks) {
+    const eventKey = `calendar-task-reminder:${task.id}:${task.dueAt!.toISOString()}`;
+    if (await tx.teamWorkflowEvent.findUnique({ where: { eventKey } })) continue;
+    await tx.teamWorkflowEvent.create({ data: { workspaceId: a.workspaceId, eventKey } });
+    await notify(tx, task.ownerId, `Task due soon: ${task.title}`, `/team?workspace=${a.workspaceId}&module=work&task=${task.id}`);
+  }
+}
+
 export async function calendarRead(a: Actor, resource: string, params: URLSearchParams) {
   if (resource === "client-account-match") {
     demand(a, "clients.manage");
@@ -76,7 +104,7 @@ export async function calendarRead(a: Actor, resource: string, params: URLSearch
   const [items, total, deadlines] = await Promise.all([
     prisma.teamCalendarEvent.findMany({ where, take: 1000, orderBy: { startsAt: "asc" }, include: { client: can(a, "clients.view") ? true : false } }),
     prisma.teamCalendarEvent.count({ where }),
-    prisma.teamTask.findMany({ where: { ...taskScope(a), dueAt: { gte: new Date(start), lt: new Date(end) }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, take: 1000, orderBy: { dueAt: "asc" }, select: { id: true, title: true, dueAt: true } })
+    prisma.teamTask.findMany({ where: { ...taskScope(a), dueAt: { gte: new Date(start), lt: new Date(end) }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, take: 1000, orderBy: { dueAt: "asc" }, select: { id: true, title: true, dueAt: true, ownerId: true, priority: true, status: true } })
   ]);
   return { items, total, deadlines };
 }

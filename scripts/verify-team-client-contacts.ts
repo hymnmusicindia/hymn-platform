@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { prisma } from "../lib/prisma";
-import { teamMutation, teamRead } from "../lib/team/service";
+import { teamMutation, teamRead, teamWrite } from "../lib/team/service";
+import { remindCalendarTasks } from "../lib/team/calendar";
 import { roleTemplates } from "../lib/team/policy";
 import { assertClientWelcomeRetryAllowed, clientWelcomeTemplate, processClientWelcomes } from "../lib/team/client-welcome";
 
@@ -51,6 +52,35 @@ async function main() {
   await assert.rejects(teamMutation(actor, "calendar-save", event));
   const schedule = await teamRead(actor, "calendar", new URLSearchParams({ start: "2027-01-01T00:00:00+05:30", end: "2027-01-02T00:00:00+05:30" })) as { items: unknown[] };
   assert.equal(schedule.items.length, 1);
+  const taskInput = { title: "Calendar linked My Work task", description: "One canonical task", ownerId: actor.id, priority: "HIGH", startsAt: "2027-01-01T14:15:00+05:30", clientKey: randomUUID() };
+  const scheduledTask = await teamMutation(actor, "calendar-task", taskInput) as { id: string; version: number };
+  const replay = await teamMutation(actor, "calendar-task", taskInput) as { id: string };
+  assert.equal(replay.id, scheduledTask.id);
+  await assert.rejects(teamMutation(actor, "calendar-task", { ...taskInput, title: "Changed retry body" }));
+  await assert.rejects(teamMutation(actor, "calendar-task", { ...taskInput, clientKey: randomUUID(), startsAt: "" }));
+  const range = (day: string) => new URLSearchParams({ start: `${day}T00:00:00+05:30`, end: `${day}T23:59:59+05:30` });
+  let linkedTasks = await teamRead(actor, "calendar", range("2027-01-01")) as { deadlines: { id: string }[] };
+  assert.ok(linkedTasks.deadlines.some(task => task.id === scheduledTask.id));
+  await teamMutation(actor, "task-update", { id: scheduledTask.id, version: scheduledTask.version, dueAt: "2027-01-02T14:15:00+05:30" });
+  linkedTasks = await teamRead(actor, "calendar", range("2027-01-01")) as { deadlines: { id: string }[] };
+  assert.ok(!linkedTasks.deadlines.some(task => task.id === scheduledTask.id));
+  linkedTasks = await teamRead(actor, "calendar", range("2027-01-02")) as { deadlines: { id: string }[] };
+  assert.ok(linkedTasks.deadlines.some(task => task.id === scheduledTask.id));
+  const viewerUser = await prisma.user.create({ data: { name: "Calendar Viewer", email: `viewer-${tag}@example.test`, googleId: `viewer-${tag}` } });
+  const viewerRole = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name: "Viewer", permissions: roleTemplates.Viewer } });
+  const viewer = await prisma.teamMember.create({ data: { workspaceId: workspace.id, userId: viewerUser.id, roleId: viewerRole.id }, include: { role: true } });
+  await assert.rejects(teamMutation(viewer, "calendar-task", { ...taskInput, clientKey: randomUUID(), ownerId: viewer.id }));
+  const privateTasks = await teamRead(viewer, "calendar", range("2027-01-02")) as { deadlines: unknown[] };
+  assert.equal(privateTasks.deadlines.length, 0);
+  const now = new Date();
+  const reminderTask = await teamMutation(actor, "calendar-task", { ...taskInput, title: "Due reminder test", startsAt: new Date(now.getTime() + 5 * 60000).toISOString(), clientKey: randomUUID() }) as { id: string };
+  await teamWrite(actor, (tx, a) => remindCalendarTasks(tx, a, now));
+  await teamWrite(actor, (tx, a) => remindCalendarTasks(tx, a, now));
+  assert.equal(await prisma.teamNotification.count({ where: { memberId: actor.id, title: "Task due soon: Due reminder test" } }), 1);
+  await prisma.teamTask.update({ where: { id: reminderTask.id }, data: { dueAt: new Date(now.getTime() + 10 * 60000) } });
+  await teamWrite(actor, (tx, a) => remindCalendarTasks(tx, a, now));
+  assert.equal(await prisma.teamNotification.count({ where: { memberId: actor.id, title: "Task due soon: Due reminder test" } }), 2);
+  console.log("PASS: calendar tasks are real My Work records, retry-safe, reschedule automatically and respect task visibility/create permissions.");
   console.log("PASS: account matching, primary/secondary dedup, interests/location, one-time personalised email, late-signup/DNC suppression, required start, nullable end, point-event range/conflicts. No real email sent.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => prisma.$disconnect());

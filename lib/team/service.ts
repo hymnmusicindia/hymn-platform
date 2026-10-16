@@ -51,7 +51,7 @@ async function dependencies(tx: Tx, a: Actor, id: string, ids: string[]) {
 
 export async function teamMutation(identity: Actor, resource: string, input: unknown) {
   return teamWrite(identity, async (tx, a) => {
-    if (["clients-save", "calendar-save"].includes(resource)) return (await import("./calendar")).calendarMutation(tx, a, resource, input);
+    if (["clients-save", "calendar-save", "calendar-task"].includes(resource)) return (await import("./calendar")).calendarMutation(tx, a, resource, input);
     const object = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
     const id = typeof object.id === "string" ? object.id : "";
     if (resource === "tasks") {
