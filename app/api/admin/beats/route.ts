@@ -8,7 +8,8 @@ import { localPrivateStorage } from "@/lib/private-storage";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  const result = await requireAdminPermission("users.read");
+  let result = await requireAdminPermission("users.read");
+  if ("error" in result) result = await requireAdminPermission("services.manage");
   if ("error" in result) return result.error;
 
   const beats = await listAllBeats();

@@ -80,16 +80,18 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const canReadUsers = permissions.includes("users.read");
   const canReadReleases=permissions.some(permission=>["releases.read","releases.review","distribution.retry","distribution.submit"].includes(permission));
   const canReadCommerce=permissions.some(permission=>["payouts.review","royalties.reconcile","services.manage"].includes(permission));
-  const subscriptionRevenue = permissions.some(permission => ["payouts.review", "royalties.reconcile"].includes(permission)) ? await listSubscriptionRevenue() : [];
+  const subscriptionRevenuePromise = permissions.some(permission => ["payouts.review", "royalties.reconcile"].includes(permission)) ? listSubscriptionRevenue() : Promise.resolve([]);
   const canReadServices=permissions.includes("services.manage");
   const canReadSystem=permissions.includes("system.manage");
 
   const resolvedSearchParams = await searchParams;
-  const [users, releases, beats] = await Promise.all([canReadUsers ? listUsers() : Promise.resolve([]), canReadReleases?listAllDetailedReleases():Promise.resolve([]), canReadServices?listAllBeats():Promise.resolve([])]);
-  const [orders, applications, leads] = await Promise.all([canReadCommerce?listAllOrders():Promise.resolve([]), canReadServices?listProducerApplications():Promise.resolve([]), canReadServices?listPartnershipLeads():Promise.resolve([])]);
-  const [distributionOrders, artistProfiles] = await Promise.all([canReadCommerce?listAllDistributionOrders():Promise.resolve([]), canReadUsers?listAllArtistProfiles():Promise.resolve([])]);
-  const [siteSettings, notifications, supportTickets] = await Promise.all([getSiteSettings(), canReadSystem?listLatestNotifications(50):Promise.resolve([]), canReadServices?listAllSupportTickets():Promise.resolve([])]);
-  const pendingEngineerApplications = canReadServices ? await prisma.engineerApplication.count({ where: { status: "PENDING" } }) : 0;
+  const [users, releases, beats, orders, applications, leads, distributionOrders, artistProfiles, siteSettings, notifications, supportTickets, subscriptionRevenue, pendingEngineerApplications] = await Promise.all([
+    canReadUsers ? listUsers() : Promise.resolve([]), canReadReleases ? listAllDetailedReleases() : Promise.resolve([]), canReadServices ? listAllBeats() : Promise.resolve([]),
+    canReadCommerce ? listAllOrders() : Promise.resolve([]), canReadServices ? listProducerApplications() : Promise.resolve([]), canReadServices ? listPartnershipLeads() : Promise.resolve([]),
+    canReadCommerce ? listAllDistributionOrders() : Promise.resolve([]), canReadUsers ? listAllArtistProfiles() : Promise.resolve([]), getSiteSettings(),
+    canReadSystem ? listLatestNotifications(50) : Promise.resolve([]), canReadServices ? listAllSupportTickets() : Promise.resolve([]), subscriptionRevenuePromise,
+    canReadServices ? prisma.engineerApplication.count({ where: { status: "PENDING" } }) : Promise.resolve(0)
+  ]);
   const revenueEntries = permissions.some(permission => ["payouts.review", "royalties.reconcile"].includes(permission)) ? await listPlatformRevenue(distributionOrders, orders, subscriptionRevenue) : [];
   const requestedTabCandidate = resolvedSearchParams?.tab && ADMIN_TABS.includes(resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) ? (resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) : undefined;
   const requestedTab = requestedTabCandidate && !adminModuleAllowed(requestedTabCandidate,permissions) ? "overview" : requestedTabCandidate;
@@ -97,7 +99,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   return (
     <main className="admin-panel-shell py-6 sm:py-8">
       {canReadSystem ? <div className="mb-4 flex justify-end"><a className="btn-secondary" href="/admin/releases/manual">Manual release</a></div> : null}
-      {canReadServices && pendingEngineerApplications > 0 ? <a href="/admin/studio" className="mb-4 flex items-center justify-between rounded-2xl border border-[var(--border-strong)] bg-[var(--card)] p-4 transition hover:border-[var(--accent)]"><span><strong className="block">Mix / Master engineer approvals</strong><small className="mt-1 block text-[var(--text-muted)]">Review profiles, work samples and pricing before publishing.</small></span><span className="rounded-full bg-[var(--accent)] px-3 py-1 text-sm font-semibold text-white">{pendingEngineerApplications} pending</span></a> : null}
+      {canReadServices && pendingEngineerApplications > 0 ? <a href="/admin/studio" className="mb-4 flex items-center justify-between rounded-2xl border border-[var(--border-strong)] bg-[var(--card)] p-4 transition hover:border-[var(--accent)]"><span><strong className="block">Mix / Master engineer approvals</strong><small className="mt-1 block text-[var(--text-muted)]">Review profiles, work samples and pricing before publishing.</small></span><span className="rounded-full px-3 py-1 text-sm font-semibold" style={{ background: "#f4d493", color: "#241b0c", border: "1px solid #f9dfac" }}>{pendingEngineerApplications} pending</span></a> : null}
       <AdminControlCenter
         currentAdmin={currentAdmin}
         adminAccess={adminAccess ?? { role: "admin", permissions: [] }}

@@ -12,7 +12,7 @@ export const getPublicHomePreview = unstable_cache(
       listAllBeats(HOME_BEAT_LIMIT),
       listProducerProfiles(HOME_PRODUCER_LIMIT),
       listRecentGoogleAvatarUrls(4),
-      prisma.purchaseReview.findMany({ where: { status: "approved", featured: true, body: { not: null } }, orderBy: [{ featuredOrder: "asc" }, { createdAt: "desc" }], take: 12, select: { id: true, rating: true, body: true, purchaseType: true, user: { select: { name: true, avatar: true } } } }).catch(() => []),
+      prisma.purchaseReview.findMany({ where: { status: "approved", body: { not: null }, NOT: { body: "" } }, orderBy: [{ moderatedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }], take: 12, select: { id: true, rating: true, body: true, featured: true, featuredOrder: true, purchaseType: true, user: { select: { name: true, avatar: true } } } }).catch(() => []),
       getSiteSettings(),
       listAllReleases().catch(() => [])
     ]);
@@ -32,8 +32,9 @@ export const getPublicHomePreview = unstable_cache(
         releaseType: release.releaseType,
         status: release.status
       }));
+    featuredReviews.sort((a, b) => Number(b.featured) - Number(a.featured) || a.featuredOrder - b.featuredOrder);
     return { beats, producerProfiles, googleAvatarUrls, featuredReviews, featuredReleases };
   },
-  ["public-home-preview-v7"],
+  ["public-home-preview-v8"],
   { revalidate: 300, tags: ["public-home-preview"] }
 );

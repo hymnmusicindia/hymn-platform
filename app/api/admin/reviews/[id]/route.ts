@@ -23,6 +23,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     await tx.auditLog.create({ data: { actorId, actorRole: "admin", action: "PURCHASE_REVIEW_MODERATED", entity: "purchase_review", entityId: String(id), previousValue: { status: current.status, featured: current.featured }, newValue: { status: updated.status, featured: updated.featured, featuredOrder: updated.featuredOrder }, reason: "Review moderation update" } });
     return updated;
   });
-  revalidateTag("public-home-preview", "max");
+  revalidateTag("public-home-preview", { expire: 0 });
   return NextResponse.json({ review });
 }

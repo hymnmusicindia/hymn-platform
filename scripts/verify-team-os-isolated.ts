@@ -18,9 +18,15 @@ async function main() {
     await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261015190000_team_os/migration.sql", "--schema", "prisma/schema.prisma"]);
     if (process.argv.includes("--generate-advanced")) await run(["node_modules/prisma/build/index.js", "migrate", "diff", "--from-url", env.DATABASE_URL, "--to-schema-datamodel", "prisma/schema.prisma", "--script", "--output", "prisma/migrations/20261015220000_team_os_complete/migration.sql"]);
     await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261015220000_team_os_complete/migration.sql", "--schema", "prisma/schema.prisma"]);
+    await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261016090000_team_calendar_clients/migration.sql", "--schema", "prisma/schema.prisma"]);
     await run(["--import", "tsx", "scripts/verify-team-owner-bootstrap.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-os.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-os-advanced.ts"]);
+    if (process.argv.includes("--upgrade")) {
+      await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-admin-workspace.ts"]);
+      await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-workspace-upgrade.ts"]);
+      await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-workspace-upgrade-browser.ts"]);
+    }
     if (process.argv.includes("--admin")) await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-admin-workspace.ts"]);
     if (process.argv.includes("--browser")) await run(["--import", "tsx", "scripts/verify-team-os-browser.ts"]);
     if (process.argv.includes("--admin")) await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-admin-workspace-browser.ts"]);

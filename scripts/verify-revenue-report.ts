@@ -37,6 +37,6 @@ assert(nav.some(row=>row.key==="revenue"&&row.group==="Command Center"&&row.labe
 assert(!nav.some(row=>row.key==="payments"||row.key==="health"),"Merged destinations must not duplicate menu entries");
 assert(!adminNavigation(["users.read"]).some(row=>row.key==="revenue"));
 const creator=consistentWorkspaceNavigation([{key:"settings",label:"Settings",group:"Account"},{key:"profile",label:"Artist Profiles",group:"Account",href:"/dashboard?tab=settings"}]);
-assert.equal(creator.filter(row=>row.href==="/dashboard?tab=settings").length,1,"Settings and profiles share one destination");
+assert(!creator.some(row=>row.group==="Account"),"Account and profile actions live in the profile menu, not the workspace rail");
 assert(!creator.some(row=>row.key==="faq"||row.key==="contact"),"Support entry consolidates help destinations");
 console.log("PASS revenue units, platform share, pending allocation, currency isolation, India months and consolidated navigation");

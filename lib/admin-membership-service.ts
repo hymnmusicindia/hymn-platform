@@ -3,7 +3,7 @@ import { prisma } from "./prisma";
 import { isConfiguredAdminEmail } from "./auth-role";
 import { isAdminAuthority } from "./admin-role-policy";
 
-export async function changeAdministrator(actorId: number, userId: number, input: { role?: string; active?: boolean; nextRole?: "customer" | "producer"; reason: string }) {
+export async function changeAdministrator(actorId: number, userId: number, input: { role?: string; active?: boolean; nextRole?: "customer" | "producer"; reason: string; expectedUpdatedAt?: string | null }) {
   if (!Number.isSafeInteger(userId) || userId < 1 || !actorId || actorId === userId) throw Error("An administrator cannot change their own access. Ask another founder or super administrator.");
   return prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(187462902)`;
@@ -14,6 +14,7 @@ export async function changeAdministrator(actorId: number, userId: number, input
     const user = await tx.user.findUnique({ where: { id: userId } });
     if (!user || user.status !== "ACTIVE" && input.active !== false) throw Error("Choose an active account for access grants. Inactive memberships may still be revoked.");
     const previous = await tx.adminMembership.findUnique({ where: { userId }, include: { role: true } });
+    if (input.expectedUpdatedAt !== undefined && (previous?.updatedAt.toISOString() ?? null) !== input.expectedUpdatedAt) throw Error("Staff access changed. Refresh before saving.");
     if (input.nextRole && !previous) throw Error("Administrator membership was not found.");
     const role = input.nextRole ? previous!.role : await tx.adminRole.findUnique({ where: { key: input.role! } });
     if (!role) throw Error("Role is not configured.");

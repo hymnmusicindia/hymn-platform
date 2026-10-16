@@ -14,6 +14,7 @@ import { AnimatedHeroMetrics } from "@/components/animated-hero-metrics";
 import { GoogleAuthButton } from "@/components/google-auth-button";
 import { HomeNewsletter } from "@/components/home-newsletter";
 import { beatStoreReviews, buildBeatStorefront } from "@/lib/beat-store";
+import { HomeReviewsCarousel } from "@/components/home-reviews-carousel";
 import { getPublicHomePreview } from "@/lib/public-home-data";
 import { getSession } from "@/lib/session";
 import { destinationForRole } from "@/lib/routes";
@@ -62,7 +63,7 @@ export default async function HomePage() {
   const { beats, producerProfiles, googleAvatarUrls, featuredReviews, featuredReleases } = await getPublicHomePreview();
   const { catalog } = buildBeatStorefront(beats, producerProfiles);
   const banners = buildHomePathBanners({featuredReleases,catalog,signedIn:Boolean(session)});
-  if (session) return <main id="home" className="hymn-landing"><LandingWorkspace workspaceHref={destinationForRole(session.role)}><HomeGoalWorkspace userId={session.sub} name={session.name} banners={banners} /></LandingWorkspace></main>;
+  if (session) return <main id="home" className="hymn-landing"><LandingWorkspace workspaceHref={destinationForRole(session.role)}><HomeGoalWorkspace userId={session.sub} name={session.name} banners={banners} /><HomeReviewsCarousel reviews={featuredReviews}/></LandingWorkspace></main>;
   return (
     <main id="home" className="hymn-landing">
       <LandingWorkspace workspaceHref="/login">

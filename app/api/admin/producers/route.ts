@@ -3,7 +3,8 @@ import { requireAdminPermission } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  const result = await requireAdminPermission("users.read");
+  let result = await requireAdminPermission("users.read");
+  if ("error" in result) result = await requireAdminPermission("services.manage");
   if ("error" in result) return result.error;
   const users = await prisma.user.findMany({ where: { role: "PRODUCER" }, include: { producerProfile: true, beats: true, producerSales: true, payoutBalance: true }, orderBy: { updatedAt: "desc" } });
   return NextResponse.json({ producers: users.map((user) => {

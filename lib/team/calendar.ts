@@ -1,0 +1,63 @@
+import "server-only";
+import { z } from "zod";
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { demand, can, TeamError, type Actor } from "./policy";
+import { audit, eligible, notify, taskScope } from "./service";
+const id = z.string().min(1).max(80);
+const clientSchema = z.object({ id: id.optional(), version: z.number().int().positive().optional(), name: z.string().trim().min(1).max(160), phone: z.string().trim().max(40).regex(/^[+\d\s().-]*$/).default(""), email: z.union([z.string().trim().email().max(320), z.literal("")]).default(""), notes: z.string().trim().max(10000).default(""), ownerId: id, status: z.enum(["ACTIVE", "DO_NOT_CONTACT", "ARCHIVED"]).default("ACTIVE") });
+const eventSchema = z.object({ id: id.optional(), version: z.number().int().positive().optional(), title: z.string().trim().min(1).max(200), kind: z.enum(["CALL", "EMAIL", "MEETING", "FOLLOW_UP", "EVENT"]), clientId: id.nullable(), assigneeId: id, startsAt: z.string().datetime({ offset: true }), endsAt: z.string().datetime({ offset: true }), notes: z.string().trim().max(10000).default(""), outcome: z.string().trim().max(10000).default(""), status: z.enum(["SCHEDULED", "COMPLETED", "CANCELLED"]).default("SCHEDULED"), reminderMinutes: z.number().int().min(0).max(10080).default(30) });
+export async function calendarMutation(tx: Prisma.TransactionClient, a: Actor, resource: string, input: unknown) {
+  if (resource === "clients-save") {
+    demand(a, "clients.manage"); const data = clientSchema.parse(input); await eligible(tx, a, [data.ownerId]);
+    const old = data.id ? await tx.teamClient.findFirst({ where: { id: data.id, workspaceId: a.workspaceId } }) : null;
+    if (data.id && !old) throw new TeamError("Client unavailable.", 404);
+    if (old && old.version !== data.version) throw new TeamError("Client changed. Refresh first.", 409);
+    if (data.ownerId !== a.id || old && old.ownerId !== a.id) demand(a, "tasks.assign");
+    if (data.email || data.phone) {
+      const duplicate = await tx.teamClient.findFirst({ where: { workspaceId: a.workspaceId, id: { not: data.id }, OR: [...(data.email ? [{ email: { equals: data.email, mode: "insensitive" as const } }] : []), ...(data.phone ? [{ phone: data.phone.replace(/[^+\d]/g, "") }] : [])] } });
+      if (duplicate) throw new TeamError("A client with this email or phone already exists. Use the existing card.", 409);
+    }
+    const fields = { name: data.name, phone: data.phone.replace(/[^+\d]/g, ""), email: data.email.toLowerCase(), notes: data.notes, ownerId: data.ownerId, status: data.status };
+    const row = old ? await tx.teamClient.update({ where: { id: old.id }, data: { ...fields, version: { increment: 1 } } }) : await tx.teamClient.create({ data: { ...fields, workspaceId: a.workspaceId } });
+    if (data.status !== "ACTIVE") await tx.teamCalendarEvent.updateMany({ where: { clientId: row.id, status: "SCHEDULED", startsAt: { gte: new Date() } }, data: { status: "CANCELLED", version: { increment: 1 } } });
+    await audit(tx, a, old ? "client.updated" : "client.created", row.id, { status: row.status }); return row;
+  }
+  demand(a, "calendar.manage"); const data = eventSchema.parse(input);
+  const old = data.id ? await tx.teamCalendarEvent.findFirst({ where: { id: data.id, workspaceId: a.workspaceId } }) : null;
+  if (data.id && !old) throw new TeamError("Event unavailable.", 404);
+  if (old && old.version !== data.version) throw new TeamError("Event changed. Refresh first.", 409);
+  if (data.assigneeId !== a.id || old && old.assigneeId !== a.id && old.creatorId !== a.id) demand(a, "tasks.assign");
+  await eligible(tx, a, [data.assigneeId]);
+  if (data.clientId) {
+    demand(a, "clients.view"); const client = await tx.teamClient.findFirst({ where: { id: data.clientId, workspaceId: a.workspaceId } });
+    if (!client || client.status !== "ACTIVE") throw new TeamError("Choose an active client; do-not-contact and archived clients cannot be scheduled.");
+  }
+  if (["CALL", "EMAIL", "FOLLOW_UP"].includes(data.kind) && !data.clientId) throw new TeamError("Link a client card for client outreach.");
+  const startsAt = new Date(data.startsAt), endsAt = new Date(data.endsAt);
+  if (endsAt <= startsAt || endsAt.getTime() - startsAt.getTime() > 7 * 86400000) throw new TeamError("Choose an end after the start, within seven days.");
+  if (data.status === "COMPLETED" && !data.outcome.trim()) throw new TeamError("Record the outcome before completing the event.");
+  if (data.status === "SCHEDULED" && await tx.teamCalendarEvent.findFirst({ where: { workspaceId: a.workspaceId, assigneeId: data.assigneeId, id: { not: data.id }, status: "SCHEDULED", startsAt: { lt: endsAt }, endsAt: { gt: startsAt } } })) throw new TeamError("This teammate already has a scheduled event in that time slot.", 409);
+  const fields = { title: data.title, kind: data.kind, clientId: data.clientId, assigneeId: data.assigneeId, startsAt, endsAt, notes: data.notes, outcome: data.outcome, status: data.status, reminderMinutes: data.reminderMinutes, ...(old && (old.startsAt.getTime() !== startsAt.getTime() || old.assigneeId !== data.assigneeId || old.reminderMinutes !== data.reminderMinutes) ? { remindedAt: null } : {}) };
+  const row = old ? await tx.teamCalendarEvent.update({ where: { id: old.id }, data: { ...fields, version: { increment: 1 } } }) : await tx.teamCalendarEvent.create({ data: { ...fields, workspaceId: a.workspaceId, creatorId: a.id } });
+  await audit(tx, a, old ? "calendar.updated" : "calendar.created", row.id, { status: row.status, kind: row.kind });
+  if (!old || old.assigneeId !== row.assigneeId || old.startsAt.getTime() !== row.startsAt.getTime()) await notify(tx, row.assigneeId, `Scheduled: ${row.title}`, "/team?module=calendar");
+  return row;
+}
+export async function calendarRead(a: Actor, resource: string, params: URLSearchParams) {
+  if (resource === "clients") {
+    demand(a, "clients.view"); const q = (params.get("q") || "").trim().slice(0, 160); const offset = z.coerce.number().int().min(0).max(100000).parse(params.get("offset") || 0);
+    const where = { workspaceId: a.workspaceId, ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" as const } }, { email: { contains: q, mode: "insensitive" as const } }, { phone: { contains: q } }] } : {}) };
+    return { items: await prisma.teamClient.findMany({ where, take: 100, skip: offset, orderBy: { updatedAt: "desc" } }), total: await prisma.teamClient.count({ where }) };
+  }
+  demand(a, "calendar.view");
+  const start = z.string().datetime({ offset: true }).parse(params.get("start")), end = z.string().datetime({ offset: true }).parse(params.get("end"));
+  if (new Date(end) <= new Date(start) || Date.parse(end) - Date.parse(start) > 93 * 86400000) throw new TeamError("Calendar range must be between one and 93 days.");
+  const where = { workspaceId: a.workspaceId, startsAt: { lt: new Date(end) }, endsAt: { gt: new Date(start) } };
+  const [items, total, deadlines] = await Promise.all([
+    prisma.teamCalendarEvent.findMany({ where, take: 1000, orderBy: { startsAt: "asc" }, include: { client: can(a, "clients.view") ? true : false } }),
+    prisma.teamCalendarEvent.count({ where }),
+    prisma.teamTask.findMany({ where: { ...taskScope(a), dueAt: { gte: new Date(start), lt: new Date(end) }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, take: 1000, orderBy: { dueAt: "asc" }, select: { id: true, title: true, dueAt: true } })
+  ]);
+  return { items, total, deadlines };
+}

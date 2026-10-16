@@ -16,6 +16,13 @@ export async function GET(request: Request) {
       await teamMutation(owner, "workflow-sync", {});
       await teamWrite(owner, async (tx, a) => {
         const now = new Date(); const local = new Date(now.getTime() + 330 * 60000); const day = local.getUTCDay(); const week = weekStartIndia(now).toISOString().slice(0, 10);
+        const appointments = await tx.teamCalendarEvent.findMany({ where: { workspaceId: a.workspaceId, status: "SCHEDULED", remindedAt: null, endsAt: { gt: now }, startsAt: { gte: new Date(now.getTime() - 15 * 60000), lte: new Date(now.getTime() + 7 * 86400000) } }, take: 1000 });
+        for (const appointment of appointments) {
+          if (appointment.startsAt.getTime() - now.getTime() <= appointment.reminderMinutes * 60000) {
+            await notify(tx, appointment.assigneeId, `Upcoming ${appointment.kind.toLowerCase()}: ${appointment.title}`, "/team?module=calendar");
+            await tx.teamCalendarEvent.update({ where: { id: appointment.id }, data: { remindedAt: now } });
+          }
+        }
         const members = await tx.teamMember.findMany({ where: { workspaceId: a.workspaceId, status: "ACTIVE", user: { status: "ACTIVE" } } });
         for (const member of members) {
           const preferences = member.preferences as { digest?: string; fridayReminder?: boolean };

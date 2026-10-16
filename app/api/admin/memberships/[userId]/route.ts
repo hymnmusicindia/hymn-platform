@@ -4,7 +4,7 @@ import { requireRecentAdminPermission } from "@/lib/access";
 import { isAdminAuthority } from "@/lib/admin-role-policy";
 import { changeAdministrator } from "@/lib/admin-membership-service";
 import { isSameAppOrigin } from "@/lib/request-origin";
-const schema = z.object({ role: z.enum(["super_admin", "qc_reviewer", "distribution_operator", "finance_operator", "payout_approver", "support_agent", "rights_operator", "read_only_auditor"]), active: z.boolean().default(true), reason: z.string().trim().min(5).max(1000) });
+const schema = z.object({ role: z.enum(["super_admin", "qc_reviewer", "distribution_operator", "finance_operator", "payout_approver", "support_agent", "rights_operator", "read_only_auditor"]), active: z.boolean().default(true), expectedUpdatedAt: z.string().datetime().nullable().optional(), reason: z.string().trim().min(5).max(1000) });
 const revokeSchema = z.object({ nextRole: z.enum(["customer", "producer"]), reason: z.string().trim().min(5).max(1000) });
 type Context = { params: Promise<{ userId: string }> };
 async function mutate(request: Request, context: Context, revoke: boolean) {

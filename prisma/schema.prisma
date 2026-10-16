@@ -3277,6 +3277,8 @@ model TeamWorkspace {
   channels TeamChannel[]
   prospects TeamProspect[]
   audits TeamAudit[]
+  clients TeamClient[]
+  calendarEvents TeamCalendarEvent[]
   @@map("team_workspaces")
 }
 
@@ -3318,6 +3320,9 @@ model TeamMember {
   prospects TeamProspect[]
   outreach TeamOutreach[]
   reports TeamWeeklyReport[]
+  clients TeamClient[]
+  assignedEvents TeamCalendarEvent[] @relation("CalendarAssignee")
+  createdEvents TeamCalendarEvent[] @relation("CalendarCreator")
   @@unique([workspaceId, userId])
   @@index([userId, status])
   @@map("team_memberships")
@@ -3710,4 +3715,50 @@ model PlaylistReviewMail {
   createdAt DateTime @default(now()) @map("created_at")
   @@index([status, availableAt])
   @@map("playlist_review_mail")
+}
+
+model TeamClient {
+  id String @id @default(cuid())
+  workspaceId String
+  ownerId String
+  name String
+  phone String @default("")
+  email String @default("")
+  notes String @default("")
+  status String @default("ACTIVE")
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  owner TeamMember @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  events TeamCalendarEvent[]
+  @@index([workspaceId, status])
+  @@map("team_clients")
+}
+
+model TeamCalendarEvent {
+  id String @id @default(cuid())
+  workspaceId String
+  creatorId String
+  assigneeId String
+  clientId String?
+  title String
+  kind String @default("EVENT")
+  startsAt DateTime
+  endsAt DateTime
+  notes String @default("")
+  outcome String @default("")
+  status String @default("SCHEDULED")
+  reminderMinutes Int @default(30)
+  remindedAt DateTime?
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  creator TeamMember @relation("CalendarCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  assignee TeamMember @relation("CalendarAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  client TeamClient? @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  @@index([workspaceId, startsAt, endsAt])
+  @@index([assigneeId, status, startsAt])
+  @@map("team_calendar_events")
 }

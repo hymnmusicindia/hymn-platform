@@ -24,7 +24,7 @@ export const adminWorkspaceNavigation:Item[]=[
         { key: "content", label: "Content Settings", description: "Site and producer content", group: "Growth / Content" },
         { key: "newsletter", label: "Newsletter", description: "Audience and email campaigns", group: "Growth / Content", href: "/admin/newsletter" },
         { key: "producers", label: "Producers", description: "Applications and catalog", group: "Marketplace" },
-        { key: "operations", label: "Beats / Orders", description: "Inventory and leads", group: "Marketplace" },
+        { key: "operations", label: "Producers / Beats / Orders", description: "Storefronts, inventory and orders", group: "Marketplace" },
         { key: "reviews", label: "Reviews", description: "Moderate customer feedback", group: "Marketplace" },
         { key: "contracts", label: "Contracts", description: "Agreements and splits", group: "Support / Legal" },
         { key: "support", label: "Support Tickets", description: "Inbound help", group: "Support / Legal" },
@@ -47,7 +47,7 @@ const required:Record<string,AdminPermissionKey[]>={
   releases:["releases.read","releases.review","distribution.retry"],"distribution-queue":["releases.review"],"delivery-failed":["distribution.retry"],delivery:["releases.read"],updates:["updates.review","takedowns.review"],takedowns:["takedowns.review"],fraud:["fraud.read"],
   payments:["payouts.review","royalties.reconcile"],revenue:["payouts.review","royalties.reconcile"],royalties:["payouts.review"],"earnings-entry":["royalties.import"],reconciliation:["royalties.reconcile"],kyc:["kyc.review"],
   settings:["system.manage"],integrations:["system.manage"],health:["system.manage"],content:["system.manage"],newsletter:["system.manage"],
-  "managed-services":["services.manage"],"playlist-reviews":["services.manage"],operations:["services.manage"],reviews:["services.manage"],support:["services.manage"],promotions:["system.manage"],"timed-playlists":["services.manage"],contracts:["services.manage"],growth:["audit.read"],"referrals-admin":["fraud.read","wallets.adjust"]
+  "managed-services":["services.manage"],"playlist-reviews":["services.manage"],operations:["services.manage","users.read"],reviews:["services.manage"],support:["services.manage"],promotions:["system.manage"],"timed-playlists":["services.manage"],contracts:["services.manage"],growth:["audit.read"],"referrals-admin":["fraud.read","wallets.adjust"]
 };
 export function adminModuleAllowed(key:string,permissions:readonly string[]){return key === "overview" ? permissions.length > 0 : Boolean(required[key]?.some(permission=>permissions.includes(permission)));}
-export function adminNavigation(permissions:readonly string[]){return adminWorkspaceNavigation.filter(item=>adminModuleAllowed(item.key,permissions));}
+export function adminNavigation(permissions:readonly string[]){return adminWorkspaceNavigation.filter(item=>item.key !== "producers" && adminModuleAllowed(item.key,permissions));}

@@ -1,8 +1,11 @@
 ﻿"use client";
 
+import dynamic from "next/dynamic";
+import { AdminCenteredDialog } from "./admin-centered-dialog";
+import { AdminCatalogGrid, ProducerStorefrontPreview } from "./admin-catalog-grid";
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import { AdminSubscriptionRevenue } from "@/components/admin-subscription-revenue";
-import { AdminRevenueWorkspace } from "@/components/admin-revenue-workspace";
+const AdminRevenueWorkspace = dynamic(() => import("@/components/admin-revenue-workspace").then(m => m.AdminRevenueWorkspace), { loading: () => <p role="status">Loading workspace...</p> });
 import { summarizeRevenue, type RevenueEntry } from "@/lib/revenue-report";
 import type { SubscriptionRevenueRow } from "@/lib/subscription-revenue";
 
@@ -15,8 +18,8 @@ import { AdminReviewManager } from "@/components/admin-review-manager";
 import { AdminTimedPlaylistManager } from "@/components/admin-timed-playlist-manager";
 import { AdminActivityAndLogs } from "@/components/admin-activity-and-logs";
 import { WorkspaceRecords } from "@/components/workspace-records";
-import { AdminUserManagement } from "@/components/admin-user-management";
-import { AdminTeamAccessManager } from "@/components/admin-team-access-manager";
+const AdminUserManagement = dynamic(() => import("@/components/admin-user-management").then(m => m.AdminUserManagement), { loading: () => <p role="status">Loading workspace...</p> });
+const AdminTeamAccessManager = dynamic(() => import("@/components/admin-team-access-manager").then(m => m.AdminTeamAccessManager), { loading: () => <p role="status">Loading workspace...</p> });
 import overviewStyles from "./dashboard-overview.module.css";
 import { AdminManualCron } from "./admin-manual-cron";
 import { OverviewPanel, OverviewPipeline } from "./simplified-dashboard-home";
@@ -575,9 +578,9 @@ export function AdminControlCenter({
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab === "releases" ? defaultReleaseTab : initialTab ?? "overview");
   const routeTab = useSearchParams().get("tab");
   useEffect(() => {
-    const internal = adminNavigation(adminAccess.permissions).some(item => item.key === routeTab && !item.href) || ["distribution-queue", "delivery-failed", "payments"].includes(routeTab || "");
+    const internal = adminNavigation(adminAccess.permissions).some(item => item.key === routeTab && !item.href) || ["distribution-queue", "delivery-failed", "payments", "producers"].includes(routeTab || "");
     const next = internal && routeTab && adminModuleAllowed(routeTab, adminAccess.permissions) ? routeTab as AdminTab : initialTab || "overview";
-    setActiveTab(next === "releases" ? defaultReleaseTab : next);
+    setActiveTab(next === "producers" ? "operations" : next === "releases" ? defaultReleaseTab : next);
   }, [routeTab, initialTab, defaultReleaseTab, adminAccess.permissions]);
   const isReleaseWorkspace = ["releases", "distribution-queue", "delivery-failed"].includes(activeTab);
   const [releases, setReleases] = useState(initialReleases);
@@ -636,6 +639,7 @@ export function AdminControlCenter({
   const [taskPriorityFilter, setTaskPriorityFilter] = useState("all");
   const [taskTypeFilter, setTaskTypeFilter] = useState("all");
   const [reviewTab, setReviewTab] = useState<"overview" | "metadata" | "tracks" | "assets" | "rights" | "direnote" | "activity">("overview");
+  const [catalogOpen, setCatalogOpen] = useState(false);
   const [catalogTab, setCatalogTab] = useState<"overview" | "tracks" | "distribution" | "identifiers" | "stores" | "promolink" | "earnings" | "activity">(initialTab === "delivery" ? "distribution" : "overview");
   const [moduleSearch, setModuleSearch] = useState("");
   const [producerManagement, setProducerManagement] = useState<any[]>([]);
@@ -648,7 +652,7 @@ export function AdminControlCenter({
   const [isPending, startTransition] = useTransition();
 
   useEffect(()=>{if(selectedBeatReviewId)document.getElementById(`admin-beat-${selectedBeatReviewId}`)?.scrollIntoView({behavior:"smooth",block:"start"});},[selectedBeatReviewId]);
-  useEffect(()=>{if(selectedProducerId)document.getElementById("producer-storefront-details")?.scrollIntoView({behavior:"smooth",block:"start"});},[selectedProducerId]);
+
   useEffect(()=>{if(selectedTicketId)document.getElementById("support-ticket-detail")?.scrollIntoView({behavior:"smooth",block:"start"});},[selectedTicketId]);
   useEffect(() => {
     const timer = window.setInterval(() => setCooldownClock(Date.now()), 1000);
@@ -907,6 +911,7 @@ export function AdminControlCenter({
 
   function selectAdminTab(tab: AdminTab) {
     if (!adminModuleAllowed(tab, adminAccess.permissions)) return;
+    if (tab === "producers") tab = "operations";
     if (tab === "releases") tab = defaultReleaseTab;
     setActiveTab(tab);
     setQueueStatus("all");
@@ -1148,7 +1153,7 @@ export function AdminControlCenter({
 
   return (
     <AdminModuleToolbar
-      hideSearch={activeTab === "users"}
+      hideSearch={["users", "delivery", "releases"].includes(activeTab)}
       searchValue={moduleSearch}
       onSearchChange={setModuleSearch}
       searchPlaceholder={isReleaseWorkspace ? "Search releases..." : `Search ${activeTab.replace(/-/g, " ")}...`}
@@ -1241,11 +1246,10 @@ export function AdminControlCenter({
       {activeTab === "releases" || activeTab === "delivery" ? (
         <div className="workspace-module-layout">
           <SurfaceSection title={activeTab === "delivery" ? "Distributor Delivery" : "All releases"} description={activeTab === "delivery" ? "Track distribution processing, delivery state, store availability, and live confirmation." : "Every release, from submission to live."}>
-            <div className="grid gap-3">
-              {catalogReleases.map((release) => <button key={release.id} type="button" onClick={() => { setSelectedReleaseId(release.id); setCatalogTab("overview"); }} className="surface-list-item pressable p-4 text-left" style={selectedCatalogRelease?.id === release.id ? { borderColor: "var(--accent)", background: "var(--accent-soft)" } : undefined}><div className="flex gap-3">{release.artworkUrl ? <img src={artworkPreviewUrl(release.artworkUrl, 320)} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" /> : <div className="h-16 w-16 shrink-0 rounded-xl border border-dashed" style={{ borderColor: "var(--border)" }} />}<div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold">{release.releaseTitle || release.trackName}</p><p className="mt-1 truncate text-sm" style={{ color: "var(--text-muted)" }}>{release.artistName} · {release.releaseType.toUpperCase()} · {release.tracks?.length ?? 0} tracks</p></div><StatusPill label={adminReleaseStatusLabel(release.status, release.direNoteStatus)} active /></div><div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-soft)" }}><span>Release {release.releaseDate || "—"}</span><span>UPC {release.upcCode || "Pending"}</span><span>{release.distributionStores?.filter((store) => store.status === "Live").length ?? 0} stores live</span></div></div></div></button>)}
-              {catalogReleases.length === 0 ? <EmptyState copy="No releases match this view." /> : null}
-            </div>
+            <AdminCatalogGrid search={moduleSearch} onSearch={setModuleSearch} releases={catalogReleases} onSelect={id=>{setSelectedReleaseId(id);setCatalogTab(activeTab==="delivery"?"distribution":"overview");setCatalogOpen(true);}}/>
+
           </SurfaceSection>
+          {catalogOpen && <AdminCenteredDialog title={activeTab === "delivery" ? "Delivery Details" : "Catalog Details"} onClose={()=>setCatalogOpen(false)}>
           <SurfaceSection title={activeTab === "delivery" ? "Delivery Details" : "Catalog Details"} description="Distribution state, identifiers, stores, links, and reporting for the selected release.">
             {selectedCatalogRelease ? <div className="grid gap-5">
               <div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="text-2xl font-semibold">{selectedCatalogRelease.releaseTitle || selectedCatalogRelease.trackName}</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{selectedCatalogRelease.artistName} · {selectedCatalogRelease.releaseType.toUpperCase()} · Release {selectedCatalogRelease.releaseDate || "—"}</p></div><StatusPill label={adminReleaseStatusLabel(selectedCatalogRelease.status, selectedCatalogRelease.direNoteStatus)} active /></div>
@@ -1259,9 +1263,9 @@ export function AdminControlCenter({
               {catalogTab === "promolink" ? <div className="rounded-2xl border p-5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{typeof selectedCatalogRelease.metadata?.promolinkUrl === "string" ? <a href={selectedCatalogRelease.metadata.promolinkUrl} target="_blank" rel="noreferrer" className="btn-primary inline-flex">View Promolink</a> : <p className="text-sm" style={{ color: "var(--text-muted)" }}>Promolink will appear after the release is scheduled or live.</p>}</div> : null}
               {catalogTab === "earnings" ? <div className="rounded-2xl border p-5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{selectedCatalogRelease.analytics ? <div className="grid gap-3 sm:grid-cols-2">{Object.entries(selectedCatalogRelease.analytics).filter(([, value]) => typeof value === "number").map(([label, value]) => <div key={label} className="summary-card"><span>{label.replace(/([A-Z])/g, " $1")}</span><strong>{Number(value).toLocaleString("en-IN")}</strong></div>)}</div> : <p className="text-sm leading-6" style={{ color: "var(--text-muted)" }}>Earnings usually take around 1.5 months to reflect after platform reporting and distributor processing.</p>}</div> : null}
               {catalogTab === "activity" ? <div className="grid gap-2">{releaseAudit.map((event) => <div key={event.id} className="summary-card"><span><strong>{event.action.replace(/_/g, " ")}</strong><br /><small>{new Date(event.createdAt).toLocaleString("en-IN")}</small></span><span>Recorded</span></div>)}{releaseAudit.length === 0 ? <EmptyState copy="No catalog activity has been recorded yet." /> : null}</div> : null}
-              <div className="flex flex-wrap gap-2">{["scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered", "sent"].includes(selectedCatalogRelease.status) ? <button type="button" disabled={isPending} onClick={() => setConfirmStatusAction("live")} className="btn-primary pressable">Mark Live</button> : null}<button type="button" onClick={() => setCatalogTab("stores")} className="btn-outline pressable">Update Store Status</button>{selectedCatalogRelease.analytics ? <button type="button" onClick={() => setCatalogTab("earnings")} className="btn-outline pressable">View Earnings</button> : null}</div>
+              <div className="flex flex-wrap gap-2">{["scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered", "sent"].includes(selectedCatalogRelease.status) ? <button type="button" disabled={isPending} onClick={() => {setCatalogOpen(false);setConfirmStatusAction("live");}} className="btn-primary pressable">Mark Live</button> : null}<button type="button" onClick={() => setCatalogTab("stores")} className="btn-outline pressable">Update Store Status</button>{selectedCatalogRelease.analytics ? <button type="button" onClick={() => setCatalogTab("earnings")} className="btn-outline pressable">View Earnings</button> : null}</div>
             </div> : <EmptyState copy="Select a catalog release to manage its distribution details." />}
-          </SurfaceSection>
+          </SurfaceSection></AdminCenteredDialog>}
         </div>
       ) : null}
 
@@ -1570,7 +1574,7 @@ export function AdminControlCenter({
         {key:"open",label:"Details",render:ticket=><button className="btn-outline" onClick={()=>setSelectedTicketId(ticket.id)}>Open ticket</button>}
       ]}/></SurfaceSection>{(()=>{const ticket=supportTickets.find(item=>item.id===selectedTicketId);return ticket?<div id="support-ticket-detail"><SurfaceSection title={`Ticket #${ticket.id}: ${ticket.subject}`} description={`${ticket.category} / ${ticket.priority||"normal"} priority`}><div className="workspace-ticket-message">{ticket.message}</div><div className="record-actions mt-4">{(["open","in_progress","resolved","closed"] as SupportTicket["status"][]).map(status=><button key={status} className={ticket.status===status?"btn-primary":"btn-outline"} disabled={isPending||ticket.status===status} onClick={()=>updateTicketStatus(ticket.id,status)}>{status.replaceAll("_"," ")}</button>)}<button className="btn-outline" onClick={()=>setSelectedTicketId(null)}>Close details</button></div></SurfaceSection></div>:null;})()}</div>:null}
 
-      {activeTab === "producers" ? <div className="grid gap-6">
+      {activeTab === "operations" ? <div className="grid gap-6">
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Approved producers" value={producerManagement.length} detail="Accounts with producer access" /><StatCard label="Published inventory" value={publishedBeats} detail={`${pendingBeatReviews} awaiting review`} /><StatCard label="Verified gross sales" value={formatMoney(producerManagement.reduce((sum, producer) => sum + producer.grossRevenue, 0))} /><StatCard label="Producer earnings" value={formatMoney(producerManagement.reduce((sum, producer) => sum + producer.producerEarnings, 0))} detail="Contractual 70% share" /></section>
         <SurfaceSection title="Producer operations" description="Live creator accounts, storefront readiness, catalogue health, verified sales, and payout exposure.">
           <WorkspaceRecords rows={producerManagement} rowKey={producer=>producer.id} searchText={producer=>`${producer.name} ${producer.email} ${producer.profile?.displayName} ${producer.status}`} externalSearch={moduleSearch} noun="producers" columns={[
@@ -1580,12 +1584,12 @@ export function AdminControlCenter({
             {key:"earnings",label:"Producer earnings",value:producer=>producer.producerEarnings||0,render:producer=>formatMoney(producer.producerEarnings)},
             {key:"open",label:"Inspect",render:producer=><div className="record-actions"><button className="btn-outline" onClick={()=>setSelectedProducerId(producer.id)}>Storefront details</button><a className="btn-outline" href={`/admin?tab=users&userId=${producer.id}`}>User workspace</a></div>}
           ]}/>
-          {selectedProducerId?<button className="btn-outline mt-4" onClick={()=>setSelectedProducerId(null)}>Close storefront details</button>:null}
 
-          <div id="producer-storefront-details" className="grid gap-5">
-            {producerManagement.filter((producer) => producer.id===selectedProducerId).map((producer) => <ProducerManagementCard key={producer.id} producer={producer} pending={isPending} canManage={hasPermission("users.manage")} onOpenCatalogue={() => { setProducerBeatFilter(producer.id); setBeatStatusFilter("all"); selectAdminTab("operations"); }} onOpenLedger={() => selectAdminTab("royalties")} onSave={updateProducerProfile} onRevoke={() => { const linked = users.find((user) => user.id === producer.id); if (linked && window.confirm(`Revoke producer access for ${producer.name}? Their storefront will be disabled.`)) updateWorkspaceRole(linked, "customer"); }} />)}
+
+          {selectedProducerId && <AdminCenteredDialog title="Producer storefront" onClose={()=>setSelectedProducerId(null)}><div id="producer-storefront-details" className="grid gap-5">{producerManagement.filter(p=>p.id===selectedProducerId).map(p=><ProducerStorefrontPreview key={p.id} producer={p} beats={beats}/>)}
+            {producerManagement.filter((producer) => producer.id===selectedProducerId).map((producer) => <ProducerManagementCard key={producer.id} producer={producer} pending={isPending} canManage={hasPermission("users.manage")} onOpenCatalogue={() => { setSelectedProducerId(null); setProducerBeatFilter(producer.id); setBeatStatusFilter("all"); selectAdminTab("operations"); }} onOpenLedger={() => selectAdminTab("royalties")} onSave={updateProducerProfile} onRevoke={() => { const linked = users.find((user) => user.id === producer.id); if (linked && window.confirm(`Revoke producer access for ${producer.name}? Their storefront will be disabled.`)) updateWorkspaceRole(linked, "customer"); }} />)}
             {producerManagement.length === 0 ? <EmptyState copy="No producers found. Grant producer access from Admin Portal → Users." /> : null}
-          </div>
+          </div></AdminCenteredDialog>}
         </SurfaceSection>
       </div> : null}
 

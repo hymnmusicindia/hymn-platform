@@ -1,9 +1,9 @@
-export const permissions = ["team.members.view", "team.members.invite", "team.members.manage", "tasks.create", "tasks.assign", "tasks.update", "tasks.complete", "tasks.approve", "tasks.delete", "tasks.all", "projects.create", "projects.manage", "chat.use", "chat.channel.manage", "crm.prospects.view", "crm.prospects.create", "crm.prospects.assign", "crm.outreach.manage", "crm.all", "operations.distribution.review", "operations.beats.manage", "operations.engineers.manage", "operations.studio.review", "reports.team.view", "reports.all.view", "audit.view", "settings.manage"] as const;
+export const permissions = ["calendar.view", "calendar.manage", "clients.view", "clients.manage", "team.members.view", "team.members.invite", "team.members.manage", "tasks.create", "tasks.assign", "tasks.update", "tasks.complete", "tasks.approve", "tasks.delete", "tasks.all", "projects.create", "projects.manage", "chat.use", "chat.channel.manage", "crm.prospects.view", "crm.prospects.create", "crm.prospects.assign", "crm.outreach.manage", "crm.all", "operations.distribution.review", "operations.beats.manage", "operations.engineers.manage", "operations.studio.review", "reports.team.view", "reports.all.view", "audit.view", "settings.manage"] as const;
 export type Permission = typeof permissions[number];
 export const statuses = ["BACKLOG", "TODO", "IN_PROGRESS", "IN_REVIEW", "BLOCKED", "COMPLETED", "CANCELLED"] as const;
 export const pipeline = ["NEW", "NEEDS_RESEARCH", "QUALIFIED", "READY_TO_CONTACT", "CONTACTED", "REPLIED", "INTERESTED", "OFFER_SHARED", "CONVERTED", "LOST", "DO_NOT_CONTACT"] as const;
 export const categories = ["Distribution", "Playlist curation", "Beat licensing", "Mixing & mastering", "Studios & producers"] as const;
-const member: Permission[] = ["team.members.view", "tasks.create", "tasks.update", "tasks.complete", "projects.create", "chat.use", "reports.team.view"];
+const member: Permission[] = ["calendar.view", "calendar.manage", "clients.view", "clients.manage", "team.members.view", "tasks.create", "tasks.update", "tasks.complete", "projects.create", "chat.use", "reports.team.view"];
 export const roleTemplates: Record<string, Permission[]> = {
   Owner: [...permissions],
   Admin: permissions.filter(p => p !== "settings.manage" && p !== "team.members.manage"),
@@ -12,7 +12,7 @@ export const roleTemplates: Record<string, Permission[]> = {
   "Marketplace Executive": [...member, "operations.beats.manage", "operations.engineers.manage"],
   "Operations Executive": [...member, "operations.distribution.review", "operations.studio.review"],
   "Team Member": member,
-  Viewer: ["team.members.view", "reports.team.view"],
+  Viewer: ["calendar.view", "clients.view", "team.members.view", "reports.team.view"],
 };
 export const onboardingTemplates = [
   { name: "Tavish Relhan", role: "Growth Executive", department: "Growth & Client Success", jobTitle: "Artist Growth & Client Operations", target: "Contact 20 researched artist prospects. Count actual contact events, not drafts." },
