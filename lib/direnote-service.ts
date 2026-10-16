@@ -15,6 +15,7 @@ import { normalizeDireNoteUpc, upcFromDireNoteIsrcReport, upcFromDireNoteRespons
 import { ensureCurrentDireNoteAttempt } from "@/lib/distribution-idempotency";
 import { attachedArtistProfileIds, verifiedArtistStoreLinks } from "@/lib/artist-store-links";
 import { validIsrc, validReleaseBarcode } from "@/lib/release-input-rules";
+import { confirmsDireNoteWithdrawal } from "@/lib/direnote/v24-reconciliation";
 
 type RecordValue = Record<string, unknown>;
 
@@ -363,12 +364,13 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   const payload = record(result.data);
   const remoteRelease = record(payload.release);
   const remoteTracks: Record<string, unknown>[] = (Array.isArray(payload.tracks) ? payload.tracks.map(record) : Array.isArray(remoteRelease.tracks) ? remoteRelease.tracks.map(record) : []).map((track, index) => ({ ...track, track_number: track.track_number ?? index + 1 }));
-  const providerCorrections = extractDireNoteCorrections(redactDireNoteDiagnostic(payload) as RecordValue, mappingTracks, releaseId, attempt.id);
+  const withdrawn = confirmsDireNoteWithdrawal({ upc: normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc }, payload);
+  const providerCorrections = withdrawn ? [] : extractDireNoteCorrections(redactDireNoteDiagnostic(payload) as RecordValue, mappingTracks, releaseId, attempt.id);
   const explicitProviderStatus = rejectOrCorrectionStatus(payload) ?? rejectOrCorrectionStatus(remoteRelease) ?? rejectOrCorrectionStatus(remoteTracks);
   const lifecycleStatus = aggregateReleaseStatus(remoteTracks, remoteRelease.status ?? payload.status, release.releaseDate);
   // DireNote uses Rejected for fixable review requests too. Actionable remarks
   // must enter the correction workflow; a bare rejection remains a rejection.
-  const aggregateStatus = explicitProviderStatus === "changes_required" || providerCorrections.length
+  const aggregateStatus = withdrawn ? { provider: "rejected", canonical: "rejected" as ReleaseStatus } : explicitProviderStatus === "changes_required" || providerCorrections.length
       ? { provider: "changes_required", canonical: "changes_requested" as ReleaseStatus }
       : explicitProviderStatus === "rejected"
         ? { provider: "rejected", canonical: "rejected" as ReleaseStatus }

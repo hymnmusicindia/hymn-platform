@@ -13,7 +13,11 @@ export async function reserveDireNoteRequest(action: string, releaseId?: number 
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422026)`;
     const cooldown = await tx.direNoteLog.findFirst({ where: { action: "provider_rate_limit" }, orderBy: { createdAt: "desc" }, select: { responseJson: true } });
     const retryAt = (cooldown?.responseJson as { retryAt?: string } | null)?.retryAt;
-    if (retryAt && Date.parse(retryAt) > Date.now()) throw new Error("DireNote hourly request capacity is exhausted during the provider Retry-After period.");
+    if (retryAt && Date.parse(retryAt) > Date.now()) {
+      const error = new Error("DireNote hourly request capacity is exhausted during the provider Retry-After period.");
+      Object.assign(error, { code: "DIRENOTE_RATE_LIMIT", retryAfterSeconds: Math.max(1, Math.ceil((Date.parse(retryAt) - Date.now()) / 1000)) });
+      throw error;
+    }
     const since = new Date(Date.now() - 60 * 60 * 1000);
     const used = await tx.direNoteLog.count({
       where: { action: "rate_limit_reservation", createdAt: { gte: since } }

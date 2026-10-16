@@ -1,10 +1,12 @@
 "use client";
 import "./release-welcome.css";
 import "./release-editor-layout.css";
+import "./release-mobile.css";
 import { loadBioRazorpay as loadRazorpayCheckout } from "@/lib/client-razorpay";
 
 import { customerMessage } from "@/lib/customer-message";
 import { checkoutPlan } from "@/lib/distribution-checkout-plan";
+import { distributionSubmittedUrl, isCompletedDistributionSubmission } from "@/lib/distribution-return";
 import { getContentIdEligibility } from "@/lib/content-id-eligibility";
 import { FIRST_RELEASE_BASE_DISCOUNT } from "@/lib/first-release-pricing";
 
@@ -1094,6 +1096,7 @@ export function ReleaseForm({
   hasActiveSubscription = false,
   hymnCreditBalance = 0,
   initialRelease,
+  returnedFromSubmission = false,
   firstReleaseOffer = false,
   campaignAttribution = {},
   prefillSuggestions = [],
@@ -1106,6 +1109,7 @@ export function ReleaseForm({
   hasActiveSubscription?: boolean;
   hymnCreditBalance?: number;
   initialRelease?: Release | null;
+  returnedFromSubmission?: boolean;
   firstReleaseOffer?: boolean;
   campaignAttribution?: Record<string, string>;
   prefillSuggestions?: ReleasePrefillSuggestion[];
@@ -1157,9 +1161,7 @@ export function ReleaseForm({
   const audioPreviewObjectUrlsRef = useRef<Set<string>>(new Set());
   const [draggedTrackIndex, setDraggedTrackIndex] = useState<number | null>(null);
   const [versionPickerTrack, setVersionPickerTrack] = useState<number | null>(null);
-  const [legalDetailsOpen, setLegalDetailsOpen] = useState(
-    () => !Object.values(createInitialLegalState(initialRelease)).every(Boolean),
-  );
+  const [legalDetailsOpen, setLegalDetailsOpen] = useState(false);
   const [queue, setQueue] = useState<DistributionQueueSummary | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [useHymnCredits, setUseHymnCredits] = useState(false);
@@ -1194,7 +1196,7 @@ export function ReleaseForm({
   useEffect(() => {
     if (!submitting) return;
     const previousOverflow = document.body.style.overflow;
-    const guardNavigation = (event: BeforeUnloadEvent) => event.preventDefault();
+    const guardNavigation = (event: BeforeUnloadEvent) => { if (!allowReloadRef.current) event.preventDefault(); };
     document.body.style.overflow = "hidden";
     window.addEventListener("beforeunload", guardNavigation);
     return () => {
@@ -1321,7 +1323,7 @@ export function ReleaseForm({
     createTracksFromRelease(initialRelease, audioLibraryPrefill),
   );
   const [submittedRelease, setSubmittedRelease] = useState<Release | null>(
-    initialRelease && releaseAlreadyInReview(initialRelease.status) ? initialRelease : null,
+    initialRelease && (releaseAlreadyInReview(initialRelease.status) || returnedFromSubmission && isCompletedDistributionSubmission(initialRelease)) ? initialRelease : null,
   );
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [shakingField, setShakingField] = useState<string | null>(null);
@@ -1647,6 +1649,7 @@ export function ReleaseForm({
   const reviewMetadataFingerprint = useMemo(() => JSON.stringify(autosaveSnapshot), [autosaveSnapshot]);
   const autosavePendingRef = useRef<Promise<void>>(Promise.resolve());
   const savingReleaseRef = useRef(false);
+  const preparedSubmissionRef = useRef<Awaited<ReturnType<typeof uploadFilesDirectly>> | null>(null);
   const lastSavedFingerprintRef = useRef(reviewMetadataFingerprint);
   const confirmedReviewFingerprintRef = useRef<string | null>(null);
   const hasUnsavedChanges = lastSavedFingerprintRef.current !== reviewMetadataFingerprint;
@@ -2949,6 +2952,7 @@ export function ReleaseForm({
     setStatus("Verifying payment and submitting release...");
     const formData = new FormData();
     formData.append("payload", JSON.stringify(checked.data));
+    try {
     const response = await fetch("/api/distribution/payment/verify-submit", {
       method: "POST",
       body: formData,
@@ -2957,6 +2961,16 @@ export function ReleaseForm({
     if (!response.ok) throw new Error(data.error || "Submission failed.");
     if (data.reviewEligibility) window.dispatchEvent(new CustomEvent("hymn:purchase-review-eligible", { detail: data.reviewEligibility }));
     return data;
+    } catch (error) {
+      // A lost response is not proof of a failed submission. Read the owned
+      // release before presenting a retry; never manufacture payment success.
+      try {
+        const response = await fetch(`/api/distribution/payment/status?releaseId=${checked.data.draftReleaseId}`, { cache: "no-store" });
+        const recovered = await response.json();
+        if (response.ok && recovered.submitted && recovered.release) return { release: recovered.release, recovered: true };
+      } catch { /* Keep the original actionable error and the resumable URL. */ }
+      throw error;
+    }
   }
 
   async function persistDraftRelease(forSubmission = false) {
@@ -2969,6 +2983,7 @@ export function ReleaseForm({
     try {
       await autosavePendingRef.current;
       const uploaded = await uploadFilesDirectly();
+      if (forSubmission) preparedSubmissionRef.current = uploaded;
       setStatus("Saving draft...");
 
       const payload = {
@@ -3109,7 +3124,7 @@ export function ReleaseForm({
     submissionPlan: DistributionPlanOption = selectedPlan,
   ) {
     setStatus("Uploading files...");
-    const uploaded = await uploadFilesDirectly();
+    const uploaded = preparedSubmissionRef.current ?? await uploadFilesDirectly();
     setStatus("Preparing secure submission...");
 
     const payload = {
@@ -3205,6 +3220,14 @@ export function ReleaseForm({
     return result;
   }
 
+  function completeSubmission(value: Release) {
+    if (!value?.id) throw new Error("Submission confirmation unavailable. Your draft is saved; check Your Releases before paying again.");
+    allowReloadRef.current = true;
+    window.history.replaceState(window.history.state, "", distributionSubmittedUrl(value.id));
+    setSubmittedRelease(value);
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }
+
   async function handleFinalSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (draftConflict) { setStatus("This draft changed in another tab. Open the latest version before submitting."); return; }
@@ -3221,6 +3244,7 @@ export function ReleaseForm({
     }
 
     savingReleaseRef.current = true;
+    preparedSubmissionRef.current = null;
     setSubmitting(true);
     setUploadProgress(0);
     setStatus(null);
@@ -3233,7 +3257,7 @@ export function ReleaseForm({
           router.refresh();
           return;
         }
-        setSubmittedRelease(data.release);
+        completeSubmission(data.release);
         setUploadProgress(100);
         return;
       }
@@ -3241,6 +3265,11 @@ export function ReleaseForm({
       if (!reviewConfirmed || confirmedReviewFingerprintRef.current !== reviewMetadataFingerprint) throw new Error("Confirm the reviewed release information before continuing.");
       const reviewReleaseId = await persistDraftRelease(true);
       if (!reviewReleaseId) throw new Error("Could not save the latest release details. Please retry before submitting.");
+      const resumeUrl = new URL(window.location.href);
+      resumeUrl.searchParams.delete("edit");
+      resumeUrl.searchParams.set("resume", String(reviewReleaseId));
+      resumeUrl.searchParams.set("stage", "7");
+      window.history.replaceState(window.history.state, "", resumeUrl);
       const confirmationResponse = await fetch("/api/distribution/review-confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ releaseId: reviewReleaseId, metadataSnapshot: autosaveSnapshot }) });
       const confirmation = await confirmationResponse.json().catch(() => ({}));
       if (!confirmationResponse.ok) {
@@ -3275,7 +3304,7 @@ export function ReleaseForm({
 
       if (orderData.paidReleaseReusable === true) {
         const data = await submitEditedRelease();
-        setSubmittedRelease(data.release);
+        completeSubmission(data.release);
         setUploadProgress(100);
         return;
       }
@@ -3285,7 +3314,7 @@ export function ReleaseForm({
           if (!orderData.paymentId) throw new Error("The captured payment reference is unavailable. Contact HYMN support; do not pay again.");
           setStatus("Resuming your paid release submission...");
           const data = await submitRelease(orderData.orderId, orderData.paymentId, `stored-payment:${orderData.orderId}`, checkoutPlan(orderData, selectedPlan));
-          setSubmittedRelease(data.release);
+          completeSubmission(data.release);
           setUploadProgress(100);
           return;
         }
@@ -3296,7 +3325,7 @@ export function ReleaseForm({
           coveredBySubscription ? "subscription:active" : "free:first-release",
           checkoutPlan(orderData, selectedPlan),
         );
-        setSubmittedRelease(data.release);
+        completeSubmission(data.release);
         setUploadProgress(100);
         return;
       }
@@ -3308,6 +3337,7 @@ export function ReleaseForm({
       if (!RazorpayCheckout) throw new Error("Razorpay checkout is unavailable. Please refresh and try again.");
 
       await new Promise<void>((resolve, reject) => {
+          let paymentReceived = false;
           const razorpay = new RazorpayCheckout({
             key: orderData.key,
             amount: orderData.amount,
@@ -3320,6 +3350,7 @@ export function ReleaseForm({
             razorpay_signature: string;
             razorpay_subscription_id?: string;
           }) => {
+            paymentReceived = true;
             try {
               setStatus("Verifying payment...");
               if (orderData.billingType === "subscription") {
@@ -3336,7 +3367,7 @@ export function ReleaseForm({
                 const entitlement = await entitlementResponse.json();
                 if (!entitlementResponse.ok || entitlement.requiresPayment !== false || !entitlement.subscriptionCovered) throw new Error(entitlement.error || "Could not create the subscription release entitlement.");
                 const data = await submitRelease(entitlement.orderId, `subscription_${Date.now()}`, "subscription:active", checkoutPlan(entitlement, selectedPlan));
-                setSubmittedRelease(data.release);
+                completeSubmission(data.release);
                 setUploadProgress(100);
                 resolve();
                 return;
@@ -3347,14 +3378,14 @@ export function ReleaseForm({
                 response.razorpay_signature,
                 checkoutPlan(orderData, selectedPlan),
               );
-              setSubmittedRelease(data.release);
+              completeSubmission(data.release);
               setUploadProgress(100);
               resolve();
             } catch (error) {
-              reject(error);
+              reject(new Error(`Payment confirmation needs attention. Your draft is saved; do not pay again. ${error instanceof Error ? error.message : "Resume this release from Your Releases."}`));
             }
           },
-          modal: { ondismiss: () => reject(new Error("Checkout cancelled.")) },
+          modal: { ondismiss: () => { if (!paymentReceived) reject(new Error("Checkout closed. Your draft is saved; resume checkout to check payment status before paying again.")); } },
           theme: { color: "#7db7ff" },
         });
         razorpay.on("payment.failed", (response) => setStatus(response.error?.description || "Payment failed. Retry in the payment window or close it."));
@@ -3732,7 +3763,7 @@ export function ReleaseForm({
               <div className="mt-5 border-t pt-5" style={{ borderColor: "var(--border)" }}>
                 <div className="flex items-start justify-between gap-3"><p className="font-semibold">Legal Declaration</p><span className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: legalComplete ? "#22c55e" : "var(--text-soft)" }}>{legalComplete ? "Agreed" : "Required"}</span></div>
                 <details open={legalDetailsOpen} onToggle={(event) => setLegalDetailsOpen(event.currentTarget.open)} className="legal-declaration-details group mt-5 overflow-hidden rounded-xl border px-4 py-1" style={{ borderColor: "var(--border)" }}>
-                  <summary onClick={(event) => { if (!legalComplete) event.preventDefault(); }} className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-[var(--text)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] [&::-webkit-details-marker]:hidden"><span>Review declaration terms</span><ChevronDown className="h-4 w-4 shrink-0 text-[var(--text-soft)] transition-transform duration-200 group-open:rotate-180" /></summary>
+                  <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-[var(--text)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] [&::-webkit-details-marker]:hidden"><span>Review declaration terms</span><ChevronDown className="h-4 w-4 shrink-0 text-[var(--text-soft)] transition-transform duration-200 group-open:rotate-180" /></summary>
                   <div className="legal-declaration-copy pb-5 pt-3">
                     <div className="grid gap-4">
                       <p><span aria-hidden="true">✓</span><span>I confirm that I own or control all rights required to distribute this content.</span></p>
@@ -3746,7 +3777,7 @@ export function ReleaseForm({
                     </div>
                   </div>
                 </details>
-                <label className="mt-5 flex cursor-pointer items-start gap-3 text-sm font-semibold"><input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0" checked={legalComplete} onChange={(event) => { setLegalDeclarationAccepted(event.target.checked); setLegalDetailsOpen(!event.target.checked); }} /><span>I have read and agree to the Legal Declaration above.</span></label>
+                <label className="mt-5 flex cursor-pointer items-start gap-3 text-sm font-semibold"><input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0" checked={legalComplete} onChange={(event) => { setLegalDeclarationAccepted(event.target.checked); setLegalDetailsOpen(false); }} /><span>I have read and agree to the Legal Declaration above.</span></label>
               </div>
             </div>
           </section>
@@ -5659,6 +5690,7 @@ export function ReleaseForm({
                       <p className="font-semibold" style={{ color: "var(--text)" }}>Legal Declaration</p>
                       <span className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: legalComplete ? "var(--success)" : "var(--text-soft)" }}>{legalComplete ? "Agreed" : "Required"}</span>
                     </div>
+                    <details className="legal-declaration-details mt-4"><summary className="cursor-pointer py-3 text-sm font-semibold">Review legal declaration and royalty terms</summary>
                     <div className="mt-5 grid gap-3 border-t pt-5 text-sm leading-6" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
                       <p>✓ I confirm that I own or control all rights required to distribute this content.</p>
                       <p>✓ I confirm that all collaborators, contributors and rights holders have authorized this release.</p>
@@ -5666,7 +5698,7 @@ export function ReleaseForm({
                       <p>✓ I understand that this release will be distributed through HYMN&apos;s distribution network, which retains 30% of Net Royalty Revenue. The remaining eligible earnings will be reflected in my HYMN dashboard where reporting, royalty tracking, splits and payouts are managed.</p>
                     </div>
                     <p className="mt-5 border-t pt-5 text-sm leading-6" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>By submitting this release, you acknowledge that distribution is fulfilled through HYMN&apos;s distribution network, which retains 30% of Net Royalty Revenue in accordance with the applicable distribution agreement. The remaining 70% of eligible Net Royalty Revenue is reflected within your HYMN earnings dashboard, where HYMN manages reporting, royalty tracking, splits, and payout processing according to your account settings and any configured royalty splits.</p>
-                    <p className="mt-5 border-t pt-5 text-sm font-semibold" style={{ borderColor: "var(--border)", color: legalComplete ? "var(--success)" : "var(--danger)" }}>{legalComplete ? "Legal Declaration accepted." : "Return to Delivery and accept the Legal Declaration before submitting."}</p>
+                    </details><p className="mt-5 border-t pt-5 text-sm font-semibold" style={{ borderColor: "var(--border)", color: legalComplete ? "var(--success)" : "var(--danger)" }}>{legalComplete ? "Legal Declaration accepted." : "Return to Delivery and accept the Legal Declaration before submitting."}</p>
                   </div>
                 </div>
 

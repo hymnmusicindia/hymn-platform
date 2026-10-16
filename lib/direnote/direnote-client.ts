@@ -69,7 +69,7 @@ export function extractDireNoteProviderError(value: unknown): ProviderError {
   };
 }
 
-async function postToDireNote(endpoint: string, payload: Record<string, unknown>, options: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}): Promise<DireNoteSubmitResult> {
+export async function postToDireNote(endpoint: string, payload: Record<string, unknown>, options: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}): Promise<DireNoteSubmitResult> {
   const config = getDireNoteConfig();
   if (!config.isConfigured) return { success: false, httpStatus: null, error: "DireNote credentials are not configured.", missing: config.missing };
 
@@ -87,6 +87,7 @@ async function postToDireNote(endpoint: string, payload: Record<string, unknown>
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify(finalPayload),
+        redirect: "error",
         signal: controller.signal
       });
       return { response, raw: await response.text() };
@@ -99,14 +100,17 @@ async function postToDireNote(endpoint: string, payload: Record<string, unknown>
     });
     const { response, raw } = await Promise.race([request, timedOut]);
     const contentType = response.headers.get("content-type");
+    const retryHeader = response.headers.get("retry-after");
+    const parsedRetry = retryHeader ? Math.max(0, /^\d+$/.test(retryHeader) ? Number(retryHeader) : Math.ceil((Date.parse(retryHeader) - Date.now()) / 1000)) : undefined;
+    const retryAfterSeconds = Number.isFinite(parsedRetry) ? parsedRetry : undefined;
     let data: any;
     try { data = JSON.parse(raw); } catch {
       const preview = safeResponsePreview(raw, config);
       const error = nonJsonProviderFailure(response.status, contentType, preview);
-      return { success: false, httpStatus: response.status, contentType, raw: preview, error, providerReason: error.startsWith("DIRENOTE_LICENSE_RECEIPT_IMPORT_FAILED") ? "licenseReceiptImportFailed" : undefined };
+      return { success: false, httpStatus: response.status, contentType, raw: preview, error, retryAfterSeconds, providerReason: error.startsWith("DIRENOTE_LICENSE_RECEIPT_IMPORT_FAILED") ? "licenseReceiptImportFailed" : undefined };
     }
     if (!data || typeof data !== "object" || Array.isArray(data)) {
-      return { success: false, httpStatus: response.status, contentType, raw: safeResponsePreview(raw, config), error: "DIRENOTE_MALFORMED_RESPONSE: DireNote returned JSON that was not an object." };
+      return { success: false, httpStatus: response.status, contentType, retryAfterSeconds, raw: safeResponsePreview(raw, config), error: "DIRENOTE_MALFORMED_RESPONSE: DireNote returned JSON that was not an object." };
     }
     // The v2.3 contract requires an explicit acknowledgement. A proxy's 200
     // response or an unrelated JSON object is not evidence of provider success.
@@ -114,8 +118,6 @@ async function postToDireNote(endpoint: string, payload: Record<string, unknown>
     const providerError = apiRejected || !response.ok ? extractDireNoteProviderError(data) : {};
     let safeError = providerError.message || (response.ok && apiRejected ? "DIRENOTE_UNCONFIRMED_RESPONSE: DireNote did not explicitly acknowledge this request. Reconcile the provider result before sending again." : undefined);
     for (const secret of [config.pin, config.clientId]) if (secret) safeError = safeError?.split(secret).join("[REDACTED]");
-    const retryHeader = response.headers.get("retry-after");
-    const retryAfterSeconds = retryHeader ? Math.max(0, /^\d+$/.test(retryHeader) ? Number(retryHeader) : Math.ceil((Date.parse(retryHeader) - Date.now()) / 1000)) : undefined;
     return { success: response.ok && !apiRejected, httpStatus: response.status, ok: response.ok, data, raw, contentType, error: safeError, providerCode: providerError.code, providerReason: providerError.reason, retryAfterSeconds: Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined };
   } catch (error: any) {
     return { success: false, httpStatus: null, error: error?.name === "AbortError" ? `DireNote request timed out after ${timeoutMs} milliseconds.` : error?.message || "DireNote request failed." };

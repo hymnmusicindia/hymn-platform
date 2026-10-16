@@ -195,6 +195,11 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
 async function submitLockedRelease(releaseId: number, options: { actorId?: number | null; siteUrl?: string; retry?: boolean; adminConfirmedExistingArtists?: boolean; correctionReingest?: boolean }) {
   const release = await getDetailedReleaseById(releaseId);
   if (!release) throw new Error("Release not found.");
+  const withdrawalUpc = (release.upcCode || "").replace(/[\s-]/g, "");
+  if (withdrawalUpc) {
+    const withdrawal = await prisma.direNoteLog.findFirst({ where: { action: "v24_withdraw_release", requestPayloadRedacted: { path: ["resource"], equals: `upc:${withdrawalUpc}` }, OR: [{ success: true }, { responseJson: { path: ["state"], equals: "unconfirmed" } }] }, select: { id: true, success: true } });
+    if (withdrawal) throw new Error(withdrawal.success ? `This UPC was withdrawn from DireNote (audit #${withdrawal.id}) and cannot be resubmitted. Create a new release if appropriate.` : `This UPC has an unconfirmed withdrawal (audit #${withdrawal.id}). Reconcile the provider outcome before delivery.`);
+  }
   const reviewingCorrections = ["under_review", "approved"].includes(release.status);
   const correctionAttempt = reviewingCorrections ? await prisma.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: "direnote", isCurrent: true }, select: { corrections: true } }) : null;
   const correctionsResolved = Boolean(correctionAttempt?.corrections && typeof correctionAttempt.corrections === "object" && (correctionAttempt.corrections as Record<string, unknown>).status === "customer_resolved");

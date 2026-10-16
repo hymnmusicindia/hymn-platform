@@ -1,8 +1,10 @@
 import EmbeddedPostgres from "embedded-postgres";
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 
-const databaseDir = path.resolve(".cache", `direnote-postgres-${Date.now()}`);
+const databaseDir = path.join(mkdtempSync(path.join(tmpdir(), "hymn-direnote-")), "pg");
 const port = 55439;
 const environment = { ...process.env,
   DATABASE_URL: `postgresql://fixture:fixture@127.0.0.1:${port}/direnote_virtual?connection_limit=12`,
@@ -11,6 +13,8 @@ const environment = { ...process.env,
   DIRENOTE_INGEST_ENDPOINT: "http://127.0.0.1:55440/ingest_content",
   DIRENOTE_RELEASE_INFORMATION_ENDPOINT: "http://127.0.0.1:55440/check_release_status",
   DIRENOTE_REVENUE_REPORT_ENDPOINT: "http://127.0.0.1:55440/check_revenue_report",
+  DIRENOTE_ARTIST_INFORMATION_ENDPOINT: "http://127.0.0.1:55440/check_artist",
+  DIRENOTE_SONGWRITER_INFORMATION_ENDPOINT: "http://127.0.0.1:55440/check_songwriter",
   EMAIL_ENABLED: "false", CRON_SECRET: "fixture-cron",
   HYMN_STORAGE_ROOT: path.join(databaseDir, "private-storage"),
   HYMN_ALLOW_STORAGE_ROOT_OVERRIDE: "true",
@@ -18,7 +22,7 @@ const environment = { ...process.env,
   HTTPS_PROXY: "", HTTP_PROXY: "", ALL_PROXY: "",
   JWT_SECRET: "fixture-user-session-secret-long-enough", ADMIN_JWT_SECRET: "fixture-admin-session-secret-long-enough",
   CANONICAL_HOST: "127.0.0.1",
-  NEXT_PUBLIC_APP_URL: "http://127.0.0.1:55441", NEXT_DIST_DIR: ".next-direnote-virtual",
+  NEXT_PUBLIC_APP_URL: "http://127.0.0.1:55441", APP_URL: "https://hymnmusic.fun", NEXT_DIST_DIR: ".next-direnote-virtual",
   DIRENOTE_RELEASE_SYNC_ENABLED: "true"
 };
 
@@ -47,6 +51,11 @@ async function main() {
     }
     if (process.argv.includes("--storage-only")) {
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-private-storage-integration.ts"]);
+      return;
+    }
+    if (process.argv.includes("--v24-only")) {
+      if (process.argv.includes("--build")) await run(["node_modules/next/dist/bin/next", "build", "--webpack"]);
+      await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-direnote-v24-http.ts"]);
       return;
     }
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-release-pipeline-integration.ts"]);

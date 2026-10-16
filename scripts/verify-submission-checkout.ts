@@ -11,6 +11,12 @@ import { getDetailedReleaseByUserId, updatePaidDistributionRelease } from "../li
 import { showFirstReleaseBadge } from "../lib/first-release-flow";
 
 const orders = new Map<string, { id: string; amount: number; currency: string; payment?: Record<string, unknown> }>();
+export function captureBrowserFixtureOrder(orderId: string) {
+  const order = orders.get(orderId); assert(order, "Fixture payment order required.");
+  const paymentId = `pay_fixture_${orderId}`;
+  order.payment = { id: paymentId, order_id: orderId, amount: order.amount, currency: order.currency, status: "captured" };
+  return { razorpay_order_id: orderId, razorpay_payment_id: paymentId, razorpay_signature: createHmac("sha256", "fixture-razorpay-secret").update(`${orderId}|${paymentId}`).digest("hex") };
+}
 export async function startCheckoutMock() {
   const server = createServer(async (request, response) => {
     let raw = "";
@@ -88,10 +94,14 @@ export async function verifySubmissionCheckout() {
     const draft = await active.draft();
     const entitlement = await active.create(draft.release.id, "half_yearly"); passed(entitlement, 200);
     passed(await active.submit(draft, entitlement.body, "half_yearly"));
+    const recovered = await active.client.get(`/api/distribution/payment/status?releaseId=${draft.release.id}`);
+    assert.equal(recovered.status(), 200); assert.equal((await recovered.json()).submitted, true);
     assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: draft.release.id } })).status, "UNDER_REVIEW");
     passed(await active.submit(draft, entitlement.body, "half_yearly"), 200);
     assert.equal(await prisma.subscriptionReleaseUsage.count({ where: { subscriptionId: sub.id } }), 1);
     const exhausted = await active.draft("AWAITING_PAYMENT");
+    assert.equal((await (await active.client.get(`/api/distribution/payment/status?releaseId=${exhausted.release.id}`)).json()).submitted, false);
+    const stranger = await make(); assert.equal((await stranger.client.get(`/api/distribution/payment/status?releaseId=${draft.release.id}`)).status(), 404);
     passed(await active.create(exhausted.release.id, "half_yearly"), 409);
     const paidOrder = await active.create(exhausted.release.id, "one_time", { useHymnCredits: true }); passed(paidOrder, 200);
     assert.equal(paidOrder.body.requiresPayment, true); assert.equal(paidOrder.body.creditsUsed, 0);
@@ -138,7 +148,7 @@ export async function verifySubmissionCheckout() {
     const leftOrder = await concurrent.create(left.release.id, "half_yearly"); const rightOrder = await concurrent.create(right.release.id, "half_yearly");
     const attempts = await Promise.all([concurrent.submit(left, leftOrder.body, "half_yearly"), concurrent.submit(right, rightOrder.body, "half_yearly")]);
     assert.equal(attempts.filter(result => result.status === 201).length, 1, JSON.stringify(attempts));
-    assert(attempts.every(result => [201, 400, 409].includes(result.status)), JSON.stringify(attempts));
+    assert(attempts.every(result => [201, 400, 409].includes(result.status) || result.status === 503 && result.body.code === "RELEASE_SAVE_RETRYABLE"), JSON.stringify(attempts));
     assert.equal(await prisma.subscriptionReleaseUsage.count({ where: { subscriptionId: concurrentSub.id } }), 1);
 
     const retry = await make(); const retrySub = await retry.subscription(); const retryDraft = await retry.draft(); const retryOrder = await retry.create(retryDraft.release.id, "half_yearly");
@@ -224,6 +234,11 @@ export async function verifySubmissionCheckout() {
     const browserDraft = await browserAccount.draft();
     const browserSaved = await browserAccount.client.post("/api/distribution/save-draft", { multipart: { payload: JSON.stringify({ draftReleaseId: browserDraft.release.id, metadata: { ...browserDraft.metadata, promotionCode: "FIRST_RELEASE_FREE" } }) } });
     assert(browserSaved.ok(), await browserSaved.text());
-    return { user: browserAccount.user, releaseId: browserDraft.release.id };
+    const paidBrowserAccount = await make();
+    await prisma.release.create({ data: { userId: paidBrowserAccount.user.id, title: "Prior paid release", artistName: "Fixture", genre: "Pop", releaseDate: new Date("2026-01-01"), releaseType: "single", status: "LIVE", paymentStatus: "paid" } });
+    const paidBrowserDraft = await paidBrowserAccount.draft();
+    const paidSaved = await paidBrowserAccount.client.post("/api/distribution/save-draft", { multipart: { payload: JSON.stringify({ draftReleaseId: paidBrowserDraft.release.id, metadata: paidBrowserDraft.metadata }) } });
+    assert(paidSaved.ok(), await paidSaved.text());
+    return { user: browserAccount.user, releaseId: browserDraft.release.id, paid: { user: paidBrowserAccount.user, releaseId: paidBrowserDraft.release.id } };
   } finally { for (const context of contexts) await context.client.dispose(); }
 }

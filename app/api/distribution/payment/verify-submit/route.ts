@@ -304,7 +304,9 @@ export async function POST(request: Request) {
         eventKey: `release:${release.id}:status:under_review`,
         metadata: { releaseId: release.id, status: "under_review" }
       }).catch(() => console.error("Release notification could not be delivered.", { releaseId: release.id }));
-      await sendReleaseEmail("release_submitted", {
+      // SMTP completion must not delay the paid customer's confirmation screen.
+      const confirmedReleaseId = release.id;
+      after(async () => { await sendReleaseEmail("release_submitted", {
         to: session.email,
         userId: session.sub,
         userName: session.name,
@@ -315,7 +317,7 @@ export async function POST(request: Request) {
         releaseDate: parsed.metadata.releaseDate,
         manageReleaseUrl: emailAppUrl(`/dashboard/releases/${release.id}`),
         correctionUrl: emailAppUrl(`/dashboard/releases/${release.id}?tab=corrections`)
-      }).catch(() => console.error("Release confirmation email could not be delivered.", { releaseId: release.id }));
+      }).catch(() => console.error("Release confirmation email could not be delivered.", { releaseId: confirmedReleaseId })); });
     }
 
     return NextResponse.json({ release, reviewEligibility: { purchaseType: "service", purchaseId: persistedOrder.id, label: `${parsed.metadata.plan} · ${release.releaseTitle || release.trackName || resolvedReleaseTitle}` } }, { status: 201 });
