@@ -58,7 +58,19 @@ async function main() {
     await expect(page.getByLabel("Schedule item type", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Close calendar form" }).click();
     // Click the date/blank surface, not an overlaid event chip's centre.
-    await page.getByRole("button", { name: `Schedule on ${date}`, exact: true }).click({ position: { x: 8, y: 8 } });
+    await page.getByRole("button", { name: `View schedule for ${date}`, exact: true }).click({ position: { x: 8, y: 8 } });
+    const dayDialog = page.getByRole("dialog").filter({ has: page.locator("#calendar-day-title") });
+    await expect(dayDialog.getByRole("heading", { name: "Start-only browser appointment", exact: true })).toBeVisible();
+    await dayDialog.getByRole("button", { name: "Delete event", exact: true }).first().click();
+    await dayDialog.getByRole("button", { name: "Keep event", exact: true }).click();
+    await expect(dayDialog.getByRole("heading", { name: "Start-only browser appointment", exact: true })).toBeVisible();
+    const target = dayDialog.locator("article").filter({ has: page.getByRole("heading", { name: "Start-only browser appointment", exact: true }) });
+    await target.getByRole("button", { name: "Delete event", exact: true }).click();
+    await target.getByRole("button", { name: "Confirm delete", exact: true }).click();
+    await expect(dayDialog.getByRole("heading", { name: "Start-only browser appointment", exact: true })).toHaveCount(0);
+    assert.equal((await prisma.teamCalendarEvent.findUniqueOrThrow({ where: { id: appointment.id } })).status, "DELETED");
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2));
+    await dayDialog.getByRole("button", { name: "+ Schedule on this day", exact: true }).click();
     await page.getByLabel("Schedule item type", { exact: true }).selectOption("TASK");
     await page.getByLabel("Task title", { exact: true }).fill("Calendar browser My Work task");
     await page.getByLabel("Start time hour", { exact: true }).selectOption("4");
@@ -75,6 +87,7 @@ async function main() {
     await expect(page.getByRole("dialog").getByRole("heading", { name: "Calendar browser My Work task", exact: true })).toBeVisible();
     console.log("PASS: day-cell quick scheduling, task creation, type filters, My Work deep link and mobile interaction.");
     console.log("PASS: inline client creation selects the card, defaults to CALL and preserves appointment form fields.");
+    console.log("PASS: day detail popup, mobile layout, cancel-delete, inline confirmed deletion and schedule-from-day flow.");
     console.log("PASS: blank AM/PM controls, required-start browser validation, start-only save/midnight conversion, account matching and mobile dial layout.");
   } finally {
     await browser.close();

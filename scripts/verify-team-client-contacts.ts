@@ -132,6 +132,20 @@ async function main() {
   const latestClient = await prisma.teamClient.findUniqueOrThrow({ where: { id: client.id } });
   await teamMutation(actor, "clients-save", { ...latestClient, status: "DO_NOT_CONTACT" });
   await processAppointments(dncCall.id, 10, delivery); assert.equal(mail.length, expiredBefore);
+  const deleteCall = await teamMutation(actor, "calendar-save", { ...callInput, startsAt: new Date(Date.now() + 24 * 3600000).toISOString() }) as { id: string; version: number };
+  await assert.rejects(teamMutation(viewer, "calendar-delete", deleteCall));
+  await assert.rejects(teamMutation(rep, "calendar-delete", deleteCall));
+  await assert.rejects(teamMutation(actor, "calendar-delete", { ...deleteCall, version: deleteCall.version + 1 }));
+  await teamMutation(actor, "calendar-delete", deleteCall);
+  assert.equal((await prisma.teamCalendarEvent.findUniqueOrThrow({ where: { id: deleteCall.id } })).status, "DELETED");
+  assert.equal(await prisma.teamAppointmentMessage.count({ where: { eventId: deleteCall.id, status: "PENDING" } }), 0);
+  const beforeDeleted = mail.length;
+  await processAppointments(deleteCall.id, 10, delivery); assert.equal(mail.length, beforeDeleted);
+  const deletedRange = await teamRead(actor, "calendar", new URLSearchParams({ start: new Date().toISOString(), end: new Date(Date.now() + 48 * 3600000).toISOString() })) as { items: { id: string }[] };
+  assert.ok(!deletedRange.items.some(e => e.id === deleteCall.id));
+  await assert.rejects(teamMutation(actor, "calendar-save", { ...callInput, id: deleteCall.id, version: deleteCall.version + 1 }));
+  assert.equal(await prisma.teamAudit.count({ where: { entityId: deleteCall.id, action: "calendar.deleted" } }), 1);
+  console.log("PASS: scoped event deletion, stale-edit rejection, hidden deleted records, stopped reminders and retained audit history.");
   console.log("PASS: appointment confirmations, exact 40/30-minute queues, concurrent dedup, registered signup suppression, scoped rep handoff, stale retry rejection and cancellation. No real email sent.");
   console.log("PASS: account matching, primary/secondary dedup, interests/location, one-time personalised email, late-signup/DNC suppression, required start, nullable end, point-event range/conflicts. No real email sent.");
 }

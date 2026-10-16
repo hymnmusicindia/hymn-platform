@@ -12,6 +12,21 @@ const email = z.union([z.string().trim().email().max(320), z.literal("")]).trans
 const clientSchema = z.object({ id: id.optional(), version: z.number().int().positive().optional(), name: z.string().trim().min(1).max(160), phone: z.string().trim().max(40).regex(/^[+\d\s().-]*$/).default(""), email: email.default(""), secondaryEmail: email.default(""), interests: z.array(z.enum(Object.keys(CLIENT_INTERESTS) as [keyof typeof CLIENT_INTERESTS, ...(keyof typeof CLIENT_INTERESTS)[]])).max(6).default([]), state: z.string().trim().max(100).default(""), city: z.string().trim().max(100).default(""), notes: z.string().trim().max(10000).default(""), ownerId: id, status: z.enum(["ACTIVE", "DO_NOT_CONTACT", "ARCHIVED"]).default("ACTIVE") });
 const eventSchema = z.object({ id: id.optional(), version: z.number().int().positive().optional(), title: z.string().trim().min(1).max(200), kind: z.enum(["CALL", "EMAIL", "MEETING", "FOLLOW_UP", "EVENT"]), clientId: id.nullable(), assigneeId: id, startsAt: z.string().datetime({ offset: true }), endsAt: z.string().datetime({ offset: true }).nullish(), notes: z.string().trim().max(10000).default(""), outcome: z.string().trim().max(10000).default(""), status: z.enum(["SCHEDULED", "COMPLETED", "CANCELLED"]).default("SCHEDULED"), reminderMinutes: z.number().int().min(0).max(10080).default(30) });
 export async function calendarMutation(tx: Prisma.TransactionClient, a: Actor, resource: string, input: unknown) {
+  if (resource === "calendar-delete") {
+    demand(a, "calendar.manage");
+    const data = z.object({ id, version: z.number().int().positive() }).parse(input);
+    const event = await tx.teamCalendarEvent.findFirst({ where: { id: data.id, workspaceId: a.workspaceId, status: { not: "DELETED" } } });
+    if (!event) throw new TeamError("Event unavailable.", 404);
+    if (event.creatorId !== a.id && event.assigneeId !== a.id) demand(a, "tasks.assign");
+    if (event.version !== data.version) throw new TeamError("Event changed. Refresh before deleting.", 409);
+    // Retain history while removing the event from all calendar views. The
+    // schedule revision and status also invalidate queued and claimed reminders.
+    await tx.teamCalendarEvent.update({ where: { id: event.id }, data: { status: "DELETED", version: { increment: 1 }, scheduleRevision: { increment: 1 } } });
+    await tx.teamAppointmentMessage.updateMany({ where: { eventId: event.id, status: "PENDING" }, data: { status: "CANCELLED" } });
+    await audit(tx, a, "calendar.deleted", event.id, { title: event.title, assigneeId: event.assigneeId, startsAt: event.startsAt.toISOString() });
+    await notify(tx, event.assigneeId, `Event deleted: ${event.title}`, `/team?workspace=${a.workspaceId}&module=calendar`);
+    return { id: event.id, deleted: true };
+  }
   if (resource === "calendar-handoff") {
     demand(a, "calendar.manage");
     const data = z.object({ id, version: z.number().int().positive(), assigneeId: id, reason: z.string().trim().min(3).max(1000) }).parse(input);
@@ -74,6 +89,7 @@ async function saveEvent(tx: Prisma.TransactionClient, a: Actor, input: unknown,
   demand(a, "calendar.manage"); const data = eventSchema.parse(input);
   const old = data.id ? await tx.teamCalendarEvent.findFirst({ where: { id: data.id, workspaceId: a.workspaceId } }) : null;
   if (data.id && !old) throw new TeamError("Event unavailable.", 404);
+  if (old?.status === "DELETED") throw new TeamError("This event was deleted.", 404);
   if (old && old.version !== data.version) throw new TeamError("Event changed. Refresh first.", 409);
   if (!handoff && (data.assigneeId !== a.id || old && old.assigneeId !== a.id && old.creatorId !== a.id)) demand(a, "tasks.assign");
   await eligible(tx, a, [data.assigneeId]);
@@ -125,7 +141,7 @@ export async function calendarRead(a: Actor, resource: string, params: URLSearch
   demand(a, "calendar.view");
   const start = z.string().datetime({ offset: true }).parse(params.get("start")), end = z.string().datetime({ offset: true }).parse(params.get("end"));
   if (new Date(end) <= new Date(start) || Date.parse(end) - Date.parse(start) > 93 * 86400000) throw new TeamError("Calendar range must be between one and 93 days.");
-  const where = { workspaceId: a.workspaceId, startsAt: { lt: new Date(end) }, OR: [{ endsAt: { gt: new Date(start) } }, { endsAt: null, startsAt: { gte: new Date(start) } }] };
+  const where = { workspaceId: a.workspaceId, status: { not: "DELETED" }, startsAt: { lt: new Date(end) }, OR: [{ endsAt: { gt: new Date(start) } }, { endsAt: null, startsAt: { gte: new Date(start) } }] };
   const [items, total, deadlines] = await Promise.all([
     prisma.teamCalendarEvent.findMany({ where, take: 1000, orderBy: { startsAt: "asc" }, include: { client: can(a, "clients.view") ? true : false, appointmentMessages: { where: { status: { not: "CANCELLED" } }, select: { kind: true, status: true, dueAt: true, error: true } } } }),
     prisma.teamCalendarEvent.count({ where }),

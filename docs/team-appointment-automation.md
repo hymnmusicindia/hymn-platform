@@ -21,6 +21,12 @@ Messages already accepted by SMTP cannot be recalled. A cancellation or handoff 
 
 Hostinger's existing `npm start` entrypoint invokes `/api/cron/team-appointments` every minute, starting 30 seconds after boot, using `CRON_SECRET`. Requires `TEAM_AUTOMATION_ENABLED` not `false`, live SMTP configured, and a running Node process. The endpoint also appears in `vercel.json` for deployments with minute-cron support. Do not install duplicate external cron unless needed; atomic claims still protect multiple hosts. Reminders are due at the requested offsets, normally processed on the next minute tick; SMTP/provider delays and downtime prevent exact delivery-time guarantees. After downtime, reminders for calls that already started are cancelled rather than delivered late.
 
+## Day schedule and deletion
+
+Clicking a calendar day (or its overflow count) opens the complete loaded day schedule, independent of the board's search/type filters, including times, assigned representatives, client contact details, footnotes and outcomes. Multi-day events appear on each overlapping day. My Work tasks keep their canonical task links. Use Schedule on this day to create an item, or Open event to edit an existing one.
+
+Delete event requires confirmation, `calendar.manage`, and either being its creator/assignee or having `tasks.assign`. Version checks prevent deleting stale records. Deletion retains the event as DELETED and its immutable audit trail, removes it from calendar reads (including closed-event views), invalidates queued reminders and notifies the assignee. It is not a client-card or My Work task deletion. The additive `20261017130000_team_calendar_deleted_status` migration must be applied before deploying this code.
+
 ## Handoff permissions
 
 The currently assigned representative, or a member with `tasks.assign`, can pass an upcoming call to an active, AVAILABLE representative in the same workspace. A reason and current event version are required. Slot conflicts are checked using normal calendar validation. Both old and new representatives are notified, and the client gets updated appointment details. This grants no ability to assign arbitrary work. Pending old-assignee reminders are invalidated. Calls already started/completed/cancelled cannot be handed off.
