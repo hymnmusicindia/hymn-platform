@@ -100,7 +100,7 @@ export async function pollDireNoteIngestJobs(options: { limit?: number } = {}) {
       if (status === "queued" || status === "processing") {
         await prisma.distributionSubmissionAttempt.updateMany({ where: { id: attempt.id, state: "submitted", isCurrent: true }, data: { providerStatus: status, lastCheckedAt: checkedAt, safeError: null, responseRedacted: jobMetadata as never } });
         await logDistributionEvent({ releaseId: attempt.releaseId, action: "ingest_status", httpStatus: response.httpStatus, responsePayload: { job_id: responseJobId || reference.jobId, status, progress: progress || null, attempts: jobMetadata.jobAttempts, poll_after_seconds: jobMetadata.pollAfterSeconds }, success: true });
-        if (status === "processing" && attempt.release.status === "sent_to_distributor") await updateDetailedReleaseStatus(attempt.releaseId, "distributor_processing", "DireNote is processing the accepted ingest job.", undefined, { notify: false });
+        if (status === "processing" && attempt.release.status === "SENT_TO_DISTRIBUTOR") await updateDetailedReleaseStatus(attempt.releaseId, "distributor_processing", "DireNote is processing the accepted ingest job.", undefined, { notify: false });
         if (status === "queued") queued++; else processing++;
         results.push({ releaseId: attempt.releaseId, state: status, ...(progress ? { progress } : {}) });
         continue;
@@ -142,7 +142,7 @@ export async function pollDireNoteIngestJobs(options: { limit?: number } = {}) {
 
       const completedData = { ...jobMetadata, ingestJobStatus: "completed", result: safeResult };
       await activateDireNoteAttempt(attempt.id, { upc: upc!, providerStatus: "processing", trackIdentifiers: mappedTracks as never, responseRedacted: completedData as never });
-      if (attempt.release.status === "submitting_to_distributor") await updateDetailedReleaseStatus(attempt.releaseId, "sent_to_distributor", "DireNote completed the accepted ingest job.");
+      if (attempt.release.status === "SUBMITTING_TO_DISTRIBUTOR") await updateDetailedReleaseStatus(attempt.releaseId, "sent_to_distributor", "DireNote completed the accepted ingest job.");
       const currentRelease = await prisma.release.findUniqueOrThrow({ where: { id: attempt.releaseId } });
       const priorMetadata = object(currentRelease.metadata);
       await prisma.release.update({ where: { id: attempt.releaseId }, data: { metadata: { ...priorMetadata, direnoteAccepted: true, direnoteAcceptedAt: checkedAt.toISOString(), direnoteStatus: "accepted", direnoteResponse: safeResult, latestStatusSyncAt: checkedAt.toISOString() } } });
