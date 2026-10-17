@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { getCurrentUserForPage } from "@/lib/access";
-import { listDetailedReleasesByUser } from "@/lib/distribution-db";
+import { getDetailedReleaseByUserId } from "@/lib/distribution-db";
 import { ReleaseForm } from "@/components/release-form";
 import { ReleaseOnboardingGate } from "@/components/release-onboarding-gate";
 import { getFirstReleaseEligibility } from "@/lib/first-release-promotion";
@@ -20,7 +20,7 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
   const user = await getCurrentUserForPage();
   const params = (await searchParams) ?? {};
   const requestedId = Number(firstValue(params.edit) ?? firstValue(params.resume) ?? firstValue(params.manage) ?? "");
-  const editingRelease = user && Number.isFinite(requestedId) && requestedId > 0 ? (await listDetailedReleasesByUser(user.id)).find((release) => release.id === requestedId) ?? null : null;
+  const editingRelease = user && Number.isSafeInteger(requestedId) && requestedId > 0 ? await getDetailedReleaseByUserId(user.id, requestedId) : null;
   const audioAssetId = Number(firstValue(params.audioAssetId) ?? "");
   const audioAsset = user && Number.isInteger(audioAssetId) && audioAssetId > 0 ? await (prisma.storedAsset.findFirst({ where: { id: audioAssetId, ownerUserId: user.id, assetType: "private_audio_master", uploadStatus: "ready", deletedAt: null }, select: { id: true, safeFilename: true, originalFilename: true, mimeType: true, byteSize: true, checksum: true, release: { select: { id: true, title: true, artistName: true, genre: true, metadata: true, releaseDate: true, status: true } }, track: { select: { title: true, trackNumber: true, duration: true, isrc: true, primaryArtist: true, metadata: true } }, releaseAssetLinks: { where: { release: { status: { in: ["LIVE", "DISTRIBUTED"] } } }, orderBy: { createdAt: "desc" }, take: 1, select: { release: { select: { id: true, title: true, artistName: true, genre: true, metadata: true, releaseDate: true } }, track: { select: { title: true, trackNumber: true, duration: true, isrc: true, primaryArtist: true, metadata: true } } } } } }) as any) : null;
   const legacyPrior = audioAsset?.release && ["LIVE", "DISTRIBUTED"].includes(audioAsset.release.status) ? { release: audioAsset.release, track: audioAsset.track } : null;
@@ -89,7 +89,7 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
             <div className="mx-auto w-full max-w-[1440px]">
               {explicitCampaign && campaignDraftEligible && editingRelease?.paymentStatus !== "paid" && campaignEligibility && !campaignEligibility.eligible ? <p role="status" className="mb-4 rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>The first-release offer is not currently available for this account. Your draft is saved. Check your existing releases or review the displayed price before continuing.</p> : null}
               {hasActiveSubscription && !hasReleaseAllowance && selectedPlan === "one_time" ? <p role="status" className="mb-4 rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>Your subscription release allowance is used up. You can submit this release with a one-time payment and apply any available HYMN credits at checkout.</p> : null}
-              <ReleaseForm returnedFromSubmission={firstValue(params.submitted) === "1"} userName={user.name} initialStage={firstValue(params.stage) ? Number(firstValue(params.stage)) : undefined} selectedPlan={selectedPlan} hasActiveSubscription={hasActiveSubscription} hymnCreditBalance={Number(user.referralCredits || 0)} initialRelease={editingRelease} audioLibraryPrefill={audioLibraryPrefill} initialCorrectionField={firstValue(params.correctionField)} firstReleaseOffer={firstReleaseOffer} campaignAttribution={attribution} prefillSuggestions={releasePrefill.suggestions} />
+              <ReleaseForm key={editingRelease?.id ?? "new-release"} returnedFromSubmission={firstValue(params.submitted) === "1"} userName={user.name} initialStage={firstValue(params.stage) ? Number(firstValue(params.stage)) : undefined} selectedPlan={selectedPlan} hasActiveSubscription={hasActiveSubscription} hymnCreditBalance={Number(user.referralCredits || 0)} initialRelease={editingRelease} audioLibraryPrefill={audioLibraryPrefill} initialCorrectionField={firstValue(params.correctionField)} firstReleaseOffer={firstReleaseOffer} campaignAttribution={attribution} prefillSuggestions={releasePrefill.suggestions} />
             </div>
           ) : firstValue(params.onboarding) === "release" ? <ReleaseOnboardingGate /> : (
             <div className="surface-card p-6 text-center sm:p-8">

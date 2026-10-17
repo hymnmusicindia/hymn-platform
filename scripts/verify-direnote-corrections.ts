@@ -29,7 +29,7 @@ assert.equal(contentIdCorrection.label, "Rights · Content ID");
 assert.equal(extractDireNoteCorrections({ remarks: "TRACK 2 SEEMS LIKE AN INSTRUMENTAL. PLEASE SELECT RELEVANT TRACK LANGUAGE" }, tracks, 19)[0].field, "tracks.1.trackLanguage");
 assert.equal(issues.length, 1);
 assert.match(issues[0].field, /^tracks\.1\.providerCorrection\./);
-assert.equal(issues[0].label, "Track 2 · DireNote correction");
+assert.equal(issues[0].label, "Track 2 · pink · DireNote correction");
 assert.match(issues[0].note, /instrumental/);
 assert.equal(extractDireNoteCorrections({ message: "Release information fetched successfully", tracks: [{ status: "Pending", remarks: "NONE" }, { remarks: "ISRC generated" }] }, tracks, 19).length, 0);
 assert.equal(extractDireNoteCorrections({ release: { remarks: "Please update the artwork" } }, tracks, 19)[0].label, "Release · DireNote correction");
@@ -96,6 +96,11 @@ async function main() {
   db.adminTask.updateMany = async () => ({ count: 0 });
   db.adminTaskHistory.create = async () => ({});
   try {
+    const { updateDetailedReleaseStatus: transitionWithoutNotification } = await import("../lib/distribution-db");
+    await transitionWithoutNotification(19, "under_review", "Paid submission", undefined, { manualOverride: true, notify: false });
+    assert.equal(notificationWrites, 0, "An explicitly deferred transition must not run notification delivery inline.");
+    release.status = "SENT_TO_DISTRIBUTOR";
+    transitions = 0;
     await syncDireNoteRelease(19);
     assert.equal(release.status, "CHANGES_REQUESTED");
     assert.match(release.correctionReason, /instrumental/);
@@ -128,6 +133,7 @@ async function main() {
     const requested: string[] = [];
     db.externalIdentifierHistory.create = async () => ({});
     globalThis.fetch = async (_url, init) => {
+      if (String(_url).endsWith("/check_qc_report")) return Response.json({ success: true, upc_code: release.upc, tracks: [] });
       const request = JSON.parse(String(init?.body));
       requested.push(request.isrc ? "isrc" : "upc");
       return new Response(JSON.stringify(request.isrc

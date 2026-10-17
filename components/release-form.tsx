@@ -3225,6 +3225,7 @@ export function ReleaseForm({
     allowReloadRef.current = true;
     window.history.replaceState(window.history.state, "", distributionSubmittedUrl(value.id));
     setSubmittedRelease(value);
+    router.replace(distributionSubmittedUrl(value.id), { scroll: false });
     window.scrollTo({ top: 0, behavior: "instant" });
   }
 
@@ -3401,67 +3402,6 @@ export function ReleaseForm({
     }
   }
 
-  function resetForm() {
-    tracks.forEach((track) => {
-      safeRevokePreviewUrl(track.audioPreviewUrl);
-      audioPreviewObjectUrlsRef.current.delete(track.audioPreviewUrl);
-    });
-    if (artworkPreview) safeRevokePreviewUrl(artworkPreview);
-    setStep(initialRelease ? 7 : 1);
-    setStepMotion("step-adjacent-forward");
-    setMobileStepMenuOpen(false);
-    setExpandedTrack(0);
-    setSubmitting(false);
-    setUploadProgress(0);
-    setStatus(null);
-    setAttemptedStep(null);
-    setArtworkFile(null);
-    setArtworkPreview(initialRelease?.artworkUrl ?? null);
-    setPersistedArtworkUrl(initialRelease?.artworkUrl ?? null);
-    setArtworkDimensions(null);
-    setArtworkError(null);
-    setClearedCorrectionFields(new Set());
-    setArtworkWarning(null);
-    setArtworkScanning(false);
-    setMonetisationModalOpen(false);
-    setYoutubeContentIdModalOpen(false);
-    setDraftReleaseId(
-      initialRelease?.id ?? null,
-    );
-    setSocialConsentAccepted(
-      initialRelease?.monetisationAccepted ??
-        (initialRelease?.platforms?.length
-          ? socialPlatformSelected(initialRelease.platforms)
-          : true),
-    );
-    setMonetisationClauses(() => {
-      const base = createMonetisationClauseState();
-      if (!initialRelease?.monetisationClauses) return base;
-      return {
-        ...base,
-        ...Object.fromEntries(
-          Object.entries(initialRelease.monetisationClauses).filter(
-            ([key]) => key in base,
-          ),
-        ),
-      } as MonetisationClauseState;
-    });
-    setYoutubeContentIdEnabled(
-      Boolean(initialRelease?.youtubeContentIdEnabled),
-    );
-    setYoutubeContentIdChannelUrl(
-      initialRelease?.youtubeContentIdChannelUrl ?? "",
-    );
-    setPlatforms(
-      initialRelease?.platforms?.length
-        ? initialRelease.platforms
-        : defaultStorePlatforms,
-    );
-    setTracks(createTracksFromRelease(initialRelease));
-    setRelease(createInitialReleaseDraft(initialRelease, minimumScheduledDate));
-    setLegal(createInitialLegalState(initialRelease));
-    setSubmittedRelease(null);
-  }
 
   const startReleaseJourney = useCallback(() => {
     if (journeyExiting) return;
@@ -3486,7 +3426,7 @@ export function ReleaseForm({
     return (
       <SuccessState
         release={submittedRelease}
-        onReset={firstReleaseOffer ? () => router.push(`/dashboard/releases?releaseId=${submittedRelease.id}`) : isPaidReleaseResubmission ? () => router.push("/distribution") : resetForm}
+        onReset={firstReleaseOffer ? () => router.push(`/dashboard/releases?releaseId=${submittedRelease.id}`) : isPaidReleaseResubmission ? () => router.push("/distribution") : () => router.push("/distribution/start")}
         isResubmission={isPaidReleaseResubmission}
         resetLabel={firstReleaseOffer ? "Track my release" : isPaidReleaseResubmission ? "Back to catalogue" : undefined}
       />

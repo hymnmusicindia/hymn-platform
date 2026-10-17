@@ -19,6 +19,7 @@ assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/fixture:fixture@12
 let mode = "pending";
 let returnedArtist: { name: string; links: Record<string, string> } | undefined;
 let ingests = 0;
+let qcRequests = 0;
 const statusUpcs: string[] = [];
 const ingestPayloads: Array<Record<string, any>> = [];
 let browser: Awaited<ReturnType<typeof startDireNoteBrowser>> | undefined;
@@ -40,6 +41,11 @@ const server = createServer(async (request, response) => {
     ingestPayloads.push(body);
     ingests++;
     response.end(JSON.stringify({ success: true, upc: body.upc || oldUpc, tracks: body.tracks.map((track: { isrc?: string }, index: number) => ({ track_name: `Track ${index + 1}`, isrc: track.isrc || oldIsrcs[index], status: "Pending" })) }));
+    return;
+  }
+  if (request.url === "/check_qc_report") {
+    qcRequests++;
+    response.end(JSON.stringify({ success: true, upc_code: body.upc, tracks: [{ track_name: "Track 2", isrc: oldIsrcs[1], scanned: true, isrc_lookup: { success: false, message: "Please correct the recording details" } }, { track_name: "Track 1", isrc: oldIsrcs[0], scanned: true, acr: { matches: [] } }] }));
     return;
   }
   statusUpcs.push(body.upc);
@@ -109,6 +115,8 @@ async function main() {
   const corrected = await prisma.release.findUniqueOrThrow({ where: { id: release.id } });
   assert.equal(corrected.status, "CHANGES_REQUESTED");
   assert.match(JSON.stringify(corrected.reviewIssues), /tracks\.1\.trackLanguage/);
+  assert.match(JSON.stringify(corrected.reviewIssues), /ISRC check: Please correct the recording details/);
+  assert.equal(qcRequests, 1, "Repeated identical correction polling must reuse the same track QC report.");
   assert.equal(await prisma.notification.count({ where: { userId: user.id, title: { startsWith: "Fix required" } } }), 1);
   assert.equal(await prisma.emailLog.count({ where: { userId: user.id, template: "release_changes_requested" } }), 1);
   assert.equal(await prisma.adminTask.count({ where: { entityId: String(release.id), type: "DireNote Correction" } }), 1);
@@ -270,7 +278,7 @@ async function main() {
       assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: derived.id } })).status, "SENT_TO_DISTRIBUTOR");
     }
   }
-  await prisma.release.update({ where: { id: single.id }, data: { metadata: { ...(single.metadata as object), autoQc: { status: "passed", checkedAt: new Date().toISOString() } } } });
+  await prisma.release.update({ where: { id: single.id }, data: { metadata: { ...(single.metadata as object), autoQc: { status: "pending", checkedAt: new Date().toISOString() } } } });
   const beforeAutoQc = ingests;
   const autoQcCycle = await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));
   const autoQcSummary = await autoQcCycle.json();

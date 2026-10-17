@@ -16,6 +16,8 @@ import { ensureCurrentDireNoteAttempt } from "@/lib/distribution-idempotency";
 import { attachedArtistProfileIds, verifiedArtistStoreLinks } from "@/lib/artist-store-links";
 import { validIsrc, validReleaseBarcode } from "@/lib/release-input-rules";
 import { confirmsDireNoteWithdrawal } from "@/lib/direnote/v24-reconciliation";
+import { requestDireNoteV24 } from "@/lib/direnote/v24-client";
+import { direNoteQcCorrectionPayload } from "@/lib/direnote-qc-report";
 
 type RecordValue = Record<string, unknown>;
 
@@ -368,6 +370,26 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   const providerCorrections = withdrawn ? [] : extractDireNoteCorrections(redactDireNoteDiagnostic(payload) as RecordValue, mappingTracks, releaseId, attempt.id);
   const explicitProviderStatus = rejectOrCorrectionStatus(payload) ?? rejectOrCorrectionStatus(remoteRelease) ?? rejectOrCorrectionStatus(remoteTracks);
   const lifecycleStatus = aggregateReleaseStatus(remoteTracks, remoteRelease.status ?? payload.status, release.releaseDate);
+  if (result.success && !withdrawn && lookupUpc && (providerCorrections.length || explicitProviderStatus || providerRequiresCorrections(remoteRelease.status) || remoteTracks.some(track => providerRequiresCorrections(track.status)))) {
+    try {
+      const reviewFingerprint = direNoteCorrectionFingerprint(providerCorrections);
+      const recent = await prisma.direNoteLog.findFirst({ where: { releaseId, action: "correction_qc_report", createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) }, AND: [{ requestPayloadRedacted: { path: ["attemptId"], equals: attempt.id } }, { requestPayloadRedacted: { path: ["reviewFingerprint"], equals: reviewFingerprint } }] }, orderBy: { createdAt: "desc" } });
+      let qc = recent?.success ? record(recent.responseJson) : null;
+      if (!recent) {
+        await reserveDireNoteRequest("correction_qc_report", releaseId, actorId);
+        const response = await requestDireNoteV24("check_qc_report", { upc: lookupUpc }, { timeoutMs: 15000 });
+        const safeQc = redactDireNoteDiagnostic(response.data ?? {}) as RecordValue;
+        await prisma.direNoteLog.create({ data: { releaseId, action: "correction_qc_report", success: response.success, httpStatus: response.httpStatus, requestPayloadRedacted: { upc: lookupUpc, attemptId: attempt.id, reviewFingerprint }, responseJson: safeQc as never, errorMessage: response.error ?? null, createdByAdminId: actorId ?? null } });
+        if (response.httpStatus === 429) await prisma.direNoteLog.create({ data: { action: "provider_rate_limit", success: false, httpStatus: 429, responseJson: { retryAt: new Date(Date.now() + Math.max(60, response.retryAfterSeconds ?? 3600) * 1000).toISOString() } } });
+        if (response.success) qc = safeQc;
+      }
+      const qcUpc = qc ? normalizeDireNoteUpc(qc.upc_code) : null;
+      if (qc && qcUpc === lookupUpc) {
+        const detailed = extractDireNoteCorrections(direNoteQcCorrectionPayload(qc), mappingTracks, releaseId, attempt.id, true);
+        for (const issue of detailed) if (!providerCorrections.some(existing => existing.fingerprint === issue.fingerprint)) providerCorrections.push(issue);
+      }
+    } catch (error) { console.warn("Track QC enrichment deferred; review remarks remain available", { releaseId, error: String(redactDireNoteDiagnostic(error instanceof Error ? error.message : "QC unavailable")) }); }
+  }
   // DireNote uses Rejected for fixable review requests too. Actionable remarks
   // must enter the correction workflow; a bare rejection remains a rejection.
   const aggregateStatus = withdrawn ? { provider: "rejected", canonical: "rejected" as ReleaseStatus } : explicitProviderStatus === "changes_required" || providerCorrections.length

@@ -2,7 +2,7 @@ import { releaseSaveFailure } from "@/lib/release-track-save";
 import { after, NextResponse } from "next/server";
 import { submitRelease } from "@/lib/distribution-service";
 import { getSession } from "@/lib/session";
-import { getDetailedReleaseById, getDetailedReleaseByUserId, getDistributionPricing, submitPaidDistributionRelease, updatePaidDistributionRelease } from "@/lib/distribution-db";
+import { getDetailedReleaseById, getDistributionPricing, submitPaidDistributionRelease, updatePaidDistributionRelease } from "@/lib/distribution-db";
 import { createNotification, getSubscriptionByUserId, listArtistProfilesByUser, touchArtistProfiles } from "@/lib/db";
 import { verifyCapturedRazorpayPayment, verifyRazorpaySignature } from "@/lib/razorpay";
 import { distributionSubmitSchema } from "@/lib/validation";
@@ -19,7 +19,7 @@ import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution"
 import { checkoutPlan } from "@/lib/distribution-checkout-plan";
 import { releaseReviewSnapshotHash } from "@/lib/release-review-snapshot";
 import { findReleaseIdentifierConflicts } from "@/lib/release-identifier-conflicts";
-import { validateReleaseForDireNote } from "@/lib/direnote-readiness";
+import { runPendingDistributionQc } from "@/lib/distribution-auto-qc";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 
 export const runtime = "nodejs";
@@ -215,6 +215,7 @@ export async function POST(request: Request) {
         publishingRights: parsed.metadata.publishingRights,
         paymentModel: parsed.metadata.paymentModel,
         paymentStatus: "paid" as const,
+        autoQc: { status: "pending" },
         distributionPlan: parsed.metadata.plan,
         ...(isFirstReleaseOffer ? { promotionCode: FIRST_RELEASE_PROMOTION_CODE, campaignAttribution: parsed.attribution ?? {} } : {}),
         tracks
@@ -222,7 +223,7 @@ export async function POST(request: Request) {
       if (parsed.draftReleaseId) {
         const draft = await getDetailedReleaseById(parsed.draftReleaseId);
         if (!draft || draft.userId !== session.sub || !["draft", "awaiting_payment"].includes(draft.status)) throw new Error("The draft attached to this checkout is invalid.");
-        release = await updatePaidDistributionRelease({ userId: session.sub, releaseId: parsed.draftReleaseId, metadata: releaseMetadata, verifiedOrderId: parsed.razorpay_order_id });
+        release = await updatePaidDistributionRelease({ userId: session.sub, releaseId: parsed.draftReleaseId, metadata: releaseMetadata, verifiedOrderId: parsed.razorpay_order_id, deferStatusNotifications: true });
       } else release = await submitPaidDistributionRelease({
       userId: session.sub,
       razorpayOrderId: parsed.razorpay_order_id,
@@ -252,31 +253,12 @@ export async function POST(request: Request) {
       throw error;
     }
 
-    // Run the same provider readiness contract immediately after persistence.
-    // A passing result is recorded for the admin queue; only real issues remain
-    // paused for manual QC and correction.
-    if (release?.id) {
-      try {
-        const persisted = await getDetailedReleaseByUserId(session.sub, release.id);
-        if (persisted) {
-          const readiness = await validateReleaseForDireNote(persisted, { siteUrl: getPublicAppUrl(request.url) });
-          const previousMetadata = persisted.metadata && typeof persisted.metadata === "object" ? persisted.metadata : {};
-          const autoQc = { status: readiness.ready ? "passed" : "issues_found", checkedAt: new Date().toISOString(), issueCount: readiness.issues.length, warningCount: readiness.warnings.length };
-          await prisma.release.update({ where: { id: release.id }, data: { metadata: { ...previousMetadata, autoQc } as any } });
-          release = await getDetailedReleaseByUserId(session.sub, release.id) ?? release;
-          if (readiness.ready) {
-            const releaseId = release.id;
-            const siteUrl = getPublicAppUrl(request.url);
-            after(async () => {
-              try { await submitRelease(releaseId, { siteUrl }); }
-              catch (error) { console.error("Automatic DireNote submission failed", { releaseId, error }); }
-            });
-          }
-        }
-      } catch (error) {
-        console.error("Automatic DireNote QC could not be recorded", { releaseId: release.id, error });
-      }
-    }
+    const submissionSiteUrl = getPublicAppUrl(request.url);
+    after(async () => {
+      try { if (await runPendingDistributionQc(release.id, submissionSiteUrl)) await submitRelease(release.id, { siteUrl: submissionSiteUrl }); }
+      catch (error) { console.error("Background submission QC deferred to scheduled recovery", { releaseId: release.id, error }); }
+    });
+    after(async () => {
 
     await createNotification({
       userId: session.sub,
@@ -320,6 +302,7 @@ export async function POST(request: Request) {
       }).catch(() => console.error("Release confirmation email could not be delivered.", { releaseId: confirmedReleaseId })); });
     }
 
+    });
     return NextResponse.json({ release, reviewEligibility: { purchaseType: "service", purchaseId: persistedOrder.id, label: `${parsed.metadata.plan} · ${release.releaseTitle || release.trackName || resolvedReleaseTitle}` } }, { status: 201 });
   } catch (error) {
     const transient = releaseSaveFailure(error);

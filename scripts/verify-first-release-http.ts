@@ -52,6 +52,30 @@ async function main() {
       expect(await header.evaluate(e => getComputedStyle(e).backgroundColor)).not.toBe("rgb(0, 0, 0)");
       await browser.page.screenshot({ path: `.cache/distribution-mobile-${width}.png`, fullPage: true });
     }
+    for (const width of [390, 1440]) {
+      await browser.page.setViewportSize({ width, height: 900 });
+      await browser.page.goto(`http://127.0.0.1:55441/distribution/start?resume=${readyRelease.releaseId}&stage=3`);
+      await browser.page.getByRole("button", { name: "Edit credits", exact: true }).click();
+      const editor = browser.page.locator(".contributors-modal");
+      await expect(editor.locator('button[aria-expanded="true"]')).toHaveCount(0);
+      await editor.getByRole("button", { name: "Edit producers", exact: true }).click();
+      const producers = editor.getByRole("region", { name: "Producers details", exact: true });
+      await producers.getByPlaceholder("Producer artist name").fill("Fixture Producer");
+      await producers.getByRole("button", { name: "Done with producers", exact: true }).click();
+      await expect(editor.locator('button[aria-expanded="true"]')).toHaveCount(0);
+      await expect(editor.getByRole("button", { name: "Edit producers", exact: true })).toContainText("Fixture Producer");
+      await expect(editor.getByRole("button", { name: "Edit producers", exact: true }).locator("p")).toBeVisible();
+      await editor.getByRole("button", { name: "Edit songwriters", exact: true }).click();
+      await editor.getByRole("button", { name: "Edit composers", exact: true }).click();
+      await expect(editor.locator('button[aria-expanded="true"]')).toHaveCount(1);
+      await expect(editor.getByRole("region", { name: "Songwriters details", exact: true })).toHaveCount(0);
+      expect(await editor.evaluate(element => element.scrollWidth <= element.clientWidth + 2)).toBe(true);
+      await browser.page.screenshot({ path: `.cache/contributors-${width}.png`, fullPage: true });
+      await editor.getByRole("button", { name: "Save contributors", exact: true }).click();
+      await browser.page.waitForTimeout(1600);
+      await expect(browser.page.locator(".release-workspace-state")).toContainText("Saved", { timeout: 20000 });
+    }
+    console.log("PASS contributor editor: 390/1440px, summaries, saved producer name, one expanded role, explicit Done and no overflow.");
     await browser.page.goto(`http://127.0.0.1:55441/distribution/start?resume=${readyRelease.releaseId}&stage=5`);
     const legal = browser.page.locator(".legal-declaration-details").first();
     await expect(legal).not.toHaveAttribute("open", "");
@@ -84,8 +108,15 @@ async function main() {
     expect(["UNDER_REVIEW", "APPROVED", "SUBMITTED"]).toContain((await prisma.release.findUniqueOrThrow({ where: { id: readyRelease.releaseId } })).status);
     await expect(browser.page.locator("[data-release-review-confirmation]")).toBeVisible();
     await expect(browser.page).toHaveURL(/submitted=1/);
+    await browser.page.getByRole("link", { name: /Find curators for my song/ }).click({ timeout: 15000 });
+    await expect(browser.page).toHaveURL(/dashboard\/playlists/);
+    await browser.page.goBack();
+    await expect(browser.page).toHaveURL(/submitted=1/);
+    await expect(browser.page.locator("[data-release-review-confirmation]")).toBeVisible();
+    await expect(browser.page.locator(".curation-invitation")).toHaveCount(0);
     await browser.page.reload();
     await expect(browser.page.locator("[data-release-review-confirmation]")).toBeVisible();
+    console.log("PASS playlist invitation → browser Back restores the owned submitted screen, not a fresh wizard.");
     await browser.page.goto("http://127.0.0.1:55441/dashboard/releases");
     await expect(browser.page.getByText("Free release", { exact: true })).toBeVisible();
     await prisma.release.update({ where: { id: readyRelease.releaseId }, data: { status: "LIVE" } });
@@ -129,6 +160,11 @@ async function main() {
     await expect(browser.page).toHaveURL(/submitted=1/); await browser.page.reload();
     await expect(browser.page.locator("[data-release-review-confirmation]")).toBeVisible();
     console.log("PASS paid mobile checkout: verified captured payment, dismiss race, lost-response recovery and submitted screen surviving reload.");
+    await browser.page.getByRole("button", { name: "Submit another release", exact: true }).click();
+    await expect(browser.page).toHaveURL(/\/distribution\/start$/);
+    await expect(browser.page.locator("[data-release-review-confirmation]")).toHaveCount(0);
+    await expect(browser.page.locator(".release-journey-intro")).toBeVisible();
+    console.log("PASS submit-another explicitly starts a clean release without reusing the submitted record.");
   } catch (error) {
     console.error("First-release browser diagnostics", responses, await browser?.page.locator("body").innerText().then(text => text.slice(-3500)).catch(() => ""));
     await browser?.page.screenshot({ path: ".cache/first-release-browser-failure.png", fullPage: true }).catch(() => undefined);

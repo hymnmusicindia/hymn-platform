@@ -58,6 +58,10 @@ async function main() {
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-direnote-v24-http.ts"]);
       return;
     }
+    if (process.argv.includes("--lifecycle-only")) {
+      await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-direnote-lifecycle.ts"]);
+      return;
+    }
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-release-pipeline-integration.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-release-change-requests-integration.ts"]);
     if (process.argv.includes("--build")) await run(["node_modules/next/dist/bin/next", "build", "--webpack"]);

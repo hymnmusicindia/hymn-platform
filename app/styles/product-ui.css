@@ -2247,9 +2247,6 @@ body:has(.distribution-start-page) > header,body:has(.distribution-start-page) >
   background: transparent !important;
 }
 
-.contributors-modal > div:first-child p:last-child {
-  display: none;
-}
 
 .contributors-modal > div:first-child > div:last-child > span {
   display: none;
@@ -2286,9 +2283,6 @@ body:has(.distribution-start-page) > header,body:has(.distribution-start-page) >
   color: var(--danger) !important;
 }
 
-.contributors-modal > div:nth-child(2) > div > div:first-child > div:last-child > span {
-  display: none !important;
-}
 
 .contributors-modal > div:nth-child(2) > div > div:first-child button {
   padding: .35rem 0 !important;
@@ -2370,9 +2364,6 @@ body:has(.distribution-start-page) > header,body:has(.distribution-start-page) >
   display: block;
 }
 
-.contributors-modal .contributor-role-requirement + p {
-  display: none;
-}
 
 .contributors-modal > div:last-child {
   padding: 1.15rem 2rem !important;

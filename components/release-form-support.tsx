@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
+import "./contributor-editor.css";
 import clsx from "clsx";
 import { CustomerOverlay } from "@/components/customer-overlay";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
@@ -161,12 +162,14 @@ export function ContributorsModal({
 }) {
   const [local, setLocal] = useState({ songwriters: [createContributor()], composers: [createContributor()], producers: [createContributor()] });
   const [applyToAllTracks, setApplyToAllTracks] = useState(false);
+  const [openRole, setOpenRole] = useState<"songwriters" | "composers" | "producers" | null>(null);
 
   useEffect(() => {
     if (!state.open) return;
     setLocal({ songwriters: state.songwriters, composers: state.composers, producers: state.producers });
     setApplyToAllTracks(false);
-  }, [state]);
+    setOpenRole(!contributorsValid(state.songwriters) ? "songwriters" : !contributorsValid(state.composers) ? "composers" : !producersValid(state.producers) ? "producers" : null);
+  }, [state, contributorsValid, producersValid]);
 
   if (!state.open) return null;
 
@@ -175,6 +178,7 @@ export function ContributorsModal({
   }
 
   function addRoleEntry(role: "songwriters" | "composers" | "producers") {
+    setOpenRole(role);
     setLocal((current) => ({ ...current, [role]: [...current[role], createContributor()] }));
   }
 
@@ -192,7 +196,7 @@ export function ContributorsModal({
           <div>
             <p className="text-xs uppercase tracking-[0.2em]" style={{ color: "var(--text-soft)" }}>Credits & rights</p>
             <h3 className="mt-1 text-xl font-semibold sm:text-2xl" style={{ color: "var(--text)" }}>Contributors</h3>
-            <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Use legal names for songwriter and composer rights matching. Producer artist names are sent to DireNote; legal names remain optional for producers.</p>
+            <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>One role at a time. Finish each section to keep a compact summary; click it any time to edit.</p>
           </div>
           <div className="flex items-center gap-2">
             <span className="rounded-full border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: valid ? "rgba(34,197,94,0.38)" : "rgba(250,204,21,0.38)", background: valid ? "rgba(34,197,94,0.1)" : "rgba(250,204,21,0.1)", color: valid ? "#86efac" : "#fde68a" }}>
@@ -211,14 +215,17 @@ export function ContributorsModal({
             return (
               <div key={role.key} className="rounded-[1.15rem] border p-3 sm:p-4" style={{ borderColor: complete ? "color-mix(in srgb, var(--accent) 28%, var(--border))" : "rgba(250,204,21,0.34)", background: "var(--bg-soft)" }}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h4 className="m-0 min-w-0 flex-1"><button type="button" className="flex min-h-12 w-full min-w-0 items-center justify-between gap-3 text-left" aria-label={`Edit ${role.label.toLowerCase()}`} aria-expanded={openRole === key} aria-controls={`credit-panel-${key}`} onClick={() => setOpenRole(openRole === key ? null : key)}>
                   <div className="flex items-center gap-3">
                     <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border text-sm font-semibold" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}>{initials}</span>
                     <div>
-                      <h4 className="text-base font-semibold" style={{ color: "var(--text)" }}>{role.label}</h4>
+                      <span className="text-base font-semibold" style={{ color: "var(--text)" }}>{role.label}</span>
                       <div className="contributor-role-requirement text-xs" style={{ color: "var(--text-soft)" }}>{entries.length} entr{entries.length === 1 ? "y" : "ies"} · {role.key === "producer" ? "artist name required" : "legal name required"}</div>
-                      <p className="text-xs" style={{ color: "var(--text-soft)" }}>{entries.length} entr{entries.length === 1 ? "y" : "ies"} · legal name required</p>
+                      <p className="mt-1 break-words text-sm" style={{ color: "var(--text-muted)" }}>{entries.map(entry => role.key === "producer" ? entry.artistName : entry.legalName).filter(Boolean).join(", ") || (role.key === "songwriter" ? "Who wrote the lyrics?" : role.key === "composer" ? "Who wrote the music?" : "Who produced the recording?")}</p>
                     </div>
                   </div>
+                  <ChevronDown className={clsx("h-5 w-5 shrink-0 transition-transform", openRole === key && "rotate-180")} />
+                  </button></h4>
                   <div className="flex items-center gap-2">
                     <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]" style={complete ? { borderColor: "rgba(34,197,94,0.4)", color: "#86efac", background: "rgba(34,197,94,0.09)" } : { borderColor: "rgba(250,204,21,0.38)", color: "#fde68a", background: "rgba(250,204,21,0.09)" }}>
                       {complete ? "Complete" : "Missing"}
@@ -226,7 +233,9 @@ export function ContributorsModal({
                     <button type="button" className="contributor-add-action btn-outline pressable px-3 py-2 text-xs" onClick={() => addRoleEntry(key)}>+ Add</button>
                   </div>
                 </div>
-                <div className="mt-3 grid gap-2">
+                <div id={`credit-panel-${key}`} role="region" aria-label={`${role.label} details`} hidden={openRole !== key}>
+                <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>{role.key === "songwriter" ? "Credit the person who wrote the lyrics. Use their full legal name for rights matching." : role.key === "composer" ? "Credit the person who created the melody or composition. Use their full legal name." : "Use the producer’s public artist name. Their legal name is optional."}</p>
+                <div className="mt-3 grid gap-3">
                   {entries.map((entry, entryIndex) => (
                     <div key={entry.id} className="contributor-person-fields grid gap-2 rounded-xl border p-2.5 sm:grid-cols-[auto,1fr,1fr,auto] sm:items-center" style={{ borderColor: (role.key === "producer" ? entry.artistName : entry.legalName).trim() ? "var(--border)" : "rgba(250,204,21,0.36)", background: "var(--card)" }}>
                       <ContributorIdentityPicker entry={entry} role={role.key} onSelect={(patch) => updateRole(key, entry.id, patch)} />
@@ -239,10 +248,12 @@ export function ContributorsModal({
                         <span className="text-[11px] uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Artist name {role.key === "producer" ? "(required)" : ""}</span>
                         <input className="field min-h-10 py-2 text-sm" placeholder={role.key === "producer" ? "Producer artist name" : "Optional public credit"} value={entry.artistName} onChange={(event) => updateRole(key, entry.id, { artistName: event.target.value })} />
                       </label>
-                      {role.key !== "producer" ? <div className="col-span-full grid gap-2 sm:grid-cols-2 lg:grid-cols-4"><label className="grid gap-1"><span className="text-[11px] uppercase tracking-[0.16em]" style={{color:"var(--text-soft)"}}>IPI number</span><input className="field min-h-10 py-2 text-sm" value={entry.ipi ?? ""} onChange={(event)=>updateRole(key,entry.id,{ipi:event.target.value})} placeholder="Optional" /></label><label className="flex items-center gap-2 pt-5 text-sm"><input type="checkbox" checked={Boolean(entry.iprsMember)} onChange={(event)=>updateRole(key,entry.id,{iprsMember:event.target.checked})} />IPRS member</label><label className="grid gap-1"><span className="text-[11px] uppercase tracking-[0.16em]" style={{color:"var(--text-soft)"}}>Instagram</span><input className="field min-h-10 py-2 text-sm" value={entry.instagramUrl ?? ""} onChange={(event)=>updateRole(key,entry.id,{instagramUrl:event.target.value})} placeholder="Optional URL" /></label><label className="grid gap-1"><span className="text-[11px] uppercase tracking-[0.16em]" style={{color:"var(--text-soft)"}}>X / Twitter</span><input className="field min-h-10 py-2 text-sm" value={entry.xUrl ?? ""} onChange={(event)=>updateRole(key,entry.id,{xUrl:event.target.value})} placeholder="Optional URL" /></label></div> : null}
-                      <button type="button" className="contributor-remove-action btn-outline pressable px-3 py-2 text-xs" disabled={entries.length === 1} onClick={() => removeRoleEntry(key, entry.id)}>Remove</button>
+                      {role.key !== "producer" ? <details className="col-span-full"><summary className="min-h-11 cursor-pointer py-3 text-sm">Optional rights &amp; social details</summary><div className="grid gap-3 sm:grid-cols-2"><label className="grid gap-1">IPI number<input className="field" inputMode="numeric" value={entry.ipi ?? ""} onChange={event => updateRole(key, entry.id, { ipi: event.target.value })} placeholder="9–11 digits, if registered" /></label><label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={Boolean(entry.iprsMember)} onChange={event => updateRole(key, entry.id, { iprsMember: event.target.checked })} />IPRS member</label><label className="grid gap-1">Instagram URL<input className="field" value={entry.instagramUrl ?? ""} onChange={event => updateRole(key, entry.id, { instagramUrl: event.target.value })} /></label><label className="grid gap-1">X / Twitter URL<input className="field" value={entry.xUrl ?? ""} onChange={event => updateRole(key, entry.id, { xUrl: event.target.value })} /></label></div></details> : null}
+                      {entries.length > 1 ? <button type="button" className="contributor-remove-action btn-outline pressable px-3 py-2 text-xs" onClick={() => removeRoleEntry(key, entry.id)}>Remove</button> : null}
                     </div>
                   ))}
+                </div>
+                <button type="button" className="btn-outline mt-3 min-h-11" disabled={!complete} onClick={() => setOpenRole(null)}>Done with {role.label.toLowerCase()}</button>
                 </div>
               </div>
             );

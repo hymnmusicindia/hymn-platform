@@ -810,7 +810,7 @@ export async function updateDetailedReleaseStatus(releaseId: number, status: Rel
         return true;
       }, { timeout: 30_000, maxWait: 10_000 });
       const release = await getDetailedReleaseById(releaseId);
-      if (release && (didTransition || options?.notify)) await notifyReleaseStatusChange(release, status, note);
+      if (release && options?.notify !== false && (didTransition || options?.notify)) await notifyReleaseStatusChange(release, status, note);
       return release;
     }
     const release = memory.releases.find((item) => item.id === releaseId);
@@ -827,7 +827,7 @@ export async function updateDetailedReleaseStatus(releaseId: number, status: Rel
     if (status === "in_queue" && release.queuePosition == null) {
       release.queuePosition = memory.releases.filter((item) => item.status === "submitted" || item.status === "in_queue").length;
     }
-    await notifyReleaseStatusChange(release, status, note);
+    if (options?.notify !== false) await notifyReleaseStatusChange(release, status, note);
     return release;
   }
   await pool.query("UPDATE releases SET status = ? WHERE id = ?", [status, releaseId]);
@@ -836,7 +836,7 @@ export async function updateDetailedReleaseStatus(releaseId: number, status: Rel
   }
   const releases = await listAllDetailedReleases();
   const release = releases.find((item) => item.id === releaseId) ?? null;
-  if (release) await notifyReleaseStatusChange(release, status, note);
+  if (release && options?.notify !== false) await notifyReleaseStatusChange(release, status, note);
   return release;
 }
 
@@ -1403,6 +1403,7 @@ export async function submitPaidDistributionRelease(input: {
 }
 
 export async function updatePaidDistributionRelease(input: {
+  deferStatusNotifications?: boolean;
   submissionKey?: string;
   userId: number;
   releaseId: number;
@@ -1471,9 +1472,10 @@ export async function updatePaidDistributionRelease(input: {
       }, releaseSaveTransactionOptions);
       const reviewReason = "Paid release metadata was submitted for review.";
       const currentStatus = String(existingRelease.status ?? "").trim().toLowerCase();
-      if (currentStatus === "changes_requested" || currentStatus === "rejected") await updateDetailedReleaseStatus(input.releaseId, "resubmitted", reviewReason);
-      else if (currentStatus === "draft" || currentStatus === "awaiting_payment") await updateDetailedReleaseStatus(input.releaseId, "submitted", reviewReason);
-      await updateDetailedReleaseStatus(input.releaseId, "under_review", reviewReason);
+      const notificationOptions = input.deferStatusNotifications ? { notify: false } : undefined;
+      if (currentStatus === "changes_requested" || currentStatus === "rejected") await updateDetailedReleaseStatus(input.releaseId, "resubmitted", reviewReason, undefined, notificationOptions);
+      else if (currentStatus === "draft" || currentStatus === "awaiting_payment") await updateDetailedReleaseStatus(input.releaseId, "submitted", reviewReason, undefined, notificationOptions);
+      await updateDetailedReleaseStatus(input.releaseId, "under_review", reviewReason, undefined, notificationOptions);
       await createDistributionQueueEntry({ releaseId: input.releaseId, initialStage: "quality_check", notes: "Draft completed and submitted for HYMN review." });
       return getDetailedReleaseByUserId(input.userId, input.releaseId);
     }

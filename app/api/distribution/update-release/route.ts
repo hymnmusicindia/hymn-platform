@@ -1,11 +1,11 @@
 import { releaseSaveFailure } from "@/lib/release-track-save";
 import { createHash } from "node:crypto";
 import { matchesReceivedCorrection } from "@/lib/release-correction-workflow";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { localPrivateStorage, type PrivateAssetType } from "@/lib/private-storage";
 import { listArtistProfilesByUser, touchArtistProfiles } from "@/lib/db";
-import { getDetailedReleaseById, updatePaidDistributionRelease } from "@/lib/distribution-db";
+import { getDetailedReleaseById, notifyReleaseStatusChange, updatePaidDistributionRelease } from "@/lib/distribution-db";
 import type { ReleaseTrack } from "@/lib/types";
 import { distributionEditSchema } from "@/lib/validation";
 import { assertDireNoteAssetFormat } from "@/lib/distribution-asset-format";
@@ -140,6 +140,7 @@ export async function POST(request: Request) {
       ? parsed.metadata.tracks[0]?.trackTitle?.trim() || parsed.metadata.releaseTitle?.trim() || "Untitled release"
       : parsed.metadata.releaseTitle?.trim() || parsed.metadata.tracks[0]?.trackTitle || "Untitled release";
     const release = await updatePaidDistributionRelease({
+      deferStatusNotifications: true,
       submissionKey,
       userId: existingRelease.userId,
       releaseId: parsed.metadata.editReleaseId,
@@ -201,6 +202,7 @@ export async function POST(request: Request) {
       await prisma.releaseAssetLink.createMany({ data: libraryLinks.filter((item) => allowed.has(item.assetId)).map((item) => ({ ...item, role: "TRACK_AUDIO_MASTER" })), skipDuplicates: true });
     }
 
+    after(async () => { await notifyReleaseStatusChange(release, "under_review", "Your corrections were received for HYMN review.").catch(error => console.error("Correction confirmation deferred", { releaseId: release.id, error })); });
     return NextResponse.json({ release });
   } catch (error) {
     // A response/queue failure after the save must not report a failed submission.

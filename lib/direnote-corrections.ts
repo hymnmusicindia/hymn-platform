@@ -10,7 +10,7 @@ export function providerRequiresCorrections(input: unknown) {
   return /reject|denied|declin|correction|changes?\s*required|action\s*required|fix\s*required|failed|error|invalid|blocked/.test(value(input).toLowerCase().replace(/[_-]/g, " "));
 }
 
-export function matchDireNoteTrack(remote: Row, tracks: LocalTrack[]) {
+export function matchDireNoteTrack(remote: Row, tracks: LocalTrack[], strictIdentity = false) {
   const isrc = identifier(remote.isrc);
   const providerId = value(remote.track_id ?? remote.id);
   const providerMatches = providerId ? tracks.filter(track => track.providerTrackId === providerId) : [];
@@ -19,17 +19,22 @@ export function matchDireNoteTrack(remote: Row, tracks: LocalTrack[]) {
   const matches = isrc ? tracks.filter(track => identifier(track.isrc) === isrc) : [];
   if (matches.length === 1) return matches[0];
   const titles = title ? tracks.filter(track => value(track.title).toLowerCase() === title) : [];
-  if (titles.length === 1) return titles[0];
-  // Only use an explicit sequence when no conflicting identity was supplied.
+  if (titles.length === 1) {
+    if (strictIdentity && isrc && titles[0].isrc && identifier(titles[0].isrc) !== isrc) return undefined;
+    if (strictIdentity && providerId && titles[0].providerTrackId && titles[0].providerTrackId !== providerId) return undefined;
+    return titles[0];
+  }
+  // QC enrichment cannot use a positional guess when identifiers conflict.
+  // Legacy status reconciliation separately validates identifier discrepancies.
   const sequence = Number(remote.track_number);
-  if (Number.isInteger(sequence) && sequence > 0) {
+  if ((!strictIdentity || (!isrc && !providerId && !title)) && Number.isInteger(sequence) && sequence > 0) {
     const numbered = tracks.filter(track => track.trackNumber === sequence);
     if (numbered.length === 1) return numbered[0];
   }
   return undefined;
 }
 
-export function extractDireNoteCorrections(payload: Row, tracks: LocalTrack[], releaseId: number, attemptId?: number) {
+export function extractDireNoteCorrections(payload: Row, tracks: LocalTrack[], releaseId: number, attemptId?: number, strictIdentity = false) {
   const issues: Array<{ field: string; label: string; note: string; fingerprint: string }> = [];
   const ignored = /^(none|n\/?a|null|nil|no(?:ne)?[ .]*|false|true|pending|processing|live|approved|ok|success|isrc generated|release information fetched successfully)[.!]?$/i;
   const action = /\b(?:please\s+(?:select|change|update|fix|correct|provide|upload|remove|replace|check)|must\s+(?:select|change|provide|be)|(?:correction|action|changes?)\s+required|missing|mismatch|invalid|incorrect|rejected|not\s+allowed)\b/i;
@@ -57,9 +62,10 @@ export function extractDireNoteCorrections(payload: Row, tracks: LocalTrack[], r
       const target = namedIndex >= 0 ? `tracks.${namedIndex}` : scope;
       const trackLanguage = /^tracks\.\d+$/.test(target) && /\btrack[\s_-]+language\b/i.test(message);
       const contentIdRights = /content\s*id|copyright detection|ownership|exclusive rights?|licen[cs]e|rights clarification/i.test(message);
+      const affectedTrack = namedIndex >= 0 ? `Track ${namedIndex + 1} · ${tracks[namedIndex].title}` : /^tracks\.\d+$/.test(target) ? label : null;
       issues.push({
         field: trackLanguage ? `${target}.trackLanguage` : contentIdRights ? "rights.contentId" : `${target}.providerCorrection.${fingerprint.slice(0, 12)}`,
-        label: contentIdRights ? "Rights · Content ID" : namedIndex >= 0 ? `Track ${namedIndex + 1} - DireNote correction` : label,
+        label: contentIdRights ? affectedTrack ? `${affectedTrack} · Rights / Content ID` : "Rights · Content ID" : namedIndex >= 0 ? `${affectedTrack} · DireNote correction` : label,
         note: `DireNote review: ${message}`,
         fingerprint
       });
@@ -73,10 +79,10 @@ export function extractDireNoteCorrections(payload: Row, tracks: LocalTrack[], r
   const remoteTracks = Array.isArray(payload.tracks) ? payload.tracks : Array.isArray(object(payload.release).tracks) ? object(payload.release).tracks as unknown[] : [];
   remoteTracks.forEach((input, index) => {
     const remote = object(input);
-    const local = matchDireNoteTrack({ ...remote, track_number: remote.track_number ?? index + 1 }, tracks);
+    const local = matchDireNoteTrack(remote, tracks, strictIdentity);
     const localIndex = local ? tracks.indexOf(local) : -1;
     inspect(remote, local ? `tracks.${localIndex}` : `direnote.remoteTrack.${index}`,
-      local ? `Track ${localIndex + 1} · DireNote correction` : `DireNote track ${value(remote.track_name) || index + 1} · Correction`,
+      local ? `Track ${localIndex + 1} · ${local.title} · DireNote correction` : `DireNote track ${value(remote.track_name) || index + 1} · Correction`,
       local ? String(local.id) : identifier(remote.isrc) || value(remote.track_name) || `remote:${index}`);
   });
   return issues;

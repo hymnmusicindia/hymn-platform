@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
+import { runPendingDistributionQc } from "@/lib/distribution-auto-qc";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { syncDireNoteArtistInformation, syncDireNoteRelease, syncDireNoteSongwriterInformation } from "@/lib/direnote-service";
@@ -54,7 +55,7 @@ export async function GET(request: Request) {
     // Recover a verified, QC-passed release if its request ended before the
     // background handoff ran. The submission lock and attempt state prevent duplicates.
     const autoQcCandidates = await prisma.release.findMany({
-      where: { archivedAt: null, paymentStatus: "paid", status: { in: ["UNDER_REVIEW", "APPROVED", "QUEUED_FOR_DISTRIBUTION"] }, metadata: { path: ["autoQc", "status"], equals: "passed" }, distributionSubmissions: { none: { provider: "direnote", state: { in: ["submitted", "reconciliation_required", "processing", "failed"] } } } },
+      where: { archivedAt: null, paymentStatus: "paid", status: { in: ["SUBMITTED", "UNDER_REVIEW", "APPROVED", "QUEUED_FOR_DISTRIBUTION"] }, OR: [{ metadata: { path: ["autoQc", "status"], equals: "passed" } }, { metadata: { path: ["autoQc", "status"], equals: "pending" } }], distributionSubmissions: { none: { provider: "direnote", state: { in: ["submitted", "reconciliation_required", "processing", "failed"] } } } },
       select: { id: true, status: true, distributionSubmissions: { where: { provider: "direnote" }, select: { state: true }, orderBy: { startedAt: "desc" }, take: 1 } },
       orderBy: { id: "asc" }, take: 5
     });
@@ -65,6 +66,8 @@ export async function GET(request: Request) {
       if (attemptState === "submitted" || attemptState === "reconciliation_required" || attemptState === "processing" || attemptState === "failed") continue;
       if (candidate.status === "QUEUED_FOR_DISTRIBUTION" && attemptState !== "retryable") continue;
       try {
+        const qcRelease = await prisma.release.findUnique({ where: { id: candidate.id }, select: { metadata: true } });
+        if ((qcRelease?.metadata as { autoQc?: { status?: string } } | null)?.autoQc?.status === "pending" && !await runPendingDistributionQc(candidate.id, getPublicAppUrl(request.url))) continue;
         const result = await submitRelease(candidate.id, { siteUrl: getPublicAppUrl(request.url), retry: attemptState === "retryable" });
         autoQcResults.push({ releaseId: candidate.id, outcome: result.submitted ? "submitted" : "inProgress" in result && result.inProgress ? "in_progress" : result.retryable ? "retryable" : "failed" });
       } catch (error) {

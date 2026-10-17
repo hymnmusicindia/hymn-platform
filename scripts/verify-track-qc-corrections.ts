@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import { direNoteQcCorrectionPayload } from "../lib/direnote-qc-report";
+import { extractDireNoteCorrections } from "../lib/direnote-corrections";
+const tracks = [{ id: 1, title: "First song", isrc: "INDN22603001", trackNumber: 1 }, { id: 2, title: "Second song", isrc: "INDN22603002", trackNumber: 2 }];
+const report = { tracks: [{ track_name: "Second song", isrc: tracks[1].isrc, scanned: true, isrc_lookup: { success: false, message: "Incorrect recording identifier; please update" } }, { track_name: "First song", isrc: tracks[0].isrc, scanned: true, acr: { status: "matched", matches: [{ title: "Another song" }] } }] };
+const issues = extractDireNoteCorrections(direNoteQcCorrectionPayload(report), tracks, 11, 12, true);
+assert.equal(issues.length, 1); assert.match(issues[0].field, /^tracks\.1\./); assert.match(issues[0].label, /Second song/);
+assert.equal(extractDireNoteCorrections(direNoteQcCorrectionPayload({ tracks: [{ ...report.tracks[0], scanned: false }] }), tracks, 11, 12, true).length, 0);
+const mismatch = extractDireNoteCorrections(direNoteQcCorrectionPayload({ tracks: [{ ...report.tracks[0], isrc: "INDN22609999", track_number: 1 }] }), tracks, 11, 12, true);
+assert(mismatch.every(issue => !issue.field.startsWith("tracks.")), "Conflicting identifiers must not implicate a different EP track.");
+for (const check of [{ error: "NONE" }, { success: false, message: "API limit reached" }]) assert.equal(extractDireNoteCorrections(direNoteQcCorrectionPayload({ tracks: [{ ...report.tracks[0], isrc_lookup: check }] }), tracks, 11, 12, true).length, 0);
+const rights = extractDireNoteCorrections(direNoteQcCorrectionPayload({ tracks: [{ ...report.tracks[0], isrc_lookup: null, acr: { status: "failed", message: "Please provide proof of exclusive rights" } }] }), tracks, 11, 12, true);
+assert.equal(rights[0].field, "rights.contentId"); assert.match(rights[0].label, /Second song/);
+console.log("PASS track QC: reordered EP rows, exact track attribution, conflicting identifiers, unscanned results and ACR matches without false accusations.");
