@@ -12,7 +12,7 @@ export const getPublicHomePreview = unstable_cache(
       listAllBeats(HOME_BEAT_LIMIT),
       listProducerProfiles(HOME_PRODUCER_LIMIT),
       listRecentGoogleAvatarUrls(4),
-      prisma.purchaseReview.findMany({ where: { status: "approved", rating: { gte: 4 } }, orderBy: [{ moderatedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }], take: 12, select: { id: true, rating: true, body: true, featured: true, featuredOrder: true, purchaseType: true, user: { select: { name: true, avatar: true } } } }).catch(() => []),
+      prisma.purchaseReview.findMany({ where: { status: "approved", rating: { gte: 4 } }, orderBy: [{ moderatedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }], select: { id: true, rating: true, body: true, featured: true, featuredOrder: true, purchaseType: true, user: { select: { id: true, name: true, avatar: true } } } }).catch(() => []),
       getSiteSettings(),
       listAllReleases().catch(() => [])
     ]);
@@ -35,6 +35,6 @@ export const getPublicHomePreview = unstable_cache(
     featuredReviews.sort((a, b) => Number(b.featured) - Number(a.featured) || a.featuredOrder - b.featuredOrder);
     return { beats, producerProfiles, googleAvatarUrls, featuredReviews, featuredReleases };
   },
-  ["public-home-preview-v8"],
+  ["public-home-preview-v10"],
   { revalidate: 300, tags: ["public-home-preview"] }
 );
