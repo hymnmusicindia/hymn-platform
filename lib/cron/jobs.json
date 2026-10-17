@@ -133,6 +133,5 @@
     "seconds": 3600,
     "purpose": "Fair ISRC royalty ingestion; each successful ISRC waits 24 hours",
     "flag": "DIRENOTE_REVENUE_SYNC_ENABLED"
-  },
-  { "id": "release-emails", "method": "GET", "seconds": 60, "purpose": "Durable release updates and draft warning email queue" }
+  }
 ]

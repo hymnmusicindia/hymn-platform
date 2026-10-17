@@ -39,6 +39,17 @@ async function main() {
   const domainFailure = await runCronJobs(["health"], { secret: "fixture", attempts: 3, delay: async () => {}, fetcher: async () => { domainCalls++; return Response.json({ errorCount: 1 }); } });
   assert.equal(domainFailure[0].healthy, false);
   assert.equal(domainCalls, 1, "A domain result with uncertain side effects must not be replayed automatically.");
+  // The durable wrapper turns a completed run that reported problems into a 503,
+  // which is also a retryable status. Its outcome header must stop the replay.
+  let wrappedCalls = 0;
+  const wrapped = await runCronJobs(["health"], { secret: "fixture", attempts: 3, delay: async () => {}, fetcher: async () => { wrappedCalls++; return Response.json({ errorCount: 1 }, { status: 503, headers: { "X-HYMN-Cron-Outcome": "domain-failure" } }); } });
+  assert.equal(wrapped[0].healthy, false);
+  assert.equal(wrapped[0].reason, "job_reported_errors");
+  assert.equal(wrappedCalls, 1, "A wrapped domain failure must not be retried like an outage.");
+  const html = await runCronJobs(["health"], { secret: "fixture", attempts: 1, fetcher: async () => new Response("<html>404</html>", { status: 404 }) });
+  assert.deepEqual([html[0].status, html[0].reason], [404, "non_json_response"], "A non-JSON page must keep its HTTP status and say why.");
+  // A release still waiting for DireNote to assign a UPC is an expected state.
+  assert.equal(cronHasFailures({ results: [{ releaseId: 1, success: true, pending: true, reason: "Awaiting UPC (UPC_NOT_YET_ASSIGNED)" }], errorCount: 0, pendingCount: 1 }), false);
   let healthCalls = 0, recoveryCalls = 0;
   const recoveredWatchdog = await recoverFailedCronJobs({ secret: "fixture", delay: async () => {}, log: () => {}, fetcher: async input => {
     const url = new URL(String(input));

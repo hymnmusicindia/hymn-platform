@@ -38,6 +38,9 @@ export function cronHandler(id: CronJobId, handler: (request: Request) => Promis
       await prisma.auditLog.create({ data: { actorType: "system", action: "CRON_RUN_FINISHED", entity: "cron_job", entityId: id, metadata: { runId, state: failed ? "failed" : "completed", httpStatus: response.status, durationMs: Date.now() - started, disabled: !!body && typeof body === "object" && ((body as { enabled?: boolean }).enabled === false || (body as { skipped?: string }).skipped === "disabled") } } });
       const headers = new Headers(response.headers);
       headers.set("Cache-Control", "no-store"); headers.set("X-HYMN-Cron-Run", runId);
+      // The job ran to completion and reported problems. Triggers must not retry
+      // this like an outage: re-running immediately repeats provider side effects.
+      if (failed && response.ok) headers.set("X-HYMN-Cron-Outcome", "domain-failure");
       return new Response(response.body, { status: failed && response.ok ? 503 : response.status, headers });
     } catch {
       if (acquired) await prisma.auditLog.create({ data: { actorType: "system", action: "CRON_RUN_FINISHED", entity: "cron_job", entityId: id, metadata: { runId, state: "failed", durationMs: Date.now() - started, reason: "Job or audit persistence failed; inspect domain logs before retrying uncertain side effects." } } }).catch(() => undefined);

@@ -17,7 +17,7 @@ export function startCronScheduler(options: { port: number; secret: string; fetc
       active.add(job.id);
       const attemptStarted = now();
       work.push((async () => {
-        let healthy = false, retryAfter = 0;
+        let healthy = false, domainFailure = false, retryAfter = 0;
         try {
           const response = await fetcher(`http://127.0.0.1:${options.port}/api/cron/${job.id}`, {
             method: job.method, redirect: "error", headers: { authorization: `Bearer ${options.secret}`, "x-hymn-cron-source": "hostinger-runtime" },
@@ -25,15 +25,19 @@ export function startCronScheduler(options: { port: number; secret: string; fetc
           });
           const data: unknown = await response.json();
           healthy = response.ok && !cronHasFailures(data) && (data as { skipped?: string })?.skipped !== "already_running";
+          // A completed run that reported problems keeps its normal cadence; fast
+          // backoff is for outages, and would repeat provider calls every 30s.
+          domainFailure = !healthy && response.headers.get("x-hymn-cron-outcome") === "domain-failure";
           const retry = Number(response.headers.get("retry-after"));
           if (Number.isFinite(retry) && retry > 0) retryAfter = Math.min(retry * 1000, 86400000);
           if (!healthy) console.error("cron job requires attention", { job: job.id, httpStatus: response.status });
         } catch { if (!stopped) console.error("cron job unavailable; retry scheduled", { job: job.id }); }
         finally {
-          const count = healthy ? 0 : Math.min(10, (failures.get(job.id) ?? 0) + 1);
+          const onCadence = healthy || domainFailure;
+          const count = onCadence ? 0 : Math.min(10, (failures.get(job.id) ?? 0) + 1);
           failures.set(job.id, count);
-          const delay = healthy ? job.seconds * 1000 : Math.min(job.seconds * 1000, 30_000 * 2 ** Math.min(count, 6));
-          const nextStart = healthy ? Math.max(now() + 1000, attemptStarted + delay) : now() + delay;
+          const delay = onCadence ? job.seconds * 1000 : Math.min(job.seconds * 1000, 30_000 * 2 ** Math.min(count, 6));
+          const nextStart = onCadence ? Math.max(now() + 1000, attemptStarted + delay) : now() + delay;
           next.set(job.id, Math.max(nextStart + random() * Math.min(5000, delay / 10), now() + retryAfter));
           active.delete(job.id);
         }

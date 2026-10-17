@@ -18,16 +18,19 @@ export async function runCronJobs(ids, { baseUrl, secret, fetcher = fetch, attem
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const response = await fetcher(new URL(`/api/cron/${job.id}`, origin), { method: job.method, redirect: "error", headers: { authorization: `Bearer ${secret.trim()}`, "x-hymn-cron-source": "github-fallback" }, signal: AbortSignal.timeout(65000) });
-        const data = await response.json();
-        const healthy = response.ok && data.success !== false && data.ok !== false && data.healthy !== false && !(data.errorCount > 0);
-        result = { job: job.id, status: response.status, healthy, attempts: attempt };
+        let data;
+        try { data = await response.json(); } catch { data = null; }
+        const healthy = !!data && response.ok && data.success !== false && data.ok !== false && data.healthy !== false && !(data.errorCount > 0);
+        const domainFailure = response.headers.get("x-hymn-cron-outcome") === "domain-failure";
+        result = { job: job.id, status: response.status, healthy, attempts: attempt, ...(healthy ? {} : { reason: domainFailure ? "job_reported_errors" : data ? "http_error" : "non_json_response" }) };
         // Domain failures are not retried here because their side-effect outcome
         // may be uncertain. HTTP retries rely on cron leases and domain idempotency.
-        if (healthy || ![408, 425, 429, 500, 502, 503, 504].includes(response.status)) break;
+        if (healthy || domainFailure || ![408, 425, 429, 500, 502, 503, 504].includes(response.status)) break;
         const retryAfter = Number(response.headers.get("retry-after"));
         if (attempt < maxAttempts) await delay(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(60_000, retryAfter * 1000) : Math.min(30_000, sleepMs * 2 ** (attempt - 1)));
-      } catch {
-        result = { job: job.id, status: 0, healthy: false, attempts: attempt };
+      } catch (error) {
+        const reason = error?.name === "TimeoutError" ? "timeout" : /redirect/i.test(String(error?.cause?.message ?? error?.message)) ? "redirect" : "network";
+        result = { job: job.id, status: 0, healthy: false, attempts: attempt, reason };
         if (attempt < maxAttempts) await delay(Math.min(30_000, sleepMs * 2 ** (attempt - 1)));
       }
     }

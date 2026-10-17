@@ -20,7 +20,7 @@ export async function recoverFailedCronJobs({ baseUrl, secret, fetcher = fetch, 
   const failed = before.body.jobs.filter(job => repairable.has(job.status)).map(job => job.id);
   if (failed.length) {
     const results = await runCronJobs([...new Set(failed)], { baseUrl: origin.toString(), secret, fetcher, attempts: 3 });
-    log(JSON.stringify({ recovery: results.map(({ job, status, healthy, attempts }) => ({ job, status, healthy, attempts })) }));
+    log(JSON.stringify({ recovery: results.map(({ job, status, healthy, attempts, reason }) => ({ job, status, healthy, attempts, reason })) }));
     if (results.some(result => !result.healthy)) return { healthy: false, recovered: results.length, failedJobs: results.filter(result => !result.healthy).map(result => result.job) };
   }
 
