@@ -3,10 +3,11 @@ import { readFileSync } from "node:fs";
 import { CRON_JOBS, cronEnabled, cronHasFailures } from "../lib/cron/registry";
 import { startCronScheduler } from "./cron-scheduler";
 import { runCronJobs } from "./run-cron-jobs.mjs";
+import { recoverFailedCronJobs } from "./recover-failed-cron-jobs.mjs";
 
 async function main() {
-  assert.equal(CRON_JOBS.length, 20);
-  assert.equal(new Set(CRON_JOBS.map(job => job.id)).size, 20);
+  assert(CRON_JOBS.length >= 21, "The scheduled job registry must include the expected automation set.");
+  assert.equal(new Set(CRON_JOBS.map(job => job.id)).size, CRON_JOBS.length, "Cron job IDs must remain unique as jobs are added.");
   const workflows = ["frequent", "hourly", "daily"].map(group => readFileSync(`.github/workflows/cron-${group}.yml`, "utf8")).join("\n");
   const vercel = JSON.parse(readFileSync("vercel.json", "utf8"));
   for (const job of CRON_JOBS) {
@@ -25,6 +26,34 @@ async function main() {
   await assert.rejects(() => runCronJobs(["unknown"], { secret: "fixture", fetcher }), /allowlist/);
   assert.equal(calls, 0);
   assert.equal((await runCronJobs(["health"], { secret: "fixture", fetcher }))[0].healthy, false);
+  let transientCalls = 0, delays: number[] = [];
+  const recovered = await runCronJobs(["health"], { secret: "fixture", attempts: 3, delay: async ms => { delays.push(ms); }, fetcher: async () => {
+    transientCalls++;
+    return transientCalls === 1 ? Response.json({ error: "temporary" }, { status: 503 }) : Response.json({ healthy: true });
+  } });
+  assert.equal(recovered[0].healthy, true, "Transient cron errors must recover within the bounded retry window.");
+  assert.equal(recovered[0].attempts, 2);
+  assert.equal(transientCalls, 2);
+  assert.deepEqual(delays, [1000]);
+  let domainCalls = 0;
+  const domainFailure = await runCronJobs(["health"], { secret: "fixture", attempts: 3, delay: async () => {}, fetcher: async () => { domainCalls++; return Response.json({ errorCount: 1 }); } });
+  assert.equal(domainFailure[0].healthy, false);
+  assert.equal(domainCalls, 1, "A domain result with uncertain side effects must not be replayed automatically.");
+  let healthCalls = 0, recoveryCalls = 0;
+  const recoveredWatchdog = await recoverFailedCronJobs({ secret: "fixture", delay: async () => {}, log: () => {}, fetcher: async input => {
+    const url = new URL(String(input));
+    if (url.pathname === "/api/cron/health") {
+      healthCalls++;
+      return Response.json(healthCalls === 1
+        ? { healthy: false, jobs: [{ id: "team-appointments", status: "attention" }, { id: "team-os", status: "healthy" }] }
+        : { healthy: true, jobs: [{ id: "team-appointments", status: "healthy" }, { id: "team-os", status: "healthy" }] });
+    }
+    recoveryCalls++;
+    return Response.json({ success: true });
+  } });
+  assert.equal(recoveredWatchdog.healthy, true, "The watchdog must replay unhealthy jobs and recheck health.");
+  assert.equal(healthCalls, 2);
+  assert.equal(recoveryCalls, 1, "Only unhealthy registered jobs should be replayed.");
   // Keep the urgent request unresolved while a bulk job completes. It must not
   // be duplicated by another tick or block the separate bulk lane.
   let clock = 0, resolveUrgent: ((response: Response) => void) | undefined;

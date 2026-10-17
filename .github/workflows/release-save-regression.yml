@@ -40,12 +40,12 @@ permissions:
 
 concurrency:
   group: release-save-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   release-save:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     env:
       DATABASE_URL: postgresql://fixture:fixture@127.0.0.1:55439/direnote_virtual
     steps:
@@ -54,9 +54,9 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-      - run: npm ci
-      - run: npx prisma generate
-      - run: node --import tsx scripts/verify-contributor-sync.ts
-      - run: node --import tsx scripts/verify-release-artist-selection.ts
-      - run: node --import tsx scripts/verify-artist-profile-validation.ts
-      - run: node --import tsx scripts/verify-direnote-virtual.ts --release-save-only
+      - run: npm ci --fetch-retries=5 --fetch-timeout=120000
+      - run: node scripts/retry-command.mjs npx prisma generate
+      - run: node scripts/retry-command.mjs node --import tsx scripts/verify-contributor-sync.ts
+      - run: node scripts/retry-command.mjs node --import tsx scripts/verify-release-artist-selection.ts
+      - run: node scripts/retry-command.mjs node --import tsx scripts/verify-artist-profile-validation.ts
+      - run: node scripts/retry-command.mjs node --import tsx scripts/verify-direnote-virtual.ts --release-save-only

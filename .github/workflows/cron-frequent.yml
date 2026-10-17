@@ -15,14 +15,29 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
       - name: Run allowlisted jobs and check results
+        id: cron
+        continue-on-error: true
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           BASE_URL: https://hymnmusic.fun
         run: node scripts/run-cron-jobs.mjs team-appointments release-emails direnote-ingest-status playlist-reviews team-os studio-automation
+      - name: Retry failed jobs once after runner-level retries
+        id: retry
+        if: steps.cron.outputs.failed_jobs != ''
+        continue-on-error: true
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          BASE_URL: https://hymnmusic.fun
+        run: node scripts/run-cron-jobs.mjs ${{ steps.cron.outputs.failed_jobs }}
+      - name: Notify on persistent cron failure
+        if: always() && (steps.cron.outcome == 'failure' && steps.cron.outputs.failed_jobs == '' || steps.retry.outcome == 'failure')
+        run: |
+          echo "::error::Scheduled job recovery still failed after retries. Review the workflow run and cron health dashboard."
+          exit 1

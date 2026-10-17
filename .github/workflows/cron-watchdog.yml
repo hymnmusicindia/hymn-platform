@@ -17,8 +17,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Detect missed, failed and uncertain work
+      - name: Recover missed jobs and verify scheduler health
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           BASE_URL: https://hymnmusic.fun
-        run: node scripts/run-cron-jobs.mjs health
+        run: node scripts/recover-failed-cron-jobs.mjs
