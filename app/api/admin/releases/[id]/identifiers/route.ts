@@ -32,7 +32,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const release = await prisma.$transaction(async tx => {
       const current = await tx.release.findUnique({ where: { id: releaseId }, include: { tracks: { orderBy: { trackNumber: "asc" } } } });
       if (!current) throw new Error("Release not found.");
-      if (current.liveAt || releasedStatuses.includes(current.status as typeof releasedStatuses[number])) throw new Error("UPC and ISRC are locked after a release goes live.");
+      if (releasedStatuses.includes(current.status as typeof releasedStatuses[number])) throw new Error("UPC and ISRC are locked after a release goes live.");
       if (tracks && (tracks.length !== current.tracks.length || tracks.some(item => !current.tracks.some(track => track.id === item.id)))) throw new Error("Track list changed. Reload the release and try again.");
       const normalizedTracks = tracks?.map(track => ({ ...track, isrc: track.isrc?.trim().toUpperCase() || null }));
       if (normalizedTracks && new Set(normalizedTracks.map(track => track.isrc).filter(Boolean)).size !== normalizedTracks.filter(track => track.isrc).length) throw new Error("Each track must have a unique ISRC.");
