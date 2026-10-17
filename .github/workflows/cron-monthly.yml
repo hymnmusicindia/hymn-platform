@@ -1,27 +1,28 @@
-name: Scheduled jobs (monthly revenue)
+name: Scheduled jobs (monthly)
 
 on:
   schedule:
     - cron: "55 1 2 * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: cron-monthly
+  cancel-in-progress: false
 
 jobs:
   run:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Call cron endpoints
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run allowlisted jobs and check results
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           BASE_URL: https://hymnmusic.fun
-        run: |
-          set -u
-          code=$(curl --silent --show-error --max-time 300 \
-            -o response.json -w '%{http_code}' \
-            -H "Authorization: Bearer $CRON_SECRET" \
-            "$BASE_URL/api/cron/direnote-revenue-sync") || code=000
-          echo "--- direnote-revenue-sync (GET) HTTP $code"
-          head -c 4000 response.json; echo
-          [ "$code" = "200" ]
+        run: node scripts/run-cron-jobs.mjs direnote-revenue-sync health

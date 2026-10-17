@@ -16,7 +16,8 @@ const workspace = source("components/customer-dashboard-shell.tsx");
 assert(workspace.includes('if (activeTab !== "purchases" && activeTab !== "support") return;'), "Beat purchases must be loaded on demand.");
 
 const releaseCron = source("app/api/cron/direnote-release-sync/route.ts");
-assert(/"SCHEDULED"\s*,\s*"AWAITING_LIVE_CONFIRMATION"\s*,\s*"PARTIALLY_LIVE"/.test(releaseCron), "The DireNote status worker must continue polling every post-review lifecycle state.");
+const polledProviderStates = releaseCron.match(/providerStatus:\s*\{\s*in:\s*\[([^\]]+)/)?.[1] ?? "";
+for (const state of ["scheduled", "awaiting_live_confirmation", "partially_live"]) assert(polledProviderStates.includes(JSON.stringify(state)), "The DireNote status worker must continue polling every post-review lifecycle state.");
 assert.equal(JSON.parse(source("vercel.json")).crons.find((cron: { path: string }) => cron.path === "/api/cron/direnote-release-sync").schedule, "0 * * * *", "DireNote review polling must run hourly.");
 
 const revenueCron = source("app/api/cron/direnote-revenue-sync/route.ts");
@@ -37,12 +38,15 @@ assert(!distributionDatabase.includes("include: { tracks: true, user: { select: 
 
 const draftCreateRoute = source("app/api/distribution/drafts/route.ts");
 const draftUpdateRoute = source("app/api/distribution/drafts/[id]/route.ts");
-assert(draftCreateRoute.includes("select: { id: true }"), "Draft creation must not return unavailable optional Release columns.");
-assert(draftUpdateRoute.includes("select: { metadata: true, status: true, tracks: { select: { id: true, trackNumber: true } } }") && draftUpdateRoute.includes("select: { id: true, updatedAt: true }"), "Draft autosave must select only its required status, metadata and track identities, without optional Release columns.");
+assert(draftCreateRoute.includes("select: { id: true, updatedAt: true }"), "Draft creation must return only its identity and optimistic-concurrency timestamp.");
+assert(draftUpdateRoute.includes("select: { metadata: true, status: true, updatedAt: true, tracks: { select: { id: true, trackNumber: true } } }") && draftUpdateRoute.includes("select: { id: true, updatedAt: true }"), "Draft autosave must select only its required status, metadata, concurrency timestamp and track identities, without optional Release columns.");
 
 const adminControlCenter = source("components/admin-control-center.tsx");
 const adminStatusRoute = source("app/api/admin/update-status/[id]/route.ts");
 assert(adminControlCenter.includes('"Approve & Send to DireNote"') && adminControlCenter.includes('setConfirmStatusAction("sent")'), "HYMN approval must submit to DireNote in one admin action.");
-assert(adminStatusRoute.includes('syncQueueStage(Number(id), "approved"') && !adminStatusRoute.includes("syncQueueStage(Number(id), statusStageMap.sent!"), "The queue must not be marked sent before DireNote accepts the release.");
+const providerSubmitAt = adminStatusRoute.indexOf("const submission = await submitRelease");
+const failedSubmissionGateAt = adminStatusRoute.indexOf("if (!submission.submitted)", providerSubmitAt);
+const sentQueueAt = adminStatusRoute.indexOf('syncQueueStage(Number(id), "sent_to_direnote"', providerSubmitAt);
+assert(providerSubmitAt >= 0 && failedSubmissionGateAt > providerSubmitAt && sentQueueAt > failedSubmissionGateAt && adminStatusRoute.includes("{ syncReleaseStatus: false }"), "The queue must not be marked sent before DireNote accepts the release.");
 
 console.log("Performance execution guard verification passed.");

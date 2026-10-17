@@ -1,0 +1,130 @@
+[
+  {
+    "id": "team-appointments",
+    "method": "GET",
+    "seconds": 60,
+    "purpose": "Client/representative call confirmations and reminders",
+    "flag": "TEAM_AUTOMATION_ENABLED"
+  },
+  {
+    "id": "playlist-reviews",
+    "method": "GET",
+    "seconds": 900,
+    "purpose": "Playlist review deadlines, refunds and review state",
+    "flag": "PLAYLIST_REVIEW_AUTOMATION_ENABLED"
+  },
+  {
+    "id": "team-os",
+    "method": "GET",
+    "seconds": 900,
+    "purpose": "Team tasks, digests, calendar notifications and client introductions",
+    "flag": "TEAM_AUTOMATION_ENABLED"
+  },
+  {
+    "id": "studio-automation",
+    "method": "GET",
+    "seconds": 900,
+    "purpose": "Studio payment recovery, project deadlines and follow-ups",
+    "flag": "STUDIO_AUTOMATION_ENABLED"
+  },
+  {
+    "id": "direnote-release-sync",
+    "method": "GET",
+    "seconds": 3600,
+    "purpose": "Provider status, QC recovery, corrections and artist identities",
+    "flag": "DIRENOTE_RELEASE_SYNC_ENABLED"
+  },
+  {
+    "id": "release-status-sync",
+    "method": "GET",
+    "seconds": 3600,
+    "purpose": "Scheduled releases awaiting verified store availability"
+  },
+  {
+    "id": "referral-reconciliation",
+    "method": "GET",
+    "seconds": 3600,
+    "purpose": "Referral qualifications and mail queue"
+  },
+  {
+    "id": "growth-sync",
+    "method": "GET",
+    "seconds": 3600,
+    "purpose": "Recover missing growth observations and nudges"
+  },
+  {
+    "id": "draft-reminders",
+    "method": "GET",
+    "seconds": 3600,
+    "purpose": "One-time four-day draft email with verified offer eligibility",
+    "flag": "DRAFT_REMINDERS_ENABLED"
+  },
+  {
+    "id": "engineer-reminders",
+    "method": "GET",
+    "seconds": 3600,
+    "purpose": "One-time abandoned engineer booking follow-up",
+    "flag": "ENGINEER_REMINDERS_ENABLED"
+  },
+  {
+    "id": "storage-cleanup",
+    "method": "POST",
+    "seconds": 3600,
+    "purpose": "Recover interrupted uploads and remove expired temporary assets"
+  },
+  {
+    "id": "payment-reconciliation",
+    "method": "GET",
+    "seconds": 86400,
+    "purpose": "Recover paid orders/licences and flag financial discrepancies"
+  },
+  {
+    "id": "gateway-finance",
+    "method": "GET",
+    "seconds": 86400,
+    "purpose": "Settlement reconciliation and transfer status refresh"
+  },
+  {
+    "id": "spotify-artist-photos",
+    "method": "GET",
+    "seconds": 86400,
+    "purpose": "Verified Spotify artist photo refresh"
+  },
+  {
+    "id": "birthday-notifications",
+    "method": "GET",
+    "seconds": 3600,
+    "purpose": "Deduplicated birthday notifications"
+  },
+  {
+    "id": "exchange-rate-refresh",
+    "method": "POST",
+    "seconds": 86400,
+    "purpose": "Refresh due payout exchange-rate snapshots"
+  },
+  {
+    "id": "quarterly-payout-reset",
+    "method": "POST",
+    "seconds": 86400,
+    "purpose": "Ensure payout period and catch up eligible previous-quarter closure"
+  },
+  {
+    "id": "draft-nudges",
+    "method": "GET",
+    "seconds": 86400,
+    "purpose": "One-time in-app unfinished-draft notification"
+  },
+  {
+    "id": "account-deletion-cleanup",
+    "method": "GET",
+    "seconds": 86400,
+    "purpose": "Anonymize eligible accounts after appeal deadline"
+  },
+  {
+    "id": "direnote-revenue-sync",
+    "method": "GET",
+    "seconds": 3600,
+    "purpose": "Fair ISRC royalty ingestion; each successful ISRC waits 24 hours",
+    "flag": "DIRENOTE_REVENUE_SYNC_ENABLED"
+  }
+]

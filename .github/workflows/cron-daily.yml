@@ -5,33 +5,24 @@ on:
     - cron: "5 2 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: cron-daily
+  cancel-in-progress: false
 
 jobs:
   run:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Call cron endpoints
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run allowlisted jobs and check results
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           BASE_URL: https://hymnmusic.fun
-        run: |
-          set -u
-          failed=0
-          run_job() {
-            code=$(curl --silent --show-error --max-time 300 \
-              -o response.json -w '%{http_code}' \
-              -X "$2" -H "Authorization: Bearer $CRON_SECRET" \
-              "$BASE_URL/api/cron/$1") || code=000
-            echo "--- $1 ($2) HTTP $code"
-            head -c 4000 response.json; echo
-            [ "$code" = "200" ] || failed=1
-          }
-          run_job spotify-artist-photos GET
-          run_job birthday-notifications GET
-          run_job exchange-rate-refresh POST
-          run_job quarterly-payout-reset POST
-          run_job draft-nudges GET
-          run_job account-deletion-cleanup GET
-          exit $failed
+        run: node scripts/run-cron-jobs.mjs payment-reconciliation gateway-finance spotify-artist-photos exchange-rate-refresh quarterly-payout-reset draft-nudges account-deletion-cleanup

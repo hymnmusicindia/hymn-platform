@@ -1,3 +1,5 @@
+import { cronHandler } from "@/lib/cron/runtime";
+export const GET = cronHandler("direnote-release-sync", runJob);
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { runPendingDistributionQc } from "@/lib/distribution-auto-qc";
@@ -35,7 +37,7 @@ async function releaseLease(runId: string) {
   await prisma.$executeRaw(Prisma.sql`UPDATE "cron_leases" SET "leased_until" = NOW(), "updated_at" = NOW() WHERE "lease_key" = ${LEASE_KEY} AND "run_id" = ${runId}`);
 }
 
-export async function GET(request: Request) {
+async function runJob(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ error: "Unauthorized." }, { status: 401, headers: { "X-HYMN-DireNote-Sync-Version": "corrections-v2" } });
   if (process.env.DIRENOTE_RELEASE_SYNC_ENABLED === "false") return NextResponse.json({ success: true, skipped: "disabled" });

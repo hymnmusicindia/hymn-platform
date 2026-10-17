@@ -1,7 +1,9 @@
+import { cronHandler } from "@/lib/cron/runtime";
+export const GET = cronHandler("draft-reminders", runJob);
 import { timingSafeEqual } from "node:crypto";
 import { sendDraftReleaseReminders } from "@/lib/email/draft-release-reminder";
 export const runtime = "nodejs";
-export async function GET(request: Request) {
+async function runJob(request: Request) {
   const expected = Buffer.from(`Bearer ${process.env.CRON_SECRET || ""}`);
   const actual = Buffer.from(request.headers.get("authorization") || "");
   if (!process.env.CRON_SECRET || expected.length !== actual.length || !timingSafeEqual(expected, actual)) return Response.json({ error: "Unauthorized." }, { status: 401 });

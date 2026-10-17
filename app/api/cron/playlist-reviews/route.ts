@@ -1,10 +1,12 @@
+import { cronHandler } from "@/lib/cron/runtime";
+export const GET = cronHandler("playlist-reviews", runJob);
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { runPlaylistReviewAutomation } from "@/lib/playlist-reviews";
 export const runtime = "nodejs";
 export const maxDuration = 300;
-export async function GET(request: Request) {
+async function runJob(request: Request) {
   if (!process.env.CRON_SECRET || request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   const runId = crypto.randomUUID(); const leaseKey = "playlist-reviews";
   const leases = await prisma.$queryRaw<Array<{ run_id: string }>>`INSERT INTO cron_leases (lease_key,run_id,leased_until,updated_at) VALUES (${leaseKey},${runId},NOW()+INTERVAL '10 minutes',NOW()) ON CONFLICT (lease_key) DO UPDATE SET run_id=EXCLUDED.run_id,leased_until=EXCLUDED.leased_until,updated_at=NOW() WHERE cron_leases.leased_until<NOW() RETURNING run_id`;

@@ -49,7 +49,9 @@ export async function processClientWelcomes(clientId?: string, limit = 5, delive
   await prisma.teamClientWelcome.updateMany({ where: { status: "SENDING", updatedAt: { lt: new Date(Date.now() - 5 * 60000) } }, data: { status: "REVIEW", error: "Delivery outcome is unknown. Review email logs before retrying." } });
   const jobs = await prisma.teamClientWelcome.findMany({ where: { status: "PENDING", ...(clientId ? { clientId } : {}) }, orderBy: { createdAt: "asc" }, take: limit });
   let sent = 0;
+  const deadline = Date.now() + 35000;
   for (const job of jobs) {
+    if (Date.now() >= deadline) break;
     if (!(await prisma.teamClientWelcome.updateMany({ where: { id: job.id, status: "PENDING" }, data: { status: "SENDING" } })).count) continue;
     try {
       const client = await prisma.teamClient.findUniqueOrThrow({ where: { id: job.clientId }, include: { owner: { include: { user: { select: { status: true } } } } } });
@@ -62,7 +64,7 @@ export async function processClientWelcomes(clientId?: string, limit = 5, delive
         await prisma.teamClientWelcome.update({ where: { id: job.id }, data: { status: "SKIPPED", error: "Contact changed, suppressed, inactive or already registered." } }); continue;
       }
       const eventKey = `team-client-welcome:${createHash("sha256").update(job.email).digest("hex")}`;
-      const delivery = await deliver({ ...clientWelcomeTemplate(client), to: job.email, template: "team_client_welcome", eventKey, entityType: "team_client", entityId: client.id });
+      const delivery = await deliver({ ...clientWelcomeTemplate(client), timeoutMs: Math.max(1000, Math.min(8000, deadline - Date.now())), to: job.email, template: "team_client_welcome", eventKey, entityType: "team_client", entityId: client.id });
       const prior = delivery.status === "duplicate_skipped" ? await prisma.emailLog.findUnique({ where: { eventKey } }) : null;
       const status = delivery.status === "sent" || prior?.status === "sent" ? "SENT" : delivery.status === "skipped" ? "PENDING" : "REVIEW";
       await prisma.teamClientWelcome.update({ where: { id: job.id }, data: { status, error: delivery.error || (status === "REVIEW" ? "Check the email log before an explicit manual retry." : null) } });

@@ -1,3 +1,5 @@
+import { cronHandler } from "@/lib/cron/runtime";
+export const GET = cronHandler("growth-sync", runJob);
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -7,7 +9,7 @@ import { qualifyPartnerPayment } from "@/lib/growth-partners";
 import { queueGrowthNudges, deliverGrowthNudges } from "@/lib/growth-retention";
 
 export const maxDuration = 60;
-export async function GET(request: Request) {
+async function runJob(request: Request) {
   const expected = Buffer.from(`Bearer ${process.env.CRON_SECRET || ""}`); const actual = Buffer.from(request.headers.get("authorization") || "");
   if (!process.env.CRON_SECRET || actual.length !== expected.length || !timingSafeEqual(actual, expected)) return new NextResponse(null, { status: 401 });
   if (!growthEnabled()) return NextResponse.json({ enabled: false });

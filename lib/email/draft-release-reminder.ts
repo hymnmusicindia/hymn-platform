@@ -30,7 +30,9 @@ export async function sendDraftReleaseReminders() {
     include: { user: { select: { id: true, name: true, email: true, status: true } }, _count: { select: { tracks: true } } }, orderBy: { createdAt: "asc" }, take: 200
   });
   let sent = 0; let failed = 0;
+  const deadline = Date.now() + 35000;
   for (const draft of drafts) {
+    if (Date.now() >= deadline) break;
     if (contacted.has(draft.user.email.toLowerCase())) continue;
     await prisma.$transaction(async tx => {
     // Serialise all reminder jobs for this account, including overlapping cron requests.
@@ -45,7 +47,7 @@ export async function sendDraftReleaseReminders() {
     if (!current) return;
     const url = `${getEmailConfig().appUrl}/distribution/start?edit=${draft.id}${free ? "&campaign=first-release" : ""}`;
     const content = draftReminderContent(draft.user.name, draft.title, url, free);
-    const result = await sendTransactionalEmail({ ...content, to: draft.user.email, userId: draft.userId, template: DRAFT_REMINDER_TEMPLATE, eventKey: `${DRAFT_REMINDER_TEMPLATE}:${draft.id}`, entityType: "release", entityId: draft.id });
+    const result = await sendTransactionalEmail({ ...content, timeoutMs: Math.max(1000, Math.min(8000, deadline - Date.now())), to: draft.user.email, userId: draft.userId, template: DRAFT_REMINDER_TEMPLATE, eventKey: `${DRAFT_REMINDER_TEMPLATE}:${draft.id}`, entityType: "release", entityId: draft.id });
     contacted.add(draft.user.email.toLowerCase());
     if (result.status === "sent") sent++;
     if (result.status === "failed") failed++;

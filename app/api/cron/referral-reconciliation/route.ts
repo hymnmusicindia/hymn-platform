@@ -1,9 +1,11 @@
+import { cronHandler } from "@/lib/cron/runtime";
+export const GET = cronHandler("referral-reconciliation", runJob);
 import { deliverReferralMail } from "@/lib/referral-mail";
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { reconcileReferralQualifications } from "@/lib/referral-reconciliation";
 export const maxDuration = 60;
-export async function GET(request: Request) {
+async function runJob(request: Request) {
   const expected=Buffer.from(`Bearer ${process.env.CRON_SECRET || ""}`), actual=Buffer.from(request.headers.get("authorization") || "");
   if(!process.env.CRON_SECRET || expected.length!==actual.length || !timingSafeEqual(expected,actual)) return NextResponse.json({error:"Unauthorized."},{status:401});
   try {

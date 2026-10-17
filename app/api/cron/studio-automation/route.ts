@@ -1,3 +1,5 @@
+import { cronHandler } from "@/lib/cron/runtime";
+export const POST = cronHandler("studio-automation", runJob);
 import { NextResponse } from "next/server";
 import { runStudioAutomation } from "@/lib/studio-services";
 import { sendStudioBeatFollowups } from "@/lib/studio-beat-followups";
@@ -5,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { randomUUID } from "node:crypto";
 import { recoverStudioPayments } from "@/lib/studio-payment-recovery";
 export const maxDuration=60;
-export async function POST(request: Request) {
+async function runJob(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   const runId = randomUUID(), leaseKey = "studio-automation";

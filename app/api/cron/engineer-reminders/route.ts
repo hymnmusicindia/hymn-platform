@@ -1,7 +1,9 @@
+import { cronHandler } from "@/lib/cron/runtime";
+export const GET = cronHandler("engineer-reminders", runJob);
 import { timingSafeEqual } from "node:crypto";
 import { sendEngineerBookingReminders } from "@/lib/email/engineer-booking-reminder";
 export const runtime = "nodejs";
-export async function GET(request: Request) {
+async function runJob(request: Request) {
   const expected = Buffer.from(`Bearer ${process.env.CRON_SECRET || ""}`), actual = Buffer.from(request.headers.get("authorization") || "");
   if (!process.env.CRON_SECRET || expected.length !== actual.length || !timingSafeEqual(expected, actual)) return Response.json({ error: "Unauthorized." }, { status: 401 });
   try { return Response.json(await sendEngineerBookingReminders(), { headers: { "Cache-Control": "no-store" } }); }

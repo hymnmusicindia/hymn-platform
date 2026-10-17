@@ -1,0 +1,48 @@
+import { CRON_JOBS, cronEnabled, cronHasFailures } from "../lib/cron/registry";
+
+/** Hostinger scheduler: separate urgent/bulk lanes and guarded endpoint retries. */
+export function startCronScheduler(options: { port: number; secret: string; fetcher?: typeof fetch; now?: () => number; random?: () => number }) {
+  const fetcher = options.fetcher ?? fetch, now = options.now ?? Date.now, random = options.random ?? Math.random;
+  const next = new Map(CRON_JOBS.map((job, index) => [job.id, now() + index * 2000]));
+  const active = new Set<string>(), failures = new Map<string, number>();
+  const controller = new AbortController();
+  let stopped = false;
+  const tick = async () => {
+    if (stopped) return;
+    const due = CRON_JOBS.filter(job => cronEnabled(job) && !active.has(job.id) && (next.get(job.id) ?? 0) <= now()).sort((a, b) => (next.get(a.id) ?? 0) - (next.get(b.id) ?? 0));
+    const work: Promise<void>[] = [];
+    for (const job of due) {
+      const urgent = job.id === "team-appointments";
+      if (active.has(job.id) || (urgent ? active.has("team-appointments") : [...active].some(id => id !== "team-appointments"))) continue;
+      active.add(job.id);
+      const attemptStarted = now();
+      work.push((async () => {
+        let healthy = false, retryAfter = 0;
+        try {
+          const response = await fetcher(`http://127.0.0.1:${options.port}/api/cron/${job.id}`, {
+            method: job.method, redirect: "error", headers: { authorization: `Bearer ${options.secret}`, "x-hymn-cron-source": "hostinger-runtime" },
+            signal: AbortSignal.any([controller.signal, AbortSignal.timeout(55_000)])
+          });
+          const data: unknown = await response.json();
+          healthy = response.ok && !cronHasFailures(data) && (data as { skipped?: string })?.skipped !== "already_running";
+          const retry = Number(response.headers.get("retry-after"));
+          if (Number.isFinite(retry) && retry > 0) retryAfter = Math.min(retry * 1000, 86400000);
+          if (!healthy) console.error("cron job requires attention", { job: job.id, httpStatus: response.status });
+        } catch { if (!stopped) console.error("cron job unavailable; retry scheduled", { job: job.id }); }
+        finally {
+          const count = healthy ? 0 : Math.min(10, (failures.get(job.id) ?? 0) + 1);
+          failures.set(job.id, count);
+          const delay = healthy ? job.seconds * 1000 : Math.min(job.seconds * 1000, 30_000 * 2 ** Math.min(count, 6));
+          const nextStart = healthy ? Math.max(now() + 1000, attemptStarted + delay) : now() + delay;
+          next.set(job.id, Math.max(nextStart + random() * Math.min(5000, delay / 10), now() + retryAfter));
+          active.delete(job.id);
+        }
+      })());
+    }
+    await Promise.allSettled(work);
+  };
+  const timer = setInterval(() => { void tick(); }, 15000);
+  timer.unref();
+  void tick();
+  return { tick, stop() { stopped = true; clearInterval(timer); controller.abort(); }, active };
+}

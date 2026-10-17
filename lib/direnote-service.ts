@@ -569,10 +569,10 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
 }
 
 /** Returns the documented ISRC report. Accounting ingestion remains explicit and admin-controlled. */
-export async function getDireNoteTrackRevenue(isrc: string, actorId?: number | null, importIntoLedger = false) {
+export async function getDireNoteTrackRevenue(isrc: string, actorId?: number | null, importIntoLedger = false, options: { timeoutMs?: number } = {}) {
   const track = await prisma.track.findFirst({ where: { isrc: normalized(isrc) }, select: { releaseId: true } });
   await reserveDireNoteRequest("revenue_report", track?.releaseId ?? null, actorId);
-  const result = await getDireNoteRevenueReport(isrc);
+  const result = await getDireNoteRevenueReport(isrc, options);
   const payload = record(result.data);
   await prisma.direNoteLog.create({ data: { releaseId: track?.releaseId ?? null, action: "revenue_report", httpStatus: result.httpStatus, success: result.success, requestPayloadRedacted: { isrc: normalized(isrc) }, responseJson: redactDireNoteDiagnostic(payload) as never, errorMessage: result.error ?? null, createdByAdminId: actorId ?? null } });
   if (!result.success) throw new Error(result.error || text(payload.message) || "DireNote revenue report lookup failed.");

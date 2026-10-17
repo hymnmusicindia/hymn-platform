@@ -1,10 +1,13 @@
+import { cronHandler } from "@/lib/cron/runtime";
+export const POST = cronHandler("exchange-rate-refresh", runJob);
+export const GET = POST;
 import { NextResponse } from "next/server";
 import { getLatestUsdInrRate, refreshUsdInrRate } from "@/lib/payout/exchange-rates";
 import { PAYOUT_CONFIG } from "@/lib/payout/config";
 
 export const runtime = "nodejs";
 
-export async function POST(request: Request) {
+async function runJob(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   try {

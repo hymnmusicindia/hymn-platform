@@ -1,3 +1,5 @@
+import { cronHandler } from "@/lib/cron/runtime";
+export const GET = cronHandler("release-status-sync", runJob);
 import { NextResponse } from "next/server";
 import { createNotification } from "@/lib/db";
 import { createReleaseAuditLog, listAllDetailedReleases, updateDetailedReleaseStatus } from "@/lib/distribution-db";
@@ -6,7 +8,7 @@ import { logAuditEvent } from "@/lib/audit-log";
 
 export const runtime = "nodejs";
 
-export async function GET(request: Request) {
+async function runJob(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });

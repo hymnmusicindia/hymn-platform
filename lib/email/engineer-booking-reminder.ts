@@ -16,7 +16,9 @@ export async function sendEngineerBookingReminders(deliver = sendTransactionalEm
   const done = await prisma.emailLog.findMany({ where: { template: ENGINEER_REMINDER_TEMPLATE }, select: { userId: true } });
   const candidates = await prisma.studioServiceOrder.findMany({ where: { status: "AWAITING_PAYMENT", paymentStatus: "UNPAID", cancelledAt: null, createdAt: { lt: cutoff }, customerId: { notIn: done.flatMap(r => r.userId ? [r.userId] : []) }, customer: { status: "ACTIVE", studioTipsEnabled: true, studioOrders: { none: { paymentStatus: "PAID" } } }, engineerProfile: { sellerState: "ACTIVE" }, serviceListing: { active: true, paused: false } }, select: { customerId: true }, distinct: ["customerId"], take: 100 });
   let sent = 0, failed = 0;
+  const deadline = Date.now() + 35000;
   for (const candidate of candidates) {
+    if (Date.now() >= deadline) break;
     await prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(19462029, ${candidate.customerId}::int)`;
       const eventKey = `${ENGINEER_REMINDER_TEMPLATE}:${candidate.customerId}`;
@@ -28,7 +30,7 @@ export async function sendEngineerBookingReminders(deliver = sendTransactionalEm
       if (order.engineerProfile.sellerState !== "ACTIVE") return;
       const current = await prisma.studioServiceOrder.findFirst({ where: { id: order.id, status: "AWAITING_PAYMENT", paymentStatus: "UNPAID", cancelledAt: null, customer: { status: "ACTIVE", studioTipsEnabled: true }, serviceListing: { active: true, paused: false } }, select: { id: true } }); if (!current) return;
       const content = engineerReminderContent({ name: order.customer.name, engineer: order.engineerProfile.professionalName, project: order.projectTitle, resumeUrl: `${config.appUrl}/studio/orders/${order.publicId}`, engineersUrl: `${config.appUrl}/studio#engineers`, preferencesUrl: `${config.appUrl}/studio/email-preferences?token=${studioPreferenceToken(order.customerId)}` });
-      const result = await deliver({ ...content, to: order.customer.email, userId: order.customerId, eventKey, template: ENGINEER_REMINDER_TEMPLATE, entityType: "studio_order", entityId: order.id });
+      const result = await deliver({ ...content, timeoutMs: Math.max(1000, Math.min(8000, deadline - Date.now())), to: order.customer.email, userId: order.customerId, eventKey, template: ENGINEER_REMINDER_TEMPLATE, entityType: "studio_order", entityId: order.id });
       if (result.status === "sent") sent++; if (result.status === "failed") failed++;
     }, { timeout: 45000 });
     if (sent + failed >= 5) break;

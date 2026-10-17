@@ -1,3 +1,5 @@
+import { cronHandler } from "@/lib/cron/runtime";
+export const GET = cronHandler("team-os", runJob);
 import { timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { teamMutation, teamWrite, notify } from "@/lib/team/service";
@@ -6,7 +8,7 @@ import { processClientWelcomes } from "@/lib/team/client-welcome";
 import { remindCalendarTasks } from "@/lib/team/calendar";
 export const runtime = "nodejs";
 export const maxDuration = 300;
-export async function GET(request: Request) {
+async function runJob(request: Request) {
   const expected = Buffer.from(`Bearer ${process.env.CRON_SECRET || ""}`); const actual = Buffer.from(request.headers.get("authorization") || "");
   if (!process.env.CRON_SECRET || actual.length !== expected.length || !timingSafeEqual(actual, expected)) return Response.json({ error: "Unauthorized." }, { status: 401 });
   try {
