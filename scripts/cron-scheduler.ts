@@ -1,8 +1,9 @@
 import { CRON_JOBS, cronEnabled, cronHasFailures } from "../lib/cron/registry";
 
 /** Hostinger scheduler: separate urgent/bulk lanes and guarded endpoint retries. */
-export function startCronScheduler(options: { port: number; secret: string; fetcher?: typeof fetch; now?: () => number; random?: () => number }) {
+export function startCronScheduler(options: { port: number; secret: string; origin?: string; fetcher?: typeof fetch; now?: () => number; random?: () => number }) {
   const fetcher = options.fetcher ?? fetch, now = options.now ?? Date.now, random = options.random ?? Math.random;
+  const origin = options.origin ?? `http://127.0.0.1:${options.port}`;
   const next = new Map(CRON_JOBS.map((job, index) => [job.id, now() + index * 2000]));
   const active = new Set<string>(), failures = new Map<string, number>();
   const controller = new AbortController();
@@ -19,7 +20,7 @@ export function startCronScheduler(options: { port: number; secret: string; fetc
       work.push((async () => {
         let healthy = false, domainFailure = false, retryAfter = 0;
         try {
-          const response = await fetcher(`http://127.0.0.1:${options.port}/api/cron/${job.id}`, {
+          const response = await fetcher(`${origin}/api/cron/${job.id}`, {
             method: job.method, redirect: "error", headers: { authorization: `Bearer ${options.secret}`, "x-hymn-cron-source": "hostinger-runtime" },
             signal: AbortSignal.any([controller.signal, AbortSignal.timeout(55_000)])
           });
