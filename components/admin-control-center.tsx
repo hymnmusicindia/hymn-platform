@@ -38,6 +38,43 @@ const REVIEW_QUEUE_STATUSES = ["submitted", "in_queue", "under_review", "changes
 const DELIVERY_FAILED_STATUSES = ["delivery_failed"] as const;
 const CATALOG_STATUSES = ["queued_for_distribution", "submitting_to_distributor", "sent", "sent_to_distributor", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered", "live"] as const;
 
+function AdminReleaseCatalogue({ releases, search, onSearch, assignment, onAssignment, status, onStatus, onOpen }: { releases: Release[]; search: string; onSearch: (value: string) => void; assignment: string; onAssignment: (value: string) => void; status: string; onStatus: (value: string) => void; onOpen: (id: number) => void }) {
+  const rows = releases.filter((release) => {
+    const searchable = [release.releaseTitle, release.trackName, release.artistName, release.ownerEmail, release.upcCode, ...(release.tracks ?? []).map((track) => track.isrc)].filter(Boolean).join(" ").toLowerCase();
+    return (!search.trim() || searchable.includes(search.trim().toLowerCase()))
+      && (assignment === "all" || (assignment === "assigned" ? Boolean(release.ownerUserId || release.releaseSource !== "ADMIN_MANUAL") : !release.ownerUserId && release.releaseSource === "ADMIN_MANUAL"))
+      && (status === "all" || release.status === status);
+  });
+  const statuses = Array.from(new Set(releases.map((release) => release.status))).sort();
+  return <section>
+    <div className="grid gap-3 sm:grid-cols-[minmax(16rem,1fr),auto,auto]">
+      <label className="sr-only" htmlFor="admin-release-catalogue-search">Search releases</label>
+      <input id="admin-release-catalogue-search" type="search" className="field" placeholder="Search release, artist, user, UPC, ISRC" value={search} onChange={(event) => onSearch(event.target.value)} />
+      <select className="field" aria-label="Filter by assignment" value={assignment} onChange={(event) => onAssignment(event.target.value)}><option value="all">All assignments</option><option value="assigned">Assigned</option><option value="unassigned">Unassigned manual</option></select>
+      <select className="field" aria-label="Filter by status" value={status} onChange={(event) => onStatus(event.target.value)}><option value="all">All statuses</option>{statuses.map((value) => <option key={value} value={value}>{adminReleaseStatusLabel(value as Release["status"]).replace(/_/g, " ")}</option>)}</select>
+    </div>
+    <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>{rows.length} {rows.length === 1 ? "release" : "releases"}</p>
+    <div className="mt-4 overflow-x-auto">
+      <table className="w-full min-w-[1050px] text-left text-sm">
+        <thead><tr>{["Artwork", "Release", "Artist", "Assigned user", "UPC", "Tracks", "Status", "Release date", "Updated", "Actions"].map((label) => <th key={label} className="border-b p-3 text-xs font-semibold" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>{label}</th>)}</tr></thead>
+        <tbody>{rows.map((release) => <tr key={release.id} className="transition-colors hover:bg-[var(--bg-soft)]">
+          <td className="border-b p-3" style={{ borderColor: "var(--border)" }}>{release.artworkUrl ? <img src={artworkPreviewUrl(release.artworkUrl, 160)} alt="" className="h-12 w-12 rounded-lg object-cover" /> : <div className="h-12 w-12 rounded-lg border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} />}</td>
+          <td className="border-b p-3 font-medium" style={{ borderColor: "var(--border)" }}>{release.releaseTitle || release.trackName}</td>
+          <td className="border-b p-3" style={{ borderColor: "var(--border)" }}>{release.artistName || "—"}</td>
+          <td className="border-b p-3" style={{ borderColor: "var(--border)" }}>{release.ownerEmail || "Unassigned"}</td>
+          <td className="border-b p-3 font-mono text-xs" style={{ borderColor: "var(--border)" }}>{release.upcCode || "—"}</td>
+          <td className="border-b p-3" style={{ borderColor: "var(--border)" }}>{release.tracks?.length ?? 0}</td>
+          <td className="border-b p-3" style={{ borderColor: "var(--border)" }}><StatusPill label={adminReleaseStatusLabel(release.status, release.direNoteStatus)} /></td>
+          <td className="border-b p-3" style={{ borderColor: "var(--border)" }}>{release.releaseDate ? new Date(release.releaseDate).toLocaleDateString("en-IN") : "—"}</td>
+          <td className="border-b p-3" style={{ borderColor: "var(--border)" }}>{release.lastEditedAt ? new Date(release.lastEditedAt).toLocaleDateString("en-IN") : new Date(release.createdAt).toLocaleDateString("en-IN")}</td>
+          <td className="border-b p-3" style={{ borderColor: "var(--border)" }}><button type="button" className="btn-secondary pressable" onClick={() => onOpen(release.id)}>Inspect</button></td>
+        </tr>)}</tbody>
+      </table>
+      {!rows.length ? <p className="py-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>No releases match these filters.</p> : null}
+    </div>
+  </section>;
+}
+
 function formatMoney(amount: number) {
   if (!Number.isFinite(amount)) return "Unavailable";
   return `Rs ${amount.toLocaleString("en-IN")}`;
@@ -642,6 +679,8 @@ export function AdminControlCenter({
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [catalogTab, setCatalogTab] = useState<"overview" | "tracks" | "distribution" | "identifiers" | "stores" | "promolink" | "earnings" | "activity">(initialTab === "delivery" ? "distribution" : "overview");
   const [moduleSearch, setModuleSearch] = useState("");
+  const [catalogAssignment, setCatalogAssignment] = useState("all");
+  const [catalogStatus, setCatalogStatus] = useState("all");
   const [producerManagement, setProducerManagement] = useState<any[]>([]);
   const [selectedProducerId,setSelectedProducerId]=useState<number|null>(null);
   const [selectedBeatReviewId,setSelectedBeatReviewId]=useState<number|null>(initialBeatId??null);
@@ -793,7 +832,7 @@ export function AdminControlCenter({
         : true;
     return belongsToModule && (!query || searchable.includes(query)) && (queueStatus === "all" || release.status === queueStatus) && (queueType === "all" || release.releaseType === queueType);
   }), [activeTab, moduleSearch, queueStatus, queueType, releases]);
-  const catalogReleases = useMemo(() => releases.filter(release => (activeTab !== "delivery" || CATALOG_STATUSES.includes(release.status as typeof CATALOG_STATUSES[number])) && searchMatch(release.releaseTitle,release.trackName,release.artistName,release.upcCode,release.ownerEmail)), [releases,activeTab,moduleSearch]);
+  const catalogReleases = useMemo(() => releases.filter(release => activeTab !== "delivery" || CATALOG_STATUSES.includes(release.status as typeof CATALOG_STATUSES[number])), [releases,activeTab]);
   const selectedCatalogRelease = catalogReleases.find((release) => release.id === selectedReleaseId) ?? catalogReleases[0] ?? null;
   const notificationCountsByType = useMemo(() => {
     const counts = new Map<string, number>();
@@ -1246,7 +1285,7 @@ export function AdminControlCenter({
       {activeTab === "releases" || activeTab === "delivery" ? (
         <div className="workspace-module-layout">
           <SurfaceSection title={activeTab === "delivery" ? "Distributor Delivery" : "All releases"} description={activeTab === "delivery" ? "Track distribution processing, delivery state, store availability, and live confirmation." : "Every release, from submission to live."}>
-            <AdminCatalogGrid search={moduleSearch} onSearch={setModuleSearch} releases={catalogReleases} onSelect={id=>{setSelectedReleaseId(id);setCatalogTab(activeTab==="delivery"?"distribution":"overview");setCatalogOpen(true);}}/>
+            {activeTab === "releases" ? <AdminReleaseCatalogue releases={catalogReleases} search={moduleSearch} onSearch={setModuleSearch} assignment={catalogAssignment} onAssignment={setCatalogAssignment} status={catalogStatus} onStatus={setCatalogStatus} onOpen={id=>{setSelectedReleaseId(id);setCatalogTab("overview");setCatalogOpen(true);}} /> : <AdminCatalogGrid search={moduleSearch} onSearch={setModuleSearch} releases={catalogReleases} onSelect={id=>{setSelectedReleaseId(id);setCatalogTab("distribution");setCatalogOpen(true);}}/>}
 
           </SurfaceSection>
           {catalogOpen && <AdminCenteredDialog title={activeTab === "delivery" ? "Delivery Details" : "Catalog Details"} onClose={()=>setCatalogOpen(false)}>
