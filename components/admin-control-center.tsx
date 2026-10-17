@@ -57,9 +57,9 @@ function AdminReleaseCatalogue({ releases, search, onSearch, assignment, onAssig
     <div className="mt-4 overflow-x-auto">
       <table className="w-full min-w-[1050px] text-left text-sm">
         <thead><tr>{["Artwork", "Release", "Artist", "Assigned user", "UPC", "Tracks", "Status", "Release date", "Updated", "Actions"].map((label) => <th key={label} className="border-b p-3 text-xs font-semibold" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>{label}</th>)}</tr></thead>
-        <tbody>{rows.map((release) => <tr key={release.id} className="transition-colors hover:bg-[var(--bg-soft)]">
+        <tbody>{rows.map((release) => <tr key={release.id} onClick={() => onOpen(release.id)} className="cursor-pointer transition-colors hover:bg-[var(--bg-soft)]">
           <td className="border-b p-3" style={{ borderColor: "var(--border)" }}>{release.artworkUrl ? <img src={artworkPreviewUrl(release.artworkUrl, 160)} alt="" className="h-12 w-12 rounded-lg object-cover" /> : <div className="h-12 w-12 rounded-lg border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} />}</td>
-          <td className="border-b p-3 font-medium" style={{ borderColor: "var(--border)" }}>{release.releaseTitle || release.trackName}</td>
+          <td className="border-b p-3 font-medium" style={{ borderColor: "var(--border)" }}><button type="button" className="text-left hover:underline" onClick={(event) => { event.stopPropagation(); onOpen(release.id); }}>{release.releaseTitle || release.trackName}</button></td>
           <td className="border-b p-3" style={{ borderColor: "var(--border)" }}>{release.artistName || "—"}</td>
           <td className="border-b p-3" style={{ borderColor: "var(--border)" }}>{release.ownerEmail || "Unassigned"}</td>
           <td className="border-b p-3 font-mono text-xs" style={{ borderColor: "var(--border)" }}>{release.upcCode || "—"}</td>
@@ -67,7 +67,7 @@ function AdminReleaseCatalogue({ releases, search, onSearch, assignment, onAssig
           <td className="border-b p-3" style={{ borderColor: "var(--border)" }}><StatusPill label={adminReleaseStatusLabel(release.status, release.direNoteStatus)} /></td>
           <td className="border-b p-3" style={{ borderColor: "var(--border)" }}>{release.releaseDate ? new Date(release.releaseDate).toLocaleDateString("en-IN") : "—"}</td>
           <td className="border-b p-3" style={{ borderColor: "var(--border)" }}>{release.lastEditedAt ? new Date(release.lastEditedAt).toLocaleDateString("en-IN") : new Date(release.createdAt).toLocaleDateString("en-IN")}</td>
-          <td className="border-b p-3" style={{ borderColor: "var(--border)" }}><button type="button" className="btn-secondary pressable" onClick={() => onOpen(release.id)}>Inspect</button></td>
+          <td className="border-b p-3" style={{ borderColor: "var(--border)" }}><button type="button" className="btn-secondary pressable" onClick={(event) => { event.stopPropagation(); onOpen(release.id); }}>Inspect</button></td>
         </tr>)}</tbody>
       </table>
       {!rows.length ? <p className="py-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>No releases match these filters.</p> : null}
