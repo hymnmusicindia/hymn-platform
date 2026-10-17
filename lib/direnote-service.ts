@@ -13,6 +13,7 @@ import type { ReleaseStatus } from "@/lib/types";
 import { direNoteCorrectionFingerprint, extractDireNoteCorrections, matchDireNoteTrack, providerRequiresCorrections } from "@/lib/direnote-corrections";
 import { normalizeDireNoteUpc, upcFromDireNoteIsrcReport, upcFromDireNoteResponse } from "@/lib/direnote-upc";
 import { ensureCurrentDireNoteAttempt } from "@/lib/distribution-idempotency";
+import { currentDireNoteTracks } from "@/lib/direnote-track-revisions";
 import { attachedArtistProfileIds, verifiedArtistStoreLinks } from "@/lib/artist-store-links";
 import { validIsrc, validReleaseBarcode } from "@/lib/release-input-rules";
 import { confirmsDireNoteWithdrawal } from "@/lib/direnote/v24-reconciliation";
@@ -263,7 +264,7 @@ function aggregateReleaseStatus(tracks: RecordValue[], releaseStatus: unknown, r
 }
 
 /** Fetches the documented UPC lookup and caches provider facts without overwriting HYMN metadata. */
-export async function syncDireNoteRelease(releaseId: number, actorId?: number | null) {
+export async function syncDireNoteRelease(releaseId: number, actorId?: number | null, options: { deadlineAt?: number } = {}) {
   // A durable lease spans HTTP without holding a database connection open.
   const leaseKey = `direnote-release-sync:${releaseId}`;
   const runId = randomUUID();
@@ -278,7 +279,7 @@ export async function syncDireNoteRelease(releaseId: number, actorId?: number | 
     return leases[0]?.run_id === runId;
   }, { timeout: 10_000, maxWait: 5_000 });
   if (!acquired) throw new Error("DireNote release is already being synchronized or submitted.");
-  try { return await syncCurrentDireNoteRelease(releaseId, actorId); }
+  try { return await syncCurrentDireNoteRelease(releaseId, actorId, options.deadlineAt); }
   catch (error) {
     const message = String(redactDireNoteDiagnostic(error instanceof Error ? error.message : "DireNote synchronization failed.")).slice(0, 1000);
     await prisma.release.update({ where: { id: releaseId }, data: { direNoteSyncError: message, direNoteLastAttemptedAt: new Date() } }).catch(() => undefined);
@@ -290,7 +291,12 @@ export async function syncDireNoteRelease(releaseId: number, actorId?: number | 
   }
 }
 
-async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | null) {
+async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | null, deadlineAt?: number) {
+  const requestTimeout = (maximum: number) => {
+    const remaining = deadlineAt ? deadlineAt - Date.now() : maximum;
+    if (remaining < 1000) throw new Error("DireNote sync deferred to the next cron run: request time budget exhausted.");
+    return Math.min(maximum, remaining);
+  };
   const release = await prisma.release.findUnique({ where: { id: releaseId }, include: { tracks: { orderBy: { trackNumber: "asc" } } } });
   if (!release) throw new Error("Release not found.");
   const attempt = await ensureCurrentDireNoteAttempt(releaseId);
@@ -330,7 +336,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       const providerReference = text(attempt.providerReference);
       for (const key of ["release_id", "distributor_release_id"] as const) {
         await reserveDireNoteRequest(`release_information_${key}`, releaseId, actorId);
-        const referenceResult = await getDireNoteReleaseInformationByReference(providerReference, key, { timeoutMs: 20_000 });
+        const referenceResult = await getDireNoteReleaseInformationByReference(providerReference, key, { timeoutMs: requestTimeout(20_000) });
         const referenceUpc = referenceResult.success ? upcFromDireNoteResponse(referenceResult.data) : null;
         await prisma.direNoteLog.create({ data: {
           releaseId, action: `release_information_${key}`, httpStatus: referenceResult.httpStatus, success: Boolean(referenceUpc),
@@ -354,21 +360,23 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   }
   if (!result) await reserveDireNoteRequest("release_information", releaseId, actorId);
   await prisma.release.update({ where: { id: releaseId }, data: { direNoteLastAttemptedAt: new Date(), direNoteSyncError: null } });
-  result ??= await getDireNoteReleaseInformation(lookupUpc!, { timeoutMs: 20_000 });
+  result ??= await getDireNoteReleaseInformation(lookupUpc!, { timeoutMs: requestTimeout(20_000) });
   for (let retry = 0; lookupUpc && !result.success && retry < 2 && (result.httpStatus === null || result.httpStatus >= 500); retry++) {
+    if (deadlineAt && deadlineAt - Date.now() < 2500) break;
     await new Promise(resolve => setTimeout(resolve, 500 * 2 ** retry));
     await reserveDireNoteRequest("release_information_retry", releaseId, actorId);
-    result = await getDireNoteReleaseInformation(lookupUpc, { timeoutMs: 20_000 });
+    result = await getDireNoteReleaseInformation(lookupUpc, { timeoutMs: requestTimeout(20_000) });
   }
   if (result.httpStatus === 429) {
     await prisma.direNoteLog.create({ data: { releaseId, action: "provider_rate_limit", success: false, httpStatus: 429, responseJson: { retryAt: new Date(Date.now() + Math.max(60, result.retryAfterSeconds ?? 3600) * 1000).toISOString() } } });
   }
   const payload = record(result.data);
   const remoteRelease = record(payload.release);
-  const remoteTracks: Record<string, unknown>[] = (Array.isArray(payload.tracks) ? payload.tracks.map(record) : Array.isArray(remoteRelease.tracks) ? remoteRelease.tracks.map(record) : []).map((track, index) => ({ ...track, track_number: track.track_number ?? index + 1 }));
+  const remoteTracks = currentDireNoteTracks(Array.isArray(payload.tracks) ? payload.tracks.map(record) : Array.isArray(remoteRelease.tracks) ? remoteRelease.tracks.map(record) : []);
+  const currentPayload = { ...payload, tracks: remoteTracks, release: { ...remoteRelease, ...(Array.isArray(remoteRelease.tracks) ? { tracks: remoteTracks } : {}) } };
   const withdrawn = confirmsDireNoteWithdrawal({ upc: normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc }, payload);
-  const providerCorrections = withdrawn ? [] : extractDireNoteCorrections(redactDireNoteDiagnostic(payload) as RecordValue, mappingTracks, releaseId, attempt.id);
-  const explicitProviderStatus = rejectOrCorrectionStatus(payload) ?? rejectOrCorrectionStatus(remoteRelease) ?? rejectOrCorrectionStatus(remoteTracks);
+  const providerCorrections = withdrawn ? [] : extractDireNoteCorrections(redactDireNoteDiagnostic(currentPayload) as RecordValue, mappingTracks, releaseId, attempt.id);
+  const explicitProviderStatus = rejectOrCorrectionStatus(currentPayload);
   const lifecycleStatus = aggregateReleaseStatus(remoteTracks, remoteRelease.status ?? payload.status, release.releaseDate);
   if (result.success && !withdrawn && lookupUpc && (providerCorrections.length || explicitProviderStatus || providerRequiresCorrections(remoteRelease.status) || remoteTracks.some(track => providerRequiresCorrections(track.status)))) {
     try {
@@ -377,7 +385,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       let qc = recent?.success ? record(recent.responseJson) : null;
       if (!recent) {
         await reserveDireNoteRequest("correction_qc_report", releaseId, actorId);
-        const response = await requestDireNoteV24("check_qc_report", { upc: lookupUpc }, { timeoutMs: 15000 });
+        const response = await requestDireNoteV24("check_qc_report", { upc: lookupUpc }, { timeoutMs: requestTimeout(15000) });
         const safeQc = redactDireNoteDiagnostic(response.data ?? {}) as RecordValue;
         await prisma.direNoteLog.create({ data: { releaseId, action: "correction_qc_report", success: response.success, httpStatus: response.httpStatus, requestPayloadRedacted: { upc: lookupUpc, attemptId: attempt.id, reviewFingerprint }, responseJson: safeQc as never, errorMessage: response.error ?? null, createdByAdminId: actorId ?? null } });
         if (response.httpStatus === 429) await prisma.direNoteLog.create({ data: { action: "provider_rate_limit", success: false, httpStatus: 429, responseJson: { retryAt: new Date(Date.now() + Math.max(60, response.retryAfterSeconds ?? 3600) * 1000).toISOString() } } });
@@ -506,7 +514,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   const customerWorkflow = !providerAccepted && ["changes_requested", "resubmitted", "under_review", "in_qc_queue", "in_queue", "submitted", "approved", "queued_for_distribution"].includes(previousStatus);
   const repeatCorrection = previousDireNote.appliedCorrectionFingerprint === correctionFingerprint;
   if (!staleRegression && aggregateStatus.canonical && (aggregateStatus.canonical !== previousStatus || (aggregateStatus.canonical === "changes_requested" && !repeatCorrection))
-    && !(aggregateStatus.canonical === "changes_requested" && repeatCorrection)
+    && !(aggregateStatus.canonical === "changes_requested" && repeatCorrection && customerWorkflow)
     && !(customerWorkflow && !["changes_requested", "rejected"].includes(aggregateStatus.canonical))) {
     if (aggregateStatus.canonical === "changes_requested") {
       const reason = correctionMessages.join(" ") || "DireNote requires corrections before distribution can continue.";

@@ -28,6 +28,11 @@ jobs:
             echo "--- $1 ($2) HTTP $code"
             head -c 4000 response.json; echo
             [ "$code" = "200" ] || failed=1
+            # A partial reconciliation still returns 200 with per-release
+            # diagnostics. Do not silently report that job as healthy.
+            if [ "$1" = "direnote-release-sync" ]; then
+              jq -e '.success == true and ((.errorCount // 0) == 0)' response.json >/dev/null || failed=1
+            fi
           }
           run_job direnote-release-sync GET
           run_job release-status-sync GET

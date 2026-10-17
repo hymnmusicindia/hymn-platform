@@ -42,5 +42,5 @@ export async function reserveDireNoteRequest(action: string, releaseId?: number 
         createdByAdminId: actorId ?? null
       }
     });
-  });
+  }, { timeout: 15_000, maxWait: 10_000 });
 }

@@ -92,7 +92,15 @@ export async function ensureCurrentDireNoteAttempt(releaseId: number) {
     }
     const release = await tx.release.findUniqueOrThrow({ where: { id: releaseId }, include: { tracks: true } });
     if (current) {
-      const recoveredUpc = normalizeDireNoteAttemptUpc(current.responseRedacted) ?? normalizeDireNoteAttemptUpc(current.rawStatusPayload) ?? normalizeDireNoteAttemptUpc(release.metadata) ?? release.upc;
+      // A verified status lookup is newer evidence than an initial ingestion
+      // acknowledgement. Keep immutable acknowledgement diagnostics intact.
+      const status = current.rawStatusPayload as { success?: boolean; release?: { upc_code?: string; album_name?: string }; tracks?: Array<{ isrc?: string }> } | null;
+      const statusUpc = normalizeDireNoteAttemptUpc({ upc: status?.release?.upc_code });
+      const normalize = (value: string | null | undefined) => (value ?? "").replace(/[\s-]/g, "").toLowerCase();
+      const verifiedStatus = current.state === "submitted" && status?.success === true && statusUpc && statusUpc === current.upc && statusUpc === release.upc
+        && status?.release?.album_name?.trim().replace(/\s+/g, " ").toLowerCase() === release.title.trim().replace(/\s+/g, " ").toLowerCase()
+        && Array.isArray(status?.tracks) && release.tracks.length > 0 && release.tracks.every(track => validIsrc(track.isrc ?? "") && status.tracks!.some(remote => normalize(remote.isrc) === normalize(track.isrc)));
+      const recoveredUpc = (verifiedStatus ? statusUpc : null) ?? normalizeDireNoteAttemptUpc(current.responseRedacted) ?? statusUpc ?? normalizeDireNoteAttemptUpc(release.metadata) ?? release.upc;
       if (recoveredUpc && current.upc && current.upc !== recoveredUpc) throw new Error("Stored provider UPC conflicts with the current submission identity. Manual reconciliation is required.");
       if (recoveredUpc && release.upc && release.upc !== recoveredUpc) throw new Error("Stored provider UPC conflicts with the release identity. Manual reconciliation is required.");
       if (recoveredUpc && !current.upc) {

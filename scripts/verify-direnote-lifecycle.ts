@@ -56,6 +56,12 @@ const server = createServer(async (request, response) => {
   }
   if (mode === "malformed") { response.end("not JSON"); return; }
   const ids = mode === "conflicting-isrc" ? ["INDN22609999", oldIsrcs[1]] : mode === "invalid-isrc" ? ["BAD", oldIsrcs[1]] : body.upc === oldUpc ? oldIsrcs : newIsrcs;
+  if (mode === "revisions") {
+    response.end(JSON.stringify({ success: true, release: { album_name: "Magenta", upc_code: body.upc }, tracks: ids.flatMap((isrc, index) => [
+      { track_name: `Track ${index + 1}`, isrc, status: "Rejected", remarks: remark, date: "2026-10-14 08:44:19" },
+      { track_name: `Track ${index + 1}`, isrc, status: "Approved", remarks: "", date: "2026-10-14 14:08:04" }
+    ]) })); return;
+  }
   response.end(JSON.stringify({ success: true, release: { album_name: "Magenta", upc_code: body.upc, status: mode === "accepted" ? "Accepted" : "Pending" }, tracks: ids.map((isrc, index) => ({ track_number: index + 1, track_name: `Track ${index + 1}`, isrc, artist: returnedArtist, status: "Pending", remarks: mode === "remark" && index === 1 ? remark : "NONE" })) }));
 });
 
@@ -318,6 +324,29 @@ async function main() {
   assert.equal((await pollArtist()).spotifyProfileUrl, spotify);
   if (browser) await browser.savedArtistLinks(artist.id, spotify, "https://music.apple.com/us/artist/test/1800353038");
   console.log("Hourly artist enrichment passed: canonical attachment, partial links, IDs, repeated polling, conflict deduplication and invalid-link rejection.");
+  // Reproduce the three live reconciliation bugs without production writes.
+  mode = "remark";
+  await syncDireNoteRelease(release.id);
+  await prisma.release.update({ where: { id: release.id }, data: { status: "DELIVERY_FAILED" } });
+  await syncDireNoteRelease(release.id);
+  assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: release.id } })).status, "CHANGES_REQUESTED", "Repeated correction must repair a failed delivery projection.");
+  const current = await ensureCurrentDireNoteAttempt(release.id);
+  const originalResponse = current.responseRedacted;
+  await prisma.distributionSubmissionAttempt.update({ where: { id: current.id }, data: { responseRedacted: { success: true, upc: "3473620319017" } } });
+  assert.equal((await ensureCurrentDireNoteAttempt(release.id)).upc, oldUpc, "Verified title + UPC + every ISRC supersede stale acknowledgement evidence.");
+  await prisma.distributionSubmissionAttempt.update({ where: { id: current.id }, data: { rawStatusPayload: { success: true, release: { upc_code: oldUpc, album_name: "Other album" }, tracks: [] } } });
+  await assert.rejects(() => ensureCurrentDireNoteAttempt(release.id), /conflicts/);
+  await prisma.distributionSubmissionAttempt.update({ where: { id: current.id }, data: { responseRedacted: originalResponse! } });
+  mode = "revisions";
+  await syncDireNoteRelease(release.id);
+  assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: release.id } })).status, "SCHEDULED", "Historical rejected rows must not override a newer approved recording.");
+  assert.equal(((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: current.id } })).corrections as any).status, "closed");
+  await prisma.distributionSubmissionAttempt.update({ where: { id: current.id }, data: { isCurrent: false } });
+  const repaired = await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));
+  assert.equal((await repaired.json()).checked, 1, "Cron must recover a missing current flag from accepted evidence.");
+  assert.equal((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: current.id } })).isCurrent, true);
+  assert.equal(ingests, beforeAutoQc + 1, "All status fallbacks must remain read-only at DireNote.");
+  console.log("Cron fallback regression checks passed: stale revisions, verified UPC precedence, failed projection repair and accepted lineage recovery.");
   if (browser) await verifySubmissionCheckout();
   console.log("Virtual PostgreSQL lifecycle, null/stale Instrumental HTTP mapping, paid draft recovery, one-track JPEG readiness and release isolation passed.");
 }

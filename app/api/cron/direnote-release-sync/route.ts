@@ -89,16 +89,30 @@ export async function GET(request: Request) {
       orderBy: [{ lastCheckedAt: { sort: "asc", nulls: "first" } }, { id: "asc" }],
       take: Math.max(CONCURRENCY, Math.min(Number(process.env.DIRENOTE_RELEASE_SYNC_BATCH_SIZE || 30), 100))
     });
+    // Recover accepted legacy attempts whose current flag was never persisted.
+    // This is status reconciliation only, never a second ingestion request.
+    const missingLineage = await prisma.distributionSubmissionAttempt.findMany({
+      where: { provider: "direnote", state: "submitted", release: { archivedAt: null,
+        distributionSubmissions: { none: { provider: "direnote", isCurrent: true } } } },
+      include: { release: { select: { id: true, title: true } } },
+      orderBy: [{ lastCheckedAt: { sort: "asc", nulls: "first" } }, { id: "desc" }], take: 5
+    });
+    for (const candidate of missingLineage) if (!candidates.some(item => item.releaseId === candidate.releaseId)) candidates.unshift(candidate);
     const results: Array<{ releaseId: number; title: string; success: boolean; error?: string; upc?: string | null; status?: string }> = [];
     let cursor = 0;
     const worker = async () => {
       while (cursor < candidates.length && Date.now() - started < START_WORK_UNTIL_MS) {
         const candidate = candidates[cursor++];
         try {
-          const outcome = await syncDireNoteRelease(candidate.releaseId);
+          const outcome = await syncDireNoteRelease(candidate.releaseId, null, { deadlineAt: started + 45_000 });
           results.push({ releaseId: candidate.releaseId, title: candidate.release.title, success: true, upc: outcome.upc, status: outcome.status });
         }
-        catch (error) { results.push({ releaseId: candidate.releaseId, title: candidate.release.title, success: false, error: error instanceof Error ? error.message : "Sync failed." }); }
+        catch (error) {
+          // Failed/missing-UPC records used to stay at the front forever. Rotate
+          // them behind unchecked work; retain the error and retry next run.
+          await prisma.distributionSubmissionAttempt.updateMany({ where: { id: candidate.id }, data: { lastCheckedAt: new Date() } }).catch(() => undefined);
+          results.push({ releaseId: candidate.releaseId, title: candidate.release.title, success: false, error: error instanceof Error ? error.message : "Sync failed." });
+        }
       }
     };
     const staleBefore = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -117,7 +131,17 @@ export async function GET(request: Request) {
         prisma.contributorParty.findMany({ where: { direNoteSongwriterId: { not: null }, mergedIntoId: null, OR: [{ direNoteLastSyncedAt: null }, { direNoteLastSyncedAt: { lt: staleBefore } }] }, select: { id: true }, take: 3, orderBy: { direNoteLastSyncedAt: { sort: "asc", nulls: "first" } } })
       ]);
       const artists = [...pendingArtists, ...staleArtists];
-      return Promise.allSettled([...artists.map(item => syncDireNoteArtistInformation(item.id)), ...songwriters.map(item => syncDireNoteSongwriterInformation(item.id))]);
+      const tasks = [...artists.map(item => () => syncDireNoteArtistInformation(item.id)), ...songwriters.map(item => () => syncDireNoteSongwriterInformation(item.id))];
+      const outcomes: PromiseSettledResult<unknown>[] = [];
+      let identityCursor = 0;
+      await Promise.all(Array.from({ length: Math.min(2, tasks.length) }, async () => {
+        while (identityCursor < tasks.length && Date.now() - started < START_WORK_UNTIL_MS) {
+          const task = tasks[identityCursor++];
+          try { outcomes.push({ status: "fulfilled", value: await task() }); }
+          catch (reason) { outcomes.push({ status: "rejected", reason }); }
+        }
+      }));
+      return outcomes;
     };
     // Runs alongside the release syncs so a full release batch cannot use up the
     // time budget and starve identity refresh. allSettled keeps a failed identity
