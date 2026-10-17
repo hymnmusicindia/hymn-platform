@@ -1,4 +1,5 @@
 const DEFAULT_DIRENOTE_ENDPOINT = "https://api.direnotemedia.com/ingest_content";
+const DEFAULT_DIRENOTE_INGEST_STATUS_ENDPOINT = "https://api.direnotemedia.com/ingest_status";
 const DEFAULT_DIRENOTE_RELEASE_INFORMATION_ENDPOINT = "https://api.direnotemedia.com/check_release_status";
 const DEFAULT_DIRENOTE_REVENUE_REPORT_ENDPOINT = "https://api.direnotemedia.com/check_revenue_report";
 const DEFAULT_DIRENOTE_ARTIST_INFORMATION_ENDPOINT = "https://api.direnotemedia.com/check_artist";
@@ -44,6 +45,7 @@ export function getDireNoteConfig() {
     process.env.DIRENOTE_INGEST_ENDPOINT || process.env.DISTRIBUTOR_RELEASE_ENDPOINT,
     DEFAULT_DIRENOTE_ENDPOINT,
   );
+  const ingestStatusEndpoint = normalizeEndpoint(process.env.DIRENOTE_INGEST_STATUS_ENDPOINT, DEFAULT_DIRENOTE_INGEST_STATUS_ENDPOINT);
   const pin =
     process.env.DIRENOTE_API_PIN?.trim() ||
     process.env.DIRENOTE_PIN?.trim() ||
@@ -59,6 +61,7 @@ export function getDireNoteConfig() {
 
   return {
     endpoint,
+    ingestStatusEndpoint,
     releaseInformationEndpoint,
     revenueReportEndpoint,
     artistInformationEndpoint,

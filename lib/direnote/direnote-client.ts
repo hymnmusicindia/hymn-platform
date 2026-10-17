@@ -128,6 +128,14 @@ export function submitToDireNote(payload: Record<string, unknown>, options: { ti
   return postToDireNote(getDireNoteConfig().endpoint, payload, options);
 }
 
+export function getDireNoteIngestStatus(input: { jobId?: string | null; idempotencyKey?: string | null }, options: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}) {
+  const jobId = input.jobId?.trim();
+  const idempotencyKey = input.idempotencyKey?.trim();
+  if (jobId) return postToDireNote(getDireNoteConfig().ingestStatusEndpoint, { job_id: jobId }, options);
+  if (idempotencyKey) return postToDireNote(getDireNoteConfig().ingestStatusEndpoint, { idempotency_key: idempotencyKey }, options);
+  return Promise.resolve<DireNoteSubmitResult>({ success: false, httpStatus: null, error: "A DireNote job ID or idempotency key is required." });
+}
+
 function normalizeIdentifier(value: string) {
   return value.replace(/[\s-]+/g, "").toUpperCase();
 }

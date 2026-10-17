@@ -58,7 +58,7 @@ export async function claimDistributionSubmission(releaseId: number, payload: un
   return { attempt: await prisma.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: existing.id } }), claimed: claimed.count >= 1, alreadySubmitted: false, retryAfterSeconds: undefined };
 }
 
-export async function finishDistributionSubmission(id: number, input: { state: "submitted" | "failed" | "retryable" | "reconciliation_required"; httpStatus?: number | null; providerReference?: string | null; safeError?: string | null; responseRedacted?: Prisma.InputJsonValue }) {
+export async function finishDistributionSubmission(id: number, input: { state: "submitted" | "failed" | "retryable" | "reconciliation_required"; httpStatus?: number | null; providerReference?: string | null; providerStatus?: string | null; safeError?: string | null; responseRedacted?: Prisma.InputJsonValue }) {
   return prisma.distributionSubmissionAttempt.update({ where: { id }, data: { ...input, completedAt: new Date() } });
 }
 
@@ -137,7 +137,7 @@ function normalizeDireNoteAttemptUpc(value: unknown) {
   return upcFromDireNoteResponse(value);
 }
 
-export async function activateDireNoteAttempt(id: number, input: { upc: string | null; trackIdentifiers: Prisma.InputJsonValue; responseRedacted: Prisma.InputJsonValue }) {
+export async function activateDireNoteAttempt(id: number, input: { upc: string | null; trackIdentifiers: Prisma.InputJsonValue; responseRedacted: Prisma.InputJsonValue; providerStatus?: string }) {
   return prisma.$transaction(async tx => {
     const attempt = await tx.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id } });
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422027, ${attempt.releaseId}::integer)`;
@@ -172,6 +172,6 @@ export async function activateDireNoteAttempt(id: number, input: { upc: string |
       });
       await tx.adminTask.updateMany({ where: { eventKey: { startsWith: `release:${release.id}:direnote:correction:${previous.id}:` }, status: { not: "resolved" } }, data: { status: "resolved", resolvedAt: new Date(), resolutionNote: "Corrections re-ingested; monitoring the new submission attempt." } });
     }
-    return tx.distributionSubmissionAttempt.update({ where: { id }, data: { ...input, isCurrent: true, state: "submitted", providerStatus: "processing", completedAt: new Date() } });
+    return tx.distributionSubmissionAttempt.update({ where: { id }, data: { ...input, isCurrent: true, state: "submitted", providerStatus: input.providerStatus ?? "processing", completedAt: new Date() } });
   }, { timeout: 30_000 });
 }

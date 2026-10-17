@@ -25,4 +25,4 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           BASE_URL: https://hymnmusic.fun
-        run: node scripts/run-cron-jobs.mjs team-appointments playlist-reviews team-os studio-automation
+        run: node scripts/run-cron-jobs.mjs team-appointments release-emails direnote-ingest-status playlist-reviews team-os studio-automation

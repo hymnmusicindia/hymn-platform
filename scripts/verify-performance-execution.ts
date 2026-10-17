@@ -19,6 +19,8 @@ const releaseCron = source("app/api/cron/direnote-release-sync/route.ts");
 const polledProviderStates = releaseCron.match(/providerStatus:\s*\{\s*in:\s*\[([^\]]+)/)?.[1] ?? "";
 for (const state of ["scheduled", "awaiting_live_confirmation", "partially_live"]) assert(polledProviderStates.includes(JSON.stringify(state)), "The DireNote status worker must continue polling every post-review lifecycle state.");
 assert.equal(JSON.parse(source("vercel.json")).crons.find((cron: { path: string }) => cron.path === "/api/cron/direnote-release-sync").schedule, "0 * * * *", "DireNote review polling must run hourly.");
+assert.equal(JSON.parse(source("vercel.json")).crons.find((cron: { path: string }) => cron.path === "/api/cron/direnote-ingest-status").schedule, "* * * * *", "Accepted DireNote ingest jobs must be polled every minute.");
+assert(source("lib/cron/jobs.json").includes('"id": "direnote-ingest-status"') && source(".github/workflows/cron-frequent.yml").includes("direnote-ingest-status"), "The minute-poll job must be covered by Hostinger and the GitHub fallback.");
 
 const revenueCron = source("app/api/cron/direnote-revenue-sync/route.ts");
 assert(revenueCron.includes("checkedIsrcs"), "Revenue sync must skip ISRCs already checked for the reporting month.");

@@ -1,6 +1,8 @@
 {
   "buildCommand": "npm run vercel-build",
   "crons": [
+    { "path": "/api/cron/release-emails", "schedule": "* * * * *" },
+    { "path": "/api/cron/direnote-ingest-status", "schedule": "* * * * *" },
     { "path": "/api/cron/team-appointments", "schedule": "* * * * *" },
     { "path": "/api/cron/playlist-reviews", "schedule": "*/15 * * * *" },
     { "path": "/api/cron/studio-automation", "schedule": "5 * * * *" },

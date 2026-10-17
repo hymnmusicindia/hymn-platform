@@ -17,7 +17,7 @@ import { getPublicAppUrl } from "@/lib/public-app-url";
 import { mapContributorToDireNote } from "@/lib/contributor-provider-mapping";
 import { attachedArtistProfileIds, verifiedArtistStoreLinks } from "@/lib/artist-store-links";
 import { parseReleaseDate, validIsrc, validReleaseBarcode, safeReleaseText } from "@/lib/release-input-rules";
-export { submitToDireNote, getDireNoteReleaseInformation, getDireNoteReleaseInformationByReference, getDireNoteRevenueReport, getDireNoteArtistInformation, getDireNoteSongwriterInformation } from "@/lib/direnote/direnote-client";
+export { submitToDireNote, getDireNoteIngestStatus, getDireNoteReleaseInformation, getDireNoteReleaseInformationByReference, getDireNoteRevenueReport, getDireNoteArtistInformation, getDireNoteSongwriterInformation } from "@/lib/direnote/direnote-client";
 
 export type DireNoteArtist = {
   name: string;
@@ -122,6 +122,10 @@ export type DireNoteParsedResponse = {
   message: string;
   upc?: string | null;
   distributorReleaseId?: string | null;
+  ingestJobId?: string | null;
+  ingestIdempotencyKey?: string | null;
+  ingestJobStatus?: "queued" | "processing" | "completed" | "failed" | null;
+  pollAfterSeconds?: number | null;
   warnings: string[];
   trackIsrcs: Array<{ trackNumber?: number; trackTitle?: string; isrc?: string | null; distributorStatus?: string | null }>;
   artists: Array<{ name: string; artistId: string; created?: boolean }>;
@@ -537,6 +541,10 @@ export function parseDireNoteResponse(response: unknown): DireNoteParsedResponse
     message: String(record.message ?? record.error ?? (success ? "DireNote accepted release." : "DireNote rejected release.")),
     upc: upcFromDireNoteResponse(response),
     distributorReleaseId: typeof nested.distributor_release_id === "string" ? nested.distributor_release_id : typeof nested.release_id === "string" ? nested.release_id : null,
+    ingestJobId: typeof (record as any).job_id === "string" ? (record as any).job_id.trim() : typeof (record as any).jobId === "string" ? (record as any).jobId.trim() : null,
+    ingestIdempotencyKey: typeof (record as any).idempotency_key === "string" ? (record as any).idempotency_key.trim() : typeof (record as any).idempotencyKey === "string" ? (record as any).idempotencyKey.trim() : null,
+    ingestJobStatus: ["queued", "processing", "completed", "failed"].includes(String((record as any).status)) ? (record as any).status : null,
+    pollAfterSeconds: Number.isFinite(Number((record as any).poll_after_seconds)) ? Math.max(1, Math.min(3600, Number((record as any).poll_after_seconds))) : null,
     warnings: Array.isArray(record.warnings) ? record.warnings.map(String) : [],
     trackIsrcs: tracks.map((track: any, index: number) => ({
       trackNumber: index + 1,

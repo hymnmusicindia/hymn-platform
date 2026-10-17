@@ -28,6 +28,13 @@
     "flag": "STUDIO_AUTOMATION_ENABLED"
   },
   {
+    "id": "direnote-ingest-status",
+    "method": "GET",
+    "seconds": 60,
+    "purpose": "Poll accepted DireNote ingest jobs and persist final identifiers",
+    "flag": "DIRENOTE_RELEASE_SYNC_ENABLED"
+  },
+  {
     "id": "direnote-release-sync",
     "method": "GET",
     "seconds": 3600,
@@ -126,5 +133,6 @@
     "seconds": 3600,
     "purpose": "Fair ISRC royalty ingestion; each successful ISRC waits 24 hours",
     "flag": "DIRENOTE_REVENUE_SYNC_ENABLED"
-  }
+  },
+  { "id": "release-emails", "method": "GET", "seconds": 60, "purpose": "Durable release updates and draft warning email queue" }
 ]

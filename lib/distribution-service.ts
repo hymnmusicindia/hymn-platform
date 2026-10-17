@@ -306,6 +306,10 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
             : "The previous submission requires review before it can be retried. Check Submission history for the recorded error.",
   };
   await snapshotTrackContributions(claim.attempt.id, releaseId);
+  // DireNote v2.5 queues ingestion asynchronously. Reuse HYMN's stable attempt
+  // key on every transport retry so DireNote can return the same job safely.
+  const providerPayload = { ...payload, idempotency_key: claim.attempt.idempotencyKey };
+  const providerRedactedPayload = redactDireNotePayload(providerPayload);
 
   await updateDetailedReleaseStatus(releaseId, "queued_for_distribution", options.correctionReingest ? "Provider corrections validated for re-ingestion with the existing identifiers." : "Validated and queued for DireNote API.", undefined, { manualOverride: Boolean(options.correctionReingest), actorType: "system" });
   await updateDetailedReleaseStatus(releaseId, "submitting_to_distributor", "DireNote submission claimed and started.");
@@ -318,11 +322,11 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
   try {
     await reserveDireNoteRequest("content_ingestion", releaseId, options.actorId);
     await prisma.distributionSubmissionAttempt.update({ where: { id: claim.attempt.id }, data: {
-      payloadRedacted: JSON.parse(JSON.stringify(redactedPayload)),
-      payloadDiff: previousAttempt?.payloadRedacted ? JSON.parse(JSON.stringify(diffDireNotePayload(previousAttempt.payloadRedacted, redactedPayload))) : undefined
+      payloadRedacted: JSON.parse(JSON.stringify(providerRedactedPayload)),
+      payloadDiff: previousAttempt?.payloadRedacted ? JSON.parse(JSON.stringify(diffDireNotePayload(previousAttempt.payloadRedacted, providerRedactedPayload))) : undefined
     } });
     providerRequestStarted = true;
-    const response = await submitToDireNote(payload);
+    const response = await submitToDireNote(providerPayload);
     const data = redactDireNoteDiagnostic(response.data ?? (response.error ? { error: response.error } : {}));
     if (!response.success) {
       const status = response.httpStatus ?? 503;
@@ -349,7 +353,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
         { manualOverride: [400, 422].includes(status), actorType: "system" }
       );
       await finishDistributionSubmission(claim.attempt.id, { state: uncertain ? "reconciliation_required" : mode.retryable ? "retryable" : "failed", httpStatus: response.httpStatus, safeError: message.slice(0, 500), responseRedacted: { message, warnings: parsed.warnings } });
-      await logDistributionEvent({ releaseId, action: options.retry ? "retry_submission" : "release_submission", httpStatus: response.httpStatus, createdByAdminId: options.actorId, correlationId, requestPayload: redactedPayload, responsePayload: data, responseRaw: response.raw, warnings: parsed.warnings, errors: [message], success: false });
+      await logDistributionEvent({ releaseId, action: options.retry ? "retry_submission" : "release_submission", httpStatus: response.httpStatus, createdByAdminId: options.actorId, correlationId, requestPayload: providerRedactedPayload, responsePayload: data, responseRaw: response.raw, warnings: parsed.warnings, errors: [message], success: false });
       if (mode.queueStage) await moveQueue(releaseId, mode.queueStage, options.actorId, message, { status: response.httpStatus, response: data });
       await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: mode.action, details: { attemptId: claim.attempt.id, correlationId, status: response.httpStatus, message } });
       if (![400, 422].includes(status)) {
@@ -360,10 +364,29 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
 
     const parsed = parseDireNoteResponse(data);
     providerAccepted = true;
+    const queuedIngest = response.httpStatus === 202 && Boolean(parsed.ingestJobId || parsed.ingestIdempotencyKey || claim.attempt.idempotencyKey);
+    if (queuedIngest) {
+      const queuedMessage = "DireNote accepted the ingest job for processing.";
+      await activateDireNoteAttempt(claim.attempt.id, {
+        upc: release.upcCode ?? null,
+        providerStatus: parsed.ingestJobStatus ?? "queued",
+        trackIdentifiers: (release.tracks ?? []).map(track => ({ id: track.id, title: track.trackTitle, trackNumber: track.trackNumber, isrc: track.isrc ?? null })),
+        responseRedacted: { ingestJobId: parsed.ingestJobId ?? null, providerIdempotencyKey: parsed.ingestIdempotencyKey ?? claim.attempt.idempotencyKey, ingestJobStatus: parsed.ingestJobStatus ?? "queued", pollAfterSeconds: parsed.pollAfterSeconds ?? 60 } as never
+      });
+      await updateDetailedReleaseStatus(releaseId, "sent_to_distributor", queuedMessage, undefined, { notify: false });
+      await logDistributionEvent({ releaseId, action: options.retry ? "retry_submission" : "release_submission", httpStatus: response.httpStatus, createdByAdminId: options.actorId, correlationId, requestPayload: providerRedactedPayload, responsePayload: data, responseRaw: response.raw, warnings: parsed.warnings, success: true });
+      await moveQueue(releaseId, "sent_to_direnote", options.actorId, queuedMessage, { direnoteResponse: data, warnings: parsed.warnings });
+      await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: "DIRENOTE_INGEST_QUEUED", details: { attemptId: claim.attempt.id, correlationId, status: response.httpStatus, jobId: parsed.ingestJobId ?? null } });
+      await resolveAdminTask(`release:${releaseId}:direnote:validation`, "DireNote accepted the ingest job.");
+      await resolveAdminTask(`release:${releaseId}:direnote:network`, "DireNote accepted the ingest job.");
+      await finishDistributionSubmission(claim.attempt.id, { state: "submitted", httpStatus: response.httpStatus, providerReference: parsed.ingestJobId ?? parsed.ingestIdempotencyKey ?? claim.attempt.idempotencyKey, providerStatus: parsed.ingestJobStatus ?? "queued", responseRedacted: { ingestJobId: parsed.ingestJobId ?? null, providerIdempotencyKey: parsed.ingestIdempotencyKey ?? claim.attempt.idempotencyKey, ingestJobStatus: parsed.ingestJobStatus ?? "queued", pollAfterSeconds: parsed.pollAfterSeconds ?? 60 } });
+      return { submitted: true, release: await prisma.release.findUnique({ where: { id: releaseId } }), duplicate: false };
+    }
     const automaticStatus = "sent_to_distributor" as const;
     const assignedTrackIsrcs = parsed.trackIsrcs;
     await activateDireNoteAttempt(claim.attempt.id, {
       upc: parsed.upc ?? release.upcCode ?? null,
+      providerStatus: parsed.ingestJobStatus ?? "processing",
       trackIdentifiers: (release.tracks ?? []).map(track => ({
         id: track.id, title: track.trackTitle, trackNumber: track.trackNumber,
         isrc: assignedTrackIsrcs.find(remote => remote.trackNumber === track.trackNumber || remote.trackTitle === track.trackTitle)?.isrc
@@ -383,12 +406,12 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     const artistCardIds = await persistDireNoteArtistIds(releaseId, parsed.artists);
     const contributorPartyIds = await persistDireNoteSongwriterIds(releaseId, parsed.songwriters);
 
-    await logDistributionEvent({ releaseId, action: options.retry ? "retry_submission" : "release_submission", httpStatus: response.httpStatus, createdByAdminId: options.actorId, correlationId, requestPayload: redactedPayload, responsePayload: data, responseRaw: response.raw, warnings: parsed.warnings, success: true });
+    await logDistributionEvent({ releaseId, action: options.retry ? "retry_submission" : "release_submission", httpStatus: response.httpStatus, createdByAdminId: options.actorId, correlationId, requestPayload: providerRedactedPayload, responsePayload: data, responseRaw: response.raw, warnings: parsed.warnings, success: true });
     await moveQueue(releaseId, "sent_to_direnote", options.actorId, "Release sent to DireNote.", { direnoteResponse: data, warnings: parsed.warnings });
     await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: "DIRENOTE_ACCEPTED", details: { attemptId: claim.attempt.id, correlationId, trigger: options.correctionReingest ? "AUTO_AFTER_REDRESSAL_APPROVAL" : "AUTO_AFTER_QC_APPROVAL", status: automaticStatus, upc: parsed.upc, warnings: parsed.warnings } });
     await resolveAdminTask(`release:${releaseId}:direnote:validation`, "DireNote submission accepted.");
     await resolveAdminTask(`release:${releaseId}:direnote:network`, "DireNote submission accepted.");
-    await finishDistributionSubmission(claim.attempt.id, { state: "submitted", httpStatus: response.httpStatus, providerReference: parsed.distributorReleaseId ?? parsed.upc ?? null, responseRedacted: { distributorReleaseId: parsed.distributorReleaseId ?? null, upc: parsed.upc ?? null, trackIsrcs: parsed.trackIsrcs, artists: parsed.artists, songwriters: parsed.songwriters, warnings: parsed.warnings } });
+    await finishDistributionSubmission(claim.attempt.id, { state: "submitted", httpStatus: response.httpStatus, providerReference: parsed.distributorReleaseId ?? parsed.upc ?? parsed.ingestJobId ?? null, providerStatus: parsed.ingestJobStatus ?? "processing", responseRedacted: { distributorReleaseId: parsed.distributorReleaseId ?? null, upc: parsed.upc ?? null, trackIsrcs: parsed.trackIsrcs, artists: parsed.artists, songwriters: parsed.songwriters, warnings: parsed.warnings, ingestJobId: parsed.ingestJobId ?? null, providerIdempotencyKey: parsed.ingestIdempotencyKey ?? claim.attempt.idempotencyKey, ingestJobStatus: parsed.ingestJobStatus ?? "processing", pollAfterSeconds: parsed.pollAfterSeconds ?? 60 } });
     if (artistCardIds.length || contributorPartyIds.length) {
       const { syncDireNoteArtistInformation, syncDireNoteSongwriterInformation } = await import("@/lib/direnote-service");
       await Promise.allSettled(artistCardIds.map(artistCardId => syncDireNoteArtistInformation(artistCardId, options.actorId, releaseId)));

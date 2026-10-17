@@ -10,6 +10,7 @@ import { GET as cron } from "../app/api/cron/direnote-release-sync/route";
 import { startDireNoteBrowser } from "./direnote-browser-fixture";
 import { getDireNoteReleaseInformation } from "../lib/direnote/direnote-client";
 import { ensureCurrentDireNoteAttempt } from "../lib/distribution-idempotency";
+import { pollDireNoteIngestJobs } from "../lib/direnote-ingest-jobs";
 import { assertDireNoteSchemaReady } from "../lib/direnote-schema-readiness";
 import { validateReleaseForDireNote } from "../lib/direnote-readiness";
 import { readTrackLanguage } from "../lib/track-language";
@@ -19,6 +20,7 @@ assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/fixture:fixture@12
 let mode = "pending";
 let returnedArtist: { name: string; links: Record<string, string> } | undefined;
 let ingests = 0;
+let ingestStatusPolls = 0;
 let qcRequests = 0;
 const statusUpcs: string[] = [];
 const ingestPayloads: Array<Record<string, any>> = [];
@@ -40,7 +42,13 @@ const server = createServer(async (request, response) => {
     assert.equal(request.method, "POST");
     ingestPayloads.push(body);
     ingests++;
-    response.end(JSON.stringify({ success: true, upc: body.upc || oldUpc, tracks: body.tracks.map((track: { isrc?: string }, index: number) => ({ track_name: `Track ${index + 1}`, isrc: track.isrc || oldIsrcs[index], status: "Pending" })) }));
+    response.end(JSON.stringify({ success: true, job_id: `fixture-job-${ingests}`, idempotency_key: body.idempotency_key, status: "queued", poll_after_seconds: 60 }));
+    return;
+  }
+  if (request.url === "/ingest_status") {
+    ingestStatusPolls++;
+    assert(body.job_id || body.idempotency_key, "Status lookup must provide a provider job reference.");
+    response.end(JSON.stringify({ success: true, job_id: body.job_id || `fixture-job-${ingestStatusPolls}`, status: "processing", progress: "Fixture is processing", attempts: 1, poll_after_seconds: 60 }));
     return;
   }
   if (request.url === "/check_qc_report") {
@@ -104,6 +112,12 @@ async function main() {
   assert.equal(ingestPayloads[0].tracks[0].explicitLyrics, "Yes");
   assert(!ingestPayloads[0].tracks[0].trackLyrics, "Explicit content must submit without lyrics.");
   const firstAttempt = await prisma.distributionSubmissionAttempt.findFirstOrThrow({ where: { releaseId: release.id, isCurrent: true } });
+  assert.equal(firstAttempt.providerStatus, "queued", "A 202 acknowledgement must be represented as an asynchronous provider job.");
+  assert.equal((firstAttempt.responseRedacted as any).ingestJobId, "fixture-job-1");
+  const initialPoll = await pollDireNoteIngestJobs();
+  assert.equal(initialPoll.processing, 1, "The minute worker must poll accepted DireNote jobs.");
+  assert.equal(ingestStatusPolls, 1);
+  assert.equal((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: firstAttempt.id } })).providerStatus, "processing");
   assert.equal(firstAttempt.upc, oldUpc);
   assert.equal((await ensureCurrentDireNoteAttempt(release.id)).id, firstAttempt.id);
   assert.equal((await ensureCurrentDireNoteAttempt(release.id)).id, firstAttempt.id);
