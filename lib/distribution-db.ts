@@ -855,11 +855,48 @@ export async function createDistributionOrder(input: { userId: number; plan: Sub
             if (bound.userId !== input.userId) throw new Error("This release draft is attached to another customer's checkout.");
             const unusedSubscriptionEntitlement = bound.razorpayOrderId.startsWith("sub_entitlement_") && bound.amount === 0 && bound.creditsUsed === 0 && !bound.fulfilledAt;
             if (bound.fulfilledAt || (!unusedSubscriptionEntitlement && (bound.paymentStatus === "paid" || bound.razorpayPaymentId))) throw new Error("A captured payment is already attached to this release. Retry submission instead of creating another payment.");
+            // Failed Razorpay attempts remain attached to their draft so their
+            // history is preserved, but they must not block a fresh checkout.
+            // Only orders without a captured payment can be released here.
+            const replaceablePaymentStates = ["created", "authorized", "failed"];
             const detached = await tx.distributionOrder.updateMany({
-              where: { id: bound.id, releaseId: input.releaseId, fulfilledAt: null, ...(unusedSubscriptionEntitlement ? { amount: 0, creditsUsed: 0, razorpayOrderId: bound.razorpayOrderId } : { paymentStatus: { in: ["created", "authorized"] }, razorpayPaymentId: null }) },
+              where: {
+                id: bound.id,
+                releaseId: input.releaseId,
+                fulfilledAt: null,
+                ...(unusedSubscriptionEntitlement
+                  ? { amount: 0, creditsUsed: 0, razorpayOrderId: bound.razorpayOrderId }
+                  : { paymentStatus: { in: replaceablePaymentStates }, razorpayPaymentId: null })
+              },
               data: { releaseId: null },
             });
-            if (detached.count !== 1) throw new Error("The release checkout changed while the order was being prepared. Please retry.");
+            if (detached.count !== 1) {
+              // A payment callback may have captured this order after the
+              // initial read. Keep the paid order bound to the draft so the
+              // checkout route can resume it; never orphan a captured payment.
+              const latest = await tx.distributionOrder.findUnique({ where: { id: bound.id } });
+              if (
+                !latest ||
+                latest.releaseId !== input.releaseId ||
+                latest.fulfilledAt ||
+                latest.razorpayPaymentId ||
+                !replaceablePaymentStates.includes(latest.paymentStatus)
+              ) {
+                throw new Error("The release checkout changed while the order was being prepared. Please retry.");
+              }
+
+              const retriedDetach = await tx.distributionOrder.updateMany({
+                where: {
+                  id: latest.id,
+                  releaseId: input.releaseId,
+                  fulfilledAt: null,
+                  paymentStatus: { in: replaceablePaymentStates },
+                  razorpayPaymentId: null
+                },
+                data: { releaseId: null }
+              });
+              if (retriedDetach.count !== 1) throw new Error("The release checkout changed while the order was being prepared. Please retry.");
+            }
           }
         }
         return tx.distributionOrder.create({
