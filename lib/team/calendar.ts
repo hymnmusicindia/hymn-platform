@@ -136,7 +136,22 @@ export async function calendarRead(a: Actor, resource: string, params: URLSearch
   if (resource === "clients") {
     demand(a, "clients.view"); const q = (params.get("q") || "").trim().slice(0, 160); const offset = z.coerce.number().int().min(0).max(100000).parse(params.get("offset") || 0);
     if (can(a, "crm.all")) await importWorkspaceClientAccounts(a.workspaceId);
-    const where = { workspaceId: a.workspaceId, ...(!can(a, "crm.all") ? { ownerId: a.id } : {}), ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" as const } }, { email: { contains: q, mode: "insensitive" as const } }, { secondaryEmail: { contains: q, mode: "insensitive" as const } }, { city: { contains: q, mode: "insensitive" as const } }, { state: { contains: q, mode: "insensitive" as const } }, { phone: { contains: q } }] } : {}) };
+    const phoneQuery = q.replace(/\D/g, "");
+    const where = { workspaceId: a.workspaceId, ...(!can(a, "crm.all") ? { ownerId: a.id } : {}), ...(q ? { OR: [
+      { name: { contains: q, mode: "insensitive" as const } },
+      { email: { contains: q, mode: "insensitive" as const } },
+      { secondaryEmail: { contains: q, mode: "insensitive" as const } },
+      { city: { contains: q, mode: "insensitive" as const } },
+      { state: { contains: q, mode: "insensitive" as const } },
+      { notes: { contains: q, mode: "insensitive" as const } },
+      ...(phoneQuery ? [{ phone: { contains: phoneQuery } }] : []),
+      { user: { is: { OR: [
+        { name: { contains: q, mode: "insensitive" as const } },
+        { email: { contains: q, mode: "insensitive" as const } },
+        { contactEmail: { contains: q, mode: "insensitive" as const } },
+        ...(phoneQuery ? [{ mobile: { contains: phoneQuery } }] : [])
+      ] } } }
+    ] } : {}) };
     const items = await prisma.teamClient.findMany({ where, take: 100, skip: offset, orderBy: { updatedAt: "desc" }, include: { welcomeJobs: { select: { email: true, status: true } }, user: { select: { id: true, name: true, email: true } } } });
     const emails = items.flatMap(c => [c.email, c.secondaryEmail]).filter(Boolean);
     const accounts = emails.length ? await prisma.user.findMany({ where: { OR: emails.map(value => ({ email: { equals: value, mode: "insensitive" as const } })) }, select: { email: true, name: true, avatar: true } }) : [];
