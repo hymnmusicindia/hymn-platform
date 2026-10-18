@@ -44,9 +44,14 @@ async function main() {
   try {
     const results = await runCronJobs(process.argv.slice(2), { baseUrl: process.env.BASE_URL, secret: process.env.CRON_SECRET });
     console.log(JSON.stringify(results));
-    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `failed_jobs=${results.filter(result => !result.healthy).map(result => result.job).join(" ")}\n`);
+    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `failed_jobs=${results.filter(result => !result.healthy && result.reason !== "job_reported_errors").map(result => result.job).join(" ")}\n`);
     if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `| Job | Result | HTTP | Attempts |\n|---|---:|---:|---:|\n${results.map(result => `| ${result.job} | ${result.healthy ? "healthy" : "failed"} | ${result.status} | ${result.attempts} |`).join("\n")}\n`);
-    if (results.some(result => !result.healthy)) process.exitCode = 1;
+    // A job that completed and flagged something for a person (e.g. an open
+    // payment mismatch) is a warning, not a broken schedule; it would otherwise
+    // fail every run until the item is resolved. Outages still fail the run.
+    const needsReview = results.filter(result => result.reason === "job_reported_errors");
+    if (needsReview.length) console.log(`::warning::Completed with items needing human review: ${needsReview.map(result => result.job).join(", ")}`);
+    if (results.some(result => !result.healthy && result.reason !== "job_reported_errors")) process.exitCode = 1;
   } catch { console.error("Cron fallback configuration or execution failed; credentials were not printed."); process.exitCode = 1; }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) void main();
