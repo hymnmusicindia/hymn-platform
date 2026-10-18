@@ -1031,12 +1031,23 @@ export function AdminControlCenter({
         }
         setReleases((items) => items.map((item) => (item.id === id ? data.release : item)));
         const releaseName = data.release?.releaseTitle || data.release?.trackName || "Release";
-        setFeedback(status === "approved" ? `${releaseName} was approved and sent to DireNote.` : status === "sent" ? `${releaseName} was sent for distribution successfully.` : `${releaseName} status updated to ${status.replace(/_/g, " ")}.`);
         if (isDireNoteAction) {
+          const release = data.release as Release | undefined;
+          const upcMessage = release?.upcCode ? ` DireNote UPC: ${release.upcCode}.` : " The DireNote UPC will appear after it is assigned.";
+          const providerSync = data.providerSync as { status?: string; upc?: string | null; trackCount?: number } | null;
+          const statusMessage = providerSync?.status
+            ? ` DireNote status: ${providerSync.status.replace(/_/g, " ")}${providerSync.trackCount ? ` (${providerSync.trackCount} tracks matched)` : ""}.`
+            : release?.direNoteStatus
+              ? ` Current DireNote status: ${release.direNoteStatus.replace(/_/g, " ")}.`
+            : " DireNote is processing the submission; its catalog status has not been confirmed yet.";
           const warningText = Array.isArray(data.warnings) && data.warnings.length
-            ? ` HYMN distribution accepted it with ${data.warnings.length} warning${data.warnings.length === 1 ? "" : "s"}.`
-            : " HYMN distribution accepted the submission for processing.";
-          setDireNoteResult({ type: "success", title: "Sent for distribution", message: `${releaseName} was sent successfully.${warningText}` });
+            ? ` HYMN reported ${data.warnings.length} warning${data.warnings.length === 1 ? "" : "s"}.`
+            : "";
+          const message = `DireNote accepted ${releaseName} for ingestion.${statusMessage}${providerSync?.upc ? ` UPC: ${providerSync.upc}.` : upcMessage} Store availability is not confirmed by this action.${warningText}`;
+          setFeedback(message);
+          setDireNoteResult({ type: "pending", title: "Accepted by DireNote", message });
+        } else {
+          setFeedback(`${releaseName} status updated to ${status.replace(/_/g, " ")}.`);
         }
       } catch (error) {
         const reason = error instanceof Error ? error.message : "The distribution request could not be completed.";
@@ -1835,7 +1846,7 @@ export function AdminControlCenter({
                   {direNoteResult.type === "success" ? <CheckCircle2 className="h-6 w-6" /> : direNoteResult.type === "pending" ? <Clock3 className="h-6 w-6" /> : <XCircle className="h-6 w-6" />}
                 </span>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: direNoteResult.type === "success" ? "var(--success)" : direNoteResult.type === "pending" ? "var(--text-muted)" : "var(--danger)" }}>{direNoteResult.type === "success" ? "Submission complete" : direNoteResult.type === "pending" ? "Processing" : "Action required"}</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: direNoteResult.type === "success" ? "var(--success)" : direNoteResult.type === "pending" ? "var(--text-muted)" : "var(--danger)" }}>{direNoteResult.type === "success" ? "Submission complete" : direNoteResult.type === "pending" ? "Provider status" : "Action required"}</p>
                   <h2 id="direnote-result-title" className="mt-1 text-xl font-semibold" style={{ color: "var(--text)" }}>{direNoteResult.title}</h2>
                 </div>
               </div>

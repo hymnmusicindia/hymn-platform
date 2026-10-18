@@ -106,6 +106,17 @@ export async function pollDireNoteIngestJobs(options: { limit?: number } = {}) {
         continue;
       }
 
+      if (status === "completed" && attempt.responseRedacted && (attempt.responseRedacted as JobRecord).ingestJobStatus === "completed") {
+        // The ingest result is already validated and persisted. Once ingest
+        // completes, use the UPC status endpoint as a separate lifecycle
+        // reconciliation signal; never poll the completed ingest as if it
+        // were still running.
+        await prisma.distributionSubmissionAttempt.updateMany({ where: { id: attempt.id, state: "submitted", isCurrent: true }, data: { providerStatus: "completed", lastCheckedAt: checkedAt, safeError: null } });
+        completed++;
+        results.push({ releaseId: attempt.releaseId, state: "completed", progress: "Ingest completed; release status is tracked separately." });
+        continue;
+      }
+
       if (status === "failed") {
         const failure = cleanText(object(body.error).message ?? body.error, 500) || "DireNote could not finish processing the ingest job.";
         const canResubmit = body.can_resubmit === true;
@@ -141,13 +152,16 @@ export async function pollDireNoteIngestJobs(options: { limit?: number } = {}) {
       }
 
       const completedData = { ...jobMetadata, ingestJobStatus: "completed", result: safeResult };
+      // The completed ingest result itself is authoritative provider evidence.
+      // Keep it distinct from a later catalog/status lookup; a correction
+      // resubmission can legitimately receive a new UPC and track ISRCs.
       await activateDireNoteAttempt(attempt.id, { upc: upc!, providerStatus: "processing", trackIdentifiers: mappedTracks as never, responseRedacted: completedData as never }, { replaceIdentifiers: "identifierPolicy" in reference.stored && reference.stored.identifierPolicy === "replace" });
       if (attempt.release.status === "SUBMITTING_TO_DISTRIBUTOR") await updateDetailedReleaseStatus(attempt.releaseId, "sent_to_distributor", "DireNote completed the accepted ingest job.");
       const currentRelease = await prisma.release.findUniqueOrThrow({ where: { id: attempt.releaseId } });
       const priorMetadata = object(currentRelease.metadata);
       await prisma.release.update({ where: { id: attempt.releaseId }, data: { metadata: { ...priorMetadata, direnoteAccepted: true, direnoteAcceptedAt: checkedAt.toISOString(), direnoteStatus: "accepted", direnoteResponse: safeResult, latestStatusSyncAt: checkedAt.toISOString() } } });
       await markReleaseDistributionSuccess({ releaseId: attempt.releaseId, status: attempt.release.releaseDate > checkedAt ? "scheduled" : "awaiting_live_confirmation", distributorReleaseId: parsed.distributorReleaseId, upc: upc!, trackIsrcs: parsed.trackIsrcs, responsePayload: safeResult, warnings: parsed.warnings });
-      await finishDistributionSubmission(attempt.id, { state: "submitted", providerStatus: "processing", httpStatus: response.httpStatus, providerReference: parsed.distributorReleaseId ?? upc ?? attempt.providerReference, responseRedacted: completedData as never });
+      await finishDistributionSubmission(attempt.id, { state: "submitted", providerStatus: "completed", httpStatus: response.httpStatus, providerReference: parsed.distributorReleaseId ?? upc ?? attempt.providerReference, responseRedacted: completedData as never });
       await logDistributionEvent({ releaseId: attempt.releaseId, action: "ingest_status", httpStatus: response.httpStatus, responsePayload: { job_id: responseJobId || reference.jobId, status, result: safeResult }, success: true });
       await createReleaseAuditLog({ releaseId: attempt.releaseId, action: "DIRENOTE_INGEST_JOB_COMPLETED", details: { attemptId: attempt.id, jobId: reference.jobId ?? responseJobId, upc, trackCount } });
       completed++;

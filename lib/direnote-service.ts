@@ -409,11 +409,21 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   }
   // DireNote uses Rejected for fixable review requests too. Actionable remarks
   // must enter the correction workflow; a bare rejection remains a rejection.
+  const hasVerifiedProviderListing = Boolean(
+    result.success && lookupUpc &&
+    normalizeDireNoteUpc(remoteRelease.upc_code) === lookupUpc &&
+    remoteTracks.length === release.tracks.length &&
+    remoteTracks.every(remote => mappingTracks.some(track =>
+      normalized(text(remote.isrc)) === normalized(text(track.isrc)) && validIsrc(text(remote.isrc))
+    ))
+  );
   const aggregateStatus = withdrawn ? { provider: "rejected", canonical: "rejected" as ReleaseStatus } : explicitProviderStatus === "changes_required" || providerCorrections.length
       ? { provider: "changes_required", canonical: "changes_requested" as ReleaseStatus }
       : explicitProviderStatus === "rejected"
         ? { provider: "rejected", canonical: "rejected" as ReleaseStatus }
-        : lifecycleStatus;
+        : hasVerifiedProviderListing && lifecycleStatus.provider === "unknown"
+          ? { provider: "processing", canonical: "distributor_processing" as ReleaseStatus }
+          : lifecycleStatus;
   const correctionMessages = providerCorrections.map(issue => `${issue.label}: ${issue.note}`);
   const correctionFingerprint = direNoteCorrectionFingerprint(providerCorrections);
   const previousDireNote = record(record(release.metadata).direNote);
@@ -425,7 +435,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     if (result.httpStatus === 401) await createAdminTaskOnce({ eventKey: "direnote:status:auth-failed", type: "DireNote Failed", priority: "critical", title: "DireNote status authentication failed", body: message, href: "/admin?tab=releases", entityType: "release", entityId: releaseId });
     throw new Error(message);
   }
-  if (lifecycleStatus.provider === "unknown" && !providerCorrections.length) {
+  if (lifecycleStatus.provider === "unknown" && !providerCorrections.length && !hasVerifiedProviderListing) {
     const message = "DIRENOTE_MALFORMED_RESPONSE: No release or track status returned.";
     await prisma.release.update({ where: { id: releaseId }, data: { direNoteSyncError: message } });
     throw new Error(message);
