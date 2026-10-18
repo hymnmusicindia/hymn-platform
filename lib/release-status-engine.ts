@@ -1,4 +1,5 @@
 import type { Release, ReleaseStatus } from "@/lib/types";
+import { isDireNoteCorrectionStatus } from "@/lib/release-status-presentation";
 
 export function releaseDateReached(value?: string | null, now = new Date()) {
   if (!value) return true;
@@ -47,6 +48,7 @@ export function isDireNoteAccepted(release: Release) {
 }
 
 export function automaticStatusCopy(release: Release) {
+  if (isDireNoteCorrectionStatus(release.direNoteStatus)) return "DireNote requires corrections before this release can continue. Open the correction details to review the requested changes.";
   if (release.status === "under_review" || release.status === "submitted" || release.status === "in_queue") return "HYMN is reviewing your metadata, artwork, audio, and rights.";
   if (["approved", "queued_for_distribution", "submitting_to_distributor", "sent_to_distributor", "distributor_processing", "processing"].includes(release.status)) return "Your release is under review. HYMN and DireNote processing continues automatically.";
   if (release.status === "distributor_changes_required") return "DireNote requires corrections before this release can continue. Open Fix Required for the exact requested changes.";

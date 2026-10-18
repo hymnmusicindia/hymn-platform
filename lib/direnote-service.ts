@@ -524,7 +524,6 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   const customerWorkflow = !providerAccepted && ["changes_requested", "resubmitted", "under_review", "in_qc_queue", "in_queue", "submitted", "approved", "queued_for_distribution"].includes(previousStatus);
   const repeatCorrection = previousDireNote.appliedCorrectionFingerprint === correctionFingerprint;
   if (!staleRegression && aggregateStatus.canonical && (aggregateStatus.canonical !== previousStatus || (aggregateStatus.canonical === "changes_requested" && !repeatCorrection))
-    && !(aggregateStatus.canonical === "changes_requested" && repeatCorrection && customerWorkflow)
     && !(customerWorkflow && !["changes_requested", "rejected"].includes(aggregateStatus.canonical))) {
     if (aggregateStatus.canonical === "changes_requested") {
       const reason = correctionMessages.join(" ") || "DireNote requires corrections before distribution can continue.";
@@ -537,7 +536,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
         reviewedBy: "DireNote automation"
       };
       await updateDetailedReleaseStatus(releaseId, "changes_requested", reason, review, {
-        manualOverride: true, actorType: "system", notify: true, reviewChanged: record(attempt.corrections).fingerprint !== correctionFingerprint,
+        manualOverride: true, actorType: "system", notify: !repeatCorrection, reviewChanged: record(attempt.corrections).fingerprint !== correctionFingerprint,
         persist: async tx => {
           if (record(attempt.corrections).fingerprint === correctionFingerprint) return;
           const currentRelease = await tx.release.findUniqueOrThrow({ where: { id: releaseId }, select: { metadata: true } });

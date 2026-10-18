@@ -1,14 +1,13 @@
 import { Release, ReleaseStatus } from "@/lib/types";
-import { CUSTOMER_REVIEW_STATUSES } from "@/lib/release-status-presentation";
+import { CUSTOMER_REVIEW_STATUSES, effectiveReleaseStatus } from "@/lib/release-status-presentation";
 
 export type ReleasePortalStage = "draft" | "review" | "reconciling" | "changes_requested" | "scheduled" | "processing" | "partially_live" | "released" | "rejected" | "queued" | "sending" | "partner_received" | "payment_required" | "delivery_issue" | "takedown_pending" | "taken_down" | "archived" | "unknown";
 
 export function getReleasePortalStage(release: Release): ReleasePortalStage {
-  const s = release.status.toLowerCase();
+  const s = effectiveReleaseStatus(release.status, release.direNoteStatus);
   const metadata = release.metadata && typeof release.metadata === "object" ? release.metadata as Record<string, unknown> : {};
   const direNote = metadata.direNote && typeof metadata.direNote === "object" ? metadata.direNote as Record<string, unknown> : {};
   if (direNote.reconciliationInProgress === true) return "reconciling";
-  if (CUSTOMER_REVIEW_STATUSES.has(s)) return "review";
   if (s === "draft") return "draft";
   if (s === "rejected") return "rejected";
   if (s === "changes_requested" || s === "distributor_changes_required") return "changes_requested";
@@ -21,17 +20,16 @@ export function getReleasePortalStage(release: Release): ReleasePortalStage {
   if (s === "takedown_requested" || s === "takedown_processing") return "takedown_pending";
   if (s === "taken_down") return "taken_down";
   if (s === "archived") return "archived";
-  if (["under_review", "submitted", "in_queue", "in_qc_queue", "approved", "queued_for_distribution", "submitting_to_distributor", "sent", "sent_to_distributor", "distributor_processing", "processing"].includes(s)) return "review";
   if (s === "awaiting_live_confirmation" || s === "delivered") return "processing";
   if (s === "partially_live") return "partially_live";
   if (s === "scheduled") return "scheduled";
   if (s === "live" || s === "released" || s === "distributed") return "released";
+  if (CUSTOMER_REVIEW_STATUSES.has(s)) return "review";
   return "unknown";
 }
 
 export function getReleasePortalStageLabel(stage: ReleasePortalStage) {
   if (stage === "reconciling") return "Reconciling";
-  if (["queued", "sending", "partner_received", "scheduled", "processing"].includes(stage)) return "Under Review";
   const operational: Partial<Record<ReleasePortalStage, string>> = { queued: "Queued for Distribution", sending: "Sending to Partner", partner_received: "Received by Partner", payment_required: "Payment Required", delivery_issue: "Delivery Needs Attention", takedown_pending: "Takedown Pending", taken_down: "Taken Down", archived: "Archived", unknown: "Status Pending" };
   if (operational[stage]) return operational[stage]!;
   if (stage === "scheduled") return "Scheduled";

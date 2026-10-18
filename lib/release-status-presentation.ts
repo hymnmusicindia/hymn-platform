@@ -31,18 +31,30 @@ const map: Record<string, { label: string; description: string; tone: ReleaseSta
   live: { label: "Live", description: "Your release is available and reporting will follow.", tone: "success", step: 4, nextAction: "View performance" },
   failed: { label: "Delivery Issue", description: "HYMN needs your attention to continue delivery.", tone: "danger", step: 2, nextAction: "Resolve issue" }
 };
-export function getReleaseStatusPresentation(status?: string | null) {
-  if (["released", "distributed"].includes(String(status).toLowerCase())) return map.live;
-  if (status === "awaiting_payment") return { label: "Payment Required", description: "Complete checkout to submit your release.", tone: "warning" as const, step: 0, nextAction: "Continue checkout" };
-  if (CUSTOMER_REVIEW_STATUSES.has(String(status).toLowerCase())) {
+export function getReleaseStatusPresentation(status?: string | null, providerStatus?: string | null) {
+  const normalizedStatus = effectiveReleaseStatus(String(status || "draft"), providerStatus);
+  if (["released", "distributed"].includes(normalizedStatus)) return map.live;
+  if (normalizedStatus === "awaiting_payment") return { label: "Payment Required", description: "Complete checkout to submit your release.", tone: "warning" as const, step: 0, nextAction: "Continue checkout" };
+  if (map[normalizedStatus]) return map[normalizedStatus];
+  if (CUSTOMER_REVIEW_STATUSES.has(normalizedStatus)) {
     return { label: "Under Review", description: "Your release is being prepared for stores. We’ll update you when it goes live.", tone: "progress" as const, step: 1, nextAction: "View release" };
   }
-  return map[String(status || "draft").toLowerCase()] || { label: String(status || "Status pending").replaceAll("_", " "), description: "Open the release for the latest details.", tone: "neutral" as const, step: 0, nextAction: "Manage release" };
+  return { label: String(status || "Status pending").replaceAll("_", " "), description: "Open the release for the latest details.", tone: "neutral" as const, step: 0, nextAction: "Manage release" };
+}
+
+export function isDireNoteCorrectionStatus(providerStatus?: string | null) {
+  const provider = String(providerStatus ?? "").trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+  return /\b(?:changes? (?:required|requested)|corrections? (?:required|requested)|correction (?:required|request(?:ed)?)|action required|fix required)\b/.test(provider);
+}
+
+export function effectiveReleaseStatus(status: string, providerStatus?: string | null) {
+  return isDireNoteCorrectionStatus(providerStatus) ? "changes_requested" : status.toLowerCase();
 }
 
 /** Human labels for operational release states. Kept client-safe so admin and
  * customer surfaces cannot drift by each maintaining their own formatter. */
 export function adminReleaseStatusLabel(status: string, providerStatus?: string | null) {
+  if (isDireNoteCorrectionStatus(providerStatus)) return "Correction Required";
   const labels: Record<string, string> = {
     submitting_to_distributor: "Sending to DireNote",
     sent_to_distributor: "Sent to DireNote",
