@@ -12,7 +12,7 @@ Contract: user-supplied DireNote v2.4 documentation, changelog 15 October 2026. 
 | `check_artist`, `check_songwriter` | Linked-record refresh | Existing protected HYMN refresh retained; also used to verify interrupted identity changes against provider IDs and requested fields. |
 | `list_releases` | Unused | Paginated, searchable provider catalogue with status/type filters. Browse only: never adopt foreign releases by name. |
 | `get_smartlink` | Unused | UPC lookup; HTTPS `dnm.link` results open safely in a new tab. |
-| `check_qc_report` | Unused | UPC lookup with expandable per-track analysis. Unscanned is not an error and scanned is not approval. |
+| `check_qc_report` | Integrated on correction/rejection | A verified UPC lookup enriches release remarks with per-track ACR/ISRC/UPC analysis. Unscanned is not an error and scanned is not approval; only explicit actionable failures are sent to customers. |
 | `withdraw_release` | Unused | Recent `system.manage` authentication, typed UPC confirmation, durable pre-write audit, replay protection, no automatic retry, subsequent local status reconciliation. Pending-only enforcement remains provider-authoritative. This is irreversible, not a store takedown. |
 | `list_artists`, `list_songwriters` | Unused | Paginated provider catalogue, search and visible provider identifiers. No unsafe name-only association with HYMN accounts. |
 | `update_artist`, `update_songwriter` | Unused | Explicit field selection; omitted fields preserved; permitted blank URL/IPI clears supported; name/IPI/IPRS validation; duplicate-link conflicts shown. Provider-only changes do not silently overwrite verified HYMN identity data. |

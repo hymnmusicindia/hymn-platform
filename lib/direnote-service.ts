@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { refreshMissingSpotifyArtistPhotos, refreshSpotifyArtistPhoto } from "@/lib/spotify-artist-photos";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { getDireNoteArtistInformation, getDireNoteReleaseInformation, getDireNoteReleaseInformationByReference, getDireNoteRevenueReport, getDireNoteSongwriterInformation, redactDireNoteDiagnostic } from "@/lib/direnote";
 import { importDireNoteRevenueReport } from "@/lib/direnote-revenue";
@@ -404,7 +404,11 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   const lifecycleStatus = aggregateReleaseStatus(remoteTracks, remoteRelease.status ?? payload.status, release.releaseDate);
   if (result.success && !withdrawn && lookupUpc && (providerCorrections.length || explicitProviderStatus || providerRequiresCorrections(remoteRelease.status) || remoteTracks.some(track => providerRequiresCorrections(track.status)))) {
     try {
-      const reviewFingerprint = direNoteCorrectionFingerprint(providerCorrections);
+      const reviewFingerprint = createHash("sha256").update(JSON.stringify({
+        corrections: direNoteCorrectionFingerprint(providerCorrections),
+        releaseStatus: remoteRelease.status ?? payload.status,
+        trackReviews: remoteTracks.map(track => ({ isrc: track.isrc, status: track.status, remarks: track.remarks ?? track.review_remarks ?? track.correction_remarks }))
+      })).digest("hex");
       const recent = await prisma.direNoteLog.findFirst({ where: { releaseId, action: "correction_qc_report", createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) }, AND: [{ requestPayloadRedacted: { path: ["attemptId"], equals: attempt.id } }, { requestPayloadRedacted: { path: ["reviewFingerprint"], equals: reviewFingerprint } }] }, orderBy: { createdAt: "desc" } });
       let qc = recent?.success ? record(recent.responseJson) : null;
       if (!recent) {
@@ -415,7 +419,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
         if (response.httpStatus === 429) await prisma.direNoteLog.create({ data: { action: "provider_rate_limit", success: false, httpStatus: 429, responseJson: { retryAt: new Date(Date.now() + Math.max(60, response.retryAfterSeconds ?? 3600) * 1000).toISOString() } } });
         if (response.success) qc = safeQc;
       }
-      const qcUpc = qc ? normalizeDireNoteUpc(qc.upc_code) : null;
+      const qcUpc = qc ? normalizeDireNoteUpc(qc.upc_code ?? qc.upc ?? record(qc.release).upc_code) : null;
       if (qc && qcUpc === lookupUpc) {
         const detailed = extractDireNoteCorrections(direNoteQcCorrectionPayload(qc), mappingTracks, releaseId, attempt.id, true);
         for (const issue of detailed) if (!providerCorrections.some(existing => existing.fingerprint === issue.fingerprint)) providerCorrections.push(issue);

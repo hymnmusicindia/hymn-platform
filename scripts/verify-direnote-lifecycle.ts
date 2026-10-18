@@ -83,7 +83,7 @@ const server = createServer(async (request, response) => {
       { track_name: `Track ${index + 1}`, isrc, status: "Approved", remarks: "", date: "2026-10-14 14:08:04" }
     ]) })); return;
   }
-  response.end(JSON.stringify({ success: true, release: { album_name: "Magenta", upc_code: body.upc, status: mode === "accepted" ? "Accepted" : "Pending" }, tracks: ids.map((isrc, index) => ({ track_number: index + 1, track_name: `Track ${index + 1}`, isrc, artist: returnedArtist, status: "Pending", remarks: mode === "remark" && index === 1 ? remark : "NONE" })) }));
+  response.end(JSON.stringify({ success: true, release: { album_name: "Magenta", upc_code: body.upc, status: mode === "accepted" ? "Accepted" : mode === "rejected" ? "Rejected" : "Pending" }, tracks: ids.map((isrc, index) => ({ track_number: index + 1, track_name: `Track ${index + 1}`, isrc, artist: returnedArtist, status: "Pending", remarks: mode === "remark" && index === 1 ? remark : "NONE" })) }));
 });
 
 async function main() {
@@ -384,6 +384,16 @@ async function main() {
   assert.equal((await repaired.json()).checked, 1, "Cron must recover a missing current flag from accepted evidence.");
   assert.equal((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: current.id } })).isCurrent, true);
   assert.equal(ingests, beforeAutoQc + 1, "All status fallbacks must remain read-only at DireNote.");
+  mode = "rejected";
+  const priorQcRequests = qcRequests;
+  await syncDireNoteRelease(release.id);
+  assert.equal(qcRequests, priorQcRequests + 1, "A release-level rejection with no written remarks must still fetch the per-track QC report.");
+  const qcRejectedRelease = await prisma.release.findUniqueOrThrow({ where: { id: release.id } });
+  assert.equal(qcRejectedRelease.status, "CHANGES_REQUESTED", "Actionable ISRC QC evidence turns an unexplained rejection into a correction request.");
+  assert.match(qcRejectedRelease.correctionReason ?? "", /ISRC check: Please correct the recording details/);
+  const qcCorrectionEmail = await prisma.emailLog.findFirst({ where: { entityType: "release", entityId: String(release.id), template: "release_changes_requested" }, orderBy: { createdAt: "desc" } });
+  assert(qcCorrectionEmail, "The QC-derived correction must queue the normal customer email.");
+  assert.match(JSON.stringify(qcCorrectionEmail.payload), /Please correct the recording details/);
   console.log("Cron fallback regression checks passed: stale revisions, verified UPC precedence, failed projection repair and accepted lineage recovery.");
   if (browser) await verifySubmissionCheckout();
   console.log("Virtual PostgreSQL lifecycle, null/stale Instrumental HTTP mapping, paid draft recovery, one-track JPEG readiness and release isolation passed.");
