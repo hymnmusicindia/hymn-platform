@@ -330,7 +330,7 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
     artists: primaryArtists,
     featuring_artists: featuringArtists,
     tracks: (release.tracks ?? []).map((track) => ({
-      trackName: track.trackTitle,
+      trackName: track.trackTitle.trim(),
       audio_url: publicUrl(track.audioUrl, options.siteUrl),
       trackGenre: normalizedGenre.genre || undefined,
       trackSubgenre: normalizedGenre.subgenre || undefined,
