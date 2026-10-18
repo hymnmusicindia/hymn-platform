@@ -44,7 +44,7 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
     editingRelease.releaseType === "single" &&
     (editingRelease.tracks?.length ?? 0) <= 1
   );
-  const campaignEligibility = user && campaignDraftEligible ? await getFirstReleaseEligibility(user.id) : null;
+  const campaignEligibility = user && campaignDraftEligible ? await getFirstReleaseEligibility(user.id, editingRelease?.id) : null;
   const explicitCampaign = firstValue(params.campaign) === "first-release" || editingMetadata.promotionCode === "FIRST_RELEASE_FREE";
   // The acquisition gift is only for non-subscribers; active plans take precedence.
   if (campaignEligibility?.eligible && campaignDraftEligible && attachedOrder?.paymentStatus !== "paid") selectedPlan = "one_time";

@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     const existingMetadata = existingRelease?.metadata && typeof existingRelease.metadata === "object" ? existingRelease.metadata as Record<string, unknown> : {};
     const existingFirstReleaseOffer = existingMetadata.promotionCode === FIRST_RELEASE_PROMOTION_CODE;
     const redeemedFirstRelease = draftReleaseId ? await prisma.promotionRedemption.findFirst({ where: { releaseId: draftReleaseId, userId: session.sub, status: "REDEEMED", promotion: { code: FIRST_RELEASE_PROMOTION_CODE } }, select: { id: true } }) : null;
-    const promotionEligibility = requestedFirstReleaseOffer || existingFirstReleaseOffer ? await getFirstReleaseEligibility(session.sub) : null;
+    const promotionEligibility = requestedFirstReleaseOffer || existingFirstReleaseOffer ? await getFirstReleaseEligibility(session.sub, draftReleaseId) : null;
     const preserveFirstReleaseOffer = Boolean(redeemedFirstRelease || (
       (requestedFirstReleaseOffer || existingFirstReleaseOffer) &&
       promotionEligibility?.eligible &&

@@ -13,9 +13,9 @@ export const metadata: Metadata = {
 
 export default async function FirstReleasePage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const user = await getCurrentUserForPage();
-  const status = user ? await getFirstReleaseEligibility(user.id) : { eligible: false as const, reason: "authentication_required" };
   const params = (await searchParams) ?? {};
-  const draft = user && status.eligible ? await prisma.release.findFirst({ where: { userId: user.id, archivedAt: null, status: "DRAFT", releaseType: "single", metadata: { path: ["promotionCode"], equals: "FIRST_RELEASE_FREE" } }, orderBy: { updatedAt: "desc" }, select: { id: true } }) : null;
+  const draft = user ? await prisma.release.findFirst({ where: { userId: user.id, archivedAt: null, status: "DRAFT", releaseType: "single", metadata: { path: ["promotionCode"], equals: "FIRST_RELEASE_FREE" } }, orderBy: { updatedAt: "desc" }, select: { id: true } }) : null;
+  const status = user ? await getFirstReleaseEligibility(user.id, draft?.id) : { eligible: false as const, reason: "authentication_required" };
   const query = Object.fromEntries(Object.entries(params).map(([key, value]) => [key, Array.isArray(value) ? value[0] : value]));
   return <FirstReleaseFunnel eligibility={{ authenticated: Boolean(user), eligible: status.eligible, reason: status.reason, firstName: user?.name.split(/\s+/)[0], draftId: draft?.id }} query={query} />;
 }

@@ -1,4 +1,5 @@
 import { socialPlatforms } from "@/lib/release-config";
+import { FIRST_RELEASE_BASE_DISCOUNT } from "@/lib/first-release-pricing";
 import type { SubscriptionPlan } from "@/lib/types";
 
 const TRACK_PRICE = 99;
@@ -101,4 +102,71 @@ export function getUgcAddonPrice(platforms: string[], plan?: SubscriptionPlan) {
 
 export function getYoutubeContentIdAddonPrice(plan?: SubscriptionPlan, enabled?: boolean) {
   return (!plan || plan === "one_time") && enabled ? 200 : 0;
+}
+
+export type DistributionCheckoutQuote = {
+  version: 1;
+  plan: "one_time";
+  paymentModel: "one_time";
+  releaseId: number;
+  reviewMetadataHash: string;
+  trackCount: number;
+  releaseType: string;
+  platforms: string[];
+  youtubeContentIdEnabled: boolean;
+  currency: "INR";
+  basePrice: number;
+  bulkDiscount: number;
+  ugcAddon: number;
+  youtubeContentIdAddon: number;
+  firstReleaseDiscount: number;
+  subtotal: number;
+  creditsUsed: number;
+  payable: number;
+  promotionCode: "FIRST_RELEASE_FREE" | null;
+  issuedAt: string;
+};
+
+/** Server-owned immutable price breakdown for a saved single-release draft. */
+export function createDistributionCheckoutQuote(input: {
+  releaseId: number;
+  reviewMetadataHash: string;
+  trackCount: number;
+  releaseType: string;
+  platforms: string[];
+  youtubeContentIdEnabled: boolean;
+  firstReleaseOffer: boolean;
+  useHymnCredits: boolean;
+  availableCredits: number;
+}): DistributionCheckoutQuote {
+  const trackPricing = getTrackPricingQuote(input.trackCount);
+  const ugcAddon = getUgcAddonPrice(input.platforms, "one_time");
+  const youtubeContentIdAddon = getYoutubeContentIdAddonPrice("one_time", input.youtubeContentIdEnabled);
+  const firstReleaseDiscount = input.firstReleaseOffer
+    ? Math.min(FIRST_RELEASE_BASE_DISCOUNT, trackPricing.finalPrice)
+    : 0;
+  const subtotal = Math.max(0, trackPricing.finalPrice + ugcAddon + youtubeContentIdAddon - firstReleaseDiscount);
+  const creditsUsed = input.useHymnCredits ? Math.min(Math.max(0, Math.floor(input.availableCredits)), subtotal) : 0;
+  return {
+    version: 1,
+    plan: "one_time",
+    paymentModel: "one_time",
+    releaseId: input.releaseId,
+    reviewMetadataHash: input.reviewMetadataHash,
+    trackCount: input.trackCount,
+    releaseType: input.releaseType,
+    platforms: input.platforms,
+    youtubeContentIdEnabled: input.youtubeContentIdEnabled,
+    currency: "INR",
+    basePrice: trackPricing.basePrice,
+    bulkDiscount: trackPricing.discountAmount,
+    ugcAddon,
+    youtubeContentIdAddon,
+    firstReleaseDiscount,
+    subtotal,
+    creditsUsed,
+    payable: subtotal - creditsUsed,
+    promotionCode: input.firstReleaseOffer ? "FIRST_RELEASE_FREE" : null,
+    issuedAt: new Date().toISOString()
+  };
 }

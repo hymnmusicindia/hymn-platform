@@ -844,7 +844,7 @@ export async function updateDetailedReleaseStatus(releaseId: number, status: Rel
   return release;
 }
 
-export async function createDistributionOrder(input: { userId: number; plan: SubscriptionPlan; amount: number; creditsUsed?: number; razorpayOrderId: string; releaseId?: number; }) {
+export async function createDistributionOrder(input: { userId: number; plan: SubscriptionPlan; amount: number; creditsUsed?: number; razorpayOrderId: string; releaseId?: number; quoteSnapshot?: Prisma.InputJsonValue; }) {
   const pool = getPool();
   if (!pool) {
     if (isPostgresPrisma()) {
@@ -900,7 +900,7 @@ export async function createDistributionOrder(input: { userId: number; plan: Sub
           }
         }
         return tx.distributionOrder.create({
-          data: { userId: input.userId, plan: input.plan, amount: input.amount, creditsUsed: input.creditsUsed ?? 0, paymentStatus: 'created', razorpayOrderId: input.razorpayOrderId, releaseId: input.releaseId }
+          data: { userId: input.userId, plan: input.plan, amount: input.amount, creditsUsed: input.creditsUsed ?? 0, paymentStatus: 'created', razorpayOrderId: input.razorpayOrderId, releaseId: input.releaseId, quoteSnapshot: input.quoteSnapshot }
         });
       });
       return { id: dbOrder.id, userId: input.userId, plan: input.plan, amount: input.amount, paymentStatus: dbOrder.paymentStatus, razorpayOrderId: dbOrder.razorpayOrderId } as any;

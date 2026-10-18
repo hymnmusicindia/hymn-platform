@@ -2312,6 +2312,7 @@ model DistributionOrder {
   razorpayPaymentId String?               @unique @map("razorpay_payment_id")
   paymentStatus     String                @default("created") @map("payment_status")
   currency          String                @default("INR")
+  quoteSnapshot     Json?                 @map("quote_snapshot")
   fulfilledAt       DateTime?             @map("fulfilled_at")
   webhookEvents     PaymentWebhookEvent[]
   user              User                  @relation(fields: [userId], references: [id], onDelete: Restrict)

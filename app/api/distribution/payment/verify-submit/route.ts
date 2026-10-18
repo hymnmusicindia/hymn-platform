@@ -36,18 +36,24 @@ export async function POST(request: Request) {
     const payload = JSON.parse(String(formData.get("payload") || "{}"));
     const parsed = distributionSubmitSchema.parse(payload);
     if (!parsed.draftReleaseId) return NextResponse.json({ error: "Save and review your release draft before submitting." }, { status: 409 });
+    let currentDraftReviewHash: string | null = null;
     if (parsed.draftReleaseId) {
       const reviewedDraft = await prisma.release.findFirst({ where: { id: parsed.draftReleaseId, userId: session.sub }, select: { status: true, reviewConfirmedAt: true, reviewConfirmedBy: true, reviewMetadataHash: true } });
       if (!reviewedDraft) return NextResponse.json({ error: "Draft release not found." }, { status: 404 });
       if (reviewedDraft.status === "DRAFT" && (!reviewedDraft.reviewConfirmedAt || reviewedDraft.reviewConfirmedBy !== session.sub)) return NextResponse.json({ error: "Review confirmation is required before payment or submission." }, { status: 409 });
+      currentDraftReviewHash = await releaseReviewSnapshotHash(parsed.draftReleaseId, session.sub);
       if (reviewedDraft.status === "DRAFT") {
-        const currentReviewHash = await releaseReviewSnapshotHash(parsed.draftReleaseId, session.sub);
-        if (!reviewedDraft.reviewMetadataHash || reviewedDraft.reviewMetadataHash !== currentReviewHash) return NextResponse.json({ error: "The release changed after it was reviewed. Review and confirm the latest saved version before submitting." }, { status: 409 });
+        if (!reviewedDraft.reviewMetadataHash || reviewedDraft.reviewMetadataHash !== currentDraftReviewHash) return NextResponse.json({ error: "The release changed after it was reviewed. Review and confirm the latest saved version before submitting." }, { status: 409 });
       }
     }
-    const isFirstReleaseOffer = parsed.promotionCode === FIRST_RELEASE_PROMOTION_CODE;
     const persistedOrder = await prisma.distributionOrder.findUnique({ where: { razorpayOrderId: parsed.razorpay_order_id } });
     if (!persistedOrder || persistedOrder.userId !== session.sub) return NextResponse.json({ error: "Distribution order not found." }, { status: 404 });
+    const storedQuote = persistedOrder.quoteSnapshot && typeof persistedOrder.quoteSnapshot === "object" && !Array.isArray(persistedOrder.quoteSnapshot)
+      ? persistedOrder.quoteSnapshot as Record<string, unknown>
+      : null;
+    const isFirstReleaseOffer = storedQuote
+      ? storedQuote.promotionCode === FIRST_RELEASE_PROMOTION_CODE
+      : parsed.promotionCode === FIRST_RELEASE_PROMOTION_CODE;
     if (persistedOrder.fulfilledAt) {
       if (persistedOrder.releaseId === parsed.draftReleaseId && persistedOrder.paymentStatus === "paid" && persistedOrder.razorpayPaymentId === parsed.razorpay_payment_id) {
         const completed = await getDetailedReleaseById(persistedOrder.releaseId!);
@@ -56,12 +62,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "This payment or entitlement has already been used or is being submitted. Refresh your releases before retrying." }, { status: 409 });
     }
     if (persistedOrder.releaseId && persistedOrder.releaseId !== parsed.draftReleaseId) return NextResponse.json({ error: "This payment belongs to a different release draft." }, { status: 409 });
+    if (storedQuote && (
+      storedQuote.releaseId !== parsed.draftReleaseId ||
+      storedQuote.reviewMetadataHash !== currentDraftReviewHash ||
+      storedQuote.plan !== parsed.metadata.plan ||
+      storedQuote.trackCount !== parsed.metadata.tracks.length ||
+      storedQuote.releaseType !== parsed.metadata.releaseType ||
+      JSON.stringify(storedQuote.platforms) !== JSON.stringify(parsed.metadata.platforms) ||
+      storedQuote.youtubeContentIdEnabled !== Boolean(parsed.metadata.youtubeContentIdEnabled) ||
+      storedQuote.paymentModel !== parsed.metadata.paymentModel ||
+      Number(storedQuote.creditsUsed) !== persistedOrder.creditsUsed
+    )) return NextResponse.json({ error: "The saved checkout quote no longer matches this release. Refresh the review and create a new checkout." }, { status: 409 });
     if (checkoutPlan(persistedOrder, "one_time") !== parsed.metadata.plan) return NextResponse.json({ error: "The submitted plan does not match the persisted order. Resume checkout to reload the saved payment plan." }, { status: 400 });
     if ((checkoutPlan(persistedOrder, "one_time") === "one_time") !== (parsed.metadata.paymentModel === "one_time")) return NextResponse.json({ error: "The submitted payment model does not match the persisted order." }, { status: 400 });
     const isSubscriptionEntitlement = parsed.razorpay_order_id.startsWith("sub_entitlement_");
     const normalAmount = getDistributionPricing(parsed.metadata.plan, parsed.metadata.tracks.length, parsed.metadata.releaseType, parsed.metadata.platforms, { youtubeContentIdEnabled: parsed.metadata.youtubeContentIdEnabled });
-    const promotionQuote = isFirstReleaseOffer ? calculateFirstReleasePrice({ plan: parsed.metadata.plan, releaseType: parsed.metadata.releaseType, trackCount: parsed.metadata.tracks.length, normalAmount }) : null;
-    const expectedAmount = promotionQuote?.finalAmount ?? normalAmount;
+    const promotionQuote = isFirstReleaseOffer
+      ? storedQuote
+        ? { originalAmount: Number(storedQuote.subtotal) + Number(storedQuote.firstReleaseDiscount), discountAmount: Number(storedQuote.firstReleaseDiscount), finalAmount: Number(storedQuote.subtotal) }
+        : calculateFirstReleasePrice({ plan: parsed.metadata.plan, releaseType: parsed.metadata.releaseType, trackCount: parsed.metadata.tracks.length, normalAmount })
+      : null;
+    const expectedAmount = storedQuote ? Number(storedQuote.subtotal) : promotionQuote?.finalAmount ?? normalAmount;
+    if (isFirstReleaseOffer && storedQuote) {
+      const redemptionId = Number(storedQuote.promotionRedemptionId);
+      const redemption = Number.isInteger(redemptionId) ? await prisma.promotionRedemption.findUnique({ where: { id: redemptionId } }) : null;
+      if (!redemption || redemption.userId !== session.sub || redemption.releaseId !== parsed.draftReleaseId || redemption.status !== "RESERVED" || Number(redemption.finalAmount) !== expectedAmount) {
+        return NextResponse.json({ error: "The first-release offer reservation is missing or no longer matches this checkout. Resume checkout before submitting." }, { status: 409 });
+      }
+    }
     if (!distributionOrderPriceMatches({ amount: persistedOrder.amount, creditsUsed: persistedOrder.creditsUsed, expectedAmount, currency: persistedOrder.currency, subscriptionEntitlement: isSubscriptionEntitlement })) return NextResponse.json({ error: "The submitted release price does not match the persisted order." }, { status: 400 });
     if (isFirstReleaseOffer && persistedOrder.plan !== "one_time") return NextResponse.json({ error: "First-release order is invalid." }, { status: 400 });
     const savedArtistIds = new Set((await listArtistProfilesByUser(session.sub)).map((profile) => profile.id));
@@ -163,7 +191,7 @@ export async function POST(request: Request) {
       : parsed.metadata.releaseTitle?.trim() || parsed.metadata.tracks[0]?.trackTitle || "Untitled release";
     let promotionRedemption: Awaited<ReturnType<typeof reserveFirstRelease>> | null = null;
     if (isFirstReleaseOffer) {
-      promotionRedemption = await reserveFirstRelease({ userId: session.sub, ...promotionQuote!, attribution: parsed.attribution });
+      promotionRedemption = await reserveFirstRelease({ userId: session.sub, releaseId: parsed.draftReleaseId, ...promotionQuote!, attribution: parsed.attribution });
     }
     let release;
     let orderClaimed = false;

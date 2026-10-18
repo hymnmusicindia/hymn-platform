@@ -1113,6 +1113,7 @@ CREATE TABLE "distribution_orders" (
     "razorpay_payment_id" TEXT,
     "payment_status" TEXT NOT NULL DEFAULT 'created',
     "currency" TEXT NOT NULL DEFAULT 'INR',
+    "quote_snapshot" JSONB,
     "fulfilled_at" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 

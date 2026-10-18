@@ -83,7 +83,7 @@ export function FirstReleaseFunnel({ eligibility, query }: { eligibility: Eligib
     timersRef.current.push(window.setTimeout(() => sessionStorage.setItem("hymn:first-release-pass-revealed", "1"), 1900));
     if (hapticsEnabled && typeof navigator !== "undefined" && "vibrate" in navigator) timersRef.current.push(window.setTimeout(() => navigator.vibrate(10), 105));
   };
-  const claim = () => { void track("first_release_reward_cta_clicked"); void track(state.event); router.push(eligibility.reason === "reserved" ? "/dashboard/releases" : isUsed ? "/distribution/start" : startHref); };
+  const claim = () => { void track("first_release_reward_cta_clicked"); void track(state.event); router.push(eligibility.draftId ? firstReleaseStartHref(attribution, eligibility.draftId) : eligibility.reason === "reserved" ? "/dashboard/releases" : isUsed ? "/distribution/start" : startHref); };
   const passRaised = ["passRising", "reward", "revealed"].includes(revealState);
   // Lift the letter clear of the pocket before exposing its claim action.
   const passLift = passRaised ? 0 : 365;

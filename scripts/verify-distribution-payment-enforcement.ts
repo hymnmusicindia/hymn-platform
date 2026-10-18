@@ -65,7 +65,8 @@ assert.doesNotMatch(editRoute, /\["under_review"/);
 assert.match(payment, /paymentStatus: "paid", fulfilledAt: null/);
 assert.match(payment, /This payment or entitlement has already been used for a release/);
 assert.match(payment, /distribution-order:\$\{order\.id\}:credit-debit/);
-assert.match(source("lib/distribution-db.ts"), /paymentStatus: \{ in: \["created", "authorized"\] \}/);
+assert.match(source("lib/distribution-db.ts"), /const replaceablePaymentStates = \["created", "authorized", "failed"\]/);
+assert.match(source("lib/distribution-db.ts"), /paymentStatus: \{ in: replaceablePaymentStates \}/);
 assert.match(source("lib/distribution-db.ts"), /A captured payment is already attached to this release/);
 
 assert.equal(distributionOrderPriceMatches({ amount: 0, creditsUsed: 0, expectedAmount: 4999, currency: "INR", subscriptionEntitlement: true }), true, "Yearly+ and other active subscriptions must use their zero-value release entitlement.");

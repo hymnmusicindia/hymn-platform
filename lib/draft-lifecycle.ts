@@ -39,7 +39,7 @@ export async function runDraftLifecycle(options: { untitledOnly?: boolean; apply
       continue;
     }
     const meta = (draft.metadata ?? {}) as Record<string, unknown>;
-    const free = meta.promotionCode === FIRST_RELEASE_PROMOTION_CODE && draft.releaseType === "single" && draft._count.tracks <= 1 && (await getFirstReleaseEligibility(draft.userId)).eligible;
+    const free = meta.promotionCode === FIRST_RELEASE_PROMOTION_CODE && draft.releaseType === "single" && draft._count.tracks <= 1 && (await getFirstReleaseEligibility(draft.userId, draft.id)).eligible;
     const content = draftReminderContent(draft.user.name, draft.title, `${getPublicAppUrl()}/distribution/start?edit=${draft.id}`, free);
     await enqueueRenderedEmail(prisma, { ...content, eventKey, template: DRAFT_WARNING_TEMPLATE, to: draft.user.email, userId: draft.userId, releaseId: draft.id, expectedStatus: "DRAFT", draftEditedAt: edited.toISOString() });
     if (!warning) warningsQueued++;

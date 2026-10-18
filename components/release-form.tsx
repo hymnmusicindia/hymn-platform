@@ -3322,6 +3322,27 @@ export function ReleaseForm({
         return;
       }
 
+      if (orderData.quote && orderData.quote.currency === "INR") {
+        const quote = orderData.quote as {
+          basePrice: number; bulkDiscount: number; ugcAddon: number; youtubeContentIdAddon: number;
+          firstReleaseDiscount: number; creditsUsed: number; payable: number;
+        };
+        const money = (value: number) => `₹${Number(value || 0).toLocaleString("en-IN")}`;
+        const lines = [
+          `Release fee: ${money(quote.basePrice)}`,
+          ...(quote.bulkDiscount > 0 ? [`Track discount: −${money(quote.bulkDiscount)}`] : []),
+          ...(quote.firstReleaseDiscount > 0 ? [`First-release base-fee discount: −${money(quote.firstReleaseDiscount)}`] : []),
+          ...(quote.ugcAddon > 0 ? [`UGC add-on: ${money(quote.ugcAddon)}`] : []),
+          ...(quote.youtubeContentIdAddon > 0 ? [`YouTube Content ID add-on: ${money(quote.youtubeContentIdAddon)}`] : []),
+          ...(quote.creditsUsed > 0 ? [`HYMN credits: −${money(quote.creditsUsed)}`] : []),
+          `Total to pay: ${money(quote.payable)}`
+        ];
+        if (!window.confirm(`Confirm your server-calculated checkout\n\n${lines.join("\n")}\n\nContinue to Razorpay?`)) {
+          setStatus("Checkout is ready. Review the saved price breakdown and continue when you’re ready.");
+          return;
+        }
+      }
+
       if (!orderData.key) throw new Error("Razorpay key is not configured on the server.");
       setStatus("Opening Razorpay...");
       await loadRazorpayCheckout();

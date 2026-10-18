@@ -34,7 +34,7 @@ async function promotion() {
   });
 }
 
-export async function getFirstReleaseEligibility(userId: number) {
+export async function getFirstReleaseEligibility(userId: number, releaseId?: number) {
   const subscription = await prisma.subscription.findUnique({ where: { userId } });
   if (subscriptionHasEntitlement(subscription)) return { eligible: false as const, reason: "active_subscription" as const };
   const offer = await promotion();
@@ -47,7 +47,16 @@ export async function getFirstReleaseEligibility(userId: number) {
   if (submittedReleaseCount > 0) return { eligible: false as const, reason: "release_already_submitted" as const };
   const redemption = await prisma.promotionRedemption.findUnique({ where: { promotionId_userId: { promotionId: offer.id, userId } } });
   if (!redemption) return { eligible: true as const, reason: "available" as const, promotionId: offer.id };
+  if (redemption.status === "RESERVED" && releaseId && redemption.releaseId === releaseId) {
+    return { eligible: true as const, reason: "reserved" as const, promotionId: offer.id, redemption };
+  }
   if (redemption.status === "RESERVED" && redemption.updatedAt.getTime() < Date.now() - RESERVATION_TTL_MS) {
+    const linkedOrder = redemption.releaseId
+      ? await prisma.distributionOrder.findUnique({ where: { releaseId: redemption.releaseId }, select: { paymentStatus: true, razorpayPaymentId: true, fulfilledAt: true } })
+      : null;
+    if (linkedOrder && (linkedOrder.razorpayPaymentId || linkedOrder.fulfilledAt || linkedOrder.paymentStatus !== "failed")) {
+      return { eligible: false as const, reason: "reserved" as const, redemption };
+    }
     return { eligible: true as const, reason: "stale_reservation" as const, promotionId: offer.id };
   }
   return { eligible: false as const, reason: redemption.status === "REDEEMED" ? "already_redeemed" as const : "reserved" as const, redemption };
@@ -59,7 +68,7 @@ export function calculateFirstReleasePrice(input: { plan: string; releaseType: s
   return { originalAmount: input.normalAmount, discountAmount, finalAmount: Math.max(0, input.normalAmount - discountAmount) };
 }
 
-export async function reserveFirstRelease(input: { userId: number; originalAmount: number; discountAmount: number; finalAmount: number; attribution?: CampaignAttribution }) {
+export async function reserveFirstRelease(input: { userId: number; releaseId?: number; originalAmount: number; discountAmount: number; finalAmount: number; attribution?: CampaignAttribution }) {
   return prisma.$transaction(async (tx) => {
     const subscription = await tx.subscription.findUnique({ where: { userId: input.userId } });
     if (subscriptionHasEntitlement(subscription)) throw new Error("Your active subscription already covers distribution. The first-release offer is for non-subscribers only.");
@@ -68,13 +77,37 @@ export async function reserveFirstRelease(input: { userId: number; originalAmoun
     if (!offer || !offer.active || (offer.startsAt && offer.startsAt > now) || (offer.endsAt && offer.endsAt <= now)) throw new Error("The first-release offer is not available.");
     const submittedReleaseCount = await tx.release.count({ where: submittedReleaseWhere(input.userId) });
     if (submittedReleaseCount > 0) throw new Error("The free first-release offer has already been used on this account.");
-    await tx.promotionRedemption.deleteMany({ where: { promotionId: offer.id, userId: input.userId, status: "RESERVED", updatedAt: { lt: new Date(Date.now() - RESERVATION_TTL_MS) } } });
+    const prior = await tx.promotionRedemption.findUnique({ where: { promotionId_userId: { promotionId: offer.id, userId: input.userId } } });
+    if (prior?.status === "REDEEMED") throw new Error("You have already used the first-release offer.");
+    if (prior?.status === "RESERVED" && prior.releaseId === input.releaseId) {
+      return tx.promotionRedemption.update({
+        where: { id: prior.id },
+        data: {
+          originalAmount: input.originalAmount,
+          discountAmount: input.discountAmount,
+          finalAmount: input.finalAmount,
+          campaignSource: input.attribution as Prisma.InputJsonValue | undefined
+        }
+      });
+    }
+    if (prior?.status === "RESERVED" && prior.updatedAt.getTime() >= Date.now() - RESERVATION_TTL_MS) {
+      throw new Error("The first-release offer is reserved for another release. Resume that draft or try again after its reservation expires.");
+    }
+    if (prior?.status === "RESERVED") {
+      const linkedOrder = prior.releaseId
+        ? await tx.distributionOrder.findUnique({ where: { releaseId: prior.releaseId }, select: { paymentStatus: true, razorpayPaymentId: true, fulfilledAt: true } })
+        : null;
+      if (linkedOrder && (linkedOrder.razorpayPaymentId || linkedOrder.fulfilledAt || linkedOrder.paymentStatus !== "failed")) {
+        throw new Error("The first-release offer is attached to a checkout that may still complete. Resume that draft or contact HYMN support before starting another release.");
+      }
+      await tx.promotionRedemption.deleteMany({ where: { id: prior.id, status: "RESERVED" } });
+    }
     if (offer.maxRedemptions != null) {
       const used = await tx.promotionRedemption.count({ where: { promotionId: offer.id, OR: [{ status: "REDEEMED" }, { status: "RESERVED", updatedAt: { gte: new Date(now.getTime() - RESERVATION_TTL_MS) } }] } });
       if (used >= offer.maxRedemptions) throw new Error("The first-release offer has ended.");
     }
     try {
-      return await tx.promotionRedemption.create({ data: { promotionId: offer.id, userId: input.userId, originalAmount: input.originalAmount, discountAmount: input.discountAmount, finalAmount: input.finalAmount, campaignSource: input.attribution as Prisma.InputJsonValue | undefined } });
+      return await tx.promotionRedemption.create({ data: { promotionId: offer.id, userId: input.userId, releaseId: input.releaseId, originalAmount: input.originalAmount, discountAmount: input.discountAmount, finalAmount: input.finalAmount, campaignSource: input.attribution as Prisma.InputJsonValue | undefined } });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") throw new Error("You have already used or reserved your first-release offer.");
       throw error;
@@ -83,7 +116,7 @@ export async function reserveFirstRelease(input: { userId: number; originalAmoun
 }
 
 export async function redeemFirstRelease(redemptionId: number, releaseId: number) {
-  const result = await prisma.promotionRedemption.updateMany({ where: { id: redemptionId, status: "RESERVED", releaseId: null }, data: { status: "REDEEMED", releaseId, redeemedAt: new Date() } });
+  const result = await prisma.promotionRedemption.updateMany({ where: { id: redemptionId, status: "RESERVED", OR: [{ releaseId: null }, { releaseId }] }, data: { status: "REDEEMED", releaseId, redeemedAt: new Date() } });
   if (result.count !== 1) throw new Error("The first-release offer could not be redeemed.");
 }
 
