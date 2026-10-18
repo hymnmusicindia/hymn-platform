@@ -27,9 +27,9 @@ const ingestPayloads: Array<Record<string, any>> = [];
 let browser: Awaited<ReturnType<typeof startDireNoteBrowser>> | undefined;
 let checkoutMock: Awaited<ReturnType<typeof startCheckoutMock>> | undefined;
 const oldUpc = "3473620313503";
-const newUpc = oldUpc;
+const newUpc = "3473620313534";
 const oldIsrcs = ["INDN22602442", "INDN22602443"];
-const newIsrcs = oldIsrcs;
+const newIsrcs = ["INDN22602444", "INDN22602445"];
 const remark = "TRACK 2 SEEMS LIKE AN INSTRUMENTAL. PLEASE SELECT RELEVANT TRACK LANGUAGE";
 const server = createServer(async (request, response) => {
   let raw = "";
@@ -42,12 +42,25 @@ const server = createServer(async (request, response) => {
     assert.equal(request.method, "POST");
     ingestPayloads.push(body);
     ingests++;
+    if (body.albumname === "Magenta" && ingests === 2) {
+      response.end(JSON.stringify({ success: true, upc: newUpc, release_id: `fixture-release-${ingests}`, tracks: newIsrcs.map((isrc, index) => ({ track_number: index + 1, track_name: `Track ${index + 1}`, isrc })) }));
+      return;
+    }
+    if (body.albumname === "Transfer fixture") {
+      response.statusCode = 202;
+      response.end(JSON.stringify({ success: true, job_id: `fixture-job-${ingests}`, idempotency_key: body.idempotency_key, status: "queued", poll_after_seconds: 60 }));
+      return;
+    }
     response.end(JSON.stringify({ success: true, job_id: `fixture-job-${ingests}`, idempotency_key: body.idempotency_key, status: "queued", poll_after_seconds: 60 }));
     return;
   }
   if (request.url === "/ingest_status") {
     ingestStatusPolls++;
     assert(body.job_id || body.idempotency_key, "Status lookup must provide a provider job reference.");
+    if (body.job_id === "fixture-job-3") {
+      response.end(JSON.stringify({ success: true, job_id: body.job_id, status: "completed", result: { album_name: "Transfer fixture", upc_code: "3473620313541", track_count: 2, tracks: ["INDN22602446", "INDN22602447"].map((isrc, index) => ({ track_number: index + 1, track_name: `Track ${index + 1}`, isrc })) } }));
+      return;
+    }
     response.end(JSON.stringify({ success: true, job_id: body.job_id || `fixture-job-${ingestStatusPolls}`, status: "processing", progress: "Fixture is processing", attempts: 1, poll_after_seconds: 60 }));
     return;
   }
@@ -89,9 +102,9 @@ async function main() {
   const user = await prisma.user.create({ data: { googleId: "fixture-gxrry", name: "gxrry", email: "gxrry@example.test", role: "CUSTOMER", status: "ACTIVE" } });
   const artist = await prisma.artistCard.create({ data: { userId: user.id, artistName: "gxrry", instagramUrl: "https://instagram.com/fixture_gxrry" } });
   const release = await prisma.release.create({ data: {
-    userId: user.id, artistProfileId: artist.id, title: "Magenta", artistName: "gxrry", genre: "Pop", releaseType: "ep", releaseDate: new Date("2099-01-10"), status: "APPROVED", paymentStatus: "paid", artworkUrl: "https://cdn.example.test/cover.jpg",
+    userId: user.id, artistProfileId: artist.id, title: "Magenta", artistName: "gxrry", genre: "Pop", releaseType: "ep", releaseDate: new Date("2099-01-10"), status: "APPROVED", paymentStatus: "paid", artworkUrl: "https://cdn.example.test/cover.jpg", upc: oldUpc,
     metadata: { releaseTitle: "Magenta", releaseDate: "2099-01-10", releaseTiming: "schedule_release", language: "Hindi", mood: "Happy", secondaryGenre: "Indie Pop", labelName: "Fixture Records", copyrightOwner: "2026 Fixture Records", publishingRights: "2026 Fixture Artist", contentType: "original", platforms: ["Spotify"], territory: "Worldwide", ownershipConfirmed: true, noUnauthorizedSamples: true, collaboratorsCredited: true, platformCompliant: true, hymnNotLiable: true, agreedToTerms: true, falseMetadataAcknowledged: true },
-    tracks: { create: [1, 2].map(n => ({ title: n === 1 ? "purple" : "pink", trackNumber: n, primaryArtist: "gxrry", audioUrl: `https://cdn.example.test/track${n}.wav`, metadata: { metadata: { artistProfileIds: [artist.id] }, language: "Hindi", version: "Original", songwriters: "Fixture Artist", composers: "Fixture Artist", producers: "Fixture Artist", duration: "180", explicitContent: false } })) }
+    tracks: { create: [1, 2].map((n, index) => ({ title: n === 1 ? "purple" : "pink", trackNumber: n, primaryArtist: "gxrry", audioUrl: `https://cdn.example.test/track${n}.wav`, isrc: oldIsrcs[index], metadata: { metadata: { artistProfileIds: [artist.id] }, language: "Hindi", version: "Original", songwriters: "Fixture Artist", composers: "Fixture Artist", producers: "Fixture Artist", duration: "180", explicitContent: false } })) }
   }, include: { tracks: true } });
   await prisma.track.update({ where: { id: release.tracks[0].id }, data: { metadata: { ...(release.tracks[0].metadata as object), explicitContent: true } } });
   await prisma.$transaction(async lock => {
@@ -122,8 +135,10 @@ async function main() {
   assert.equal((await ensureCurrentDireNoteAttempt(release.id)).id, firstAttempt.id);
   assert.equal((await ensureCurrentDireNoteAttempt(release.id)).id, firstAttempt.id);
   await prisma.release.update({ where: { id: release.id }, data: { direNoteLastAttemptedAt: new Date(0) } });
+  await prisma.distributionSubmissionAttempt.update({ where: { id: firstAttempt.id }, data: { lastCheckedAt: new Date(0) } });
   const pendingCycle = await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));
-  assert.equal((await pendingCycle.json()).checked, 1);
+  const pendingCycleResult = await pendingCycle.json();
+  assert.equal(pendingCycleResult.checked, 1, JSON.stringify(pendingCycleResult));
   assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: release.id } })).status, "DISTRIBUTOR_PROCESSING");
   mode = "remark";
   for (let cycle = 0; cycle < 10; cycle++) {
@@ -167,14 +182,16 @@ async function main() {
   assert.equal(ingestPayloads[1].tracks[0].trackLanguage, "Hindi");
   assert.equal(ingestPayloads[1].contenttype, "Original/Exclusive Licensed");
   await writeFile(".cache/direnote-magenta-track2-virtual-after.json", JSON.stringify(redactDireNoteDiagnostic(ingestPayloads[1].tracks[1]), null, 2));
-  assert.equal(ingestPayloads[1].upc, oldUpc);
-  assert.deepEqual(ingestPayloads[1].tracks.map((track: any) => track.isrc), oldIsrcs, "Corrections preserve recording identifiers");
+  assert.equal(ingestPayloads[1].upc, undefined, "Correction re-ingest must let DireNote issue a fresh UPC.");
+  assert.deepEqual(ingestPayloads[1].tracks.map((track: any) => track.isrc), [undefined, undefined], "Correction re-ingest must let DireNote issue fresh ISRCs.");
   const attempts = await prisma.distributionSubmissionAttempt.findMany({ where: { releaseId: release.id }, orderBy: { id: "asc" } });
   assert.equal(attempts.length, 2);
-  assert.equal(attempts[0].isCurrent, false);
+  assert.equal(attempts[0].isCurrent, false, JSON.stringify(attempts.map(item => ({ id: item.id, isCurrent: item.isCurrent, state: item.state, upc: item.upc }))));
   assert.equal(attempts[0].upc, oldUpc);
   assert.equal(attempts[1].isCurrent, true);
   assert.equal(attempts[1].upc, newUpc);
+  assert.deepEqual((await prisma.track.findMany({ where: { releaseId: release.id }, orderBy: { trackNumber: "asc" } })).map(track => track.isrc), newIsrcs);
+  assert.equal((await prisma.externalIdentifierHistory.findFirst({ where: { releaseId: release.id, identifierType: "upc", previousValue: oldUpc, canonicalValue: newUpc } })) !== null, true);
   assert.equal((attempts[0].payloadRedacted as any).tracks[1].trackLanguage, "Hindi");
   assert.equal((attempts[1].payloadRedacted as any).tracks[1].trackLanguage, "Instrumental");
   assert.deepEqual(redactDireNoteDiagnostic(ingestPayloads[1]), attempts[1].payloadRedacted, "The entire HTTP body must match the saved canonical payload snapshot.");
@@ -191,7 +208,7 @@ async function main() {
     const unchanged = await prisma.release.findUniqueOrThrow({ where: { id: release.id } });
     assert.equal(unchanged.status, "DISTRIBUTOR_PROCESSING");
     assert.equal(unchanged.upc, newUpc);
-    assert.deepEqual((await prisma.track.findMany({ where: { releaseId: release.id }, orderBy: { trackNumber: "asc" } })).map(track => track.isrc), oldIsrcs);
+    assert.deepEqual((await prisma.track.findMany({ where: { releaseId: release.id }, orderBy: { trackNumber: "asc" } })).map(track => track.isrc), newIsrcs);
     assert(!JSON.stringify(await prisma.direNoteLog.findMany()).includes("fixture-pin"));
   }
   mode = "remark";
@@ -241,8 +258,15 @@ async function main() {
   await prisma.distributionSubmissionAttempt.update({ where: { id: transferAttempt.id }, data: { startedAt: new Date(0) } });
   const transferred = await submitRelease(transfer.id, { correctionReingest: true });
   assert.equal(transferred.submitted, true, JSON.stringify(transferred));
-  assert.deepEqual(ingestPayloads.at(-1)!.tracks.map((track: any) => track.isrc), oldIsrcs, "A correction must preserve existing recording identities.");
-  assert.deepEqual((await prisma.track.findMany({ where: { releaseId: transfer.id }, orderBy: { trackNumber: "asc" } })).map(track => track.isrc), newIsrcs, "DireNote's re-ingest identifiers become the current track projection.");
+  assert.equal(ingestPayloads.at(-1)!.upc, undefined, "A correction re-ingest must omit the prior UPC.");
+  assert.deepEqual(ingestPayloads.at(-1)!.tracks.map((track: any) => track.isrc), [undefined, undefined], "A correction re-ingest must omit the prior ISRCs.");
+  const queuedTransfer = await prisma.distributionSubmissionAttempt.findFirstOrThrow({ where: { releaseId: transfer.id, isCurrent: true } });
+  assert.equal((queuedTransfer.responseRedacted as any).identifierPolicy, "replace", "The async job must retain the fresh-identifier policy after its acknowledgement is saved.");
+  await prisma.distributionSubmissionAttempt.updateMany({ where: { releaseId: release.id }, data: { lastCheckedAt: new Date() } });
+  const transferJob = await pollDireNoteIngestJobs({ limit: 10 });
+  assert.equal(transferJob.completed, 1, JSON.stringify(transferJob));
+  assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: transfer.id } })).upc, "3473620313541");
+  assert.deepEqual((await prisma.track.findMany({ where: { releaseId: transfer.id }, orderBy: { trackNumber: "asc" } })).map(track => track.isrc), ["INDN22602446", "INDN22602447"], "DireNote's fresh identifiers become current while old identifiers remain in history.");
   const paidDraft = await prisma.release.create({ data: { userId: user.id, artistProfileId: artist.id, title: "Paid draft", artistName: "gxrry", genre: "Pop", releaseDate: new Date("2099-01-10"), status: "DRAFT", paymentStatus: "paid" } });
   await saveDraftDistributionRelease({ userId: user.id, draftReleaseId: paidDraft.id, metadata: { artistName: "gxrry", trackName: "Paid draft", tracks: [] } as any });
   assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: paidDraft.id } })).paymentStatus, "paid", "Saving a draft must not erase payment.");
@@ -347,7 +371,7 @@ async function main() {
   const current = await ensureCurrentDireNoteAttempt(release.id);
   const originalResponse = current.responseRedacted;
   await prisma.distributionSubmissionAttempt.update({ where: { id: current.id }, data: { responseRedacted: { success: true, upc: "3473620319017" } } });
-  assert.equal((await ensureCurrentDireNoteAttempt(release.id)).upc, oldUpc, "Verified title + UPC + every ISRC supersede stale acknowledgement evidence.");
+  assert.equal((await ensureCurrentDireNoteAttempt(release.id)).upc, newUpc, "Verified title + UPC + every ISRC supersede stale acknowledgement evidence.");
   await prisma.distributionSubmissionAttempt.update({ where: { id: current.id }, data: { rawStatusPayload: { success: true, release: { upc_code: oldUpc, album_name: "Other album" }, tracks: [] } } });
   await assert.rejects(() => ensureCurrentDireNoteAttempt(release.id), /conflicts/);
   await prisma.distributionSubmissionAttempt.update({ where: { id: current.id }, data: { responseRedacted: originalResponse! } });

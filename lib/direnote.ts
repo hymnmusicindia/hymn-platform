@@ -147,6 +147,7 @@ type BuildOptions = {
   ownerEmail?: string | null;
   artistProfiles?: ArtistProfile[];
   adminConfirmedExistingArtists?: boolean;
+  replaceProviderIdentifiers?: boolean;
 };
 
 function splitNames(value?: string | null) {
@@ -321,7 +322,7 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
     labelName: release.labelName || release.labelDisplayName || "",
     cLine: release.copyrightOwner ?? "",
     pLine: release.publishingRights ?? "",
-    upc: release.upcCode || undefined,
+    upc: options.replaceProviderIdentifiers ? undefined : release.upcCode || undefined,
     youtubeContentID: release.youtubeContentIdEnabled === true ? "Yes" : "No",
     releasePreviouslyReleased: isPreviouslyReleased ? "Yes" : "No",
     addrequest: meta.adminInstructions ?? meta.reviewNote ?? meta.addrequest ?? undefined,
@@ -335,7 +336,7 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
       trackGenre: normalizedGenre.genre || undefined,
       trackSubgenre: normalizedGenre.subgenre || undefined,
       trackLanguage: readTrackLanguage(track),
-      isrc: track.isrc || undefined,
+      isrc: options.replaceProviderIdentifiers ? undefined : track.isrc || undefined,
       trackVersion: track.version || "",
       previewStart: String((track as any).previewStart ?? 30),
       vocalist: (track as any).vocalist || undefined,
@@ -413,7 +414,7 @@ function isBefore(left?: string, right?: string) {
   return Boolean(leftDate && rightDate && leftDate.getTime() < rightDate.getTime());
 }
 
-export function validateDireNotePayload(payload: DireNotePayload, options: { adminConfirmedExistingArtists?: boolean } = {}) {
+export function validateDireNotePayload(payload: DireNotePayload, options: { adminConfirmedExistingArtists?: boolean; replaceProviderIdentifiers?: boolean } = {}) {
   const issues: DireNoteValidationIssue[] = [];
   const warnings: DireNoteValidationIssue[] = [];
   // Check container shape before traversing payloads supplied by diagnostics or tests.
@@ -465,8 +466,10 @@ export function validateDireNotePayload(payload: DireNotePayload, options: { adm
   if (!missingReleaseType && (payload.typeOfRelease === "EP" || payload.typeOfRelease === "Album") && payload.tracks.length < 2) issues.push({ field: "tracks", message: `${payload.typeOfRelease}s must have at least 2 tracks.` });
   if (payload.releasePreviouslyReleased === "Yes") {
     pushMissing(issues, "originalReleaseDate", payload.originalReleaseDate, "Previously released releases require their original release date.");
-    pushMissing(issues, "upc", payload.upc, "Previously released releases require their existing UPC.");
-    payload.tracks.forEach((track, index) => pushMissing(issues, `tracks.${index}.isrc`, track.isrc, `Previously released track ${index + 1} requires its existing ISRC.`));
+    if (!options.replaceProviderIdentifiers) {
+      pushMissing(issues, "upc", payload.upc, "Previously released releases require their existing UPC.");
+      payload.tracks.forEach((track, index) => pushMissing(issues, `tracks.${index}.isrc`, track.isrc, `Previously released track ${index + 1} requires its existing ISRC.`));
+    }
   }
 
   const releaseDays = missingReleaseDate ? null : daysFromToday(payload.trackReleaseDate);

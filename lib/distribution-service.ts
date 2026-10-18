@@ -95,7 +95,7 @@ async function moveQueue(releaseId: number, nextStage: "sent_to_direnote" | "pro
   }
 }
 
-function validationResult(payload: DireNotePayload, options: { adminConfirmedExistingArtists?: boolean } = {}) {
+function validationResult(payload: DireNotePayload, options: { adminConfirmedExistingArtists?: boolean; replaceProviderIdentifiers?: boolean } = {}) {
   const result = validateDireNotePayload(payload, options);
   const config = getDireNoteConfig();
   if (!config.endpoint) result.issues.unshift({ field: "endpoint", message: "DireNote endpoint is not configured.", severity: "error" });
@@ -106,7 +106,7 @@ function validationResult(payload: DireNotePayload, options: { adminConfirmedExi
   };
 }
 
-export async function buildDireNotePayloadForRelease(release: Release, options: { siteUrl?: string; adminConfirmedExistingArtists?: boolean } = {}) {
+export async function buildDireNotePayloadForRelease(release: Release, options: { siteUrl?: string; adminConfirmedExistingArtists?: boolean; replaceProviderIdentifiers?: boolean } = {}) {
   const privateArtworkUrl = await resolvePrivateReleaseArtworkUrl({
     userId: release.userId,
     releaseId: release.id,
@@ -131,11 +131,12 @@ export async function buildDireNotePayloadForRelease(release: Release, options: 
     siteUrl: options.siteUrl,
     ownerEmail: owner?.email ?? null,
     artistProfiles,
-    adminConfirmedExistingArtists: options.adminConfirmedExistingArtists
+    adminConfirmedExistingArtists: options.adminConfirmedExistingArtists,
+    replaceProviderIdentifiers: options.replaceProviderIdentifiers
   });
 }
 
-export async function validateRelease(release: Release, options: { siteUrl?: string; adminConfirmedExistingArtists?: boolean } = {}) {
+export async function validateRelease(release: Release, options: { siteUrl?: string; adminConfirmedExistingArtists?: boolean; replaceProviderIdentifiers?: boolean } = {}) {
   const payload = await buildDireNotePayloadForRelease(release, options);
   return validationResult(payload, options);
 }
@@ -260,9 +261,9 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
 
   await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: options.retry ? "DIRENOTE_RETRY_STARTED" : "APPROVE_RELEASE_STARTED" });
 
-  const payload = await buildDireNotePayloadForRelease(release, options);
+  const payload = await buildDireNotePayloadForRelease(release, { ...options, replaceProviderIdentifiers: Boolean(options.correctionReingest) });
   const previousAttempt = options.correctionReingest ? await ensureCurrentDireNoteAttempt(releaseId) : null;
-  const validation = validationResult(payload, options);
+  const validation = validationResult(payload, { ...options, replaceProviderIdentifiers: Boolean(options.correctionReingest) });
   const redactedPayload = redactDireNotePayload(payload);
 
   if (!validation.ok) {
@@ -311,7 +312,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
   const providerPayload = { ...payload, idempotency_key: claim.attempt.idempotencyKey };
   const providerRedactedPayload = redactDireNotePayload(providerPayload);
 
-  await updateDetailedReleaseStatus(releaseId, "queued_for_distribution", options.correctionReingest ? "Provider corrections validated for re-ingestion with the existing identifiers." : "Validated and queued for DireNote API.", undefined, { manualOverride: Boolean(options.correctionReingest), actorType: "system" });
+  await updateDetailedReleaseStatus(releaseId, "queued_for_distribution", options.correctionReingest ? "Corrected release queued as a new DireNote submission; waiting for fresh provider identifiers." : "Validated and queued for DireNote API.", undefined, { manualOverride: Boolean(options.correctionReingest), actorType: "system" });
   await updateDetailedReleaseStatus(releaseId, "submitting_to_distributor", "DireNote submission claimed and started.");
 
   let providerAccepted = false;
@@ -368,32 +369,32 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     if (queuedIngest) {
       const queuedMessage = "DireNote accepted the ingest job for processing.";
       await activateDireNoteAttempt(claim.attempt.id, {
-        upc: release.upcCode ?? null,
+        upc: options.correctionReingest ? null : release.upcCode ?? null,
         providerStatus: parsed.ingestJobStatus ?? "queued",
-        trackIdentifiers: (release.tracks ?? []).map(track => ({ id: track.id, title: track.trackTitle, trackNumber: track.trackNumber, isrc: track.isrc ?? null })),
-        responseRedacted: { ingestJobId: parsed.ingestJobId ?? null, providerIdempotencyKey: parsed.ingestIdempotencyKey ?? claim.attempt.idempotencyKey, ingestJobStatus: parsed.ingestJobStatus ?? "queued", pollAfterSeconds: parsed.pollAfterSeconds ?? 60 } as never
-      });
+        trackIdentifiers: (release.tracks ?? []).map(track => ({ id: track.id, title: track.trackTitle, trackNumber: track.trackNumber, isrc: options.correctionReingest ? null : track.isrc ?? null })),
+        responseRedacted: { ingestJobId: parsed.ingestJobId ?? null, providerIdempotencyKey: parsed.ingestIdempotencyKey ?? claim.attempt.idempotencyKey, ingestJobStatus: parsed.ingestJobStatus ?? "queued", pollAfterSeconds: parsed.pollAfterSeconds ?? 60, ...(options.correctionReingest ? { identifierPolicy: "replace" } : {}) } as never
+      }, { replaceIdentifiers: Boolean(options.correctionReingest) });
       await updateDetailedReleaseStatus(releaseId, "sent_to_distributor", queuedMessage, undefined, { notify: false });
       await logDistributionEvent({ releaseId, action: options.retry ? "retry_submission" : "release_submission", httpStatus: response.httpStatus, createdByAdminId: options.actorId, correlationId, requestPayload: providerRedactedPayload, responsePayload: data, responseRaw: response.raw, warnings: parsed.warnings, success: true });
       await moveQueue(releaseId, "sent_to_direnote", options.actorId, queuedMessage, { direnoteResponse: data, warnings: parsed.warnings });
       await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: "DIRENOTE_INGEST_QUEUED", details: { attemptId: claim.attempt.id, correlationId, status: response.httpStatus, jobId: parsed.ingestJobId ?? null } });
       await resolveAdminTask(`release:${releaseId}:direnote:validation`, "DireNote accepted the ingest job.");
       await resolveAdminTask(`release:${releaseId}:direnote:network`, "DireNote accepted the ingest job.");
-      await finishDistributionSubmission(claim.attempt.id, { state: "submitted", httpStatus: response.httpStatus, providerReference: parsed.ingestJobId ?? parsed.ingestIdempotencyKey ?? claim.attempt.idempotencyKey, providerStatus: parsed.ingestJobStatus ?? "queued", responseRedacted: { ingestJobId: parsed.ingestJobId ?? null, providerIdempotencyKey: parsed.ingestIdempotencyKey ?? claim.attempt.idempotencyKey, ingestJobStatus: parsed.ingestJobStatus ?? "queued", pollAfterSeconds: parsed.pollAfterSeconds ?? 60 } });
+      await finishDistributionSubmission(claim.attempt.id, { state: "submitted", httpStatus: response.httpStatus, providerReference: parsed.ingestJobId ?? parsed.ingestIdempotencyKey ?? claim.attempt.idempotencyKey, providerStatus: parsed.ingestJobStatus ?? "queued", responseRedacted: { ingestJobId: parsed.ingestJobId ?? null, providerIdempotencyKey: parsed.ingestIdempotencyKey ?? claim.attempt.idempotencyKey, ingestJobStatus: parsed.ingestJobStatus ?? "queued", pollAfterSeconds: parsed.pollAfterSeconds ?? 60, ...(options.correctionReingest ? { identifierPolicy: "replace" } : {}) } });
       return { release: await prisma.release.findUnique({ where: { id: releaseId } }), validation, submitted: true, duplicate: false, retryable: false, warnings: validation.warnings };
     }
     const automaticStatus = "sent_to_distributor" as const;
     const assignedTrackIsrcs = parsed.trackIsrcs;
     await activateDireNoteAttempt(claim.attempt.id, {
-      upc: parsed.upc ?? release.upcCode ?? null,
+      upc: parsed.upc ?? (options.correctionReingest ? null : release.upcCode ?? null),
       providerStatus: parsed.ingestJobStatus ?? "processing",
       trackIdentifiers: (release.tracks ?? []).map(track => ({
         id: track.id, title: track.trackTitle, trackNumber: track.trackNumber,
         isrc: assignedTrackIsrcs.find(remote => remote.trackNumber === track.trackNumber || remote.trackTitle === track.trackTitle)?.isrc
-          ?? track.isrc ?? null
+          ?? (options.correctionReingest ? null : track.isrc ?? null)
       })),
       responseRedacted: redactDireNoteDiagnostic(data) as never
-    });
+    }, { replaceIdentifiers: Boolean(options.correctionReingest) });
     const updatedRelease = await markReleaseDistributionSuccess({
       releaseId,
       status: automaticStatus,

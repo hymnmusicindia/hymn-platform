@@ -77,7 +77,7 @@ async function runJob(request: Request) {
         autoQcResults.push({ releaseId: candidate.id, outcome: "failed" });
       }
     }
-    const candidates = await prisma.distributionSubmissionAttempt.findMany({
+    const candidateRows = await prisma.distributionSubmissionAttempt.findMany({
       where: {
         // Accepted requests that need reconciliation are still safe to poll:
         // this path only reads release status and never submits another ingest.
@@ -93,14 +93,16 @@ async function runJob(request: Request) {
       orderBy: [{ lastCheckedAt: { sort: "asc", nulls: "first" } }, { id: "asc" }],
       take: Math.max(CONCURRENCY, Math.min(Number(process.env.DIRENOTE_RELEASE_SYNC_BATCH_SIZE || 30), 100))
     });
+    const candidates = candidateRows.filter(item => !item.corrections || typeof item.corrections !== "object" || Array.isArray(item.corrections) || (item.corrections as Prisma.JsonObject).status !== "customer_resolved");
     // Recover accepted legacy attempts whose current flag was never persisted.
     // This is status reconciliation only, never a second ingestion request.
-    const missingLineage = await prisma.distributionSubmissionAttempt.findMany({
+    const missingLineageRows = await prisma.distributionSubmissionAttempt.findMany({
       where: { provider: "direnote", state: "submitted", release: { archivedAt: null,
         distributionSubmissions: { none: { provider: "direnote", isCurrent: true } } } },
       include: { release: { select: { id: true, title: true } } },
       orderBy: [{ lastCheckedAt: { sort: "asc", nulls: "first" } }, { id: "desc" }], take: 5
     });
+    const missingLineage = missingLineageRows.filter(item => !item.corrections || typeof item.corrections !== "object" || Array.isArray(item.corrections) || (item.corrections as Prisma.JsonObject).status !== "customer_resolved");
     for (const candidate of missingLineage) if (!candidates.some(item => item.releaseId === candidate.releaseId)) candidates.unshift(candidate);
     const results: Array<{ releaseId: number; title: string; success: boolean; pending?: boolean; reason?: string; error?: string; upc?: string | null; status?: string }> = [];
     let cursor = 0;
@@ -109,7 +111,7 @@ async function runJob(request: Request) {
         const candidate = candidates[cursor++];
         try {
           const outcome = await syncDireNoteRelease(candidate.releaseId, null, { deadlineAt: started + 55_000 });
-          results.push({ releaseId: candidate.releaseId, title: candidate.release.title, success: true, upc: outcome.upc, status: outcome.status });
+          results.push({ releaseId: candidate.releaseId, title: candidate.release.title, success: true, ...( "skipped" in outcome ? { pending: true, reason: outcome.skipped } : { upc: outcome.upc, status: outcome.status }) });
         }
         catch (error) {
           // Failed/missing-UPC records used to stay at the front forever. Rotate

@@ -40,6 +40,19 @@ async function main() {
     } });
     fixtures.push({ id: release.id, upc, title, isrc, trackId: release.tracks[0].id });
   }
+  const abandonedTitle = "Resolved correction awaiting re-ingest";
+  const abandonedUpc = upcFor(9);
+  const abandoned = await prisma.release.create({ data: {
+    userId: user.id, title: abandonedTitle, artistName: "Fixture Artist", genre: "Pop", releaseType: "single", releaseDate: new Date("2099-01-01"),
+    status: "UNDER_REVIEW", paymentStatus: "paid", upc: abandonedUpc, direNoteStatus: "processing",
+    tracks: { create: [{ title: abandonedTitle, trackNumber: 1, isrc: `INDN2${String(2603200 + 9).padStart(7, "0")}`, primaryArtist: "Fixture Artist", metadata: { language: "English", version: "Original" } }] }
+  }, include: { tracks: true } });
+  await prisma.distributionSubmissionAttempt.create({ data: {
+    releaseId: abandoned.id, provider: "direnote", state: "submitted", isCurrent: true,
+    idempotencyKey: "reconciliation-cron-abandoned", payloadHash: "reconciliation-cron-abandoned", upc: abandonedUpc,
+    providerStatus: "changes_required", corrections: { status: "customer_resolved" },
+    trackIdentifiers: [{ id: abandoned.tracks[0].id, title: abandonedTitle, trackNumber: 1, isrc: abandoned.tracks[0].isrc }]
+  } });
 
   globalThis.fetch = async (input, init) => {
     const url = String(input);
@@ -64,7 +77,7 @@ async function main() {
     const first = await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));
     const firstResult = await first.json();
     const failedFixture = fixtures.find(fixture => fixture.upc === failedUpc)!;
-    assert.equal(firstResult.candidateCount, 8, "The batch must include every current reconciliation-required attempt.");
+    assert.equal(firstResult.candidateCount, 8, "The batch includes every current reconciliation-required attempt and excludes the abandoned resolved-correction attempt.");
     assert.equal(firstResult.checked, 8, "The worker must continue through all eligible releases after one provider failure.");
     assert.equal(firstResult.errorCount, 1, `A failed status lookup must be reported while other releases still sync: ${JSON.stringify(firstResult.results)}`);
     assert.equal(firstResult.results.find((item: any) => item.releaseId === failedFixture.id).success, false);

@@ -300,6 +300,10 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   const release = await prisma.release.findUnique({ where: { id: releaseId }, include: { tracks: { orderBy: { trackNumber: "asc" } } } });
   if (!release) throw new Error("Release not found.");
   const attempt = await ensureCurrentDireNoteAttempt(releaseId);
+  const corrections = record(attempt.corrections);
+  if (corrections.status === "customer_resolved") {
+    return { success: true, releaseId, attemptId: attempt.id, skipped: "corrections_resolved_waiting_for_resubmission" as const };
+  }
   // A submitted current attempt is authoritative provider-acceptance evidence.
   // Repair a stale local handoff projection before any status lookup, without
   // calling ingest again.
@@ -316,22 +320,27 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   let result: Awaited<ReturnType<typeof getDireNoteReleaseInformation>> | null = null;
   if (!lookupUpc) {
     const isrc = mappingTracks.map(track => normalized(track.isrc ?? "")).find(value => /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(value));
-    if (!isrc) throw new Error("Awaiting DireNote identifiers: no numeric UPC or assigned track ISRC is available yet.");
-    await reserveDireNoteRequest("upc_lookup", releaseId, actorId);
-    // Identifier discovery only. Never import this report into the royalty ledger.
-    const report = await getDireNoteRevenueReport(isrc);
-    lookupUpc = report.success ? upcFromDireNoteIsrcReport(report.data, isrc, release.title) : null;
-    const lookupOutcome = lookupUpc ? "UPC_FOUND_AND_VERIFIED" : report.success
-      ? (report.data ? "UPC_NOT_YET_ASSIGNED" : "UPC_RESPONSE_MISSING")
-      : report.httpStatus === 401 ? "PROVIDER_AUTH_FAILED" : "PROVIDER_UNAVAILABLE";
-    const lookupError = lookupUpc ? null : report.success
-      ? `Awaiting UPC (${lookupOutcome}): DireNote has not returned a numeric UPC for this ISRC and release title.`
-      : report.httpStatus === 401 ? "DIRENOTE_STATUS_AUTH_FAILED (PROVIDER_AUTH_FAILED, HTTP 401): Identifier discovery authentication failed." : `PROVIDER_UNAVAILABLE: DireNote UPC lookup failed (HTTP ${report.httpStatus ?? "unavailable"}). Check provider credentials or retry later.`;
-    await prisma.direNoteLog.create({ data: {
-      releaseId, action: "upc_lookup", httpStatus: report.httpStatus, success: Boolean(lookupUpc),
-      requestPayloadRedacted: { isrc }, responseJson: { isrc, upc: lookupUpc, outcome: lookupOutcome },
-      errorMessage: lookupError, createdByAdminId: actorId ?? null
-    } });
+    if (!isrc && !attempt.providerReference) throw new Error("Awaiting DireNote identifiers: the new submission has not returned a UPC, ISRC, or release reference yet.");
+    let lookupError: string | null = null;
+    if (isrc) {
+      await reserveDireNoteRequest("upc_lookup", releaseId, actorId);
+      // Identifier discovery only. Never import this report into the royalty ledger.
+      const report = await getDireNoteRevenueReport(isrc);
+      lookupUpc = report.success ? upcFromDireNoteIsrcReport(report.data, isrc, release.title) : null;
+      const lookupOutcome = lookupUpc ? "UPC_FOUND_AND_VERIFIED" : report.success
+        ? (report.data ? "UPC_NOT_YET_ASSIGNED" : "UPC_RESPONSE_MISSING")
+        : report.httpStatus === 401 ? "PROVIDER_AUTH_FAILED" : "PROVIDER_UNAVAILABLE";
+      lookupError = lookupUpc ? null : report.success
+        ? `Awaiting UPC (${lookupOutcome}): DireNote has not returned a numeric UPC for this ISRC and release title.`
+        : report.httpStatus === 401 ? "DIRENOTE_STATUS_AUTH_FAILED (PROVIDER_AUTH_FAILED, HTTP 401): Identifier discovery authentication failed." : `PROVIDER_UNAVAILABLE: DireNote UPC lookup failed (HTTP ${report.httpStatus ?? "unavailable"}). Check provider credentials or retry later.`;
+      await prisma.direNoteLog.create({ data: {
+        releaseId, action: "upc_lookup", httpStatus: report.httpStatus, success: Boolean(lookupUpc),
+        requestPayloadRedacted: { isrc }, responseJson: { isrc, upc: lookupUpc, outcome: lookupOutcome },
+        errorMessage: lookupError, createdByAdminId: actorId ?? null
+      } });
+    } else {
+      lookupError = "Awaiting DireNote identifiers: the accepted resubmission has no assigned UPC or ISRC yet.";
+    }
     if (!lookupUpc && attempt.providerReference) {
       const providerReference = text(attempt.providerReference);
       for (const key of ["release_id", "distributor_release_id"] as const) {
@@ -439,13 +448,14 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     const currentRelease = await tx.release.findUniqueOrThrow({ where: { id: releaseId }, include: { tracks: true } });
     const openDiscrepancies = new Set((await tx.direNoteReconciliationDiscrepancy.findMany({ where: { releaseId, status: "open" }, select: { field: true } })).map(item => item.field));
     const receivedUpc = normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc;
-    if (receivedUpc && (!validReleaseBarcode(receivedUpc) || (currentRelease.upc && currentRelease.upc !== receivedUpc))) {
+    const replacingIdentifiers = record(record(currentRelease.metadata).direNote).reconciliationInProgress === true;
+    if (receivedUpc && (!validReleaseBarcode(receivedUpc) || (!replacingIdentifiers && currentRelease.upc && currentRelease.upc !== receivedUpc))) {
       throw new Error("DireNote UPC conflicts with the stored release identity or has an invalid check digit. No identifiers were changed.");
     }
     for (const track of currentRelease.tracks) {
       const external = remoteTracks.find(remote => matchDireNoteTrack(remote, mappingTracks)?.id === track.id);
       const receivedIsrc = text(external?.isrc);
-      if (receivedIsrc && (!validIsrc(receivedIsrc) || (track.isrc && track.isrc !== receivedIsrc))) {
+      if (receivedIsrc && (!validIsrc(receivedIsrc) || (!replacingIdentifiers && track.isrc && track.isrc !== receivedIsrc))) {
         throw new Error(`DireNote ISRC conflicts with track ${track.trackNumber}'s stored recording identity or is invalid. No identifiers were changed.`);
       }
     }
@@ -485,7 +495,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     }
     const remoteUpc = normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc;
     const comparisons = [
-      { field: "upc", hymn: release.upc, external: remoteUpc, severity: "critical" },
+      ...(!replacingIdentifiers ? [{ field: "upc", hymn: release.upc, external: remoteUpc, severity: "critical" }] : []),
       { field: "release_title", hymn: release.title, external: text(remoteRelease.album_name), severity: "warning" },
       { field: "release_type", hymn: release.releaseType, external: text(remoteRelease.type_of_release), severity: "warning" },
       { field: "label_name", hymn: text(record(release.metadata).labelName), external: text(remoteRelease.label_name), severity: "warning" },
@@ -499,7 +509,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       }
     }
     if (remoteUpc && remoteUpc !== release.upc) await tx.externalIdentifierHistory.create({ data: { releaseId, provider: "direnote", identifierType: "upc", previousValue: release.upc, canonicalValue: remoteUpc, source: "release_information_sync" } });
-    await tx.release.update({ where: { id: releaseId }, data: { ...(remoteUpc ? { upc: remoteUpc } : {}), direNoteStatus: aggregateStatus.provider, direNoteLastSyncedAt: new Date(), direNoteSyncError: null, metadata: json({ ...(record(release.metadata)), direNote: { ...previousDireNote, lastSyncedAt: new Date().toISOString(), status: aggregateStatus.provider, release: redactDireNoteDiagnostic(remoteRelease), correctionMessages } }) } });
+    await tx.release.update({ where: { id: releaseId }, data: { ...(remoteUpc ? { upc: remoteUpc } : {}), direNoteStatus: aggregateStatus.provider, direNoteLastSyncedAt: new Date(), direNoteSyncError: null, metadata: json({ ...(record(release.metadata)), upcCode: remoteUpc ?? release.upc, direNote: { ...previousDireNote, reconciliationInProgress: false, lastSyncedAt: new Date().toISOString(), status: aggregateStatus.provider, release: redactDireNoteDiagnostic(remoteRelease), correctionMessages } }) } });
   }, { timeout: 60_000, maxWait: 10_000 });
   const previousStatus = release.status.toLowerCase() as ReleaseStatus;
   if (artistLinksChanged) {

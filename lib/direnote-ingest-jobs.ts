@@ -141,7 +141,7 @@ export async function pollDireNoteIngestJobs(options: { limit?: number } = {}) {
       }
 
       const completedData = { ...jobMetadata, ingestJobStatus: "completed", result: safeResult };
-      await activateDireNoteAttempt(attempt.id, { upc: upc!, providerStatus: "processing", trackIdentifiers: mappedTracks as never, responseRedacted: completedData as never });
+      await activateDireNoteAttempt(attempt.id, { upc: upc!, providerStatus: "processing", trackIdentifiers: mappedTracks as never, responseRedacted: completedData as never }, { replaceIdentifiers: "identifierPolicy" in reference.stored && reference.stored.identifierPolicy === "replace" });
       if (attempt.release.status === "SUBMITTING_TO_DISTRIBUTOR") await updateDetailedReleaseStatus(attempt.releaseId, "sent_to_distributor", "DireNote completed the accepted ingest job.");
       const currentRelease = await prisma.release.findUniqueOrThrow({ where: { id: attempt.releaseId } });
       const priorMetadata = object(currentRelease.metadata);

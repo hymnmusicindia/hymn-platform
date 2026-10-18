@@ -25,6 +25,8 @@ for (const status of CUSTOMER_REVIEW_STATUSES) {
   assert.equal(getReleasePortalFilterLabel(status as any), "Under Review");
 }
 assert.equal(getReleasePortalStageLabel("partner_received"), "Under Review");
+assert.equal(getReleasePortalStage({ status: "under_review", metadata: { direNote: { reconciliationInProgress: true } } } as any), "reconciling");
+assert.equal(getReleasePortalStageLabel("reconciling"), "Reconciling");
 assert.equal(getReleasePortalDateLabel({ status: "live", releaseTiming: "quick_release" } as any), "Available now");
 assert.equal(getReleasePortalStage({ status: "distributed" } as any), "released");
 assert.equal(getReleasePortalFilterLabel("changes_requested"), "Changes Requested");
