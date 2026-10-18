@@ -48,13 +48,20 @@ export function isDireNoteCorrectionStatus(providerStatus?: string | null) {
 }
 
 export function effectiveReleaseStatus(status: string, providerStatus?: string | null) {
-  return isDireNoteCorrectionStatus(providerStatus) ? "changes_requested" : status.toLowerCase();
+  const localStatus = status.toLowerCase();
+  // A user's successful correction submission advances the HYMN workflow while
+  // DireNote can still report the correction from the previous submission.
+  // Keep the newer local lifecycle state visible until a fresh provider sync
+  // changes the canonical status again.
+  if (CUSTOMER_REVIEW_STATUSES.has(localStatus)) return localStatus;
+  return isDireNoteCorrectionStatus(providerStatus) ? "changes_requested" : localStatus;
 }
 
 /** Human labels for operational release states. Kept client-safe so admin and
  * customer surfaces cannot drift by each maintaining their own formatter. */
 export function adminReleaseStatusLabel(status: string, providerStatus?: string | null) {
-  if (isDireNoteCorrectionStatus(providerStatus)) return "Correction Required";
+  const effectiveStatus = effectiveReleaseStatus(status, providerStatus);
+  if (effectiveStatus === "changes_requested" && isDireNoteCorrectionStatus(providerStatus)) return "Correction Required";
   const labels: Record<string, string> = {
     submitting_to_distributor: "Sending to DireNote",
     sent_to_distributor: "Sent to DireNote",
