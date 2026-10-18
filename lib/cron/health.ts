@@ -37,6 +37,14 @@ export async function cronHealthResponse() {
     SELECT EXTRACT(EPOCH FROM (NOW() - MAX(created_at))) AS age_seconds FROM audit_logs
     WHERE entity='cron_job' AND action='CRON_RUN_STARTED' AND metadata->>'source'='hostinger-runtime'`;
   const workerAge = worker?.age_seconds == null ? null : Math.round(Number(worker.age_seconds));
-  const scheduler = { primaryWorker: workerAge != null && workerAge <= 600 ? "running" : "not_running", lastTriggerSecondsAgo: workerAge, note: "In-process worker is primary; GitHub runs are fallback, not evidence of delivery." };
+  const [started] = await prisma.$queryRaw<Array<{ action: string; metadata: Record<string, unknown>; age_seconds: number }>>`
+    SELECT action, metadata, EXTRACT(EPOCH FROM (NOW() - created_at)) AS age_seconds FROM audit_logs
+    WHERE entity='cron_worker' ORDER BY created_at DESC, id DESC LIMIT 1`;
+  const scheduler = {
+    primaryWorker: workerAge != null && workerAge <= 600 ? "running" : started ? "started_but_not_triggering" : "never_started",
+    lastTriggerSecondsAgo: workerAge,
+    lastWorkerEvent: started ? { action: started.action, secondsAgo: Math.round(Number(started.age_seconds)), origin: started.metadata.origin ?? started.metadata.to ?? null } : null,
+    note: "In-process worker is primary; GitHub runs are fallback, not evidence of delivery."
+  };
   return Response.json({ healthy: Object.values(review).every(count => count === 0) && jobs.every(job => ["healthy", "running", "disabled"].includes(job.status)), jobs, review, scheduler }, { headers: { "Cache-Control": "no-store" } });
 }

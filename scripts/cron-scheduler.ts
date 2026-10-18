@@ -1,9 +1,9 @@
 import { CRON_JOBS, cronEnabled, cronHasFailures } from "../lib/cron/registry";
 
 /** Hostinger scheduler: separate urgent/bulk lanes and guarded endpoint retries. */
-export function startCronScheduler(options: { port: number; secret: string; origin?: string; fetcher?: typeof fetch; now?: () => number; random?: () => number }) {
+export function startCronScheduler(options: { port: number; secret: string; origin?: string; fallbackOrigin?: string; onFallback?: (from: string, to: string) => void; fetcher?: typeof fetch; now?: () => number; random?: () => number }) {
   const fetcher = options.fetcher ?? fetch, now = options.now ?? Date.now, random = options.random ?? Math.random;
-  const origin = options.origin ?? `http://127.0.0.1:${options.port}`;
+  let origin = options.origin ?? `http://127.0.0.1:${options.port}`;
   const next = new Map(CRON_JOBS.map((job, index) => [job.id, now() + index * 2000]));
   const active = new Set<string>(), failures = new Map<string, number>();
   const controller = new AbortController();
@@ -32,7 +32,18 @@ export function startCronScheduler(options: { port: number; secret: string; orig
           const retry = Number(response.headers.get("retry-after"));
           if (Number.isFinite(retry) && retry > 0) retryAfter = Math.min(retry * 1000, 86400000);
           if (!healthy) console.error("cron job requires attention", { job: job.id, httpStatus: response.status });
-        } catch { if (!stopped) console.error("cron job unavailable; retry scheduled", { job: job.id }); }
+        } catch (error) {
+          if (!stopped) console.error("cron job unavailable; retry scheduled", { job: job.id, origin });
+          // Connection refused on loopback means the server is not listening where
+          // we assumed (host-assigned port or socket). Switch to the public origin
+          // once. A timeout is excluded: the app answered slowly, so it is reachable.
+          const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+          if (!stopped && !timedOut && options.fallbackOrigin && origin !== options.fallbackOrigin) {
+            const from = origin;
+            origin = options.fallbackOrigin;
+            options.onFallback?.(from, origin);
+          }
+        }
         finally {
           const onCadence = healthy || domainFailure;
           const count = onCadence ? 0 : Math.min(10, (failures.get(job.id) ?? 0) + 1);

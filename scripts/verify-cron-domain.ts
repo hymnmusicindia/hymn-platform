@@ -56,7 +56,7 @@ async function main() {
     if (url.pathname === "/api/cron/health") {
       healthCalls++;
       return Response.json(healthCalls === 1
-        ? { healthy: false, jobs: [{ id: "team-appointments", status: "attention" }, { id: "team-os", status: "healthy" }] }
+        ? { healthy: false, jobs: [{ id: "team-appointments", status: "stale" }, { id: "team-os", status: "healthy" }] }
         : { healthy: true, jobs: [{ id: "team-appointments", status: "healthy" }, { id: "team-os", status: "healthy" }] });
     }
     recoveryCalls++;
@@ -65,6 +65,33 @@ async function main() {
   assert.equal(recoveredWatchdog.healthy, true, "The watchdog must replay unhealthy jobs and recheck health.");
   assert.equal(healthCalls, 2);
   assert.equal(recoveryCalls, 1, "Only unhealthy registered jobs should be replayed.");
+  // A job that ran and flagged something for a person must not be replayed every
+  // watchdog cycle, and an open review item must not fail scheduler health.
+  let reviewReplays = 0;
+  const reviewLog: string[] = [];
+  const reviewWatchdog = await recoverFailedCronJobs({ secret: "fixture", delay: async () => {}, log: line => { reviewLog.push(String(line)); }, fetcher: async input => {
+    if (new URL(String(input)).pathname === "/api/cron/health") return Response.json({ healthy: false, review: { financialTasks: 1 }, jobs: [{ id: "payment-reconciliation", status: "attention" }, { id: "team-os", status: "healthy" }] });
+    reviewReplays++;
+    return Response.json({ success: true });
+  } });
+  assert.equal(reviewReplays, 0, "Jobs awaiting human review must not be replayed.");
+  // Loopback refused (host-assigned port or socket): switch to the public origin once.
+  let fallbackClock = 0, fellBackTo = "";
+  const fallbackCalls: string[] = [];
+  const fallbackWorker = startCronScheduler({ port: 3000, secret: "fixture", fallbackOrigin: "https://fallback.test", onFallback: (_from, to) => { fellBackTo = to; }, now: () => fallbackClock, random: () => 0, fetcher: (async input => {
+    fallbackCalls.push(String(input));
+    if (String(input).startsWith("http://127.0.0.1")) throw new TypeError("fetch failed");
+    return Response.json({ success: true });
+  }) as typeof fetch });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(fellBackTo, "https://fallback.test");
+  fallbackClock = 10_000_000;
+  await fallbackWorker.tick();
+  fallbackWorker.stop();
+  assert(fallbackCalls[0].startsWith("http://127.0.0.1:3000/"));
+  assert(fallbackCalls.length > 1 && fallbackCalls.slice(1).every(url => url.startsWith("https://fallback.test/")), "After a refused loopback call every job must use the public origin.");
+  assert.equal(reviewWatchdog.healthy, true);
+  assert(reviewLog.some(line => line.startsWith("::warning::") && line.includes("payment-reconciliation") && line.includes("financialTasks=1")), "Review items must stay visible as a warning.");
   // Keep the urgent request unresolved while a bulk job completes. It must not
   // be duplicated by another tick or block the separate bulk lane.
   let clock = 0, resolveUrgent: ((response: Response) => void) | undefined;

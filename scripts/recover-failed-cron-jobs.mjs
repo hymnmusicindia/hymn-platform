@@ -2,7 +2,10 @@ import { pathToFileURL } from "node:url";
 import { runCronJobs } from "./run-cron-jobs.mjs";
 
 const healthPath = "/api/cron/health";
-const repairable = new Set(["attention", "interrupted", "never_observed", "stale"]);
+// Only missed runs are recoverable by re-running. "attention" means the job ran
+// and flagged something for a person (e.g. a payment mismatch); re-running it
+// every 15 minutes cannot resolve that and repeats its side effects.
+const repairable = new Set(["interrupted", "never_observed", "stale"]);
 
 export async function recoverFailedCronJobs({ baseUrl, secret, fetcher = fetch, log = console.log } = {}) {
   if (!secret?.trim()) throw new Error("CRON_SECRET is missing; no recovery jobs were invoked.");
@@ -26,9 +29,14 @@ export async function recoverFailedCronJobs({ baseUrl, secret, fetcher = fetch, 
 
   const after = await health();
   const remaining = after.body.jobs.filter(job => repairable.has(job.status)).map(job => job.id);
-  const healthy = after.response.ok && after.body.healthy === true && remaining.length === 0;
-  log(JSON.stringify({ healthy, recovered: failed.length, remaining }));
-  return { healthy, recovered: failed.length, remaining };
+  // Scheduler health is about missed runs. Items awaiting human review stay
+  // visible as a warning on every run but do not fail the watchdog.
+  const needsReview = after.body.jobs.filter(job => job.status === "attention").map(job => job.id);
+  const review = Object.entries(after.body.review ?? {}).filter(([, count]) => Number(count) > 0).map(([key, count]) => `${key}=${count}`);
+  if (needsReview.length || review.length) log(`::warning::Needs human review: ${[...needsReview, ...review].join(", ")}`);
+  const healthy = remaining.length === 0;
+  log(JSON.stringify({ healthy, recovered: failed.length, remaining, needsReview, review, scheduler: after.body.scheduler ?? null }));
+  return { healthy, recovered: failed.length, remaining, needsReview };
 }
 
 async function main() {
