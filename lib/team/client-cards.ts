@@ -134,7 +134,7 @@ export async function ensureAccountClientCard(userId: number) {
     where: { id: userId },
     select: { id: true, role: true, status: true, name: true, email: true, mobile: true, contactEmail: true, onboardingPurpose: true, onboardingUserType: true }
   });
-  if (!account || ![UserRole.CUSTOMER, UserRole.PRODUCER].includes(account.role) || ["BANNED", "DELETION_SCHEDULED"].includes(account.status)) return null;
+  if (!account || (account.role !== UserRole.CUSTOMER && account.role !== UserRole.PRODUCER) || ["BANNED", "DELETION_SCHEDULED"].includes(account.status)) return null;
   const workspace = await prisma.teamWorkspace.findFirst({ orderBy: { createdAt: "asc" }, select: { id: true } });
   if (!workspace) return null;
   return prisma.$transaction(async tx => {

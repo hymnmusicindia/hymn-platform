@@ -67,6 +67,6 @@ export async function PATCH(request: Request) {
     return { item: row, previous: { ownerId: current.ownerId, status: current.status } };
   }, { maxWait: 10000, timeout: 30000 });
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status });
-  await logAuditEvent({ actorType: "admin", actorId: Number(admin.sub) || null, actorRole: "admin", entityType: "team_client", entityId: result.item.id, action: "client_card.updated", oldValue: result.previous, newValue: { ownerId: result.item.ownerId, status: result.item.status, name: result.item.name, email: result.item.email, phone: result.item.phone } }).catch(error => console.error("Client card audit write failed", { clientId: result.item.id, error }));
+  await logAuditEvent({ actorType: "admin", actorId: "sub" in admin ? Number(admin.sub) || null : null, actorRole: "admin", entityType: "team_client", entityId: result.item.id, action: "client_card.updated", oldValue: result.previous, newValue: { ownerId: result.item.ownerId, status: result.item.status, name: result.item.name, email: result.item.email, phone: result.item.phone } }).catch(error => console.error("Client card audit write failed", { clientId: result.item.id, error }));
   return NextResponse.json({ item: result.item });
 }

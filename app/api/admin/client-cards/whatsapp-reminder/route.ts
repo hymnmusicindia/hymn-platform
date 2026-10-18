@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { UserRole } from "@prisma/client";
 import { requireAdminPermission, requireRecentAdminPermission } from "@/lib/access";
 import { logAuditEvent } from "@/lib/audit-log";
 import { emailLayout, emailText } from "@/lib/email/email-templates";
@@ -11,10 +12,11 @@ import { isSameAppOrigin } from "@/lib/request-origin";
 const TEMPLATE = "account_whatsapp_number_reminder_v1";
 const EVENT_PREFIX = `${TEMPLATE}:user:`;
 const BATCH_SIZE = 25;
+const reminderRoles: UserRole[] = [UserRole.CUSTOMER, UserRole.PRODUCER];
 
 const baseWhere = {
   status: "ACTIVE" as const,
-  role: { in: ["CUSTOMER", "PRODUCER"] as const },
+  role: { in: reminderRoles },
   OR: [{ mobile: null }, { mobile: "" }]
 };
 
