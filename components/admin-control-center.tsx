@@ -54,22 +54,47 @@ function AdminReleaseCatalogue({ releases, search, onSearch, assignment, onAssig
       <select className="field" aria-label="Filter by status" value={status} onChange={(event) => onStatus(event.target.value)}><option value="all">All statuses</option>{statuses.map((value) => <option key={value} value={value}>{adminReleaseStatusLabel(value as Release["status"]).replace(/_/g, " ")}</option>)}</select>
     </div>
     <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>{rows.length} {rows.length === 1 ? "release" : "releases"}</p>
-    <div className="mt-4 overflow-x-auto">
-      <table className="w-full min-w-[1050px] text-left text-sm">
-        <thead><tr>{["Artwork", "Release", "Artist", "Assigned user", "UPC", "Tracks", "Status", "Release date", "Updated", "Actions"].map((label) => <th key={label} className="border-b p-3 text-xs font-semibold" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>{label}</th>)}</tr></thead>
-        <tbody>{rows.map((release) => <tr key={release.id} onClick={() => onOpen(release.id)} className="cursor-pointer transition-colors hover:bg-[var(--bg-soft)]">
-          <td className="border-b p-3" style={{ borderColor: "var(--border)" }}>{release.artworkUrl ? <img src={artworkPreviewUrl(release.artworkUrl, 160)} alt="" className="h-12 w-12 rounded-lg object-cover" /> : <div className="h-12 w-12 rounded-lg border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} />}</td>
-          <td className="border-b p-3 font-medium" style={{ borderColor: "var(--border)" }}><button type="button" className="text-left hover:underline" onClick={(event) => { event.stopPropagation(); onOpen(release.id); }}>{release.releaseTitle || release.trackName}</button></td>
-          <td className="border-b p-3" style={{ borderColor: "var(--border)" }}>{release.artistName || "—"}</td>
-          <td className="border-b p-3" style={{ borderColor: "var(--border)" }}>{release.ownerEmail || "Unassigned"}</td>
-          <td className="border-b p-3 font-mono text-xs" style={{ borderColor: "var(--border)" }}>{release.upcCode || "—"}</td>
-          <td className="border-b p-3" style={{ borderColor: "var(--border)" }}>{release.tracks?.length ?? 0}</td>
-          <td className="border-b p-3" style={{ borderColor: "var(--border)" }}><StatusPill label={adminReleaseStatusLabel(release.status, release.direNoteStatus)} /></td>
-          <td className="border-b p-3" style={{ borderColor: "var(--border)" }}>{release.releaseDate ? new Date(release.releaseDate).toLocaleDateString("en-IN") : "—"}</td>
-          <td className="border-b p-3" style={{ borderColor: "var(--border)" }}>{release.lastEditedAt ? new Date(release.lastEditedAt).toLocaleDateString("en-IN") : new Date(release.createdAt).toLocaleDateString("en-IN")}</td>
-          <td className="border-b p-3" style={{ borderColor: "var(--border)" }}><button type="button" className="btn-secondary pressable" onClick={(event) => { event.stopPropagation(); onOpen(release.id); }}>Inspect</button></td>
-        </tr>)}</tbody>
-      </table>
+    <div className="mt-4">
+      <div className="grid gap-3 xl:hidden">
+        {rows.map((release) => <article key={release.id} className="min-w-0 rounded-xl border p-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
+          <div className="flex min-w-0 items-start gap-3">
+            {release.artworkUrl ? <img src={artworkPreviewUrl(release.artworkUrl, 120)} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" /> : <div className="h-12 w-12 shrink-0 rounded-lg border" style={{ borderColor: "var(--border)", background: "var(--bg)" }} />}
+            <div className="min-w-0 flex-1">
+              <p className="break-words text-sm font-semibold leading-5">{release.releaseTitle || release.trackName}</p>
+              <p className="mt-0.5 break-words text-xs" style={{ color: "var(--text-muted)" }}>{release.artistName || "Artist unavailable"}</p>
+              <p className="mt-0.5 break-all text-[11px]" style={{ color: "var(--text-soft)" }}>{release.ownerEmail || "Unassigned"}</p>
+            </div>
+          </div>
+          <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-2 border-t pt-2" style={{ borderColor: "var(--border)" }}>
+            <StatusPill label={adminReleaseStatusLabel(release.status, release.direNoteStatus)} />
+            <button type="button" className="btn-secondary pressable shrink-0 px-3 py-1.5 text-xs" onClick={() => onOpen(release.id)}>Inspect</button>
+          </div>
+          <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]" style={{ color: "var(--text-muted)" }}>
+            <div className="min-w-0"><dt>UPC</dt><dd className="break-all font-mono">{release.upcCode || "—"}</dd></div>
+            <div><dt>Tracks</dt><dd>{release.tracks?.length ?? 0}</dd></div>
+            <div><dt>Release date</dt><dd>{release.releaseDate ? new Date(release.releaseDate).toLocaleDateString("en-IN") : "—"}</dd></div>
+            <div><dt>Updated</dt><dd>{release.lastEditedAt ? new Date(release.lastEditedAt).toLocaleDateString("en-IN") : new Date(release.createdAt).toLocaleDateString("en-IN")}</dd></div>
+          </dl>
+        </article>)}
+      </div>
+      <div className="hidden overflow-x-auto xl:block">
+        <table className="w-full table-fixed text-left text-xs">
+          <colgroup><col className="w-[6%]" /><col className="w-[15%]" /><col className="w-[12%]" /><col className="w-[17%]" /><col className="w-[12%]" /><col className="w-[6%]" /><col className="w-[14%]" /><col className="w-[8%]" /><col className="w-[7%]" /><col className="w-[7%]" /></colgroup>
+          <thead><tr>{["Artwork", "Release", "Artist", "Assigned user", "UPC", "Tracks", "Status", "Release date", "Updated", "Actions"].map((label) => <th key={label} className="border-b px-2 py-2 text-[10px] font-semibold leading-tight xl:px-2.5 xl:text-[11px]" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>{label}</th>)}</tr></thead>
+          <tbody>{rows.map((release) => <tr key={release.id} onClick={() => onOpen(release.id)} className="cursor-pointer transition-colors hover:bg-[var(--bg-soft)]">
+            <td className="border-b px-2 py-2" style={{ borderColor: "var(--border)" }}>{release.artworkUrl ? <img src={artworkPreviewUrl(release.artworkUrl, 120)} alt="" className="h-9 w-9 rounded-md object-cover" /> : <div className="h-9 w-9 rounded-md border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} />}</td>
+            <td className="break-words border-b px-2 py-2 font-medium leading-tight" style={{ borderColor: "var(--border)" }}>{release.releaseTitle || release.trackName}</td>
+            <td className="break-words border-b px-2 py-2 leading-tight" style={{ borderColor: "var(--border)" }}>{release.artistName || "—"}</td>
+            <td className="break-all border-b px-2 py-2 text-[11px] leading-tight" style={{ borderColor: "var(--border)" }}>{release.ownerEmail || "Unassigned"}</td>
+            <td className="break-all border-b px-2 py-2 font-mono text-[10px] leading-tight" style={{ borderColor: "var(--border)" }}>{release.upcCode || "—"}</td>
+            <td className="border-b px-2 py-2" style={{ borderColor: "var(--border)" }}>{release.tracks?.length ?? 0}</td>
+            <td className="border-b px-2 py-2" style={{ borderColor: "var(--border)" }}><div className="max-w-full [&>span]:max-w-full [&>span]:break-words"><StatusPill label={adminReleaseStatusLabel(release.status, release.direNoteStatus)} /></div></td>
+            <td className="border-b px-2 py-2 text-[10px] leading-tight" style={{ borderColor: "var(--border)" }}>{release.releaseDate ? new Date(release.releaseDate).toLocaleDateString("en-IN") : "—"}</td>
+            <td className="border-b px-2 py-2 text-[10px] leading-tight" style={{ borderColor: "var(--border)" }}>{release.lastEditedAt ? new Date(release.lastEditedAt).toLocaleDateString("en-IN") : new Date(release.createdAt).toLocaleDateString("en-IN")}</td>
+            <td className="border-b px-2 py-2" style={{ borderColor: "var(--border)" }}><button type="button" className="btn-secondary pressable whitespace-nowrap px-2 py-1.5 text-[10px]" onClick={(event) => { event.stopPropagation(); onOpen(release.id); }}>Inspect</button></td>
+          </tr>)}</tbody>
+        </table>
+      </div>
       {!rows.length ? <p className="py-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>No releases match these filters.</p> : null}
     </div>
   </section>;
