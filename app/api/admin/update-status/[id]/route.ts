@@ -57,11 +57,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
       const queueEntry = submission.duplicate ? null : await syncQueueStage(Number(id), "sent_to_direnote", actorId, "HYMN approval automatically delivered this release to DireNote.", { syncReleaseStatus: false });
       if (!submission.duplicate) await createReleaseAuditLog({ releaseId: Number(id), userId: actorId, action: "RELEASE_APPROVED_AND_AUTO_DELIVERED", details: { note: payload.note ?? null } });
-      const sync = submission.release?.upcCode
+      const submittedRelease = await getDetailedReleaseById(Number(id));
+      const sync = submittedRelease?.upcCode
         ? await syncDireNoteRelease(Number(id), actorId).catch(() => null)
         : null;
-      const release = sync ? await getDetailedReleaseById(Number(id)) : submission.release;
-      return NextResponse.json({ release, queueEntry, validation: submission.validation, warnings: "warnings" in submission ? submission.warnings ?? [] : [], providerSync: sync ? { status: sync.status, upc: sync.upc, trackCount: sync.trackCount } : null });
+      const release = sync ? await getDetailedReleaseById(Number(id)) : submittedRelease;
+      const providerSync = sync && !("skipped" in sync) ? { status: sync.status, upc: sync.upc, trackCount: sync.trackCount } : null;
+      return NextResponse.json({ release, queueEntry, validation: submission.validation, warnings: "warnings" in submission ? submission.warnings ?? [] : [], providerSync });
     }
     if (payload.status === "sent") {
       const origin = getPublicAppUrl(request.url);
@@ -79,11 +81,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           { status: submission.validation.ok ? 502 : 400 }
         );
       }
-      const sync = submission.release?.upcCode
+      const submittedRelease = await getDetailedReleaseById(Number(id));
+      const sync = submittedRelease?.upcCode
         ? await syncDireNoteRelease(Number(id), actorId).catch(() => null)
         : null;
-      const release = sync ? await getDetailedReleaseById(Number(id)) : submission.release;
-      return NextResponse.json({ release, validation: submission.validation, warnings: "warnings" in submission ? submission.warnings ?? [] : [], providerSync: sync ? { status: sync.status, upc: sync.upc, trackCount: sync.trackCount } : null });
+      const release = sync ? await getDetailedReleaseById(Number(id)) : submittedRelease;
+      const providerSync = sync && !("skipped" in sync) ? { status: sync.status, upc: sync.upc, trackCount: sync.trackCount } : null;
+      return NextResponse.json({ release, validation: submission.validation, warnings: "warnings" in submission ? submission.warnings ?? [] : [], providerSync });
     }
     const requiresReview = payload.status === "rejected" || payload.status === "changes_requested";
     const statusReason = payload.note?.trim() || payload.reason?.trim();
