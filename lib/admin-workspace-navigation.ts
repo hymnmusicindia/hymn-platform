@@ -18,6 +18,7 @@ export const adminWorkspaceNavigation:Item[]=[
         { key: "kyc", label: "KYC", description: "Payout-profile review", group: "Money Operations", href: "/admin/payout-profiles" },
         { key: "managed-services", label: "Managed Services", description: "CRBT, OAC and Content ID", group: "Growth / Content", href: "/admin/managed-services" },
         { key: "artists", label: "Artists", description: "Profiles and creators", group: "Growth / Content" },
+        { key: "client-cards-admin", label: "Client Cards", description: "Account profiles, interests and team ownership", group: "Growth / Content", href: "/admin/client-cards" },
         { key: "promotions", label: "Promotions", description: "Campaign operations and redemptions", group: "Growth / Content", href:"/admin/campaigns" },
         { key: "playlist-reviews", label: "Playlist reviews", description: "Curator approval and paid-feedback operations", group: "Growth / Content", href: "/admin/playlist-reviews" },
         { key: "timed-playlists", label: "Timed Playlists", description: "Playlist scheduling", group: "Growth / Content" },
@@ -42,7 +43,7 @@ export const adminWorkspaceNavigation:Item[]=[
         { key: "settings", label: "Settings", description: "Platform config", group: "Platform" }
       ];
 const required:Record<string,AdminPermissionKey[]>={
- "manual-catalogue":["system.manage"],"studio-admin":["services.manage"],"contributors-admin":["users.read"],"campaign-redemptions":["users.read"],"leads-admin":["users.manage"],"audit-admin":["audit.read"],"email-admin":["system.manage"],"webhooks-admin":["system.manage"],
+ "manual-catalogue":["system.manage"],"studio-admin":["services.manage"],"contributors-admin":["users.read"],"campaign-redemptions":["users.read"],"leads-admin":["users.manage"],"client-cards-admin":["users.manage"],"audit-admin":["audit.read"],"email-admin":["system.manage"],"webhooks-admin":["system.manage"],
   notifications:["system.manage"],users:["users.read"],artists:["users.read"],producers:["users.read","services.manage"],team:["system.manage"],activity:["audit.read"],analytics:["audit.read"],
   releases:["releases.read","releases.review","distribution.retry"],"distribution-queue":["releases.review"],"delivery-failed":["distribution.retry"],delivery:["releases.read"],updates:["updates.review","takedowns.review"],takedowns:["takedowns.review"],fraud:["fraud.read"],
   payments:["payouts.review","royalties.reconcile"],revenue:["payouts.review","royalties.reconcile"],royalties:["payouts.review"],"earnings-entry":["royalties.import"],reconciliation:["royalties.reconcile"],kyc:["kyc.review"],

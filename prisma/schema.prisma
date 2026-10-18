@@ -135,6 +135,7 @@ enum StudioPaymentPurpose {
 
 model User {
   teamMemberships TeamMember[]
+  clientCards TeamClient[]
   studioTipsEnabled Boolean @default(true) @map("studio_tips_enabled")
   studioVouches StudioVouch[]
   studioShowcaseCredits StudioShowcase[] @relation("ShowcaseArtist")
@@ -3289,6 +3290,7 @@ model ReferralMessage {
 model TeamWorkspace {
   id String @id @default(cuid())
   name String @default("HYMN Team OS")
+  clientCardsImportedAt DateTime? @map("client_cards_imported_at")
   createdAt DateTime @default(now())
   roles TeamRole[]
   members TeamMember[]
@@ -3742,6 +3744,7 @@ model TeamClient {
   id String @id @default(cuid())
   workspaceId String
   ownerId String
+  userId Int? @unique
   name String
   phone String @default("")
   email String @default("")
@@ -3756,6 +3759,7 @@ model TeamClient {
   updatedAt DateTime @updatedAt
   workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   owner TeamMember @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
   events TeamCalendarEvent[]
   welcomeJobs TeamClientWelcome[]
   @@index([workspaceId, status])

@@ -10,6 +10,7 @@ import { createSession } from "@/lib/session";
 import { userSignupSchema } from "@/lib/validation";
 import { cookies } from "next/headers";
 import { REFERRAL_ATTRIBUTION_COOKIE } from "@/lib/referrals";
+import { ensureAccountClientCard } from "@/lib/team/client-cards";
 
 export async function POST(request: Request) {
   const startedAt = new Date();
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
     }
 
     await createSession({ sub: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: profileAvatarDataUrl(user.name, user.role) });
+    await ensureAccountClientCard(user.id).catch(error => console.error("Client card account sync failed", { userId: user.id, error }));
     cookieStore.delete(REFERRAL_ATTRIBUTION_COOKIE);
     after(() => deliverReferralMail().then(() => undefined));
     const referralWelcome = await referralWelcomeForSignup(user.id, startedAt).catch(() => null);

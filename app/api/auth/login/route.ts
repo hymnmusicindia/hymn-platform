@@ -9,6 +9,7 @@ import { userLoginSchema } from "@/lib/validation";
 import { consumeRateLimit, requestIdentity } from "@/lib/rate-limit";
 import { apiRequestId } from "@/lib/api-response";
 import { logAuditEvent } from "@/lib/audit-log";
+import { ensureAccountClientCard } from "@/lib/team/client-cards";
 
 // Deployment readiness only; never exposes accounts or authentication secrets.
 export async function GET() {
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
     }
 
     await createSession({ sub: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: profileAvatarDataUrl(user.name, user.role) }, { ipAddress, userAgent, requestId });
+    await ensureAccountClientCard(user.id).catch(error => console.error("Client card account sync failed", { userId: user.id, requestId, error }));
     await logAuditEvent({ actorType: user.role === "admin" ? "admin" : "user", actorId: user.id, actorRole: user.role, entityType: "authentication", entityId: user.id, action: "login.succeeded", requestId, ipAddress, userAgent, riskLevel: "low" });
 
     return NextResponse.json({ user, redirectPath: destinationAfterLogin(user.role) });

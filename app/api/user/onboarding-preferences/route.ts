@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { saveOnboardingPreferences, validateOnboardingPreferences } from "@/lib/onboarding";
 import { languageCodes } from "@/lib/i18n/languages";
 import { logAuditEvent } from "@/lib/audit-log";
+import { ensureAccountClientCard } from "@/lib/team/client-cards";
 
 export async function GET() {
   const session = await getSession();
@@ -18,6 +19,7 @@ export async function POST(request: Request) {
   try {
     const preferences = validateOnboardingPreferences(await request.json());
     await saveOnboardingPreferences(session.sub, preferences);
+    await ensureAccountClientCard(session.sub).catch(error => console.error("Client card profile sync failed", { userId: session.sub, error }));
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not save preferences." }, { status: 400 });
@@ -49,6 +51,7 @@ export async function PATCH(request: Request) {
     data.dateOfBirth = dob;
   }
   await prisma.user.update({ where: { id: session.sub }, data });
+  await ensureAccountClientCard(session.sub).catch(error => console.error("Client card profile sync failed", { userId: session.sub, error }));
   if (typeof data.name === "string" && existing?.name !== data.name) {
     await logAuditEvent({ actorType: "user", actorId: session.sub, actorRole: session.role, entityType: "user", entityId: session.sub, action: "account.name.changed", oldValue: { name: existing?.name ?? null }, newValue: { name: data.name }, riskLevel: "normal" });
   }

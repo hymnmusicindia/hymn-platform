@@ -13,6 +13,7 @@ import { cookies } from "next/headers";
 import { REFERRAL_ATTRIBUTION_COOKIE } from "@/lib/referrals";
 import { apiRequestId } from "@/lib/api-response";
 import { requestIdentity } from "@/lib/rate-limit";
+import { ensureAccountClientCard } from "@/lib/team/client-cards";
 
 export async function POST(request: Request) {
   const startedAt = new Date();
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
     }
 
     await createSession({ sub: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: profile.picture || profileAvatarDataUrl(user.name, user.role) }, { ipAddress, userAgent, requestId });
+    await ensureAccountClientCard(user.id).catch(error => console.error("Client card account sync failed", { userId: user.id, requestId, error }));
     cookieStore.delete(REFERRAL_ATTRIBUTION_COOKIE);
     after(() => deliverReferralMail().then(() => undefined));
     await createBirthdayNotificationForUser(user.id).catch((error) => console.error("Birthday notification check failed", error));

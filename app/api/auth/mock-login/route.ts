@@ -4,6 +4,7 @@ import { profileAvatarDataUrl } from "@/lib/avatar";
 import { ensureMockUser } from "@/lib/db";
 import { createSession } from "@/lib/session";
 import { mockLoginSchema } from "@/lib/validation";
+import { ensureAccountClientCard } from "@/lib/team/client-cards";
 
 const mockLoginEnabled =
   process.env.NODE_ENV !== "production" && process.env.ENABLE_MOCK_LOGIN !== "false";
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
     }
 
     await createSession({ sub: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: profileAvatarDataUrl(user.name, user.role) });
+    await ensureAccountClientCard(user.id).catch(error => console.error("Client card account sync failed", { userId: user.id, error }));
 
     return NextResponse.json({ user, redirectPath: destinationAfterLogin(user.role) });
   } catch (error) {
