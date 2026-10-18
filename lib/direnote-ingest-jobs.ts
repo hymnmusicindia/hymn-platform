@@ -6,6 +6,7 @@ import { reserveDireNoteRequest } from "@/lib/direnote-rate-limit";
 import { activateDireNoteAttempt, finishDistributionSubmission } from "@/lib/distribution-idempotency";
 import { markReleaseDistributionSuccess, updateDetailedReleaseStatus, logDistributionEvent, createReleaseAuditLog } from "@/lib/distribution-db";
 import { validIsrc, validReleaseBarcode } from "@/lib/release-input-rules";
+import { statusAfterDireNoteAcceptance } from "@/lib/release-status-engine";
 
 type JobRecord = Record<string, unknown>;
 const object = (value: unknown): JobRecord => value && typeof value === "object" && !Array.isArray(value) ? value as JobRecord : {};
@@ -53,7 +54,7 @@ export async function pollDireNoteIngestJobs(options: { limit?: number } = {}) {
       provider: "direnote", isCurrent: true, state: "submitted", providerStatus: { in: ["queued", "processing"] }, release: { archivedAt: null },
       OR: [{ lastCheckedAt: null }, { lastCheckedAt: { lte: new Date(now.getTime() - 60_000) } }]
     },
-    include: { release: { select: { id: true, title: true, status: true, upc: true, releaseDate: true, tracks: { orderBy: { trackNumber: "asc" }, select: { id: true, title: true, trackNumber: true, isrc: true } } } } },
+    include: { release: { select: { id: true, title: true, status: true, upc: true, releaseDate: true, metadata: true, tracks: { orderBy: { trackNumber: "asc" }, select: { id: true, title: true, trackNumber: true, isrc: true } } } } },
     orderBy: [{ lastCheckedAt: { sort: "asc", nulls: "first" } }, { startedAt: "asc" }, { id: "asc" }],
     // Look ahead so accepted jobs with no recoverable reference can be
     // quarantined without starving later jobs in the queue.
@@ -160,7 +161,7 @@ export async function pollDireNoteIngestJobs(options: { limit?: number } = {}) {
       const currentRelease = await prisma.release.findUniqueOrThrow({ where: { id: attempt.releaseId } });
       const priorMetadata = object(currentRelease.metadata);
       await prisma.release.update({ where: { id: attempt.releaseId }, data: { metadata: { ...priorMetadata, direnoteAccepted: true, direnoteAcceptedAt: checkedAt.toISOString(), direnoteStatus: "accepted", direnoteResponse: safeResult, latestStatusSyncAt: checkedAt.toISOString() } } });
-      await markReleaseDistributionSuccess({ releaseId: attempt.releaseId, status: attempt.release.releaseDate > checkedAt ? "scheduled" : "awaiting_live_confirmation", distributorReleaseId: parsed.distributorReleaseId, upc: upc!, trackIsrcs: parsed.trackIsrcs, responsePayload: safeResult, warnings: parsed.warnings });
+      await markReleaseDistributionSuccess({ releaseId: attempt.releaseId, status: statusAfterDireNoteAcceptance({ releaseDate: attempt.release.releaseDate.toISOString(), releaseTiming: String(object(attempt.release.metadata).releaseTiming ?? "quick_release") }), distributorReleaseId: parsed.distributorReleaseId, upc: upc!, trackIsrcs: parsed.trackIsrcs, responsePayload: safeResult, warnings: parsed.warnings });
       await finishDistributionSubmission(attempt.id, { state: "submitted", providerStatus: "completed", httpStatus: response.httpStatus, providerReference: parsed.distributorReleaseId ?? upc ?? attempt.providerReference, responseRedacted: completedData as never });
       await logDistributionEvent({ releaseId: attempt.releaseId, action: "ingest_status", httpStatus: response.httpStatus, responsePayload: { job_id: responseJobId || reference.jobId, status, result: safeResult }, success: true });
       await createReleaseAuditLog({ releaseId: attempt.releaseId, action: "DIRENOTE_INGEST_JOB_COMPLETED", details: { attemptId: attempt.id, jobId: reference.jobId ?? responseJobId, upc, trackCount } });

@@ -65,6 +65,8 @@ export function getReleasePortalDateLabel(release: Release) {
     if (stage === "released") return "Available now";
     if (stage === "partially_live") return "Available on some stores";
     if (stage === "taken_down") return "Removed from stores";
+    if (stage === "scheduled") return "DireNote approved; store release is pending";
+    if (["partner_received", "processing"].includes(stage)) return "Usually 2–7 days after DireNote approval";
     return "As soon as possible after approval";
   }
   const source = release.releaseDate || release.createdAt;
@@ -76,7 +78,7 @@ export function getReleasePortalDateLabel(release: Release) {
 
 export function isTentativeQuickRelease(release: Release) {
   if (release.releaseTiming !== "quick_release") return false;
-  return !["scheduled", "live", "released"].includes(release.status.toLowerCase());
+  return !["live", "released"].includes(release.status.toLowerCase());
 }
 
 export function getReleasePortalDateTitle(release: Release) {

@@ -205,7 +205,7 @@ export function mapDireNoteStatus(value: unknown) {
   if (status === "live") return "live";
   if (/reject|declin|fail|invalid|denied|cancel(?:led|ed)?/.test(status)) return "rejected";
   if (providerRequiresCorrections(status)) return "changes_required";
-  if (/^(scheduled|approved|accepted|ready|ready for distribution)$/.test(status)) return "scheduled";
+  if (/^(scheduled(?:\b.*)?|approved|accepted|ready|ready for distribution)$/.test(status)) return "scheduled";
   if (/deliver|distribut/.test(status)) return "delivered";
   if (/pending|process|review|queue|ingest/.test(status)) return "processing";
   return "unknown";
@@ -263,6 +263,20 @@ function aggregateReleaseStatus(tracks: RecordValue[], releaseStatus: unknown, r
   return { provider: "processing", canonical: "distributor_processing" as ReleaseStatus } as const;
 }
 
+function hasExplicitProviderSchedule(payload: RecordValue, release: RecordValue): boolean {
+  const scheduleTerms = /\b(scheduled|ready for distribution|approved for distribution|release date approved)\b/i;
+  const releaseStatuses = [payload.status, payload.release_status, payload.delivery_status, release.status, release.release_status, release.delivery_status];
+  return releaseStatuses.some(status => typeof status === "string" && scheduleTerms.test(status));
+}
+
+function normalizeProviderScheduleStatus(status: { provider: string; canonical: ReleaseStatus | null }, release: { releaseTiming: string | null }) {
+  if (status.provider !== "scheduled") return status;
+  if (release.releaseTiming !== "schedule_release") {
+    return { provider: "processing", canonical: "distributor_processing" as ReleaseStatus };
+  }
+  return status;
+}
+
 /** Fetches the documented UPC lookup and caches provider facts without overwriting HYMN metadata. */
 export async function syncDireNoteRelease(releaseId: number, actorId?: number | null, options: { deadlineAt?: number } = {}) {
   // A durable lease spans HTTP without holding a database connection open.
@@ -299,6 +313,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   };
   const release = await prisma.release.findUnique({ where: { id: releaseId }, include: { tracks: { orderBy: { trackNumber: "asc" } } } });
   if (!release) throw new Error("Release not found.");
+  const releaseTiming = String(record(release.metadata).releaseTiming ?? "quick_release");
   const attempt = await ensureCurrentDireNoteAttempt(releaseId);
   const corrections = record(attempt.corrections);
   if (corrections.status === "customer_resolved") {
@@ -417,13 +432,23 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       normalized(text(remote.isrc)) === normalized(text(track.isrc)) && validIsrc(text(remote.isrc))
     ))
   );
+  const providerScheduleConfirmed = hasExplicitProviderSchedule(payload, remoteRelease);
+  const mappedLifecycleStatus = normalizeProviderScheduleStatus(lifecycleStatus, { releaseTiming });
+  const scheduleEligibleStatus = providerScheduleConfirmed && releaseTiming === "schedule_release"
+    ? mappedLifecycleStatus
+    : mappedLifecycleStatus.provider === "scheduled"
+      ? { provider: "processing", canonical: "distributor_processing" as ReleaseStatus }
+      : mappedLifecycleStatus;
+  const lifecycleForRelease = releaseTiming === "quick_release" && ["awaiting_live_confirmation", "delivered"].includes(mappedLifecycleStatus.canonical ?? "")
+    ? { provider: "processing", canonical: "distributor_processing" as ReleaseStatus }
+    : scheduleEligibleStatus;
   const aggregateStatus = withdrawn ? { provider: "rejected", canonical: "rejected" as ReleaseStatus } : explicitProviderStatus === "changes_required" || providerCorrections.length
       ? { provider: "changes_required", canonical: "changes_requested" as ReleaseStatus }
       : explicitProviderStatus === "rejected"
         ? { provider: "rejected", canonical: "rejected" as ReleaseStatus }
         : hasVerifiedProviderListing && lifecycleStatus.provider === "unknown"
           ? { provider: "processing", canonical: "distributor_processing" as ReleaseStatus }
-          : lifecycleStatus;
+          : lifecycleForRelease;
   const correctionMessages = providerCorrections.map(issue => `${issue.label}: ${issue.note}`);
   const correctionFingerprint = direNoteCorrectionFingerprint(providerCorrections);
   const previousDireNote = record(record(release.metadata).direNote);

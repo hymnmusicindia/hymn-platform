@@ -464,7 +464,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
 
             <Panel title="Recent releases" description="Your latest catalogue records and their immediate operational state.">
               <div className="grid gap-3">
-                {releases.slice(0, 5).map((release) => <article key={release.id} className="surface-list-item flex flex-wrap items-center justify-between gap-4 p-4"><div className="min-w-0"><p className="truncate font-semibold" style={{ color: "var(--text)" }}>{releaseTitle(release)}</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{release.artistName} · {formatDate(release.releaseDate)}</p><div className="mt-2"><StatusPill label={release.status} active /></div></div><Link href={`/dashboard/releases/${release.id}`} className="btn-outline pressable px-3 py-2 text-xs">View release</Link></article>)}
+                {releases.slice(0, 5).map((release) => <article key={release.id} className="surface-list-item flex flex-wrap items-center justify-between gap-4 p-4"><div className="min-w-0"><p className="truncate font-semibold" style={{ color: "var(--text)" }}>{releaseTitle(release)}</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{release.artistName} · {release.releaseTiming === "quick_release" ? "Usually released within 2–7 days after DireNote approval" : formatDate(release.releaseDate)}</p><div className="mt-2"><StatusPill label={release.status} active /></div></div><Link href={`/dashboard/releases/${release.id}`} className="btn-outline pressable px-3 py-2 text-xs">View release</Link></article>)}
                 {releases.length === 0 ? <EmptyState copy="No releases yet. Create a release to begin your catalogue and delivery workflow." /> : null}
               </div>
             </Panel>
@@ -505,7 +505,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
             {key:"release",label:"Release",primary:true,value:release=>releaseTitle(release),render:release=><div className="record-identity">{release.artworkUrl&&<img src={artworkPreviewUrl(release.artworkUrl, 320)} alt=""/>}<div><strong>{releaseTitle(release)}</strong><small>{release.artistName} / {release.releaseType}</small>{release.status==="draft"&&<small>{release.draftCompletionPercent??0}% complete</small>}</div></div>},
             {key:"status",label:"Status",value:release=>release.status,render:release=><StatusPill label={release.status}/>},
             {key:"payment",label:"Payment",render:release=>release.paymentStatus||"Not recorded"},
-            {key:"date",label:"Release date",render:release=>formatDate(release.releaseDate)},
+            {key:"date",label:"Release timing",render:release=>release.releaseTiming === "quick_release" ? "As soon as possible after approval" : formatDate(release.releaseDate)},
             {key:"action",label:"Action",render:release=>release.status==="draft"?<Link className="btn-outline" href={`/distribution/start?edit=${release.id}`}>Continue draft</Link>:<Link className="btn-outline" href={`/dashboard/releases/${release.id}`}>Manage release</Link>}
           ]}/>
         </Panel>

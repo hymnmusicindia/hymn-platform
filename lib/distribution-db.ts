@@ -382,7 +382,8 @@ export async function notifyReleaseStatusChange(release: Release, status: Releas
   const sendStatusEmail = async (event: "release_under_review" | "release_approved_by_hymn" | "release_changes_requested" | "release_rejected" | "release_sent_to_distributor" | "release_scheduled" | "release_live" | "release_distribution_failed") => {
     const user = await findUserById(release.userId);
     if (!user) return;
-    await sendReleaseEmail(event, { to: user.email, userId: user.id, userName: user.name, releaseTitle: releaseName, artistName: release.artistName, releaseId: release.id, releaseStatus: status, releaseDate: release.releaseDate, manageReleaseUrl: emailAppUrl(`/dashboard/releases/${release.id}`), correctionUrl: emailAppUrl(`/dashboard/releases/${release.id}?tab=corrections`), rejectionReason: reason ?? undefined, correctionEventKey: status === "changes_requested" ? correctionEventKey : undefined });
+    const releaseTiming = String((release.metadata as Record<string, unknown> | null)?.releaseTiming ?? "quick_release");
+    await sendReleaseEmail(event, { to: user.email, userId: user.id, userName: user.name, releaseTitle: releaseName, artistName: release.artistName, releaseId: release.id, releaseStatus: status, releaseDate: releaseTiming === "schedule_release" ? release.releaseDate : undefined, manageReleaseUrl: emailAppUrl(`/dashboard/releases/${release.id}`), correctionUrl: emailAppUrl(`/dashboard/releases/${release.id}?tab=corrections`), rejectionReason: reason ?? undefined, correctionEventKey: status === "changes_requested" ? correctionEventKey : undefined });
   };
 
   if (status === "under_review") {
@@ -486,7 +487,15 @@ export async function notifyReleaseStatusChange(release: Release, status: Releas
   }
 
   if (status === "scheduled") {
-    await createNotification({ userId: release.userId, title: `Release scheduled: ${releaseName}`, body: `Your release is scheduled for ${release.releaseDate || "the selected release date"}. Platform availability may vary by DSP.`, type: "release", href: releaseHref, actionLabel: "View release", eventKey: `release:${release.id}:status:scheduled`, metadata: baseMetadata });
+    if (String((release.metadata as Record<string, unknown> | null)?.releaseTiming ?? "quick_release") !== "schedule_release") {
+      await createNotification({ userId: release.userId, title: `DireNote approved your quick release: ${releaseName}`, body: "DireNote approved your quick release for distribution. HYMN is monitoring store availability, which usually takes 2–7 days.", type: "release", href: releaseHref, actionLabel: "Track release", eventKey: `release:${release.id}:status:quick_release_approved`, metadata: baseMetadata });
+      await sendStatusEmail("release_sent_to_distributor");
+      return;
+    }
+    if (!/^(scheduled|ready for distribution|approved for distribution|release date approved)$/i.test(String(release.direNoteStatus ?? "").replaceAll("_", " "))) return;
+    await createNotification({ userId: release.userId, title: `Release scheduled: ${releaseName}`, body: `DireNote approved your release schedule for ${release.releaseDate || "your selected release date"}. Store availability can vary by platform.`, type: "release", href: releaseHref, actionLabel: "View release", eventKey: `release:${release.id}:status:scheduled`, metadata: baseMetadata });
+    const scheduleApproved = /^(scheduled|ready for distribution|approved for distribution|release date approved)$/i.test(String(release.direNoteStatus ?? "").replaceAll("_", " "));
+    if (!scheduleApproved) return;
     await sendStatusEmail("release_scheduled");
   }
 }
@@ -2056,7 +2065,11 @@ export async function markReleaseDistributionSuccess(input: {
         }
       }
       const updatedRelease = await getDetailedReleaseById(input.releaseId);
-      if (updatedRelease) await notifyReleaseStatusChange(updatedRelease, input.status);
+      if (updatedRelease) {
+        const releaseTiming = String((updatedRelease.metadata as Record<string, unknown> | null)?.releaseTiming ?? "quick_release");
+        const notificationStatus = updatedRelease.status === "scheduled" && releaseTiming !== "schedule_release" ? "sent_to_distributor" : input.status;
+        await notifyReleaseStatusChange(updatedRelease, notificationStatus);
+      }
       return updatedRelease;
     }
     
@@ -2073,7 +2086,9 @@ export async function markReleaseDistributionSuccess(input: {
         track.distributorStatus = isrc.distributorStatus ?? track.distributorStatus ?? input.status;
       }
     }
-    await notifyReleaseStatusChange(release, input.status);
+    const releaseTiming = String(release.releaseTiming ?? (release.metadata as Record<string, unknown> | undefined)?.releaseTiming ?? "quick_release");
+    const notificationStatus = release.status === "scheduled" && releaseTiming !== "schedule_release" ? "sent_to_distributor" : input.status;
+    await notifyReleaseStatusChange(release, notificationStatus);
     return release;
   }
   return null;

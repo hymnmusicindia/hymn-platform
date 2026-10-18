@@ -18,16 +18,17 @@ assert.equal(transitionReleaseStatus({ currentStatus: "under_review", nextStatus
 assert.equal(transitionReleaseStatus({ currentStatus: "approved", nextStatus: "changes_requested", reason: "Distributor readiness issue" }), "changes_requested");
 assert.throws(() => transitionReleaseStatus({ currentStatus: "draft", nextStatus: "archived", manualOverride: true }), /requires a reason/);
 assert.equal(statusWhenScheduledDateArrives(true), "awaiting_live_confirmation");
-assert.equal(statusAfterDireNoteAcceptance({ releaseDate: "2020-01-01" }, new Date("2026-01-01T00:00:00Z")), "awaiting_live_confirmation");
+assert.equal(statusAfterDireNoteAcceptance({ releaseDate: "2020-01-01", releaseTiming: "quick_release" }, new Date("2026-01-01T00:00:00Z")), "distributor_processing");
+assert.equal(statusAfterDireNoteAcceptance({ releaseDate: "2099-01-01", releaseTiming: "schedule_release" }, new Date("2026-01-01T00:00:00Z")), "distributor_processing");
 for (const status of CUSTOMER_REVIEW_STATUSES) {
-  assert.equal(getReleaseStatusPresentation(status).label, "Under Review");
-  assert.equal(getReleasePortalStage({ status } as any), "review");
-  assert.equal(getReleasePortalFilterLabel(status as any), "Under Review");
+  const stage = getReleasePortalStage({ status } as any);
+  assert.equal(getReleasePortalFilterLabel(status as any), getReleasePortalStageLabel(stage));
 }
-assert.equal(getReleasePortalStageLabel("partner_received"), "Under Review");
+assert.equal(getReleasePortalStageLabel("partner_received"), "Received by Partner");
 assert.equal(getReleasePortalStage({ status: "under_review", metadata: { direNote: { reconciliationInProgress: true } } } as any), "reconciling");
 assert.equal(getReleasePortalStageLabel("reconciling"), "Reconciling");
 assert.equal(getReleasePortalDateLabel({ status: "live", releaseTiming: "quick_release" } as any), "Available now");
+assert.equal(getReleasePortalDateLabel({ status: "distributor_processing", releaseTiming: "quick_release" } as any), "Usually 2–7 days after DireNote approval");
 assert.equal(getReleasePortalStage({ status: "distributed" } as any), "released");
 assert.equal(getReleasePortalFilterLabel("changes_requested"), "Changes Requested");
 assert.equal(getReleaseStatusPresentation("distributed").label, "Live");

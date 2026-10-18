@@ -19,14 +19,17 @@ export async function enqueueReleaseEmail(db: any, event: string, input: { to: s
 
 /** Called inside the status transaction: SMTP is never part of that transaction. */
 export async function queueReleaseStatusUpdate(db: any, releaseId: number, status: string, requestedReminderKey?: string) {
-  const event = ({ changes_requested: "release_changes_requested", rejected: "release_rejected", approved: "release_approved_by_hymn", scheduled: "release_scheduled", awaiting_live_confirmation: "release_scheduled", live: "release_live" } as Record<string, string>)[status.toLowerCase()];
+  const event = ({ changes_requested: "release_changes_requested", rejected: "release_rejected", approved: "release_approved_by_hymn", scheduled: "release_scheduled", live: "release_live" } as Record<string, string>)[status.toLowerCase()];
   if (!event) return undefined;
   const release = await db.release.findUnique({ where: { id: releaseId }, include: { user: { select: { id: true, email: true, name: true, status: true } } } });
   if (!release || release.archivedAt || release.user.status !== "ACTIVE") return undefined;
   const meta = object(release.metadata), provider = object(meta.direNote);
+  const releaseTiming = String(meta.releaseTiming ?? "quick_release");
+  const providerScheduleApproved = ["scheduled", "ready for distribution", "approved for distribution", "release date approved"].includes(String(release.direNoteStatus ?? "").toLowerCase().replaceAll("_", " "));
+  if (event === "release_scheduled" && (releaseTiming !== "schedule_release" || !providerScheduleApproved)) return undefined;
   const correctionKey = provider.correctionEventKey ?? release.reviewedAt?.toISOString() ?? "status";
   const providerMessages = Array.isArray(provider.correctionMessages) ? provider.correctionMessages.filter((item: unknown): item is string => typeof item === "string" && Boolean(item.trim())) : [];
-  return enqueueReleaseEmail(db, event, { to: release.user.email, userId: release.userId, userName: release.user.name, releaseId, releaseTitle: release.title, artistName: release.artistName, releaseStatus: status, statusEventKey: `v${release.version}`, releaseDate: release.releaseDate.toISOString().slice(0, 10), manageReleaseUrl: `${getPublicAppUrl()}/dashboard/releases/${releaseId}`, correctionUrl: `${getPublicAppUrl()}/dashboard/releases/${releaseId}?tab=corrections`, rejectionReason: status === "changes_requested" ? (release.correctionReason ?? providerMessages.join("\n")) || undefined : release.rejectionReason ?? undefined, correctionEventKey: status === "changes_requested" ? correctionKey + (requestedReminderKey ? `:${requestedReminderKey}` : "") : undefined, providerApproved: ["scheduled", "awaiting_live_confirmation", "live", "partially_live"].includes(release.direNoteStatus ?? "") });
+  return enqueueReleaseEmail(db, event, { to: release.user.email, userId: release.userId, userName: release.user.name, releaseId, releaseTitle: release.title, artistName: release.artistName, releaseStatus: status, statusEventKey: `v${release.version}`, releaseDate: releaseTiming === "schedule_release" ? release.releaseDate.toISOString().slice(0, 10) : undefined, manageReleaseUrl: `${getPublicAppUrl()}/dashboard/releases/${releaseId}`, correctionUrl: `${getPublicAppUrl()}/dashboard/releases/${releaseId}?tab=corrections`, rejectionReason: status === "changes_requested" ? (release.correctionReason ?? providerMessages.join("\n")) || undefined : release.rejectionReason ?? undefined, correctionEventKey: status === "changes_requested" ? correctionKey + (requestedReminderKey ? `:${requestedReminderKey}` : "") : undefined, providerApproved: providerScheduleApproved });
 }
 
 export async function deliverReleaseOutbox(releaseIds?: number[], limit = 5, deliver?: (input: { from: string; to: string; subject: string; html: string; text: string; replyTo?: string }) => Promise<{ data: { id?: string } | null; error: { message: string } | null }>, emailLogIds?: number[]) {
@@ -47,6 +50,13 @@ export async function deliverReleaseOutbox(releaseIds?: number[], limit = 5, del
     if (!(await prisma.emailLog.updateMany({ where: { id: job.id, status: "pending" }, data: { status: "sending", payload: { ...payload, claimedAt: new Date().toISOString() } } })).count) continue;
     processed++;
     const release = await prisma.release.findUnique({ where: { id: Number(job.entityId) }, include: { user: { select: { email: true, status: true } } } });
+    const currentProviderStatus = String(release?.direNoteStatus ?? "").toLowerCase().replaceAll("_", " ");
+    const providerScheduleApproved = ["scheduled", "ready for distribution", "approved for distribution", "release date approved"].includes(currentProviderStatus);
+    if (job.template === "release_scheduled" && (String(object(release?.metadata).releaseTiming ?? "quick_release") !== "schedule_release" || !providerScheduleApproved || !payload.providerApproved)) {
+      await prisma.emailLog.update({ where: { id: job.id }, data: { status: "cancelled", errorMessage: "Scheduled-release notices are only sent for schedule_release after provider approval." } });
+      cancelled++;
+      continue;
+    }
     if (!release || release.archivedAt || release.status !== payload.expectedStatus || release.user.status !== "ACTIVE" || release.user.email.toLowerCase() !== job.toEmail.toLowerCase() || payload.draftEditedAt && (release.lastEditedAt ?? release.createdAt).toISOString() !== payload.draftEditedAt) {
       await prisma.emailLog.update({ where: { id: job.id }, data: { status: "cancelled", errorMessage: "Release, owner or draft changed before delivery." } }); cancelled++; continue;
     }

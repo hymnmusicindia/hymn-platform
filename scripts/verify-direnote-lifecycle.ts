@@ -220,7 +220,7 @@ async function main() {
   assert.equal(await prisma.notification.count({ where: { userId: user.id, title: { startsWith: "Fix required" } } }), 2);
   mode = "accepted";
   await syncDireNoteRelease(release.id);
-  assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: release.id } })).status, "SCHEDULED");
+  assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: release.id } })).status, "DISTRIBUTOR_PROCESSING", "Generic Accepted means provider acceptance, not that the release schedule is approved.");
   assert.equal(((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: attempts[1].id } })).corrections as any).status, "closed");
   if (browser) { await browser.history(release.id); await browser.admin(release.id); }
   const timeout = await getDireNoteReleaseInformation(newUpc, { timeoutMs: 5, fetchImpl: async (_url, init) => new Promise((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(Object.assign(new Error("timeout"), { name: "AbortError" })))) });
@@ -377,7 +377,7 @@ async function main() {
   await prisma.distributionSubmissionAttempt.update({ where: { id: current.id }, data: { responseRedacted: originalResponse! } });
   mode = "revisions";
   await syncDireNoteRelease(release.id);
-  assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: release.id } })).status, "SCHEDULED", "Historical rejected rows must not override a newer approved recording.");
+  assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: release.id } })).status, "DISTRIBUTOR_PROCESSING", "Historical track approval without an approved schedule remains provider processing.");
   assert.equal(((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: current.id } })).corrections as any).status, "closed");
   await prisma.distributionSubmissionAttempt.update({ where: { id: current.id }, data: { isCurrent: false } });
   const repaired = await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));

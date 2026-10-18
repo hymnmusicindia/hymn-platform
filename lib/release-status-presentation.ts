@@ -25,7 +25,7 @@ const map: Record<string, { label: string; description: string; tone: ReleaseSta
   taken_down: { label: "Taken Down", description: "Removal has been confirmed.", tone: "neutral", step: 4, nextAction: "View details" },
   distributor_changes_required: { label: "Fix Required", description: "DireNote requires corrections before distribution can continue.", tone: "danger", step: 1, nextAction: "Fix release" },
   delivered: { label: "Delivered", description: "Delivery is complete and store availability is being tracked.", tone: "success", step: 3, nextAction: "View stores" },
-  scheduled: { label: "Scheduled", description: "Your release is ready for its release date.", tone: "success", step: 3, nextAction: "View schedule" },
+  scheduled: { label: "Scheduled", description: "DireNote approved this release for its selected release date.", tone: "success", step: 3, nextAction: "View schedule" },
   awaiting_live_confirmation: { label: "Awaiting Live Confirmation", description: "The release date has arrived and platform availability is being verified.", tone: "progress", step: 3, nextAction: "View stores" },
   partially_live: { label: "Partially Live", description: "The release is live on at least one platform while remaining stores process it.", tone: "success", step: 3, nextAction: "View stores" },
   live: { label: "Live", description: "Your release is available and reporting will follow.", tone: "success", step: 4, nextAction: "View performance" },
