@@ -62,7 +62,7 @@ export function ProfilePreferencesForm({ user }: { user: User }) {
           <legend>Personal details</legend><p className={styles.intro}>How we know you. Artist names stay with your artist profiles.</p>
           <div className={styles.grid}>
             <label>Display name<input autoComplete="name" value={form.name} required maxLength={120} onChange={e => update("name", e.target.value)}/></label>
-            <label>Mobile number {optional}<input type="tel" autoComplete="tel" maxLength={30} placeholder="+91" value={form.mobile} onChange={e => update("mobile", e.target.value)}/></label>
+            <label>WhatsApp number {optional}<input type="tel" autoComplete="tel" maxLength={30} placeholder="+91" value={form.mobile} onChange={e => update("mobile", e.target.value)}/><small>Add a number where HYMN can reach you with faster account and release updates.</small></label>
             <label>Contact email {optional}<input type="email" autoComplete="email" maxLength={254} placeholder="For reaching you" value={form.contactEmail} onChange={e => update("contactEmail", e.target.value)}/><small>Does not change your sign-in email.</small></label>
             <label>Date of birth {optional}<input type="date" autoComplete="bday" max={new Date().toISOString().slice(0, 10)} value={form.dateOfBirth} onChange={e => update("dateOfBirth", e.target.value)}/><small>Private. Never shown on your public profile.</small></label>
           </div>
