@@ -41,9 +41,14 @@ export async function reconcilePayments() {
   const distributionOrders = await prisma.distributionOrder.findMany({ where: { paymentStatus: "paid" } });
   for (const order of distributionOrders) {
     if (order.razorpayPaymentId) await confirmDistributionPayment({ razorpayOrderId: order.razorpayOrderId, paymentId: order.razorpayPaymentId, source: "reconciliation" });
-    const release = await prisma.release.findFirst({ where: { id: order.releaseId ?? -1, userId: order.userId, paymentStatus: "paid" } });
-    if (!release) {
-      const key = `payment:distribution:${order.id}`;
+    const key = `payment:distribution:${order.id}`;
+    // A ₹0 order with no credits spent was covered by the customer's plan: no
+    // money changed hands, so there is nothing unfulfilled to flag. These were
+    // raised as critical mismatches (e.g. plan-covered drafts later archived).
+    const charged = order.amount > 0 || order.creditsUsed > 0;
+    const release = charged ? await prisma.release.findFirst({ where: { id: order.releaseId ?? -1, userId: order.userId, paymentStatus: "paid" } }) : null;
+    if (!charged || release) await resolveAdminTask(key, charged ? "The paid order is linked to a fulfilled release." : "Plan-covered order with no charge; nothing to fulfil.");
+    else {
       issues.push({ key, type: "distribution", message: `Paid distribution order #${order.id} has no fulfilled release.`, autoRepaired: false });
       await createAdminTaskOnce({ eventKey: key, type: "Payment Mismatch", priority: "critical", title: "Paid distribution order is unfulfilled", body: issues.at(-1)!.message, href: "/admin?tab=distribution-orders", entityType: "distribution_order", entityId: order.id });
     }
