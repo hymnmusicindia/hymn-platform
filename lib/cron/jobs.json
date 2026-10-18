@@ -67,6 +67,13 @@
     "flag": "DRAFT_REMINDERS_ENABLED"
   },
   {
+    "id": "release-emails",
+    "method": "GET",
+    "seconds": 300,
+    "purpose": "Deliver queued release status and draft emails",
+    "flag": "RELEASE_EMAILS_ENABLED"
+  },
+  {
     "id": "engineer-reminders",
     "method": "GET",
     "seconds": 3600,

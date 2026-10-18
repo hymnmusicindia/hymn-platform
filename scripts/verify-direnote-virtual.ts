@@ -48,6 +48,7 @@ async function main() {
     if (process.argv.includes("--release-email-only")) {
       if (process.argv.includes("--build")) await run(["node_modules/next/dist/bin/next", "build", "--webpack"]);
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-release-email-lifecycle.ts"]);
+      await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-draft-reminders.ts"]);
       return;
     }
     if (process.argv.includes("--cron-only")) {

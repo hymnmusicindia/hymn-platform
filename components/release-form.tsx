@@ -9,6 +9,7 @@ import { checkoutPlan } from "@/lib/distribution-checkout-plan";
 import { distributionSubmittedUrl, isCompletedDistributionSubmission } from "@/lib/distribution-return";
 import { getContentIdEligibility } from "@/lib/content-id-eligibility";
 import { FIRST_RELEASE_BASE_DISCOUNT } from "@/lib/first-release-pricing";
+import { wizardTrackTitle } from "@/lib/distribution-title";
 
 import clsx from "clsx";
 import {
@@ -735,10 +736,7 @@ function createTracksFromRelease(
         ? String(trackMetadata.clientTrackId ?? nestedTrackMetadata.clientTrackId)
         : createId(),
       trackNumber: track?.trackNumber ?? index + 1,
-      trackTitle:
-        track?.trackTitle && !isPlaceholderTrackTitle(track.trackTitle)
-          ? track.trackTitle.trim()
-          : "",
+      trackTitle: wizardTrackTitle(track?.trackTitle, Boolean(initialRelease)),
       suggestedTitleUnconfirmed: trackMetadata.suggestedTitleUnconfirmed === true || nestedTrackMetadata.suggestedTitleUnconfirmed === true,
       existingIsrcCode: track?.isrc?.trim() || "",
       versionPreset: legacyExplicitVersion
@@ -855,10 +853,6 @@ function releaseTypeFromCount(trackCount: number) {
   if (trackCount <= 1) return "single" as const;
   if (trackCount <= 4) return "ep" as const;
   return "album" as const;
-}
-
-function titleFromAudioFilename(fileName: string) {
-  return fileName.replace(/\.(wav|mp3)$/i, "").replace(/^\s*\d{1,2}[\s._-]+/, "").replace(/[_]+/g, " ").trim().slice(0, 150);
 }
 
 function recordJourneyEvent(releaseId: number | null, event: "stage_reached" | "audio_upload_failed" | "audio_upload_resumed" | "draft_conflict", stage: number, format: string | null, trackCount: number) {
@@ -1367,12 +1361,12 @@ export function ReleaseForm({
   const displayedReleaseTitle = useMemo(
     () =>
       releaseType === "single"
-        ? tracks[0]?.trackTitle.trim() || "Untitled single"
-        : release.releaseTitle.trim() ||
-          (releaseType === "ep" ? "Untitled EP" : "Untitled Album"),
+        ? tracks[0]?.trackTitle.trim() || ""
+        : release.releaseTitle.trim(),
     [release.releaseTitle, releaseType, tracks],
   );
   const ensureUploadDraft = useCallback(async () => {
+    if (!displayedReleaseTitle || /^untitled(?:\s+(single|ep|album|release))?$/i.test(displayedReleaseTitle)) throw new Error("Enter your album or track title before uploading or saving.");
     if (draftReleaseId) return draftReleaseId;
     if (initialRelease?.id) return initialRelease.id;
     if (!draftCreationPromiseRef.current) {
@@ -1554,7 +1548,7 @@ export function ReleaseForm({
   // Start protecting a new release after the first user edit. Existing drafts
   // continue to autosave immediately. Readiness remains a submission signal,
   // not a condition for protecting the artist's work.
-  const autosaveEligible = Boolean(initialRelease || draftReleaseId || hasStartedEditing);
+  const autosaveEligible = Boolean(displayedReleaseTitle.trim()) && Boolean(initialRelease || draftReleaseId || hasStartedEditing);
   const autosaveLabel = !autosaveEligible
     ? "Autosave starts when you begin"
     : autosaveStatus === "saving"
@@ -2069,7 +2063,7 @@ export function ReleaseForm({
       audioPreviewObjectUrlsRef.current.delete(currentTrack.audioPreviewUrl);
     }
     patchTrack({
-      trackTitle: currentTrack?.trackTitle.trim() || titleFromAudioFilename(file.name),
+      trackTitle: currentTrack?.trackTitle.trim() || "",
       suggestedTitleUnconfirmed: currentTrack?.trackTitle.trim() ? currentTrack.suggestedTitleUnconfirmed : true,
       audioFile: file,
       audioFileName: file.name,
@@ -2974,6 +2968,7 @@ export function ReleaseForm({
   }
 
   async function persistDraftRelease(forSubmission = false) {
+    if (!displayedReleaseTitle.trim()) { setStatus("Enter an album or track title before saving your draft."); document.getElementById("draft-release-title")?.focus(); return; }
     if (draftConflict) { setStatus("This draft changed in another tab. Open the latest version before saving."); return; }
     if (savingReleaseRef.current && !forSubmission) return;
     savingReleaseRef.current = true;
@@ -3476,6 +3471,7 @@ export function ReleaseForm({
         className={clsx("release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", step !== 0 && step !== 1 && "release-premium-editor", (step === 0 || step === 1) && "is-focused-step", step === 0 && "is-audio-upload-step", step === 0 && musicEntering && "is-entering-from-format", step === 1 && "is-artist-step", step === 3 && "is-tracklist-step", step === 7 && "is-review-mode")}
         style={{ borderColor: "var(--border)", background: "var(--card)" }}
       >
+        <label className="grid gap-2" htmlFor="draft-release-title"><span>{releaseType === "single" ? "Track title" : "Album / EP title"} · required to save</span><input id="draft-release-title" className="field" maxLength={200} value={displayedReleaseTitle} placeholder="Enter your title" onChange={event => { const title = event.target.value; if (releaseType === "single") setTracks(current => current.length ? current.map((track, index) => index === 0 ? { ...track, trackTitle: title } : track) : [{ ...createTrack(), trackTitle: title }]); else setRelease(current => ({ ...current, releaseTitle: title })); }} /><small style={{ color: "var(--text-muted)" }}>Saved drafts receive a reminder after 4 inactive days and are removed after 6. Saving an edit restarts the clock.</small></label>
         <header className="release-workspace-header">
           <button type="button" onClick={quitReleaseJourney} disabled={submitting} className="release-workspace-quit">Quit</button>
           <NextImage src="/assets/hymnlogowhite.png" alt="HYMN Music" width={116} height={38} priority className="release-workspace-logo" style={{ filter: "var(--logo-filter)" }} />

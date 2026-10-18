@@ -13,11 +13,15 @@ assert.match(paid.text, /current pricing/);
 async function main() {
   process.env.EMAIL_ENABLED = "false";
   assert.deepEqual(await sendDraftReleaseReminders(), { enabled: false, sent: 0 });
-  process.env.CRON_SECRET = "fixture-secret";
+  process.env.DRAFT_REMINDERS_ENABLED = "false";
+  delete process.env.CRON_SECRET;
   assert.equal((await GET(new Request("https://fixture/api/cron/draft-reminders"))).status, 401);
+  process.env.CRON_SECRET = "fixture-secret";
+  assert.equal((await GET(new Request("https://fixture/api/cron/draft-reminders", { headers: { authorization: "Bearer wrong-secret" } }))).status, 401);
   const response = await GET(new Request("https://fixture/api/cron/draft-reminders", { headers: { authorization: "Bearer fixture-secret" } }));
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { enabled: false, sent: 0 });
-  console.log("Draft reminders: free/paid wording, escaped personalisation, WhatsApp and disabled SMTP checks passed.");
+  assert.deepEqual(await response.json(), { success: true, skipped: "disabled", job: "draft-reminders" });
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  console.log("Draft reminders: free/paid wording, escaped personalisation, WhatsApp, disabled SMTP, missing/wrong cron secrets and disabled job checks passed.");
 }
 void main();

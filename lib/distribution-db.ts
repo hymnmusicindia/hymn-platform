@@ -807,6 +807,8 @@ export async function updateDetailedReleaseStatus(releaseId: number, status: Rel
         if (changed.count !== 1) throw new Error("Release changed concurrently. Refresh and retry.");
         await tx.releaseStatusTransition.create({ data: { releaseId, previousStatus: current.status, newStatus: status.toUpperCase() as any, actorType: options?.actorType ?? (review?.reviewedBy ? "admin" : "system"), actorId: options?.actorId ?? null, reason: note?.trim() || null, metadata: { manualOverride: Boolean(options?.manualOverride) } } });
         await tx.auditLog.create({ data: { actorId: options?.actorId ?? null, action: "RELEASE_STATUS_TRANSITION", entity: "release", entityId: String(releaseId), metadata: { previousStatus, newStatus: status, reason: note?.trim() || null, version: current.version + 1, manualOverride: Boolean(options?.manualOverride) } } });
+        const { queueReleaseStatusUpdate } = await import("@/lib/email/release-outbox");
+        await queueReleaseStatusUpdate(tx, releaseId, status);
         return true;
       }, { timeout: 30_000, maxWait: 10_000 });
       const release = await getDetailedReleaseById(releaseId);
@@ -1019,6 +1021,8 @@ export async function saveDraftDistributionRelease(input: {
     const title = input.metadata.tracks[0].trackTitle?.trim();
     if (title) input = { ...input, metadata: { ...input.metadata, releaseTitle: title, trackName: title } };
   }
+  const { meaningfulDraftTitle } = await import("@/lib/draft-policy");
+  if (!meaningfulDraftTitle(input.metadata.releaseTitle || input.metadata.trackName || input.metadata.tracks[0]?.trackTitle)) throw new Error("Enter an album or track title before saving a draft.");
   const pool = getPool();
   const existingRelease = input.draftReleaseId ? await getDetailedReleaseByUserId(input.userId, input.draftReleaseId) : null;
   if (input.expectedUpdatedAt && existingRelease?.draftVersion !== input.expectedUpdatedAt) throw new Error("This draft was updated elsewhere. Reload the latest version before editing.");
@@ -1092,7 +1096,7 @@ export async function saveDraftDistributionRelease(input: {
           delete trackRest.id;
           delete trackRest.releaseId;
           const previous = current?.tracks.find(track => track.trackNumber === numbers[i]);
-          return { title: t.trackTitle || "Untitled Track", trackNumber: numbers[i], audioUrl: t.audioUrl, primaryArtist: t.primaryArtist, isrc: t.isrc || previous?.isrc || null, metadata: trackRest };
+          return { title: t.trackTitle?.trim() || "", trackNumber: numbers[i], audioUrl: t.audioUrl, primaryArtist: t.primaryArtist, isrc: t.isrc || previous?.isrc || null, metadata: trackRest };
         }), current?.tracks ?? []);
         const retainedIds = savedTracks.map(track => track.id);
         await syncReleaseContributions(tx, { actorUserId: input.userId, tracks: savedTracks.map((track, i) => ({ trackId: track.id, contributions: tracks[i].contributors ?? [] })) });

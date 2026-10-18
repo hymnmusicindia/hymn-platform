@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { CRON_JOBS, cronEnabled, cronHasFailures } from "../lib/cron/registry";
 import { startCronScheduler } from "./cron-scheduler";
 import { runCronJobs } from "./run-cron-jobs.mjs";
@@ -10,6 +10,7 @@ async function main() {
   assert.equal(new Set(CRON_JOBS.map(job => job.id)).size, CRON_JOBS.length, "Cron job IDs must remain unique as jobs are added.");
   const workflows = ["frequent", "hourly", "daily"].map(group => readFileSync(`.github/workflows/cron-${group}.yml`, "utf8")).join("\n");
   const vercel = JSON.parse(readFileSync("vercel.json", "utf8"));
+  const registeredIds = new Set(CRON_JOBS.map(job => job.id));
   for (const job of CRON_JOBS) {
     assert(job.seconds >= 60 && job.seconds <= 86400);
     assert(workflows.includes(job.id), `${job.id} needs an independent fallback`);
@@ -17,7 +18,12 @@ async function main() {
     const source = readFileSync(`app/api/cron/${job.id}/route.ts`, "utf8");
     assert(source.includes(`cronHandler("${job.id}"`), `${job.id} must use durable run guards`);
   }
+  for (const entry of readdirSync("app/api/cron", { withFileTypes: true }).filter(entry => entry.isDirectory())) {
+    const source = readFileSync(`app/api/cron/${entry.name}/route.ts`, "utf8");
+    if (source.includes("cronHandler(")) assert(registeredIds.has(entry.name as typeof CRON_JOBS[number]["id"]), `${entry.name} uses cronHandler but is missing from the scheduled-job registry`);
+  }
   assert.equal(cronEnabled(CRON_JOBS[0], { TEAM_AUTOMATION_ENABLED: "false" }), false);
+  assert.equal(cronEnabled(CRON_JOBS.find(job => job.id === "release-emails")!, { RELEASE_EMAILS_ENABLED: "false" }), false);
   for (const body of [{ success: false }, { errors: ["error"] }, { child: { failed: 1 } }, { messages: [{ status: "REVIEW" }] }, { issues: [{ autoRepaired: false }] }, { issues: ["Gateway unavailable"] }]) assert.equal(cronHasFailures(body), true);
   for (const body of [{ errors: [] }, { skipped: "already_running" }, { child: { sent: 1 } }, { issues: [{ autoRepaired: true }] }]) assert.equal(cronHasFailures(body), false);
   let calls = 0;

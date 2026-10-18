@@ -3,6 +3,7 @@ import { saveReleaseTracks, releaseSaveFailure } from "@/lib/release-track-save"
 import { releaseSaveTransactionOptions } from "@/lib/release-contributor-sync";
 export const maxDuration = 180;
 import { requireUser } from "@/lib/access";
+import { meaningfulDraftTitle } from "@/lib/draft-policy";
 import { getDetailedReleaseByUserId } from "@/lib/distribution-db";
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser(); if ("error" in user) return user.error;
@@ -17,6 +18,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const release = await getDetailedReleaseByUserId(user.session.sub, id);
   if (!release || release.status !== "draft") return NextResponse.json({ error: "Draft not found." }, { status: 404 });
   const body = await request.json().catch(() => ({}));
+  if (!meaningfulDraftTitle(body.title ?? release.releaseTitle ?? release.trackName)) return NextResponse.json({ error: "Enter a release title before saving." }, { status: 400 });
   const metadata = typeof body.metadata === "object" && body.metadata ? body.metadata : {};
   const { prisma } = await import("@/lib/prisma");
   try {
@@ -47,7 +49,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }, select: { id: true, updatedAt: true } });
   if (Array.isArray((metadata as any).tracks)) {
     const tracks = (metadata as any).tracks as any[];
-    await saveReleaseTracks(tx, id, tracks.map((track, index) => ({ title: String(track.trackTitle || `Track ${index + 1}`), trackNumber: index + 1, primaryArtist: String(track.primaryArtist || body.artistName || ""), audioUrl: typeof track.audioUrl === "string" ? track.audioUrl : null, metadata: track })), current.tracks);
+    await saveReleaseTracks(tx, id, tracks.map((track, index) => ({ title: String(track.trackTitle || ""), trackNumber: index + 1, primaryArtist: String(track.primaryArtist || body.artistName || ""), audioUrl: typeof track.audioUrl === "string" ? track.audioUrl : null, metadata: track })), current.tracks);
     await tx.track.deleteMany({ where: { releaseId: id, trackNumber: { gt: tracks.length } } });
   }
   return { conflict: false as const, updated };

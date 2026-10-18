@@ -1,7 +1,7 @@
 import "server-only";
 import { emailLayout, emailText } from "@/lib/email/email-templates";
 
-export type ReleaseEmailData = { userName: string; releaseTitle: string; artistName?: string; releaseId: string | number; releaseStatus: string; releaseDate?: string; manageReleaseUrl: string; correctionUrl?: string; rejectionReason?: string };
+export type ReleaseEmailData = { userName: string; releaseTitle: string; artistName?: string; releaseId: string | number; releaseStatus: string; releaseDate?: string; manageReleaseUrl: string; correctionUrl?: string; rejectionReason?: string; providerApproved?: boolean };
 
 const copy: Record<string, { subject: string; body: (data: ReleaseEmailData) => string; next: string; cta: string; step: number; notice?: (data: ReleaseEmailData) => string | undefined }> = {
   release_submitted: { subject: "Your release has been submitted", body: (d) => `We received “${d.releaseTitle}”. HYMN will review its audio, artwork, metadata and rights information before distribution.`, next: "No action is needed right now. We’ll email you when review is complete or if anything needs your attention.", cta: "Manage release", step: 0 },
@@ -19,10 +19,11 @@ export function releaseStatusEmail(event: string, data: ReleaseEmailData) {
   const item = copy[event];
   if (!item) throw new Error(`Unsupported release email event: ${event}`);
   const ctaUrl = event === "release_changes_requested" ? data.correctionUrl || data.manageReleaseUrl : data.manageReleaseUrl;
-  const model = { title: item.subject, greeting: `Hi ${data.userName || "there"},`, body: item.body(data), ctaLabel: item.cta, ctaUrl, notice: item.notice?.(data), timelineStep: item.step, sections: [
+  const subject = event === "release_scheduled" && data.providerApproved ? "Your release is approved for distribution" : item.subject;
+  const model = { title: subject, greeting: `Hi ${data.userName || "there"},`, body: event === "release_scheduled" && data.providerApproved ? `Good news—“${data.releaseTitle}” has been approved by our distribution partner. Your selected release date is ${data.releaseDate || "shown in HYMN"}. Approval does not mean it is live yet; we will update you when platform availability is confirmed.` : item.body(data), ctaLabel: item.cta, ctaUrl, notice: event === "release_changes_requested" && data.rejectionReason ? `Requested corrections: ${data.rejectionReason}` : item.notice?.(data), timelineStep: item.step, sections: [
     { title: "What happens next?", body: item.next },
     { title: "Need help with your release?", body: "Reply to this email and the HYMN team will help you understand the status and next steps." }
   ] };
-  return { subject: item.subject, html: emailLayout(model), text: emailText(model) };
+  return { subject: `${subject} · ${data.releaseTitle}`, html: emailLayout(model), text: emailText(model) };
 }
 // vercel trigger 6

@@ -8,6 +8,7 @@ import { recordGrowthEvent } from "@/lib/growth";
 import { prisma } from "@/lib/prisma";
 import { releaseSaveFailure } from "@/lib/release-track-save";
 import { firstReleaseAttribution } from "@/lib/first-release-flow";
+import { meaningfulDraftTitle } from "@/lib/draft-policy";
 
 export const maxDuration = 180;
 
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const payload = JSON.parse(String(formData.get("payload") || "{}"));
     const metadata = payload.metadata ?? {};
+    if (!meaningfulDraftTitle(metadata.releaseTitle || metadata.trackName || metadata.tracks?.[0]?.trackTitle)) return NextResponse.json({ error: "Enter an album or track title before saving a draft." }, { status: 400 });
     const contentIdEligible = getContentIdEligibility(metadata.contentType).eligible;
     if (typeof metadata.licenseReceiptUrl === "string" && /^https?:/i.test(metadata.licenseReceiptUrl)) {
       const proofUrl = new URL(metadata.licenseReceiptUrl);

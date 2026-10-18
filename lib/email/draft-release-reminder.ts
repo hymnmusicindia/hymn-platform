@@ -7,12 +7,14 @@ import { FIRST_RELEASE_PROMOTION_CODE, getFirstReleaseEligibility } from "@/lib/
 
 export const DRAFT_REMINDER_TEMPLATE = "draft_release_four_days_v1";
 export function draftReminderContent(name: string, title: string, url: string, free: boolean) {
+  const expiryNotice = "\n\nThe world is missing your music—submit it for the world to listen :) Inactive drafts are removed after six days. You have at least two days after this email to open and save your draft or submit it. A real edit resets the inactivity clock.";
   const model = {
     title: free ? "Your free release is waiting :)" : "Your music is ready for its next step",
     greeting: `Hi ${name || "artist"},`,
     body: `Your release “${title}” has been in draft for more than four days. Pick up where you left off, complete the remaining details and submit it for review.\n\n${free ? "Your first single’s base distribution is FREE with your HYMN first-release offer. Finish your draft and distribute :) Optional add-ons cost extra; check your final total before submitting." : "Your draft is saved. Open it to check the remaining details and current pricing before submitting."}\n\nNeed a hand? Reply to this email or chat with us on WhatsApp—we’ll help you take the next step.`,
     ctaLabel: free ? "Finish my free release" : "Continue my release", ctaUrl: url
   };
+  model.body += expiryNotice;
   return { subject: free ? `${title}: your free release is waiting :)` : `Finish your HYMN release: ${title}`, html: emailLayout(model), text: emailText(model) };
 }
 

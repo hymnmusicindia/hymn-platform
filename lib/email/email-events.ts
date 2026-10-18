@@ -1,17 +1,20 @@
 import "server-only";
 import { getEmailConfig } from "@/lib/email/email-client";
 import { sendTransactionalEmail } from "@/lib/email/send-transactional-email";
-import { releaseStatusEmail, type ReleaseEmailData } from "@/lib/email/templates/release-status-email";
+import type { ReleaseEmailData } from "@/lib/email/templates/release-status-email";
 import { splitEmail } from "@/lib/email/templates/split-email";
 import { payoutEmail } from "@/lib/email/templates/payout-email";
 import { beatEmail } from "@/lib/email/templates/beat-email";
+import { prisma } from "@/lib/prisma";
+import { enqueueReleaseEmail } from "./release-outbox";
 
 export const EMAIL_EVENTS = ["release_submitted","release_under_review","release_approved_by_hymn","release_changes_requested","release_rejected","release_sent_to_distributor","release_scheduled","release_live","release_distribution_failed","split_invite_received","split_accepted","split_declined","payout_earnings_updated","payout_request_submitted","payout_completed","payout_rejected","beat_purchase_success","license_ready"] as const;
 export type EmailEvent = typeof EMAIL_EVENTS[number];
 
 export async function sendReleaseEmail(event: EmailEvent, input: { to: string; userId: number; correctionEventKey?: string } & ReleaseEmailData) {
-  const template = releaseStatusEmail(event, input);
-  return sendTransactionalEmail({ ...template, to: input.to, template: event, eventKey: `release:${input.releaseId}:${event}${input.correctionEventKey ? `:${input.correctionEventKey}` : ""}:email`, userId: input.userId, entityType: "release", entityId: input.releaseId });
+  const current = await prisma.release.findUnique({ where: { id: Number(input.releaseId) }, select: { version: true } });
+  const logId = await enqueueReleaseEmail(prisma, event, { ...input, statusEventKey: current ? `v${current.version}` : undefined });
+  return { status: "queued" as const, logId };
 }
 
 export async function sendSplitEmailEvent(input: Parameters<typeof splitEmail>[0] & { to: string; userId?: number; splitId: number; inviteId?: number; recipientEmail?: string }) {

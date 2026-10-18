@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { parseReleaseDate, validIsrc, validReleaseBarcode, normalizeReleaseText, safeReleaseText } from "../lib/release-input-rules";
+import { wizardTrackTitle } from "../lib/distribution-title";
 
 for (const date of ["2026-02-29", "2026-02-30", "2026-04-31", "2026-13-01", "2026-00-01", "2026-10-10T00:00:00Z", "", "not a date"]) assert.equal(parseReleaseDate(date), null);
 assert.equal(parseReleaseDate("2028-02-29")?.toISOString(), "2028-02-29T00:00:00.000Z");
@@ -11,6 +12,9 @@ assert(!validReleaseBarcode("3473620313505"));
 for (const title of ["हिन्दी गीत", "தமிழ் பாடல்", "Beyoncé", "L'été", "Dream ✨", "O'Connor", "SELECT * FROM songs"]) assert(safeReleaseText(title));
 for (const title of ["Song\0", "Song\nTitle", "<script>alert(1)</script>", "Song\u202eTitle"]) assert(!safeReleaseText(title));
 assert.equal(normalizeReleaseText("  Cafe\u0301   song  "), "Café song");
+assert.equal(wizardTrackTitle("Prior audio title", false), "", "New submissions started from prior audio must leave the track title empty.");
+assert.equal(wizardTrackTitle(" Saved draft title ", true), "Saved draft title", "Editing a saved release must retain its title and remove whitespace.");
+assert.equal(wizardTrackTitle("Untitled Single", true), "", "Placeholder titles must not be restored into a draft.");
 for (let n = 0; n < 2000; n++) {
   const value = String.fromCodePoint(n) + "Track";
   assert.equal(normalizeReleaseText(normalizeReleaseText(value)), normalizeReleaseText(value));
