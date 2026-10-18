@@ -98,6 +98,13 @@ async function main() {
   assert(fallbackCalls.length > 1 && fallbackCalls.slice(1).every(url => url.startsWith("https://fallback.test/")), "After a refused loopback call every job must use the public origin.");
   assert.equal(reviewWatchdog.healthy, true);
   assert(reviewLog.some(line => line.startsWith("::warning::") && line.includes("payment-reconciliation") && line.includes("financialTasks=1")), "Review items must stay visible as a warning.");
+  const schedulerErrors: unknown[][] = [];
+  const originalConsoleError = console.error;
+  console.error = (...args: unknown[]) => { schedulerErrors.push(args); };
+  const leasedWorker = startCronScheduler({ port: 3000, secret: "fixture", now: () => 0, random: () => 0, fetcher: (async () => Response.json({ success: true, skipped: "already_running" })) as typeof fetch });
+  try { await new Promise(resolve => setImmediate(resolve)); }
+  finally { leasedWorker.stop(); console.error = originalConsoleError; }
+  assert.equal(schedulerErrors.length, 0, "Another worker's durable lease skip must not be reported as a CRON error.");
   // Keep the urgent request unresolved while a bulk job completes. It must not
   // be duplicated by another tick or block the separate bulk lane.
   let clock = 0, resolveUrgent: ((response: Response) => void) | undefined;

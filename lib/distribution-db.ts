@@ -1,6 +1,6 @@
 import mysql from "mysql2/promise";
 import { AdminStoreStatus, DistributionLog, DistributionQueueEntry, DistributionQueueLog, DistributionQueueStage, ReleaseAuditLog, DistributionOrder, DistributionQueueSummary, Release, ReleaseStatus, ReleaseTrack, StoreStatus, StoreStatusHistoryEntry, Subscription, SubscriptionPlan, UserStoreStatus } from "@/lib/types";
-import { getTrackPricingQuote, getUgcAddonPrice } from "@/lib/distribution-pricing";
+import { getTrackPricingQuote, getUgcAddonPrice, getYoutubeContentIdAddonPrice } from "@/lib/distribution-pricing";
 import { sampleReleases } from "@/lib/site";
 import { prisma } from "@/lib/prisma";
 import { createNotification, findUserById } from "@/lib/db";
@@ -632,7 +632,7 @@ export async function getDetailedReleaseByUserId(userId: number, releaseId: numb
   return releases.find((release) => release.id === releaseId) ?? null;
 }
 
-const duplicateUnsafeMetadataKeys = new Set(["direnoteResponse", "direnoteValidationErrors", "reviewIssues", "reviewHistory", "analytics", "earnings", "audit", "promotionCode", "campaignAttribution", "submittedAt"]);
+const duplicateUnsafeMetadataKeys = new Set(["direnoteResponse", "direnoteValidationErrors", "reviewIssues", "reviewHistory", "analytics", "earnings", "audit", "promotionCode", "campaignAttribution", "submittedAt", "youtubeContentIdEnabled", "youtubeContentIdChannelUrl"]);
 
 function duplicateSafeValue(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
@@ -669,6 +669,8 @@ export async function duplicateReleaseForUser(userId: number, releaseId: number)
       artworkUrl: persistedArtwork?.artworkUrl ?? safeSource.artworkUrl,
       releaseTitle: copyTitle,
       trackName: copyTitle,
+      youtubeContentIdEnabled: false,
+      youtubeContentIdChannelUrl: null,
       paymentStatus: "pending",
       metadata: duplicateSafeValue(source.metadata),
       tracks: duplicateTracks
@@ -1856,11 +1858,12 @@ export async function transitionDistributionQueueEntry(input: {
 }
 export function getDistributionPricing(plan: SubscriptionPlan, trackCount: number, releaseType: Release["releaseType"], platforms: string[] = [], options?: { youtubeContentIdEnabled?: boolean }) {
   void releaseType;
-  const ugcAddonPrice = getUgcAddonPrice(platforms, plan, options);
+  const ugcAddonPrice = getUgcAddonPrice(platforms, plan);
+  const youtubeContentIdAddonPrice = getYoutubeContentIdAddonPrice(plan, options?.youtubeContentIdEnabled);
   if (plan !== "one_time") {
-    return planLimits(plan).amount + ugcAddonPrice;
+    return planLimits(plan).amount;
   }
-  return getTrackPricingQuote(trackCount).finalPrice + ugcAddonPrice;
+  return getTrackPricingQuote(trackCount).finalPrice + ugcAddonPrice + youtubeContentIdAddonPrice;
 }
 
 export async function getDetailedReleaseById(releaseId: number): Promise<Release | null> {

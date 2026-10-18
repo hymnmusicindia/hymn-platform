@@ -18,8 +18,10 @@ assert.doesNotMatch(form, /if \(isEditing\)\s*\{\s*const data = await submitEdit
 assert.ok(form.includes("const isPaidReleaseResubmission = isPaidCorrectionRelease(initialRelease)"));
 assert.ok(form.includes('return paymentStatus === "paid" && ["draft", "awaiting_payment", "changes_requested", "rejected", "resubmitted"].includes(status)'));
 assert.match(form, /if \(isPaidReleaseResubmission\)/);
-assert.match(form, /modal: \{ ondismiss: \(\) => reject\(new Error\("Checkout cancelled\."\)\) \}/);
-assert.match(form, /payment\.failed/);
+assert.ok(form.includes('modal: { ondismiss: () => { if (!paymentReceived) reject('), "Closing checkout before a payment response must keep the draft resumable.");
+assert.match(form, /payment\.failed[\s\S]{0,600}reject\(new Error/);
+assert.match(form, /payment\.failed[\s\S]{0,800}razorpay\.close\(\)/);
+assert.match(form, /window\.setTimeout\(\(\) => controller\.abort\(\), 90_000\)/);
 assert.doesNotMatch(form, /dev_dist_payment|dev_bypass_payment|sub_active/);
 assert.match(form, /existingAudioUrl: track\.existingAudioUrl \|\| undefined/);
 assert.match(form, /draftReleaseId: reviewReleaseId/);

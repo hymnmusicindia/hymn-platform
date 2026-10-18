@@ -33,6 +33,7 @@ type RazorpayResponse = {
 
 type RazorpayInstance = {
   open: () => void;
+  close: () => void;
   on: (event: string, handler: (response: { error?: { description?: string } }) => void) => void;
 };
 

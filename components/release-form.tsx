@@ -186,6 +186,7 @@ import {
 import {
   getTrackPricingQuote,
   getUgcAddonPrice,
+  getYoutubeContentIdAddonPrice,
 } from "@/lib/distribution-pricing";
 import {
   socialPlatforms,
@@ -303,17 +304,6 @@ type ValidationIssue = {
   message: string;
   trackIndex?: number;
 };
-
-declare global {
-  interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => {
-      open: () => void;
-      on: (event: string, handler: (response: { error?: { description?: string } }) => void) => void;
-    };
-  }
-}
-
-
 
 const RELEASE_WELCOME_MS = 2400;
 
@@ -1442,10 +1432,10 @@ export function ReleaseForm({
     );
   }
   const ugcAddOnAmount = useMemo(
-    () =>
-      getUgcAddonPrice(platforms, selectedPlan, { youtubeContentIdEnabled }),
-    [platforms, selectedPlan, youtubeContentIdEnabled],
+    () => getUgcAddonPrice(platforms, selectedPlan),
+    [platforms, selectedPlan],
   );
+  const youtubeContentIdAddOnAmount = getYoutubeContentIdAddonPrice(selectedPlan, youtubeContentIdEnabled);
   const distributionBaseAmount =
     selectedPlan === "one_time"
       ? trackPricingQuote.basePrice
@@ -1453,8 +1443,8 @@ export function ReleaseForm({
   const distributionAmount =
     (selectedPlan === "one_time"
       ? trackPricingQuote.finalPrice
-      : currentPlan.price) + ugcAddOnAmount;
-  const firstReleaseDiscount = firstReleaseOffer && selectedPlan === "one_time" && releaseType === "single" && tracks.length === 1 ? Math.min(FIRST_RELEASE_BASE_DISCOUNT, distributionAmount - ugcAddOnAmount) : 0;
+      : currentPlan.price) + ugcAddOnAmount + youtubeContentIdAddOnAmount;
+  const firstReleaseDiscount = firstReleaseOffer && selectedPlan === "one_time" && releaseType === "single" && tracks.length === 1 ? Math.min(FIRST_RELEASE_BASE_DISCOUNT, trackPricingQuote.finalPrice) : 0;
   const finalDistributionAmount = Math.max(0, distributionAmount - firstReleaseDiscount);
   const hymnCreditsApplied = useHymnCredits && !subscriptionCovered && selectedPlan === "one_time" ? Math.min(Math.max(0, hymnCreditBalance), finalDistributionAmount) : 0;
   const distributionCheckoutAmount = Math.max(0, finalDistributionAmount - hymnCreditsApplied);
@@ -2947,22 +2937,28 @@ export function ReleaseForm({
     const formData = new FormData();
     formData.append("payload", JSON.stringify(checked.data));
     try {
-    const response = await fetch("/api/distribution/payment/verify-submit", {
-      method: "POST",
-      body: formData,
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Submission failed.");
-    if (data.reviewEligibility) window.dispatchEvent(new CustomEvent("hymn:purchase-review-eligible", { detail: data.reviewEligibility }));
-    return data;
+    const controller = new AbortController();
+    const requestTimeout = window.setTimeout(() => controller.abort(), 90_000);
+    try {
+      const response = await fetch("/api/distribution/payment/verify-submit", {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Submission failed.");
+      if (data.reviewEligibility) window.dispatchEvent(new CustomEvent("hymn:purchase-review-eligible", { detail: data.reviewEligibility }));
+      return data;
+    } finally { window.clearTimeout(requestTimeout); }
     } catch (error) {
       // A lost response is not proof of a failed submission. Read the owned
       // release before presenting a retry; never manufacture payment success.
       try {
-        const response = await fetch(`/api/distribution/payment/status?releaseId=${checked.data.draftReleaseId}`, { cache: "no-store" });
+        const response = await fetch(`/api/distribution/payment/status?releaseId=${checked.data.draftReleaseId}`, { cache: "no-store", signal: AbortSignal.timeout(8_000) });
         const recovered = await response.json();
         if (response.ok && recovered.submitted && recovered.release) return { release: recovered.release, recovered: true };
       } catch { /* Keep the original actionable error and the resumable URL. */ }
+      if (error instanceof DOMException && error.name === "AbortError") throw new Error("Payment confirmation is taking longer than expected. Your payment is being checked; open Your Releases and resume this draft. Do not pay again until its payment status is confirmed.");
       throw error;
     }
   }
@@ -3384,7 +3380,12 @@ export function ReleaseForm({
           modal: { ondismiss: () => { if (!paymentReceived) reject(new Error("Checkout closed. Your draft is saved; resume checkout to check payment status before paying again.")); } },
           theme: { color: "#7db7ff" },
         });
-        razorpay.on("payment.failed", (response) => setStatus(response.error?.description || "Payment failed. Retry in the payment window or close it."));
+        razorpay.on("payment.failed", (response) => {
+          const reason = response.error?.description || "Razorpay could not complete this payment.";
+          setStatus(`${reason} No payment was captured. You can safely try checkout again.`);
+          reject(new Error(`${reason} No payment was captured. You can safely try checkout again.`));
+          razorpay.close();
+        });
         razorpay.open();
       });
     } catch (error) {
@@ -5987,6 +5988,9 @@ export function ReleaseForm({
                                 `Rs ${ugcAddOnAmount.toLocaleString("en-IN")}`,
                               ],
                             ]
+                          : []),
+                        ...(youtubeContentIdAddOnAmount > 0
+                          ? [["YouTube Content ID add-on", `Rs ${youtubeContentIdAddOnAmount.toLocaleString("en-IN")}`]]
                           : []),
                         ...(hymnCreditsApplied > 0 ? [["HYMN credits", `-Rs ${hymnCreditsApplied.toLocaleString("en-IN")}`]] : []),
                         ["Payment status", distributionCheckoutAmount === 0 ? "No Razorpay payment required" : "Pending"],

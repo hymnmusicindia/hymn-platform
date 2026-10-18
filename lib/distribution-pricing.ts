@@ -92,11 +92,13 @@ export function hasUgcPlatforms(platforms: string[]) {
   return socialPlatforms.some((platform) => selected.has(normalizePlatformName(platform.name)));
 }
 
-export function getUgcAddonPrice(platforms: string[], plan?: SubscriptionPlan, options?: { youtubeContentIdEnabled?: boolean }) {
+export function getUgcAddonPrice(platforms: string[], plan?: SubscriptionPlan) {
   if (plan && plan !== "one_time") {
     return 0;
   }
-  const ugcFee = hasUgcPlatforms(platforms) ? UGC_ADDON_PRICE : 0;
-  const youtubeContentIdFee = options?.youtubeContentIdEnabled ? 200 : 0;
-  return ugcFee + youtubeContentIdFee;
+  return hasUgcPlatforms(platforms) ? UGC_ADDON_PRICE : 0;
+}
+
+export function getYoutubeContentIdAddonPrice(plan?: SubscriptionPlan, enabled?: boolean) {
+  return (!plan || plan === "one_time") && enabled ? 200 : 0;
 }

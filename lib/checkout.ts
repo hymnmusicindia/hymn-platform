@@ -1,6 +1,6 @@
 import { findCouponByCode, findUserById, getCouponUsage, listBeats } from "@/lib/db";
 import { distributionPlanCards } from "@/lib/distribution-plans";
-import { getTrackPricingQuote, getUgcAddonPrice } from "@/lib/distribution-pricing";
+import { getTrackPricingQuote, getUgcAddonPrice, getYoutubeContentIdAddonPrice } from "@/lib/distribution-pricing";
 import { beatLicenseLabel, beatLicensePrice, normalizeBeatLicenseType } from "@/lib/beat-store";
 import type { LicenseType, User } from "@/lib/types";
 import type { z } from "zod";
@@ -72,7 +72,7 @@ async function buildLineItems(input: CheckoutInput): Promise<CheckoutLineItem[]>
     const plan = distributionPlanCards.find((entry) => entry.key === item.plan);
     if (!plan) throw new Error("Invalid distribution plan selected.");
     const basePrice = item.plan === "one_time"
-      ? getTrackPricingQuote(item.trackCount).finalPrice + getUgcAddonPrice(item.platforms, item.plan, { youtubeContentIdEnabled: item.youtubeContentIdEnabled })
+      ? getTrackPricingQuote(item.trackCount).finalPrice + getUgcAddonPrice(item.platforms, item.plan) + getYoutubeContentIdAddonPrice(item.plan, item.youtubeContentIdEnabled)
       : plan.price;
 
     return {

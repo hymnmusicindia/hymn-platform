@@ -2,7 +2,7 @@ import { SubscriptionPlanConfigurationError, subscriptionCheckoutUnavailable } f
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { razorpay } from "@/lib/razorpay";
-import { getTrackPricingQuote, getUgcAddonPrice } from "@/lib/distribution-pricing";
+import { getTrackPricingQuote, getUgcAddonPrice, getYoutubeContentIdAddonPrice } from "@/lib/distribution-pricing";
 import { createDistributionOrder, getDistributionPricing } from "@/lib/distribution-db";
 import { distributionOrderCreateSchema } from "@/lib/validation";
 import { calculateFirstReleasePrice, FIRST_RELEASE_PROMOTION_CODE, getFirstReleaseEligibility } from "@/lib/first-release-promotion";
@@ -232,7 +232,8 @@ export async function POST(request: Request) {
       creditsUsed,
       priceBeforeCredits,
       promotion,
-      ugcAddOnAmount: getUgcAddonPrice(payload.platforms, payload.plan, { youtubeContentIdEnabled: payload.youtubeContentIdEnabled }),
+      ugcAddOnAmount: getUgcAddonPrice(payload.platforms, payload.plan),
+      youtubeContentIdAddOnAmount: getYoutubeContentIdAddonPrice(payload.plan, payload.youtubeContentIdEnabled),
       trackPricing: payload.plan === "one_time" ? getTrackPricingQuote(payload.trackCount) : null,
       key: process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ""
     });

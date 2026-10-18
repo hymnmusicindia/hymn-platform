@@ -25,7 +25,9 @@ export function startCronScheduler(options: { port: number; secret: string; orig
             signal: AbortSignal.any([controller.signal, AbortSignal.timeout(55_000)])
           });
           const data: unknown = await response.json();
-          healthy = response.ok && !cronHasFailures(data) && (data as { skipped?: string })?.skipped !== "already_running";
+          // A second process can reach the same durable lease while the owner
+          // is working. The owner will finish the job; this is a healthy skip.
+          healthy = response.ok && !cronHasFailures(data);
           // A completed run that reported problems keeps its normal cadence; fast
           // backoff is for outages, and would repeat provider calls every 30s.
           domainFailure = !healthy && response.headers.get("x-hymn-cron-outcome") === "domain-failure";
