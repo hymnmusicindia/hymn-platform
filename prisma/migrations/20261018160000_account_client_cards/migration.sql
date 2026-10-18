@@ -94,4 +94,4 @@ ON CONFLICT ("userId") DO NOTHING;
 
 UPDATE "team_workspaces"
 SET "client_cards_imported_at" = CURRENT_TIMESTAMP
-WHERE "id" = (SELECT "workspaceId" FROM "team_memberships" m JOIN "team_roles" r ON r."id" = m."roleId" WHERE r."owner" = TRUE AND m."status" = 'ACTIVE' ORDER BY m."joinedAt" ASC LIMIT 1);
+WHERE "id" = (SELECT m."workspaceId" FROM "team_memberships" m JOIN "team_roles" r ON r."id" = m."roleId" WHERE r."owner" = TRUE AND m."status" = 'ACTIVE' ORDER BY m."joinedAt" ASC LIMIT 1);
