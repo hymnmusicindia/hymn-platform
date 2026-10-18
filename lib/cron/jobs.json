@@ -37,7 +37,7 @@
   {
     "id": "direnote-release-sync",
     "method": "GET",
-    "seconds": 3600,
+    "seconds": 900,
     "purpose": "Provider status, QC recovery, corrections and artist identities",
     "flag": "DIRENOTE_RELEASE_SYNC_ENABLED"
   },

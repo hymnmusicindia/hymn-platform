@@ -10,7 +10,7 @@
     { "path": "/api/cron/growth-sync", "schedule": "10 * * * *" },
     { "path": "/api/cron/birthday-notifications", "schedule": "15 0 * * *" },
     { "path": "/api/cron/release-status-sync", "schedule": "25 * * * *" },
-    { "path": "/api/cron/direnote-release-sync", "schedule": "0 * * * *" },
+    { "path": "/api/cron/direnote-release-sync", "schedule": "*/15 * * * *" },
     { "path": "/api/cron/direnote-revenue-sync", "schedule": "55 * * * *" },
     { "path": "/api/cron/team-os", "schedule": "*/15 * * * *" },
     { "path": "/api/cron/draft-reminders", "schedule": "12 * * * *" },

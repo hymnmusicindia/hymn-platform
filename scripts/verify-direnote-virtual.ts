@@ -59,6 +59,10 @@ async function main() {
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-cron-integration.ts"]);
       return;
     }
+    if (process.argv.includes("--reconciliation-cron-only")) {
+      await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-direnote-reconciliation-cron.ts"]);
+      return;
+    }
     if (process.argv.includes("--release-save-only")) {
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-release-pipeline-integration.ts"]);
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-release-credit-batch.ts"]);

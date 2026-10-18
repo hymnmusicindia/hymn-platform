@@ -14,10 +14,10 @@ export const maxDuration = 300;
 
 const LEASE_KEY = "direnote-release-sync";
 const CONCURRENCY = Math.max(1, Math.min(Number(process.env.DIRENOTE_RELEASE_SYNC_CONCURRENCY || 3), 5));
-// Hostinger's edge abandons a request after 60s. Stop starting new provider work
-// at 30s so in-flight calls and the run summary finish inside that window;
-// releases left over are checked first on the next run.
-const START_WORK_UNTIL_MS = 30_000;
+const STATUS_POLL_INTERVAL_MS = 15 * 60 * 1000;
+// Hostinger's edge abandons a request after 60s. Reserve time for provider calls
+// already in flight and for persisting the complete run summary.
+const START_WORK_UNTIL_MS = 50_000;
 // Provider polling continues for "SCHEDULED", "AWAITING_LIVE_CONFIRMATION",
 // and "PARTIALLY_LIVE" via the current attempt's providerStatus.
 
@@ -79,10 +79,12 @@ async function runJob(request: Request) {
     }
     const candidates = await prisma.distributionSubmissionAttempt.findMany({
       where: {
-        provider: "direnote", isCurrent: true, state: "submitted", release: { archivedAt: null },
+        // Accepted requests that need reconciliation are still safe to poll:
+        // this path only reads release status and never submits another ingest.
+        provider: "direnote", isCurrent: true, state: { in: ["submitted", "reconciliation_required"] }, release: { archivedAt: null },
         OR: [
           { lastCheckedAt: null },
-          { lastCheckedAt: { lte: new Date(Date.now() - 60 * 60 * 1000) } },
+          { lastCheckedAt: { lte: new Date(Date.now() - STATUS_POLL_INTERVAL_MS) } },
           { upc: null },
           { providerStatus: { in: ["processing", "changes_required", "rejected", "scheduled", "awaiting_live_confirmation", "partially_live"] } }
         ]
@@ -106,7 +108,7 @@ async function runJob(request: Request) {
       while (cursor < candidates.length && Date.now() - started < START_WORK_UNTIL_MS) {
         const candidate = candidates[cursor++];
         try {
-          const outcome = await syncDireNoteRelease(candidate.releaseId, null, { deadlineAt: started + 45_000 });
+          const outcome = await syncDireNoteRelease(candidate.releaseId, null, { deadlineAt: started + 55_000 });
           results.push({ releaseId: candidate.releaseId, title: candidate.release.title, success: true, upc: outcome.upc, status: outcome.status });
         }
         catch (error) {

@@ -20,15 +20,16 @@ export async function enqueueReleaseEmail(db: any, event: string, input: { to: s
 /** Called inside the status transaction: SMTP is never part of that transaction. */
 export async function queueReleaseStatusUpdate(db: any, releaseId: number, status: string, requestedReminderKey?: string) {
   const event = ({ changes_requested: "release_changes_requested", rejected: "release_rejected", approved: "release_approved_by_hymn", scheduled: "release_scheduled", awaiting_live_confirmation: "release_scheduled", live: "release_live" } as Record<string, string>)[status.toLowerCase()];
-  if (!event) return;
+  if (!event) return undefined;
   const release = await db.release.findUnique({ where: { id: releaseId }, include: { user: { select: { id: true, email: true, name: true, status: true } } } });
-  if (!release || release.archivedAt || release.user.status !== "ACTIVE") return;
+  if (!release || release.archivedAt || release.user.status !== "ACTIVE") return undefined;
   const meta = object(release.metadata), provider = object(meta.direNote);
   const correctionKey = provider.correctionEventKey ?? release.reviewedAt?.toISOString() ?? "status";
-  await enqueueReleaseEmail(db, event, { to: release.user.email, userId: release.userId, userName: release.user.name, releaseId, releaseTitle: release.title, artistName: release.artistName, releaseStatus: status, statusEventKey: `v${release.version}`, releaseDate: release.releaseDate.toISOString().slice(0, 10), manageReleaseUrl: `${getPublicAppUrl()}/dashboard/releases/${releaseId}`, correctionUrl: `${getPublicAppUrl()}/dashboard/releases/${releaseId}?tab=corrections`, rejectionReason: status === "changes_requested" ? release.correctionReason ?? undefined : release.rejectionReason ?? undefined, correctionEventKey: status === "changes_requested" ? correctionKey + (requestedReminderKey ? `:${requestedReminderKey}` : "") : undefined, providerApproved: ["scheduled", "awaiting_live_confirmation", "live", "partially_live"].includes(release.direNoteStatus ?? "") });
+  const providerMessages = Array.isArray(provider.correctionMessages) ? provider.correctionMessages.filter((item: unknown): item is string => typeof item === "string" && Boolean(item.trim())) : [];
+  return enqueueReleaseEmail(db, event, { to: release.user.email, userId: release.userId, userName: release.user.name, releaseId, releaseTitle: release.title, artistName: release.artistName, releaseStatus: status, statusEventKey: `v${release.version}`, releaseDate: release.releaseDate.toISOString().slice(0, 10), manageReleaseUrl: `${getPublicAppUrl()}/dashboard/releases/${releaseId}`, correctionUrl: `${getPublicAppUrl()}/dashboard/releases/${releaseId}?tab=corrections`, rejectionReason: status === "changes_requested" ? (release.correctionReason ?? providerMessages.join("\n")) || undefined : release.rejectionReason ?? undefined, correctionEventKey: status === "changes_requested" ? correctionKey + (requestedReminderKey ? `:${requestedReminderKey}` : "") : undefined, providerApproved: ["scheduled", "awaiting_live_confirmation", "live", "partially_live"].includes(release.direNoteStatus ?? "") });
 }
 
-export async function deliverReleaseOutbox(releaseIds?: number[], limit = 5, deliver?: (input: { from: string; to: string; subject: string; html: string; text: string; replyTo?: string }) => Promise<{ data: { id?: string } | null; error: { message: string } | null }>) {
+export async function deliverReleaseOutbox(releaseIds?: number[], limit = 5, deliver?: (input: { from: string; to: string; subject: string; html: string; text: string; replyTo?: string }) => Promise<{ data: { id?: string } | null; error: { message: string } | null }>, emailLogIds?: number[]) {
   if (!getEmailConfig().enabled && !deliver) return { enabled: false, sent: 0, failed: 0 };
   const interrupted = await prisma.emailLog.findMany({ where: { status: "sending", payload: { path: ["channel"], equals: "release_outbox" } }, select: { id: true, payload: true }, take: 100 });
   const staleIds = interrupted.filter(row => {
@@ -36,7 +37,7 @@ export async function deliverReleaseOutbox(releaseIds?: number[], limit = 5, del
     return !Number.isFinite(claimedAt) || claimedAt < Date.now() - 10 * 60000;
   }).map(row => row.id);
   if (staleIds.length) await prisma.emailLog.updateMany({ where: { id: { in: staleIds }, status: "sending" }, data: { status: "review", errorMessage: "Interrupted SMTP delivery: confirm provider outcome before retrying." } });
-  const jobs = await prisma.emailLog.findMany({ where: { status: "pending", payload: { path: ["channel"], equals: "release_outbox" }, ...(releaseIds ? { entityId: { in: releaseIds.map(String) } } : {}) }, orderBy: { createdAt: "asc" }, take: 50 });
+  const jobs = await prisma.emailLog.findMany({ where: { status: "pending", payload: { path: ["channel"], equals: "release_outbox" }, ...(releaseIds ? { entityId: { in: releaseIds.map(String) } } : {}), ...(emailLogIds ? { id: { in: emailLogIds } } : {}) }, orderBy: { createdAt: "asc" }, take: 50 });
   let sent = 0, failed = 0, cancelled = 0, processed = 0;
   const deadline = Date.now() + 40000;
   for (const job of jobs) {

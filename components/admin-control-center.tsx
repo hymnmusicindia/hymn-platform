@@ -676,6 +676,7 @@ export function AdminControlCenter({
   const [loadedDireNoteReadiness, setDireNoteReadiness] = useState<{ releaseId: number; ready: boolean; issues: Array<{ field: string; category: string; message: string; fixSuggestion: string }>; warnings: Array<{ field: string; category: string; message: string }>; checklist?: Array<{ label: string; ready: boolean }> } | null>(null);
   const direNoteReadiness = loadedDireNoteReadiness?.releaseId === readinessReleaseId ? loadedDireNoteReadiness : null;
   const [reviewAction, setReviewAction] = useState<"rejected" | "changes_requested" | null>(null);
+  const [correctionEmailTrackId, setCorrectionEmailTrackId] = useState<number | null>(null);
   const [reviewReason, setReviewReason] = useState("");
   const [reviewIssueType, setReviewIssueType] = useState("");
   const [reviewSeverity, setReviewSeverity] = useState("required_correction");
@@ -1087,6 +1088,20 @@ export function AdminControlCenter({
     });
   }
 
+  async function sendCorrectionEmail(releaseId: number, trackId: number) {
+    setCorrectionEmailTrackId(trackId);
+    setFeedback(null);
+    try {
+      const response = await fetch(`/api/admin/releases/${releaseId}/correction-email`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trackId }) });
+      const data = await response.json().catch(() => ({}));
+      setFeedback(response.ok ? data.message || "Correction email queued." : data.error || "Correction email could not be sent.");
+    } catch {
+      setFeedback("Correction email could not be sent. Check the release email log before retrying.");
+    } finally {
+      setCorrectionEmailTrackId(null);
+    }
+  }
+
   function updateProducerProfile(producerId: number, form: HTMLFormElement) {
     startTransition(async () => {
       const response = await fetch(`/api/admin/producers/${producerId}/profile`, { method: "PATCH", body: new FormData(form) });
@@ -1461,7 +1476,11 @@ export function AdminControlCenter({
                 </div>
                 {reviewTab === "tracks" ? <div className="grid gap-3">
                   {(selectedRelease.tracks ?? []).map((track) => (
-                    <details key={track.id} className="surface-list-item p-4" open={(selectedRelease.tracks?.length ?? 0) === 1}><summary className="cursor-pointer"><div className="inline-flex w-[calc(100%-1.5rem)] items-start justify-between gap-3 align-middle"><div><p className="font-semibold" style={{ color: "var(--text)" }}>{track.trackNumber}. {track.trackTitle}</p><p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>{track.primaryArtist} · {track.duration}</p></div><StatusPill label={track.explicitContent ? "Explicit" : "Clean"} active={track.explicitContent} /></div></summary><div className="mt-4 grid gap-2 border-t pt-4 sm:grid-cols-2" style={{ borderColor: "var(--border)" }}>{[["Version", track.version], ["Featured artists", track.featuredArtists], ["Songwriters", track.songwriters], ["Composers", track.composers], ["Producers", track.producers], ["ISRC", track.isrc || (track.previouslyReleased ? "Missing" : "Pending")], ["Lyrics", track.trackLyrics || track.lyrics], ["Audio", track.audioUrl ? "Ready" : "Missing"]].map(([label, value]) => <div key={String(label)} className="summary-card"><span>{label}</span><strong className="max-w-[60%] truncate">{value || "—"}</strong></div>)}</div></details>
+                    <details key={track.id} className="surface-list-item p-4" open={(selectedRelease.tracks?.length ?? 0) === 1}>
+                      <summary className="cursor-pointer"><div className="inline-flex w-[calc(100%-1.5rem)] items-start justify-between gap-3 align-middle"><div><p className="font-semibold" style={{ color: "var(--text)" }}>{track.trackNumber}. {track.trackTitle}</p><p className="mt-2 text-sm" style={{ color: "var(--text-soft)" }}>{track.primaryArtist} · {track.duration}</p></div><StatusPill label={track.explicitContent ? "Explicit" : "Clean"} active={track.explicitContent} /></div></summary>
+                      <div className="mt-4 grid gap-2 border-t pt-4 sm:grid-cols-2" style={{ borderColor: "var(--border)" }}>{[["Version", track.version], ["Featured artists", track.featuredArtists], ["Songwriters", track.songwriters], ["Composers", track.composers], ["Producers", track.producers], ["ISRC", track.isrc || (track.previouslyReleased ? "Missing" : "Pending")], ["Lyrics", track.trackLyrics || track.lyrics], ["Audio", track.audioUrl ? "Ready" : "Missing"]].map(([label, value]) => <div key={String(label)} className="summary-card"><span>{label}</span><strong className="max-w-[60%] truncate">{value || "—"}</strong></div>)}</div>
+                      {selectedRelease.status === "changes_requested" ? <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--border)" }}><button type="button" disabled={!hasPermission("releases.review") || correctionEmailTrackId !== null} onClick={() => void sendCorrectionEmail(selectedRelease.id, track.id)} className="btn-outline pressable disabled:opacity-45">{correctionEmailTrackId === track.id ? "Sending correction email…" : "Email artist about correction"}</button><p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>Sends the saved correction request by email and records the action in the release audit.</p></div> : null}
+                    </details>
                   ))}
                 </div> : null}
               </div>
