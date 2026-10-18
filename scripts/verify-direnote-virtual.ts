@@ -1,11 +1,14 @@
 import EmbeddedPostgres from "embedded-postgres";
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const databaseDir = path.join(mkdtempSync(path.join(tmpdir(), "hymn-direnote-")), "pg");
 const port = 55439;
+// Child processes use .cache as their temp directory. A fresh CI checkout has no
+// such folder, and Prisma fails resolving a missing temp path before any test runs.
+mkdirSync(path.resolve(".cache"), { recursive: true });
 const environment = { ...process.env,
   DATABASE_URL: `postgresql://fixture:fixture@127.0.0.1:${port}/direnote_virtual?connection_limit=12`,
   DIRECT_URL: `postgresql://fixture:fixture@127.0.0.1:${port}/direnote_virtual`,
