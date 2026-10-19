@@ -1,6 +1,6 @@
 import EmbeddedPostgres from "embedded-postgres";
 import { spawn, execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
@@ -15,13 +15,17 @@ const run = (args: string[], executable = process.execPath) => new Promise<void>
 
 async function main() {
   const oldSchema = path.join(fixture, "baseline.prisma");
-  writeFileSync(oldSchema, execFileSync("git", ["show", "HEAD:prisma/schema.prisma"], { encoding: "utf8", windowsHide: true }));
+  // Build the pre-feature schema from the base revision, then apply the
+  // acquisition SQL migration exactly as production would. Using HEAD here
+  // includes the feature models and makes the migration create duplicate tables.
+  writeFileSync(oldSchema, execFileSync("git", ["show", "83ca6fe86ccb00ed78c9c080413e93284a682e7d:prisma/schema.prisma"], { encoding: "utf8", windowsHide: true }));
   const pg = new EmbeddedPostgres({ databaseDir, port, user: "fixture", password: "fixture", persistent: true, initdbFlags: ["--encoding=UTF8", "--locale=C"], postgresFlags: ["-h", "127.0.0.1"] });
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("acquisition_fixture");
     await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", oldSchema, "--skip-generate"]);
-    await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261019120000_research_acquisition/migration.sql", "--schema", "prisma/schema.prisma"]);
+    const migrations = readdirSync("prisma/migrations", { withFileTypes: true }).filter(entry => entry.isDirectory() && /^20261019\d+_/.test(entry.name)).map(entry => path.join("prisma/migrations", entry.name, "migration.sql")).sort();
+    for (const migration of migrations) await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", migration, "--schema", "prisma/schema.prisma"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-acquisition-domain.ts"]);
   } finally {
     if (process.platform === "win32") await run(["-D", databaseDir, "-m", "fast", "-w", "stop"], path.resolve("node_modules/@embedded-postgres/windows-x64/native/bin/pg_ctl.exe")); else await pg.stop();

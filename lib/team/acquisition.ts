@@ -184,6 +184,10 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
     const wasReconciled = evidence.eligibleNetRevenueMinor !== null;
     const adjustmentReference = String(body.adjustmentReference || "").trim();
     if (wasReconciled && net !== evidence.eligibleNetRevenueMinor && (!adjustmentReference || adjustmentReference.length > 200)) throw new TeamError("A unique provider adjustment reference is required when changing reconciled eligible revenue.");
+    if (wasReconciled && net !== evidence.eligibleNetRevenueMinor) {
+      const duplicateAdjustment = await tx.acquisitionCommission.findFirst({ where: { sourceType: evidence.sourceType, sourceId: evidence.sourceId, entryType: "ADJUSTMENT", adjustmentReference } });
+      if (duplicateAdjustment) throw new TeamError("This adjustment reference has already been recorded for this transaction.", 409);
+    }
     const updated = await tx.acquisitionRevenueEvidence.update({ where: { id: evidence.id }, data: { applicableTaxesMinor: taxes, refundsChargebacksMinor: refunds, directPassThroughCostsMinor: costs, providerFeeMinor: providerFee, eligibleNetRevenueMinor: net, status: "RECONCILED", taxEvidence, costEvidence, reviewedByEmployeeId: a.id, reviewedAt: new Date(), reviewReason: reason } });
     const attribution = await tx.acquisitionLead.findFirst({ where: { customerId: evidence.customerId, workspaceId: a.workspaceId, attributionLockedAt: { not: null }, acquisitionEmployeeId: { not: null } } });
     const settings = await tx.acquisitionProgramSettings.findUnique({ where: { workspaceId: a.workspaceId } });
@@ -215,8 +219,10 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
     const employeeId = String(body.employeeId || ""); const reason = String(body.reason || "").trim();
     const commissionIds = Array.isArray(body.commissionIds) ? [...new Set(body.commissionIds.filter((id): id is string => typeof id === "string"))] : [];
     if (!employeeId || reason.length < 8 || reason.length > 1000 || !commissionIds.length || commissionIds.length > 300) throw new TeamError("Select unpaid ledger entries and provide the approval reason.");
-    const entries = await tx.acquisitionCommission.findMany({ where: { id: { in: commissionIds }, employeeId, lead: { workspaceId: a.workspaceId }, payoutItems: { none: {} } } });
-    if (entries.length !== commissionIds.length || new Set(entries.map(row => row.currency)).size !== 1) throw new TeamError("One or more ledger entries were already paid, belong to another employee, or use another currency.", 409);
+    const entries = await tx.acquisitionCommission.findMany({ where: { id: { in: commissionIds }, employeeId, lead: { workspaceId: a.workspaceId }, status: { in: ["PENDING", "APPROVED"] }, eligibleAt: { lte: new Date() }, payoutItems: { none: {} } } });
+    if (entries.length !== commissionIds.length || new Set(entries.map(row => row.currency)).size !== 1) throw new TeamError("One or more entries are still held, already paid, belong to another employee, or use another currency.", 409);
+    const evidenceRows = await tx.acquisitionRevenueEvidence.findMany({ where: { workspaceId: a.workspaceId, status: "RECONCILED", OR: entries.map(row => ({ sourceType: row.sourceType, sourceId: row.sourceId, paymentId: row.paymentId })) }, select: { sourceType: true, sourceId: true, paymentId: true } });
+    if (evidenceRows.length !== new Set(entries.map(row => `${row.sourceType}:${row.sourceId}:${row.paymentId}`)).size) throw new TeamError("Reconcile every payment, refund, tax, and cost record before approving a payout.", 409);
     const amountMinor = entries.reduce((sum, row) => sum + row.amountMinor, 0);
     if (amountMinor <= 0) throw new TeamError("The selected entries have no positive net payout.");
     const settings = await tx.acquisitionProgramSettings.findUnique({ where: { workspaceId: a.workspaceId } });

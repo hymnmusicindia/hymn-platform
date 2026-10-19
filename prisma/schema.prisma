@@ -3488,7 +3488,6 @@ model AcquisitionCommission {
   customer User @relation(fields: [customerId], references: [id], onDelete: Restrict)
   employee TeamMember @relation(fields: [employeeId], references: [id], onDelete: Restrict)
   payoutItems AcquisitionPayoutItem[]
-  @@unique([sourceType, sourceId, employeeId, attributionRole, entryType, adjustmentReference])
   @@index([paymentId])
   @@index([employeeId, status, createdAt])
   @@index([leadId, createdAt])
