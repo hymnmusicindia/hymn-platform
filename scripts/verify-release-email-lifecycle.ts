@@ -39,6 +39,16 @@ async function main() {
   assert.equal((await deliverReleaseOutbox([release.id], 5, send)).sent, 1);
   assert.equal((await deliverReleaseOutbox([release.id], 5, send)).sent, 0);
   assert.equal(deliveries, 1);
+  const submitted = await create("Submission receipt");
+  await prisma.release.update({ where: { id: submitted.id }, data: { status: "SUBMITTED" } });
+  const receiptId = await queueReleaseStatusUpdate(prisma, submitted.id, "submitted");
+  await prisma.release.update({ where: { id: submitted.id }, data: { status: "DISTRIBUTOR_PROCESSING", version: { increment: 1 } } });
+  assert.equal(await queueReleaseStatusUpdate(prisma, submitted.id, "submitted"), receiptId, "A later callback must reuse the receipt despite version changes.");
+  assert.equal((await deliverReleaseOutbox([submitted.id], 5, async () => ({ data: { id: "submission-proof" }, error: null }))).sent, 1, "Normal release progress must not cancel the receipt.");
+  assert.equal(await queueReleaseStatusUpdate(prisma, submitted.id, "submitted"), receiptId, "A delivered receipt must not be resent.");
+  const withdrawn = await create("Withdrawn submission");
+  await queueReleaseStatusUpdate(prisma, withdrawn.id, "submitted");
+  assert.equal((await deliverReleaseOutbox([withdrawn.id], 5, async () => { throw new Error("Must not send a draft receipt"); })).cancelled, 1);
   const scheduled = await create("Approved schedule");
   await prisma.release.update({ where: { id: scheduled.id }, data: { status: "SCHEDULED", direNoteStatus: "scheduled", metadata: { releaseTiming: "schedule_release" } } });
   const scheduledLogId = await queueReleaseStatusUpdate(prisma, scheduled.id, "scheduled");

@@ -14,12 +14,18 @@ export async function enqueueRenderedEmail(db: any, input: { eventKey: string; t
 }
 
 export async function enqueueReleaseEmail(db: any, event: string, input: { to: string; userId: number; correctionEventKey?: string; statusEventKey?: string } & ReleaseEmailData) {
-  return enqueueRenderedEmail(db, { ...releaseStatusEmail(event, input), to: input.to, userId: input.userId, releaseId: Number(input.releaseId), template: event, expectedStatus: input.releaseStatus.toUpperCase(), providerApproved: input.providerApproved, eventKey: `release:${input.releaseId}:${event}${input.correctionEventKey ? `:${input.correctionEventKey}` : input.statusEventKey ? `:${input.statusEventKey}` : ""}:email` });
+  if (event === "release_submitted") {
+    const existing = await db.emailLog.findFirst({ where: { entityType: "release", entityId: String(input.releaseId), template: event, status: { in: ["sent", "pending", "sending", "review"] } }, select: { id: true } });
+    if (existing) return existing.id as number;
+  }
+  // A submission receipt is one milestone per release, not per status version.
+  const suffix = event === "release_submitted" ? "" : input.correctionEventKey ? `:${input.correctionEventKey}` : input.statusEventKey ? `:${input.statusEventKey}` : "";
+  return enqueueRenderedEmail(db, { ...releaseStatusEmail(event, input), to: input.to, userId: input.userId, releaseId: Number(input.releaseId), template: event, expectedStatus: input.releaseStatus.toUpperCase(), providerApproved: input.providerApproved, eventKey: `release:${input.releaseId}:${event}${suffix}:email` });
 }
 
 /** Called inside the status transaction: SMTP is never part of that transaction. */
 export async function queueReleaseStatusUpdate(db: any, releaseId: number, status: string, requestedReminderKey?: string) {
-  const event = ({ changes_requested: "release_changes_requested", rejected: "release_rejected", approved: "release_approved_by_hymn", scheduled: "release_scheduled", live: "release_live" } as Record<string, string>)[status.toLowerCase()];
+  const event = ({ submitted: "release_submitted", changes_requested: "release_changes_requested", rejected: "release_rejected", approved: "release_approved_by_hymn", scheduled: "release_scheduled", live: "release_live" } as Record<string, string>)[status.toLowerCase()];
   if (!event) return undefined;
   const release = await db.release.findUnique({ where: { id: releaseId }, include: { user: { select: { id: true, email: true, name: true, status: true } } } });
   if (!release || release.archivedAt || release.user.status !== "ACTIVE") return undefined;
@@ -57,7 +63,10 @@ export async function deliverReleaseOutbox(releaseIds?: number[], limit = 5, del
       cancelled++;
       continue;
     }
-    if (!release || release.archivedAt || release.status !== payload.expectedStatus || release.user.status !== "ACTIVE" || release.user.email.toLowerCase() !== job.toEmail.toLowerCase() || payload.draftEditedAt && (release.lastEditedAt ?? release.createdAt).toISOString() !== payload.draftEditedAt) {
+    // Receipt confirms a historical submission; normal progress must not cancel it.
+    // Drafts/withdrawn releases still cannot receive a submission receipt.
+    const validSubmission = job.template === "release_submitted" && ["SUBMITTED", "UNDER_REVIEW", "IN_QC_QUEUE", "APPROVED", "QUEUED_FOR_DISTRIBUTION", "SUBMITTING_TO_DISTRIBUTOR", "SENT_TO_DISTRIBUTOR", "DISTRIBUTOR_PROCESSING", "SCHEDULED", "LIVE", "CHANGES_REQUESTED", "REJECTED", "RESUBMITTED", "DELIVERY_FAILED"].includes(release?.status ?? "");
+    if (!release || release.archivedAt || (!validSubmission && release.status !== payload.expectedStatus) || release.user.status !== "ACTIVE" || release.user.email.toLowerCase() !== job.toEmail.toLowerCase() || payload.draftEditedAt && (release.lastEditedAt ?? release.createdAt).toISOString() !== payload.draftEditedAt) {
       await prisma.emailLog.update({ where: { id: job.id }, data: { status: "cancelled", errorMessage: "Release, owner or draft changed before delivery." } }); cancelled++; continue;
     }
     try {

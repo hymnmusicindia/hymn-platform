@@ -1312,6 +1312,8 @@ export async function submitPaidDistributionRelease(input: {
         return { title: t.trackTitle || "Untitled Track", trackNumber: t.trackNumber || i + 1, audioUrl: t.audioUrl, primaryArtist: t.primaryArtist, metadata: trackRest };
       }), []);
       await syncReleaseContributions(tx, { actorUserId: input.userId, tracks: savedTracks.map((track, i) => ({ trackId: track.id, contributions: tracks[i].contributors ?? [] })) });
+      const { queueReleaseStatusUpdate } = await import("@/lib/email/release-outbox");
+      await queueReleaseStatusUpdate(tx, createdRelease.id, "submitted");
       return createdRelease;
       }, releaseSaveTransactionOptions);
 
