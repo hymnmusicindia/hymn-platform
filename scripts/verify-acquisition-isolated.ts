@@ -30,6 +30,7 @@ async function main() {
     const migrations = readdirSync("prisma/migrations", { withFileTypes: true }).filter(entry => entry.isDirectory() && /^20261019\d+_/.test(entry.name)).map(entry => path.join("prisma/migrations", entry.name, "migration.sql")).sort();
     for (const migration of migrations) await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", migration, "--schema", "prisma/schema.prisma"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-acquisition-domain.ts"]);
+    if (process.argv.includes("--browser")) await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-acquisition-browser.ts"]);
   } finally {
     if (process.platform === "win32") await run(["-D", databaseDir, "-m", "fast", "-w", "stop"], path.resolve("node_modules/@embedded-postgres/windows-x64/native/bin/pg_ctl.exe")); else await pg.stop();
     if (path.resolve(fixture).startsWith(`${tempRoot}${path.sep}`)) rmSync(fixture, { recursive: true, force: true });

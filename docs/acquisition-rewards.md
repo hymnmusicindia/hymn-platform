@@ -25,3 +25,5 @@ No new secret variables are required. Existing configuration uses `DATABASE_URL`
 `npm run test:acquisition` applies the release SQL to a disposable PostgreSQL database and checks attribution, evidence idempotency, employee commission uniqueness, customer-only referrals, net revenue, missing evidence, partial and full refunds, retained original calculations, adjustment entries, payout holds, and outreach persistence.
 
 `npm run test:acquisition-revenue` checks product revenue calculations. `npm run test:referrals-integration` checks legacy policy preservation, referral eligibility, recurring payments, refund and dispute reconciliation, concurrency, payout reservations, and mocked email retries. These fixtures never use the production database.
+
+After `npm run build`, run `npm run test:acquisition -- --browser` to exercise the production build against the disposable database, including navigation, attribution lookup, mobile width, and anonymous API denial. The fixture blocks external browser requests and disables scheduled automation and email.

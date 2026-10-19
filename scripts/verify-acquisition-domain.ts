@@ -5,9 +5,10 @@ import { acquisitionMutation, acquisitionRead } from "../lib/team/acquisition";
 import { processAcquisitionEmailEvent } from "../lib/team/acquisition-email";
 import { accrueReferralCommission } from "../lib/referral-commissions";
 import { teamMutation } from "../lib/team/service";
-import { createPasswordUser } from "../lib/db";
+import { createPasswordUser, createOrder, completeCheckoutOrder } from "../lib/db";
 import { attachNewCustomerToAcquisitionLead } from "../lib/acquisition-revenue";
 import { confirmDistributionPayment } from "../lib/payment-webhooks";
+import { confirmStudioPayment, createStudioOrder, createStudioPayment } from "../lib/studio-services";
 
 async function main() {
   assert.match(process.env.DATABASE_URL || "", /^postgresql:\/\/fixture:fixture@127\.0\.0\.1:55473\/acquisition_fixture$/, "Acquisition checks are restricted to the disposable local fixture.");
@@ -33,9 +34,13 @@ async function main() {
   assert.equal(leadFilter.items.some(item => item.id === lead.id), true, "Lead search combines email and status filters.");
   const exportData = await acquisitionRead(actor, "acquisition-leads-export", new URLSearchParams()) as { csv: string; count: number };
   assert.equal(exportData.count, 1); assert.match(exportData.csv, /Fixture Artist/);
-  const newLeadInput = { name: "Profile-only researched artist", ownerId: researcher.id, instagramUrl: `https://www.instagram.com/fixture_${suffix}`, sourceUrl: "https://example.org/discovery", evidence: "Verified public professional profile", categories: ["Distribution"], contactEligibility: "LEGITIMATE_INTEREST", verified: true, score: { intent: 10, relevance: 10, recency: 5, contactability: 5, fit: 5 } };
+  const newLeadInput = { name: "Profile-only researched artist", discoveredAt: "2026-10-01T08:00:00.000Z", followUpAt: "2026-11-01T08:00:00.000Z", notes: "Fixture research notes", ownerId: researcher.id, instagramUrl: `https://www.instagram.com/fixture_${suffix}`, sourceUrl: "https://example.org/discovery", evidence: "Verified public professional profile", categories: ["Distribution"], contactEligibility: "LEGITIMATE_INTEREST", verified: true, score: { intent: 10, relevance: 10, recency: 5, contactability: 5, fit: 5 } };
   const submittedProspect = await teamMutation(actor, "prospects", newLeadInput) as { id: string; version: number };
   await assert.rejects(teamMutation(actor, "prospects", newLeadInput), /already exists/, "Profile-only duplicates must be rejected without hashing an absent email.");
+  const storedProspect = await prisma.teamProspect.findUniqueOrThrow({ where: { id: submittedProspect.id } });
+  assert.equal(storedProspect.discoveredAt?.toISOString(), newLeadInput.discoveredAt);
+  assert.equal(storedProspect.followUpAt?.toISOString(), newLeadInput.followUpAt);
+  assert.equal(storedProspect.notes, newLeadInput.notes);
   const submittedLead = await prisma.acquisitionLead.findUniqueOrThrow({ where: { prospectId: submittedProspect.id } });
   assert.equal(submittedLead.researcherEmployeeId, researcher.id);
   await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-assign", { leadId: submittedLead.id, employeeId: converter.id, reason: "Assign independent conversion representative" }));
@@ -176,6 +181,30 @@ async function main() {
   assert.equal(await prisma.acquisitionProgramAudit.count({ where: { workspaceId: workspace.id, action: "programme.settings_changed" } }), 1);
   assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { id: customerReward.id } })).rateBps, 200);
   assert.equal((await prisma.acquisitionCommission.findFirstOrThrow({ where: { leadId: lead.id, attributionRole: "RESEARCHER", entryType: "EARNED" } })).rateBps, 200, "Rate changes preserve historical employee calculations.");
+  const upload = await prisma.upload.create({ data: { userId: researcherUser.id, kind: "AUDIO", storageKey: `fixture-net-${suffix}/audio`, fileName: "beat.mp3", mimeType: "audio/mpeg", sizeBytes: 1 } });
+  const beat = await prisma.beat.create({ data: { userId: researcherUser.id, title: "Net policy beat", bpm: 100, genre: "fixture", mood: "fixture", keySignature: "C", priceCents: 10000, status: "PUBLISHED", audioUploadId: upload.id } });
+  const beatOrder = await createOrder({ userId: ordinaryCustomer.id, productId: "beatstore", originalPrice: 100, finalAmount: 100, razorpayOrderId: `order_net_beat_${suffix}`, amount: 100, paymentStatus: "created", items: [{ beatId: beat.id, licenseType: "general", price: 100 }] });
+  await completeCheckoutOrder(`order_net_beat_${suffix}`, `pay_net_beat_${suffix}`);
+  const beatSale = await prisma.beatSale.findFirstOrThrow({ where: { orderId: beatOrder!.id } });
+  const beatEvidence = await prisma.acquisitionRevenueEvidence.findUniqueOrThrow({ where: { paymentId: `pay_net_beat_${suffix}` } });
+  assert.equal(beatEvidence.recognisedRevenueMinor, Number(beatSale.hymnCommissionAmount.mul(100)), "Marketplace revenue uses the contracted share recorded on the actual sale.");
+  const reviewRetainedShare = (id: string, reference: string) => prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-evidence-review", { id, applicableTaxesMinor: 0, refundsChargebacksMinor: 0, directPassThroughCostsMinor: 0, providerFeeMinor: 0, taxEvidence: ["fixture-tax-exemption-record"], costEvidence: [reference, "fixture-provider-fee-settlement"], reason: "Verified contractual retained share and explicit zero deductions" }));
+  await reviewRetainedShare(beatEvidence.id, `beat-sale-contract-and-payout:${beatSale.id}`);
+  assert.equal((await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: beatEvidence.paymentId } })).netMinor, Math.floor(beatEvidence.recognisedRevenueMinor * 200 / 10000));
+  const party = await prisma.contributorParty.create({ data: { publicId: `HYM_NET_${suffix}`, professionalName: "Fixture Engineer", displayName: "Fixture Engineer", claimedByUserId: researcherUser.id, createdByUserId: researcherUser.id, identityState: "CLAIMED" } });
+  const engineer = await prisma.engineerProfile.create({ data: { contributorPartyId: party.id, slug: `net-engineer-${suffix}`, professionalName: "Fixture Engineer", availability: "AVAILABLE", maxActiveOrders: 5, verificationState: "VERIFIED" } });
+  const listing = await prisma.studioServiceListing.create({ data: { engineerProfileId: engineer.id, title: "Net Policy Mix", description: "Fixture", standardPrice: 2000, includedRevisions: 2, additionalRevisionPrice: 400, turnaroundDays: 5, sourceRequirements: {}, deliverables: {} } });
+  const studioOrder = await createStudioOrder({ customerId: ordinaryCustomer.id, listingPublicId: listing.publicId, projectTitle: "Net policy song", idempotencyKey: `net-studio-order-${suffix}`, termsAccepted: true });
+  const studioPayment = await createStudioPayment({ customerId: ordinaryCustomer.id, orderPublicId: studioOrder.publicId, idempotencyKey: `net-studio-payment-${suffix}` });
+  await confirmStudioPayment({ razorpayOrderId: studioPayment.razorpayOrderId, paymentId: `pay_net_studio_${suffix}`, source: "fixture", amountMinor: 200000, currency: "INR" });
+  const studioEvidence = await prisma.acquisitionRevenueEvidence.findUniqueOrThrow({ where: { paymentId: `pay_net_studio_${suffix}` } });
+  await reviewRetainedShare(studioEvidence.id, `studio-contract-and-provider-payout:${studioOrder.publicId}`);
+  assert.equal((await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: studioEvidence.paymentId } })).netMinor, Math.floor(studioEvidence.recognisedRevenueMinor * 200 / 10000));
+  await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-reassign", { leadId: lead.id, employeeId: converter.id, role: "RESEARCHER", reason: "Fixture documented ownership correction" }));
+  const ownershipHistory = await acquisitionRead(actor, "acquisition-reassign", new URLSearchParams({ id: lead.id })) as { previousEmployeeId: string; newEmployeeId: string; reason: string }[];
+  assert.equal(ownershipHistory[0].previousEmployeeId, researcher.id);
+  assert.equal(ownershipHistory[0].newEmployeeId, converter.id);
+  assert.equal((await prisma.acquisitionCommission.findFirstOrThrow({ where: { leadId: lead.id, attributionRole: "RESEARCHER", entryType: "EARNED" } })).employeeId, researcher.id, "Audited ownership corrections preserve earlier earned employee attribution.");
   console.log("Acquisition attribution, revenue reconciliation, partial refund, payout and email persistence checks passed.");
 }
 
