@@ -3,9 +3,16 @@ import { prisma } from "../lib/prisma";
 import { recordVerifiedAcquisitionRevenue } from "../lib/acquisition-revenue";
 import { acquisitionMutation, acquisitionRead } from "../lib/team/acquisition";
 import { processAcquisitionEmailEvent } from "../lib/team/acquisition-email";
+import { accrueReferralCommission } from "../lib/referral-commissions";
+import { teamMutation } from "../lib/team/service";
+import { createPasswordUser } from "../lib/db";
+import { attachNewCustomerToAcquisitionLead } from "../lib/acquisition-revenue";
+import { confirmDistributionPayment } from "../lib/payment-webhooks";
 
 async function main() {
+  assert.match(process.env.DATABASE_URL || "", /^postgresql:\/\/fixture:fixture@127\.0\.0\.1:55473\/acquisition_fixture$/, "Acquisition checks are restricted to the disposable local fixture.");
   const suffix = Date.now().toString(36);
+  await prisma.referralProgram.upsert({ where: { id: 1 }, create: { id: 1, effectiveAt: new Date(0), netRevenueEffectiveAt: new Date(0) }, update: { netRevenueEffectiveAt: new Date(0) } });
   const researcherUser = await prisma.user.create({ data: { googleId: `acq-r-${suffix}`, name: "Researcher", email: `r-${suffix}@fixture.invalid` } });
   const converterUser = await prisma.user.create({ data: { googleId: `acq-c-${suffix}`, name: "Converter", email: `c-${suffix}@fixture.invalid` } });
   const customer = await prisma.user.create({ data: { googleId: `acq-u-${suffix}`, name: "Customer", email: `u-${suffix}@fixture.invalid` } });
@@ -18,31 +25,116 @@ async function main() {
   const growth = await prisma.growthLead.create({ data: { kind: "acquisition", name: "Fixture Artist", email: prospectContact, interest: "Distribution", message: "Fixture source-backed lead" } });
   const prospect = await prisma.teamProspect.create({ data: { workspaceId: workspace.id, ownerId: researcher.id, name: "Fixture Artist", contactName: "Fixture Artist", email: prospectContact, sourceUrl: "https://example.org/artist", evidence: "Public professional contact source", categories: ["Distribution"], score: { intent: 10 }, stage: "INTERESTED", contactEligibility: "LEGITIMATE_INTEREST", verified: true, identityKey: `fixture-${suffix}`, leadId: growth.id } });
   const lead = await prisma.acquisitionLead.create({ data: { workspaceId: workspace.id, prospectId: prospect.id, researcherEmployeeId: researcher.id, acquisitionEmployeeId: converter.id, customerId: customer.id, convertedAt: new Date(), attributionLockedAt: new Date() } });
+  await prisma.referral.create({ data: { userId: researcherUser.id, referredUserId: customer.id, referralCode: `FIX-${suffix}`, signupEmail: customer.email, status: "PENDING" } });
+  const attributionView = await acquisitionRead(actor, "acquisition-customer-attribution", new URLSearchParams({ customerId: String(customer.id) })) as { employeeAttribution: { researcherEmployeeId: string }; customerReferral: { referrer: { id: number } } };
+  assert.equal(attributionView.employeeAttribution.researcherEmployeeId, researcher.id);
+  assert.equal(attributionView.customerReferral.referrer.id, researcherUser.id, "Admin attribution inspection shows independent employee and customer referral records.");
+  const leadFilter = await acquisitionRead(actor, "acquisition-leads", new URLSearchParams({ q: prospectContact, status: "INTERESTED" })) as { items: { id: string }[] };
+  assert.equal(leadFilter.items.some(item => item.id === lead.id), true, "Lead search combines email and status filters.");
+  const exportData = await acquisitionRead(actor, "acquisition-leads-export", new URLSearchParams()) as { csv: string; count: number };
+  assert.equal(exportData.count, 1); assert.match(exportData.csv, /Fixture Artist/);
+  const newLeadInput = { name: "Profile-only researched artist", ownerId: researcher.id, instagramUrl: `https://www.instagram.com/fixture_${suffix}`, sourceUrl: "https://example.org/discovery", evidence: "Verified public professional profile", categories: ["Distribution"], contactEligibility: "LEGITIMATE_INTEREST", verified: true, score: { intent: 10, relevance: 10, recency: 5, contactability: 5, fit: 5 } };
+  const submittedProspect = await teamMutation(actor, "prospects", newLeadInput) as { id: string; version: number };
+  await assert.rejects(teamMutation(actor, "prospects", newLeadInput), /already exists/, "Profile-only duplicates must be rejected without hashing an absent email.");
+  const submittedLead = await prisma.acquisitionLead.findUniqueOrThrow({ where: { prospectId: submittedProspect.id } });
+  assert.equal(submittedLead.researcherEmployeeId, researcher.id);
+  await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-assign", { leadId: submittedLead.id, employeeId: converter.id, reason: "Assign independent conversion representative" }));
+  await teamMutation(actor, "prospect-update", { id: submittedProspect.id, version: submittedProspect.version, stage: "QUALIFIED" });
+  const converterActor = await prisma.teamMember.findUniqueOrThrow({ where: { id: converter.id }, include: { role: true } });
+  const signedLink = await acquisitionRead(converterActor, "acquisition-link", new URLSearchParams({ leadId: submittedLead.id })) as { url: string };
+  const acquisitionToken = decodeURIComponent(new URL(signedLink.url).pathname.split("/").pop()!);
+  const joinedCustomer = await createPasswordUser({ name: "Signed link customer", email: `signed-${suffix}@fixture.invalid`, passwordHash: "fixture-only-hash", role: "customer", acquisitionToken });
+  assert.ok(joinedCustomer);
+  const matchedLead = await prisma.acquisitionLead.findUniqueOrThrow({ where: { id: submittedLead.id } });
+  assert.equal(matchedLead.customerId, joinedCustomer.id);
+  assert.equal(matchedLead.researcherEmployeeId, researcher.id);
+  assert.equal(matchedLead.acquisitionEmployeeId, converter.id);
+  assert.equal(await prisma.$transaction(tx => attachNewCustomerToAcquisitionLead(tx, { token: acquisitionToken, customerId: customer.id, email: customer.email })), false, "A signed acquisition link cannot reassign a converted lead.");
 
-  const order = await prisma.checkoutOrder.create({ data: { userId: customer.id, originalPrice: 100, finalAmount: 100, razorpayOrderId: `order-${suffix}`, razorpayPaymentId: `pay-${suffix}`, paymentStatus: "paid" } });
-  const evidence = await recordVerifiedAcquisitionRevenue({ sourceType: "checkout_order", sourceId: String(order.id), customerId: customer.id, paymentId: `pay-${suffix}`, currency: "INR", recognisedRevenueMinor: 10000 });
+  const paymentId = `pay_${suffix}`;
+  const order = await prisma.checkoutOrder.create({ data: { userId: customer.id, originalPrice: 100, finalAmount: 100, razorpayOrderId: `order_${suffix}`, razorpayPaymentId: paymentId, paymentStatus: "paid" } });
+  const evidence = await recordVerifiedAcquisitionRevenue({ sourceType: "checkout_order", sourceId: String(order.id), customerId: customer.id, paymentId, currency: "INR", recognisedRevenueMinor: 10000 });
   assert.equal(evidence?.status, "RECONCILIATION_REQUIRED");
-  await recordVerifiedAcquisitionRevenue({ sourceType: "checkout_order", sourceId: String(order.id), customerId: customer.id, paymentId: `pay-${suffix}`, currency: "INR", recognisedRevenueMinor: 10000 });
-  assert.equal(await prisma.acquisitionRevenueEvidence.count({ where: { paymentId: `pay-${suffix}` } }), 1, "Verified payment retries do not duplicate revenue evidence.");
-  await prisma.acquisitionProgramSettings.create({ data: { workspaceId: workspace.id, enabled: true, holdPeriodDays: 0, payoutMinimumMinor: 0, revenuePolicy: "Recognised retained revenue less verified taxes, refunds and direct pass-through costs." } });
+  await recordVerifiedAcquisitionRevenue({ sourceType: "checkout_order", sourceId: String(order.id), customerId: customer.id, paymentId, currency: "INR", recognisedRevenueMinor: 10000 });
+  assert.equal(await prisma.acquisitionRevenueEvidence.count({ where: { paymentId } }), 1, "Verified payment retries do not duplicate revenue evidence.");
+  await prisma.acquisitionProgramSettings.create({ data: { workspaceId: workspace.id, enabled: true, effectiveAt: new Date(0), holdPeriodDays: 0, payoutMinimumMinor: 0, revenuePolicy: "Recognised retained revenue less verified taxes, refunds and direct pass-through costs." } });
+  for (const purchase of [1, 2]) {
+    const linkedOrder = await prisma.distributionOrder.create({ data: { userId: joinedCustomer.id, plan: "one_time", amount: 100, razorpayOrderId: `order_signed_${purchase}_${suffix}` } });
+    await confirmDistributionPayment({ razorpayOrderId: linkedOrder.razorpayOrderId, paymentId: `pay_signed_${purchase}_${suffix}`, amountMinor: 10000, currency: "INR", source: "fixture" });
+    const linkedEvidence = await prisma.acquisitionRevenueEvidence.findUniqueOrThrow({ where: { paymentId: `pay_signed_${purchase}_${suffix}` } });
+    await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-evidence-review", { id: linkedEvidence.id, applicableTaxesMinor: 1000, refundsChargebacksMinor: 0, directPassThroughCostsMinor: 1000, providerFeeMinor: 0, taxEvidence: ["distribution-invoice"], costEvidence: ["distributor-settlement"], reason: "Review signed link customer paid purchase" }));
+    const employeeRewards = await prisma.acquisitionCommission.findMany({ where: { sourceType: "distribution_order", sourceId: String(linkedOrder.id), entryType: "EARNED" }, orderBy: { attributionRole: "asc" } });
+    assert.deepEqual(employeeRewards.map(row => [row.employeeId, row.amountMinor]), [[converter.id, 240], [researcher.id, 160]], "Signup attribution survives first and repeat verified purchases.");
+  }
+  await prisma.$transaction(tx => accrueReferralCommission(tx, "checkout_order", order.id));
+  assert.equal(await prisma.referralCommission.count({ where: { paymentId } }), 0, "Customer referral accrual waits for employee-attributed revenue reconciliation.");
   const review = (refunds: number, adjustmentReference?: string) => prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-evidence-review", { id: evidence!.id, applicableTaxesMinor: 1000, refundsChargebacksMinor: refunds, directPassThroughCostsMinor: 1000, providerFeeMinor: 0, taxEvidence: ["tax-invoice-fixture"], costEvidence: ["marketplace-settlement-fixture"], adjustmentReference, reason: "Reviewed fixture financial records" }));
   await review(0);
   assert.equal(await prisma.acquisitionCommission.count({ where: { leadId: lead.id, entryType: "EARNED" } }), 2);
   assert.equal(await prisma.acquisitionCommission.aggregate({ where: { leadId: lead.id, entryType: "EARNED" }, _sum: { amountMinor: true } }).then(result => result._sum.amountMinor), 400);
-  await assert.rejects(prisma.acquisitionCommission.create({ data: { leadId: lead.id, sourceType: "checkout_order", sourceId: String(order.id), paymentId: `pay-${suffix}`, customerId: customer.id, employeeId: researcher.id, attributionRole: "RESEARCHER", eligibleNetRevenueMinor: 8000, rateBps: 200, amountMinor: 160, currency: "INR", calculationBasis: "duplicate webhook fixture", paymentVerificationReference: `pay-${suffix}`, status: "PENDING" } }), "The database prevents duplicate earned commissions for the same source and role.");
+  const customerReward = await prisma.referralCommission.findFirstOrThrow({ where: { paymentId, referral: { referredUserId: customer.id } } });
+  assert.equal(customerReward.eligibleNetRevenueMinor, 8000);
+  assert.equal(customerReward.rateBps, 200);
+  assert.equal(customerReward.netMinor, 160, "Customer referral reward is 2% of reconciled eligible net revenue outside the employee cap.");
+  await assert.rejects(prisma.acquisitionCommission.create({ data: { leadId: lead.id, sourceType: "checkout_order", sourceId: String(order.id), paymentId, customerId: customer.id, employeeId: researcher.id, attributionRole: "RESEARCHER", eligibleNetRevenueMinor: 8000, rateBps: 200, amountMinor: 160, currency: "INR", calculationBasis: "duplicate webhook fixture", paymentVerificationReference: paymentId, status: "PENDING" } }), "The database prevents duplicate earned commissions for the same source and role.");
 
-  await prisma.paymentWebhookEvent.create({ data: { providerEventId: `refund-event-${suffix}`, eventType: "refund.processed", payloadHash: `refund-hash-${suffix}`, signatureValid: true, paymentId: `pay-${suffix}`, amountMinor: 5000, currency: "INR", payloadRedacted: { event: "refund.processed", entity: { id: `rfnd-${suffix}`, amount: 5000 } }, processingState: "processed" } });
+  await prisma.paymentWebhookEvent.create({ data: { providerEventId: `refund-event-${suffix}`, eventType: "refund.processed", payloadHash: `refund-hash-${suffix}`, signatureValid: true, paymentId, amountMinor: 5000, currency: "INR", payloadRedacted: { event: "refund.processed", entity: { id: `rfnd-${suffix}`, amount: 5000 } }, processingState: "processed" } });
   await prisma.acquisitionRevenueEvidence.update({ where: { id: evidence!.id }, data: { status: "ADJUSTMENT_REQUIRED" } });
   await review(5000, `rfnd-${suffix}`);
   assert.equal(await prisma.acquisitionCommission.count({ where: { leadId: lead.id, entryType: "ADJUSTMENT" } }), 2);
   const netCommission = await prisma.acquisitionCommission.aggregate({ where: { leadId: lead.id }, _sum: { amountMinor: true } });
   assert.equal(netCommission._sum.amountMinor, 150, "Partial refunds create negative adjustments while preserving original ledger rows.");
+  assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { id: customerReward.id } })).netMinor, 60, "Customer referral rewards recalculate from reconciled net revenue after refunds.");
 
   await prisma.acquisitionRevenueEvidence.update({ where: { id: evidence!.id }, data: { status: "ADJUSTMENT_REQUIRED" } });
-  await prisma.paymentWebhookEvent.create({ data: { providerEventId: `refund-event-two-${suffix}`, eventType: "refund.processed", payloadHash: `refund-hash-two-${suffix}`, signatureValid: true, paymentId: `pay-${suffix}`, amountMinor: 2000, currency: "INR", payloadRedacted: { event: "refund.processed", entity: { id: `rfnd-two-${suffix}`, amount: 2000 } }, processingState: "processed" } });
+  await prisma.paymentWebhookEvent.create({ data: { providerEventId: `refund-event-two-${suffix}`, eventType: "refund.processed", payloadHash: `refund-hash-two-${suffix}`, signatureValid: true, paymentId, amountMinor: 2000, currency: "INR", payloadRedacted: { event: "refund.processed", entity: { id: `rfnd-two-${suffix}`, amount: 2000 } }, processingState: "processed" } });
   await review(7000, `rfnd-revised-${suffix}`);
   const revisedCommission = await prisma.acquisitionCommission.aggregate({ where: { leadId: lead.id }, _sum: { amountMinor: true } });
   assert.equal(revisedCommission._sum.amountMinor, 50, "A later correction targets the cumulative commission balance without duplicating earlier adjustments.");
+  assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { id: customerReward.id } })).netMinor, 20, "Customer referral amount follows later reconciled partial refunds.");
+  const adjustments = await prisma.referralCommissionAdjustment.findMany({ where: { commissionId: customerReward.id }, orderBy: { id: "asc" } });
+  assert.deepEqual(adjustments.map(row => row.amountMinor), [-100, -40]);
+  assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { id: customerReward.id } })).originalMinor, 160, "Original calculation is preserved alongside the adjustment ledger.");
+
+  const ordinaryCustomer = await prisma.user.create({ data: { name: "Customer without employee lead", email: `ordinary-${suffix}@fixture.invalid`, googleId: `ordinary-${suffix}` } });
+  await prisma.referral.create({ data: { userId: researcherUser.id, referredUserId: ordinaryCustomer.id, referralCode: `ORD-${suffix}`, signupEmail: ordinaryCustomer.email } });
+  const ordinaryOrder = await prisma.distributionOrder.create({ data: { userId: ordinaryCustomer.id, plan: "one_time", amount: 100, razorpayOrderId: `order_ordinary_${suffix}`, razorpayPaymentId: `pay_ordinary_${suffix}`, paymentStatus: "paid" } });
+  await prisma.$transaction(tx => accrueReferralCommission(tx, "distribution_order", ordinaryOrder.id));
+  const ordinaryEvidence = await prisma.acquisitionRevenueEvidence.findUniqueOrThrow({ where: { paymentId: ordinaryOrder.razorpayPaymentId! } });
+  assert.equal(ordinaryEvidence.workspaceId, null);
+  assert.equal(await prisma.referralCommission.count({ where: { paymentId: ordinaryEvidence.paymentId } }), 0, "Missing evidence blocks customer-only gross commission accrual.");
+  await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-evidence-review", { id: ordinaryEvidence.id, applicableTaxesMinor: 1000, refundsChargebacksMinor: 0, directPassThroughCostsMinor: 1000, providerFeeMinor: 0, taxEvidence: ["tax-reference"], costEvidence: ["cost-reference"], reason: "Verified customer-only financial records" }));
+  assert.equal((await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: ordinaryEvidence.paymentId } })).netMinor, 160, "Independent customer referral earns 2% of reconciled net without an employee lead.");
+  await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-evidence-review", { id: ordinaryEvidence.id, applicableTaxesMinor: 0, refundsChargebacksMinor: 10000, directPassThroughCostsMinor: 0, providerFeeMinor: 0, taxEvidence: ["credit-note"], costEvidence: ["cancelled-cost"], adjustmentReference: "ordinary-full-refund", reason: "Verified full refund and credit note" }));
+  const fullyRefunded = await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: ordinaryEvidence.paymentId } });
+  assert.equal(fullyRefunded.netMinor, 0);
+  assert.equal(fullyRefunded.originalMinor, 160);
+  assert.equal((await prisma.referralCommissionAdjustment.findFirstOrThrow({ where: { commissionId: fullyRefunded.id } })).amountMinor, -160);
+  const subscription = await prisma.subscription.create({ data: { userId: ordinaryCustomer.id, plan: "yearly", expiryDate: new Date(Date.now() + 86400000), status: "active" } });
+  for (const renewal of [1, 2]) {
+    const payment = await prisma.subscriptionPayment.create({ data: { subscriptionId: subscription.id, razorpayPaymentId: `pay_net_renewal_${renewal}_${suffix}`, amount: 60000, planSnapshot: "yearly", status: "captured" } });
+    await prisma.$transaction(tx => accrueReferralCommission(tx, "subscription_payment", payment.id));
+    const renewalEvidence = await prisma.acquisitionRevenueEvidence.findUniqueOrThrow({ where: { paymentId: payment.razorpayPaymentId } });
+    await assert.rejects(prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-evidence-review", { id: renewalEvidence.id, applicableTaxesMinor: 10000, refundsChargebacksMinor: 0, directPassThroughCostsMinor: 5000, providerFeeMinor: 0, reason: "Must reject missing supporting records" })), /supporting tax and cost references/);
+    const reviewRenewal = () => prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-evidence-review", { id: renewalEvidence.id, applicableTaxesMinor: 10000, refundsChargebacksMinor: 0, directPassThroughCostsMinor: 5000, providerFeeMinor: 0, taxEvidence: ["renewal-invoice"], costEvidence: ["subscription-settlement"], reason: "Verified independent recurring payment" }));
+    await reviewRenewal(); await reviewRenewal();
+    const reward = await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: payment.razorpayPaymentId } });
+    assert.equal(reward.netMinor, 900);
+    assert.equal(await prisma.referralCommission.count({ where: { paymentId: payment.razorpayPaymentId } }), 1, "Renewal review replay never duplicates a customer reward.");
+    if (renewal === 2) {
+      await prisma.paymentWebhookEvent.create({ data: { providerEventId: `net-dispute-${suffix}`, eventType: "payment.dispute.lost", payloadHash: `dispute-${suffix}`, signatureValid: true, paymentId: payment.razorpayPaymentId, amountMinor: 60000, currency: "INR", payloadRedacted: {}, processingState: "processed" } });
+      await prisma.acquisitionRevenueEvidence.update({ where: { id: renewalEvidence.id }, data: { status: "ADJUSTMENT_REQUIRED" } });
+      await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-evidence-review", { id: renewalEvidence.id, applicableTaxesMinor: 0, refundsChargebacksMinor: 60000, directPassThroughCostsMinor: 0, providerFeeMinor: 0, taxEvidence: ["credit-note"], costEvidence: ["cancelled-cost"], adjustmentReference: "net-dispute-lost", reason: "Verified chargeback terminal outcome" }));
+      assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { id: reward.id } })).netMinor, 0);
+    }
+  }
+  const freeOrder = await prisma.distributionOrder.create({ data: { userId: ordinaryCustomer.id, plan: "one_time", amount: 0, razorpayOrderId: `order_net_free_${suffix}`, razorpayPaymentId: `pay_net_free_${suffix}`, paymentStatus: "paid" } });
+  const unpaidOrder = await prisma.distributionOrder.create({ data: { userId: ordinaryCustomer.id, plan: "one_time", amount: 100, razorpayOrderId: `order_net_unpaid_${suffix}`, paymentStatus: "created" } });
+  for (const row of [freeOrder, unpaidOrder]) await prisma.$transaction(tx => accrueReferralCommission(tx, "distribution_order", row.id));
+  assert.equal(await prisma.referralCommission.count({ where: { sourceType: "distribution_order", sourceId: { in: [String(freeOrder.id), String(unpaidOrder.id)] } } }), 0);
+  const restrictedActor = { ...actor, role: { ...actor.role, owner: false, permissions: ["crm.prospects.view"] } };
+  await assert.rejects(acquisitionRead(restrictedActor, "acquisition-evidence", new URLSearchParams()), /permission/);
+  await assert.rejects(prisma.$transaction(tx => acquisitionMutation(tx, restrictedActor, "acquisition-assign", { leadId: lead.id, employeeId: converter.id, reason: "Unauthorized attribution edit" })), /permission/);
 
   const commissions = await prisma.acquisitionCommission.findMany({ where: { leadId: lead.id }, orderBy: { attributionRole: "asc" } });
   await prisma.acquisitionRevenueEvidence.update({ where: { id: evidence!.id }, data: { status: "ADJUSTMENT_REQUIRED" } });
@@ -60,6 +152,9 @@ async function main() {
   const templates = await acquisitionRead(actor, "acquisition-email-templates", new URLSearchParams()) as { items: { id: string; slug: string }[] };
   assert.equal(templates.items.length >= 3, true);
   const template = templates.items.find(row => row.slug === "music-distribution")!;
+  const personalized = await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-email-draft", { prospectId: prospect.id, templateId: template.id })) as { subject: string; body: string };
+  assert.match(personalized.subject, /Fixture Artist/);
+  assert.equal(personalized.body.includes("{{"), false, "Optional template data has safe populated fallbacks.");
   const draft = await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-email-draft", { prospectId: prospect.id, templateId: template.id, subject: "Fixture outreach", body: "Hello Fixture Artist" })) as { id: string; status: string };
   assert.equal(draft.status, "DRAFT");
   const queued = await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-email-queue", { prospectId: prospect.id, templateId: template.id, subject: "Fixture outreach", body: "Hello Fixture Artist" })) as { id: string; status: string };
@@ -67,6 +162,20 @@ async function main() {
   const sendResult = await processAcquisitionEmailEvent(queued.id);
   assert.equal(sendResult?.status, "skipped", "Disabled fixture email configuration must never simulate a send.");
   assert.equal((await prisma.acquisitionEmailEvent.findUniqueOrThrow({ where: { id: queued.id } })).status, "FAILED");
+  await prisma.newsletterSubscriber.create({ data: { email: prospectContact, status: "unsubscribed", unsubscribedAt: new Date(), unsubscribeToken: `acquisition-unsubscribe-${suffix}` } });
+  await assert.rejects(prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-email-queue", { prospectId: prospect.id, templateId: template.id, subject: "Must not send", body: "Recipient has opted out" })), /opted out/);
+  await prisma.acquisitionEmailEvent.update({ where: { id: queued.id }, data: { status: "QUEUED" } });
+  const suppressedResult = await processAcquisitionEmailEvent(queued.id);
+  assert.equal(suppressedResult?.status, "skipped");
+  assert.match((await prisma.acquisitionEmailEvent.findUniqueOrThrow({ where: { id: queued.id } })).providerError || "", /suppressed/);
+  const performance = await acquisitionRead(actor, "acquisition-dashboard", new URLSearchParams()) as { performance: { convertedCustomers: number; repeatPurchases: number } };
+  assert.equal(performance.performance.convertedCustomers, 2);
+  assert.equal(performance.performance.repeatPurchases, 1);
+  const previousSettings = await prisma.acquisitionProgramSettings.findUniqueOrThrow({ where: { workspaceId: workspace.id } });
+  await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-settings-save", { ...previousSettings, effectiveAt: previousSettings.effectiveAt.toISOString(), researcherRateBps: 100, acquisitionRateBps: 400, reason: "Fixture audited rate revision" }));
+  assert.equal(await prisma.acquisitionProgramAudit.count({ where: { workspaceId: workspace.id, action: "programme.settings_changed" } }), 1);
+  assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { id: customerReward.id } })).rateBps, 200);
+  assert.equal((await prisma.acquisitionCommission.findFirstOrThrow({ where: { leadId: lead.id, attributionRole: "RESEARCHER", entryType: "EARNED" } })).rateBps, 200, "Rate changes preserve historical employee calculations.");
   console.log("Acquisition attribution, revenue reconciliation, partial refund, payout and email persistence checks passed.");
 }
 

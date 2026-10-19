@@ -43,23 +43,42 @@ export async function accrueReferralCommission(tx: Tx, source: CommissionSource,
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${paymentId}, 0))::text`;
   const program = await tx.referralProgram.findUnique({ where: { id: 1 } });
   if (!program || purchasedAt < program.effectiveAt) return;
+  // New-policy customer rewards wait for reconciled HYMN net revenue.
+  // Earlier payments retain their frozen programme terms. Customer rewards
+  // remain outside the employee commission cap.
+  const employeeAttribution = await tx.acquisitionLead.findFirst({ where: { customerId: userId, attributionLockedAt: { not: null }, acquisitionEmployeeId: { not: null } }, select: { id: true } });
+  const netPolicy = Boolean(employeeAttribution || (program.netRevenueEffectiveAt && purchasedAt >= program.netRevenueEffectiveAt));
   const referral = await tx.referral.findUnique({ where: { referredUserId: userId }, include: { owner: true, referredUser: true } });
   if (!referral || referral.status === "REJECTED" || referral.userId === userId || purchasedAt < referral.createdAt || referral.owner.status !== "ACTIVE" || referral.referredUser?.status !== "ACTIVE") return;
+  let netEvidence = null;
+  if (netPolicy) {
+    netEvidence = await tx.acquisitionRevenueEvidence.upsert({
+      where: { sourceType_sourceId: { sourceType: source, sourceId: String(id) } },
+      create: { sourceType: source, sourceId: String(id), customerId: userId, paymentId, currency: "INR", recognisedRevenueMinor: baseMinor, status: "RECONCILIATION_REQUIRED" }, update: {},
+    });
+    if (netEvidence.status !== "RECONCILED" || netEvidence.eligibleNetRevenueMinor === null) return;
+    baseMinor = netEvidence.eligibleNetRevenueMinor;
+  }
   const rates = referral.commissionRates as Record<string, number> | null;
   const savedRate = rates?.[category];
   let rateBps = savedRate !== undefined && Number.isInteger(savedRate) && savedRate >= 0 && savedRate <= 10000 ? savedRate : REFERRAL_COMMISSION_RATES[category];
-  if (["beats", "studio"].includes(category)) rateBps = Math.min(rateBps, 500);
+  if (netPolicy) {
+    const settings = netEvidence?.workspaceId ? await tx.acquisitionProgramSettings.findUnique({ where: { workspaceId: netEvidence.workspaceId } }) : null;
+    if (settings && (!settings.eligibleSourceTypes.includes(source) || purchasedAt < settings.effectiveAt)) return;
+    rateBps = settings?.customerReferralRateBps ?? 200;
+  }
+  if (!netPolicy && ["beats", "studio"].includes(category)) rateBps = Math.min(rateBps, 500);
   const amount = testMode ? 0 : commissionMinor(Math.min(baseMinor, paidMinor), rateBps);
   // Freeze the whole allocation once. Replays must not award new ancestors
   // after an account changes, or reinterpret an old payment using new rates.
   await tx.$queryRaw`SELECT id FROM referrals WHERE id = ${referral.id} FOR UPDATE`;
   if (await tx.referralCommission.findFirst({ where: { OR: [{ paymentId }, { sourceType: source, sourceId: String(id) }] } })) return;
   const eligibleAt = new Date(Date.now() + REFERRAL_HOLD_DAYS * 86400000);
-  const allocations = [{ referralId: referral.id, originReferralId: referral.id, level: 1, paymentId, sourceType: source, sourceId: String(id), category, paidMinor, baseMinor: Math.min(baseMinor, paidMinor), rateBps, originalMinor: amount, netMinor: amount, status: testMode ? "EXCLUDED" : "PENDING", capturedAt: purchasedAt, eligibleAt }];
+  const allocations = [{ referralId: referral.id, originReferralId: referral.id, level: 1, paymentId, sourceType: source, sourceId: String(id), category, paidMinor, baseMinor: Math.min(baseMinor, paidMinor), rateBps, originalMinor: amount, netMinor: amount, policyVersion: netPolicy ? 2 : 1, eligibleNetRevenueMinor: netPolicy ? baseMinor : null, status: testMode ? "EXCLUDED" : "PENDING", capturedAt: purchasedAt, eligibleAt }];
   let descendant = referral.userId;
   const visited = new Set([userId, descendant]);
   let budget = ["beats", "studio"].includes(category) ? Math.max(0, Math.min(baseMinor, commissionMinor(paidMinor, 500)) - amount) : Math.max(0, baseMinor - amount);
-  if (!testMode && program.networkEffectiveAt && purchasedAt >= program.networkEffectiveAt) {
+  if (!netPolicy && !testMode && program.networkEffectiveAt && purchasedAt >= program.networkEffectiveAt) {
     for (let level = 2; level <= 7; level++) {
       const ancestor = await tx.referral.findUnique({ where: { referredUserId: descendant }, include: { owner: { select: { status: true } }, referredUser: { select: { status: true } } } });
       if (!ancestor || visited.has(ancestor.userId) || ancestor.createdAt > purchasedAt || ancestor.status === "REJECTED" || ancestor.riskStatus !== "clear" || ancestor.owner.status !== "ACTIVE" || ancestor.referredUser?.status !== "ACTIVE") break;
@@ -125,12 +144,17 @@ export async function refreshReferralCommission(tx: Tx, paymentId: string, now =
     }
   }
   const refundedMinor = dispute === "payment.dispute.lost" ? row.paidMinor : Math.min(row.paidMinor, [...refunds.values()].reduce((a, b) => a + b, 0));
-  const netMinor = remainingCommissionMinor(row.originalMinor, row.paidMinor, refundedMinor);
-  const held = !validPath || unknownRefund || pendingRefunds.size > 0 || dispute === "payment.dispute.created" || row.referral.riskStatus !== "clear" || row.referral.status === "REJECTED" || row.referral.owner.status !== "ACTIVE" || row.referral.referredUser?.status !== "ACTIVE";
+  let reconciledEvidence: { eligibleNetRevenueMinor: number | null; status: string } | null = null;
+  if (row.policyVersion >= 2) reconciledEvidence = await tx.acquisitionRevenueEvidence.findUnique({ where: { paymentId }, select: { eligibleNetRevenueMinor: true, status: true } });
+  const netMinor = row.policyVersion >= 2
+    ? (reconciledEvidence?.status === "RECONCILED" && reconciledEvidence.eligibleNetRevenueMinor !== null ? commissionMinor(reconciledEvidence.eligibleNetRevenueMinor, row.rateBps) : row.netMinor)
+    : remainingCommissionMinor(row.originalMinor, row.paidMinor, refundedMinor);
+  const held = !validPath || unknownRefund || pendingRefunds.size > 0 || dispute === "payment.dispute.created" || row.referral.riskStatus !== "clear" || row.referral.status === "REJECTED" || row.referral.owner.status !== "ACTIVE" || row.referral.referredUser?.status !== "ACTIVE" || (row.policyVersion >= 2 && reconciledEvidence?.status !== "RECONCILED");
   const status = netMinor === 0 ? "REVERSED" : held ? "HELD" : row.eligibleAt > now ? "PENDING" : "AVAILABLE";
   if (row.netMinor !== netMinor || row.status !== status || row.refundedMinor !== refundedMinor) {
-    await tx.referralCommission.update({ where: { id: row.id }, data: { netMinor, refundedMinor, status } });
-    await tx.auditLog.create({ data: { actorType: "system", action: "REFERRAL_COMMISSION_UPDATED", entity: "referral_commission", entityId: String(row.id), metadata: { previousStatus: row.status, status, previousMinor: row.netMinor, netMinor, refundedMinor } } });
+    if (row.netMinor !== netMinor) await tx.referralCommissionAdjustment.create({ data: { commissionId: row.id, previousMinor: row.netMinor, amountMinor: netMinor - row.netMinor, resultingMinor: netMinor, eligibleNetRevenueMinor: reconciledEvidence?.eligibleNetRevenueMinor, rateBps: row.rateBps, policyVersion: row.policyVersion, reason: `Payment ${paymentId}; verified refunds ${refundedMinor}; evidence ${reconciledEvidence?.status ?? "legacy provider reconciliation"}` } });
+    await tx.referralCommission.update({ where: { id: row.id }, data: { netMinor, refundedMinor, ...(row.policyVersion >= 2 && reconciledEvidence?.status === "RECONCILED" ? { eligibleNetRevenueMinor: reconciledEvidence.eligibleNetRevenueMinor } : {}), status } });
+    await tx.auditLog.create({ data: { actorType: "system", action: "REFERRAL_COMMISSION_UPDATED", entity: "referral_commission", entityId: String(row.id), metadata: { previousStatus: row.status, status, previousMinor: row.netMinor, netMinor, refundedMinor, eligibleNetRevenueMinor: reconciledEvidence?.eligibleNetRevenueMinor ?? null, policyVersion: row.policyVersion } } });
   } else await tx.referralCommission.update({ where: { id: row.id }, data: { updatedAt: now } });
   }
 }

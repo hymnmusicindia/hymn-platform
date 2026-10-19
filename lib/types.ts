@@ -618,7 +618,7 @@ export interface ReferralDashboard {
     pending: number; held: number; available: number; recovery: number; paid: number; requested: number; total: number;
     minimumPayout: number; holdDays: number;
     rates: Array<{ category: string; percent: number; basis: string }>;
-    history: Array<{ level?: number; id: number; category: string; paid: number; base: number; rate: number; amount: number; status: string; eligibleAt: string; createdAt: string }>;
+    history: Array<{ level?: number; id: number; category: string; paid: number; base: number; rate: number; amount: number; originalAmount?: number; policyVersion?: number; adjustments?: Array<{ id: number; amount: number; reason: string; createdAt: string }>; status: string; eligibleAt: string; createdAt: string }>;
     payouts: Array<{ id: number; amount: number; status: string; reference: string | null; createdAt: string }>;
     nextCursor: number | null;
   };

@@ -41,12 +41,13 @@ export async function GET(request: Request) {
 
   const [commissionGroups, commissionHistory, cashPayouts, payoutGroups, perReferral, clearedMinor] = await Promise.all([
     prisma.referralCommission.groupBy({ by: ["status"], where: { referral: { userId: user.id } }, _sum: { netMinor: true } }),
-    prisma.referralCommission.findMany({ where: { referral: { userId: user.id }, status: { not: "EXCLUDED" }, ...(commissionCursor ? { id: { lt: commissionCursor } } : {}) }, orderBy: { id: "desc" }, take: 26 }),
+    prisma.referralCommission.findMany({ where: { referral: { userId: user.id }, status: { not: "EXCLUDED" }, ...(commissionCursor ? { id: { lt: commissionCursor } } : {}) }, orderBy: { id: "desc" }, take: 26, include: { adjustments: { orderBy: { id: "asc" } } } }),
     prisma.referralCommissionPayout.findMany({ where: { userId: user.id }, orderBy: { id: "desc" }, take: 25, select: { id: true, amountMinor: true, status: true, paymentReference: true, createdAt: true } }),
     prisma.referralCommissionPayout.groupBy({ by: ["status"], where: { userId: user.id }, _sum: { amountMinor: true } }),
     prisma.referralCommission.groupBy({ by: ["referralId"], where: { referral: { userId: user.id } }, _sum: { netMinor: true } }),
     prisma.$transaction(tx => clearedReferralMinor(tx, user.id)),
   ]);
+  const netPolicy = await prisma.referralProgram.findUnique({ where: { id: 1 }, select: { netRevenueEffectiveAt: true } });
   const earned = (status: string) => (commissionGroups.find(row => row.status === status)?._sum.netMinor || 0) / 100;
   const paid = (payoutGroups.find(row => row.status === "PAID")?._sum.amountMinor || 0) / 100;
   const requested = (payoutGroups.find(row => row.status === "REQUESTED")?._sum.amountMinor || 0) / 100;
@@ -56,8 +57,8 @@ export async function GET(request: Request) {
       pending: earned("PENDING"), held: earned("HELD") + Math.max(0, earned("AVAILABLE") - clearedMinor / 100), available: Math.max(0, balance), recovery: Math.max(0, -balance), paid, requested,
       total: commissionGroups.reduce((sum, row) => sum + (row._sum.netMinor || 0), 0) / 100,
       minimumPayout: REFERRAL_MINIMUM_PAYOUT_MINOR / 100, holdDays: REFERRAL_HOLD_DAYS,
-      rates: Object.entries(REFERRAL_COMMISSION_RATES).map(([category, rate]) => ({ category, percent: rate / 100, basis: ["beats", "studio"].includes(category) ? "HYMN share" : "payment collected" })),
-      history: commissionHistory.slice(0,25).map(row => ({ id: row.id, level: row.level, category: row.category, paid: row.paidMinor / 100, base: row.baseMinor / 100, rate: row.rateBps / 100, amount: row.netMinor / 100, status: row.status, eligibleAt: row.eligibleAt.toISOString(), createdAt: row.createdAt.toISOString() })),
+      rates: Object.entries(REFERRAL_COMMISSION_RATES).map(([category, rate]) => ({ category, percent: netPolicy?.netRevenueEffectiveAt ? 2 : rate / 100, basis: netPolicy?.netRevenueEffectiveAt ? "verified eligible net revenue; configured rate frozen per purchase" : ["beats", "studio"].includes(category) ? "HYMN share" : "payment collected" })),
+      history: commissionHistory.slice(0,25).map(row => ({ id: row.id, level: row.level, category: row.category, paid: row.paidMinor / 100, base: row.baseMinor / 100, rate: row.rateBps / 100, amount: row.netMinor / 100, originalAmount: row.originalMinor / 100, policyVersion: row.policyVersion, adjustments: row.adjustments.map(entry => ({ id: entry.id, amount: entry.amountMinor / 100, reason: entry.reason, createdAt: entry.createdAt.toISOString() })), status: row.status, eligibleAt: row.eligibleAt.toISOString(), createdAt: row.createdAt.toISOString() })),
       nextCursor: commissionHistory.length > 25 ? commissionHistory[24].id : null,
       payouts: cashPayouts.map(row => ({ id: row.id, amount: row.amountMinor / 100, status: row.status, reference: row.paymentReference, createdAt: row.createdAt.toISOString() })),
     },

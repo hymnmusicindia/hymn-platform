@@ -9,10 +9,23 @@ import { getEmailConfig } from "@/lib/email/email-client";
 import { acquisitionEmailStarters } from "./acquisition-email";
 import { can, demand, TeamError, type Actor } from "./policy";
 import { eligibleNetRevenue, proportionalRefundMinor } from "@/lib/acquisition-revenue";
+import { accrueReferralCommission, refreshReferralCommission } from "@/lib/referral-commissions";
 
 type Tx = Prisma.TransactionClient;
 export async function acquisitionRead(a: Actor, resource: string, params: URLSearchParams) {
   if (["acquisition-leads", "acquisition-dashboard", "acquisition-ledger", "acquisition-settings", "acquisition-reassign", "acquisition-email-templates", "acquisition-email-events"].includes(resource)) demand(a, "crm.prospects.view");
+  if (resource === "acquisition-customer-attribution") {
+    demand(a, "acquisition.admin");
+    const customerId = Number(params.get("customerId"));
+    if (!Number.isSafeInteger(customerId) || customerId <= 0) throw new TeamError("Enter a valid HYMN customer ID.");
+    const [customer, lead, referral] = await Promise.all([
+      prisma.user.findUnique({ where: { id: customerId }, select: { id: true, name: true, email: true, status: true } }),
+      prisma.acquisitionLead.findFirst({ where: { workspaceId: a.workspaceId, customerId }, include: { prospect: { select: { id: true, name: true, stage: true } }, researcher: { select: { id: true, user: { select: { name: true, email: true } } } }, acquisitionEmployee: { select: { id: true, user: { select: { name: true, email: true } } } }, commissions: { orderBy: { createdAt: "desc" }, take: 100 } } }),
+      prisma.referral.findUnique({ where: { referredUserId: customerId }, include: { owner: { select: { id: true, name: true, email: true } }, commissions: { where: { level: 1 }, orderBy: { createdAt: "desc" }, take: 100, include: { adjustments: { orderBy: { id: "asc" } } } } } }),
+    ]);
+    if (!customer) throw new TeamError("Customer not found.", 404);
+    return { customer, employeeAttribution: lead, customerReferral: referral ? { id: referral.id, status: referral.status, attributedAt: referral.attributedAt, referrer: referral.owner, commissions: referral.commissions } : null };
+  }
   if (resource === "acquisition-email-templates") {
     for (const template of acquisitionEmailStarters) await prisma.acquisitionEmailTemplate.createMany({ data: [{ workspaceId: a.workspaceId, ...template, status: "ACTIVE", createdByEmployeeId: a.id, updatedByEmployeeId: a.id, updatedAt: new Date() }], skipDuplicates: true });
     return { items: await prisma.acquisitionEmailTemplate.findMany({ where: { workspaceId: a.workspaceId, ...(can(a, "acquisition.admin") ? {} : { status: "ACTIVE" }) }, orderBy: [{ status: "asc" }, { name: "asc" }] }) };
@@ -30,15 +43,42 @@ export async function acquisitionRead(a: Actor, resource: string, params: URLSea
     return settings ? { ...settings, emailSenderConfigured: getEmailConfig().enabled } : { emailSenderConfigured: getEmailConfig().enabled };
   }
   if (resource === "acquisition-leads") {
-    const rows = await prisma.acquisitionLead.findMany({ where: { workspaceId: a.workspaceId, ...(can(a, "crm.all") ? {} : { OR: [{ researcherEmployeeId: a.id }, { acquisitionEmployeeId: a.id }] }), ...(params.get("q") ? { prospect: { name: { contains: params.get("q")!.slice(0, 150), mode: "insensitive" } } } : {}), ...(params.get("status") ? { prospect: { stage: params.get("status")! } } : {}) }, take: 100, orderBy: { registeredAt: "desc" }, include: { prospect: { select: { id: true, name: true, contactName: true, email: true, phone: true, stage: true, sourceUrl: true, discoveredAt: true, notes: true, followUpAt: true, categories: true, contactEligibility: true, suppressed: true } }, researcher: { select: { id: true, user: { select: { name: true } } } }, acquisitionEmployee: { select: { id: true, user: { select: { name: true } } } }, customer: { select: { id: true, name: true, email: true } } } });
+    const q = params.get("q")?.trim().slice(0, 150); const status = params.get("status");
+    const where: Prisma.AcquisitionLeadWhereInput = { workspaceId: a.workspaceId, ...(can(a, "crm.all") && params.get("scope") !== "mine" ? {} : { OR: [{ researcherEmployeeId: a.id }, { acquisitionEmployeeId: a.id }] }), AND: [
+      ...(q ? [{ prospect: { OR: [{ name: { contains: q, mode: "insensitive" as const } }, { email: { contains: q, mode: "insensitive" as const } }, { contactName: { contains: q, mode: "insensitive" as const } }] } }] : []),
+      ...(status && ["NEW", "QUALIFIED", "ASSIGNED", "CONTACTED", "INTERESTED", "CONVERTED", "UNQUALIFIED", "DUPLICATE", "NOT_INTERESTED", "DO_NOT_CONTACT", "LOST"].includes(status) ? [{ prospect: { stage: status } }] : []),
+    ] };
+    const orderKey = params.get("sort"); const orderBy = orderKey === "status" ? { prospect: { stage: "asc" as const } } : orderKey === "owner" ? { acquisitionEmployeeId: "asc" as const } : orderKey === "source" ? { prospect: { sourceUrl: "asc" as const } } : { registeredAt: "desc" as const };
+    const rows = await prisma.acquisitionLead.findMany({ where, take: resource === "acquisition-leads" ? 100 : 5000, orderBy, include: { prospect: { select: { id: true, name: true, contactName: true, email: true, phone: true, stage: true, sourceUrl: true, discoveredAt: true, notes: true, followUpAt: true, categories: true, contactEligibility: true, suppressed: true } }, researcher: { select: { id: true, user: { select: { name: true } } } }, acquisitionEmployee: { select: { id: true, user: { select: { name: true } } } }, customer: { select: { id: true, name: true, email: true } } } });
     return { items: rows };
+  }
+  if (resource === "acquisition-leads-export") {
+    demand(a, "crm.prospects.view");
+    const q = params.get("q")?.trim().slice(0, 150); const status = params.get("status");
+    const where: Prisma.AcquisitionLeadWhereInput = { workspaceId: a.workspaceId, ...(can(a, "crm.all") && params.get("scope") !== "mine" ? {} : { OR: [{ researcherEmployeeId: a.id }, { acquisitionEmployeeId: a.id }] }), AND: [
+      ...(q ? [{ prospect: { OR: [{ name: { contains: q, mode: "insensitive" as const } }, { email: { contains: q, mode: "insensitive" as const } }, { contactName: { contains: q, mode: "insensitive" as const } }] } }] : []),
+      ...(status ? [{ prospect: { stage: status } }] : []),
+    ] };
+    const rows = await prisma.acquisitionLead.findMany({ where, take: 5000, orderBy: { registeredAt: "desc" }, include: { prospect: true, researcher: { include: { user: { select: { name: true } } } }, acquisitionEmployee: { include: { user: { select: { name: true } } } }, customer: { select: { id: true, name: true, email: true } } } });
+    const quote = (value: unknown) => { const raw = String(value ?? "").replace(/[\r\n]+/g, " "); const safe = /^[=+\-@\t]/.test(raw) ? `'${raw}` : raw; return `"${safe.replace(/"/g, '""')}"`; };
+    const columns = ["Lead ID", "Business", "Contact", "Email", "Phone", "Category", "Services", "Country", "City", "Status", "Researcher", "Acquisition employee", "Source", "Discovered at", "Follow-up at", "Customer ID", "Customer name", "Contact eligibility"];
+    const records = rows.map(row => [row.id, row.prospect.name, row.prospect.contactName, row.prospect.email, row.prospect.phone, row.prospect.leadCategory, row.prospect.categories.join(", "), row.prospect.country, row.prospect.city, row.prospect.stage, row.researcher.user.name, row.acquisitionEmployee?.user.name, row.prospect.sourceUrl, row.prospect.discoveredAt?.toISOString(), row.prospect.followUpAt?.toISOString(), row.customer?.id, row.customer?.name, row.prospect.contactEligibility]);
+    return { csv: [columns, ...records].map(record => record.map(quote).join(",")).join("\r\n"), count: rows.length, capped: rows.length === 5000 };
   }
   if (resource === "acquisition-dashboard") {
     const owned = { workspaceId: a.workspaceId, ...(can(a, "crm.all") ? {} : { OR: [{ researcherEmployeeId: a.id }, { acquisitionEmployeeId: a.id }] }) };
     const [leads, rows] = await Promise.all([prisma.acquisitionLead.count({ where: owned }), prisma.acquisitionCommission.findMany({ where: { lead: owned, ...(can(a, "crm.all") ? {} : { employeeId: a.id }) }, include: { payoutItems: { select: { payout: { select: { payment: { select: { id: true } } } } } } } })]);
     const totals = new Map<string, { amount: number; count: number }>();
     for (const row of rows) { const status = row.payoutItems[0]?.payout.payment ? "PAID" : row.payoutItems.length ? "APPROVED" : row.status; const aggregate = totals.get(status) || { amount: 0, count: 0 }; aggregate.amount += row.amountMinor; aggregate.count++; totals.set(status, aggregate); }
-    return { leads, commissions: [...totals].map(([status, row]) => ({ status, amount: row.amount / 100, count: row.count })) };
+    const attributed = await prisma.acquisitionLead.findMany({ where: owned, select: { customerId: true, prospect: { select: { stage: true } } } });
+    const customerIds = [...new Set(attributed.flatMap(row => row.customerId ? [row.customerId] : []))];
+    const [completedReleases, purchases, recentActivity] = await Promise.all([
+      prisma.release.count({ where: { userId: { in: customerIds }, status: { in: ["LIVE", "DELIVERED", "DISTRIBUTED"] } } }),
+      prisma.acquisitionRevenueEvidence.groupBy({ by: ["customerId"], where: { customerId: { in: customerIds }, sourceType: { in: ["distribution_order", "checkout_order", "subscription_payment", "studio_payment"] } }, _count: true }),
+      prisma.acquisitionProgramAudit.findMany({ where: { workspaceId: a.workspaceId, ...(can(a, "crm.all") ? {} : { actorEmployeeId: a.id }) }, orderBy: { createdAt: "desc" }, take: 10, select: { id: true, action: true, createdAt: true } }),
+    ]);
+    const stageCount = (stages: string[]) => attributed.filter(row => stages.includes(row.prospect.stage)).length;
+    return { leads, performance: { qualified: stageCount(["QUALIFIED", "READY_TO_CONTACT"]), contacted: stageCount(["CONTACTED", "REPLIED", "OFFER_SHARED"]), interested: stageCount(["INTERESTED"]), convertedCustomers: customerIds.length, completedReleases, repeatPurchases: purchases.reduce((sum, row) => sum + Math.max(0, row._count - 1), 0), lifetimeEarned: rows.reduce((sum, row) => sum + row.amountMinor, 0) / 100 }, recentActivity, commissions: [...totals].map(([status, row]) => ({ status, amount: row.amount / 100, count: row.count })) };
   }
   if (resource === "acquisition-ledger") {
     const rows = await prisma.acquisitionCommission.findMany({ where: { lead: { workspaceId: a.workspaceId, ...(can(a, "crm.all") ? {} : { OR: [{ researcherEmployeeId: a.id }, { acquisitionEmployeeId: a.id }] }) }, ...(can(a, "crm.all") ? {} : { employeeId: a.id }) }, take: 100, orderBy: { createdAt: "desc" }, include: { payoutItems: { select: { payout: { select: { payment: true } } } }, lead: { select: { prospect: { select: { name: true } } } }, customer: { select: { id: true, name: true } }, employee: { select: { user: { select: { name: true } } } } } });
@@ -57,7 +97,7 @@ export async function acquisitionRead(a: Actor, resource: string, params: URLSea
   }
   if (resource === "acquisition-evidence") {
     demand(a, "acquisition.admin");
-    return { items: await prisma.acquisitionRevenueEvidence.findMany({ where: { workspaceId: a.workspaceId, ...(params.get("status") ? { status: params.get("status")! } : {}) }, take: 200, orderBy: { createdAt: "desc" }, include: { customer: { select: { id: true, name: true, email: true } } } }) };
+    return { items: await prisma.acquisitionRevenueEvidence.findMany({ where: { OR: [{ workspaceId: a.workspaceId }, { workspaceId: null }], ...(params.get("status") ? { status: params.get("status")! } : {}) }, take: 200, orderBy: { createdAt: "desc" }, include: { customer: { select: { id: true, name: true, email: true } } } }) };
   }
   if (resource === "acquisition-link") {
     const leadId = params.get("leadId") || "";
@@ -92,7 +132,7 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
     demand(a, "crm.outreach.manage");
     const prospectId = String(body.prospectId || ""); const templateId = String(body.templateId || "");
     const prospect = await tx.teamProspect.findFirst({ where: {
-      id: prospectId, workspaceId: a.workspaceId, suppressed: false, stage: { in: ["QUALIFIED", "READY_TO_CONTACT", "INTERESTED"] },
+      id: prospectId, workspaceId: a.workspaceId, suppressed: false, verified: true, stage: { in: ["QUALIFIED", "READY_TO_CONTACT", "INTERESTED"] },
       ...(can(a, "crm.all") ? {} : { OR: [
         { ownerId: a.id },
         { acquisitionLead: { is: { OR: [{ researcherEmployeeId: a.id }, { acquisitionEmployeeId: a.id }] } } },
@@ -123,7 +163,10 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
   if (resource === "acquisition-settings-save") {
     demand(a, "acquisition.admin");
     const reason = typeof body.reason === "string" ? body.reason.trim() : "";
-    const values = { researcherRateBps: Number(body.researcherRateBps), acquisitionRateBps: Number(body.acquisitionRateBps), customerReferralRateBps: Number(body.customerReferralRateBps), maximumRewardRateBps: Number(body.maximumRewardRateBps), holdPeriodDays: Number(body.holdPeriodDays), payoutMinimumMinor: Number(body.payoutMinimumMinor), payoutSchedule: String(body.payoutSchedule || "MONTHLY"), attributionPolicy: String(body.attributionPolicy || "").trim(), revenuePolicy: String(body.revenuePolicy || "").trim(), enabled: body.enabled === true };
+    const effectiveAt = new Date(String(body.effectiveAt || new Date().toISOString()));
+    const eligibleSourceTypes = Array.isArray(body.eligibleSourceTypes) ? body.eligibleSourceTypes.map(String) : ["distribution_order", "checkout_order", "subscription_payment", "studio_payment"];
+    if (!Number.isFinite(effectiveAt.getTime()) || !eligibleSourceTypes.length || eligibleSourceTypes.some(value => !["distribution_order", "checkout_order", "subscription_payment", "studio_payment"].includes(value))) throw new TeamError("Choose a valid programme effective date and eligible service categories.");
+    const values = { effectiveAt, eligibleSourceTypes, researcherRateBps: Number(body.researcherRateBps), acquisitionRateBps: Number(body.acquisitionRateBps), customerReferralRateBps: Number(body.customerReferralRateBps), maximumRewardRateBps: Number(body.maximumRewardRateBps), holdPeriodDays: Number(body.holdPeriodDays), payoutMinimumMinor: Number(body.payoutMinimumMinor), payoutSchedule: String(body.payoutSchedule || "MONTHLY"), attributionPolicy: String(body.attributionPolicy || "").trim(), revenuePolicy: String(body.revenuePolicy || "").trim(), enabled: body.enabled === true };
     if (!reason || reason.length > 1000 || [values.researcherRateBps, values.acquisitionRateBps, values.customerReferralRateBps, values.maximumRewardRateBps].some(v => !Number.isInteger(v) || v < 0 || v > 10000) || !Number.isInteger(values.holdPeriodDays) || values.holdPeriodDays < 0 || values.holdPeriodDays > 365 || !Number.isSafeInteger(values.payoutMinimumMinor) || values.payoutMinimumMinor < 0 || values.payoutMinimumMinor > 2_000_000_000 || !["WEEKLY", "BIWEEKLY", "MONTHLY"].includes(values.payoutSchedule) || values.attributionPolicy.length < 40 || values.attributionPolicy.length > 5000 || !values.revenuePolicy || values.revenuePolicy.length < 40) throw new TeamError("Provide a reason, valid rates and payout policy, and a documented net revenue policy.");
     if (values.researcherRateBps + values.acquisitionRateBps > values.maximumRewardRateBps) throw new TeamError("Combined researcher and acquisition rates exceed the employee reward cap.");
     const old = await tx.acquisitionProgramSettings.findUnique({ where: { workspaceId: a.workspaceId } });
@@ -148,14 +191,17 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
   if (resource === "acquisition-evidence-review") {
     demand(a, "acquisition.admin");
     const id = String(body.id || "");
+    // Customer-only evidence can be unassigned. Serialize its first review
+    // across workspaces before checking and claiming ownership.
+    await tx.$queryRaw`SELECT id FROM acquisition_revenue_evidence WHERE id = ${id} FOR UPDATE`;
     const taxes = Number(body.applicableTaxesMinor); const refunds = Number(body.refundsChargebacksMinor); const costs = Number(body.directPassThroughCostsMinor); const providerFee = Number(body.providerFeeMinor);
     const reason = typeof body.reason === "string" ? body.reason.trim() : "";
     const taxEvidence = Array.isArray(body.taxEvidence) ? body.taxEvidence.filter(value => typeof value === "string" && value.trim()).map(value => String(value).trim()).slice(0, 10) : [];
     const costEvidence = Array.isArray(body.costEvidence) ? body.costEvidence.filter(value => typeof value === "string" && value.trim()).map(value => String(value).trim()).slice(0, 10) : [];
     if (!reason || reason.length < 8 || ![taxes, refunds, costs, providerFee].every(value => Number.isSafeInteger(value) && value >= 0) || !taxEvidence.length || !costEvidence.length) throw new TeamError("Reconciliation requires nonnegative tax, refund, direct-cost and provider-fee amounts plus supporting tax and cost references.");
-    const evidence = await tx.acquisitionRevenueEvidence.findFirst({ where: { id, workspaceId: a.workspaceId, status: { in: ["RECONCILIATION_REQUIRED", "RECONCILED", "ADJUSTMENT_REQUIRED"] } } });
+    const evidence = await tx.acquisitionRevenueEvidence.findFirst({ where: { id, OR: [{ workspaceId: a.workspaceId }, { workspaceId: null }], status: { in: ["RECONCILIATION_REQUIRED", "RECONCILED", "ADJUSTMENT_REQUIRED"] } } });
     if (!evidence) throw new TeamError("Reconciliation record not found or already reviewed.", 404);
-    const source = evidence.sourceType === "distribution_order" ? await tx.distributionOrder.findUnique({ where: { id: Number(evidence.sourceId) } }) : evidence.sourceType === "checkout_order" ? await tx.checkoutOrder.findUnique({ where: { id: Number(evidence.sourceId) } }) : evidence.sourceType === "subscription_payment" ? await tx.subscriptionPayment.findUnique({ where: { id: Number(evidence.sourceId) }, include: { subscription: true } }) : evidence.sourceType === "studio_payment" ? await tx.studioPayment.findUnique({ where: { id: Number(evidence.sourceId) }, include: { order: true } }) : null;
+    const source = evidence.sourceType === "distribution_order" ? await tx.distributionOrder.findUnique({ where: { id: Number(evidence.sourceId) } }) : evidence.sourceType === "checkout_order" ? await tx.checkoutOrder.findUnique({ where: { id: Number(evidence.sourceId) } }) : evidence.sourceType === "subscription_payment" ? await tx.subscriptionPayment.findUnique({ where: { id: Number(evidence.sourceId) }, include: { subscription: true } }) : evidence.sourceType === "studio_payment" ? await tx.studioPayment.findUnique({ where: { id: Number(evidence.sourceId) }, include: { order: true, refunds: true } }) : null;
     const paymentId = source && "razorpayPaymentId" in source ? source.razorpayPaymentId : null;
     const paid = source && "paymentStatus" in source ? source.paymentStatus === "paid" : source && "status" in source ? (evidence.sourceType === "studio_payment" ? source.status === "CAPTURED" : source.status === "captured") : false;
     if (!source || !paid || paymentId !== evidence.paymentId) throw new TeamError("The source payment is not currently verified and paid.", 409);
@@ -188,10 +234,10 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
       const duplicateAdjustment = await tx.acquisitionCommission.findFirst({ where: { sourceType: evidence.sourceType, sourceId: evidence.sourceId, entryType: "ADJUSTMENT", adjustmentReference } });
       if (duplicateAdjustment) throw new TeamError("This adjustment reference has already been recorded for this transaction.", 409);
     }
-    const updated = await tx.acquisitionRevenueEvidence.update({ where: { id: evidence.id }, data: { applicableTaxesMinor: taxes, refundsChargebacksMinor: refunds, directPassThroughCostsMinor: costs, providerFeeMinor: providerFee, eligibleNetRevenueMinor: net, status: "RECONCILED", taxEvidence, costEvidence, reviewedByEmployeeId: a.id, reviewedAt: new Date(), reviewReason: reason } });
+    const updated = await tx.acquisitionRevenueEvidence.update({ where: { id: evidence.id }, data: { workspaceId: a.workspaceId, applicableTaxesMinor: taxes, refundsChargebacksMinor: refunds, directPassThroughCostsMinor: costs, providerFeeMinor: providerFee, eligibleNetRevenueMinor: net, status: "RECONCILED", taxEvidence, costEvidence, reviewedByEmployeeId: a.id, reviewedAt: new Date(), reviewReason: reason } });
     const attribution = await tx.acquisitionLead.findFirst({ where: { customerId: evidence.customerId, workspaceId: a.workspaceId, attributionLockedAt: { not: null }, acquisitionEmployeeId: { not: null } } });
     const settings = await tx.acquisitionProgramSettings.findUnique({ where: { workspaceId: a.workspaceId } });
-    if (attribution && settings?.enabled && net > 0 && !wasReconciled) {
+    if (attribution && settings?.enabled && evidence.paymentVerifiedAt >= settings.effectiveAt && settings.eligibleSourceTypes.includes(evidence.sourceType) && !wasReconciled) {
       // The customer referral programme has separate terms and accounting.
       // Its rewards are intentionally excluded from this employee-only cap.
       const employeeCap = Math.min(settings.maximumRewardRateBps, settings.researcherRateBps + settings.acquisitionRateBps);
@@ -208,9 +254,11 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
         const prior = await tx.acquisitionCommission.aggregate({ where: { sourceType: evidence.sourceType, sourceId: evidence.sourceId, employeeId: earned.employeeId, attributionRole: earned.attributionRole, entryType: "ADJUSTMENT" }, _sum: { amountMinor: true } });
         const target = Math.floor(net * earned.rateBps / 10000);
         const delta = target - earned.amountMinor - (prior._sum.amountMinor || 0);
-        if (delta) await tx.acquisitionCommission.create({ data: { leadId: attribution.id, sourceType: evidence.sourceType, sourceId: evidence.sourceId, paymentId: evidence.paymentId, customerId: evidence.customerId, employeeId: earned.employeeId, attributionRole: earned.attributionRole, entryType: "ADJUSTMENT", adjustmentReference, eligibleNetRevenueMinor: net, rateBps: earned.rateBps, amountMinor: delta, currency: evidence.currency, calculationBasis: `Post-reconciliation correction ${adjustmentReference}; revised eligible net revenue ${net}; prior earned amount ${earned.amountMinor}; prior adjustments ${prior._sum.amountMinor || 0}. ${reason}`, policyVersion: earned.policyVersion, paymentVerificationReference: evidence.paymentId, status: "PENDING", eligibleAt: delta < 0 ? new Date() : new Date(Date.now() + (settings.holdPeriodDays || 14) * 86_400_000) } });
+        if (delta) await tx.acquisitionCommission.create({ data: { leadId: attribution.id, sourceType: evidence.sourceType, sourceId: evidence.sourceId, paymentId: evidence.paymentId, customerId: evidence.customerId, employeeId: earned.employeeId, attributionRole: earned.attributionRole, entryType: "ADJUSTMENT", adjustmentReference, eligibleNetRevenueMinor: net, rateBps: earned.rateBps, amountMinor: delta, currency: evidence.currency, calculationBasis: `Post-reconciliation correction ${adjustmentReference}; revised eligible net revenue ${net}; prior earned amount ${earned.amountMinor}; prior adjustments ${prior._sum.amountMinor || 0}. ${reason}`, policyVersion: earned.policyVersion, paymentVerificationReference: evidence.paymentId, status: "PENDING", eligibleAt: delta < 0 ? new Date() : new Date(Date.now() + (settings.holdPeriodDays ?? 14) * 86_400_000) } });
       }
     }
+    await accrueReferralCommission(tx, evidence.sourceType as import("@/lib/referral-commissions").CommissionSource, Number(evidence.sourceId));
+    await refreshReferralCommission(tx, evidence.paymentId);
     await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: wasReconciled ? "revenue.evidence_adjusted" : "revenue.evidence_reconciled", entityId: evidence.id, metadata: { previous: { status: evidence.status, eligibleNetRevenueMinor: evidence.eligibleNetRevenueMinor }, next: { status: updated.status, eligibleNetRevenueMinor: net }, adjustmentReference: wasReconciled ? adjustmentReference : null, reason } } });
     return updated;
   }

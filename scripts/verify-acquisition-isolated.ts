@@ -1,10 +1,13 @@
 import EmbeddedPostgres from "embedded-postgres";
 import { spawn, execFileSync } from "node:child_process";
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-const tempRoot = path.resolve(os.tmpdir());
+// Keep the disposable PostgreSQL fixture inside the workspace on Windows,
+// where the embedded server cannot initialise under the profile temp path.
+const tempRoot = process.platform === "win32" ? path.resolve(".cache") : path.resolve(os.tmpdir());
+mkdirSync(tempRoot, { recursive: true });
 const fixture = mkdtempSync(path.join(tempRoot, "hymn-acquisition-"));
 const databaseDir = path.join(fixture, "pg"); const port = 55473;
 const env = { ...process.env, DATABASE_URL: `postgresql://fixture:fixture@127.0.0.1:${port}/acquisition_fixture`, DIRECT_URL: `postgresql://fixture:fixture@127.0.0.1:${port}/acquisition_fixture`, EMAIL_ENABLED: "false", NODE_ENV: "test" };
@@ -33,4 +36,4 @@ async function main() {
     console.log("Isolated acquisition database stopped; the production database was not used.");
   }
 }
-main().catch(error => { console.error(error); process.exit(1); });
+main().then(() => process.exit(0)).catch(error => { console.error(error); process.exit(1); });

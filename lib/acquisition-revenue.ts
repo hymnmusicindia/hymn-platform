@@ -10,11 +10,12 @@ export const ACQUISITION_ATTRIBUTION_COOKIE = "hymn_acquisition_attribution";
 export async function recordVerifiedAcquisitionRevenue(input: { sourceType: RevenueSource; sourceId: string; customerId: number; paymentId: string; currency: string; recognisedRevenueMinor: number }) {
   if (!input.paymentId || !Number.isSafeInteger(input.recognisedRevenueMinor) || input.recognisedRevenueMinor < 0) throw new Error("Verified revenue evidence is invalid.");
   const attribution = await prisma.acquisitionLead.findFirst({ where: { customerId: input.customerId, attributionLockedAt: { not: null }, acquisitionEmployeeId: { not: null } }, select: { workspaceId: true } });
-  if (!attribution) return null;
+  const referral = !attribution ? await prisma.referral.findUnique({ where: { referredUserId: input.customerId }, select: { id: true } }) : null;
+  if (!attribution && !referral) return null;
   return prisma.acquisitionRevenueEvidence.upsert({
     where: { sourceType_sourceId: { sourceType: input.sourceType, sourceId: input.sourceId } },
-    create: { ...input, workspaceId: attribution.workspaceId, status: "RECONCILIATION_REQUIRED" },
-    update: {},
+    create: { ...input, workspaceId: attribution?.workspaceId, status: "RECONCILIATION_REQUIRED" },
+    update: attribution ? { workspaceId: attribution.workspaceId } : {},
   });
 }
 
@@ -22,7 +23,7 @@ export async function flagAcquisitionRevenueAdjustment(paymentId: string, provid
   const evidence = await prisma.acquisitionRevenueEvidence.findUnique({ where: { paymentId } });
   if (!evidence || evidence.status !== "RECONCILED") return;
   await prisma.acquisitionRevenueEvidence.update({ where: { id: evidence.id }, data: { status: "ADJUSTMENT_REQUIRED" } });
-  if (evidence.reviewedByEmployeeId) await prisma.acquisitionProgramAudit.create({ data: { workspaceId: evidence.workspaceId, actorEmployeeId: evidence.reviewedByEmployeeId, action: "revenue.provider_adjustment_received", entityId: evidence.id, metadata: { providerEventId, paymentId, previousStatus: evidence.status } } });
+  if (evidence.reviewedByEmployeeId && evidence.workspaceId) await prisma.acquisitionProgramAudit.create({ data: { workspaceId: evidence.workspaceId, actorEmployeeId: evidence.reviewedByEmployeeId, action: "revenue.provider_adjustment_received", entityId: evidence.id, metadata: { providerEventId, paymentId, previousStatus: evidence.status } } });
 }
 
 export function eligibleNetRevenue(input: { recognisedRevenueMinor: number; applicableTaxesMinor: number; refundsChargebacksMinor: number; directPassThroughCostsMinor: number; providerFeeMinor: number }) {
@@ -63,6 +64,7 @@ export async function attachNewCustomerToAcquisitionLead(tx: Prisma.TransactionC
     if (!lead || (lead.prospect.email && lead.prospect.email.trim().toLowerCase() !== input.email.trim().toLowerCase())) return false;
     const claimed = await tx.acquisitionLead.updateMany({ where: { id: lead.id, customerId: null }, data: { customerId: input.customerId, convertedAt: new Date() } });
     if (claimed.count !== 1) return false;
+    await tx.teamProspect.update({ where: { id: lead.prospectId }, data: { stage: "CONVERTED", version: { increment: 1 } } });
     if (lead.prospect.leadId) await tx.growthLead.update({ where: { id: lead.prospect.leadId }, data: { userId: input.customerId, status: "converted" } });
     await tx.acquisitionProgramAudit.create({ data: { workspaceId: lead.workspaceId, actorEmployeeId: lead.acquisitionEmployeeId!, action: "lead.customer_matched_from_signed_link", entityId: lead.id, metadata: { customerId: input.customerId, researcherEmployeeId: lead.researcherEmployeeId, acquisitionEmployeeId: lead.acquisitionEmployeeId } } });
     return true;

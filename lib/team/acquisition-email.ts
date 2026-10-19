@@ -11,6 +11,15 @@ export const acquisitionEmailStarters = [
 export async function processAcquisitionEmailEvent(id: string) {
   const event = await prisma.acquisitionEmailEvent.findUnique({ where: { id } });
   if (!event || event.status !== "QUEUED") return;
+  const [prospect, optedOut] = await Promise.all([
+    prisma.teamProspect.findUnique({ where: { id: event.prospectId }, select: { suppressed: true, verified: true, contactEligibility: true, email: true } }),
+    prisma.newsletterSubscriber.findFirst({ where: { email: { equals: event.recipientEmail, mode: "insensitive" }, OR: [{ status: { not: "subscribed" } }, { unsubscribedAt: { not: null } }] }, select: { id: true } }),
+  ]);
+  if (!prospect || prospect.suppressed || !prospect.verified || !["CONSENTED", "LEGITIMATE_INTEREST"].includes(prospect.contactEligibility) || prospect.email?.toLowerCase() !== event.recipientEmail.toLowerCase() || optedOut) {
+    const error = "Recipient is suppressed or no longer eligible for outreach; no email was sent.";
+    await prisma.acquisitionEmailEvent.updateMany({ where: { id, status: "QUEUED" }, data: { status: "FAILED", providerError: error } });
+    return { status: "skipped" as const, error };
+  }
   const html = `<div style="font-family:Arial,sans-serif;white-space:pre-wrap">${event.body.replace(/[&<>"']/g, value => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[value]!)}</div>`;
   const result = await sendTransactionalEmail({ to: event.recipientEmail, subject: event.subject, template: "acquisition_outreach", html, text: event.body, eventKey: event.eventKey, entityType: "acquisition_email", entityId: event.id });
   if (result.status === "sent") await prisma.acquisitionEmailEvent.updateMany({ where: { id, status: "QUEUED" }, data: { status: "SENT", providerMessageId: result.providerMessageId || null, sentAt: new Date() } });

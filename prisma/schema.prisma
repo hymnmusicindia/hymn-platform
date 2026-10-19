@@ -2014,6 +2014,7 @@ model Referral {
 }
 
 model ReferralProgram {
+  netRevenueEffectiveAt DateTime? @map("net_revenue_effective_at")
   networkEffectiveAt DateTime? @map("network_effective_at")
   id          Int      @id @default(1)
   effectiveAt DateTime @default(now()) @map("effective_at")
@@ -2021,6 +2022,7 @@ model ReferralProgram {
 }
 
 model ReferralCommission {
+  adjustments ReferralCommissionAdjustment[]
   id                Int      @id @default(autoincrement())
   referralId        Int      @map("referral_id")
   paymentId         String   @map("payment_id")
@@ -2033,6 +2035,8 @@ model ReferralCommission {
   originalMinor     Int      @map("original_minor")
   netMinor          Int      @map("net_minor")
   refundedMinor     Int      @default(0) @map("refunded_minor")
+  eligibleNetRevenueMinor Int? @map("eligible_net_revenue_minor")
+  policyVersion     Int      @default(1) @map("policy_version")
   status            String   @default("PENDING")
   eligibleAt        DateTime @map("eligible_at")
   capturedAt        DateTime @map("captured_at")
@@ -2047,6 +2051,22 @@ model ReferralCommission {
   @@unique([paymentId, referralId])
   @@unique([sourceType, sourceId, referralId])
   @@map("referral_commissions")
+}
+
+model ReferralCommissionAdjustment {
+  id Int @id @default(autoincrement())
+  commissionId Int @map("commission_id")
+  commission ReferralCommission @relation(fields: [commissionId], references: [id], onDelete: Restrict)
+  previousMinor Int @map("previous_minor")
+  amountMinor Int @map("amount_minor")
+  resultingMinor Int @map("resulting_minor")
+  eligibleNetRevenueMinor Int? @map("eligible_net_revenue_minor")
+  rateBps Int @map("rate_bps")
+  policyVersion Int @map("policy_version")
+  reason String
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([commissionId, id])
+  @@map("referral_commission_adjustments")
 }
 
 model ReferralCommissionPayout {
@@ -3496,7 +3516,7 @@ model AcquisitionCommission {
 
 model AcquisitionRevenueEvidence {
   id String @id @default(cuid())
-  workspaceId String @map("workspace_id")
+  workspaceId String? @map("workspace_id")
   sourceType String @map("source_type")
   sourceId String @map("source_id")
   customerId Int @map("customer_id")
@@ -3519,7 +3539,7 @@ model AcquisitionRevenueEvidence {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   customer User @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  workspace TeamWorkspace? @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   reviewedBy TeamMember? @relation("RevenueEvidenceReviewer", fields: [reviewedByEmployeeId], references: [id], onDelete: Restrict)
   @@unique([sourceType, sourceId])
   @@unique([paymentId])
@@ -3530,6 +3550,8 @@ model AcquisitionRevenueEvidence {
 
 model AcquisitionProgramSettings {
   workspaceId String @id @map("workspace_id")
+  effectiveAt DateTime @default(now()) @map("effective_at")
+  eligibleSourceTypes String[] @default(["distribution_order", "checkout_order", "subscription_payment", "studio_payment"]) @map("eligible_source_types")
   researcherRateBps Int @default(200) @map("researcher_rate_bps")
   acquisitionRateBps Int @default(300) @map("acquisition_rate_bps")
   customerReferralRateBps Int @default(200) @map("customer_referral_rate_bps")

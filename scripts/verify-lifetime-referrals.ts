@@ -82,10 +82,11 @@ async function main() {
   assert.equal((await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: "pay_cash_hybrid" } })).netMinor, 0);
   await assert.rejects(requestReferralPayout(owner.id), /Verify your payout profile/);
   await prisma.payoutCredential.create({ data: { userId: owner.id, method: "UPI", status: "verified", legalName: "Fixture Owner", upiIdMasked: "ca***@fixture", upiIdEncrypted: "fixture-encrypted" } });
-  await assert.rejects(requestReferralPayout(owner.id), /At least Rs 500/);
-  const large = await distribution("cash_large", 10000, { paymentStatus: "paid", razorpayPaymentId: "pay_cash_large" });
+  await assert.rejects(requestReferralPayout(owner.id), /At least Rs 1500/);
+  // Accrue enough cleared commission to meet the current Rs 1,500 withdrawal floor.
+  const large = await distribution("cash_large", 200000, { paymentStatus: "paid", razorpayPaymentId: "pay_cash_large" });
   await prisma.$transaction(tx => accrueReferralCommission(tx, "distribution_order", large.id));
-  await assert.rejects(requestReferralPayout(owner.id), /At least Rs 500/, "Pending commission is not withdrawable.");
+  await assert.rejects(requestReferralPayout(owner.id), /At least Rs 1500/, "Pending commission is not withdrawable.");
   await prisma.referralCommission.updateMany({ data: { eligibleAt: new Date(Date.now() - 1000) } });
   await reconcileReferralQualifications();
   const requests = await Promise.allSettled([requestReferralPayout(owner.id), requestReferralPayout(owner.id)]);
@@ -99,7 +100,7 @@ async function main() {
   await reviewReferralPayout(corrected.id, null, { action: "paid", note: "Fixture bank transfer recorded", reference: "fixture-ref-final" });
   await assert.rejects(reviewReferralPayout(corrected.id, null, { action: "paid", note: "Duplicate update", reference: "fixture-ref-duplicate" }), /already been processed/);
   await event("cash_after_payout", "refund.processed", 500000, "rfnd_cash_large2", "pay_cash_large");
-  await assert.rejects(requestReferralPayout(owner.id), /At least Rs 500/, "Post-payout refunds offset future earnings, never pay twice.");
+  await assert.rejects(requestReferralPayout(owner.id), /At least Rs 1500/, "Post-payout refunds offset future earnings, never pay twice.");
   console.log("PASS lifetime referrals: releases, hybrid cash basis, recurring renewals, immutable plan/rate, beat and studio HYMN-only share, webhook replay, cumulative partial refunds, hold, verified profile, payout reservation/rejection/payment and post-payout recovery; no live charges or transfers.");
 }
 main().finally(() => prisma.$disconnect());
