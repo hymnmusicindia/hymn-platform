@@ -8,10 +8,11 @@ import { prisma } from "../lib/prisma";
 async function main() {
   assert.equal(process.env.DATABASE_URL, "postgresql://fixture:fixture@127.0.0.1:55473/acquisition_fixture", "Browser checks require the isolated acquisition fixture.");
   const origin = "http://127.0.0.1:35475";
+  const publicOrigin = "https://hymnmusic.fun";
   const proxyHeaders = { "x-forwarded-host": "hymnmusic.fun", "x-forwarded-proto": "https" };
   const secret = "acquisition-browser-fixture-session-secret";
   const owner = await prisma.teamMember.findFirstOrThrow({ where: { user: { email: { startsWith: "r-" } } }, include: { user: true } });
-  const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "--hostname", "127.0.0.1", "--port", "35475"], { env: { ...process.env, NODE_ENV: "production", PORT: "35475", EMAIL_ENABLED: "false", HYMN_CRON_WORKER_ENABLED: "false", JWT_SECRET: secret, ADMIN_JWT_SECRET: secret, NEXT_PUBLIC_APP_URL: origin }, stdio: "ignore", windowsHide: true });
+  const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "--hostname", "127.0.0.1", "--port", "35475"], { env: { ...process.env, NODE_ENV: "production", PORT: "35475", EMAIL_ENABLED: "false", HYMN_CRON_WORKER_ENABLED: "false", JWT_SECRET: secret, ADMIN_JWT_SECRET: secret, NEXT_PUBLIC_APP_URL: publicOrigin, APP_URL: publicOrigin, PUBLIC_SITE_URL: publicOrigin, NEXT_PUBLIC_SITE_URL: publicOrigin }, stdio: "ignore", windowsHide: true });
   const browser = await chromium.launch();
   try {
     for (let attempt = 0; attempt < 60; attempt++) {
@@ -20,10 +21,18 @@ async function main() {
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, extraHTTPHeaders: proxyHeaders });
-    await context.route("**/*", route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
-    await context.addCookies([{ name: "hymn_session", value: jwt.sign({ sub: owner.user.id, email: owner.user.email, name: owner.user.name, role: "customer" }, secret, { expiresIn: "1h" }), url: origin }]);
+    // Production validates writes against the public origin; simulate the
+    // reverse proxy while keeping every browser request on the local fixture.
+    await context.route("**/*", async route => {
+      const request = route.request();
+      if (new URL(request.url()).origin !== publicOrigin) return route.abort();
+      const target = new URL(request.url());
+      const local = await route.fetch({ url: `${origin}${target.pathname}${target.search}`, headers: { ...request.headers(), ...proxyHeaders }, maxRedirects: 0 });
+      await route.fulfill({ response: local });
+    });
+    await context.addCookies([{ name: "hymn_session", value: jwt.sign({ sub: owner.user.id, email: owner.user.email, name: owner.user.name, role: "customer" }, secret, { expiresIn: "1h" }), url: publicOrigin }]);
     const page = await context.newPage(); page.setDefaultTimeout(60000);
-    await page.goto(`${origin}/team?module=acquisition`);
+    await page.goto(`${publicOrigin}/team?module=acquisition`);
     await page.getByRole("button", { name: "Research & Acquisition", exact: true }).click();
     await page.getByRole("heading", { name: "Acquisition dashboard", exact: true }).waitFor();
     for (const [button, heading] of [["My Leads", "My leads"], ["All Leads", "All leads"], ["Employee Rewards", "Employee rewards"], ["Commission Ledger", "Revenue reconciliation"], ["Programme Settings", "Programme settings"]]) {
@@ -37,6 +46,36 @@ async function main() {
     await page.getByLabel("HYMN customer ID").fill(String(customer.id));
     await page.getByRole("button", { name: "Inspect attribution", exact: true }).click();
     await page.getByRole("heading", { name: `${customer.name} · #${customer.id}`, exact: true }).waitFor();
+    await page.getByRole("button", { name: "Commission Ledger", exact: true }).click();
+    // The original customer fixture deliberately has a pending provider refund.
+    // Use the clean repeat purchase for the successful dispute resolution flow.
+    const evidence = await prisma.acquisitionRevenueEvidence.findFirstOrThrow({ where: { workspaceId: owner.workspaceId, paymentId: { startsWith: "pay_signed_2_" } } });
+    const evidencePanel = page.locator("details").filter({ hasText: evidence.paymentId }).filter({ has: page.locator('textarea[name="taxEvidence"]') });
+    await evidencePanel.locator("summary").click();
+    await evidencePanel.getByLabel("Dispute or ownership concern").fill("Browser fixture ownership review");
+    const holdResponse = page.waitForResponse(response => response.url().includes("/api/team/acquisition-evidence-dispute") && response.request().method() === "POST");
+    await evidencePanel.getByRole("button", { name: "Hold rewards for dispute", exact: true }).click();
+    const held = await holdResponse;
+    assert.equal(held.status(), 200, `Dispute hold failed: ${await held.text()}`);
+    await evidencePanel.getByText("Disputed: payout approval and payment recording are blocked until an administrator resolves this concern.", { exact: true }).waitFor();
+    await evidencePanel.getByLabel("I confirm the ownership or payment concern is resolved", { exact: false }).check();
+    await evidencePanel.getByLabel("Tax/invoice references, one per line").fill("browser-tax-reference");
+    await evidencePanel.getByLabel("Cost/refund/settlement references, one per line").fill("browser-settlement-reference");
+    await evidencePanel.getByLabel("Review reason", { exact: true }).fill("Browser fixture ownership outcome confirmed");
+    await evidencePanel.getByLabel("Provider adjustment reference", { exact: true }).fill("browser-dispute-resolution");
+    const reviewResponse = page.waitForResponse(response => response.url().includes("/api/team/acquisition-evidence-review") && response.request().method() === "POST");
+    await evidencePanel.getByRole("button", { name: "Reconcile or record adjustment", exact: true }).click();
+    const reviewed = await reviewResponse;
+    assert.equal(reviewed.status(), 200, `Dispute resolution failed: ${await reviewed.text()}`);
+    await evidencePanel.getByRole("button", { name: "Hold rewards for dispute", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Payout Management", exact: true }).click();
+    const pending = page.locator("article").filter({ has: page.getByRole("heading", { name: /^Researcher:/ }) });
+    await pending.getByLabel("Approval reason").fill("Browser fixture batch reservation");
+    await pending.getByRole("button", { name: "Approve payout batch", exact: true }).click();
+    const reserved = page.locator("article").filter({ has: page.getByRole("heading", { name: /^Approved: Researcher,/ }) });
+    await reserved.getByLabel("Payment evidence / reason").fill("Browser fixture cancellation without transfer");
+    await reserved.getByRole("button", { name: "Cancel unpaid batch", exact: true }).click();
+    await page.getByText(/Cancelled batch .*Browser fixture cancellation without transfer/).waitFor();
     await page.getByText(/Loading workspace records/).waitFor({ state: "hidden" });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("button", { name: "Acquisition Dashboard", exact: true }).click();

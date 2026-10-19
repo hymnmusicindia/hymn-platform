@@ -12,11 +12,16 @@ export async function recordVerifiedAcquisitionRevenue(input: { sourceType: Reve
   const attribution = await prisma.acquisitionLead.findFirst({ where: { customerId: input.customerId, attributionLockedAt: { not: null }, acquisitionEmployeeId: { not: null } }, select: { workspaceId: true } });
   const referral = !attribution ? await prisma.referral.findUnique({ where: { referredUserId: input.customerId }, select: { id: true } }) : null;
   if (!attribution && !referral) return null;
-  return prisma.acquisitionRevenueEvidence.upsert({
+  const evidence = await prisma.acquisitionRevenueEvidence.upsert({
     where: { sourceType_sourceId: { sourceType: input.sourceType, sourceId: input.sourceId } },
     create: { ...input, workspaceId: attribution?.workspaceId, status: "RECONCILIATION_REQUIRED" },
-    update: attribution ? { workspaceId: attribution.workspaceId } : {},
+    update: {},
   });
+  if (attribution && evidence.workspaceId === null && !evidence.reviewedAt) {
+    await prisma.acquisitionRevenueEvidence.updateMany({ where: { id: evidence.id, workspaceId: null, reviewedAt: null, eligibleNetRevenueMinor: null }, data: { workspaceId: attribution.workspaceId } });
+    return prisma.acquisitionRevenueEvidence.findUniqueOrThrow({ where: { id: evidence.id } });
+  }
+  return evidence;
 }
 
 export async function flagAcquisitionRevenueAdjustment(paymentId: string, providerEventId: string) {

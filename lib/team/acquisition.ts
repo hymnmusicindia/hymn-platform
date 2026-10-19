@@ -67,9 +67,10 @@ export async function acquisitionRead(a: Actor, resource: string, params: URLSea
   }
   if (resource === "acquisition-dashboard") {
     const owned = { workspaceId: a.workspaceId, ...(can(a, "crm.all") ? {} : { OR: [{ researcherEmployeeId: a.id }, { acquisitionEmployeeId: a.id }] }) };
-    const [leads, rows] = await Promise.all([prisma.acquisitionLead.count({ where: owned }), prisma.acquisitionCommission.findMany({ where: { lead: owned, ...(can(a, "crm.all") ? {} : { employeeId: a.id }) }, include: { payoutItems: { select: { payout: { select: { payment: { select: { id: true } } } } } } } })]);
+    const [leads, rows] = await Promise.all([prisma.acquisitionLead.count({ where: owned }), prisma.acquisitionCommission.findMany({ where: { lead: owned, ...(can(a, "crm.all") ? {} : { employeeId: a.id }) }, include: { payoutItems: { where: { payout: { cancellation: { is: null } } }, select: { payout: { select: { payment: { select: { id: true } } } } } } } })]);
+    const disputedPayments = new Set((await prisma.acquisitionRevenueEvidence.findMany({ where: { workspaceId: a.workspaceId, status: "DISPUTED", paymentId: { in: rows.map(row => row.paymentId) } }, select: { paymentId: true } })).map(row => row.paymentId));
     const totals = new Map<string, { amount: number; count: number }>();
-    for (const row of rows) { const status = row.payoutItems[0]?.payout.payment ? "PAID" : row.payoutItems.length ? "APPROVED" : row.status; const aggregate = totals.get(status) || { amount: 0, count: 0 }; aggregate.amount += row.amountMinor; aggregate.count++; totals.set(status, aggregate); }
+    for (const row of rows) { const status = row.payoutItems[0]?.payout.payment ? "PAID" : disputedPayments.has(row.paymentId) ? "DISPUTED" : row.payoutItems.length ? "APPROVED" : row.status; const aggregate = totals.get(status) || { amount: 0, count: 0 }; aggregate.amount += row.amountMinor; aggregate.count++; totals.set(status, aggregate); }
     const attributed = await prisma.acquisitionLead.findMany({ where: owned, select: { customerId: true, prospect: { select: { stage: true } } } });
     const customerIds = [...new Set(attributed.flatMap(row => row.customerId ? [row.customerId] : []))];
     const [completedReleases, purchases, recentActivity] = await Promise.all([
@@ -84,19 +85,20 @@ export async function acquisitionRead(a: Actor, resource: string, params: URLSea
     return { leads, performance: { commissionLiability, qualified: stageCount(["QUALIFIED", "READY_TO_CONTACT"]), contacted: stageCount(["CONTACTED", "REPLIED", "OFFER_SHARED"]), interested: stageCount(["INTERESTED"]), convertedCustomers: customerIds.length, completedReleases, repeatPurchases: purchases.reduce((sum, row) => sum + Math.max(0, row._count - 1), 0), lifetimeEarned: rows.reduce((sum, row) => sum + row.amountMinor, 0) / 100 }, recentActivity, commissions: [...totals].map(([status, row]) => ({ status, amount: row.amount / 100, count: row.count })) };
   }
   if (resource === "acquisition-ledger") {
-    const rows = await prisma.acquisitionCommission.findMany({ where: { lead: { workspaceId: a.workspaceId, ...(can(a, "crm.all") ? {} : { OR: [{ researcherEmployeeId: a.id }, { acquisitionEmployeeId: a.id }] }) }, ...(can(a, "crm.all") ? {} : { employeeId: a.id }) }, take: 100, orderBy: { createdAt: "desc" }, include: { payoutItems: { select: { payout: { select: { payment: true } } } }, lead: { select: { prospect: { select: { name: true } } } }, customer: { select: { id: true, name: true } }, employee: { select: { user: { select: { name: true } } } } } });
-    return { items: rows.map(row => ({ ...row, status: row.payoutItems[0]?.payout.payment ? "PAID" : row.payoutItems.length ? "APPROVED" : row.status, payoutReference: row.payoutItems[0]?.payout.payment?.paymentReference || null, paidAt: row.payoutItems[0]?.payout.payment?.paidAt || null })) };
+    const rows = await prisma.acquisitionCommission.findMany({ where: { lead: { workspaceId: a.workspaceId, ...(can(a, "crm.all") ? {} : { OR: [{ researcherEmployeeId: a.id }, { acquisitionEmployeeId: a.id }] }) }, ...(can(a, "crm.all") ? {} : { employeeId: a.id }) }, take: 100, orderBy: { createdAt: "desc" }, include: { payoutItems: { where: { payout: { cancellation: { is: null } } }, select: { payout: { select: { payment: true } } } }, lead: { select: { prospect: { select: { name: true } } } }, customer: { select: { id: true, name: true } }, employee: { select: { user: { select: { name: true } } } } } });
+    const disputedPayments = new Set((await prisma.acquisitionRevenueEvidence.findMany({ where: { workspaceId: a.workspaceId, status: "DISPUTED", paymentId: { in: rows.map(row => row.paymentId) } }, select: { paymentId: true } })).map(row => row.paymentId));
+    return { items: rows.map(row => ({ ...row, entryKind: row.entryType === "ADJUSTMENT" ? row.amountMinor < 0 ? "REVERSED" : "ADJUSTED" : "EARNED", status: row.payoutItems[0]?.payout.payment ? "PAID" : disputedPayments.has(row.paymentId) ? "DISPUTED" : row.payoutItems.length ? "APPROVED" : row.status, payoutReference: row.payoutItems[0]?.payout.payment?.paymentReference || null, paidAt: row.payoutItems[0]?.payout.payment?.paidAt || null })) };
   }
   if (resource === "acquisition-payouts") {
     demand(a, "acquisition.admin");
     const [payouts, unpaid, settings] = await Promise.all([
-      prisma.acquisitionPayout.findMany({ where: { workspaceId: a.workspaceId }, take: 100, orderBy: { approvedAt: "desc" }, include: { payment: true, employee: { select: { user: { select: { name: true } } } } } }),
-      prisma.acquisitionCommission.findMany({ where: { lead: { workspaceId: a.workspaceId }, status: { in: ["PENDING", "APPROVED"] }, eligibleAt: { lte: new Date() }, payoutItems: { none: {} } }, take: 300, orderBy: { createdAt: "asc" }, include: { employee: { select: { id: true, user: { select: { name: true } } } } } }),
+      prisma.acquisitionPayout.findMany({ where: { workspaceId: a.workspaceId }, take: 100, orderBy: { approvedAt: "desc" }, include: { payment: true, cancellation: true, items: { select: { commissionId: true, amountMinor: true, commission: { select: { sourceType: true, sourceId: true, paymentId: true, attributionRole: true } } } }, employee: { select: { user: { select: { name: true } } } } } }),
+      prisma.acquisitionCommission.findMany({ where: { lead: { workspaceId: a.workspaceId }, status: { in: ["PENDING", "APPROVED"] }, eligibleAt: { lte: new Date() }, payoutItems: { none: { payout: { cancellation: { is: null } } } } }, take: 300, orderBy: { createdAt: "asc" }, include: { employee: { select: { id: true, user: { select: { name: true } } } } } }),
       prisma.acquisitionProgramSettings.findUnique({ where: { workspaceId: a.workspaceId } }),
     ]);
     const groups = new Map<string, { employeeId: string; name: string; currency: string; amountMinor: number; commissionIds: string[] }>();
     for (const row of unpaid) { const key = `${row.employeeId}:${row.currency}`; const group = groups.get(key) || { employeeId: row.employeeId, name: row.employee.user.name, currency: row.currency, amountMinor: 0, commissionIds: [] }; group.amountMinor += row.amountMinor; group.commissionIds.push(row.id); groups.set(key, group); }
-    return { payouts, minimumMinor: settings?.payoutMinimumMinor ?? 50000, schedule: settings?.payoutSchedule ?? "MONTHLY", due: [...groups.values()].filter(group => group.amountMinor > 0).map(group => ({ ...group, minimumMet: group.amountMinor >= (settings?.payoutMinimumMinor ?? 50000) })) };
+    return { payouts: payouts.map(row => ({ ...row, cancelledAt: row.cancellation?.createdAt || null, cancellationReason: row.cancellation?.reason || null })), minimumMinor: settings?.payoutMinimumMinor ?? 50000, schedule: settings?.payoutSchedule ?? "MONTHLY", due: [...groups.values()].filter(group => group.amountMinor > 0).map(group => ({ ...group, minimumMet: group.amountMinor >= (settings?.payoutMinimumMinor ?? 50000) })) };
   }
   if (resource === "acquisition-evidence") {
     demand(a, "acquisition.admin");
@@ -191,6 +193,19 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
     await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: "lead.acquisition_employee_assigned", entityId: lead.id, metadata: { previous, employeeId, reason } } });
     return { ok: true };
   }
+  if (resource === "acquisition-evidence-dispute") {
+    demand(a, "acquisition.admin");
+    const id = String(body.id || ""); const reason = String(body.reason || "").trim();
+    if (reason.length < 8 || reason.length > 1000) throw new TeamError("Document the dispute or ownership concern before holding rewards.");
+    await tx.$queryRaw`SELECT id FROM acquisition_revenue_evidence WHERE id = ${id} FOR UPDATE`;
+    const evidence = await tx.acquisitionRevenueEvidence.findFirst({ where: { id, OR: [{ workspaceId: a.workspaceId }, { workspaceId: null }] } });
+    if (!evidence) throw new TeamError("Revenue evidence not accessible.", 404);
+    if (evidence.status === "DISPUTED") return evidence;
+    const held = await tx.acquisitionRevenueEvidence.update({ where: { id }, data: { workspaceId: a.workspaceId, status: "DISPUTED" } });
+    await refreshReferralCommission(tx, evidence.paymentId);
+    await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: "revenue.dispute_opened", entityId: id, metadata: { previousStatus: evidence.status, paymentId: evidence.paymentId, reason } } });
+    return held;
+  }
   if (resource === "acquisition-evidence-review") {
     demand(a, "acquisition.admin");
     const id = String(body.id || "");
@@ -202,8 +217,9 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
     const taxEvidence = Array.isArray(body.taxEvidence) ? body.taxEvidence.filter(value => typeof value === "string" && value.trim()).map(value => String(value).trim()).slice(0, 10) : [];
     const costEvidence = Array.isArray(body.costEvidence) ? body.costEvidence.filter(value => typeof value === "string" && value.trim()).map(value => String(value).trim()).slice(0, 10) : [];
     if (!reason || reason.length < 8 || ![taxes, refunds, costs, providerFee].every(value => Number.isSafeInteger(value) && value >= 0) || !taxEvidence.length || !costEvidence.length) throw new TeamError("Reconciliation requires nonnegative tax, refund, direct-cost and provider-fee amounts plus supporting tax and cost references.");
-    const evidence = await tx.acquisitionRevenueEvidence.findFirst({ where: { id, OR: [{ workspaceId: a.workspaceId }, { workspaceId: null }], status: { in: ["RECONCILIATION_REQUIRED", "RECONCILED", "ADJUSTMENT_REQUIRED"] } } });
+    const evidence = await tx.acquisitionRevenueEvidence.findFirst({ where: { id, OR: [{ workspaceId: a.workspaceId }, { workspaceId: null }], status: { in: ["RECONCILIATION_REQUIRED", "RECONCILED", "ADJUSTMENT_REQUIRED", "DISPUTED"] } } });
     if (!evidence) throw new TeamError("Reconciliation record not found or already reviewed.", 404);
+    if (evidence.status === "DISPUTED" && body.resolveDispute !== true) throw new TeamError("Explicitly confirm that the documented dispute has been resolved before reconciliation.", 409);
     const source = evidence.sourceType === "distribution_order" ? await tx.distributionOrder.findUnique({ where: { id: Number(evidence.sourceId) } }) : evidence.sourceType === "checkout_order" ? await tx.checkoutOrder.findUnique({ where: { id: Number(evidence.sourceId) } }) : evidence.sourceType === "subscription_payment" ? await tx.subscriptionPayment.findUnique({ where: { id: Number(evidence.sourceId) }, include: { subscription: true } }) : evidence.sourceType === "studio_payment" ? await tx.studioPayment.findUnique({ where: { id: Number(evidence.sourceId) }, include: { order: true, refunds: true } }) : null;
     const paymentId = source && "razorpayPaymentId" in source ? source.razorpayPaymentId : null;
     const paid = source && "paymentStatus" in source ? source.paymentStatus === "paid" : source && "status" in source ? (evidence.sourceType === "studio_payment" ? source.status === "CAPTURED" : source.status === "captured") : false;
@@ -214,7 +230,7 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
       if (!event.eventType.startsWith("refund.")) continue;
       const refund = (event.payloadRedacted as { entity?: { id?: string } } | null)?.entity; const refundId = refund?.id;
       if (!refundId) throw new TeamError("A provider refund event is missing its refund reference; resolve it before reconciliation.", 409);
-      if (event.eventType === "refund.created") pendingRefunds.add(refundId);
+      if (event.eventType === "refund.created" && !processedRefunds.has(refundId)) pendingRefunds.add(refundId);
       else if (event.eventType === "refund.failed") pendingRefunds.delete(refundId);
       else if (event.eventType === "refund.processed") { processedRefunds.set(refundId, Math.max(processedRefunds.get(refundId) || 0, event.amountMinor || 0)); pendingRefunds.delete(refundId); }
     }
@@ -235,7 +251,8 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
     if (wasReconciled && net !== evidence.eligibleNetRevenueMinor && (!adjustmentReference || adjustmentReference.length > 200)) throw new TeamError("A unique provider adjustment reference is required when changing reconciled eligible revenue.");
     if (wasReconciled && net !== evidence.eligibleNetRevenueMinor) {
       const duplicateAdjustment = await tx.acquisitionCommission.findFirst({ where: { sourceType: evidence.sourceType, sourceId: evidence.sourceId, entryType: "ADJUSTMENT", adjustmentReference } });
-      if (duplicateAdjustment) throw new TeamError("This adjustment reference has already been recorded for this transaction.", 409);
+      const duplicateAudit = await tx.acquisitionProgramAudit.findFirst({ where: { entityId: evidence.id, action: "revenue.evidence_adjusted", metadata: { path: ["adjustmentReference"], equals: adjustmentReference } }, select: { id: true } });
+      if (duplicateAdjustment || duplicateAudit) throw new TeamError("This adjustment reference has already been recorded for this transaction.", 409);
     }
     const updated = await tx.acquisitionRevenueEvidence.update({ where: { id: evidence.id }, data: { workspaceId: a.workspaceId, applicableTaxesMinor: taxes, refundsChargebacksMinor: refunds, directPassThroughCostsMinor: costs, providerFeeMinor: providerFee, eligibleNetRevenueMinor: net, status: "RECONCILED", taxEvidence, costEvidence, reviewedByEmployeeId: a.id, reviewedAt: new Date(), reviewReason: reason } });
     const attribution = await tx.acquisitionLead.findFirst({ where: { customerId: evidence.customerId, workspaceId: a.workspaceId, attributionLockedAt: { not: null }, acquisitionEmployeeId: { not: null } } });
@@ -251,17 +268,18 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
         await tx.acquisitionCommission.create({ data: { leadId: attribution.id, sourceType: evidence.sourceType, sourceId: evidence.sourceId, paymentId: evidence.paymentId, customerId: evidence.customerId, employeeId: entry.employeeId, attributionRole: entry.role, eligibleNetRevenueMinor: net, rateBps: entry.rate, amountMinor: Math.floor(net * entry.rate / 10000), currency: evidence.currency, calculationBasis: `Recognised HYMN revenue ${evidence.recognisedRevenueMinor}; less taxes ${taxes}, refunds/chargebacks ${refunds}, direct costs ${costs}, and provider fee ${providerFee}. Tax references and cost references recorded in revenue evidence.`, policyVersion: evidence.policyVersion, paymentVerificationReference: evidence.paymentId, status: "PENDING", eligibleAt: new Date(evidence.paymentVerifiedAt.getTime() + settings.holdPeriodDays * 86_400_000) } });
       }
     }
-    if (attribution && settings?.enabled && wasReconciled && net !== evidence.eligibleNetRevenueMinor) {
+    if (attribution && wasReconciled && net !== evidence.eligibleNetRevenueMinor) {
       const entries = await tx.acquisitionCommission.findMany({ where: { leadId: attribution.id, sourceType: evidence.sourceType, sourceId: evidence.sourceId, entryType: "EARNED" } });
       for (const earned of entries) {
         const prior = await tx.acquisitionCommission.aggregate({ where: { sourceType: evidence.sourceType, sourceId: evidence.sourceId, employeeId: earned.employeeId, attributionRole: earned.attributionRole, entryType: "ADJUSTMENT" }, _sum: { amountMinor: true } });
         const target = Math.floor(net * earned.rateBps / 10000);
         const delta = target - earned.amountMinor - (prior._sum.amountMinor || 0);
-        if (delta) await tx.acquisitionCommission.create({ data: { leadId: attribution.id, sourceType: evidence.sourceType, sourceId: evidence.sourceId, paymentId: evidence.paymentId, customerId: evidence.customerId, employeeId: earned.employeeId, attributionRole: earned.attributionRole, entryType: "ADJUSTMENT", adjustmentReference, eligibleNetRevenueMinor: net, rateBps: earned.rateBps, amountMinor: delta, currency: evidence.currency, calculationBasis: `Post-reconciliation correction ${adjustmentReference}; revised eligible net revenue ${net}; prior earned amount ${earned.amountMinor}; prior adjustments ${prior._sum.amountMinor || 0}. ${reason}`, policyVersion: earned.policyVersion, paymentVerificationReference: evidence.paymentId, status: "PENDING", eligibleAt: delta < 0 ? new Date() : new Date(Date.now() + (settings.holdPeriodDays ?? 14) * 86_400_000) } });
+        if (delta) await tx.acquisitionCommission.create({ data: { leadId: attribution.id, sourceType: evidence.sourceType, sourceId: evidence.sourceId, paymentId: evidence.paymentId, customerId: evidence.customerId, employeeId: earned.employeeId, attributionRole: earned.attributionRole, entryType: "ADJUSTMENT", adjustmentReference, eligibleNetRevenueMinor: net, rateBps: earned.rateBps, amountMinor: delta, currency: evidence.currency, calculationBasis: `Post-reconciliation correction ${adjustmentReference}; revised eligible net revenue ${net}; prior earned amount ${earned.amountMinor}; prior adjustments ${prior._sum.amountMinor || 0}. ${reason}`, policyVersion: earned.policyVersion, paymentVerificationReference: evidence.paymentId, status: "PENDING", eligibleAt: delta < 0 ? new Date() : new Date(Date.now() + (settings?.holdPeriodDays ?? 14) * 86_400_000) } });
       }
     }
     await accrueReferralCommission(tx, evidence.sourceType as import("@/lib/referral-commissions").CommissionSource, Number(evidence.sourceId));
-    await refreshReferralCommission(tx, evidence.paymentId);
+    await refreshReferralCommission(tx, evidence.paymentId, new Date(), adjustmentReference);
+    if (evidence.status === "DISPUTED") await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: "revenue.dispute_resolved", entityId: evidence.id, metadata: { reason, paymentId: evidence.paymentId } } });
     await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: wasReconciled ? "revenue.evidence_adjusted" : "revenue.evidence_reconciled", entityId: evidence.id, metadata: { previous: { status: evidence.status, eligibleNetRevenueMinor: evidence.eligibleNetRevenueMinor }, next: { status: updated.status, eligibleNetRevenueMinor: net }, adjustmentReference: wasReconciled ? adjustmentReference : null, reason } } });
     return updated;
   }
@@ -270,10 +288,12 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
     const employeeId = String(body.employeeId || ""); const reason = String(body.reason || "").trim();
     const commissionIds = Array.isArray(body.commissionIds) ? [...new Set(body.commissionIds.filter((id): id is string => typeof id === "string"))] : [];
     if (!employeeId || reason.length < 8 || reason.length > 1000 || !commissionIds.length || commissionIds.length > 300) throw new TeamError("Select unpaid ledger entries and provide the approval reason.");
-    const entries = await tx.acquisitionCommission.findMany({ where: { id: { in: commissionIds }, employeeId, lead: { workspaceId: a.workspaceId }, status: { in: ["PENDING", "APPROVED"] }, eligibleAt: { lte: new Date() }, payoutItems: { none: {} } } });
+    const entries = await tx.acquisitionCommission.findMany({ where: { id: { in: commissionIds }, employeeId, lead: { workspaceId: a.workspaceId }, status: { in: ["PENDING", "APPROVED"] }, eligibleAt: { lte: new Date() }, payoutItems: { none: { payout: { cancellation: { is: null } } } } } });
     if (entries.length !== commissionIds.length || new Set(entries.map(row => row.currency)).size !== 1) throw new TeamError("One or more entries are still held, already paid, belong to another employee, or use another currency.", 409);
     const evidenceRows = await tx.acquisitionRevenueEvidence.findMany({ where: { workspaceId: a.workspaceId, status: "RECONCILED", OR: entries.map(row => ({ sourceType: row.sourceType, sourceId: row.sourceId, paymentId: row.paymentId })) }, select: { sourceType: true, sourceId: true, paymentId: true } });
     if (evidenceRows.length !== new Set(entries.map(row => `${row.sourceType}:${row.sourceId}:${row.paymentId}`)).size) throw new TeamError("Reconcile every payment, refund, tax, and cost record before approving a payout.", 409);
+    if (await tx.paymentWebhookEvent.count({ where: { paymentId: { in: entries.map(row => row.paymentId) }, signatureValid: true, processingState: { not: "processed" }, eventType: { in: ["refund.created", "refund.processed", "payment.dispute.created", "payment.dispute.lost"] } } })) throw new TeamError("A provider adjustment is awaiting processing. Keep this payment on hold.", 409);
+    if (await tx.acquisitionCommission.count({ where: { employeeId, lead: { workspaceId: a.workspaceId }, currency: entries[0].currency, amountMinor: { lt: 0 }, payoutItems: { none: { payout: { cancellation: { is: null } } } }, id: { notIn: commissionIds } } })) throw new TeamError("Include all outstanding refund adjustments before approving a payout.", 409);
     const amountMinor = entries.reduce((sum, row) => sum + row.amountMinor, 0);
     if (amountMinor <= 0) throw new TeamError("The selected entries have no positive net payout.");
     const settings = await tx.acquisitionProgramSettings.findUnique({ where: { workspaceId: a.workspaceId } });
@@ -282,12 +302,29 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
     await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: "commission.payout_approved", entityId: payout.id, metadata: { employeeId, commissionIds, amountMinor, currency: payout.currency, reason } } });
     return payout;
   }
+  if (resource === "acquisition-payout-cancel") {
+    demand(a, "acquisition.admin");
+    const payoutId = String(body.payoutId || ""); const reason = String(body.reason || "").trim();
+    if (reason.length < 8 || reason.length > 1000) throw new TeamError("Provide the cancellation reason.");
+    await tx.$queryRaw`SELECT id FROM acquisition_payouts WHERE id = ${payoutId} FOR UPDATE`;
+    const payout = await tx.acquisitionPayout.findFirst({ where: { id: payoutId, workspaceId: a.workspaceId }, include: { payment: true, cancellation: true, items: true } });
+    if (!payout || payout.payment || payout.cancellation) throw new TeamError("Only an unpaid approved batch can be cancelled.", 409);
+    const cancelled = await tx.acquisitionPayoutCancellation.create({ data: { payoutId, reason, recordedByEmployeeId: a.id } });
+    await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: "commission.payout_cancelled", entityId: payoutId, metadata: { reason, amountMinor: payout.amountMinor, items: payout.items } } });
+    return { id: payoutId, cancelledAt: cancelled.createdAt, cancelledItems: payout.items };
+  }
   if (resource === "acquisition-payout-record") {
     demand(a, "acquisition.admin");
     const payoutId = String(body.payoutId || ""); const paymentReference = String(body.paymentReference || "").trim(); const reason = String(body.reason || "").trim();
     if (!paymentReference || paymentReference.length > 200 || reason.length < 8 || reason.length > 1000) throw new TeamError("Provide the actual payment reference and evidence after transferring the payout.");
-    const payout = await tx.acquisitionPayout.findFirst({ where: { id: payoutId, workspaceId: a.workspaceId }, include: { payment: true } });
-    if (!payout || payout.payment) throw new TeamError("Approved payout unavailable or already paid.", 409);
+    await tx.$queryRaw`SELECT id FROM acquisition_payouts WHERE id = ${payoutId} FOR UPDATE`;
+    const payout = await tx.acquisitionPayout.findFirst({ where: { id: payoutId, workspaceId: a.workspaceId }, include: { payment: true, cancellation: true, items: { include: { commission: true } } } });
+    if (!payout || payout.payment || payout.cancellation) throw new TeamError("Approved payout unavailable or already paid.", 409);
+    const sources = payout.items.map(row => ({ sourceType: row.commission.sourceType, sourceId: row.commission.sourceId, paymentId: row.commission.paymentId }));
+    const reconciled = await tx.acquisitionRevenueEvidence.count({ where: { workspaceId: a.workspaceId, status: "RECONCILED", OR: sources } });
+    if (reconciled !== new Set(sources.map(row => `${row.sourceType}:${row.sourceId}:${row.paymentId}`)).size || !sources.length) throw new TeamError("An approved payment is disputed or awaits reconciliation. Resolve it or cancel this batch before payment.", 409);
+    if (await tx.paymentWebhookEvent.count({ where: { paymentId: { in: sources.map(row => row.paymentId) }, signatureValid: true, processingState: { not: "processed" }, eventType: { in: ["refund.created", "refund.processed", "payment.dispute.created", "payment.dispute.lost"] } } })) throw new TeamError("A provider adjustment is awaiting processing. Keep this payment on hold.", 409);
+    if (await tx.acquisitionCommission.count({ where: { employeeId: payout.employeeId, lead: { workspaceId: a.workspaceId }, currency: payout.currency, amountMinor: { lt: 0 }, payoutItems: { none: { payout: { cancellation: { is: null } } } } } })) throw new TeamError("New refund adjustments changed the balance. Cancel and rebuild this batch before payment.", 409);
     const payment = await tx.acquisitionPayoutPayment.create({ data: { payoutId, paymentReference, recordedByEmployeeId: a.id } });
     await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: "commission.payout_paid", entityId: payoutId, metadata: { amountMinor: payout.amountMinor, currency: payout.currency, paymentReference, reason } } });
     return payment;

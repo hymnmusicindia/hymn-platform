@@ -4,7 +4,6 @@ import { checkoutRetainedRevenueMinor, eligibleNetRevenue, proportionalRefundMin
 assert.equal(eligibleNetRevenue({ recognisedRevenueMinor: 100000, applicableTaxesMinor: 18000, refundsChargebacksMinor: 10000, directPassThroughCostsMinor: 20000, providerFeeMinor: 2000 }), 50000);
 assert.equal(Math.floor(50000 * 200 / 10000), 1000);
 assert.equal(Math.floor(50000 * 300 / 10000), 1500);
-assert.equal(Math.min(700, 200 + 300 + 200), 700);
 assert.equal(checkoutRetainedRevenueMinor(30), 3000, "Beat-store rewards use the recorded HYMN share, not buyer gross.");
 assert.equal(studioRetainedRevenueMinor(10000, 0.2), 2000, "Studio rewards use HYMN's contract commission share.");
 assert.equal(proportionalRefundMinor(3000, 10000, 2500), 750, "Partial refunds reduce retained revenue proportionately.");

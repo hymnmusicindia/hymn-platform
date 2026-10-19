@@ -3,7 +3,7 @@ import { prisma } from "../lib/prisma";
 import { recordVerifiedAcquisitionRevenue } from "../lib/acquisition-revenue";
 import { acquisitionMutation, acquisitionRead } from "../lib/team/acquisition";
 import { processAcquisitionEmailEvent } from "../lib/team/acquisition-email";
-import { accrueReferralCommission } from "../lib/referral-commissions";
+import { accrueReferralCommission, refreshReferralCommission, clearedReferralMinor } from "../lib/referral-commissions";
 import { teamMutation } from "../lib/team/service";
 import { createPasswordUser, createOrder, completeCheckoutOrder } from "../lib/db";
 import { attachNewCustomerToAcquisitionLead } from "../lib/acquisition-revenue";
@@ -50,6 +50,7 @@ async function main() {
   const acquisitionToken = decodeURIComponent(new URL(signedLink.url).pathname.split("/").pop()!);
   const joinedCustomer = await createPasswordUser({ name: "Signed link customer", email: `signed-${suffix}@fixture.invalid`, passwordHash: "fixture-only-hash", role: "customer", acquisitionToken });
   assert.ok(joinedCustomer);
+  await prisma.referral.create({ data: { userId: researcherUser.id, referredUserId: joinedCustomer.id, referralCode: `SIGNED-${suffix}`, signupEmail: joinedCustomer.email } });
   const matchedLead = await prisma.acquisitionLead.findUniqueOrThrow({ where: { id: submittedLead.id } });
   assert.equal(matchedLead.customerId, joinedCustomer.id);
   assert.equal(matchedLead.researcherEmployeeId, researcher.id);
@@ -62,11 +63,12 @@ async function main() {
   assert.equal(evidence?.status, "RECONCILIATION_REQUIRED");
   await recordVerifiedAcquisitionRevenue({ sourceType: "checkout_order", sourceId: String(order.id), customerId: customer.id, paymentId, currency: "INR", recognisedRevenueMinor: 10000 });
   assert.equal(await prisma.acquisitionRevenueEvidence.count({ where: { paymentId } }), 1, "Verified payment retries do not duplicate revenue evidence.");
-  await prisma.acquisitionProgramSettings.create({ data: { workspaceId: workspace.id, enabled: true, effectiveAt: new Date(0), holdPeriodDays: 0, payoutMinimumMinor: 0, revenuePolicy: "Recognised retained revenue less verified taxes, refunds and direct pass-through costs." } });
+  await prisma.acquisitionProgramSettings.create({ data: { workspaceId: workspace.id, enabled: true, effectiveAt: new Date(0), maximumRewardRateBps: 500, holdPeriodDays: 0, payoutMinimumMinor: 0, revenuePolicy: "Recognised retained revenue less verified taxes, refunds and direct pass-through costs." } });
   for (const purchase of [1, 2]) {
     const linkedOrder = await prisma.distributionOrder.create({ data: { userId: joinedCustomer.id, plan: "one_time", amount: 100, razorpayOrderId: `order_signed_${purchase}_${suffix}` } });
     await confirmDistributionPayment({ razorpayOrderId: linkedOrder.razorpayOrderId, paymentId: `pay_signed_${purchase}_${suffix}`, amountMinor: 10000, currency: "INR", source: "fixture" });
     const linkedEvidence = await prisma.acquisitionRevenueEvidence.findUniqueOrThrow({ where: { paymentId: `pay_signed_${purchase}_${suffix}` } });
+    assert.equal(linkedEvidence.workspaceId, workspace.id, "Known employee attribution scopes evidence at creation.");
     await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-evidence-review", { id: linkedEvidence.id, applicableTaxesMinor: 1000, refundsChargebacksMinor: 0, directPassThroughCostsMinor: 1000, providerFeeMinor: 0, taxEvidence: ["distribution-invoice"], costEvidence: ["distributor-settlement"], reason: "Review signed link customer paid purchase" }));
     const employeeRewards = await prisma.acquisitionCommission.findMany({ where: { sourceType: "distribution_order", sourceId: String(linkedOrder.id), entryType: "EARNED" }, orderBy: { attributionRole: "asc" } });
     assert.deepEqual(employeeRewards.map(row => [row.employeeId, row.amountMinor]), [[converter.id, 240], [researcher.id, 160]], "Signup attribution survives first and repeat verified purchases.");
@@ -114,6 +116,8 @@ async function main() {
   const fullyRefunded = await prisma.referralCommission.findFirstOrThrow({ where: { paymentId: ordinaryEvidence.paymentId } });
   assert.equal(fullyRefunded.netMinor, 0);
   assert.equal(fullyRefunded.originalMinor, 160);
+  await assert.rejects(prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-evidence-review", { id: ordinaryEvidence.id, applicableTaxesMinor: 0, refundsChargebacksMinor: 5000, directPassThroughCostsMinor: 0, providerFeeMinor: 0, taxEvidence: ["credit-note"], costEvidence: ["cancelled-cost"], adjustmentReference: "ordinary-full-refund", reason: "Attempt to reuse a customer-only adjustment reference" })), /already been recorded/);
+  assert.match((await prisma.referralCommissionAdjustment.findFirstOrThrow({ where: { commissionId: fullyRefunded.id } })).reason, /ordinary-full-refund/);
   assert.equal((await prisma.referralCommissionAdjustment.findFirstOrThrow({ where: { commissionId: fullyRefunded.id } })).amountMinor, -160);
   const subscription = await prisma.subscription.create({ data: { userId: ordinaryCustomer.id, plan: "yearly", expiryDate: new Date(Date.now() + 86400000), status: "active" } });
   for (const renewal of [1, 2]) {
@@ -148,11 +152,44 @@ async function main() {
   const futureEvidence = await prisma.acquisitionRevenueEvidence.create({ data: { workspaceId: workspace.id, sourceType: "fixture", sourceId: suffix, customerId: customer.id, paymentId: `pay-future-${suffix}`, recognisedRevenueMinor: 1000, applicableTaxesMinor: 0, refundsChargebacksMinor: 0, directPassThroughCostsMinor: 0, providerFeeMinor: 0, eligibleNetRevenueMinor: 1000, status: "RECONCILED", taxEvidence: ["tax-fixture"], costEvidence: ["cost-fixture"], reviewedByEmployeeId: researcher.id, reviewedAt: new Date(), reviewReason: "Fixture hold test" } });
   const futureCommission = await prisma.acquisitionCommission.create({ data: { leadId: lead.id, sourceType: "fixture", sourceId: suffix, paymentId: futureEvidence.paymentId, customerId: customer.id, employeeId: researcher.id, attributionRole: "RESEARCHER", eligibleNetRevenueMinor: 1000, rateBps: 200, amountMinor: 20, currency: "INR", calculationBasis: "Future-dated hold fixture", paymentVerificationReference: futureEvidence.paymentId, status: "PENDING", eligibleAt: new Date(Date.now() + 86_400_000) } });
   await assert.rejects(prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-payout-approve", { employeeId: researcher.id, commissionIds: [futureCommission.id], reason: "Must reject rewards still in refund hold" })), "Payout approval cannot bypass the configured refund-risk hold.");
-  const approved = await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-payout-approve", { employeeId: researcher.id, commissionIds: commissions.filter(row => row.employeeId === researcher.id).map(row => row.id), reason: "Fixture payout batch approval" }));
+  await assert.rejects(prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-payout-approve", { employeeId: researcher.id, commissionIds: commissions.filter(row => row.employeeId === researcher.id && row.amountMinor > 0).map(row => row.id), reason: "Must reject omitted negative adjustments" })), /outstanding refund adjustments/);
+  const delayedRefund = await prisma.paymentWebhookEvent.create({ data: { providerEventId: `delayed-refund-${suffix}`, eventType: "refund.created", payloadHash: `delayed-${suffix}`, signatureValid: true, paymentId, amountMinor: 5000, currency: "INR", payloadRedacted: { entity: { id: `rfnd-${suffix}` } }, processingState: "received" } });
+  await assert.rejects(prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-payout-approve", { employeeId: researcher.id, commissionIds: commissions.filter(row => row.employeeId === researcher.id).map(row => row.id), reason: "Unprocessed provider adjustments block approval" })), /awaiting processing/);
+  await prisma.paymentWebhookEvent.update({ where: { id: delayedRefund.id }, data: { processingState: "processed" } });
+  await review(7000);
+  let approved = await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-payout-approve", { employeeId: researcher.id, commissionIds: commissions.filter(row => row.employeeId === researcher.id).map(row => row.id), reason: "Fixture payout batch approval" }));
   assert.equal((await acquisitionRead(actor, "acquisition-ledger", new URLSearchParams()) as { items: { status: string }[] }).items.some(row => row.status === "APPROVED"), true);
+  const duplicateBatch = await prisma.acquisitionPayout.create({ data: { workspaceId: workspace.id, employeeId: researcher.id, amountMinor: 20, reason: "Duplicate reservation fixture", recordedByEmployeeId: researcher.id } });
+  const reservedCommission = commissions.find(row => row.employeeId === researcher.id && row.amountMinor > 0)!;
+  await assert.rejects(prisma.acquisitionPayoutItem.create({ data: { payoutId: duplicateBatch.id, commissionId: reservedCommission.id, amountMinor: reservedCommission.amountMinor } }), "The database prevents one commission from entering two active batches.");
+  await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-payout-cancel", { payoutId: duplicateBatch.id, reason: "Close rejected duplicate reservation fixture" }));
+  const pendingBeforePayment = await prisma.paymentWebhookEvent.create({ data: { providerEventId: `pending-before-payment-${suffix}`, eventType: "refund.created", payloadHash: `pending-before-payment-${suffix}`, signatureValid: true, paymentId, amountMinor: 5000, currency: "INR", payloadRedacted: { entity: { id: `rfnd-${suffix}` } }, processingState: "received" } });
+  await assert.rejects(prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-payout-record", { payoutId: (approved as { id: string }).id, paymentReference: "must-not-pay", reason: "Unprocessed provider adjustment blocks payment" })), /awaiting processing/);
+  await prisma.paymentWebhookEvent.update({ where: { id: pendingBeforePayment.id }, data: { processingState: "processed" } });
+  await prisma.referralCommission.update({ where: { id: customerReward.id }, data: { eligibleAt: new Date(Date.now() - 1000) } });
+  await prisma.$transaction(tx => refreshReferralCommission(tx, paymentId));
+  assert.equal(await prisma.$transaction(tx => clearedReferralMinor(tx, researcherUser.id)), 20);
+  await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-evidence-dispute", { id: evidence!.id, reason: "Ownership disputed pending documented review" }));
+  assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { id: customerReward.id } })).status, "HELD");
+  assert.equal(await prisma.$transaction(tx => clearedReferralMinor(tx, researcherUser.id)), 0, "Manual disputes remove otherwise available customer rewards from withdrawal.");
+  assert.equal((await acquisitionRead(actor, "acquisition-ledger", new URLSearchParams()) as { items: { paymentId: string; status: string }[] }).items.filter(row => row.paymentId === paymentId).every(row => row.status === "DISPUTED"), true);
+  await assert.rejects(prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-payout-record", { payoutId: (approved as { id: string }).id, paymentReference: "must-not-pay", reason: "Disputed approved transfer must be blocked" })), /disputed|reconciliation/);
+  await assert.rejects(review(7000), /Explicitly confirm/);
+  const cancelled = await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-payout-cancel", { payoutId: (approved as { id: string }).id, reason: "Cancel disputed reservation for finance review" })) as { id: string; cancelledAt: Date; cancelledItems: unknown[] };
+  assert.ok(cancelled.cancelledAt); assert.equal(cancelled.cancelledItems.length, 3);
+  assert.equal(await prisma.acquisitionPayoutItem.count({ where: { payoutId: cancelled.id } }), 3);
+  await assert.rejects(prisma.acquisitionPayoutPayment.create({ data: { payoutId: cancelled.id, paymentReference: "must-not-pay-cancelled", recordedByEmployeeId: researcher.id } }), "The database prevents payment of a cancelled batch.");
+  await assert.rejects(prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-payout-record", { payoutId: cancelled.id, paymentReference: "must-not-pay", reason: "Cancelled batches cannot be paid" })), /unavailable/);
+  await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-evidence-review", { id: evidence!.id, applicableTaxesMinor: 1000, refundsChargebacksMinor: 7000, directPassThroughCostsMinor: 1000, providerFeeMinor: 0, taxEvidence: ["tax-invoice-fixture"], costEvidence: ["marketplace-settlement-fixture"], reason: "Ownership verified and dispute outcome recorded", resolveDispute: true }));
+  assert.notEqual((await prisma.referralCommission.findUniqueOrThrow({ where: { id: customerReward.id } })).status, "HELD");
+  approved = await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-payout-approve", { employeeId: researcher.id, commissionIds: commissions.filter(row => row.employeeId === researcher.id).map(row => row.id), reason: "Rebuild payout after resolved dispute" }));
   await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-payout-record", { payoutId: (approved as { id: string }).id, paymentReference: `utr-${suffix}`, reason: "Fixture transfer confirmation evidence" }));
   const ledgerAfterPay = await acquisitionRead(actor, "acquisition-ledger", new URLSearchParams()) as { items: { status: string; payoutReference?: string | null }[] };
   assert.equal(ledgerAfterPay.items.some(row => row.status === "PAID" && row.payoutReference === `utr-${suffix}`), true);
+  await assert.rejects(prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-payout-cancel", { payoutId: (approved as { id: string }).id, reason: "Paid batch cannot be cancelled" })), /Only an unpaid/);
+  await assert.rejects(prisma.acquisitionPayout.update({ where: { id: cancelled.id }, data: { amountMinor: 1 } }), "Cancelled payout records remain immutable.");
+  await assert.rejects(prisma.acquisitionPayoutCancellation.update({ where: { payoutId: cancelled.id }, data: { reason: "Must not rewrite cancellation history" } }), "Cancellation history remains immutable.");
+  await assert.rejects(prisma.acquisitionPayoutCancellation.create({ data: { payoutId: (approved as { id: string }).id, reason: "Must not cancel a paid batch", recordedByEmployeeId: researcher.id } }), "The database prevents cancellation of a paid batch.");
 
   const templates = await acquisitionRead(actor, "acquisition-email-templates", new URLSearchParams()) as { items: { id: string; slug: string }[] };
   assert.equal(templates.items.length >= 3, true);
@@ -177,6 +214,8 @@ async function main() {
   assert.equal(performance.performance.convertedCustomers, 2);
   assert.equal(performance.performance.repeatPurchases, 1);
   const previousSettings = await prisma.acquisitionProgramSettings.findUniqueOrThrow({ where: { workspaceId: workspace.id } });
+  await assert.rejects(prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-settings-save", { ...previousSettings, effectiveAt: previousSettings.effectiveAt.toISOString(), researcherRateBps: 400, acquisitionRateBps: 300, reason: "Reject employee rates above configured cap" })), /employee reward cap/);
+  await assert.rejects(prisma.acquisitionProgramSettings.update({ where: { workspaceId: workspace.id }, data: { researcherRateBps: 400, acquisitionRateBps: 300 } }), "The database enforces the employee-only cap independently of customer rewards.");
   await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-settings-save", { ...previousSettings, effectiveAt: previousSettings.effectiveAt.toISOString(), researcherRateBps: 100, acquisitionRateBps: 400, reason: "Fixture audited rate revision" }));
   assert.equal(await prisma.acquisitionProgramAudit.count({ where: { workspaceId: workspace.id, action: "programme.settings_changed" } }), 1);
   assert.equal((await prisma.referralCommission.findUniqueOrThrow({ where: { id: customerReward.id } })).rateBps, 200);
@@ -205,6 +244,21 @@ async function main() {
   assert.equal(ownershipHistory[0].previousEmployeeId, researcher.id);
   assert.equal(ownershipHistory[0].newEmployeeId, converter.id);
   assert.equal((await prisma.acquisitionCommission.findFirstOrThrow({ where: { leadId: lead.id, attributionRole: "RESEARCHER", entryType: "EARNED" } })).employeeId, researcher.id, "Audited ownership corrections preserve earlier earned employee attribution.");
+  const foreignWorkspace = await prisma.teamWorkspace.create({ data: { name: `Finance review ${suffix}` } });
+  await prisma.acquisitionRevenueEvidence.update({ where: { id: evidence!.id }, data: { workspaceId: foreignWorkspace.id } });
+  await recordVerifiedAcquisitionRevenue({ sourceType: "checkout_order", sourceId: String(order.id), customerId: customer.id, paymentId, currency: "INR", recognisedRevenueMinor: 10000 });
+  assert.equal((await prisma.acquisitionRevenueEvidence.findUniqueOrThrow({ where: { id: evidence!.id } })).workspaceId, foreignWorkspace.id, "Payment retries cannot move reviewed evidence to another workspace.");
+  await assert.rejects(review(7000), /not found/);
+  await prisma.acquisitionRevenueEvidence.update({ where: { id: evidence!.id }, data: { workspaceId: workspace.id } });
+  await prisma.acquisitionProgramSettings.update({ where: { workspaceId: workspace.id }, data: { enabled: false } });
+  const disabledRefund = await prisma.acquisitionRevenueEvidence.findUniqueOrThrow({ where: { paymentId: `pay_signed_1_${suffix}` } });
+  await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-evidence-review", { id: disabledRefund.id, applicableTaxesMinor: 1000, refundsChargebacksMinor: 1000, directPassThroughCostsMinor: 1000, providerFeeMinor: 0, taxEvidence: ["credit-note-fixture"], costEvidence: ["settlement-fixture"], adjustmentReference: "disabled-programme-refund", reason: "Refunds must adjust earlier earnings after programme termination" }));
+  assert.equal((await prisma.acquisitionCommission.aggregate({ where: { paymentId: disabledRefund.paymentId }, _sum: { amountMinor: true } }))._sum.amountMinor, 350);
+  const raceCommission = await prisma.acquisitionCommission.findFirstOrThrow({ where: { paymentId: `pay_signed_2_${suffix}`, employeeId: researcher.id, entryType: "EARNED" } });
+  const raceBatches = await Promise.all([1, 2].map(attempt => prisma.acquisitionPayout.create({ data: { workspaceId: workspace.id, employeeId: researcher.id, amountMinor: raceCommission.amountMinor, reason: `Concurrent reservation probe ${attempt}`, recordedByEmployeeId: researcher.id } })));
+  const reservations = await Promise.allSettled(raceBatches.map(batch => prisma.acquisitionPayoutItem.create({ data: { payoutId: batch.id, commissionId: raceCommission.id, amountMinor: raceCommission.amountMinor } })));
+  assert.equal(reservations.filter(result => result.status === "fulfilled").length, 1, "Concurrent database writers cannot reserve one commission in two active batches.");
+  for (const batch of raceBatches) await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-payout-cancel", { payoutId: batch.id, reason: "Close concurrent reservation fixture without payment" }));
   console.log("Acquisition attribution, revenue reconciliation, partial refund, payout and email persistence checks passed.");
 }
 

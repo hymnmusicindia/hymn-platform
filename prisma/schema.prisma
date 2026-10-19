@@ -3379,6 +3379,7 @@ model TeamMember {
   acquisitionCommissions AcquisitionCommission[]
   acquisitionPayouts AcquisitionPayout[]
   recordedAcquisitionPayouts AcquisitionPayout[] @relation("AcquisitionPayoutRecorder")
+  cancelledAcquisitionPayouts AcquisitionPayoutCancellation[]
   recordedAcquisitionPayoutPayments AcquisitionPayoutPayment[] @relation("AcquisitionPayoutPaymentRecorder")
   createdAcquisitionEmailTemplates AcquisitionEmailTemplate[] @relation("AcquisitionEmailTemplateCreator")
   updatedAcquisitionEmailTemplates AcquisitionEmailTemplate[] @relation("AcquisitionEmailTemplateUpdater")
@@ -3442,8 +3443,19 @@ model AcquisitionPayout {
   recordedBy TeamMember @relation("AcquisitionPayoutRecorder", fields: [recordedByEmployeeId], references: [id], onDelete: Restrict)
   items AcquisitionPayoutItem[]
   payment AcquisitionPayoutPayment?
+  cancellation AcquisitionPayoutCancellation?
   @@index([workspaceId, employeeId, approvedAt])
   @@map("acquisition_payouts")
+}
+
+model AcquisitionPayoutCancellation {
+  payoutId String @id @map("payout_id")
+  reason String
+  recordedByEmployeeId String @map("recorded_by_employee_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  payout AcquisitionPayout @relation(fields: [payoutId], references: [id], onDelete: Restrict)
+  recordedBy TeamMember @relation(fields: [recordedByEmployeeId], references: [id], onDelete: Restrict)
+  @@map("acquisition_payout_cancellations")
 }
 
 model AcquisitionPayoutPayment {
@@ -3459,11 +3471,12 @@ model AcquisitionPayoutPayment {
 
 model AcquisitionPayoutItem {
   payoutId String @map("payout_id")
-  commissionId String @unique @map("commission_id")
+  commissionId String @map("commission_id")
   amountMinor Int @map("amount_minor")
   payout AcquisitionPayout @relation(fields: [payoutId], references: [id], onDelete: Restrict)
   commission AcquisitionCommission @relation(fields: [commissionId], references: [id], onDelete: Restrict)
   @@id([payoutId, commissionId])
+  @@index([commissionId])
   @@map("acquisition_payout_items")
 }
 
