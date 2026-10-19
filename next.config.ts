@@ -5,6 +5,8 @@ const developmentCspScriptSources = process.env.NODE_ENV === "development" ? " '
 const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR?.trim() || ".next",
   experimental: {
+    // Shared build hosts can report more CPUs than their process limits allow.
+    cpus: 2,
     proxyClientMaxBodySize: "510mb"
   },
   images: {
