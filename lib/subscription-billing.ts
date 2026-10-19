@@ -8,6 +8,7 @@ import { qualifyRecurringReferral } from "@/lib/referral-reward-policy";
 import { qualifyPartnerPayment } from "@/lib/growth-partners";
 import { recordGrowthEvent } from "@/lib/growth";
 import { SubscriptionPlanConfigurationError, validateSubscriptionProviderPlan } from "@/lib/subscription-plan-validation";
+import { recordVerifiedAcquisitionRevenue } from "@/lib/acquisition-revenue";
 
 export const SUBSCRIPTION_PRODUCTS = ["half_yearly", "yearly", "yearly_plus"] as const;
 export type SubscriptionProduct = typeof SUBSCRIPTION_PRODUCTS[number];
@@ -202,6 +203,7 @@ export async function synchronizeProviderSubscription(entity: ProviderSubscripti
   if (payment?.id && payment.status === "captured") {
     try {
       const persisted = await prisma.subscriptionPayment.findUniqueOrThrow({ where: { razorpayPaymentId: payment.id } });
+      await recordVerifiedAcquisitionRevenue({ sourceType: "subscription_payment", sourceId: String(persisted.id), customerId: subscription.userId, paymentId: payment.id, currency: persisted.currency, recognisedRevenueMinor: persisted.amount });
       await qualifyRecurringReferral(persisted.id);
       await qualifyPartnerPayment(persisted.id);
       const earlier = await prisma.subscriptionPayment.count({ where: { subscriptionId: subscription.id, status: "captured", id: { lt: persisted.id } } });

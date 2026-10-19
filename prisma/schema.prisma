@@ -245,6 +245,9 @@ model User {
   studioAmendmentsProposed      StudioAmendment[]                   @relation("StudioAmendmentProposer")
   studioStatusEvents            StudioOrderStatusEvent[]            @relation("StudioStatusActor")
   studioReviews                 StudioReview[]                      @relation("StudioReviewAuthor")
+  acquisitionLeads              AcquisitionLead[]
+  acquisitionRevenueEvidence    AcquisitionRevenueEvidence[]
+  acquisitionCommissionsReceived AcquisitionCommission[]
 
   @@index([role])
   @@index([email])
@@ -3302,6 +3305,11 @@ model TeamWorkspace {
   audits TeamAudit[]
   clients TeamClient[]
   calendarEvents TeamCalendarEvent[]
+  acquisitionLeads AcquisitionLead[]
+  acquisitionSettings AcquisitionProgramSettings?
+  acquisitionEvidence AcquisitionRevenueEvidence[]
+  acquisitionEmailTemplates AcquisitionEmailTemplate[]
+  acquisitionEmailEvents AcquisitionEmailEvent[]
   @@map("team_workspaces")
 }
 
@@ -3346,9 +3354,210 @@ model TeamMember {
   clients TeamClient[]
   assignedEvents TeamCalendarEvent[] @relation("CalendarAssignee")
   createdEvents TeamCalendarEvent[] @relation("CalendarCreator")
+  researchedLeads AcquisitionLead[] @relation("LeadResearcher")
+  acquiredLeads AcquisitionLead[] @relation("LeadAcquisitionEmployee")
+  acquisitionCommissions AcquisitionCommission[]
+  acquisitionPayouts AcquisitionPayout[]
+  recordedAcquisitionPayouts AcquisitionPayout[] @relation("AcquisitionPayoutRecorder")
+  recordedAcquisitionPayoutPayments AcquisitionPayoutPayment[] @relation("AcquisitionPayoutPaymentRecorder")
+  createdAcquisitionEmailTemplates AcquisitionEmailTemplate[] @relation("AcquisitionEmailTemplateCreator")
+  updatedAcquisitionEmailTemplates AcquisitionEmailTemplate[] @relation("AcquisitionEmailTemplateUpdater")
+  acquisitionEmailEvents AcquisitionEmailEvent[]
+  leadOwnershipEvents LeadOwnershipEvent[] @relation("LeadOwnershipActor")
+  acquisitionClicks AcquisitionClick[]
+  reviewedRevenueEvidence AcquisitionRevenueEvidence[] @relation("RevenueEvidenceReviewer")
+  updatedAcquisitionSettings AcquisitionProgramSettings[] @relation("AcquisitionSettingsUpdater")
   @@unique([workspaceId, userId])
   @@index([userId, status])
   @@map("team_memberships")
+}
+
+model AcquisitionLead {
+  id String @id @default(cuid())
+  workspaceId String @map("workspace_id")
+  prospectId String @unique @map("prospect_id")
+  researcherEmployeeId String @map("researcher_employee_id")
+  acquisitionEmployeeId String? @map("acquisition_employee_id")
+  customerId Int? @map("customer_id")
+  registeredAt DateTime @default(now()) @map("registered_at")
+  convertedAt DateTime? @map("converted_at")
+  attributionLockedAt DateTime? @map("attribution_locked_at")
+  workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  prospect TeamProspect @relation(fields: [prospectId], references: [id], onDelete: Restrict)
+  researcher TeamMember @relation("LeadResearcher", fields: [researcherEmployeeId], references: [id], onDelete: Restrict)
+  acquisitionEmployee TeamMember? @relation("LeadAcquisitionEmployee", fields: [acquisitionEmployeeId], references: [id], onDelete: Restrict)
+  customer User? @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  commissions AcquisitionCommission[]
+  ownershipHistory LeadOwnershipEvent[] @relation("AcquisitionLeadOwnership")
+  clicks AcquisitionClick[]
+  @@index([workspaceId, registeredAt])
+  @@index([customerId])
+  @@index([researcherEmployeeId, registeredAt])
+  @@index([acquisitionEmployeeId, registeredAt])
+  @@map("acquisition_leads")
+}
+
+model AcquisitionClick {
+  id String @id @default(cuid())
+  leadId String @map("lead_id")
+  employeeId String @map("employee_id")
+  campaign String @default("employee_lead_link")
+  clickedAt DateTime @default(now()) @map("clicked_at")
+  lead AcquisitionLead @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  employee TeamMember @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  @@index([leadId, clickedAt])
+  @@map("acquisition_clicks")
+}
+
+model AcquisitionPayout {
+  id String @id @default(cuid())
+  workspaceId String @map("workspace_id")
+  employeeId String @map("employee_id")
+  currency String @default("INR")
+  amountMinor Int @map("amount_minor")
+  reason String
+  recordedByEmployeeId String @map("recorded_by_employee_id")
+  approvedAt DateTime @default(now()) @map("approved_at")
+  employee TeamMember @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  recordedBy TeamMember @relation("AcquisitionPayoutRecorder", fields: [recordedByEmployeeId], references: [id], onDelete: Restrict)
+  items AcquisitionPayoutItem[]
+  payment AcquisitionPayoutPayment?
+  @@index([workspaceId, employeeId, approvedAt])
+  @@map("acquisition_payouts")
+}
+
+model AcquisitionPayoutPayment {
+  id String @id @default(cuid())
+  payoutId String @unique @map("payout_id")
+  paymentReference String @map("payment_reference")
+  paidAt DateTime @default(now()) @map("paid_at")
+  recordedByEmployeeId String @map("recorded_by_employee_id")
+  payout AcquisitionPayout @relation(fields: [payoutId], references: [id], onDelete: Restrict)
+  recordedBy TeamMember @relation("AcquisitionPayoutPaymentRecorder", fields: [recordedByEmployeeId], references: [id], onDelete: Restrict)
+  @@map("acquisition_payout_payments")
+}
+
+model AcquisitionPayoutItem {
+  payoutId String @map("payout_id")
+  commissionId String @unique @map("commission_id")
+  amountMinor Int @map("amount_minor")
+  payout AcquisitionPayout @relation(fields: [payoutId], references: [id], onDelete: Restrict)
+  commission AcquisitionCommission @relation(fields: [commissionId], references: [id], onDelete: Restrict)
+  @@id([payoutId, commissionId])
+  @@map("acquisition_payout_items")
+}
+
+model LeadOwnershipEvent {
+  id String @id @default(cuid())
+  leadId String @map("lead_id")
+  actorEmployeeId String @map("actor_employee_id")
+  previousEmployeeId String? @map("previous_employee_id")
+  newEmployeeId String @map("new_employee_id")
+  attributionRole String @map("attribution_role")
+  reason String
+  createdAt DateTime @default(now()) @map("created_at")
+  lead AcquisitionLead @relation("AcquisitionLeadOwnership", fields: [leadId], references: [id], onDelete: Restrict)
+  actor TeamMember @relation("LeadOwnershipActor", fields: [actorEmployeeId], references: [id], onDelete: Restrict)
+  @@index([leadId, createdAt])
+  @@map("lead_ownership_events")
+}
+
+model AcquisitionCommission {
+  id String @id @default(cuid())
+  leadId String @map("lead_id")
+  sourceType String @map("source_type")
+  sourceId String @map("source_id")
+  paymentId String @map("payment_id")
+  customerId Int @map("customer_id")
+  entryType String @default("EARNED") @map("entry_type")
+  adjustmentReference String? @map("adjustment_reference")
+  employeeId String @map("employee_id")
+  attributionRole String @map("attribution_role")
+  eligibleNetRevenueMinor Int @map("eligible_net_revenue_minor")
+  rateBps Int @map("rate_bps")
+  amountMinor Int @map("amount_minor")
+  currency String
+  calculationBasis String @map("calculation_basis")
+  policyVersion Int @default(1) @map("policy_version")
+  calculatedAt DateTime @default(now()) @map("calculated_at")
+  eligibleAt DateTime @default(now()) @map("eligible_at")
+  paymentVerificationReference String @map("payment_verification_reference")
+  status String @default("APPROVED")
+  createdAt DateTime @default(now()) @map("created_at")
+  lead AcquisitionLead @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  customer User @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  employee TeamMember @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  payoutItems AcquisitionPayoutItem[]
+  @@unique([sourceType, sourceId, employeeId, attributionRole, entryType, adjustmentReference])
+  @@index([paymentId])
+  @@index([employeeId, status, createdAt])
+  @@index([leadId, createdAt])
+  @@map("acquisition_commissions")
+}
+
+model AcquisitionRevenueEvidence {
+  id String @id @default(cuid())
+  workspaceId String @map("workspace_id")
+  sourceType String @map("source_type")
+  sourceId String @map("source_id")
+  customerId Int @map("customer_id")
+  paymentId String @map("payment_id")
+  currency String @default("INR")
+  recognisedRevenueMinor Int @map("recognised_revenue_minor")
+  applicableTaxesMinor Int? @map("applicable_taxes_minor")
+  refundsChargebacksMinor Int? @map("refunds_chargebacks_minor")
+  directPassThroughCostsMinor Int? @map("direct_pass_through_costs_minor")
+  providerFeeMinor Int? @map("provider_fee_minor")
+  eligibleNetRevenueMinor Int? @map("eligible_net_revenue_minor")
+  status String @default("RECONCILIATION_REQUIRED")
+  paymentVerifiedAt DateTime @default(now()) @map("payment_verified_at")
+  costEvidence Json @default("[]") @map("cost_evidence")
+  taxEvidence Json @default("[]") @map("tax_evidence")
+  policyVersion Int @default(1) @map("policy_version")
+  reviewedByEmployeeId String? @map("reviewed_by_employee_id")
+  reviewedAt DateTime? @map("reviewed_at")
+  reviewReason String? @map("review_reason")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  customer User @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  reviewedBy TeamMember? @relation("RevenueEvidenceReviewer", fields: [reviewedByEmployeeId], references: [id], onDelete: Restrict)
+  @@unique([sourceType, sourceId])
+  @@unique([paymentId])
+  @@index([workspaceId, status, createdAt])
+  @@index([customerId, createdAt])
+  @@map("acquisition_revenue_evidence")
+}
+
+model AcquisitionProgramSettings {
+  workspaceId String @id @map("workspace_id")
+  researcherRateBps Int @default(200) @map("researcher_rate_bps")
+  acquisitionRateBps Int @default(300) @map("acquisition_rate_bps")
+  customerReferralRateBps Int @default(200) @map("customer_referral_rate_bps")
+  maximumRewardRateBps Int @default(700) @map("maximum_reward_rate_bps")
+  holdPeriodDays Int @default(14) @map("hold_period_days")
+  payoutMinimumMinor Int @default(50000) @map("payout_minimum_minor")
+  payoutSchedule String @default("MONTHLY") @map("payout_schedule")
+  attributionPolicy String @default("Original researcher attribution is locked at registration. Acquisition attribution is assigned and audited. Earned ledger entries are preserved after employee departure, customer closure, or programme termination; fraud and disputed ownership require an audited admin hold or correction.") @map("attribution_policy") @db.Text
+  revenuePolicy String @default("Paid amount less recorded refunds, taxes and third-party service costs; update cost inputs before this programme is active.") @map("revenue_policy")
+  enabled Boolean @default(false)
+  updatedByEmployeeId String? @map("updated_by_employee_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  updatedBy TeamMember? @relation("AcquisitionSettingsUpdater", fields: [updatedByEmployeeId], references: [id], onDelete: Restrict)
+  @@map("acquisition_program_settings")
+}
+
+model AcquisitionProgramAudit {
+  id String @id @default(cuid())
+  workspaceId String @map("workspace_id")
+  actorEmployeeId String @map("actor_employee_id")
+  action String
+  entityId String @map("entity_id")
+  metadata Json @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([workspaceId, createdAt])
+  @@map("acquisition_program_audit")
 }
 
 model TeamInvitation {
@@ -3498,13 +3707,24 @@ model TeamAudit {
 
 model TeamProspect {
   leadId Int? @unique
+  acquisitionLead AcquisitionLead?
   lead GrowthLead? @relation(fields: [leadId], references: [id], onDelete: Restrict)
   id String @id @default(cuid())
   workspaceId String
   ownerId String
   name String
+  contactName String? @map("contact_name")
   email String?
+  phone String @default("")
   contactUrl String?
+  instagramUrl String? @map("instagram_url")
+  youtubeUrl String? @map("youtube_url")
+  websiteUrl String? @map("website_url")
+  country String @default("")
+  city String @default("")
+  leadCategory String @default("Artist") @map("lead_category")
+  discoveredAt DateTime @default(now()) @map("discovered_at")
+  contactEligibility String @default("UNVERIFIED") @map("contact_eligibility")
   sourceUrl String
   evidence String
   buyingSignal String @default("")
@@ -3523,9 +3743,56 @@ model TeamProspect {
   workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   owner TeamMember @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   outreach TeamOutreach[]
+  acquisitionEmails AcquisitionEmailEvent[]
   @@unique([workspaceId, identityKey])
   @@index([ownerId, stage, followUpAt])
   @@map("team_prospects")
+}
+
+model AcquisitionEmailTemplate {
+  id String @id @default(cuid())
+  workspaceId String @map("workspace_id")
+  slug String
+  name String
+  subject String
+  body String @db.Text
+  category String @default("Other")
+  status String @default("DRAFT")
+  createdByEmployeeId String @map("created_by_employee_id")
+  updatedByEmployeeId String @map("updated_by_employee_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  createdBy TeamMember @relation("AcquisitionEmailTemplateCreator", fields: [createdByEmployeeId], references: [id], onDelete: Restrict)
+  updatedBy TeamMember @relation("AcquisitionEmailTemplateUpdater", fields: [updatedByEmployeeId], references: [id], onDelete: Restrict)
+  events AcquisitionEmailEvent[]
+  @@unique([workspaceId, slug])
+  @@index([workspaceId, status, category])
+  @@map("acquisition_email_templates")
+}
+
+model AcquisitionEmailEvent {
+  id String @id @default(cuid())
+  workspaceId String @map("workspace_id")
+  prospectId String @map("prospect_id")
+  templateId String? @map("template_id")
+  createdByEmployeeId String @map("created_by_employee_id")
+  recipientEmail String @map("recipient_email")
+  subject String
+  body String @db.Text
+  status String @default("DRAFT")
+  eventKey String @unique @map("event_key")
+  providerMessageId String? @map("provider_message_id")
+  providerError String? @map("provider_error")
+  createdAt DateTime @default(now()) @map("created_at")
+  sentAt DateTime? @map("sent_at")
+  workspace TeamWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  prospect TeamProspect @relation(fields: [prospectId], references: [id], onDelete: Restrict)
+  template AcquisitionEmailTemplate? @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  createdBy TeamMember @relation(fields: [createdByEmployeeId], references: [id], onDelete: Restrict)
+  @@index([workspaceId, status, createdAt])
+  @@index([prospectId, recipientEmail, createdAt])
+  @@map("acquisition_email_events")
 }
 
 model TeamOutreach {

@@ -11,6 +11,7 @@ import { userSignupSchema } from "@/lib/validation";
 import { cookies } from "next/headers";
 import { REFERRAL_ATTRIBUTION_COOKIE } from "@/lib/referrals";
 import { ensureAccountClientCard } from "@/lib/team/client-cards";
+import { ACQUISITION_ATTRIBUTION_COOKIE } from "@/lib/acquisition-revenue";
 
 export async function POST(request: Request) {
   const startedAt = new Date();
@@ -23,7 +24,8 @@ export async function POST(request: Request) {
       email: payload.email,
       passwordHash,
       role: payload.role,
-      referralCode: payload.referralCode || cookieStore.get(REFERRAL_ATTRIBUTION_COOKIE)?.value
+      referralCode: payload.referralCode || cookieStore.get(REFERRAL_ATTRIBUTION_COOKIE)?.value,
+      acquisitionToken: cookieStore.get(ACQUISITION_ATTRIBUTION_COOKIE)?.value
     });
 
     if (!user) {
@@ -33,6 +35,7 @@ export async function POST(request: Request) {
     await createSession({ sub: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: profileAvatarDataUrl(user.name, user.role) });
     await ensureAccountClientCard(user.id).catch(error => console.error("Client card account sync failed", { userId: user.id, error }));
     cookieStore.delete(REFERRAL_ATTRIBUTION_COOKIE);
+    cookieStore.delete(ACQUISITION_ATTRIBUTION_COOKIE);
     after(() => deliverReferralMail().then(() => undefined));
     const referralWelcome = await referralWelcomeForSignup(user.id, startedAt).catch(() => null);
     return NextResponse.json({ user, redirectPath: destinationAfterLogin(user.role), referralWelcome }, { status: 201 });

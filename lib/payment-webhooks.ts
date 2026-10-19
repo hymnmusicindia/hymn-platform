@@ -8,6 +8,7 @@ import { qualifyReferralInTransaction, reverseReferralForTransactionInTransactio
 import { synchronizeProviderSubscription, synchronizeSubscriptionPayment } from "@/lib/subscription-billing";
 import { normalizeBeatLicenseType } from "@/lib/beat-store";
 import { confirmStudioPayment } from "@/lib/studio-services";
+import { checkoutRetainedRevenueMinor, flagAcquisitionRevenueAdjustment, recordVerifiedAcquisitionRevenue, studioRetainedRevenueMinor } from "@/lib/acquisition-revenue";
 import { applyStudioDispute, recordStudioRefund } from "@/lib/studio-refunds";
 import { syncSettlement } from "@/lib/gateway-settlements";
 import { refreshRouteSettlement, refreshRouteTransfer } from "@/lib/razorpay-route";
@@ -98,6 +99,7 @@ export async function processRazorpayEvent(eventId: number) {
     }
     if (event.eventType in nonFulfilmentStates) {
       if (resolvedOrderId) await applyPaymentState({ razorpayOrderId: resolvedOrderId, paymentId: event.paymentId, state: nonFulfilmentStates[event.eventType], eventId: event.id, amountMinor: event.amountMinor });
+      if (event.paymentId && ["refund.created", "refund.processed", "payment.dispute.created", "payment.dispute.won", "payment.dispute.lost"].includes(event.eventType)) await flagAcquisitionRevenueAdjustment(event.paymentId, String(event.id));
       await prisma.$transaction(async tx => {
         if (event.paymentId) await refreshReferralCommission(tx, event.paymentId);
         await reviewSubscriptionReferralPayment(tx, event);
@@ -146,6 +148,7 @@ export async function confirmDistributionPayment(input: { razorpayOrderId: strin
     const qualification = !alreadyPaid ? await qualifyReferralInTransaction(tx, { referredUserId: order.userId, transactionType: "distribution_order", transactionId: order.id, paymentId: input.paymentId, paidAmountInr: order.amount, source: input.source }) : { qualified: false as const, reason: "already_paid" as const };
     return { updated, qualification };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 20000 });
+  await recordVerifiedAcquisitionRevenue({ sourceType: "distribution_order", sourceId: String(result.updated.id), customerId: result.updated.userId, paymentId: input.paymentId, currency: result.updated.currency, recognisedRevenueMinor: result.updated.amount * 100 });
   if (result.qualification.qualified) await sendReferralRewardEmails(result.qualification.referralId).catch(() => undefined);
   return result.updated;
 }
@@ -182,6 +185,8 @@ export async function confirmCheckoutPayment(input: { razorpayOrderId: string; p
   validateObservedPayment({ amountMinor: Number(persisted.finalAmount.mul(100)), currency: persisted.currency }, input);
   const order = await completeCheckoutOrder(input.razorpayOrderId, input.paymentId);
   if (!order) throw new Error("Checkout fulfilment did not return an order.");
+  const beatRevenue = await prisma.beatSale.aggregate({ where: { orderId: order.id, status: "paid" }, _sum: { hymnCommissionAmount: true } });
+  await recordVerifiedAcquisitionRevenue({ sourceType: "checkout_order", sourceId: String(order.id), customerId: order.userId, paymentId: input.paymentId, currency: persisted.currency, recognisedRevenueMinor: checkoutRetainedRevenueMinor(Number(beatRevenue._sum.hymnCommissionAmount || 0)) });
   if (persisted.paymentStatus !== "paid") await prisma.auditLog.create({ data: { actorId: input.userId ?? null, action: "CHECKOUT_PAYMENT_CONFIRMED", entity: "checkout_order", entityId: String(order.id), metadata: { source: input.source, paymentId: input.paymentId } } });
   const purchases = await prisma.beatPurchase.findMany({ where: { userId: order.userId, paymentId: input.paymentId, hasAccess: true }, include: { user: true, beat: true } });
   if (purchases.length) {
@@ -213,7 +218,15 @@ export async function confirmPersistedPayment(input: { razorpayOrderId: string; 
   if ([distribution, checkout, studio].filter(Boolean).length > 1) throw new Error("Ambiguous persisted Razorpay order identifier.");
   if (distribution) return { kind: "distribution" as const, order: await confirmDistributionPayment(input) };
   if (checkout) return { kind: "checkout" as const, order: await confirmCheckoutPayment(input) };
-  if (studio) return { kind: "studio" as const, order: await confirmStudioPayment({ razorpayOrderId: input.razorpayOrderId, paymentId: input.paymentId, customerId: input.userId, amountMinor: input.amountMinor, currency: input.currency, source: "webhook" }) };
+  if (studio) {
+    const order = await confirmStudioPayment({ razorpayOrderId: input.razorpayOrderId, paymentId: input.paymentId, customerId: input.userId, amountMinor: input.amountMinor, currency: input.currency, source: "webhook" });
+    const payment = await prisma.studioPayment.findUnique({ where: { razorpayOrderId: input.razorpayOrderId }, select: { id: true, status: true, razorpayPaymentId: true, currency: true, amount: true, order: { select: { customerId: true, commissionRate: true } } } });
+    if (payment?.status === "CAPTURED" && payment.razorpayPaymentId === input.paymentId) {
+      const retained = studioRetainedRevenueMinor(Math.round(Number(payment.amount) * 100), Number(payment.order.commissionRate));
+      await recordVerifiedAcquisitionRevenue({ sourceType: "studio_payment", sourceId: String(payment.id), customerId: payment.order.customerId, paymentId: input.paymentId, currency: payment.currency, recognisedRevenueMinor: retained });
+    }
+    return { kind: "studio" as const, order };
+  }
   throw new Error("Persisted HYMN order was not found.");
 }
 

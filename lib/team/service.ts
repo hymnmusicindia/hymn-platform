@@ -51,6 +51,7 @@ async function dependencies(tx: Tx, a: Actor, id: string, ids: string[]) {
 
 export async function teamMutation(identity: Actor, resource: string, input: unknown) {
   return teamWrite(identity, async (tx, a) => {
+    if (resource.startsWith("acquisition-")) return (await import("./acquisition")).acquisitionMutation(tx, a, resource, (input && typeof input === "object" ? input : {}) as Record<string, unknown>);
     if (["clients-save", "calendar-save", "calendar-task", "calendar-handoff", "calendar-delete"].includes(resource)) return (await import("./calendar")).calendarMutation(tx, a, resource, input);
     const object = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
     const id = typeof object.id === "string" ? object.id : "";
@@ -167,24 +168,56 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
       if (data.ownerId !== a.id) demand(a, "crm.prospects.assign"); await eligible(tx, a, [data.ownerId]);
       // Existing inbound enquiries remain authoritative. Never create a second
       // prospect/contact copy for a person already in that pipeline.
-      if (data.email && await tx.growthLead.findFirst({ where: { email: { equals: data.email, mode: "insensitive" } }, select: { id: true } })) throw new TeamError("This contact already exists in HYMN enquiries. Use its existing lead record; inbound-lead assignment integration is not yet enabled in Team OS.", 409);
+      if (data.email && await tx.growthLead.findFirst({ where: { email: { equals: data.email, mode: "insensitive" } }, select: { id: true } })) throw new TeamError("This contact already exists in HYMN enquiries. Do not claim an existing customer through a new acquisition lead.", 409);
+      if (data.email) {
+        const existing = await tx.user.findFirst({ where: { email: { equals: data.email, mode: "insensitive" } }, select: { id: true } });
+        if (existing) throw new TeamError("An account with this email already exists. Existing customers cannot be claimed as new leads.", 409);
+      }
+      if (data.phone) {
+        const phoneKey = data.phone.replace(/\D/g, "");
+        if (phoneKey.length >= 7 && (await tx.$queryRaw<{ id: number }[]>`SELECT id FROM users WHERE status = 'ACTIVE' AND regexp_replace(COALESCE(mobile, ''), '[^0-9]', '', 'g') = ${phoneKey} LIMIT 1`).length) throw new TeamError("A HYMN account already uses this phone number. Do not register it as a new lead.", 409);
+        if (phoneKey.length >= 7 && (await tx.teamProspect.findMany({ where: { workspaceId: a.workspaceId, phone: { not: "" } }, select: { phone: true } })).some(p => p.phone.replace(/\D/g, "") === phoneKey)) throw new TeamError("A lead with this phone number already exists.", 409);
+      }
       if (await tx.teamProspect.findUnique({ where: { workspaceId_identityKey: { workspaceId: a.workspaceId, identityKey: hash(data.email?.toLowerCase() || data.contactUrl!) } }, select: { id: true } })) throw new TeamError("This prospect already exists.", 409);
       const lead = await tx.growthLead.create({ data: { kind: "acquisition", name: data.name, email: data.email || "", interest: data.categories.join(", "), message: data.evidence, notes: data.notes } });
-      const row = await tx.teamProspect.create({ data: { ...data, leadId: lead.id, workspaceId: a.workspaceId, identityKey: hash(data.email?.toLowerCase() || data.contactUrl!) } }); await audit(tx, a, "prospect.created", row.id, { leadId: lead.id }); return row;
+      const row = await tx.teamProspect.create({ data: { ...data, discoveredAt: data.discoveredAt ? new Date(data.discoveredAt) : new Date(), contactEligibility: data.contactEligibility === "DO_NOT_CONTACT" ? "DO_NOT_CONTACT" : data.contactEligibility, suppressed: data.contactEligibility === "DO_NOT_CONTACT", verified: data.verified && data.contactEligibility !== "UNVERIFIED", leadId: lead.id, workspaceId: a.workspaceId, identityKey: hash(data.email?.toLowerCase() || data.phone.replace(/\D/g, "") || data.contactUrl || data.instagramUrl || data.youtubeUrl || data.websiteUrl!) } });
+      const attribution = await tx.acquisitionLead.create({ data: { workspaceId: a.workspaceId, prospectId: row.id, researcherEmployeeId: a.id, attributionLockedAt: new Date(), ownershipHistory: { create: { actorEmployeeId: a.id, newEmployeeId: a.id, attributionRole: "RESEARCHER", reason: "Original verified lead registration." } } } });
+      await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: "lead.registered", entityId: attribution.id, metadata: { researcherEmployeeId: a.id, sourceUrl: data.sourceUrl } } });
+      await audit(tx, a, "prospect.created", row.id, { leadId: lead.id, acquisitionLeadId: attribution.id }); return row;
     }
     if (resource === "prospect-update") {
       demand(a, "crm.prospects.view"); demand(a, "crm.outreach.manage"); const data = prospectUpdateSchema.parse(input);
+      if (!a.role.owner && !can(a, "acquisition.admin") && data.ownerId && data.ownerId !== (await tx.teamProspect.findFirst({ where: { ...prospectScope(a), id }, select: { ownerId: true } }))?.ownerId) throw new TeamError("Lead reassignment requires an authorised admin override with a reason.", 403);
       const old = await tx.teamProspect.findFirst({ where: { ...prospectScope(a), id } }); if (!old) throw new TeamError("Prospect unavailable.", 404);
       if (old.version !== data.version) throw new TeamError("Prospect changed. Refresh first.", 409);
       if (data.ownerId && data.ownerId !== old.ownerId) { demand(a, "crm.prospects.assign"); await eligible(tx, a, [data.ownerId]); }
+      if (data.ownerId && data.ownerId !== old.ownerId && (!data.reason || data.reason.trim().length < 8)) throw new TeamError("Reassignment requires a reason.");
       if (old.suppressed && (data.suppressed === false || (data.stage && data.stage !== "DO_NOT_CONTACT"))) throw new TeamError("Suppressed prospects cannot be reactivated here.", 403);
       if (data.stage === "CONTACTED" && !await tx.teamOutreach.count({ where: { prospectId: id, kind: "CONTACT" } })) throw new TeamError("Record an actual contact event, not a draft.");
       if (data.stage === "CONVERTED") {
         if (!data.customerUserId || !await tx.user.findUnique({ where: { id: data.customerUserId }, select: { id: true } })) throw new TeamError("Conversion must link an existing HYMN customer.");
+        const registeredAttribution = await tx.acquisitionLead.findUnique({ where: { prospectId: id } });
+        if (!registeredAttribution?.acquisitionEmployeeId) throw new TeamError("Assign the acquisition employee before converting this lead.", 409);
+        if (registeredAttribution.customerId && registeredAttribution.customerId !== data.customerUserId && (!can(a, "acquisition.admin") || !data.reason || data.reason.trim().length < 8)) throw new TeamError("Changing a linked customer requires an admin override reason.", 403);
+        if (data.customerUserId) {
+          const existingAttribution = await tx.acquisitionLead.findFirst({ where: { customerId: data.customerUserId, prospectId: { not: id } }, select: { id: true } });
+          if (existingAttribution) throw new TeamError("This customer already has acquisition attribution. An admin override with a reason is required.", 409);
+        }
       } else if (data.customerUserId) throw new TeamError("Link the customer when recording conversion.");
-      const row = await tx.teamProspect.update({ where: { id }, data: { ...data, stage: data.suppressed || data.stage === "DO_NOT_CONTACT" ? "DO_NOT_CONTACT" : data.stage, suppressed: data.suppressed || data.stage === "DO_NOT_CONTACT" ? true : undefined, followUpAt: data.followUpAt === undefined ? undefined : data.followUpAt ? new Date(data.followUpAt) : null, version: { increment: 1 } } });
+      const { reason: _reason, ...updateData } = data;
+      const row = await tx.teamProspect.update({ where: { id }, data: { ...updateData, stage: data.suppressed || data.stage === "DO_NOT_CONTACT" ? "DO_NOT_CONTACT" : data.stage, suppressed: data.suppressed || data.stage === "DO_NOT_CONTACT" ? true : undefined, followUpAt: data.followUpAt === undefined ? undefined : data.followUpAt ? new Date(data.followUpAt) : null, version: { increment: 1 } } });
       if (row.leadId) await tx.growthLead.update({ where: { id: row.leadId }, data: { status: row.stage.toLowerCase(), notes: data.notes, userId: data.customerUserId } });
+      const attribution = await tx.acquisitionLead.findUnique({ where: { prospectId: id } });
+      if (attribution && row.stage === "CONVERTED" && data.customerUserId) {
+        await tx.acquisitionLead.update({ where: { id: attribution.id }, data: { customerId: data.customerUserId, convertedAt: new Date() } });
+        await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: attribution.customerId ? "lead.customer_attribution_overridden" : "lead.customer_attributed", entityId: attribution.id, metadata: { previousCustomerId: attribution.customerId, customerId: data.customerUserId, acquisitionEmployeeId: attribution.acquisitionEmployeeId, ...(attribution.customerId ? { reason: data.reason } : {}) } } });
+      }
       if (row.ownerId !== old.ownerId) {
+        const attribution = await tx.acquisitionLead.findUnique({ where: { prospectId: id } });
+        if (attribution) {
+          await tx.leadOwnershipEvent.create({ data: { leadId: attribution.id, actorEmployeeId: a.id, previousEmployeeId: old.ownerId, newEmployeeId: row.ownerId, attributionRole: "LEAD_OWNER", reason: data.reason!.trim() } });
+          await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: "lead.owner_reassigned", entityId: attribution.id, metadata: { previousEmployeeId: old.ownerId, newEmployeeId: row.ownerId, reason: data.reason!.trim() } } });
+        }
         await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: `${id}:` }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, data: { ownerId: row.ownerId, version: { increment: 1 } } });
         await notify(tx, row.ownerId, `Prospect assigned: ${row.name}`, "/team?module=crm");
       }
@@ -243,6 +276,7 @@ export async function acceptTeamInvitation(user: { id: number; email: string }, 
 }
 
 export async function teamRead(a: Actor, resource: string, params: URLSearchParams) {
+  if (resource.startsWith("acquisition-")) return (await import("./acquisition")).acquisitionRead(a, resource, params);
   if (["clients", "calendar", "client-account-match"].includes(resource)) return (await import("./calendar")).calendarRead(a, resource, params);
   const offset = Math.max(0, Math.min(100000, Number(params.get("offset")) || 0));
   const page = { take: 50, skip: offset };
@@ -273,7 +307,7 @@ export async function teamRead(a: Actor, resource: string, params: URLSearchPara
     return { items: items.reverse(), readers };
   }
   if (resource === "notifications") return { items: await prisma.teamNotification.findMany({ where: { memberId: a.id }, ...page, orderBy: { createdAt: "desc" } }) };
-  if (resource === "prospects") { demand(a, "crm.prospects.view"); const items = await prisma.teamProspect.findMany({ where: prospectScope(a), ...page, orderBy: { updatedAt: "desc" }, include: { lead: true, owner: { select: memberSelect } } }); return { items: items.map(({ lead, ...p }) => ({ ...p, name: lead?.name ?? p.name, email: lead?.email || p.email, notes: lead?.notes ?? p.notes, stage: lead ? lead.status === "closed" ? "LOST" : lead.status.toUpperCase() : p.stage, customerUserId: lead?.userId ?? p.customerUserId })) }; }
+  if (resource === "prospects") { demand(a, "crm.prospects.view"); const items = await prisma.teamProspect.findMany({ where: prospectScope(a), ...page, orderBy: { discoveredAt: "desc" }, include: { lead: true, owner: { select: memberSelect }, acquisitionLead: { include: { researcher: { select: { id: true, user: { select: { name: true } } } }, acquisitionEmployee: { select: { id: true, user: { select: { name: true } } } } } } } }); return { items: items.map(({ lead, ...p }) => ({ ...p, researcherName: p.acquisitionLead?.researcher.user.name || p.owner.user.name, acquisitionEmployeeName: p.acquisitionLead?.acquisitionEmployee?.user.name || null, name: lead?.name ?? p.name, email: lead?.email || p.email, notes: lead?.notes ?? p.notes, stage: lead ? lead.status === "closed" ? "LOST" : lead.status.toUpperCase() : p.stage, customerUserId: lead?.userId ?? p.customerUserId })) }; }
   if (resource === "outreach") { demand(a, "crm.prospects.view"); return { items: await prisma.teamOutreach.findMany({ where: { prospect: prospectScope(a), ...(params.get("id") ? { prospectId: params.get("id")! } : {}) }, ...page, orderBy: { occurredAt: "desc" } }) }; }
   if (resource === "reports") { demand(a, "reports.team.view"); return { items: await prisma.teamWeeklyReport.findMany({ where: can(a, "reports.all.view") ? { member: { workspaceId: a.workspaceId } } : { memberId: a.id }, ...page, orderBy: { weekStart: "desc" }, include: { member: { select: memberSelect } } }) }; }
   if (resource === "audit") { demand(a, "audit.view"); return { items: await prisma.teamAudit.findMany({ where: { workspaceId: a.workspaceId }, ...page, orderBy: { createdAt: "desc" } }) }; }

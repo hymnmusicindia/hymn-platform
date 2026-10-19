@@ -33,6 +33,10 @@ export async function POST(request: Request, context: Context) {
     const limit = await consumeRateLimit({ scope: "team-write", identity: String(user.id), limit: 90, windowSeconds: 60 });
     if (!limit.allowed) throw new TeamError("Too many changes. Try again shortly.", 429);
     const { resource } = await context.params;
+    if (resource === "acquisition-email-queue") {
+      const emailLimit = await consumeRateLimit({ scope: "team-acquisition-email", identity: String(user.id), limit: 5, windowSeconds: 3600 });
+      if (!emailLimit.allowed) throw new TeamError("Email outreach is limited to 5 individual messages per hour.", 429);
+    }
     const result = resource === "accept" ? await acceptTeamInvitation(user, typeof (body as { token?: unknown })?.token === "string" ? (body as { token: string }).token : "") : await teamMutation(await teamActor(new URL(request.url).searchParams.get("workspace") || undefined), resource, body);
     if (resource === "clients-save" && result && typeof result === "object" && "id" in result) {
       const clientId = String(result.id);
@@ -41,6 +45,10 @@ export async function POST(request: Request, context: Context) {
     if (["calendar-save", "calendar-handoff"].includes(resource) && result && typeof result === "object" && "id" in result) {
       const eventId = String(result.id);
       after(async () => { const { processAppointments } = await import("@/lib/team/appointments"); await processAppointments(eventId, 4); });
+    }
+    if (resource === "acquisition-email-queue" && result && typeof result === "object" && "id" in result) {
+      const eventId = String(result.id);
+      after(async () => { const { processAcquisitionEmailEvent } = await import("@/lib/team/acquisition-email"); await processAcquisitionEmailEvent(eventId); });
     }
     return NextResponse.json(result, { headers });
   } catch (error) { return failure(error); }

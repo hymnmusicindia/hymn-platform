@@ -7,6 +7,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { persistCheckoutOrder } from "@/lib/checkout-order-persistence";
 import { ensureClaimedContributorParty } from "@/lib/contributor-identity";
+import { attachNewCustomerToAcquisitionLead } from "@/lib/acquisition-revenue";
 import {
   AdminNote,
   AnalyticsSummary,
@@ -414,6 +415,7 @@ export async function createPasswordUser(input: {
   passwordHash: string;
   role: AuthAccountRole;
   referralCode?: string;
+  acquisitionToken?: string;
 }) {
   if (usesPostgresPrisma()) {
     const normalizedEmail = input.email.trim().toLowerCase();
@@ -427,6 +429,7 @@ export async function createPasswordUser(input: {
         passwordHash: input.passwordHash, role: toPrismaRole(input.role), referralCode: permanentReferralCode
       } });
       await registerReferralForNewUser(tx, { referredUserId: user.id, referredEmail: user.email, referralCode: input.referralCode });
+      await attachNewCustomerToAcquisitionLead(tx, { token: input.acquisitionToken, customerId: user.id, email: user.email });
       return mapPrismaUser(user);
     }, REFERRAL_SIGNUP_TRANSACTION_OPTIONS);
   }
@@ -1159,7 +1162,7 @@ export async function updateUserRole(userId: number, role: UserRole) {
   return findUserById(userId);
 }
 
-export async function upsertGoogleUser(input: Pick<User, "name" | "email" | "googleId"> & { avatarUrl?: string | null; referralCode?: string; expectedRole?: AuthAccountRole }) {
+export async function upsertGoogleUser(input: Pick<User, "name" | "email" | "googleId"> & { avatarUrl?: string | null; referralCode?: string; acquisitionToken?: string; expectedRole?: AuthAccountRole }) {
   if (usesPostgresPrisma()) {
     return prisma.$transaction(async tx => {
       const normalizedEmail = input.email.trim().toLowerCase();
@@ -1170,7 +1173,7 @@ export async function upsertGoogleUser(input: Pick<User, "name" | "email" | "goo
       const user = existing
         ? await tx.user.update({ where: { id: existing.id }, data: { googleId: input.googleId, name: input.name.trim(), email: normalizedEmail, avatar: input.avatarUrl || existing.avatar, role: toPrismaRole(role) } })
         : await tx.user.create({ data: { googleId: input.googleId, name: input.name.trim(), email: normalizedEmail, avatar: input.avatarUrl || null, role: toPrismaRole(role), referralCode: permanentReferralCode } });
-      if (!existing) await registerReferralForNewUser(tx, { referredUserId: user.id, referredEmail: user.email, referralCode: input.referralCode });
+      if (!existing) { await registerReferralForNewUser(tx, { referredUserId: user.id, referredEmail: user.email, referralCode: input.referralCode }); await attachNewCustomerToAcquisitionLead(tx, { token: input.acquisitionToken, customerId: user.id, email: user.email }); }
       await tx.auditLog.create({ data: { actorId: user.id, action: existing ? "LOGIN" : "USER_CREATED_WITH_GOOGLE", entity: "users", entityId: String(user.id), metadata: { authenticationProvider: "google" } } });
       return mapPrismaUser(user);
     }, REFERRAL_SIGNUP_TRANSACTION_OPTIONS);
