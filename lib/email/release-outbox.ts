@@ -5,8 +5,8 @@ import { releaseStatusEmail, type ReleaseEmailData } from "./templates/release-s
 import { getPublicAppUrl } from "@/lib/public-app-url";
 const object = (value: unknown): Record<string, any> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
 
-export async function enqueueRenderedEmail(db: any, input: { eventKey: string; template: string; to: string; userId: number; releaseId: number; subject: string; html: string; text: string; expectedStatus: string; draftEditedAt?: string }) {
-  const data = { toEmail: input.to, userId: input.userId, template: input.template, entityType: "release", entityId: String(input.releaseId), subject: input.subject, provider: "smtp", payload: { channel: "release_outbox", html: input.html, text: input.text, expectedStatus: input.expectedStatus, draftEditedAt: input.draftEditedAt ?? null } };
+export async function enqueueRenderedEmail(db: any, input: { eventKey: string; template: string; to: string; userId: number; releaseId: number; subject: string; html: string; text: string; expectedStatus: string; draftEditedAt?: string; providerApproved?: boolean }) {
+  const data = { toEmail: input.to, userId: input.userId, template: input.template, entityType: "release", entityId: String(input.releaseId), subject: input.subject, provider: "smtp", payload: { channel: "release_outbox", html: input.html, text: input.text, expectedStatus: input.expectedStatus, draftEditedAt: input.draftEditedAt ?? null, providerApproved: input.providerApproved === true } };
   const log = await db.emailLog.upsert({ where: { eventKey: input.eventKey }, create: { ...data, eventKey: input.eventKey, status: "pending" }, update: {} });
   // Skipped means SMTP was never attempted. Sent/uncertain outcomes are never reset.
   if (log.status === "skipped") await db.emailLog.updateMany({ where: { id: log.id, status: "skipped" }, data: { ...data, status: "pending", errorMessage: null } });
@@ -14,7 +14,7 @@ export async function enqueueRenderedEmail(db: any, input: { eventKey: string; t
 }
 
 export async function enqueueReleaseEmail(db: any, event: string, input: { to: string; userId: number; correctionEventKey?: string; statusEventKey?: string } & ReleaseEmailData) {
-  return enqueueRenderedEmail(db, { ...releaseStatusEmail(event, input), to: input.to, userId: input.userId, releaseId: Number(input.releaseId), template: event, expectedStatus: input.releaseStatus.toUpperCase(), eventKey: `release:${input.releaseId}:${event}${input.correctionEventKey ? `:${input.correctionEventKey}` : input.statusEventKey ? `:${input.statusEventKey}` : ""}:email` });
+  return enqueueRenderedEmail(db, { ...releaseStatusEmail(event, input), to: input.to, userId: input.userId, releaseId: Number(input.releaseId), template: event, expectedStatus: input.releaseStatus.toUpperCase(), providerApproved: input.providerApproved, eventKey: `release:${input.releaseId}:${event}${input.correctionEventKey ? `:${input.correctionEventKey}` : input.statusEventKey ? `:${input.statusEventKey}` : ""}:email` });
 }
 
 /** Called inside the status transaction: SMTP is never part of that transaction. */

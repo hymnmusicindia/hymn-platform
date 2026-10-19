@@ -39,6 +39,11 @@ async function main() {
   assert.equal((await deliverReleaseOutbox([release.id], 5, send)).sent, 1);
   assert.equal((await deliverReleaseOutbox([release.id], 5, send)).sent, 0);
   assert.equal(deliveries, 1);
+  const scheduled = await create("Approved schedule");
+  await prisma.release.update({ where: { id: scheduled.id }, data: { status: "SCHEDULED", direNoteStatus: "scheduled", metadata: { releaseTiming: "schedule_release" } } });
+  const scheduledLogId = await queueReleaseStatusUpdate(prisma, scheduled.id, "scheduled");
+  assert.ok(scheduledLogId);
+  assert.equal((await deliverReleaseOutbox([scheduled.id], 5, async () => ({ data: { id: "scheduled-proof" }, error: null }))).sent, 1, "An approved scheduled notice must retain its approval evidence and actually send.");
   const draft = await create("Draft song", 7), untitled = await create("Untitled single"), paid = await create("Untitled release", 7, "paid");
   await runDraftLifecycle({ apply: true });
   assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: untitled.id } })).status, "ARCHIVED");
