@@ -5,7 +5,7 @@ type Benefits = { checkoutCredit: number; active: boolean; subscriptionVersion: 
 export function AdminUserBenefits({ user, onCreditChange, canManageSubscription = true, canAdjustCredit = true, onChanged }: { user: User; onCreditChange: (balance: number) => void; canManageSubscription?: boolean; canAdjustCredit?: boolean; onChanged?: () => void }) {
   const [benefits, setBenefits] = useState<Benefits | null>(null);
   const [plan, setPlan] = useState("half_yearly");
-  const [mode, setMode] = useState("extend");
+  const [mode, setMode] = useState("replace");
   const [days, setDays] = useState(180);
   const [note, setNote] = useState("");
   const [credit, setCredit] = useState("");

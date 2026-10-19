@@ -21,6 +21,12 @@ async function main() {
   await assert.rejects(reserveFirstRelease({ userId: artist.id, originalAmount: 99, discountAmount: 99, finalAmount: 0 }), /active subscription/);
   assert.equal(effectiveSubscriptionReleaseLimit(sub), null);
   assert.equal(subscriptionHasReleaseAllowance({ ...sub, releasesUsed: 999 }), true);
+  const staleOrder = await prisma.distributionOrder.create({ data: { userId: artist.id, plan: "half_yearly", amount: 1000, paymentStatus: "created", razorpayOrderId: `stale_${randomUUID()}` } });
+  const capturedOrder = await prisma.distributionOrder.create({ data: { userId: artist.id, plan: "half_yearly", amount: 1000, paymentStatus: "paid", razorpayOrderId: `captured_${randomUUID()}`, razorpayPaymentId: `payment_${randomUUID()}` } });
+  const grantedAgain = await grantManualSubscription(artist.id, null, { plan: "half_yearly", durationDays: 180, mode: "replace", note: "Fixture fresh grant", expectedUpdatedAt: sub.updatedAt.toISOString() });
+  assert.equal((await prisma.distributionOrder.findUniqueOrThrow({ where: { id: staleOrder.id } })).paymentStatus, "cancelled");
+  assert.equal((await prisma.distributionOrder.findUniqueOrThrow({ where: { id: capturedOrder.id } })).paymentStatus, "paid");
+  sub = grantedAgain;
   assert.equal(effectiveSubscriptionReleaseLimit({ plan: "half_yearly", releaseLimit: null, availableFeatures: '["all"]', razorpaySubscriptionId: null }), null);
   assert.equal(effectiveSubscriptionReleaseLimit({ plan: "half_yearly", releaseLimit: null, availableFeatures: '["all"]', razorpaySubscriptionId: "sub_provider" }), 6);
   const firstExpiry = sub.expiryDate.getTime(); const version = sub.updatedAt.toISOString();

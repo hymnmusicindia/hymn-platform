@@ -18,6 +18,12 @@ export async function grantManualSubscription(userId: number, actorId: number | 
     const fields = { plan: input.plan, planName: policy.name, expiryDate, status: "active", artistLimit: artistProfileLimitForPlan(input.plan), releaseLimit: null, availableFeatures: JSON.stringify([...policy.features, "manual_unlimited_releases"]), daysRemaining: Math.ceil((expiryDate.getTime() - now.getTime()) / 86400000), autoRenewal: false, currentPeriodStart: null, currentPeriodEnd: null, nextRenewalDate: null, cancelledAt: null, cancelAtPeriodEnd: false, razorpaySubscriptionId: null, razorpayPlanId: null, planVersionId: null, providerSyncedAt: null };
     const subscription = await tx.subscription.upsert({ where: { userId }, create: { userId, ...fields, purchasedAt: now }, update: fields });
     await tx.auditLog.create({ data: { actorType: "admin", actorId, actorRole: "admin", entity: "subscription", entityId: String(subscription.id), action: "subscription.admin_granted", reason: input.note, riskLevel: "high", previousValue: previous ? { plan: previous.plan, status: previous.status, expiryDate: previous.expiryDate.toISOString() } : undefined, newValue: { userId, plan: input.plan, mode: input.mode, expiryDate: expiryDate.toISOString(), releaseLimit: null, autoRenewal: false } } });
+    // An unpaid one-time order saved before the grant must not keep sending this
+    // user through payment after their subscription now covers the draft.
+    await tx.distributionOrder.updateMany({
+      where: { userId, paymentStatus: { in: ["created", "authorized"] }, fulfilledAt: null, razorpayPaymentId: null, plan: input.plan },
+      data: { paymentStatus: "cancelled" },
+    });
     return subscription;
   }, { isolationLevel: "Serializable", timeout: 15000 });
 }
