@@ -30,6 +30,7 @@ import "./styles/faq-center.css";
 import "./styles/sidebar-consistency.css";
 import "./styles/workspace-page-transition.css";
 import "./styles/workspace-enterprise.css";
+import "./styles/distribution-consistency.css";
 import { WorkspacePageTransition } from "@/components/workspace-page-transition";
 import { SmartHelpLayer } from "@/components/smart-help-layer";
 

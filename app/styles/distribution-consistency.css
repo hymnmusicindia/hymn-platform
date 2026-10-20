@@ -1,0 +1,105 @@
+/* Shared distribution palette and controls. Scoped so other portal modules keep their theme. */
+html body :is(.distribution-workflow,.release-portal-page,.release-manage-page) {
+  --bg:#161c25; --bg-elevated:#1d2530; --bg-soft:#222c39;
+  --card:#1d2530; --surface:#222c39; --input:#161e29;
+  --text:#f4f7fc; --text-muted:#c0cad8; --text-soft:#a8b6c8;
+  --border:#3e4c60; --border-strong:#64758e; --focus:#aacbff;
+  --editor-line:var(--border); --editor-muted:var(--text-muted); --editor-surface:var(--card);
+  color:var(--text); color-scheme:dark; line-height:1.55;
+}
+/* One column, one scroll owner, and the same sticky stage bar in setup, editing and review. */
+html body .distribution-workflow.distribution-workflow.distribution-workflow {
+  display:flex!important; flex-direction:column; gap:20px!important;
+  width:100%; max-width:1200px; margin-inline:auto; padding:24px!important;
+  height:auto!important; min-height:0!important; max-height:none!important;
+  overflow:visible!important; border:0!important; border-radius:20px!important;
+  background:var(--bg)!important; box-shadow:none!important;
+}
+html body .distribution-workflow.distribution-workflow > * { min-width:0; flex-shrink:0; }
+html body .distribution-workflow.distribution-workflow .release-workspace-header {
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  min-height:64px; margin:0; padding:12px 16px; border:1px solid var(--border);
+  border-radius:16px; background:var(--card);
+}
+html body .distribution-workflow .release-workspace-logo { width:96px; height:auto; margin-inline:auto; }
+html body .distribution-workflow .release-workspace-state { display:flex; align-items:center; gap:12px; font-size:13px; }
+html body .distribution-workflow .release-draft-title { width:100%; font-size:14px; }
+html body .distribution-workflow .release-draft-title small { font-size:12px; line-height:1.6; }
+html body .distribution-workflow.distribution-workflow .release-journey-progress { display:flex!important; align-items:center; gap:20px; margin:0; padding:0; }
+html body .distribution-workflow .release-journey-progress > div:first-child { display:flex; align-items:center; gap:10px; white-space:nowrap; font-size:12px; }
+html body .distribution-workflow .release-journey-progress-track { flex:1; height:4px; border-radius:99px; overflow:hidden; background:var(--border); }
+html body .distribution-workflow .release-journey-progress-track > span { display:block; height:100%; background:#aacbff; }
+html body .distribution-workflow.distribution-workflow.distribution-workflow > .release-workflow-nav {
+  display:flex!important; position:sticky!important; top:0!important; z-index:35;
+  align-self:stretch; flex-wrap:nowrap; gap:6px; width:100%; margin:0; padding:8px;
+  overflow-x:auto; overscroll-behavior-inline:contain; scrollbar-width:thin;
+  border:1px solid var(--border)!important; border-radius:16px; background:#1d2530!important;
+  box-shadow:0 8px 24px #0003;
+}
+html body .distribution-workflow.distribution-workflow.distribution-workflow > .release-workflow-nav > button {
+  flex:1 0 auto; display:flex; align-items:center; justify-content:center;
+  min-height:46px; padding:10px 12px!important; border:1px solid transparent!important;
+  border-radius:10px!important; background:transparent!important; color:var(--text-muted)!important;
+  font-size:12px; font-weight:600; text-decoration:none!important; white-space:nowrap;
+}
+html body .distribution-workflow.distribution-workflow.distribution-workflow > .release-workflow-nav > button:hover { background:#2b384a!important; color:#fff!important; }
+html body .distribution-workflow.distribution-workflow.distribution-workflow > .release-workflow-nav > button[aria-current=step] {
+  background:#314765!important; border-color:#87afe4!important; color:#fff!important;
+}
+html body .distribution-workflow .release-stage-number { display:inline-grid; place-items:center; width:22px; height:22px; border-radius:50%; background:#ffffff12; font-size:11px; }
+html body .distribution-workflow.distribution-workflow :is(.release-mobile-step-menu,.release-workflow-summary) { display:none!important; }
+html body .distribution-workflow.distribution-workflow.distribution-workflow :is(.release-workflow-content,.release-editor-panels) {
+  display:flex!important; flex-direction:column; width:100%; height:auto!important;
+  min-height:0!important; max-height:none!important; overflow:visible!important;
+  gap:24px; padding:0; margin:0;
+}
+html body .distribution-workflow.distribution-workflow :is(.release-artist-stage,.release-audio-stage,.release-focused-card) { height:auto!important; min-height:0!important; max-height:none!important; }
+html body .distribution-workflow.distribution-workflow :is(.field,.input) {
+  width:100%; min-height:48px!important; padding:12px 14px!important;
+  border:1px solid var(--border-strong)!important; border-radius:12px!important;
+  background:var(--input)!important; color:var(--text)!important; font-size:15px; line-height:1.5;
+}
+html body .distribution-workflow :is(input,textarea)::placeholder { color:var(--text-soft); opacity:1; }
+html body .distribution-workflow.distribution-workflow :is(.card-base,.release-track-panel,.review-confirmation,.release-review,.release-record-review .record-review-card,.record-review-details,.record-review-tracks) {
+  padding:24px; border:1px solid var(--border)!important; border-radius:16px!important;
+  background:var(--card)!important; box-shadow:none!important;
+}
+html body .distribution-workflow.distribution-workflow .release-editor-panels [class*="rounded-"]:not(.rounded-full) { border-radius:12px!important; }
+html body .distribution-workflow.distribution-workflow label { font-size:14px; line-height:1.6; }
+html body .distribution-workflow .release-existing-identifiers > .flex { gap:8px; }
+html body .distribution-workflow.distribution-workflow .release-existing-identifiers button {
+  min-width:80px; min-height:44px; padding:10px 20px; border:1px solid var(--border-strong)!important;
+  border-radius:10px!important; background:var(--input)!important; color:var(--text-muted)!important;
+}
+html body .distribution-workflow.distribution-workflow .release-existing-identifiers button[aria-pressed=true] {
+  background:#e0edff!important; border-color:#e0edff!important; color:#142238!important;
+}
+html body .distribution-workflow.distribution-workflow.distribution-workflow :is(.release-footer-mobile-actions,.release-focused-actions,.review-submit-bar) {
+  position:sticky!important; bottom:0; z-index:30; display:flex; flex-wrap:wrap; align-items:center;
+  justify-content:space-between; gap:12px; margin:8px 0 0; padding:14px!important;
+  border:1px solid var(--border)!important; border-radius:16px!important; background:#1d2530!important;
+}
+html body .distribution-workflow.distribution-workflow.distribution-workflow :is(.release-footer-action,.release-focused-actions>button,.release-workspace-quit,.release-workspace-review) {
+  min-height:44px; padding:10px 16px!important; border:1px solid var(--border-strong)!important;
+  border-radius:10px!important; background:#293649!important; color:var(--text)!important;
+  font-size:13px; text-decoration:none;
+}
+html body .distribution-workflow.distribution-workflow.distribution-workflow :is(.release-footer-action.is-primary,.release-workspace-review) { background:#e0edff!important; border-color:#e0edff!important; color:#142238!important; }
+html body :is(.distribution-workflow,.release-portal-page,.release-manage-page) :is(button,a,input,select,textarea,summary):focus-visible { outline:3px solid var(--focus)!important; outline-offset:3px; }
+html body .distribution-workflow button:disabled { opacity:.5; cursor:not-allowed; }
+html body :is(.release-portal-page,.release-manage-page) :is(.surface-card,.metric-card,.release-section-tabs) { border:1px solid var(--border); border-radius:16px; background:var(--card); }
+html body :is(.release-portal-page,.release-manage-page) :is(.btn-primary,.btn-secondary,.btn-outline,.input) { min-height:44px; border-radius:10px!important; }
+html body .release-manage-page .release-section-navigation { position:sticky; top:0; z-index:25; background:var(--bg); margin:0; padding:8px 0; }
+@media(max-width:767px) {
+  html body .distribution-workflow.distribution-workflow.distribution-workflow { padding:12px!important; gap:16px!important; }
+  html body .distribution-workflow.distribution-workflow .release-workspace-header { flex-wrap:wrap; padding:12px; }
+  html body .distribution-workflow.distribution-workflow .release-workspace-state { flex-basis:auto; margin-left:auto; }
+  html body .distribution-workflow .release-workspace-logo { display:none; }
+  html body .distribution-workflow.distribution-workflow .release-journey-progress { flex-wrap:wrap; gap:10px; }
+  html body .distribution-workflow .release-journey-progress-track { flex-basis:100%; }
+  html body .distribution-workflow.distribution-workflow :is(.field,.input) { font-size:16px!important; }
+  html body .distribution-workflow.distribution-workflow :is(.card-base,.release-track-panel,.review-confirmation,.record-review-card,.record-review-details,.record-review-tracks) { padding:16px; }
+}
+@media(prefers-reduced-motion:reduce) { html body .distribution-workflow * { scroll-behavior:auto!important; transition:none!important; animation:none!important; } }
+html body .distribution-workflow.distribution-workflow.distribution-workflow > .release-workflow-nav > button.is-invalid svg { color:#ffb8b8; }
+html body .distribution-workflow.distribution-workflow.distribution-workflow > .release-workflow-nav > button.is-complete .release-stage-number { background:#315844; color:#c5f2d8; }

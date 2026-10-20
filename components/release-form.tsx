@@ -1101,6 +1101,7 @@ export function ReleaseForm({
   initialCorrectionField?: string;
 }) {
   const router = useRouter();
+  const stageNavigationRef = useRef<HTMLElement | null>(null);
   const today = useMemo(() => new Date(), []);
   const quickReleaseDate = useMemo(
     () => toDateInputValue(addDays(today, 3)),
@@ -1114,6 +1115,13 @@ export function ReleaseForm({
     ? initialCorrectionField?.match(/^tracks\.(\d+)\./) : null;
   const correctionTrackIndex = correctionTrackMatch ? Number(correctionTrackMatch[1]) : null;
   const [step, setStep] = useState(correctionTrackIndex !== null ? 3 : initialRelease?.status === "draft" && initialStage != null && [0, 4, 1, 3, 2, 5, 7].includes(initialStage) ? initialStage : initialRelease ? 7 : 1);
+  useEffect(() => {
+    const navigation = stageNavigationRef.current;
+    const current = navigation?.querySelector<HTMLElement>('[aria-current="step"]');
+    if (navigation && current) {
+      navigation.scrollLeft = current.offsetLeft - navigation.offsetLeft - (navigation.clientWidth - current.offsetWidth) / 2;
+    }
+  }, [step]);
   const resumeStageResolvedRef = useRef(false);
   const [journeyIntro, setJourneyIntro] = useState<"welcome" | null>(initialRelease || audioLibraryPrefill ? null : "welcome");
   const [journeyExiting, setJourneyExiting] = useState(false);
@@ -3490,10 +3498,9 @@ export function ReleaseForm({
         }}
         onDropCapture={() => setHasStartedEditing(true)}
         data-editor-stage={step}
-        className={clsx("release-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", step !== 0 && step !== 1 && "release-premium-editor", (step === 0 || step === 1) && "is-focused-step", step === 0 && "is-audio-upload-step", step === 0 && musicEntering && "is-entering-from-format", step === 1 && "is-artist-step", step === 3 && "is-tracklist-step", step === 7 && "is-review-mode")}
+        className={clsx("release-workflow distribution-workflow grid gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", step !== 0 && step !== 1 && "release-premium-editor", (step === 0 || step === 1) && "is-focused-step", step === 0 && "is-audio-upload-step", step === 0 && musicEntering && "is-entering-from-format", step === 1 && "is-artist-step", step === 3 && "is-tracklist-step", step === 7 && "is-review-mode")}
         style={{ borderColor: "var(--border)", background: "var(--card)" }}
       >
-        <label className="grid gap-2" htmlFor="draft-release-title"><span>{releaseType === "single" ? "Track title" : "Album / EP title"} · required to save</span><input id="draft-release-title" className="field" maxLength={200} value={displayedReleaseTitle} placeholder="Enter your title" onChange={event => { const title = event.target.value; if (releaseType === "single") setTracks(current => current.length ? current.map((track, index) => index === 0 ? { ...track, trackTitle: title } : track) : [{ ...createTrack(), trackTitle: title }]); else setRelease(current => ({ ...current, releaseTitle: title })); }} /><small style={{ color: "var(--text-muted)" }}>Saved drafts receive a reminder after 4 inactive days and are removed after 6. Saving an edit restarts the clock.</small></label>
         <header className="release-workspace-header">
           <button type="button" onClick={quitReleaseJourney} disabled={submitting} className="release-workspace-quit">Quit</button>
           <NextImage src="/assets/hymnlogowhite.png" alt="HYMN Music" width={116} height={38} priority className="release-workspace-logo" style={{ filter: "var(--logo-filter)" }} />
@@ -3503,6 +3510,7 @@ export function ReleaseForm({
             {step !== 7 ? <button type="button" onClick={enterReviewMode} className="release-workspace-review">Review</button> : null}
           </div>
         </header>
+        <label className="release-draft-title grid gap-2" htmlFor="draft-release-title"><span>{releaseType === "single" ? "Track title" : "Album / EP title"} · required to save</span><input id="draft-release-title" className="field" maxLength={200} value={displayedReleaseTitle} placeholder="Enter your title" onChange={event => { const title = event.target.value; if (releaseType === "single") setTracks(current => current.length ? current.map((track, index) => index === 0 ? { ...track, trackTitle: title } : track) : [{ ...createTrack(), trackTitle: title }]); else setRelease(current => ({ ...current, releaseTitle: title })); }} /><small style={{ color: "var(--text-muted)" }}>Saved drafts receive a reminder after 4 inactive days and are removed after 6. Saving an edit restarts the clock.</small></label>
         {draftConflict ? <div className="release-draft-conflict" role="alert"><span>This draft changed in another tab. Your edits here have not replaced the latest version.</span><button type="button" onClick={() => { if (window.confirm("Open the latest draft? Unsaved changes in this tab will be lost.")) { allowReloadRef.current = true; window.location.reload(); } }}>Open latest draft</button></div> : null}
         <div className="release-journey-progress" role="group" aria-label="Release journey progress">
           <div><span>{step === 0 || step === 1 ? "SETUP" : "SECTION"} {menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1} / {menuStepIndexes.length}</span><strong>{stepMenuLabels[step] ?? steps[step]}</strong></div>
@@ -3601,8 +3609,8 @@ export function ReleaseForm({
           </div>
         </div>
 
-        <nav className="release-workflow-nav hidden gap-2 md:grid md:grid-cols-5 lg:grid-cols-1" aria-label="Release sections">
-          {menuStepIndexes.filter((index) => index !== 0 && index !== 1).map((index) => {
+        <nav ref={stageNavigationRef} className="release-workflow-nav" aria-label="Release sections">
+          {menuStepIndexes.filter((index) => index !== 0 && index !== 1).map((index, position) => {
             const label = stepMenuLabels[index] ?? steps[index];
             const buttonState = stepButtonStyles(index);
             return (
@@ -3620,7 +3628,7 @@ export function ReleaseForm({
                       aria-hidden="true"
                     />
                   ) : null}
-                  <span>{label}</span>
+                  <span className="release-stage-number" aria-hidden="true">{position + 1}</span><span>{label}</span>
                 </span>
               </button>
             );
@@ -3819,7 +3827,7 @@ export function ReleaseForm({
           />
         ) : null}
         {step === 2 ? (
-          <div className="card-base mb-5">
+          <div className="card-base release-existing-identifiers mb-5">
             <p className="text-sm font-semibold">Already released?</p>
             <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
               Use this if the release was previously distributed and already has
@@ -3830,6 +3838,7 @@ export function ReleaseForm({
                 <button
                   key={String(value)}
                   type="button"
+                  aria-pressed={release.releasePreviouslyReleased === value}
                   className={
                     release.releasePreviouslyReleased === value
                       ? "btn-primary"
