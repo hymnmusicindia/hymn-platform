@@ -1,5 +1,6 @@
 "use client";
 
+import { BeatEditMetadataFields } from "@/components/beat-metadata-fields";
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import { customerMessage } from "@/lib/customer-message";
 
@@ -102,7 +103,7 @@ function Timeline({ items }: { items: Array<{ label: string; detail?: string; ac
   );
 }
 
-export function ProducerDashboardShell({ user, beats, orders, earnings, finance }: { user: User; beats: Beat[]; orders: Order[]; earnings: { totalSales: number; totalRevenue: number; beatsSold: number }; finance: any }) {
+export function ProducerDashboardShell({ user, beats, orders, earnings, finance, autoPublishUnlocked = false }: { user: User; beats: Beat[]; orders: Order[]; earnings: { totalSales: number; totalRevenue: number; beatsSold: number }; finance: any; autoPublishUnlocked?: boolean }) {
   const [requestedTab, setActiveTab] = useState<"overview" | "profile" | "catalog" | "collaborations" | "placements" | "contracts" | "earnings" | "payout" | "ledger" | "upload" | "licensing" | "messages" | "analytics" | "settings" | "manage" | "sales">("overview");
   const [catalog, setCatalog] = useState(beats);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -183,7 +184,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
     if (!data.beat?.id) throw new Error("Upload could not be confirmed. Please check your catalogue before retrying.");
     setCatalog(items => [data.beat, ...items.filter(item => item.id !== data.beat.id)]);
     if (!setup.complete && setup.storefrontReady) window.location.assign("/producer/dashboard?tab=overview");
-    else { selectProducerTab("catalog"); setFeedback(`Submitted for review: ${data.beat.title}`); }
+    else { selectProducerTab("catalog"); setFeedback(`${data.status === "published" ? "Published" : "Submitted for review"}: ${data.beat.title}`); }
   }
 
   function handleBeatUpdate(beat: Beat, patch: Partial<Beat>) {
@@ -359,7 +360,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
 
       {activeTab === "profile" ? <ProducerStorefrontEditor name={user.name} profile={producerProfile} liveBeatCount={catalog.filter(beat => beat.enabled && ["PUBLISHED", "EXCLUSIVE_RESERVED"].includes(beat.status || "")).length} onSubmit={saveProducerProfile} pending={isPending} feedback={feedback} /> : null}
 
-      {activeTab === "upload" ? <ProducerBeatUploader producerName={producerProfile?.displayName || user.name} onUpload={handleBeatUpload}/> : null}
+      {activeTab === "upload" ? <ProducerBeatUploader autoPublishUnlocked={autoPublishUnlocked} producerName={producerProfile?.displayName || user.name} onUpload={handleBeatUpload}/> : null}
       {(activeTab === "manage" || activeTab === "catalog") ? (
         <Panel title="Manage beats" description="Enable, disable, and price your catalog without desktop-only controls.">
           <div className="mb-5 grid gap-3 md:grid-cols-[0.8fr,0.8fr,1fr]">
@@ -453,24 +454,11 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance 
                 <label className="text-sm font-medium mb-1 block">Title</label>
                 <input name="title" defaultValue={editingBeat.title} required className="field" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Genre</label>
-                  <input name="genre" defaultValue={editingBeat.genre} required className="field" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Mood</label>
-                  <input name="mood" defaultValue={editingBeat.mood} required className="field" />
-                </div>
-              </div>
+              <div className="grid gap-4 sm:grid-cols-2"><BeatEditMetadataFields key={editingBeat.id} genre={editingBeat.genre} mood={editingBeat.mood} keySignature={editingBeat.keySignature ?? ""}/></div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="text-sm font-medium mb-1 block">BPM</label>
                   <input name="bpm" type="number" defaultValue={editingBeat.bpm} required className="field" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Key</label>
-                  <input name="keySignature" defaultValue={editingBeat.keySignature} className="field" />
                 </div>
                 <div>
                   <label className="text-sm font-medium mb-1 block">WAV Licence price (Rs)</label>

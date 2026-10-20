@@ -15,8 +15,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!beat) return NextResponse.json({ error: "Beat not found." }, { status: 404 });
   const readiness = validateBeatReadiness({ ...beat, price: beat.priceCents / 100, generalPrice: beat.generalPriceCents / 100, exclusivePrice: beat.exclusivePriceCents / 100, audioUrl: beat.audio?.publicUrl ?? undefined, artworkUrl: beat.artwork?.publicUrl ?? undefined });
   if (body.decision === "approved" && !readiness.ready) return NextResponse.json({ error: "Incomplete beat cannot be approved.", readiness }, { status: 400 });
+  if(body.decision==='approved' && beat.sampleDeclaration==='LICENSED_SAMPLES' && !await prisma.storedAsset.count({where:{entityType:'BEAT',entityId:String(id),category:'BEAT_SAMPLE_LICENSE',ownerUserId:beat.userId,assetType:'private_ownership_proof',deletedAt:null}})) return NextResponse.json({error:'A private sample licence or certificate is required before approval.'},{status:400});
   if (body.decision === "changes_requested" && !String(body.reason ?? "").trim()) return NextResponse.json({ error: "A correction reason is required." }, { status: 400 });
-  const updated = await prisma.beat.update({ where: { id }, data: { status: body.decision === "approved" ? "PUBLISHED" : "CHANGES_REQUESTED", enabled: body.decision === "approved", reviewIssues: body.decision === "approved" ? Prisma.JsonNull : { reason: String(body.reason).trim(), issues: readiness.issues } } });
+  const updated = await prisma.$transaction(async tx => {
+    const updated = await tx.beat.update({ where: { id }, data: { status: body.decision === "approved" ? "PUBLISHED" : "CHANGES_REQUESTED", enabled: body.decision === "approved", reviewIssues: body.decision === "approved" ? Prisma.JsonNull : { reason: String(body.reason).trim(), issues: readiness.issues } } });
+    if (body.decision === 'approved') await tx.auditLog.create({data:{actorType:'admin',actorId:'sub' in admin ? Number(admin.sub) : null,entity:'producer',entityId:String(beat.userId),action:'producer.beats_auto_publish_unlocked',metadata:{firstApprovedBeatId:id}}});
+    return updated;
+  });
   const sideEffects = await Promise.allSettled([
     createNotificationOnce({ eventKey: `producer:${beat.userId}:beat:${beat.id}:${body.decision}`, userId: beat.userId, title: body.decision === "approved" ? "Beat approved" : "Beat changes requested", body: body.decision === "approved" ? `${beat.title} is approved for the Beat Store.` : String(body.reason), type: "beat", href: "/producer/dashboard?tab=manage", actionLabel: "Manage beat" }),
     resolveAdminTask(`producer:${beat.userId}:beat:${beat.id}:review`, `Beat ${body.decision}.`),

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BEAT_KEYS, normalizeBeatKey, normalizeBeatMoods, splitBeatMoods } from '@/lib/beat-metadata';
 import { getContentIdEligibility } from "@/lib/content-id-eligibility";
 import { normalizeReleaseText, safeReleaseText, parseReleaseDate, validIsrc, validReleaseBarcode } from "@/lib/release-input-rules";
 import { isDistributionChannel } from "@/lib/distribution-capabilities";
@@ -326,8 +327,8 @@ export const beatMutationSchema = z.object({
   title: z.string().min(2).optional(),
   bpm: z.coerce.number().int().positive().optional(),
   genre: z.string().min(2).optional(),
-  mood: z.string().min(2).optional(),
-  keySignature: z.string().min(1).max(40).optional(),
+  mood: z.string().trim().min(2).max(150).transform(normalizeBeatMoods).refine(value=>splitBeatMoods(value).length>=1 && splitBeatMoods(value).length<=3, 'Choose one to three moods.').optional(),
+  keySignature: z.string().transform(normalizeBeatKey).refine(value=>BEAT_KEYS.includes(value), 'Choose a valid key and scale.').optional(),
   price: z.coerce.number().finite().positive().max(21000000).refine(v => Math.abs(v * 100 - Math.round(v * 100)) < 0.000001, "Use at most two decimal places.").optional(),
   generalPrice: z.coerce.number().finite().nonnegative().max(21000000).refine(v => Math.abs(v * 100 - Math.round(v * 100)) < 0.000001, "Use at most two decimal places.").optional(),
   stemPrice: z.coerce.number().finite().nonnegative().max(21000000).refine(v => Math.abs(v * 100 - Math.round(v * 100)) < 0.000001, "Use at most two decimal places.").optional(),
@@ -335,12 +336,12 @@ export const beatMutationSchema = z.object({
   description: z.string().max(2000).optional(),
   subgenre: z.string().max(80).optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
-  sampleDeclaration: z.enum(["NO_UNCONTROLLED_SAMPLES", "CONTAINS_UNCONTROLLED_SAMPLES"]).optional(),
-  sampleDisclosure: z.string().max(2000).nullable().optional(),
+  sampleDeclaration: z.enum(["NO_UNCONTROLLED_SAMPLES", "LICENSED_SAMPLES", "CONTAINS_UNCONTROLLED_SAMPLES"]).optional(),
+  sampleDisclosure: z.string().max(4000).nullable().optional(),
   enabled: z.boolean().optional()
 }).superRefine((value, context) => {
   if (value.exclusivePrice && value.exclusivePrice <= Math.max(value.generalPrice ?? 0, value.stemPrice ?? 0)) context.addIssue({ code: z.ZodIssueCode.custom, path: ["exclusivePrice"], message: "Stems Exclusive price must be higher than WAV and Stem Files prices." });
-  if (value.sampleDeclaration === "CONTAINS_UNCONTROLLED_SAMPLES" && !value.sampleDisclosure?.trim()) context.addIssue({ code: z.ZodIssueCode.custom, path: ["sampleDisclosure"], message: "Sample disclosure is required." });
+  if (value.sampleDeclaration && value.sampleDeclaration !== "NO_UNCONTROLLED_SAMPLES" && !value.sampleDisclosure?.trim()) context.addIssue({ code: z.ZodIssueCode.custom, path: ["sampleDisclosure"], message: "Sample source and licence/clearance details are required." });
 });
 
 

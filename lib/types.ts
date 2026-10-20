@@ -481,7 +481,7 @@ export interface Beat {
   subgenre?: string;
   tags?: string[];
   previewUrl?: string;
-  sampleDeclaration?: "NO_UNCONTROLLED_SAMPLES" | "CONTAINS_UNCONTROLLED_SAMPLES";
+  sampleDeclaration?: "NO_UNCONTROLLED_SAMPLES" | "LICENSED_SAMPLES" | "CONTAINS_UNCONTROLLED_SAMPLES";
   sampleDisclosure?: string | null;
   generalMaxCommercialReleases?: number;
   generalStreamingLimit?: number | null;

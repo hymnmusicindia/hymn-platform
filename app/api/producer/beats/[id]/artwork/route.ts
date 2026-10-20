@@ -8,6 +8,7 @@ import { beatAssetRelativePath } from "@/lib/storage-service";
 import { deleteUploadedFileByUrl, deleteUploadedFileByUrlPermanently, saveUploadedFile } from "@/lib/storage";
 import { createAdminTaskOnce } from "@/lib/task-queue";
 import { Prisma } from "@prisma/client";
+import { autoPublishProducerBeat } from '@/lib/beat-publication';
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole(["producer", "admin"]);
@@ -18,6 +19,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const current = await prisma.beat.findUnique({ where: { id: beatId }, include: { user: true, artwork: true } });
   if (!current) return NextResponse.json({ error: "Beat not found." }, { status: 404 });
   if (auth.user.role === "producer" && current.userId !== auth.user.id) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  if (auth.user.role === 'producer' && !['PUBLISHED','PENDING_REVIEW','DRAFT','CHANGES_REQUESTED'].includes(current.status)) return NextResponse.json({error:'This beat cannot be edited in its current state.'},{status:409});
 
   const form = await request.formData().catch(() => null);
   const artwork = form?.get("artwork");
@@ -33,7 +35,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const updated = await prisma.$transaction(async (tx) => {
       const upload = await tx.upload.create({ data: { userId: current.userId, kind: "ARTWORK", storageKey: replacementUrl!, fileName: artwork.name, mimeType: artwork.type, sizeBytes: artwork.size, publicUrl: replacementUrl } });
       replacementUploadId = upload.id;
-      return tx.beat.update({ where: { id: beatId }, data: { artworkUploadId: upload.id, status: "PENDING_REVIEW", enabled: false, reviewIssues: Prisma.JsonNull }, include: { user: true, audio: true, preview: true, artwork: true } });
+      return tx.beat.update({ where: { id: beatId }, data: { artworkUploadId: upload.id }, include: { user: true, audio: true, preview: true, artwork: true } });
     });
     databaseCommitted = true;
 
@@ -48,8 +50,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: cleanupError instanceof Error ? `The old cover could not be deleted: ${cleanupError.message}` : "The old cover could not be deleted. No changes were kept." }, { status: 500 });
     }
     if (current.artworkUploadId) await prisma.upload.deleteMany({ where: { id: current.artworkUploadId, artworkBeats: { none: {} } } }).catch((error) => console.error("Obsolete beat artwork upload record cleanup failed", { beatId, uploadId: current.artworkUploadId, error }));
+    if (await autoPublishProducerBeat(beatId)) return NextResponse.json({beat:mapPrismaBeat({...updated,status:'PUBLISHED',enabled:current.status==='PUBLISHED' ? current.enabled : true}),oldArtworkDeleted:true});
+    const queued = await prisma.beat.update({where:{id:beatId},data:{status:'PENDING_REVIEW',enabled:false},include:{user:true,audio:true,preview:true,artwork:true}});
     await createAdminTaskOnce({ eventKey: `producer:${current.userId}:beat:${beatId}:artwork:${replacementUploadId}`, type: "Beat Awaiting Approval", priority: "normal", title: `Replacement artwork ready for review: ${current.title}`, body: "The producer replaced the cover artwork. Review the new visual and current beat metadata.", href: `/admin?tab=operations&beatId=${beatId}`, entityType: "beat", entityId: beatId }).catch((error) => console.error("Replacement artwork review task failed", { beatId, error }));
-    return NextResponse.json({ beat: mapPrismaBeat(updated), oldArtworkDeleted: true });
+    return NextResponse.json({ beat: mapPrismaBeat(queued), oldArtworkDeleted: true });
   } catch (error) {
     if (replacementUrl && !databaseCommitted) await deleteUploadedFileByUrl(replacementUrl);
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not replace beat artwork." }, { status: 400 });

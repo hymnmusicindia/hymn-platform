@@ -1906,7 +1906,7 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
           price: Number(item.price),
           currency: order.currency,
           existingGeneralLicenses: item.beat.generalLicensesSold,
-          rights: { commercialUse: true, exclusiveUse: true, copyrightAssigned: item.beat.exclusiveLegalMode === "RIGHTS_ASSIGNMENT", contentIdPolicy: "ALLOWED", includesWav: true, includesStems: true },
+          rights: { commercialUse: true, exclusiveUse: true, copyrightAssigned: item.beat.exclusiveLegalMode === "RIGHTS_ASSIGNMENT", contentIdPolicy: item.beat.sampleDeclaration === 'NO_UNCONTROLLED_SAMPLES' ? "ALLOWED" : "NOT_ALLOWED", includesWav: true, includesStems: true },
           restrictions: { samplesSubjectToProducerDisclosure: true, priorGeneralLicensesRemainValid: true }
         } : {
           version: "2026-09-05",

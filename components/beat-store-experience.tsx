@@ -1,4 +1,5 @@
 ﻿"use client";
+import { splitBeatMoods } from "@/lib/beat-metadata";
 
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import Link from "next/link";
@@ -316,14 +317,14 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
   const [cartNotice, setCartNotice] = useState<{ beatTitle: string; action: "added" | "removed"; item?: CartItem } | null>(null);
 
   const genres = useMemo(() => Array.from(new Set(catalog.map((beat) => beat.genre))).sort(), [catalog]);
-  const moods = useMemo(() => Array.from(new Set(catalog.map((beat) => beat.mood))).sort(), [catalog]);
+  const moods = useMemo(() => Array.from(new Set(catalog.flatMap((beat) => splitBeatMoods(beat.mood)))).sort(), [catalog]);
   const keys = useMemo(() => Array.from(new Set(catalog.map((beat) => beat.keySignature))).sort(), [catalog]);
 
   const filteredBeats = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     const matches = catalog.filter((beat) => {
       const genreMatch = selectedGenres.length === 0 || selectedGenres.includes(beat.genre);
-      const moodMatch = selectedMoods.length === 0 || selectedMoods.includes(beat.mood);
+      const moodMatch = selectedMoods.length === 0 || splitBeatMoods(beat.mood).some(mood => selectedMoods.includes(mood));
       const budgetMatch = onboardingBudgetMax === null || beat.startingPrice <= onboardingBudgetMax;
       const keyMatch = selectedKey === "All" || beat.keySignature === selectedKey;
       const producerMatch = !selectedProducerSlug || beat?.producer?.slug === selectedProducerSlug;
@@ -380,7 +381,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
   const quickMoods = moods.slice(0, 4);
   const findMyBeat = (mood?: string) => {
     if (mood) setSelectedMoods([mood]);
-    const pool = mood ? catalog.filter((beat) => beat.mood === mood) : filteredBeats;
+    const pool = mood ? catalog.filter((beat) => splitBeatMoods(beat.mood).includes(mood)) : filteredBeats;
     const pick = pool[Math.floor(Math.random() * Math.max(pool.length, 1))] ?? catalog[0];
     document.getElementById("beat-catalog")?.scrollIntoView({ behavior: "smooth", block: "start" });
     if (pick) window.setTimeout(() => beatPlayer.playBeat(pick, pool.length ? pool : catalog), 380);

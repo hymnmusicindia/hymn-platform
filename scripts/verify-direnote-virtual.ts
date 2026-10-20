@@ -48,6 +48,10 @@ async function main() {
   try {
     await pg.createDatabase("direnote_virtual");
     await run(["node_modules/prisma/build/index.js", "db", "push", "--skip-generate"]);
+    if (process.argv.includes('--producer-workflow-only')) {
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-producer-workflow.ts']);
+      return;
+    }
     if (process.argv.includes("--policy-only")) {
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-policy-agreement.ts"]);
       return;

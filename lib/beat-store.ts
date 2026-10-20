@@ -1,4 +1,5 @@
 import type { Beat, LicenseType, ProducerProfile } from "@/lib/types";
+import { normalizeBeatKey } from '@/lib/beat-metadata';
 
 type ProducerSeed = {
   slug: string;
@@ -98,7 +99,7 @@ export const beatLicenseOptions: Array<{
     label: "Stems Exclusive Licence",
     price: 2100,
     note: "Instant download after purchase",
-    bullets: ["Stems + WAV", "Complete exclusive right", "Content ID included", "Removed from sale"]
+    bullets: ["Stems + WAV", "Exclusive licence", "Content ID subject to sample rights", "Removed from sale"]
   }
 ];
 
@@ -245,7 +246,7 @@ export function buildBeatStorefront(beats: Beat[], producerProfiles: ProducerPro
       typeBeat: `${beat.genre} type beat`,
       activityLabel: beat.enabled ? "Available" : "Unavailable",
       activityTone: "new" as const,
-      keySignature: beat.keySignature ?? "Not supplied",
+      keySignature: beat.keySignature ? normalizeBeatKey(beat.keySignature) : "Not supplied",
       subgenre: beat.genre,
       listenersNow: 0,
       cartsNow: 0,

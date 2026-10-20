@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import dynamic from "next/dynamic";
+import { BeatSampleReview } from '@/components/beat-sample-review';
 import { AdminCenteredDialog } from "./admin-centered-dialog";
 import { AdminCatalogGrid, ProducerStorefrontPreview } from "./admin-catalog-grid";
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
@@ -1753,6 +1754,7 @@ export function AdminControlCenter({
                         <div><p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: "var(--text-soft)" }}>General</p><p className="mt-1 font-medium">{formatMoney(beat.generalPrice ?? beat.price)}</p></div>
                         <div><p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: "var(--text-soft)" }}>Exclusive</p><p className="mt-1 font-medium">{formatMoney(beat.exclusivePrice ?? 0)}</p></div>
                       </div>
+                      <BeatSampleReview declaration={beat.sampleDeclaration} disclosure={beat.sampleDisclosure}/>
                       {beat.reviewIssues?.reason ? <div className="mt-4 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "color-mix(in srgb, var(--danger) 45%, var(--border))", color: "var(--danger)" }}><strong>Corrections:</strong> {beat.reviewIssues.reason}</div> : null}
                       <div className="mt-4 flex flex-wrap gap-2">
                         {beat.previewUrl ? <a href={beat.previewUrl} target="_blank" rel="noreferrer" className="btn-outline pressable">Listen to preview</a> : <span className="btn-outline cursor-not-allowed opacity-50">Preview missing</span>}

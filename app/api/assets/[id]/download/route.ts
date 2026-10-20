@@ -16,10 +16,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     const downloadRequested = new URL(request.url).searchParams.get("download") === "1";
     let releaseAdmin = false;
     if (!admin && user) {
-      const linked = await prisma.storedAsset.findUnique({ where: { id: assetId }, select: { ownerUserId: true, assetType: true, releaseId: true, releaseAssetLinks: { select: { id: true }, take: 1 } } });
+      const linked = await prisma.storedAsset.findUnique({ where: { id: assetId }, select: { ownerUserId: true, assetType: true, releaseId: true, category:true, entityType:true, releaseAssetLinks: { select: { id: true }, take: 1 } } });
       if (linked?.ownerUserId !== user.sub && linked?.assetType === "private_audio_master" && (linked.releaseId || linked.releaseAssetLinks.length)) {
         releaseAdmin = !('error' in await requireAdminPermission("releases.read"));
       }
+      if(linked?.ownerUserId !== user.sub && linked?.assetType==='private_ownership_proof' && linked.entityType==='BEAT' && linked.category==='BEAT_SAMPLE_LICENSE') releaseAdmin = !('error' in await requireAdminPermission('users.manage'));
     }
     const asset = await localPrivateStorage.createAuthorizedRead({ assetId, requesterUserId: user?.sub ?? 0, isAdmin: Boolean(admin) || releaseAdmin, range: request.headers.get("range") });
     const width = !downloadRequested && asset.mimeType.startsWith("image/") ? requestedArtworkWidth(request) : null;
