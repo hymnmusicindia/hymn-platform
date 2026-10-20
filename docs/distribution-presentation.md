@@ -45,3 +45,11 @@ notice policy as other drafts. Check route behavior with
 After a production build in `.next-distribution-desktop`, use
 `node scripts/verify-distribution-visual.cjs --production-css` to repeat the
 layout checks against the emitted route CSS and its manifest ordering.
+
+`node scripts/verify-distribution-navigation.cjs` checks the actual artist Continue
+button on desktop and phone: blank titles, persisted artist IDs, failed saves,
+visible errors, retry and pending states, then transition to Music.
+
+A Git push does not prove that hosting deployed the change. Run
+`node scripts/verify-live-distribution.cjs [origin]` to check the publicly served
+Next page bundle for the obsolete title gate before reporting the fix as live.

@@ -1145,6 +1145,7 @@ export function ReleaseForm({
   }, [firstReleaseOffer]);
   const [stepMotion, setStepMotion] = useState("step-adjacent-forward");
   const [stepTransitioning, setStepTransitioning] = useState(false);
+  const [artistSaveError, setArtistSaveError] = useState<string | null>(null);
   const stepTransitionRef = useRef(false);
   const stepTransitionTimerRef = useRef<number | null>(null);
   const [mobileStepMenuOpen, setMobileStepMenuOpen] = useState(false);
@@ -1369,7 +1370,7 @@ export function ReleaseForm({
     if (initialRelease?.id) return initialRelease.id;
     if (!draftCreationPromiseRef.current) {
       draftCreationRef.current = true;
-      draftCreationPromiseRef.current = fetch("/api/distribution/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: displayedReleaseTitle, wizardFormatIntent: formatIntent, ...(firstReleaseOffer ? { promotionCode: "FIRST_RELEASE_FREE", attribution: campaignAttribution } : {}) }) })
+      draftCreationPromiseRef.current = fetch("/api/distribution/drafts", { signal: AbortSignal.timeout(45000), method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: displayedReleaseTitle, wizardFormatIntent: formatIntent, ...(firstReleaseOffer ? { promotionCode: "FIRST_RELEASE_FREE", attribution: campaignAttribution } : {}) }) })
         .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not start draft."); draftVersionRef.current = typeof data.draft?.updatedAt === "string" ? data.draft.updatedAt : null; return Number(data.draft?.id); })
         .then(id => { if (!Number.isInteger(id) || id < 1) throw new Error("Draft creation returned an invalid identifier."); setDraftReleaseId(id); return id; })
         .catch(error => { draftCreationRef.current = false; draftCreationPromiseRef.current = null; throw error; });
@@ -1688,6 +1689,7 @@ export function ReleaseForm({
       if (savingReleaseRef.current) return;
       setAutosaveStatus("saving");
       autosavePendingRef.current = autosavePendingRef.current.catch(() => undefined).then(() => fetch(`/api/distribution/drafts/${draftReleaseId}`, {
+        signal: AbortSignal.timeout(45000),
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...autosaveSnapshot, expectedUpdatedAt: draftVersionRef.current }),
@@ -1714,7 +1716,7 @@ export function ReleaseForm({
     }
     setAutosaveStatus("saving");
     try {
-      const response = await fetch(`/api/distribution/drafts/${draftReleaseId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...autosaveSnapshot, expectedUpdatedAt: draftVersionRef.current }) });
+      const response = await fetch(`/api/distribution/drafts/${draftReleaseId}`, { signal: AbortSignal.timeout(45000), method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...autosaveSnapshot, expectedUpdatedAt: draftVersionRef.current }) });
       const data = await response.json().catch(() => ({}));
       if (data.code === "DRAFT_VERSION_CONFLICT") { setDraftConflict(true); throw new Error(data.error); }
       if (!response.ok) throw new Error(data.error || "Save failed");
@@ -2714,6 +2716,7 @@ export function ReleaseForm({
     setStepTransitioning(true);
     setAttemptedStep(null);
     setStatus(null);
+    setArtistSaveError(null);
     // Artist selection now precedes audio. Persist it before the upload flow
     // starts, otherwise a fast upload and reload can reopen a draft without its
     // selected profile IDs.
@@ -2723,6 +2726,7 @@ export function ReleaseForm({
         setAutosaveStatus("saving");
         autosavePendingRef.current = autosavePendingRef.current.catch(() => undefined).then(async () => {
           const response = await fetch(`/api/distribution/drafts/${id}`, {
+            signal: AbortSignal.timeout(45000),
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ...autosaveSnapshot, expectedUpdatedAt: draftVersionRef.current }),
@@ -2738,7 +2742,9 @@ export function ReleaseForm({
       }
     } catch (error) {
       setAutosaveStatus("error");
-      setStatus(error instanceof Error ? error.message : "Could not save the selected artists. Try again.");
+      const message = error instanceof Error && error.name === "TimeoutError" ? "Saving took too long. Please try Continue again." : error instanceof Error ? error.message : "Could not save the selected artists. Try again.";
+      setStatus(message);
+      setArtistSaveError(message);
       stepTransitionRef.current = false;
       setStepTransitioning(false);
       return;
@@ -3697,7 +3703,8 @@ export function ReleaseForm({
               </div>
             </div>
             {primaryArtistIssue && (tracks[0]?.primaryArtistIds.length ?? 0) > 0 ? <p role="alert" className="mt-3 text-sm" style={{ color: "var(--danger)" }}>{primaryArtistIssue.message}</p> : null}
-            {primaryArtistComplete ? <button type="button" onClick={continueFromArtists} disabled={stepTransitioning} aria-label="Continue to upload music" title="Upload music" className="release-artist-next"><ArrowRight size={23} aria-hidden="true" /></button> : null}
+            {artistSaveError ? <p id="artist-save-error" className="release-artist-save-error" role="alert">{customerMessage(artistSaveError)}</p> : null}
+            {primaryArtistComplete ? <button type="button" onClick={continueFromArtists} disabled={stepTransitioning} aria-busy={stepTransitioning} aria-describedby={artistSaveError ? "artist-save-error" : undefined} aria-label="Continue to upload music" className="release-artist-next">{stepTransitioning ? <><LoaderCircle size={18} className="animate-spin" aria-hidden="true" /> Saving artists...</> : <>Continue <ArrowRight size={20} aria-hidden="true" /></>}</button> : null}
           </section>
         ) : null}
         {step === 5 ? (
