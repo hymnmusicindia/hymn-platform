@@ -67,7 +67,13 @@ async function main() {
   assert.equal(await prisma.distributionSubmissionAttempt.count({ where: { releaseId: release.id } }), 1);
   assert(submissionRetryDelayMs(2, claim.attempt.idempotencyKey) > submissionRetryDelayMs(1, claim.attempt.idempotencyKey), "Submission retry delay uses bounded exponential backoff with jitter");
   await assert.rejects(confirmDistributionNonReceipt({ releaseId: release.id, attemptId: claim.attempt.id, adminId: user.id, evidence: "No", providerReference: "ticket" }), /confirmation/);
-  await confirmDistributionNonReceipt({ releaseId: release.id, attemptId: claim.attempt.id, adminId: user.id, evidence: "Provider support confirmed no ingestion exists for this exact attempt.", providerReference: "fixture-ticket-1" });
+  const recovery = { releaseId: release.id, attemptId: claim.attempt.id, adminId: user.id, evidence: "Provider support confirmed no ingestion exists for this exact attempt.", providerReference: "fixture-ticket-1" };
+  await prisma.distributionSubmissionAttempt.update({ where: { id: claim.attempt.id }, data: { isCurrent: true, providerReference: "accepted-provider-reference" } });
+  await assert.rejects(confirmDistributionNonReceipt(recovery), /Provider acceptance exists/, "Actual provider acceptance must still prevent re-delivery.");
+  await prisma.distributionSubmissionAttempt.update({ where: { id: claim.attempt.id }, data: { providerReference: null } });
+  const recoveredAttempt = await confirmDistributionNonReceipt(recovery);
+  assert.equal(recoveredAttempt.state, "retryable");
+  assert.equal(recoveredAttempt.isCurrent, false, "A stale current marker must be cleared after partner-confirmed non-receipt.");
   assert.equal((await claimDistributionSubmission(release.id, { version: 1 })).claimed, true);
   await finishDistributionSubmission(claim.attempt.id, { state: "failed" });
   const order = await prisma.distributionOrder.create({ data: { userId: user.id, plan: "one_time", amount: 99, razorpayOrderId: `order_audit_${user.id}`, currency: "INR" } });

@@ -15,7 +15,7 @@ export function ReleaseSubmissionHistory({ releaseId, admin = false }: { release
       const response = await fetch(`/api/admin/releases/${releaseId}/direnote/recover`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ attemptId: recoveryAttempt, evidence, providerReference: reference }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Recovery could not be recorded.");
-      setAttempts(rows => rows.map(row => row.id === recoveryAttempt ? { ...row, state: "retryable", status: "retryable" } : row));
+      setAttempts(rows => rows.map(row => row.id === recoveryAttempt ? { ...row, state: "retryable", status: "retryable", isCurrent: false } : row));
       setRecoveryAttempt(null);
       setRecoveryMessage("Partner confirmation recorded. You can now use Retry distribution.");
     } catch (error) { setRecoveryMessage(error instanceof Error ? error.message : "Recovery failed."); }

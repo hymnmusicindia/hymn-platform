@@ -9,8 +9,11 @@ export async function confirmDistributionNonReceipt(input: { releaseId: number; 
     if (!rows[0]?.locked) throw new Error("This release is still being processed. Retry reconciliation later.");
     const attempt = await tx.distributionSubmissionAttempt.findFirst({ where: { id: input.attemptId, releaseId: input.releaseId, provider: "direnote" } });
     if (!attempt || !["processing", "reconciliation_required"].includes(attempt.state) || attempt.startedAt > new Date(Date.now() - 5 * 60_000)) throw new Error("This attempt is not eligible for manual recovery yet.");
-    if (attempt.isCurrent || attempt.providerReference || await tx.distributionSubmissionAttempt.count({ where: { releaseId: input.releaseId, state: "submitted" } })) throw new Error("Provider acceptance exists. Synchronize the accepted release instead of sending again.");
-    const updated = await tx.distributionSubmissionAttempt.update({ where: { id: attempt.id }, data: { state: "retryable", safeError: "Partner confirmed this attempt was not received; an administrator authorized retry.", completedAt: new Date() } });
+    // `isCurrent` is a lineage/display projection. It can remain set on an
+    // unresolved attempt after older releases were migrated; it is not proof
+    // of provider acceptance. A provider reference or submitted attempt is.
+    if (attempt.providerReference || await tx.distributionSubmissionAttempt.count({ where: { releaseId: input.releaseId, provider: "direnote", state: "submitted" } })) throw new Error("Provider acceptance exists. Synchronize the accepted release instead of sending again.");
+    const updated = await tx.distributionSubmissionAttempt.update({ where: { id: attempt.id }, data: { state: "retryable", isCurrent: false, safeError: "Partner confirmed this attempt was not received; an administrator authorized retry.", completedAt: new Date() } });
     await tx.auditLog.create({ data: { actorId: input.adminId, actorType: "admin", action: "DISTRIBUTION_NON_RECEIPT_CONFIRMED", entity: "release", entityId: String(input.releaseId), metadata: { attemptId: attempt.id, previousState: attempt.state, providerReference: input.providerReference.trim(), evidence: input.evidence.trim() } } });
     return updated;
   });
