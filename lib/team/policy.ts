@@ -8,6 +8,8 @@ export const roleTemplates: Record<string, Permission[]> = {
   Owner: [...permissions],
   Admin: permissions.filter(p => p !== "settings.manage" && p !== "team.members.manage"),
   "Team Manager": [...member, "tasks.assign", "tasks.approve", "projects.manage", "chat.channel.manage"],
+  Researcher: [...member, "crm.prospects.view", "crm.prospects.create"],
+  "Call Representative": [...member, "crm.prospects.view", "crm.outreach.manage"],
   "Growth Executive": [...member, "crm.prospects.view", "crm.prospects.create", "crm.outreach.manage", "operations.distribution.review", "operations.studio.review"],
   "Marketplace Executive": [...member, "operations.beats.manage", "operations.engineers.manage"],
   "Operations Executive": [...member, "operations.distribution.review", "operations.studio.review"],

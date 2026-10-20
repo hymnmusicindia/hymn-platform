@@ -8,7 +8,7 @@ import { CalendarDay } from "./calendar-day";
 import styles from "./calendar.module.css";
 type Client = { id: string; name: string; phone: string; email: string; notes: string; ownerId: string; status: string; version: number; secondaryEmail: string; interests: string[]; state: string; city: string; user?: { id: number; name: string; email: string } | null; accounts?: { email: string; name: string }[]; welcomeJobs?: { email: string; status: string }[] };
 type Event = { id: string; creatorId: string; title: string; kind: string; clientId: string | null; assigneeId: string; startsAt: string; endsAt: string | null; notes: string; outcome: string; status: string; version: number; reminderMinutes: number; client?: Client | null; appointmentMessages?: { kind: string; status: string; dueAt: string; error: string | null }[] };
-type Member = { id: string; status: string; user: { name: string } };
+type Member = { id: string; status: string; role?: { owner: boolean }; user: { name: string } };
 type Api = <T>(resource: string, body?: unknown) => Promise<T>;
 const localInput = (date: string | Date) => new Date(new Date(date).getTime() + 330 * 60000).toISOString().slice(0, 16);
 const today = () => localInput(new Date()).slice(0, 10);
@@ -67,7 +67,7 @@ export function TeamCalendar({ api, actor, members }: { api: Api; actor: { id: s
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not save."); } finally { setBusy(false); }
   }
   const availableMembers = members.some(m => m.id === actor.id) ? members : [{ id: actor.id, status: "ACTIVE", user: { name: actor.name || "Me" } }, ...members];
-  const people = (field: string, value: string) => <label>Responsible teammate<select name={field} defaultValue={value}>{availableMembers.filter(m => m.status === "ACTIVE" && (can("tasks.assign") || m.id === actor.id || m.id === value)).map(m => <option key={m.id} value={m.id}>{m.user.name}</option>)}</select></label>;
+  const people = (field: string, value: string) => <label>Responsible teammate<select name={field} defaultValue={availableMembers.some(m => m.id === value && !m.role?.owner) ? value : availableMembers.find(m => !m.role?.owner)?.id}>{availableMembers.filter(m => m.status === "ACTIVE" && !m.role?.owner && (can("tasks.assign") || m.id === actor.id || m.id === value)).map(m => <option key={m.id} value={m.id}>{m.user.name}</option>)}</select></label>;
   const currentEvent = modal?.event;
   const clientOptions = [...clients];
   for (const client of [currentEvent?.client, modal?.client, inlineClient]) if (client && !clientOptions.some(c => c.id === client.id)) clientOptions.push(client);

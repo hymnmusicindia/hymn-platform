@@ -31,6 +31,7 @@ async function main() {
     for (const migration of migrations) await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", migration, "--schema", "prisma/schema.prisma"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-acquisition-domain.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-crm-workflow.ts"]);
+    await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-daily-work.ts"]);
     if (process.argv.includes("--build-browser")) await run(["node_modules/next/dist/bin/next", "build", "--webpack"], process.execPath, { ...env, NODE_ENV: "production" });
     if (process.argv.includes("--browser") || process.argv.includes("--build-browser")) await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-acquisition-browser.ts"]);
   } finally {

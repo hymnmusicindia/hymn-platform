@@ -1,3 +1,4 @@
+import { assertEmployeeAssignee } from "./daily-work";
 import "server-only";
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
@@ -93,6 +94,8 @@ export async function advancedMutation(tx: Tx, a: Actor, resource: string, input
     const task = await taskAccess(tx, a, data.id); if (task.version !== data.version) throw new TeamError("Task changed. Refresh first.", 409);
     if (data.action === "archive") { demand(a, "tasks.delete"); if (await tx.teamTask.count({ where: { workspaceId: a.workspaceId, dependencyIds: { has: task.id }, archivedAt: null, status: { notIn: ["COMPLETED", "CANCELLED"] } } })) throw new TeamError("Remove active dependencies before archiving this task."); const row = await tx.teamTask.update({ where: { id: task.id }, data: { archivedAt: new Date(), version: { increment: 1 } } }); await audit(tx, a, "task.archived", task.id); return row; }
     demand(a, "tasks.assign");
+    await assertEmployeeAssignee(tx, a.workspaceId, task.ownerId);
+    if (task.eventKey?.includes(":crm-daily:")) throw new TeamError("Daily CRM tasks are managed by the daily programme.");
     if (data.action === "duplicate") { demand(a, "tasks.create"); const row = await tx.teamTask.create({ data: { workspaceId: a.workspaceId, ownerId: task.ownerId, creatorId: a.id, projectId: task.projectId, title: `${task.title} (copy)`.slice(0, 200), description: task.description, approvalRequired: task.approvalRequired, priority: task.priority, recordType: task.recordType, recordId: task.recordId, checklist: (task.checklist as { text: string; done: boolean }[]).map(c => ({ ...c, done: false })) } }); await audit(tx, a, "task.duplicated", row.id, { sourceId: task.id }); await notify(tx, row.ownerId, `Assigned: ${row.title}`); return row; }
     if (data.collaboratorIds) await eligible(tx, a, data.collaboratorIds);
     if (data.parentId) { let parent: string | null = data.parentId; const seen = new Set([task.id]); while (parent) { if (seen.has(parent)) throw new TeamError("Circular subtasks are not allowed."); seen.add(parent); parent = (await taskAccess(tx, a, parent)).parentId; } }
@@ -148,6 +151,7 @@ export async function advancedMutation(tx: Tx, a: Actor, resource: string, input
   if (resource === "workflow-rules") {
     if (!a.role.owner) throw new TeamError("Only the owner can configure automations.", 403);
     const data = z.object({ name: text.max(150), eventType: z.enum(events), ownerId: id, enabled: z.boolean() }).parse(input); await eligible(tx, a, [data.ownerId]);
+    await assertEmployeeAssignee(tx, a.workspaceId, data.ownerId);
     const member = await tx.teamMember.findUniqueOrThrow({ where: { id: data.ownerId }, include: { role: true } }); demand(member, eventPermissions[data.eventType]);
     const row = await tx.teamWorkflowRule.upsert({ where: { workspaceId_eventType: { workspaceId: a.workspaceId, eventType: data.eventType } }, create: { ...data, workspaceId: a.workspaceId }, update: data }); await audit(tx, a, "workflow.configured", row.id); return row;
   }
@@ -158,7 +162,7 @@ export async function advancedMutation(tx: Tx, a: Actor, resource: string, input
     for (const rule of rules) {
       const handled = await tx.teamTask.findMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: `${a.workspaceId}:${rule.eventType}:` } }, select: { recordId: true } });
       const excludedIds = handled.flatMap(t => t.recordId ? [t.recordId] : []);
-      const assignee = await tx.teamMember.findFirst({ where: { workspaceId: a.workspaceId, id: rule.ownerId, status: "ACTIVE", user: { status: "ACTIVE" } }, include: { role: true } }); if (!assignee || !can(assignee, eventPermissions[rule.eventType])) continue;
+      const assignee = await tx.teamMember.findFirst({ where: { workspaceId: a.workspaceId, id: rule.ownerId, status: "ACTIVE", user: { status: "ACTIVE" } }, include: { role: true } }); if (!assignee || assignee.role.owner || !can(assignee, eventPermissions[rule.eventType])) continue;
       const records = rule.eventType === "BEAT_REVIEW" ? (await tx.beat.findMany({ where: { id: { notIn: excludedIds }, status: { in: ["PENDING_REVIEW", "CHANGES_REQUESTED"] } }, take: 5 })).map(r => ({ id: r.id, title: r.title, type: "beat" })) : rule.eventType === "ENGINEER_PROFILE" ? (await tx.engineerProfile.findMany({ where: { id: { notIn: excludedIds }, OR: [{ bio: "" }, { verificationState: "UNVERIFIED" }] }, take: 5 })).map(r => ({ id: r.id, title: r.professionalName, type: "engineer" })) : rule.eventType === "RELEASE_REVIEW" ? (await tx.release.findMany({ where: { id: { notIn: excludedIds }, status: { in: ["SUBMITTED", "UNDER_REVIEW", "CHANGES_REQUESTED"] } }, take: 5 })).map(r => ({ id: r.id, title: r.title, type: "release" })) : (await tx.studioServiceOrder.findMany({ where: { id: { notIn: excludedIds }, paymentStatus: "PAID", status: { notIn: ["COMPLETED", "CANCELLED", "REFUNDED"] } }, take: 5 })).map(r => ({ id: r.id, title: r.projectTitle, type: "studio" }));
       for (const record of records) {
         const key = `${a.workspaceId}:${rule.eventType}:${record.id}`;

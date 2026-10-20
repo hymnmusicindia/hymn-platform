@@ -1,3 +1,4 @@
+import { syncDailyCrmWork } from "@/lib/team/daily-work";
 import { cronHandler } from "@/lib/cron/runtime";
 export const GET = cronHandler("team-os", runJob);
 import { timingSafeEqual } from "node:crypto";
@@ -20,6 +21,7 @@ async function runJob(request: Request) {
       handled.add(owner.workspaceId);
       await teamMutation(owner, "workflow-sync", {});
       await teamWrite(owner, async (tx, a) => {
+        await syncDailyCrmWork(tx, a);
         const now = new Date(); const local = new Date(now.getTime() + 330 * 60000); const day = local.getUTCDay(); const week = weekStartIndia(now).toISOString().slice(0, 10);
         const appointments = await tx.teamCalendarEvent.findMany({ where: { workspaceId: a.workspaceId, status: "SCHEDULED", remindedAt: null, OR: [{ endsAt: { gt: now } }, { endsAt: null }], startsAt: { gte: new Date(now.getTime() - 15 * 60000), lte: new Date(now.getTime() + 7 * 86400000) } }, take: 1000 });
         for (const appointment of appointments) {

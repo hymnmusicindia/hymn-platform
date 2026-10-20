@@ -20,7 +20,8 @@ async function main() {
   const workspace = await prisma.teamWorkspace.create({ data: { name: `Acquisition ${suffix}` } });
   const role = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name: "Acquisition Admin", owner: true, permissions: ["crm.prospects.view", "crm.prospects.create", "crm.prospects.assign", "crm.outreach.manage", "crm.all", "acquisition.admin"] } });
   const researcher = await prisma.teamMember.create({ data: { workspaceId: workspace.id, userId: researcherUser.id, roleId: role.id } });
-  const converter = await prisma.teamMember.create({ data: { workspaceId: workspace.id, userId: converterUser.id, roleId: role.id } });
+  const converterRole = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name: "Acquisition representative", owner: false, permissions: role.permissions } });
+  const converter = await prisma.teamMember.create({ data: { workspaceId: workspace.id, userId: converterUser.id, roleId: converterRole.id } });
   const actor = await prisma.teamMember.findUniqueOrThrow({ where: { id: researcher.id }, include: { role: true } });
   const prospectContact = `artist-${suffix}@fixture.invalid`;
   const growth = await prisma.growthLead.create({ data: { kind: "acquisition", name: "Fixture Artist", email: prospectContact, interest: "Distribution", message: "Fixture source-backed lead" } });
@@ -44,7 +45,7 @@ async function main() {
   const submittedLead = await prisma.acquisitionLead.findUniqueOrThrow({ where: { prospectId: submittedProspect.id } });
   assert.equal(submittedLead.researcherEmployeeId, researcher.id);
   await prisma.$transaction(tx => acquisitionMutation(tx, actor, "acquisition-assign", { leadId: submittedLead.id, employeeId: converter.id, reason: "Assign independent conversion representative" }));
-  await teamMutation(actor, "prospect-update", { id: submittedProspect.id, version: submittedProspect.version, stage: "QUALIFIED" });
+  await teamMutation(actor, "prospect-update", { id: submittedProspect.id, version: (await prisma.teamProspect.findUniqueOrThrow({ where: { id: submittedProspect.id } })).version, stage: "QUALIFIED" });
   const converterActor = await prisma.teamMember.findUniqueOrThrow({ where: { id: converter.id }, include: { role: true } });
   const signedLink = await acquisitionRead(converterActor, "acquisition-link", new URLSearchParams({ leadId: submittedLead.id })) as { url: string };
   const acquisitionToken = decodeURIComponent(new URL(signedLink.url).pathname.split("/").pop()!);

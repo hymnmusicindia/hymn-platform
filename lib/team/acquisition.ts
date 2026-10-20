@@ -1,3 +1,4 @@
+import { assertEmployeeAssignee, dailyProgress, indiaWorkday, syncDailyCrmWork } from "./daily-work";
 import { crmPreferences, nextCaller } from "./crm-workflow";
 import { z } from "zod";
 import "server-only";
@@ -17,10 +18,18 @@ type Tx = Prisma.TransactionClient;
 export async function acquisitionRead(a: Actor, resource: string, params: URLSearchParams) {
   if (resource === "acquisition-targets") {
     demand(a, "crm.prospects.view");
-    const today = new Date(new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) + "T00:00:00+05:30");
-    const tomorrow = new Date(today.getTime() + 86400000);
-    const members = await prisma.teamMember.findMany({ where: { workspaceId: a.workspaceId, status: "ACTIVE", ...(can(a, "acquisition.admin") ? {} : { id: a.id }) }, include: { user: { select: { name: true } } } });
-    return { items: await Promise.all(members.map(async member => ({ id: member.id, name: member.user.name, ...crmPreferences(member.preferences), researched: await prisma.acquisitionLead.count({ where: { workspaceId: a.workspaceId, researcherEmployeeId: member.id, registeredAt: { gte: today, lt: tomorrow }, prospect: { verified: true, suppressed: false } } }), called: (await prisma.teamOutreach.findMany({ where: { actorId: member.id, kind: "CONTACT", occurredAt: { gte: today, lt: tomorrow }, prospect: { workspaceId: a.workspaceId } }, distinct: ["prospectId"], select: { prospectId: true } })).length }))) };
+    const members = await prisma.teamMember.findMany({ where: { workspaceId: a.workspaceId, status: "ACTIVE", role: { owner: false }, user: { status: "ACTIVE" }, ...(can(a, "acquisition.admin") ? {} : { id: a.id }) }, include: { user: { select: { name: true } } } });
+    return { items: await Promise.all(members.map(async member => ({ id: member.id, name: member.user.name, ...crmPreferences(member.preferences), ...await dailyProgress(prisma, a.workspaceId, member.id) }))) };
+
+  }
+  if (resource === "acquisition-daily-plan") {
+    demand(a, "crm.prospects.view");
+    const self = await prisma.teamMember.findUniqueOrThrow({ where: { id: a.id }, include: { role: true } });
+    const config = crmPreferences(self.preferences);
+    const { day, start, end } = indiaWorkday();
+    const tasks = await prisma.teamTask.findMany({ where: { workspaceId: a.workspaceId, ownerId: a.id, archivedAt: null, status: { notIn: ["COMPLETED", "CANCELLED"] } }, select: { id: true, title: true, dueAt: true, status: true }, orderBy: { dueAt: "asc" }, take: 8 });
+    const ready = { workspaceId: a.workspaceId, ...(can(a, "crm.all") ? {} : { acquisitionEmployeeId: a.id }), prospect: { verified: true, suppressed: false, contactEligibility: { in: ["CONSENTED", "LEGITIMATE_INTEREST"] }, stage: { notIn: ["CONVERTED", "LOST", "NOT_INTERESTED", "UNQUALIFIED", "DUPLICATE", "DO_NOT_CONTACT"] } } };
+    return { day, owner: self.role.owner, workRole: self.role.owner ? "owner" : config.workRole || "member", researchTarget: self.role.owner ? 0 : config.researchTarget || 0, callTarget: self.role.owner ? 0 : config.callTarget || 0, ...await dailyProgress(prisma, a.workspaceId, a.id), tasks, ready: await prisma.acquisitionLead.count({ where: ready }), overdue: await prisma.acquisitionLead.count({ where: { ...ready, prospect: { ...ready.prospect, followUpAt: { lt: new Date() } } } }), teamIntake: can(a, "acquisition.admin") ? await prisma.acquisitionLead.count({ where: { workspaceId: a.workspaceId, registeredAt: { gte: start, lt: end } } }) : undefined };
   }
   if (["acquisition-leads", "acquisition-dashboard", "acquisition-ledger", "acquisition-settings", "acquisition-reassign", "acquisition-email-templates", "acquisition-email-events"].includes(resource)) demand(a, "crm.prospects.view");
   if (resource === "acquisition-customer-attribution") {
@@ -58,7 +67,7 @@ export async function acquisitionRead(a: Actor, resource: string, params: URLSea
       ...(status && ["NEW", "QUALIFIED", "ASSIGNED", "CONTACTED", "INTERESTED", "CONVERTED", "UNQUALIFIED", "DUPLICATE", "NOT_INTERESTED", "DO_NOT_CONTACT", "LOST"].includes(status) ? [{ prospect: { stage: status } }] : []),
     ] };
     const orderKey = params.get("sort"); const orderBy = orderKey === "status" ? { prospect: { stage: "asc" as const } } : orderKey === "owner" ? { acquisitionEmployeeId: "asc" as const } : orderKey === "source" ? { prospect: { sourceUrl: "asc" as const } } : { registeredAt: "desc" as const };
-    const rows = await prisma.acquisitionLead.findMany({ where, take: resource === "acquisition-leads" ? 100 : 5000, orderBy, include: { prospect: { select: { id: true, version: true, ownerId: true, verified: true, name: true, contactName: true, email: true, phone: true, stage: true, sourceUrl: true, discoveredAt: true, notes: true, followUpAt: true, categories: true, contactEligibility: true, suppressed: true } }, researcher: { select: { id: true, user: { select: { name: true } } } }, acquisitionEmployee: { select: { id: true, user: { select: { name: true } } } }, customer: { select: { id: true, name: true, email: true } } } });
+    const rows = await prisma.acquisitionLead.findMany({ where, take: resource === "acquisition-leads" ? 100 : 5000, orderBy, include: { prospect: { select: { id: true, version: true, ownerId: true, verified: true, name: true, contactName: true, email: true, phone: true, stage: true, sourceUrl: true, evidence: true, discoveredAt: true, notes: true, followUpAt: true, categories: true, contactEligibility: true, suppressed: true } }, researcher: { select: { id: true, user: { select: { name: true } } } }, acquisitionEmployee: { select: { id: true, user: { select: { name: true } } } }, customer: { select: { id: true, name: true, email: true } } } });
     return { items: rows };
   }
   if (resource === "acquisition-leads-export") {
@@ -129,9 +138,10 @@ export async function acquisitionRead(a: Actor, resource: string, params: URLSea
 }
 
 export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, body: Record<string, unknown>) {
+  if (resource === "acquisition-daily-sync") { demand(a, "crm.prospects.view"); return syncDailyCrmWork(tx, a); }
   if (resource === "acquisition-dispatch") {
     demand(a, "acquisition.admin");
-    const leads = await tx.acquisitionLead.findMany({ where: { workspaceId: a.workspaceId, acquisitionEmployeeId: null, prospect: { suppressed: false, stage: { notIn: ["CONVERTED", "LOST", "NOT_INTERESTED", "UNQUALIFIED", "DUPLICATE"] } } }, orderBy: [{ registeredAt: "asc" }, { id: "asc" }], take: 100 });
+    const leads = await tx.acquisitionLead.findMany({ where: { workspaceId: a.workspaceId, acquisitionEmployeeId: null, prospect: { verified: true, contactEligibility: { in: ["CONSENTED", "LEGITIMATE_INTEREST"] }, suppressed: false, stage: { notIn: ["CONVERTED", "LOST", "NOT_INTERESTED", "UNQUALIFIED", "DUPLICATE"] } } }, orderBy: [{ registeredAt: "asc" }, { id: "asc" }], take: 100, include: { prospect: true } });
     let assigned = 0;
     for (const lead of leads) {
       const caller = await nextCaller(tx, a);
@@ -139,6 +149,7 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
       await tx.acquisitionLead.update({ where: { id: lead.id }, data: { acquisitionEmployeeId: caller.id } });
       await tx.teamProspect.update({ where: { id: lead.prospectId }, data: { ownerId: caller.id, version: { increment: 1 } } });
       await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: `${lead.prospectId}:` }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, data: { ownerId: caller.id, version: { increment: 1 } } });
+      await tx.teamTask.upsert({ where: { eventKey: `${lead.prospectId}:call` }, create: { workspaceId: a.workspaceId, creatorId: a.id, ownerId: caller.id, title: `First contact: ${lead.prospect.name}`, eventKey: `${lead.prospectId}:call`, dueAt: lead.prospect.followUpAt || indiaWorkday().dueAt }, update: { ownerId: caller.id } });
       await tx.leadOwnershipEvent.create({ data: { leadId: lead.id, actorEmployeeId: a.id, newEmployeeId: caller.id, attributionRole: "ACQUISITION", reason: "Automatic caller rotation." } });
       await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: "lead.rotation_assigned", entityId: lead.id, metadata: { employeeId: caller.id } } });
       await tx.teamNotification.create({ data: { memberId: caller.id, title: "New contact assigned to your call queue", href: "/team?module=acquisition" } });
@@ -149,12 +160,15 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
   }
   if (resource === "acquisition-target-save") {
     demand(a, "acquisition.admin");
-    const data = z.object({ employeeId: z.string().min(1), researchTarget: z.number().int().min(0).max(10000), callTarget: z.number().int().min(0).max(10000), caller: z.boolean() }).parse(body);
+    const data = z.object({ employeeId: z.string().min(1), researchTarget: z.number().int().min(0).max(10000), callTarget: z.number().int().min(0).max(10000), caller: z.boolean(), workRole: z.enum(["researcher", "caller"]).optional() }).parse(body);
     const member = await tx.teamMember.findFirst({ where: { id: data.employeeId, workspaceId: a.workspaceId, status: "ACTIVE" }, include: { role: true } });
     if (!member) throw new TeamError("Member unavailable.", 404);
+    await assertEmployeeAssignee(tx, a.workspaceId, member.id);
+    if (data.workRole === "researcher" && !can(member, "crm.prospects.create") || data.workRole === "caller" && !can(member, "crm.outreach.manage")) throw new TeamError("The selected daily assignment requires the matching CRM permissions.");
     if (data.caller && (!can(member, "crm.outreach.manage") || !can(member, "crm.prospects.view"))) throw new TeamError("Callers need CRM view and outreach permissions.");
     const previous = member.preferences && typeof member.preferences === "object" && !Array.isArray(member.preferences) ? member.preferences : {};
-    const { employeeId, ...crm } = data;
+    const { employeeId, ...requested } = data;
+    const crm = { ...crmPreferences(member.preferences), ...requested };
     await tx.teamMember.update({ where: { id: employeeId }, data: { preferences: { ...previous, crm } } });
     await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: "crm.targets_updated", entityId: employeeId, metadata: { previous: crmPreferences(member.preferences), next: crm } } });
     return { ok: true };
@@ -227,6 +241,9 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
     const lead = await tx.acquisitionLead.findFirst({ where: { id: leadId, workspaceId: a.workspaceId } });
     if (!lead) throw new TeamError("Lead unavailable.", 404);
     if (!await tx.teamMember.findFirst({ where: { id: employeeId, workspaceId: a.workspaceId, status: "ACTIVE", user: { status: "ACTIVE" } } })) throw new TeamError("Choose an active member of this workspace.");
+    await assertEmployeeAssignee(tx, a.workspaceId, employeeId);
+    await tx.teamProspect.update({ where: { id: lead.prospectId }, data: { ownerId: employeeId, version: { increment: 1 } } });
+    await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: `${lead.prospectId}:` }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, data: { ownerId: employeeId, version: { increment: 1 } } });
     const previous = lead.acquisitionEmployeeId;
     await tx.acquisitionLead.update({ where: { id: lead.id }, data: { acquisitionEmployeeId: employeeId } });
     await tx.leadOwnershipEvent.create({ data: { leadId: lead.id, actorEmployeeId: a.id, previousEmployeeId: previous, newEmployeeId: employeeId, attributionRole: "ACQUISITION", reason } });
@@ -376,6 +393,11 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
     const lead = await tx.acquisitionLead.findFirst({ where: { id: leadId, workspaceId: a.workspaceId } });
     if (!lead) throw new TeamError("Lead unavailable.", 404);
     if (!await tx.teamMember.findFirst({ where: { id: employeeId, workspaceId: a.workspaceId } })) throw new TeamError("Choose a member of this workspace.");
+    if (role === "ACQUISITION") {
+      await assertEmployeeAssignee(tx, a.workspaceId, employeeId);
+      await tx.teamProspect.update({ where: { id: lead.prospectId }, data: { ownerId: employeeId, version: { increment: 1 } } });
+      await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: `${lead.prospectId}:` }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, data: { ownerId: employeeId, version: { increment: 1 } } });
+    }
     const previous = role === "RESEARCHER" ? lead.researcherEmployeeId : lead.acquisitionEmployeeId;
     await tx.acquisitionLead.update({ where: { id: lead.id }, data: role === "RESEARCHER" ? { researcherEmployeeId: employeeId } : { acquisitionEmployeeId: employeeId } });
     await tx.leadOwnershipEvent.create({ data: { leadId: lead.id, actorEmployeeId: a.id, previousEmployeeId: previous, newEmployeeId: employeeId, attributionRole: role, reason } });

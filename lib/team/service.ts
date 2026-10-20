@@ -1,3 +1,4 @@
+import { assertEmployeeAssignee, assertDailyTaskChange, syncDailyCrmWork, indiaWorkday } from "./daily-work";
 import { nextCaller } from "./crm-workflow";
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
@@ -8,7 +9,7 @@ import { can, demand, TeamError, statuses, onboardingTemplates, assertAcyclic, a
 import { taskSchema, taskUpdateSchema, projectSchema, inviteSchema, roleSchema, prospectSchema, prospectUpdateSchema, outreachSchema, messageSchema, channelSchema, reportSchema } from "./validation";
 
 type Tx = Prisma.TransactionClient;
-export const memberSelect = { id: true, department: true, jobTitle: true, responsibilities: true, managerId: true, lastActiveAt: true, availability: true, status: true, joinedAt: true, user: { select: { name: true, avatar: true, email: true } }, role: { select: { name: true } } } satisfies Prisma.TeamMemberSelect;
+export const memberSelect = { id: true, department: true, jobTitle: true, responsibilities: true, managerId: true, lastActiveAt: true, availability: true, status: true, joinedAt: true, user: { select: { name: true, avatar: true, email: true } }, role: { select: { name: true, owner: true } } } satisfies Prisma.TeamMemberSelect;
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 export const taskScope = (a: Actor): Prisma.TeamTaskWhereInput => ({ workspaceId: a.workspaceId, archivedAt: null, ...(!can(a, "tasks.all") ? { OR: [{ ownerId: a.id }, { creatorId: a.id }, { collaboratorIds: { has: a.id } }, { project: { memberIds: { has: a.id } } }] } : {}) });
 export const projectScope = (a: Actor): Prisma.TeamProjectWhereInput => ({ workspaceId: a.workspaceId, ...(!can(a, "tasks.all") ? { memberIds: { has: a.id } } : {}) });
@@ -57,7 +58,7 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
     const object = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
     const id = typeof object.id === "string" ? object.id : "";
     if (resource === "tasks") {
-      demand(a, "tasks.create"); const data = taskSchema.parse(input);
+      demand(a, "tasks.create"); const data = taskSchema.parse(input); await assertEmployeeAssignee(tx, a.workspaceId, data.ownerId);
       if (data.ownerId !== a.id) demand(a, "tasks.assign"); await eligible(tx, a, [data.ownerId]);
       if (data.projectId && !await tx.teamProject.findFirst({ where: { ...projectScope(a), id: data.projectId, memberIds: { has: data.ownerId } } })) throw new TeamError("Choose a project accessible to both you and the assignee.");
       await validateLink(tx, a, data.recordType, data.recordId); await dependencies(tx, a, "new", data.dependencyIds);
@@ -67,7 +68,9 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
     if (resource === "task-update") {
       const data = taskUpdateSchema.parse(input); const old = await taskAccess(tx, a, id);
       demand(a, "tasks.update"); if (old.version !== data.version) throw new TeamError("This task changed. Refresh before saving.", 409);
+      await assertDailyTaskChange(tx, a, old, object);
       const owner = data.ownerId ?? old.ownerId;
+      if (data.ownerId) await assertEmployeeAssignee(tx, a.workspaceId, data.ownerId);
       if (owner !== old.ownerId || (old.ownerId !== a.id && Object.keys(data).some(k => !["version", "status"].includes(k)))) demand(a, "tasks.assign");
       if (owner !== old.ownerId) await eligible(tx, a, [owner]);
       if (data.approvalRequired !== undefined && data.approvalRequired !== old.approvalRequired) demand(a, "tasks.approve");
@@ -96,7 +99,7 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
       await audit(tx, a, "task.updated", id, { previousStatus: old.status, status: next, previousOwner: old.ownerId, ownerId: owner });
       if (owner !== old.ownerId) await notify(tx, owner, `Assigned: ${row.title}`, `/team?module=work&task=${id}`);
       if (a.id !== owner && old.status === "IN_REVIEW" && next !== old.status) await notify(tx, owner, `Review ${next === "COMPLETED" ? "approved" : "updated"}: ${row.title}`, `/team?module=work&task=${id}`);
-      if (next === "COMPLETED" && old.status !== next && row.recurrenceDays) {
+      if (next === "COMPLETED" && old.status !== next && row.recurrenceDays && !(await tx.teamMember.findUniqueOrThrow({ where: { id: row.ownerId }, include: { role: true } })).role.owner) {
         const eventKey = `${row.id}:recurrence`;
         if (!await tx.teamTask.findUnique({ where: { eventKey } })) await tx.teamTask.create({ data: { workspaceId: a.workspaceId, creatorId: a.id, ownerId: row.ownerId, projectId: row.projectId, title: row.title, description: row.description, priority: row.priority, approvalRequired: row.approvalRequired, recordType: row.recordType, recordId: row.recordId, recurrenceDays: row.recurrenceDays, dueAt: new Date((row.dueAt?.getTime() || Date.now()) + row.recurrenceDays * 86400000), eventKey, checklist: (row.checklist as { text: string; done: boolean }[]).map(c => ({ ...c, done: false })) } });
       }
@@ -193,23 +196,49 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
       const lead = await tx.growthLead.create({ data: { kind: "acquisition", name: data.name, email: data.email || "", interest: data.categories.join(", "), message: data.evidence, notes: data.notes } });
       const row = await tx.teamProspect.create({ data: { ...data, discoveredAt: data.discoveredAt ? new Date(data.discoveredAt) : new Date(), contactEligibility: data.contactEligibility === "DO_NOT_CONTACT" ? "DO_NOT_CONTACT" : data.contactEligibility, suppressed: data.contactEligibility === "DO_NOT_CONTACT", verified: data.verified && data.contactEligibility !== "UNVERIFIED", leadId: lead.id, workspaceId: a.workspaceId, identityKey } });
       const attribution = await tx.acquisitionLead.create({ data: { workspaceId: a.workspaceId, prospectId: row.id, researcherEmployeeId: a.id, attributionLockedAt: new Date(), ownershipHistory: { create: { actorEmployeeId: a.id, newEmployeeId: a.id, attributionRole: "RESEARCHER", reason: "Original verified lead registration." } } } });
-      const caller = row.suppressed ? null : await nextCaller(tx, a);
+      const caller = row.suppressed || !row.verified || !["CONSENTED", "LEGITIMATE_INTEREST"].includes(row.contactEligibility) || (!row.email && !/^\+?[1-9]\d{7,14}$/.test(row.phone.replace(/[\s().-]/g, ""))) ? null : await nextCaller(tx, a);
       if (caller) {
         await tx.acquisitionLead.update({ where: { id: attribution.id }, data: { acquisitionEmployeeId: caller.id } });
-        await tx.teamProspect.update({ where: { id: row.id }, data: { ownerId: caller.id } });
+        await tx.teamProspect.update({ where: { id: row.id }, data: { ownerId: caller.id, stage: "READY_TO_CONTACT" } });
         await tx.leadOwnershipEvent.create({ data: { leadId: attribution.id, actorEmployeeId: a.id, newEmployeeId: caller.id, attributionRole: "ACQUISITION", reason: "Automatic caller rotation." } });
         await notify(tx, caller.id, `New call lead: ${row.name}`, "/team?module=acquisition");
       }
-      if (row.followUpAt && !row.suppressed) await tx.teamTask.create({ data: { workspaceId: a.workspaceId, creatorId: a.id, ownerId: caller?.id || row.ownerId, title: `Follow up: ${row.name}`, eventKey: `${row.id}:call`, dueAt: row.followUpAt } });
+      if ((row.followUpAt || caller) && !row.suppressed && (caller || !a.role.owner)) await tx.teamTask.create({ data: { workspaceId: a.workspaceId, creatorId: a.id, ownerId: caller?.id || row.ownerId, title: `Follow up: ${row.name}`, eventKey: `${row.id}:call`, dueAt: row.followUpAt || indiaWorkday().dueAt } });
       await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: "lead.registered", entityId: attribution.id, metadata: { researcherEmployeeId: a.id, sourceUrl: data.sourceUrl } } });
-      await audit(tx, a, "prospect.created", row.id, { leadId: lead.id, acquisitionLeadId: attribution.id }); return { ...row, ownerId: caller?.id || row.ownerId };
+      await syncDailyCrmWork(tx, a);
+      await audit(tx, a, "prospect.created", row.id, { leadId: lead.id, acquisitionLeadId: attribution.id }); return { ...row, ownerId: caller?.id || row.ownerId, stage: caller ? "READY_TO_CONTACT" : row.stage };
+    }
+    if (resource === "prospect-research-save") {
+      demand(a, "crm.prospects.create");
+      const data = z.object({ version: z.number().int().positive(), email: z.string().trim().email().max(254).nullable(), phone: z.string().trim().max(40), sourceUrl: z.string().url().max(1000).refine(value => /^https?:\/\//i.test(value)), evidence: z.string().trim().min(10).max(10000), notes: z.string().trim().max(10000), verified: z.boolean(), contactEligibility: z.enum(["UNVERIFIED", "CONSENTED", "LEGITIMATE_INTEREST", "DO_NOT_CONTACT"]) }).parse(input);
+      const old = await tx.teamProspect.findFirst({ where: { workspaceId: a.workspaceId, id, ...(can(a, "crm.all") ? {} : { acquisitionLead: { is: { researcherEmployeeId: a.id } } }) } });
+      if (!old) throw new TeamError("Research contact unavailable.", 404);
+      if (old.version !== data.version) throw new TeamError("This contact changed. Refresh before saving.", 409);
+      if (old.suppressed || ["CONVERTED", "DO_NOT_CONTACT"].includes(old.stage)) throw new TeamError("Closed or suppressed research cannot be changed here.", 403);
+      const email = data.email?.toLowerCase() || null, phoneKey = data.phone.replace(/\D/g, "");
+      if (email) {
+        if (await tx.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } } }) || await tx.growthLead.findFirst({ where: { email: { equals: email, mode: "insensitive" }, ...(old.leadId ? { id: { not: old.leadId } } : {}) } })) throw new TeamError("This email already belongs to an existing account or lead.", 409);
+        if (await tx.teamProspect.findFirst({ where: { workspaceId: a.workspaceId, id: { not: id }, email: { equals: email, mode: "insensitive" } } })) throw new TeamError("A contact with this email already exists.", 409);
+      }
+      if (phoneKey.length >= 7) {
+        if ((await tx.$queryRaw<{ id: number }[]>`SELECT id FROM users WHERE status = 'ACTIVE' AND regexp_replace(COALESCE(mobile, ''), '[^0-9]', '', 'g') = ${phoneKey} LIMIT 1`).length) throw new TeamError("This phone already belongs to a HYMN account.", 409);
+        if ((await tx.teamProspect.findMany({ where: { workspaceId: a.workspaceId, id: { not: id }, phone: { not: "" } }, select: { phone: true } })).some(row => row.phone.replace(/\D/g, "") === phoneKey)) throw new TeamError("A contact with this phone already exists.", 409);
+      }
+      const verified = data.verified && ["CONSENTED", "LEGITIMATE_INTEREST"].includes(data.contactEligibility);
+      const suppressed = data.contactEligibility === "DO_NOT_CONTACT";
+      const row = await tx.teamProspect.update({ where: { id }, data: { ...data, email, identityKey: hash(email || phoneKey || old.contactUrl || old.instagramUrl || old.youtubeUrl || old.websiteUrl || old.sourceUrl), verified, suppressed, stage: suppressed ? "DO_NOT_CONTACT" : verified && (email || phoneKey.length >= 8) && ["NEW", "NEEDS_RESEARCH"].includes(old.stage) ? "QUALIFIED" : old.stage, version: { increment: 1 } } });
+      if (old.leadId) await tx.growthLead.update({ where: { id: old.leadId }, data: { email: email || "", notes: row.notes } });
+      if (suppressed) await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: `${id}:` }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, data: { status: "CANCELLED", version: { increment: 1 } } });
+      await audit(tx, a, "prospect.research_updated", id, { verified, contactEligibility: row.contactEligibility });
+      await syncDailyCrmWork(tx, a);
+      return row;
     }
     if (["prospect-update", "prospect-call-save"].includes(resource)) {
       demand(a, "crm.prospects.view"); demand(a, "crm.outreach.manage"); const data = prospectUpdateSchema.parse(input);
       if (!a.role.owner && !can(a, "acquisition.admin") && data.ownerId && data.ownerId !== (await tx.teamProspect.findFirst({ where: { ...prospectScope(a), id }, select: { ownerId: true } }))?.ownerId) throw new TeamError("Lead reassignment requires an authorised admin override with a reason.", 403);
       const old = await tx.teamProspect.findFirst({ where: { ...prospectScope(a), id } }); if (!old) throw new TeamError("Prospect unavailable.", 404);
       if (old.version !== data.version) throw new TeamError("Prospect changed. Refresh first.", 409);
-      if (data.ownerId && data.ownerId !== old.ownerId) { demand(a, "crm.prospects.assign"); await eligible(tx, a, [data.ownerId]); }
+      if (data.ownerId && data.ownerId !== old.ownerId) { await assertEmployeeAssignee(tx, a.workspaceId, data.ownerId); demand(a, "crm.prospects.assign"); await eligible(tx, a, [data.ownerId]); }
       if (data.ownerId && data.ownerId !== old.ownerId && (!data.reason || data.reason.trim().length < 8)) throw new TeamError("Reassignment requires a reason.");
       if (old.suppressed && (data.suppressed === false || (data.stage && data.stage !== "DO_NOT_CONTACT"))) throw new TeamError("Suppressed prospects cannot be reactivated here.", 403);
       if (resource === "prospect-call-save" && object.contact) {
@@ -251,7 +280,7 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
       if (row.suppressed || ["CONVERTED", "LOST", "NOT_INTERESTED", "UNQUALIFIED", "DUPLICATE"].includes(row.stage)) await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: `${id}:` }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, data: { status: "CANCELLED", version: { increment: 1 } } });
       if (row.stage === "CONVERTED" && old.stage !== row.stage) await notify(tx, row.ownerId, `Customer linked: ${row.name}. Paid status is verified separately.`, "/team?module=analytics");
       if (data.followUpAt !== undefined) await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: `${id}:` }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, data: { dueAt: row.followUpAt, version: { increment: 1 } } });
-      if (!row.suppressed && !["CONVERTED", "LOST", "NOT_INTERESTED", "UNQUALIFIED", "DUPLICATE"].includes(row.stage) && (row.followUpAt || ["QUALIFIED", "REPLIED", "INTERESTED"].includes(row.stage))) {
+      if (!row.suppressed && !(await tx.teamMember.findUniqueOrThrow({ where: { id: row.ownerId }, include: { role: true } })).role.owner && !["CONVERTED", "LOST", "NOT_INTERESTED", "UNQUALIFIED", "DUPLICATE"].includes(row.stage) && (row.followUpAt || ["QUALIFIED", "REPLIED", "INTERESTED"].includes(row.stage))) {
         const eventKey = `${id}:call`;
         if (!await tx.teamTask.findFirst({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: `${id}:` }, status: { notIn: ["COMPLETED", "CANCELLED"] } } })) {
           const previousCall = await tx.teamTask.findUnique({ where: { eventKey } });
@@ -262,6 +291,7 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
           }
         }
       }
+      await syncDailyCrmWork(tx, a);
       return row;
     }
     if (resource === "outreach") {
@@ -272,7 +302,7 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
       if (preference) throw new TeamError("This contact has opted out. Further outreach is suppressed.", 403);
       if (data.kind === "CONTACT" && !prospect.verified) throw new TeamError("Verify the contact source before recording outreach.");
       if (new Date(data.occurredAt).getTime() > Date.now() + 60_000) throw new TeamError("An actual contact event cannot be in the future.");
-      const row = await tx.teamOutreach.create({ data: { ...data, actorId: a.id, occurredAt: new Date(data.occurredAt) } }); await audit(tx, a, `outreach.${data.kind.toLowerCase()}`, row.id); return row;
+      const row = await tx.teamOutreach.create({ data: { ...data, actorId: a.id, occurredAt: new Date(data.occurredAt) } }); await audit(tx, a, `outreach.${data.kind.toLowerCase()}`, row.id); await syncDailyCrmWork(tx, a); return row;
     }
     if (resource === "reports") {
       demand(a, "reports.team.view"); const data = reportSchema.parse(input); const weekStart = weekStartIndia(); const since = new Date(weekStart.getTime() - 330 * 60_000);

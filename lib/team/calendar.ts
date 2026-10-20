@@ -1,3 +1,4 @@
+import { assertEmployeeAssignee } from "./daily-work";
 import "server-only";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
@@ -38,7 +39,7 @@ export async function calendarMutation(tx: Prisma.TransactionClient, a: Actor, r
     if (event.version !== data.version) throw new TeamError("Event changed. Refresh first.", 409);
     if (event.kind !== "CALL" || event.status !== "SCHEDULED" || event.startsAt <= new Date()) throw new TeamError("Only upcoming scheduled calls can be passed to another representative.");
     if (event.assigneeId === data.assigneeId) throw new TeamError("Choose a different representative.");
-    await eligible(tx, a, [data.assigneeId]);
+    await eligible(tx, a, [data.assigneeId]); await assertEmployeeAssignee(tx, a.workspaceId, data.assigneeId);
     const member = await tx.teamMember.findUnique({ where: { id: data.assigneeId } });
     if (member?.availability !== "AVAILABLE") throw new TeamError("Choose an available representative.");
     // Reuse the same slot-conflict, client and schedule validation. Handoff is
@@ -53,6 +54,7 @@ export async function calendarMutation(tx: Prisma.TransactionClient, a: Actor, r
     const data = taskSchema.pick({ title: true, description: true, ownerId: true, priority: true }).extend({ startsAt: z.string().datetime({ offset: true }), clientKey: z.string().uuid() }).parse(input);
     if (data.ownerId !== a.id) demand(a, "tasks.assign");
     await eligible(tx, a, [data.ownerId]);
+    await assertEmployeeAssignee(tx, a.workspaceId, data.ownerId);
     const eventKey = `calendar-task:${a.workspaceId}:${a.id}:${data.clientKey}`;
     const dueAt = new Date(data.startsAt);
     const prior = await tx.teamTask.findUnique({ where: { eventKey } });
@@ -90,6 +92,7 @@ export async function calendarMutation(tx: Prisma.TransactionClient, a: Actor, r
 }
 async function saveEvent(tx: Prisma.TransactionClient, a: Actor, input: unknown, handoff = false) {
   demand(a, "calendar.manage"); const data = eventSchema.parse(input);
+  if (["CALL", "FOLLOW_UP"].includes(data.kind)) await assertEmployeeAssignee(tx, a.workspaceId, data.assigneeId);
   const old = data.id ? await tx.teamCalendarEvent.findFirst({ where: { id: data.id, workspaceId: a.workspaceId } }) : null;
   if (data.id && !old) throw new TeamError("Event unavailable.", 404);
   if (old?.status === "DELETED") throw new TeamError("This event was deleted.", 404);
