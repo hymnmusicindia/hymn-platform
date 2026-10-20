@@ -1,3 +1,4 @@
+import { requireCurrentPolicyAcceptance } from "@/lib/policy-agreement";
 import { SubscriptionPlanConfigurationError, subscriptionCheckoutUnavailable } from "@/lib/subscription-plan-validation";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
@@ -16,6 +17,8 @@ import { releaseReviewSnapshotHash } from "@/lib/release-review-snapshot";
 export async function POST(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  const policyGate = await requireCurrentPolicyAcceptance(session.sub);
+  if (policyGate) return policyGate;
 
   try {
     const payload = distributionOrderCreateSchema.parse(await request.json());

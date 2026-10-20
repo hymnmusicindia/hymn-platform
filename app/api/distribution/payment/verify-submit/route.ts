@@ -1,3 +1,4 @@
+import { requireCurrentPolicyAcceptance } from "@/lib/policy-agreement";
 import { releaseSaveFailure } from "@/lib/release-track-save";
 import { after, NextResponse } from "next/server";
 import { submitRelease } from "@/lib/distribution-service";
@@ -28,6 +29,8 @@ export const maxDuration = 300;
 export async function POST(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  const policyGate = await requireCurrentPolicyAcceptance(session.sub);
+  if (policyGate) return policyGate;
   const rate = await consumeRateLimit({ scope: "distribution-payment-verify", identity: String(session.sub), limit: 12, windowSeconds: 15 * 60 });
   if (!rate.allowed) return NextResponse.json({ error: "Too many payment verification attempts." }, { status: 429, headers: { "Retry-After": String(rate.retryAfterSeconds) } });
 

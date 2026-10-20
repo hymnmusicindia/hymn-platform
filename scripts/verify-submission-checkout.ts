@@ -1,3 +1,4 @@
+import { acceptCurrentPolicies, CURRENT_POLICY_REVISION } from "../lib/policy-agreement";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { createHmac } from "node:crypto";
@@ -51,6 +52,7 @@ export async function verifySubmissionCheckout() {
   async function fixture(credits = 0) {
     const suffix = ++sequence;
     const user = await prisma.user.create({ data: { googleId: `checkout-fixture-${suffix}`, name: "Checkout Artist", email: `checkout-${suffix}@example.test`, referralCredits: credits, role: "CUSTOMER", status: "ACTIVE", onboardingDone: true } });
+    await acceptCurrentPolicies(user.id, CURRENT_POLICY_REVISION);
     const artist = await prisma.artistCard.create({ data: { userId: user.id, artistName: "Checkout Artist", instagramUrl: "https://instagram.com/checkout_artist" } });
     const client = await playwrightRequest.newContext({ baseURL: origin, extraHTTPHeaders: { "x-forwarded-proto": "https", Cookie: `hymn_session=${jwt.sign({ sub: user.id, email: user.email, name: user.name, role: "customer" }, process.env.JWT_SECRET!, { expiresIn: "1h" })}` } });
     async function draft(status: "DRAFT" | "AWAITING_PAYMENT" = "DRAFT") {

@@ -1,3 +1,4 @@
+import { requireCurrentPolicyAcceptance } from "@/lib/policy-agreement";
 import { releaseSaveFailure } from "@/lib/release-track-save";
 import { createHash } from "node:crypto";
 import { matchesReceivedCorrection } from "@/lib/release-correction-workflow";
@@ -23,6 +24,8 @@ type EditTrackPayload = Omit<ReleaseTrack, "id" | "releaseId" | "createdAt"> & {
 export async function POST(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  const policyGate = await requireCurrentPolicyAcceptance(session.sub);
+  if (policyGate) return policyGate;
   let submissionKey = "";
   let editedReleaseId = 0;
 

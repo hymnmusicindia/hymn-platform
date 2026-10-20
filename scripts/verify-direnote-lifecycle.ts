@@ -1,3 +1,4 @@
+import { acceptCurrentPolicies, CURRENT_POLICY_REVISION } from "../lib/policy-agreement";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readFile, writeFile } from "node:fs/promises";
@@ -100,6 +101,7 @@ async function main() {
   const migration = await readFile("prisma/migrations/20260906000000_direnote_attempt_history/migration.sql", "utf8");
   for (let run = 0; run < 2; run++) for (const statement of migration.split(";").filter(value => value.trim())) await prisma.$executeRawUnsafe(statement);
   const user = await prisma.user.create({ data: { googleId: "fixture-gxrry", name: "gxrry", email: "gxrry@example.test", role: "CUSTOMER", status: "ACTIVE" } });
+  await acceptCurrentPolicies(user.id, CURRENT_POLICY_REVISION);
   const artist = await prisma.artistCard.create({ data: { userId: user.id, artistName: "gxrry", instagramUrl: "https://instagram.com/fixture_gxrry" } });
   const release = await prisma.release.create({ data: {
     userId: user.id, artistProfileId: artist.id, title: "Magenta", artistName: "gxrry", genre: "Pop", releaseType: "ep", releaseDate: new Date("2099-01-10"), status: "APPROVED", paymentStatus: "paid", artworkUrl: "https://cdn.example.test/cover.jpg", upc: oldUpc,
@@ -282,6 +284,7 @@ async function main() {
     assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: paidDraft.id } })).paymentStatus, "pending", "Unfulfilled capture must still pass verify-submit.");
     assert.equal(await prisma.distributionOrder.count({ where: { releaseId: paidDraft.id } }), 1);
     const otherUser = await prisma.user.create({ data: { googleId: "fixture-other-paid-owner", name: "Other owner", email: "other-paid@example.test", role: "CUSTOMER", status: "ACTIVE" } });
+    await acceptCurrentPolicies(otherUser.id, CURRENT_POLICY_REVISION);
     await prisma.distributionOrder.update({ where: { id: paidOrder.id }, data: { userId: otherUser.id, fulfilledAt: new Date() } });
     await browser.paidDraftCheckout(paidDraft.id, true, 409);
     assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: paidDraft.id } })).paymentStatus, "pending", "Another customer's payment must never restore entitlement.");

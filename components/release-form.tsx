@@ -1157,7 +1157,6 @@ export function ReleaseForm({
   const audioPreviewObjectUrlsRef = useRef<Set<string>>(new Set());
   const [draggedTrackIndex, setDraggedTrackIndex] = useState<number | null>(null);
   const [versionPickerTrack, setVersionPickerTrack] = useState<number | null>(null);
-  const [legalDetailsOpen, setLegalDetailsOpen] = useState(false);
   const [queue, setQueue] = useState<DistributionQueueSummary | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [useHymnCredits, setUseHymnCredits] = useState(false);
@@ -1463,7 +1462,7 @@ export function ReleaseForm({
     () => Object.values(legal).every(Boolean),
     [legal],
   );
-  function setLegalDeclarationAccepted(accepted: boolean) {
+  function setReleaseRightsConfirmed(accepted: boolean) {
     setLegal({
       ownershipConfirmation: accepted,
       noInfringement: accepted,
@@ -2506,7 +2505,7 @@ export function ReleaseForm({
             step: 5,
             key: "legal-checks",
             message:
-              "Complete the final legal confirmations before continuing.",
+              "Confirm the rights and permissions for this release before continuing.",
           }
         : null,
     ].filter((issue): issue is ValidationIssue => Boolean(issue));
@@ -3733,23 +3732,9 @@ export function ReleaseForm({
                 {rightsUploadError ? <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>{rightsUploadError}</p> : null}
               </section> : null}
               <div className="mt-5 border-t pt-5" style={{ borderColor: "var(--border)" }}>
-                <div className="flex items-start justify-between gap-3"><p className="font-semibold">Legal Declaration</p><span className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: legalComplete ? "#22c55e" : "var(--text-soft)" }}>{legalComplete ? "Agreed" : "Required"}</span></div>
-                <details open={legalDetailsOpen} onToggle={(event) => setLegalDetailsOpen(event.currentTarget.open)} className="legal-declaration-details group mt-5 overflow-hidden rounded-xl border px-4 py-1" style={{ borderColor: "var(--border)" }}>
-                  <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-[var(--text)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] [&::-webkit-details-marker]:hidden"><span>Review declaration terms</span><ChevronDown className="h-4 w-4 shrink-0 text-[var(--text-soft)] transition-transform duration-200 group-open:rotate-180" /></summary>
-                  <div className="legal-declaration-copy pb-5 pt-3">
-                    <div className="grid gap-4">
-                      <p><span aria-hidden="true">✓</span><span>I confirm that I own or control all rights required to distribute this content.</span></p>
-                      <p><span aria-hidden="true">✓</span><span>I confirm that all collaborators, contributors and rights holders have authorized this release.</span></p>
-                      <p><span aria-hidden="true">✓</span><span>I understand that false ownership claims, copyright infringement or fraudulent submissions may result in removal of my release and suspension of my HYMN account.</span></p>
-                      <p><span aria-hidden="true">✓</span><span>I understand that this release will be distributed through HYMN&apos;s distribution network, which retains 30% of Net Royalty Revenue. The remaining eligible earnings will be reflected in my HYMN dashboard where reporting, royalty tracking, splits and payouts are managed.</span></p>
-                    </div>
-                    <div className="legal-declaration-disclosure">
-                      <span className="legal-declaration-disclosure-label">Distribution disclosure</span>
-                      <p>By submitting this release, you acknowledge that distribution is fulfilled through HYMN&apos;s distribution network, which retains 30% of Net Royalty Revenue in accordance with the applicable distribution agreement. The remaining 70% of eligible Net Royalty Revenue is reflected within your HYMN earnings dashboard, where HYMN manages reporting, royalty tracking, splits, and payout processing according to your account settings and any configured royalty splits.</p>
-                    </div>
-                  </div>
-                </details>
-                <label className="mt-5 flex cursor-pointer items-start gap-3 text-sm font-semibold"><input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0" checked={legalComplete} onChange={(event) => { setLegalDeclarationAccepted(event.target.checked); setLegalDetailsOpen(false); }} /><span>I have read and agree to the Legal Declaration above.</span></label>
+                <p className="font-semibold">Release rights and permissions</p>
+                <p className="mt-3 text-sm leading-6" style={{ color: "var(--text-muted)" }}>I own or control the rights to this recording and artwork, have permission from all contributors, and have supplied accurate metadata that complies with destination rules. Infringing or fraudulent submissions may lead to removal and account restrictions.</p>
+                <label className="mt-4 flex cursor-pointer items-start gap-3 text-sm font-semibold"><input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0" checked={legalComplete} onChange={event => setReleaseRightsConfirmed(event.target.checked)} /><span>I confirm the rights, permissions and accuracy of this release.</span></label>
               </div>
             </div>
           </section>
@@ -5660,18 +5645,16 @@ export function ReleaseForm({
                 >
                   <div>
                     <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold" style={{ color: "var(--text)" }}>Legal Declaration</p>
+                      <p className="font-semibold" style={{ color: "var(--text)" }}>Release rights and permissions</p>
                       <span className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: legalComplete ? "var(--success)" : "var(--text-soft)" }}>{legalComplete ? "Agreed" : "Required"}</span>
                     </div>
-                    <details className="legal-declaration-details mt-4"><summary className="cursor-pointer py-3 text-sm font-semibold">Review legal declaration and royalty terms</summary>
+                    <details className="legal-declaration-details mt-4"><summary className="cursor-pointer py-3 text-sm font-semibold">Review release rights and permissions</summary>
                     <div className="mt-5 grid gap-3 border-t pt-5 text-sm leading-6" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
                       <p>✓ I confirm that I own or control all rights required to distribute this content.</p>
                       <p>✓ I confirm that all collaborators, contributors and rights holders have authorized this release.</p>
                       <p>✓ I understand that false ownership claims, copyright infringement or fraudulent submissions may result in removal of my release and suspension of my HYMN account.</p>
-                      <p>✓ I understand that this release will be distributed through HYMN&apos;s distribution network, which retains 30% of Net Royalty Revenue. The remaining eligible earnings will be reflected in my HYMN dashboard where reporting, royalty tracking, splits and payouts are managed.</p>
                     </div>
-                    <p className="mt-5 border-t pt-5 text-sm leading-6" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>By submitting this release, you acknowledge that distribution is fulfilled through HYMN&apos;s distribution network, which retains 30% of Net Royalty Revenue in accordance with the applicable distribution agreement. The remaining 70% of eligible Net Royalty Revenue is reflected within your HYMN earnings dashboard, where HYMN manages reporting, royalty tracking, splits, and payout processing according to your account settings and any configured royalty splits.</p>
-                    </details><p className="mt-5 border-t pt-5 text-sm font-semibold" style={{ borderColor: "var(--border)", color: legalComplete ? "var(--success)" : "var(--danger)" }}>{legalComplete ? "Legal Declaration accepted." : "Return to Delivery and accept the Legal Declaration before submitting."}</p>
+                    </details><p className="mt-5 border-t pt-5 text-sm font-semibold" style={{ borderColor: "var(--border)", color: legalComplete ? "var(--success)" : "var(--danger)" }}>{legalComplete ? "Release rights confirmed." : "Return to Delivery and confirm the rights for this release before submitting."}</p>
                   </div>
                 </div>
 

@@ -1,3 +1,4 @@
+import { acceptCurrentPolicies, CURRENT_POLICY_REVISION } from "../lib/policy-agreement";
 import { prisma } from "../lib/prisma";
 import { startDireNoteBrowser, fixtureWav } from "./direnote-browser-fixture";
 import { startCheckoutMock, verifySubmissionCheckout, captureBrowserFixtureOrder } from "./verify-submission-checkout";
@@ -8,6 +9,7 @@ import jwt from "jsonwebtoken";
 async function main() {
   if (!process.env.DATABASE_URL?.startsWith("postgresql://fixture:fixture@127.0.0.1:55439/")) throw new Error("Isolated fixture database required.");
   const user = await prisma.user.create({ data: { googleId: "first-release-browser", name: "Fixture", email: "first-release-browser@example.test", role: "CUSTOMER", status: "ACTIVE", onboardingDone: true } });
+  await acceptCurrentPolicies(user.id, CURRENT_POLICY_REVISION);
   const mock = await startCheckoutMock();
   let browser: Awaited<ReturnType<typeof startDireNoteBrowser>> | undefined;
   const responses: Array<{ path: string; status: number; error?: unknown }> = [];
@@ -77,16 +79,12 @@ async function main() {
     }
     console.log("PASS contributor editor: 390/1440px, summaries, saved producer name, one expanded role, explicit Done and no overflow.");
     await browser.page.goto(`http://127.0.0.1:55441/distribution/start?resume=${readyRelease.releaseId}&stage=5`);
-    const legal = browser.page.locator(".legal-declaration-details").first();
-    await expect(legal).not.toHaveAttribute("open", "");
-    const consent = browser.page.getByRole("checkbox", { name: /I have read and agree to the Legal Declaration/ });
-    await consent.uncheck();
-    await legal.locator("summary").click(); await expect(legal).toHaveAttribute("open", "");
-    await legal.locator("summary").click(); await expect(legal).not.toHaveAttribute("open", "");
-    await expect(consent).not.toBeChecked(); await consent.check();
+    await expect(browser.page.locator("form.release-workflow")).not.toContainText("Net Royalty Revenue");
+    const consent = browser.page.getByRole("checkbox", { name: "I confirm the rights, permissions and accuracy of this release." });
+    await consent.uncheck(); await expect(consent).not.toBeChecked(); await consent.check();
     await browser.page.waitForTimeout(1600);
     await expect(browser.page.locator(".release-workspace-state")).toContainText("Saved", { timeout: 20000 });
-    console.log("PASS mobile 360/390/430/768px: padded header, searchable genre/mood sheets, no overflow and collapsible legal terms without automatic consent.");
+    console.log("PASS mobile 360/390/430/768px: padded header, searchable genre/mood sheets, no overflow and release rights confirmations without repeated commercial disclosure.");
     await browser.page.setViewportSize({ width: 1440, height: 900 });
     browser.page.on("response", async response => {
       if (response.url().includes("/api/distribution/") && response.request().method() === "POST") {

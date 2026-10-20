@@ -1,0 +1,6 @@
+/* Keep the account-wide policy notice above portal chrome without covering content. */
+html body .hymn-portal-root:has([data-policy-banner]) > header { top:var(--policy-banner-height,180px)!important; }
+@media(min-width:1024px) {
+  html body .hymn-portal-root:has([data-policy-banner]) .hymn-portal .dashboard-os-sidebar { top:calc(58px + var(--policy-banner-height,180px))!important; height:calc(100dvh - 58px - var(--policy-banner-height,180px))!important; }
+  html body .hymn-portal-root:has([data-policy-banner]) .hymn-portal-frame:has(.distribution-start-page) { height:calc(100dvh - 58px - var(--policy-banner-height,180px))!important; }
+}

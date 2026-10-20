@@ -1,3 +1,4 @@
+import { requireCurrentPolicyAcceptance } from "@/lib/policy-agreement";
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
@@ -8,6 +9,8 @@ import { findReleaseIdentifierConflicts } from "@/lib/release-identifier-conflic
 
 export async function POST(request: Request) {
   const auth = await requireUser(); if ("error" in auth) return auth.error;
+  const policyGate = await requireCurrentPolicyAcceptance(auth.user.id);
+  if (policyGate) return policyGate;
   const body = await request.json().catch(() => ({}));
   const releaseId = Number(body.releaseId);
   if (!Number.isInteger(releaseId)) return NextResponse.json({ error: "A release is required." }, { status: 400 });

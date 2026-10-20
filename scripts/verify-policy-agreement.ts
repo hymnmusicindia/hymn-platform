@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { prisma } from '../lib/prisma';
+import { acceptCurrentPolicies, CURRENT_POLICY_REVISION, getPolicyAgreementStatus, requireCurrentPolicyAcceptance } from '../lib/policy-agreement';
+import { policyDocuments, POLICY_VERSION } from '../lib/policy-content';
+assert.match(process.env.DATABASE_URL ?? '', /^postgresql:\/\/fixture:fixture@127\.0\.0\.1:55439\/direnote_virtual/);
+async function main() {
+  const user = await prisma.user.create({ data:{ name:'Policy fixture',email:`policy-${Date.now()}@example.test`,googleId:`policy-${Date.now()}` } });
+  const other = await prisma.user.create({ data:{ name:'Other policy fixture',email:`policy-other-${Date.now()}@example.test`,googleId:`policy-other-${Date.now()}` } });
+  assert.equal((await getPolicyAgreementStatus(user.id)).accepted,false);
+  assert.equal((await requireCurrentPolicyAcceptance(user.id))?.status,428);
+  assert.equal((await acceptCurrentPolicies(user.id,'stale-revision')).stale,true);
+  assert.equal(await prisma.auditLog.count({where:{actorId:user.id,action:'ACCOUNT_POLICIES_ACCEPTED'}}),0);
+  await Promise.all([1,2,3].map(()=>acceptCurrentPolicies(user.id,CURRENT_POLICY_REVISION)));
+  assert.equal(await prisma.auditLog.count({where:{actorId:user.id,action:'ACCOUNT_POLICIES_ACCEPTED'}}),1,'Multiple tabs must not duplicate acceptance.');
+  const status=await getPolicyAgreementStatus(user.id);
+  assert.equal(status.accepted,true);assert(status.acceptedAt);assert.equal(await requireCurrentPolicyAcceptance(user.id),null);
+  assert.equal((await getPolicyAgreementStatus(other.id)).accepted,false,'Acceptance is account-specific.');
+  const publications=await prisma.auditLog.findMany({where:{action:'ACCOUNT_POLICY_REVISION_PUBLISHED',entityId:CURRENT_POLICY_REVISION}});
+  assert.equal(publications.length,1);assert.deepEqual((publications[0].metadata as any).documents,policyDocuments,'The accepted text is preserved, not merely a mutable URL.');
+  const acceptance=await prisma.auditLog.findFirstOrThrow({where:{actorId:user.id,action:'ACCOUNT_POLICIES_ACCEPTED'}});
+  assert.equal((acceptance.metadata as any).publicationId,publications[0].id);assert.equal((acceptance.metadata as any).optionalMarketingConsent,false);
+  await prisma.auditLog.create({data:{actorId:other.id,actorType:'user',action:'ACCOUNT_POLICIES_ACCEPTED',entity:'account_policy_acceptance',entityId:'older-policy-revision',metadata:{version:'older'}}});
+  assert.equal((await getPolicyAgreementStatus(other.id)).accepted,false,'An old policy acceptance cannot authorize current checkout.');
+  await acceptCurrentPolicies(other.id,CURRENT_POLICY_REVISION);
+  assert.equal(await prisma.auditLog.count({where:{actorId:other.id,action:'ACCOUNT_POLICIES_ACCEPTED'}}),2,'Re-acceptance preserves historical evidence.');
+  const changed=structuredClone(policyDocuments);changed[0].sections[0].paragraphs[0]+=' Updated policy.';
+  const changedHash=createHash('sha256').update(JSON.stringify({version:POLICY_VERSION,documents:changed})).digest('hex');
+  assert.notEqual(changedHash,CURRENT_POLICY_REVISION,'Editing policy text must automatically create a new acceptance revision.');
+  const releaseForm=await import('node:fs/promises').then(fs=>fs.readFile('components/release-form.tsx','utf8'));
+  assert(!releaseForm.includes('30% of Net Royalty Revenue'),'The repeated commercial disclosure must be absent from the wizard.');
+  assert(releaseForm.includes('I confirm the rights, permissions and accuracy of this release.'));
+  console.log('Account policy agreement passed: explicit revision, immutable snapshot, idempotency, account isolation, stale-version rejection, re-acceptance and distribution gate.');
+}
+main().catch(error=>{console.error(error);process.exitCode=1}).finally(()=>prisma.$disconnect());
