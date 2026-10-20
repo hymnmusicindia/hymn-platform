@@ -1120,7 +1120,9 @@ export function ReleaseForm({
     const navigation = stageNavigationRef.current;
     const current = navigation?.querySelector<HTMLElement>('[aria-current="step"]');
     if (navigation && current) {
-      navigation.scrollLeft = current.offsetLeft - navigation.offsetLeft - (navigation.clientWidth - current.offsetWidth) / 2;
+      const currentBounds = current.getBoundingClientRect();
+      const navigationBounds = navigation.getBoundingClientRect();
+      navigation.scrollLeft += currentBounds.left - navigationBounds.left - (navigation.clientWidth - currentBounds.width) / 2;
     }
   }, [step]);
   const resumeStageResolvedRef = useRef(false);
@@ -3516,10 +3518,6 @@ export function ReleaseForm({
           </div>
         </header>
         {draftConflict ? <div className="release-draft-conflict" role="alert"><span>This draft changed in another tab. Your edits here have not replaced the latest version.</span><button type="button" onClick={() => { if (window.confirm("Open the latest draft? Unsaved changes in this tab will be lost.")) { allowReloadRef.current = true; window.location.reload(); } }}>Open latest draft</button></div> : null}
-        <div className="release-journey-progress" role="group" aria-label="Release journey progress">
-          <div><span>{step === 0 || step === 1 ? "SETUP" : "SECTION"} {menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1} / {menuStepIndexes.length}</span><strong>{stepMenuLabels[step] ?? steps[step]}</strong></div>
-          <div className="release-journey-progress-track" role="progressbar" aria-label="Journey stages reached" aria-valuemin={0} aria-valuemax={menuStepIndexes.length} aria-valuenow={menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1}><span style={{ width: `${((menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1) / menuStepIndexes.length) * 100}%` }} /></div>
-        </div>
         {firstReleaseOffer ? <div className="release-free-offer-banner flex items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-500">🎁 First release on us</div> : null}
         {step !== 0 && step !== 1 && step !== 7 ? (
           <div className="release-editor-status" role="status">
@@ -3613,8 +3611,9 @@ export function ReleaseForm({
           </div>
         </div>
 
+        <div className="release-stage-menu">
         <nav ref={stageNavigationRef} className="release-workflow-nav" aria-label="Release sections">
-          {menuStepIndexes.filter((index) => index !== 0 && index !== 1).map((index, position) => {
+          {menuStepIndexes.filter((index) => index !== 0 && index !== 1).map((index) => {
             const label = stepMenuLabels[index] ?? steps[index];
             const buttonState = stepButtonStyles(index);
             return (
@@ -3632,12 +3631,14 @@ export function ReleaseForm({
                       aria-hidden="true"
                     />
                   ) : null}
-                  <span className="release-stage-number" aria-hidden="true">{position + 1}</span><span>{label}</span>
+                  <span>{label}</span>
                 </span>
               </button>
             );
           })}
         </nav>
+          <div className="release-journey-progress-track" role="progressbar" aria-label="Journey stages reached" aria-valuemin={0} aria-valuemax={menuStepIndexes.length} aria-valuenow={menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1}><span style={{ width: `${((menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1) / menuStepIndexes.length) * 100}%` }} /></div>
+        </div>
         <aside className="release-workflow-summary hidden lg:block" aria-label="Release summary">
           <div className="release-summary-card rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
             <div className="release-live-preview" aria-label="Release preview">
