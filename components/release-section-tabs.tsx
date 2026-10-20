@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { FileText, Users, LayoutDashboard, Music2, CircleAlert, History, Radio, Megaphone, ChartNoAxesCombined, MessageSquare } from "lucide-react";
 import "./release-section-tabs.css";
 
@@ -13,6 +13,11 @@ export function ReleaseSectionTabs({ items, active, onChange, panelId }: {
 }) {
   const id = useId();
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
+  useEffect(() => {
+    const button = buttons.current[items.findIndex(item => item.key === active)];
+    const list = button?.parentElement;
+    if (button && list) list.scrollLeft = button.offsetLeft - list.offsetLeft - (list.clientWidth - button.offsetWidth) / 2;
+  }, [active, items]);
   return <div className="release-section-navigation">
     <div className="release-section-tabs" role="tablist" aria-label="Release sections">
       {items.map((item, index) => {
@@ -29,7 +34,6 @@ export function ReleaseSectionTabs({ items, active, onChange, panelId }: {
             else return;
             event.preventDefault(); onChange(items[next].key);
             buttons.current[next]?.focus({ preventScroll: true });
-            buttons.current[next]?.scrollIntoView({ block: "nearest", inline: "nearest" });
           }}>
           <Icon size={16} aria-hidden="true" /><span>{item.label}</span>
           {item.count !== undefined && item.count > 0 ? <span className="release-section-count" aria-label={`${item.count} ${item.key === "corrections" ? item.attention ? "open corrections" : "review notes" : item.label.toLowerCase()}`}>{item.count}</span> : null}

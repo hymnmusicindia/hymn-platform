@@ -406,7 +406,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
   const dashboardNav = (
     <nav aria-label="Release dashboard sections" className="release-dashboard-tabs flex flex-wrap items-center gap-2 border-b pb-4 text-sm" style={{ borderColor: "var(--border)" }}>
       {[{ key: "releases", label: "My releases" }, { key: "promotion", label: "Promotion" }, { key: "trends", label: "Trends" }, { key: "earnings", label: "Earnings" }].map((item) => (
-        <Link key={item.key} href={item.key === "releases" ? "/dashboard/releases" : `/dashboard/releases?view=${item.key}`} aria-current={activeView === item.key ? "page" : undefined} className="release-dashboard-tab rounded-full border px-4 py-2 font-semibold transition hover:-translate-y-0.5" style={{ borderColor: activeView === item.key ? "var(--accent)" : "var(--border)", background: activeView === item.key ? "var(--accent)" : "var(--card)", color: activeView === item.key ? "var(--accent-foreground)" : "var(--text-muted)" }}>{item.label}</Link>
+        <Link key={item.key} href={item.key === "releases" ? "/dashboard/releases" : `/dashboard/releases?view=${item.key}`} aria-current={activeView === item.key ? "page" : undefined} className="distribution-dashboard-link rounded-full border px-4 py-2 font-semibold transition hover:-translate-y-0.5" style={{ borderColor: activeView === item.key ? "var(--accent)" : "var(--border)", background: activeView === item.key ? "var(--accent)" : "var(--card)", color: activeView === item.key ? "var(--accent-foreground)" : "var(--text-muted)" }}>{item.label}</Link>
       ))}
     </nav>
   );
@@ -430,6 +430,12 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
   );
 
   if (selectedRelease && initialPanel !== "redressal") return <ReleaseManage release={selectedRelease} initialTab={initialTab} />;
+
+  const hasActiveFilters = Boolean(search.trim()) || statusFilter !== "all" || dateFilter !== "all" || releaseTypeFilter !== "all" || artistFilter !== "all" || sortOrder !== "pipeline";
+  function resetCatalogueFilters() {
+    setSearch(""); setStatusFilter("all"); setDateFilter("all");
+    setReleaseTypeFilter("all"); setArtistFilter("all"); setSortOrder("pipeline");
+  }
 
   const filtersGrid = (
     <>
@@ -476,8 +482,8 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
         </span>
         <select className="field" value={sortOrder} onChange={(event) => setSortOrder(event.target.value as typeof sortOrder)}>
           <option value="pipeline">Workflow priority</option>
-          <option value="newest">Newest updated</option>
-          <option value="oldest">Oldest updated</option>
+          <option value="newest">Newest added</option>
+          <option value="oldest">Oldest added</option>
           <option value="title">Title A–Z</option>
         </select>
       </label>
@@ -496,8 +502,8 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
       </label>
 
       <div className="release-visible-meter release-filter-count" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-        <p className="release-results-count" role="status" aria-live="polite"><strong>{Math.min(visibleCount, filteredReleases.length)}</strong> of {filteredReleases.length} releases</p>
-        {(statusFilter !== "all" || dateFilter !== "all" || releaseTypeFilter !== "all" || artistFilter !== "all" || sortOrder !== "pipeline") ? <button type="button" className="release-filters-reset" onClick={() => { setStatusFilter("all"); setDateFilter("all"); setReleaseTypeFilter("all"); setArtistFilter("all"); setSortOrder("pipeline"); }}><RotateCcw aria-hidden="true" size={13} /> Reset filters</button> : null}
+        <p className="release-results-count" role="status" aria-live="polite">{viewMode === "list" ? <><strong>{filteredReleases.length}</strong> matching releases</> : <><strong>{Math.min(visibleCount, filteredReleases.length)}</strong> of {filteredReleases.length} releases</>}</p>
+        {hasActiveFilters ? <button type="button" className="release-filters-reset" onClick={resetCatalogueFilters}><RotateCcw aria-hidden="true" size={13} /> Reset filters</button> : null}
       </div>
     </>
   );
@@ -544,15 +550,16 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
             <p className="mt-3 text-base" style={{ color: "var(--text-muted)" }}>Manage and track all your music releases.</p>
           </div>
           <div className="release-library-toolbar flex w-full flex-col gap-2 sm:flex-row lg:max-w-2xl lg:justify-end"><label className="release-search-control relative min-w-0 flex-1">
-            <span className="sr-only">Search by title or artist</span>
+            <span className="sr-only">Search title, artist, UPC or ISRC</span>
             <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--text-soft)" }} />
             <input
               className="field pl-11"
+              type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search title, artist, UPC or ISRC"
             />
-          </label><div className="release-view-toggle inline-flex rounded-xl border p-1" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><button type="button" aria-label="Grid view" onClick={() => setViewMode("grid")} className="inline-flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: viewMode === "grid" ? "var(--card)" : "transparent", color: viewMode === "grid" ? "var(--text)" : "var(--text-soft)" }}><Grid2X2 className="h-4 w-4" /></button><button type="button" aria-label="List view" onClick={() => setViewMode("list")} className="inline-flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: viewMode === "list" ? "var(--card)" : "transparent", color: viewMode === "list" ? "var(--text)" : "var(--text-soft)" }}><List className="h-4 w-4" /></button></div><Link href="/distribution/start" className="release-add-button btn-primary pressable whitespace-nowrap">Add release</Link></div>
+          </label><div className="release-view-toggle inline-flex rounded-xl border p-1" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><button type="button" aria-label="Grid view" aria-pressed={viewMode === "grid"} onClick={() => setViewMode("grid")} className="inline-flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: viewMode === "grid" ? "var(--card)" : "transparent", color: viewMode === "grid" ? "var(--text)" : "var(--text-soft)" }}><Grid2X2 className="h-4 w-4" /></button><button type="button" aria-label="List view" aria-pressed={viewMode === "list"} onClick={() => setViewMode("list")} className="inline-flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: viewMode === "list" ? "var(--card)" : "transparent", color: viewMode === "list" ? "var(--text)" : "var(--text-soft)" }}><List className="h-4 w-4" /></button></div><Link href="/distribution/start" className="release-add-button btn-primary pressable whitespace-nowrap">Add release</Link></div>
         </div>
 
         {selectedRelease ? (
@@ -600,13 +607,13 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
       </section>
 
       <section>
-        {filteredReleases.length === 0 && viewMode === "list" ? (
-          <EmptyState
-            title="No releases match your filters"
-            description="Try a different title, artist, or status filter to bring your catalogue back into view."
-            actionHref="/dashboard/releases"
-            actionLabel="Reset view"
-          />
+        {filteredReleases.length === 0 ? (
+          <div className="release-no-results" role="status">
+            <Search size={28} aria-hidden="true" />
+            <h2>No releases match your search</h2>
+            <p>Try another title, artist, UPC or ISRC, or clear your filters to see all releases.</p>
+            <button type="button" className="btn-primary" onClick={resetCatalogueFilters}><RotateCcw size={16} aria-hidden="true" /> Clear search and filters</button>
+          </div>
         ) : viewMode === "list" ? (
           <WorkspaceRecords rows={filteredReleases} rowKey={release=>release.id} searchable={false} searchText={release=>`${release.trackName} ${release.artistName}`} noun="releases" columns={[
             {key:"release",label:"Release",primary:true,value:release=>release.releaseTitle||release.trackName,render:release=><div className="record-identity">{release.artworkUrl&&<img src={artworkPreviewUrl(release.artworkUrl, 320)} alt=""/>}<div><strong>{release.releaseTitle||release.trackName}</strong><small>{release.artistName} / {release.releaseType}</small></div></div>},

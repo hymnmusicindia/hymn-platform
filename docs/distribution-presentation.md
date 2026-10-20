@@ -25,3 +25,7 @@ ReleaseForm at 1440, 1024, 768 and 390 pixels. It checks all seven stages, curre
 stage visibility, sticky navigation, overflow and re-release selection; previews
 are saved under `.tmp/distribution-visual/`. Next navigation and network responses
 are mocked; this is a presentation check, not a live delivery or checkout test.
+
+Run `node scripts/verify-distribution-portal-visual.cjs` for catalogue search,
+empty-result recovery, grid/list selection, keyboard tab navigation and overflow
+checks at the same four widths. Network and Next navigation use fixture responses.
