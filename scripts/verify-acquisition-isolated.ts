@@ -11,8 +11,8 @@ mkdirSync(tempRoot, { recursive: true });
 const fixture = mkdtempSync(path.join(tempRoot, "hymn-acquisition-"));
 const databaseDir = path.join(fixture, "pg"); const port = 55473;
 const env = { ...process.env, DATABASE_URL: `postgresql://fixture:fixture@127.0.0.1:${port}/acquisition_fixture`, DIRECT_URL: `postgresql://fixture:fixture@127.0.0.1:${port}/acquisition_fixture`, EMAIL_ENABLED: "false", NODE_ENV: "test" };
-const run = (args: string[], executable = process.execPath) => new Promise<void>((resolve, reject) => {
-  const child = spawn(executable, args, { env, stdio: "inherit", windowsHide: true });
+const run = (args: string[], executable = process.execPath, childEnv = env) => new Promise<void>((resolve, reject) => {
+  const child = spawn(executable, args, { env: childEnv, stdio: "inherit", windowsHide: true });
   child.on("error", reject); child.on("exit", code => code === 0 ? resolve() : reject(new Error(`Acquisition fixture command exited ${code}`)));
 });
 
@@ -30,7 +30,9 @@ async function main() {
     const migrations = readdirSync("prisma/migrations", { withFileTypes: true }).filter(entry => entry.isDirectory() && /^20261019\d+_/.test(entry.name)).map(entry => path.join("prisma/migrations", entry.name, "migration.sql")).sort();
     for (const migration of migrations) await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", migration, "--schema", "prisma/schema.prisma"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-acquisition-domain.ts"]);
-    if (process.argv.includes("--browser")) await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-acquisition-browser.ts"]);
+    await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-crm-workflow.ts"]);
+    if (process.argv.includes("--build-browser")) await run(["node_modules/next/dist/bin/next", "build", "--webpack"], process.execPath, { ...env, NODE_ENV: "production" });
+    if (process.argv.includes("--browser") || process.argv.includes("--build-browser")) await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-acquisition-browser.ts"]);
   } finally {
     if (process.platform === "win32") await run(["-D", databaseDir, "-m", "fast", "-w", "stop"], path.resolve("node_modules/@embedded-postgres/windows-x64/native/bin/pg_ctl.exe")); else await pg.stop();
     if (path.resolve(fixture).startsWith(`${tempRoot}${path.sep}`)) rmSync(fixture, { recursive: true, force: true });

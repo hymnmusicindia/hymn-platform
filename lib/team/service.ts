@@ -1,3 +1,4 @@
+import { nextCaller } from "./crm-workflow";
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
@@ -11,7 +12,7 @@ export const memberSelect = { id: true, department: true, jobTitle: true, respon
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 export const taskScope = (a: Actor): Prisma.TeamTaskWhereInput => ({ workspaceId: a.workspaceId, archivedAt: null, ...(!can(a, "tasks.all") ? { OR: [{ ownerId: a.id }, { creatorId: a.id }, { collaboratorIds: { has: a.id } }, { project: { memberIds: { has: a.id } } }] } : {}) });
 export const projectScope = (a: Actor): Prisma.TeamProjectWhereInput => ({ workspaceId: a.workspaceId, ...(!can(a, "tasks.all") ? { memberIds: { has: a.id } } : {}) });
-export const prospectScope = (a: Actor): Prisma.TeamProspectWhereInput => ({ workspaceId: a.workspaceId, ...(!can(a, "crm.all") ? { ownerId: a.id } : {}) });
+export const prospectScope = (a: Actor): Prisma.TeamProspectWhereInput => ({ workspaceId: a.workspaceId, ...(!can(a, "crm.all") ? { OR: [{ ownerId: a.id }, { acquisitionLead: { is: { researcherEmployeeId: a.id } } }, { acquisitionLead: { is: { acquisitionEmployeeId: a.id } } }] } : {}) });
 export const channelScope = (a: Actor): Prisma.TeamChannelWhereInput => ({ workspaceId: a.workspaceId, OR: [{ private: false }, { memberIds: { has: a.id } }] });
 export async function audit(tx: Tx, a: Actor, action: string, entityId: string, detail: Prisma.InputJsonValue = {}) { await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action, entityId, detail } }); }
 export async function notify(tx: Tx, memberId: string, title: string, href = "/team?module=work") { const member = await tx.teamMember.findUnique({ where: { id: memberId }, select: { preferences: true, status: true } }); if (member?.status !== "ACTIVE" || (member.preferences as { notifications?: boolean }).notifications === false) return; await tx.teamNotification.create({ data: { memberId, title, href } }); }
@@ -84,6 +85,14 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
         assertTaskTransition({ previous: old.status, next, review: !!review, evidence: data.evidence ?? old.evidence, blocker: data.blocker ?? old.blocker, dependenciesComplete: await tx.teamTask.count({ where: { workspaceId: a.workspaceId, id: { in: deps }, status: "COMPLETED" } }) === deps.length, checklistComplete: checklist.every(c => c.done), reviewer: can(a, "tasks.approve"), authorIsOwner: a.id === old.ownerId });
       }
       const row = await tx.teamTask.update({ where: { id }, data: { ...data, approvalRequired: !!review, dueAt: data.dueAt === undefined ? undefined : data.dueAt ? new Date(data.dueAt) : null, completedAt: next === "COMPLETED" ? old.completedAt ?? new Date() : null, version: { increment: 1 } } });
+      if (data.dueAt !== undefined && old.eventKey) {
+        const prospectId = old.eventKey.split(":")[0];
+        const prospect = await tx.teamProspect.findFirst({ where: { ...prospectScope(a), id: prospectId } });
+        if (prospect && can(a, "crm.outreach.manage")) {
+          await tx.teamProspect.update({ where: { id: prospect.id }, data: { followUpAt: row.dueAt, version: { increment: 1 } } });
+          await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, id: { not: row.id }, eventKey: { startsWith: `${prospect.id}:` }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, data: { dueAt: row.dueAt, version: { increment: 1 } } });
+        }
+      }
       await audit(tx, a, "task.updated", id, { previousStatus: old.status, status: next, previousOwner: old.ownerId, ownerId: owner });
       if (owner !== old.ownerId) await notify(tx, owner, `Assigned: ${row.title}`, `/team?module=work&task=${id}`);
       if (a.id !== owner && old.status === "IN_REVIEW" && next !== old.status) await notify(tx, owner, `Review ${next === "COMPLETED" ? "approved" : "updated"}: ${row.title}`, `/team?module=work&task=${id}`);
@@ -184,10 +193,18 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
       const lead = await tx.growthLead.create({ data: { kind: "acquisition", name: data.name, email: data.email || "", interest: data.categories.join(", "), message: data.evidence, notes: data.notes } });
       const row = await tx.teamProspect.create({ data: { ...data, discoveredAt: data.discoveredAt ? new Date(data.discoveredAt) : new Date(), contactEligibility: data.contactEligibility === "DO_NOT_CONTACT" ? "DO_NOT_CONTACT" : data.contactEligibility, suppressed: data.contactEligibility === "DO_NOT_CONTACT", verified: data.verified && data.contactEligibility !== "UNVERIFIED", leadId: lead.id, workspaceId: a.workspaceId, identityKey } });
       const attribution = await tx.acquisitionLead.create({ data: { workspaceId: a.workspaceId, prospectId: row.id, researcherEmployeeId: a.id, attributionLockedAt: new Date(), ownershipHistory: { create: { actorEmployeeId: a.id, newEmployeeId: a.id, attributionRole: "RESEARCHER", reason: "Original verified lead registration." } } } });
+      const caller = row.suppressed ? null : await nextCaller(tx, a);
+      if (caller) {
+        await tx.acquisitionLead.update({ where: { id: attribution.id }, data: { acquisitionEmployeeId: caller.id } });
+        await tx.teamProspect.update({ where: { id: row.id }, data: { ownerId: caller.id } });
+        await tx.leadOwnershipEvent.create({ data: { leadId: attribution.id, actorEmployeeId: a.id, newEmployeeId: caller.id, attributionRole: "ACQUISITION", reason: "Automatic caller rotation." } });
+        await notify(tx, caller.id, `New call lead: ${row.name}`, "/team?module=acquisition");
+      }
+      if (row.followUpAt && !row.suppressed) await tx.teamTask.create({ data: { workspaceId: a.workspaceId, creatorId: a.id, ownerId: caller?.id || row.ownerId, title: `Follow up: ${row.name}`, eventKey: `${row.id}:call`, dueAt: row.followUpAt } });
       await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: "lead.registered", entityId: attribution.id, metadata: { researcherEmployeeId: a.id, sourceUrl: data.sourceUrl } } });
-      await audit(tx, a, "prospect.created", row.id, { leadId: lead.id, acquisitionLeadId: attribution.id }); return row;
+      await audit(tx, a, "prospect.created", row.id, { leadId: lead.id, acquisitionLeadId: attribution.id }); return { ...row, ownerId: caller?.id || row.ownerId };
     }
-    if (resource === "prospect-update") {
+    if (["prospect-update", "prospect-call-save"].includes(resource)) {
       demand(a, "crm.prospects.view"); demand(a, "crm.outreach.manage"); const data = prospectUpdateSchema.parse(input);
       if (!a.role.owner && !can(a, "acquisition.admin") && data.ownerId && data.ownerId !== (await tx.teamProspect.findFirst({ where: { ...prospectScope(a), id }, select: { ownerId: true } }))?.ownerId) throw new TeamError("Lead reassignment requires an authorised admin override with a reason.", 403);
       const old = await tx.teamProspect.findFirst({ where: { ...prospectScope(a), id } }); if (!old) throw new TeamError("Prospect unavailable.", 404);
@@ -195,6 +212,13 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
       if (data.ownerId && data.ownerId !== old.ownerId) { demand(a, "crm.prospects.assign"); await eligible(tx, a, [data.ownerId]); }
       if (data.ownerId && data.ownerId !== old.ownerId && (!data.reason || data.reason.trim().length < 8)) throw new TeamError("Reassignment requires a reason.");
       if (old.suppressed && (data.suppressed === false || (data.stage && data.stage !== "DO_NOT_CONTACT"))) throw new TeamError("Suppressed prospects cannot be reactivated here.", 403);
+      if (resource === "prospect-call-save" && object.contact) {
+        const contact = z.object({ body: z.string().trim().min(3).max(4000), evidence: z.string().trim().min(3).max(1000) }).parse(object.contact);
+        if (old.suppressed || !old.verified || !["CONSENTED", "LEGITIMATE_INTEREST"].includes(old.contactEligibility)) throw new TeamError("Verify an eligible contact before recording a call.", 403);
+        if (old.email && await tx.newsletterSubscriber.findFirst({ where: { email: { equals: old.email, mode: "insensitive" }, OR: [{ status: { not: "subscribed" } }, { unsubscribedAt: { not: null } }] } })) throw new TeamError("This contact has opted out.", 403);
+        const contactEvent = await tx.teamOutreach.create({ data: { prospectId: id, kind: "CONTACT", actorId: a.id, body: contact.body, evidence: contact.evidence, occurredAt: new Date() } });
+        await audit(tx, a, "outreach.contact", contactEvent.id);
+      }
       if (data.stage === "CONTACTED" && !await tx.teamOutreach.count({ where: { prospectId: id, kind: "CONTACT" } })) throw new TeamError("Record an actual contact event, not a draft.");
       if (data.stage === "CONVERTED") {
         if (!data.customerUserId || !await tx.user.findUnique({ where: { id: data.customerUserId }, select: { id: true } })) throw new TeamError("Conversion must link an existing HYMN customer.");
@@ -224,14 +248,18 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
         await notify(tx, row.ownerId, `Prospect assigned: ${row.name}`, "/team?module=crm");
       }
       await audit(tx, a, "prospect.updated", id, { previousStage: old.stage, stage: row.stage });
-      if (row.suppressed || row.stage === "CONVERTED" || row.stage === "LOST") await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: `${id}:` }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, data: { status: "CANCELLED", version: { increment: 1 } } });
+      if (row.suppressed || ["CONVERTED", "LOST", "NOT_INTERESTED", "UNQUALIFIED", "DUPLICATE"].includes(row.stage)) await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: `${id}:` }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, data: { status: "CANCELLED", version: { increment: 1 } } });
       if (row.stage === "CONVERTED" && old.stage !== row.stage) await notify(tx, row.ownerId, `Customer linked: ${row.name}. Paid status is verified separately.`, "/team?module=analytics");
       if (data.followUpAt !== undefined) await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: `${id}:` }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, data: { dueAt: row.followUpAt, version: { increment: 1 } } });
-      if (["QUALIFIED", "REPLIED", "INTERESTED"].includes(row.stage)) {
-        const eventKey = `${id}:${row.stage}`;
-        if (!await tx.teamTask.findUnique({ where: { eventKey } })) {
+      if (!row.suppressed && !["CONVERTED", "LOST", "NOT_INTERESTED", "UNQUALIFIED", "DUPLICATE"].includes(row.stage) && (row.followUpAt || ["QUALIFIED", "REPLIED", "INTERESTED"].includes(row.stage))) {
+        const eventKey = `${id}:call`;
+        if (!await tx.teamTask.findFirst({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: `${id}:` }, status: { notIn: ["COMPLETED", "CANCELLED"] } } })) {
+          const previousCall = await tx.teamTask.findUnique({ where: { eventKey } });
+          if (previousCall) await tx.teamTask.update({ where: { id: previousCall.id }, data: { status: "TODO", completedAt: null, ownerId: row.ownerId, dueAt: row.followUpAt, version: { increment: 1 } } });
+          else {
           const task = await tx.teamTask.create({ data: { workspaceId: a.workspaceId, creatorId: a.id, ownerId: row.ownerId, title: `Follow up: ${row.name}`, description: `CRM prospect ${id}. ${row.buyingSignal}`, eventKey, dueAt: row.followUpAt } });
           await notify(tx, row.ownerId, `Follow-up: ${row.name}`, `/team?module=work&task=${task.id}`);
+          }
         }
       }
       return row;

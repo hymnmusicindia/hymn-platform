@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import jwt from "jsonwebtoken";
 import { chromium } from "playwright";
+import { teamMutation } from "../lib/team/service";
 import { prisma } from "../lib/prisma";
 
 async function main() {
@@ -11,7 +12,8 @@ async function main() {
   const publicOrigin = "https://hymnmusic.fun";
   const proxyHeaders = { "x-forwarded-host": "hymnmusic.fun", "x-forwarded-proto": "https" };
   const secret = "acquisition-browser-fixture-session-secret";
-  const owner = await prisma.teamMember.findFirstOrThrow({ where: { user: { email: { startsWith: "r-" } } }, include: { user: true } });
+  const owner = await prisma.teamMember.findFirstOrThrow({ where: { user: { email: { startsWith: "r-" } } }, include: { user: true, role: true } });
+  await teamMutation(owner, "prospects", { ownerId: owner.id, name: "Browser call contact", phone: "+919811223344", sourceUrl: "https://example.org/browser-contact", evidence: "Verified professional contact for browser fixture", categories: ["Distribution"], verified: true, contactEligibility: "LEGITIMATE_INTEREST", score: { intent: 0, relevance: 0, recency: 0, contactability: 0, fit: 0 } });
   const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "--hostname", "127.0.0.1", "--port", "35475"], { env: { ...process.env, NODE_ENV: "production", PORT: "35475", EMAIL_ENABLED: "false", HYMN_CRON_WORKER_ENABLED: "false", JWT_SECRET: secret, ADMIN_JWT_SECRET: secret, NEXT_PUBLIC_APP_URL: publicOrigin, APP_URL: publicOrigin, PUBLIC_SITE_URL: publicOrigin, NEXT_PUBLIC_SITE_URL: publicOrigin }, stdio: "ignore", windowsHide: true });
   const browser = await chromium.launch();
   try {
@@ -33,7 +35,28 @@ async function main() {
     await context.addCookies([{ name: "hymn_session", value: jwt.sign({ sub: owner.user.id, email: owner.user.email, name: owner.user.name, role: "customer" }, secret, { expiresIn: "1h" }), url: publicOrigin }]);
     const page = await context.newPage(); page.setDefaultTimeout(60000);
     await page.goto(`${publicOrigin}/team?module=acquisition`);
-    await page.getByRole("button", { name: "Research & Acquisition", exact: true }).click();
+    await page.getByRole("button", { name: "Contacts & Calls", exact: true }).click();
+    await page.getByRole("heading", { name: "Contacts & calls", exact: true }).waitFor();
+    assert.equal(await page.getByRole("heading", { name: "Business", exact: true }).count(), 0);
+    await page.getByRole("button", { name: /Browser call contact/ }).click();
+    const contact = page.getByRole("dialog", { name: "Contact: Browser call contact" });
+    assert.equal(await contact.getByRole("link", { name: "WhatsApp", exact: true }).getAttribute("href"), "https://wa.me/919811223344");
+    await contact.getByLabel(/Next call.*India time/).fill("2026-12-04T14:30");
+    await contact.getByLabel("Call notes", { exact: true }).fill("Customer requested an afternoon follow-up");
+    const savedCall = page.waitForResponse(response => response.url().includes("/api/team/prospect-call-save") && response.request().method() === "POST");
+    await contact.getByRole("button", { name: "Save contact & next call", exact: true }).click();
+    assert.equal((await savedCall).status(), 200);
+    await contact.waitFor({ state: "hidden" });
+    await page.getByRole("button", { name: /Call queue/ }).click();
+    await page.getByRole("button", { name: /Browser call contact/ }).waitFor();
+    await page.getByRole("button", { name: "Pipeline", exact: true }).click();
+    mkdirSync(".cache", { recursive: true });
+    await page.screenshot({ path: ".cache/crm-desktop.png", fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true, "CRM fits mobile width.");
+    await page.screenshot({ path: ".cache/crm-mobile.png", fullPage: true });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.getByText("Lead search, outreach & rewards", { exact: true }).click();
     await page.getByRole("heading", { name: "Acquisition dashboard", exact: true }).waitFor();
     for (const [button, heading] of [["My Leads", "My leads"], ["All Leads", "All leads"], ["Employee Rewards", "Employee rewards"], ["Commission Ledger", "Revenue reconciliation"], ["Programme Settings", "Programme settings"]]) {
       await page.getByRole("button", { name: button, exact: true }).click();
@@ -50,7 +73,7 @@ async function main() {
     // The original customer fixture deliberately has a pending provider refund.
     // Use the clean repeat purchase for the successful dispute resolution flow.
     const evidence = await prisma.acquisitionRevenueEvidence.findFirstOrThrow({ where: { workspaceId: owner.workspaceId, paymentId: { startsWith: "pay_signed_2_" } } });
-    const evidencePanel = page.locator("details").filter({ hasText: evidence.paymentId }).filter({ has: page.locator('textarea[name="taxEvidence"]') });
+    const evidencePanel = page.locator("details").filter({ hasText: evidence.paymentId }).filter({ has: page.locator('textarea[name="taxEvidence"]') }).last();
     await evidencePanel.locator("summary").click();
     await evidencePanel.getByLabel("Dispute or ownership concern").fill("Browser fixture ownership review");
     const holdResponse = page.waitForResponse(response => response.url().includes("/api/team/acquisition-evidence-dispute") && response.request().method() === "POST");

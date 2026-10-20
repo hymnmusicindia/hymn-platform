@@ -1,3 +1,5 @@
+import { crmPreferences, nextCaller } from "./crm-workflow";
+import { z } from "zod";
 import "server-only";
 import { Prisma } from "@prisma/client";
 import jwt from "jsonwebtoken";
@@ -13,6 +15,13 @@ import { accrueReferralCommission, refreshReferralCommission } from "@/lib/refer
 
 type Tx = Prisma.TransactionClient;
 export async function acquisitionRead(a: Actor, resource: string, params: URLSearchParams) {
+  if (resource === "acquisition-targets") {
+    demand(a, "crm.prospects.view");
+    const today = new Date(new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) + "T00:00:00+05:30");
+    const tomorrow = new Date(today.getTime() + 86400000);
+    const members = await prisma.teamMember.findMany({ where: { workspaceId: a.workspaceId, status: "ACTIVE", ...(can(a, "acquisition.admin") ? {} : { id: a.id }) }, include: { user: { select: { name: true } } } });
+    return { items: await Promise.all(members.map(async member => ({ id: member.id, name: member.user.name, ...crmPreferences(member.preferences), researched: await prisma.acquisitionLead.count({ where: { workspaceId: a.workspaceId, researcherEmployeeId: member.id, registeredAt: { gte: today, lt: tomorrow }, prospect: { verified: true, suppressed: false } } }), called: (await prisma.teamOutreach.findMany({ where: { actorId: member.id, kind: "CONTACT", occurredAt: { gte: today, lt: tomorrow }, prospect: { workspaceId: a.workspaceId } }, distinct: ["prospectId"], select: { prospectId: true } })).length }))) };
+  }
   if (["acquisition-leads", "acquisition-dashboard", "acquisition-ledger", "acquisition-settings", "acquisition-reassign", "acquisition-email-templates", "acquisition-email-events"].includes(resource)) demand(a, "crm.prospects.view");
   if (resource === "acquisition-customer-attribution") {
     demand(a, "acquisition.admin");
@@ -49,7 +58,7 @@ export async function acquisitionRead(a: Actor, resource: string, params: URLSea
       ...(status && ["NEW", "QUALIFIED", "ASSIGNED", "CONTACTED", "INTERESTED", "CONVERTED", "UNQUALIFIED", "DUPLICATE", "NOT_INTERESTED", "DO_NOT_CONTACT", "LOST"].includes(status) ? [{ prospect: { stage: status } }] : []),
     ] };
     const orderKey = params.get("sort"); const orderBy = orderKey === "status" ? { prospect: { stage: "asc" as const } } : orderKey === "owner" ? { acquisitionEmployeeId: "asc" as const } : orderKey === "source" ? { prospect: { sourceUrl: "asc" as const } } : { registeredAt: "desc" as const };
-    const rows = await prisma.acquisitionLead.findMany({ where, take: resource === "acquisition-leads" ? 100 : 5000, orderBy, include: { prospect: { select: { id: true, name: true, contactName: true, email: true, phone: true, stage: true, sourceUrl: true, discoveredAt: true, notes: true, followUpAt: true, categories: true, contactEligibility: true, suppressed: true } }, researcher: { select: { id: true, user: { select: { name: true } } } }, acquisitionEmployee: { select: { id: true, user: { select: { name: true } } } }, customer: { select: { id: true, name: true, email: true } } } });
+    const rows = await prisma.acquisitionLead.findMany({ where, take: resource === "acquisition-leads" ? 100 : 5000, orderBy, include: { prospect: { select: { id: true, version: true, ownerId: true, verified: true, name: true, contactName: true, email: true, phone: true, stage: true, sourceUrl: true, discoveredAt: true, notes: true, followUpAt: true, categories: true, contactEligibility: true, suppressed: true } }, researcher: { select: { id: true, user: { select: { name: true } } } }, acquisitionEmployee: { select: { id: true, user: { select: { name: true } } } }, customer: { select: { id: true, name: true, email: true } } } });
     return { items: rows };
   }
   if (resource === "acquisition-leads-export") {
@@ -120,6 +129,37 @@ export async function acquisitionRead(a: Actor, resource: string, params: URLSea
 }
 
 export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, body: Record<string, unknown>) {
+  if (resource === "acquisition-dispatch") {
+    demand(a, "acquisition.admin");
+    const leads = await tx.acquisitionLead.findMany({ where: { workspaceId: a.workspaceId, acquisitionEmployeeId: null, prospect: { suppressed: false, stage: { notIn: ["CONVERTED", "LOST", "NOT_INTERESTED", "UNQUALIFIED", "DUPLICATE"] } } }, orderBy: [{ registeredAt: "asc" }, { id: "asc" }], take: 100 });
+    let assigned = 0;
+    for (const lead of leads) {
+      const caller = await nextCaller(tx, a);
+      if (!caller) break;
+      await tx.acquisitionLead.update({ where: { id: lead.id }, data: { acquisitionEmployeeId: caller.id } });
+      await tx.teamProspect.update({ where: { id: lead.prospectId }, data: { ownerId: caller.id, version: { increment: 1 } } });
+      await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: `${lead.prospectId}:` }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, data: { ownerId: caller.id, version: { increment: 1 } } });
+      await tx.leadOwnershipEvent.create({ data: { leadId: lead.id, actorEmployeeId: a.id, newEmployeeId: caller.id, attributionRole: "ACQUISITION", reason: "Automatic caller rotation." } });
+      await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: "lead.rotation_assigned", entityId: lead.id, metadata: { employeeId: caller.id } } });
+      await tx.teamNotification.create({ data: { memberId: caller.id, title: "New contact assigned to your call queue", href: "/team?module=acquisition" } });
+      assigned++;
+    }
+    if (leads.length && !assigned) throw new TeamError("Enable at least one available caller with CRM and outreach permissions in Targets & caller rotation.");
+    return { assigned };
+  }
+  if (resource === "acquisition-target-save") {
+    demand(a, "acquisition.admin");
+    const data = z.object({ employeeId: z.string().min(1), researchTarget: z.number().int().min(0).max(10000), callTarget: z.number().int().min(0).max(10000), caller: z.boolean() }).parse(body);
+    const member = await tx.teamMember.findFirst({ where: { id: data.employeeId, workspaceId: a.workspaceId, status: "ACTIVE" }, include: { role: true } });
+    if (!member) throw new TeamError("Member unavailable.", 404);
+    if (data.caller && (!can(member, "crm.outreach.manage") || !can(member, "crm.prospects.view"))) throw new TeamError("Callers need CRM view and outreach permissions.");
+    const previous = member.preferences && typeof member.preferences === "object" && !Array.isArray(member.preferences) ? member.preferences : {};
+    const { employeeId, ...crm } = data;
+    await tx.teamMember.update({ where: { id: employeeId }, data: { preferences: { ...previous, crm } } });
+    await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: "crm.targets_updated", entityId: employeeId, metadata: { previous: crmPreferences(member.preferences), next: crm } } });
+    return { ok: true };
+  }
+
   if (resource === "acquisition-email-template-save") {
     demand(a, "acquisition.admin");
     const id = typeof body.id === "string" ? body.id : ""; const slug = String(body.slug || "").trim().toLowerCase();

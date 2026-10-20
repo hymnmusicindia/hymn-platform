@@ -137,7 +137,9 @@ export async function advancedMutation(tx: Tx, a: Actor, resource: string, input
   }
   if (resource === "preferences") {
     const data = z.object({ availability: z.enum(["AVAILABLE", "BUSY", "AWAY"]), notifications: z.boolean(), digest: z.enum(["NONE", "DAILY", "WEEKLY"]), fridayReminder: z.boolean() }).parse(input);
-    return tx.teamMember.update({ where: { id: a.id }, data: { availability: data.availability, preferences: data } });
+    const previous = await tx.teamMember.findUniqueOrThrow({ where: { id: a.id }, select: { preferences: true } });
+    const retained = previous.preferences && typeof previous.preferences === "object" && !Array.isArray(previous.preferences) ? previous.preferences : {};
+    return tx.teamMember.update({ where: { id: a.id }, data: { availability: data.availability, preferences: { ...retained, ...data } } });
   }
   if (resource === "saved-views") {
     const data = z.object({ name: text.max(100), filters: z.object({ status: z.enum(statuses).optional(), query: z.string().max(200).optional(), mine: z.boolean().optional() }) }).parse(input);
