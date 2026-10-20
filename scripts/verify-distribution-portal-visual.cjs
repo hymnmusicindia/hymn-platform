@@ -10,7 +10,7 @@ const {chromium, expect} = require('@playwright/test');
  if(!css)throw Error('Tailwind compilation failed');
  if(css) await fs.writeFile(path.join(out,'global.css'),css.css);
  const browser=await chromium.launch();try{
- for(const width of [1440,1024,768,390]){
+ for(const width of [1920,1440,1280,1024,768,390]){
   const page=await browser.newPage({viewport:{width,height:900}});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('https://hymn.fixture/**',async r=> {if(r.request().resourceType()==='document')return r.fulfill({contentType:'text/html',body:'<div class="hymn-portal-root"><div class="hymn-portal workspace-v2"><div class="portal-page-content" style="height:900px;overflow:auto"><div id="root"></div></div></div></div>'});if(r.request().url().includes('/assets/')){const asset=path.join('public',new URL(r.request().url()).pathname);try{return r.fulfill({body:await fs.readFile(asset),contentType:'image/png'})}catch{}}return r.fulfill({json:{success:true,artists:[],releases:[],data:[]}})});
@@ -25,6 +25,7 @@ const {chromium, expect} = require('@playwright/test');
    if(mode==='catalogue'){
     const search=page.getByRole('searchbox',{name:'Search title, artist, UPC or ISRC'});
     await expect(search).toBeVisible();
+    if(width>=1024){await expect(page.locator('.release-catalogue-desktop-filters')).toBeVisible();await expect(page.locator('.release-library-panel > details')).toBeHidden();}
     await expect(page.getByRole('button',{name:'Grid view'})).toHaveAttribute('aria-pressed','true');
     await search.fill('nonexistent release');
     await expect(page.getByRole('heading',{name:'No releases match your search'})).toBeVisible();

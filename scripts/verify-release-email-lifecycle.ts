@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { prisma } from "../lib/prisma";
+import { saveDraftDistributionRelease } from "../lib/distribution-db";
 import { enqueueRenderedEmail, queueReleaseStatusUpdate, deliverReleaseOutbox } from "../lib/email/release-outbox";
 import { runDraftLifecycle, DRAFT_WARNING_TEMPLATE, archiveLifecycleDraft } from "../lib/draft-lifecycle";
 import { meaningfulDraftTitle } from "../lib/draft-policy";
@@ -27,6 +28,13 @@ async function main() {
   assert.equal(emailRun.status, 200);
   assert.deepEqual(await emailRun.json(), { enabled: false, sent: 0, failed: 0 });
   const user = await prisma.user.create({ data: { googleId: "outbox", email: "outbox@example.test", name: "Artist", status: "ACTIVE" } });
+  const unfinishedMetadata = { artistName: user.name, releaseTitle: "", trackName: "", releaseType: "single", genre: "", releaseDate: new Date().toISOString().slice(0, 10), tracks: [] } as any;
+  const unfinished = await saveDraftDistributionRelease({ userId: user.id, metadata: unfinishedMetadata });
+  assert.equal(unfinished.status, "draft", "Manual save must accept unfinished work without a title.");
+  await prisma.release.update({ where: { id: unfinished.id }, data: { lastEditedAt: new Date(Date.now() - 5 * DAY) } });
+  await saveDraftDistributionRelease({ userId: user.id, draftReleaseId: unfinished.id, metadata: { ...unfinishedMetadata, mood: "Happy" } });
+  const savedUnfinished = await prisma.release.findUniqueOrThrow({ where: { id: unfinished.id } });
+  assert(savedUnfinished.lastEditedAt!.getTime() > Date.now() - 60000, "Editing metadata must reset inactivity without requiring a title.");
   const create = (title: string, days = 0, paymentStatus = "pending") => prisma.release.create({ data: { userId: user.id, title, artistName: "Artist", genre: "Pop", releaseDate: new Date(), status: "DRAFT", paymentStatus, lastEditedAt: new Date(Date.now() - days * DAY), createdAt: new Date(Date.now() - days * DAY) } });
   assert.equal(meaningfulDraftTitle("   "), ""); assert.equal(meaningfulDraftTitle("Untitled Album"), ""); assert.equal(meaningfulDraftTitle(" My song "), "My song");
   const release = await create("Correction song");
@@ -56,7 +64,8 @@ async function main() {
   assert.equal((await deliverReleaseOutbox([scheduled.id], 5, async () => ({ data: { id: "scheduled-proof" }, error: null }))).sent, 1, "An approved scheduled notice must retain its approval evidence and actually send.");
   const draft = await create("Draft song", 7), untitled = await create("Untitled single"), paid = await create("Untitled release", 7, "paid");
   await runDraftLifecycle({ apply: true });
-  assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: untitled.id } })).status, "ARCHIVED");
+  assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: untitled.id } })).status, "DRAFT", "An untitled draft must retain edits and follow the normal inactivity window.");
+  assert.equal(await prisma.emailLog.count({ where: { entityId: String(untitled.id), template: DRAFT_WARNING_TEMPLATE } }), 0, "A new untitled draft must not receive an expiry notice.");
   assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: paid.id } })).status, "DRAFT");
   assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: draft.id } })).status, "DRAFT", "Old drafts require delivered notice before removal.");
   assert.equal((await deliverReleaseOutbox([draft.id], 5, send)).sent, 1);

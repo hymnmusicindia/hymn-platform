@@ -30,7 +30,6 @@ export async function runDraftLifecycle(options: { untitledOnly?: boolean; apply
   for (const draft of options.untitledOnly ? untitled : drafts) {
     if (Date.now() >= deadline) break;
     const edited = draft.lastEditedAt ?? draft.createdAt;
-    if (!meaningfulDraftTitle(draft.title)) { if (await archiveLifecycleDraft(draft.id, edited, "untitled")) archived++; continue; }
     if (draft.user.status !== "ACTIVE" || now.getTime() - edited.getTime() < 4 * DAY) continue;
     const eventKey = `${DRAFT_WARNING_TEMPLATE}:${draft.id}:${edited.getTime()}`;
     const warning = await prisma.emailLog.findUnique({ where: { eventKey } });

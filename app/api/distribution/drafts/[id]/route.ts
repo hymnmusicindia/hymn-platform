@@ -3,7 +3,7 @@ import { saveReleaseTracks, releaseSaveFailure } from "@/lib/release-track-save"
 import { releaseSaveTransactionOptions } from "@/lib/release-contributor-sync";
 export const maxDuration = 180;
 import { requireUser } from "@/lib/access";
-import { meaningfulDraftTitle } from "@/lib/draft-policy";
+import { draftTitleForSave } from "@/lib/draft-policy";
 import { getDetailedReleaseByUserId } from "@/lib/distribution-db";
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser(); if ("error" in user) return user.error;
@@ -18,7 +18,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const release = await getDetailedReleaseByUserId(user.session.sub, id);
   if (!release || release.status !== "draft") return NextResponse.json({ error: "Draft not found." }, { status: 404 });
   const body = await request.json().catch(() => ({}));
-  if (!meaningfulDraftTitle(body.title ?? release.releaseTitle ?? release.trackName)) return NextResponse.json({ error: "Enter a release title before saving." }, { status: 400 });
   const metadata = typeof body.metadata === "object" && body.metadata ? body.metadata : {};
   const { prisma } = await import("@/lib/prisma");
   try {
@@ -34,7 +33,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const updated = await tx.release.update({ where: { id }, data: {
     metadata: { ...existing, ...metadata, promotionCode: existing.promotionCode ?? null, campaignAttribution: existing.campaignAttribution ?? {}, lastEditedAt: new Date().toISOString() } as any,
     releaseType: ["single", "ep", "album"].includes(metadata.releaseType) ? metadata.releaseType : undefined,
-    title: typeof body.title === "string" && body.title.trim() ? body.title.trim() : undefined,
+    title: typeof body.title === "string" ? draftTitleForSave(body.title) : undefined,
     artistName: typeof body.artistName === "string" && body.artistName.trim() ? body.artistName.trim() : undefined,
     genre: typeof body.genre === "string" ? body.genre : undefined,
     releaseDate: body.releaseDate ? new Date(body.releaseDate) : undefined,

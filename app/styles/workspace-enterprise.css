@@ -60,3 +60,11 @@ html body .workspace-v2 .module-search-empty {padding:18px 10px;color:var(--text
 @media(max-width:600px){html body .workspace-v2.workspace-v2 .portal-workspace{padding:14px!important;}html body .workspace-v2.workspace-v2 .dashboard-os-topbar {gap:12px;}.workspace-switcher-option{min-height:40px;}}
 html body .workspace-v2.workspace-v2 .dashboard-os-nav-item{min-height:44px!important;}
 @media(hover:none),(pointer:coarse){html body .workspace-v2.workspace-v2 .dashboard-os-nav-item{min-height:48px!important;}}
+/* Desktop modules fill the workspace beside the sidebar, rather than inheriting
+   the narrow public-page shell used by mobile and marketing layouts. */
+@media(min-width:1024px) {
+  html body .workspace-v2.workspace-v2 .portal-workspace { min-width:0; max-width:none; }
+  html body .workspace-v2.workspace-v2 .portal-page-content { width:100%; max-width:none; align-self:stretch; }
+  html body .workspace-v2.workspace-v2 .portal-page-content > :is(main,section,.release-portal-page,.release-manage-page) { width:100%; min-width:0; max-width:none; }
+  html body .workspace-v2.workspace-v2 .portal-page-content .distribution-start-page > .shell { width:100%; max-width:none; margin-inline:0; }
+}

@@ -23,8 +23,6 @@ html body .distribution-workflow.distribution-workflow .release-workspace-header
 }
 html body .distribution-workflow .release-workspace-logo { width:96px; height:auto; margin-inline:auto; }
 html body .distribution-workflow .release-workspace-state { display:flex; align-items:center; gap:12px; font-size:13px; }
-html body .distribution-workflow .release-draft-title { width:100%; font-size:14px; }
-html body .distribution-workflow .release-draft-title small { font-size:12px; line-height:1.6; }
 html body .distribution-workflow.distribution-workflow .release-journey-progress { display:flex!important; align-items:center; gap:20px; margin:0; padding:0; }
 html body .distribution-workflow .release-journey-progress > div:first-child { display:flex; align-items:center; gap:10px; white-space:nowrap; font-size:12px; }
 html body .distribution-workflow .release-journey-progress-track { flex:1; height:4px; border-radius:99px; overflow:hidden; background:var(--border); }

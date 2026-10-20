@@ -1069,13 +1069,12 @@ export async function saveDraftDistributionRelease(input: {
     const title = input.metadata.tracks[0].trackTitle?.trim();
     if (title) input = { ...input, metadata: { ...input.metadata, releaseTitle: title, trackName: title } };
   }
-  const { meaningfulDraftTitle } = await import("@/lib/draft-policy");
-  if (!meaningfulDraftTitle(input.metadata.releaseTitle || input.metadata.trackName || input.metadata.tracks[0]?.trackTitle)) throw new Error("Enter an album or track title before saving a draft.");
   const pool = getPool();
   const existingRelease = input.draftReleaseId ? await getDetailedReleaseByUserId(input.userId, input.draftReleaseId) : null;
   if (input.expectedUpdatedAt && existingRelease?.draftVersion !== input.expectedUpdatedAt) throw new Error("This draft was updated elsewhere. Reload the latest version before editing.");
   const releaseId = input.draftReleaseId ?? existingRelease?.id ?? nextId(memory.releases);
   const now = new Date().toISOString();
+  input = { ...input, metadata: { ...input.metadata, lastEditedAt: now } };
   const baseTrack = input.metadata.tracks[0] ?? {
     trackTitle: input.metadata.trackName || input.metadata.releaseTitle || "Untitled track",
     version: undefined,
@@ -1130,6 +1129,7 @@ export async function saveDraftDistributionRelease(input: {
           audioUrl: input.metadata.audioUrl || null,
           releaseDate: input.metadata.releaseDate ? new Date(input.metadata.releaseDate) : current?.releaseDate ?? new Date(),
           metadata: rest as any,
+          lastEditedAt: new Date(now),
           reviewConfirmedAt: null,
           reviewConfirmedBy: null,
           upc: input.metadata.upcCode || current?.upc || null

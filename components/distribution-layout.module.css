@@ -1,0 +1,24 @@
+/* The editor shell owns its layout independently of legacy global grid rules.
+   Repeated local scope wins over old stage selectors regardless of CSS chunk order. */
+html body .workflow.workflow.workflow.workflow {
+  display:flex!important; flex-direction:column; align-items:stretch;
+  width:100%!important; max-width:none!important; min-width:0;
+  height:auto!important; min-height:0!important; grid-template-columns:none!important;
+}
+html body .workflow.workflow.workflow.workflow > :is(header,nav,div,aside) { width:100%; min-width:0; max-width:none; margin-inline:0; grid-column:auto!important; grid-row:auto!important; }
+html body .workflow.workflow.workflow.workflow :global(.release-workflow-content) { width:100%!important; max-width:none!important; align-self:stretch!important; }
+html body .workflow.workflow.workflow.workflow :global(.release-editor-panels) { width:100%; max-width:none; }
+html body .workflow.workflow.workflow.workflow :global(.release-artist-stage) { width:100%; max-width:none!important; padding:32px 0!important; margin:0; align-content:start; }
+html body .workflow.workflow.workflow.workflow :global(.release-focused-intro) { text-align:left; min-width:0; }
+html body .workflow.workflow.workflow.workflow :global(.release-focused-intro) h2 { max-width:26ch; font-size:clamp(28px,3vw,40px); line-height:1.16; }
+html body .workflow.workflow.workflow.workflow :global(.release-focused-card) { width:100%; max-width:none; min-width:0; }
+@media(min-width:1024px) {
+  html body .workflow.workflow.workflow.workflow :global(.release-artist-stage) { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:center; gap:32px; min-height:260px!important; }
+  html body .workflow.workflow.workflow.workflow :global(.release-artist-next) { grid-column:2; justify-self:end; }
+  html body .workflow.workflow.workflow.workflow :global(.release-artwork-stage) { display:grid; grid-template-columns:minmax(240px,.8fr) minmax(0,1.2fr); gap:32px; }
+  html body .workflow.workflow.workflow.workflow :global(.release-workspace-state) { display:flex; }
+}
+@media(max-width:767px) {
+  html body .workflow.workflow.workflow.workflow :global(.release-artist-stage) { display:grid; grid-template-columns:minmax(0,1fr); padding:20px 0!important; gap:24px; }
+}
+html body .workflow.workflow.workflow.workflow :global(.release-workflow-nav) > button { border-radius:10px!important; }
