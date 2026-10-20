@@ -4,7 +4,6 @@
 .heading { font-size:14px; font-weight:650; margin:0 0 4px; }
 .content p { margin-bottom:4px; }
 .content a { color:#f4d69d; text-decoration:underline; text-underline-offset:3px; font-weight:600; }
-.share { color:#e1e6ef; }
 .version { color:#bdc6d3; font-size:12px; }
 .banner .agree { display:inline-flex; align-items:center; justify-content:center; gap:8px; flex:none; min-width:104px; min-height:44px; padding:10px 18px; border:1px solid #e3edfc; border-radius:12px; background:#e3edfc; color:#111b2b; font-size:14px; font-weight:650; cursor:pointer; }
 .agree:disabled { opacity:.65; cursor:wait; }

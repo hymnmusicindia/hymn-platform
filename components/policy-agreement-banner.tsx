@@ -54,7 +54,6 @@ export function PolicyAgreementBanner({ initialStatus }: { initialStatus: Policy
     <div className={styles.content}>
       <p id="account-policy-heading" className={styles.heading}>Please review our current terms and policies</p>
       <p>By selecting I agree, you accept the <Link href="/terms-of-service" target="_blank" rel="noopener noreferrer">Terms of Service</Link>, <Link href="/policies/distribution-terms" target="_blank" rel="noopener noreferrer">Distribution Terms</Link> and <Link href="/policies" target="_blank" rel="noopener noreferrer">applicable policies</Link>, and acknowledge the <Link href="/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</Link>.</p>
-      <p className={styles.share}>{status.distributionSummary}</p>
       <p className={styles.version}>Updated {status.updatedLabel}. Your agreement is saved to your account; updates will ask you to agree again.</p>
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
     </div>

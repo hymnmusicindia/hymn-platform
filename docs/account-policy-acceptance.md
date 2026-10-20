@@ -1,6 +1,6 @@
 # Account policy acceptance
 
-The authenticated portal shows a HYMN graphite/gold policy banner until the account explicitly accepts the current policy revision. It links to the Terms of Service, Distribution Terms, Policy Center and Privacy Policy. The banner states DireNote's 30% share and HYMN's zero additional royalty-percentage commission; the Distribution Terms explain the revenue base, example, separate charges and payout conditions.
+The authenticated portal shows a HYMN graphite/gold policy banner until the account explicitly accepts the current policy revision. It links to the Terms of Service, Distribution Terms, Policy Center and Privacy Policy. Distribution royalty shares are explained in the Terms of Service and Distribution Terms, including the revenue base, example, separate charges and payout conditions.
 
 `lib/policy-content.ts` owns the documents and displayed version/date. Update the version and date when publishing policy changes. A SHA-256 fingerprint includes every policy document and the version, so changing policy content requires renewed acceptance even if the version was accidentally left unchanged.
 
