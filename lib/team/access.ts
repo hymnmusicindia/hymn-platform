@@ -12,7 +12,7 @@ export async function teamIdentity() {
 }
 export async function teamActor(workspaceId?: string) {
   const user = await teamIdentity();
-  const member = await prisma.teamMember.findFirst({ where: { userId: user.id, status: "ACTIVE", ...(workspaceId ? { workspaceId } : {}) }, include: { role: true, user: { select: { name: true, avatar: true } }, workspace: true }, orderBy: { joinedAt: "asc" } });
+  const member = await prisma.teamMember.findFirst({ where: { userId: user.id, status: "ACTIVE", ...(workspaceId ? { workspaceId } : {}) }, include: { role: true, user: { select: { name: true, avatar: true } }, workspace: { select: { id: true, name: true } } }, orderBy: { joinedAt: "asc" } });
   if (!member) throw new TeamError("An active internal team membership is required.", 403);
   return member;
 }
