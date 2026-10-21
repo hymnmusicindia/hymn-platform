@@ -1,7 +1,8 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Check, ChevronDown, Crown, Gift, Minus, X, Zap } from "lucide-react";
 import { CustomerOverlay } from "@/components/customer-overlay";
 import { planPerks } from "@/components/distribution-pricing-strip";
@@ -13,6 +14,20 @@ const subscriptions = distributionPlanCards.filter(plan => plan.key !== "one_tim
 const sharedBenefits = planPerks.half_yearly.filter(feature => feature.included &&
   subscriptions.every(plan => planPerks[plan.key].some(item => item.label === feature.label && item.included)));
 type OfferState = "loading" | "gift" | "reserved" | "one-time" | "unverified";
+
+function SubscriptionRouteTrigger({ onOpen }: { onOpen: () => void }) {
+  const params = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
+  useEffect(() => {
+    if (params.get("subscriptions") !== "1") return;
+    onOpen();
+    const query = new URLSearchParams(params.toString());
+    query.delete("subscriptions");
+    router.replace(`${pathname}${query.size ? `?${query}` : ""}${window.location.hash}`, { scroll: false });
+  }, [params, pathname, router, onOpen]);
+  return null;
+}
 
 export function openSubscriptions() {
   window.dispatchEvent(new Event("hymn-open-subscriptions"));
@@ -29,13 +44,13 @@ export function SubscriptionOptions() {
   const currentPlan = ({ "Half-Yearly": "half_yearly", "Yearly": "yearly", "Yearly+": "yearly_plus" } as Record<string, string>)[subscriptionLabel] ?? null;
   const [open, setOpen] = useState(false);
   const [offer, setOffer] = useState<OfferState>("loading");
+  const show = useCallback(() => { setOffer("loading"); setOpen(true); }, []);
   const close = () => setOpen(false);
   const dialogRef = useAccessibleDialog(open, close);
   useEffect(() => {
-    const show = () => { setOffer("loading"); setOpen(true); };
     window.addEventListener("hymn-open-subscriptions", show);
     return () => window.removeEventListener("hymn-open-subscriptions", show);
-  }, []);
+  }, [show]);
   useEffect(() => {
     if (!open || currentPlan) return;
     const controller = new AbortController();
@@ -62,7 +77,7 @@ export function SubscriptionOptions() {
   const bannerHref = offer === "gift" ? "/distribution/start?campaign=first-release"
     : offer === "reserved" ? "/dashboard/releases" : "/distribution/start";
 
-  return <CustomerOverlay open={open}>
+  return <><Suspense fallback={null}><SubscriptionRouteTrigger onOpen={show} /></Suspense><CustomerOverlay open={open}>
     <div className="subscription-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) close(); }}>
       <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="subscription-options-title" className="subscription-dialog">
         <header className="subscription-dialog-heading">
@@ -104,5 +119,5 @@ export function SubscriptionOptions() {
         </div>
       </section>
     </div>
-  </CustomerOverlay>;
+  </CustomerOverlay></>;
 }

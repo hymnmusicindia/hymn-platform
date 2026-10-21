@@ -3,7 +3,6 @@ import { getPublicAppUrl } from "@/lib/public-app-url";
 
 const routes = [
   ["", 1, "daily"],
-  ["/distribution", 0.95, "weekly"],
   ["/beat-store", 0.95, "daily"],
   ["/studio", 0.9, "weekly"],
   ["/services", 0.85, "monthly"],

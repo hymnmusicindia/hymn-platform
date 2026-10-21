@@ -1,5 +1,6 @@
 "use client";
 
+import { openSubscriptions } from "@/components/subscription-options";
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import { customerMessage } from "@/lib/customer-message";
 
@@ -489,7 +490,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         </div>
         {subscription?.razorpaySubscriptionId ? <SubscriptionActions status={subscription.status} cancelAtPeriodEnd={subscription.cancelAtPeriodEnd} /> : null}
         {subscription?.billingHistory?.length ? <div className="mt-6"><h3 className="font-semibold">Billing history</h3><div className="mt-3 grid gap-2">{subscription.billingHistory.map((payment: any) => <div key={payment.id} className="summary-card"><span>{formatDate(payment.createdAt)} · {payment.status}</span><span>{payment.currency} {payment.amount}{payment.invoiceId ? ` · Invoice ${payment.invoiceId}` : ""}</span></div>)}</div></div> : null}
-        <Link href="/distribution#distribution-pricing" className="btn-primary pressable mt-5 inline-flex">View plans</Link>
+        <button type="button" onClick={openSubscriptions} className="btn-primary pressable mt-5 inline-flex">View plans</button>
       </Panel> : null}
 
       {activeTab === "releases" ? (
