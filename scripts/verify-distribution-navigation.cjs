@@ -11,7 +11,7 @@ const {chromium, expect} = require('@playwright/test');
  if(css) await fs.writeFile(path.join(out,'global.css'),css.css);
  const browser=await chromium.launch();try{
  for(const width of [1440,390,320]){
-  const page=await browser.newPage({viewport:{width,height:900}});
+  const page=await browser.newPage({viewport:{width,height:900},hasTouch:width<768});
   let mode='success', releaseSave, lastSaved;
   await page.route('https://hymn.fixture/**',async route=>{
    const url=new URL(route.request().url());
@@ -56,16 +56,37 @@ const {chromium, expect} = require('@playwright/test');
   if(selected.color!=='rgb(255, 255, 255)'||selected.shadow!=='none'||selected.textShadow!=='none')throw Error('Selected section must be crisp white without glow.');
   const inactive=await navigation.getByRole('button',{name:/^Credits & tracks/}).evaluate(element=>getComputedStyle(element).color);
   if(inactive!=='rgb(203, 208, 216)')throw Error('Unselected section must be off-white.');
-  await navigation.getByRole('button',{name:/^Delivery/}).click();await expect(page.locator('form')).toHaveAttribute('data-editor-stage','5');
+  await expect(current).toBeEnabled();await current.focus();await page.keyboard.press('End');await expect(page.locator('form')).toHaveAttribute('data-editor-stage','7');await expect(navigation.locator('button[aria-current="step"]')).toBeEnabled();await page.keyboard.press('ArrowLeft');await expect(page.locator('form')).toHaveAttribute('data-editor-stage','5');
   await expect.poll(()=>navigation.locator('button[aria-current="step"]').evaluate(element=>getComputedStyle(element).color)).toBe('rgb(255, 255, 255)');
   await expect(stages.getByRole('progressbar')).toBeVisible();
   await expect(navigation.locator('button[aria-current="step"]')).toBeEnabled();
   const labelStyle=await navigation.locator('button[aria-current="step"] > span').evaluate(element=>({border:getComputedStyle(element).borderBottomWidth,decoration:getComputedStyle(element).textDecorationLine}));
   if(labelStyle.border!=='0px'||labelStyle.decoration!=='none')throw Error('Selected section must not be underlined.');
-  const divider=await navigation.locator('button').first().evaluate(element=>({content:getComputedStyle(element,'::after').content,width:getComputedStyle(element,'::after').width}));
-  if(divider.content==='none'||divider.width!=='1px')throw Error('Section separators must remain visible.');
+  const shell=await stages.evaluate(element=>({border:getComputedStyle(element).borderTopWidth,shadow:getComputedStyle(element).boxShadow}));
+  if(shell.border!=='0px'||shell.shadow!=='none')throw Error('Selector must not have a box.');
+  await expect.poll(async()=>navigation.locator('button[aria-current="step"]').evaluate(element=>{const button=element.getBoundingClientRect(),nav=element.closest('nav').getBoundingClientRect();return Math.abs((button.left+button.width/2)-(nav.left+nav.width/2));})).toBeLessThan(2);
+  const blur=await navigation.getByRole('button',{name:/^Review/}).locator('span').evaluate(element=>getComputedStyle(element).filter);
+  if(!blur.startsWith('blur(')||blur==='blur(0px)')throw Error('Neighbouring sections should have a soft blur: '+blur);
+  await navigation.scrollIntoViewIfNeeded();
+  const bounds=await navigation.boundingBox();
+  await page.mouse.move(bounds.x+bounds.width*.3,bounds.y+bounds.height/2);await page.mouse.down();await page.mouse.move(bounds.x+bounds.width*.7,bounds.y+bounds.height/2,{steps:8});await page.mouse.up();
+  await expect(page.locator('form')).toHaveAttribute('data-editor-stage','2');
+  await expect.poll(async()=>navigation.locator('button[aria-current="step"]').evaluate(element=>{const button=element.getBoundingClientRect(),nav=element.closest('nav').getBoundingClientRect();return Math.abs((button.left+button.width/2)-(nav.left+nav.width/2));})).toBeLessThan(2);
+  if(width<768){
+    await expect(navigation.locator('button[aria-current="step"]')).toBeEnabled();
+    await navigation.scrollIntoViewIfNeeded();const touch=await navigation.boundingBox();const session=await page.context().newCDPSession(page);
+    const point=x=>[{x,y:touch.y+touch.height/2}];
+    await session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:point(touch.x+touch.width*.7)});
+    for(let i=1;i<=8;i++)await session.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:point(touch.x+touch.width*(.7-.4*i/8))});
+    await session.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    await expect(page.locator('form')).toHaveAttribute('data-editor-stage','5');
+    await expect(navigation.locator('button[aria-current="step"]')).toBeEnabled();await session.detach();
+  }
+  await page.emulateMedia({reducedMotion:'reduce'});
+  const transition=await navigation.locator('button').first().evaluate(element=>getComputedStyle(element.parentElement).transitionDuration);
+  if(transition!=='0s')throw Error('Reduced-motion preference must disable sliding animation.');
   await stages.screenshot({path:path.join(out,`${width}-menu.png`)});
-  console.log(`PASS ${width}px: compact text-only sections, working navigation, white selected/off-white inactive, no glow, 44px targets and no horizontal scrolling`);
+  console.log(`PASS ${width}px: box-free carousel, centred white selection, blurred neighbours, swipe/keyboard navigation, reduced motion and no page overflow`);
   await page.screenshot({path:path.join(out,`${width}-stages.png`),fullPage:true});await page.close();
  }
  }finally{await browser.close()}

@@ -3,6 +3,7 @@ import "./release-welcome.css";
 import "./release-editor-layout.css";
 import "./release-mobile.css";
 import layoutStyles from "./distribution-layout.module.css";
+import { ReleaseStageCarousel } from "./release-stage-carousel";
 import { loadBioRazorpay as loadRazorpayCheckout } from "@/lib/client-razorpay";
 
 import { customerMessage } from "@/lib/customer-message";
@@ -3601,25 +3602,11 @@ export function ReleaseForm({
         </div>
 
         <div className="release-stage-menu">
-        <nav className="release-workflow-nav" aria-label="Release sections">
-          {menuStepIndexes.filter((index) => index !== 0 && index !== 1).map((index) => {
-            const label = stepMenuLabels[index] ?? steps[index];
-            const buttonState = stepButtonStyles(index);
-            return (
-              <button
-                key={label}
-                type="button"
-                onClick={() => jumpToStep(index)}
-                className={buttonState.className}
-                disabled={stepTransitioning}
-                aria-label={buttonState.hasCorrection || buttonState.validity === "invalid" ? `${label}, needs attention` : label}
-                aria-current={buttonState.isCurrent ? "step" : undefined}
-              >
-                <span>{label}</span>
-              </button>
-            );
-          })}
-        </nav>
+        <ReleaseStageCarousel sections={menuStepIndexes.filter(index => index !== 0 && index !== 1).map(index => {
+          const state = stepButtonStyles(index);
+          return { id: index, label: stepMenuLabels[index] ?? steps[index], current: state.isCurrent, attention: state.hasCorrection || state.validity === "invalid" };
+        })} onSelect={jumpToStep} disabled={stepTransitioning}/>
+
           <div className="release-journey-progress-track" role="progressbar" aria-label="Journey stages reached" aria-valuemin={0} aria-valuemax={menuStepIndexes.length} aria-valuenow={menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1}><span style={{ width: `${((menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1) / menuStepIndexes.length) * 100}%` }} /></div>
         </div>
         <aside className="release-workflow-summary hidden lg:block" aria-label="Release summary">
