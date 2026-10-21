@@ -1,3 +1,4 @@
+import { customerBrandText } from "@/lib/customer-message";
 import { accrueReferralCommission } from "@/lib/referral-commissions";
 import bcrypt from "bcrypt";
 import { assertNotMergedIdentity } from "@/lib/merged-account-identity";
@@ -623,8 +624,8 @@ function mapNotification(row: any): Notification {
   return {
     id: Number(row.id),
     userId: Number(row.userId ?? row.user_id),
-    title: String(row.title ?? ""),
-    body: String(row.body ?? ""),
+    title: customerBrandText(String(row.title ?? "")),
+    body: customerBrandText(String(row.body ?? "")),
     type: normalizeNotificationType(row.type),
     href: row.href ?? null,
     actionLabel: row.actionLabel ?? row.action_label ?? null,

@@ -7,3 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Customer-facing distribution branding
+
+HYMN white-labels the distribution integration. Use HYMN in customer-facing pages, emails, notifications, correction requests and QC report commentary. Keep provider names and identifiers in internal integrations, diagnostics and audit evidence. Use the shared customer branding formatter for legacy/provider-generated messages. Do not rename actual matched recording artists or rights holders. Describe partner fees accurately as the distribution partner's share, preserving HYMN's zero additional royalty commission.

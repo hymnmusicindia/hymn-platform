@@ -307,8 +307,8 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       .filter((notification) => !notification.readAt && ["high", "normal"].includes(notification.priority))
       .slice(0, 4)
       .map((notification) => ({
-        title: notification.title,
-        detail: notification.body,
+        title: customerMessage(notification.title),
+        detail: customerMessage(notification.body),
         severity: notification.priority === "high" ? "High" : "Update",
         time: notification.createdAt,
         cta: "Read",
@@ -464,7 +464,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
 
             <Panel title="Recent releases" description="Your latest catalogue records and their immediate operational state.">
               <div className="grid gap-3">
-                {releases.slice(0, 5).map((release) => <article key={release.id} className="surface-list-item flex flex-wrap items-center justify-between gap-4 p-4"><div className="min-w-0"><p className="truncate font-semibold" style={{ color: "var(--text)" }}>{releaseTitle(release)}</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{release.artistName} · {release.releaseTiming === "quick_release" ? "Usually released within 2–7 days after DireNote approval" : formatDate(release.releaseDate)}</p><div className="mt-2"><StatusPill label={release.status} active /></div></div><Link href={`/dashboard/releases/${release.id}`} className="btn-outline pressable px-3 py-2 text-xs">View release</Link></article>)}
+                {releases.slice(0, 5).map((release) => <article key={release.id} className="surface-list-item flex flex-wrap items-center justify-between gap-4 p-4"><div className="min-w-0"><p className="truncate font-semibold" style={{ color: "var(--text)" }}>{releaseTitle(release)}</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{release.artistName} · {release.releaseTiming === "quick_release" ? "Usually released within 2–7 days after HYMN approval" : formatDate(release.releaseDate)}</p><div className="mt-2"><StatusPill label={release.status} active /></div></div><Link href={`/dashboard/releases/${release.id}`} className="btn-outline pressable px-3 py-2 text-xs">View release</Link></article>)}
                 {releases.length === 0 ? <EmptyState copy="No releases yet. Create a release to begin your catalogue and delivery workflow." /> : null}
               </div>
             </Panel>
@@ -623,7 +623,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
               <article key={notification.id} className="surface-list-item p-4" style={!notification.readAt ? { borderColor: "var(--accent)" } : undefined}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold" style={{ color: "var(--text)" }}>{notification.title}</p>
+                    <p className="font-semibold" style={{ color: "var(--text)" }}>{customerMessage(notification.title)}</p>
                     <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{customerMessage(notification.body)}</p>
                   </div>
                   <StatusPill label={notification.readAt ? "read" : "unread"} active={!notification.readAt} />

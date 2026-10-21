@@ -1,4 +1,5 @@
 "use client";
+import { customerMessage } from "@/lib/customer-message";
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import Image from "next/image";
 import Link from "next/link";
@@ -28,7 +29,7 @@ export function OverviewPipeline({ stages }: { stages:Array<{label:string;count:
 }
 function Activity({ notifications, producer=false }: { notifications:Notification[];producer?:boolean }) {
   const href=producer?"/producer/dashboard?tab=messages":"/dashboard?tab=messages";
-  return <OverviewPanel title="Activity" action={<Link className={s.link} href={href}>View all <ArrowRight/></Link>}>{newest(notifications).slice(0,4).map(item=><div className={s.row} key={item.id}><span className={s.icon}><Bell/></span><div className={s.rowCopy}><Link href={item.href||href}><strong>{item.title}</strong></Link><small>{item.body}</small></div><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleDateString("en-IN",{day:"numeric",month:"short"})}</time></div>)}{!notifications.length && <OverviewEmpty title="You're up to date">Account updates will appear here.</OverviewEmpty>}</OverviewPanel>;
+  return <OverviewPanel title="Activity" action={<Link className={s.link} href={href}>View all <ArrowRight/></Link>}>{newest(notifications).slice(0,4).map(item=><div className={s.row} key={item.id}><span className={s.icon}><Bell/></span><div className={s.rowCopy}><Link href={item.href||href}><strong>{customerMessage(item.title)}</strong></Link><small>{customerMessage(item.body)}</small></div><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleDateString("en-IN",{day:"numeric",month:"short"})}</time></div>)}{!notifications.length && <OverviewEmpty title="You're up to date">Account updates will appear here.</OverviewEmpty>}</OverviewPanel>;
 }
 function Artwork({ src }: {src?:string}) { return <span className={s.art}>{src?<Image src={artworkPreviewUrl(src, 96)} alt="" width={240} height={240} unoptimized/>:<Disc3/>}</span>; }
 type ArtistWorkspaceSummary={releaseCount:number;needsAttention:number;plan:string;planDaysRemaining:number|null;credit:number};

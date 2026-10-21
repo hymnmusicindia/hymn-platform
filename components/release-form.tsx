@@ -1280,7 +1280,7 @@ export function ReleaseForm({
     [release.contentType],
   );
   const requiresAiProof = release.contentType === "AI Generated";
-  // DireNote requires evidence of the third-party licence that gives an artist
+  // HYMN requires evidence of the third-party licence that gives an artist
   // the right to distribute non-exclusive content. Original and exclusively
   // controlled masters are covered by the ownership declaration instead.
   const requiresLicenceProof = release.contentType === "Non-Exclusive Licensed";
@@ -2051,7 +2051,7 @@ export function ReleaseForm({
   ) {
     const supportedMime = ["audio/wav", "audio/x-wav", "audio/mpeg"].includes(file.type);
     if (!supportedMime || !/\.(wav|mp3)$/i.test(file.name)) {
-      throw new Error("DireNote requires WAV or MP3 audio. FLAC and other formats are not accepted.");
+      throw new Error("HYMN requires WAV or MP3 audio. FLAC and other formats are not accepted.");
     }
     clearCorrectionField("audio-upload", `track-${index}-audio`);
     const currentTrack = tracks[index];
@@ -2310,7 +2310,7 @@ export function ReleaseForm({
         step: 3,
         key: `track-${index}-audio`,
         trackIndex: index,
-        message: "Replace this audio master with a DireNote-compliant WAV or MP3 file.",
+        message: "Replace this audio master with a HYMN-compliant WAV or MP3 file.",
       };
     if (track.versionPreset === "Other" && !track.customVersion.trim())
       return {
@@ -3725,9 +3725,9 @@ export function ReleaseForm({
                 <div className="pt-3"><p className="text-xs leading-5" style={{ color: "var(--text-muted)" }}>{release.contentType === "AI Generated" ? "Recommended: Attach your generation receipt, licence or supporting link to help reduce rights-review delays." : release.contentType === "Non-Exclusive Licensed" ? "Recommended: Attach your licence or agreement to help us verify your distribution rights faster." : "Optional: Attach an agreement or ownership document to help speed up review."}</p><label className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-3 text-xs" style={{ borderColor: "var(--border)" }}><span className="flex items-center gap-2"><FileUp className="h-4 w-4" style={{ color: "var(--accent)" }} />{rightsUploadProgress != null ? `Uploading ${rightsUploadProgress}%` : "Drop a PDF, JPG or PNG, or browse"}</span><input className="sr-only" type="file" accept="application/pdf,image/jpeg,image/png" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { setRightsUploadProgress(0); const releaseId = await ensureUploadDraft(); const url = await uploadPrivateAsset(file, "private_ownership_proof", { releaseId, onProgress: (loaded, total) => setRightsUploadProgress(Math.round((loaded / total) * 100)) }); setRelease((current) => ({ ...current, licenseReceiptUrl: url })); } catch (error) { setRightsUploadError(error instanceof Error ? error.message : "Could not upload rights document."); } finally { setRightsUploadProgress(null); event.target.value = ""; } }} /></label><label className="mt-3 block text-xs" style={{ color: "var(--text-muted)" }}>Document link<input type="url" maxLength={2048} placeholder="https://..." className="field mt-1" value={release.licenseReceiptUrl.startsWith("http") ? release.licenseReceiptUrl : ""} onChange={event => setRelease(current => ({ ...current, licenseReceiptUrl: event.target.value }))} /></label>{release.licenseReceiptUrl && !release.licenseReceiptUrl.startsWith("http") ? <p className="mt-2 text-xs" style={{ color: "var(--success)" }}>Rights document attached · <button type="button" onClick={() => setRelease(current => ({ ...current, licenseReceiptUrl: "" }))}>Remove</button></p> : null}{rightsUploadError ? <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>{rightsUploadError}</p> : null}</div>
               </details> : null}
               {(requiresAiProof || requiresLicenceProof) ? <section ref={registerField("rights-document") as (node: HTMLElement | null) => void} className="mt-4 border-t pt-4" style={{ borderColor: "var(--border)" }}>
-                <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>{requiresAiProof ? "AI-generated content" : "Licence agreement"}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{requiresAiProof ? "Generation receipt and original track/project link are required for distribution." : "DireNote requires your licence or beat agreement for non-exclusive content."}</p></div><span className="text-[10px] font-semibold uppercase" style={{ color: "var(--danger)" }}>Required</span></div>
+                <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>{requiresAiProof ? "AI-generated content" : "Licence agreement"}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{requiresAiProof ? "Generation receipt and original track/project link are required for distribution." : "HYMN requires your licence or beat agreement for non-exclusive content."}</p></div><span className="text-[10px] font-semibold uppercase" style={{ color: "var(--danger)" }}>Required</span></div>
                 {requiresAiProof ? <p className="mt-3 text-xs font-semibold">Suno receipt PDF</p> : null}<label className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-3 text-xs" style={{ borderColor: "var(--border)" }}><span className="flex items-center gap-2"><FileUp className="h-4 w-4" style={{ color: "var(--accent)" }} />{rightsUploadProgress != null ? `Uploading ${rightsUploadProgress}%` : requiresAiProof ? "Drop generation receipt PDF or browse" : "Drop licence agreement PDF or browse"}</span><span style={{ color: "var(--text-soft)" }}>PDF · Max 10 MB</span><input className="sr-only" type="file" accept="application/pdf" onChange={async (event) => { const file = event.target.files?.[0]; if (file) await uploadRequiredRightsProof(file); event.target.value = ""; }} /></label>
-                {(requiresAiProof ? release.sunoReceiptUrl : release.licenseReceiptUrl) ? <div className="mt-2 flex items-center justify-between text-xs" style={{ color: "var(--success)" }}><span>PDF attached and ready for DireNote.</span><button type="button" onClick={() => setRelease((current) => requiresAiProof ? { ...current, sunoReceiptUrl: "" } : { ...current, licenseReceiptUrl: "" })}>Remove</button></div> : null}
+                {(requiresAiProof ? release.sunoReceiptUrl : release.licenseReceiptUrl) ? <div className="mt-2 flex items-center justify-between text-xs" style={{ color: "var(--success)" }}><span>PDF attached and ready for HYMN.</span><button type="button" onClick={() => setRelease((current) => requiresAiProof ? { ...current, sunoReceiptUrl: "" } : { ...current, licenseReceiptUrl: "" })}>Remove</button></div> : null}
                 {requiresAiProof ? <label className="mt-3 block text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Track / project link<input ref={registerField("ai-generation-link")} type="url" placeholder="https://..." className="field mt-1" value={release.sunoLink} onChange={(event) => setRelease((current) => ({ ...current, sunoLink: event.target.value }))} /></label> : null}
                 {rightsUploadError ? <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>{rightsUploadError}</p> : null}
               </section> : null}

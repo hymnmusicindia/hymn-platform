@@ -16,16 +16,16 @@ const map: Record<string, { label: string; description: string; tone: ReleaseSta
   queued_for_distribution: { label: "Queued for Distribution", description: "Your release is waiting to be sent to the distribution partner.", tone: "progress", step: 2, nextAction: "Track delivery" },
   submitting_to_distributor: { label: "Sending to Partner", description: "HYMN is awaiting the partner acknowledgement.", tone: "progress", step: 2, nextAction: "Track delivery" },
   sent: { label: "Received by Partner", description: "The distribution partner has acknowledged your release.", tone: "progress", step: 2, nextAction: "Track delivery" },
-  sent_to_distributor: { label: "Received by Partner", description: "DireNote acknowledged your release. Store availability is not yet confirmed.", tone: "progress", step: 2, nextAction: "Track delivery" },
-  distributor_processing: { label: "Partner Processing", description: "DireNote is processing your release.", tone: "progress", step: 2, nextAction: "Track delivery" },
-  processing: { label: "Partner Processing", description: "DireNote is processing your release.", tone: "progress", step: 2, nextAction: "Track delivery" },
+  sent_to_distributor: { label: "Received by Partner", description: "HYMN acknowledged your release. Store availability is not yet confirmed.", tone: "progress", step: 2, nextAction: "Track delivery" },
+  distributor_processing: { label: "Partner Processing", description: "HYMN is processing your release.", tone: "progress", step: 2, nextAction: "Track delivery" },
+  processing: { label: "Partner Processing", description: "HYMN is processing your release.", tone: "progress", step: 2, nextAction: "Track delivery" },
   delivery_failed: { label: "Delivery Needs Attention", description: "HYMN is checking a delivery issue. Do not create or pay for another release.", tone: "danger", step: 2, nextAction: "View delivery details" },
   takedown_requested: { label: "Takedown Requested", description: "HYMN has received the takedown request.", tone: "warning", step: 4, nextAction: "Track takedown" },
   takedown_processing: { label: "Takedown Processing", description: "Removal is awaiting partner confirmation.", tone: "warning", step: 4, nextAction: "Track takedown" },
   taken_down: { label: "Taken Down", description: "Removal has been confirmed.", tone: "neutral", step: 4, nextAction: "View details" },
-  distributor_changes_required: { label: "Fix Required", description: "DireNote requires corrections before distribution can continue.", tone: "danger", step: 1, nextAction: "Fix release" },
+  distributor_changes_required: { label: "Fix Required", description: "HYMN requires corrections before distribution can continue.", tone: "danger", step: 1, nextAction: "Fix release" },
   delivered: { label: "Delivered", description: "Delivery is complete and store availability is being tracked.", tone: "success", step: 3, nextAction: "View stores" },
-  scheduled: { label: "Scheduled", description: "DireNote approved this release for its selected release date.", tone: "success", step: 3, nextAction: "View schedule" },
+  scheduled: { label: "Scheduled", description: "HYMN approved this release for its selected release date.", tone: "success", step: 3, nextAction: "View schedule" },
   awaiting_live_confirmation: { label: "Awaiting Live Confirmation", description: "The release date has arrived and platform availability is being verified.", tone: "progress", step: 3, nextAction: "View stores" },
   partially_live: { label: "Partially Live", description: "The release is live on at least one platform while remaining stores process it.", tone: "success", step: 3, nextAction: "View stores" },
   live: { label: "Live", description: "Your release is available and reporting will follow.", tone: "success", step: 4, nextAction: "View performance" },
@@ -50,7 +50,7 @@ export function isDireNoteCorrectionStatus(providerStatus?: string | null) {
 export function effectiveReleaseStatus(status: string, providerStatus?: string | null) {
   const localStatus = status.toLowerCase();
   // A user's successful correction submission advances the HYMN workflow while
-  // DireNote can still report the correction from the previous submission.
+  // HYMN can still report the correction from the previous submission.
   // Keep the newer local lifecycle state visible until a fresh provider sync
   // changes the canonical status again.
   if (CUSTOMER_REVIEW_STATUSES.has(localStatus)) return localStatus;
@@ -63,11 +63,11 @@ export function adminReleaseStatusLabel(status: string, providerStatus?: string 
   const effectiveStatus = effectiveReleaseStatus(status, providerStatus);
   if (effectiveStatus === "changes_requested" && isDireNoteCorrectionStatus(providerStatus)) return "Correction Required";
   const labels: Record<string, string> = {
-    submitting_to_distributor: "Sending to DireNote",
-    sent_to_distributor: "Sent to DireNote",
-    distributor_processing: "DireNote Review",
+    submitting_to_distributor: "Sending to HYMN",
+    sent_to_distributor: "Sent to HYMN",
+    distributor_processing: "HYMN Review",
     changes_requested: "Changes Required",
-    rejected: providerStatus === "rejected" ? "Rejected by DireNote" : "Rejected"
+    rejected: providerStatus === "rejected" ? "Rejected by HYMN" : "Rejected"
   };
   return labels[status.toLowerCase()] ?? status.replace(/_/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
 }

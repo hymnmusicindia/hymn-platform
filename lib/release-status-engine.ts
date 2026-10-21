@@ -47,15 +47,15 @@ export function isDireNoteAccepted(release: Release) {
 }
 
 export function automaticStatusCopy(release: Release) {
-  if (isDireNoteCorrectionStatus(release.direNoteStatus)) return "DireNote requires corrections before this release can continue. Open the correction details to review the requested changes.";
+  if (isDireNoteCorrectionStatus(release.direNoteStatus)) return "HYMN requires corrections before this release can continue. Open the correction details to review the requested changes.";
   if (release.status === "under_review" || release.status === "submitted" || release.status === "in_queue") return "HYMN is reviewing your metadata, artwork, audio, and rights.";
   if (["approved", "queued_for_distribution", "submitting_to_distributor", "sent_to_distributor", "distributor_processing", "processing"].includes(release.status)) return release.releaseTiming === "quick_release"
-    ? "DireNote is processing your quick release. After partner approval, store availability usually takes 2–7 days."
-    : "HYMN and DireNote are processing your scheduled release. We’ll confirm the selected date after DireNote approves the schedule.";
-  if (release.status === "distributor_changes_required") return "DireNote requires corrections before this release can continue. Open Fix Required for the exact requested changes.";
+    ? "HYMN is processing your quick release. After partner approval, store availability usually takes 2–7 days."
+    : "HYMN is processing your scheduled release. We’ll confirm the selected date after HYMN approves the schedule.";
+  if (release.status === "distributor_changes_required") return "HYMN requires corrections before this release can continue. Open Fix Required for the exact requested changes.";
   if (release.status === "scheduled") return release.releaseTiming === "quick_release"
-    ? "DireNote has approved your quick release for distribution. HYMN is monitoring store availability, which usually takes 2–7 days."
-    : `DireNote has approved your release schedule for ${release.releaseDate}.`;
+    ? "HYMN has approved your quick release for distribution. HYMN is monitoring store availability, which usually takes 2–7 days."
+    : `HYMN has approved your release schedule for ${release.releaseDate}.`;
   if (release.status === "processing") return "Your release has cleared distribution submission. Platform availability may still take time depending on DSP processing.";
   if (release.status === "awaiting_live_confirmation") return "Your release date has arrived. HYMN is waiting for platform availability confirmation.";
   if (release.status === "partially_live") return "Your release is confirmed live on at least one platform. Availability may still vary by DSP.";

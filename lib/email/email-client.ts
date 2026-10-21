@@ -1,4 +1,5 @@
 import "server-only";
+import { customerBrandText } from "@/lib/customer-message";
 import nodemailer from "nodemailer";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 
@@ -17,7 +18,7 @@ export function getEmailClient(options?: { timeoutMs?: number }): { emails: { se
     const timeout = Math.max(1000, Math.min(30000, options?.timeoutMs || 30000));
     const port = Number(process.env.SMTP_PORT || 465);
     const transport = nodemailer.createTransport({ host: process.env.SMTP_HOST?.trim() || "smtp.gmail.com", port, secure: port === 465, requireTLS: true, auth: { user: process.env.SMTP_USER?.trim(), pass: process.env.SMTP_APP_PASSWORD?.replace(/\s/g, "") }, connectionTimeout: Math.min(15000, timeout), greetingTimeout: Math.min(15000, timeout), socketTimeout: timeout, disableFileAccess: true, disableUrlAccess: true });
-    const result = await transport.sendMail(input);
+    const result = await transport.sendMail({ ...input, subject: customerBrandText(input.subject), html: customerBrandText(input.html), text: customerBrandText(input.text) });
     if (!result.accepted.length) throw new Error("SMTP did not accept the recipient.");
     return { data: { id: result.messageId }, error: null };
   } } };

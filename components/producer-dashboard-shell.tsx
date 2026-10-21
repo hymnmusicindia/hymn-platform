@@ -1,8 +1,8 @@
 "use client";
+import { customerMessage } from "@/lib/customer-message";
 
 import { BeatEditMetadataFields } from "@/components/beat-metadata-fields";
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
-import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
 import { ProducerBeatUploader } from "@/components/producer-beat-uploader";
@@ -421,7 +421,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance,
 
       {activeTab === "messages" ? (
         <Panel title="Producer messages" description="Beat sales, payout changes, approvals, license updates, and admin notices.">
-          <div className="grid gap-3">{producerNotifications.map((notification) => <article key={notification.id} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">{notification.title}</p><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{notification.body}</p><p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>{new Date(notification.createdAt).toLocaleString("en-IN")}</p></div><StatusPill label={notification.readAt ? "Read" : "Unread"} active={!notification.readAt} /></div>{notification.href ? <a href={notification.href} className="btn-outline mt-3 inline-flex px-3 py-2 text-xs">{notification.actionLabel || "Open"}</a> : null}</article>)}{producerNotifications.length === 0 ? <EmptyState copy="No producer notifications yet." /> : null}</div>
+          <div className="grid gap-3">{producerNotifications.map((notification) => <article key={notification.id} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">{customerMessage(notification.title)}</p><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{customerMessage(notification.body)}</p><p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>{new Date(notification.createdAt).toLocaleString("en-IN")}</p></div><StatusPill label={notification.readAt ? "Read" : "Unread"} active={!notification.readAt} /></div>{notification.href ? <a href={notification.href} className="btn-outline mt-3 inline-flex px-3 py-2 text-xs">{notification.actionLabel || "Open"}</a> : null}</article>)}{producerNotifications.length === 0 ? <EmptyState copy="No producer notifications yet." /> : null}</div>
         </Panel>
       ) : null}
 

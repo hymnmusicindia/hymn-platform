@@ -1,3 +1,15 @@
+// White-label presentation only. Provider records and integration identifiers stay unchanged.
+export function customerBrandText(value: string): string {
+  return value
+    .replace(/https?:\/\/[^\s<>"']+/gi, link => {
+      try {
+        const host = new URL(link).hostname;
+        return /(?:^|\.)(?:direnotemedia|direnote)\.[a-z.]+$/i.test(host) ? "https://hymnmusic.fun/contact" : link;
+      } catch { return link; }
+    })
+    .replace(/\bDire[\s-]*Note(?:\s+Media)?\b|\bDNM\b/gi, "HYMN");
+}
+
 // Presentation only: keep API errors, stored review notes and field identifiers intact.
 const labels: Record<string, string> = {
   instagram_url: "Instagram profile", instagramUrl: "Instagram profile", "Instagram URL": "Instagram profile",
@@ -35,7 +47,7 @@ export function customerFieldLabel(path: string): string {
 
 export function customerMessage(value: string | null | undefined): string {
   if (!value) return "";
-  let text = value.replace(/\\_/g, "_");
+  let text = customerBrandText(value).replace(/\\_/g, "_");
   // Zod errors sometimes arrive as JSON text. Show the fields to correct, not schema internals.
   if (/^\s*[\[{]/.test(text)) {
     try {

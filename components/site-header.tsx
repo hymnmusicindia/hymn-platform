@@ -473,7 +473,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-start justify-between gap-2">
-                          <span className="site-notification-item-title text-sm font-semibold">{notification.title}</span>
+                          <span className="site-notification-item-title text-sm font-semibold">{customerMessage(notification.title)}</span>
                           {unread ? <span className="site-notification-unread-dot mt-1 h-2 w-2 shrink-0 rounded-full" aria-label="Unread" /> : null}
                         </span>
                         <span className="site-notification-body mt-1 block text-xs leading-5" style={{ color: "var(--text-muted)" }}>{customerMessage(notification.body)}</span>

@@ -23,7 +23,7 @@ export function LanguageFieldHelp({ track = false }: { track?: boolean }) {
     <div ref={popup} id={id} popover="auto" role="dialog" aria-label={track ? "Track language help" : "Release language help"}
       className="language-field-popup" onToggle={event => setOpen(event.newState === "open")}>
       <strong>{track ? "Track language" : "Release language"}</strong>
-      <p>{track ? "Choose the language sung or spoken, not the title’s script. “Ye Zindagi…” uses Latin letters but is Hindi: select Hindi. Use Instrumental only for audio without lyrics." : "Choose the release’s main language. For this Hindi single, select Hindi here and for track language—even though the title uses Latin letters. DireNote has no separate title-language field."}</p>
+      <p>{track ? "Choose the language sung or spoken, not the title’s script. “Ye Zindagi…” uses Latin letters but is Hindi: select Hindi. Use Instrumental only for audio without lyrics." : "Choose the release’s main language. For this Hindi single, select Hindi here and for track language—even though the title uses Latin letters. HYMN has no separate title-language field."}</p>
     </div>
   </span>;
 }

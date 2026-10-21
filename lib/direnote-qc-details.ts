@@ -55,7 +55,7 @@ export function qcReportSummary(report:ReleaseQcReport){return report.tracks.map
   });
   return `${t.title}: ${!t.scanned?'scan pending':!t.analysisAvailable?'detailed analysis not returned':`${t.matches.length} fingerprint match${t.matches.length===1?'':'es'}${examples.length?` — ${examples.join('; ')}`:''}`}`;
 }).join('\n').slice(0,3500);}
-export function qcMatchCorrectionNotes(report:ReleaseQcReport){return report.tracks.filter(t=>t.matches.length).map(t=>({field:`tracks.${report.tracks.indexOf(t)}.providerQc`,label:`Track ${t.trackNumber} · ${t.title} · Audio match review`,note:`DireNote reported ${t.matches.length} fingerprint match${t.matches.length===1?'':'es'}. Review the QC report for recordings, timing and rights information; a match alone does not establish infringement.`}));}
+export function qcMatchCorrectionNotes(report:ReleaseQcReport){return report.tracks.filter(t=>t.matches.length).map(t=>({field:`tracks.${report.tracks.indexOf(t)}.providerQc`,label:`Track ${t.trackNumber} · ${t.title} · Audio match review`,note:`HYMN reported ${t.matches.length} fingerprint match${t.matches.length===1?'':'es'}. Review the QC report for recordings, timing and rights information; a match alone does not establish infringement.`}));}
 
 export function providerQcSourceUpc(payload:unknown):string|null{
   const candidates=new Set<string>();

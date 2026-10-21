@@ -65,8 +65,8 @@ export function extractDireNoteCorrections(payload: Row, tracks: LocalTrack[], r
       const affectedTrack = namedIndex >= 0 ? `Track ${namedIndex + 1} · ${tracks[namedIndex].title}` : /^tracks\.\d+$/.test(target) ? label : null;
       issues.push({
         field: trackLanguage ? `${target}.trackLanguage` : contentIdRights ? "rights.contentId" : `${target}.providerCorrection.${fingerprint.slice(0, 12)}`,
-        label: contentIdRights ? affectedTrack ? `${affectedTrack} · Rights / Content ID` : "Rights · Content ID" : namedIndex >= 0 ? `${affectedTrack} · DireNote correction` : label,
-        note: `DireNote review: ${message}`,
+        label: contentIdRights ? affectedTrack ? `${affectedTrack} · Rights / Content ID` : "Rights · Content ID" : namedIndex >= 0 ? `${affectedTrack} · HYMN correction` : label,
+        note: `HYMN review: ${message}`,
         fingerprint
       });
     }
@@ -74,15 +74,15 @@ export function extractDireNoteCorrections(payload: Row, tracks: LocalTrack[], r
       if (strongKeys.has(key) || reviewKeys.has(key) || (key === "message" && rejected)) add(input, key, strongKeys.has(key));
     }
   }
-  inspect(payload, "direnote", "Release · DireNote correction", "release");
-  inspect(object(payload.release), "direnote", "Release · DireNote correction", "release");
+  inspect(payload, "direnote", "Release · HYMN correction", "release");
+  inspect(object(payload.release), "direnote", "Release · HYMN correction", "release");
   const remoteTracks = Array.isArray(payload.tracks) ? payload.tracks : Array.isArray(object(payload.release).tracks) ? object(payload.release).tracks as unknown[] : [];
   remoteTracks.forEach((input, index) => {
     const remote = object(input);
     const local = matchDireNoteTrack(remote, tracks, strictIdentity);
     const localIndex = local ? tracks.indexOf(local) : -1;
     inspect(remote, local ? `tracks.${localIndex}` : `direnote.remoteTrack.${index}`,
-      local ? `Track ${localIndex + 1} · ${local.title} · DireNote correction` : `DireNote track ${value(remote.track_name) || index + 1} · Correction`,
+      local ? `Track ${localIndex + 1} · ${local.title} · HYMN correction` : `HYMN track ${value(remote.track_name) || index + 1} · Correction`,
       local ? String(local.id) : identifier(remote.isrc) || value(remote.track_name) || `remote:${index}`);
   });
   return issues;
