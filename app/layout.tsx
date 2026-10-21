@@ -1,3 +1,4 @@
+import { CustomerServiceInterestTracker } from "@/components/customer-service-interest";
 import "./styles/royalty-splits.css";
 import "./styles/gateway-finance.css";
 import "./styles/heading-hierarchy.css";
@@ -93,7 +94,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           }}
         />
       </head>
-      <body suppressHydrationWarning>{children}<WorkspacePageTransition /><SmartHelpLayer /><ReferralWelcome />{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</body>
+      <body suppressHydrationWarning>{children}<CustomerServiceInterestTracker /><WorkspacePageTransition /><SmartHelpLayer /><ReferralWelcome />{process.env.GROWTH_ANALYTICS_ENABLED === "true" ? <GrowthTracker /> : null}</body>
     </html>
   );
 }

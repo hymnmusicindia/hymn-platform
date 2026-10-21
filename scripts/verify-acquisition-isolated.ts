@@ -26,13 +26,20 @@ async function main() {
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("acquisition_fixture");
+    if (process.argv.includes("--contacts-followups-only")) {
+      writeFileSync(oldSchema, execFileSync("git", ["show", "07ad464:prisma/schema.prisma"], { encoding: "utf8", windowsHide: true }));
+      await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", oldSchema, "--skip-generate"]);
+      await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261022090000_shared_contacts_followups/migration.sql", "--schema", "prisma/schema.prisma"]);
+      await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-contacts-followups.ts"]);
+      return;
+    }
     if (process.argv.includes("--performance-only")) {
       await run(["node_modules/prisma/build/index.js", "db", "push", "--skip-generate"]);
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-performance.ts"]);
       return;
     }
     await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", oldSchema, "--skip-generate"]);
-    const migrations = readdirSync("prisma/migrations", { withFileTypes: true }).filter(entry => entry.isDirectory() && /^20261019\d+_/.test(entry.name)).map(entry => path.join("prisma/migrations", entry.name, "migration.sql")).sort();
+    const migrations = readdirSync("prisma/migrations", { withFileTypes: true }).filter(entry => entry.isDirectory() && /^202610(?:19|22)\d+_/.test(entry.name)).map(entry => path.join("prisma/migrations", entry.name, "migration.sql")).sort();
     for (const migration of migrations) await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", migration, "--schema", "prisma/schema.prisma"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-acquisition-domain.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-crm-workflow.ts"]);

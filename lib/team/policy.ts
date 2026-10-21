@@ -24,7 +24,7 @@ export class TeamError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
 export type Actor = { id: string; workspaceId: string; userId: number; department: string; role: { owner: boolean; permissions: string[] } };
-export function can(actor: Actor, permission: Permission) { return actor.role.owner || actor.role.permissions.includes(permission); }
+export function can(actor: Actor, permission: Permission) { return permission === "clients.view" || permission === "clients.manage" || actor.role.owner || actor.role.permissions.includes(permission); }
 export function demand(actor: Actor, permission: Permission) { if (!can(actor, permission)) throw new TeamError("You do not have permission for this action.", 403); }
 export function assertTaskTransition(input: { previous: string; next: string; review: boolean; evidence: string; blocker: string; dependenciesComplete: boolean; checklistComplete: boolean; reviewer: boolean; authorIsOwner: boolean }) {
   if (!(statuses as readonly string[]).includes(input.next)) throw new TeamError("Unknown task status.");

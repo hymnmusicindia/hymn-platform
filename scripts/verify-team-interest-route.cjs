@@ -1,0 +1,35 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const ts = require('typescript');
+const compile = file => ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+(async () => {
+  let session = { sub: 42 }, active = true, limited = false, failed = false;
+  const stored = [];
+  const paths = { exports: {} };
+  vm.runInNewContext(compile('lib/team/service-interest.ts'), { exports: paths.exports });
+  const route = { exports: {} };
+  vm.runInNewContext(compile('app/api/team/customer-interest/route.ts'), { exports: route.exports, Response, Date, process: { env: {} }, require(id) {
+    if (id === '@/lib/session') return { getSession: async () => session };
+    if (id === '@/lib/request-origin') return { isSameAppOrigin: request => request.headers.get('origin') === 'https://hymn.fixture' };
+    if (id === '@/lib/rate-limit') return { consumeRateLimit: async () => ({ allowed: !limited }) };
+    if (id === '@/lib/team/service-interest') return paths.exports;
+    if (id === '@/lib/prisma') return { prisma: { user: { findFirst: async ({ where }) => { assert.equal(where.id, 42); assert.equal(where.status, 'ACTIVE'); return active ? { id: 42 } : null; } }, growthEvent: { createMany: async ({ data }) => { if (failed) throw Error('Database unavailable'); stored.push(...data); } } } };
+    throw Error('Unexpected import '+id);
+  } });
+  const call = (body, origin = 'https://hymn.fixture') => route.exports.POST(new Request('https://hymn.fixture/api/team/customer-interest', { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify(body) }));
+  assert.equal((await call({ path: '/studio', userId: 999 })).status, 204);
+  assert.equal(stored[0].userId, 42, 'Identity is derived from the session, never the body.');
+  assert.match(stored[0].key, /^support-interest:42:/);
+  assert.equal((await call({ path: '/distribution/start' })).status, 400, 'Draft start must not bypass the 30-hour inactivity rule.');
+  assert.equal((await call({ path: 'https://external.example/studio' })).status, 400);
+  assert.equal((await call({ path: '/admin' })).status, 400);
+  assert.equal((await call({ path: '/studio' }, 'https://external.example')).status, 403);
+  limited = true; assert.equal((await call({ path: '/studio' })).status, 429); limited = false;
+  assert.equal((await call({ path: '/studio', extra: 'x'.repeat(1100) })).status, 413);
+  active = false; assert.equal((await call({ path: '/studio' })).status, 204); active = true;
+  session = null; assert.equal((await call({ path: '/studio' })).status, 204); session = { sub: 42 };
+  failed = true; assert.equal((await call({ path: '/studio' })).status, 503);
+  assert.equal(stored.length, 1);
+  console.log('PASS service interest: session identity, origin, allowlist, anonymous/inactive users, size/rate limits and failure handling.');
+})().catch(e => { console.error(e); process.exitCode = 1; });

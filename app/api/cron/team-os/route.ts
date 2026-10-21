@@ -1,3 +1,4 @@
+import { syncCustomerFollowups } from "@/lib/team/customer-followups";
 import { syncDailyCrmWork } from "@/lib/team/daily-work";
 import { cronHandler } from "@/lib/cron/runtime";
 export const GET = cronHandler("team-os", runJob);
@@ -42,7 +43,9 @@ async function runJob(request: Request) {
           const reportKey = `${member.id}:friday:${week}`;
           if (day === 5 && preferences.fridayReminder && !await tx.teamWorkflowEvent.findUnique({ where: { eventKey: reportKey } })) { await tx.teamWorkflowEvent.create({ data: { workspaceId: a.workspaceId, eventKey: reportKey } }); await notify(tx, member.id, "Review and submit your weekly report", "/team?module=reports"); }
         }
-      }); workspaces++;
+      });
+      await teamWrite(owner, (tx, a) => syncCustomerFollowups(tx, a));
+      workspaces++;
     }
     return Response.json({ workspaces, welcomeEmails: await processClientWelcomes() });
   } catch { return Response.json({ error: "Team automation did not complete; it will retry safely." }, { status: 503 }); }

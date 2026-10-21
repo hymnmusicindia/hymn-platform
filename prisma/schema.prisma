@@ -3314,6 +3314,7 @@ model TeamWorkspace {
   id String @id @default(cuid())
   name String @default("HYMN Team OS")
   clientCardsImportedAt DateTime? @map("client_cards_imported_at")
+  customerFollowupCursor Json @default("{}") @map("customer_followup_cursor")
   createdAt DateTime @default(now())
   roles TeamRole[]
   members TeamMember[]
@@ -3633,6 +3634,9 @@ model TeamProject {
 }
 
 model TeamTask {
+  clientId String? @map("client_id")
+  followUpContext Json? @map("follow_up_context")
+  client TeamClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
   parentId String?
   collaboratorIds String[] @default([])
   recurrenceDays Int?
@@ -3668,6 +3672,7 @@ model TeamTask {
   @@index([ownerId, status])
   @@index([recordType, recordId])
   @@map("team_tasks")
+  @@index([clientId])
 }
 
 model TeamComment {
@@ -3740,6 +3745,8 @@ model TeamAudit {
 }
 
 model TeamProspect {
+  clientId String? @unique @map("client_id")
+  client TeamClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
   leadId Int? @unique
   acquisitionLead AcquisitionLead?
   lead GrowthLead? @relation(fields: [leadId], references: [id], onDelete: Restrict)
@@ -4042,6 +4049,8 @@ model PlaylistReviewMail {
 }
 
 model TeamClient {
+  prospect TeamProspect?
+  tasks TeamTask[]
   id String @id @default(cuid())
   workspaceId String
   ownerId String
