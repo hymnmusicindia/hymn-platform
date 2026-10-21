@@ -27,3 +27,6 @@ html body .workflow.workflow.workflow.workflow :global(.release-artist-save-erro
 
 html body .workflow.workflow.workflow.workflow :global(.release-stage-menu) :global(.release-workflow-nav) { display:flex!important; flex-direction:row; position:static!important; flex-wrap:nowrap; gap:6px; padding:0; margin:0; border:0!important; border-radius:0; background:transparent!important; width:100%; overflow-x:auto; scrollbar-width:thin; }
 html body .workflow.workflow.workflow.workflow :global(.release-stage-menu) :global(.release-journey-progress-track) { flex:none; width:100%; height:3px; margin:0; background:var(--border); border-radius:99px; overflow:hidden; }
+@media(max-width:767px) {
+  html body .workflow.workflow.workflow.workflow :global(.release-stage-menu) :global(.release-workflow-nav) { display:none!important; }
+}

@@ -3611,6 +3611,21 @@ export function ReleaseForm({
         </div>
 
         <div className="release-stage-menu">
+          <label className="release-stage-select">
+            <span>Release section</span>
+            <select
+              aria-label="Release section"
+              disabled={stepTransitioning}
+              value={step !== 0 && step !== 1 ? String(step) : ""}
+              onChange={(event) => jumpToStep(Number(event.target.value))}
+            >
+              <option value="" disabled>Choose a section</option>
+              {menuStepIndexes.filter((index) => index !== 0 && index !== 1).map((index) => {
+                const state = stepButtonStyles(index);
+                return <option key={index} value={index}>{stepMenuLabels[index] ?? steps[index]}{state.hasCorrection || state.validity === "invalid" ? " — Needs attention" : ""}</option>;
+              })}
+            </select>
+          </label>
         <nav ref={stageNavigationRef} className="release-workflow-nav" aria-label="Release sections">
           {menuStepIndexes.filter((index) => index !== 0 && index !== 1).map((index) => {
             const label = stepMenuLabels[index] ?? steps[index];

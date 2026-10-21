@@ -10,7 +10,7 @@ const {chromium, expect} = require('@playwright/test');
  if(!css)throw Error('Tailwind compilation failed');
  if(css) await fs.writeFile(path.join(out,'global.css'),css.css);
  const browser=await chromium.launch();try{
- for(const width of [1440,390]){
+ for(const width of [1440,390,320]){
   const page=await browser.newPage({viewport:{width,height:900}});
   let mode='success', releaseSave, lastSaved;
   await page.route('https://hymn.fixture/**',async route=>{
@@ -42,7 +42,22 @@ const {chromium, expect} = require('@playwright/test');
   if(lastSaved.title!=='')throw Error('Transition should not require a title');
   if(lastSaved.metadata.tracks[0].artistProfileIds[0]!==1)throw Error('Selected artist was not saved before advancing');
   console.log(`PASS ${width}px: visible save failure, retry, pending state, untitled artist save and Music transition`);
-  await page.screenshot({path:path.join(out,`${width}-music.png`),fullPage:true});await page.close();
+  const stages=page.locator('.release-stage-menu');
+  const selector=stages.getByRole('combobox',{name:'Release section'});
+  if(width<768){
+   await expect(selector).toBeVisible();await expect(stages.locator('nav')).toBeHidden();
+   if(JSON.stringify(await selector.locator('option').evaluateAll(options=>options.map(option=>option.value)))!==JSON.stringify(['','4','3','2','5','7']))throw Error('Mobile selector must retain the five ordered sections without setup stages.');
+   if(await stages.evaluate(element=>element.scrollWidth>element.clientWidth+1))throw Error('Mobile stage menu must not scroll horizontally.');
+   await selector.selectOption('4');await expect(page.locator('form')).toHaveAttribute('data-editor-stage','4');
+   await expect(selector).toHaveValue('4');
+   await selector.selectOption('5');await expect(page.locator('form')).toHaveAttribute('data-editor-stage','5');
+   await expect(stages.getByRole('progressbar')).toBeVisible();
+   console.log(`PASS ${width}px: single mobile selector, five ordered stages, working stage changes, retained progress and no menu scrolling`);
+  }else{
+   await expect(selector).toBeHidden();await expect(stages.locator('nav')).toBeVisible();
+   console.log('PASS desktop: horizontal stage navigation retained');
+  }
+  await page.screenshot({path:path.join(out,`${width}-stages.png`),fullPage:true});await page.close();
  }
  }finally{await browser.close()}
 })().catch(error=>{console.error(error);process.exitCode=1});
