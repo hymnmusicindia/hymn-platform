@@ -1,6 +1,10 @@
 import type { UserRole } from "@/lib/types";
 export function qcReportReturnPath(value?:string){return value && /^\/dashboard\/releases\/[1-9]\d*\/qc-report$/.test(value)?value:undefined;}
 
+export function reportReturnPath(value?: string) {
+  return qcReportReturnPath(value) ?? (value && /^\/team\/performance(?:\/[1-9]\d*)?$/.test(value) ? value : undefined);
+}
+
 export function destinationForRole(role: UserRole) {
   if (role === "admin") return "/dashboard";
   if (role === "producer") return "/producer/dashboard";

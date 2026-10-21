@@ -13,8 +13,9 @@ export function startCronScheduler(options: { port: number; secret: string; orig
     const due = CRON_JOBS.filter(job => cronEnabled(job) && !active.has(job.id) && (next.get(job.id) ?? 0) <= now()).sort((a, b) => (next.get(a.id) ?? 0) - (next.get(b.id) ?? 0));
     const work: Promise<void>[] = [];
     for (const job of due) {
-      const urgent = job.id === "team-appointments";
-      if (active.has(job.id) || (urgent ? active.has("team-appointments") : [...active].some(id => id !== "team-appointments"))) continue;
+      const urgentIds = new Set(["team-appointments", "team-performance"]);
+      const urgent = urgentIds.has(job.id);
+      if (active.has(job.id) || (!urgent && [...active].some(id => !urgentIds.has(id)))) continue;
       active.add(job.id);
       const attemptStarted = now();
       work.push((async () => {

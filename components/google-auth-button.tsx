@@ -7,7 +7,7 @@ import { MousePointer2, Hand } from "lucide-react";
 import cueStyles from "./google-login-cue.module.css";
 import { profileAvatarDataUrl } from "@/lib/avatar";
 import { queueReferralWelcome } from "@/lib/referral-welcome-client";
-import { qcReportReturnPath } from '@/lib/routes';
+import { reportReturnPath } from '@/lib/routes';
 
 const GOOGLE_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
@@ -95,8 +95,8 @@ export function GoogleAuthButton({
           return;
         }
 
-        if (qcReportReturnPath(returnTo) || data?.redirectPath) {
-          router.push(qcReportReturnPath(returnTo) ?? data.redirectPath);
+        if (reportReturnPath(returnTo) || data?.redirectPath) {
+          router.push(reportReturnPath(returnTo) ?? data.redirectPath);
           router.refresh();
           return;
         }

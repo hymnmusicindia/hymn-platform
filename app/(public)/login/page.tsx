@@ -2,7 +2,7 @@ import { UnifiedAuthForm } from "@/components/unified-auth-form";
 import type { UserRole } from "@/lib/types";
 import { prisma } from "@/lib/prisma";
 import { normalizeReferralCode } from "@/lib/referrals";
-import { qcReportReturnPath } from '@/lib/routes';
+import { reportReturnPath } from '@/lib/routes';
 
 type AuthRole = Exclude<UserRole, "admin">;
 
@@ -16,7 +16,7 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
     <main className="auth-standalone-page relative min-h-screen overflow-hidden py-6 sm:py-10">
       <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse at 50% 32%, rgba(155,168,190,0.075), transparent 70%)" }} />
       <div className="shell relative">
-        <UnifiedAuthForm returnTo={qcReportReturnPath(params.next)} initialRole={role as AuthRole} initialMode={mode} initialReferralCode={inviter?.referralCode || undefined} invitedBy={inviter?.name} referralError={params.referralError || (params.ref && !inviter ? "invalid" : undefined)} />
+        <UnifiedAuthForm returnTo={reportReturnPath(params.next)} initialRole={role as AuthRole} initialMode={mode} initialReferralCode={inviter?.referralCode || undefined} invitedBy={inviter?.name} referralError={params.referralError || (params.ref && !inviter ? "invalid" : undefined)} />
       </div>
     </main>
   );

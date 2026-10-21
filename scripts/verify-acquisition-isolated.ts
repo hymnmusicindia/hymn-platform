@@ -26,6 +26,11 @@ async function main() {
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("acquisition_fixture");
+    if (process.argv.includes("--performance-only")) {
+      await run(["node_modules/prisma/build/index.js", "db", "push", "--skip-generate"]);
+      await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-performance.ts"]);
+      return;
+    }
     await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", oldSchema, "--skip-generate"]);
     const migrations = readdirSync("prisma/migrations", { withFileTypes: true }).filter(entry => entry.isDirectory() && /^20261019\d+_/.test(entry.name)).map(entry => path.join("prisma/migrations", entry.name, "migration.sql")).sort();
     for (const migration of migrations) await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", migration, "--schema", "prisma/schema.prisma"]);
