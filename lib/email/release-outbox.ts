@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getEmailClient, getEmailConfig } from "./email-client";
 import { releaseStatusEmail, type ReleaseEmailData } from "./templates/release-status-email";
 import { getPublicAppUrl } from "@/lib/public-app-url";
+import { qcReportSummary } from '@/lib/direnote-qc-details';
+import { readReleaseQcReport } from '@/lib/direnote-qc-store';
 const object = (value: unknown): Record<string, any> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
 
 export async function enqueueRenderedEmail(db: any, input: { eventKey: string; template: string; to: string; userId: number; releaseId: number; subject: string; html: string; text: string; expectedStatus: string; draftEditedAt?: string; providerApproved?: boolean }) {
@@ -35,7 +37,12 @@ export async function queueReleaseStatusUpdate(db: any, releaseId: number, statu
   if (event === "release_scheduled" && (releaseTiming !== "schedule_release" || !providerScheduleApproved)) return undefined;
   const correctionKey = provider.correctionEventKey ?? release.reviewedAt?.toISOString() ?? "status";
   const providerMessages = Array.isArray(provider.correctionMessages) ? provider.correctionMessages.filter((item: unknown): item is string => typeof item === "string" && Boolean(item.trim())) : [];
-  return enqueueReleaseEmail(db, event, { to: release.user.email, userId: release.userId, userName: release.user.name, releaseId, releaseTitle: release.title, artistName: release.artistName, releaseStatus: status, statusEventKey: `v${release.version}`, releaseDate: releaseTiming === "schedule_release" ? release.releaseDate.toISOString().slice(0, 10) : undefined, manageReleaseUrl: `${getPublicAppUrl()}/dashboard/releases/${releaseId}`, correctionUrl: `${getPublicAppUrl()}/dashboard/releases/${releaseId}?tab=corrections`, rejectionReason: status === "changes_requested" ? (release.correctionReason ?? providerMessages.join("\n")) || undefined : release.rejectionReason ?? undefined, correctionEventKey: status === "changes_requested" ? correctionKey + (requestedReminderKey ? `:${requestedReminderKey}` : "") : undefined, providerApproved: providerScheduleApproved });
+  let qcSummary:string|undefined;
+  if(['release_changes_requested','release_rejected'].includes(event) && db.distributionSubmissionAttempt && db.direNoteLog){
+    const report=await readReleaseQcReport(releaseId,db);
+    if(report)qcSummary=qcReportSummary(report);
+  }
+  return enqueueReleaseEmail(db, event, { qcReportUrl: ['release_changes_requested','release_rejected'].includes(event) ? `${getPublicAppUrl()}/dashboard/releases/${releaseId}/qc-report` : undefined, qcSummary, to: release.user.email, userId: release.userId, userName: release.user.name, releaseId, releaseTitle: release.title, artistName: release.artistName, releaseStatus: status, statusEventKey: `v${release.version}`, releaseDate: releaseTiming === "schedule_release" ? release.releaseDate.toISOString().slice(0, 10) : undefined, manageReleaseUrl: `${getPublicAppUrl()}/dashboard/releases/${releaseId}`, correctionUrl: `${getPublicAppUrl()}/dashboard/releases/${releaseId}?tab=corrections`, rejectionReason: status === "changes_requested" ? (release.correctionReason ?? providerMessages.join("\n")) || undefined : release.rejectionReason ?? undefined, correctionEventKey: status === "changes_requested" ? correctionKey + (requestedReminderKey ? `:${requestedReminderKey}` : "") : undefined, providerApproved: providerScheduleApproved });
 }
 
 export async function deliverReleaseOutbox(releaseIds?: number[], limit = 5, deliver?: (input: { from: string; to: string; subject: string; html: string; text: string; replyTo?: string }) => Promise<{ data: { id?: string } | null; error: { message: string } | null }>, emailLogIds?: number[]) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { customerMessage } from "@/lib/customer-message";
+import Link from 'next/link';
 
 import type { Release } from "@/lib/types";
 import { CircleAlert, Clock3, ArrowUpRight, Music2 } from "lucide-react";
@@ -16,6 +17,7 @@ export function ProviderCorrectionWorkspace({ release, onFix }: { release: Relea
       <p>{open ? "Review the note below, update the affected field, then submit your corrections." : awaitingReview ? "Your corrections are with HYMN for review. Previous provider notes remain here for reference." : "Previous provider notes are retained here for reference. Check the release status above for current progress."}</p></div>
       <span className="provider-correction-status" data-open={open}>{open ? "Action required" : awaitingReview ? "Awaiting review" : "Review notes"}</span>
     </header>
+    <div className="my-4"><Link className="btn-outline" href={`/dashboard/releases/${release.id}/qc-report`}>View detailed QC report and timestamps</Link></div>
     <div className="provider-correction-list">{(release.reviewIssues?.fields ?? []).map(issue => {
       const trackIndex = issue.field.match(/^tracks\.(\d+)\./)?.[1];
       const track = trackIndex ? release.tracks?.[Number(trackIndex)] : undefined;

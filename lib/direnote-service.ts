@@ -17,7 +17,9 @@ import { currentDireNoteTracks } from "@/lib/direnote-track-revisions";
 import { attachedArtistProfileIds, verifiedArtistStoreLinks } from "@/lib/artist-store-links";
 import { validIsrc, validReleaseBarcode } from "@/lib/release-input-rules";
 import { confirmsDireNoteWithdrawal } from "@/lib/direnote/v24-reconciliation";
-import { requestDireNoteV24 } from "@/lib/direnote/v24-client";
+import { fetchBoundReleaseQcReport } from "@/lib/direnote-qc-store";
+import { qcMatchCorrectionNotes, providerQcSourceUpc } from "@/lib/direnote-qc-details";
+import { getPublicAppUrl } from "@/lib/public-app-url";
 import { direNoteQcCorrectionPayload } from "@/lib/direnote-qc-report";
 
 type RecordValue = Record<string, unknown>;
@@ -409,20 +411,28 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
         releaseStatus: remoteRelease.status ?? payload.status,
         trackReviews: remoteTracks.map(track => ({ isrc: track.isrc, status: track.status, remarks: track.remarks ?? track.review_remarks ?? track.correction_remarks }))
       })).digest("hex");
-      const recent = await prisma.direNoteLog.findFirst({ where: { releaseId, action: "correction_qc_report", createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) }, AND: [{ requestPayloadRedacted: { path: ["attemptId"], equals: attempt.id } }, { requestPayloadRedacted: { path: ["reviewFingerprint"], equals: reviewFingerprint } }] }, orderBy: { createdAt: "desc" } });
-      let qc = recent?.success ? record(recent.responseJson) : null;
-      if (!recent) {
-        await reserveDireNoteRequest("correction_qc_report", releaseId, actorId);
-        const response = await requestDireNoteV24("check_qc_report", { upc: lookupUpc }, { timeoutMs: requestTimeout(15000) });
-        const safeQc = redactDireNoteDiagnostic(response.data ?? {}) as RecordValue;
-        await prisma.direNoteLog.create({ data: { releaseId, action: "correction_qc_report", success: response.success, httpStatus: response.httpStatus, requestPayloadRedacted: { upc: lookupUpc, attemptId: attempt.id, reviewFingerprint }, responseJson: safeQc as never, errorMessage: response.error ?? null, createdByAdminId: actorId ?? null } });
-        if (response.httpStatus === 429) await prisma.direNoteLog.create({ data: { action: "provider_rate_limit", success: false, httpStatus: 429, responseJson: { retryAt: new Date(Date.now() + Math.max(60, response.retryAfterSeconds ?? 3600) * 1000).toISOString() } } });
-        if (response.success) qc = safeQc;
-      }
-      const qcUpc = qc ? normalizeDireNoteUpc(qc.upc_code ?? qc.upc ?? record(qc.release).upc_code) : null;
-      if (qc && qcUpc === lookupUpc) {
-        const detailed = extractDireNoteCorrections(direNoteQcCorrectionPayload(qc), mappingTracks, releaseId, attempt.id, true);
+      const sourceBinding=record(record(release.metadata).direNote);
+      const sourceUpc = (sourceBinding.qcSourceAttemptId===attempt.id ? normalizeDireNoteUpc(sourceBinding.qcSourceUpc) : null) ?? providerQcSourceUpc(currentPayload) ?? lookupUpc;
+      const { raw: qc, report } = await fetchBoundReleaseQcReport({ releaseId, attemptId: attempt.id, upc: lookupUpc, sourceUpc, tracks: mappingTracks, reviewFingerprint, actorId, timeoutMs: requestTimeout(15000) });
+      if (qc) {
+        // Bind source report rows to verified local ISRCs before extracting explicit failures.
+        const verifiedTracks = Array.isArray(qc.tracks) ? qc.tracks.map((row, index) => {
+          const remote = record(row);
+          const bound = report?.tracks.find(track => track.sourceIsrc === text(remote.isrc));
+          return { ...remote, ...(bound?.localTrackId ? { isrc: bound.isrc } : {}), track_number: index + 1 };
+        }) : [];
+        const detailed = extractDireNoteCorrections(direNoteQcCorrectionPayload({ ...qc, tracks: verifiedTracks }), mappingTracks, releaseId, attempt.id, true);
         for (const issue of detailed) if (!providerCorrections.some(existing => existing.fingerprint === issue.fingerprint)) providerCorrections.push(issue);
+      }
+      if (report?.verified) {
+        const reportFingerprint = createHash('sha256').update(JSON.stringify(report.tracks.map(track=>({localTrackId:track.localTrackId,sourceIsrc:track.sourceIsrc,matches:track.matches})))).digest('hex');
+        for (const note of qcMatchCorrectionNotes(report)) {
+          const detailTrack = report.tracks[Number(note.field.split('.')[1])];
+          const localIndex = mappingTracks.findIndex(track => track.id === detailTrack.localTrackId);
+          if (localIndex < 0) continue;
+          const fingerprint = createHash('sha256').update(`${attempt.id}:${detailTrack.localTrackId}:${reportFingerprint}`).digest('hex');
+          providerCorrections.push({ ...note, field: `tracks.${localIndex}.providerQc`, fingerprint });
+        }
       }
     } catch (error) { console.warn("Track QC enrichment deferred; review remarks remain available", { releaseId, error: String(redactDireNoteDiagnostic(error instanceof Error ? error.message : "QC unavailable")) }); }
   }
@@ -453,6 +463,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
         : hasVerifiedProviderListing && lifecycleStatus.provider === "unknown"
           ? { provider: "processing", canonical: "distributor_processing" as ReleaseStatus }
           : lifecycleForRelease;
+  for (const issue of providerCorrections) issue.note = issue.note.replace(/https:\/\/dashboard\.direnotemedia\.com\/release_detection_analysis\.php\?upc=\d+/g, `${getPublicAppUrl()}/dashboard/releases/${releaseId}/qc-report`);
   const correctionMessages = providerCorrections.map(issue => `${issue.label}: ${issue.note}`);
   const correctionFingerprint = direNoteCorrectionFingerprint(providerCorrections);
   const previousDireNote = record(record(release.metadata).direNote);

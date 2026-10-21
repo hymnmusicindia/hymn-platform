@@ -7,6 +7,7 @@ import { MousePointer2, Hand } from "lucide-react";
 import cueStyles from "./google-login-cue.module.css";
 import { profileAvatarDataUrl } from "@/lib/avatar";
 import { queueReferralWelcome } from "@/lib/referral-welcome-client";
+import { qcReportReturnPath } from '@/lib/routes';
 
 const GOOGLE_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
@@ -23,6 +24,7 @@ interface GoogleAuthButtonProps {
   appearance?: "default" | "quiet";
   autoPrompt?: boolean;
   showActionCue?: boolean;
+  returnTo?:string;
 }
 
 export function GoogleAuthButton({
@@ -34,7 +36,8 @@ export function GoogleAuthButton({
   onAuthenticated,
   appearance = "default",
   autoPrompt = false,
-  showActionCue = false
+  showActionCue = false,
+  returnTo
 }: GoogleAuthButtonProps) {
   const router = useRouter();
   const [scriptReady, setScriptReady] = useState(false);
@@ -92,8 +95,8 @@ export function GoogleAuthButton({
           return;
         }
 
-        if (data?.redirectPath) {
-          router.push(data.redirectPath);
+        if (qcReportReturnPath(returnTo) || data?.redirectPath) {
+          router.push(qcReportReturnPath(returnTo) ?? data.redirectPath);
           router.refresh();
           return;
         }
@@ -105,7 +108,7 @@ export function GoogleAuthButton({
         setProcessing(false);
       }
     },
-    [expectedRole, loginContext, onAuthenticated, referralCode, router]
+    [expectedRole, loginContext, onAuthenticated, referralCode, router, returnTo]
   );
 
   const handleScriptLoad = useCallback(() => {

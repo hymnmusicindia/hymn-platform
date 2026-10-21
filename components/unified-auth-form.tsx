@@ -16,12 +16,14 @@ export function UnifiedAuthForm({
   initialReferralCode,
   referralError,
   invitedBy,
+  returnTo,
 }: {
   initialRole?: AuthRole;
   initialMode?: AuthMode;
   initialReferralCode?: string;
   referralError?: string;
   invitedBy?: string;
+  returnTo?:string;
 }) {
   const [code, setCode] = useState(initialReferralCode || "");
   const [appliedCode, setAppliedCode] = useState(initialReferralCode || "");
@@ -58,7 +60,7 @@ export function UnifiedAuthForm({
           {appliedCode && code !== appliedCode ? <p className="mt-2 text-xs">{appliedCode} stays applied until you apply a new code.</p> : null}
           {referralState ? <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: referralState === "Referral code applied" ? "var(--success)" : "var(--danger)" }}>{referralState === "Referral code applied" ? <Check className="h-3.5 w-3.5" /> : null}{referralState}</p> : null}
         </details> : null}
-        <GoogleAuthButton label="Continue with Google" className="w-full" appearance="quiet" expectedRole={initialRole} referralCode={appliedCode || undefined} autoPrompt />
+        <GoogleAuthButton returnTo={returnTo} label="Continue with Google" className="w-full" appearance="quiet" expectedRole={initialRole} referralCode={appliedCode || undefined} autoPrompt />
       </div>
     </section>
   );
