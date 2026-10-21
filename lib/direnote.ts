@@ -15,7 +15,7 @@ import {
 import { getDireNoteConfig } from "@/lib/direnote/direnote-config";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 import { mapContributorToDireNote } from "@/lib/contributor-provider-mapping";
-import { attachedArtistProfileIds, verifiedArtistStoreLinks } from "@/lib/artist-store-links";
+import { attachedArtistProfileIds, verifiedArtistStoreLinks, savedArtistStoreLinks } from "@/lib/artist-store-links";
 import { parseReleaseDate, validIsrc, validReleaseBarcode, safeReleaseText } from "@/lib/release-input-rules";
 export { submitToDireNote, getDireNoteIngestStatus, getDireNoteReleaseInformation, getDireNoteReleaseInformationByReference, getDireNoteRevenueReport, getDireNoteArtistInformation, getDireNoteSongwriterInformation } from "@/lib/direnote/direnote-client";
 
@@ -215,14 +215,18 @@ function pickArtistProfile(name: string, profiles: ArtistProfile[] = [], selecte
 
 function toDireNoteArtist(name: string, profiles: ArtistProfile[] = [], release?: ExtendedRelease, selectedIds: number[] = []): DireNoteArtist {
   const profile = pickArtistProfile(name, profiles, selectedIds);
+  if (!profile && profiles.some(candidate => candidate.name.trim().toLowerCase() === name.trim().toLowerCase() && (candidate.spotifyUrl || candidate.appleUrl || candidate.spotifyArtistId || candidate.appleArtistId))) {
+    throw new Error(`Select the saved HYMN artist card for ${name} before delivery. Its existing store profile must not be omitted.`);
+  }
   const meta = release ? releaseMeta(release) : {};
   const artistMeta = meta.artistLinks?.[name] ?? meta.artistLinks?.[name.trim().toLowerCase()] ?? {};
   const youtubeUrl = profile?.youtubeUrl ?? artistMeta.youtube_url ?? artistMeta.youtubeUrl ?? meta.youtubeArtistUrl;
   const verifiedYoutube = verifiedArtistStoreLinks({ youtube: youtubeUrl }).youtube?.url;
+  const saved = profile ? savedArtistStoreLinks({ ...profile, spotifyProfileUrl: profile.spotifyUrl, appleMusicProfileUrl: profile.appleUrl }) : {};
   return {
     name,
-    spotify_url: profile?.spotifyUrl ?? artistMeta.spotify_url ?? artistMeta.spotifyUrl ?? undefined,
-    apple_url: profile?.appleUrl ?? artistMeta.apple_url ?? artistMeta.appleUrl ?? undefined,
+    spotify_url: profile ? profile.spotifyUrl || saved.spotify?.url : artistMeta.spotify_url || artistMeta.spotifyUrl || undefined,
+    apple_url: profile ? profile.appleUrl || saved.apple?.url : artistMeta.apple_url || artistMeta.appleUrl || undefined,
     // Duplicated releases may contain an old video/album URL. Do not send it
     // as an artist identity link; DireNote correctly rejects those URLs.
     youtube_url: verifiedYoutube,

@@ -7,6 +7,7 @@ import { activateDireNoteAttempt, finishDistributionSubmission } from "@/lib/dis
 import { markReleaseDistributionSuccess, updateDetailedReleaseStatus, logDistributionEvent, createReleaseAuditLog } from "@/lib/distribution-db";
 import { validIsrc, validReleaseBarcode } from "@/lib/release-input-rules";
 import { statusAfterDireNoteAcceptance } from "@/lib/release-status-engine";
+import { persistDireNoteArtistIds } from "@/lib/distribution-service";
 
 type JobRecord = Record<string, unknown>;
 const object = (value: unknown): JobRecord => value && typeof value === "object" && !Array.isArray(value) ? value as JobRecord : {};
@@ -157,6 +158,9 @@ export async function pollDireNoteIngestJobs(options: { limit?: number } = {}) {
       // Keep it distinct from a later catalog/status lookup; a correction
       // resubmission can legitimately receive a new UPC and track ISRCs.
       await activateDireNoteAttempt(attempt.id, { upc: upc!, providerStatus: "processing", trackIdentifiers: mappedTracks as never, responseRedacted: completedData as never }, { replaceIdentifiers: "identifierPolicy" in reference.stored && reference.stored.identifierPolicy === "replace" });
+      // Bind async-ingestion identities to the already attached cards so the
+      // normal artist refresh can verify/fill their stored store mappings.
+      await persistDireNoteArtistIds(attempt.releaseId, parsed.artists);
       if (attempt.release.status === "SUBMITTING_TO_DISTRIBUTOR") await updateDetailedReleaseStatus(attempt.releaseId, "sent_to_distributor", "DireNote completed the accepted ingest job.");
       const currentRelease = await prisma.release.findUniqueOrThrow({ where: { id: attempt.releaseId } });
       const priorMetadata = object(currentRelease.metadata);

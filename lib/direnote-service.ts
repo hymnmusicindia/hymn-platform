@@ -14,7 +14,8 @@ import { direNoteCorrectionFingerprint, extractDireNoteCorrections, matchDireNot
 import { normalizeDireNoteUpc, upcFromDireNoteIsrcReport, upcFromDireNoteResponse } from "@/lib/direnote-upc";
 import { ensureCurrentDireNoteAttempt } from "@/lib/distribution-idempotency";
 import { currentDireNoteTracks } from "@/lib/direnote-track-revisions";
-import { attachedArtistProfileIds, verifiedArtistStoreLinks } from "@/lib/artist-store-links";
+import { attachedArtistProfileIds, verifiedArtistStoreLinks, savedArtistStoreLinks } from "@/lib/artist-store-links";
+import { ensureDireNoteArtistMapping, flagArtistMappingReview } from "@/lib/direnote-artist-mapping";
 import { validIsrc, validReleaseBarcode } from "@/lib/release-input-rules";
 import { confirmsDireNoteWithdrawal } from "@/lib/direnote/v24-reconciliation";
 import { fetchBoundReleaseQcReport } from "@/lib/direnote-qc-store";
@@ -94,6 +95,13 @@ export async function syncDireNoteArtistInformation(artistCardId: number, actorI
   if (!card.spotifyProfileUrl && updatedCard.spotifyProfileUrl) {
     try { await refreshSpotifyArtistPhoto(card.id); }
     catch { /* Daily Spotify refresh retries transient provider errors. */ }
+  }
+  const savedLinks = savedArtistStoreLinks(updatedCard);
+  if ((['spotify', 'apple'] as const).some(provider => savedLinks[provider] && savedLinks[provider]?.id !== links[provider]?.id)) {
+    try { await ensureDireNoteArtistMapping(updatedCard.id, releaseId ?? null, actorId); }
+    catch (error) {
+      await flagArtistMappingReview({ releaseId, artistCardId: card.id, name: card.artistName, message: error instanceof Error ? error.message : "Artist store identity needs review. Do not resubmit accepted releases." });
+    }
   }
   return updatedCard;
 }

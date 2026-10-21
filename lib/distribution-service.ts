@@ -28,8 +28,9 @@ import { prisma } from "@/lib/prisma";
 import { diffDireNotePayload } from "@/lib/direnote-payload-diff";
 import { snapshotTrackContributions } from "@/lib/contributor-identity";
 import { attachedArtistProfileIds } from "@/lib/artist-store-links";
+import { ensureDireNoteArtistMapping, verifyReleaseArtistMappings, flagArtistMappingReview } from "@/lib/direnote-artist-mapping";
 
-async function persistDireNoteArtistIds(releaseId: number, artists: Array<{ name: string; artistId: string }>) {
+export async function persistDireNoteArtistIds(releaseId: number, artists: Array<{ name: string; artistId: string }>) {
   if (!artists.length) return [] as number[];
   return prisma.$transaction(async tx => {
     const release = await tx.release.findUnique({
@@ -283,6 +284,15 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     return { release: await getDetailedReleaseById(releaseId), validation, submitted: false, retryable: false, payload: redactedPayload };
   }
 
+  try {
+    await verifyReleaseArtistMappings(release.userId, releaseId, payload, options.actorId);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "Artist mapping needs review before delivery.";
+    await flagArtistMappingReview({ releaseId, name: displayName(release), message: reason });
+    await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: "ARTIST_MAPPING_DELIVERY_PAUSED", details: { reason } });
+    throw error;
+  }
+  await resolveAdminTask(`release:${releaseId}:artist-mapping`);
   if (!options.retry && release.status === "under_review") {
     await updateDetailedReleaseStatus(releaseId, "approved", "HYMN review approved for DireNote submission.");
   }
@@ -415,7 +425,14 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     await finishDistributionSubmission(claim.attempt.id, { state: "submitted", httpStatus: response.httpStatus, providerReference: parsed.distributorReleaseId ?? parsed.upc ?? parsed.ingestJobId ?? null, providerStatus: parsed.ingestJobStatus ?? "processing", responseRedacted: { distributorReleaseId: parsed.distributorReleaseId ?? null, upc: parsed.upc ?? null, trackIsrcs: parsed.trackIsrcs, artists: parsed.artists, songwriters: parsed.songwriters, warnings: parsed.warnings, ingestJobId: parsed.ingestJobId ?? null, providerIdempotencyKey: parsed.ingestIdempotencyKey ?? claim.attempt.idempotencyKey, ingestJobStatus: parsed.ingestJobStatus ?? "processing", pollAfterSeconds: parsed.pollAfterSeconds ?? 60 } });
     if (artistCardIds.length || contributorPartyIds.length) {
       const { syncDireNoteArtistInformation, syncDireNoteSongwriterInformation } = await import("@/lib/direnote-service");
-      await Promise.allSettled(artistCardIds.map(artistCardId => syncDireNoteArtistInformation(artistCardId, options.actorId, releaseId)));
+      await Promise.allSettled(artistCardIds.map(async artistCardId => {
+        try {
+          await ensureDireNoteArtistMapping(artistCardId, releaseId, options.actorId);
+          await syncDireNoteArtistInformation(artistCardId, options.actorId, releaseId);
+        } catch (error) {
+          await flagArtistMappingReview({ releaseId, name: displayName(release), message: error instanceof Error ? error.message : "Accepted release needs an artist mapping check. Do not resubmit it." });
+        }
+      }));
       await Promise.allSettled(contributorPartyIds.map(partyId => syncDireNoteSongwriterInformation(partyId, options.actorId, releaseId)));
     }
     return { release: updatedRelease, validation, submitted: true, retryable: false, warnings: parsed.warnings };

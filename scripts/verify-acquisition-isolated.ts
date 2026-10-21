@@ -33,6 +33,11 @@ async function main() {
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-contacts-followups.ts"]);
       return;
     }
+    if (process.argv.includes("--artist-mapping-only")) {
+      await run(["node_modules/prisma/build/index.js", "db", "push", "--skip-generate"]);
+      await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-artist-delivery-mapping.ts"]);
+      return;
+    }
     if (process.argv.includes("--performance-only")) {
       await run(["node_modules/prisma/build/index.js", "db", "push", "--skip-generate"]);
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-performance.ts"]);

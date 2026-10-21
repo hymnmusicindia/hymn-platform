@@ -1,4 +1,11 @@
 type StoreLink = { url: string; id?: string };
+/** A stored store ID is an explicit identity even on older cards missing its URL. */
+export function savedArtistStoreLinks(card: { spotifyProfileUrl?: string | null; spotifyArtistId?: string | null; appleMusicProfileUrl?: string | null; appleArtistId?: string | null }) {
+  return verifiedArtistStoreLinks({
+    spotify: card.spotifyProfileUrl || (card.spotifyArtistId && /^[A-Za-z0-9]{22}$/.test(card.spotifyArtistId) ? `https://open.spotify.com/artist/${card.spotifyArtistId}` : undefined),
+    apple: card.appleMusicProfileUrl || (card.appleArtistId && /^\d+$/.test(card.appleArtistId) ? `https://music.apple.com/artist/${card.appleArtistId}` : undefined)
+  });
+}
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }

@@ -28,9 +28,15 @@ const release = {
 const payload = buildDireNotePayload(release);
 const quickRelease = { ...release, releaseTiming: "quick_release", status: "sent_to_distributor" } as Release;
 assert.equal(getReleasePortalDateTitle(quickRelease), "Release timing");
-assert.equal(getReleasePortalDateLabel(quickRelease), "As soon as possible after approval");
+assert.equal(getReleasePortalDateLabel(quickRelease), "Usually 2\u20137 days after HYMN approval");
 assert.equal(getReleasePortalDateTitle({ ...quickRelease, releaseTiming: "schedule_release" }), "Release date");
 const debutPayload = buildDireNotePayload({ ...release, metadata: { artistProfileId: 1 } }, { artistProfiles: [{ id: 1, name: "Fixture Artist", instagramUrl: "https://instagram.com/debut_artist", spotifyUrl: null, appleUrl: null } as ArtistProfile] });
+const selectedDebut = buildDireNotePayload({ ...release, metadata: { ...release.metadata, artistProfileId: 1 } }, { artistProfiles: [{ id: 1, name: "Fixture Artist", spotifyUrl: null, appleUrl: null } as ArtistProfile] });
+assert.equal(selectedDebut.artists[0].spotify_url, undefined, "A selected card must not inherit a stale legacy Spotify identity.");
+assert.equal(selectedDebut.artists[0].apple_url, undefined, "A selected card must not inherit a stale legacy Apple identity.");
+const idOnly = buildDireNotePayload({ ...release, metadata: { artistProfileId: 1 } }, { artistProfiles: [{ id: 1, name: "Fixture Artist", spotifyArtistId: "0123456789012345678901", spotifyUrl: null } as ArtistProfile] });
+assert.equal(idOnly.artists[0].spotify_url, "https://open.spotify.com/artist/0123456789012345678901");
+assert.ok(idOnly.tracks.every(track => track.artists?.[0].spotify_url === idOnly.artists[0].spotify_url));
 const unselectedPayload = buildDireNotePayload({ ...release, metadata: {} }, { artistProfiles: [{ id: 2, name: "Fixture Artist", instagramUrl: "https://instagram.com/wrong_artist" } as ArtistProfile] });
 assert.equal(unselectedPayload.artists[0].instagram_url, undefined, "Matching a name must not select an unassociated artist card");
 assert.equal(debutPayload.artists[0].instagram_url, "https://instagram.com/debut_artist");
