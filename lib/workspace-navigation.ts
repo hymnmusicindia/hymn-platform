@@ -1,4 +1,4 @@
-import { Disc3, Folder, Headphones, LayoutGrid, Megaphone, Music2, Plus, ShieldCheck, Store, TrendingUp, Users, Wallet } from "lucide-react";
+import { Disc3, Folder, Headphones, LayoutGrid, Megaphone, Music2, Plus, ShieldCheck, Store, TrendingUp, Users } from "lucide-react";
 
 // Shared by the home rail and every artist/producer workspace frame.
 export const workspaceNavigation = [
@@ -7,11 +7,9 @@ export const workspaceNavigation = [
   { key:"upload", label:"Add release", group:"Distribution", href:"/distribution/start", icon:Plus },
   { key:"releases", label:"My releases", group:"Distribution", href:"/dashboard/releases", icon:Disc3 },
   { key:"analytics", label:"Trends", group:"Distribution", href:"/analytics", icon:TrendingUp },
-  { key:"earnings", label:"Earnings & payouts", group:"Distribution", href:"/payout", icon:Wallet },
   { key:"promotions", label:"Promotion", group:"Distribution", href:"/dashboard?tab=promotions", icon:Megaphone },
   { key:"content-id", label:"Content ID", group:"Distribution", href:"/dashboard?tab=content-id", icon:ShieldCheck },
   { key:"collaborators", label:"Royalty splits", group:"Distribution", href:"/dashboard?tab=collaborators", icon:Users },
-  { key:"plans", label:"Subscriptions", group:"Distribution", href:"/distribution", icon:Music2 },
   { key:"beat-store", label:"Browse beats", group:"Beatstore", href:"/beat-store", icon:Store },
   { key:"purchases", label:"My purchases", group:"Beatstore", href:"/dashboard?tab=purchases", icon:Music2 },
   { key:"sell-beats", label:"Sell beats", group:"Beatstore", href:"/producer/dashboard", icon:Users },
@@ -31,7 +29,7 @@ type NavItem = {key:string;label:string;group?:string;href?:string;description?:
 export function consistentWorkspaceNavigation(items: NavItem[]): NavItem[] {
   // Administrative operations have a separate, permission-specific information architecture.
   if(items.some(item=>item.group==="Command Center")) return items;
-  items = items.filter(item => item.group !== "Support" && item.group !== "Account");
+  items = items.filter(item => item.group !== "Support" && item.group !== "Account" && !(item.group === 'Distribution' && ['earnings','payouts','plans','subscriptions'].includes(item.key)));
   const producer = items.some(item=>item.key==="catalog" && item.group==="Beatstore");
   const matched = new Set<NavItem>();
   const shared = workspaceNavigation.map(canonical=>{
