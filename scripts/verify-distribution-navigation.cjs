@@ -43,20 +43,29 @@ const {chromium, expect} = require('@playwright/test');
   if(lastSaved.metadata.tracks[0].artistProfileIds[0]!==1)throw Error('Selected artist was not saved before advancing');
   console.log(`PASS ${width}px: visible save failure, retry, pending state, untitled artist save and Music transition`);
   const stages=page.locator('.release-stage-menu');
-  const selector=stages.getByRole('combobox',{name:'Release section'});
-  if(width<768){
-   await expect(selector).toBeVisible();await expect(stages.locator('nav')).toBeHidden();
-   if(JSON.stringify(await selector.locator('option').evaluateAll(options=>options.map(option=>option.value)))!==JSON.stringify(['','4','3','2','5','7']))throw Error('Mobile selector must retain the five ordered sections without setup stages.');
-   if(await stages.evaluate(element=>element.scrollWidth>element.clientWidth+1))throw Error('Mobile stage menu must not scroll horizontally.');
-   await selector.selectOption('4');await expect(page.locator('form')).toHaveAttribute('data-editor-stage','4');
-   await expect(selector).toHaveValue('4');
-   await selector.selectOption('5');await expect(page.locator('form')).toHaveAttribute('data-editor-stage','5');
-   await expect(stages.getByRole('progressbar')).toBeVisible();
-   console.log(`PASS ${width}px: single mobile selector, five ordered stages, working stage changes, retained progress and no menu scrolling`);
-  }else{
-   await expect(selector).toBeHidden();await expect(stages.locator('nav')).toBeVisible();
-   console.log('PASS desktop: horizontal stage navigation retained');
-  }
+  const navigation=stages.getByRole('navigation',{name:'Release sections'});
+  await expect(navigation).toBeVisible();await expect(stages.getByRole('combobox')).toHaveCount(0);
+  const expectedNames=['Cover artwork','Credits & tracks','Release details','Delivery','Review'];
+  if(JSON.stringify(await navigation.locator('button').allTextContents())!==JSON.stringify(expectedNames))throw Error('Sections must show only five ordered names.');
+  if(await stages.evaluate(element=>element.scrollWidth>element.clientWidth+1))throw Error('Stage menu must not scroll horizontally.');
+  for(const button of await navigation.locator('button').all())if((await button.boundingBox()).height<44)throw Error('Compact labels must retain accessible touch targets.');
+  await navigation.getByRole('button',{name:/^Cover artwork/}).click();await expect(page.locator('form')).toHaveAttribute('data-editor-stage','4');
+  const current=navigation.locator('button[aria-current="step"]');await expect(current).toHaveText('Cover artwork');
+  await expect.poll(()=>current.evaluate(element=>getComputedStyle(element).color)).toBe('rgb(255, 255, 255)');
+  const selected=await current.evaluate(element=>({color:getComputedStyle(element).color,shadow:getComputedStyle(element).boxShadow,textShadow:getComputedStyle(element).textShadow}));
+  if(selected.color!=='rgb(255, 255, 255)'||selected.shadow!=='none'||selected.textShadow!=='none')throw Error('Selected section must be crisp white without glow.');
+  const inactive=await navigation.getByRole('button',{name:/^Credits & tracks/}).evaluate(element=>getComputedStyle(element).color);
+  if(inactive!=='rgb(203, 208, 216)')throw Error('Unselected section must be off-white.');
+  await navigation.getByRole('button',{name:/^Delivery/}).click();await expect(page.locator('form')).toHaveAttribute('data-editor-stage','5');
+  await expect.poll(()=>navigation.locator('button[aria-current="step"]').evaluate(element=>getComputedStyle(element).color)).toBe('rgb(255, 255, 255)');
+  await expect(stages.getByRole('progressbar')).toBeVisible();
+  await expect(navigation.locator('button[aria-current="step"]')).toBeEnabled();
+  const labelStyle=await navigation.locator('button[aria-current="step"] > span').evaluate(element=>({border:getComputedStyle(element).borderBottomWidth,decoration:getComputedStyle(element).textDecorationLine}));
+  if(labelStyle.border!=='0px'||labelStyle.decoration!=='none')throw Error('Selected section must not be underlined.');
+  const divider=await navigation.locator('button').first().evaluate(element=>({content:getComputedStyle(element,'::after').content,width:getComputedStyle(element,'::after').width}));
+  if(divider.content==='none'||divider.width!=='1px')throw Error('Section separators must remain visible.');
+  await stages.screenshot({path:path.join(out,`${width}-menu.png`)});
+  console.log(`PASS ${width}px: compact text-only sections, working navigation, white selected/off-white inactive, no glow, 44px targets and no horizontal scrolling`);
   await page.screenshot({path:path.join(out,`${width}-stages.png`),fullPage:true});await page.close();
  }
  }finally{await browser.close()}

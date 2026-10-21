@@ -42,18 +42,6 @@ html body .distribution-workflow.distribution-workflow.distribution-workflow .re
 html body .distribution-workflow.distribution-workflow.distribution-workflow .release-stage-menu > .release-workflow-nav > button[aria-current=step] {
   background:#314765!important; border-color:#87afe4!important; color:#fff!important;
 }
-html body .distribution-workflow .release-stage-select { display:none; }
-@media(max-width:767px) {
-  html body .distribution-workflow.distribution-workflow.distribution-workflow .release-stage-menu > .release-workflow-nav { display:none!important; }
-  html body .distribution-workflow .release-stage-select { display:grid; gap:6px; width:100%; min-width:0; margin:0; }
-  html body .distribution-workflow .release-stage-select > span { padding-inline:4px; font-size:12px; font-weight:600; color:var(--text-muted); }
-  html body .distribution-workflow .release-stage-select > select {
-    display:block; width:100%; max-width:100%; min-width:0; min-height:48px;
-    padding:10px 12px; border:1px solid var(--border-strong); border-radius:10px;
-    background:var(--input); color:var(--text); font:inherit; font-size:16px; cursor:pointer;
-  }
-  html body .distribution-workflow .release-stage-select > select:focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
-}
 html body .distribution-workflow.distribution-workflow :is(.release-mobile-step-menu,.release-workflow-summary) { display:none!important; }
 html body .distribution-workflow.distribution-workflow.distribution-workflow :is(.release-workflow-content,.release-editor-panels) {
   display:flex!important; flex-direction:column; width:100%; height:auto!important;

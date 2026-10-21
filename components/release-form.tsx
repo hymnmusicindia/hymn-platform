@@ -1102,7 +1102,6 @@ export function ReleaseForm({
   initialCorrectionField?: string;
 }) {
   const router = useRouter();
-  const stageNavigationRef = useRef<HTMLElement | null>(null);
   const today = useMemo(() => new Date(), []);
   const quickReleaseDate = useMemo(
     () => toDateInputValue(addDays(today, 3)),
@@ -1116,15 +1115,6 @@ export function ReleaseForm({
     ? initialCorrectionField?.match(/^tracks\.(\d+)\./) : null;
   const correctionTrackIndex = correctionTrackMatch ? Number(correctionTrackMatch[1]) : null;
   const [step, setStep] = useState(correctionTrackIndex !== null ? 3 : initialRelease?.status === "draft" && initialStage != null && [0, 4, 1, 3, 2, 5, 7].includes(initialStage) ? initialStage : initialRelease ? 7 : 1);
-  useEffect(() => {
-    const navigation = stageNavigationRef.current;
-    const current = navigation?.querySelector<HTMLElement>('[aria-current="step"]');
-    if (navigation && current) {
-      const currentBounds = current.getBoundingClientRect();
-      const navigationBounds = navigation.getBoundingClientRect();
-      navigation.scrollLeft += currentBounds.left - navigationBounds.left - (navigation.clientWidth - currentBounds.width) / 2;
-    }
-  }, [step]);
   const resumeStageResolvedRef = useRef(false);
   const [journeyIntro, setJourneyIntro] = useState<"welcome" | null>(initialRelease || audioLibraryPrefill ? null : "welcome");
   const [journeyExiting, setJourneyExiting] = useState(false);
@@ -3611,22 +3601,7 @@ export function ReleaseForm({
         </div>
 
         <div className="release-stage-menu">
-          <label className="release-stage-select">
-            <span>Release section</span>
-            <select
-              aria-label="Release section"
-              disabled={stepTransitioning}
-              value={step !== 0 && step !== 1 ? String(step) : ""}
-              onChange={(event) => jumpToStep(Number(event.target.value))}
-            >
-              <option value="" disabled>Choose a section</option>
-              {menuStepIndexes.filter((index) => index !== 0 && index !== 1).map((index) => {
-                const state = stepButtonStyles(index);
-                return <option key={index} value={index}>{stepMenuLabels[index] ?? steps[index]}{state.hasCorrection || state.validity === "invalid" ? " — Needs attention" : ""}</option>;
-              })}
-            </select>
-          </label>
-        <nav ref={stageNavigationRef} className="release-workflow-nav" aria-label="Release sections">
+        <nav className="release-workflow-nav" aria-label="Release sections">
           {menuStepIndexes.filter((index) => index !== 0 && index !== 1).map((index) => {
             const label = stepMenuLabels[index] ?? steps[index];
             const buttonState = stepButtonStyles(index);
@@ -3636,17 +3611,11 @@ export function ReleaseForm({
                 type="button"
                 onClick={() => jumpToStep(index)}
                 className={buttonState.className}
+                disabled={stepTransitioning}
+                aria-label={buttonState.hasCorrection || buttonState.validity === "invalid" ? `${label}, needs attention` : label}
                 aria-current={buttonState.isCurrent ? "step" : undefined}
               >
-                <span className="flex items-center justify-center gap-2">
-                  {buttonState.hasCorrection || buttonState.validity === "invalid" ? (
-                    <AlertCircle
-                      className="h-4 w-4 shrink-0"
-                      aria-hidden="true"
-                    />
-                  ) : null}
-                  <span>{label}</span>
-                </span>
+                <span>{label}</span>
               </button>
             );
           })}
