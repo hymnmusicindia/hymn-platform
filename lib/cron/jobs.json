@@ -147,5 +147,12 @@
     "seconds": 3600,
     "purpose": "Fair ISRC royalty ingestion; each successful ISRC waits 24 hours",
     "flag": "DIRENOTE_REVENUE_SYNC_ENABLED"
+  },
+  {
+    "id": "team-outreach",
+    "method": "GET",
+    "seconds": 60,
+    "purpose": "Reviewed individual Team OS email outbox and sending status",
+    "flag": "TEAM_AUTOMATION_ENABLED"
   }
 ]

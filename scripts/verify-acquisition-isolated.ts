@@ -1,6 +1,6 @@
 import EmbeddedPostgres from "embedded-postgres";
 import { spawn, execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
@@ -26,6 +26,16 @@ async function main() {
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("acquisition_fixture");
+    if (process.argv.includes('--smart-outreach-only')) {
+      const baseline = path.join(fixture, 'smart-outreach-baseline.prisma');
+      writeFileSync(baseline, readFileSync('prisma/schema.prisma', 'utf8').replace(/^model TeamOutreach(?:Email|Suppression) \{[\s\S]*?^\}\r?\n/gm, '').replace(/^  followUpTaskId String\? @unique @map\("follow_up_task_id"\)\r?\n/gm, ''));
+      await run(['node_modules/prisma/build/index.js','db','push','--schema',baseline,'--skip-generate']);
+      await run(['node_modules/prisma/build/index.js','db','execute','--file','prisma/migrations/20261023193000_team_smart_outreach/migration.sql','--schema','prisma/schema.prisma']);
+      await run(['node_modules/prisma/build/index.js','migrate','diff','--from-url',env.DATABASE_URL,'--to-schema-datamodel','prisma/schema.prisma','--script','--output',path.join(fixture,'schema-diff.sql')]);
+      if (/team_outreach|follow_up_task_id/.test(readFileSync(path.join(fixture,'schema-diff.sql'),'utf8'))) throw new Error('Smart outreach migration does not match its Prisma schema.');
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-smart-team-outreach.ts'], process.execPath, { ...env, JWT_SECRET: 'isolated-team-outreach-fixture-secret-must-be-long-enough', APP_URL: 'https://hymn.fixture' });
+      return;
+    }
     if (process.argv.includes('--review-handoff-only')) {
       await run(['node_modules/prisma/build/index.js','db','push','--skip-generate']);
       await run(['--conditions=react-server','--import','tsx','scripts/verify-review-handoff.ts']);

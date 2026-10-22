@@ -33,7 +33,7 @@ export async function POST(request: Request, context: Context) {
     const limit = await consumeRateLimit({ scope: "team-write", identity: String(user.id), limit: 90, windowSeconds: 60 });
     if (!limit.allowed) throw new TeamError("Too many changes. Try again shortly.", 429);
     const { resource } = await context.params;
-    if (resource === "acquisition-email-queue") {
+    if (["acquisition-email-queue", "team-email-send", "team-email-retry"].includes(resource)) {
       const emailLimit = await consumeRateLimit({ scope: "team-acquisition-email", identity: String(user.id), limit: 5, windowSeconds: 3600 });
       if (!emailLimit.allowed) throw new TeamError("Email outreach is limited to 5 individual messages per hour.", 429);
     }
@@ -49,6 +49,10 @@ export async function POST(request: Request, context: Context) {
     if (resource === "acquisition-email-queue" && result && typeof result === "object" && "id" in result) {
       const eventId = String(result.id);
       after(async () => { const { processAcquisitionEmailEvent } = await import("@/lib/team/acquisition-email"); await processAcquisitionEmailEvent(eventId); });
+    }
+    if (["team-email-send", "team-email-retry"].includes(resource) && result && typeof result === "object" && "id" in result) {
+      const id = String(result.id);
+      after(async () => { const { processTeamOutreachEmail } = await import("@/lib/team/outreach-email"); await processTeamOutreachEmail(id, 1); });
     }
     return NextResponse.json(result, { headers });
   } catch (error) { return failure(error); }

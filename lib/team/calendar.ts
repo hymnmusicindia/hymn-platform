@@ -29,6 +29,7 @@ export async function calendarMutation(tx: Prisma.TransactionClient, a: Actor, r
     // schedule revision and status also invalidate queued and claimed reminders.
     await tx.teamCalendarEvent.update({ where: { id: event.id }, data: { status: "DELETED", version: { increment: 1 }, scheduleRevision: { increment: 1 } } });
     await tx.teamAppointmentMessage.updateMany({ where: { eventId: event.id, status: "PENDING" }, data: { status: "CANCELLED" } });
+    if (event.followUpTaskId) await tx.teamTask.updateMany({ where: { id: event.followUpTaskId, workspaceId: a.workspaceId }, data: { status: "CANCELLED", version: { increment: 1 } } });
     await audit(tx, a, "calendar.deleted", event.id, { title: event.title, assigneeId: event.assigneeId, startsAt: event.startsAt.toISOString() });
     await notify(tx, event.assigneeId, `Event deleted: ${event.title}`, `/team?workspace=${a.workspaceId}&module=calendar`);
     return { id: event.id, deleted: true };
@@ -119,6 +120,7 @@ async function saveEvent(tx: Prisma.TransactionClient, a: Actor, input: unknown,
     if (!client || client.status !== "ACTIVE") throw new TeamError("Choose an active shared contact; do-not-contact and archived clients cannot be scheduled.");
   }
   if (["CALL", "EMAIL", "FOLLOW_UP"].includes(data.kind) && !data.clientId) throw new TeamError("Link a client card for client outreach.");
+  if (old?.followUpTaskId && (data.kind !== "FOLLOW_UP" || data.clientId !== old.clientId)) throw new TeamError("Keep this internal callback linked to its original contact. Record the outcome in Customer callbacks.");
   const startsAt = new Date(data.startsAt), endsAt = data.endsAt ? new Date(data.endsAt) : null;
   if (endsAt && (endsAt <= startsAt || endsAt.getTime() - startsAt.getTime() > 7 * 86400000)) throw new TeamError("Choose an end after the start, within seven days.");
   if (data.status === "COMPLETED" && !data.outcome.trim()) throw new TeamError("Record the outcome before completing the event.");
@@ -131,6 +133,13 @@ async function saveEvent(tx: Prisma.TransactionClient, a: Actor, input: unknown,
   const scheduleChanged = !old || old.assigneeId !== data.assigneeId || old.clientId !== data.clientId || old.kind !== data.kind || old.status !== data.status || old.startsAt.getTime() !== startsAt.getTime();
   const row = old ? await tx.teamCalendarEvent.update({ where: { id: old.id }, data: { ...fields, version: { increment: 1 }, ...(scheduleChanged ? { scheduleRevision: { increment: 1 } } : {}) } }) : await tx.teamCalendarEvent.create({ data: { ...fields, workspaceId: a.workspaceId, creatorId: a.id } });
   if (scheduleChanged) await queueAppointment(tx, row);
+  if (old?.followUpTaskId) {
+    const linkedTask = await tx.teamTask.findUnique({ where: { id: old.followUpTaskId } });
+    if (linkedTask?.eventKey?.endsWith(":call") && !linkedTask.eventKey.startsWith("support-call:")) await tx.teamProspect.updateMany({ where: { id: linkedTask.eventKey.slice(0, -5), workspaceId: a.workspaceId }, data: { ownerId: row.assigneeId, followUpAt: row.startsAt, version: { increment: 1 } } });
+    const closed = row.status !== "SCHEDULED";
+    await tx.teamTask.updateMany({ where: { id: old.followUpTaskId, workspaceId: a.workspaceId }, data: { ownerId: row.assigneeId, dueAt: row.startsAt, status: row.status === "COMPLETED" ? "COMPLETED" : row.status === "CANCELLED" ? "CANCELLED" : "TODO", completedAt: row.status === "COMPLETED" ? new Date() : null, version: { increment: 1 } } });
+    if (row.outcome) await tx.teamComment.create({ data: { taskId: old.followUpTaskId, authorId: a.id, body: `Calendar ${closed ? "outcome" : "update"}: ${row.outcome}` } });
+  }
   await audit(tx, a, old ? "calendar.updated" : "calendar.created", row.id, { status: row.status, kind: row.kind });
   if (!old || old.assigneeId !== row.assigneeId || old.startsAt.getTime() !== row.startsAt.getTime()) await notify(tx, row.assigneeId, `Scheduled: ${row.title} · ${new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata", hour12: true }).format(row.startsAt)} IST`, `/team?workspace=${a.workspaceId}&module=calendar`);
   return row;

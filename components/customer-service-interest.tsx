@@ -9,9 +9,10 @@ export function CustomerServiceInterestTracker() {
       if (!event.isTrusted || event.defaultPrevented || event.button !== 0 || !(event.target instanceof Element)) return;
       const link = event.target.closest<HTMLAnchorElement>('a[href]'); if (!link) return;
       const url = new URL(link.href, location.origin);
-      if (url.origin !== location.origin || !serviceForPath(url.pathname) || recorded.has(url.pathname)) return;
-      recorded.add(url.pathname);
-      void fetch('/api/team/customer-interest', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: url.pathname }), keepalive: true }).catch(() => { recorded.delete(url.pathname); });
+      const path = url.pathname === '/dashboard' ? url.pathname + url.search + url.hash : url.pathname;
+      if (url.origin !== location.origin || !serviceForPath(path) || recorded.has(path)) return;
+      recorded.add(path);
+      void fetch('/api/team/customer-interest', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }), keepalive: true }).catch(() => { recorded.delete(path); });
     }
     document.addEventListener('click', clicked, true);
     return () => document.removeEventListener('click', clicked, true);

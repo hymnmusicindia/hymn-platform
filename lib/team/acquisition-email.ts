@@ -1,4 +1,5 @@
 import "server-only";
+import { teamSenderRole } from "./outreach-content";
 import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/email/send-transactional-email";
 
@@ -11,17 +12,21 @@ export const acquisitionEmailStarters = [
 export async function processAcquisitionEmailEvent(id: string) {
   const event = await prisma.acquisitionEmailEvent.findUnique({ where: { id } });
   if (!event || event.status !== "QUEUED") return;
+  const sender = await prisma.teamMember.findFirst({ where: { id: event.createdByEmployeeId, workspaceId: event.workspaceId, status: "ACTIVE", user: { status: "ACTIVE" } }, include: { role: true, user: { select: { name: true } } } });
+  const suppressed = await prisma.teamOutreachSuppression.findUnique({ where: { email: event.recipientEmail.toLowerCase() } });
   const [prospect, optedOut] = await Promise.all([
     prisma.teamProspect.findUnique({ where: { id: event.prospectId }, select: { suppressed: true, verified: true, contactEligibility: true, email: true } }),
     prisma.newsletterSubscriber.findFirst({ where: { email: { equals: event.recipientEmail, mode: "insensitive" }, OR: [{ status: { not: "subscribed" } }, { unsubscribedAt: { not: null } }] }, select: { id: true } }),
   ]);
-  if (!prospect || prospect.suppressed || !prospect.verified || !["CONSENTED", "LEGITIMATE_INTEREST"].includes(prospect.contactEligibility) || prospect.email?.toLowerCase() !== event.recipientEmail.toLowerCase() || optedOut) {
+  if (!sender || suppressed || !prospect || prospect.suppressed || !prospect.verified || !["CONSENTED", "LEGITIMATE_INTEREST"].includes(prospect.contactEligibility) || prospect.email?.toLowerCase() !== event.recipientEmail.toLowerCase() || optedOut) {
     const error = "Recipient is suppressed or no longer eligible for outreach; no email was sent.";
     await prisma.acquisitionEmailEvent.updateMany({ where: { id, status: "QUEUED" }, data: { status: "FAILED", providerError: error } });
     return { status: "skipped" as const, error };
   }
-  const html = `<div style="font-family:Arial,sans-serif;white-space:pre-wrap">${event.body.replace(/[&<>"']/g, value => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[value]!)}</div>`;
-  const result = await sendTransactionalEmail({ to: event.recipientEmail, subject: event.subject, template: "acquisition_outreach", html, text: event.body, eventKey: event.eventKey, entityType: "acquisition_email", entityId: event.id });
+  const senderHeader = `${sender!.user.name} - ${teamSenderRole(sender!)} | HYMN Music`;
+  const personalizedBody = `${senderHeader}\n\n${event.body}`;
+  const html = `<div style="font-family:Arial,sans-serif;white-space:pre-wrap">${personalizedBody.replace(/[&<>"']/g, value => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[value]!)}</div>`;
+  const result = await sendTransactionalEmail({ to: event.recipientEmail, subject: event.subject, template: "acquisition_outreach", html, text: personalizedBody, senderName: `${sender!.user.name} | HYMN`, eventKey: event.eventKey, entityType: "acquisition_email", entityId: event.id });
   if (result.status === "sent") await prisma.acquisitionEmailEvent.updateMany({ where: { id, status: "QUEUED" }, data: { status: "SENT", providerMessageId: result.providerMessageId || null, sentAt: new Date() } });
   else await prisma.acquisitionEmailEvent.updateMany({ where: { id, status: "QUEUED" }, data: { status: "FAILED", providerError: result.error || (result.status === "skipped" ? "Email sending is disabled or not configured; no email was sent." : `Email sender status: ${result.status}`) } });
   await prisma.acquisitionProgramAudit.create({ data: { workspaceId: event.workspaceId, actorEmployeeId: event.createdByEmployeeId, action: result.status === "sent" ? "email.outreach_sent" : "email.outreach_failed", entityId: event.id, metadata: { recipient: event.recipientEmail, status: result.status, providerMessageId: result.providerMessageId || null, error: result.error || null } } });

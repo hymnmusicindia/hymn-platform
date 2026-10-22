@@ -54,6 +54,8 @@ async function dependencies(tx: Tx, a: Actor, id: string, ids: string[]) {
 
 export async function teamMutation(identity: Actor, resource: string, input: unknown) {
   return teamWrite(identity, async (tx, a) => {
+  if (resource === "call-followup-outcome") return (await import("./customer-followups")).recordCallbackOutcome(tx, a, input);
+  if (resource.startsWith("team-email-")) return (await import("./outreach-email")).outreachMutation(tx, a, resource, input);
   if (resource.startsWith("acquisition-")) return (await import("./acquisition")).acquisitionMutation(tx, a, resource, (input && typeof input === "object" ? input : {}) as Record<string, unknown>);
     if (["clients-save", "calendar-save", "calendar-task", "calendar-handoff", "calendar-delete"].includes(resource)) return (await import("./calendar")).calendarMutation(tx, a, resource, input);
     const object = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
@@ -108,6 +110,7 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
         const reviewers = await tx.teamMember.findMany({ where: { workspaceId: a.workspaceId, status: "ACTIVE", id: { not: owner }, OR: [{ role: { owner: true } }, { role: { permissions: { has: "tasks.approve" } } }] } });
         for (const reviewer of reviewers) await notify(tx, reviewer.id, `Review requested: ${row.title}`, `/team?module=approvals&task=${id}`);
       }
+      if (row.eventKey?.startsWith("support-call:")) await (await import("./callback-calendar")).syncCallbackCalendar(tx, a, row);
       return row;
     }
     if (resource === "comments") {
@@ -263,7 +266,8 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
         }
       }
       await syncDailyCrmWork(tx, a);
-      return row;
+      await (await import("./callback-calendar")).syncProspectCallCalendar(tx, a, row.id);
+      return tx.teamProspect.findUniqueOrThrow({ where: { id: row.id } });
     }
     if (resource === "outreach") {
       demand(a, "crm.outreach.manage"); const data = outreachSchema.parse(input);
@@ -307,6 +311,7 @@ export async function acceptTeamInvitation(user: { id: number; email: string }, 
 }
 
 export async function teamRead(a: Actor, resource: string, params: URLSearchParams) {
+  if (resource.startsWith("team-email-")) return (await import("./outreach-email")).outreachRead(a, resource, params);
   if (resource === "call-followups") return (await import("./customer-followups")).readCallFollowups(a, params);
   if (resource.startsWith("acquisition-")) return (await import("./acquisition")).acquisitionRead(a, resource, params);
   if (["clients", "calendar", "client-account-match"].includes(resource)) return (await import("./calendar")).calendarRead(a, resource, params);
@@ -390,6 +395,7 @@ export async function registerTeamProspect(tx: Prisma.TransactionClient, a: Acto
       if ((row.followUpAt || caller) && !row.suppressed && (caller || !a.role.owner)) await tx.teamTask.create({ data: { workspaceId: a.workspaceId, creatorId: a.id, ownerId: caller?.id || row.ownerId, title: `Follow up: ${row.name}`, eventKey: `${row.id}:call`, dueAt: row.followUpAt || indiaWorkday().dueAt } });
       await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: "lead.registered", entityId: attribution.id, metadata: { researcherEmployeeId: a.id, sourceUrl: data.sourceUrl } } });
       await syncProspectContact(tx, row.id);
+      await (await import("./callback-calendar")).syncProspectCallCalendar(tx, a, row.id);
       await syncDailyCrmWork(tx, a);
       await audit(tx, a, "prospect.created", row.id, { leadId: lead.id, acquisitionLeadId: attribution.id }); return { ...row, ownerId: caller?.id || row.ownerId, stage: caller ? "READY_TO_CONTACT" : row.stage };
 }

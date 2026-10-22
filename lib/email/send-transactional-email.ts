@@ -6,7 +6,7 @@ import { purchaseAttachments } from "@/lib/email/purchase-attachments";
 
 const recipientSchema = z.string().trim().email().max(320);
 export type EmailDeliveryStatus = "sent" | "failed" | "skipped" | "duplicate_skipped";
-export type TransactionalEmailInput = { to: string; subject: string; template: string; html: string; text: string; eventKey: string; userId?: number; entityType?: string; entityId?: string | number; forceRetry?: boolean; timeoutMs?: number };
+export type TransactionalEmailInput = { to: string; subject: string; template: string; html: string; text: string; eventKey: string; userId?: number; entityType?: string; entityId?: string | number; forceRetry?: boolean; senderName?: string; timeoutMs?: number };
 
 export async function sendTransactionalEmail(input: TransactionalEmailInput): Promise<{ status: EmailDeliveryStatus; logId?: number; providerMessageId?: string; error?: string }> {
   const config = getEmailConfig();
@@ -25,7 +25,10 @@ export async function sendTransactionalEmail(input: TransactionalEmailInput): Pr
     try {
       const attachments = input.entityType === "beat_purchase" && input.userId && input.entityId
         ? await purchaseAttachments(Number(input.entityId), input.userId, recipient).catch(() => []) : [];
-      const result = await client.emails.send({ from: config.from, to: recipient, subject: input.subject, html: input.html, text: input.text, attachments, ...(config.replyTo ? { replyTo: config.replyTo } : {}) });
+      const verifiedAddress = config.from.match(/<([^>]+)>/)?.[1] || config.from;
+      const displayName = input.senderName?.replace(/[\r\n"<>]/g, "").trim().slice(0, 160);
+      const from = displayName && recipientSchema.safeParse(verifiedAddress).success ? `"${displayName}" <${verifiedAddress}>` : config.from;
+      const result = await client.emails.send({ from, to: recipient, subject: input.subject, html: input.html, text: input.text, attachments, ...(config.replyTo ? { replyTo: config.replyTo } : {}) });
       if (result.error) throw new Error(result.error.message);
       await emailLog.update({ where: { id: log.id }, data: { status: "sent", providerMessageId: result.data?.id ?? null, sentAt: new Date() } });
       return { status: "sent", logId: log.id, providerMessageId: result.data?.id };
@@ -45,6 +48,7 @@ export async function retryTransactionalEmail(logId: number) {
   const original = await emailLog.findUnique({ where: { id: logId } });
   if (!original) throw new Error("Email log not found.");
   if (original.status !== "failed") throw new Error("Only failed emails can be retried.");
+  if (original.template === "team_outreach") throw new Error("Review team outreach inside Team OS; generic retries cannot bypass recipient eligibility checks.");
   if (original.template === "team_appointment") {
     const { assertAppointmentRetryAllowed } = await import("@/lib/team/appointments");
     await assertAppointmentRetryAllowed(String(original.entityId), original.toEmail);

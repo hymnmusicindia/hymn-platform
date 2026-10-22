@@ -1,0 +1,37 @@
+import 'server-only';
+import { Prisma } from '@prisma/client';
+import { whatsappNumber } from './phone';
+import { freeCallSlot } from './call-rules';
+import { TeamError, type Actor } from './policy';
+export async function callbackSlot(tx: Prisma.TransactionClient, workspaceId: string, memberId: string, after: Date, taskId?: string) {
+  const events = await tx.teamCalendarEvent.findMany({ where: { workspaceId, assigneeId: memberId, status: 'SCHEDULED', ...(taskId ? { OR: [{ followUpTaskId: null }, { followUpTaskId: { not: taskId } }] } : {}), startsAt: { gte: new Date(after.getTime() - 7 * 86400000), lte: new Date(after.getTime() + 14 * 86400000) } }, select: { startsAt: true, endsAt: true, kind: true } });
+  const slot = freeCallSlot(after, events);
+  if (!slot || slot.getTime() > after.getTime() + 14 * 86400000) throw new TeamError('No free callback slot within 14 days. Choose another representative or time.', 409);
+  return slot;
+}
+export async function syncCallbackCalendar(tx: Prisma.TransactionClient, a: Actor, task: { id: string; title: string; ownerId: string; clientId: string | null; dueAt: Date | null; status: string; description: string }) {
+  const status = ['COMPLETED', 'CANCELLED', 'BLOCKED'].includes(task.status) ? 'CANCELLED' : 'SCHEDULED';
+  const old = await tx.teamCalendarEvent.findUnique({ where: { followUpTaskId: task.id } });
+  if (!task.dueAt || !task.clientId) return;
+  const data = { title: task.title, assigneeId: task.ownerId, clientId: task.clientId, startsAt: task.dueAt, endsAt: new Date(task.dueAt.getTime() + 30 * 60000), status, kind: 'FOLLOW_UP', notes: `Internal suggested callback; no customer appointment is confirmed.\n${task.description}` };
+  if (!old && status === 'SCHEDULED') await tx.teamCalendarEvent.create({ data: { ...data, workspaceId: a.workspaceId, creatorId: a.id, followUpTaskId: task.id } });
+  else if (old) await tx.teamCalendarEvent.update({ where: { id: old.id }, data: { ...data, remindedAt: null, version: { increment: 1 }, scheduleRevision: { increment: 1 } } });
+}
+export async function syncProspectCallCalendar(tx: Prisma.TransactionClient, a: Actor, prospectId: string, now = new Date()) {
+  const prospect = await tx.teamProspect.findFirst({ where: { id: prospectId, workspaceId: a.workspaceId }, include: { owner: { include: { role: true, user: { select: { status: true } } } } } });
+  if (!prospect?.clientId) return;
+  const task = await tx.teamTask.findUnique({ where: { eventKey: `${prospect.id}:call` } });
+  if (!task) return;
+  const terminal = !whatsappNumber(prospect.phone) || prospect.suppressed || !prospect.verified || !['CONSENTED', 'LEGITIMATE_INTEREST'].includes(prospect.contactEligibility) || ['CONVERTED','LOST','NOT_INTERESTED','UNQUALIFIED','DUPLICATE','DO_NOT_CONTACT'].includes(prospect.stage);
+  if (terminal || task.archivedAt || ['COMPLETED','CANCELLED'].includes(task.status)) {
+    await tx.teamCalendarEvent.updateMany({ where: { followUpTaskId: task.id, status: 'SCHEDULED' }, data: { status: 'CANCELLED', version: { increment: 1 } } }); return;
+  }
+  if (prospect.owner.status !== 'ACTIVE' || prospect.owner.user.status !== 'ACTIVE' || prospect.owner.availability !== 'AVAILABLE' || prospect.owner.role.owner || !prospect.owner.role.permissions.includes('crm.outreach.manage')) return;
+  const desired = prospect.followUpAt && prospect.followUpAt > now ? prospect.followUpAt : new Date(now.getTime() + 3600000);
+  const old = await tx.teamCalendarEvent.findUnique({ where: { followUpTaskId: task.id } });
+  if (old?.status === 'SCHEDULED' && old.assigneeId === prospect.ownerId && (!prospect.followUpAt || old.startsAt.getTime() === prospect.followUpAt.getTime())) return;
+  const dueAt = await callbackSlot(tx, a.workspaceId, prospect.ownerId, desired, task.id);
+  const updated = await tx.teamTask.update({ where: { id: task.id }, data: { clientId: prospect.clientId, ownerId: prospect.ownerId, dueAt, description: `CRM follow-up for ${prospect.name}.\n${prospect.buyingSignal}\n${prospect.notes}`, version: { increment: 1 } } });
+  await tx.teamProspect.update({ where: { id: prospect.id }, data: { followUpAt: dueAt, version: { increment: 1 } } });
+  await syncCallbackCalendar(tx, a, updated);
+}

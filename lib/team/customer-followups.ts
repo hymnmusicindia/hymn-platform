@@ -1,29 +1,30 @@
 import 'server-only';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { can, demand, type Actor } from './policy';
+import { can, demand, TeamError, type Actor } from './policy';
 import { crmPreferences } from './crm-workflow';
 import { whatsappNumber } from './phone';
 import { linkProspectContact } from './contact-directory';
+
+import { z } from 'zod';
+import { callbackSlot, syncCallbackCalendar, syncProspectCallCalendar } from './callback-calendar';
+import { callWindowStart, callbackTip } from './call-rules';
 
 export const DRAFT_CALL_INACTIVITY_HOURS = 30;
 type Signal = { kind: 'DRAFT_INACTIVE' | 'ENQUIRY' | 'SERVICE_INTEREST'; source: string; referenceId: string; service: string; occurredAt: string; footnotes: string[]; draftEditedAt?: string };
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 const object = (value: unknown) => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 export function nextCallDue(now: Date) {
-  const local = new Date(now.getTime() + 330 * 60_000);
-  const minute = local.getUTCHours() * 60 + local.getUTCMinutes();
-  if (minute >= 570 && minute < 1050) return new Date(now.getTime() + 60 * 60_000);
-  if (minute >= 1050) local.setUTCDate(local.getUTCDate() + 1);
-  local.setUTCHours(9, 30, 0, 0);
-  return new Date(local.getTime() - 330 * 60_000);
+  return callWindowStart(new Date(now.getTime() + 60 * 60000));
 }
 async function supportCaller(tx: Prisma.TransactionClient, a: Actor) {
   const members = await tx.teamMember.findMany({ where: { workspaceId: a.workspaceId, status: 'ACTIVE', availability: 'AVAILABLE', role: { owner: false }, user: { status: 'ACTIVE' } }, include: { role: true }, orderBy: { id: 'asc' } });
-  const callers = members.filter(m => (crmPreferences(m.preferences).caller || crmPreferences(m.preferences).workRole === 'caller') && can(m, 'crm.outreach.manage') && can(m, 'tasks.update'));
+  const callers = members.filter(m => (crmPreferences(m.preferences).caller || crmPreferences(m.preferences).workRole === 'caller' || /call representative/i.test(m.role.name)) && can(m, 'crm.outreach.manage') && can(m, 'tasks.update'));
   if (!callers.length) return null;
   const previous = await tx.teamTask.findFirst({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: 'support-call:' } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
-  return callers[(callers.findIndex(m => m.id === previous?.ownerId) + 1) % callers.length];
+  const rotated = [...callers.slice((callers.findIndex(m => m.id === previous?.ownerId) + 1) % callers.length), ...callers.slice(0, (callers.findIndex(m => m.id === previous?.ownerId) + 1) % callers.length)];
+  const load = await tx.teamTask.groupBy({ by: ['ownerId'], where: { workspaceId: a.workspaceId, ownerId: { in: callers.map(m => m.id) }, status: { notIn: ['COMPLETED', 'CANCELLED'] }, eventKey: { startsWith: 'support-call:' } }, _count: true });
+  return rotated.sort((left, right) => (load.find(item => item.ownerId === left.id)?._count || 0) - (load.find(item => item.ownerId === right.id)?._count || 0))[0];
 }
 async function accountCard(tx: Prisma.TransactionClient, a: Actor, user: { id: number; name: string; email: string; mobile: string | null }) {
   const linked = await tx.teamClient.findUnique({ where: { userId: user.id } });
@@ -39,16 +40,21 @@ async function emit(tx: Prisma.TransactionClient, a: Actor, client: { id: string
   if (await tx.teamWorkflowEvent.findUnique({ where: { eventKey } })) return 0;
   const prefix = `support-call:${a.workspaceId}:${signal.kind}:${client.id}:`;
   // Several clicks about one service attach context to one open callback, not a new task per click.
-  const prior = signal.kind === 'DRAFT_INACTIVE' ? null : await tx.teamTask.findFirst({ where: { workspaceId: a.workspaceId, clientId: client.id, eventKey: { startsWith: prefix }, status: { notIn: ['COMPLETED', 'CANCELLED'] }, followUpContext: { path: ['service'], equals: signal.service } } });
+  const prior = signal.kind === 'DRAFT_INACTIVE' ? null : await tx.teamTask.findFirst({ where: { workspaceId: a.workspaceId, clientId: client.id, eventKey: { startsWith: `support-call:${a.workspaceId}:` }, NOT: { eventKey: { contains: ':DRAFT_INACTIVE:' } }, status: { notIn: ['COMPLETED', 'CANCELLED'] }, followUpContext: { path: ['service'], equals: signal.service } } });
   if (prior) {
     const context = object(prior.followUpContext), footnotes = Array.isArray(context.footnotes) ? context.footnotes : [];
-    await tx.teamTask.update({ where: { id: prior.id }, data: { followUpContext: json({ ...context, footnotes: [...footnotes, ...signal.footnotes].slice(-12) }), version: { increment: 1 } } });
+    const updated = await tx.teamTask.update({ where: { id: prior.id }, data: { ...(signal.kind === 'ENQUIRY' ? { priority: 'HIGH' } : {}), description: `${prior.description}\n${signal.footnotes.join('\n')}`.slice(-10000), followUpContext: json({ ...context, ...(signal.kind === 'ENQUIRY' ? { kind: 'ENQUIRY', tip: callbackTip('ENQUIRY') } : {}), footnotes: [...footnotes, ...signal.footnotes].slice(-12) }), version: { increment: 1 } } });
+    await syncCallbackCalendar(tx, a, updated);
     await tx.teamWorkflowEvent.create({ data: { workspaceId: a.workspaceId, eventKey, taskId: prior.id } }); return 0;
   }
+  if (signal.kind === 'SERVICE_INTEREST' && await tx.teamTask.findFirst({ where: { workspaceId: a.workspaceId, clientId: client.id, eventKey: { startsWith: 'support-call:' }, status: 'COMPLETED', completedAt: { gte: new Date(now.getTime() - 3 * 86400000) }, followUpContext: { path: ['service'], equals: signal.service } } })) { await tx.teamWorkflowEvent.create({ data: { workspaceId: a.workspaceId, eventKey } }); return 0; }
   const caller = await supportCaller(tx, a);
   if (!caller) return 0; // Leave the source unconsumed so an available representative can receive it later.
   const reason = signal.kind === 'DRAFT_INACTIVE' ? 'Draft inactive for 30 hours' : signal.kind === 'ENQUIRY' ? 'Customer enquiry' : 'Service interest';
-  const task = await tx.teamTask.create({ data: { workspaceId: a.workspaceId, creatorId: a.id, ownerId: caller.id, clientId: client.id, eventKey: `${prefix}${signal.source}`, title: `${reason}: ${client.name}`.slice(0, 200), description: `${reason}\nService: ${signal.service}\n\n${signal.footnotes.join('\n')}\n\nCheck the customer context before contact. Open WhatsApp or call manually, record the real outcome, and schedule a next step. Opening WhatsApp does not log a successful call.`, priority: signal.kind === 'ENQUIRY' ? 'HIGH' : signal.kind === 'SERVICE_INTEREST' ? 'LOW' : 'NORMAL', dueAt: nextCallDue(now), followUpContext: json({ version: 1, ...signal }) } });
+  let dueAt: Date;
+  try { dueAt = await callbackSlot(tx, a.workspaceId, caller.id, nextCallDue(now)); } catch (error) { if (error instanceof TeamError && error.status === 409) return 0; throw error; }
+  const task = await tx.teamTask.create({ data: { workspaceId: a.workspaceId, creatorId: a.id, ownerId: caller.id, clientId: client.id, eventKey: `${prefix}${signal.source}`, title: `${reason}: ${client.name}`.slice(0, 200), description: `${reason}\nService: ${signal.service}\n\n${signal.footnotes.join('\n')}\n\nCheck the customer context before contact. Open WhatsApp or call manually, record the real outcome, and schedule a next step. Opening WhatsApp does not log a successful call.`, priority: signal.kind === 'ENQUIRY' ? 'HIGH' : signal.kind === 'SERVICE_INTEREST' ? 'LOW' : 'NORMAL', dueAt, followUpContext: json({ version: 1, ...signal }) } });
+  await syncCallbackCalendar(tx, a, task);
   await tx.teamWorkflowEvent.create({ data: { workspaceId: a.workspaceId, eventKey, taskId: task.id } });
   await tx.teamNotification.create({ data: { memberId: caller.id, title: task.title, href: `/team?workspace=${a.workspaceId}&module=customer-calls` } });
   await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action: 'support.callback_assigned', entityId: task.id, detail: { reason: signal.kind, assigneeId: caller.id, clientId: client.id } } });
@@ -65,7 +71,7 @@ export async function syncCustomerFollowups(tx: Prisma.TransactionClient, a: Act
   const unlinked = await tx.teamProspect.findMany({ where: { workspaceId: a.workspaceId, clientId: null }, select: { id: true }, take: 20, orderBy: { id: 'asc' }, ...(typeof cursor.prospect === 'string' ? { cursor: { id: cursor.prospect }, skip: 1 } : {}) });
   for (const p of unlinked) { if (Date.now() > deadline) break; await linkProspectContact(tx, p.id); cursor.prospect = p.id; }
   if (!unlinked.length) delete cursor.prospect;
-  const open = await tx.teamTask.findMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: 'support-call:' }, status: { notIn: ['COMPLETED', 'CANCELLED'] } }, select: { id: true, client: { select: { status: true, phone: true, user: { select: { status: true } }, prospect: { select: { suppressed: true } } } }, followUpContext: true }, take: 100, orderBy: { id: 'asc' }, ...(typeof cursor.open === 'string' ? { cursor: { id: cursor.open }, skip: 1 } : {}) });
+  const open = await tx.teamTask.findMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: 'support-call:' }, status: { notIn: ['COMPLETED', 'CANCELLED'] } }, select: { id: true, client: { select: { status: true, phone: true, user: { select: { status: true } }, prospect: { select: { suppressed: true } } } }, followUpContext: true, owner: { select: { status: true, availability: true, user: { select: { status: true } } } }, title: true, description: true, ownerId: true, clientId: true, dueAt: true, status: true }, take: 100, orderBy: { id: 'asc' }, ...(typeof cursor.open === 'string' ? { cursor: { id: cursor.open }, skip: 1 } : {}) });
   if (!open.length) delete cursor.open;
   for (const task of open) {
     if (Date.now() > deadline) break;
@@ -76,8 +82,18 @@ export async function syncCustomerFollowups(tx: Prisma.TransactionClient, a: Act
       const release = await tx.release.findUnique({ where: { id: Number(context.referenceId) }, select: { status: true, archivedAt: true, lastEditedAt: true, createdAt: true } });
       obsolete ||= !release || release.status !== 'DRAFT' || Boolean(release.archivedAt) || (release.lastEditedAt || release.createdAt).toISOString() !== context.draftEditedAt;
     }
-    if (obsolete) { await tx.teamTask.update({ where: { id: task.id }, data: { status: 'CANCELLED', blocker: 'Customer resumed the draft, the release moved on, or the contact is no longer eligible.', version: { increment: 1 } } }); await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action: 'support.callback_cancelled', entityId: task.id, detail: { reason: 'source_or_contact_no_longer_eligible' } } }); }
+    if (context.kind === 'ENQUIRY' && String(context.source || '').startsWith('ticket:')) { const ticket = await tx.supportTicket.findUnique({ where: { id: Number(context.referenceId) }, select: { status: true } }); obsolete ||= !ticket || ['RESOLVED', 'CLOSED'].includes(ticket.status); }
+    if (!obsolete && task.status !== 'BLOCKED') {
+      if (task.owner.status !== 'ACTIVE' || task.owner.user.status !== 'ACTIVE' || task.owner.availability !== 'AVAILABLE') {
+        const replacement = await supportCaller(tx, a);
+        if (replacement && replacement.id !== task.ownerId) { const moved = await tx.teamTask.update({ where: { id: task.id }, data: { ownerId: replacement.id, dueAt: await callbackSlot(tx, a.workspaceId, replacement.id, nextCallDue(now), task.id), version: { increment: 1 } } }); await syncCallbackCalendar(tx, a, moved); await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action: "support.callback_reassigned", entityId: task.id, detail: { from: task.ownerId, to: replacement.id, reason: "assignee_unavailable" } } }); await tx.teamNotification.create({ data: { memberId: replacement.id, title: `Callback reassigned: ${task.title}`, href: `/team?workspace=${a.workspaceId}&module=customer-calls` } }); }
+      } else if ((await tx.teamCalendarEvent.findUnique({ where: { followUpTaskId: task.id } }))?.status !== 'SCHEDULED') { const due = await callbackSlot(tx, a.workspaceId, task.ownerId, task.dueAt && task.dueAt > now ? task.dueAt : nextCallDue(now), task.id); const updated = await tx.teamTask.update({ where: { id: task.id }, data: { dueAt: due, version: { increment: 1 } } }); await syncCallbackCalendar(tx, a, updated); }
+    }
+    if (obsolete) { await tx.teamCalendarEvent.updateMany({ where: { followUpTaskId: task.id, status: 'SCHEDULED' }, data: { status: 'CANCELLED', version: { increment: 1 }, scheduleRevision: { increment: 1 } } }); await tx.teamTask.update({ where: { id: task.id }, data: { status: 'CANCELLED', blocker: 'Customer resumed the draft, the release moved on, or the contact is no longer eligible.', version: { increment: 1 } } }); await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action: 'support.callback_cancelled', entityId: task.id, detail: { reason: 'source_or_contact_no_longer_eligible' } } }); }
   }
+  const crm = await tx.teamProspect.findMany({ where: { workspaceId: a.workspaceId, clientId: { not: null } }, select: { id: true }, take: 40, orderBy: { id: 'asc' }, ...(typeof cursor.crm === 'string' ? { cursor: { id: cursor.crm }, skip: 1 } : {}) });
+  if (!crm.length) delete cursor.crm;
+  for (const prospect of crm) { if (Date.now() > deadline) break; cursor.crm = prospect.id; try { await syncProspectCallCalendar(tx, a, prospect.id, now); } catch (error) { if (!(error instanceof TeamError && error.status === 409)) throw error; } }
   let assigned = 0;
   const cutoff = new Date(now.getTime() - DRAFT_CALL_INACTIVITY_HOURS * 3_600_000);
   const drafts = await tx.release.findMany({ where: { status: 'DRAFT', archivedAt: null, user: { status: 'ACTIVE', role: { in: ['CUSTOMER', 'PRODUCER'] }, mobile: { not: null } }, OR: [{ lastEditedAt: { lte: cutoff } }, { lastEditedAt: null, createdAt: { lte: cutoff } }] }, include: { user: { select: { id: true, name: true, email: true, mobile: true } }, _count: { select: { tracks: true } } }, orderBy: { id: 'asc' }, take: 100, ...(typeof cursor.draft === 'number' ? { cursor: { id: cursor.draft }, skip: 1 } : {}) });
@@ -106,6 +122,15 @@ export async function syncCustomerFollowups(tx: Prisma.TransactionClient, a: Act
     if (!client) continue;
     assigned += await emit(tx, a, client, { kind: 'ENQUIRY', source: String(lead.id), referenceId: String(lead.id), service: lead.interest || 'General enquiry', occurredAt: lead.createdAt.toISOString(), footnotes: [`Enquiry #${lead.id} received ${lead.createdAt.toISOString()}`, `Customer message: ${lead.message.slice(0, 3000)}`, user ? 'Linked to the signed-in HYMN account.' : 'Guest enquiry: identity and WhatsApp availability are not verified.'] }, now);
   }
+  const tickets = await tx.supportTicket.findMany({ where: { status: { in: ['OPEN', 'IN_PROGRESS'] }, createdAt: { gte: new Date(now.getTime() - 30 * 86400000) }, OR: [{ category: { in: ['community_plan', 'promotion', 'sales'] } }, { subject: { in: ['Curator review support', 'Meta ads campaign request', 'Release campaign request', 'Influencer/reel campaign request', 'YouTube/short-form push request'] } }] }, include: { user: { select: { id: true, name: true, email: true, mobile: true, status: true } } }, take: 50, orderBy: { id: 'asc' }, ...(typeof cursor.ticket === 'number' ? { cursor: { id: cursor.ticket }, skip: 1 } : {}) });
+  if (!tickets.length) delete cursor.ticket;
+  for (const ticket of tickets) {
+    if (Date.now() > deadline) break;
+    cursor.ticket = ticket.id;
+    if (ticket.user.status !== 'ACTIVE' || !whatsappNumber(ticket.user.mobile)) continue;
+    const client = await accountCard(tx, a, ticket.user); if (!client) continue;
+    assigned += await emit(tx, a, client, { kind: 'ENQUIRY', source: `ticket:${ticket.id}`, referenceId: String(ticket.id), service: ticket.category === 'community_plan' ? 'Community Plans' : ticket.subject, occurredAt: ticket.createdAt.toISOString(), footnotes: [`Customer request #${ticket.id}: ${ticket.subject}`, ticket.message.slice(0, 3000), 'Read the request before contact. Keep the proposal and response in the customer support thread.'] }, now);
+  }
   const interests = await tx.growthEvent.findMany({ where: { event: 'customer_service_interest', source: 'support_signal', userId: { not: null }, createdAt: { gte: new Date(now.getTime() - 7 * 86_400_000) } }, orderBy: { id: 'asc' }, take: 100, ...(typeof cursor.interest === 'string' ? { cursor: { id: cursor.interest }, skip: 1 } : {}) });
   if (!interests.length) delete cursor.interest;
   for (const event of interests) {
@@ -126,4 +151,36 @@ export async function readCallFollowups(a: Actor, params: URLSearchParams) {
   const offset = Math.max(0, Math.min(100000, Number(params.get('offset')) || 0));
   const where = { workspaceId: a.workspaceId, eventKey: { startsWith: 'support-call:' }, archivedAt: null, status: { notIn: ['COMPLETED', 'CANCELLED'] }, ...(!can(a, 'tasks.all') ? { ownerId: a.id } : {}) };
   return { items: await prisma.teamTask.findMany({ where, select: { id: true, title: true, description: true, ownerId: true, status: true, priority: true, dueAt: true, followUpContext: true, version: true, client: { select: { id: true, name: true, email: true, phone: true, status: true } } }, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], take: 50, skip: offset }), total: await prisma.teamTask.count({ where }) };
+}
+export async function recordCallbackOutcome(tx: Prisma.TransactionClient, a: Actor, input: unknown, now = new Date()) {
+  demand(a, 'crm.outreach.manage'); demand(a, 'tasks.update');
+  const data = z.object({ id: z.string().min(1), version: z.number().int().positive(), outcome: z.enum(['NO_ANSWER', 'CALLBACK', 'INTERESTED', 'RESOLVED', 'NOT_INTERESTED', 'DO_NOT_CONTACT']), notes: z.string().trim().min(3).max(2000), nextAt: z.string().datetime({ offset: true }).optional() }).parse(input);
+  const task = await tx.teamTask.findFirst({ where: { id: data.id, workspaceId: a.workspaceId, eventKey: { startsWith: 'support-call:' }, archivedAt: null, ...(!can(a, 'tasks.all') ? { ownerId: a.id } : {}) } });
+  if (!task || !task.clientId) throw new TeamError('Callback unavailable.', 404);
+  if (task.version !== data.version) throw new TeamError('Callback changed. Refresh before recording the result.', 409);
+  if (['COMPLETED', 'CANCELLED'].includes(task.status)) throw new TeamError('This callback is already closed.', 409);
+  const context = object(task.followUpContext);
+  const attempts = Number(context.attempts || 0) + 1;
+  let dueAt = task.dueAt;
+  const noAnswerAttempts = data.outcome === 'NO_ANSWER' ? Number(context.noAnswerAttempts || 0) + 1 : 0;
+  const status = ['RESOLVED', 'NOT_INTERESTED', 'DO_NOT_CONTACT'].includes(data.outcome) ? 'COMPLETED' : data.outcome === 'NO_ANSWER' && noAnswerAttempts >= 3 ? 'BLOCKED' : 'TODO';
+  if (data.outcome === 'CALLBACK' && !data.nextAt) throw new TeamError('Choose the callback time requested by the customer.');
+  if (status === 'TODO') {
+    const desired = data.nextAt ? new Date(data.nextAt) : callWindowStart(new Date(now.getTime() + 86400000));
+    if (desired <= now) throw new TeamError('Choose a future callback time.');
+    const available = await callbackSlot(tx, a.workspaceId, task.ownerId, desired, task.id);
+    if (data.nextAt && available.getTime() !== desired.getTime()) throw new TeamError(`This time is outside calling hours or overlaps another reservation. Next available: ${available.toISOString()}.`, 409);
+    dueAt = available;
+  }
+  const updated = await tx.teamTask.update({ where: { id: task.id }, data: { status, dueAt, completedAt: status === 'COMPLETED' ? now : null, blocker: status === 'BLOCKED' ? 'Three attempts recorded. Review before any further outreach.' : '', followUpContext: json({ ...context, attempts, noAnswerAttempts, outcome: data.outcome, lastOutcomeAt: now.toISOString(), tip: callbackTip(String(context.kind), data.outcome), footnotes: [...(Array.isArray(context.footnotes) ? context.footnotes : []), `${now.toISOString()} - ${data.outcome}: ${data.notes}`].slice(-12) }), version: { increment: 1 } } });
+  await tx.teamComment.create({ data: { taskId: task.id, authorId: a.id, body: `${data.outcome}: ${data.notes}${status === 'TODO' ? `\nNext callback: ${dueAt!.toISOString()}` : ''}` } });
+  await syncCallbackCalendar(tx, a, updated);
+  if (data.outcome === 'DO_NOT_CONTACT') {
+    await tx.teamClient.update({ where: { id: task.clientId }, data: { status: 'DO_NOT_CONTACT', version: { increment: 1 } } });
+    await tx.teamProspect.updateMany({ where: { clientId: task.clientId }, data: { suppressed: true, stage: 'DO_NOT_CONTACT', version: { increment: 1 } } });
+    await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, clientId: task.clientId, status: { notIn: ['COMPLETED', 'CANCELLED'] } }, data: { status: 'CANCELLED', version: { increment: 1 } } });
+    await tx.teamCalendarEvent.updateMany({ where: { workspaceId: a.workspaceId, clientId: task.clientId, status: 'SCHEDULED' }, data: { status: 'CANCELLED', version: { increment: 1 }, scheduleRevision: { increment: 1 } } });
+  }
+  await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action: 'support.callback_outcome', entityId: task.id, detail: { outcome: data.outcome, attempts, nextAt: dueAt?.toISOString() || null } } });
+  return updated;
 }

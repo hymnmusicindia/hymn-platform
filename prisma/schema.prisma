@@ -4080,6 +4080,7 @@ model TeamClient {
 }
 
 model TeamCalendarEvent {
+  followUpTaskId String? @unique @map("follow_up_task_id")
   id String @id @default(cuid())
   workspaceId String
   creatorId String
@@ -4162,4 +4163,33 @@ model ReleaseArtistIdentity {
   @@unique([releaseId, artistCardId])
   @@index([artistCardId])
   @@map("release_artist_identities")
+}
+
+model TeamOutreachEmail {
+  id String @id @default(cuid())
+  workspaceId String
+  memberId String
+  clientId String
+  requestKey String @unique
+  template String
+  recipient String
+  subject String
+  body String
+  senderName String
+  senderRole String
+  status String @default("QUEUED")
+  attempt Int @default(0)
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([workspaceId, memberId, createdAt])
+  @@index([status, createdAt])
+  @@index([recipient, createdAt])
+  @@map("team_outreach_emails")
+}
+
+model TeamOutreachSuppression {
+  email String @id
+  createdAt DateTime @default(now())
+  @@map("team_outreach_suppressions")
 }
