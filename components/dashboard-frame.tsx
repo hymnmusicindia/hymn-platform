@@ -106,14 +106,12 @@ export function DashboardFrame<T extends string>({
     return navItems.find(item => item.key === activeKey)?.group ?? "Workspace";
   });
   useEffect(() => {
-    function reveal(event: Event) { setOpenGroup((event as CustomEvent<string>).detail); setCollapsed(false); setLocalSearch(""); if(window.innerWidth<1024) setMobileOpen(true); }
+    function reveal(event: Event) { setOpenGroup((event as CustomEvent<string>).detail); setCollapsed(false); if(window.innerWidth<1024) setMobileOpen(true); }
     function hide() { setMobileOpen(false); }
     window.addEventListener("hymn-reveal-service",reveal);
     window.addEventListener("hymn-hide-service",hide);
     return () => { window.removeEventListener("hymn-reveal-service",reveal); window.removeEventListener("hymn-hide-service",hide); };
   }, []);
-  const [localSearch, setLocalSearch] = useState("");
-  const adminModuleSearchRef = useRef<HTMLInputElement>(null);
   const navScrollRef = useRef<HTMLDivElement>(null);
   const [navScroll, setNavScroll] = useState({ canUp: false, canDown: false });
 
@@ -141,14 +139,9 @@ export function DashboardFrame<T extends string>({
   }, [navGroups, navItems]);
 
   const flatItems = useMemo(() => groups.flatMap((group) => group.items), [groups]);
-  const effectiveSearch = onSearchChange ? searchValue : localSearch;
-  const visibleGroups = useMemo(() => {
-    const query = (onSearchChange ? localSearch : effectiveSearch).trim().toLowerCase();
-    if (!query) return groups;
-    return groups
-      .map((group) => ({ ...group, items: group.items.filter((item) => `${item.label} ${item.description ?? ""} ${group.label}`.toLowerCase().includes(query)) }))
-      .filter((group) => group.items.length > 0);
-  }, [effectiveSearch, groups, localSearch, onSearchChange]);
+  const [workspaceSearch, setWorkspaceSearch] = useState("");
+  const effectiveSearch = onSearchChange ? searchValue : workspaceSearch;
+  const visibleGroups = groups;
 
   useEffect(() => {
     updateNavScroll();
@@ -182,23 +175,6 @@ export function DashboardFrame<T extends string>({
   const isOverview = activeKey === "overview";
   const adminWorkspace = navItems.some(item => item.group === "Command Center");
   const overviewItem = navItems.find(item => item.key === "overview");
-  useEffect(() => {
-    function focusModuleSearch(event: KeyboardEvent) {
-      const target = event.target as HTMLElement | null;
-      if (event.key === "/" && !target?.matches("input, textarea, select, [contenteditable='true']")) {
-        event.preventDefault();
-        setCollapsed(false);
-        if (window.innerWidth < 1024) setMobileOpen(true);
-        requestAnimationFrame(() => adminModuleSearchRef.current?.focus());
-      }
-      if (event.key === "Escape" && document.activeElement === adminModuleSearchRef.current) {
-        setLocalSearch("");
-        adminModuleSearchRef.current?.blur();
-      }
-    }
-    window.addEventListener("keydown", focusModuleSearch);
-    return () => window.removeEventListener("keydown", focusModuleSearch);
-  }, []);
 
   return (
     <div data-workspace={adminWorkspace ? "admin" : "creator"} data-collapsed={collapsed} className="workspace-v2 hymn-portal-frame dashboard-os-shell lg:grid-cols-[var(--dashboard-sidebar-width,236px),minmax(0,1fr)]" style={{ "--dashboard-sidebar-width": collapsed ? "76px" : "236px" } as React.CSSProperties}>
@@ -260,15 +236,13 @@ export function DashboardFrame<T extends string>({
 
         <WorkspaceDestinations overviewActive={isOverview} overviewHref={overviewItem?.href} onOverview={overviewItem && !overviewItem.href ? () => handleSelect(overviewItem.key) : undefined} onNavigate={() => setMobileOpen(false)} />
         </div>
-        {!collapsed ? <label className="admin-module-search"><Search aria-hidden="true"/><input ref={adminModuleSearchRef} value={localSearch} onChange={event => setLocalSearch(event.target.value)} placeholder="Find a module..." aria-label="Find a workspace module"/>{localSearch ? <button type="button" onClick={() => setLocalSearch("")} aria-label="Clear module search"><X/></button> : <kbd>/</kbd>}</label> : null}
         <div ref={navScrollRef} onScroll={updateNavScroll} className="dashboard-nav-scroll mt-4 min-h-0 flex-1 content-start gap-3 overflow-x-hidden overflow-y-auto pr-1 grid">
-          {!visibleGroups.some(group => group.items.some(item => item.key !== "overview")) ? <p className="module-search-empty" role="status">No modules match “{localSearch}”. Try a service name or clear your search.</p> : null}
           {visibleGroups.map((group) => {
             const destination = adminWorkspace ? undefined : workspaceGroupDestination(group.label);
             const groupItems = group.items.filter(item => item.key !== "overview" && item.label !== destination?.label);
             if (!groupItems.length && !destination) return null;
             const menuId = `workspace-group-${group.label.replace(/[^a-z]/gi, '-')}`;
-            const closed = !localSearch.trim() && openGroup !== group.label;
+            const closed = openGroup !== group.label;
             return (
               <div key={group.label} className="dashboard-os-nav-group">
                 {destination ? <div className="workspace-service-heading"><Link href={destination.href} aria-label={group.label} className={clsx("dashboard-os-group-toggle",collapsed ? "lg:justify-center" : "")} data-guide-route={destination.href} aria-current={activeItem?.label === destination.label ? "page" : undefined} title={collapsed ? group.label : undefined} onClick={()=>{setOpenGroup(group.label);setMobileOpen(false);}}><span>{group.label}</span></Link>{groupItems.length ? <button type="button" className={clsx("workspace-service-toggle",collapsed ? "lg:hidden" : "")} aria-label={`Toggle ${group.label} menu`} aria-expanded={!closed} aria-controls={menuId} onClick={()=>toggleGroup(group.label)}><ChevronDown className="h-3.5 w-3.5"/></button> : null}</div> : <button
@@ -324,7 +298,7 @@ export function DashboardFrame<T extends string>({
             <input
               aria-label="Search dashboard"
               value={effectiveSearch}
-              onChange={(event) => onSearchChange ? onSearchChange(event.target.value) : setLocalSearch(event.target.value)}
+              onChange={(event) => onSearchChange ? onSearchChange(event.target.value) : setWorkspaceSearch(event.target.value)}
               placeholder={searchPlaceholder}
             />
             <Command className="h-4 w-4" style={{ color: "var(--text-muted)" }} />

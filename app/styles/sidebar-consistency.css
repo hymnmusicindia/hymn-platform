@@ -107,3 +107,13 @@ html body :is(.landing-rail,.dashboard-os-sidebar) :is(.landing-group-title,.das
   html body :is(.landing-rail,.dashboard-os-sidebar) {--sidebar-row-height:48px;}
 }
 @media(prefers-reduced-motion:reduce){html body .workspace-launch-row *,html body .workspace-launch-row *::before{transition:none!important;}}
+
+/* Match the homepage rail: no hidden brand spacer above the launch shortcuts. */
+@media(min-width:1024px) {
+  html body .hymn-portal-root .workspace-v2.workspace-v2[data-workspace="creator"] .dashboard-os-sidebar {
+    padding:10px 12px 16px!important;
+  }
+  html body .hymn-portal-root .workspace-v2.workspace-v2[data-workspace="creator"] .dashboard-os-sidebar>div:first-child {
+    display:none!important;
+  }
+}
