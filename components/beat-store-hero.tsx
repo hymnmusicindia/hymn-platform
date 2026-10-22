@@ -19,7 +19,6 @@ export function BeatStoreHero({ moods, search, onSearch, onMood, onSurprise, onF
     <img className="beat-hero-background" src="/assets/onboarding/engineer.jpg" alt="" fetchPriority="high" />
     <div className="beat-hero-shade" aria-hidden="true" />
     <div className="beat-hero-content">
-      <span className="beat-hero-label">THE HYMN BEATSTORE</span>
       <h1>Find the beat.<br />Make your next hit.</h1>
       <p className="beat-hero-description">Beats from independent producers. A sound for every story.</p>
       <form className="beat-hero-search" role="search" aria-label="Find beats" onSubmit={event => { event.preventDefault(); browse(); }}>
