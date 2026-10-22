@@ -1,16 +1,20 @@
 .release-section-navigation{min-width:0;margin-top:28px;padding-bottom:18px}
-html body .release-manage-page .release-section-tabs,.release-section-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:4px 24px;overflow:visible;padding:8px 0;border:0;background:transparent;border-radius:0;box-shadow:none}
-html body .release-manage-page .release-section-tabs [role=tab],.release-section-tabs [role=tab]{flex:0 1 auto;max-width:100%;display:inline-flex;align-items:center;justify-content:flex-start;gap:7px;min-height:44px;padding:8px 0;border:0;border-radius:0;background:transparent;color:var(--text-muted);font-size:12px;font-weight:500;line-height:1.5;white-space:normal;text-align:left;cursor:pointer;box-shadow:none;transition:color .18s ease,opacity .18s ease}
-html body .release-manage-page .release-section-tabs [role=tab][aria-selected=true],.release-section-tabs [role=tab][aria-selected=true]{background:transparent;border:0;color:var(--text);font-weight:700;box-shadow:none}
-.release-section-tabs [role=tab]>svg{flex-shrink:0;opacity:.7}
+html body .release-manage-page .release-section-tabs,.release-section-tabs{display:flex;flex-wrap:nowrap;align-items:center;gap:clamp(8px,1.2vw,18px);overflow-x:auto;scrollbar-width:none;padding:8px 0;border:0;background:transparent;border-radius:0;box-shadow:none}
+html body .release-manage-page .release-section-tabs [role=tab],.release-section-tabs [role=tab]{flex:0 0 auto;max-width:100%;display:inline-flex;align-items:center;justify-content:flex-start;gap:4px;min-height:44px;padding:8px 0;border:0;border-radius:0;background:transparent;color:#d2d0cb;filter:blur(.35px);opacity:.8;font-size:11px;font-weight:500;line-height:1.5;white-space:nowrap;text-align:left;cursor:pointer;box-shadow:none;transition:color .2s ease,opacity .2s ease,filter .2s ease}
+html body .release-manage-page .release-section-tabs [role=tab][aria-selected=true],.release-section-tabs [role=tab][aria-selected=true]{background:transparent;border:0;color:#fff;filter:none;opacity:1;font-weight:700;box-shadow:none}
+.release-section-tabs [role=tab]>svg{display:none}
 .release-section-tabs [role=tab][aria-selected=true]>svg{opacity:1}
-html body .release-manage-page .release-section-tabs [role=tab]:hover{color:var(--text);background:transparent}
-.release-section-tabs [role=tab]:focus-visible{outline:2px solid var(--focus,var(--text));outline-offset:5px;border-radius:4px}
+html body .release-manage-page .release-section-tabs [role=tab]:hover{color:#fff;filter:none;opacity:1;background:transparent}
+html body .release-manage-page .release-section-tabs [role=tab]:focus-visible{position:relative;outline:none!important;color:#fff;filter:none;opacity:1}
+.release-section-tabs [role=tab]:focus-visible::after{content:'';position:absolute;top:3px;left:calc(50% - 1.5px);width:3px;height:3px;border-radius:50%;background:currentColor}
 .release-section-tabs [data-attention=true]>svg{color:var(--warning,#e9b768)}
 .release-section-count{font-size:10px;font-weight:600;font-variant-numeric:tabular-nums;opacity:.75}
 .release-section-caption{display:flex;gap:8px;margin:12px 0 0;font-size:11px;font-weight:500;color:var(--text-muted)}
 .release-section-caption>span{color:var(--text-soft)}
 .release-section-panel{display:grid;gap:24px;min-width:0;animation:release-section-reveal .2s ease-out}
 @keyframes release-section-reveal{from{opacity:.6;transform:translateY(3px)}to{opacity:1;transform:none}}
-@media(max-width:640px){.release-section-navigation{margin-top:20px}html body .release-manage-page .release-section-tabs,.release-section-tabs{gap:2px 18px}.release-section-caption{margin-top:10px}}
+@media(max-width:640px){.release-section-navigation{margin-top:20px}html body .release-manage-page .release-section-tabs,.release-section-tabs{gap:16px}.release-section-caption{margin-top:10px}}
 @media(prefers-reduced-motion:reduce){.release-section-tabs [role=tab]{transition:none}.release-section-panel{animation:none}}
+
+.release-section-tabs::-webkit-scrollbar{display:none}
+@media(max-width:640px){.release-section-tabs{mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent);scroll-padding-inline:16px;padding-inline:16px!important}}

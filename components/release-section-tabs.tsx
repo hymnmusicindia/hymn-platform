@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { FileText, Users, LayoutDashboard, Music2, CircleAlert, History, Radio, Megaphone, ChartNoAxesCombined, MessageSquare } from "lucide-react";
 import "./release-section-tabs.css";
 
@@ -13,12 +13,22 @@ export function ReleaseSectionTabs({ items, active, onChange, panelId }: {
 }) {
   const id = useId();
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
+  const activeIndex = items.findIndex(item => item.key === active);
+  useEffect(() => {
+    const button = buttons.current[activeIndex];
+    const list = button?.parentElement;
+    if (!button || !list) return;
+    const center = () => list.scrollTo({ left: button.offsetLeft - list.offsetLeft - (list.clientWidth - button.offsetWidth) / 2, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    center();
+    const observer = new ResizeObserver(center); observer.observe(list);
+    return () => observer.disconnect();
+  }, [activeIndex]);
   return <div className="release-section-navigation">
     <div className="release-section-tabs" role="tablist" aria-label="Release sections">
       {items.map((item, index) => {
         const Icon = icons[item.key];
         return <button key={item.key} id={`${id}-${item.key}`} ref={node => { buttons.current[index] = node; }}
-          type="button" role="tab" aria-selected={active === item.key} aria-controls={panelId}
+          type="button" role="tab" aria-label={item.label} aria-selected={active === item.key} aria-controls={panelId}
           tabIndex={active === item.key ? 0 : -1} data-attention={item.attention || undefined}
           onClick={() => onChange(item.key)} onKeyDown={event => {
             let next = index;
@@ -30,7 +40,7 @@ export function ReleaseSectionTabs({ items, active, onChange, panelId }: {
             event.preventDefault(); onChange(items[next].key);
             buttons.current[next]?.focus({ preventScroll: true });
           }}>
-          <Icon size={16} aria-hidden="true" /><span>{item.label}</span>
+          <Icon size={16} aria-hidden="true" /><span>{item.key === 'corrections' ? 'Corrections' : item.label}</span>
           {item.count !== undefined && item.count > 0 ? <span className="release-section-count" aria-label={`${item.count} ${item.key === "corrections" ? item.attention ? "open corrections" : "review notes" : item.label.toLowerCase()}`}>{item.count}</span> : null}
         </button>;
       })}
