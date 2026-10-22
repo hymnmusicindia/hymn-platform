@@ -1,3 +1,4 @@
+import { failArtistAmendment } from '@/lib/release-artist-amendment';
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { getDireNoteIngestStatus } from "@/lib/direnote/direnote-client";
@@ -48,11 +49,12 @@ async function recordPollFailure(attempt: { id: number; releaseId: number }, pre
   await logDistributionEvent({ releaseId: attempt.releaseId, action: "ingest_status", errors: [safe], success: false });
 }
 
-export async function pollDireNoteIngestJobs(options: { limit?: number } = {}) {
+export async function pollDireNoteIngestJobs(options: { limit?: number; releaseId?: number } = {}) {
   const now = new Date();
   const candidates = await prisma.distributionSubmissionAttempt.findMany({
     where: {
       provider: "direnote", isCurrent: true, state: "submitted", providerStatus: { in: ["queued", "processing"] }, release: { archivedAt: null },
+      ...(options.releaseId ? { releaseId: options.releaseId } : {}),
       OR: [{ lastCheckedAt: null }, { lastCheckedAt: { lte: new Date(now.getTime() - 60_000) } }]
     },
     include: { release: { select: { id: true, title: true, status: true, upc: true, releaseDate: true, metadata: true, tracks: { orderBy: { trackNumber: "asc" }, select: { id: true, title: true, trackNumber: true, isrc: true } } } } },
@@ -81,8 +83,12 @@ export async function pollDireNoteIngestJobs(options: { limit?: number } = {}) {
       await reserveDireNoteRequest("ingest_status", attempt.releaseId);
       const response = await getDireNoteIngestStatus({ jobId: reference.jobId, idempotencyKey: reference.idempotencyKey }, { timeoutMs: 20_000 });
       const body = object(response.data);
-      if (!response.success || body.success !== true) throw new Error(response.error || cleanText(body.error) || "DireNote job status was not confirmed.");
       const responseJobId = cleanText(body.job_id ?? body.jobId, 200);
+      // A documented terminal job failure includes an error string even though
+      // the status lookup itself succeeded. The generic transport parser marks
+      // error-bearing bodies unsuccessful; require exact job identity here.
+      const confirmedFailure = response.httpStatus === 200 && body.success === true && cleanText(body.status, 30).toLowerCase() === 'failed' && (reference.jobId ? responseJobId === reference.jobId : cleanText(body.idempotency_key, 200) === reference.idempotencyKey);
+      if ((!response.success && !confirmedFailure) || body.success !== true) throw new Error(response.error || cleanText(body.error) || "DireNote job status was not confirmed.");
       if (reference.jobId && responseJobId && responseJobId !== reference.jobId) throw new Error("DireNote returned a different job ID than the accepted submission.");
       const status = cleanText(body.status, 30).toLowerCase();
       if (!["queued", "processing", "completed", "failed"].includes(status)) throw new Error("DireNote returned an unsupported ingest job status.");
@@ -122,9 +128,11 @@ export async function pollDireNoteIngestJobs(options: { limit?: number } = {}) {
       if (status === "failed") {
         const failure = cleanText(object(body.error).message ?? body.error, 500) || "DireNote could not finish processing the ingest job.";
         const canResubmit = body.can_resubmit === true;
+        const isAmendment = Number(object(reference.stored).amendmentRequestId) > 0;
         const responseRedacted = { ...jobMetadata, canResubmit, error: failure };
         await prisma.distributionSubmissionAttempt.updateMany({ where: { id: attempt.id, state: "submitted", isCurrent: true }, data: { state: canResubmit ? "retryable" : "failed", isCurrent: false, providerStatus: "failed", lastCheckedAt: checkedAt, safeError: failure, responseRedacted: responseRedacted as never, completedAt: checkedAt } });
-        await updateDetailedReleaseStatus(attempt.releaseId, "delivery_failed", `DireNote ingest job failed: ${failure}`);
+        if (isAmendment) await failArtistAmendment(Number(object(reference.stored).amendmentRequestId), attempt.id);
+        else await updateDetailedReleaseStatus(attempt.releaseId, "delivery_failed", `DireNote ingest job failed: ${failure}`);
         await logDistributionEvent({ releaseId: attempt.releaseId, action: "ingest_status", httpStatus: response.httpStatus, responsePayload: { job_id: responseJobId || reference.jobId, status, can_resubmit: canResubmit, error: failure }, errors: [failure], success: false });
         await createReleaseAuditLog({ releaseId: attempt.releaseId, action: "DIRENOTE_INGEST_JOB_FAILED", details: { attemptId: attempt.id, canResubmit, error: failure } });
         failed++;
@@ -138,9 +146,13 @@ export async function pollDireNoteIngestJobs(options: { limit?: number } = {}) {
       const albumName = cleanText(result.album_name ?? result.albumname, 300).replace(/\s+/g, " ").toLowerCase();
       const expectedTitle = attempt.release.title.trim().replace(/\s+/g, " ").toLowerCase();
       const trackCount = Number(result.track_count ?? parsed.trackIsrcs.length);
+      const usedTracks = new Set<typeof parsed.trackIsrcs[number]>();
       const mappedTracks = attempt.release.tracks.map(track => {
         const remote = parsed.trackIsrcs.find(item => item.trackNumber === track.trackNumber || item.trackTitle?.trim().toLowerCase() === track.title.trim().toLowerCase());
-        return { id: track.id, title: track.title, trackNumber: track.trackNumber, isrc: remote?.isrc ?? track.isrc ?? null };
+        const duplicate = remote && usedTracks.has(remote);
+        if (remote) usedTracks.add(remote);
+        const replacement = 'identifierPolicy' in reference.stored && reference.stored.identifierPolicy === 'replace';
+        return { id: track.id, title: track.title, trackNumber: track.trackNumber, isrc: duplicate ? null : remote?.isrc ?? (replacement ? null : track.isrc ?? null) };
       });
       const invalidIdentity = !upc || !validReleaseBarcode(upc) || albumName && albumName !== expectedTitle || trackCount !== attempt.release.tracks.length || parsed.trackIsrcs.length !== attempt.release.tracks.length || mappedTracks.some(track => !track.isrc || !validIsrc(track.isrc));
       const safeResult = { upc: upc ?? null, albumName: cleanText(result.album_name ?? result.albumname, 300) || null, trackCount, releaseDate: cleanText(result.release_date, 30) || null, distributorReleaseId: parsed.distributorReleaseId ?? null, tracks: parsed.trackIsrcs, artists: parsed.artists, songwriters: parsed.songwriters, warnings: parsed.warnings };
@@ -165,7 +177,7 @@ export async function pollDireNoteIngestJobs(options: { limit?: number } = {}) {
       const currentRelease = await prisma.release.findUniqueOrThrow({ where: { id: attempt.releaseId } });
       const priorMetadata = object(currentRelease.metadata);
       await prisma.release.update({ where: { id: attempt.releaseId }, data: { metadata: { ...priorMetadata, direnoteAccepted: true, direnoteAcceptedAt: checkedAt.toISOString(), direnoteStatus: "accepted", direnoteResponse: safeResult, latestStatusSyncAt: checkedAt.toISOString() } } });
-      await markReleaseDistributionSuccess({ releaseId: attempt.releaseId, status: statusAfterDireNoteAcceptance({ releaseDate: attempt.release.releaseDate.toISOString(), releaseTiming: String(object(attempt.release.metadata).releaseTiming ?? "quick_release") }), distributorReleaseId: parsed.distributorReleaseId, upc: upc!, trackIsrcs: parsed.trackIsrcs, responsePayload: safeResult, warnings: parsed.warnings });
+      await markReleaseDistributionSuccess({ releaseId: attempt.releaseId, notify: !(Number(object(reference.stored).amendmentRequestId) > 0), status: statusAfterDireNoteAcceptance({ releaseDate: attempt.release.releaseDate.toISOString(), releaseTiming: String(object(attempt.release.metadata).releaseTiming ?? "quick_release") }), distributorReleaseId: parsed.distributorReleaseId, upc: upc!, trackIsrcs: parsed.trackIsrcs, responsePayload: safeResult, warnings: parsed.warnings });
       await finishDistributionSubmission(attempt.id, { state: "submitted", providerStatus: "completed", httpStatus: response.httpStatus, providerReference: parsed.distributorReleaseId ?? upc ?? attempt.providerReference, responseRedacted: completedData as never });
       await logDistributionEvent({ releaseId: attempt.releaseId, action: "ingest_status", httpStatus: response.httpStatus, responsePayload: { job_id: responseJobId || reference.jobId, status, result: safeResult }, success: true });
       await createReleaseAuditLog({ releaseId: attempt.releaseId, action: "DIRENOTE_INGEST_JOB_COMPLETED", details: { attemptId: attempt.id, jobId: reference.jobId ?? responseJobId, upc, trackCount } });

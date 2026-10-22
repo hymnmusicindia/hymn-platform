@@ -2022,6 +2022,7 @@ export async function markReleaseDistributionSuccess(input: {
   trackIsrcs?: Array<{ trackNumber?: number; trackTitle?: string; isrc?: string | null; distributorStatus?: string | null }>;
   responsePayload?: unknown;
   warnings?: string[];
+  notify?: boolean;
 }) {
   const pool = getPool();
   if (!pool) {
@@ -2042,7 +2043,7 @@ export async function markReleaseDistributionSuccess(input: {
       newMetadata.direnoteReleaseDate = (input.responsePayload as any)?.release_date ?? null;
       newMetadata.latestStatusSyncAt = new Date().toISOString();
 
-      await updateDetailedReleaseStatus(input.releaseId, input.status, "DireNote accepted the release submission.");
+      await updateDetailedReleaseStatus(input.releaseId, input.status, "DireNote accepted the release submission.", undefined, { notify: input.notify });
       await prisma.release.update({
         where: { id: input.releaseId },
         data: {
@@ -2067,7 +2068,7 @@ export async function markReleaseDistributionSuccess(input: {
         }
       }
       const updatedRelease = await getDetailedReleaseById(input.releaseId);
-      if (updatedRelease) {
+      if (updatedRelease && input.notify !== false) {
         const releaseTiming = String((updatedRelease.metadata as Record<string, unknown> | null)?.releaseTiming ?? "quick_release");
         const notificationStatus = updatedRelease.status === "scheduled" && releaseTiming !== "schedule_release" ? "sent_to_distributor" : input.status;
         await notifyReleaseStatusChange(updatedRelease, notificationStatus);
@@ -2090,7 +2091,7 @@ export async function markReleaseDistributionSuccess(input: {
     }
     const releaseTiming = String(release.releaseTiming ?? (release.metadata as Record<string, unknown> | undefined)?.releaseTiming ?? "quick_release");
     const notificationStatus = release.status === "scheduled" && releaseTiming !== "schedule_release" ? "sent_to_distributor" : input.status;
-    await notifyReleaseStatusChange(release, notificationStatus);
+    if (input.notify !== false) await notifyReleaseStatusChange(release, notificationStatus);
     return release;
   }
   return null;

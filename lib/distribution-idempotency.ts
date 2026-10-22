@@ -92,6 +92,11 @@ export async function ensureCurrentDireNoteAttempt(releaseId: number) {
     }
     const release = await tx.release.findUniqueOrThrow({ where: { id: releaseId }, include: { tracks: true } });
     if (current) {
+      // A replacement job has its own identity. The displayed identifiers still
+      // belong to the preceding delivery until the complete new set is assigned.
+      const releaseMeta = release.metadata && typeof release.metadata === 'object' && !Array.isArray(release.metadata) ? release.metadata as Record<string, unknown> : {};
+      const providerMeta = releaseMeta.direNote && typeof releaseMeta.direNote === 'object' && !Array.isArray(releaseMeta.direNote) ? releaseMeta.direNote as Record<string, unknown> : {};
+      if (providerMeta.identifierAssignmentPending === true) return current;
       // A verified status lookup is newer evidence than an initial ingestion
       // acknowledgement. Keep immutable acknowledgement diagnostics intact.
       const status = current.rawStatusPayload as { success?: boolean; release?: { upc_code?: string; album_name?: string }; tracks?: Array<{ isrc?: string }> } | null;
@@ -146,10 +151,17 @@ export async function activateDireNoteAttempt(id: number, input: { upc: string |
     input = { ...input, upc: replaceIdentifiers ? input.upc : input.upc || release.upc };
     if (input.upc && !validReleaseBarcode(input.upc)) throw new Error("DireNote returned an invalid UPC. Reconcile the provider identity before continuing.");
     if (!replaceIdentifiers && release.upc && input.upc && release.upc !== input.upc) throw new Error("DireNote returned a conflicting UPC. Reconcile the provider identity before continuing.");
-    if (release.upc !== input.upc) await tx.externalIdentifierHistory.create({ data: { releaseId: release.id, provider: "direnote", identifierType: "upc", previousValue: release.upc, canonicalValue: input.upc ?? "awaiting_assignment", source: "submission_attempt" } });
+    const incoming = (Array.isArray(input.trackIdentifiers) ? input.trackIdentifiers : []) as Array<{ id: number; isrc: string | null }>;
+    if (new Set(incoming.map(item => item.id)).size !== incoming.length || incoming.some(item => !release.tracks.some(track => track.id === item.id))) throw new Error('Submission track identities are duplicated or do not match this release.');
+    for (const identifier of incoming) if (identifier.isrc && !validIsrc(identifier.isrc)) throw new Error('DireNote returned an invalid ISRC. Reconcile the recording identity before continuing.');
+    const assignmentPending = replaceIdentifiers && !(input.upc && incoming.length === release.tracks.length && release.tracks.length > 0 && incoming.every(item => Boolean(item.isrc)));
+    const displayedUpc = assignmentPending ? release.upc : input.upc;
+    const lockSource = `submission_attempt:${id}:locked`;
+    if (assignmentPending && release.upc && !(await tx.externalIdentifierHistory.findFirst({ where: { releaseId: release.id, identifierType: 'upc', source: lockSource } }))) await tx.externalIdentifierHistory.create({ data: { releaseId: release.id, provider: 'direnote', identifierType: 'upc', previousValue: release.upc, canonicalValue: release.upc, source: lockSource } });
+    if (release.upc !== displayedUpc) await tx.externalIdentifierHistory.create({ data: { releaseId: release.id, provider: "direnote", identifierType: "upc", previousValue: release.upc, canonicalValue: displayedUpc ?? "awaiting_assignment", source: "submission_attempt" } });
     const metadata = release.metadata && typeof release.metadata === "object" && !Array.isArray(release.metadata) ? release.metadata : {};
     const direNote = metadata.direNote && typeof metadata.direNote === "object" && !Array.isArray(metadata.direNote) ? metadata.direNote : {};
-    await tx.release.update({ where: { id: release.id }, data: { upc: input.upc, direNoteStatus: "processing", metadata: { ...metadata, upcCode: input.upc, direNote: { ...direNote, currentAttemptId: id, ...(replaceIdentifiers ? { reconciliationInProgress: true } : {}) } } } });
+    await tx.release.update({ where: { id: release.id }, data: { upc: displayedUpc, direNoteStatus: "processing", metadata: { ...metadata, upcCode: displayedUpc, direNote: { ...direNote, currentAttemptId: id, ...(replaceIdentifiers ? { reconciliationInProgress: true, identifierAssignmentPending: assignmentPending } : {}) } } } });
     for (const item of Array.isArray(input.trackIdentifiers) ? input.trackIdentifiers : []) {
       const identifier = item as { id: number; isrc: string | null };
       const track = release.tracks.find(row => row.id === identifier.id);
@@ -157,9 +169,19 @@ export async function activateDireNoteAttempt(id: number, input: { upc: string |
       if (!replaceIdentifiers) identifier.isrc ||= track.isrc;
       if (identifier.isrc && !validIsrc(identifier.isrc)) throw new Error("DireNote returned an invalid ISRC. Reconcile the recording identity before continuing.");
       if (!replaceIdentifiers && track.isrc && identifier.isrc && track.isrc !== identifier.isrc) throw new Error("DireNote returned a conflicting ISRC. Reconcile the recording identity before continuing.");
+      if (assignmentPending) continue;
       if (track.isrc !== identifier.isrc) await tx.externalIdentifierHistory.create({ data: { releaseId: release.id, trackId: track.id, provider: "direnote", identifierType: "isrc", previousValue: track.isrc, canonicalValue: identifier.isrc ?? "awaiting_assignment", source: "submission_attempt" } });
       const trackMetadata = track.metadata && typeof track.metadata === "object" && !Array.isArray(track.metadata) ? track.metadata as Record<string, unknown> : {};
       await tx.track.update({ where: { id: track.id }, data: { isrc: identifier.isrc, metadata: { ...trackMetadata, isrc: identifier.isrc } } });
+    }
+    if (assignmentPending) for (const track of release.tracks) {
+      if (track.isrc && !(await tx.externalIdentifierHistory.findFirst({ where: { releaseId: release.id, trackId: track.id, identifierType: 'isrc', source: lockSource } }))) await tx.externalIdentifierHistory.create({ data: { releaseId: release.id, trackId: track.id, provider: 'direnote', identifierType: 'isrc', previousValue: track.isrc, canonicalValue: track.isrc, source: lockSource } });
+    }
+    const receipt = input.responseRedacted && typeof input.responseRedacted === 'object' && !Array.isArray(input.responseRedacted) ? input.responseRedacted as Record<string, unknown> : {};
+    const amendmentRequestId = Number(receipt.amendmentRequestId);
+    if (replaceIdentifiers && !assignmentPending && Number.isSafeInteger(amendmentRequestId) && amendmentRequestId > 0) {
+      const amendment = await tx.releaseChangeRequest.findFirst({ where: { id: amendmentRequestId, releaseId: release.id, status: 'submitted_to_partner' } });
+      if (amendment && !(await tx.releaseChangeRequestEvent.findFirst({ where: { requestId: amendment.id, metadata: { path: ['assignedAttemptId'], equals: id } } }))) await tx.releaseChangeRequestEvent.create({ data: { requestId: amendment.id, actorType: 'system', previousStatus: amendment.status, newStatus: amendment.status, note: `HYMN confirmed the assigned UPC ${input.upc} and ISRCs ${incoming.map(track => track.isrc).join(', ')}. Awaiting store and artist-profile verification.`, metadata: { assignedAttemptId: id, upc: input.upc, tracks: incoming as unknown as Prisma.InputJsonValue } } });
     }
     const previousCandidates = await tx.distributionSubmissionAttempt.findMany({
       where: { releaseId: attempt.releaseId, provider: "direnote", isCurrent: true, id: { not: id } },

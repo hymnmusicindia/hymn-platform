@@ -26,6 +26,12 @@ async function main() {
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("acquisition_fixture");
+    if (process.argv.includes('--amendment-identifiers-only')) {
+      await run(['node_modules/prisma/build/index.js', 'db', 'push', '--skip-generate']);
+      await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-amendment-identifiers.ts']);
+      await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-artist-amendment.ts']);
+      return;
+    }
     if (process.argv.includes("--contacts-followups-only")) {
       writeFileSync(oldSchema, execFileSync("git", ["show", "07ad464:prisma/schema.prisma"], { encoding: "utf8", windowsHide: true }));
       await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", oldSchema, "--skip-generate"]);

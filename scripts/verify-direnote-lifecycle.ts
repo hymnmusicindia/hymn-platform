@@ -67,7 +67,8 @@ const server = createServer(async (request, response) => {
   }
   if (request.url === "/check_qc_report") {
     qcRequests++;
-    response.end(JSON.stringify({ success: true, upc_code: body.upc, tracks: [{ track_name: "Track 2", isrc: oldIsrcs[1], scanned: true, isrc_lookup: { success: false, message: "Please correct the recording details" } }, { track_name: "Track 1", isrc: oldIsrcs[0], scanned: true, acr: { matches: [] } }] }));
+    const qcIsrcs = body.upc === oldUpc ? oldIsrcs : newIsrcs;
+    response.end(JSON.stringify({ success: true, upc_code: body.upc, tracks: [{ track_name: "Track 2", isrc: qcIsrcs[1], scanned: true, isrc_lookup: { success: false, message: "Please correct the recording details" } }, { track_name: "Track 1", isrc: qcIsrcs[0], scanned: true, acr: { matches: [] } }] }));
     return;
   }
   statusUpcs.push(body.upc);

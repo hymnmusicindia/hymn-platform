@@ -12,7 +12,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
   const releaseId = Number((await context.params).id);
   const owned = await prisma.release.count({ where: { id: releaseId, userId: user.user.id } });
   if (!owned) return NextResponse.json({ error: "Release not found." }, { status: 404 });
-  return NextResponse.json({ requests: await prisma.releaseChangeRequest.findMany({ where: { releaseId }, orderBy: { submittedAt: "desc" }, take: 100, include: { events: { orderBy: { createdAt: "asc" } } } }) });
+  return NextResponse.json({ requests: await prisma.releaseChangeRequest.findMany({ where: { releaseId }, orderBy: { submittedAt: "desc" }, take: 100, include: { events: { orderBy: { createdAt: "asc" }, select: { id: true, actorType: true, previousStatus: true, newStatus: true, note: true, providerReference: true, createdAt: true } } } }) });
 }
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {

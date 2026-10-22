@@ -50,7 +50,7 @@ export async function createDistributorAssetUrl(value: string | null | undefined
   const assetId = privateAssetId(value);
   if (!assetId) return value ?? "";
   const asset = await prisma.storedAsset.findFirst({ where: { id: assetId, ownerUserId, deletedAt: null, uploadStatus: "ready" }, select: { id: true, safeFilename: true, mimeType: true, providerDeliveryToken: true } });
-  if (!asset) throw new Error("A release asset is unavailable for distributor delivery.");
+  if (!asset) throw new Error(`Delivery asset #${assetId} is missing or unavailable. Restore the original file before submitting.`);
   // The Hostinger Node deployment can route public_html paths back into Next
   // after a release, producing intermittent 404s for static proof copies.
   // Use the durable public provider endpoint for PDFs too: it needs no login,

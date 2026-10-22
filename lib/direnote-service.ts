@@ -1,4 +1,5 @@
-import { conflictsWithHistoricalIdentity, selectedReleaseArtistIds, snapshotMatchesCard } from '@/lib/release-artist-verification';
+import { completeArtistAmendment } from '@/lib/release-artist-amendment';
+import { artistIdentityFingerprint, cardIdentity, conflictsWithHistoricalIdentity, selectedReleaseArtistIds, snapshotMatchesCard } from '@/lib/release-artist-verification';
 import { prisma } from "@/lib/prisma";
 import { refreshMissingSpotifyArtistPhotos, refreshSpotifyArtistPhoto } from "@/lib/spotify-artist-photos";
 import { createHash, randomUUID } from "node:crypto";
@@ -156,9 +157,10 @@ async function persistArtistLinks(tx: Prisma.TransactionClient, releaseId: numbe
   const card = matches[0];
   const binding = await tx.releaseArtistIdentity.findUnique({ where: { releaseId_artistCardId: { releaseId, artistCardId: card.id } } });
   // An older release's sync must never fill or rebind a corrected current card.
-  if (binding && (!snapshotMatchesCard(binding, card) || (binding.providerArtistId && binding.providerArtistId !== direNoteArtistId))) return false;
-  if (binding && !binding.providerArtistId) {
-    if (!direNoteArtistId || (binding.spotifyUrl && links.spotify?.id !== verifiedArtistStoreLinks({ spotify: binding.spotifyUrl }).spotify?.id) || (binding.appleUrl && links.apple?.id !== verifiedArtistStoreLinks({ apple: binding.appleUrl }).apple?.id)) return false;
+  if (binding && (!snapshotMatchesCard(binding, card) || (binding.providerArtistId && direNoteArtistId && binding.providerArtistId !== direNoteArtistId))) return false;
+  if (binding?.corrected && !binding.providerArtistId && !direNoteArtistId) return false;
+  if (binding && !binding.providerArtistId && direNoteArtistId) {
+    if ((binding.spotifyUrl && links.spotify?.id !== verifiedArtistStoreLinks({ spotify: binding.spotifyUrl }).spotify?.id) || (binding.appleUrl && links.apple?.id !== verifiedArtistStoreLinks({ apple: binding.appleUrl }).apple?.id)) return false;
     const prior = await tx.releaseArtistIdentity.findMany({ where: { artistCardId: card.id, providerArtistId: direNoteArtistId, id: { not: binding.id } } });
     if (prior.some(row => conflictsWithHistoricalIdentity(row, binding))) {
       const field = `artist_${card.id}_identity_reused`;
@@ -196,6 +198,16 @@ async function persistArtistLinks(tx: Prisma.TransactionClient, releaseId: numbe
       const discrepancy = await tx.direNoteReconciliationDiscrepancy.findFirst({ where: { releaseId, field: fieldName, status: "open" } });
       if (!discrepancy) await tx.direNoteReconciliationDiscrepancy.create({ data: { releaseId, field: fieldName, hymnValue: current, direNoteValue: received, severity: "warning" } });
     }
+  }
+  if (changed && binding && !binding.corrected) {
+    const updated = await tx.artistCard.findUniqueOrThrow({ where: { id: card.id } });
+    const identity = cardIdentity(updated);
+    await tx.releaseArtistIdentity.update({ where: { id: binding.id }, data: {
+      ...(!binding.spotifyUrl && identity.spotifyUrl ? { spotifyUrl: identity.spotifyUrl } : {}),
+      ...(!binding.appleUrl && identity.appleUrl ? { appleUrl: identity.appleUrl } : {}),
+      ...(!binding.youtubeUrl && identity.youtubeUrl ? { youtubeUrl: identity.youtubeUrl } : {}),
+      ...(!binding.confirmedAt ? { sourceFingerprint: artistIdentityFingerprint(updated) } : {})
+    } });
   }
   return changed;
 }
@@ -339,6 +351,10 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   if (!release) throw new Error("Release not found.");
   const releaseTiming = String(record(release.metadata).releaseTiming ?? "quick_release");
   const attempt = await ensureCurrentDireNoteAttempt(releaseId);
+  if (record(record(release.metadata).direNote).identifierAssignmentPending === true && ['queued', 'processing'].includes(attempt.providerStatus ?? '')) {
+    return { success: true, releaseId, attemptId: attempt.id, skipped: 'identifier_assignment_pending' as const };
+  }
+  const suppressAmendmentNotifications = Number(record(attempt.responseRedacted).amendmentRequestId) > 0;
   const corrections = record(attempt.corrections);
   if (corrections.status === "customer_resolved") {
     return { success: true, releaseId, attemptId: attempt.id, skipped: "corrections_resolved_waiting_for_resubmission" as const };
@@ -347,7 +363,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
   // Repair a stale local handoff projection before any status lookup, without
   // calling ingest again.
   if (["SUBMITTING_TO_DISTRIBUTOR", "QUEUED_FOR_DISTRIBUTION"].includes(release.status) && attempt.state === "submitted") {
-    await updateDetailedReleaseStatus(releaseId, "sent_to_distributor", "DireNote submission was already accepted; reconciliation repaired the stale handoff status.", undefined, { manualOverride: true, actorType: "system" });
+    await updateDetailedReleaseStatus(releaseId, "sent_to_distributor", "DireNote submission was already accepted; reconciliation repaired the stale handoff status.", undefined, { manualOverride: true, actorType: "system", notify: !suppressAmendmentNotifications });
     release.status = "SENT_TO_DISTRIBUTOR" as typeof release.status;
   }
   const attemptTracks = Array.isArray(attempt.trackIdentifiers) ? attempt.trackIdentifiers.map(record) : [];
@@ -521,6 +537,10 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     for (const cardId of selectedReleaseArtistIds(currentRelease.tracks, currentRelease.artistProfileId)) await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422030, ${cardId}::integer)`;
     const openDiscrepancies = new Set((await tx.direNoteReconciliationDiscrepancy.findMany({ where: { releaseId, status: "open" }, select: { field: true } })).map(item => item.field));
     const receivedUpc = normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc;
+    if (record(record(currentRelease.metadata).direNote).identifierAssignmentPending === true && (!receivedUpc || remoteTracks.length !== currentRelease.tracks.length || currentRelease.tracks.some(track => {
+      const remote = remoteTracks.find(row => matchDireNoteTrack(row, mappingTracks)?.id === track.id);
+      return !remote || !validIsrc(text(remote.isrc));
+    }))) throw new Error('The amended release is still awaiting a complete verified identifier set. Previous identifiers remain locked.');
     const replacingIdentifiers = record(record(currentRelease.metadata).direNote).reconciliationInProgress === true;
     if (receivedUpc && (!validReleaseBarcode(receivedUpc) || (!replacingIdentifiers && currentRelease.upc && currentRelease.upc !== receivedUpc))) {
       throw new Error("DireNote UPC conflicts with the stored release identity or has an invalid check digit. No identifiers were changed.");
@@ -582,8 +602,9 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       }
     }
     if (remoteUpc && remoteUpc !== release.upc) await tx.externalIdentifierHistory.create({ data: { releaseId, provider: "direnote", identifierType: "upc", previousValue: release.upc, canonicalValue: remoteUpc, source: "release_information_sync" } });
-    await tx.release.update({ where: { id: releaseId }, data: { ...(remoteUpc ? { upc: remoteUpc } : {}), direNoteStatus: aggregateStatus.provider, direNoteLastSyncedAt: new Date(), direNoteSyncError: null, metadata: json({ ...(record(release.metadata)), upcCode: remoteUpc ?? release.upc, direNote: { ...previousDireNote, reconciliationInProgress: false, lastSyncedAt: new Date().toISOString(), status: aggregateStatus.provider, release: redactDireNoteDiagnostic(remoteRelease), correctionMessages } }) } });
+    await tx.release.update({ where: { id: releaseId }, data: { ...(remoteUpc ? { upc: remoteUpc } : {}), direNoteStatus: aggregateStatus.provider, direNoteLastSyncedAt: new Date(), direNoteSyncError: null, metadata: json({ ...(record(release.metadata)), upcCode: remoteUpc ?? release.upc, direNote: { ...previousDireNote, reconciliationInProgress: false, identifierAssignmentPending: false, lastSyncedAt: new Date().toISOString(), status: aggregateStatus.provider, release: redactDireNoteDiagnostic(remoteRelease), correctionMessages } }) } });
   }, { timeout: 60_000, maxWait: 10_000 });
+  if (aggregateStatus.canonical === 'live') await completeArtistAmendment(releaseId, attempt.id, remoteTracks);
   const previousStatus = release.status.toLowerCase() as ReleaseStatus;
   if (artistLinksChanged) {
     await refreshMissingSpotifyArtistPhotos(release.userId).catch(() => undefined);
@@ -593,7 +614,10 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     (previousStatus === "live" && aggregateStatus.canonical !== "live") ||
     (previousStatus === "partially_live" && !["live", "partially_live"].includes(aggregateStatus.canonical ?? "")) ||
     (previousStatus === "rejected" && ["live", "partially_live"].includes(aggregateStatus.canonical ?? ""));
-  const providerAccepted = ["scheduled", "awaiting_live_confirmation", "partially_live", "live"].includes(aggregateStatus.provider);
+  const providerAccepted = ["scheduled", "awaiting_live_confirmation", "partially_live", "live"].includes(aggregateStatus.provider) ||
+    (hasVerifiedProviderListing && !providerCorrections.length && !explicitProviderStatus &&
+      (String(remoteRelease.status ?? payload.status ?? '').trim().toLowerCase() === 'accepted' ||
+        (remoteTracks.length > 0 && remoteTracks.every(track => /^(approved|accepted)$/i.test(String(track.status ?? '').trim())))));
   const customerWorkflow = !providerAccepted && ["changes_requested", "resubmitted", "under_review", "in_qc_queue", "in_queue", "submitted", "approved", "queued_for_distribution"].includes(previousStatus);
   const repeatCorrection = previousDireNote.appliedCorrectionFingerprint === correctionFingerprint;
   if (!staleRegression && aggregateStatus.canonical && (aggregateStatus.canonical !== previousStatus || (aggregateStatus.canonical === "changes_requested" && !repeatCorrection))
@@ -609,7 +633,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
         reviewedBy: "DireNote automation"
       };
       await updateDetailedReleaseStatus(releaseId, "changes_requested", reason, review, {
-        manualOverride: true, actorType: "system", notify: !repeatCorrection, reviewChanged: record(attempt.corrections).fingerprint !== correctionFingerprint,
+        manualOverride: true, actorType: "system", notify: !repeatCorrection && !suppressAmendmentNotifications, reviewChanged: record(attempt.corrections).fingerprint !== correctionFingerprint,
         persist: async tx => {
           if (record(attempt.corrections).fingerprint === correctionFingerprint) return;
           const currentRelease = await tx.release.findUniqueOrThrow({ where: { id: releaseId }, select: { metadata: true } });
@@ -628,7 +652,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
         await tx.release.update({ where: { id: releaseId }, data: { metadata: json({ ...record(current.metadata), direNote: { ...record(record(current.metadata).direNote), appliedCorrectionFingerprint: correctionFingerprint } }) } });
       });
     } else {
-      await updateDetailedReleaseStatus(releaseId, aggregateStatus.canonical, `DireNote status confirmed: ${aggregateStatus.provider}.`, undefined, { manualOverride: true, actorType: "system" });
+      await updateDetailedReleaseStatus(releaseId, aggregateStatus.canonical, `DireNote status confirmed: ${aggregateStatus.provider}.`, undefined, { manualOverride: true, actorType: "system", notify: !suppressAmendmentNotifications });
       if (providerAccepted) {
         await prisma.distributionSubmissionAttempt.update({ where: { id: attempt.id }, data: { corrections: json({ ...record(attempt.corrections), status: "closed", providerClearedAt: new Date().toISOString() }) } });
       }

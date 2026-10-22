@@ -117,7 +117,7 @@ export async function ensureDireNoteArtistMapping(cardId: number, releaseId: num
   }
 }
 
-export async function verifyReleaseArtistMappings(userId: number, releaseId: number, payload: DireNotePayload, actorId?: number | null) {
+export async function verifyReleaseArtistMappings(userId: number, releaseId: number, payload: DireNotePayload, actorId?: number | null, newIdentityCardIds: number[] = []) {
   const deadline = Date.now() + 45000;
   const artists = [...payload.artists, ...(payload.featuring_artists ?? []), ...payload.tracks.flatMap(track => [...(track.artists ?? []), ...(track.featuring_artists ?? [])])];
   // Payload names alone never authorize a provider write: require the exact saved store identity.
@@ -139,6 +139,6 @@ export async function verifyReleaseArtistMappings(userId: number, releaseId: num
     }
     const saved = savedArtistStoreLinks(card);
     if (saved.spotify && wanted.spotify?.id !== saved.spotify.id || saved.apple && wanted.apple?.id !== saved.apple.id) throw Error('A saved store profile is missing or different in the artist delivery payload. Refresh the release before delivery.');
-    if (!checked.has(card.id)) { checked.add(card.id); await ensureDireNoteArtistMapping(card.id, releaseId, actorId, deadline); }
+    if (!checked.has(card.id)) { checked.add(card.id); if (!newIdentityCardIds.includes(card.id)) await ensureDireNoteArtistMapping(card.id, releaseId, actorId, deadline); }
   }
 }
