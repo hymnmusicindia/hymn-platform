@@ -28,7 +28,7 @@ import {
 import { automaticStatusCopy } from "@/lib/release-status-engine";
 import { effectiveReleaseStatus } from "@/lib/release-status-presentation";
 import { ReleaseSummaryCard } from "@/components/release-summary-card";
-import { AddReleaseCard } from "@/components/add-release-card";
+import catalogueStyles from "./release-catalogue.module.css";
 
 import detailStyles from "./release-detail.module.css";
 
@@ -436,7 +436,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
   if (activeView !== "releases") {
     const totalStreams = sortedReleases.reduce((sum, release) => sum + Number(release.analytics?.streams_total || 0), 0);
     const totalRevenue = sortedReleases.reduce((sum, release) => sum + Number(release.analytics?.revenue_total || 0), 0);
-    return <div className="release-portal-page grid gap-6 xl:gap-8">{dashboardNav}
+    return <div className={`${catalogueStyles.catalogue} release-portal-page grid gap-6 xl:gap-8`}>{dashboardNav}
       {activeView === "promotion" ? <section className="surface-card p-5 sm:p-6"><h1 className="text-4xl font-semibold tracking-tight">Promotion</h1><p className="mt-3" style={{ color: "var(--text-muted)" }}>Choose a release to start planning its campaign and promotional support.</p><div className="mt-6 grid gap-3">{sortedReleases.map((release) => <div key={release.id} className="flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div><p className="font-semibold">{release.releaseTitle || release.trackName}</p><p className="mt-1 text-sm capitalize" style={{ color: "var(--text-muted)" }}>{getReleasePortalStageLabel(getReleasePortalStage(release))}</p></div><Link href={`/contact?releaseId=${release.id}`} className="btn-outline pressable text-center">Promote release</Link></div>)}</div></section> : null}
       {activeView === "trends" ? <section className="surface-card p-5 sm:p-6"><h1 className="text-4xl font-semibold tracking-tight">Trends</h1><p className="mt-3" style={{ color: "var(--text-muted)" }}>A catalogue-level view of reported audience activity.</p><div className="mt-6 grid gap-4 sm:grid-cols-3"><div className="metric-card p-5"><p className="text-sm" style={{ color: "var(--text-muted)" }}>Reported streams</p><p className="mt-2 text-2xl font-semibold">{totalStreams.toLocaleString()}</p></div><div className="metric-card p-5"><p className="text-sm" style={{ color: "var(--text-muted)" }}>Live releases</p><p className="mt-2 text-2xl font-semibold">{stats.released}</p></div><div className="metric-card p-5"><p className="text-sm" style={{ color: "var(--text-muted)" }}>Scheduled</p><p className="mt-2 text-2xl font-semibold">{stats.scheduled}</p></div></div><Link href="/analytics" className="btn-primary pressable mt-6 inline-flex">Open detailed analytics</Link></section> : null}
       {activeView === "earnings" ? <section className="surface-card p-5 sm:p-6"><h1 className="text-4xl font-semibold tracking-tight">Earnings</h1><p className="mt-3" style={{ color: "var(--text-muted)" }}>Review reported release revenue and open your payout ledger.</p><div className="metric-card mt-6 p-5"><p className="text-sm" style={{ color: "var(--text-muted)" }}>Recorded release earnings</p><p className="mt-2 text-3xl font-semibold">₹{totalRevenue.toLocaleString()}</p></div><Link href="/payout" className="btn-primary pressable mt-6 inline-flex">Open payout statements</Link></section> : null}
@@ -532,7 +532,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
 
   if (sortedReleases.length === 0) {
     return (
-      <div className="release-portal-page grid gap-6">
+      <div className={`${catalogueStyles.catalogue} release-portal-page grid gap-6`}>
         <EmptyState
           title="You have no releases yet"
           description="Start your first distribution and keep everything organized from one clean control center."
@@ -544,22 +544,14 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
   }
 
   return (
-    <div className="release-portal-page grid gap-6 xl:gap-8">
+    <div className={`${catalogueStyles.catalogue} release-portal-page grid gap-6 xl:gap-8`}>
       {draftRelease ? (
-        <section className="release-draft-resume-card surface-card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-          <div>
-            <p className="release-dashboard-kicker">Draft in progress</p>
-            <h2 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>Continue your draft release</h2>
-            <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
-              Pick up {draftRelease.releaseTitle?.trim() || draftRelease.trackName} from where you left off.
-            </p>
-            <ol className="draft-readiness" aria-label="Draft preparation">
-              {[{ label: "Audio", ready: Boolean(draftRelease.audioUrl || draftRelease.tracks?.some(track => track.audioUrl)) }, { label: "Artwork", ready: Boolean(draftRelease.artworkUrl) }, { label: "Release date", ready: Boolean(draftRelease.releaseDate) }].map(item => <li key={item.label} data-ready={item.ready}><span aria-hidden="true">{item.ready ? "✓" : "○"}</span>{item.label}<span className="sr-only">{item.ready ? " added" : " needed"}</span></li>)}
-            </ol>
+        <section className={catalogueStyles.draft} aria-label="Continue your draft">
+          <div className={catalogueStyles.draftArtwork}>
+            {draftRelease.artworkUrl ? <Image src={artworkPreviewUrl(draftRelease.artworkUrl, 160)} alt="" fill sizes="56px" className="object-cover" unoptimized /> : <Disc3 size={24} strokeWidth={1.5} aria-hidden="true" />}
           </div>
-          <Link href={getReleasePortalAction(draftRelease).href} className="release-draft-resume-action inline-flex w-full items-center justify-center rounded-full px-5 py-3 font-semibold transition hover:-translate-y-0.5 sm:w-auto" style={{ background: "var(--money)", color: "var(--money-foreground)", boxShadow: "0 16px 38px rgba(245,193,108,0.16)" }}>
-            Finish your release <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </Link>
+          <h2>{draftRelease.releaseTitle?.trim() || draftRelease.trackName || "Untitled release"}</h2>
+          <Link href={getReleasePortalAction(draftRelease).href}>Continue release <ArrowRight size={17} strokeWidth={1.5} aria-hidden="true" /></Link>
         </section>
       ) : null}
 
@@ -569,7 +561,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-2xl">
             <h1 className="text-4xl font-semibold tracking-tight" style={{ color: "var(--text)" }}>My releases</h1>
-            <p className="mt-3 text-base" style={{ color: "var(--text-muted)" }}>Manage and track all your music releases.</p>
+            <p className="mt-3 text-base" style={{ color: "var(--text-muted)" }}>Your music, all in one place.</p>
           </div>
           <div className="release-library-toolbar flex w-full flex-col gap-2 sm:flex-row lg:max-w-2xl lg:justify-end"><label className="release-search-control relative min-w-0 flex-1">
             <span className="sr-only">Search title, artist, UPC or ISRC</span>
@@ -647,7 +639,6 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
           ]}/>
         ) : (
           <div className="release-library-grid grid grid-cols-1 justify-items-center gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            <AddReleaseCard />
             {visibleReleases.map((release) => <ReleaseCard key={release.id} release={release} selected={release.id === selectedReleaseId} />)}
           </div>
         )}
