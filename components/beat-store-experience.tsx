@@ -5,10 +5,11 @@ import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowDown, ArrowLeft, ArrowRight, Check, ChevronDown, Disc3, ExternalLink, Filter, Gauge, Globe2, Instagram, Music2, Search, ShoppingBag, Sparkles, Users2, WandSparkles, X, Youtube } from "lucide-react";
+import { Headphones, SlidersHorizontal, ArrowLeft, ArrowRight, Check, ChevronDown, Disc3, Filter, Gauge, Music2, Search, ShoppingBag, Sparkles, Users2, WandSparkles, X } from "lucide-react";
 import { beatLicenseLabel, beatLicensePrice, buildBeatStorefront, normalizeBeatLicenseType, type BeatStoreLicenseType, type StorefrontBeat } from "@/lib/beat-store";
 import type { Beat, ProducerProfile } from "@/lib/types";
 import { BeatCard } from "@/components/beat-card";
+import storeStyles from "./beat-store.module.css";
 import { BeatStoreHero } from "@/components/beat-store-hero";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import { useBeatPreviewPlayer } from "@/components/beat-preview-player";
@@ -282,10 +283,6 @@ function replaceBrokenImage(event: SyntheticEvent<HTMLImageElement>, fallback: s
   image.src = fallback;
 }
 
-function SpotifyMark({ className = "h-4 w-4" }: { className?: string }) {
-  return <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true"><path d="M12 1.8A10.2 10.2 0 1 0 12 22.2 10.2 10.2 0 0 0 12 1.8Zm4.68 14.7a.64.64 0 0 1-.88.21c-2.4-1.47-5.43-1.8-8.99-.99a.64.64 0 1 1-.28-1.25c3.9-.89 7.25-.51 9.94 1.13.3.18.4.58.21.9Zm1.25-2.77a.8.8 0 0 1-1.1.26c-2.75-1.69-6.95-2.18-10.2-1.19a.8.8 0 1 1-.47-1.53c3.72-1.13 8.35-.59 11.5 1.35.38.23.5.73.27 1.11Zm.11-2.89C14.74 8.88 9.3 8.7 6.15 9.66a.96.96 0 1 1-.56-1.84c3.62-1.1 9.63-.89 13.43 1.36a.96.96 0 0 1-.98 1.66Z" /></svg>;
-}
-
 export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: Beat[]; producerProfiles?: ProducerProfile[] }) {
   const searchParams = useSearchParams();
   const displayProducerProfiles = producerProfiles;
@@ -309,8 +306,6 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
   const [selectedProducerSlug, setSelectedProducerSlug] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("newest");
-  const [previewProducerIndex, setPreviewProducerIndex] = useState(0);
-  const [producerDetailsOpen, setProducerDetailsOpen] = useState(false);
   const [sectionState, setSectionState] = useState<Record<SectionKey, boolean>>({ genre: true, mood: true, bpm: true, key: true });
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
@@ -343,22 +338,8 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
   }, [genres, moods, searchParams]);
 
   const selectedProducer = useMemo(() => displayProducerProfiles.find((producer) => producer.slug === selectedProducerSlug) ?? null, [displayProducerProfiles, selectedProducerSlug]);
-  const previewProducer = displayProducerProfiles[previewProducerIndex % Math.max(displayProducerProfiles.length, 1)] ?? null;
+  const previewProducer = displayProducerProfiles[0] ?? null;
   const spotlightProducer = selectedProducer ?? previewProducer;
-  const otherProducers = useMemo(() => displayProducerProfiles.filter((producer) => producer.slug !== spotlightProducer?.slug).slice(0, 5), [displayProducerProfiles, spotlightProducer?.slug]);
-  const producerSocials = spotlightProducer ? [
-    { label: "Instagram", href: spotlightProducer.instagramUrl, icon: <Instagram className="h-4 w-4" /> },
-    { label: "YouTube", href: spotlightProducer.youtubeUrl, icon: <Youtube className="h-4 w-4" /> },
-    { label: "Spotify", href: spotlightProducer.spotifyUrl, icon: <SpotifyMark /> },
-    { label: "Website", href: spotlightProducer.websiteUrl, icon: <Globe2 className="h-4 w-4" /> }
-  ].filter((item) => Boolean(item.href)) : [];
-  useEffect(() => {
-    if (selectedProducerSlug !== null || displayProducerProfiles.length < 2) return;
-    const timer = window.setInterval(() => {
-      setPreviewProducerIndex((current) => (current + 1) % displayProducerProfiles.length);
-    }, 3500);
-    return () => window.clearInterval(timer);
-  }, [displayProducerProfiles.length, selectedProducerSlug]);
 
   useEffect(() => {
     setDraftBpmMin(bpmMin);
@@ -643,7 +624,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
         {cartNotice?.action === "removed" && cartNotice.item ? <button type="button" className="shrink-0 underline underline-offset-4" onClick={() => { const item = cartNotice.item!; setCart(current => [...current.filter(entry => !(entry.beatId === item.beatId && entry.licenseType === item.licenseType)), item]); setCartNotice({ beatTitle: cartNotice.beatTitle, action: "added" }); }}>Undo</button> : null}
       </div>
 
-      <section className="mx-auto max-w-[1700px] pb-10 pt-0 lg:pb-14">
+      <section className={`${storeStyles.store} mx-auto max-w-[1700px] pb-10 pt-0 lg:pb-14`}>
         <BeatStoreHero
           moods={quickMoods}
           producer={spotlightProducer}
@@ -655,74 +636,17 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
             document.getElementById("beat-catalog")?.scrollIntoView({ behavior: "smooth", block: "start" });
           }}
         />
-        <section className="hidden">
-          <div className="pointer-events-none absolute -right-20 -top-36 h-96 w-96 rounded-full border-[70px] border-[color-mix(in_srgb,var(--accent)_42%,transparent)] opacity-75" />
-          <div className="pointer-events-none absolute bottom-[-8rem] right-[22%] h-72 w-72 rounded-full border border-white/10" />
-          <div className="relative grid gap-8 p-6 sm:p-9 lg:grid-cols-[1.1fr_.9fr] lg:items-end lg:p-12">
-            <div>
-              <h1 className="max-w-3xl text-4xl font-semibold leading-[.95] tracking-[-.055em] sm:text-6xl">Don’t browse forever.<br /><span className="text-[var(--accent)]">Hear your record.</span></h1>
-              <p className="mt-5 max-w-xl text-sm leading-6 opacity-65 sm:text-base">Start with the beat. Mix and master with HYMN. Send the finished record worldwide—all in one connected run.</p>
-              <div className="mt-5 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[.14em]"><span className="rounded-full border border-white/15 px-3 py-1.5">01 Pick a beat</span><span className="opacity-35">→</span><span className="rounded-full border border-white/15 px-3 py-1.5">02 Mix + master</span><span className="opacity-35">→</span><span className="rounded-full border border-white/15 px-3 py-1.5">03 Release worldwide</span></div>
-              <div className="mt-7 flex flex-wrap gap-2">
-                {quickMoods.map((mood) => <button key={mood} type="button" onClick={() => findMyBeat(mood)} className="rounded-full border border-white/15 bg-white/[.06] px-4 py-2.5 text-xs font-semibold transition hover:-translate-y-0.5 hover:border-[var(--accent)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]">{mood}</button>)}
-                <button type="button" onClick={() => findMyBeat()} className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-4 py-2.5 text-xs font-semibold text-[var(--accent-foreground)] transition hover:scale-[1.03]"><WandSparkles className="h-4 w-4" />Surprise me</button>
-                <button type="button" onClick={() => setBeatFinderOpen(true)} className="inline-flex items-center gap-2 rounded-full border border-white/25 px-4 py-2.5 text-xs font-semibold transition hover:border-white/60 hover:bg-white/10"><Sparkles className="h-4 w-4" />Need a beat for your banger?</button>
-              </div>
-            </div>
-            <div className="rounded-[1.5rem] border border-white/10 bg-white/[.06] p-5 backdrop-blur-md">
-              <p className="text-xs font-semibold uppercase tracking-[.18em] opacity-50">A human marketplace</p>
-              <p className="mt-3 text-xl font-medium leading-7">“The right beat should make you reach for the mic before the preview ends.”</p>
-              <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4 text-xs"><span className="opacity-60">Picked by ears. Checked by people.</span><Link href="/producer-login" className="font-semibold text-[var(--accent)]">Sell your beats →</Link></div>
-            </div>
-          </div>
-        </section>
-        <div className="hidden">
-          <div key={selectedProducer?.slug ?? "all-producers"} className="fade-up mt-3 overflow-hidden rounded-[1.75rem] border border-[var(--border)] bg-[var(--card)] shadow-[0_16px_45px_rgba(0,0,0,0.1)]">
-            <div className="grid md:min-h-[230px] md:grid-cols-[1.35fr_.65fr]">
-              <div key={spotlightProducer?.slug ?? "producer-room"} className="producer-spotlight-enter relative z-10 flex flex-col justify-center bg-[var(--card)] p-6 sm:p-8">
-                {selectedProducer ? <p className="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">Producer spotlight</p> : null}
-                <h3 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[var(--text)] sm:text-4xl">{spotlightProducer ? spotlightProducer.name || "Unnamed producer" : "Find the beat. Build the record."}</h3>
-                <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--text-muted)]">
-                  {spotlightProducer ? spotlightProducer.description || `${spotlightProducer.specialty || "Distinctive sounds"}, shaped for artists building their next release.` : "Move across distinct sounds, moods, and creative perspectives to find the right foundation for your next record."}
-                </p>
-                 <div className="mt-5 flex flex-wrap items-center gap-3">
-                   {!producerDetailsOpen ? <button type="button" onClick={() => { if (spotlightProducer) setSelectedProducerSlug(spotlightProducer.slug); setProducerDetailsOpen(true); }} className="btn-primary inline-flex">Browse catalog<ArrowDown className="ml-2 h-4 w-4" /></button> : <div className="producer-connect-panel rounded-[1.35rem] border border-[var(--border)] bg-[var(--bg-soft)] p-4 sm:p-5">
-                     <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-[var(--text-soft)]">Connect with {spotlightProducer?.name || "producer"}</p><a href="#beat-catalog" className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--text)] transition hover:text-[var(--accent)]">View beats <ArrowDown className="h-3.5 w-3.5" /></a></div>
-                     {producerSocials.length ? <div className="mt-3 flex flex-wrap gap-2">{producerSocials.map((social) => <a key={social.label} href={social.href!} target="_blank" rel="noreferrer" className="group inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--card)] px-3.5 py-2 text-xs font-semibold text-[var(--text)] shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-md" aria-label={`Open ${spotlightProducer?.name || "producer"} on ${social.label}`}>{social.icon}<span>{social.label}</span><ExternalLink className="h-3 w-3 text-[var(--text-soft)] transition group-hover:text-[var(--text)]" /></a>)}</div> : <p className="mt-3 text-xs leading-5 text-[var(--text-muted)]">This producer has not added public social links yet.</p>}
-                     {otherProducers.length ? <div className="mt-4 border-t border-[var(--border)] pt-4"><p className="text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-[var(--text-soft)]">Discover another producer</p><div className="mt-2.5 flex flex-wrap gap-2">{otherProducers.map((producer) => <button key={producer.slug} type="button" onClick={() => { setSelectedProducerSlug(producer.slug); setPreviewProducerIndex(Math.max(0, displayProducerProfiles.findIndex((item) => item.slug === producer.slug))); }} className="group inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--card)] py-1.5 pl-1.5 pr-3 text-left transition hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-md" aria-label={`Show ${producer.name || "producer"}`}><span className="relative h-7 w-7 shrink-0 overflow-hidden rounded-full bg-[var(--surface)] ring-1 ring-[var(--border)]"><img src={producer.avatarUrl || producer.imageUrl || getFallbackImage(producer.id)} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" onError={(event) => replaceBrokenImage(event, getFallbackImage(producer.id))} /></span><span className="max-w-28 truncate text-xs font-semibold text-[var(--text)]">{producer.name || "Producer"}</span></button>)}</div></div> : null}
-                   </div>}<Link href="/producer-login" className="btn-outline inline-flex">Sell your beats</Link>
-                 </div>
-              </div>
-              <div className="hidden min-h-0 flex-col overflow-hidden border-l border-[var(--border)] bg-[var(--bg-soft)] md:flex">
-                <div className="relative min-h-[230px] flex-1 overflow-hidden bg-[radial-gradient(circle_at_60%_32%,color-mix(in_srgb,var(--accent)_16%,var(--bg-soft)),var(--bg-soft)_65%)]">
-                  {selectedProducer || previewProducer ? (
-                    <img
-                      key={(selectedProducer ?? previewProducer)?.slug}
-                      src={(selectedProducer ?? previewProducer)?.imageUrl || getFallbackImage((selectedProducer ?? previewProducer)!.id)}
-                      alt={`${(selectedProducer ?? previewProducer)?.name || "Unnamed producer"} producer portrait`}
-                      loading="eager"
-                      decoding="async"
-                      className="producer-spotlight-enter absolute inset-0 h-full w-full object-cover object-[center_28%]"
-                      onError={(event) => replaceBrokenImage(event, getFallbackImage((selectedProducer ?? previewProducer)!.id))}
-                    />
-                  ) : <Disc3 className="absolute left-1/2 top-1/2 h-52 w-52 -translate-x-1/2 -translate-y-1/2 text-[var(--accent)] opacity-15 sm:h-64 sm:w-64" />}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div id="beat-catalog" className="scroll-mt-24">
           <div className="space-y-5">
-            <div className="surface-card p-5">
+            <div className={storeStyles.catalogueToolbar}>
               <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-semibold text-[var(--text)]">{selectedProducer ? `Beats by ${selectedProducer.name || "Unnamed producer"}` : "All Beats"}</h2>
+                <h2 className="text-2xl font-semibold text-[var(--text)]">{selectedProducer ? `Beats by ${selectedProducer.name || "Unnamed producer"}` : "Find your next sound"}</h2>
                 <p className="mt-2 text-sm text-[var(--text-soft)]">
-                  Showing {visibleBeats.length} of {filteredBeats.length} beats.
+                  {filteredBeats.length} {filteredBeats.length === 1 ? "beat" : "beats"} to explore. Preview, compare, make it yours.
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-3">
+              <div className={`${storeStyles.toolbarActions} flex flex-wrap items-center gap-3`}>
                 <button type="button" onClick={() => setBeatFinderOpen(true)} className="btn-outline inline-flex">
                   <WandSparkles className="mr-2 h-4 w-4" />
                   Find my beat
@@ -731,7 +655,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
                   <Filter className="mr-2 h-4 w-4" />
                   Filters
                 </button>
-                <button type="button" onClick={clearFilters} className="btn-outline hidden sm:inline-flex">
+                <button type="button" onClick={() => { clearFilters(); setSearchQuery(""); }} className="btn-outline hidden sm:inline-flex">
                   Clear filters
                 </button>
                 <button type="button" onClick={() => setCartOpen(true)} className="btn-primary inline-flex">
@@ -739,15 +663,18 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
                   Cart ({cart.length})
                 </button>
               </div>
-              <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
-                {genres.slice(0, 8).map((genre) => <button key={genre} type="button" onClick={() => setSelectedGenres((current) => toggleSelection(current, genre))} className={`shrink-0 rounded-full border px-3.5 py-2 text-xs font-semibold transition ${selectedGenres.includes(genre) ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text)]" : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--border-strong)]"}`}>{genre}</button>)}
+              <div className={storeStyles.genreRail} aria-label="Browse genres">
+                {genres.slice(0, 8).map((genre) => <button key={genre} type="button" aria-pressed={selectedGenres.includes(genre)} onClick={() => setSelectedGenres((current) => toggleSelection(current, genre))} className={`shrink-0 rounded-full border px-3.5 py-2 text-xs font-semibold transition ${selectedGenres.includes(genre) ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text)]" : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--border-strong)]"}`}>{genre}</button>)}
               </div>
               </div>
-              <div className="mt-5 grid gap-3 border-t border-[var(--border)] pt-4 md:grid-cols-[minmax(0,1fr)_210px]">
+              <div className={`${storeStyles.searchControls} mt-5 grid gap-3 border-t border-[var(--border)] pt-4 md:grid-cols-[minmax(0,1fr)_150px_170px]`}>
                 <label className="relative block">
                   <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-soft)]" />
                   <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="field w-full rounded-xl pl-11" placeholder="Search beats, producers, moods, BPM or key" aria-label="Search beat catalog" />
                 </label>
+                <select aria-label="Budget" className="field w-full rounded-xl" value={onboardingBudgetMax ?? "all"} onChange={event => setOnboardingBudgetMax(event.target.value === "all" ? null : Number(event.target.value))}>
+                  <option value="all">Any budget</option>{onboardingBudgetMax !== null && ![500, 1000, 2500].includes(onboardingBudgetMax) ? <option value={onboardingBudgetMax}>Up to &#8377;{onboardingBudgetMax.toLocaleString("en-IN")}</option> : null}<option value="500">Up to &#8377;500</option><option value="1000">Up to &#8377;1,000</option><option value="2500">Up to &#8377;2,500</option>
+                </select>
                 <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} className="field w-full rounded-xl" aria-label="Sort beats">
                   <option value="newest">Newest</option>
                   <option value="price-asc">Price: low to high</option>
@@ -815,10 +742,15 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
                   Load more
                 </button>
               ) : null}
-              {filteredBeats.length === 0 ? <div className="flex flex-wrap items-center justify-center gap-3 text-sm text-[var(--text-soft)]"><span>No beats match your search and filters.</span><button type="button" onClick={() => { clearFilters(); setSearchQuery(""); }} className="underline underline-offset-4 text-[var(--text)]">Clear search and filters</button></div> : <span className="text-sm text-[var(--text-soft)]">Auto-load keeps the browse session moving.</span>}
+              {filteredBeats.length === 0 ? <div className="flex flex-wrap items-center justify-center gap-3 text-sm text-[var(--text-soft)]"><span>No beats match your search and filters.</span><button type="button" onClick={() => { clearFilters(); setSearchQuery(""); }} className="underline underline-offset-4 text-[var(--text)]">Clear search and filters</button></div> : <span className="text-sm text-[var(--text-soft)]">{visibleCount < filteredBeats.length ? "Keep exploring to hear more." : "You have reached the end. Try another mood or genre."}</span>}
             </div>
           </div>
         </div>
+        <section className={storeStyles.guide} aria-labelledby="beat-licence-guide">
+          <div><p className={storeStyles.eyebrow}>FROM FIRST PLAY TO FIRST TAKE</p><h2 id="beat-licence-guide">The sound is yours to choose.<br /><span>Know what comes with it.</span></h2><p>Every project is different. Compare file formats and read the selected beat's licence terms before you buy.</p></div>
+          <div className={storeStyles.steps}><div><Headphones size={20}/><h3>Listen first</h3><p>Try a few sounds. Preview the beat and find space for your voice.</p></div><div><SlidersHorizontal size={20}/><h3>Choose your licence</h3><p>Compare the available formats, price and usage rights for your project.</p></div><div><ShoppingBag size={20}/><h3>Make it your next song</h3><p>Complete checkout, then access your purchased files and agreement from My purchases.</p></div></div>
+          <details><summary>Which licence should I choose?<ChevronDown size={16}/></summary><div className={storeStyles.licences}><p><strong>MP3</strong>A compressed audio file for working with the full beat.</p><p><strong>WAV</strong>Uncompressed audio for your recording and mixing session.</p><p><strong>Stems</strong>Separate audio parts for more control over your mix.</p><p><strong>Exclusive</strong>Review the exclusive agreement and any earlier licences. Rights follow the contract.</p></div><p className={storeStyles.termsNote}>File format alone does not determine usage rights. Check stream limits, credits, monetisation and Content ID permissions in the beat's agreement.</p></details>
+        </section>
       </section>
     </>
   );
