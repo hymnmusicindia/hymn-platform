@@ -826,6 +826,15 @@ export async function updateDetailedReleaseStatus(releaseId: number, status: Rel
           ...(review ? { rejectionReason: status === "rejected" ? review.reason : undefined, correctionReason: status === "changes_requested" ? review.reason : undefined, reviewIssues: reviewIssues as any, adminInternalNote: review.adminInternalNote || null, reviewedAt: new Date(), reviewedBy: review.reviewedBy ?? null } : {})
         } });
         if (changed.count !== 1) throw new Error("Release changed concurrently. Refresh and retry.");
+        if (['approved','changes_requested','rejected','archived'].includes(status)) {
+          const row = await tx.release.findUniqueOrThrow({where:{id:releaseId},select:{metadata:true}});
+          const meta = row.metadata as Record<string,unknown>|null;
+          const marker = meta?.correctionReview as {submissionKey?:string}|undefined;
+          if (marker?.submissionKey) {
+            await tx.adminTask.updateMany({where:{eventKey:`release:${releaseId}:correction-review:${marker.submissionKey}`,status:{not:'resolved'}},data:{status:'resolved',resolvedAt:new Date(),resolutionNote:note||`Review decision: ${status}`}});
+            await tx.release.update({where:{id:releaseId},data:{metadata:JSON.parse(JSON.stringify({...meta,correctionReview:{...marker,status,reviewedAt:new Date().toISOString()}}))}});
+          }
+        }
         await tx.releaseStatusTransition.create({ data: { releaseId, previousStatus: current.status, newStatus: status.toUpperCase() as any, actorType: options?.actorType ?? (review?.reviewedBy ? "admin" : "system"), actorId: options?.actorId ?? null, reason: note?.trim() || null, metadata: { manualOverride: Boolean(options?.manualOverride) } } });
         await tx.auditLog.create({ data: { actorId: options?.actorId ?? null, action: "RELEASE_STATUS_TRANSITION", entity: "release", entityId: String(releaseId), metadata: { previousStatus, newStatus: status, reason: note?.trim() || null, version: current.version + 1, manualOverride: Boolean(options?.manualOverride) } } });
         const { queueReleaseStatusUpdate } = await import("@/lib/email/release-outbox");
@@ -1533,14 +1542,14 @@ export async function updatePaidDistributionRelease(input: {
           const attempt = await tx.distributionSubmissionAttempt.findFirst({ where: { releaseId: input.releaseId, provider: "direnote", isCurrent: true } });
           if (attempt) await tx.distributionSubmissionAttempt.update({ where: { id: attempt.id }, data: { corrections: { ...(typeof attempt.corrections === "object" && attempt.corrections ? attempt.corrections : {}), status: "customer_resolved", artistResolvedAt: new Date().toISOString() } } });
         }
+        const { finalizeReleaseReviewHandoff } = await import('./release-review-handoff');
+        await finalizeReleaseReviewHandoff(tx, { releaseId: input.releaseId, userId: input.userId, submissionKey: input.submissionKey });
       }, releaseSaveTransactionOptions);
       const reviewReason = "Paid release metadata was submitted for review.";
-      const currentStatus = String(existingRelease.status ?? "").trim().toLowerCase();
-      const notificationOptions = input.deferStatusNotifications ? { notify: false } : undefined;
-      if (currentStatus === "changes_requested" || currentStatus === "rejected") await updateDetailedReleaseStatus(input.releaseId, "resubmitted", reviewReason, undefined, notificationOptions);
-      else if (currentStatus === "draft" || currentStatus === "awaiting_payment") await updateDetailedReleaseStatus(input.releaseId, "submitted", reviewReason, undefined, notificationOptions);
-      await updateDetailedReleaseStatus(input.releaseId, "under_review", reviewReason, undefined, notificationOptions);
-      await createDistributionQueueEntry({ releaseId: input.releaseId, initialStage: "quality_check", notes: "Draft completed and submitted for HYMN review." });
+      if (!input.deferStatusNotifications && !input.submissionKey) {
+        const reviewed = await getDetailedReleaseByUserId(input.userId, input.releaseId);
+        if (reviewed) await notifyReleaseStatusChange(reviewed, 'under_review', reviewReason);
+      }
       return getDetailedReleaseByUserId(input.userId, input.releaseId);
     }
     const release = memory.releases.find((item) => item.id === input.releaseId && item.userId === input.userId);

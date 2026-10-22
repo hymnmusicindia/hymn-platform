@@ -207,7 +207,7 @@ export async function POST(request: Request) {
       await prisma.releaseAssetLink.createMany({ data: libraryLinks.filter((item) => allowed.has(item.assetId)).map((item) => ({ ...item, role: "TRACK_AUDIO_MASTER" })), skipDuplicates: true });
     }
 
-    after(async () => { await notifyReleaseStatusChange(release, "under_review", "Your corrections were received for HYMN review.").catch(error => console.error("Correction confirmation deferred", { releaseId: release.id, error })); });
+    if (!(release.metadata?.correctionReview as { submissionKey?: string } | undefined)?.submissionKey) after(async () => { await notifyReleaseStatusChange(release, "under_review", "Your corrections were received for HYMN review.").catch(error => console.error("Correction confirmation deferred", { releaseId: release.id, error })); });
     return NextResponse.json({ release });
   } catch (error) {
     if (error instanceof ArtistVerificationError) return NextResponse.json({ error: error.message, code: 'ARTIST_PROFILE_CONFIRMATION_REQUIRED' }, { status: 409 });

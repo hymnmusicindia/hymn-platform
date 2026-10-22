@@ -17,8 +17,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     let releaseAdmin = false;
     if (!admin && user) {
       const linked = await prisma.storedAsset.findUnique({ where: { id: assetId }, select: { ownerUserId: true, assetType: true, releaseId: true, category:true, entityType:true, releaseAssetLinks: { select: { id: true }, take: 1 } } });
-      if (linked?.ownerUserId !== user.sub && linked?.assetType === "private_audio_master" && (linked.releaseId || linked.releaseAssetLinks.length)) {
-        releaseAdmin = !('error' in await requireAdminPermission("releases.read"));
+      if (linked && linked.ownerUserId !== user.sub && ["private_audio_master", "private_ownership_proof", "private_unreleased_artwork"].includes(linked.assetType) && (linked.releaseId || linked.releaseAssetLinks.length)) {
+        releaseAdmin = !('error' in await requireAdminPermission("releases.review")) || !('error' in await requireAdminPermission("releases.read"));
       }
       if(linked?.ownerUserId !== user.sub && linked?.assetType==='private_ownership_proof' && linked.entityType==='BEAT' && linked.category==='BEAT_SAMPLE_LICENSE') releaseAdmin = !('error' in await requireAdminPermission('users.manage'));
     }

@@ -26,6 +26,11 @@ async function main() {
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("acquisition_fixture");
+    if (process.argv.includes('--review-handoff-only')) {
+      await run(['node_modules/prisma/build/index.js','db','push','--skip-generate']);
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-review-handoff.ts']);
+      return;
+    }
     if (process.argv.includes('--amendment-identifiers-only')) {
       await run(['node_modules/prisma/build/index.js', 'db', 'push', '--skip-generate']);
       await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-amendment-identifiers.ts']);

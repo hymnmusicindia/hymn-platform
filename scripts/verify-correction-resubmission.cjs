@@ -27,6 +27,8 @@ let release = { id: 83, userId: 1, status: 'under_review', paymentStatus: 'paid'
 let session = { sub: 1 };
 let failNextRead = false;
 const mocks = {
+  '@/lib/release-artist-verification': {assertReleaseArtistVerification:async()=>{},selectedReleaseArtistIds:()=>[],ArtistVerificationError:class extends Error{}},
+  '@/lib/policy-agreement': {requireCurrentPolicyAcceptance:async()=>null},
   'node:crypto': crypto,
   'next/server': { NextResponse: { json: (data, init) => new Response(JSON.stringify(data), init) } },
   '@/lib/release-correction-workflow': workflow,
@@ -56,7 +58,7 @@ const request = () => ({ formData: async () => new Map([['payload', JSON.stringi
   session = null;
   assert.equal((await POST(request())).status, 401);
   const form = fs.readFileSync('components/release-form.tsx', 'utf8');
-  assert.match(form, /initialRelease && releaseAlreadyInReview\(initialRelease.status\) \? initialRelease : null/);
+  assert.match(form, /!amendmentMode && initialRelease && \(releaseAlreadyInReview\(initialRelease.status\)/);
   assert.equal((form.match(/hidden=\{Boolean\(initialRelease && initialRelease.status !== "draft"\)\}/g) || []).length, 2);
   assert.equal((form.match(/help=\{<LanguageFieldHelp/g) || []).length, 2);
   console.log('PASS exact correction retry, locked/mismatched payload, ownership, authentication, instrumental and independent track language, review-state and Draft UI guards.');
