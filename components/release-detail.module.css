@@ -26,3 +26,19 @@
 .page :global(.release-manage-information) :global(.summary-card)>span{width:auto!important;max-width:65%}
 .page :global(.release-manage-information) :global(.summary-card)>span:last-child{text-align:right!important}
 @media(max-width:640px){.page .summary h1{font-size:25px}.page :global(.release-manage-information) :global(.summary-card){gap:16px}}
+
+/* Artwork extends behind the complete release header and fades into the page. */
+.page .hero{border:0;border-radius:24px 24px 0 0;background:var(--bg);padding:28px 32px 0}
+.page .backdrop{inset:-12%;z-index:0;opacity:.72;filter:blur(38px) saturate(.8);transform:scale(1.16)}
+.page .backdrop img{object-position:center 38%}
+.page .shade{z-index:0;background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 38%,transparent) 0%,color-mix(in srgb,var(--bg) 66%,transparent) 48%,color-mix(in srgb,var(--bg) 94%,transparent) 82%,var(--bg) 100%)}
+.hero>:not(.backdrop):not(.shade){position:relative;z-index:1}
+.page .cover{border-radius:14px;box-shadow:0 16px 40px #0003}
+.page .badges>span{border:0;background:transparent;padding:0;letter-spacing:.12em}
+.page .badges>span+span::before{content:'·';margin-right:8px}
+.page .actions{gap:4px 20px}
+.page .actions :is(a,button){padding:8px 0!important;border:0!important;border-radius:0!important;background:transparent!important;color:var(--text)!important;min-height:44px;opacity:.88;transition:opacity .18s ease}
+.page .actions :is(a,button):hover{opacity:1;filter:none}
+.page .metrics>div{border:0;background:transparent;padding:0 0 0 20px;text-align:right}
+@media(max-width:640px){.page .hero{padding:20px 18px 0;border-radius:20px 20px 0 0}.page .identity{grid-template-columns:1fr;gap:22px}.page .cover{width:clamp(140px,48vw,200px)}.page .summary h1{padding-top:14px;font-size:clamp(27px,7vw,36px);line-height:1.12}.page .bottom{gap:18px}.page .actions{gap:4px 18px}.page .actions :is(a,button){font-size:12px}.page .metrics>div{text-align:left;padding:0}.page .backdrop{filter:blur(30px);opacity:.65}}
+@media(prefers-reduced-motion:reduce){.page .actions :is(a,button){transition:none}}

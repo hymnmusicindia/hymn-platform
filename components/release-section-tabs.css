@@ -1,15 +1,16 @@
-.release-section-navigation{min-width:0;margin-top:24px;padding-bottom:16px}
-.release-section-tabs{display:flex;gap:6px;overflow-x:auto;overscroll-behavior-inline:contain;padding:6px;background:var(--bg-soft);border:1px solid var(--border);border-radius:12px;scrollbar-width:thin;scroll-padding-inline:6px}
-.release-section-tabs [role=tab]{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 14px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--text-muted);font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;transition:background .16s ease,color .16s ease,border-color .16s ease}
-.release-section-tabs [role=tab]:hover{background:color-mix(in srgb,var(--text) 5%,transparent);color:var(--text)}
-.release-section-tabs [role=tab][aria-selected=true]{background:var(--card,var(--bg-elevated));color:var(--text);border-color:var(--border);box-shadow:0 2px 6px #0002}
-.release-section-tabs [role=tab]:focus-visible{outline:2px solid var(--accent,var(--text));outline-offset:-2px}
-.release-section-tabs [data-attention=true]>svg{color:#e9b768}
-.release-section-count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:6px;background:color-mix(in srgb,var(--text) 8%,transparent);font-size:11px;font-variant-numeric:tabular-nums}
-.release-section-tabs [data-attention=true] .release-section-count{background:#e9b76820;color:#e9b768}
-.release-section-caption{display:flex;gap:8px;margin:12px 4px 0;font-size:11px;font-weight:500;color:var(--text-muted)}
+.release-section-navigation{min-width:0;margin-top:28px;padding-bottom:18px}
+html body .release-manage-page .release-section-tabs,.release-section-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:4px 24px;overflow:visible;padding:8px 0;border:0;background:transparent;border-radius:0;box-shadow:none}
+html body .release-manage-page .release-section-tabs [role=tab],.release-section-tabs [role=tab]{flex:0 1 auto;max-width:100%;display:inline-flex;align-items:center;justify-content:flex-start;gap:7px;min-height:44px;padding:8px 0;border:0;border-radius:0;background:transparent;color:var(--text-muted);font-size:12px;font-weight:500;line-height:1.5;white-space:normal;text-align:left;cursor:pointer;box-shadow:none;transition:color .18s ease,opacity .18s ease}
+html body .release-manage-page .release-section-tabs [role=tab][aria-selected=true],.release-section-tabs [role=tab][aria-selected=true]{background:transparent;border:0;color:var(--text);font-weight:700;box-shadow:none}
+.release-section-tabs [role=tab]>svg{flex-shrink:0;opacity:.7}
+.release-section-tabs [role=tab][aria-selected=true]>svg{opacity:1}
+html body .release-manage-page .release-section-tabs [role=tab]:hover{color:var(--text);background:transparent}
+.release-section-tabs [role=tab]:focus-visible{outline:2px solid var(--focus,var(--text));outline-offset:5px;border-radius:4px}
+.release-section-tabs [data-attention=true]>svg{color:var(--warning,#e9b768)}
+.release-section-count{font-size:10px;font-weight:600;font-variant-numeric:tabular-nums;opacity:.75}
+.release-section-caption{display:flex;gap:8px;margin:12px 0 0;font-size:11px;font-weight:500;color:var(--text-muted)}
 .release-section-caption>span{color:var(--text-soft)}
-.release-section-panel{display:grid;gap:24px;min-width:0;animation:release-section-reveal .16s ease-out}
+.release-section-panel{display:grid;gap:24px;min-width:0;animation:release-section-reveal .2s ease-out}
 @keyframes release-section-reveal{from{opacity:.6;transform:translateY(3px)}to{opacity:1;transform:none}}
-@media(max-width:640px){.release-section-navigation{margin-top:18px}.release-section-tabs [role=tab]{padding:10px 12px}.release-section-caption{margin-top:10px}}
+@media(max-width:640px){.release-section-navigation{margin-top:20px}html body .release-manage-page .release-section-tabs,.release-section-tabs{gap:2px 18px}.release-section-caption{margin-top:10px}}
 @media(prefers-reduced-motion:reduce){.release-section-tabs [role=tab]{transition:none}.release-section-panel{animation:none}}

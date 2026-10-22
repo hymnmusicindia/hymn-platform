@@ -82,9 +82,9 @@ html body .distribution-workflow.distribution-workflow.distribution-workflow :is
 html body .distribution-workflow.distribution-workflow.distribution-workflow :is(.release-footer-action.is-primary,.release-workspace-review) { background:#e0edff!important; border-color:#e0edff!important; color:#142238!important; }
 html body :is(.distribution-workflow,.release-portal-page,.release-manage-page) :is(button,a,input,select,textarea,summary):focus-visible { outline:3px solid var(--focus)!important; outline-offset:3px; }
 html body .distribution-workflow button:disabled { opacity:.5; cursor:not-allowed; }
-html body :is(.release-portal-page,.release-manage-page) :is(.surface-card,.metric-card,.release-section-tabs) { border:1px solid var(--border); border-radius:16px; background:var(--card); }
+html body :is(.release-portal-page,.release-manage-page) :is(.surface-card,.metric-card) { border:1px solid var(--border); border-radius:16px; background:var(--card); }
 html body :is(.release-portal-page,.release-manage-page) :is(.btn-primary,.btn-secondary,.btn-outline,.input) { min-height:44px; border-radius:10px!important; }
-html body .release-manage-page .release-section-navigation { position:sticky; top:0; z-index:25; background:var(--bg); margin:0; padding:8px 0; }
+html body .release-manage-page .release-section-navigation { position:relative; background:transparent; margin:24px 0 0; padding:8px 0 16px; }
 @media(max-width:767px) {
   html body .distribution-workflow.distribution-workflow.distribution-workflow { padding:12px!important; gap:16px!important; }
   html body .distribution-workflow.distribution-workflow .release-workspace-header { flex-wrap:wrap; padding:12px; }
@@ -110,8 +110,8 @@ html body .release-portal-page .release-no-results > svg { color:var(--text-soft
 html body .release-portal-page .release-no-results h2 { font-size:22px; line-height:1.3; font-weight:600; letter-spacing:-.02em; }
 html body .release-portal-page .release-no-results p { max-width:460px; color:var(--text-muted); font-size:14px; line-height:1.7; }
 html body .release-portal-page .release-no-results button { display:inline-flex; align-items:center; justify-content:center; gap:10px; padding:12px 18px; }
-html body .release-manage-page .release-section-tabs [role=tab] { min-height:46px; font-size:13px; }
-html body .release-manage-page .release-section-tabs [role=tab][aria-selected=true] { background:#314765; border-color:#87afe4; color:#fff; }
+html body .release-manage-page .release-section-tabs [role=tab] { min-height:44px; font-size:12px; }
+html body .release-manage-page .release-section-tabs [role=tab][aria-selected=true] { background:transparent; border-color:transparent; color:var(--text); }
 html body .release-manage-page .release-section-caption { font-size:12px; padding-bottom:4px; }
 html body .release-manage-page .summary-card { overflow-wrap:anywhere; }
 @media(max-width:767px) {

@@ -230,7 +230,7 @@ export function ReleaseManage({ release, initialTab }: { release: Release; initi
   const title = release.releaseTitle?.trim() || release.trackName;
   const promoLink = release.presaveSpotify || release.presaveApple || release.exclusiveSpotify || release.exclusiveApple;
   const portalStatus = effectiveReleaseStatus(release.status, release.direNoteStatus);
-  const alreadyDistributed = ["sent", "sent_to_distributor", "processing", "delivered", "live"].includes(portalStatus);
+  const alreadyDistributed = ["sent", "sent_to_distributor", "distributor_processing", "processing", "delivered", "scheduled", "awaiting_live_confirmation", "partially_live", "live"].includes(portalStatus);
   const canEdit = ["draft", "changes_requested", "rejected", "under_review"].includes(release.status) || portalStatus === "changes_requested";
   const editingDuringReview = getReleasePortalStage(release) === "review";
   const metadata = releaseMetadata(release) as Record<string, any>;
@@ -284,8 +284,9 @@ export function ReleaseManage({ release, initialTab }: { release: Release; initi
             <div className={detailStyles.actions}>
               {canEdit ? <button type="button" onClick={() => release.status === "draft" ? router.push(`/distribution/start?edit=${release.id}`) : setEditWarningOpen(true)} className="btn-primary"><Pencil size={17}/>{release.status === "draft" ? "Continue editing" : editingDuringReview ? "Edit metadata" : "Fix release"}</button> : null}
               {promoLink ? <a href={promoLink} target="_blank" rel="noreferrer" className="btn-outline">Promolink<ExternalLink size={16}/></a> : null}
-              <Link href={`/contact?releaseId=${release.id}`} className="btn-outline"><Headphones size={17}/>Support</Link>
-              <button type="button" onClick={shareRelease} className="btn-outline" aria-label="Share release" title="Share release"><Share2 size={18}/></button>
+              <Link href={`/contact?releaseId=${release.id}`} ><Headphones size={17}/>Support</Link>
+              {alreadyDistributed ? <button type="button" onClick={() => { setTab("requests"); requestAnimationFrame(() => document.getElementById(`release-${release.id}-panel`)?.focus({ preventScroll: false })); }}><Pencil size={17}/>Amend release</button> : null}
+              <button type="button" onClick={shareRelease} aria-label="Share release" title="Share release"><Share2 size={18}/></button>
             </div>
             <dl className={detailStyles.metrics}><div><dt>UPC</dt><dd>{resolvedUpc(release)}</dd></div>{release.analytics?.streams_total != null ? <div><dt>Streams</dt><dd>{release.analytics.streams_total.toLocaleString()}</dd></div> : null}</dl>
           </div>

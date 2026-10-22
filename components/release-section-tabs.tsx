@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useId, useRef } from "react";
 import { FileText, Users, LayoutDashboard, Music2, CircleAlert, History, Radio, Megaphone, ChartNoAxesCombined, MessageSquare } from "lucide-react";
 import "./release-section-tabs.css";
 
@@ -13,11 +13,6 @@ export function ReleaseSectionTabs({ items, active, onChange, panelId }: {
 }) {
   const id = useId();
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
-  useEffect(() => {
-    const button = buttons.current[items.findIndex(item => item.key === active)];
-    const list = button?.parentElement;
-    if (button && list) list.scrollLeft = button.offsetLeft - list.offsetLeft - (list.clientWidth - button.offsetWidth) / 2;
-  }, [active, items]);
   return <div className="release-section-navigation">
     <div className="release-section-tabs" role="tablist" aria-label="Release sections">
       {items.map((item, index) => {
