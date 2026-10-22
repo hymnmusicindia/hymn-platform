@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { WorkspaceFooter } from "@/components/workspace-footer";
 import { WorkspaceDestinations } from "@/components/workspace-destinations";
-import { workspaceGroups } from "@/lib/workspace-navigation";
+import { workspaceGroups, workspaceGroupDestination } from "@/lib/workspace-navigation";
 import { useEffect, useState } from "react";
 import { ArrowUpRight, ChevronDown, Menu, Plus, X } from "lucide-react";
 
@@ -33,7 +33,15 @@ export function LandingWorkspace({ children, workspaceHref }: {children:React.Re
       <Link href="/distribution/start" className="landing-new" aria-label="New release"><Plus size={17}/><span>New</span></Link>
       <WorkspaceDestinations homeActive overviewHref={workspaceHref} onNavigate={()=>setOpen(false)} />
       </div>
-      <nav aria-label="HYMN services">{groups.map(group=><div className="landing-nav-group" key={group.title}><button type="button" className="landing-group-title" aria-expanded={openGroup===group.title} aria-controls={`landing-group-${group.title.replaceAll(/[^a-z]/gi, "-")}`} onClick={()=>setOpenGroup(current=>current===group.title?null:group.title)}><span>{group.title}</span><ChevronDown size={13}/></button><div id={`landing-group-${group.title.replaceAll(/[^a-z]/gi, "-")}`} hidden={openGroup!==group.title}>{group.links.map(item=><Link href={item.href} data-guide-route={item.href} key={item.label} aria-label={item.label} className={`landing-nav-link ${item.label === "Promotion" ? "landing-service-divider" : ""}`} onClick={()=>setOpen(false)}><item.icon size={16}/><span>{item.label}</span></Link>)}</div></div>)}</nav>
+      <nav aria-label="HYMN services">{groups.map(group => {
+        const destination = workspaceGroupDestination(group.title);
+        const items = group.links.filter(item => item.key !== destination?.key);
+        const menuId = `landing-group-${group.title.replaceAll(/[^a-z]/gi, "-")}`;
+        return <div className="landing-nav-group" key={group.title}>
+          {destination ? <div className="workspace-service-heading"><Link href={destination.href} aria-label={group.title} title={group.title} data-guide-route={destination.href} className="landing-group-title" onClick={()=>{setOpenGroup(group.title);setOpen(false);}}><destination.icon className="workspace-service-icon" size={16}/><span>{group.title}</span></Link><button type="button" className="workspace-service-toggle" aria-label={`Toggle ${group.title} menu`} aria-expanded={openGroup===group.title} aria-controls={menuId} onClick={()=>setOpenGroup(current=>current===group.title?null:group.title)}><ChevronDown size={13}/></button></div> : <button type="button" className="landing-group-title" aria-expanded={openGroup===group.title} aria-controls={menuId} onClick={()=>setOpenGroup(current=>current===group.title?null:group.title)}><span>{group.title}</span><ChevronDown size={13}/></button>}
+          <div id={menuId} hidden={openGroup!==group.title}>{items.map(item=><Link href={item.href} data-guide-route={item.href} key={item.label} aria-label={item.label} className={`landing-nav-link ${item.label === "Promotion" ? "landing-service-divider" : ""}`} onClick={()=>setOpen(false)}><item.icon size={16}/><span>{item.label}</span></Link>)}</div>
+        </div>;
+      })}</nav>
       <div className="landing-rail-bottom"><Link href={workspaceHref}>Your workspace <ArrowUpRight size={15}/></Link><Link href="/contact">Talk to HYMN <ArrowUpRight size={15}/></Link><span>Independent music. Shared ambition.</span></div>
       <WorkspaceFooter collapsed={collapsed} onNavigate={()=>setOpen(false)}/>
     </aside>

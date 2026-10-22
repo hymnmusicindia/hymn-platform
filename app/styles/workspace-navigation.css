@@ -100,6 +100,22 @@ html body .workspace-home-link:focus-visible { outline:1px solid #c8ced8; outlin
 }
 
 /* Quiet movement gives the service accordions a visible response. */
+.workspace-service-heading { display:flex;align-items:center;gap:4px;min-width:0; }
+.workspace-service-heading > :is(.landing-group-title,.dashboard-os-group-toggle) { flex:1;min-width:0;width:auto;min-height:40px;margin:0;text-decoration:none; }
+.workspace-service-heading .workspace-service-toggle { display:flex;align-items:center;justify-content:center;flex:0 0 36px;min-height:40px;padding:0;background:transparent;border:0;border-radius:8px;color:var(--text-muted,#aeb7c6);cursor:pointer; }
+.workspace-service-toggle svg { transition:transform .18s ease; }
+.workspace-service-toggle[aria-expanded="false"] svg { transform:rotate(-90deg); }
+.workspace-service-heading > [aria-current="page"] { color:var(--text,#fff); }
+.workspace-service-heading :is(a,button):focus-visible { outline:2px solid var(--accent,#d7e7ff);outline-offset:2px; }
+.workspace-service-icon { display:none; }
+@media(min-width:1024px) {
+ .workspace-v2[data-collapsed="true"] .workspace-service-heading .dashboard-os-group-toggle > svg { display:block; }
+ .workspace-v2[data-collapsed="true"] .workspace-service-toggle,.rail-collapsed .workspace-service-toggle { display:none; }
+ .rail-collapsed .workspace-service-heading > .landing-group-title { display:flex;justify-content:center; }
+ .rail-collapsed .workspace-service-heading > .landing-group-title > span { display:none; }
+ .rail-collapsed .workspace-service-icon { display:block; }
+}
+@media(max-width:1023px) { .workspace-service-heading > :is(.landing-group-title,.dashboard-os-group-toggle),.workspace-service-heading .workspace-service-toggle { min-height:44px; } }
 .landing-group-title > span,.dashboard-os-group-toggle > span { transition:transform .18s ease,color .18s ease; }
 .landing-group-title,.dashboard-os-group-toggle { transition:color .18s ease; }
 .landing-group-title:is(:hover,:focus-visible),.dashboard-os-group-toggle:is(:hover,:focus-visible) { color:var(--text)!important; }

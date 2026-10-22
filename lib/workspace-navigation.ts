@@ -25,6 +25,12 @@ export const workspaceGroups = Array.from(new Set(workspaceNavigation.map(item=>
   .filter(title=>title!=="Home")
   .map(title=>({title,links:workspaceNavigation.filter(item=>item.group===title)}));
 
+// Service headings open their main page; the remaining links stay in the menu.
+export function workspaceGroupDestination(group: string) {
+  const key = ({ Beatstore: 'beat-store', Distribution: 'releases', 'Mixing / Mastering': 'studio' } as Record<string, string>)[group];
+  return key ? workspaceNavigation.find(item => item.key === key) : undefined;
+}
+
 type NavItem = {key:string;label:string;group?:string;href?:string;description?:string};
 export function consistentWorkspaceNavigation(items: NavItem[]): NavItem[] {
   // Administrative operations have a separate, permission-specific information architecture.

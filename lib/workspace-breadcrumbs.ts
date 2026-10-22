@@ -3,7 +3,7 @@ import { workspaceNavigation } from "@/lib/workspace-navigation";
 export type WorkspaceCrumb = { label: string; href: string };
 type ActiveLocation = { group: string; label?: string; href?: string };
 const roots: Record<string, string> = {
-  Home: "/", Library: "/audio-library", Distribution: "/distribution", Beatstore: "/beat-store",
+  Home: "/", Library: "/audio-library", Distribution: "/dashboard/releases", Beatstore: "/beat-store",
   "Mixing / Mastering": "/studio", Account: "/dashboard?tab=settings", Support: "/dashboard?tab=support", Workspace: "/dashboard"
 };
 const title = (part: string) => part.replace(/-/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());

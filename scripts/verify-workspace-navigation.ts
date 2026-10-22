@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { chromium, expect } from '@playwright/test';
-import { consistentWorkspaceNavigation, workspaceNavigation, workspaceGroups } from '../lib/workspace-navigation';
+import { consistentWorkspaceNavigation, workspaceNavigation, workspaceGroups, workspaceGroupDestination } from '../lib/workspace-navigation';
 async function main() {
 const legacy = [
  {key:'overview',label:'Overview',group:'Home'},
@@ -31,7 +31,7 @@ try {
   await expect(page.locator('.dashboard-os-group-toggle').first()).toBeAttached({timeout:30000});
   assert.deepEqual(await page.locator('.dashboard-os-group-toggle').evaluateAll(nodes=>nodes.map(node=>node.textContent?.trim())),workspaceGroups.map(group=>group.title));
   const links=page.locator('a[data-nav-key]');
-  assert.deepEqual(await links.evaluateAll(nodes=>nodes.map(node=>({label:node.textContent?.trim(),href:node.getAttribute('href')}))),workspaceNavigation.filter(item=>item.group!=='Home').map(item=>({label:item.label,href:item.href})));
+  assert.deepEqual(await links.evaluateAll(nodes=>nodes.map(node=>({label:node.textContent?.trim(),href:node.getAttribute('href')}))),workspaceNavigation.filter(item=>item.group!=='Home' && workspaceGroupDestination(item.group)?.key!==item.key).map(item=>({label:item.label,href:item.href})));
   await expect(page.locator('a.workspace-home-link')).toHaveAttribute('href','/');
   await page.waitForFunction(()=>Object.keys(document.querySelector('.workspace-footer button')||{}).some(key=>key.startsWith('__reactProps$')));
   await page.waitForTimeout(1000);

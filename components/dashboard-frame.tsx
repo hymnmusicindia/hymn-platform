@@ -5,7 +5,7 @@ import clsx from "clsx";
 import "@/app/styles/workspace-system.css";
 import { WorkspaceFooter } from "@/components/workspace-footer";
 import { WorkspaceDestinations } from "@/components/workspace-destinations";
-import { consistentWorkspaceNavigation, workspaceNavigation } from "@/lib/workspace-navigation";
+import { consistentWorkspaceNavigation, workspaceNavigation, workspaceGroupDestination } from "@/lib/workspace-navigation";
 import Link from "next/link";
 import { SubscriptionButton, openSubscriptions } from "@/components/subscription-options";
 import { useSubscriptionLabel } from "@/components/subscription-label-context";
@@ -264,12 +264,14 @@ export function DashboardFrame<T extends string>({
         <div ref={navScrollRef} onScroll={updateNavScroll} className="dashboard-nav-scroll mt-4 min-h-0 flex-1 content-start gap-3 overflow-x-hidden overflow-y-auto pr-1 grid">
           {!visibleGroups.some(group => group.items.some(item => item.key !== "overview")) ? <p className="module-search-empty" role="status">No modules match “{localSearch}”. Try a service name or clear your search.</p> : null}
           {visibleGroups.map((group) => {
-            const groupItems = group.items.filter(item => item.key !== "overview");
-            if (!groupItems.length) return null;
+            const destination = adminWorkspace ? undefined : workspaceGroupDestination(group.label);
+            const groupItems = group.items.filter(item => item.key !== "overview" && item.label !== destination?.label);
+            if (!groupItems.length && !destination) return null;
+            const menuId = `workspace-group-${group.label.replace(/[^a-z]/gi, '-')}`;
             const closed = !localSearch.trim() && openGroup !== group.label;
             return (
               <div key={group.label} className="dashboard-os-nav-group">
-                <button
+                {destination ? <div className="workspace-service-heading"><Link href={destination.href} aria-label={group.label} className={clsx("dashboard-os-group-toggle",collapsed ? "lg:justify-center" : "")} data-guide-route={destination.href} aria-current={activeItem?.label === destination.label ? "page" : undefined} title={collapsed ? group.label : undefined} onClick={()=>{setOpenGroup(group.label);setMobileOpen(false);}}><destination.icon className={clsx("h-4 w-4",collapsed ? "" : "hidden")} /><span className={clsx(collapsed ? "lg:hidden" : "")}>{group.label}</span></Link>{groupItems.length ? <button type="button" className={clsx("workspace-service-toggle",collapsed ? "lg:hidden" : "")} aria-label={`Toggle ${group.label} menu`} aria-expanded={!closed} aria-controls={menuId} onClick={()=>toggleGroup(group.label)}><ChevronDown className="h-3.5 w-3.5"/></button> : null}</div> : <button
                   type="button"
                   className={clsx("dashboard-os-group-toggle", collapsed ? "lg:justify-center" : "")}
                   onClick={() => toggleGroup(group.label)}
@@ -281,8 +283,8 @@ export function DashboardFrame<T extends string>({
                     {group.description ? <small>{group.description}</small> : null}
                   </span>
                   <ChevronDown className={clsx("h-3.5 w-3.5 transition", closed ? "-rotate-90" : "rotate-0", collapsed ? "lg:hidden" : "")} />
-                </button>
-                <div className={clsx("grid gap-1.5", closed ? "hidden" : "")}>
+                </button>}
+                <div id={menuId} className={clsx("grid gap-1.5", closed ? "hidden" : "")}>
                   {groupItems.map((item) => {
                     const active = item.key === activeKey;
                     const itemLabel = item.key === "plans" || item.key === "subscriptions" ? subscriptionLabel : item.label;
