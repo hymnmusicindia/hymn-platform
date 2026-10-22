@@ -338,8 +338,6 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
   }, [genres, moods, searchParams]);
 
   const selectedProducer = useMemo(() => displayProducerProfiles.find((producer) => producer.slug === selectedProducerSlug) ?? null, [displayProducerProfiles, selectedProducerSlug]);
-  const previewProducer = displayProducerProfiles[0] ?? null;
-  const spotlightProducer = selectedProducer ?? previewProducer;
 
   useEffect(() => {
     setDraftBpmMin(bpmMin);
@@ -627,14 +625,12 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
       <section className={`${storeStyles.store} mx-auto max-w-[1700px] pb-10 pt-0 lg:pb-14`}>
         <BeatStoreHero
           moods={quickMoods}
-          producer={spotlightProducer}
+          search={searchQuery}
+          onSearch={setSearchQuery}
           onMood={(mood) => findMyBeat(mood)}
           onSurprise={() => findMyBeat()}
           onFinder={() => setBeatFinderOpen(true)}
-          onProducer={() => {
-            if (spotlightProducer) setSelectedProducerSlug(spotlightProducer.slug);
-            document.getElementById("beat-catalog")?.scrollIntoView({ behavior: "smooth", block: "start" });
-          }}
+
         />
         <div id="beat-catalog" className="scroll-mt-24">
           <div className="space-y-5">
