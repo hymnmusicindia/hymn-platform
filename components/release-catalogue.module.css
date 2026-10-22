@@ -3,10 +3,10 @@
   gap: 28px;
   --catalogue-rule: color-mix(in srgb, var(--text) 12%, transparent);
 }
-.draft { display:flex; align-items:center; gap:16px; padding:4px 0 22px; border-bottom:1px solid var(--catalogue-rule); }
+.draft { display:flex; align-items:center; gap:16px; padding:16px 20px; border:1px solid color-mix(in srgb, var(--money, #f5c16c) 35%, transparent); border-radius:14px; background:color-mix(in srgb, var(--money, #f5c16c) 7%, var(--bg)); }
 .draftArtwork { position:relative; display:grid; place-items:center; flex:0 0 56px; height:56px; overflow:hidden; border-radius:7px; background:var(--bg-soft); color:var(--text-muted); }
 .draft h2 { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:15px; font-weight:600; letter-spacing:-.02em; }
-.draft a { display:inline-flex; align-items:center; gap:10px; min-height:44px; font-size:13px; font-weight:600; color:var(--text); white-space:nowrap; }
+.draft a { color:var(--money, #f5c16c); display:inline-flex; align-items:center; gap:10px; min-height:44px; font-size:13px; font-weight:600; white-space:nowrap; }
 .catalogue.catalogue.catalogue.catalogue.catalogue.catalogue :global(.release-dashboard-tabs) { padding:0!important; gap:32px; border:0!important; border-radius:0!important; background:transparent!important; box-shadow:none!important; overflow:visible; }
 .catalogue.catalogue.catalogue.catalogue.catalogue.catalogue :global(.distribution-dashboard-link) { flex:0 1 auto!important; padding:8px 0!important; min-height:44px; border:0!important; border-radius:0!important; background:transparent!important; color:var(--text-muted)!important; font-size:13px; font-weight:500; }
 .catalogue.catalogue.catalogue.catalogue.catalogue.catalogue :global(.distribution-dashboard-link[aria-current=page]) { background:transparent!important; color:var(--text)!important; border:0!important; font-weight:650; }
@@ -30,7 +30,7 @@
 .catalogue.catalogue.catalogue.catalogue.catalogue.catalogue :global(.release-filter-count) { padding:0!important; background:transparent!important; border:0!important; }
 .catalogue :global(svg) { stroke-width:1.5; }
 .catalogue.catalogue.catalogue.catalogue.catalogue.catalogue :global(.release-library-grid) { grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr))!important; justify-items:stretch!important; gap:28px 24px!important; }
-.catalogue.catalogue.catalogue.catalogue.catalogue.catalogue :global(.release-summary-tile) { max-width:none!important; padding:0!important; border:0!important; border-radius:0!important; background:transparent!important; box-shadow:none!important; transform:none!important; }
+.catalogue.catalogue.catalogue.catalogue.catalogue.catalogue :global(.release-summary-tile) { max-width:none!important; padding:12px!important; border:1px solid var(--border)!important; border-radius:14px!important; background:transparent!important; box-shadow:none!important; transform:none!important; }
 .catalogue.catalogue.catalogue.catalogue.catalogue.catalogue :global(.release-summary-artwork) { border-radius:8px; overflow:hidden; }
 .catalogue.catalogue.catalogue.catalogue.catalogue.catalogue :global(.release-summary-title) { margin-top:10px!important; font-size:15px!important; letter-spacing:-.02em; }
 .catalogue.catalogue.catalogue.catalogue.catalogue.catalogue :global(.release-summary-badge) { border:0!important; background:transparent!important; padding:0!important; font-size:9px; letter-spacing:.09em; }
@@ -54,7 +54,7 @@
   .catalogue.catalogue.catalogue.catalogue.catalogue.catalogue :global(.release-catalogue-totals) { gap:16px; flex-wrap:wrap; }
   .catalogue.catalogue.catalogue.catalogue.catalogue.catalogue :global(.release-library-grid) { grid-template-columns:repeat(2,minmax(0,1fr))!important; gap:24px 16px!important; }
   .catalogue.catalogue.catalogue.catalogue.catalogue.catalogue :global(.release-summary-subtitle) { font-size:11px!important; }
-  .draft { gap:12px; flex-wrap:wrap; }
+  .draft { gap:12px; flex-wrap:wrap; padding:14px; }
   .draft h2 { flex-basis:calc(100% - 70px); }
   .draft a { margin-left:68px; margin-top:-10px; min-height:36px; }
 }
