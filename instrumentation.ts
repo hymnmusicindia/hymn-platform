@@ -13,8 +13,8 @@ export async function register() {
   if (flag.__hymnCronWorker) return;
   flag.__hymnCronWorker = true;
 
-  const [{ startCronScheduler }, { prisma }] = await Promise.all([import("./scripts/cron-scheduler"), import("./lib/prisma")]);
-  const publicOrigin = (process.env.NEXT_PUBLIC_APP_URL || "https://hymnmusic.fun").replace(/\/+$/, "");
+  const [{ startCronScheduler }, { prisma }, { getPublicAppUrl }] = await Promise.all([import("./scripts/cron-scheduler"), import("./lib/prisma"), import("./lib/public-app-url")]);
+  const publicOrigin = getPublicAppUrl();
   const port = Number(process.env.PORT || 3000);
   const loopback = Number.isInteger(port) && port > 0 && port < 65536;
   // Recorded so cron health can tell "worker never started" from "worker started

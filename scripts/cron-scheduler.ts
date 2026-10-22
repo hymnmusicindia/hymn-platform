@@ -1,5 +1,19 @@
 import { CRON_JOBS, cronEnabled, cronHasFailures } from "../lib/cron/registry";
 
+/** Loopback still traverses the canonical-host proxy. Supply the configured
+ * public host/protocol without following a redirect with the cron credential. */
+export function cronRequestHeaders(origin: string, publicOrigin: string | undefined, secret: string) {
+  const headers: Record<string, string> = { authorization: `Bearer ${secret}`, "x-hymn-cron-source": "hostinger-runtime" };
+  const destination = new URL(origin);
+  if (["127.0.0.1", "localhost", "[::1]"].includes(destination.hostname) && publicOrigin) {
+    const external = new URL(publicOrigin);
+    if (external.protocol !== "https:" && external.protocol !== "http:") throw Error('Cron public origin must use HTTP or HTTPS.');
+    headers["x-forwarded-host"] = external.host;
+    headers["x-forwarded-proto"] = external.protocol.slice(0, -1);
+  }
+  return headers;
+}
+
 /** Hostinger scheduler: separate urgent/bulk lanes and guarded endpoint retries. */
 export function startCronScheduler(options: { port: number; secret: string; origin?: string; fallbackOrigin?: string; onFallback?: (from: string, to: string) => void; fetcher?: typeof fetch; now?: () => number; random?: () => number }) {
   const fetcher = options.fetcher ?? fetch, now = options.now ?? Date.now, random = options.random ?? Math.random;
@@ -22,7 +36,7 @@ export function startCronScheduler(options: { port: number; secret: string; orig
         let healthy = false, domainFailure = false, retryAfter = 0;
         try {
           const response = await fetcher(`${origin}/api/cron/${job.id}`, {
-            method: job.method, redirect: "error", headers: { authorization: `Bearer ${options.secret}`, "x-hymn-cron-source": "hostinger-runtime" },
+            method: job.method, redirect: "error", headers: cronRequestHeaders(origin, options.fallbackOrigin, options.secret),
             signal: AbortSignal.any([controller.signal, AbortSignal.timeout(55_000)])
           });
           const data: unknown = await response.json();
