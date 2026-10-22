@@ -9,6 +9,6 @@ export function customerQcReport(report: ReleaseQcReport | null): ReleaseQcRepor
     isrcLookup: customerBrandText(track.isrcLookup),
     upcLookup: customerBrandText(track.upcLookup),
     aiPrediction: customerBrandText(track.aiPrediction),
-    notes: track.notes.map(customerBrandText)
+    notes: track.notes.map(note => customerBrandText(note))
   })) };
 }

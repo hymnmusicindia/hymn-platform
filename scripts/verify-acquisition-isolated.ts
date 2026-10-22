@@ -30,6 +30,7 @@ async function main() {
       await run(['node_modules/prisma/build/index.js', 'db', 'push', '--skip-generate']);
       await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-amendment-identifiers.ts']);
       await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-artist-amendment.ts']);
+      await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-amendment-feedback.ts']);
       return;
     }
     if (process.argv.includes("--contacts-followups-only")) {

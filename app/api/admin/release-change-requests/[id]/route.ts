@@ -4,7 +4,7 @@ import { requireAdminPermission } from "@/lib/access";
 import { reviewReleaseChangeRequest } from "@/lib/release-change-requests";
 import { prisma } from "@/lib/prisma";
 
-const schema = z.object({ decision: z.enum(["approved", "information_required", "rejected", "processing_manually", "submitted_to_partner", "completed", "failed"]), note: z.string().trim().min(3).max(2000), providerReference: z.string().trim().max(200).optional() });
+const schema = z.object({ decision: z.enum(["under_review", "approved", "information_required", "rejected", "processing_manually", "submitted_to_partner", "completed", "failed"]), note: z.string().trim().min(3).max(2000), providerReference: z.string().trim().max(200).optional() });
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const id = Number((await context.params).id);
   const current = await prisma.releaseChangeRequest.findUnique({ where: { id }, select: { requestType: true } });

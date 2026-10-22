@@ -1,4 +1,5 @@
 import 'server-only';
+import { enqueueAmendmentUpdate, amendmentTransactionOptions } from './release-amendment-notifications';
 import { createHash } from 'node:crypto';
 import { prisma } from './prisma';
 import { attachedArtistProfileIds, verifiedArtistStoreLinks } from './artist-store-links';
@@ -65,9 +66,10 @@ export async function acceptArtistAmendment(amendment: ArtistAmendment, attemptI
     await tx.releaseArtistIdentity.update({ where: { id: identity.id }, data: { spotifyUrl: amendment.spotifyUrl, providerArtistId: null, previousProviderArtistId: identity.providerArtistId, corrected: true, sourceFingerprint: artistIdentityFingerprint({ ...current, spotifyProfileUrl: amendment.spotifyUrl, spotifyArtistId: verifiedArtistStoreLinks({ spotify: amendment.spotifyUrl }).spotify!.id ?? null }) } });
     await tx.releaseChangeRequest.update({ where: { id: amendment.request.id }, data: { status: 'submitted_to_partner', providerReference: reference } });
     const metadata = { attemptId, artistCardId: current.id, artistName: current.artistName, spotifyUrl: amendment.spotifyUrl, payloadReference: `attempt:${attemptId}`, identifierPolicy: 'provider_assigned_upc_existing_recording_isrc', previousAttemptId: amendment.previousAttempt?.id ?? null, previousStatus: amendment.previousStatus, previousProviderStatus: amendment.previousAttempt?.providerStatus ?? null, previousMapping: { spotifyUrl: identity.spotifyUrl, providerArtistId: identity.providerArtistId, sourceFingerprint: identity.sourceFingerprint, previousProviderArtistId: identity.previousProviderArtistId, corrected: identity.corrected } };
-    await tx.releaseChangeRequestEvent.create({ data: { requestId: amendment.request.id, actorType: 'system', previousStatus: 'approved', newStatus: 'submitted_to_partner', note: 'HYMN accepted the approved amendment for delivery. Existing identifiers remain visible until the new identifier set is confirmed.', providerReference: reference, metadata } });
+    const event = await tx.releaseChangeRequestEvent.create({ data: { requestId: amendment.request.id, actorType: 'system', previousStatus: 'approved', newStatus: 'submitted_to_partner', note: 'HYMN accepted the approved amendment for delivery. Existing identifiers remain visible until the new identifier set is confirmed.', providerReference: reference, metadata } });
+    await enqueueAmendmentUpdate(tx, amendment.request.id, event.id);
     await tx.auditLog.create({ data: { action: 'ARTIST_AMENDMENT_ACCEPTED', entity: 'release', entityId: String(amendment.request.releaseId), metadata: { requestId: amendment.request.id, ...metadata } } });
-  });
+  }, amendmentTransactionOptions);
 }
 
 export async function executeArtistAmendment(requestId: number, actorId?: number | null) {
@@ -108,9 +110,10 @@ export async function failArtistAmendment(requestId: number, attemptId: number) 
       await tx.releaseArtistIdentity.updateMany({ where: { releaseId: release.id, artistCardId: Number(receipt.artistCardId) }, data: { spotifyUrl: typeof mapping.spotifyUrl === 'string' ? mapping.spotifyUrl : null, providerArtistId: typeof mapping.providerArtistId === 'string' ? mapping.providerArtistId : null, sourceFingerprint: String(mapping.sourceFingerprint), previousProviderArtistId: typeof mapping.previousProviderArtistId === 'string' ? mapping.previousProviderArtistId : null, corrected: mapping.corrected === true } });
     }
     await tx.releaseChangeRequest.update({ where: { id: requestId }, data: { status: 'failed' } });
-    await tx.releaseChangeRequestEvent.create({ data: { requestId, actorType: 'system', previousStatus: request.status, newStatus: 'failed', note: 'The amendment did not finish. Your original live release and its identifiers remain current.', metadata: { failedAttemptId: attemptId, restoredAttemptId: previous.id } } });
+    const failureEvent = await tx.releaseChangeRequestEvent.create({ data: { requestId, actorType: 'system', previousStatus: request.status, newStatus: 'failed', note: 'The amendment did not finish. Your original live release and its identifiers remain current.', metadata: { failedAttemptId: attemptId, restoredAttemptId: previous.id } } });
+    await enqueueAmendmentUpdate(tx, requestId, failureEvent.id);
     await tx.releaseStatusTransition.create({ data: { releaseId: release.id, previousStatus: release.status, newStatus: status, actorType: 'system', reason: 'Amendment failed; original live delivery retained.', metadata: { requestId, attemptId } } });
-  });
+  }, amendmentTransactionOptions);
 }
 
 export async function completeArtistAmendment(releaseId: number, attemptId: number, reportTracks: unknown[]) {
@@ -130,6 +133,6 @@ export async function completeArtistAmendment(releaseId: number, attemptId: numb
   }
   await prisma.$transaction(async tx => {
     const changed = await tx.releaseChangeRequest.updateMany({ where: { id: requestId, status: 'submitted_to_partner' }, data: { status: 'completed', completedAt: new Date() } });
-    if (changed.count) await tx.releaseChangeRequestEvent.create({ data: { requestId, actorType: 'system', previousStatus: 'submitted_to_partner', newStatus: 'completed', note: 'HYMN verified that the amended delivery is live and its Spotify artist link matches the approved profile.', metadata: { verifiedAttemptId: attemptId, spotifyUrl: expected.url } } });
-  });
+    if (changed.count) { const event = await tx.releaseChangeRequestEvent.create({ data: { requestId, actorType: 'system', previousStatus: 'submitted_to_partner', newStatus: 'completed', note: 'HYMN verified that the amended delivery is live and its Spotify artist link matches the approved profile.', metadata: { verifiedAttemptId: attemptId, spotifyUrl: expected.url } } }); await enqueueAmendmentUpdate(tx, requestId, event.id); }
+  }, amendmentTransactionOptions);
 }

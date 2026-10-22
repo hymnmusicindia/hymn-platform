@@ -171,6 +171,7 @@ export interface ReleaseTrack {
 }
 
 export interface Release {
+  amendment?: import('./release-amendment-presentation').AmendmentSummary;
   id: number;
   userId: number;
   artistName: string;

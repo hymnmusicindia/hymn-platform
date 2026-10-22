@@ -40,8 +40,9 @@ References: <https://distribution.direnotemedia.com/dnm_api> and
 
 Automatic retries cannot bypass unresolved submissions. Accepted amendment
 requests are replay-safe. A corrected card remains the default for future releases
-while historical delivery mappings stay isolated. Operator amendment execution
-does not enqueue customer status emails; the portal continues to show its state.
+while historical delivery mappings stay isolated. Amendments use dedicated customer
+notifications and emails; ordinary release-status emails are suppressed during
+amendment execution to avoid contradictory new-release messages.
 
 Internal receipt metadata/payload flags are admin-only. Customer request-event
 responses expose notes/statuses, not internal execution metadata. No production
@@ -69,10 +70,35 @@ The admin queue exposes the submitted metadata and locked identifiers for review
 General wizard amendments use the existing tracked manual partner review process;
 the automated endpoint described above remains specific to Spotify link amendments.
 
+After a successful wizard submission, a confirmation screen identifies the saved
+request and links directly to its details. An existing pending request opens its
+confirmation and tracking view; it never claims a second set of changes was saved.
+Release cards, list views and the release header display the amendment's own status
+independently of the live release status. The details page refreshes status on focus
+and periodically, and shows an immutable before/after summary and event history.
+Owners can respond when HYMN requests additional information.
+
+Request creation, administrative decisions, automatic partner acceptance, failure
+and verified completion write a unique account notification and durable email job
+in the same database transaction. The existing SMTP outbox delivers and retries
+these jobs. Amendment email validity follows the request's status and proposal
+fingerprint, rather than the release's general status. Stale progress messages are
+cancelled; historical submission receipts survive normal review progression. A
+bounded repair job finds recent acknowledgements missing a notification or email.
+
+General wizard amendments still require HYMN to record partner execution and its
+reference. On recorded completion, reviewed metadata, assets and credits are applied
+to the same local release and track IDs. Original UPC/ISRCs and publication dates
+remain unchanged, with a full before-projection in the audit trail. A changed source
+revision blocks completion rather than overwriting a newer release. This does not
+pretend that a manual decision executed a provider API call.
+
 Additional checks:
 `node --import tsx scripts/verify-amendment-wizard-identifiers.ts`,
 `node scripts/verify-amendment-wizard-route.cjs`, and
-`node scripts/verify-amendment-wizard-browser.cjs`.
+`node scripts/verify-amendment-wizard-browser.cjs`. The isolated suite also runs
+`verify-amendment-feedback.ts`, including mocked SMTP, lifecycle guards, completion
+projection, immutable identifiers, notification repair and duplicate prevention.
 
 `node --import tsx scripts/verify-acquisition-isolated.ts --amendment-identifiers-only`
 uses disposable PostgreSQL, intercepted provider responses and disabled email.
@@ -85,9 +111,8 @@ The live test requested for Deepan's “Tere Bin Jiyun Kaise Bata” is release 
 original UPC `3473620314135`, ISRC `INDN22602494`. The approved destination is
 `https://open.spotify.com/artist/0cevmXPSNfo7KO9xeE7M3m`. Its saved audio references
 missing stored asset 65. The operator subsequently supplied the original WAV:
-stereo, 24-bit PCM, 44.1 kHz, 252 seconds, 66,769,458 bytes. It is validated locally;
-authenticated transfer into live managed storage is still required. Delivery is
-blocked before ingestion until the original master is restored; no new identifiers should be reported until the provider
+stereo, 24-bit PCM, 44.1 kHz, 252 seconds, 66,769,458 bytes. The owner has since submitted a wizard amendment with an updated master reference.
+The live release remains unchanged while that request is reviewed; no new identifiers should be reported until the provider
 actually assigns them. The artist card default was updated with all four previous
 release mappings preserved, and an approved operator request was prepared with a
 local backup of the original release/attempts.

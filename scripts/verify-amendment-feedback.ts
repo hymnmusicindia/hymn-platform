@@ -1,0 +1,62 @@
+import { customerBrandText } from '../lib/customer-message';
+import assert from 'node:assert/strict';
+import { prisma } from '../lib/prisma';
+import { createReleaseChangeRequest, reviewReleaseChangeRequest } from '../lib/release-change-requests';
+import { ensureAmendmentAcknowledgement, repairRecentAmendmentAcknowledgements } from '../lib/release-amendment-notifications';
+import { deliverReleaseOutbox } from '../lib/email/release-outbox';
+import { getDetailedReleaseByUserId, deserializeRelease } from '../lib/distribution-db';
+import { ensureCurrentDireNoteAttempt } from '../lib/distribution-idempotency';
+import { amendmentSourceRevision } from '../lib/release-amendment-revision';
+import { summarizeAmendment } from '../lib/release-amendment-presentation';
+
+async function main() {
+  assert.equal(process.env.DATABASE_URL, 'postgresql://fixture:fixture@127.0.0.1:55473/acquisition_fixture');
+  assert.equal(customerBrandText('DireNote report for DireNote Artist', ['DireNote Artist']), 'HYMN report for DireNote Artist');
+  const user = await prisma.user.create({ data: { email: 'amendment-feedback@fixture.invalid', name: 'Feedback fixture', googleId: 'feedback-fixture', status: 'ACTIVE' } });
+  const release = await prisma.release.create({ data: { userId: user.id, title: 'Original release', artistName: 'Fixture Artist', genre: 'Pop', releaseDate: new Date('2026-01-01'), status: 'LIVE', upc: '3473620314135', tracks: { create: { title: 'Original track', trackNumber: 1, isrc: 'INDN22602494', audioUrl: '/api/assets/65/download' } } }, include: { tracks: true } });
+  const prior=await prisma.distributionSubmissionAttempt.create({data:{releaseId:release.id,isCurrent:true,state:'submitted',idempotencyKey:'feedback-original-attempt',payloadHash:'original',upc:release.upc,payloadRedacted:{albumname:'Original release'},responseRedacted:{success:true,upc:release.upc},rawStatusPayload:{success:true,release:{album_name:'Original release',upc_code:release.upc},tracks:[{isrc:'INDN22602494'}]}}});
+  const card = await prisma.artistCard.create({data:{userId:user.id,artistName:'Fixture Artist'}});
+  const proposed = { editReleaseId:release.id, artistName:'Fixture Artist', releaseTitle:'Corrected release', releaseType:'single', releaseDate:'2026-11-20', recordLabelName:'Fixture Records', primaryGenre:'Pop', secondaryGenre:'Indie Pop', language:'Hindi', territory:'Worldwide', upcCode:release.upc, releaseTiming:'quick_release', platforms:['Spotify'], copyrightOwner:'Fixture Artist', publishingRights:'Fixture Artist',legal:Object.fromEntries(['ownershipConfirmation','noInfringement','collaboratorsCredited','platformGuidelines','hymnNotLiable','termsAccepted','falseMetadataAcknowledged','fraudWarningAccepted'].map(k=>[k,true])),paymentModel:'one_time',plan:'one_time',artworkFileKey:'artwork',existingArtworkUrl:'https://cdn.example.test/cover.jpg',tracks:[{trackNumber:1,trackTitle:'Original track',primaryArtist:'Fixture Artist',artistProfileIds:[card.id],songwriters:'Fixture Artist',composers:'Fixture Artist',producers:'Fixture Artist',isrc:'INDN22602494',isCover:false,coverLicenseConfirmed:false,audioFileKey:'audio-0',existingAudioUrl:'https://cdn.example.test/restored.wav',duration:'04:12',explicitContent:false,dolbyAtmos:false}] };
+  const summary = summarizeAmendment(deserializeRelease(release), { releaseTitle: 'Corrected release', tracks: [{ trackNumber: 1, trackTitle: 'Original track', uploadedAudioUrl: '/api/assets/999/SECRET/download' }] });
+  assert(summary.some(item => item.label === 'Release title' && item.before === 'Original release' && item.after === 'Corrected release'));
+  assert(summary.some(item => item.label.includes('audio master')));
+  assert(!JSON.stringify(summary).includes('SECRET'));
+  const request = await createReleaseChangeRequest({ releaseId: release.id, userId: user.id, requestType: 'metadata_update', reason: 'Restore original master and correct release title.', requestedChanges: { summary, fingerprint: 'feedback-v1', sourceRevision:amendmentSourceRevision(deserializeRelease(release)),wizard_metadata: { requested: JSON.parse(JSON.stringify(proposed)) } } });
+  await ensureAmendmentAcknowledgement(request.id); await ensureAmendmentAcknowledgement(request.id);
+  assert.equal(await prisma.notification.count({ where: { userId: user.id } }), 1);
+  assert.equal(await prisma.emailLog.count({ where: { userId: user.id } }), 1);
+  const receipt = await prisma.emailLog.findFirstOrThrow({ where: { userId: user.id } });
+  const text = String((receipt.payload as { text: string }).text);
+  assert.match(text, /Requested changes/); assert.match(text, /Corrected release/); assert.match(text, /audio master/); assert.match(text, /View amendment details/); assert(!/DireNote|SECRET/i.test(text));
+  assert.equal((await getDetailedReleaseByUserId(user.id, release.id))?.amendment?.status, 'submitted');
+  const restored = await prisma.emailLog.delete({ where: { id: receipt.id } });
+  assert(restored); await repairRecentAmendmentAcknowledgements();
+  assert.equal(await prisma.emailLog.count({ where: { userId: user.id } }), 1, 'Missing receipt is repaired once.');
+  await reviewReleaseChangeRequest({ id: request.id, decision: 'under_review', note: 'HYMN has started reviewing your amendment.' });
+  await reviewReleaseChangeRequest({ id: request.id, decision: 'information_required', note: 'Please confirm the restored master is the same recording.' });
+  assert.equal((await getDetailedReleaseByUserId(user.id, release.id))?.amendment?.status, 'information_required');
+  // Simulate the authenticated owner response to the information request.
+  await prisma.$transaction(async tx => {
+    await tx.releaseChangeRequest.update({ where: { id: request.id }, data: { status: 'submitted' } });
+    const event = await tx.releaseChangeRequestEvent.create({ data: { requestId: request.id, actorType: 'user', actorId: user.id, previousStatus: 'information_required', newStatus: 'submitted', note: 'Confirmed: the same unchanged original master.' } });
+    const { enqueueAmendmentUpdate } = await import('../lib/release-amendment-notifications'); await enqueueAmendmentUpdate(tx, request.id, event.id);
+  });
+  await reviewReleaseChangeRequest({ id: request.id, decision: 'approved', note: 'HYMN verified the requested metadata changes.' });
+  await reviewReleaseChangeRequest({ id: request.id, decision: 'processing_manually', note: 'Approved package prepared for delivery.' });
+  await reviewReleaseChangeRequest({ id: request.id, decision: 'submitted_to_partner', note: 'Delivery accepted; store verification pending.', providerReference: 'fixture-delivery-1' });
+  await reviewReleaseChangeRequest({ id: request.id, decision: 'completed', note: 'HYMN verified the requested changes at the destination.', providerReference: 'fixture-delivery-1' });
+  let delivered = 0;
+  const fakeSmtp = async (input: { text: string }) => { assert.match(input.text, /HYMN/); delivered++; return { data: { id: `fixture-${delivered}` }, error: null }; };
+  const result = await deliverReleaseOutbox([release.id], 20, fakeSmtp);
+  assert.equal(result.failed, 0); assert(result.sent >= 2, JSON.stringify(result));
+  assert(result.cancelled >= 1, 'Outdated progress messages are cancelled.');
+  const total = delivered; await deliverReleaseOutbox([release.id], 20, fakeSmtp); assert.equal(delivered, total, 'Outbox replay never resends accepted email.');
+  const completed=await getDetailedReleaseByUserId(user.id, release.id);
+  assert.equal(completed?.amendment?.status, 'completed');assert.equal(completed?.releaseTitle,'Corrected release');assert.equal(completed?.upcCode,'3473620314135');assert.equal(completed?.tracks?.[0].isrc,'INDN22602494');assert.equal(completed?.tracks?.[0].id,release.tracks[0].id);assert.equal(completed?.tracks?.[0].audioUrl,'https://cdn.example.test/restored.wav');assert.equal(completed?.releaseDate.slice(0,10),'2026-01-01');
+  const audit=await prisma.auditLog.findFirstOrThrow({where:{entityId:String(release.id),action:'RELEASE_AMENDMENT_APPLIED'}});assert.equal((audit.metadata as any).previous.title,'Original release');assert.equal((audit.metadata as any).previous.statusSnapshot.id,prior.id);
+  const retained=await prisma.distributionSubmissionAttempt.findUniqueOrThrow({where:{id:prior.id}});assert.deepEqual(retained.payloadRedacted,{albumname:'Original release'});assert.equal(retained.rawStatusPayload,null);assert.equal((await ensureCurrentDireNoteAttempt(release.id)).id,prior.id);
+  assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: release.id } })).status, 'LIVE');
+  assert.equal(await prisma.notification.count({ where: { userId: user.id } }), 8, 'Every lifecycle update has a notification.');
+  console.log('PASS amendment feedback: atomic receipt and notification, changes summary, safe content, visible status, acknowledgement repair, review lifecycle, request-based mail guards, stale mail cancellation, mocked SMTP delivery and duplicate prevention.');
+}
+main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => prisma.$disconnect());

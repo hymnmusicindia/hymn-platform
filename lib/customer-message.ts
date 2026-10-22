@@ -1,6 +1,11 @@
 // White-label presentation only. Provider records and integration identifiers stay unchanged.
-export function customerBrandText(value: string): string {
-  return value
+export function customerBrandText(value: string, preserveNames: readonly string[] = []): string {
+  let prefix = '\uE000\uE002';
+  while (value.includes(prefix)) prefix += '_';
+  const names = [...new Set(preserveNames.flatMap(name => [name, name.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[char]!)]).filter(Boolean))].sort((a, b) => b.length - a.length);
+  const pattern = names.map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const protectedValue = pattern ? value.replace(new RegExp(pattern, 'g'), name => `${prefix}${names.indexOf(name)}\uE001`) : value;
+  let branded = protectedValue
     .replace(/https?:\/\/[^\s<>"']+/gi, link => {
       try {
         const host = new URL(link).hostname;
@@ -8,6 +13,8 @@ export function customerBrandText(value: string): string {
       } catch { return link; }
     })
     .replace(/\bDire[\s-]*Note(?:\s+Media)?\b|\bDNM\b/gi, "HYMN");
+  names.forEach((name, index) => { branded = branded.replaceAll(`${prefix}${index}\uE001`, name); });
+  return branded;
 }
 
 // Presentation only: keep API errors, stored review notes and field identifiers intact.

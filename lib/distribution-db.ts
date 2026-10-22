@@ -12,6 +12,16 @@ import { redactDireNoteDiagnostic } from "@/lib/direnote";
 import { findDistributionPlan } from "@/lib/distribution-plans";
 import { saveReleaseTracks } from "@/lib/release-track-save";
 import { syncReleaseContributions, releaseSaveTransactionOptions } from "@/lib/release-contributor-sync";
+import { amendmentChanges } from './release-amendment-presentation';
+
+async function withAmendmentStatus(releases: Release[]): Promise<Release[]> {
+  if (!releases.length || !isPostgresPrisma()) return releases;
+  const requests = await prisma.releaseChangeRequest.findMany({ where: { releaseId: { in: releases.map(item => item.id) }, requestType: { in: ['metadata_update', 'asset_update'] } }, orderBy: { id: 'desc' }, select: { id: true, releaseId: true, status: true, submittedAt: true, updatedAt: true, requestedChanges: true } });
+  return releases.map(release => {
+    const request = requests.find(item => item.releaseId === release.id);
+    return request ? { ...release, amendment: { id: request.id, status: request.status, submittedAt: request.submittedAt.toISOString(), updatedAt: request.updatedAt.toISOString(), changes: amendmentChanges(request.requestedChanges) } } : release;
+  });
+}
 
 export function isPostgresPrisma() {
   return /^postgres(?:ql)?:\/\//i.test(process.env.DATABASE_URL?.trim() || "");
@@ -596,7 +606,7 @@ export async function listDetailedReleasesByUser(userId: number): Promise<Releas
   if (!pool) {
     if (isPostgresPrisma()) {
       const dbReleases = await legacyCompatibleReleaseRows("user", userId);
-      return dbReleases.map(deserializeRelease);
+      return withAmendmentStatus(dbReleases.map(deserializeRelease));
     }
     return memory.releases.filter((release) => release.userId === userId).sort((a, b) => b.id - a.id);
   }
@@ -633,7 +643,7 @@ export async function getDetailedReleaseByUserId(userId: number, releaseId: numb
   if (!pool) {
     if (isPostgresPrisma()) {
       const dbRelease = await legacyCompatibleReleaseForUser(userId, releaseId);
-      return dbRelease ? deserializeRelease(dbRelease) : null;
+      return dbRelease ? (await withAmendmentStatus([deserializeRelease(dbRelease)]))[0] : null;
     }
     return memory.releases.find((release) => release.userId === userId && release.id === releaseId) ?? null;
   }
@@ -1919,7 +1929,7 @@ export async function getDetailedReleaseById(releaseId: number): Promise<Release
   if (!pool) {
     if (isPostgresPrisma()) {
       const dbRelease = await legacyCompatibleReleaseById(releaseId);
-      return dbRelease ? deserializeRelease(dbRelease) : null;
+      return dbRelease ? (await withAmendmentStatus([deserializeRelease(dbRelease)]))[0] : null;
     }
     const release = memory.releases.find((item: any) => item.id === releaseId) ?? null;
     if (!release) return null;

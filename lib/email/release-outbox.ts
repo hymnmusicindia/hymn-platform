@@ -45,7 +45,7 @@ export async function queueReleaseStatusUpdate(db: any, releaseId: number, statu
   return enqueueReleaseEmail(db, event, { qcReportUrl: ['release_changes_requested','release_rejected'].includes(event) ? `${getPublicAppUrl()}/dashboard/releases/${releaseId}/qc-report` : undefined, qcSummary, to: release.user.email, userId: release.userId, userName: release.user.name, releaseId, releaseTitle: release.title, artistName: release.artistName, releaseStatus: status, statusEventKey: `v${release.version}`, releaseDate: releaseTiming === "schedule_release" ? release.releaseDate.toISOString().slice(0, 10) : undefined, manageReleaseUrl: `${getPublicAppUrl()}/dashboard/releases/${releaseId}`, correctionUrl: `${getPublicAppUrl()}/dashboard/releases/${releaseId}?tab=corrections`, rejectionReason: status === "changes_requested" ? (release.correctionReason ?? providerMessages.join("\n")) || undefined : release.rejectionReason ?? undefined, correctionEventKey: status === "changes_requested" ? correctionKey + (requestedReminderKey ? `:${requestedReminderKey}` : "") : undefined, providerApproved: providerScheduleApproved });
 }
 
-export async function deliverReleaseOutbox(releaseIds?: number[], limit = 5, deliver?: (input: { from: string; to: string; subject: string; html: string; text: string; replyTo?: string }) => Promise<{ data: { id?: string } | null; error: { message: string } | null }>, emailLogIds?: number[]) {
+export async function deliverReleaseOutbox(releaseIds?: number[], limit = 5, deliver?: (input: { from: string; to: string; subject: string; html: string; text: string; replyTo?: string; preserveNames?: string[] }) => Promise<{ data: { id?: string } | null; error: { message: string } | null }>, emailLogIds?: number[]) {
   if (!getEmailConfig().enabled && !deliver) return { enabled: false, sent: 0, failed: 0 };
   const interrupted = await prisma.emailLog.findMany({ where: { status: "sending", payload: { path: ["channel"], equals: "release_outbox" } }, select: { id: true, payload: true }, take: 100 });
   const staleIds = interrupted.filter(row => {
@@ -73,12 +73,14 @@ export async function deliverReleaseOutbox(releaseIds?: number[], limit = 5, del
     // Receipt confirms a historical submission; normal progress must not cancel it.
     // Drafts/withdrawn releases still cannot receive a submission receipt.
     const validSubmission = job.template === "release_submitted" && ["SUBMITTED", "UNDER_REVIEW", "IN_QC_QUEUE", "APPROVED", "QUEUED_FOR_DISTRIBUTION", "SUBMITTING_TO_DISTRIBUTOR", "SENT_TO_DISTRIBUTOR", "DISTRIBUTOR_PROCESSING", "SCHEDULED", "LIVE", "CHANGES_REQUESTED", "REJECTED", "RESUBMITTED", "DELIVERY_FAILED"].includes(release?.status ?? "");
-    if (!release || release.archivedAt || (!validSubmission && release.status !== payload.expectedStatus) || release.user.status !== "ACTIVE" || release.user.email.toLowerCase() !== job.toEmail.toLowerCase() || payload.draftEditedAt && (release.lastEditedAt ?? release.createdAt).toISOString() !== payload.draftEditedAt) {
+    const amendment = job.template === 'release_amendment_update' ? await prisma.releaseChangeRequest.findFirst({ where: { id: Number(payload.amendmentRequestId), releaseId: Number(job.entityId), requestedByUserId: job.userId ?? 0 } }) : null;
+    const validAmendment = Boolean(amendment && String(object(amendment.requestedChanges).fingerprint ?? '') === String(payload.amendmentFingerprint ?? '') && (payload.amendmentStatus === 'submitted' || amendment.status === payload.amendmentStatus));
+    if (!release || release.archivedAt || (job.template === 'release_amendment_update' ? !validAmendment : !validSubmission && release.status !== payload.expectedStatus) || release.user.status !== "ACTIVE" || release.user.email.toLowerCase() !== job.toEmail.toLowerCase() || payload.draftEditedAt && (release.lastEditedAt ?? release.createdAt).toISOString() !== payload.draftEditedAt) {
       await prisma.emailLog.update({ where: { id: job.id }, data: { status: "cancelled", errorMessage: "Release, owner or draft changed before delivery." } }); cancelled++; continue;
     }
     try {
       const config = getEmailConfig();
-      const result = await (deliver ?? getEmailClient({ timeoutMs: 8000 })!.emails.send)({ from: config.from, to: job.toEmail, subject: job.subject, html: payload.html, text: payload.text, replyTo: config.replyTo });
+      const result = await (deliver ?? getEmailClient({ timeoutMs: 8000 })!.emails.send)({ from: config.from, to: job.toEmail, subject: job.subject, html: payload.html, text: payload.text, replyTo: config.replyTo, preserveNames: Array.isArray(payload.preserveNames) ? payload.preserveNames.filter((name): name is string => typeof name === "string") : undefined });
       if (result.error) throw new Error(result.error.message);
       await prisma.emailLog.update({ where: { id: job.id }, data: { status: "sent", sentAt: new Date(), providerMessageId: result.data?.id ?? null, errorMessage: null } });
       sent++;

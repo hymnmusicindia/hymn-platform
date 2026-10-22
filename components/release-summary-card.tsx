@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Copy, Disc3, Gift, MoreHorizontal, Pencil, Settings, Trash2, X } from "lucide-react";
+import { amendmentStatusLabel } from '@/lib/release-amendment-presentation';
 import type { Release } from "@/lib/types";
 import { showFirstReleaseBadge } from "@/lib/first-release-flow";
 import { useSubscriptionLabel } from "@/components/subscription-label-context";
@@ -145,6 +146,7 @@ export function ReleaseSummaryCard({
         <span className="capitalize">{release.releaseType}</span> · {trackCount} Track{trackCount === 1 ? "" : "s"} · {release.artistName || "Unknown artist"}
       </p>
 
+      {release.amendment ? <Link href={`/dashboard/releases/${release.id}?tab=requests&request=${release.amendment.id}`} className="mt-3 block text-xs font-semibold" style={{ color: "var(--text)" }}>{amendmentStatusLabel(release.amendment.status)} ? #{release.amendment.id}</Link> : null}
       <div className="release-summary-actions mt-4">
         <Link
           href={href}

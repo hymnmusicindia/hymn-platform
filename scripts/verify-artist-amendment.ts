@@ -79,8 +79,9 @@ async function main() {
     assert.equal((await prisma.distributionSubmissionAttempt.findFirstOrThrow({ where: { releaseId: release.id, isCurrent: true } })).id, currentAttempt.id);
     assert.equal((await prisma.releaseArtistIdentity.findUniqueOrThrow({ where: { releaseId_artistCardId: { releaseId: release.id, artistCardId: card.id } } })).spotifyUrl, desired);
     assert.equal((await prisma.releaseChangeRequest.findUniqueOrThrow({ where: { id: failedRequest.id } })).status, 'failed');
-    assert.equal(await prisma.emailLog.count(), emailsBefore, 'Operator amendment tests do not enqueue customer emails.');
-    console.log('PASS live artist amendment: approval, internal re-release flags, supplied ISRC, assigned UPC, mapping at all levels, queued locks, scoped polling, replay protection, verified final profile, rollback of failed amendments, no email side effects and immutable history.');
+    assert.equal(await prisma.emailLog.count({ where: { template: { not: 'release_amendment_update' } } }), emailsBefore, 'Amendments do not enqueue misleading ordinary release-status emails.');
+    assert(await prisma.emailLog.count({ where: { template: 'release_amendment_update' } }) >= 4, 'Dedicated amendment updates must be durable.');
+    console.log('PASS live artist amendment: approval, internal re-release flags, supplied ISRC, assigned UPC, mapping at all levels, queued locks, scoped polling, replay protection, verified final profile, rollback of failed amendments, dedicated amendment notifications and immutable history.');
   } finally { globalThis.fetch = original; }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => prisma.$disconnect());

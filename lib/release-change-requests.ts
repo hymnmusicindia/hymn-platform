@@ -1,3 +1,5 @@
+import { enqueueAmendmentUpdate, amendmentTransactionOptions } from './release-amendment-notifications';
+import { applyCompletedWizardAmendment } from './release-amendment-fulfillment';
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { transitionReleaseStatus } from "@/lib/release-status-engine";
@@ -5,7 +7,8 @@ import type { ReleaseStatus } from "@/lib/types";
 
 export type ReleaseChangeRequestType = "correction" | "metadata_update" | "asset_update" | "takedown";
 const allowedRequestTransitions: Record<string, string[]> = {
-  submitted: ["approved", "information_required", "rejected"],
+  submitted: ["under_review", "approved", "information_required", "rejected"],
+  under_review: ["approved", "information_required", "rejected"],
   information_required: ["submitted", "rejected"],
   approved: ["processing_manually", "submitted_to_partner", "rejected"],
   processing_manually: ["submitted_to_partner", "completed", "failed"],
@@ -23,13 +26,14 @@ export async function createReleaseChangeRequest(input: { releaseId: number; use
   const existing = await tx.releaseChangeRequest.findFirst({ where: { releaseId: input.releaseId, requestType: input.requestType, status: { in: ["submitted", "under_review", "information_required", "approved", "processing_manually", "submitted_to_partner"] } } });
   if (existing) return existing;
     const request = await tx.releaseChangeRequest.create({ data: { releaseId: input.releaseId, requestedByUserId: input.userId, requestType: input.requestType, reason: input.reason.trim(), desiredEffectiveAt: input.desiredEffectiveAt, requestedChanges: input.requestedChanges } });
-    await tx.releaseChangeRequestEvent.create({ data: { requestId: request.id, actorType: "user", actorId: input.userId, previousStatus: null, newStatus: "submitted", note: input.reason.trim(), metadata: { desiredEffectiveAt: input.desiredEffectiveAt?.toISOString() ?? null, requestedChanges: input.requestedChanges ?? null } } });
+    const event = await tx.releaseChangeRequestEvent.create({ data: { requestId: request.id, actorType: "user", actorId: input.userId, previousStatus: null, newStatus: "submitted", note: input.reason.trim(), metadata: { desiredEffectiveAt: input.desiredEffectiveAt?.toISOString() ?? null, requestedChanges: input.requestedChanges ?? null } } });
+    await enqueueAmendmentUpdate(tx, request.id, event.id);
     await tx.auditLog.create({ data: { actorId: input.userId, action: "RELEASE_CHANGE_REQUEST_SUBMITTED", entity: "release_change_request", entityId: String(request.id), metadata: { releaseId: input.releaseId, requestType: input.requestType, reason: input.reason.trim() } } });
     return request;
-  });
+  }, amendmentTransactionOptions);
 }
 
-export async function reviewReleaseChangeRequest(input: { id: number; adminId?: number | null; decision: "approved" | "information_required" | "rejected" | "processing_manually" | "submitted_to_partner" | "completed" | "failed"; note: string; providerReference?: string }) {
+export async function reviewReleaseChangeRequest(input: { id: number; adminId?: number | null; decision: "under_review" | "approved" | "information_required" | "rejected" | "processing_manually" | "submitted_to_partner" | "completed" | "failed"; note: string; providerReference?: string }) {
   if (!input.note.trim()) throw new Error("An administrative reason is required.");
   return prisma.$transaction(async tx => {
   const identity = await tx.releaseChangeRequest.findUnique({ where: { id: input.id }, select: { releaseId: true } });
@@ -37,11 +41,14 @@ export async function reviewReleaseChangeRequest(input: { id: number; adminId?: 
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422028, ${identity.releaseId}::integer)`;
   const current = await tx.releaseChangeRequest.findUnique({ where: { id: input.id } });
   if (!current) throw new Error("Change request not found.");
+  if (current.status === input.decision && current.adminNote === input.note.trim() && (!input.providerReference?.trim() || current.providerReference === input.providerReference.trim())) return current;
   if (!allowedRequestTransitions[current.status]?.includes(input.decision)) throw new Error(`Change request cannot move from ${current.status} to ${input.decision}.`);
   if (["submitted_to_partner", "completed"].includes(input.decision) && !input.providerReference?.trim() && !current.providerReference) throw new Error("Partner execution reference is required.");
   if (input.decision === "submitted_to_partner" && !input.providerReference?.trim()) throw new Error("Partner submission reference is required.");
+  if (input.decision === 'completed' && current.requestType === 'metadata_update') await applyCompletedWizardAmendment(tx, current);
     const request = await tx.releaseChangeRequest.update({ where: { id: input.id }, data: { status: input.decision, adminNote: input.note.trim(), providerReference: input.providerReference?.trim() || undefined, reviewedByAdminId: input.adminId, reviewedAt: new Date(), completedAt: input.decision === "completed" ? new Date() : undefined } });
-    await tx.releaseChangeRequestEvent.create({ data: { requestId: input.id, actorType: "admin", actorId: input.adminId, previousStatus: current.status, newStatus: input.decision, note: input.note.trim(), providerReference: input.providerReference?.trim() || current.providerReference } });
+    const event = await tx.releaseChangeRequestEvent.create({ data: { requestId: input.id, actorType: "admin", actorId: input.adminId, previousStatus: current.status, newStatus: input.decision, note: input.note.trim(), providerReference: input.providerReference?.trim() || current.providerReference } });
+    await enqueueAmendmentUpdate(tx, request.id, event.id);
     await tx.auditLog.create({ data: { actorId: input.adminId, action: "RELEASE_CHANGE_REQUEST_REVIEWED", entity: "release_change_request", entityId: String(input.id), metadata: { previousStatus: current.status, newStatus: input.decision, note: input.note.trim() } } });
     const nextStatus = current.requestType !== "takedown" ? null : input.decision === "approved" ? "takedown_requested" : ["processing_manually", "submitted_to_partner"].includes(input.decision) ? "takedown_processing" : input.decision === "completed" ? "taken_down" : null;
     if (nextStatus) {
@@ -55,6 +62,6 @@ export async function reviewReleaseChangeRequest(input: { id: number; adminId?: 
       }
     }
     return request;
-  });
+  }, amendmentTransactionOptions);
 }
 // vercel trigger 9

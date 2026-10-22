@@ -4,7 +4,7 @@ import { useState } from "react";
 import { WorkspaceRecords } from "@/components/workspace-records";
 
 type RequestRow = { id: number; requestType: string; status: string; reason: string; requestedChanges?: Record<string, unknown> | null; desiredEffectiveAt?: string | null; providerReference?: string | null; submittedAt: string; release: { title: string; artistName: string; status: string }; events: Array<{ id: number; newStatus: string; note: string; createdAt: string }> };
-const decisions = ["approved", "information_required", "rejected", "processing_manually", "submitted_to_partner", "completed", "failed"];
+const decisions = ["under_review", "approved", "information_required", "rejected", "processing_manually", "submitted_to_partner", "completed", "failed"];
 
 export function ReleaseChangeRequestQueue({ initialRequests }: { initialRequests: RequestRow[] }) {
   const [selectedId,setSelectedId]=useState<number|null>(null);

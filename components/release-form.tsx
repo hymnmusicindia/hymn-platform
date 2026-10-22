@@ -1,4 +1,6 @@
 "use client";
+import { ReleaseAmendmentConfirmation } from './release-amendment-confirmation';
+import { activeAmendmentStatuses } from '@/lib/release-amendment-presentation';
 import "./release-welcome.css";
 import "./release-editor-layout.css";
 import "./release-mobile.css";
@@ -1108,6 +1110,7 @@ export function ReleaseForm({
   amendmentSourceRevision?: string;
 }) {
   const router = useRouter();
+  const [amendmentReceipt, setAmendmentReceipt] = useState<{ id: number; status: string; existing?: boolean } | null>(() => amendmentMode && initialRelease?.amendment && activeAmendmentStatuses.includes(initialRelease.amendment.status) ? { ...initialRelease.amendment, existing: true } : null);
   const today = useMemo(() => new Date(), []);
   const quickReleaseDate = useMemo(
     () => toDateInputValue(addDays(today, 3)),
@@ -2854,6 +2857,7 @@ export function ReleaseForm({
       body: formData,
     });
     const data = await response.json();
+    if (!response.ok && amendmentMode && data.code === "AMENDMENT_ALREADY_ACTIVE" && data.request) return { ...data, existingAmendment: true };
     if (!response.ok) throw new Error(data.error || "Update failed.");
     return data;
   }
@@ -3277,7 +3281,7 @@ export function ReleaseForm({
       if (isPaidReleaseResubmission) {
         if (!amendmentMode) await confirmArtistProfilesForSubmission(initialRelease?.id ?? draftReleaseId ?? 0);
         const data = await submitEditedRelease();
-        if (amendmentMode) { router.push(`/dashboard/releases/${initialRelease?.id}?tab=requests`); router.refresh(); return; }
+        if (amendmentMode) { setAmendmentReceipt({ ...data.request, existing: data.existingAmendment === true }); setSubmitting(false); setUploadProgress(100); return; }
         if (data.release?.status === "changes_requested" && data.release?.direNoteStatus) {
           router.push(`/dashboard/releases/${data.release.id}?tab=corrections`);
           router.refresh();
@@ -3474,6 +3478,7 @@ export function ReleaseForm({
     return () => window.clearTimeout(timer);
   }, [journeyIntro, journeyExiting, submittedRelease, startReleaseJourney]);
 
+  if (amendmentReceipt && initialRelease) return <ReleaseAmendmentConfirmation releaseId={initialRelease.id} title={initialRelease.releaseTitle || initialRelease.trackName} request={amendmentReceipt} />;
   if (submittedRelease) {
     return (
       <SuccessState
