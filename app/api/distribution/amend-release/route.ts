@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto';
 import { getSession } from '@/lib/session';
 import { requireCurrentPolicyAcceptance } from '@/lib/policy-agreement';
 import { distributionEditSchema } from '@/lib/validation';
-import { getDetailedReleaseById } from '@/lib/distribution-db';
+import { deserializeRelease, getDetailedReleaseById } from '@/lib/distribution-db';
+import { matchesAmendmentSourceRevision } from '@/lib/release-amendment-revision';
 import { assertAmendmentIdentifiers } from '@/lib/release-amendment-identifiers';
 import { assertDireNoteAssetFormat } from '@/lib/distribution-asset-format';
 import { resolvePrivateReleaseArtworkUrl } from '@/lib/release-asset-resolution';
@@ -35,7 +36,8 @@ export async function POST(request: Request) {
     const fingerprint = createHash('sha256').update(JSON.stringify(metadata)).digest('hex');
     const change = await prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422028, ${release.id}::integer)`;
-      const current = await tx.release.findFirstOrThrow({ where: { id: release.id, userId: user.sub }, include: { tracks: true } });
+      const current = await tx.release.findFirstOrThrow({ where: { id: release.id, userId: user.sub, archivedAt: null }, include: { tracks: { include: { contributions: { include: { party: true }, orderBy: { sequence: 'asc' } } }, orderBy: { trackNumber: 'asc' } } } });
+      if (!['LIVE', 'PARTIALLY_LIVE', 'SCHEDULED', 'AWAITING_LIVE_CONFIRMATION', 'SENT_TO_DISTRIBUTOR', 'DISTRIBUTOR_PROCESSING'].includes(current.status)) throw Error('This release is no longer eligible for an amendment.');
       const existing = await tx.releaseChangeRequest.findFirst({ where: { releaseId: release.id, requestType: 'metadata_update', status: { in: ['submitted', 'under_review', 'information_required', 'approved', 'processing_manually', 'submitted_to_partner'] } } });
       const legacyRequest = existing && !(existing.requestedChanges as Record<string, unknown> | null)?.wizard_metadata && ['submitted', 'under_review', 'information_required', 'approved'].includes(existing.status);
       if (existing) {
@@ -43,7 +45,10 @@ export async function POST(request: Request) {
         if (changes?.fingerprint === fingerprint) return existing;
         if (!legacyRequest) throw Error('An amendment is already being reviewed. Open Release requests to follow up before submitting another version.');
       }
-      if (String(form.get('sourceUpdatedAt') || '') !== current.updatedAt.toISOString()) throw Error('The release changed while you were editing. Reload before submitting.');
+      const revision = String(form.get('sourceRevision') || '');
+      if (revision) {
+        if (!matchesAmendmentSourceRevision(deserializeRelease(current), revision)) throw Error('Release metadata or assets changed while you were editing. Reload the amendment before submitting.');
+      } else if (String(form.get('sourceUpdatedAt') || '') !== current.updatedAt.toISOString()) throw Error('Refresh the amendment editor once to load the updated version check.');
       assertAmendmentIdentifiers({ ...release, upcCode: current.upc ?? undefined, tracks: current.tracks.map(track => ({ ...release.tracks!.find(item => item.id === track.id)!, isrc: track.isrc ?? undefined })) }, metadata);
       const proposed = { wizard_metadata: { requested: metadata }, fingerprint, locked: { upc: current.upc, tracks: current.tracks.map(track => ({ id: track.id, trackNumber: track.trackNumber, isrc: track.isrc })) } };
       if (legacyRequest) {

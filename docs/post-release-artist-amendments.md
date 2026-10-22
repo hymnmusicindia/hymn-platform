@@ -58,10 +58,13 @@ identifier changes, track additions/removals and track-number/ISRC remapping.
 Missing masters can be restored through the existing managed upload flow.
 
 Wizard submissions are stored as complete proposed metadata in a tracked HYMN
-review request, with a release-version check and replay fingerprint. The live
+review request, with a server-signed content revision and replay fingerprint. The live
 release is unchanged. An earlier unsent legacy request can be replaced with the
 complete wizard proposal, invalidating its previous approval. A different pending
 wizard proposal or a request already sent to the partner cannot be overwritten.
+The source revision covers editable metadata, assets, credits and original
+identifiers. Background status polling, sync timestamps and analytics do not
+invalidate an open amendment. Actual content changes still require a fresh review.
 The admin queue exposes the submitted metadata and locked identifiers for review.
 General wizard amendments use the existing tracked manual partner review process;
 the automated endpoint described above remains specific to Spotify link amendments.

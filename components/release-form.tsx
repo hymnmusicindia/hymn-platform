@@ -1090,6 +1090,7 @@ export function ReleaseForm({
   audioLibraryPrefill,
   initialCorrectionField,
   amendmentMode = false,
+  amendmentSourceRevision,
 }: {
   userName?: string;
   initialStage?: number;
@@ -1104,6 +1105,7 @@ export function ReleaseForm({
   audioLibraryPrefill?: AudioLibraryPrefill;
   initialCorrectionField?: string;
   amendmentMode?: boolean;
+  amendmentSourceRevision?: string;
 }) {
   const router = useRouter();
   const today = useMemo(() => new Date(), []);
@@ -2843,7 +2845,10 @@ export function ReleaseForm({
     if (!checked.success) throw new Error(checked.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`).join("\n"));
     const formData = new FormData();
     formData.append("payload", JSON.stringify(checked.data));
-    if (amendmentMode) formData.append("sourceUpdatedAt", initialRelease?.draftVersion ?? "");
+    if (amendmentMode) {
+      formData.append("sourceUpdatedAt", initialRelease?.draftVersion ?? "");
+      if (amendmentSourceRevision) formData.append("sourceRevision", amendmentSourceRevision);
+    }
     const response = await fetch(amendmentMode ? "/api/distribution/amend-release" : "/api/distribution/update-release", {
       method: "POST",
       body: formData,
