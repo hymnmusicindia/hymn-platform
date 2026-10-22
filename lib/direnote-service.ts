@@ -1,3 +1,4 @@
+import { conflictsWithHistoricalIdentity, selectedReleaseArtistIds, snapshotMatchesCard } from '@/lib/release-artist-verification';
 import { prisma } from "@/lib/prisma";
 import { refreshMissingSpotifyArtistPhotos, refreshSpotifyArtistPhoto } from "@/lib/spotify-artist-photos";
 import { createHash, randomUUID } from "node:crypto";
@@ -153,6 +154,19 @@ async function persistArtistLinks(tx: Prisma.TransactionClient, releaseId: numbe
   const matches = candidates.filter(card => card.artistName.trim().toLocaleLowerCase() === name.toLocaleLowerCase());
   if (matches.length !== 1) return false;
   const card = matches[0];
+  const binding = await tx.releaseArtistIdentity.findUnique({ where: { releaseId_artistCardId: { releaseId, artistCardId: card.id } } });
+  // An older release's sync must never fill or rebind a corrected current card.
+  if (binding && (!snapshotMatchesCard(binding, card) || (binding.providerArtistId && binding.providerArtistId !== direNoteArtistId))) return false;
+  if (binding && !binding.providerArtistId) {
+    if (!direNoteArtistId || (binding.spotifyUrl && links.spotify?.id !== verifiedArtistStoreLinks({ spotify: binding.spotifyUrl }).spotify?.id) || (binding.appleUrl && links.apple?.id !== verifiedArtistStoreLinks({ apple: binding.appleUrl }).apple?.id)) return false;
+    const prior = await tx.releaseArtistIdentity.findMany({ where: { artistCardId: card.id, providerArtistId: direNoteArtistId, id: { not: binding.id } } });
+    if (prior.some(row => conflictsWithHistoricalIdentity(row, binding))) {
+      const field = `artist_${card.id}_identity_reused`;
+      if (!(await tx.direNoteReconciliationDiscrepancy.findFirst({ where: { releaseId, field, status: 'open' } }))) await tx.direNoteReconciliationDiscrepancy.create({ data: { releaseId, field, hymnValue: binding.spotifyUrl ?? '', direNoteValue: direNoteArtistId, severity: 'critical' } });
+      return false;
+    }
+    await tx.releaseArtistIdentity.update({ where: { id: binding.id }, data: { providerArtistId: direNoteArtistId } });
+  }
   let changed = false;
   if (direNoteArtistId && /^\d+$/.test(direNoteArtistId)) {
     if (!card.direNoteArtistId || card.direNoteArtistId === direNoteArtistId) {
@@ -504,6 +518,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     const stillCurrent = await tx.distributionSubmissionAttempt.findFirst({ where: { id: attempt.id, isCurrent: true } });
     if (!stillCurrent) throw new Error("DireNote attempt was superseded during status lookup. Retry the current attempt.");
     const currentRelease = await tx.release.findUniqueOrThrow({ where: { id: releaseId }, include: { tracks: true } });
+    for (const cardId of selectedReleaseArtistIds(currentRelease.tracks, currentRelease.artistProfileId)) await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422030, ${cardId}::integer)`;
     const openDiscrepancies = new Set((await tx.direNoteReconciliationDiscrepancy.findMany({ where: { releaseId, status: "open" }, select: { field: true } })).map(item => item.field));
     const receivedUpc = normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc;
     const replacingIdentifiers = record(record(currentRelease.metadata).direNote).reconciliationInProgress === true;

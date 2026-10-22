@@ -1,3 +1,4 @@
+import { conflictsWithHistoricalIdentity, assertReleaseArtistVerification, releaseArtistProfiles, selectedReleaseArtistIds, snapshotMatchesCard } from '@/lib/release-artist-verification';
 import {
   buildDireNotePayload,
   parseDireNoteResponse,
@@ -27,31 +28,63 @@ import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution"
 import { prisma } from "@/lib/prisma";
 import { diffDireNotePayload } from "@/lib/direnote-payload-diff";
 import { snapshotTrackContributions } from "@/lib/contributor-identity";
-import { attachedArtistProfileIds } from "@/lib/artist-store-links";
 import { ensureDireNoteArtistMapping, verifyReleaseArtistMappings, flagArtistMappingReview } from "@/lib/direnote-artist-mapping";
+import { verifiedArtistStoreLinks } from '@/lib/artist-store-links';
 
-export async function persistDireNoteArtistIds(releaseId: number, artists: Array<{ name: string; artistId: string }>) {
+export async function persistDireNoteArtistIds(releaseId: number, artists: Array<{ name: string; artistId: string }>, attemptId?: number) {
   if (!artists.length) return [] as number[];
-  return prisma.$transaction(async tx => {
+  const conflicts: string[] = [];
+  const result = await prisma.$transaction(async tx => {
     const release = await tx.release.findUnique({
       where: { id: releaseId },
       select: { userId: true, artistProfileId: true, tracks: { select: { metadata: true } } }
     });
     if (!release) return [] as number[];
-    const attachedIds = [...new Set(release.tracks.flatMap(track => attachedArtistProfileIds(track.metadata, release.artistProfileId)))];
+    const attachedIds = selectedReleaseArtistIds(release.tracks, release.artistProfileId);
     if (!attachedIds.length) return [] as number[];
+    for (const id of attachedIds) await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422030, ${id}::integer)`;
+    const attempt = attemptId ? await tx.distributionSubmissionAttempt.findFirst({ where: { id: attemptId, releaseId, isCurrent: true } }) : null;
+    if (attemptId && !attempt) return [] as number[];
     const cards = await tx.artistCard.findMany({ where: { id: { in: attachedIds }, userId: release.userId, archivedAt: null } });
+    const identities = await tx.releaseArtistIdentity.findMany({ where: { releaseId } });
     const updated: number[] = [];
     for (const remote of artists) {
-      const matches = cards.filter(card => card.artistName.trim().toLocaleLowerCase() === remote.name.trim().toLocaleLowerCase());
+      const matches = cards.filter(card => (identities.find(row => row.artistCardId === card.id)?.artistName ?? card.artistName).trim().toLocaleLowerCase() === remote.name.trim().toLocaleLowerCase());
       if (matches.length !== 1) continue;
       const card = matches[0];
+      if (!/^\d+$/.test(remote.artistId) || Number(remote.artistId) <= 0) continue;
+      const identity = identities.find(row => row.artistCardId === card.id);
+      if (identity) {
+        if (attempt) {
+          const sent = attempt.payloadRedacted as unknown as DireNotePayload | null;
+          const sentArtists = [...(sent?.artists ?? []), ...(sent?.featuring_artists ?? []), ...(sent?.tracks ?? []).flatMap(track => [...(track.artists ?? []), ...(track.featuring_artists ?? [])])];
+          const expected = verifiedArtistStoreLinks({ spotify: identity.spotifyUrl, apple: identity.appleUrl, youtube: identity.youtubeUrl });
+          const mappingWasSent = sentArtists.some(artist => {
+            const links = verifiedArtistStoreLinks({ spotify: artist.spotify_url, apple: artist.apple_url, youtube: artist.youtube_url });
+            return artist.name.trim().toLowerCase() === identity.artistName.trim().toLowerCase() && (['spotify', 'apple', 'youtube'] as const).every(key => (links[key]?.id ?? links[key]?.url ?? null) === (expected[key]?.id ?? expected[key]?.url ?? null));
+          });
+          if (!mappingWasSent) { conflicts.push(identity.artistName); continue; }
+        }
+        if (identity.providerArtistId && identity.providerArtistId !== remote.artistId) { conflicts.push(identity.artistName); continue; }
+        // A correction must never quietly reuse an incompatible historical provider ID.
+        const prior = await tx.releaseArtistIdentity.findMany({ where: { artistCardId: card.id, providerArtistId: remote.artistId, id: { not: identity.id } } });
+        const incompatible = prior.some(row => conflictsWithHistoricalIdentity(row, identity));
+        if (incompatible) {
+          await tx.direNoteReconciliationDiscrepancy.create({ data: { releaseId, field: `artist_${card.id}_identity_reused`, hymnValue: identity.spotifyUrl ?? '', direNoteValue: remote.artistId, severity: 'critical' } });
+          conflicts.push(identity.artistName);
+          continue;
+        }
+        await tx.releaseArtistIdentity.update({ where: { id: identity.id }, data: { providerArtistId: remote.artistId } });
+        if (!snapshotMatchesCard(identity, card)) continue;
+      }
       if (card.direNoteArtistId && card.direNoteArtistId !== remote.artistId) continue;
       await tx.artistCard.update({ where: { id: card.id }, data: { direNoteArtistId: remote.artistId } });
       updated.push(card.id);
     }
     return updated;
   });
+  for (const name of conflicts) await flagArtistMappingReview({ releaseId, name, message: 'Ingestion returned an artist identity used by a different saved mapping. Do not repeat ingestion or overwrite the historical artist. Verify the accepted release and request provider mapping review.' });
+  return result;
 }
 
 async function persistDireNoteSongwriterIds(releaseId: number, songwriters: Array<{ name: string; songwriterId: string }>) {
@@ -131,7 +164,7 @@ export async function buildDireNotePayloadForRelease(release: Release, options: 
   return buildDireNotePayload({ ...release, ...proofs, artworkUrl, tracks }, {
     siteUrl: options.siteUrl,
     ownerEmail: owner?.email ?? null,
-    artistProfiles,
+    artistProfiles: await releaseArtistProfiles(release.id, artistProfiles),
     adminConfirmedExistingArtists: options.adminConfirmedExistingArtists,
     replaceProviderIdentifiers: options.replaceProviderIdentifiers
   });
@@ -262,6 +295,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
 
   await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: options.retry ? "DIRENOTE_RETRY_STARTED" : "APPROVE_RELEASE_STARTED" });
 
+  await assertReleaseArtistVerification(release.userId, release.id, undefined, true);
   const payload = await buildDireNotePayloadForRelease(release, { ...options, replaceProviderIdentifiers: Boolean(options.correctionReingest) });
   const previousAttempt = options.correctionReingest ? await ensureCurrentDireNoteAttempt(releaseId) : null;
   const validation = validationResult(payload, { ...options, replaceProviderIdentifiers: Boolean(options.correctionReingest) });
@@ -414,7 +448,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
       responsePayload: redactDireNoteDiagnostic(data),
       warnings: parsed.warnings
     });
-    const artistCardIds = await persistDireNoteArtistIds(releaseId, parsed.artists);
+    const artistCardIds = await persistDireNoteArtistIds(releaseId, parsed.artists, claim.attempt.id);
     const contributorPartyIds = await persistDireNoteSongwriterIds(releaseId, parsed.songwriters);
 
     await logDistributionEvent({ releaseId, action: options.retry ? "retry_submission" : "release_submission", httpStatus: response.httpStatus, createdByAdminId: options.actorId, correlationId, requestPayload: providerRedactedPayload, responsePayload: data, responseRaw: response.raw, warnings: parsed.warnings, success: true });

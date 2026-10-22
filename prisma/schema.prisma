@@ -372,6 +372,7 @@ model Release {
   subscriptionUsage           SubscriptionReleaseUsage?
   distributionOrder           DistributionOrder?
   identifierHistory           ExternalIdentifierHistory[]
+  artistIdentities            ReleaseArtistIdentity[]
   studioReleaseHandoff        StudioReleaseHandoff?
 
   @@index([ownerUserId, status])
@@ -2444,6 +2445,8 @@ model ArtistCard {
   releases             Release[]
   identifierHistory    ExternalIdentifierHistory[]
 
+  releaseIdentities ReleaseArtistIdentity[]
+
   @@unique([userId, artistName])
   @@index([userId])
   @@index([contributorPartyId])
@@ -4132,4 +4135,31 @@ model TeamClientWelcome {
   client TeamClient @relation(fields: [clientId], references: [id], onDelete: Restrict)
   @@index([status, createdAt])
   @@map("team_client_welcomes")
+}
+
+// Server-owned, per-release artist mapping. Never copied from customer metadata.
+model ReleaseArtistIdentity {
+  id Int @id @default(autoincrement())
+  releaseId Int @map("release_id")
+  artistCardId Int @map("artist_card_id")
+  artistName String @map("artist_name")
+  spotifyUrl String? @map("spotify_url")
+  appleUrl String? @map("apple_url")
+  youtubeUrl String? @map("youtube_url")
+  instagramUrl String? @map("instagram_url")
+  providerArtistId String? @map("provider_artist_id")
+  previousProviderArtistId String? @map("previous_provider_artist_id")
+  sourceFingerprint String @map("source_fingerprint")
+  selectionHash String @map("selection_hash")
+  confirmedAt DateTime? @map("confirmed_at")
+  confirmedBy Int? @map("confirmed_by")
+  openedSpotifyUrl String? @map("opened_spotify_url")
+  corrected Boolean @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  release Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  artistCard ArtistCard @relation(fields: [artistCardId], references: [id], onDelete: Cascade)
+  @@unique([releaseId, artistCardId])
+  @@index([artistCardId])
+  @@map("release_artist_identities")
 }

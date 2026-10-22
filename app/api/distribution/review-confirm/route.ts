@@ -1,3 +1,4 @@
+import { assertReleaseArtistVerification, ArtistVerificationError } from '@/lib/release-artist-verification';
 import { requireCurrentPolicyAcceptance } from "@/lib/policy-agreement";
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/access";
@@ -18,6 +19,8 @@ export async function POST(request: Request) {
   if (!release) return NextResponse.json({ error: "Draft release not found." }, { status: 404 });
   const detailed = await getDetailedReleaseById(releaseId);
   if (!detailed || detailed.userId !== auth.user.id) return NextResponse.json({ error: "Draft release not found." }, { status: 404 });
+  try { await assertReleaseArtistVerification(auth.user.id, releaseId, undefined, true); }
+  catch (error) { if (error instanceof ArtistVerificationError) return NextResponse.json({ error: error.message, code: 'ARTIST_PROFILE_CONFIRMATION_REQUIRED' }, { status: 409 }); throw error; }
   const validation = await validateReleaseForDireNote(detailed);
   const identifierConflicts = await findReleaseIdentifierConflicts({ releaseId, upc: detailed.upcCode, tracks: (detailed.tracks ?? []).map(track => ({ id: track.id, trackNumber: track.trackNumber, isrc: track.isrc, audioUrl: track.audioUrl })) });
   if (!validation.ready || identifierConflicts.length) return NextResponse.json({

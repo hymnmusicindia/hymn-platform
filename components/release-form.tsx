@@ -32,6 +32,7 @@ import {
   UploadCloud,
   X,
 } from "lucide-react";
+import { useArtistProfileVerification } from "@/components/distribution/artist-profile-verification";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CustomerOverlay } from "@/components/customer-overlay";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
@@ -1170,6 +1171,7 @@ export function ReleaseForm({
   const [validationErrorKeys, setValidationErrorKeys] = useState<Set<string>>(
     () => new Set(),
   );
+  const artistProfileVerification = useArtistProfileVerification();
   const [knownProfiles, setKnownProfiles] = useState<
     Record<number, ArtistProfile>
   >({});
@@ -3225,6 +3227,16 @@ export function ReleaseForm({
     window.scrollTo({ top: 0, behavior: "instant" });
   }
 
+  async function confirmArtistProfilesForSubmission(releaseId: number) {
+    const ids = [...new Set(tracks.flatMap(track => [...track.primaryArtistIds, ...track.featuredArtistIds]))];
+    if (!(await artistProfileVerification.verify(releaseId, ids))) throw new Error("Submission paused. Confirm the artist profiles when you are ready to continue.");
+    // Refresh corrected card defaults without changing release audio or metadata.
+    try {
+      const response = await fetch('/api/artists');
+      if (response.ok) { const data = await response.json(); setKnownProfiles(Object.fromEntries(((data.artists ?? []) as ArtistProfile[]).map(profile => [profile.id, profile]))); }
+    } catch { /* The server-owned approval remains authoritative. */ }
+  }
+
   async function handleFinalSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (draftConflict) { setStatus("This draft changed in another tab. Open the latest version before submitting."); return; }
@@ -3248,6 +3260,7 @@ export function ReleaseForm({
     try {
       await autosavePendingRef.current;
       if (isPaidReleaseResubmission) {
+        await confirmArtistProfilesForSubmission(initialRelease?.id ?? draftReleaseId ?? 0);
         const data = await submitEditedRelease();
         if (data.release?.status === "changes_requested" && data.release?.direNoteStatus) {
           router.push(`/dashboard/releases/${data.release.id}?tab=corrections`);
@@ -3262,6 +3275,7 @@ export function ReleaseForm({
       if (!reviewConfirmed || confirmedReviewFingerprintRef.current !== reviewMetadataFingerprint) throw new Error("Confirm the reviewed release information before continuing.");
       const reviewReleaseId = await persistDraftRelease(true);
       if (!reviewReleaseId) throw new Error("Could not save the latest release details. Please retry before submitting.");
+      await confirmArtistProfilesForSubmission(reviewReleaseId);
       const resumeUrl = new URL(window.location.href);
       resumeUrl.searchParams.delete("edit");
       resumeUrl.searchParams.set("resume", String(reviewReleaseId));
@@ -3473,7 +3487,8 @@ export function ReleaseForm({
   );
   return (
     <>
-      {submitting && status !== "Opening Razorpay..." ? (
+      {artistProfileVerification.dialog}
+      {submitting && !artistProfileVerification.open && status !== "Opening Razorpay..." ? (
         <div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/50 p-5 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="release-upload-title" aria-describedby="release-upload-status">
           <section className="w-full max-w-sm rounded-[2rem] border p-6 text-center shadow-[0_30px_100px_rgba(0,0,0,.55)] sm:p-8" style={{ borderColor: "var(--border)", background: "color-mix(in srgb, var(--card) 94%, transparent)", color: "var(--text)" }}>
             <div className="relative mx-auto flex h-40 w-40 items-center justify-center rounded-full p-2 transition-[background] duration-300" style={{ background: `conic-gradient(var(--accent) ${Math.max(0, Math.min(100, uploadProgress))}%, rgba(255,255,255,0.09) 0)` }} aria-label={`${uploadProgress}% complete`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress}>

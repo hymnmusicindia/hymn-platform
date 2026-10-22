@@ -33,6 +33,14 @@ async function main() {
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-contacts-followups.ts"]);
       return;
     }
+    if (process.argv.includes("--artist-verification-only")) {
+      writeFileSync(oldSchema, execFileSync("git", ["show", "2a7c960:prisma/schema.prisma"], { encoding: "utf8", windowsHide: true }));
+      await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", oldSchema, "--skip-generate"]);
+      await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261022150000_release_artist_verification/migration.sql", "--schema", "prisma/schema.prisma"]);
+      await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-release-artist-verification.ts"]);
+      await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-artist-delivery-mapping.ts"]);
+      return;
+    }
     if (process.argv.includes("--artist-mapping-only")) {
       await run(["node_modules/prisma/build/index.js", "db", "push", "--skip-generate"]);
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-artist-delivery-mapping.ts"]);

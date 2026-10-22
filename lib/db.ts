@@ -2632,7 +2632,17 @@ export async function updateArtistProfile(userId: number, id: number, patch: Par
   if (!existing) return null;
   const next = { ...existing, ...patch, updatedAt: new Date().toISOString() };
   if (usesPostgresPrisma()) {
-    const result = await prisma.artistCard.updateMany({ where: { id, userId, archivedAt: null }, data: { artistName: next.name, spotifyProfileUrl: next.spotifyUrl, spotifyArtistId: next.spotifyArtistId, appleMusicProfileUrl: next.appleUrl, appleArtistId: next.appleArtistId, instagramUrl: next.instagramUrl!, youtubeUrl: next.youtubeUrl, imageUrl: next.imageUrl, followers: next.followers, role: artistProducerRole(next) } });
+    const { preserveArtistReleaseMappings, artistIdentityFingerprint } = await import('./release-artist-verification');
+    const result = await prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422030, ${id}::integer)`;
+      const card = await tx.artistCard.findFirst({ where: { id, userId, archivedAt: null } });
+      if (!card) return { count: 0 };
+      const latest = { ...mapPrismaArtistCard(card), ...patch };
+      const data = { artistName: latest.name, spotifyProfileUrl: latest.spotifyUrl ?? null, spotifyArtistId: latest.spotifyArtistId ?? null, appleMusicProfileUrl: latest.appleUrl ?? null, appleArtistId: latest.appleArtistId ?? null, instagramUrl: latest.instagramUrl ?? null, youtubeUrl: latest.youtubeUrl ?? null, imageUrl: latest.imageUrl, followers: latest.followers, role: artistProducerRole(latest) };
+      const changed = artistIdentityFingerprint(card) !== artistIdentityFingerprint({ ...card, ...data });
+      if (changed) await preserveArtistReleaseMappings(tx, card);
+      return tx.artistCard.updateMany({ where: { id, userId, archivedAt: null }, data: { ...data, ...(changed ? { direNoteArtistId: null, direNoteLastSyncedAt: null } : {}) } });
+    }, { timeout: 30000 });
     if (!result.count) return null;
     const card = await prisma.artistCard.findUnique({ where: { id }, select: portalArtistCardSelect });
     return card ? mapPrismaArtistCard(card) : null;

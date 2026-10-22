@@ -215,6 +215,9 @@ function pickArtistProfile(name: string, profiles: ArtistProfile[] = [], selecte
 
 function toDireNoteArtist(name: string, profiles: ArtistProfile[] = [], release?: ExtendedRelease, selectedIds: number[] = []): DireNoteArtist {
   const profile = pickArtistProfile(name, profiles, selectedIds);
+  if (!profile && selectedIds.some(id => profiles.some(candidate => candidate.id === id))) {
+    throw new Error(`The selected artist card no longer matches ${name}. Refresh the release and confirm the intended artist card before delivery.`);
+  }
   if (!profile && profiles.some(candidate => candidate.name.trim().toLowerCase() === name.trim().toLowerCase() && (candidate.spotifyUrl || candidate.appleUrl || candidate.spotifyArtistId || candidate.appleArtistId))) {
     throw new Error(`Select the saved HYMN artist card for ${name} before delivery. Its existing store profile must not be omitted.`);
   }

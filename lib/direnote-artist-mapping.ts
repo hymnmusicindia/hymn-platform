@@ -1,4 +1,5 @@
 import 'server-only';
+import { verifiedArtistStoreLinks as storeLinks } from './artist-store-links';
 import { randomUUID } from 'node:crypto';
 import { prisma } from './prisma';
 import { getDireNoteArtistInformation } from './direnote/direnote-client';
@@ -30,7 +31,14 @@ export async function ensureDireNoteArtistMapping(cardId: number, releaseId: num
     if (remaining <= 0) throw Error('Artist mapping verification timed out. Delivery is paused; retry the check before submitting.');
     return { timeoutMs: Math.min(10000, remaining) };
   };
-  const card = await prisma.artistCard.findUniqueOrThrow({ where: { id: cardId } });
+  const liveCard = await prisma.artistCard.findUniqueOrThrow({ where: { id: cardId } });
+  const identity = releaseId ? await prisma.releaseArtistIdentity.findUnique({ where: { releaseId_artistCardId: { releaseId, artistCardId: cardId } } }) : null;
+  const card = identity ? { ...liveCard, artistName: identity.artistName, spotifyProfileUrl: identity.spotifyUrl, spotifyArtistId: storeLinks({ spotify: identity.spotifyUrl }).spotify?.id ?? null, appleMusicProfileUrl: identity.appleUrl, appleArtistId: storeLinks({ apple: identity.appleUrl }).apple?.id ?? null, direNoteArtistId: identity.providerArtistId } : liveCard;
+  const unchanged = async (tx: typeof prisma | import('@prisma/client').Prisma.TransactionClient) => {
+    if (!identity) { const latest = await tx.artistCard.findUniqueOrThrow({ where: { id: card.id } }); return !latest.archivedAt && latest.updatedAt.getTime() === liveCard.updatedAt.getTime(); }
+    const latest = await tx.releaseArtistIdentity.findUniqueOrThrow({ where: { id: identity.id } });
+    return latest.updatedAt.getTime() === identity.updatedAt.getTime();
+  };
   if (card.archivedAt) throw Error('The selected artist card is archived. Select an active card before delivery.');
   const desired = savedArtistStoreLinks(card);
   if (!desired.spotify && !desired.apple || !card.direNoteArtistId) return; // First ingestion carries the explicit store URLs.
@@ -59,8 +67,7 @@ export async function ensureDireNoteArtistMapping(cardId: number, releaseId: num
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422027)`;
     const pending = await tx.direNoteLog.findFirst({ where: { action: 'v24_update_artist', AND: [{ requestPayloadRedacted: { path: ['resource'], equals: resource } }, { responseJson: { path: ['state'], equals: 'unconfirmed' } }] } });
     if (pending) throw Error(`An artist update has an unconfirmed outcome (audit ${pending.id}). Reconcile that update before delivery; it will not be resent.`);
-    const current = await tx.artistCard.findUniqueOrThrow({ where: { id: card.id } });
-    if (current.archivedAt || current.updatedAt.getTime() !== card.updatedAt.getTime()) throw Error('The artist card changed during the mapping check. Refresh and retry before delivery.');
+    if (!(await unchanged(tx))) throw Error('The artist card changed during the mapping check. Refresh and retry before delivery.');
     if (Object.keys(payload).length === 1) return null;
     return tx.direNoteLog.create({ data: { releaseId, action: 'v24_update_artist', success: false, createdByAdminId: actorId ?? null, requestPayloadRedacted: { operationId: randomUUID(), resource, cacheKey: JSON.stringify(payload), payload, source: 'delivery_artist_mapping', artistCardId: card.id }, responseJson: { state: 'unconfirmed' }, errorMessage: 'Artist mapping update prepared; outcome not confirmed.' } });
   });
@@ -80,8 +87,7 @@ export async function ensureDireNoteArtistMapping(cardId: number, releaseId: num
       if (latestVerified[provider]?.id !== wanted.id) throw Error('A different artist mapping appeared before update. Delivery remains paused for review.');
       delete payload[`${provider}_url`];
     }
-    const currentCard = await prisma.artistCard.findUniqueOrThrow({ where: { id: card.id } });
-    if (currentCard.archivedAt || currentCard.updatedAt.getTime() !== card.updatedAt.getTime()) throw Error('The artist card changed before its mapping update. Refresh and retry before delivery.');
+    if (!(await unchanged(prisma))) throw Error('The artist card changed before its mapping update. Refresh and retry before delivery.');
     if (Object.keys(payload).length === 1) {
       await prisma.direNoteLog.update({ where: { id: claim.id }, data: { success: true, responseJson: { state: 'confirmed', noWriteNeeded: true, provider: safeJson(latest.data) }, errorMessage: null } });
       return;
@@ -104,8 +110,7 @@ export async function ensureDireNoteArtistMapping(cardId: number, releaseId: num
     const verifiedLinks = verifiedArtistStoreLinks(verifiedArtist.links);
     if (!proof.success || !sameName(card.artistName, verifiedArtist.name) || !confirmsDireNoteIdentityChange('update_artist', payload, object(proof.data)) || (desired.spotify && verifiedLinks.spotify?.id !== desired.spotify.id) || (desired.apple && verifiedLinks.apple?.id !== desired.apple.id)) throw Error(`Artist mapping update awaits verification (audit ${claim.id}). Delivery is paused; no update will be resent.`);
     await prisma.direNoteLog.update({ where: { id: claim.id }, data: { success: true, httpStatus: update.httpStatus, responseJson: { state: 'confirmed', provider: safeJson(proof.data) }, errorMessage: null } });
-    const current = await prisma.artistCard.findUniqueOrThrow({ where: { id: card.id } });
-    if (current.archivedAt || current.updatedAt.getTime() !== card.updatedAt.getTime()) throw Error('The artist card changed while its mapping was updated. Review the current identity before delivery.');
+    if (!(await unchanged(prisma))) throw Error('The artist card changed while its mapping was updated. Review the current identity before delivery.');
   } catch (error) {
     if (!dispatched) await prisma.direNoteLog.update({ where: { id: claim.id }, data: { responseJson: { state: 'not_sent' }, errorMessage: 'No provider update was sent; retry the mapping check.' } });
     throw error;
@@ -116,7 +121,12 @@ export async function verifyReleaseArtistMappings(userId: number, releaseId: num
   const deadline = Date.now() + 45000;
   const artists = [...payload.artists, ...(payload.featuring_artists ?? []), ...payload.tracks.flatMap(track => [...(track.artists ?? []), ...(track.featuring_artists ?? [])])];
   // Payload names alone never authorize a provider write: require the exact saved store identity.
-  const cards = await prisma.artistCard.findMany({ where: { userId, archivedAt: null } });
+  const liveCards = await prisma.artistCard.findMany({ where: { userId, archivedAt: null } });
+  const snapshots = await prisma.releaseArtistIdentity.findMany({ where: { releaseId, release: { userId } } });
+  const cards = liveCards.map(card => {
+    const saved = snapshots.find(row => row.artistCardId === card.id);
+    return saved ? { ...card, artistName: saved.artistName, spotifyProfileUrl: saved.spotifyUrl, spotifyArtistId: storeLinks({ spotify: saved.spotifyUrl }).spotify?.id ?? null, appleMusicProfileUrl: saved.appleUrl, appleArtistId: storeLinks({ apple: saved.appleUrl }).apple?.id ?? null } : card;
+  });
   const checked = new Set<number>();
   for (const artist of artists) {
     const wanted = verifiedArtistStoreLinks({ spotify: artist.spotify_url, apple: artist.apple_url });

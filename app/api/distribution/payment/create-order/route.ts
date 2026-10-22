@@ -1,3 +1,4 @@
+import { assertReleaseArtistVerification, ArtistVerificationError } from '@/lib/release-artist-verification';
 import { requireCurrentPolicyAcceptance } from "@/lib/policy-agreement";
 import { SubscriptionPlanConfigurationError, subscriptionCheckoutUnavailable } from "@/lib/subscription-plan-validation";
 import { NextResponse } from "next/server";
@@ -28,6 +29,7 @@ export async function POST(request: Request) {
       include: { tracks: { select: { id: true, trackNumber: true } } }
     });
     if (!checkoutDraft) return NextResponse.json({ error: "The checkout draft is no longer available." }, { status: 409 });
+    await assertReleaseArtistVerification(session.sub, payload.draftReleaseId);
     const savedMetadata = checkoutDraft.metadata && typeof checkoutDraft.metadata === "object" && !Array.isArray(checkoutDraft.metadata)
       ? checkoutDraft.metadata as Record<string, unknown>
       : {};
@@ -313,6 +315,7 @@ export async function POST(request: Request) {
       key: process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ""
     });
   } catch (error) {
+    if (error instanceof ArtistVerificationError) return NextResponse.json({ error: error.message, code: 'ARTIST_PROFILE_CONFIRMATION_REQUIRED' }, { status: 409 });
     const message = error instanceof Error ? error.message : "Could not create distribution payment order.";
     if (error instanceof SubscriptionPlanConfigurationError) {
       console.error("Subscription plan configuration mismatch", { message });

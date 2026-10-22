@@ -1,3 +1,4 @@
+import { assertReleaseArtistVerification, ArtistVerificationError, selectedReleaseArtistIds } from '@/lib/release-artist-verification';
 import { requireCurrentPolicyAcceptance } from "@/lib/policy-agreement";
 import { releaseSaveFailure } from "@/lib/release-track-save";
 import { after, NextResponse } from "next/server";
@@ -95,6 +96,7 @@ export async function POST(request: Request) {
     }
     if (!distributionOrderPriceMatches({ amount: persistedOrder.amount, creditsUsed: persistedOrder.creditsUsed, expectedAmount, currency: persistedOrder.currency, subscriptionEntitlement: isSubscriptionEntitlement })) return NextResponse.json({ error: "The submitted release price does not match the persisted order." }, { status: 400 });
     if (isFirstReleaseOffer && persistedOrder.plan !== "one_time") return NextResponse.json({ error: "First-release order is invalid." }, { status: 400 });
+    await assertReleaseArtistVerification(session.sub, parsed.draftReleaseId, selectedReleaseArtistIds(parsed.metadata.tracks), true);
     const savedArtistIds = new Set((await listArtistProfilesByUser(session.sub)).map((profile) => profile.id));
     const invalidPrimaryArtist = parsed.metadata.tracks.some((track) =>
       [...track.artistProfileIds, ...(track.featuredArtistProfileIds ?? []), ...(track.remixerProfileIds ?? [])].some((id) => !savedArtistIds.has(id)),
@@ -336,6 +338,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ release, reviewEligibility: { purchaseType: "service", purchaseId: persistedOrder.id, label: `${parsed.metadata.plan} · ${release.releaseTitle || release.trackName || resolvedReleaseTitle}` } }, { status: 201 });
   } catch (error) {
+    if (error instanceof ArtistVerificationError) return NextResponse.json({ error: error.message, code: 'ARTIST_PROFILE_CONFIRMATION_REQUIRED' }, { status: 409 });
     const transient = releaseSaveFailure(error);
     if (transient) { console.error("Release persistence failed", { error }); return NextResponse.json(transient, { status: 503 }); }
     const message = error instanceof Error ? error.message : "Could not submit distribution release.";

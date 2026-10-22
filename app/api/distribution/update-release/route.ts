@@ -1,3 +1,4 @@
+import { assertReleaseArtistVerification, ArtistVerificationError, selectedReleaseArtistIds } from '@/lib/release-artist-verification';
 import { requireCurrentPolicyAcceptance } from "@/lib/policy-agreement";
 import { releaseSaveFailure } from "@/lib/release-track-save";
 import { createHash } from "node:crypto";
@@ -46,6 +47,7 @@ export async function POST(request: Request) {
     if (!["draft", "awaiting_payment", "changes_requested", "rejected", "resubmitted"].includes(existingStatus) || existingPaymentStatus !== "paid") {
       return NextResponse.json({ error: "Only a previously paid release opened for editing can be resubmitted here." }, { status: 409 });
     }
+    await assertReleaseArtistVerification(session.sub, parsed.metadata.editReleaseId, selectedReleaseArtistIds(parsed.metadata.tracks), true);
     const savedArtistIds = new Set((await listArtistProfilesByUser(existingRelease.userId)).map((profile) => profile.id));
     const invalidPrimaryArtist = parsed.metadata.tracks.some((track) =>
       [...track.artistProfileIds, ...(track.featuredArtistProfileIds ?? []), ...(track.remixerProfileIds ?? [])].some((id) => !savedArtistIds.has(id)),
@@ -208,6 +210,7 @@ export async function POST(request: Request) {
     after(async () => { await notifyReleaseStatusChange(release, "under_review", "Your corrections were received for HYMN review.").catch(error => console.error("Correction confirmation deferred", { releaseId: release.id, error })); });
     return NextResponse.json({ release });
   } catch (error) {
+    if (error instanceof ArtistVerificationError) return NextResponse.json({ error: error.message, code: 'ARTIST_PROFILE_CONFIRMATION_REQUIRED' }, { status: 409 });
     // A response/queue failure after the save must not report a failed submission.
     // Recover only this exact owned payload, never another tab's different changes.
     if (editedReleaseId && submissionKey) {
