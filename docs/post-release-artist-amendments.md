@@ -1,5 +1,16 @@
 # Post-release artist-profile amendments
 
+The customer profile check displays every saved Spotify, Apple Music, YouTube
+and Instagram link. Each has its own Open/Edit controls; optional links can be
+removed. YouTube is optional. A supplied invalid link appears in an editable
+field with a local error instead of blocking Spotify approval invisibly.
+Client and server share link validation. Spotify still requires an explicit
+open-and-confirm action. Clearing an optional link updates the approved default
+and current editable release while preserving earlier delivery snapshots.
+Check with `node scripts/verify-profile-links-browser.cjs`,
+`node --import tsx scripts/verify-profile-links.ts`, and the isolated
+`--artist-verification-only` suite.
+
 Approved Spotify profile amendments now have an explicit delivery path, separate
 from the existing manual metadata/takedown request workflow. Customers request
 “Spotify artist profile” under release requests. An administrator approves the

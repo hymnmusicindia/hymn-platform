@@ -36,7 +36,7 @@ export function verifiedArtistStoreLinks(value: unknown): Partial<Record<"spotif
         const match = url.pathname.match(/^\/(?:[a-z]{2}\/)?artist\/(?:[^/]+\/)?(\d+)\/?$/i);
         if (match) output.apple = { url: `https://music.apple.com${url.pathname}`, id: match[1] };
       }
-      if (provider === "youtube" && ["youtube.com", "www.youtube.com"].includes(url.hostname) && /^\/(?:@[^/]+|channel\/[^/]+|c\/[^/]+|user\/[^/]+)\/?$/.test(url.pathname)) output.youtube = { url: `https://www.youtube.com${url.pathname}` };
+      if (provider === "youtube" && ["youtube.com", "www.youtube.com", "music.youtube.com", "m.youtube.com"].includes(url.hostname) && /^\/(?:@[^/]+|channel\/[^/]+|c\/[^/]+|user\/[^/]+)\/?$/.test(url.pathname)) output.youtube = { url: `https://www.youtube.com${url.pathname}` };
     } catch { /* Missing or malformed provider links leave the saved profile untouched. */ }
   }
   return output;

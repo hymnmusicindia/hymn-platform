@@ -28,7 +28,7 @@ async function main() {
     await assert.rejects(getArtistVerification(other.id, next.id), /not found/);
     await assert.rejects(getArtistVerification(user.id, next.id, [999999]), /own account/);
     const approval = { artistCardId: card.id, fingerprint: artistIdentityFingerprint(card), spotifyUrl: corrected, openedSpotifyUrl: corrected, approved: true as const };
-    await assert.rejects(approveReleaseArtistProfiles(user.id, next.id, [card.id], [{ ...approval, spotifyUrl: 'https://open.spotify.com/album/52BkE1owdr1Oz5duroCyHL' }]), /Open the Spotify/);
+    await assert.rejects(approveReleaseArtistProfiles(user.id, next.id, [card.id], [{ ...approval, spotifyUrl: 'https://open.spotify.com/album/52BkE1owdr1Oz5duroCyHL' }]), /Spotify artist profile link/);
     await assert.rejects(approveReleaseArtistProfiles(user.id, next.id, [card.id], [{ ...approval, openedSpotifyUrl: spotify }]), /Open the Spotify/);
     await assert.rejects(approveReleaseArtistProfiles(user.id, next.id, [card.id], [{ ...approval, appleUrl: 'https://evil.invalid/artist/123' }]), /Apple Music/);
     await assert.rejects(approveReleaseArtistProfiles(user.id, next.id, [card.id], [{ ...approval, fingerprint: '0'.repeat(64) }]), /changed/);
@@ -93,6 +93,13 @@ async function main() {
     assert.deepEqual(selectedReleaseArtistIds([{ metadata: { metadata: { artistProfileIds: [2], featuredArtistProfileIds: [3] } } }]), [2, 3]);
     await prisma.release.update({ where: { id: next.id }, data: { status: 'LIVE' } });
     await assert.rejects(approveReleaseArtistProfiles(user.id, next.id, [card.id], [approval]), /no longer open/);
+    const optionalCard = await prisma.artistCard.create({data:{userId:user.id,artistName:'Optional links artist',spotifyProfileUrl:spotify,youtubeUrl:'https://www.youtube.com/watch?v=legacy',direNoteArtistId:'9400'}});
+    const optionalLive = await prisma.release.create({data:{userId:user.id,title:'Optional links live',artistName:optionalCard.artistName,genre:'Pop',releaseDate:new Date(),status:'LIVE',artistProfileId:optionalCard.id}});
+    const optionalDraft = await makeRelease('Optional links draft',optionalCard.id);
+    await approveReleaseArtistProfiles(user.id,optionalDraft.id,[optionalCard.id],[{artistCardId:optionalCard.id,fingerprint:artistIdentityFingerprint(optionalCard),spotifyUrl:spotify,openedSpotifyUrl:spotify,approved:true,youtubeUrl:'  ',appleUrl:null,instagramUrl:null}]);
+    assert.equal((await prisma.artistCard.findUniqueOrThrow({where:{id:optionalCard.id}})).youtubeUrl,null,'YouTube can be cleared and is never required for approval.');
+    assert.equal((await getArtistVerification(user.id,optionalDraft.id)).artists.length,0);
+    assert.equal((await prisma.releaseArtistIdentity.findUniqueOrThrow({where:{releaseId_artistCardId:{releaseId:optionalLive.id,artistCardId:optionalCard.id}}})).youtubeUrl,optionalCard.youtubeUrl,'Removing an optional link preserves prior delivered mappings.');
     console.log('PASS artist verification: exact live-card trigger, ownership, explicit link approval, manual corrections, future defaults, immutable payloads, delayed responses, quarantined identity reuse, featured artists, and profile-editor protection.');
   } finally { globalThis.fetch = originalFetch; }
 }

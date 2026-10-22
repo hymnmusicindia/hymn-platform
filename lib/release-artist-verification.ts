@@ -1,4 +1,5 @@
 import 'server-only';
+import { validateArtistProfileLinks } from './artist-profile-links';
 import { createHash } from 'node:crypto';
 import type { ArtistCard, Prisma, ReleaseArtistIdentity } from '@prisma/client';
 import { prisma } from './prisma';
@@ -74,16 +75,11 @@ export async function preserveArtistReleaseMappings(tx: Prisma.TransactionClient
 
 export type ArtistProfileApproval = { artistCardId: number; fingerprint: string; spotifyUrl: string; appleUrl?: string | null; youtubeUrl?: string | null; instagramUrl?: string | null; openedSpotifyUrl: string; approved: true };
 function approvedLinks(input: ArtistProfileApproval) {
-  const verified = verifiedArtistStoreLinks({ spotify: input.spotifyUrl, apple: input.appleUrl, youtube: input.youtubeUrl });
-  if (!verified.spotify || verified.spotify.url !== verifiedArtistStoreLinks({ spotify: input.openedSpotifyUrl }).spotify?.url) throw new ArtistVerificationError('Open the Spotify artist profile you are approving. Use an open.spotify.com/artist/ link.');
-  if (input.appleUrl && !verified.apple) throw new ArtistVerificationError('Enter a valid Apple Music artist profile link.');
-  if (input.youtubeUrl && !verified.youtube) throw new ArtistVerificationError('Enter a valid YouTube channel link.');
-  let instagramUrl: string | null = null;
-  if (input.instagramUrl) {
-    try { const url = new URL(input.instagramUrl); if (url.protocol !== 'https:' || !['instagram.com', 'www.instagram.com'].includes(url.hostname) || url.username || url.password || url.port || !/^\/[A-Za-z0-9._]+\/?$/.test(url.pathname)) throw Error(); instagramUrl = `https://www.instagram.com${url.pathname.replace(/\/$/, '')}`; }
-    catch { throw new ArtistVerificationError('Enter a valid Instagram profile link.'); }
-  }
-  return { spotifyUrl: verified.spotify.url, appleUrl: verified.apple?.url ?? null, youtubeUrl: verified.youtube?.url ?? null, instagramUrl };
+  const { links, errors } = validateArtistProfileLinks(input);
+  const issue = Object.values(errors)[0];
+  if (issue) throw new ArtistVerificationError(issue);
+  if (!links.spotifyUrl || links.spotifyUrl !== verifiedArtistStoreLinks({ spotify: input.openedSpotifyUrl }).spotify?.url) throw new ArtistVerificationError('Open the Spotify artist profile you are approving. Use an open.spotify.com/artist/ link.');
+  return { ...links, spotifyUrl: links.spotifyUrl };
 }
 
 export async function approveReleaseArtistProfiles(userId: number, releaseId: number, ids: number[], approvals: ArtistProfileApproval[]) {

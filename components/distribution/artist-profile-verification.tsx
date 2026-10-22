@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useAccessibleDialog } from '@/components/ui/use-accessible-dialog';
-import { verifiedArtistStoreLinks } from '@/lib/artist-store-links';
+import { artistProfileFields, validateArtistProfileLinks, type ArtistProfileLinkField } from '@/lib/artist-profile-links';
+import { Check, ExternalLink, Pencil, Plus, X } from 'lucide-react';
+import styles from './artist-profile-verification.module.css';
 
 type Artist = { artistCardId: number; name: string; fingerprint: string; spotifyUrl: string | null; appleUrl: string | null; youtubeUrl: string | null; instagramUrl: string | null };
-type Entry = Artist & { openedSpotifyUrl: string; approved: boolean; editing: boolean };
+type Entry = Artist & { openedSpotifyUrl: string; approved: boolean; editing: Partial<Record<ArtistProfileLinkField, boolean>> };
 async function api(body: unknown) {
   const response = await fetch('/api/distribution/artist-verification', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const data = await response.json();
@@ -26,14 +28,16 @@ export function useArtistProfileVerification() {
     if (!data.artists.length) return true;
     return new Promise<boolean>(resolve => {
       resolveRef.current = resolve;
-      setRequest({ releaseId, artistCardIds, artists: data.artists.map(artist => ({ ...artist, openedSpotifyUrl: '', approved: false, editing: !artist.spotifyUrl })) });
+      setRequest({ releaseId, artistCardIds, artists: data.artists.map(artist => ({ ...artist, openedSpotifyUrl: '', approved: false, editing: Object.fromEntries(Object.keys(validateArtistProfileLinks(artist).errors).map(field => [field, true])) })) });
     });
   }
   function patch(id: number, values: Partial<Entry>) {
+    setError(null);
     setRequest(current => current ? { ...current, artists: current.artists.map(artist => artist.artistCardId === id ? { ...artist, ...values } : artist) } : null);
   }
   async function approve() {
     if (!request || busy) return;
+    if (request.artists.some(artist => Object.keys(validateArtistProfileLinks(artist).errors).length || !artist.approved)) return;
     setBusy(true); setError(null);
     try {
       const data = await api({ action: 'approve', releaseId: request.releaseId, artistCardIds: request.artistCardIds, approvals: request.artists.map(artist => ({ artistCardId: artist.artistCardId, fingerprint: artist.fingerprint, spotifyUrl: artist.spotifyUrl, appleUrl: artist.appleUrl, youtubeUrl: artist.youtubeUrl, instagramUrl: artist.instagramUrl, openedSpotifyUrl: artist.openedSpotifyUrl, approved: artist.approved })) });
@@ -43,39 +47,51 @@ export function useArtistProfileVerification() {
     finally { setBusy(false); }
   }
   const dialog = request ? (
-    <div className="fixed inset-0 z-[190] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
-      <section ref={node => { dialogRef.current = node; }} role="dialog" aria-modal="true" aria-labelledby="artist-verification-title" aria-describedby="artist-verification-description" tabIndex={-1} className="max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-3xl border p-5 shadow-2xl sm:p-7" style={{ background: 'var(--card, #1d2530)', borderColor: 'var(--border, #39414e)', color: 'var(--text, #fff)' }}>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted, #c5cad2)' }}>Artist profile check</p>
-        <h2 id="artist-verification-title" className="text-xl font-semibold">Send your music to the right profile</h2>
-        <p id="artist-verification-description" className="mt-2 text-sm leading-6" style={{ color: 'var(--text-muted, #c5cad2)' }}>This artist card already has live music. Open the Spotify link and check that it is your intended artist page before continuing.</p>
-        <div className="mt-5 space-y-5">
+    <div className={styles.overlay}>
+      <section ref={node => { dialogRef.current = node; }} role="dialog" aria-modal="true" aria-labelledby="artist-verification-title" aria-describedby="artist-verification-description" tabIndex={-1} className={styles.dialog}>
+        <header className={styles.header}>
+          <div><p className={styles.eyebrow}>Artist profile check</p><h2 id="artist-verification-title">Your music. The right profiles.</h2></div>
+          <button type="button" aria-label="Close artist profile check" disabled={busy} onClick={() => finish(false)} className={styles.iconButton}><X size={18}/></button>
+          <p id="artist-verification-description" className={styles.description}>Review the saved links below. Open Spotify to confirm the artist. YouTube and the other optional links can be left empty.</p>
+        </header>
+        <div className={styles.body}>
           {request.artists.map(artist => {
-            const spotify = verifiedArtistStoreLinks({ spotify: artist.spotifyUrl }).spotify?.url;
+            const validation = validateArtistProfileLinks(artist);
+            const spotify = validation.links.spotifyUrl;
             const opened = Boolean(spotify && artist.openedSpotifyUrl === spotify);
-            return <div key={artist.artistCardId} className="border-t pt-4" style={{ borderColor: 'var(--border, #39414e)' }}>
-              <h3 className="font-semibold">{artist.name}</h3>
-              {artist.editing ? <div className="mt-3 space-y-3">
-                {(['spotifyUrl', 'appleUrl', 'youtubeUrl', 'instagramUrl'] as const).map((field, index) => <label key={field} className="block text-sm">{['Spotify artist link', 'Apple Music artist link (optional)', 'YouTube channel (optional)', 'Instagram profile (optional)'][index]}
-                  <input type="url" value={artist[field] || ''} disabled={busy} onChange={event => patch(artist.artistCardId, { [field]: event.target.value, approved: false, ...(field === 'spotifyUrl' ? { openedSpotifyUrl: '' } : {}) })} className="mt-1 block min-h-11 w-full rounded-xl border bg-transparent px-3 py-2 text-sm" style={{ borderColor: 'var(--border, #596374)' }} autoComplete="off" placeholder={field === 'spotifyUrl' ? 'https://open.spotify.com/artist/...' : 'https://...'} />
-                </label>)}
-                <p className="text-xs leading-5" style={{ color: 'var(--text-muted, #c5cad2)' }}>Approved corrections update this card for this and future releases. Earlier releases keep their saved mapping; this does not move music that is already live.</p>
-              </div> : <p className="mt-2 break-all text-xs" style={{ color: 'var(--text-muted, #c5cad2)' }}>{artist.spotifyUrl}</p>}
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                {spotify ? <a href={spotify} target="_blank" rel="noopener noreferrer" onClick={() => patch(artist.artistCardId, { openedSpotifyUrl: spotify, approved: false })} className="inline-flex min-h-11 items-center rounded-full border px-4 text-sm font-semibold" style={{ borderColor: 'var(--border, #596374)' }}>Open Spotify profile <span aria-hidden="true" className="ml-2">↗</span></a> : <span className="text-xs" style={{ color: 'var(--text-muted, #c5cad2)' }}>Enter a valid Spotify artist link to open it.</span>}
-                {!artist.editing ? <button type="button" disabled={busy} onClick={() => patch(artist.artistCardId, { editing: true, approved: false })} className="min-h-11 px-1 text-sm">Wrong link? Edit</button> : null}
-              </div>
-              <label className={`mt-3 flex min-h-11 items-start gap-3 text-sm leading-6 ${!opened ? 'opacity-60' : ''}`}>
-                <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-white" disabled={busy || !opened} checked={artist.approved} onChange={event => patch(artist.artistCardId, { approved: event.target.checked })} />
-                <span>I opened this link and confirm it is the artist profile for this release. I approve any corrections above.</span>
+            return <article key={artist.artistCardId} className={styles.artist}>
+              <div className={styles.artistHeading}><h3>{artist.name}</h3><span>{artist.approved ? <><Check size={13}/> Confirmed</> : 'Review profiles'}</span></div>
+              <div className={styles.links}>{artistProfileFields.map(field => {
+                const value = artist[field.key] || '';
+                const url = validation.links[field.key];
+                const issue = validation.errors[field.key];
+                const inputId = `artist-${artist.artistCardId}-${field.key}`;
+                const edit = () => patch(artist.artistCardId, { editing: { ...artist.editing, [field.key]: true }, approved: false });
+                return <div key={field.key} className={styles.linkRow}>
+                  <div className={styles.linkHeading}><label htmlFor={inputId}>{field.label}</label><span>{field.optional ? 'Optional' : 'Confirm profile'}</span></div>
+                  {artist.editing[field.key] ? <input id={inputId} type="url" inputMode="url" maxLength={500} value={value} disabled={busy} onChange={event => patch(artist.artistCardId, { [field.key]: event.target.value, approved: false, ...(field.key === 'spotifyUrl' ? { openedSpotifyUrl: '' } : {}) })} aria-label={`${field.label} link for ${artist.name}`} aria-invalid={Boolean(issue)} aria-describedby={issue ? `${inputId}-error` : undefined} className={styles.input} autoComplete="off" placeholder={field.placeholder}/> : <p className={styles.url}>{value || 'Not added'}</p>}
+                  <div className={styles.linkActions}>
+                    {url ? <a href={url} target="_blank" rel="noopener noreferrer" onClick={() => { if (field.key === 'spotifyUrl') patch(artist.artistCardId, { openedSpotifyUrl: url, approved: false }); }}>Open {field.label} profile <ExternalLink size={13}/></a> : null}
+                    {!artist.editing[field.key] ? <button type="button" disabled={busy} onClick={edit}>{value ? <Pencil size={13}/> : <Plus size={13}/>} {value ? 'Edit' : 'Add link'}</button> : null}
+                    {field.optional && value ? <button type="button" aria-label={`Remove ${field.label} link for ${artist.name}`} disabled={busy} onClick={() => patch(artist.artistCardId, { [field.key]: '', approved: false })}><X size={13}/> Remove</button> : null}
+                  </div>
+                  {issue ? <p id={`${inputId}-error`} className={styles.fieldError}>{issue}</p> : null}
+                </div>;
+              })}</div>
+              <p className={styles.note}>Approved changes apply to this and future releases. Earlier deliveries keep their saved profile mapping.</p>
+              <label className={styles.confirmation}>
+                <input type="checkbox" disabled={busy || !opened || Boolean(Object.keys(validation.errors).length)} checked={artist.approved} onChange={event => patch(artist.artistCardId, { approved: event.target.checked })}/>
+                <span>I opened Spotify, checked this artist's links and approve the profiles shown above.</span>
               </label>
-            </div>;
+              {!opened ? <p className={styles.hint}>Open the Spotify profile above to enable confirmation.</p> : null}
+            </article>;
           })}
+          {error ? <p role="alert" className={styles.fieldError}>{error}</p> : null}
         </div>
-        {error ? <p role="alert" className="mt-3 text-sm text-red-300">{error}</p> : null}
-        <div className="mt-5 flex flex-wrap justify-end gap-3">
-          <button type="button" disabled={busy} onClick={() => finish(false)} className="min-h-11 rounded-full border px-5 text-sm" style={{ borderColor: 'var(--border, #596374)' }}>Back to release</button>
-          <button type="button" disabled={busy || request.artists.some(artist => !artist.approved)} onClick={() => void approve()} className="min-h-11 rounded-full bg-[#edf3fc] px-5 text-sm font-semibold text-[#17202d] disabled:opacity-40">{busy ? 'Saving approval...' : 'Confirm and continue'}</button>
-        </div>
+        <footer className={styles.footer}>
+          <button type="button" disabled={busy} onClick={() => finish(false)}>Back to release</button>
+          <button type="button" className={styles.primary} disabled={busy || request.artists.some(artist => !artist.approved || Object.keys(validateArtistProfileLinks(artist).errors).length)} onClick={() => void approve()}>{busy ? 'Saving approval...' : 'Confirm and continue'}</button>
+        </footer>
       </section>
     </div>
   ) : null;
