@@ -16,7 +16,7 @@ export default async function BeatStorePage() {
   const [beats, producerProfiles] = await Promise.all([listBeats(), listProducerProfiles()]);
 
   return (
-    <main className="shell pb-12 pt-5 sm:pb-16 sm:pt-6">
+    <main className="beat-store-page">
       <BeatStoreExperience beats={beats} producerProfiles={producerProfiles} />
     </main>
   );

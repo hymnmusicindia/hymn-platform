@@ -1,4 +1,4 @@
-.store {min-width:0}
+.store.store {min-width:0;width:100%;max-width:none;margin:0;padding:0 0 24px}
 .catalogueToolbar{padding:0 0 16px;background:transparent;border:0}
 .store.store.store.store .catalogueToolbar h2{font-size:24px;font-weight:600;letter-spacing:-.04em}
 .store.store.store.store .catalogueToolbar p{font-size:12px;line-height:1.7}
@@ -10,12 +10,12 @@
 .store.store.store.store .genreRail button{min-height:38px;padding:8px 16px;border:1px solid var(--border)!important;border-radius:24px!important;background:transparent!important;color:var(--text-muted)!important;font-size:11px;font-weight:500;box-shadow:none!important}
 .store.store.store.store .genreRail button[aria-pressed=true]{border-color:var(--text)!important;background:var(--text)!important;color:var(--bg)!important}
 .store svg{stroke-width:1.5}
-.guide{padding:44px 0 0;margin-top:36px;border-top:1px solid var(--border)}
+.guide{padding:28px 0 0;margin:24px 24px 0;border-top:1px solid var(--border)}
 .eyebrow{font-size:9px;letter-spacing:.18em;color:var(--money)}
 .guide h2{font-size:clamp(25px,3vw,36px);letter-spacing:-.045em;line-height:1.2;margin:16px 0}
 .guide h2 span{color:var(--text-muted)}
 .guide p:not(.eyebrow){max-width:550px;font-size:12px;line-height:1.8;color:var(--text-muted)}
-.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:32px;margin:36px 0}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin:24px 0}
 .steps>div{padding-right:20px;border-right:1px solid var(--border)}
 .steps>div:last-child{border:0}
 .steps svg{color:var(--money)}
@@ -37,3 +37,10 @@
   .searchControls{grid-template-columns:repeat(2,minmax(0,1fr))}
   .searchControls>label{grid-column:1 / -1}
 }
+
+/* The hero owns the workspace edges; content keeps a single readable gutter. */
+:global(html body .hymn-portal-root .workspace-v2.workspace-v2 .portal-workspace):has(.store) {padding:0!important;gap:0!important;border:0!important;border-radius:0!important}
+:global(html body .hymn-portal-root .workspace-v2.workspace-v2 .portal-page-content):has(.store) {padding:0!important;gap:0!important;width:100%;max-width:none}
+:global(html body .hymn-portal-root .workspace-v2.workspace-v2 .portal-page-content) > :global(main.beat-store-page):has(.store) {margin:0!important;padding:0!important;width:100%;max-width:none}
+.store > :global(#beat-catalog) {padding:0 24px}
+@media(max-width:639px){.store > :global(#beat-catalog){padding:0 14px}.guide{margin:20px 14px 0}}
