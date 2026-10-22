@@ -49,6 +49,28 @@ migration is needed beyond the artist verification table from the preceding chan
 
 ## Verification
 
+The release header's **Amend release** action opens
+`/distribution/start?amend=<owned release ID>`. This uses the existing distribution
+wizard with the prior metadata, credits and assets pre-filled. It never changes a
+live release to Draft, creates a checkout, or edits its recording identifiers.
+The original UPC/ISRC set is displayed as locked; the server independently rejects
+identifier changes, track additions/removals and track-number/ISRC remapping.
+Missing masters can be restored through the existing managed upload flow.
+
+Wizard submissions are stored as complete proposed metadata in a tracked HYMN
+review request, with a release-version check and replay fingerprint. The live
+release is unchanged. An earlier unsent legacy request can be replaced with the
+complete wizard proposal, invalidating its previous approval. A different pending
+wizard proposal or a request already sent to the partner cannot be overwritten.
+The admin queue exposes the submitted metadata and locked identifiers for review.
+General wizard amendments use the existing tracked manual partner review process;
+the automated endpoint described above remains specific to Spotify link amendments.
+
+Additional checks:
+`node --import tsx scripts/verify-amendment-wizard-identifiers.ts`,
+`node scripts/verify-amendment-wizard-route.cjs`, and
+`node scripts/verify-amendment-wizard-browser.cjs`.
+
 `node --import tsx scripts/verify-acquisition-isolated.ts --amendment-identifiers-only`
 uses disposable PostgreSQL, intercepted provider responses and disabled email.
 It tests pending/partial/malformed/full assignments, no fallback to old UPC,

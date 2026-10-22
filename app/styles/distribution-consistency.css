@@ -135,3 +135,5 @@ html body .release-portal-page .workspace-records { border-radius:16px; }
 html body .release-portal-page .records-scroll { max-width:100%; overflow:auto; }
 html body .release-portal-page .records-pagination button { min-height:44px; min-width:44px; border-radius:10px; }
 @media(max-width:767px) { html body .release-portal-page.release-portal-page .release-library-panel { padding:16px!important; } }
+
+html body .release-manage-shell{width:100%;max-width:none;margin:0;padding:0}

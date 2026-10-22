@@ -285,7 +285,7 @@ export function ReleaseManage({ release, initialTab }: { release: Release; initi
               {canEdit ? <button type="button" onClick={() => release.status === "draft" ? router.push(`/distribution/start?edit=${release.id}`) : setEditWarningOpen(true)} className="btn-primary"><Pencil size={17}/>{release.status === "draft" ? "Continue editing" : editingDuringReview ? "Edit metadata" : "Fix release"}</button> : null}
               {promoLink ? <a href={promoLink} target="_blank" rel="noreferrer" className="btn-outline">Promolink<ExternalLink size={16}/></a> : null}
               <Link href={`/contact?releaseId=${release.id}`} ><Headphones size={17}/>Support</Link>
-              {alreadyDistributed ? <button type="button" onClick={() => { setTab("requests"); requestAnimationFrame(() => document.getElementById(`release-${release.id}-panel`)?.focus({ preventScroll: false })); }}><Pencil size={17}/>Amend release</button> : null}
+              {alreadyDistributed ? <button type="button" onClick={() => router.push(`/distribution/start?amend=${release.id}`)}><Pencil size={17}/>Amend release</button> : null}
               <button type="button" onClick={shareRelease} aria-label="Share release" title="Share release"><Share2 size={18}/></button>
             </div>
             <dl className={detailStyles.metrics}><div><dt>UPC</dt><dd>{resolvedUpc(release)}</dd></div>{release.analytics?.streams_total != null ? <div><dt>Streams</dt><dd>{release.analytics.streams_total.toLocaleString()}</dd></div> : null}</dl>

@@ -29,6 +29,6 @@ export default async function ReleaseManagePage({ params, searchParams }: { para
   }
 
   const query = (await searchParams) ?? {};
-  return <main className="shell py-8 sm:py-10 lg:py-12"><ReleaseManage release={release} initialTab={query.tab ?? null} /></main>;
+  return <main className="release-manage-shell"><ReleaseManage release={release} initialTab={query.tab ?? null} /></main>;
 }
 // vercel trigger 5

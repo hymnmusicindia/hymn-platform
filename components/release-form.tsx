@@ -1089,6 +1089,7 @@ export function ReleaseForm({
   prefillSuggestions = [],
   audioLibraryPrefill,
   initialCorrectionField,
+  amendmentMode = false,
 }: {
   userName?: string;
   initialStage?: number;
@@ -1102,6 +1103,7 @@ export function ReleaseForm({
   prefillSuggestions?: ReleasePrefillSuggestion[];
   audioLibraryPrefill?: AudioLibraryPrefill;
   initialCorrectionField?: string;
+  amendmentMode?: boolean;
 }) {
   const router = useRouter();
   const today = useMemo(() => new Date(), []);
@@ -1116,7 +1118,7 @@ export function ReleaseForm({
   const correctionTrackMatch = initialRelease?.reviewIssues?.fields.some(issue => issue.field === initialCorrectionField)
     ? initialCorrectionField?.match(/^tracks\.(\d+)\./) : null;
   const correctionTrackIndex = correctionTrackMatch ? Number(correctionTrackMatch[1]) : null;
-  const [step, setStep] = useState(correctionTrackIndex !== null ? 3 : initialRelease?.status === "draft" && initialStage != null && [0, 4, 1, 3, 2, 5, 7].includes(initialStage) ? initialStage : initialRelease ? 7 : 1);
+  const [step, setStep] = useState(correctionTrackIndex !== null ? 3 : (amendmentMode || initialRelease?.status === "draft") && initialStage != null && [0, 4, 1, 3, 2, 5, 7].includes(initialStage) ? initialStage : initialRelease ? 7 : 1);
   const resumeStageResolvedRef = useRef(false);
   const [journeyIntro, setJourneyIntro] = useState<"welcome" | null>(initialRelease || audioLibraryPrefill ? null : "welcome");
   const [journeyExiting, setJourneyExiting] = useState(false);
@@ -1311,11 +1313,11 @@ export function ReleaseForm({
     createTracksFromRelease(initialRelease, audioLibraryPrefill),
   );
   const [submittedRelease, setSubmittedRelease] = useState<Release | null>(
-    initialRelease && (releaseAlreadyInReview(initialRelease.status) || returnedFromSubmission && isCompletedDistributionSubmission(initialRelease)) ? initialRelease : null,
+    !amendmentMode && initialRelease && (releaseAlreadyInReview(initialRelease.status) || returnedFromSubmission && isCompletedDistributionSubmission(initialRelease)) ? initialRelease : null,
   );
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [shakingField, setShakingField] = useState<string | null>(null);
-  const isPaidReleaseResubmission = isPaidCorrectionRelease(initialRelease);
+  const isPaidReleaseResubmission = amendmentMode || isPaidCorrectionRelease(initialRelease);
   useEffect(() => () => {
     if (stepTransitionTimerRef.current != null) window.clearTimeout(stepTransitionTimerRef.current);
     if (journeyTransitionTimerRef.current != null) window.clearTimeout(journeyTransitionTimerRef.current);
@@ -1889,6 +1891,7 @@ export function ReleaseForm({
       })),
     );
   const addTrack = () => {
+    if (amendmentMode) { setStatus("Track count is locked for this amendment."); return; }
     if (singleReleaseGift) return;
     if (tracks.length >= 30) { setStatus("An Album can contain up to 30 tracks."); return; }
     setTrackList((current) => [...current, { ...createTrack(current.length + 1), primaryArtistIds: current[0]?.primaryArtistIds ?? [] }]);
@@ -1925,6 +1928,7 @@ export function ReleaseForm({
   }
 
   function removeTrack(index: number) {
+    if (amendmentMode) { setStatus("Existing tracks and their ISRCs are locked."); return; }
     setTrackList((current) => {
       const target = current[index];
       if (target?.audioPreviewUrl) {
@@ -1959,6 +1963,7 @@ export function ReleaseForm({
   }
 
   function moveTrack(index: number, direction: -1 | 1) {
+    if (amendmentMode) { setStatus("Track order and original ISRCs are locked for this amendment."); return; }
     const target = index + direction;
     if (target < 0 || target >= tracks.length) return;
     setTrackList((current) => {
@@ -2838,7 +2843,8 @@ export function ReleaseForm({
     if (!checked.success) throw new Error(checked.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`).join("\n"));
     const formData = new FormData();
     formData.append("payload", JSON.stringify(checked.data));
-    const response = await fetch("/api/distribution/update-release", {
+    if (amendmentMode) formData.append("sourceUpdatedAt", initialRelease?.draftVersion ?? "");
+    const response = await fetch(amendmentMode ? "/api/distribution/amend-release" : "/api/distribution/update-release", {
       method: "POST",
       body: formData,
     });
@@ -2935,6 +2941,10 @@ export function ReleaseForm({
       },
     };
 
+    if (amendmentMode && initialRelease) {
+      payload.metadata.upcCode = initialRelease.upcCode ?? undefined;
+      payload.metadata.tracks = payload.metadata.tracks.map((track, index) => ({ ...track, isrc: initialRelease.tracks?.[index]?.isrc ?? undefined }));
+    }
     return await verifyAndUpdateRelease(payload);
   }
   async function verifyAndSubmitRelease(payload: any) {
@@ -3260,8 +3270,9 @@ export function ReleaseForm({
     try {
       await autosavePendingRef.current;
       if (isPaidReleaseResubmission) {
-        await confirmArtistProfilesForSubmission(initialRelease?.id ?? draftReleaseId ?? 0);
+        if (!amendmentMode) await confirmArtistProfilesForSubmission(initialRelease?.id ?? draftReleaseId ?? 0);
         const data = await submitEditedRelease();
+        if (amendmentMode) { router.push(`/dashboard/releases/${initialRelease?.id}?tab=requests`); router.refresh(); return; }
         if (data.release?.status === "changes_requested" && data.release?.direNoteStatus) {
           router.push(`/dashboard/releases/${data.release.id}?tab=corrections`);
           router.refresh();
@@ -3488,6 +3499,7 @@ export function ReleaseForm({
   return (
     <>
       {artistProfileVerification.dialog}
+      {amendmentMode && initialRelease ? <aside className="mb-5 px-2 py-4" aria-label="Amendment identifiers"><h1 className="text-xl font-semibold">Amend your release</h1><p className="mt-2 text-sm">Your previous release is pre-filled. Changes go to HYMN review; the live release stays unchanged until approved and delivered. Keep the same recording when restoring a missing master.</p><p className="mt-3 text-sm">Locked UPC: <strong>{initialRelease.upcCode}</strong></p>{initialRelease.tracks?.map(track => <p key={track.id} className="mt-1 text-sm">{track.trackTitle} | Locked ISRC: <strong>{track.isrc}</strong></p>)}</aside> : null}
       {submitting && !artistProfileVerification.open && status !== "Opening Razorpay..." ? (
         <div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/50 p-5 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="release-upload-title" aria-describedby="release-upload-status">
           <section className="w-full max-w-sm rounded-[2rem] border p-6 text-center shadow-[0_30px_100px_rgba(0,0,0,.55)] sm:p-8" style={{ borderColor: "var(--border)", background: "color-mix(in srgb, var(--card) 94%, transparent)", color: "var(--text)" }}>
@@ -3803,7 +3815,7 @@ export function ReleaseForm({
             title="Choose where your music goes"
           />
         ) : null}
-        {step === 2 ? (
+        {step === 2 && !amendmentMode ? (
           <div className="card-base release-existing-identifiers mb-5">
             <p className="text-sm font-semibold">Already released?</p>
             <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
@@ -6066,7 +6078,7 @@ export function ReleaseForm({
                 {submitting
                   ? "Processing…"
                   : isPaidReleaseResubmission
-                    ? "Submit corrections →"
+                    ? amendmentMode ? "Submit amendment" : "Submit corrections →"
                   : subscriptionCovered
                     ? "Confirm & Submit Release →"
                     : distributionCheckoutAmount === 0
