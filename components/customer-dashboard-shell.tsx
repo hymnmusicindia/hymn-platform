@@ -17,6 +17,7 @@ import { Beat, BeatPurchase, Notification, Order, Release, SupportTicket, User }
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { CustomerHome, ProducerHome } from "@/components/simplified-dashboard-home";
 import { FirstLoginReferralPrompt } from "@/components/first-login-referral-prompt";
+const PromotionCommunityPage = dynamic(() => import("@/components/community-plans").then(module => module.PromotionCommunityPage));
 const PlaylistReviewMarketplace = dynamic(() => import("@/components/playlist-review-marketplace").then(module => module.PlaylistReviewMarketplace));
 
 const AnalyticsDashboard = dynamic(() => import("@/components/analytics-dashboard").then((module) => module.AnalyticsDashboard));
@@ -576,7 +577,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       ) : null}
 
       {activeTab === "promotions" ? (
-        <><PlaylistReviewMarketplace /><Panel title="Other promotion enquiries" description="Ask HYMN about advertising, release campaigns, and creative promotion support.">
+        <PromotionCommunityPage onCreated={ticket => setSupportTickets(items => [ticket, ...items])} playlists={<PlaylistReviewMarketplace />} campaigns={<Panel title="Other promotion enquiries" description="Ask HYMN about advertising, release campaigns, and creative promotion support.">
           <form onSubmit={submitSupportTicket} className="grid gap-4 lg:grid-cols-[0.8fr,1.2fr]">
             <select name="subject" className="field" defaultValue="Curator review support">
               <option>Curator review support</option>
@@ -589,7 +590,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
             <button type="submit" className="btn-primary pressable lg:col-span-2">Submit promotion request</button>
           </form>
           {supportFeedback ? <p className="mt-3 text-sm" style={{ color: "var(--text)" }}>{supportFeedback}</p> : null}
-        </Panel></>
+        </Panel>} />
       ) : null}
 
       {activeTab === "collaborators" ? <SplitsDashboard releases={releases} /> : null}
