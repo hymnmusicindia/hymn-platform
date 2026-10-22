@@ -86,12 +86,29 @@ fingerprint, rather than the release's general status. Stale progress messages a
 cancelled; historical submission receipts survive normal review progression. A
 bounded repair job finds recent acknowledgements missing a notification or email.
 
-General wizard amendments still require HYMN to record partner execution and its
-reference. On recorded completion, reviewed metadata, assets and credits are applied
-to the same local release and track IDs. Original UPC/ISRCs and publication dates
-remain unchanged, with a full before-projection in the audit trail. A changed source
-revision blocks completion rather than overwriting a newer release. This does not
-pretend that a manual decision executed a provider API call.
+New wizard amendments opt into automatic delivery on submission. The response is returned
+immediately, with Next.js `after()` starting the durable request worker. The existing
+ingest-status cron also recovers unprocessed requests. A per-request advisory lock
+prevents overlapping workers, and the existing release/attempt locks and provider
+idempotency key prevent duplicate ingestion. Legacy requests remain review-controlled.
+
+HYMN projects the proposed metadata, assets and credits into a separate validated
+payload. Original identifiers remain locked in the editor. The transport marks the
+package previously released, supplies the original recording ISRCs and requests a
+provider-assigned UPC. These transport flags do not change the customer's declarations.
+On acceptance HYMN applies the proposal, preserves its full before-snapshot and waits
+for a complete, validated identifier set. Returned old codes stay unchanged; new codes
+replace the displayed set atomically with immutable submission/identifier history.
+
+Validated ingestion completion records amendment auto QC as passed. Validation,
+transport, malformed identifier or job failures create a tracked manual-QC task and
+notification. An uncertain provider outcome must be reconciled before another ingest.
+A confirmed asynchronous rejection restores the prior catalogue and current attempt.
+Store-live confirmation is separate from ingestion/QC acceptance.
+
+The admin queue uses the Releases catalogue layout: filters, artwork rows on desktop,
+compact cards on mobile and a centred Inspect dialog. It polls every 30 seconds;
+permission-scoped sidebar counts show outstanding distribution work.
 
 Additional checks:
 `node --import tsx scripts/verify-amendment-wizard-identifiers.ts`,
@@ -116,3 +133,7 @@ The live release remains unchanged while that request is reviewed; no new identi
 actually assigns them. The artist card default was updated with all four previous
 release mappings preserved, and an approved operator request was prepared with a
 local backup of the original release/attempts.
+
+On 22 October 2026, unsent Deepan request #1 was withdrawn at the owner's request, with a local backup and audit event. The live release and identifiers were unchanged. The owner will submit a fresh wizard amendment.
+
+Automation and queue checks: `scripts/verify-automatic-amendment.ts` (part of the isolated suite) and `node scripts/verify-amendment-queue-browser.cjs`.

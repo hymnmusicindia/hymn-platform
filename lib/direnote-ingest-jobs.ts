@@ -1,3 +1,4 @@
+import { flagAmendmentManualQc, recordAmendmentQcPassed } from './release-amendment-automation';
 import { failArtistAmendment } from '@/lib/release-artist-amendment';
 import "server-only";
 import { prisma } from "@/lib/prisma";
@@ -131,7 +132,7 @@ export async function pollDireNoteIngestJobs(options: { limit?: number; releaseI
         const isAmendment = Number(object(reference.stored).amendmentRequestId) > 0;
         const responseRedacted = { ...jobMetadata, canResubmit, error: failure };
         await prisma.distributionSubmissionAttempt.updateMany({ where: { id: attempt.id, state: "submitted", isCurrent: true }, data: { state: canResubmit ? "retryable" : "failed", isCurrent: false, providerStatus: "failed", lastCheckedAt: checkedAt, safeError: failure, responseRedacted: responseRedacted as never, completedAt: checkedAt } });
-        if (isAmendment) await failArtistAmendment(Number(object(reference.stored).amendmentRequestId), attempt.id);
+        if (isAmendment) { await failArtistAmendment(Number(object(reference.stored).amendmentRequestId), attempt.id); await flagAmendmentManualQc(Number(object(reference.stored).amendmentRequestId), failure); }
         else await updateDetailedReleaseStatus(attempt.releaseId, "delivery_failed", `DireNote ingest job failed: ${failure}`);
         await logDistributionEvent({ releaseId: attempt.releaseId, action: "ingest_status", httpStatus: response.httpStatus, responsePayload: { job_id: responseJobId || reference.jobId, status, can_resubmit: canResubmit, error: failure }, errors: [failure], success: false });
         await createReleaseAuditLog({ releaseId: attempt.releaseId, action: "DIRENOTE_INGEST_JOB_FAILED", details: { attemptId: attempt.id, canResubmit, error: failure } });
@@ -160,6 +161,7 @@ export async function pollDireNoteIngestJobs(options: { limit?: number; releaseI
         const reason = "DireNote completed the ingest job, but its release identifiers or metadata did not match HYMN's release. Review the stored job result before syncing.";
         await prisma.distributionSubmissionAttempt.updateMany({ where: { id: attempt.id, state: "submitted", isCurrent: true }, data: { state: "reconciliation_required", providerStatus: "completed", lastCheckedAt: checkedAt, safeError: reason, responseRedacted: { ...jobMetadata, result: safeResult } as never } });
         await createReleaseAuditLog({ releaseId: attempt.releaseId, action: "DIRENOTE_INGEST_JOB_RECONCILIATION_REQUIRED", details: { attemptId: attempt.id, hasUpc: Boolean(upc), trackCount, expectedTrackCount: attempt.release.tracks.length, albumName: safeResult.albumName } });
+        if (Number(object(reference.stored).amendmentRequestId) > 0) await flagAmendmentManualQc(Number(object(reference.stored).amendmentRequestId), reason);
         errorCount++;
         results.push({ releaseId: attempt.releaseId, state: "reconciliation_required", error: reason });
         continue;
@@ -172,6 +174,7 @@ export async function pollDireNoteIngestJobs(options: { limit?: number; releaseI
       await activateDireNoteAttempt(attempt.id, { upc: upc!, providerStatus: "processing", trackIdentifiers: mappedTracks as never, responseRedacted: completedData as never }, { replaceIdentifiers: "identifierPolicy" in reference.stored && reference.stored.identifierPolicy === "replace" });
       // Bind async-ingestion identities to the already attached cards so the
       // normal artist refresh can verify/fill their stored store mappings.
+      if (Number(object(reference.stored).amendmentRequestId) > 0) await recordAmendmentQcPassed(Number(object(reference.stored).amendmentRequestId), attempt.id);
       await persistDireNoteArtistIds(attempt.releaseId, parsed.artists, attempt.id);
       if (attempt.release.status === "SUBMITTING_TO_DISTRIBUTOR") await updateDetailedReleaseStatus(attempt.releaseId, "sent_to_distributor", "DireNote completed the accepted ingest job.");
       const currentRelease = await prisma.release.findUniqueOrThrow({ where: { id: attempt.releaseId } });

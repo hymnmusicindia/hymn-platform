@@ -605,6 +605,8 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     await tx.release.update({ where: { id: releaseId }, data: { ...(remoteUpc ? { upc: remoteUpc } : {}), direNoteStatus: aggregateStatus.provider, direNoteLastSyncedAt: new Date(), direNoteSyncError: null, metadata: json({ ...(record(release.metadata)), upcCode: remoteUpc ?? release.upc, direNote: { ...previousDireNote, reconciliationInProgress: false, identifierAssignmentPending: false, lastSyncedAt: new Date().toISOString(), status: aggregateStatus.provider, release: redactDireNoteDiagnostic(remoteRelease), correctionMessages } }) } });
   }, { timeout: 60_000, maxWait: 10_000 });
   if (aggregateStatus.canonical === 'live') await completeArtistAmendment(releaseId, attempt.id, remoteTracks);
+  const amendmentRequestId = Number(record(attempt.responseRedacted).amendmentRequestId);
+  if (amendmentRequestId > 0 && ['changes_requested', 'rejected', 'delivery_failed'].includes(aggregateStatus.canonical ?? '')) { const { flagAmendmentManualQc } = await import('./release-amendment-automation'); await flagAmendmentManualQc(amendmentRequestId, correctionMessages.join(' ') || 'The delivery report requires manual QC. Inspect the detailed report before retrying.'); }
   const previousStatus = release.status.toLowerCase() as ReleaseStatus;
   if (artistLinksChanged) {
     await refreshMissingSpotifyArtistPhotos(release.userId).catch(() => undefined);

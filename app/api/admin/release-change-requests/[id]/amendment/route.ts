@@ -20,7 +20,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (body.data.action === 'submit' && amendment.request.status === 'submitted_to_partner') return NextResponse.json({ submitted: true, replayed: true, request: amendment.request });
     const revision = artistAmendmentRevision(amendment, release);
     if (body.data.action === 'preview') {
-      const payload = artistAmendmentPayload(await buildDireNotePayloadForRelease(release), amendment, (release.originalReleaseDate || release.releaseDate).slice(0, 10));
+      const payload = artistAmendmentPayload(await buildDireNotePayloadForRelease(amendment.projectedRelease), amendment, (release.originalReleaseDate || release.releaseDate).slice(0, 10));
       const validation = validateDireNotePayload(payload, { replaceProviderIdentifiers: true });
       return NextResponse.json({ revision, payload: redactDireNotePayload(payload), issues: validation.issues, warnings: validation.warnings, locked: { upc: release.upcCode, tracks: release.tracks?.map(track => ({ title: track.trackTitle, isrc: track.isrc })) } });
     }

@@ -31,6 +31,7 @@ async function main() {
       await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-amendment-identifiers.ts']);
       await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-artist-amendment.ts']);
       await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-amendment-feedback.ts']);
+      await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-automatic-amendment.ts']);
       return;
     }
     if (process.argv.includes("--contacts-followups-only")) {

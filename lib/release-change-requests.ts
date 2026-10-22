@@ -11,7 +11,7 @@ const allowedRequestTransitions: Record<string, string[]> = {
   under_review: ["approved", "information_required", "rejected"],
   information_required: ["submitted", "rejected"],
   approved: ["processing_manually", "submitted_to_partner", "rejected"],
-  processing_manually: ["submitted_to_partner", "completed", "failed"],
+  processing_manually: ["approved", "information_required", "rejected", "submitted_to_partner", "completed", "failed"],
   submitted_to_partner: ["completed", "failed"],
   rejected: [], completed: [], failed: []
 };

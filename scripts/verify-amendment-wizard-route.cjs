@@ -6,6 +6,8 @@ const { build } = require('esbuild');
   const file = path.resolve('.cache/amendment-wizard-route.cjs');
   await build({ entryPoints: ['app/api/distribution/amend-release/route.ts'], outfile: file, bundle: true, platform: 'node', format: 'cjs', packages: 'external', plugins: [{ name: 'fixture', setup(b) {
     const mocks = {
+      'next/server': 'export class NextResponse {static json(value, options) {return Response.json(value,options);}};export const after=()=>{};',
+      '@/lib/release-amendment-automation': 'export const processAutomaticAmendment=async()=>{};',
       '@/lib/release-amendment-notifications': 'export const enqueueAmendmentUpdate=async()=>1;export const amendmentTransactionOptions={timeout:30000};',
       '@/lib/session': 'export const getSession=async()=>global.fixture.session;',
       '@/lib/policy-agreement': 'export const requireCurrentPolicyAcceptance=async()=>null;',
@@ -16,12 +18,14 @@ const { build } = require('esbuild');
       '@/lib/release-asset-resolution': 'export const resolvePrivateReleaseArtworkUrl=async({value})=>value;',
       '@/lib/release-artist-verification': 'export const selectedReleaseArtistIds=tracks=>[...new Set(tracks.flatMap(t=>t.artistProfileIds))];'
     };
+    b.onResolve({filter:/^next\/server$/},()=>({path:'next/server',namespace:'mock'}));
     b.onResolve({filter:/^server-only$/},()=>({path:'server-only',namespace:'mock'}));
     b.onResolve({ filter: /^@\/lib\// }, a => mocks[a.path] ? { path: a.path, namespace: 'mock' } : undefined);
     b.onLoad({ filter: /.*/, namespace: 'mock' }, a => ({ contents: mocks[a.path] }));
   } }] });
   const revisionFile=path.resolve('.cache/amendment-revision-fixture.cjs');
-  await build({entryPoints:['lib/release-amendment-revision.ts'],outfile:revisionFile,bundle:true,platform:'node',format:'cjs',packages:'external',plugins:[{name:'server',setup(b){b.onResolve({filter:/^server-only$/},()=>({path:'empty',namespace:'empty'}));b.onLoad({filter:/.*/,namespace:'empty'},()=>({contents:''}));}}]});
+  await build({entryPoints:['lib/release-amendment-revision.ts'],outfile:revisionFile,bundle:true,platform:'node',format:'cjs',packages:'external',plugins:[{name:'server',setup(b){b.onResolve({filter:/^next\/server$/},()=>({path:'next/server',namespace:'mock'}));
+    b.onResolve({filter:/^server-only$/},()=>({path:'empty',namespace:'empty'}));b.onLoad({filter:/.*/,namespace:'empty'},()=>({contents:''}));}}]});
   const {amendmentSourceRevision,matchesAmendmentSourceRevision}=require(revisionFile);
   const version = '2026-10-22T10:00:00.000Z';
   const original = { id: 25, userId: 51, status: 'live', draftVersion: version, upcCode: '3473620314135', tracks: [{ id: 400, trackNumber: 1, isrc: 'INDN22602494', trackTitle: 'Original title' }] };

@@ -10,7 +10,7 @@ export default async function ReleaseChangeRequestsPage() {
   const shell = (title: string, copy: string) => <main className="mx-auto min-h-screen max-w-7xl px-5 pb-16 pt-28 sm:px-8 sm:pt-32"><h1 className="text-3xl font-semibold">Release changes and takedowns</h1><section className="surface-card mt-6"><h2 className="text-xl font-semibold">{title}</h2><p className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }}>{copy}</p><a className="btn-outline mt-5 inline-flex" href="/admin">Back to Admin Portal</a></section></main>;
   if (!process.env.DATABASE_URL?.trim()) return shell("Database connection required", "Release-change review will become available after a PostgreSQL DATABASE_URL is configured on the server.");
   let requests: Awaited<ReturnType<typeof prisma.releaseChangeRequest.findMany>>;
-  try { requests = await prisma.releaseChangeRequest.findMany({ where, orderBy: { submittedAt: "asc" }, take: 100, include: { release: { select: { title: true, artistName: true, status: true } }, events: { orderBy: { createdAt: "asc" } } } }); }
+  try { requests = await prisma.releaseChangeRequest.findMany({ where, orderBy: { submittedAt: "desc" }, take: 100, include: { release: { select: { id: true, title: true, artistName: true, status: true, artworkUrl: true, upc: true, metadata: true, user: { select: { email: true } } } }, events: { orderBy: { createdAt: "asc" } } } }); }
   catch {
     return shell("Database unavailable", "HYMN could not connect to the release operations database. Verify DATABASE_URL and apply the pending Prisma migrations.");
   }

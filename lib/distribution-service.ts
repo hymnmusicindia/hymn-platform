@@ -229,12 +229,12 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
 }
 
 async function submitLockedRelease(releaseId: number, options: { actorId?: number | null; siteUrl?: string; retry?: boolean; adminConfirmedExistingArtists?: boolean; correctionReingest?: boolean; amendmentRequestId?: number }) {
-  const release = await getDetailedReleaseById(releaseId);
+  let release = await getDetailedReleaseById(releaseId);
   if (!release) throw new Error("Release not found.");
   const amendment = options.amendmentRequestId ? await loadArtistAmendment(release, options.amendmentRequestId) : null;
   if (amendment?.request.status === 'submitted_to_partner') return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: true, duplicate: true, retryable: false };
-  if (amendment && !['live', 'partially_live'].includes(release.status)) throw new Error('Artist-profile amendments require an already live release.');
-  if (amendment) options = { ...options, correctionReingest: true };
+  if (amendment && !['live', 'partially_live', 'scheduled', 'awaiting_live_confirmation', 'sent_to_distributor', 'distributor_processing'].includes(release.status)) throw new Error('Artist-profile amendments require an already live release.');
+  if (amendment) { options = { ...options, correctionReingest: true }; release = amendment.projectedRelease; }
   const withdrawalUpc = (release.upcCode || "").replace(/[\s-]/g, "");
   if (withdrawalUpc) {
     const withdrawal = await prisma.direNoteLog.findFirst({ where: { action: "v24_withdraw_release", requestPayloadRedacted: { path: ["resource"], equals: `upc:${withdrawalUpc}` }, OR: [{ success: true }, { responseJson: { path: ["state"], equals: "unconfirmed" } }] }, select: { id: true, success: true } });
@@ -328,7 +328,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     // The reviewed amendment carries a separate, initially unbound artist identity.
     // Check all unchanged mappings against their existing snapshots; never update
     // the historical provider artist to the corrected Spotify URL.
-    await verifyReleaseArtistMappings(release.userId, releaseId, amendment ? originalPayload : payload, options.actorId, amendment ? [amendment.card.id] : []);
+    await verifyReleaseArtistMappings(release.userId, releaseId, amendment ? originalPayload : payload, options.actorId, amendment && !amendment.wizard ? [amendment.card.id] : []);
   } catch (error) {
     const reason = error instanceof Error ? error.message : "Artist mapping needs review before delivery.";
     await flagArtistMappingReview({ releaseId, name: displayName(release), message: reason });
@@ -419,6 +419,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
 
     const parsed = parseDireNoteResponse(data);
     providerAccepted = true;
+    if (amendment?.wizard) await acceptArtistAmendment(amendment, claim.attempt.id, parsed.ingestJobId ?? parsed.distributorReleaseId ?? parsed.upc ?? claim.attempt.idempotencyKey);
     const queuedIngest = response.httpStatus === 202 && Boolean(parsed.ingestJobId || parsed.ingestIdempotencyKey || claim.attempt.idempotencyKey);
     if (queuedIngest) {
       const queuedMessage = "DireNote accepted the ingest job for processing.";
@@ -428,7 +429,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
         trackIdentifiers: (release.tracks ?? []).map(track => ({ id: track.id, title: track.trackTitle, trackNumber: track.trackNumber, isrc: options.correctionReingest ? null : track.isrc ?? null })),
         responseRedacted: { ingestJobId: parsed.ingestJobId ?? null, providerIdempotencyKey: parsed.ingestIdempotencyKey ?? claim.attempt.idempotencyKey, ingestJobStatus: parsed.ingestJobStatus ?? "queued", pollAfterSeconds: parsed.pollAfterSeconds ?? 60, ...(options.correctionReingest ? { identifierPolicy: "replace" } : {}), ...(amendment ? { amendmentRequestId: amendment.request.id } : {}) } as never
       }, { replaceIdentifiers: Boolean(options.correctionReingest) });
-      if (amendment) await acceptArtistAmendment(amendment, claim.attempt.id, parsed.ingestJobId ?? claim.attempt.idempotencyKey);
+      if (amendment && !amendment.wizard) await acceptArtistAmendment(amendment, claim.attempt.id, parsed.ingestJobId ?? claim.attempt.idempotencyKey);
       await updateDetailedReleaseStatus(releaseId, "sent_to_distributor", queuedMessage, undefined, { notify: false });
       await logDistributionEvent({ releaseId, action: options.retry ? "retry_submission" : "release_submission", httpStatus: response.httpStatus, createdByAdminId: options.actorId, correlationId, requestPayload: providerRedactedPayload, responsePayload: data, responseRaw: response.raw, warnings: parsed.warnings, success: true });
       await moveQueue(releaseId, "sent_to_direnote", options.actorId, queuedMessage, { direnoteResponse: data, warnings: parsed.warnings });
@@ -460,7 +461,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
       responsePayload: redactDireNoteDiagnostic(data),
       warnings: parsed.warnings
     });
-    if (amendment) await acceptArtistAmendment(amendment, claim.attempt.id, parsed.distributorReleaseId ?? parsed.upc ?? claim.attempt.idempotencyKey);
+    if (amendment && !amendment.wizard) await acceptArtistAmendment(amendment, claim.attempt.id, parsed.distributorReleaseId ?? parsed.upc ?? claim.attempt.idempotencyKey);
     const artistCardIds = await persistDireNoteArtistIds(releaseId, parsed.artists, claim.attempt.id);
     const contributorPartyIds = await persistDireNoteSongwriterIds(releaseId, parsed.songwriters);
 
@@ -470,6 +471,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     await resolveAdminTask(`release:${releaseId}:direnote:validation`, "DireNote submission accepted.");
     await resolveAdminTask(`release:${releaseId}:direnote:network`, "DireNote submission accepted.");
     await finishDistributionSubmission(claim.attempt.id, { state: "submitted", httpStatus: response.httpStatus, providerReference: parsed.distributorReleaseId ?? parsed.upc ?? parsed.ingestJobId ?? null, providerStatus: parsed.ingestJobStatus ?? "processing", responseRedacted: { ...(amendment ? { amendmentRequestId: amendment.request.id, identifierPolicy: "replace" } : {}), distributorReleaseId: parsed.distributorReleaseId ?? null, upc: parsed.upc ?? null, trackIsrcs: parsed.trackIsrcs, artists: parsed.artists, songwriters: parsed.songwriters, warnings: parsed.warnings, ingestJobId: parsed.ingestJobId ?? null, providerIdempotencyKey: parsed.ingestIdempotencyKey ?? claim.attempt.idempotencyKey, ingestJobStatus: parsed.ingestJobStatus ?? "processing", pollAfterSeconds: parsed.pollAfterSeconds ?? 60 } });
+    if (amendment?.wizard && parsed.upc && assignedTrackIsrcs.length === release.tracks?.length) { const { recordAmendmentQcPassed } = await import('./release-amendment-automation'); await recordAmendmentQcPassed(amendment.request.id, claim.attempt.id); }
     if (artistCardIds.length || contributorPartyIds.length) {
       const { syncDireNoteArtistInformation, syncDireNoteSongwriterInformation } = await import("@/lib/direnote-service");
       await Promise.allSettled(artistCardIds.map(async artistCardId => {

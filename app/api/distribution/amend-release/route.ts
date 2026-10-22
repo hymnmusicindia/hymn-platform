@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { createHash } from 'node:crypto';
 import { getSession } from '@/lib/session';
 import { requireCurrentPolicyAcceptance } from '@/lib/policy-agreement';
@@ -11,6 +11,7 @@ import { resolvePrivateReleaseArtworkUrl } from '@/lib/release-asset-resolution'
 import { selectedReleaseArtistIds } from '@/lib/release-artist-verification';
 import { prisma } from '@/lib/prisma';
 import { enqueueAmendmentUpdate, amendmentTransactionOptions } from '@/lib/release-amendment-notifications';
+import { processAutomaticAmendment } from '@/lib/release-amendment-automation';
 import { summarizeAmendment } from '@/lib/release-amendment-presentation';
 
 class ActiveAmendmentError extends Error {
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
         if (!matchesAmendmentSourceRevision(deserializeRelease(current), revision)) throw Error('Release metadata or assets changed while you were editing. Reload the amendment before submitting.');
       } else if (String(form.get('sourceUpdatedAt') || '') !== current.updatedAt.toISOString()) throw Error('Refresh the amendment editor once to load the updated version check.');
       assertAmendmentIdentifiers({ ...release, upcCode: current.upc ?? undefined, tracks: current.tracks.map(track => ({ ...release.tracks!.find(item => item.id === track.id)!, isrc: track.isrc ?? undefined })) }, metadata);
-      const proposed = { wizard_metadata: { requested: metadata }, sourceRevision: amendmentSourceRevision(deserializeRelease(current)), summary: summarizeAmendment({ ...release, artworkUrl: current.artworkUrl || release.artworkUrl }, metadata), fingerprint, locked: { upc: current.upc, tracks: current.tracks.map(track => ({ id: track.id, trackNumber: track.trackNumber, isrc: track.isrc })) } };
+      const proposed = { automaticDelivery: true, wizard_metadata: { requested: metadata }, sourceRevision: amendmentSourceRevision(deserializeRelease(current)), summary: summarizeAmendment({ ...release, artworkUrl: current.artworkUrl || release.artworkUrl }, metadata), fingerprint, locked: { upc: current.upc, tracks: current.tracks.map(track => ({ id: track.id, trackNumber: track.trackNumber, isrc: track.isrc })) } };
       if (legacyRequest) {
         const item = await tx.releaseChangeRequest.update({ where: { id: existing.id }, data: { status: 'submitted', requestedChanges: JSON.parse(JSON.stringify(proposed)), reason: 'Release amendment resubmitted from the pre-filled distribution wizard.', reviewedAt: null, reviewedByAdminId: null, adminNote: null } });
         const event = await tx.releaseChangeRequestEvent.create({ data: { requestId: item.id, actorType: 'user', actorId: user.sub, previousStatus: existing.status, newStatus: 'submitted', note: 'The owner supplied a complete wizard amendment. Any earlier approval is invalidated; HYMN must review this version before delivery.' } });
@@ -69,6 +70,7 @@ export async function POST(request: Request) {
       await tx.auditLog.create({ data: { actorId: user.sub, action: 'RELEASE_WIZARD_AMENDMENT_SUBMITTED', entity: 'release_change_request', entityId: String(item.id), metadata: { releaseId: release.id, fingerprint } } });
       return item;
     }, amendmentTransactionOptions);
+    after(() => processAutomaticAmendment(change.id));
     return NextResponse.json({ request: change, release }, { status: 201 });
   } catch (error) {
     if (error instanceof ActiveAmendmentError) return NextResponse.json({ error: error.message, code: 'AMENDMENT_ALREADY_ACTIVE', request: error.request, manageUrl: `/dashboard/releases/${error.releaseId}?tab=requests&request=${error.request.id}` }, { status: 409 });

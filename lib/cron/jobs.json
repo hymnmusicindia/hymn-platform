@@ -38,7 +38,7 @@
     "id": "direnote-ingest-status",
     "method": "GET",
     "seconds": 60,
-    "purpose": "Poll accepted DireNote ingest jobs and persist final identifiers",
+    "purpose": "Deliver validated amendments, poll accepted ingest jobs and persist final identifiers",
     "flag": "DIRENOTE_RELEASE_SYNC_ENABLED"
   },
   {

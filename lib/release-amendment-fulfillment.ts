@@ -5,6 +5,7 @@ import { deserializeRelease } from './distribution-db';
 import { assertAmendmentIdentifiers } from './release-amendment-identifiers';
 import { matchesAmendmentSourceRevision } from './release-amendment-revision';
 import { syncReleaseContributions } from './release-contributor-sync';
+import type { ReleaseTrack } from './types';
 
 const without = (value: object, keys: string[]) => Object.fromEntries(Object.entries(value).filter(([key]) => !keys.includes(key)));
 
@@ -13,13 +14,15 @@ export async function applyCompletedWizardAmendment(tx: Prisma.TransactionClient
   const changes = request.requestedChanges as Record<string, unknown> | null;
   const wizard = changes?.wizard_metadata as { requested?: unknown } | undefined;
   if (!wizard) return;
+  const alreadyApplied = await tx.auditLog.findFirst({ where: { action: 'RELEASE_AMENDMENT_APPLIED', entityId: String(request.releaseId), metadata: { path: ['requestId'], equals: request.id } } });
+  if (alreadyApplied) return;
   const { metadata } = distributionEditSchema.parse({ metadata: wizard.requested });
   const current = await tx.release.findUniqueOrThrow({ where: { id: request.releaseId }, include: { tracks: { include: { contributions: { include: { party: true }, orderBy: { sequence: 'asc' } } }, orderBy: { trackNumber: 'asc' } } } });
   const detailed = deserializeRelease(current);
   assertAmendmentIdentifiers(detailed, metadata);
   if (typeof changes?.sourceRevision === 'string' && !matchesAmendmentSourceRevision(detailed, changes.sourceRevision)) throw Error('The original release content changed. Review the current release before recording completion.');
   const statusSnapshot = await tx.distributionSubmissionAttempt.findFirst({ where: { releaseId: current.id, isCurrent: true }, select: { id: true, rawStatusPayload: true, lastCheckedAt: true } });
-  const previous = { title: current.title, artistName: current.artistName, genre: current.genre, artworkUrl: current.artworkUrl, audioUrl: current.audioUrl, metadata: current.metadata, statusSnapshot, tracks: current.tracks.map(track => ({ id: track.id, title: track.title, primaryArtist: track.primaryArtist, audioUrl: track.audioUrl, isrc: track.isrc, metadata: track.metadata })) };
+  const previous = { title: current.title, artistName: current.artistName, genre: current.genre, artworkUrl: current.artworkUrl, audioUrl: current.audioUrl, metadata: current.metadata, statusSnapshot, tracks: current.tracks.map(track => ({ id: track.id, title: track.title, primaryArtist: track.primaryArtist, audioUrl: track.audioUrl, isrc: track.isrc, metadata: track.metadata, contributors: detailed.tracks?.find(item => item.id === track.id)?.contributors })) };
   const oldMetadata = current.metadata && typeof current.metadata === 'object' ? current.metadata as Record<string, unknown> : {};
   const { tracks, legal } = metadata;
   const fields = without(metadata, ['tracks', 'editReleaseId', 'legal', 'artworkFileKey', 'uploadedArtworkUrl', 'existingArtworkUrl', 'upcCode']);
@@ -37,4 +40,17 @@ export async function applyCompletedWizardAmendment(tx: Prisma.TransactionClient
   // The immutable submission payload and acknowledgement remain untouched.
   if (statusSnapshot) await tx.distributionSubmissionAttempt.update({ where: { id: statusSnapshot.id }, data: { rawStatusPayload: Prisma.DbNull, lastCheckedAt: null } });
   await tx.auditLog.create({ data: { actorType: 'system', action: 'RELEASE_AMENDMENT_APPLIED', entity: 'release', entityId: String(current.id), metadata: JSON.parse(JSON.stringify({ requestId: request.id, previous, retainedUpc: current.upc, retainedIsrcs: current.tracks.map(track => ({ id: track.id, isrc: track.isrc })) })) } });
+}
+
+/** Restore the catalogue snapshot when an accepted asynchronous amendment is rejected. */
+export async function restoreFailedWizardAmendment(tx: Prisma.TransactionClient, request: ReleaseChangeRequest) {
+  const audit = await tx.auditLog.findFirst({ where: { action: 'RELEASE_AMENDMENT_APPLIED', entityId: String(request.releaseId), metadata: { path: ['requestId'], equals: request.id } }, orderBy: { id: 'desc' } });
+  const snapshot = (audit?.metadata as { previous?: { title: string; artistName: string; genre: string; artworkUrl: string; audioUrl: string; metadata: Prisma.InputJsonValue; tracks: Array<{ id: number; title: string; primaryArtist: string; audioUrl: string; metadata: Prisma.InputJsonValue; contributors?: ReleaseTrack['contributors'] }> } } | null)?.previous;
+  if (!snapshot) return;
+  await tx.release.update({ where: { id: request.releaseId }, data: { title: snapshot.title, artistName: snapshot.artistName, genre: snapshot.genre, artworkUrl: snapshot.artworkUrl, audioUrl: snapshot.audioUrl, metadata: snapshot.metadata, version: { increment: 1 } } });
+  for (const track of snapshot.tracks) {
+    await tx.track.update({ where: { id: track.id }, data: { title: track.title, primaryArtist: track.primaryArtist, audioUrl: track.audioUrl, metadata: track.metadata } });
+    if (track.contributors) await syncReleaseContributions(tx, { actorUserId: request.requestedByUserId, tracks: [{ trackId: track.id, contributions: track.contributors }] });
+  }
+  await tx.auditLog.create({ data: { actorType: 'system', action: 'RELEASE_AMENDMENT_RESTORED', entity: 'release', entityId: String(request.releaseId), metadata: { requestId: request.id, snapshotAuditId: audit!.id } } });
 }
