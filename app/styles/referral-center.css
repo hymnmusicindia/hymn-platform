@@ -103,7 +103,7 @@
 .sidebar-newsletter-input { display:flex; align-items:center; margin-top:8px; background:#0e131b; border:1px solid #3a4659; border-radius:7px; overflow:hidden; }
 .sidebar-newsletter-input input { min-width:0; width:100%; padding:8px; background:transparent; border:0; color:#eef2f9; font-size:11px; outline:none; }
 .sidebar-newsletter-input input::placeholder { color:#9aa7bb; }
-.sidebar-newsletter-input button { display:grid; place-items:center; width:36px; min-height:32px; flex-shrink:0; background:#e7edf7; color:#17202d; }
+.sidebar-newsletter-input button { display:grid; place-items:center; width:40px; min-height:40px; margin:3px; border-radius:7px; flex-shrink:0; background:#e7edf7; color:#17202d; }
 .sidebar-newsletter-input:focus-within { outline:2px solid #b6c6df; outline-offset:2px; }
 .sidebar-newsletter-content > small { display:block; font-size:9px; color:#9aa7bb; margin-top:4px; }
 .sidebar-newsletter button:disabled { opacity:.6; }

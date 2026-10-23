@@ -15,7 +15,7 @@ export async function getNextActionsForUser(userId: number): Promise<NextAction[
   const correction = releases.find((release) => release.status === "CHANGES_REQUESTED" || release.status === "REJECTED");
   if (correction) actions.push({ key: `release:${correction.id}:fix`, title: "Fix your release", reason: `${correction.title} has corrections waiting.`, cta: "Review corrections", href: `/dashboard/releases?releaseId=${correction.id}&panel=redressal`, priority: "critical" });
   const draft = releases.find((release) => release.status === "DRAFT");
-  if (draft) actions.push({ key: `release:${draft.id}:continue`, title: "Continue your release", reason: `${draft.title} is still a draft.`, cta: "Continue draft", href: `/distribution/start?draft=${draft.id}`, priority: "high" });
+  if (draft) actions.push({ key: `release:${draft.id}:continue`, title: "Continue your release", reason: `${draft.title} is still a draft.`, cta: "Continue draft", href: `/distribution/start?edit=${draft.id}`, priority: "high" });
   const unusedBeat = purchases.find((purchase) => purchase.licenseUrl && !purchase.releaseId);
   if (unusedBeat) actions.push({ key: `beat:${unusedBeat.id}:release`, title: "Release with your purchased beat", reason: "Your license is ready and can prefill a distribution draft.", cta: "Start release", href: `/dashboard?tab=purchases&purchaseId=${unusedBeat.id}`, priority: "high" });
   const missingLicense = purchases.find((purchase) => !purchase.licenseUrl);

@@ -4,7 +4,7 @@ import { Check, MessageSquare, Star, X } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { CustomerOverlay } from "./customer-overlay";
 import { useAccessibleDialog } from "./ui/use-accessible-dialog";
-import { CONFIRMATION_LEFT_EVENT, clearReviewConfirmationDeparture, recentlyLeftReviewConfirmation, recoverConfirmationDeparture } from "@/lib/purchase-review-timing";
+import { CONFIRMATION_LEFT_EVENT, clearReviewConfirmationDeparture, recentlyLeftReviewConfirmation, recoverConfirmationDeparture, deferPurchaseReview } from "@/lib/purchase-review-timing";
 import "./post-purchase-review-prompt.css";
 type EligiblePurchase = { purchaseType: "beat" | "service" | "subscription"; purchaseId: number; label: string };
 const ratingLabels = ["", "Poor", "Fair", "Good", "Very good", "Excellent"];
@@ -28,8 +28,10 @@ export function PostPurchaseReviewPrompt() {
     let departed = recentlyLeftReviewConfirmation();
     const tryShow = () => {
       if (!active || !pending || visible.current) return;
+      if (deferPurchaseReview(window.location.pathname, window.location.search)) return;
       if (document.querySelector('[data-release-review-confirmation]')) return;
-      if (document.querySelector('[role="dialog"][aria-modal="true"]:not([data-purchase-review])')) return;
+      // Cart drawers stay mounted when closed. Only an active modal may defer feedback.
+      if ([...document.querySelectorAll('[role="dialog"][aria-modal="true"]:not([data-purchase-review])')].some(dialog => !dialog.closest('[aria-hidden="true"],[hidden],[inert]'))) return;
       if (pending.purchaseType !== "beat" && !departed && !recentlyLeftReviewConfirmation()) return;
       let snoozedUntil = 0;
       try { snoozedUntil = Number(localStorage.getItem(`hymn-review-snooze:${pending.purchaseType}:${pending.purchaseId}`) || 0); } catch {}

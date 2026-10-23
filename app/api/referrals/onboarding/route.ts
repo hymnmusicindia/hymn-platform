@@ -10,8 +10,10 @@ export async function GET() {
   const user = await prisma.user.findUnique({ where: { id: session.sub }, select: { referredById: true, referralPromptCompletedAt: true, createdAt: true, _count: { select: { checkoutOrders: true, distributionOrders: true } }, subscription: { select: { _count: { select: { payments: true } } } } } });
   if (!user) return NextResponse.json({ error: "Account not found." }, { status: 404 });
   const newAccount = referralOnboardingEligible({ ...user, checkoutOrders: user._count.checkoutOrders, distributionOrders: user._count.distributionOrders, subscriptionPayments: user.subscription?._count.payments ?? 0 });
-  const policy = await prisma.growthRewardPolicy.findUniqueOrThrow({ where: { id: 1 } });
-  return NextResponse.json({ showPrompt: newAccount && !user.referredById && !user.referralPromptCompletedAt, referrerReward: policy.artistCredit, referredReward: 0 });
+  // A missing reward configuration must hide the optional invitation, rather
+  // than failing on every customer page or advertising an unconfigured reward.
+  const policy = await prisma.growthRewardPolicy.findUnique({ where: { id: 1 } });
+  return NextResponse.json({ showPrompt: Boolean(policy && newAccount && !user.referredById && !user.referralPromptCompletedAt), referrerReward: policy?.artistCredit ?? 0, referredReward: 0 });
 }
 
 export async function POST(request: Request) {

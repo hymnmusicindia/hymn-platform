@@ -15,7 +15,7 @@ assert.equal(checkoutPlan({ plan: "half_yearly" }, "one_time"), "half_yearly");
 assert.equal(checkoutPlan({ plan: "elite" }, "one_time"), "yearly_plus");
 
 assert.doesNotMatch(form, /if \(isEditing\)\s*\{\s*const data = await submitEditedRelease/);
-assert.ok(form.includes("const isPaidReleaseResubmission = isPaidCorrectionRelease(initialRelease)"));
+assert.ok(form.includes("const isPaidReleaseResubmission = amendmentMode || isPaidCorrectionRelease(initialRelease)"));
 assert.ok(form.includes('return paymentStatus === "paid" && ["draft", "awaiting_payment", "changes_requested", "rejected", "resubmitted"].includes(status)'));
 assert.match(form, /if \(isPaidReleaseResubmission\)/);
 assert.ok(form.includes('modal: { ondismiss: () => { if (!paymentReceived) reject('), "Closing checkout before a payment response must keep the draft resumable.");

@@ -59,7 +59,7 @@ html body .release-premium-editor .track-editor-fields :is(.audio-upload-stage,.
 html body .release-premium-editor .release-metadata-stage { grid-template-columns:1fr 1fr; gap:24px; }
 html body .release-premium-editor .release-details-fields { gap:16px; }
 html body .release-premium-editor .release-timing-selector { gap:10px; }
-html body .release-premium-editor .release-timing-selector > button { min-height:88px; padding:14px; border-radius:4px; box-shadow:none; }
+html body .release-premium-editor .release-timing-selector > button { min-height:88px; padding:14px; border-radius:12px; box-shadow:none; }
 html body .release-premium-editor .release-prefill-review { grid-column:1 / -1; padding:14px; border-radius:4px; }
 /* Delivery separates ownership from destinations without oversized panels. */
 html body .release-premium-editor .release-rights-stage { gap:14px; align-content:start; align-self:start; }

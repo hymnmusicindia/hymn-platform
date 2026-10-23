@@ -36,6 +36,13 @@ type CustomerPayoutSummary = {
   payoutHistory: Array<{ id: number; status: string; requestedAmount: number; requestDate: string }>;
 };
 type SmartNextAction = { key: string; title: string; reason: string; cta: string; href: string; priority: "critical" | "high" | "normal" };
+const customerTabs = ["overview", "releases", "upload", "analytics", "earnings", "promotions", "collaborators", "distribution", "content-id", "messages", "support", "settings", "purchases", "subscription", "referral", "account"] as const;
+type CustomerTab = typeof customerTabs[number];
+function customerTab(params: { get: (key: string) => string | null }): CustomerTab {
+  if (params.get("module") === "splits") return "collaborators";
+  const tab = params.get("tab");
+  return customerTabs.includes(tab as CustomerTab) && tab !== "earnings" ? tab as CustomerTab : "overview";
+}
 
 function SubscriptionActions({ status, cancelAtPeriodEnd }: { status: string; cancelAtPeriodEnd?: boolean }) {
   const [pending, setPending] = useState(false);
@@ -168,7 +175,7 @@ function Timeline({ items }: { items: Array<{ label: string; detail?: string; ac
 export function CustomerDashboardShell({ user, releases, orders, subscription, analytics = [], producerAccessDisabled = false }: { user: User; releases: Release[]; orders: Order[]; subscription?: any | null; analytics?: any[]; producerAccessDisabled?: boolean }) {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"overview" | "releases" | "upload" | "analytics" | "earnings" | "promotions" | "collaborators" | "distribution" | "content-id" | "messages" | "support" | "settings" | "purchases" | "subscription" | "referral" | "account">("overview");
+  const [activeTab, setActiveTab] = useState<CustomerTab>(() => customerTab(searchParams));
   const [dashboardSearch, setDashboardSearch] = useState("");
   const [releaseStatusFilter, setReleaseStatusFilter] = useState("all");
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
@@ -193,13 +200,9 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
 
   useEffect(() => {
     const params = searchParams;
-    if (params.get("module") === "splits") setActiveTab("collaborators");
-    else {
-      const requested = params.get("tab");
-      if (requested === "earnings" || requested === "payouts") { router.replace("/payout"); return; }
-      if (requested && ["overview", "releases", "upload", "analytics", "earnings", "promotions", "collaborators", "distribution", "content-id", "messages", "support", "settings", "purchases", "subscription", "referral", "account"].includes(requested)) setActiveTab(requested as typeof activeTab);
-      else setActiveTab("overview");
-    }
+    const requested = params.get("tab");
+    if (params.get("module") !== "splits" && (requested === "earnings" || requested === "payouts")) { router.replace("/payout"); return; }
+    setActiveTab(customerTab(params));
   }, [searchParams, router]);
 
   useEffect(() => {
@@ -474,7 +477,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         </div>
       ) : null}
 
-      {activeTab === "overview" ? <section className="sr-only" aria-label="Account summary">
+      {activeTab === "overview" ? <section className="sr-only left-0 top-0" aria-label="Account summary">
         <p>Plan {subscription ? subscription.plan : "none"}; {releases.length} releases; {paidOrders.length} paid purchases; {user.referralCredits} referral credits.</p>
       </section> : null}
 

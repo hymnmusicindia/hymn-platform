@@ -222,7 +222,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
         <div className="surface-card p-6 sm:p-8">
           <h1 className="text-4xl font-semibold" style={{ color: "var(--text)" }}>Review before payment.</h1>
           <p className="mt-3 text-sm leading-6" style={{ color: "var(--text-muted)" }}>
-            Pricing, coupons, checkout credits, and the Razorpay order amount are recalculated on the backend before payment.
+            Review your items, discounts and credits. Your final total is confirmed before you pay.
           </p>
 
           <div className="mt-6 grid gap-3">
@@ -275,7 +275,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
         <aside className="surface-card self-start p-6 sm:p-8">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5" style={{ color: "var(--text-soft)" }} />
-            <h2 className="text-sm font-semibold" style={{ color: "var(--text)" }}>Backend validated</h2>
+            <h2 className="text-sm font-semibold" style={{ color: "var(--text)" }}>Your payment summary</h2>
           </div>
 
           <div className="mt-6 space-y-3 text-sm">

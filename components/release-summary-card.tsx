@@ -101,7 +101,7 @@ export function ReleaseSummaryCard({
       }}
     >
       <div className="release-summary-artwork relative aspect-square w-full rounded-[6px] bg-[var(--bg-soft)]">
-        <div className="h-full w-full overflow-hidden rounded-[6px]">
+        <div className="relative h-full w-full overflow-hidden rounded-[6px]">
         {release.artworkUrl ? (
           <Image
             src={artworkPreviewUrl(release.artworkUrl, 320)}

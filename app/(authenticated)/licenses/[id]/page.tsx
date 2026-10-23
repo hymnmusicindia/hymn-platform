@@ -18,7 +18,7 @@ export default async function BeatLicencePage({ params }: { params: Promise<{ id
       <Link href="/dashboard?tab=purchases" className="rounded-full border border-black/15 bg-white px-4 py-2 text-sm font-semibold">← Purchases</Link>
       <div className="flex flex-wrap gap-2">
         {licence.studioOrder ? <Link href={`/studio/orders/${licence.studioOrder.publicId}`} className="rounded-full border border-black/15 bg-white px-4 py-2 text-sm font-semibold">Open Studio project</Link> : <Link href="/studio" className="rounded-full border border-black/15 bg-white px-4 py-2 text-sm font-semibold">Mix &amp; master</Link>}
-        {licence.releaseId ? <Link href={`/distribution/start?draft=${licence.releaseId}`} className="rounded-full border border-black bg-black px-4 py-2 text-sm font-semibold text-white">Continue release</Link> : <LicenceCycleActions purchaseId={licence.purchaseId} />}
+        {licence.releaseId ? <Link href={`/distribution/start?edit=${licence.releaseId}`} className="rounded-full border border-black bg-black px-4 py-2 text-sm font-semibold text-white">Continue release</Link> : <LicenceCycleActions purchaseId={licence.purchaseId} />}
         {licence.pdfUrl ? <a href={licence.pdfUrl} download className="rounded-full border border-black bg-white px-4 py-2 text-sm font-semibold">Download PDF</a> : null}
       </div>
     </div>

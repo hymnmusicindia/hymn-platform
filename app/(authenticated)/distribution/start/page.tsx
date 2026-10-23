@@ -17,10 +17,10 @@ function firstValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function DistributionStartPage({ searchParams }: { searchParams?: Promise<{ amend?: string | string[]; submitted?: string | string[]; edit?: string | string[]; audioAssetId?: string | string[]; correctionField?: string | string[]; resume?: string | string[]; manage?: string | string[]; onboarding?: string | string[]; stage?: string | string[]; campaign?: string | string[]; utm_source?: string | string[]; utm_medium?: string | string[]; utm_campaign?: string | string[]; utm_content?: string | string[]; utm_term?: string | string[] }> }) {
+export default async function DistributionStartPage({ searchParams }: { searchParams?: Promise<{ amend?: string | string[]; draft?: string | string[]; submitted?: string | string[]; edit?: string | string[]; audioAssetId?: string | string[]; correctionField?: string | string[]; resume?: string | string[]; manage?: string | string[]; onboarding?: string | string[]; stage?: string | string[]; campaign?: string | string[]; utm_source?: string | string[]; utm_medium?: string | string[]; utm_campaign?: string | string[]; utm_content?: string | string[]; utm_term?: string | string[] }> }) {
   const user = await getCurrentUserForPage();
   const params = (await searchParams) ?? {};
-  const requestedId = Number(firstValue(params.amend) ?? firstValue(params.edit) ?? firstValue(params.resume) ?? firstValue(params.manage) ?? "");
+  const requestedId = Number(firstValue(params.amend) ?? firstValue(params.edit) ?? firstValue(params.resume) ?? firstValue(params.manage) ?? firstValue(params.draft) ?? "");
   const editingRelease = user && Number.isSafeInteger(requestedId) && requestedId > 0 ? await getDetailedReleaseByUserId(user.id, requestedId) : null;
   const amendmentMode = Boolean(firstValue(params.amend));
   if (amendmentMode && (!editingRelease || !['live', 'partially_live', 'scheduled', 'awaiting_live_confirmation', 'sent_to_distributor', 'distributor_processing'].includes(editingRelease.status))) return <main className="shell py-10"><p>This release is not available for amendment.</p><Link href="/dashboard/releases">Back to releases</Link></main>;
@@ -39,7 +39,7 @@ export default async function DistributionStartPage({ searchParams }: { searchPa
   }
   const attachedOrder = editingRelease ? await prisma.distributionOrder.findUnique({ where: { releaseId: editingRelease.id } }) : null;
   if (attachedOrder?.userId === user?.id && attachedOrder?.paymentStatus === "paid" && (!attachedOrder.razorpayOrderId.startsWith("sub_entitlement_") || hasReleaseAllowance)) selectedPlan = checkoutPlan(attachedOrder, selectedPlan);
-  const hasRequestedRelease = Boolean(firstValue(params.amend) || firstValue(params.edit) || firstValue(params.resume) || firstValue(params.manage));
+  const hasRequestedRelease = Boolean(firstValue(params.amend) || firstValue(params.edit) || firstValue(params.resume) || firstValue(params.manage) || firstValue(params.draft));
   const isEditing = Boolean(editingRelease);
   const editingMetadata = editingRelease?.metadata && typeof editingRelease.metadata === "object" ? editingRelease.metadata as Record<string, unknown> : {};
   const campaignDraftEligible = !editingRelease || (

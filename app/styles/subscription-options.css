@@ -13,7 +13,7 @@ html body .subscription-dialog .subscription-first-release { display:grid; grid-
 html body .subscription-dialog .subscription-first-release h3 { margin:0 0 5px; font-size:20px; font-weight:600; letter-spacing:-.03em; line-height:1.2; }
 html body .subscription-dialog .subscription-first-release p { margin:0; color:#c5cbd5; font-size:12px; line-height:1.5; letter-spacing:0; font-weight:400; }
 html body .subscription-dialog .subscription-first-release small { display:block; margin-top:5px; color:#a4acb9; font-size:10px; line-height:1.4; }
-html body .subscription-dialog .subscription-offer-action { display:flex; align-items:center; justify-content:center; gap:14px; padding:11px 15px; min-height:44px; border:0!important; border-radius:4px; background:#e6e9ed!important; color:#1b2028!important; text-decoration:none!important; font-size:12px; font-weight:600; white-space:nowrap; box-shadow:none; transition:background .2s,color .2s; }
+html body .subscription-dialog .subscription-offer-action { display:flex; align-items:center; justify-content:center; gap:14px; padding:11px 15px; min-height:44px; border:0!important; border-radius:12px; background:#e6e9ed!important; color:#1b2028!important; text-decoration:none!important; font-size:12px; font-weight:600; white-space:nowrap; box-shadow:none; transition:background .2s,color .2s; }
 html body .subscription-dialog .subscription-offer-action:hover { color:#080a0e!important; background:#fff!important; }
 html body .subscription-dialog .subscription-offer-action::after,html body .subscription-dialog .subscription-offer-action::before { display:none!important; }
 .subscription-comparison-heading { margin:22px 0 14px; display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:10px; }

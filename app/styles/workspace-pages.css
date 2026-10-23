@@ -16,11 +16,9 @@
 .hymn-portal-root .customer-module-section { padding:0!important; border:0!important; background:none!important; }
 .hymn-portal-root .customer-module-section > div:first-child { padding-bottom:20px; }
 .hymn-portal-root .customer-module-section > div:first-child > div > p:first-child { color:var(--text-soft)!important; }
-.hymn-portal-root .field { border-radius:4px!important; box-shadow:none!important; }
-.hymn-portal-root :is(button,a)[class*="rounded"]:not([aria-label]):not(.release-summary-card):not(.beat-card) {
-  border-radius:0!important; box-shadow:none!important; text-shadow:none!important; transform:none!important;
-}
-.hymn-portal-root button[class*="rounded"]:not([aria-label]):not([aria-expanded]):not([role="menuitemradio"]) { border:0!important; }
+.hymn-portal-root .field { border-radius:10px!important; box-shadow:none!important; }
+/* Component controls own their shape, borders and selected states. A blanket
+   [class*="rounded"] reset also flattened filters, purchase actions and radios. */
 .hymn-portal-root .faq-article { border:0!important; border-bottom:1px solid var(--border)!important; border-radius:0!important; background:none!important; }
 .hymn-portal-root .faq-article button { padding-inline:0; }
 .hymn-portal-root .faq-article .chip { padding:0; border:0; border-radius:0; background:none; color:var(--text-soft); font-size:10px; letter-spacing:.12em; text-transform:uppercase; }

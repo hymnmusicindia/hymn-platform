@@ -28,7 +28,7 @@ assert.equal(getReleasePortalStageLabel("partner_received"), "Received by Partne
 assert.equal(getReleasePortalStage({ status: "under_review", metadata: { direNote: { reconciliationInProgress: true } } } as any), "reconciling");
 assert.equal(getReleasePortalStageLabel("reconciling"), "Reconciling");
 assert.equal(getReleasePortalDateLabel({ status: "live", releaseTiming: "quick_release" } as any), "Available now");
-assert.equal(getReleasePortalDateLabel({ status: "distributor_processing", releaseTiming: "quick_release" } as any), "Usually 2–7 days after DireNote approval");
+assert.equal(getReleasePortalDateLabel({ status: "distributor_processing", releaseTiming: "quick_release" } as any), "Usually 2–7 days after HYMN approval");
 assert.equal(getReleasePortalStage({ status: "distributed" } as any), "released");
 assert.equal(getReleasePortalFilterLabel("changes_requested"), "Changes Requested");
 assert.equal(getReleaseStatusPresentation("distributed").label, "Live");

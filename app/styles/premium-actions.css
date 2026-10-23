@@ -1,17 +1,18 @@
 /* Text-first actions: no pills, halos or decorative button frames. */
 html body .hymn-page-selector { border:0!important; border-radius:0!important; background:none!important; box-shadow:none!important; }
-html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost,.landing-mobile-menu,.site-header-cta,.site-nav-item,.hymn-mobile-page-link,.release-summary-action-button,.release-dashboard-tab,button.rounded-full:not([aria-label]),a.rounded-full:not([aria-label])) {
-  border:0!important; border-radius:0!important; background:none!important; background-image:none!important;
+html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost,.landing-mobile-menu,.site-header-cta,.site-nav-item,.hymn-mobile-page-link,.release-summary-action-button,.release-dashboard-tab) {
+  border:0!important; background:none!important; background-image:none!important;
   box-shadow:none!important; text-shadow:none!important; filter:none!important; transform:none!important;
   color:var(--text-muted,#a3abb8)!important; transition:color .18s ease!important;
 }
-html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost,.landing-mobile-menu,.site-header-cta,.site-nav-item,.hymn-mobile-page-link,.release-summary-action-button,.release-dashboard-tab,button.rounded-full:not([aria-label]),a.rounded-full:not([aria-label])):is(:hover,:focus-visible),
+html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost,.landing-mobile-menu,.site-header-cta,.site-nav-item,.hymn-mobile-page-link,.release-summary-action-button,.release-dashboard-tab):is(:hover,:focus-visible),
 html body :is(.btn-primary,.site-nav-item[aria-current="page"],.hymn-mobile-page-link[aria-current="page"],.release-dashboard-tab[aria-current="page"]) { color:var(--text,#f5f7fa)!important; }
 html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost)::before,
 html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost)::after { display:none!important; }
 html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost):disabled { color:var(--text-soft,#717a88)!important; opacity:.5; cursor:not-allowed; }
-html body :is(.btn-primary,.btn-outline,.btn-secondary,.premium-cta,.premium-ghost) { min-height:36px; padding:8px 12px; }
-html body :is(.btn-primary,.btn-outline,.btn-secondary,.premium-cta,.premium-ghost):focus-visible { outline:1px solid var(--text-muted); outline-offset:3px; }
+html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost) { min-height:44px; padding:10px 14px; border-radius:12px!important; }
+html body :is(.site-nav-item,.hymn-mobile-page-link,.release-summary-action-button,.release-dashboard-tab) { border-radius:0; }
+html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost):focus-visible { outline:2px solid var(--focus,var(--text-muted)); outline-offset:3px; }
 html body :is(.landing-nav-link,.dashboard-os-nav-item,.release-dashboard-tab,.hymn-mobile-page-link) { text-shadow:none!important; box-shadow:none!important; }
 html body :is(.landing-nav-link,.dashboard-os-nav-item) svg { filter:none!important; }
 html body :is(.landing-nav-link,.dashboard-os-nav-item):is(:hover,:focus-visible),
