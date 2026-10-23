@@ -26,6 +26,11 @@ async function main() {
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("acquisition_fixture");
+    if (process.argv.includes('--creator-approvals-only')) {
+      await run(['node_modules/prisma/build/index.js', 'db', 'push', '--schema', 'prisma/schema.prisma', '--skip-generate']);
+      await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-creator-approvals.ts']);
+      return;
+    }
     if (process.argv.includes('--staff-qc-only')) {
       await run(['node_modules/prisma/build/index.js', 'db', 'push', '--schema', 'prisma/schema.prisma', '--skip-generate']);
       await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-staff-qc.ts'], process.execPath, { ...env, APP_URL: 'https://hymn.fixture', ADMIN_GOOGLE_EMAILS: 'founder@staff.fixture.invalid' });

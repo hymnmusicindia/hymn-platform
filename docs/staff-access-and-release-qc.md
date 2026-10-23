@@ -43,3 +43,20 @@ with email disabled and a fake distribution function. It checks internal identit
 exclusion, real customer signals, task allocation, private-file access, stale and
 revoked decisions, correction emails, new review rounds, concurrency, uncertain
 delivery escalation and protected role changes. It does not submit real releases.
+# Creator application approvals
+
+`operations.producers.approve` and `operations.engineers.approve` expose the
+corresponding pending queues in **Team OS → Creator approvals**. These are
+business decision permissions, separate from the existing read-only marketplace
+coordination permissions. They do not grant platform administrator access.
+
+Reviewers must provide notes and confirm their checks before approving. Decisions
+recheck active membership and permissions under the workspace lock, reject
+self-review and stale submissions, and lock the application row. Producer access
+or the engineer profile and first service listing commit with the decision,
+applicant notification and audit evidence. A failed appointment rolls back the
+decision. Existing engineer profiles and payout configuration are preserved.
+
+Run `npx tsx scripts/verify-acquisition-isolated.ts --creator-approvals-only` for
+the disposable-database permission, activation, concurrency and rollback checks.
+

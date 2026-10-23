@@ -62,8 +62,8 @@ const snapshot = (input: StudioEngineerInput) => ({
   portfolioItems: input.portfolioItems.length,
 });
 
-export async function appointStudioEngineer(input: StudioEngineerInput, actorId: number | null, requestId: string) {
-  return prisma.$transaction(async tx => {
+export async function appointStudioEngineer(input: StudioEngineerInput, actorId: number | null, requestId: string, transaction?: Prisma.TransactionClient) {
+  const execute = async (tx: Prisma.TransactionClient) => {
     const user = await tx.user.findUnique({ where: { id: input.userId }, select: { id: true, name: true, avatar: true, status: true } });
     if (!user) throw new Error("Selected user does not exist.");
     if (user.status !== "ACTIVE") throw new Error("Only an active user can be appointed as an engineer.");
@@ -128,7 +128,8 @@ export async function appointStudioEngineer(input: StudioEngineerInput, actorId:
     });
     await tx.auditLog.create({ data: { actorId, actorType: "admin", actorRole: "services_manager", action: "STUDIO_ENGINEER_APPOINTED", entity: "engineer_profile", entityId: String(profile.id), requestId, newValue: snapshot(input) } });
     return profile;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5_000, timeout: 10_000 });
+  };
+  return transaction ? execute(transaction) : prisma.$transaction(execute, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5_000, timeout: 10_000 });
 }
 
 export async function updateStudioEngineer(profileId: number, input: StudioEngineerInput, actorId: number | null, requestId: string) {
