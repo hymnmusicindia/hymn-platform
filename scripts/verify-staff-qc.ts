@@ -51,6 +51,7 @@ async function main() {
   const decision = { taskId: task.id, taskVersion: task.version, releaseVersion: first.version, decision: 'approved', note: 'All submitted media and rights evidence checked.', checklistConfirmed: true };
   await assert.rejects(reviewAssignedReleaseQc(other, decision), /assigned/);
   await assert.rejects(reviewAssignedReleaseQc(reviewer, { ...decision, releaseVersion: first.version + 1 }), /changed/);
+  await assert.rejects(reviewAssignedReleaseQc(reviewer, { ...decision, checklistConfirmed: false }), /Complete all QC checks/);
   await reviewAssignedReleaseQc(reviewer, decision);
   assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: first.id } })).status, 'APPROVED');
   assert.equal((await prisma.teamTask.findUniqueOrThrow({ where: { id: task.id } })).status, 'COMPLETED');
@@ -70,7 +71,7 @@ async function main() {
   assert.equal(((await prisma.teamTask.findUniqueOrThrow({ where: { id: failedTask.id } })).followUpContext as Record<string, unknown>).delivery, 'review');
   assert.ok(await prisma.adminTask.findUnique({ where: { eventKey: `${failedTask.id}:qc-delivery-review` } }), 'Delivery errors reach the existing admin operational queue.');
   const correctionTask = tasks.find(t => t.recordId === second.id)!; const correctionReviewer = correctionTask.ownerId === tavish.id ? tavish : manha;
-  await reviewAssignedReleaseQc(correctionReviewer, { ...decision, taskId: correctionTask.id, taskVersion: correctionTask.version, releaseVersion: second.version, decision: 'changes_requested', issueType: 'artwork', note: 'Please replace the artwork with a clear square image.' });
+  await reviewAssignedReleaseQc(correctionReviewer, { ...decision, taskId: correctionTask.id, taskVersion: correctionTask.version, releaseVersion: second.version, decision: 'changes_requested', checklistConfirmed: false, issueType: 'artwork', note: 'Please replace the artwork with a clear square image.' });
   assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: second.id } })).status, 'CHANGES_REQUESTED');
   assert.ok(await prisma.emailLog.findFirst({ where: { entityType: 'release', entityId: String(second.id), template: 'release_changes_requested' } }), 'The existing customer correction email is durably queued.');
   await prisma.release.update({ where: { id: second.id }, data: { status: 'UNDER_REVIEW', version: { increment: 1 } } });
