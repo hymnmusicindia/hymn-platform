@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { whatsappNumber } from './phone';
 import { freeCallSlot } from './call-rules';
 import { TeamError, type Actor } from './policy';
+import { internalIdentities, matchesInternalIdentity, type InternalIdentities } from './internal-identity';
 export async function callbackSlot(tx: Prisma.TransactionClient, workspaceId: string, memberId: string, after: Date, taskId?: string) {
   const events = await tx.teamCalendarEvent.findMany({ where: { workspaceId, assigneeId: memberId, status: 'SCHEDULED', ...(taskId ? { OR: [{ followUpTaskId: null }, { followUpTaskId: { not: taskId } }] } : {}), startsAt: { gte: new Date(after.getTime() - 7 * 86400000), lte: new Date(after.getTime() + 14 * 86400000) } }, select: { startsAt: true, endsAt: true, kind: true } });
   const slot = freeCallSlot(after, events);
@@ -17,13 +18,15 @@ export async function syncCallbackCalendar(tx: Prisma.TransactionClient, a: Acto
   if (!old && status === 'SCHEDULED') await tx.teamCalendarEvent.create({ data: { ...data, workspaceId: a.workspaceId, creatorId: a.id, followUpTaskId: task.id } });
   else if (old) await tx.teamCalendarEvent.update({ where: { id: old.id }, data: { ...data, remindedAt: null, version: { increment: 1 }, scheduleRevision: { increment: 1 } } });
 }
-export async function syncProspectCallCalendar(tx: Prisma.TransactionClient, a: Actor, prospectId: string, now = new Date()) {
+export async function syncProspectCallCalendar(tx: Prisma.TransactionClient, a: Actor, prospectId: string, now = new Date(), staff?: InternalIdentities) {
   const prospect = await tx.teamProspect.findFirst({ where: { id: prospectId, workspaceId: a.workspaceId }, include: { owner: { include: { role: true, user: { select: { status: true } } } } } });
   if (!prospect?.clientId) return;
   const task = await tx.teamTask.findUnique({ where: { eventKey: `${prospect.id}:call` } });
   if (!task) return;
+  const internal = matchesInternalIdentity(staff ?? await internalIdentities(tx), prospect);
+  if (internal) await tx.teamTask.updateMany({ where: { id: task.id, status: { notIn: ['COMPLETED', 'CANCELLED'] } }, data: { status: 'CANCELLED', blocker: 'Internal team member: customer sales follow-up is not applicable.', version: { increment: 1 } } });
   const terminal = !whatsappNumber(prospect.phone) || prospect.suppressed || !prospect.verified || !['CONSENTED', 'LEGITIMATE_INTEREST'].includes(prospect.contactEligibility) || ['CONVERTED','LOST','NOT_INTERESTED','UNQUALIFIED','DUPLICATE','DO_NOT_CONTACT'].includes(prospect.stage);
-  if (terminal || task.archivedAt || ['COMPLETED','CANCELLED'].includes(task.status)) {
+  if (internal || terminal || task.archivedAt || ['COMPLETED','CANCELLED'].includes(task.status)) {
     await tx.teamCalendarEvent.updateMany({ where: { followUpTaskId: task.id, status: 'SCHEDULED' }, data: { status: 'CANCELLED', version: { increment: 1 } } }); return;
   }
   if (prospect.owner.status !== 'ACTIVE' || prospect.owner.user.status !== 'ACTIVE' || prospect.owner.availability !== 'AVAILABLE' || prospect.owner.role.owner || !prospect.owner.role.permissions.includes('crm.outreach.manage')) return;

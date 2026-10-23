@@ -1,4 +1,4 @@
-export const permissions = ["calendar.view", "calendar.manage", "clients.view", "clients.manage", "team.members.view", "team.members.invite", "team.members.manage", "tasks.create", "tasks.assign", "tasks.update", "tasks.complete", "tasks.approve", "tasks.delete", "tasks.all", "projects.create", "projects.manage", "chat.use", "chat.channel.manage", "crm.prospects.view", "crm.prospects.create", "crm.prospects.assign", "crm.outreach.manage", "crm.all", "acquisition.admin", "operations.distribution.review", "operations.beats.manage", "operations.engineers.manage", "operations.studio.review", "reports.team.view", "reports.all.view", "audit.view", "settings.manage"] as const;
+export const permissions = ["calendar.view", "calendar.manage", "clients.view", "clients.manage", "team.members.view", "team.members.invite", "team.members.manage", "tasks.create", "tasks.assign", "tasks.update", "tasks.complete", "tasks.approve", "tasks.delete", "tasks.all", "projects.create", "projects.manage", "chat.use", "chat.channel.manage", "crm.prospects.view", "crm.prospects.create", "crm.prospects.assign", "crm.outreach.manage", "crm.all", "acquisition.admin", "operations.distribution.review", "operations.distribution.qc", "operations.beats.manage", "operations.engineers.manage", "operations.studio.review", "reports.team.view", "reports.all.view", "audit.view", "settings.manage"] as const;
 export type Permission = typeof permissions[number];
 export const statuses = ["BACKLOG", "TODO", "IN_PROGRESS", "IN_REVIEW", "BLOCKED", "COMPLETED", "CANCELLED"] as const;
 export const pipeline = ["NEW", "NEEDS_RESEARCH", "UNQUALIFIED", "DUPLICATE", "NOT_INTERESTED", "ASSIGNED", "QUALIFIED", "READY_TO_CONTACT", "CONTACTED", "REPLIED", "INTERESTED", "OFFER_SHARED", "CONVERTED", "LOST", "DO_NOT_CONTACT"] as const;
@@ -12,6 +12,7 @@ export const roleTemplates: Record<string, Permission[]> = {
   "Call Representative": [...member, "crm.prospects.view", "crm.outreach.manage"],
   "Growth Executive": [...member, "crm.prospects.view", "crm.prospects.create", "crm.outreach.manage", "operations.distribution.review", "operations.studio.review"],
   "Marketplace Executive": [...member, "operations.beats.manage", "operations.engineers.manage"],
+  "Release QC Reviewer": [...member, "operations.distribution.review", "operations.distribution.qc"],
   "Operations Executive": [...member, "operations.distribution.review", "operations.studio.review"],
   "Team Member": member,
   Viewer: ["calendar.view", "clients.view", "team.members.view", "reports.team.view"],

@@ -6,6 +6,7 @@
     "node": ">=20.19.0"
   },
   "scripts": {
+    "test:staff-qc": "tsx scripts/verify-acquisition-isolated.ts --staff-qc-only",
     "test:team-briefings": "tsx scripts/verify-team-briefing-mail.ts",
     "test:admin-os": "tsx scripts/verify-team-os-isolated.ts --admin",
     "test:contact-merge": "tsx scripts/verify-acquisition-isolated.ts --contact-merge-only",

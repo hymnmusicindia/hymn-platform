@@ -27,7 +27,7 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           BASE_URL: https://hymnmusic.fun
-        run: node scripts/run-cron-jobs.mjs support-mail team-appointments team-outreach team-performance team-briefings direnote-ingest-status playlist-reviews team-os studio-automation release-emails
+        run: node scripts/run-cron-jobs.mjs support-mail team-appointments team-outreach team-performance team-briefings team-release-qc direnote-ingest-status playlist-reviews team-os studio-automation release-emails
       - name: Retry failed jobs once after runner-level retries
         id: retry
         if: steps.cron.outputs.failed_jobs != ''

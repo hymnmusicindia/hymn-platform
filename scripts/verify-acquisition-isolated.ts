@@ -26,6 +26,11 @@ async function main() {
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("acquisition_fixture");
+    if (process.argv.includes('--staff-qc-only')) {
+      await run(['node_modules/prisma/build/index.js', 'db', 'push', '--schema', 'prisma/schema.prisma', '--skip-generate']);
+      await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-staff-qc.ts'], process.execPath, { ...env, APP_URL: 'https://hymn.fixture', ADMIN_GOOGLE_EMAILS: 'founder@staff.fixture.invalid' });
+      return;
+    }
     if (process.argv.includes('--contact-merge-only')) {
       const baseline=path.join(fixture,'contact-merge-baseline.prisma');
       writeFileSync(baseline,execFileSync('git',['show','7a8caf1:prisma/schema.prisma'],{encoding:'utf8',windowsHide:true}));

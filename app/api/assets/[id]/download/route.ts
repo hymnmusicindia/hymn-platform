@@ -6,6 +6,7 @@ import { missingImageResponseHeaders, missingImageSvg } from "@/lib/media-placeh
 import { requireAdminPermission } from "@/lib/access";
 import { requestedArtworkWidth } from "@/lib/artwork-preview";
 import { artworkThumbnail } from "@/lib/artwork-thumbnail";
+import { canReadAssignedQcAsset } from '@/lib/team/release-qc-media';
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const [user, admin] = await Promise.all([getSession(), getAdminSession()]);
@@ -25,6 +26,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
         if (ticket) releaseAdmin = !("error" in await requireAdminPermission("services.manage"));
       }
       if(linked?.ownerUserId !== user.sub && linked?.assetType==='private_ownership_proof' && linked.entityType==='BEAT' && linked.category==='BEAT_SAMPLE_LICENSE') releaseAdmin = !('error' in await requireAdminPermission('users.manage'));
+      if (!releaseAdmin && linked?.ownerUserId !== user.sub) releaseAdmin = await canReadAssignedQcAsset(user.sub, assetId);
     }
     const asset = await localPrivateStorage.createAuthorizedRead({ assetId, requesterUserId: user?.sub ?? 0, isAdmin: Boolean(admin) || releaseAdmin, range: request.headers.get("range") });
     const width = !downloadRequested && asset.mimeType.startsWith("image/") ? requestedArtworkWidth(request) : null;

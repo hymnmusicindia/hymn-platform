@@ -1,5 +1,12 @@
 [
   {
+    "id": "team-release-qc",
+    "method": "GET",
+    "seconds": 60,
+    "purpose": "Assigned release QC work and automatic delivery after explicit QC approval",
+    "flag": "TEAM_AUTOMATION_ENABLED"
+  },
+  {
     "id": "team-briefings",
     "method": "GET",
     "seconds": 60,
