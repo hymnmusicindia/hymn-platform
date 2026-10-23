@@ -1,5 +1,12 @@
 [
   {
+    "id": "team-briefings",
+    "method": "GET",
+    "seconds": 60,
+    "purpose": "Owner-authorised internal team instructions with private PDF attachments",
+    "flag": "TEAM_AUTOMATION_ENABLED"
+  },
+  {
     "id": "team-appointments",
     "method": "GET",
     "seconds": 60,
