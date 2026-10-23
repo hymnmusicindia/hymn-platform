@@ -4084,6 +4084,9 @@ model TeamClient {
   phone String @default("")
   email String @default("")
   secondaryEmail String @default("")
+  additionalEmails String[] @default([])
+  alternatePhones String[] @default([])
+  mergedIntoId String? @map("merged_into_id")
   interests String[] @default([])
   state String @default("")
   city String @default("")
@@ -4098,6 +4101,7 @@ model TeamClient {
   events TeamCalendarEvent[]
   welcomeJobs TeamClientWelcome[]
   @@index([workspaceId, status])
+  @@index([workspaceId, mergedIntoId])
   @@map("team_clients")
 }
 

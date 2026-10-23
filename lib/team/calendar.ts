@@ -1,4 +1,4 @@
-import { contactNotesAllowed, publicContact, contactPhoneMatches } from "./contact-directory";
+import { contactNotesAllowed, publicContact, matchingContacts, contactPhone } from "./contact-directory";
 import { registerTeamProspect } from "./service";
 import { assertEmployeeAssignee } from "./daily-work";
 import "server-only";
@@ -15,7 +15,7 @@ import { importWorkspaceClientAccounts } from "./client-cards";
 const id = z.string().min(1).max(80);
 const email = z.union([z.string().trim().email().max(320), z.literal("")]).transform(value => value.toLowerCase());
 const researchSchema = z.object({ sourceUrl: z.string().url().max(1000), evidence: z.string().trim().min(10).max(10000), verified: z.boolean(), contactEligibility: z.enum(["UNVERIFIED", "CONSENTED", "LEGITIMATE_INTEREST", "DO_NOT_CONTACT"]) });
-const clientSchema = z.object({ research: researchSchema.optional(), id: id.optional(), version: z.number().int().positive().optional(), name: z.string().trim().min(1).max(160), phone: z.string().trim().max(40).regex(/^[+\d\s().-]*$/).default(""), email: email.default(""), secondaryEmail: email.default(""), interests: z.array(z.enum(Object.keys(CLIENT_INTERESTS) as [keyof typeof CLIENT_INTERESTS, ...(keyof typeof CLIENT_INTERESTS)[]])).max(6).default([]), state: z.string().trim().max(100).default(""), city: z.string().trim().max(100).default(""), notes: z.string().trim().max(10000).default(""), ownerId: id, status: z.enum(["ACTIVE", "DO_NOT_CONTACT", "ARCHIVED"]).default("ACTIVE") });
+const clientSchema = z.object({ research: researchSchema.optional(), id: id.optional(), version: z.number().int().positive().optional(), name: z.string().trim().min(1).max(160), phone: z.string().trim().max(40).regex(/^[+\d\s().-]*$/).default(""), email: email.default(""), secondaryEmail: email.default(""), interests: z.array(z.enum(Object.keys(CLIENT_INTERESTS) as [keyof typeof CLIENT_INTERESTS, ...(keyof typeof CLIENT_INTERESTS)[]])).max(7).default([]), state: z.string().trim().max(100).default(""), city: z.string().trim().max(100).default(""), notes: z.string().trim().max(10000).default(""), ownerId: id, status: z.enum(["ACTIVE", "DO_NOT_CONTACT", "ARCHIVED"]).default("ACTIVE") });
 const eventSchema = z.object({ id: id.optional(), version: z.number().int().positive().optional(), title: z.string().trim().min(1).max(200), kind: z.enum(["CALL", "EMAIL", "MEETING", "FOLLOW_UP", "EVENT"]), clientId: id.nullable(), assigneeId: id, startsAt: z.string().datetime({ offset: true }), endsAt: z.string().datetime({ offset: true }).nullish(), notes: z.string().trim().max(10000).default(""), outcome: z.string().trim().max(10000).default(""), status: z.enum(["SCHEDULED", "COMPLETED", "CANCELLED"]).default("SCHEDULED"), reminderMinutes: z.number().int().min(0).max(10080).default(30) });
 export async function calendarMutation(tx: Prisma.TransactionClient, a: Actor, resource: string, input: unknown) {
   if (resource === "calendar-delete") {
@@ -71,6 +71,13 @@ export async function calendarMutation(tx: Prisma.TransactionClient, a: Actor, r
     await notify(tx, task.ownerId, `Scheduled task: ${task.title}`, `/team?workspace=${a.workspaceId}&module=work&task=${task.id}`);
     return task;
   }
+  if (resource === "clients-merge") {
+    const draft=(input as {draft?:unknown})?.draft;
+    const parsed=draft?clientSchema.parse(draft):undefined;
+    if(parsed?.research)throw new TeamError("Resolve duplicate contacts before registering research.");
+    const fields=parsed?{name:parsed.name,phone:parsed.phone,email:parsed.email,secondaryEmail:parsed.secondaryEmail,interests:parsed.interests,state:parsed.state,city:parsed.city,notes:parsed.notes,status:parsed.status}:undefined;
+    return (await import("./contact-merge")).mergeContacts(tx,a,input,fields);
+  }
   if (resource === "clients-save") {
     demand(a, "clients.manage"); const data = clientSchema.parse(input); await eligible(tx, a, [data.ownerId]);
     const old = data.id ? await tx.teamClient.findFirst({ where: { id: data.id, workspaceId: a.workspaceId } }) : null;
@@ -80,13 +87,10 @@ export async function calendarMutation(tx: Prisma.TransactionClient, a: Actor, r
     if (old && old.status !== "ACTIVE" && data.status === "ACTIVE" && !contactNotesAllowed(a, old)) throw new TeamError("Only the responsible teammate or an authorised manager can reactivate this contact.", 403);
     if (data.secondaryEmail && !data.email) throw new TeamError("Add a primary email before a secondary email.");
     if (data.secondaryEmail && data.secondaryEmail === data.email) throw new TeamError("Primary and secondary emails must be different.");
+    if(old?.mergedIntoId)throw new TeamError("This card was merged. Open the retained contact before editing.",409);
     const emails = [data.email, data.secondaryEmail].filter(Boolean);
-    if (emails.length || data.phone) {
-      const duplicate = await tx.teamClient.findFirst({ where: { workspaceId: a.workspaceId, id: { not: data.id }, OR: [...emails.flatMap(value => [{ email: { equals: value, mode: "insensitive" as const } }, { secondaryEmail: { equals: value, mode: "insensitive" as const } }]), ...(data.phone ? [{ phone: data.phone.replace(/[^+\d]/g, "") }] : [])] } });
-      if (duplicate) throw new TeamError("A client with this email or phone already exists. Use the existing card.", 409);
-    }
-    if ((await contactPhoneMatches(tx, a.workspaceId, data.phone)).some(card => card.id !== old?.id)) throw new TeamError("A client with this phone already exists. Use the existing card.", 409);
-    const fields = { name: data.name, phone: data.phone.replace(/[^+\d]/g, ""), email: data.email, secondaryEmail: data.secondaryEmail, interests: [...new Set(data.interests)], state: data.state, city: data.city, notes: old && !contactNotesAllowed(a, old) ? old.notes : data.notes, ownerId: data.ownerId, status: data.status };
+    if((await matchingContacts(tx,a.workspaceId,{...data,excludeId:old?.id})).length)throw new TeamError("A matching contact exists. Review the matching cards and merge them if they are the same person.",409);
+    const fields = { name: data.name, phone: contactPhone(data.phone), email: data.email, secondaryEmail: data.secondaryEmail, interests: [...new Set(data.interests)], state: data.state, city: data.city, notes: old && !contactNotesAllowed(a, old) ? old.notes : data.notes, ownerId: data.ownerId, status: data.status };
     let row = old ? await tx.teamClient.update({ where: { id: old.id }, data: { ...fields, version: { increment: 1 } } }) : await tx.teamClient.create({ data: { ...fields, workspaceId: a.workspaceId } });
     if (data.research) {
       if (row.userId || row.secondaryEmail && await tx.user.findFirst({ where: { email: { equals: row.secondaryEmail, mode: "insensitive" } }, select: { id: true } })) throw new TeamError("Existing HYMN customers cannot be registered as new acquisition leads.", 409);
@@ -141,7 +145,7 @@ async function saveEvent(tx: Prisma.TransactionClient, a: Actor, input: unknown,
     if (row.outcome) await tx.teamComment.create({ data: { taskId: old.followUpTaskId, authorId: a.id, body: `Calendar ${closed ? "outcome" : "update"}: ${row.outcome}` } });
   }
   await audit(tx, a, old ? "calendar.updated" : "calendar.created", row.id, { status: row.status, kind: row.kind });
-  if (!old || old.assigneeId !== row.assigneeId || old.startsAt.getTime() !== row.startsAt.getTime()) await notify(tx, row.assigneeId, `Scheduled: ${row.title} · ${new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata", hour12: true }).format(row.startsAt)} IST`, `/team?workspace=${a.workspaceId}&module=calendar`);
+  if (!old || old.assigneeId !== row.assigneeId || old.startsAt.getTime() !== row.startsAt.getTime()) await notify(tx, row.assigneeId, `Scheduled: ${row.title} Ã‚Â· ${new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata", hour12: true }).format(row.startsAt)} IST`, `/team?workspace=${a.workspaceId}&module=calendar`);
   return row;
 }
 export async function remindCalendarTasks(tx: Prisma.TransactionClient, a: Actor, now: Date) {
@@ -160,14 +164,25 @@ export async function calendarRead(a: Actor, resource: string, params: URLSearch
     const emails = z.array(z.string().trim().email().max(320)).max(2).parse(params.getAll("email"));
     return { accounts: await prisma.user.findMany({ where: { clientCards: { some: { workspaceId: a.workspaceId } }, OR: emails.map(value => ({ email: { equals: value, mode: "insensitive" } })) }, select: { email: true, name: true, avatar: true } }) };
   }
+  if (resource === "client-duplicates") {
+    demand(a,"clients.view");
+    const matches=await matchingContacts(prisma,a.workspaceId,{phone:(params.get("phone")||"").slice(0,40),email:(params.get("email")||"").slice(0,320),secondaryEmail:(params.get("secondaryEmail")||"").slice(0,320),excludeId:params.get("excludeId")||undefined});
+    return {items:matches.map(c=>publicContact(a,c))};
+  }
+  if (resource === "client-merge-history") {
+    demand(a,"clients.view");
+    return {items:(await prisma.teamClient.findMany({where:{workspaceId:a.workspaceId,mergedIntoId:params.get("clientId")||"missing"},orderBy:{updatedAt:"desc"},take:50})).map(c=>publicContact(a,c))};
+  }
   if (resource === "clients") {
     demand(a, "clients.view"); const q = (params.get("q") || "").trim().slice(0, 160); const offset = z.coerce.number().int().min(0).max(100000).parse(params.get("offset") || 0);
     await importWorkspaceClientAccounts(a.workspaceId);
     const phoneQuery = q.replace(/\D/g, "");
-    const where = { workspaceId: a.workspaceId, ...(params.get("clientId") ? { id: params.get("clientId")! } : {}), ...(q ? { OR: [
+    const where = { workspaceId: a.workspaceId, ...(!params.get("clientId")?{mergedIntoId:null}:{}), ...(params.get("clientId") ? { id: params.get("clientId")! } : {}), ...(q ? { OR: [
       { name: { contains: q, mode: "insensitive" as const } },
       { email: { contains: q, mode: "insensitive" as const } },
       { secondaryEmail: { contains: q, mode: "insensitive" as const } },
+      {additionalEmails:{has:q.toLowerCase()}},
+      ...(phoneQuery ? [{alternatePhones:{has:contactPhone(phoneQuery)}}]:[]),
       { city: { contains: q, mode: "insensitive" as const } },
       { state: { contains: q, mode: "insensitive" as const } },
       ...(phoneQuery ? [{ phone: { contains: phoneQuery } }] : []),

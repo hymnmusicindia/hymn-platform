@@ -57,7 +57,7 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
   if (resource === "call-followup-outcome") return (await import("./customer-followups")).recordCallbackOutcome(tx, a, input);
   if (resource.startsWith("team-email-")) return (await import("./outreach-email")).outreachMutation(tx, a, resource, input);
   if (resource.startsWith("acquisition-")) return (await import("./acquisition")).acquisitionMutation(tx, a, resource, (input && typeof input === "object" ? input : {}) as Record<string, unknown>);
-    if (["clients-save", "calendar-save", "calendar-task", "calendar-handoff", "calendar-delete"].includes(resource)) return (await import("./calendar")).calendarMutation(tx, a, resource, input);
+    if (["clients-save", "clients-merge", "calendar-save", "calendar-task", "calendar-handoff", "calendar-delete"].includes(resource)) return (await import("./calendar")).calendarMutation(tx, a, resource, input);
     const object = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
     const id = typeof object.id === "string" ? object.id : "";
     if (resource === "tasks") {
@@ -314,7 +314,7 @@ export async function teamRead(a: Actor, resource: string, params: URLSearchPara
   if (resource.startsWith("team-email-")) return (await import("./outreach-email")).outreachRead(a, resource, params);
   if (resource === "call-followups") return (await import("./customer-followups")).readCallFollowups(a, params);
   if (resource.startsWith("acquisition-")) return (await import("./acquisition")).acquisitionRead(a, resource, params);
-  if (["clients", "calendar", "client-account-match"].includes(resource)) return (await import("./calendar")).calendarRead(a, resource, params);
+  if (["clients", "calendar", "client-account-match", "client-duplicates", "client-merge-history"].includes(resource)) return (await import("./calendar")).calendarRead(a, resource, params);
   const offset = Math.max(0, Math.min(100000, Number(params.get("offset")) || 0));
   const page = { take: 50, skip: offset };
   if (resource === "session") return { memberId: a.id, workspaceId: a.workspaceId, owner: a.role.owner, permissions: a.role.permissions };

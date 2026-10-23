@@ -7,6 +7,7 @@
   },
   "scripts": {
     "test:admin-os": "tsx scripts/verify-team-os-isolated.ts --admin",
+    "test:contact-merge": "tsx scripts/verify-acquisition-isolated.ts --contact-merge-only",
     "test:support": "tsx scripts/verify-acquisition-isolated.ts --support-only",
     "test:team-outreach": "tsx scripts/verify-acquisition-isolated.ts --smart-outreach-only",
     "test:team-os": "tsx scripts/verify-team-os-isolated.ts",

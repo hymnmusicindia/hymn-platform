@@ -30,6 +30,7 @@ export function clientWelcomeTemplate(client: { name: string; city: string; stat
   const place = [client.city, client.state].filter(Boolean).join(", ");
   const context = interests.length ? `Our team noted your interest in ${interests.join(" and ").toLowerCase()}${place ? ` and that you're based in ${place}` : ""}.` : place ? `Our team added your contact to HYMN and noted that you're based in ${place}.` : "Our team added your contact to HYMN, so I wanted to introduce what we do.";
   const help: Record<ClientInterest, string> = {
+    PROMOTION: "We can help you explore music promotion, campaign support and playlist pitching for your releases.",
     BEAT_SALES: "We can help you build a beat storefront, set your own licence prices and keep sales organised.",
     BEAT_PURCHASE: "You can explore beats and choose a licence that fits your next project.",
     DISTRIBUTION: "We can help you prepare your release and distribute your music to streaming platforms.",

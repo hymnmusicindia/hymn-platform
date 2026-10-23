@@ -36,18 +36,19 @@ function accountFootnote(account: Pick<ClientAccount, "onboardingPurpose" | "onb
 
 async function importAccounts(tx: Prisma.TransactionClient, workspaceId: string, ownerId: string, accounts: ClientAccount[]) {
   if (!accounts.length) return 0;
-  const emails = accounts.map(account => account.email.toLowerCase());
+  const emails = accounts.flatMap(account => [account.email,account.contactEmail]).filter((value):value is string=>Boolean(value)).map(value=>value.toLowerCase());
   const linkedUserIds = accounts.map(account => account.id);
   const linkedCards = await tx.teamClient.findMany({ where: { userId: { in: linkedUserIds } } });
   const linkedCardByUser = new Map(linkedCards.map(card => [card.userId!, card]));
   const emailCards = await tx.teamClient.findMany({
-    where: { workspaceId, userId: null, OR: [{ email: { in: emails, mode: "insensitive" } }, { secondaryEmail: { in: emails, mode: "insensitive" } }] },
+    where: { workspaceId, userId: null, mergedIntoId:null, OR: [{ email: { in: emails, mode: "insensitive" } }, { secondaryEmail: { in: emails, mode: "insensitive" } },{additionalEmails:{hasSome:emails}}] },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }]
   });
   const emailCardByEmail = new Map<string, (typeof emailCards)[number]>();
   for (const card of emailCards) {
     const email = card.email.toLowerCase();
     if (email && !emailCardByEmail.has(email)) emailCardByEmail.set(email, card);
+    for(const alias of card.additionalEmails)if(alias&&!emailCardByEmail.has(alias.toLowerCase()))emailCardByEmail.set(alias.toLowerCase(),card);
     const secondary = card.secondaryEmail.toLowerCase();
     if (secondary && !emailCardByEmail.has(secondary)) emailCardByEmail.set(secondary, card);
   }

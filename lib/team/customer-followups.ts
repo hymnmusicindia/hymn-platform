@@ -30,7 +30,7 @@ async function supportCaller(tx: Prisma.TransactionClient, a: Actor) {
 async function accountCard(tx: Prisma.TransactionClient, a: Actor, user: { id: number; name: string; email: string; mobile: string | null }) {
   const linked = await tx.teamClient.findUnique({ where: { userId: user.id } });
   if (linked) return linked.workspaceId === a.workspaceId ? linked : null;
-  const existing = await tx.teamClient.findFirst({ where: { workspaceId: a.workspaceId, OR: [{ email: { equals: user.email, mode: 'insensitive' } }, { secondaryEmail: { equals: user.email, mode: 'insensitive' } }] } });
+  const existing = await tx.teamClient.findFirst({ where: { workspaceId: a.workspaceId, mergedIntoId:null, OR: [{ additionalEmails:{has:user.email.toLowerCase()} },{ email: { equals: user.email, mode: 'insensitive' } }, { secondaryEmail: { equals: user.email, mode: 'insensitive' } }] } });
   if (existing) return existing.userId && existing.userId !== user.id ? null : tx.teamClient.update({ where: { id: existing.id }, data: { userId: user.id, ...(!existing.phone && user.mobile ? { phone: user.mobile } : {}), version: { increment: 1 } } });
   return tx.teamClient.create({ data: { workspaceId: a.workspaceId, ownerId: a.id, userId: user.id, name: user.name, email: user.email, phone: user.mobile || '' } });
 }
@@ -78,7 +78,7 @@ export async function syncCustomerFollowups(tx: Prisma.TransactionClient, a: Act
     if (Date.now() > deadline) break;
     cursor.open = task.id;
     const context = object(task.followUpContext);
-    let obsolete = !task.client || task.client.status !== 'ACTIVE' || !whatsappNumber(context.kind === 'SUPPORT_CALLBACK' ? String(context.callbackPhone || '') : task.client.phone) || Boolean(task.client.prospect?.suppressed) || Boolean(task.client.user && task.client.user.status !== 'ACTIVE');
+    let obsolete = !task.client || task.client.status !== 'ACTIVE' || !whatsappNumber(context.kind === 'SUPPORT_CALLBACK' ? String(context.callbackPhone || '') : context.kind === 'FRIENDLY_INTRO' ? String(context.callPhone || '') : task.client.phone) || Boolean(task.client.prospect?.suppressed) || Boolean(task.client.user && task.client.user.status !== 'ACTIVE');
     if (context.kind === 'DRAFT_INACTIVE') {
       const release = await tx.release.findUnique({ where: { id: Number(context.referenceId) }, select: { status: true, archivedAt: true, lastEditedAt: true, createdAt: true } });
       obsolete ||= !release || release.status !== 'DRAFT' || Boolean(release.archivedAt) || (release.lastEditedAt || release.createdAt).toISOString() !== context.draftEditedAt;
@@ -92,7 +92,7 @@ export async function syncCustomerFollowups(tx: Prisma.TransactionClient, a: Act
     if (!obsolete && task.status !== 'BLOCKED') {
       if (task.owner.status !== 'ACTIVE' || task.owner.user.status !== 'ACTIVE' || task.owner.availability !== 'AVAILABLE') {
         const replacement = await supportCaller(tx, a);
-        if (replacement && replacement.id !== task.ownerId) { const moved = await tx.teamTask.update({ where: { id: task.id }, data: { ownerId: replacement.id, dueAt: await callbackSlot(tx, a.workspaceId, replacement.id, nextCallDue(now), task.id), version: { increment: 1 } } }); await syncCallbackCalendar(tx, a, moved); await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action: "support.callback_reassigned", entityId: task.id, detail: { from: task.ownerId, to: replacement.id, reason: "assignee_unavailable" } } }); await tx.teamNotification.create({ data: { memberId: replacement.id, title: `Callback reassigned: ${task.title}`, href: `/team?workspace=${a.workspaceId}&module=customer-calls` } }); }
+        if (context.pinnedAssignee !== true && replacement && replacement.id !== task.ownerId) { const moved = await tx.teamTask.update({ where: { id: task.id }, data: { ownerId: replacement.id, dueAt: await callbackSlot(tx, a.workspaceId, replacement.id, nextCallDue(now), task.id), version: { increment: 1 } } }); await syncCallbackCalendar(tx, a, moved); await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action: "support.callback_reassigned", entityId: task.id, detail: { from: task.ownerId, to: replacement.id, reason: "assignee_unavailable" } } }); await tx.teamNotification.create({ data: { memberId: replacement.id, title: `Callback reassigned: ${task.title}`, href: `/team?workspace=${a.workspaceId}&module=customer-calls` } }); }
       } else if ((await tx.teamCalendarEvent.findUnique({ where: { followUpTaskId: task.id } }))?.status !== 'SCHEDULED') { const due = await callbackSlot(tx, a.workspaceId, task.ownerId, task.dueAt && task.dueAt > now ? task.dueAt : nextCallDue(now), task.id); const updated = await tx.teamTask.update({ where: { id: task.id }, data: { dueAt: due, version: { increment: 1 } } }); await syncCallbackCalendar(tx, a, updated); }
     }
     if (obsolete) { await tx.teamCalendarEvent.updateMany({ where: { followUpTaskId: task.id, status: 'SCHEDULED' }, data: { status: 'CANCELLED', version: { increment: 1 }, scheduleRevision: { increment: 1 } } }); await tx.teamTask.update({ where: { id: task.id }, data: { status: 'CANCELLED', blocker: 'Customer resumed the draft, the release moved on, or the contact is no longer eligible.', version: { increment: 1 } } }); await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action: 'support.callback_cancelled', entityId: task.id, detail: { reason: 'source_or_contact_no_longer_eligible' } } }); }
@@ -171,7 +171,7 @@ export async function readCallFollowups(a: Actor, params: URLSearchParams) {
   const offset = Math.max(0, Math.min(100000, Number(params.get('offset')) || 0));
   const where = { workspaceId: a.workspaceId, eventKey: { startsWith: 'support-call:' }, archivedAt: null, status: { notIn: ['COMPLETED', 'CANCELLED'] }, ...(!can(a, 'tasks.all') ? { ownerId: a.id } : {}) };
   const items = await prisma.teamTask.findMany({ where, select: { id: true, title: true, description: true, ownerId: true, status: true, priority: true, dueAt: true, followUpContext: true, version: true, client: { select: { id: true, name: true, email: true, phone: true, status: true } } }, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], take: 50, skip: offset });
-  return {items:items.map(task=>{const context=object(task.followUpContext);return context.kind==='SUPPORT_CALLBACK'&&task.client?{...task,client:{...task.client,phone:String(context.callbackPhone||task.client.phone)}}:task;}),total:await prisma.teamTask.count({where})};
+  return {items:items.map(task=>{const context=object(task.followUpContext);return ['SUPPORT_CALLBACK','FRIENDLY_INTRO'].includes(String(context.kind))&&task.client?{...task,client:{...task.client,phone:String(context.callbackPhone||context.callPhone||task.client.phone)}}:task;}),total:await prisma.teamTask.count({where})};
 }
 export async function recordCallbackOutcome(tx: Prisma.TransactionClient, a: Actor, input: unknown, now = new Date()) {
   demand(a, 'crm.outreach.manage'); demand(a, 'tasks.update');

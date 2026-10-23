@@ -26,6 +26,16 @@ async function main() {
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("acquisition_fixture");
+    if (process.argv.includes('--contact-merge-only')) {
+      const baseline=path.join(fixture,'contact-merge-baseline.prisma');
+      writeFileSync(baseline,execFileSync('git',['show','7a8caf1:prisma/schema.prisma'],{encoding:'utf8',windowsHide:true}));
+      await run(['node_modules/prisma/build/index.js','db','push','--schema',baseline,'--skip-generate']);
+      await run(['node_modules/prisma/build/index.js','db','execute','--file','prisma/migrations/20261023230000_contact_merge_aliases/migration.sql','--schema','prisma/schema.prisma']);
+      await run(['node_modules/prisma/build/index.js','migrate','diff','--from-url',env.DATABASE_URL,'--to-schema-datamodel','prisma/schema.prisma','--script','--output',path.join(fixture,'contact-diff.sql')]);
+      if(/team_clients/.test(readFileSync(path.join(fixture,'contact-diff.sql'),'utf8')))throw new Error('Contact migration does not match schema.');
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-contact-merge.ts'],process.execPath,{...env,JWT_SECRET:'contact-merge-fixture-secret-must-be-long-enough',APP_URL:'https://hymn.fixture'});
+      return;
+    }
     if (process.argv.includes('--support-only')) {
       const baseline=path.join(fixture,'support-baseline.prisma');
       writeFileSync(baseline,execFileSync('git',['show','269c23f:prisma/schema.prisma'],{encoding:'utf8',windowsHide:true}));
