@@ -19,6 +19,7 @@ export function freeCallSlot(after: Date, reservations: { kind: string; startsAt
   return null;
 }
 export function callbackTip(kind: string, outcome?: string) {
+  if (kind === 'SUPPORT_CALLBACK') return outcome === 'NO_ANSWER' ? 'Customer was unavailable. Support can send the missed-call template; wait for the customer to request another time.' : 'Read the customer support ticket, call the requested number, and help with that issue. Record the actual outcome.';
   if (outcome === 'NO_ANSWER') return 'No answer recorded. Try the next scheduled slot; do not mark the customer as contacted or send repeated messages.';
   if (outcome === 'INTERESTED') return 'Summarise the service they asked about, confirm their budget and timeline, and offer the next practical step.';
   if (outcome === 'CALLBACK') return 'The customer requested another time. Use the saved callback time and review the previous call notes before reaching out.';

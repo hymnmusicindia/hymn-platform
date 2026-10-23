@@ -83,3 +83,31 @@
 @media(max-width:900px) { .support-topics { grid-template-columns:repeat(2,minmax(0,1fr)); } .support-topic:nth-last-child(3) { border-bottom:1px solid #ffffff0c; } .support-form-layout { grid-template-columns:1fr; gap:24px; } .support-form-context { padding:20px 0 0; border-left:0; border-top:1px solid #ffffff12; } }
 @media(max-width:540px) { .support-intro { align-items:flex-start; flex-direction:column; gap:20px; } .support-topics { gap:0 12px; } .support-topic { gap:9px; min-height:99px; } .support-topic > svg:first-child { width:18px; flex-shrink:0; } .support-topic > svg:last-child { display:none; } .support-topic strong { font-size:12px; } .support-topic small { font-size:10px; } .support-composer { padding:20px 16px; border-radius:17px; } .support-workspace h3 { font-size:22px; } .support-composer > footer { align-items:flex-start; flex-direction:column; } .support-composer > footer button { width:100%; } .support-history-tools { align-items:stretch; flex-direction:column; gap:8px; } .support-filters button { flex:1; padding:9px 10px; } .support-search { max-width:none; } .support-ticket summary { gap:10px; flex-wrap:wrap; } .support-ticket-title { flex-basis:calc(100% - 65px); } .support-ticket-mark { width:34px; height:34px; } .support-ticket summary > .support-status { margin-left:44px; } .support-ticket-chevron { margin-left:auto; } .support-ticket-detail { margin-left:0; padding:18px 15px; } .support-ticket-update { align-items:flex-start; flex-direction:column; gap:10px; } }
 @media(prefers-reduced-motion:reduce) { .support-workspace * { transition:none!important; animation:none!important; scroll-behavior:auto; } }
+
+.support-ticket-tools { display:grid; gap:18px; min-width:0; margin-top:20px; }
+.support-ticket-tools label { display:grid; gap:8px; font-size:13px; }
+.support-ticket-tools :is(input,select,textarea) { width:100%; min-width:0; border:1px solid #ffffff25; border-radius:10px; padding:12px; background:#111820; color:#f2f3f5; font:inherit; }
+.support-ticket-tools textarea { resize:vertical; line-height:1.7; }
+.support-mailbox,.support-inline-form { display:grid; gap:16px; padding:20px; border:1px solid #ffffff18; border-radius:16px; }
+.support-mailbox h4 { display:flex; gap:10px; align-items:center; }
+.support-mailbox p { overflow-wrap:anywhere; }
+.support-workspace label.support-check,.support-ticket-tools label.support-check { display:flex; align-items:flex-start; gap:10px; font-size:13px; }
+.support-workspace .support-check input,.support-ticket-tools .support-check input { width:18px; min-height:18px; height:18px; flex-shrink:0; margin-top:2px; }
+.support-attachments { display:grid; gap:8px; }
+.support-attachments > div { display:flex; justify-content:space-between; gap:12px; overflow-wrap:anywhere; }
+.support-attachments button { font-size:12px; color:#b7c9e2; }
+.support-callback-fields { display:grid; gap:14px; }
+.support-callback-status { display:flex; gap:12px; padding:16px; background:#ffffff06; border-radius:12px; }
+.support-callback-status p { margin:6px 0; overflow-wrap:anywhere; }
+.support-ticket-tools small { color:#a2a9b7; font-size:12px; }
+.support-screenshot-grid { display:flex; flex-wrap:wrap; gap:12px; }
+.support-screenshot-grid a { display:grid; gap:6px; font-size:12px; }
+.support-screenshot-grid img { width:140px; height:100px; object-fit:cover; border-radius:9px; border:1px solid #ffffff20; }
+.support-conversation { display:grid; gap:14px; }
+.support-conversation article { padding:16px 0; border-top:1px solid #ffffff18; }
+.support-conversation header { display:grid; gap:6px; }
+.support-conversation p { white-space:pre-wrap; overflow-wrap:anywhere; font-size:13px; line-height:1.7; }
+.support-ticket-meta > span { display:inline-flex; align-items:center; gap:6px; overflow-wrap:anywhere; }
+@media(max-width:540px) { .support-mailbox,.support-inline-form {padding:14px;} .support-screenshot-grid img{width:110px;height:80px;} }
+
+.support-intro-actions {display:flex;flex-wrap:wrap;align-items:center;gap:10px;}

@@ -577,7 +577,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       ) : null}
 
       {activeTab === "promotions" ? (
-        <PromotionCommunityPage onCreated={ticket => setSupportTickets(items => [ticket, ...items])} playlists={<PlaylistReviewMarketplace />} campaigns={<Panel title="Other promotion enquiries" description="Ask HYMN about advertising, release campaigns, and creative promotion support.">
+        <PromotionCommunityPage onCreated={ticket => setSupportTickets(items => [ticket, ...items.filter(item => item.id !== ticket.id)])} playlists={<PlaylistReviewMarketplace />} campaigns={<Panel title="Other promotion enquiries" description="Ask HYMN about advertising, release campaigns, and creative promotion support.">
           <form onSubmit={submitSupportTicket} className="grid gap-4 lg:grid-cols-[0.8fr,1.2fr]">
             <select name="subject" className="field" defaultValue="Curator review support">
               <option>Curator review support</option>
@@ -638,7 +638,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         </Panel>
       ) : null}
 
-      {activeTab === "support" ? <SupportWorkspace loading={supportLoading} tickets={supportTickets} releases={releases.map(release=>({id:release.id,label:releaseTitle(release)}))} purchases={beatPurchases.map(purchase=>({id:purchase.id,label:`Purchase #${purchase.id} ? Beat #${purchase.beatId}`}))} payouts={(payoutSummary?.payoutHistory || []).map(payout=>({id:payout.id,label:`Payout #${payout.id} ? ${payout.status}`}))} error={dataErrors.support} externalSearch={dashboardSearch} onRetry={()=>setReloadKey(value=>value+1)} onCreated={ticket=>setSupportTickets(items=>[ticket,...items])}/> : null}
+      {activeTab === "support" ? <SupportWorkspace email={user.email} phone={user.mobile || ""} loading={supportLoading} tickets={supportTickets} releases={releases.map(release=>({id:release.id,label:releaseTitle(release)}))} purchases={beatPurchases.map(purchase=>({id:purchase.id,label:`Purchase #${purchase.id} ? Beat #${purchase.beatId}`}))} payouts={(payoutSummary?.payoutHistory || []).map(payout=>({id:payout.id,label:`Payout #${payout.id} ? ${payout.status}`}))} error={dataErrors.support} externalSearch={dashboardSearch} onRetry={()=>setReloadKey(value=>value+1)} onCreated={ticket=>setSupportTickets(items=>[ticket,...items.filter(item=>item.id!==ticket.id)])}/> : null}
 
       {activeTab === "settings" ? <ProfilePreferencesForm user={user} /> : null}
 

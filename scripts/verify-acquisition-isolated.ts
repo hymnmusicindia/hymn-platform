@@ -26,6 +26,16 @@ async function main() {
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("acquisition_fixture");
+    if (process.argv.includes('--support-only')) {
+      const baseline=path.join(fixture,'support-baseline.prisma');
+      writeFileSync(baseline,execFileSync('git',['show','269c23f:prisma/schema.prisma'],{encoding:'utf8',windowsHide:true}));
+      await run(['node_modules/prisma/build/index.js','db','push','--schema',baseline,'--skip-generate']);
+      await run(['node_modules/prisma/build/index.js','db','execute','--file','prisma/migrations/20261023210000_support_callbacks_and_replies/migration.sql','--schema','prisma/schema.prisma']);
+      await run(['node_modules/prisma/build/index.js','migrate','diff','--from-url',env.DATABASE_URL,'--to-schema-datamodel','prisma/schema.prisma','--script','--output',path.join(fixture,'support-diff.sql')]);
+      if (/support_replies|support_tickets/.test(readFileSync(path.join(fixture,'support-diff.sql'),'utf8'))){console.log(readFileSync(path.join(fixture,'support-diff.sql'),'utf8'));throw new Error('Support migration does not match schema.');}
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-support-workflow.ts'],process.execPath,{...env,JWT_SECRET:'support-fixture-secret-must-be-long-enough',APP_URL:'https://hymn.fixture'});
+      return;
+    }
     if (process.argv.includes('--smart-outreach-only')) {
       const baseline = path.join(fixture, 'smart-outreach-baseline.prisma');
       writeFileSync(baseline, readFileSync('prisma/schema.prisma', 'utf8').replace(/^model TeamOutreach(?:Email|Suppression) \{[\s\S]*?^\}\r?\n/gm, '').replace(/^  followUpTaskId String\? @unique @map\("follow_up_task_id"\)\r?\n/gm, ''));

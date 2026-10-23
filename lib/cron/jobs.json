@@ -154,5 +154,11 @@
     "seconds": 60,
     "purpose": "Reviewed individual Team OS email outbox and sending status",
     "flag": "TEAM_AUTOMATION_ENABLED"
+  },
+  {
+    "id": "support-mail",
+    "method": "GET",
+    "seconds": 60,
+    "purpose": "Send reviewed support solutions and missed-call rescheduling emails"
   }
 ]

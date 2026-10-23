@@ -20,6 +20,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       if (linked && linked.ownerUserId !== user.sub && ["private_audio_master", "private_ownership_proof", "private_unreleased_artwork"].includes(linked.assetType) && (linked.releaseId || linked.releaseAssetLinks.length)) {
         releaseAdmin = !('error' in await requireAdminPermission("releases.review")) || !('error' in await requireAdminPermission("releases.read"));
       }
+      if (linked?.assetType === "private_support_screenshot" && linked.ownerUserId !== user.sub) {
+        const ticket = await prisma.supportTicket.findFirst({where:{details:{path:["screenshotIds"],array_contains:[assetId]}},select:{id:true}});
+        if (ticket) releaseAdmin = !("error" in await requireAdminPermission("services.manage"));
+      }
       if(linked?.ownerUserId !== user.sub && linked?.assetType==='private_ownership_proof' && linked.entityType==='BEAT' && linked.category==='BEAT_SAMPLE_LICENSE') releaseAdmin = !('error' in await requireAdminPermission('users.manage'));
     }
     const asset = await localPrivateStorage.createAuthorizedRead({ assetId, requesterUserId: user?.sub ?? 0, isAdmin: Boolean(admin) || releaseAdmin, range: request.headers.get("range") });

@@ -42,6 +42,8 @@ export interface SupportTicket {
   userId: number;
   subject: string;
   message: string;
+  details?: SupportDetails;
+  replies?: SupportReply[];
   status: SupportTicketStatus;
   category?: string;
   priority?: string;
@@ -50,6 +52,26 @@ export interface SupportTicket {
   relatedPayoutId?: number | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SupportDetails {
+  email?: string;
+  upc?: string;
+  screenshotIds?: number[];
+  callbackPhone?: string;
+  callbackRequestedAt?: string;
+  callbackStatus?: string;
+  callbackPreference?: string;
+  callbackAttemptAt?: string;
+}
+export interface SupportReply {
+  id: string;
+  kind: string;
+  recipient: string;
+  subject: string;
+  body: string;
+  status: string;
+  createdAt: string;
 }
 
 export interface ContributorCredit {

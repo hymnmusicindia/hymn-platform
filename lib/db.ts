@@ -837,10 +837,12 @@ function prismaTicketStatus(status: SupportTicketStatus) {
   return status.toUpperCase();
 }
 
-function mapSupportTicket(row: any): SupportTicket {
+export function mapSupportTicket(row: any): SupportTicket {
   return {
     id: Number(row.id),
     userId: Number(row.userId ?? row.user_id),
+    details: row.details || {},
+    replies: (row.replies || []).map((r: any) => ({ id:r.id, kind:r.kind, recipient:r.recipient, subject:r.subject, body:r.body, status:r.status, createdAt:r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt })),
     subject: String(row.subject ?? ""),
     message: String(row.message ?? ""),
     status: normalizeTicketStatus(String(row.status ?? "").toLowerCase()),
@@ -858,6 +860,7 @@ export async function listSupportTicketsByUser(userId: number) {
   if (usesPostgresPrisma()) {
     const tickets = await (prisma as any).supportTicket.findMany({
       where: { userId },
+      include: { replies: { orderBy: { createdAt: "asc" } } },
       orderBy: { createdAt: "desc" }
     });
     return tickets.map(mapSupportTicket);
@@ -876,7 +879,7 @@ export async function listSupportTicketsByUser(userId: number) {
 
 export async function listAllSupportTickets() {
   if (usesPostgresPrisma()) {
-    const tickets = await (prisma as any).supportTicket.findMany({ orderBy: { createdAt: "desc" } });
+    const tickets = await (prisma as any).supportTicket.findMany({ include: { replies: { orderBy: { createdAt: "asc" } } }, orderBy: { createdAt: "desc" } });
     return tickets.map(mapSupportTicket);
   }
 
@@ -890,12 +893,13 @@ export async function listAllSupportTickets() {
   return (rows as any[]).map(mapSupportTicket);
 }
 
-export async function createSupportTicket(input: { userId: number; subject: string; message: string; category?: string; priority?: string; relatedReleaseId?: number | null; relatedPurchaseId?: number | null; relatedPayoutId?: number | null }) {
+export async function createSupportTicket(input: { details?: import("@/lib/types").SupportDetails; userId: number; subject: string; message: string; category?: string; priority?: string; relatedReleaseId?: number | null; relatedPurchaseId?: number | null; relatedPayoutId?: number | null }) {
   if (usesPostgresPrisma()) {
     const ticket = await (prisma as any).supportTicket.create({
       data: {
         userId: input.userId,
         subject: input.subject,
+        details: input.details || {},
         message: input.message,
         category: input.category ?? "general",
         priority: input.priority ?? "normal",
@@ -925,6 +929,9 @@ export async function createSupportTicket(input: { userId: number; subject: stri
       userId: input.userId,
       subject: input.subject,
       message: input.message,
+      details: input.details || {},
+      category: input.category,
+      priority: input.priority,
       status: "open",
       createdAt: now,
       updatedAt: now

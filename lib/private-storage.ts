@@ -7,7 +7,7 @@ import { CANONICAL_HOSTINGER_STORAGE_ROOT, managedStorageRoot } from "@/lib/host
 import { verifyArtworkIntegrity, verifyAudioIntegrity } from "@/lib/media-integrity";
 import { normalizeUploadMime } from "@/lib/upload-mime";
 
-export type PrivateAssetType = "private_team_attachment" | "private_audio_master" | "private_studio_source" | "private_studio_delivery" | "private_beat_deliverable" | "private_beat_license" | "private_cover_licence" | "private_ownership_proof" | "private_ai_receipt" | "private_royalty_statement" | "private_payout_report" | "private_payout_proof" | "private_kyc_document" | "private_unreleased_artwork";
+export type PrivateAssetType = "private_support_screenshot" | "private_team_attachment" | "private_audio_master" | "private_studio_source" | "private_studio_delivery" | "private_beat_deliverable" | "private_beat_license" | "private_cover_licence" | "private_ownership_proof" | "private_ai_receipt" | "private_royalty_statement" | "private_payout_report" | "private_payout_proof" | "private_kyc_document" | "private_unreleased_artwork";
 export type PrivateUploadInput = { ownerUserId: number; ownerName?: string; releaseId?: number; beatPurchaseId?: number; beatId?: number; beatTitle?: string; assetType: PrivateAssetType; fileName: string; mimeType: string; bytes: Buffer; retentionUntil?: Date };
 export type AuthorizedReadInput = { assetId: number; requesterUserId: number; isAdmin: boolean; range?: string | null };
 export type StoredPrivateAsset = { id: number; downloadPath: string; checksum: string; byteSize: number };
@@ -19,6 +19,7 @@ export interface PrivateStorageAdapter {
 }
 
 const policies: Record<PrivateAssetType, { max: number; mime: string[] }> = {
+  private_support_screenshot: { max: 5 * 1024 * 1024, mime: ["image/jpeg", "image/png", "image/webp"] },
   private_team_attachment: { max: 25 * 1024 * 1024, mime: ["application/pdf", "image/jpeg", "image/png", "text/plain", "text/csv", "audio/mpeg", "audio/wav", "audio/x-wav", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"] },
   private_audio_master: { max: 500 * 1024 * 1024, mime: ["audio/wav", "audio/x-wav", "audio/mpeg"] },
   private_studio_source: { max: 2 * 1024 * 1024 * 1024, mime: ["audio/wav", "audio/x-wav", "audio/flac", "audio/mpeg", "application/zip"] },

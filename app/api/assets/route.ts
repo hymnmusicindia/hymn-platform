@@ -1,10 +1,11 @@
+import { isSameAppOrigin } from "@/lib/request-origin";
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/access";
 import { localPrivateStorage, type PrivateAssetType } from "@/lib/private-storage";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit } from "@/lib/rate-limit";
 
-const assetTypes = new Set<PrivateAssetType>(["private_audio_master", "private_beat_deliverable", "private_cover_licence", "private_ownership_proof", "private_ai_receipt", "private_royalty_statement", "private_payout_report", "private_payout_proof", "private_kyc_document", "private_unreleased_artwork"]);
+const assetTypes = new Set<PrivateAssetType>(["private_support_screenshot", "private_audio_master", "private_beat_deliverable", "private_cover_licence", "private_ownership_proof", "private_ai_receipt", "private_royalty_statement", "private_payout_report", "private_payout_proof", "private_kyc_document", "private_unreleased_artwork"]);
 
 export async function POST(request: Request) {
   const result = await requireUser();
@@ -17,6 +18,7 @@ export async function POST(request: Request) {
     const assetType = String(form.get("assetType") || "") as PrivateAssetType;
     const releaseId = form.get("releaseId") ? Number(form.get("releaseId")) : undefined;
     if (!(file instanceof File) || !assetTypes.has(assetType)) return NextResponse.json({ error: "A supported private asset and file are required." }, { status: 400 });
+    if (assetType === "private_support_screenshot" && (!isSameAppOrigin(request) || file.size > 5 * 1024 * 1024)) return NextResponse.json({error:"Use a screenshot up to 5 MB from the HYMN support form."},{status:400});
     if (releaseId) {
       const owned = await prisma.release.count({ where: { id: releaseId, userId: result.user.id } });
       if (!owned) return NextResponse.json({ error: "Release not found." }, { status: 404 });
