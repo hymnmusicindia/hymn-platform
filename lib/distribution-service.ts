@@ -84,7 +84,7 @@ export async function persistDireNoteArtistIds(releaseId: number, artists: Array
       updated.push(card.id);
     }
     return updated;
-  });
+  }, { timeout: 30_000, maxWait: 10_000 });
   for (const name of conflicts) await flagArtistMappingReview({ releaseId, name, message: 'Ingestion returned an artist identity used by a different saved mapping. Do not repeat ingestion or overwrite the historical artist. Verify the accepted release and request provider mapping review.' });
   return result;
 }
@@ -107,7 +107,7 @@ async function persistDireNoteSongwriterIds(releaseId: number, songwriters: Arra
       updated.push(party.id);
     }
     return [...new Set(updated)];
-  });
+  }, { timeout: 30_000, maxWait: 10_000 });
 }
 
 export type DistributionValidationIssue = {
