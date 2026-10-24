@@ -19,6 +19,7 @@ export function freeCallSlot(after: Date, reservations: { kind: string; startsAt
   return null;
 }
 export function callbackTip(kind: string, outcome?: string) {
+  if (outcome === 'TALKED') return 'Conversation recorded. Review notes and email delivery history for any further assistance.';
   if (kind === 'FRIENDLY_INTRO' && !outcome) return 'Offer a friendly introduction to HYMN services, understand their needs, and invite them to reach out whenever they need help. Start with the saved contact context.';
   if (kind === 'SUPPORT_CALLBACK') return outcome === 'NO_ANSWER' ? 'Customer was unavailable. Support can send the missed-call template; wait for the customer to request another time.' : 'Read the customer support ticket, call the requested number, and help with that issue. Record the actual outcome.';
   if (outcome === 'NO_ANSWER') return 'No answer recorded. Try the next scheduled slot; do not mark the customer as contacted or send repeated messages.';

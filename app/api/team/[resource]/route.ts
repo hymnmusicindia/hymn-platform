@@ -38,6 +38,10 @@ export async function POST(request: Request, context: Context) {
       if (!emailLimit.allowed) throw new TeamError("Email outreach is limited to 5 individual messages per hour.", 429);
     }
     const result = resource === "accept" ? await acceptTeamInvitation(user, typeof (body as { token?: unknown })?.token === "string" ? (body as { token: string }).token : "") : await teamMutation(await teamActor(new URL(request.url).searchParams.get("workspace") || undefined), resource, body);
+    if (resource === "call-followup-outcome" && result && typeof result === "object" && "followupEmail" in result) {
+      const job = result.followupEmail as { id: string; status: string } | null;
+      if (job?.status === "QUEUED") after(async () => { const { processTeamOutreachEmail } = await import("@/lib/team/outreach-email"); await processTeamOutreachEmail(job.id, 1); });
+    }
     if (resource === "clients-save" && result && typeof result === "object" && "id" in result) {
       const clientId = String(result.id);
       after(async () => { const { processClientWelcomes } = await import("@/lib/team/client-welcome"); await processClientWelcomes(clientId, 1); });

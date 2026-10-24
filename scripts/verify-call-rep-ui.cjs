@@ -6,7 +6,7 @@ async function main() {
     stdin: { contents: `import React from 'react'; import {createRoot} from 'react-dom/client'; import {CustomerCalls} from './components/team/customer-calls';
       const task={id:'call-1',version:1,status:'TODO',title:'Friendly introduction',dueAt:'2027-01-11T05:00:00Z',priority:'NORMAL',ownerId:'kira',followUpContext:{footnotes:['Ask about distribution']},client:{id:'client-1',name:'Artist One',phone:'+919876543210',email:'artist@example.com',status:'ACTIVE'}};
       window.calls=[]; window.rejectSave=false;
-      const api=async(resource,body)=>{if(body){window.calls.push({resource,body});if(window.rejectSave)throw Error('Could not save. Try again.');task.version++;if(body.notes)task.followUpContext.footnotes.push(body.notes);if(body.nextAt)task.dueAt=body.nextAt;return task;}return {items:[task],total:1}};
+      const api=async(resource,body)=>{if(body){window.calls.push({resource,body});if(window.rejectSave)throw Error('Could not save. Try again.');task.version++;if(body.notes)task.followUpContext.footnotes.push(body.notes);if(body.nextAt)task.dueAt=body.nextAt;return {...task,followupEmail:body.outcome==='TALKED'?{status:'QUEUED'}:null};}return {items:[task],total:1}};
       createRoot(document.getElementById('root')).render(<CustomerCalls api={api} workspaceId="workspace-1"/>);`, resolveDir: process.cwd(), loader: 'tsx' },
     bundle: true, write: false, format: 'iife', jsx: 'automatic',
     plugins: [{ name: 'test-adapters', setup(b) {
@@ -38,7 +38,11 @@ async function main() {
     await expect(page.getByRole('link',{name:'Edit contact details'})).toHaveAttribute('href',/module=contacts&client=client-1/);
     await page.getByLabel('Find a callback').fill('no match');
     await expect(page.getByRole('heading',{name:'Artist One'})).toHaveCount(0);
-    console.log('PASS call rep browser interactions: mobile queue, note persistence on failure, successful saves, IST rescheduling, contact edit link and search.');
+    await page.getByLabel('Find a callback').fill('');
+    await page.getByRole('button',{name:'? Talked with client'}).click();
+    await expect(page.getByRole('status').filter({hasText:'Marked as talked.'})).toContainText('Follow-up email queued');
+    expect(await page.evaluate(()=>window.calls.at(-1).body.outcome)).toBe('TALKED');
+    console.log('PASS call rep browser interactions: mobile queue, note persistence on failure, successful saves, IST rescheduling, contact edit link, search and one-click talked confirmation.');
   } finally { await browser.close(); }
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

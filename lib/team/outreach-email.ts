@@ -10,6 +10,7 @@ import { sendTransactionalEmail } from '@/lib/email/send-transactional-email';
 import { can, TeamError, type Actor } from './policy';
 import { personalTeamMessage, teamEmailTemplates, teamSenderRole } from './outreach-content';
 import { customerBrandText } from '@/lib/customer-message';
+import { CALL_ESTABLISHED_TEMPLATE, callEstablishedTemplate } from './call-established-email';
 
 async function eligibleContact(tx: Prisma.TransactionClient, workspaceId: string, clientId: string, recipient?: string) {
   const client = await tx.teamClient.findFirst({ where: { id: clientId, workspaceId, status: 'ACTIVE' }, include: { prospect: true, user: { select: { status: true } } } });
@@ -76,7 +77,8 @@ export async function processTeamOutreachEmail(id?: string, limit = 10, deliver 
       const text = customerBrandText(personalTeamMessage({ recipientName: client.name, senderName: job.senderName, senderRole: job.senderRole, body: job.body }));
       const html = `<div style="background:#11161c;padding:28px;font-family:Arial,sans-serif;color:#eef2f8;max-width:620px"><div style="font-weight:700;letter-spacing:3px;margin-bottom:28px">HYMN</div><p style="font-size:12px;color:#b9c2cf">${escape(job.senderName)} &middot; ${escape(job.senderRole)}</p><div style="white-space:pre-wrap;line-height:1.8;font-size:14px">${escape(text)}</div><p style="margin-top:30px;font-size:11px;color:#b9c2cf">You can reply to this email, or <a style="color:#b9c2cf" href="${escape(unsubscribe)}">stop HYMN team outreach emails</a>.</p></div>`;
       const eventKey = `team-outreach:${job.id}${job.attempt ? `:retry:${job.attempt}` : ""}`;
-      const result = await deliver({ to: job.recipient, subject: customerBrandText(job.subject), template: 'team_outreach', html, text: `${text}\n\nStop HYMN team outreach emails: ${unsubscribe}`, eventKey, entityType: 'team_outreach', entityId: job.id, senderName: `${job.senderName} | HYMN`, timeoutMs: 10000 });
+      const acknowledgement = job.template === CALL_ESTABLISHED_TEMPLATE ? callEstablishedTemplate(client.name) : null;
+      const result = await deliver({ to: job.recipient, subject: customerBrandText(job.subject), template: 'team_outreach', html: acknowledgement ? acknowledgement.html.replace('</body>', `<p style="text-align:center;font:12px Arial"><a href="${escape(unsubscribe)}">Stop HYMN team outreach emails</a></p></body>`) : html, text: `${acknowledgement?.text || text}\n\nStop HYMN team outreach emails: ${unsubscribe}`, eventKey, entityType: 'team_outreach', entityId: job.id, senderName: acknowledgement ? 'HYMN Customer Support' : `${job.senderName} | HYMN`, timeoutMs: 10000 });
       const sent = result.status === 'sent' || result.status === 'duplicate_skipped' && (await prisma.emailLog.findUnique({ where: { eventKey } }))?.status === 'sent';
       await prisma.teamOutreachEmail.update({ where: { id: job.id }, data: { status: sent ? 'SENT' : 'REVIEW', error: sent ? null : result.error || 'Check email delivery logs before retrying.' } });
       results.push({ id: job.id, status: sent ? 'SENT' : 'REVIEW' });
