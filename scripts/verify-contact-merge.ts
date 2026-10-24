@@ -5,7 +5,7 @@ import { teamMutation, teamRead, teamWrite } from '../lib/team/service';
 import { mergeContacts } from '../lib/team/contact-merge';
 import { matchingContacts, contactPhoneKey } from '../lib/team/contact-directory';
 import { importCallContact } from '../lib/team/call-list-import';
-import { readCallFollowups, recordCallbackOutcome } from '../lib/team/customer-followups';
+import { readCallFollowups, recordCallbackOutcome, updateCallback } from '../lib/team/customer-followups';
 async function main(){
   assert.equal(process.env.DATABASE_URL,'postgresql://fixture:fixture@127.0.0.1:55473/acquisition_fixture');
   const workspace=await prisma.teamWorkspace.create({data:{name:'Contact merge fixture',clientCardsImportedAt:new Date()}});
@@ -53,6 +53,22 @@ async function main(){
   for(const call of intros){assert.equal(call.ownerId,kira.id);const local=new Date(call.dueAt!.getTime()+330*60000);assert.ok(![0,6].includes(local.getUTCDay()));const day=local.toISOString().slice(0,10);dayCounts.set(day,(dayCounts.get(day)||0)+1);}
   assert.ok([...dayCounts.values()].every(n=>n<=10));
   const slots=await prisma.teamCalendarEvent.findMany({where:{followUpTaskId:{in:intros.map(t=>t.id)}}});assert.equal(new Set(slots.map(s=>s.startsAt.toISOString())).size,12);
+  const editable = intros[1];
+  const note = await teamWrite(kira, (tx,a) => updateCallback(tx,a,{id:editable.id,version:editable.version,notes:'Customer prefers a short call after lunch.'},now));
+  assert.equal(note.status, editable.status);
+  assert.equal(note.dueAt!.toISOString(), editable.dueAt!.toISOString());
+  assert.equal((note.followUpContext as {attempts?:number}).attempts, undefined, 'Saving notes must not fabricate attempts.');
+  assert.match(JSON.stringify(note.followUpContext), /prefers a short call/);
+  assert.equal(await prisma.teamComment.count({where:{taskId:note.id}}),1);
+  await assert.rejects(teamWrite(other,(tx,a)=>updateCallback(tx,a,{id:note.id,version:note.version,notes:'Unauthorised edit'},now)),/unavailable/);
+  await assert.rejects(teamWrite(kira,(tx,a)=>updateCallback(tx,a,{id:note.id,version:editable.version,notes:'Stale edit'},now)),/changed/);
+  await assert.rejects(teamWrite(kira,(tx,a)=>updateCallback(tx,a,{id:note.id,version:note.version,nextAt:'2027-01-11T01:00:00Z'},now)),/free slot/);
+  const moved = await teamWrite(kira,(tx,a)=>updateCallback(tx,a,{id:note.id,version:note.version,nextAt:'2027-01-11T09:30:00Z',notes:'Agreed planning time'},now));
+  assert.equal(moved.dueAt!.toISOString(),'2027-01-11T09:30:00.000Z');
+  assert.equal((await prisma.teamCalendarEvent.findUniqueOrThrow({where:{followUpTaskId:note.id}})).startsAt.toISOString(),moved.dueAt!.toISOString());
+  const sharedEdit = await teamMutation(kira,'clients-save',{id:target.id,version:(await prisma.teamClient.findUniqueOrThrow({where:{id:target.id}})).version,ownerId:other.id,name:'Corrected artist name',phone:target.phone,status:'DO_NOT_CONTACT'});
+  assert.equal((sharedEdit as {name:string}).name,'Corrected artist name');
+  assert.equal((await prisma.teamClient.findUniqueOrThrow({where:{id:target.id}})).notes,'Other member private note');
   await teamWrite(kira,(tx,a)=>recordCallbackOutcome(tx,a,{id:intros[0].id,version:intros[0].version,outcome:'RESOLVED',notes:'Introduced HYMN services and noted current needs.'},now));
   assert.equal(await prisma.acquisitionLead.count(),0,'Founder-provided calls must not fabricate acquisition credit.');
   assert.equal(await prisma.teamAppointmentMessage.count(),0,'Internal slots must not send customer appointment emails.');

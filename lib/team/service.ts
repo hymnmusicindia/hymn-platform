@@ -55,6 +55,7 @@ async function dependencies(tx: Tx, a: Actor, id: string, ids: string[]) {
 export async function teamMutation(identity: Actor, resource: string, input: unknown) {
   return teamWrite(identity, async (tx, a) => {
   if (resource === "call-followup-outcome") return (await import("./customer-followups")).recordCallbackOutcome(tx, a, input);
+  if (resource === "call-followup-update") return (await import("./customer-followups")).updateCallback(tx, a, input);
   if (resource.startsWith("team-email-")) return (await import("./outreach-email")).outreachMutation(tx, a, resource, input);
   if (resource.startsWith("acquisition-")) return (await import("./acquisition")).acquisitionMutation(tx, a, resource, (input && typeof input === "object" ? input : {}) as Record<string, unknown>);
     if (["clients-save", "clients-merge", "calendar-save", "calendar-task", "calendar-handoff", "calendar-delete"].includes(resource)) return (await import("./calendar")).calendarMutation(tx, a, resource, input);

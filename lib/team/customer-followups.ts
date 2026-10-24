@@ -223,3 +223,32 @@ export async function recordCallbackOutcome(tx: Prisma.TransactionClient, a: Act
   await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action: 'support.callback_outcome', entityId: task.id, detail: { outcome: data.outcome, attempts, nextAt: dueAt?.toISOString() || null } } });
   return updated;
 }
+
+/** Notes and planning are independent of actual contact attempts. */
+export async function updateCallback(tx: Prisma.TransactionClient, a: Actor, input: unknown, now = new Date()) {
+  demand(a, 'crm.outreach.manage'); demand(a, 'tasks.update');
+  const data = z.object({ id: z.string().min(1), version: z.number().int().positive(), notes: z.string().trim().max(2000).default(''), nextAt: z.string().datetime({ offset: true }).optional() }).parse(input);
+  if (!data.notes && !data.nextAt) throw new TeamError('Add a note or choose a new callback time.');
+  const task = await tx.teamTask.findFirst({ where: { id: data.id, workspaceId: a.workspaceId, eventKey: { startsWith: 'support-call:' }, archivedAt: null, ...(!can(a, 'tasks.all') ? { ownerId: a.id } : {}) } });
+  if (!task || !task.clientId) throw new TeamError('Callback unavailable.', 404);
+  if (task.version !== data.version) throw new TeamError('Callback changed. Refresh the queue before saving. Your note is still here.', 409);
+  if (['COMPLETED', 'CANCELLED'].includes(task.status)) throw new TeamError('This callback is closed.', 409);
+  let dueAt = task.dueAt;
+  if (data.nextAt) {
+    if (task.status === 'BLOCKED') throw new TeamError('This callback needs manager review before rescheduling.', 409);
+    const client = await tx.teamClient.findUniqueOrThrow({ where: { id: task.clientId } });
+    if (client.status !== 'ACTIVE') throw new TeamError('Only active contacts can be scheduled.');
+    const desired = new Date(data.nextAt);
+    if (desired <= now) throw new TeamError('Choose a future callback time.');
+    const available = await callbackSlot(tx, a.workspaceId, task.ownerId, desired, task.id);
+    if (+available !== +desired) throw new TeamError(`Choose a free slot between 9:30 AM and 6 PM IST. Next available: ${new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }).format(available)} IST.`, 409);
+    dueAt = desired;
+  }
+  const context = object(task.followUpContext);
+  const body = [data.notes, data.nextAt ? `Rescheduled callback: ${dueAt!.toISOString()}` : ''].filter(Boolean).join('\n');
+  const updated = await tx.teamTask.update({ where: { id: task.id }, data: { dueAt, followUpContext: json({ ...context, footnotes: [...(Array.isArray(context.footnotes) ? context.footnotes : []), `${now.toISOString()} - ${body}`].slice(-12) }), version: { increment: 1 } } });
+  await tx.teamComment.create({ data: { taskId: task.id, authorId: a.id, body } });
+  if (data.nextAt) await syncCallbackCalendar(tx, a, updated);
+  await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action: 'support.callback_updated', entityId: task.id, detail: { rescheduled: Boolean(data.nextAt), noteAdded: Boolean(data.notes) } } });
+  return updated;
+}
