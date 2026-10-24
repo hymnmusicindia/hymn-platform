@@ -5,11 +5,12 @@ import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
 import { useSearchParams } from "next/navigation";
-import { Headphones, SlidersHorizontal, ArrowLeft, ArrowRight, Check, ChevronDown, Disc3, Filter, Gauge, Music2, Search, ShoppingBag, Sparkles, Users2, WandSparkles, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, Disc3, Filter, Gauge, Music2, Search, ShoppingBag, Sparkles, Users2, WandSparkles, X } from "lucide-react";
 import { beatLicenseLabel, beatLicensePrice, buildBeatStorefront, normalizeBeatLicenseType, type BeatStoreLicenseType, type StorefrontBeat } from "@/lib/beat-store";
 import type { Beat, ProducerProfile } from "@/lib/types";
 import { BeatCard } from "@/components/beat-card";
 import storeStyles from "./beat-store.module.css";
+import { BeatLicenceGuide } from "@/components/beat-licence-guide";
 import { BeatStoreHero } from "@/components/beat-store-hero";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import { useBeatPreviewPlayer } from "@/components/beat-preview-player";
@@ -742,11 +743,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
             </div>
           </div>
         </div>
-        <section className={storeStyles.guide} aria-labelledby="beat-licence-guide">
-          <div><p className={storeStyles.eyebrow}>FROM FIRST PLAY TO FIRST TAKE</p><h2 id="beat-licence-guide">The sound is yours to choose.<br /><span>Know what comes with it.</span></h2><p>Every project is different. Compare file formats and read the selected beat's licence terms before you buy.</p></div>
-          <div className={storeStyles.steps}><div><Headphones size={20}/><h3>Listen first</h3><p>Try a few sounds. Preview the beat and find space for your voice.</p></div><div><SlidersHorizontal size={20}/><h3>Choose your licence</h3><p>Compare the available formats, price and usage rights for your project.</p></div><div><ShoppingBag size={20}/><h3>Make it your next song</h3><p>Complete checkout, then access your purchased files and agreement from My purchases.</p></div></div>
-          <details><summary>Which licence should I choose?<ChevronDown size={16}/></summary><div className={storeStyles.licences}><p><strong>MP3</strong>A compressed audio file for working with the full beat.</p><p><strong>WAV</strong>Uncompressed audio for your recording and mixing session.</p><p><strong>Stems</strong>Separate audio parts for more control over your mix.</p><p><strong>Exclusive</strong>Review the exclusive agreement and any earlier licences. Rights follow the contract.</p></div><p className={storeStyles.termsNote}>File format alone does not determine usage rights. Check stream limits, credits, monetisation and Content ID permissions in the beat's agreement.</p></details>
-        </section>
+        <BeatLicenceGuide beat={beatPlayer.activeBeat} onChoose={(beat, licence) => beatPlayer.openLicensing(beat, licence)} onBrowse={() => document.getElementById("beat-catalog")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })} />
       </section>
     </>
   );
