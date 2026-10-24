@@ -3336,6 +3336,7 @@ model ReferralMessage {
   @@map("referral_messages")
 }
 model TeamWorkspace {
+  workIntakes TeamWorkIntake[]
   id String @id @default(cuid())
   name String @default("HYMN Team OS")
   clientCardsImportedAt DateTime? @map("client_cards_imported_at")
@@ -3373,6 +3374,7 @@ model TeamRole {
 }
 
 model TeamMember {
+  workIntakes TeamWorkIntake[]
   managerId String?
   preferences Json @default("{}")
   lastActiveAt DateTime @default(now())
@@ -3659,6 +3661,7 @@ model TeamProject {
 }
 
 model TeamTask {
+  workIntakes TeamWorkIntake[]
   clientId String? @map("client_id")
   followUpContext Json? @map("follow_up_context")
   client TeamClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
@@ -3946,6 +3949,32 @@ model TeamWorkflowEvent {
   createdAt DateTime @default(now())
   @@index([workspaceId, createdAt])
   @@map("team_workflow_events")
+}
+
+model TeamWorkIntake {
+  id String @id @default(cuid())
+  workspaceId String
+  creatorId String
+  clientKey String
+  payloadHash String
+  kind String
+  summary String
+  details String
+  source String
+  clientId String?
+  requestedAt DateTime?
+  status String @default("WAITING")
+  reason String @default("Waiting for an eligible employee with declared availability.")
+  taskId String?
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace TeamWorkspace @relation(fields:[workspaceId],references:[id],onDelete:Restrict)
+  creator TeamMember @relation(fields:[creatorId],references:[id],onDelete:Restrict)
+  task TeamTask? @relation(fields:[taskId],references:[id],onDelete:Restrict)
+  @@unique([workspaceId,creatorId,clientKey])
+  @@index([workspaceId,status,createdAt])
+  @@map("team_work_intakes")
 }
 
 model TeamSavedView {

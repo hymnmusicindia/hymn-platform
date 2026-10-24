@@ -26,6 +26,17 @@ async function main() {
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("acquisition_fixture");
+    if (process.argv.includes('--team-coordinator-only')) {
+      const baseline=path.join(fixture,'coordinator-baseline.prisma');
+      writeFileSync(baseline,readFileSync('prisma/schema.prisma','utf8').replace(/^model TeamWorkIntake \{[\s\S]*?^\}\r?\n/gm,'').replace(/^  workIntakes TeamWorkIntake\[\]\r?\n/gm,''));
+      await run(['node_modules/prisma/build/index.js','db','push','--schema',baseline,'--skip-generate']);
+      await run(['node_modules/prisma/build/index.js','db','execute','--file','prisma/migrations/20261025090000_team_work_coordinator/migration.sql','--schema','prisma/schema.prisma']);
+      await run(['node_modules/prisma/build/index.js','migrate','diff','--from-url',env.DATABASE_URL,'--to-schema-datamodel','prisma/schema.prisma','--script','--output',path.join(fixture,'coordinator-diff.sql')]);
+      if(/team_work_intakes/.test(readFileSync(path.join(fixture,'coordinator-diff.sql'),'utf8')))throw Error('Coordinator migration does not match the schema.');
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-team-coordinator.ts']);
+      if(process.argv.includes('--browser'))await run(['--import','tsx','scripts/verify-team-coordinator-browser.ts']);
+      return;
+    }
     if (process.argv.includes('--catalogue-acceptance-only')) {
       await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
       await run(['--conditions=react-server','--import','tsx','scripts/verify-direnote-catalogue-acceptance.ts']);
@@ -93,6 +104,9 @@ async function main() {
       writeFileSync(oldSchema, execFileSync("git", ["show", "07ad464:prisma/schema.prisma"], { encoding: "utf8", windowsHide: true }));
       await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", oldSchema, "--skip-generate"]);
       await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261022090000_shared_contacts_followups/migration.sql", "--schema", "prisma/schema.prisma"]);
+      // The regression also exercises newer contact identity and scheduling
+      // code; bring the empty fixture forward after testing the original SQL.
+      await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate','--accept-data-loss']);
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-team-contacts-followups.ts"]);
       return;
     }

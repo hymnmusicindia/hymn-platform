@@ -8,6 +8,8 @@
   "scripts": {
     "test:customer-experience": "tsx scripts/verify-customer-experience-isolated.ts --features",
     "test:staff-qc": "tsx scripts/verify-acquisition-isolated.ts --staff-qc-only",
+    "test:team-coordinator": "tsx scripts/verify-acquisition-isolated.ts --team-coordinator-only",
+    "test:team-coordinator:browser": "tsx scripts/verify-acquisition-isolated.ts --team-coordinator-only --browser",
     "test:team-briefings": "tsx scripts/verify-team-briefing-mail.ts",
     "test:admin-os": "tsx scripts/verify-team-os-isolated.ts --admin",
     "test:contact-merge": "tsx scripts/verify-acquisition-isolated.ts --contact-merge-only",

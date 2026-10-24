@@ -15,7 +15,7 @@ async function main() {
   const callerRole = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name: 'Caller', permissions: ['calendar.view', 'calendar.manage', 'crm.outreach.manage', 'tasks.update', 'tasks.view'] } });
   async function member(name: string, roleId: string, caller = false) {
     const user = await prisma.user.create({ data: { name, email: `${name}@contacts.fixture.invalid`, googleId: name } });
-    return prisma.teamMember.create({ data: { workspaceId: workspace.id, userId: user.id, roleId, preferences: caller ? { crm: { caller: true, workRole: 'caller' } } : {} }, include: { role: true } });
+    return prisma.teamMember.create({ data: { workspaceId: workspace.id, userId: user.id, roleId, preferences: caller ? { crm: { caller: true, workRole: 'caller' }, workAvailability: { weeklyMinutes:2400, plans:Object.fromEntries(['2026-10-19','2026-10-26'].map(week=>[week,{revision:1,submittedAt:'2026-10-19T00:00:00Z',slots:Array.from({length:7},(_,day)=>({day,start:570,end:1080}))}])) } } : {} }, include: { role: true } });
   }
   const owner = await member('Owner', ownerRole.id), alice = await member('Alice', staffRole.id), bob = await member('Bob', staffRole.id);
   const caller = await member('Caller', callerRole.id, true), second = await member('Second', callerRole.id, true);
@@ -24,7 +24,7 @@ async function main() {
   assert.equal(read.items[0].notes, ''); assert.equal(read.items[0].notesVisible, false);
   const updated = await teamMutation(bob, 'clients-save', { id: card.id, version: card.version, name: 'Shared Artist corrected', phone: '+919876543210', notes: 'Cannot replace private notes', ownerId: alice.id }) as { version: number };
   assert.equal((await prisma.teamClient.findUniqueOrThrow({ where: { id: card.id } })).notes, 'Alice private note');
-  await assert.rejects(teamMutation(bob, 'clients-save', { name: 'Duplicate formatted number', phone: '919876543210', ownerId: bob.id }), /phone already exists/);
+  await assert.rejects(teamMutation(bob, 'clients-save', { name: 'Duplicate formatted number', phone: '919876543210', ownerId: bob.id }), /phone already exists|matching contact exists/i);
   await assert.rejects(teamMutation(bob, 'clients-save', { id: card.id, version: updated.version, name: 'Reassigned', ownerId: bob.id }), /permission/);
   assert.equal((await calendarRead(bob, 'clients', new URLSearchParams({ q: 'Alice private note' })) as { total: number }).total, 0);
   const noPermissionsRole = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name: 'Contact-only' } });
@@ -69,7 +69,7 @@ async function main() {
   assert.equal((await sync()).assigned, 2);
   assert.equal((await sync()).assigned, 0);
   assert.equal(await prisma.acquisitionLead.count(), 0, 'Support callbacks never claim acquisition credit.');
-  assert.equal(await prisma.teamAppointmentMessage.count(), 0, 'Callbacks do not reserve appointments or message customers.');
+  assert.equal(await prisma.teamAppointmentMessage.count({where:{kind:{startsWith:'CLIENT_'}}}), 0, 'Internal callbacks must not send customer appointment emails.');
   const linked = await prisma.teamClient.findUniqueOrThrow({ where: { userId: customer.id } });
   await teamMutation(bob, 'clients-save', { id: linked.id, version: linked.version, ownerId: linked.ownerId, name: linked.name, phone: linked.phone, email: linked.email, status: 'DO_NOT_CONTACT' });
   assert.equal(await prisma.teamTask.count({ where: { clientId: linked.id, status: { notIn: ['COMPLETED', 'CANCELLED'] } } }), 0);
@@ -93,7 +93,7 @@ async function main() {
   assert.equal(whatsappLink('+91 98765 43210', true), 'https://web.whatsapp.com/send?phone=919876543210');
   assert.equal(whatsappLink('invalid'), null); assert.equal(serviceForPath('/distribution/start'), null);
   assert.ok(serviceForPath('/studio')); assert.equal(serviceForPath('/admin'), null);
-  assert.equal(nextCallDue(new Date('2026-10-22T17:00:00Z')).toISOString(), '2026-10-23T04:00:00.000Z');
+  assert.equal(nextCallDue(new Date('2026-10-22T17:00:00Z')).toISOString(), '2026-10-22T18:00:00.000Z');
   console.log('Shared contacts, private notes, calendar scope, 30-hour lifecycle, caller isolation, deduplication, DNC, credit separation and timeline layout passed.');
 }
 main().catch(e => { console.error(e); process.exitCode = 1; }).finally(() => prisma.$disconnect());

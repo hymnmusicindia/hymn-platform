@@ -1,22 +1,29 @@
 import 'server-only';
 import { Prisma } from '@prisma/client';
 import { whatsappNumber } from './phone';
-import { freeCallSlot } from './call-rules';
+import { employeeCallSlot } from './availability';
+import { queueAppointment } from './appointments';
 import { TeamError, type Actor } from './policy';
 import { internalIdentities, matchesInternalIdentity, type InternalIdentities } from './internal-identity';
 export async function callbackSlot(tx: Prisma.TransactionClient, workspaceId: string, memberId: string, after: Date, taskId?: string) {
-  const events = await tx.teamCalendarEvent.findMany({ where: { workspaceId, assigneeId: memberId, status: 'SCHEDULED', ...(taskId ? { OR: [{ followUpTaskId: null }, { followUpTaskId: { not: taskId } }] } : {}), startsAt: { gte: new Date(after.getTime() - 7 * 86400000), lte: new Date(after.getTime() + 14 * 86400000) } }, select: { startsAt: true, endsAt: true, kind: true } });
-  const slot = freeCallSlot(after, events);
-  if (!slot || slot.getTime() > after.getTime() + 14 * 86400000) throw new TeamError('No free callback slot within 14 days. Choose another representative or time.', 409);
+  const slot = await employeeCallSlot(tx,workspaceId,memberId,after,undefined,taskId);
+  if (!slot) throw new TeamError('No declared free callback slot within 14 days. Submit weekly availability or choose another representative.', 409);
   return slot;
 }
 export async function syncCallbackCalendar(tx: Prisma.TransactionClient, a: Actor, task: { id: string; title: string; ownerId: string; clientId: string | null; dueAt: Date | null; status: string; description: string }) {
   const status = ['COMPLETED', 'CANCELLED', 'BLOCKED'].includes(task.status) ? 'CANCELLED' : 'SCHEDULED';
   const old = await tx.teamCalendarEvent.findUnique({ where: { followUpTaskId: task.id } });
-  if (!task.dueAt || !task.clientId) return;
+  if (!task.dueAt || !task.clientId) {
+    if(old&&status==='CANCELLED'){const event=await tx.teamCalendarEvent.update({where:{id:old.id},data:{status:'CANCELLED',version:{increment:1},scheduleRevision:{increment:1}}});await queueAppointment(tx,event);}
+    return;
+  }
   const data = { title: task.title, assigneeId: task.ownerId, clientId: task.clientId, startsAt: task.dueAt, endsAt: new Date(task.dueAt.getTime() + 30 * 60000), status, kind: 'FOLLOW_UP', notes: `Internal suggested callback; no customer appointment is confirmed.\n${task.description}` };
-  if (!old && status === 'SCHEDULED') await tx.teamCalendarEvent.create({ data: { ...data, workspaceId: a.workspaceId, creatorId: a.id, followUpTaskId: task.id } });
-  else if (old) await tx.teamCalendarEvent.update({ where: { id: old.id }, data: { ...data, remindedAt: null, version: { increment: 1 }, scheduleRevision: { increment: 1 } } });
+  if (!old && status === 'SCHEDULED') {const event=await tx.teamCalendarEvent.create({ data: { ...data, workspaceId: a.workspaceId, creatorId: a.id, followUpTaskId: task.id } });await queueAppointment(tx,event);}
+  else if (old) {
+    const changed=old.assigneeId!==data.assigneeId||old.startsAt.getTime()!==data.startsAt.getTime()||old.status!==data.status;
+    const event=await tx.teamCalendarEvent.update({ where: { id: old.id }, data: { ...data, remindedAt: null, version: { increment: 1 }, ...(changed?{scheduleRevision:{increment:1}}:{}) } });
+    if(changed)await queueAppointment(tx,event);
+  }
 }
 export async function syncProspectCallCalendar(tx: Prisma.TransactionClient, a: Actor, prospectId: string, now = new Date(), staff?: InternalIdentities) {
   const prospect = await tx.teamProspect.findFirst({ where: { id: prospectId, workspaceId: a.workspaceId }, include: { owner: { include: { role: true, user: { select: { status: true } } } } } });

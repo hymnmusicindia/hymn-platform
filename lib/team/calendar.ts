@@ -12,6 +12,8 @@ import { taskSchema } from "./validation";
 import { queueAppointment } from "./appointments";
 import { reservationEnd, reservationsOverlap } from "./calendar-reservations";
 import { importWorkspaceClientAccounts } from "./client-cards";
+import { requireActiveCallHours } from './availability';
+import { representativeForCall } from './call-routing';
 const id = z.string().min(1).max(80);
 const email = z.union([z.string().trim().email().max(320), z.literal("")]).transform(value => value.toLowerCase());
 const researchSchema = z.object({ sourceUrl: z.string().url().max(1000), evidence: z.string().trim().min(10).max(10000), verified: z.boolean(), contactEligibility: z.enum(["UNVERIFIED", "CONSENTED", "LEGITIMATE_INTEREST", "DO_NOT_CONTACT"]) });
@@ -36,13 +38,28 @@ export async function calendarMutation(tx: Prisma.TransactionClient, a: Actor, r
   }
   if (resource === "calendar-handoff") {
     demand(a, "calendar.manage");
-    const data = z.object({ id, version: z.number().int().positive(), assigneeId: id, reason: z.string().trim().min(3).max(1000) }).parse(input);
+    const data = z.object({ id, version: z.number().int().positive(), assigneeId: id.optional(), reason: z.string().trim().min(3).max(1000) }).parse(input);
     const event = await tx.teamCalendarEvent.findFirst({ where: { id: data.id, workspaceId: a.workspaceId } });
     if (!event) throw new TeamError("Event unavailable.", 404);
     if (event.assigneeId !== a.id) demand(a, "tasks.assign");
     if (event.version !== data.version) throw new TeamError("Event changed. Refresh first.", 409);
-    if (event.kind !== "CALL" || event.status !== "SCHEDULED" || event.startsAt <= new Date()) throw new TeamError("Only upcoming scheduled calls can be passed to another representative.");
-    if (event.assigneeId === data.assigneeId) throw new TeamError("Choose a different representative.");
+    if (!['CALL','FOLLOW_UP'].includes(event.kind) || event.status !== "SCHEDULED" || event.startsAt <= new Date()) throw new TeamError("Only upcoming scheduled calls can be passed to another representative.");
+    const history=await tx.teamAudit.findMany({where:{workspaceId:a.workspaceId,entityId:event.id,action:'calendar.handoff'},select:{detail:true}});
+    const passed=[event.assigneeId,...history.flatMap(row=>typeof (row.detail as {from?:string})?.from==='string'?[(row.detail as {from:string}).from]:[])];
+    const target=data.assigneeId || (await representativeForCall(tx,a.workspaceId,event.startsAt,passed,event.id))?.id;
+    if(!target) {
+      const message='No other representative is free at this time. The call stays assigned to you; a manager has been notified to arrange coverage.';
+      const eventKey=`coverage-needed:${event.id}:${event.version}`;
+      if(!await tx.teamWorkflowEvent.findUnique({where:{eventKey}})) {
+        await tx.teamWorkflowEvent.create({data:{workspaceId:a.workspaceId,eventKey}});
+        await audit(tx,a,'calendar.coverage_needed',event.id,{version:event.version,reason:data.reason});
+        const managers=await tx.teamMember.findMany({where:{workspaceId:a.workspaceId,status:'ACTIVE',OR:[{role:{owner:true}},{role:{permissions:{has:'tasks.assign'}}}]},select:{id:true}});
+        for(const manager of managers)await notify(tx,manager.id,`Coverage needed: ${event.title}`,`/team?workspace=${a.workspaceId}&module=calendar&event=${event.id}&date=${new Date(event.startsAt.getTime()+330*60000).toISOString().slice(0,10)}`);
+      }
+      return {...event,coverageRequired:true,message};
+    }
+    data.assigneeId=target;
+    if (passed.includes(target)) throw new TeamError("This representative already passed this call. Choose another representative.");
     await eligible(tx, a, [data.assigneeId]); await assertEmployeeAssignee(tx, a.workspaceId, data.assigneeId);
     const member = await tx.teamMember.findUnique({ where: { id: data.assigneeId } });
     if (member?.availability !== "AVAILABLE") throw new TeamError("Choose an available representative.");
@@ -112,24 +129,32 @@ export async function calendarMutation(tx: Prisma.TransactionClient, a: Actor, r
 }
 async function saveEvent(tx: Prisma.TransactionClient, a: Actor, input: unknown, handoff = false) {
   demand(a, "calendar.manage"); const data = eventSchema.parse(input);
+  const autoAssign=data.assigneeId==='__AUTO__';
+  if(autoAssign) {
+    if(data.id || data.kind!=='CALL')throw new TeamError('Automatic assignment is available for new calls.');
+    const rep=await representativeForCall(tx,a.workspaceId,new Date(data.startsAt));
+    if(!rep)throw new TeamError('No representative has declared free time for this call. Choose a different time or review weekly availability.',409);
+    data.assigneeId=rep.id;
+  }
   if (["CALL", "FOLLOW_UP"].includes(data.kind)) await assertEmployeeAssignee(tx, a.workspaceId, data.assigneeId);
   const old = data.id ? await tx.teamCalendarEvent.findFirst({ where: { id: data.id, workspaceId: a.workspaceId } }) : null;
   if (data.id && !old) throw new TeamError("Event unavailable.", 404);
   if (old?.status === "DELETED") throw new TeamError("This event was deleted.", 404);
   if (old && old.version !== data.version) throw new TeamError("Event changed. Refresh first.", 409);
-  if (!handoff && (data.assigneeId !== a.id || old && old.assigneeId !== a.id && old.creatorId !== a.id)) demand(a, "tasks.assign");
+  if (!handoff && !autoAssign && (data.assigneeId !== a.id || old && old.assigneeId !== a.id && old.creatorId !== a.id)) demand(a, "tasks.assign");
   await eligible(tx, a, [data.assigneeId]);
   if (data.clientId) {
     demand(a, "clients.view"); const client = await tx.teamClient.findFirst({ where: { id: data.clientId, workspaceId: a.workspaceId } });
     if (!client || client.status !== "ACTIVE") throw new TeamError("Choose an active shared contact; do-not-contact and archived clients cannot be scheduled.");
   }
   if (["CALL", "EMAIL", "FOLLOW_UP"].includes(data.kind) && !data.clientId) throw new TeamError("Link a client card for client outreach.");
-  if (old?.followUpTaskId && (data.kind !== "FOLLOW_UP" || data.clientId !== old.clientId)) throw new TeamError("Keep this internal callback linked to its original contact. Record the outcome in Customer callbacks.");
+  if (old?.followUpTaskId && (data.kind !== old.kind || data.clientId !== old.clientId)) throw new TeamError("Keep this scheduled task linked to its original type and contact. Record callback outcomes in Customer callbacks.");
   const startsAt = new Date(data.startsAt), endsAt = data.endsAt ? new Date(data.endsAt) : null;
   if (endsAt && (endsAt <= startsAt || endsAt.getTime() - startsAt.getTime() > 7 * 86400000)) throw new TeamError("Choose an end after the start, within seven days.");
   if (data.status === "COMPLETED" && !data.outcome.trim()) throw new TeamError("Record the outcome before completing the event.");
   if (data.status === "SCHEDULED") {
     const slot = { kind: data.kind, startsAt, endsAt };
+    if(['CALL','FOLLOW_UP'].includes(data.kind) && startsAt>new Date() && (!old || old.status!=='SCHEDULED' || old.assigneeId!==data.assigneeId || old.startsAt.getTime()!==startsAt.getTime() || old.kind!==data.kind)) await requireActiveCallHours(tx,a.workspaceId,data.assigneeId,startsAt,reservationEnd(slot));
     const nearby = await tx.teamCalendarEvent.findMany({ where: { workspaceId: a.workspaceId, assigneeId: data.assigneeId, id: { not: data.id }, status: "SCHEDULED", startsAt: { gte: new Date(startsAt.getTime() - 7 * 86400000), lt: reservationEnd(slot) } }, select: { kind: true, startsAt: true, endsAt: true } });
     if (nearby.some(event => reservationsOverlap(slot, event))) throw new TeamError("This teammate has an overlapping reservation. Calls reserve 30 minutes from their start; choose a free slot or another representative.", 409);
   }

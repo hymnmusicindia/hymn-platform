@@ -8,6 +8,7 @@ import { teamMutation, teamWrite, notify } from "@/lib/team/service";
 import { weekStartIndia } from "@/lib/team/policy";
 import { processClientWelcomes } from "@/lib/team/client-welcome";
 import { remindCalendarTasks } from "@/lib/team/calendar";
+import { syncCoordinator, remindAvailability, ensureCoordinatorRules } from '@/lib/team/coordinator';
 export const runtime = "nodejs";
 export const maxDuration = 300;
 async function runJob(request: Request) {
@@ -20,6 +21,7 @@ async function runJob(request: Request) {
     for (const owner of owners) {
       if (handled.has(owner.workspaceId)) continue;
       handled.add(owner.workspaceId);
+      await teamWrite(owner,(tx,a)=>ensureCoordinatorRules(tx,a));
       await teamMutation(owner, "workflow-sync", {});
       await teamWrite(owner, async (tx, a) => {
         await syncDailyCrmWork(tx, a);
@@ -45,6 +47,7 @@ async function runJob(request: Request) {
         }
       });
       await teamWrite(owner, (tx, a) => syncCustomerFollowups(tx, a));
+      await teamWrite(owner, async (tx,a)=>{await syncCoordinator(tx,a);await remindAvailability(tx,a);});
       workspaces++;
     }
     return Response.json({ workspaces, welcomeEmails: await processClientWelcomes() });

@@ -4,7 +4,7 @@ import { ZodError } from "zod";
 import { Prisma } from "@prisma/client";
 import { teamActor, teamIdentity } from "@/lib/team/access";
 import { TeamError } from "@/lib/team/policy";
-import { teamMutation, teamRead, acceptTeamInvitation } from "@/lib/team/service";
+import { teamMutation, teamRead, acceptTeamInvitation, teamWrite } from "@/lib/team/service";
 import { consumeRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +37,18 @@ export async function POST(request: Request, context: Context) {
       const emailLimit = await consumeRateLimit({ scope: "team-acquisition-email", identity: String(user.id), limit: 5, windowSeconds: 3600 });
       if (!emailLimit.allowed) throw new TeamError("Email outreach is limited to 5 individual messages per hour.", 429);
     }
-    const result = resource === "accept" ? await acceptTeamInvitation(user, typeof (body as { token?: unknown })?.token === "string" ? (body as { token: string }).token : "") : await teamMutation(await teamActor(new URL(request.url).searchParams.get("workspace") || undefined), resource, body);
+    const actor=resource==='accept'?null:await teamActor(new URL(request.url).searchParams.get('workspace')||undefined);
+    const result = resource === "accept" ? await acceptTeamInvitation(user, typeof (body as { token?: unknown })?.token === "string" ? (body as { token: string }).token : "") : await teamMutation(actor!, resource, body);
+    if(actor&&['availability-save','availability-policy'].includes(resource))after(async()=>{await teamWrite(actor,async(tx,a)=>{await (await import('@/lib/team/coordinator')).syncCoordinator(tx,a);});});
+    if(actor&&resource==='coordinator-intake'&&result&&typeof result==='object'&&'id' in result) {
+      const intakeId=String(result.id);
+      after(async()=>{await teamWrite(actor,async(tx,a)=>{await (await import('@/lib/team/coordinator')).dispatchIntake(tx,a,intakeId);});const {prisma}=await import('@/lib/prisma');const item=await prisma.teamWorkIntake.findUnique({where:{id:intakeId},select:{taskId:true}});if(item?.taskId){const event=await prisma.teamCalendarEvent.findUnique({where:{followUpTaskId:item.taskId},select:{id:true}});if(event)await (await import('@/lib/team/appointments')).processAppointments(event.id,4);}});
+    }
+    if(['coordinator-intake','coordinator-update','call-followup-update','call-followup-outcome'].includes(resource) && result && typeof result==='object') {
+      const row=result as {taskId?:string;id?:string};
+      const taskId=resource.startsWith('coordinator-')?row.taskId:row.id;
+      if(taskId)after(async()=>{const {prisma}=await import('@/lib/prisma');const event=await prisma.teamCalendarEvent.findUnique({where:{followUpTaskId:taskId},select:{id:true}});if(event)await (await import('@/lib/team/appointments')).processAppointments(event.id,4);});
+    }
     if (resource === "call-followup-outcome" && result && typeof result === "object" && "followupEmail" in result) {
       const job = result.followupEmail as { id: string; status: string } | null;
       if (job?.status === "QUEUED") after(async () => { const { processTeamOutreachEmail } = await import("@/lib/team/outreach-email"); await processTeamOutreachEmail(job.id, 1); });

@@ -12,6 +12,7 @@ import { getPublicAppUrl } from "@/lib/public-app-url";
 import { prospectSchema } from "./validation";
 import { parseTeamCsv } from "./csv";
 import { teamRevenue } from "./revenue";
+import { employeeCallSlot } from './availability';
 
 type Tx = Prisma.TransactionClient;
 const id = z.string().min(1).max(80);
@@ -158,16 +159,28 @@ export async function advancedMutation(tx: Tx, a: Actor, resource: string, input
   if (resource === "workflow-sync") {
     if (!a.role.owner) throw new TeamError("Owner action required.", 403);
     let created = 0;
+    const deadline=Date.now()+12000;
     const rules = await tx.teamWorkflowRule.findMany({ where: { workspaceId: a.workspaceId, enabled: true } });
     for (const rule of rules) {
+      if(Date.now()>deadline)break;
       const handled = await tx.teamTask.findMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: `${a.workspaceId}:${rule.eventType}:` } }, select: { recordId: true } });
-      const excludedIds = handled.flatMap(t => t.recordId ? [t.recordId] : []);
-      const assignee = await tx.teamMember.findFirst({ where: { workspaceId: a.workspaceId, id: rule.ownerId, status: "ACTIVE", user: { status: "ACTIVE" } }, include: { role: true } }); if (!assignee || assignee.role.owner || !can(assignee, eventPermissions[rule.eventType])) continue;
+      const recordType=rule.eventType==='BEAT_REVIEW'?'beat':rule.eventType==='ENGINEER_PROFILE'?'engineer':rule.eventType==='RELEASE_REVIEW'?'release':'studio';
+      const alreadyOpen=await tx.teamTask.findMany({where:{workspaceId:a.workspaceId,recordType,archivedAt:null,status:{notIn:['COMPLETED','CANCELLED']}},select:{recordId:true}});
+      const excludedIds = [...handled,...alreadyOpen].flatMap(t => t.recordId ? [t.recordId] : []);
+      const candidates = await tx.teamMember.findMany({where:{workspaceId:a.workspaceId,status:"ACTIVE",availability:"AVAILABLE",role:{owner:false},user:{status:"ACTIVE"}},include:{role:true},orderBy:{id:"asc"}});
+      const qualified=candidates.filter(member=>can(member,eventPermissions[rule.eventType])&&can(member,'tasks.update')).sort((left,right)=>Number(right.id===rule.ownerId)-Number(left.id===rule.ownerId));
+      if(!qualified.length)continue;
       const records = rule.eventType === "BEAT_REVIEW" ? (await tx.beat.findMany({ where: { id: { notIn: excludedIds }, status: { in: ["PENDING_REVIEW", "CHANGES_REQUESTED"] } }, take: 5 })).map(r => ({ id: r.id, title: r.title, type: "beat" })) : rule.eventType === "ENGINEER_PROFILE" ? (await tx.engineerProfile.findMany({ where: { id: { notIn: excludedIds }, OR: [{ bio: "" }, { verificationState: "UNVERIFIED" }] }, take: 5 })).map(r => ({ id: r.id, title: r.professionalName, type: "engineer" })) : rule.eventType === "RELEASE_REVIEW" ? (await tx.release.findMany({ where: { id: { notIn: excludedIds }, status: { in: ["SUBMITTED", "UNDER_REVIEW", "CHANGES_REQUESTED"] } }, take: 5 })).map(r => ({ id: r.id, title: r.title, type: "release" })) : (await tx.studioServiceOrder.findMany({ where: { id: { notIn: excludedIds }, paymentStatus: "PAID", status: { notIn: ["COMPLETED", "CANCELLED", "REFUNDED"] } }, take: 5 })).map(r => ({ id: r.id, title: r.projectTitle, type: "studio" }));
       for (const record of records) {
+        if(Date.now()>deadline)break;
         const key = `${a.workspaceId}:${rule.eventType}:${record.id}`;
         if (await tx.teamWorkflowEvent.findUnique({ where: { eventKey: key } })) continue;
-        const task = await tx.teamTask.create({ data: { workspaceId: a.workspaceId, creatorId: a.id, ownerId: assignee.id, title: `Review: ${record.title}`.slice(0, 200), description: `Created by ${rule.name}. Review actual ${record.type} #${record.id}; this task never executes the business operation.`, approvalRequired: true, recordType: record.type, recordId: record.id, eventKey: key } });
+        if(await tx.teamTask.findFirst({where:{workspaceId:a.workspaceId,recordType:record.type,recordId:record.id,archivedAt:null,status:{notIn:['COMPLETED','CANCELLED']}}}))continue;
+        let assignee:typeof qualified[number]|undefined,dueAt:Date|null=null;
+        for(const candidate of qualified){const slot=await employeeCallSlot(tx,a.workspaceId,candidate.id,new Date(Date.now()+30*60000),undefined,undefined,eventPermissions[rule.eventType]);if(slot){assignee=candidate;dueAt=slot;break;}}
+        if(!dueAt||!assignee)break;
+        const task = await tx.teamTask.create({ data: { workspaceId: a.workspaceId, creatorId: a.id, ownerId: assignee.id, title: `Review: ${record.title}`.slice(0, 200), description: `Created by ${rule.name}. Review actual ${record.type} #${record.id}; this task never executes the business operation.`, dueAt, approvalRequired: true, recordType: record.type, recordId: record.id, eventKey: key } });
+        await tx.teamCalendarEvent.create({data:{workspaceId:a.workspaceId,creatorId:a.id,assigneeId:assignee.id,followUpTaskId:task.id,title:task.title,kind:'EVENT',startsAt:dueAt,endsAt:new Date(dueAt.getTime()+30*60000),notes:task.description}});
         await tx.teamWorkflowEvent.create({ data: { workspaceId: a.workspaceId, eventKey: key, taskId: task.id } }); await notify(tx, assignee.id, task.title); created++;
       }
     }

@@ -54,6 +54,9 @@ async function dependencies(tx: Tx, a: Actor, id: string, ids: string[]) {
 
 export async function teamMutation(identity: Actor, resource: string, input: unknown) {
   return teamWrite(identity, async (tx, a) => {
+  if (['availability-save','availability-policy'].includes(resource)) return (await import('./availability')).availabilityMutation(tx,a,resource,input);
+  if (resource === 'coordinator-intake') return (await import('./coordinator')).coordinatorIntake(tx,a,input);
+  if (resource === 'coordinator-update') return (await import('./coordinator')).coordinatorUpdate(tx,a,input);
   if (resource === "call-followup-outcome") return (await import("./customer-followups")).recordCallbackOutcome(tx, a, input);
   if (resource === "call-followup-update") return (await import("./customer-followups")).updateCallback(tx, a, input);
   if (resource.startsWith("team-email-")) return (await import("./outreach-email")).outreachMutation(tx, a, resource, input);
@@ -84,6 +87,15 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
       if (data.recordType !== undefined || data.recordId !== undefined) await validateLink(tx, a, data.recordType ?? old.recordType, data.recordId ?? old.recordId);
       const deps = data.dependencyIds ?? old.dependencyIds; await dependencies(tx, a, old.id, deps);
       const next = data.status ?? old.status; const checklist = data.checklist ?? old.checklist as { text: string; done: boolean }[];
+      if(old.eventKey?.startsWith('support-call:')) {
+        if(next==='COMPLETED'&&old.status!=='COMPLETED')throw new TeamError('Record the real call outcome in Customer callbacks before completing this call.');
+        if(!['COMPLETED','CANCELLED','BLOCKED'].includes(next)&&(old.status==='BLOCKED'||data.ownerId&&data.ownerId!==old.ownerId||data.dueAt!==undefined)) {
+          const desired=data.dueAt?new Date(data.dueAt):old.dueAt;
+          if(!desired||desired<=new Date())throw new TeamError('Choose a future callback slot.');
+          const available=await (await import('./availability')).employeeCallSlot(tx,a.workspaceId,owner,desired,undefined,old.id);
+          if(!available||available.getTime()!==desired.getTime())throw new TeamError('Callbacks must use a free slot inside the representative\'s declared weekly hours.',409);
+        }
+      }
       const review = old.approvalRequired || data.approvalRequired || !!old.recordType || !!data.recordType;
       if (next !== old.status) {
         if (["COMPLETED", "IN_REVIEW"].includes(next)) demand(a, next === "COMPLETED" && review ? "tasks.approve" : "tasks.complete");
@@ -112,6 +124,21 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
         for (const reviewer of reviewers) await notify(tx, reviewer.id, `Review requested: ${row.title}`, `/team?module=approvals&task=${id}`);
       }
       if (row.eventKey?.startsWith("support-call:")) await (await import("./callback-calendar")).syncCallbackCalendar(tx, a, row);
+      if(row.eventKey?.startsWith('coordinator:') || ['BEAT_REVIEW','ENGINEER_PROFILE','RELEASE_REVIEW','STUDIO_COORDINATION'].some(type=>row.eventKey?.startsWith(`${a.workspaceId}:${type}:`))) {
+        const event=await tx.teamCalendarEvent.findUnique({where:{followUpTaskId:row.id}});
+        if(event) {
+          const closed=['COMPLETED','CANCELLED','BLOCKED','IN_REVIEW'].includes(row.status);
+          const startsAt=row.dueAt||event.startsAt, endsAt=new Date(startsAt.getTime()+30*60000);
+          if(!closed&&(event.assigneeId!==row.ownerId||event.startsAt.getTime()!==startsAt.getTime())) {
+            const member=await tx.teamMember.findUniqueOrThrow({where:{id:row.ownerId}});
+            const {withinWorkHours}=await import('./availability-rules');
+            if(!withinWorkHours(member.preferences,startsAt,endsAt))throw new TeamError('Scheduled work must stay inside declared weekly hours.',409);
+            const available=await (await import('./availability')).employeeCallSlot(tx,a.workspaceId,row.ownerId,startsAt,event.id,undefined,'tasks.update');
+            if(!available||available.getTime()!==startsAt.getTime())throw new TeamError('This work slot is already reserved.',409);
+          }
+          await tx.teamCalendarEvent.update({where:{id:event.id},data:{assigneeId:row.ownerId,startsAt,endsAt,status:row.status==='COMPLETED'?'COMPLETED':closed?'CANCELLED':'SCHEDULED',version:{increment:1}}});
+        }
+      }
       return row;
     }
     if (resource === "comments") {
@@ -312,6 +339,8 @@ export async function acceptTeamInvitation(user: { id: number; email: string }, 
 }
 
 export async function teamRead(a: Actor, resource: string, params: URLSearchParams) {
+  if(resource==='availability') return (await import('./availability')).availabilityRead(a,params);
+  if(resource==='coordinator') return (await import('./coordinator')).coordinatorRead(a);
   if (resource.startsWith("team-email-")) return (await import("./outreach-email")).outreachRead(a, resource, params);
   if (resource === "call-followups") return (await import("./customer-followups")).readCallFollowups(a, params);
   if (resource.startsWith("acquisition-")) return (await import("./acquisition")).acquisitionRead(a, resource, params);
