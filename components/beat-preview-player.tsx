@@ -235,6 +235,9 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
       window.removeEventListener("wheel", onWheel);
     };
   }, [licensingOpen]);
+  useEffect(() => {
+    if (value.playing) setCollapsed(false);
+  }, [value.activeBeatId, value.playing]);
   if (!beat) return null;
   const progress = value.duration > 0 ? Math.min(100, Math.max(0, (value.currentTime / value.duration) * 100)) : 0;
   const canUseQueue = true;

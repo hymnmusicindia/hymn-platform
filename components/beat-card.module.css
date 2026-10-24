@@ -1,6 +1,5 @@
 .card.card{display:grid;position:relative;grid-template-columns:64px minmax(0,1.4fr) minmax(155px,.8fr) auto;align-items:center;gap:20px;min-width:0;padding:16px 8px;border:0;border-bottom:1px solid #ffffff16;border-radius:0;background:transparent;color:#f7f8fa;transition:background .18s}
 .card.card:hover{background:#ffffff04}
-.card.active{background:#ffffff08;border-bottom-color:#f4c37670}
 .card.card h3{color:#f7f8fa;font-size:14px;font-weight:600;letter-spacing:-.015em}
 .card.card p,.card .metadata{color:#b9c2cf}
 .artwork{position:relative;width:64px;height:64px;display:grid;place-items:center;overflow:hidden;border:0;border-radius:6px;background:#282f3b;color:#b9c2cf}

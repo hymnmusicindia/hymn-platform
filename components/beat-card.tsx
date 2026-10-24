@@ -19,7 +19,7 @@ export function BeatCard({ beat, active = false, playing = false, onPlay, onAdd,
   const artwork = beat.coverImage && !coverFailed ? beat.coverImage : "";
 
   const entryLicense = beatLicensePrice(beat, "mp3") <= beatLicensePrice(beat, "wav") ? "mp3" : "wav";
-  return <article className={`${styles.card} ${active ? styles.active : ""}`} id={`beat-${beat.id}`}>
+  return <article className={styles.card} id={`beat-${beat.id}`}>
     <button type="button" onClick={onPlay} className={styles.artwork} aria-label={playing ? `Pause ${beat.title}` : `Play ${beat.title}`}>
       <span className={`${styles.vinyl} ${playing ? styles.spinning : ""}`} aria-hidden="true"><span className={styles.discLabel}>{artwork ? <img src={artworkPreviewUrl(artwork, 160)} alt="" loading="lazy" onError={() => setCoverFailed(true)} /> : <Disc3 size={22} />}</span></span>
       <span className={styles.play}>{playing ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}</span>
