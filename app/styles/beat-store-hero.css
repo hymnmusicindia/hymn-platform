@@ -20,4 +20,7 @@ html body .beat-store-hero .beat-hero-actions>a{color:#b9c2cf}
 .beat-store-hero :is(button,a,input):focus-visible{outline:2px solid #aacbff!important;outline-offset:4px}
 @media(max-width:767px){html body .beat-store-hero.beat-store-hero{min-height:380px}.beat-hero-content{padding:28px 18px}.beat-hero-background{object-position:65% center}.beat-hero-shade{background:linear-gradient(90deg,#0a0d13ed,#0a0d13b0)}html body .beat-store-hero.beat-store-hero h1{font-size:clamp(34px,6vw,46px)}html body .beat-store-hero .beat-hero-search{min-height:54px;padding-left:12px;gap:9px}html body .beat-store-hero .beat-hero-search input{font-size:12px}html body .beat-store-hero .beat-hero-search button{padding:10px 14px;min-height:42px;gap:8px}.beat-hero-actions{gap:4px 18px;margin-top:16px}}
 @media(max-width:379px){.beat-hero-content{padding:28px 16px}.beat-hero-actions{gap:2px 15px}html body .beat-store-hero .beat-hero-search button{padding:10px}html body .beat-store-hero .beat-hero-search button svg{display:none}html body .beat-store-hero.beat-store-hero h1{font-size:32px}}
-@media(prefers-reduced-motion:reduce){.beat-store-hero *{scroll-behavior:auto!important;transition:none!important}}
+.beat-hero-background{transform:translate3d(0,var(--hero-background-y,0px),0) scale(var(--hero-scale,1.04));transform-origin:center bottom}
+.beat-hero-content{transform:translate3d(0,var(--hero-content-y,0px),0);opacity:var(--hero-opacity,1)}
+.beat-hero-content:focus-within{transform:none;opacity:1}
+@media(prefers-reduced-motion:reduce){.beat-store-hero *{scroll-behavior:auto!important;transition:none!important}.beat-hero-background,.beat-hero-content{transform:none!important;opacity:1!important}}

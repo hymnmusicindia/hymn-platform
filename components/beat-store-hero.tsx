@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 import { ArrowRight, Headphones, Search, SlidersHorizontal } from "lucide-react";
 import "@/app/styles/beat-store-hero.css";
 
@@ -12,10 +13,41 @@ export function BeatStoreHero({ moods, search, onSearch, onMood, onSurprise, onF
   onSurprise: () => void;
   onFinder: () => void;
 }) {
+  const heroRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const hero = heroRef.current;
+    if (!hero) return;
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let frame = 0;
+    function update() {
+      frame = 0;
+      if (!hero) return;
+      const rect = hero.getBoundingClientRect();
+      const progress = motion.matches ? 0 : Math.min(1, Math.max(0, (72 - rect.top) / Math.max(1, rect.height)));
+      hero.style.setProperty("--hero-content-y", `${-48 * progress}px`);
+      hero.style.setProperty("--hero-background-y", `${60 * progress}px`);
+      hero.style.setProperty("--hero-scale", String(1.04 + .04 * progress));
+      hero.style.setProperty("--hero-opacity", String(1 - .8 * progress));
+    }
+    function schedule() {
+      if (!frame) frame = window.requestAnimationFrame(update);
+    }
+    update();
+    // Capture also handles scrolling inside the portal workspace.
+    window.addEventListener("scroll", schedule, { passive: true, capture: true });
+    window.addEventListener("resize", schedule, { passive: true });
+    motion.addEventListener("change", schedule);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule, true);
+      window.removeEventListener("resize", schedule);
+      motion.removeEventListener("change", schedule);
+    };
+  }, []);
   function browse() {
     document.getElementById("beat-catalog")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
   }
-  return <section className="beat-store-hero" aria-label="HYMN Beatstore">
+  return <section ref={heroRef} className="beat-store-hero" aria-label="HYMN Beatstore">
     <img className="beat-hero-background" src="/assets/onboarding/engineer.jpg" alt="" fetchPriority="high" />
     <div className="beat-hero-shade" aria-hidden="true" />
     <div className="beat-hero-content">
