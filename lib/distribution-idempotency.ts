@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { upcFromDireNoteResponse } from "@/lib/direnote-upc";
 import { validIsrc, validReleaseBarcode } from "@/lib/release-input-rules";
+import { verifiedDireNoteCatalogue } from './direnote-submission-evidence';
 
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -97,6 +98,12 @@ export async function ensureCurrentDireNoteAttempt(releaseId: number) {
       const releaseMeta = release.metadata && typeof release.metadata === 'object' && !Array.isArray(release.metadata) ? release.metadata as Record<string, unknown> : {};
       const providerMeta = releaseMeta.direNote && typeof releaseMeta.direNote === 'object' && !Array.isArray(releaseMeta.direNote) ? releaseMeta.direNote as Record<string, unknown> : {};
       if (providerMeta.identifierAssignmentPending === true) return current;
+      const acknowledgement = current.responseRedacted as { source?: string; ingestJobId?: string; providerIdempotencyKey?: string } | null;
+      if (current.state === 'reconciliation_required' && acknowledgement?.source === 'dashboard_reconciliation' && !acknowledgement.ingestJobId && !acknowledgement.providerIdempotencyKey && verifiedDireNoteCatalogue(current, release)) {
+        const repaired = await tx.distributionSubmissionAttempt.update({ where:{id:current.id}, data:{state:'submitted',safeError:null} });
+        await tx.auditLog.create({data:{actorType:'system',action:'DIRENOTE_CATALOGUE_ACCEPTANCE_RECONCILED',entity:'release',entityId:String(releaseId),metadata:{attemptId:current.id,upc:current.upc,reason:'Verified legacy catalogue delivery does not require an asynchronous job ID.'}}});
+        return repaired;
+      }
       // A verified status lookup is newer evidence than an initial ingestion
       // acknowledgement. Keep immutable acknowledgement diagnostics intact.
       const status = current.rawStatusPayload as { success?: boolean; release?: { upc_code?: string; album_name?: string }; tracks?: Array<{ isrc?: string }> } | null;
@@ -123,7 +130,7 @@ export async function ensureCurrentDireNoteAttempt(releaseId: number) {
     const snapshot = release.tracks.map(track => ({ id: track.id, title: track.title, trackNumber: track.trackNumber, isrc: track.isrc }));
     const data = { isCurrent: true, upc: normalizeDireNoteAttemptUpc(latest?.responseRedacted) ?? normalizeDireNoteAttemptUpc(latest?.rawStatusPayload) ?? normalizeDireNoteAttemptUpc(release.metadata) ?? release.upc, trackIdentifiers: snapshot, providerStatus: release.direNoteStatus };
     return tx.distributionSubmissionAttempt.update({ where: { id: latest.id }, data });
-  });
+  }, { timeout: 30_000, maxWait: 10_000 });
 }
 
 /** Repairs duplicate current rows deterministically without creating a new

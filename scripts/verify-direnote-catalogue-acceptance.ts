@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import { prisma } from '../lib/prisma';
+import { verifiedDireNoteCatalogue, direNoteAcknowledgement } from '../lib/direnote-submission-evidence';
+import { ensureCurrentDireNoteAttempt } from '../lib/distribution-idempotency';
+import { pollDireNoteIngestJobs } from '../lib/direnote-ingest-jobs';
+import { adminReleaseStatusLabel } from '../lib/release-status-presentation';
+async function main(){
+  assert.equal(process.env.DATABASE_URL,'postgresql://fixture:fixture@127.0.0.1:55473/acquisition_fixture');
+  assert.equal(direNoteAcknowledgement({httpStatus:200}),'unconfirmed');
+  assert.equal(direNoteAcknowledgement({httpStatus:202}),'unconfirmed');
+  assert.equal(direNoteAcknowledgement({httpStatus:202,jobId:'verified-job'}),'queued');
+  assert.equal(direNoteAcknowledgement({httpStatus:200,jobId:'verified-job'}),'queued');
+  assert.equal(direNoteAcknowledgement({httpStatus:200,jobId:'verified-job',upc:'3473620319543'}),'queued');
+  assert.equal(direNoteAcknowledgement({httpStatus:200,upc:'3473620319543'}),'identified');
+  const user=await prisma.user.create({data:{name:'Catalogue fixture',email:'catalogue@fixture.invalid',googleId:'catalogue-fixture'}});
+  const release=await prisma.release.create({data:{userId:user.id,title:'Verified catalogue',artistName:'Fixture',genre:'Pop',releaseDate:new Date('2099-01-01'),status:'APPROVED',upc:'3473620319543',tracks:{create:{title:'Track',trackNumber:1,isrc:'INDN22603222'}}},include:{tracks:true}});
+  const rawStatusPayload={success:true,release:{upc_code:release.upc,album_name:release.title},tracks:[{isrc:release.tracks[0].isrc}]};
+  const attempt=await prisma.distributionSubmissionAttempt.create({data:{releaseId:release.id,idempotencyKey:'catalogue-fixture',payloadHash:'catalogue-fixture',state:'reconciliation_required',isCurrent:true,upc:release.upc,providerReference:release.upc,providerStatus:'processing',rawStatusPayload,responseRedacted:{source:'dashboard_reconciliation',upc:release.upc}}});
+  assert.equal(verifiedDireNoteCatalogue(attempt,release),true);
+  assert.equal(verifiedDireNoteCatalogue({...attempt,upc:'3473620314135'},release),false);
+  assert.equal(verifiedDireNoteCatalogue({...attempt,rawStatusPayload:{...rawStatusPayload,release:{...rawStatusPayload.release,album_name:'Other album'}}},release),false);
+  assert.equal((await ensureCurrentDireNoteAttempt(release.id)).state,'submitted','Verified dashboard delivery must not remain quarantined as an unknown async job.');
+  const result=await pollDireNoteIngestJobs({releaseId:release.id,limit:1});
+  assert.equal(result.checked,0,'Catalogue evidence requires no async status request.');
+  assert.equal((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({where:{id:attempt.id}})).state,'submitted');
+  assert.equal((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({where:{id:attempt.id}})).providerStatus,'catalogue_confirmed');
+  const unknown=await prisma.release.create({data:{userId:user.id,title:'Unresolved async',artistName:'Fixture',genre:'Pop',releaseDate:new Date('2099-01-01')}});
+  const unconfirmed=await prisma.distributionSubmissionAttempt.create({data:{releaseId:unknown.id,idempotencyKey:'unknown-fixture',payloadHash:'unknown-fixture',state:'submitted',isCurrent:true,httpStatus:202,providerStatus:'queued'}});
+  await pollDireNoteIngestJobs({releaseId:unknown.id,limit:1});
+  assert.equal((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({where:{id:unconfirmed.id}})).state,'reconciliation_required','Unknown async acknowledgements still require reconciliation.');
+  assert.match(adminReleaseStatusLabel('approved'),/awaiting delivery/i);
+  assert.equal(await prisma.direNoteLog.count({where:{action:'rate_limit_reservation'}}),0);
+  console.log('PASS catalogue acceptance: verified legacy recovery, no false missing-job quarantine, strict identity matching, unresolved async protection and truthful approval label.');
+}
+main().catch(error=>{console.error(error);process.exitCode=1;}).finally(()=>prisma.$disconnect());

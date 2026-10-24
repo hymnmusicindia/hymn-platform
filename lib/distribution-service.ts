@@ -31,6 +31,7 @@ import { diffDireNotePayload } from "@/lib/direnote-payload-diff";
 import { snapshotTrackContributions } from "@/lib/contributor-identity";
 import { ensureDireNoteArtistMapping, verifyReleaseArtistMappings, flagArtistMappingReview } from "@/lib/direnote-artist-mapping";
 import { verifiedArtistStoreLinks } from '@/lib/artist-store-links';
+import { direNoteAcknowledgement } from './direnote-submission-evidence';
 
 export async function persistDireNoteArtistIds(releaseId: number, artists: Array<{ name: string; artistId: string }>, attemptId?: number) {
   if (!artists.length) return [] as number[];
@@ -418,9 +419,17 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     }
 
     const parsed = parseDireNoteResponse(data);
+    const acknowledgement = direNoteAcknowledgement({httpStatus:response.httpStatus,jobId:parsed.ingestJobId,idempotencyKey:parsed.ingestIdempotencyKey,upc:parsed.upc,releaseId:parsed.distributorReleaseId});
+    const queuedIngest = acknowledgement === 'queued';
+    if (acknowledgement === 'unconfirmed') {
+      const message = 'DireNote acknowledged the request without a usable job or release reference. Delivery needs reconciliation; do not submit again.';
+      await finishDistributionSubmission(claim.attempt.id, {state:'reconciliation_required',httpStatus:response.httpStatus,safeError:message,responseRedacted:data as never});
+      await updateDetailedReleaseStatus(releaseId,'delivery_failed',message,undefined,{notify:!amendment});
+      await logDistributionEvent({releaseId,action:options.retry?'retry_submission':'release_submission',httpStatus:response.httpStatus,requestPayload:providerRedactedPayload,responsePayload:data,errors:[message],success:false});
+      return {release:await getDetailedReleaseById(releaseId),validation,submitted:false,retryable:false,reconciliationRequired:true,error:message};
+    }
     providerAccepted = true;
     if (amendment?.wizard) await acceptArtistAmendment(amendment, claim.attempt.id, parsed.ingestJobId ?? parsed.distributorReleaseId ?? parsed.upc ?? claim.attempt.idempotencyKey);
-    const queuedIngest = response.httpStatus === 202 && Boolean(parsed.ingestJobId || parsed.ingestIdempotencyKey || claim.attempt.idempotencyKey);
     if (queuedIngest) {
       const queuedMessage = "DireNote accepted the ingest job for processing.";
       await activateDireNoteAttempt(claim.attempt.id, {
@@ -443,7 +452,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     const assignedTrackIsrcs = parsed.trackIsrcs;
     await activateDireNoteAttempt(claim.attempt.id, {
       upc: parsed.upc ?? (options.correctionReingest ? null : release.upcCode ?? null),
-      providerStatus: parsed.ingestJobStatus ?? "processing",
+      providerStatus: "catalogue_confirmed",
       trackIdentifiers: (release.tracks ?? []).map(track => ({
         id: track.id, title: track.trackTitle, trackNumber: track.trackNumber,
         isrc: assignedTrackIsrcs.find(remote => remote.trackNumber === track.trackNumber || remote.trackTitle === track.trackTitle)?.isrc
@@ -470,7 +479,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: "DIRENOTE_ACCEPTED", details: { attemptId: claim.attempt.id, correlationId, trigger: options.correctionReingest ? "AUTO_AFTER_REDRESSAL_APPROVAL" : "AUTO_AFTER_QC_APPROVAL", status: automaticStatus, upc: parsed.upc, warnings: parsed.warnings } });
     await resolveAdminTask(`release:${releaseId}:direnote:validation`, "DireNote submission accepted.");
     await resolveAdminTask(`release:${releaseId}:direnote:network`, "DireNote submission accepted.");
-    await finishDistributionSubmission(claim.attempt.id, { state: "submitted", httpStatus: response.httpStatus, providerReference: parsed.distributorReleaseId ?? parsed.upc ?? parsed.ingestJobId ?? null, providerStatus: parsed.ingestJobStatus ?? "processing", responseRedacted: { ...(amendment ? { amendmentRequestId: amendment.request.id, identifierPolicy: "replace" } : {}), distributorReleaseId: parsed.distributorReleaseId ?? null, upc: parsed.upc ?? null, trackIsrcs: parsed.trackIsrcs, artists: parsed.artists, songwriters: parsed.songwriters, warnings: parsed.warnings, ingestJobId: parsed.ingestJobId ?? null, providerIdempotencyKey: parsed.ingestIdempotencyKey ?? claim.attempt.idempotencyKey, ingestJobStatus: parsed.ingestJobStatus ?? "processing", pollAfterSeconds: parsed.pollAfterSeconds ?? 60 } });
+    await finishDistributionSubmission(claim.attempt.id, { state: "submitted", httpStatus: response.httpStatus, providerReference: parsed.distributorReleaseId ?? parsed.upc ?? parsed.ingestJobId ?? null, providerStatus: "catalogue_confirmed", responseRedacted: { ...(amendment ? { amendmentRequestId: amendment.request.id, identifierPolicy: "replace" } : {}), distributorReleaseId: parsed.distributorReleaseId ?? null, upc: parsed.upc ?? null, trackIsrcs: parsed.trackIsrcs, artists: parsed.artists, songwriters: parsed.songwriters, warnings: parsed.warnings, ingestJobId: parsed.ingestJobId ?? null, providerIdempotencyKey: null, ingestJobStatus: null, pollAfterSeconds: parsed.pollAfterSeconds ?? 60 } });
     if (amendment?.wizard && parsed.upc && assignedTrackIsrcs.length === release.tracks?.length) { const { recordAmendmentQcPassed } = await import('./release-amendment-automation'); await recordAmendmentQcPassed(amendment.request.id, claim.attempt.id); }
     if (artistCardIds.length || contributorPartyIds.length) {
       const { syncDireNoteArtistInformation, syncDireNoteSongwriterInformation } = await import("@/lib/direnote-service");
@@ -493,7 +502,7 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
         data: { state: "reconciliation_required", safeError: "Provider accepted; local persistence requires reconciliation." }
       });
       await createReleaseAuditLog({ releaseId, userId: options.actorId ?? null, action: "DIRENOTE_ACCEPTED_RECONCILIATION_REQUIRED", details: { attemptId: claim.attempt.id } });
-      return { release: await getDetailedReleaseById(releaseId), validation, submitted: true, retryable: false, error: "DireNote accepted this submission. HYMN needs to reconcile the result; do not submit again." };
+      return { release: await getDetailedReleaseById(releaseId), validation, submitted: false, retryable: false, reconciliationRequired:true, error: "DireNote accepted this submission. HYMN needs to reconcile the result; do not submit again." };
     }
     console.error("[DireNote] Submission pipeline failed", { releaseId, message });
     await finishDistributionSubmission(claim.attempt.id, { state: providerRequestStarted ? "reconciliation_required" : "retryable", safeError: message.slice(0, 500) });

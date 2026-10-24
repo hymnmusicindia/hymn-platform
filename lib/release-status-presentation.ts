@@ -63,6 +63,7 @@ export function adminReleaseStatusLabel(status: string, providerStatus?: string 
   const effectiveStatus = effectiveReleaseStatus(status, providerStatus);
   if (effectiveStatus === "changes_requested" && isDireNoteCorrectionStatus(providerStatus)) return "Correction Required";
   const labels: Record<string, string> = {
+    approved: "Approved - awaiting delivery",
     submitting_to_distributor: "Sending to HYMN",
     sent_to_distributor: "Sent to HYMN",
     distributor_processing: "HYMN Review",

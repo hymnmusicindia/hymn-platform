@@ -10,6 +10,7 @@ import { markReleaseDistributionSuccess, updateDetailedReleaseStatus, logDistrib
 import { validIsrc, validReleaseBarcode } from "@/lib/release-input-rules";
 import { statusAfterDireNoteAcceptance } from "@/lib/release-status-engine";
 import { persistDireNoteArtistIds } from "@/lib/distribution-service";
+import { verifiedDireNoteCatalogue } from './direnote-submission-evidence';
 
 type JobRecord = Record<string, unknown>;
 const object = (value: unknown): JobRecord => value && typeof value === "object" && !Array.isArray(value) ? value as JobRecord : {};
@@ -73,6 +74,11 @@ export async function pollDireNoteIngestJobs(options: { limit?: number; releaseI
     if (attempt.responseRedacted && (attempt.responseRedacted as JobRecord).ingestJobStatus === "completed") continue;
     const reference = await recoverJobReference(attempt);
     if (!reference.jobId && !reference.idempotencyKey) {
+      if (verifiedDireNoteCatalogue(attempt, attempt.release)) {
+        await prisma.distributionSubmissionAttempt.updateMany({ where: { id:attempt.id, state:'submitted', isCurrent:true }, data: { providerStatus:'catalogue_confirmed', lastCheckedAt:new Date(), safeError:null } });
+        results.push({ releaseId:attempt.releaseId, state:'catalogue_confirmed', progress:'Verified catalogue delivery; track lifecycle by UPC rather than ingest job.' });
+        continue;
+      }
       await prisma.distributionSubmissionAttempt.updateMany({ where: { id: attempt.id, state: "submitted", isCurrent: true }, data: { state: "reconciliation_required", lastCheckedAt: new Date(), safeError: "DireNote accepted this job, but no job_id or idempotency key was recorded. Manual provider reconciliation is required." } });
       await createReleaseAuditLog({ releaseId: attempt.releaseId, action: "DIRENOTE_INGEST_JOB_REFERENCE_MISSING", details: { attemptId: attempt.id } });
       errorCount++;
