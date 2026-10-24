@@ -50,7 +50,7 @@
 .beat-volume-range::-webkit-slider-runnable-track {
   height: .24rem;
   border-radius: 999px;
-  background: rgba(255,255,255,.18);
+  background: linear-gradient(90deg, #fff 0 var(--beat-volume, 0%), rgba(255,255,255,.18) var(--beat-volume, 0%) 100%);
 }
 
 .beat-volume-range::-moz-range-track {
@@ -59,13 +59,20 @@
   background: rgba(255,255,255,.18);
 }
 
+.beat-volume-range::-moz-range-progress {
+  height: .24rem;
+  border-radius: 999px;
+  background: #fff;
+}
+
 .beat-volume-range::-webkit-slider-thumb {
   appearance: none;
   width: .75rem;
   height: .75rem;
   margin-top: -.25rem;
   border-radius: 999px;
-  background: var(--accent);
+  border: 0;
+  background: #fff;
 }
 
 .beat-volume-range::-moz-range-thumb {
@@ -73,7 +80,7 @@
   height: .75rem;
   border: 0;
   border-radius: 999px;
-  background: var(--accent);
+  background: #fff;
 }
 
 :root {
