@@ -1,12 +1,13 @@
 "use client";
 
+import { ReleaseActionsMenu } from "@/components/release-actions-menu";
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Copy, Disc3, Gift, MoreHorizontal, Pencil, Settings, Trash2, X } from "lucide-react";
+import { Disc3, Gift, Pencil, Settings, X } from "lucide-react";
 import { amendmentStatusLabel } from '@/lib/release-amendment-presentation';
 import type { Release } from "@/lib/types";
 import { showFirstReleaseBadge } from "@/lib/first-release-flow";
@@ -35,8 +36,6 @@ export function ReleaseSummaryCard({
   const needsCorrection = stage === "changes_requested";
   const primaryActionLabel = release.status === "draft" ? "Edit" : needsCorrection ? "Fix release" : actionLabel;
   const router = useRouter();
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [busy, setBusy] = useState<"duplicate" | "delete" | null>(null);
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
@@ -46,22 +45,13 @@ export function ReleaseSummaryCard({
   const showFreeReleaseTag = subscriptionLabel === "Subscriptions" && showFirstReleaseBadge(release.status, releaseMetadata);
 
   useEffect(() => {
-    if (!menuOpen) return;
-    const close = (event: MouseEvent) => { if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false); };
-    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setMenuOpen(false); };
-    document.addEventListener("mousedown", close);
-    document.addEventListener("keydown", escape);
-    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", escape); };
-  }, [menuOpen]);
-
-  useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(null), 3500);
     return () => window.clearTimeout(timer);
   }, [notice]);
 
   async function duplicateRelease() {
-    setMenuOpen(false); setBusy("duplicate");
+    setBusy("duplicate");
     try {
       const response = await fetch(`/api/releases/${release.id}/duplicate`, { method: "POST" });
       const data = await response.json().catch(() => ({}));
@@ -117,15 +107,7 @@ export function ReleaseSummaryCard({
           </div>
         )}
         </div>
-        <div ref={menuRef} className="absolute right-2.5 top-2.5 z-20">
-          <button type="button" onClick={() => setMenuOpen((value) => !value)} aria-haspopup="menu" aria-expanded={menuOpen} aria-label={`Actions for ${title}`} className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-md backdrop-blur-md transition hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80">
-            <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
-          </button>
-          {menuOpen ? <div role="menu" className="absolute right-0 top-11 z-30 w-48 overflow-hidden rounded-xl border border-white/10 bg-[#171a20]/95 p-1.5 text-sm text-white shadow-2xl backdrop-blur-xl">
-            <button role="menuitem" type="button" disabled={busy !== null} onClick={duplicateRelease} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition hover:bg-[var(--hover)] disabled:opacity-50"><Copy className="h-4 w-4" />{busy === "duplicate" ? "Duplicating…" : "Duplicate release"}</button>
-            <button role="menuitem" type="button" aria-disabled={!canDelete} onClick={() => { setMenuOpen(false); if (canDelete) setDeleteOpen(true); else setNotice({ text: "This release cannot be deleted after submission.", error: true }); }} className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition ${canDelete ? "text-red-400 hover:bg-red-500/10" : "cursor-not-allowed text-white/35"}`} title={canDelete ? undefined : "Only drafts can be deleted."}><Trash2 className="h-4 w-4" />Delete release</button>
-          </div> : null}
-        </div>
+        <ReleaseActionsMenu title={title} canDelete={canDelete} busy={busy !== null} onDuplicate={() => void duplicateRelease()} onDelete={() => setDeleteOpen(true)} onBlockedDelete={() => setNotice({ text: "This release cannot be deleted after submission.", error: true })} />
       </div>
 
       {showFreeReleaseTag ? <div className="mt-3 inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.09em] text-emerald-600 dark:text-emerald-400"><Gift className="h-3 w-3" />Free release</div> : null}
