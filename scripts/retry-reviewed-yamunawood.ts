@@ -2,6 +2,13 @@
  * Dry-run by default. Never claims that an uncertain legacy request was not received. */
 async function main() {
   process.loadEnvFile('.env.hostinger');
+  // Keep this one-off workstation job from opening a large CPU-sized pool.
+  // One connection holds the release lock while the normal pipeline uses others.
+  const databaseUrl = new URL(process.env.DATABASE_URL!);
+  databaseUrl.searchParams.set('connection_limit','4');
+  databaseUrl.searchParams.set('connect_timeout','30');
+  databaseUrl.searchParams.set('pool_timeout','30');
+  process.env.DATABASE_URL=databaseUrl.toString();
   const { prisma } = await import('../lib/prisma');
   const { getDireNoteReleaseInformation, getDireNoteIngestStatus, redactDireNoteDiagnostic } = await import('../lib/direnote');
   const { reserveDireNoteRequest } = await import('../lib/direnote-rate-limit');
