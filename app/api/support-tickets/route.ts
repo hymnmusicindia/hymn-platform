@@ -1,6 +1,5 @@
-import { getAdminSession } from "@/lib/session";
+import { requireSupportAccess } from "@/lib/support-access";
 import { isSameAppOrigin } from "@/lib/request-origin";
-import { requireAdminPermission } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { SupportError, validateSupportDetails, changeSupportCallback, queueSupportReply, retrySupportReply, processSupportMail, readSupportTicket } from "@/lib/support";
@@ -20,11 +19,9 @@ function parseStatus(value: unknown): SupportTicketStatus | null {
 
 export async function GET() {
   const result = await requireUser();
-  const adminSession = await getAdminSession();
-  if (adminSession || (!("error" in result) && result.user.role === "admin")) {
-    const access=await requireAdminPermission("services.manage");
-    if("error" in access)return access.error;
-    return NextResponse.json({tickets:await listAllSupportTickets()},{headers:{"Cache-Control":"private, no-store"}});
+  const access = await requireSupportAccess();
+  if (!("error" in access)) {
+    return NextResponse.json({tickets:await listAllSupportTickets(), reviewer:true},{headers:{"Cache-Control":"private, no-store"}});
   }
   if ("error" in result) return result.error;
   const tickets = await listSupportTicketsByUser(result.user.id);
@@ -41,7 +38,7 @@ async function post(request: Request) {
   const action = String(body.action || "create");
 
   if (["update-status", "send-reply", "retry-reply", "callback-no-answer", "callback-contacted"].includes(action)) {
-    const access = await requireAdminPermission("services.manage");
+    const access = await requireSupportAccess();
     if ("error" in access) return access.error;
     const actorId = "sub" in access ? Number(access.sub) : 0;
     const ticketId = Number(body.ticketId);

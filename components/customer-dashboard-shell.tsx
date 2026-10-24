@@ -180,6 +180,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   const [releaseStatusFilter, setReleaseStatusFilter] = useState("all");
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [supportReviewer, setSupportReviewer] = useState(false);
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
   const [supportLoading, setSupportLoading] = useState(true);
   const [beatPurchases, setBeatPurchases] = useState<BeatPurchase[]>([]);
@@ -223,6 +224,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       if (ticketResponse?.ok) {
         const data = await ticketResponse.json();
         setSupportTickets(Array.isArray(data.tickets) ? data.tickets : []);
+        setSupportReviewer(data.reviewer === true);
         setDataErrors(current => { const next = { ...current }; delete next.support; return next; });
       } else setDataErrors(current => ({ ...current, support: "Support tickets could not be loaded." }));
       setSupportLoading(false);
@@ -641,7 +643,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         </Panel>
       ) : null}
 
-      {activeTab === "support" ? <SupportWorkspace email={user.email} phone={user.mobile || ""} loading={supportLoading} tickets={supportTickets} releases={releases.map(release=>({id:release.id,label:releaseTitle(release)}))} purchases={beatPurchases.map(purchase=>({id:purchase.id,label:`Purchase #${purchase.id} ? Beat #${purchase.beatId}`}))} payouts={(payoutSummary?.payoutHistory || []).map(payout=>({id:payout.id,label:`Payout #${payout.id} ? ${payout.status}`}))} error={dataErrors.support} externalSearch={dashboardSearch} onRetry={()=>setReloadKey(value=>value+1)} onCreated={ticket=>setSupportTickets(items=>[ticket,...items.filter(item=>item.id!==ticket.id)])}/> : null}
+      {activeTab === "support" ? <SupportWorkspace reviewer={supportReviewer} email={user.email} phone={user.mobile || ""} loading={supportLoading} tickets={supportTickets} releases={releases.map(release=>({id:release.id,label:releaseTitle(release)}))} purchases={beatPurchases.map(purchase=>({id:purchase.id,label:`Purchase #${purchase.id} ? Beat #${purchase.beatId}`}))} payouts={(payoutSummary?.payoutHistory || []).map(payout=>({id:payout.id,label:`Payout #${payout.id} ? ${payout.status}`}))} error={dataErrors.support} externalSearch={dashboardSearch} onRetry={()=>setReloadKey(value=>value+1)} onCreated={ticket=>setSupportTickets(items=>[ticket,...items.filter(item=>item.id!==ticket.id)])}/> : null}
 
       {activeTab === "settings" ? <ProfilePreferencesForm user={user} /> : null}
 

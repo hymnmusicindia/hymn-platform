@@ -3,6 +3,7 @@ import { getAdminSession, getSession } from "@/lib/session";
 import { AudioRangeNotSatisfiableError, localPrivateStorage } from "@/lib/private-storage";
 import { prisma } from "@/lib/prisma";
 import { missingImageResponseHeaders, missingImageSvg } from "@/lib/media-placeholder";
+import { requireSupportAccess } from "@/lib/support-access";
 import { requireAdminPermission } from "@/lib/access";
 import { requestedArtworkWidth } from "@/lib/artwork-preview";
 import { artworkThumbnail } from "@/lib/artwork-thumbnail";
@@ -23,7 +24,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       }
       if (linked?.assetType === "private_support_screenshot" && linked.ownerUserId !== user.sub) {
         const ticket = await prisma.supportTicket.findFirst({where:{details:{path:["screenshotIds"],array_contains:[assetId]}},select:{id:true}});
-        if (ticket) releaseAdmin = !("error" in await requireAdminPermission("services.manage"));
+        if (ticket) releaseAdmin = !("error" in await requireSupportAccess());
       }
       if(linked?.ownerUserId !== user.sub && linked?.assetType==='private_ownership_proof' && linked.entityType==='BEAT' && linked.category==='BEAT_SAMPLE_LICENSE') releaseAdmin = !('error' in await requireAdminPermission('users.manage'));
       if (!releaseAdmin && linked?.ownerUserId !== user.sub) releaseAdmin = await canReadAssignedQcAsset(user.sub, assetId);

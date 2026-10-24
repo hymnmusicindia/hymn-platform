@@ -1,5 +1,6 @@
 import 'server-only';
 import { z } from 'zod';
+import { isConfiguredAdminEmail } from './auth-role';
 import { Prisma } from '@prisma/client';
 import { prisma } from './prisma';
 import { mapSupportTicket, createNotification } from './db';
@@ -110,7 +111,12 @@ export async function processSupportMail(id?:string, deliver = sendTransactional
     processed++;
     try {
       const url = `${getPublicAppUrl()}/dashboard?tab=support&ticketId=${job.ticketId}`;
-      const result = await deliver({to:job.recipient,subject:job.subject,template:'support_reply',eventKey:`support-reply:${job.id}:${job.attempt}`,userId:job.ticket.userId,entityType:'support_ticket',entityId:job.ticketId,senderName:'HYMN Support',timeoutMs:10000,text:`${job.body}\n\nView your ticket: ${url}`,html:emailLayout({title:job.kind==='missed-call'?'Let us arrange another call':'Your HYMN support update',body:job.body,ctaLabel:job.kind==='missed-call'?'Reschedule a callback':'View support ticket',ctaUrl:url,notice:`Support request #${job.ticketId}`})});
+      const author = job.authorId ? await prisma.user.findUnique({where:{id:job.authorId},select:{name:true,email:true}}) : null;
+      const member = job.authorId ? await prisma.teamMember.findFirst({where:{userId:job.authorId,status:'ACTIVE'},select:{jobTitle:true},orderBy:{joinedAt:'asc'}}) : null;
+      const name = author?.name?.trim() || 'HYMN Support';
+      const title = author && isConfiguredAdminEmail(author.email) && name.toLowerCase() === 'aditya ujjain' ? 'Founder, HYMN Music' : `${member?.jobTitle || 'Customer Support'}, HYMN Music`;
+      const signedBody = `${job.body}\n\nWriting to you: ${name}\n${title}\n\nIf you have any questions, kindly reply to this email.`;
+      const result = await deliver({to:job.recipient,subject:job.subject,template:'support_reply',eventKey:`support-reply:${job.id}:${job.attempt}`,userId:job.ticket.userId,entityType:'support_ticket',entityId:job.ticketId,senderName:`${name} | HYMN Support`,timeoutMs:10000,text:`${signedBody}\n\nView your ticket: ${url}`,html:emailLayout({title:job.kind==='missed-call'?'Let us arrange another call':'Your HYMN support update',body:signedBody,preserveNames:[name],ctaLabel:job.kind==='missed-call'?'Reschedule a callback':'View support ticket',ctaUrl:url,notice:`Support request #${job.ticketId}`})});
       await prisma.supportReply.update({where:{id:job.id},data:{status:result.status==='sent'?'SENT':'REVIEW',error:result.status==='sent'?null:result.error || 'Inspect email logs before sending again.'}});
       if (result.status==='sent') await createNotification({userId:job.ticket.userId,title:'HYMN Support replied',body:`An update on "${job.ticket.subject}" is available in your support history and email.`,type:'system',href:url,actionLabel:'View ticket',eventKey:`support-reply:${job.id}`});
     } catch { await prisma.supportReply.updateMany({where:{id:job.id,status:'SENDING'},data:{status:'REVIEW',error:'Delivery could not be confirmed. Inspect email logs before resending.'}}); }

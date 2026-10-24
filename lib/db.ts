@@ -879,8 +879,11 @@ export async function listSupportTicketsByUser(userId: number) {
 
 export async function listAllSupportTickets() {
   if (usesPostgresPrisma()) {
-    const tickets = await (prisma as any).supportTicket.findMany({ include: { replies: { orderBy: { createdAt: "asc" } } }, orderBy: { createdAt: "desc" } });
-    return tickets.map(mapSupportTicket);
+    const tickets = await (prisma as any).supportTicket.findMany({ include: { user: { select: { email: true } }, replies: { orderBy: { createdAt: "asc" } } }, orderBy: { createdAt: "desc" } });
+    return tickets.map((row: any) => {
+      const ticket = mapSupportTicket(row);
+      return { ...ticket, details: { ...ticket.details, email: ticket.details?.email || row.user.email } };
+    });
   }
 
   const pool = getPool();
