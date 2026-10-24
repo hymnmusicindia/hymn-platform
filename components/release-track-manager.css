@@ -1,0 +1,26 @@
+/* Music-step master management. Keep control targets visible at every width. */
+html body .release-workflow.release-workflow.is-audio-upload-step .release-managed-master { grid-template-columns:22px 24px minmax(0,1fr); gap:12px; border:1px solid var(--border); background:var(--bg-elevated); padding:18px; box-shadow:0 4px 18px #00000008; }
+html body .release-workflow.is-audio-upload-step .release-managed-master:not(:has(.release-master-grip)) { grid-template-columns:24px minmax(0,1fr); }
+.release-master-toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:8px 0 14px; }
+.release-master-toolbar strong { font-size:13px; font-weight:650; }
+.release-master-toolbar p { margin:4px 0 0; color:var(--text-muted); font-size:12px; }
+.release-master-toolbar>span { flex-shrink:0; padding:5px 10px; border:1px solid var(--border); border-radius:20px; color:var(--text-muted); font-size:11px; }
+.release-master-notice { margin:0 0 12px; color:var(--text-muted); font-size:12px; }
+.release-managed-master .release-master-grip { display:grid; place-items:center; width:24px; height:44px; padding:0; border:0; background:transparent; color:var(--text-soft); cursor:grab; }
+.release-managed-master.is-dragging { opacity:.65; border-color:var(--accent)!important; }
+.release-managed-master .release-audio-queue-main { min-width:0; }
+.release-master-tools { grid-column:3; min-width:0; padding-top:12px; border-top:1px solid var(--border); }
+.release-managed-master:not(:has(.release-master-grip)) .release-master-tools { grid-column:2; }
+.release-master-buttons { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.release-master-buttons button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:40px; padding:8px 12px; border:1px solid var(--border); border-radius:9px; background:var(--card); color:var(--text); font-size:12px; font-weight:550; }
+.release-master-buttons button:hover:not(:disabled) { background:var(--accent-soft); border-color:var(--accent); }
+.release-master-buttons button:disabled { opacity:.4; cursor:not-allowed; }
+.release-master-buttons button:focus-visible,.release-master-grip:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.release-master-order { display:flex; gap:4px; margin-left:auto; }
+.release-master-order button { width:40px; padding:8px; }
+.release-master-buttons .release-master-remove { width:40px; padding:8px; color:var(--text-muted); }
+.release-master-buttons .release-master-remove:hover:not(:disabled) { color:var(--danger); border-color:var(--danger); background:transparent; }
+.release-master-replacing { display:inline-flex; align-items:center; gap:7px; color:var(--text-muted); font-size:12px; }
+.release-master-progress { display:block; width:100%; height:4px; margin-top:12px; accent-color:var(--accent); }
+.release-master-error { color:var(--danger); margin:10px 0 0; font-size:12px; line-height:1.5; }
+@media(max-width:767px) { html body .release-workflow.release-workflow.is-audio-upload-step .release-managed-master { grid-template-columns:20px 22px minmax(0,1fr); gap:8px; padding:14px 12px; }.release-master-tools { grid-column:1/-1!important; }.release-master-toolbar { align-items:flex-start; }.release-master-toolbar p { max-width:230px; }.release-master-buttons button { min-height:44px; }.release-master-order button,.release-master-buttons .release-master-remove { width:44px; }.release-managed-master .release-master-grip { width:20px; } }
