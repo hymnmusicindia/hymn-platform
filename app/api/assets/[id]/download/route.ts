@@ -18,7 +18,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     let releaseAdmin = false;
     if (!admin && user) {
       const linked = await prisma.storedAsset.findUnique({ where: { id: assetId }, select: { ownerUserId: true, assetType: true, releaseId: true, category:true, entityType:true, releaseAssetLinks: { select: { id: true }, take: 1 } } });
-      if (linked && linked.ownerUserId !== user.sub && ["private_audio_master", "private_ownership_proof", "private_unreleased_artwork"].includes(linked.assetType) && (linked.releaseId || linked.releaseAssetLinks.length)) {
+      if (linked && linked.ownerUserId !== user.sub && ["private_audio_master", "private_ownership_proof", "private_cover_licence", "private_ai_receipt", "private_unreleased_artwork"].includes(linked.assetType) && (linked.releaseId || linked.releaseAssetLinks.length)) {
         releaseAdmin = !('error' in await requireAdminPermission("releases.review")) || !('error' in await requireAdminPermission("releases.read"));
       }
       if (linked?.assetType === "private_support_screenshot" && linked.ownerUserId !== user.sub) {
@@ -39,7 +39,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       const purchase = stored?.beatPurchaseId ? await prisma.beatPurchase.findFirst({ where: { id: stored.beatPurchaseId, userId: user.sub, hasAccess: true }, select: { id: true } }) : stored?.assetType === "private_beat_deliverable" && stored.beatId ? await prisma.beatPurchase.findFirst({ where: { beatId: stored.beatId, userId: user.sub, hasAccess: true }, orderBy: { purchasedAt: "desc" }, select: { id: true } }) : null;
       if (purchase) await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { downloadedAt: new Date(), downloadCount: { increment: 1 } } });
     }
-    const inline = !downloadRequested && (asset.mimeType.startsWith("audio/") || asset.mimeType.startsWith("image/"));
+    const inline = !downloadRequested && (asset.mimeType.startsWith("audio/") || asset.mimeType.startsWith("image/") || asset.mimeType === "application/pdf");
     return new NextResponse(new Uint8Array(asset.bytes), { status: asset.contentRange ? 206 : 200, headers: { "Content-Type": asset.mimeType, "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${asset.fileName.replace(/["\\]/g, "_")}"`, "Content-Length": asset.contentLength || String(asset.bytes.length), ...(asset.contentRange ? { "Content-Range": asset.contentRange } : {}), "Accept-Ranges": "bytes", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "X-Robots-Tag": "noindex, nofollow" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Asset is unavailable.";
