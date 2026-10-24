@@ -26,10 +26,18 @@ Reviewed 24 October 2026:
 
 ## Mark a completed conversation
 
-The visible **Talked with client** button records an actual conversation and completes the callback in one action. The detailed outcome form also offers this outcome; use its callback/interested options when further work needs scheduling.
+The visible **Talked with client** button opens a second confirmation before recording the conversation and completing the callback. The detailed outcome form requires the same confirmation for Talked. The detailed outcome form also offers this outcome; use its callback/interested options when further work needs scheduling.
 
 Talked, resolved, interested and customer-requested-callback outcomes queue one acknowledgement per callback in the existing team email outbox. Unanswered calls, note saves, rescheduling alone and opt-out outcomes do not queue an acknowledgement. The job is created in the same transaction as the recorded outcome. The API starts delivery after responding; the existing team-outreach cron processes remaining queued jobs. Atomic claims and unique job keys protect against duplicate delivery. Uncertain delivery requires the existing manager review flow.
 
 The email thanks the recipient for speaking with HYMN Customer Support, invites them to reply with questions, and provides a **Log in to HYMN Music** button linking to `/login` on the configured public website. It uses HYMN's shared HTML layout with a plain-text alternative. It contains no internal notes. Replies use the configured HYMN Reply-To mailbox, falling back to the authenticated sender mailbox.
 
 Missing email addresses are recorded as skipped without blocking the call result. Contact eligibility and email opt-outs are checked again before sending. Sending history in Emails shows queued, sent, skipped, cancelled or review states. SMTP configuration is required for delivery; disabled sending leaves jobs queued.
+
+## Organised callback cards
+
+Cards use registered account imagery matched by the linked account first, then primary or secondary email (case-insensitive). Producer cover photos are preferred; an account avatar or initials provides a fallback. The read endpoint batches account matching, returns only the display imagery and registration indicator, and ignores image URLs outside HTTP(S) or local paths.
+
+A header toggle collapses the whole card without discarding draft form input. Call details, context, note editing and other outcomes are separate disclosure sections. The main view keeps the schedule, contact details, three short prompts and primary call actions together. Suggestions depend on the source of the callback and previous outcome; long imported scripts stay in task history.
+
+Talked confirmation names the client and explains that the callback will complete and an acknowledgement may be queued. Go back and Escape both cancel without recording an outcome. Browser checks cover these paths for the quick button and the detailed form, plus responsive layouts with real card CSS.

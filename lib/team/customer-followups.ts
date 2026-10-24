@@ -179,8 +179,17 @@ export async function readCallFollowups(a: Actor, params: URLSearchParams) {
   demand(a, 'crm.outreach.manage');
   const offset = Math.max(0, Math.min(100000, Number(params.get('offset')) || 0));
   const where = { workspaceId: a.workspaceId, eventKey: { startsWith: 'support-call:' }, archivedAt: null, status: { notIn: ['COMPLETED', 'CANCELLED'] }, ...(!can(a, 'tasks.all') ? { ownerId: a.id } : {}) };
-  const items = await prisma.teamTask.findMany({ where, select: { id: true, title: true, description: true, ownerId: true, status: true, priority: true, dueAt: true, followUpContext: true, version: true, client: { select: { id: true, name: true, email: true, phone: true, status: true } } }, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], take: 50, skip: offset });
-  return {items:items.map(task=>{const context=object(task.followUpContext);return ['SUPPORT_CALLBACK','FRIENDLY_INTRO'].includes(String(context.kind))&&task.client?{...task,client:{...task.client,phone:String(context.callbackPhone||context.callPhone||task.client.phone)}}:task;}),total:await prisma.teamTask.count({where})};
+  const items = await prisma.teamTask.findMany({ where, select: { id: true, title: true, description: true, ownerId: true, status: true, priority: true, dueAt: true, followUpContext: true, version: true, client: { select: { id: true, userId: true, name: true, email: true, secondaryEmail: true, phone: true, status: true } } }, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], take: 50, skip: offset });
+  const emails = [...new Set(items.flatMap(task => [task.client?.email, task.client?.secondaryEmail]).filter((email): email is string => Boolean(email)))];
+  const userIds = items.flatMap(task => task.client?.userId ? [task.client.userId] : []);
+  const accounts = emails.length || userIds.length ? await prisma.user.findMany({ where: { status: 'ACTIVE', OR: [{ id: { in: userIds } }, ...emails.map(email => ({ email: { equals: email, mode: 'insensitive' as const } }))] }, select: { id: true, email: true, avatar: true, producerProfile: { select: { coverPhotoUrl: true, avatarUrl: true } } } }) : [];
+  const mediaUrl = (value: string | null | undefined) => value && (/^https?:\/\//i.test(value) || /^\/(?!\/)/.test(value)) ? value : null;
+  return { items: items.map(task => {
+    const context = object(task.followUpContext), client = task.client;
+    if (!client) return { ...task, client: null };
+    const account = client.userId ? accounts.find(user => user.id === client.userId) : accounts.find(user => client.email.toLowerCase() === user.email.toLowerCase()) || accounts.find(user => client.secondaryEmail.toLowerCase() === user.email.toLowerCase());
+    return { ...task, client: { id: client.id, name: client.name, email: client.email, status: client.status, phone: ['SUPPORT_CALLBACK','FRIENDLY_INTRO'].includes(String(context.kind)) ? String(context.callbackPhone || context.callPhone || client.phone) : client.phone, registered: Boolean(account), coverUrl: mediaUrl(account?.producerProfile?.coverPhotoUrl), avatarUrl: mediaUrl(account?.producerProfile?.avatarUrl || account?.avatar) } };
+  }), total: await prisma.teamTask.count({ where }) };
 }
 export async function recordCallbackOutcome(tx: Prisma.TransactionClient, a: Actor, input: unknown, now = new Date()) {
   demand(a, 'crm.outreach.manage'); demand(a, 'tasks.update');

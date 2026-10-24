@@ -29,3 +29,19 @@ export function callbackTip(kind: string, outcome?: string) {
   if (kind === 'ENQUIRY') return 'Read the exact enquiry first, answer that question, then ask what they would like to do next.';
   return 'This is browsing interest, not a booking. Ask whether help with the selected service would be welcome.';
 }
+
+/** Short, contextual prompts; imported free-text scripts stay in the full history. */
+export function callbackSuggestions(context: { kind?: string; outcome?: string; service?: string } | null, missingEmail = false, blocked = false) {
+  if (blocked) return ['Review the saved notes and previous attempts.', 'Ask a manager to review before further outreach.', 'Add context without recording another call.'];
+  const kind = context?.kind, outcome = context?.outcome;
+  let bullets: string[];
+  if (outcome === 'NO_ANSWER') bullets = ['Review the last attempt before calling.', 'Try the next agreed slot; avoid repeated messages.'];
+  else if (outcome === 'CALLBACK') bullets = ['Call at the time the client requested.', 'Review their previous questions first.'];
+  else if (outcome === 'INTERESTED') bullets = ['Confirm their goal, timeline and budget.', 'Agree one practical next step.'];
+  else if (kind === 'SUPPORT_CALLBACK') bullets = ['Read the support request before calling.', 'Help with that issue; confirm what is still needed.'];
+  else if (kind === 'FRIENDLY_INTRO') bullets = ['Introduce yourself from HYMN; ask if now is convenient.', 'Ask what they are working on and where they need help.'];
+  else if (kind === 'DRAFT_INACTIVE') bullets = ['Ask what is holding up their release draft.', 'Offer help with audio, artwork or credits.'];
+  else if (kind === 'ENQUIRY') bullets = ['Read their enquiry and answer the main question.', 'Agree the next step together.'];
+  else bullets = [`Ask if they need help with ${context?.service?.slice(0, 80) || 'the service they viewed'}.`, 'Browsing interest is not a booking or purchase.'];
+  return [...bullets, missingEmail ? 'Confirm their preferred email for follow-up.' : 'Record the real outcome and any agreed follow-up.'];
+}

@@ -100,6 +100,25 @@ async function main(){
   await processTeamOutreachEmail(optedCall.followupEmail!.id,1,deliver);
   assert.equal(delivered,1,'Suppressed recipients must not receive acknowledgements.');
   assert.equal((await prisma.teamOutreachEmail.findUniqueOrThrow({where:{id:optedCall.followupEmail!.id}})).status,'CANCELLED');
+  const photoUser = await prisma.user.create({data:{name:'Registered artist',email:'visual@fixture.invalid',googleId:'visual-user',avatar:'/assets/account-avatar.jpg'}});
+  await prisma.producerProfile.create({data:{userId:photoUser.id,slug:'visual-artist',displayName:'Registered artist',bio:'Fixture biography',specialty:'Music',coverPhotoUrl:'/assets/artist-cover.jpg',avatarUrl:'/assets/artist-avatar.jpg'}});
+  await prisma.teamClient.update({where:{id:intros[4].clientId!},data:{email:'VISUAL@fixture.invalid'}});
+  await prisma.teamClient.update({where:{id:intros[5].clientId!},data:{userId:photoUser.id,email:'different@fixture.invalid'}});
+  const visualCalls = await readCallFollowups(kira,new URLSearchParams());
+  for(const taskId of [intros[4].id,intros[5].id]) {
+    const visual = visualCalls.items.find(item=>item.id===taskId)!.client!;
+    assert.equal(visual.registered,true,'Linked accounts and case-insensitive registered emails receive account imagery.');
+    assert.equal(visual.coverUrl,'/assets/artist-cover.jpg');
+    assert.equal(visual.avatarUrl,'/assets/artist-avatar.jpg');
+    assert.ok(!('userId' in visual),'Do not expose internal account identifiers with card imagery.');
+  }
+  const unmatched = visualCalls.items.find(item=>item.id===intros[6].id)!.client!;
+  assert.equal(unmatched.registered,false);
+  assert.equal(unmatched.coverUrl,null);
+  await prisma.producerProfile.update({where:{userId:photoUser.id},data:{coverPhotoUrl:'javascript:alert(1)',avatarUrl:null}});
+  const safeMedia = (await readCallFollowups(kira,new URLSearchParams())).items.find(item=>item.id===intros[4].id)!.client!;
+  assert.equal(safeMedia.coverUrl,null);
+  assert.equal(safeMedia.avatarUrl,'/assets/account-avatar.jpg');
   assert.equal(await prisma.acquisitionLead.count(),0,'Founder-provided calls must not fabricate acquisition credit.');
   assert.equal(await prisma.teamAppointmentMessage.count(),0,'Internal slots must not send customer appointment emails.');
   console.log('PASS contact merge and call import: normalization, conflicts, private-note isolation, history, aliases, retries, DNC, separate accounts, Kira assignment, weekday capacity, idempotent imports, actual outcomes, talked completion, acknowledgement templates, concurrent delivery deduplication, missing emails, opt-outs and no invented acquisition credit.');
