@@ -14,3 +14,7 @@ The targeted recovery verifies the catalogue's title, UPC, recording count and e
 The general fix distinguishes catalogue-confirmed deliveries from asynchronous jobs. Bare successful HTTP responses require reconciliation unless they include a usable provider job or release reference. Local persistence failures after provider acceptance also return an explicit reconciliation result. The admin summary separates approval/readiness from delivery.
 
 Validation: isolated PostgreSQL catalogue recovery and unresolved-job regression checks; existing isolated distribution lifecycle suite; TypeScript and targeted ESLint checks.
+
+Recovery completed: attempt 52, provider job `07498ab539670b29d1d7a8871c625800`, new UPC `3473620320655`. Job polling returned `completed` with no errors. A separate catalogue lookup returned the exact title and all five matching recordings, ISRCs `INDN22603403` through `INDN22603407`, each Pending with remarks NONE. Pending is provider review, not approval or store availability. The old rejected UPC remains historical.
+
+Production reconciliation also exposed five-second transaction limits while saving returned artist identities. Artist/songwriter persistence and catalogue reconciliation now use bounded 30-second transactions; the workstation recovery uses a four-connection pool. This allowed the accepted job to finish locally without repeating ingestion.
