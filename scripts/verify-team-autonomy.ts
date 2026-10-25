@@ -50,6 +50,12 @@ async function main(){
   await prisma.teamMember.update({where:{id:researcher.id},data:{availability:'AVAILABLE'}});
   await prisma.teamProspect.update({where:{id:prospect.id},data:{verified:true,contactEligibility:'LEGITIMATE_INTEREST'}});
   await teamWrite(owner,(tx,a)=>syncSourceWork(tx,a,after));assert.equal((await prisma.teamTask.findUniqueOrThrow({where:{id:task.id}})).status,'COMPLETED');
+  await prisma.teamProspect.update({where:{id:prospect.id},data:{verified:false,contactEligibility:'UNVERIFIED'}});
+  await teamWrite(owner,(tx,a)=>syncSourceWork(tx,a,after));
+  assert.equal((await prisma.teamTask.findUniqueOrThrow({where:{id:task.id}})).status,'TODO','Invalidated source evidence reopens the same assignment.');
+  assert.equal(await prisma.teamTask.count({where:{eventKey:task.eventKey}}),1);
+  await prisma.teamProspect.update({where:{id:prospect.id},data:{verified:true,contactEligibility:'LEGITIMATE_INTEREST'}});
+  await teamWrite(owner,(tx,a)=>syncSourceWork(tx,a,after));
   const applicant=await prisma.user.create({data:{name:'Applicant',email:'applicant@autonomy.fixture.invalid',googleId:'applicant'}});
   const application=await prisma.producerApplication.create({data:{userId:applicant.id,producerName:'Artist',genre:'Pop',yearsExperience:2,pricing:'100',bio:'Original work'}});
   await teamWrite(owner,(tx,a)=>syncSourceWork(tx,a,after));
@@ -60,6 +66,9 @@ async function main(){
   assert.equal(await prisma.teamTask.count({where:{eventKey:`auto-source:producer:${own.id}`}}),0,'A reviewer cannot receive their own application.');
   await prisma.producerApplication.update({where:{id:application.id},data:{status:'REJECTED'}});
   await teamWrite(owner,(tx,a)=>syncSourceWork(tx,a,after));assert.equal((await prisma.teamTask.findUniqueOrThrow({where:{id:approval.id}})).status,'COMPLETED');
+  await prisma.producerApplication.update({where:{id:application.id},data:{status:'PENDING'}});
+  await teamWrite(owner,(tx,a)=>syncSourceWork(tx,a,after));
+  assert.equal((await prisma.teamTask.findUniqueOrThrow({where:{id:approval.id}})).status,'TODO','A resubmitted application reopens review without duplicating the task.');
   const early=new Date('2026-10-27T10:00:00+05:30');
   const callTask=await prisma.teamTask.create({data:{workspaceId:workspace.id,creatorId:owner.id,ownerId:kira.id,clientId:contact.id,title:'Suggested callback',eventKey:'support-call:fixture',dueAt:early}});
   const event=await prisma.teamCalendarEvent.create({data:{workspaceId:workspace.id,creatorId:owner.id,assigneeId:kira.id,clientId:contact.id,followUpTaskId:callTask.id,kind:'FOLLOW_UP',title:'Suggested callback',startsAt:early}});

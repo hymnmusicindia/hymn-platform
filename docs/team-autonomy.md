@@ -22,7 +22,7 @@ Team OS assigns operational work from saved data. Staff record the real outcome 
 | Release, beat, engineer-profile or studio queue | Existing enabled workflow rules create review tasks | Existing review/approval flow |
 | Quick intake | Permission, workload and free-slot routing | Work outcome in its existing flow |
 
-Source tasks have stable unique event keys. Repeated worker runs do not recreate them. Source-check and creator-review assignments cannot be completed by ticking a task checkbox. Creator self-review is excluded. An unavailable source-task owner is replaced without changing original research attribution. Deliberately cancelled source assignments remain cancelled.
+Source tasks have stable unique event keys. Repeated worker runs do not recreate them. Invalidated source evidence or a resubmitted application reopens the existing task and reservation, preserving their IDs. Source-check and creator-review assignments cannot be completed by ticking a task checkbox. Creator self-review is excluded. An unavailable source-task owner is replaced without changing original research attribution. Deliberately cancelled source assignments remain cancelled.
 
 Source tasks reserve a 30-minute calendar slot. Internal callback suggestions outside current hours are moved into free slots, retaining the original task and event IDs and updating revisions, deadlines and pending rep messages. Confirmed customer CALL appointments are preserved and raise a coverage notice for the supervisor instead of silently changing an agreed time.
 

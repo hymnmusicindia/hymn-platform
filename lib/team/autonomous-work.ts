@@ -14,7 +14,7 @@ const closed=['LOST','NOT_INTERESTED','UNQUALIFIED','DUPLICATE','DO_NOT_CONTACT'
 /** One source per locked transaction: bounded work, durable deduplication and no fabricated outcomes. */
 export async function syncSourceWork(tx:Prisma.TransactionClient,a:Actor,now=new Date()) {
   const existing=await tx.teamTask.findMany({where:{workspaceId:a.workspaceId,eventKey:{startsWith:prefix}},select:{id:true,eventKey:true,status:true,ownerId:true,title:true,owner:{include:{role:true,user:{select:{status:true}}}}}});
-  const keys=new Set(existing.map(t=>t.eventKey));
+  const keys=new Set(existing.filter(t=>t.status!=='COMPLETED').map(t=>t.eventKey));
   const open=existing.filter(t=>!['COMPLETED','CANCELLED'].includes(t.status));
   const ids=(kind:string)=>open.filter(t=>t.eventKey!.startsWith(`${prefix}${kind}:`)).map(t=>t.eventKey!.split(':')[2]);
   const prospects=await tx.teamProspect.findMany({where:{workspaceId:a.workspaceId,id:{in:ids('lead')}},select:{id:true,verified:true,suppressed:true,stage:true,contactEligibility:true,email:true,phone:true,client:{select:{status:true,mergedIntoId:true}}}});
@@ -62,7 +62,7 @@ export async function syncSourceWork(tx:Prisma.TransactionClient,a:Actor,now=new
   const leads=await tx.acquisitionLead.findMany({
     where:{
       workspaceId:a.workspaceId,
-      prospectId:{notIn:existing.filter(t=>t.eventKey?.startsWith(`${prefix}lead:`)).map(t=>t.eventKey!.slice(`${prefix}lead:`.length))},
+      prospectId:{notIn:existing.filter(t=>t.status!=='COMPLETED'&&t.eventKey?.startsWith(`${prefix}lead:`)).map(t=>t.eventKey!.slice(`${prefix}lead:`.length))},
       prospect:{verified:false,suppressed:false,stage:{notIn:closed},OR:[{clientId:null},{client:{status:'ACTIVE',mergedIntoId:null}}]},
     },
     include:{prospect:true},orderBy:{registeredAt:'asc'},take:10,
@@ -70,7 +70,7 @@ export async function syncSourceWork(tx:Prisma.TransactionClient,a:Actor,now=new
   for(const lead of leads)sources.push({key:`${prefix}lead:${lead.prospectId}`,title:`Check saved contact: ${lead.prospect.name}`,description:`Open Contacts & Calls and check this saved contact's details, public source and eligibility. Record evidence and useful notes. Do not mark a conversation or consent that did not happen.\nContact reference: ${lead.prospectId}\n/team?module=crm`,permission:'crm.prospects.create',preferred:lead.researcherEmployeeId,clientId:lead.prospect.clientId});
   const primary=await tx.teamWorkspace.findFirst({orderBy:{createdAt:'asc'},select:{id:true}});
   if(primary?.id===a.workspaceId)for(const kind of ['producer','engineer'] as const) {
-    const ids=existing.filter(t=>t.eventKey?.startsWith(`${prefix}${kind}:`)).map(t=>Number(t.eventKey!.split(':')[2]));
+    const ids=existing.filter(t=>t.status!=='COMPLETED'&&t.eventKey?.startsWith(`${prefix}${kind}:`)).map(t=>Number(t.eventKey!.split(':')[2]));
     const where={status:'PENDING' as const,id:{notIn:ids}};
     const records=kind==='producer'?await tx.producerApplication.findMany({where,select:{id:true,userId:true},orderBy:{createdAt:'asc'},take:5}):await tx.engineerApplication.findMany({where,select:{id:true,userId:true},orderBy:{createdAt:'asc'},take:5});
     for(const record of records)sources.push({key:`${prefix}${kind}:${record.id}`,title:`Review ${kind} application #${record.id}`,description:'Check the application and work samples in Creator approvals, then record your decision there.\n/team?module=creator-applications',permission:kind==='producer'?'operations.producers.approve':'operations.engineers.approve',userId:record.userId});
@@ -84,10 +84,10 @@ export async function syncSourceWork(tx:Prisma.TransactionClient,a:Actor,now=new
     for(const member of candidates) {
       const dueAt=await employeeCallSlot(tx,a.workspaceId,member.id,now,undefined,undefined,source.permission);
       if(!dueAt)continue;
-      const task=await tx.teamTask.create({data:{workspaceId:a.workspaceId,creatorId:a.id,ownerId:member.id,clientId:source.clientId,title:source.title,description:source.description,eventKey:source.key,dueAt}});
+      const task=await tx.teamTask.upsert({where:{eventKey:source.key},create:{workspaceId:a.workspaceId,creatorId:a.id,ownerId:member.id,clientId:source.clientId,title:source.title,description:source.description,eventKey:source.key,dueAt},update:{ownerId:member.id,status:'TODO',completedAt:null,archivedAt:null,evidence:'',blocker:'',dueAt,version:{increment:1}}});
       if(source.key.startsWith(`${prefix}lead:`))await tx.teamProspect.updateMany({where:{workspaceId:a.workspaceId,id:source.key.slice(`${prefix}lead:`.length),ownerId:{not:member.id}},data:{ownerId:member.id,version:{increment:1}}});
-      await tx.teamCalendarEvent.create({data:{workspaceId:a.workspaceId,creatorId:a.id,assigneeId:member.id,clientId:source.clientId,followUpTaskId:task.id,kind:'EVENT',title:source.title,startsAt:dueAt,endsAt:new Date(dueAt.getTime()+1800000),notes:'Automatic work reservation; finish by recording the actual source decision.'}});
-      await notifyTeamBatch(tx,a,[{eventKey:`assigned:${source.key}`,memberId:member.id,title:source.title,taskId:task.id}]);
+      await tx.teamCalendarEvent.upsert({where:{followUpTaskId:task.id},create:{workspaceId:a.workspaceId,creatorId:a.id,assigneeId:member.id,clientId:source.clientId,followUpTaskId:task.id,kind:'EVENT',title:source.title,startsAt:dueAt,endsAt:new Date(dueAt.getTime()+1800000),notes:'Automatic work reservation; finish by recording the actual source decision.'},update:{assigneeId:member.id,status:'SCHEDULED',startsAt:dueAt,endsAt:new Date(dueAt.getTime()+1800000),remindedAt:null,scheduleRevision:{increment:1},version:{increment:1}}});
+      await notifyTeamBatch(tx,a,[{eventKey:`assigned:${source.key}:${task.version}`,memberId:member.id,title:source.title,taskId:task.id}]);
       await tx.teamAudit.create({data:{workspaceId:a.workspaceId,actorId:a.id,action:'automation.source_assigned',entityId:task.id,detail:{source:source.key,ownerId:member.id}}});
       return {created:1,reconciled:0};
     }
