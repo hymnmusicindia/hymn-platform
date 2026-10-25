@@ -1,4 +1,5 @@
 .root {display:grid;gap:20px;max-width:1440px;margin:auto;color:#eef1f6;color-scheme:dark}
+.root .lookup{display:grid;gap:8px}.root .lookup button{display:flex;flex-direction:column;align-items:flex-start;gap:5px;white-space:normal;overflow-wrap:anywhere;min-height:48px;width:100%}.lookup button span{font-size:11px;color:#b4c1d5}
 .root :is(strong,summary,li) {color:inherit}.suggestion {color:#dce8fc}.badge {color:#cbdaf3}.metric strong {color:#f4f8ff}
 .header {display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
 .header h2 {font-size:22px;margin:6px 0}.root p {line-height:1.65;color:var(--team-muted,#a9b2c2);margin:8px 0 16px}.root h3 {font-size:16px;margin:0 0 10px}

@@ -339,6 +339,7 @@ export async function acceptTeamInvitation(user: { id: number; email: string }, 
 }
 
 export async function teamRead(a: Actor, resource: string, params: URLSearchParams) {
+  if(resource==='clients-lookup')return (await import('./contact-lookup')).lookupContacts(a,params);
   if(resource==='availability') return (await import('./availability')).availabilityRead(a,params);
   if(resource==='coordinator') return (await import('./coordinator')).coordinatorRead(a);
   if (resource.startsWith("team-email-")) return (await import("./outreach-email")).outreachRead(a, resource, params);

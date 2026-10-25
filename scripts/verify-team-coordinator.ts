@@ -135,6 +135,20 @@ async function main(){
   await teamWrite(owner,(tx,a)=>dispatchIntake(tx,a,mergeIntake.id));
   const linked=await prisma.teamWorkIntake.findUniqueOrThrow({where:{id:mergeIntake.id}});
   assert.equal(linked.clientId,contact.id);assert.equal(linked.status,'WAITING','A contact merge must not discard pending work.');
+  const lookup = async(q:string,workspaceId=workspace.id)=>teamRead({...operator,workspaceId},'clients-lookup',new URLSearchParams({q})) as Promise<{items:{id:string;name:string;notes:string}[]}>;
+  const lookupUser=await prisma.user.create({data:{name:'Linked account',email:'linked@lookup.fixture.invalid',googleId:'lookup-user',mobile:'+91 (71234) 56789',contactEmail:'contact@lookup.fixture.invalid',handle:{create:{tag:'alexquery'}}}});
+  const exact=await prisma.teamClient.create({data:{workspaceId:workspace.id,ownerId:operator.id,userId:lookupUser.id,name:'Alex Query',phone:'+91 (79872) 74100',email:'alex@lookup.fixture.invalid',secondaryEmail:'secondary@lookup.fixture.invalid',additionalEmails:['extra@lookup.fixture.invalid'],alternatePhones:['0091 76543 21098'],notes:'Owner-only lookup note'}});
+  await prisma.teamClient.create({data:{workspaceId:workspace.id,ownerId:operator.id,name:'Unrelated',city:'7987274100',phone:'+919111111111'}});
+  await prisma.teamClient.create({data:{workspaceId:workspace.id,ownerId:operator.id,name:'Alex Query newer',email:'prefix@lookup.fixture.invalid'}});
+  await prisma.teamClient.create({data:{workspaceId:workspace.id,ownerId:operator.id,name:'Alex Query archived',phone:'+917987274100',status:'ARCHIVED'}});
+  for(const q of ['7987274100','+91 79872 74100','00917987274100','7654321098','7123456789','CONTACT@LOOKUP.FIXTURE.INVALID','extra@lookup.fixture.invalid','@alexquery'])assert.equal((await lookup(q)).items[0]?.id,exact.id,`Lookup identity: ${q}`);
+  assert.equal((await lookup('Alex Query')).items[0]?.id,exact.id,'Exact names precede recently edited prefix matches.');
+  assert.equal((await lookup('query alex')).items[0]?.id,exact.id,'Name words can be entered in either order.');
+  assert.equal((await lookup('7987274100')).items.length,1,'Locations, archived cards and names do not pollute phone results.');
+  assert.equal((await lookup('7987274100','another-workspace')).items.length,0);
+  assert.equal((await lookup('%')).items.length,0);assert.equal((await lookup('798')).items.length,0);
+  assert.equal((await teamRead(alice,'clients-lookup',new URLSearchParams({q:'7987274100'})) as {items:{notes:string}[]}).items[0].notes,'','Private notes stay hidden from other representatives.');
+  console.log('PASS contact lookup: canonical and formatted phones, alternate/account identities, handles, email case, name ranking, workspace isolation, privacy and no location noise.');
   console.log('PASS Team coordinator: real migration, weekly 70% coverage, leave, optimistic revisions, idempotent intake, permission-based assignment, operator scope, free-slot reservation, rep-only plan emails, confirmed appointment emails, automatic handoff, no pass loops, manager escalation, task-calendar completion, opt-out, workspace isolation, reminder deduplication, queue fairness and contact-merge continuity.');
 }
 main().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>prisma.$disconnect());

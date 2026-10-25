@@ -57,9 +57,9 @@ export function TeamWorkspaceUI({ actor }: { actor: ActorProps }) {
   const [modal, setModal] = useState<Modal | null>(null); const [busy, setBusy] = useState(false); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [notice, setNotice] = useState(""); const [inviteLink, setInviteLink] = useState("");
   const dialog = useRef<HTMLDialogElement>(null); const taskDialog = useRef<HTMLDialogElement>(null);
   const task = module === "release-qc" ? undefined : tasks.find(t => t.id === selected);
-  const api = useCallback(async <T,>(resource: string, body?: unknown): Promise<T> => {
+  const api = useCallback(async <T,>(resource: string, body?: unknown, options?: { signal?: AbortSignal }): Promise<T> => {
     const separator = resource.includes("?") ? "&" : "?";
-    const response = await fetch(`/api/team/${resource}${separator}workspace=${actor.workspaceId}`, body === undefined ? { cache: "no-store" } : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const response = await fetch(`/api/team/${resource}${separator}workspace=${actor.workspaceId}`, body === undefined ? { cache: "no-store", signal: options?.signal } : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const data = await response.json(); if (!response.ok) throw new Error(data.error || "Request failed."); return data as T;
   }, [actor.workspaceId]);
   const refresh = useCallback(async () => {
