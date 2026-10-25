@@ -1,3 +1,4 @@
+import { notifyTeamBatch } from './notification-batch';
 import { assertEmployeeAssignee } from "./daily-work";
 import "server-only";
 import { createHash } from "node:crypto";
@@ -185,8 +186,11 @@ export async function advancedMutation(tx: Tx, a: Actor, resource: string, input
       }
     }
     // Deadline notifications are deduplicated by task/day and also respect scopes.
-    const due = await tx.teamTask.findMany({ where: { workspaceId: a.workspaceId, archivedAt: null, dueAt: { lte: new Date(Date.now() + 86400000) }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, take: 100 });
-    for (const task of due) { const key = `${task.id}:due:${new Date().toISOString().slice(0, 10)}`; if (await tx.teamWorkflowEvent.findUnique({ where: { eventKey: key } })) continue; await tx.teamWorkflowEvent.create({ data: { workspaceId: a.workspaceId, eventKey: key, taskId: task.id } }); await notify(tx, task.ownerId, `Deadline attention: ${task.title}`); }
+    const today = new Date().toISOString().slice(0, 10);
+    const prior = await tx.teamWorkflowEvent.findMany({ where: { workspaceId: a.workspaceId, eventKey: { endsWith: `:due:${today}` } }, select: { taskId: true } });
+    const handledIds = prior.flatMap(event => event.taskId ? [event.taskId] : []);
+    const due = await tx.teamTask.findMany({ where: { workspaceId: a.workspaceId, id: { notIn: handledIds }, archivedAt: null, dueAt: { lte: new Date(Date.now() + 86400000) }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], take: 100 });
+    await notifyTeamBatch(tx, a, due.map(task => ({ eventKey: `${task.id}:due:${today}`, memberId: task.ownerId, taskId: task.id, title: `Deadline attention: ${task.title}` })));
     await audit(tx, a, "workflow.synced", a.workspaceId, { created }); return { created };
   }
   if (resource === "inbound-link") {

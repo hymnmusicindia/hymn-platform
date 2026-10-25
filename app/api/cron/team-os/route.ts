@@ -1,55 +1,69 @@
-import { syncCustomerFollowups } from "@/lib/team/customer-followups";
-import { syncDailyCrmWork } from "@/lib/team/daily-work";
-import { cronHandler } from "@/lib/cron/runtime";
-export const GET = cronHandler("team-os", runJob);
-import { timingSafeEqual } from "node:crypto";
-import { prisma } from "@/lib/prisma";
-import { teamMutation, teamWrite, notify } from "@/lib/team/service";
-import { weekStartIndia } from "@/lib/team/policy";
-import { processClientWelcomes } from "@/lib/team/client-welcome";
-import { remindCalendarTasks } from "@/lib/team/calendar";
+import { Prisma } from '@prisma/client';
+import { cronHandler } from '@/lib/cron/runtime';
+import { prisma } from '@/lib/prisma';
+import { teamMutation, teamWrite } from '@/lib/team/service';
+import { weekStartIndia } from '@/lib/team/policy';
+import { processClientWelcomes } from '@/lib/team/client-welcome';
+import { remindCalendarTasks } from '@/lib/team/calendar';
 import { syncCoordinator, remindAvailability, ensureCoordinatorRules } from '@/lib/team/coordinator';
-export const runtime = "nodejs";
+import { syncCustomerFollowups } from '@/lib/team/customer-followups';
+import { syncDailyCrmWork } from '@/lib/team/daily-work';
+import { notifyTeamBatch, type TeamReminder } from '@/lib/team/notification-batch';
+
+export const runtime = 'nodejs';
 export const maxDuration = 300;
-async function runJob(request: Request) {
-  const expected = Buffer.from(`Bearer ${process.env.CRON_SECRET || ""}`); const actual = Buffer.from(request.headers.get("authorization") || "");
-  if (!process.env.CRON_SECRET || actual.length !== expected.length || !timingSafeEqual(actual, expected)) return Response.json({ error: "Unauthorized." }, { status: 401 });
-  try {
-    const owners = await prisma.teamMember.findMany({ where: { status: "ACTIVE", role: { owner: true }, user: { status: "ACTIVE" } }, include: { role: true } });
-    let workspaces = 0;
-    const handled = new Set<string>();
-    for (const owner of owners) {
-      if (handled.has(owner.workspaceId)) continue;
-      handled.add(owner.workspaceId);
-      await teamWrite(owner,(tx,a)=>ensureCoordinatorRules(tx,a));
-      await teamMutation(owner, "workflow-sync", {});
-      await teamWrite(owner, async (tx, a) => {
-        await syncDailyCrmWork(tx, a);
-        const now = new Date(); const local = new Date(now.getTime() + 330 * 60000); const day = local.getUTCDay(); const week = weekStartIndia(now).toISOString().slice(0, 10);
-        const appointments = await tx.teamCalendarEvent.findMany({ where: { workspaceId: a.workspaceId, status: "SCHEDULED", remindedAt: null, OR: [{ endsAt: { gt: now } }, { endsAt: null }], startsAt: { gte: new Date(now.getTime() - 15 * 60000), lte: new Date(now.getTime() + 7 * 86400000) } }, take: 1000 });
-        for (const appointment of appointments) {
-          if (appointment.kind === "CALL") continue; // Dedicated minute queue uses a fixed 40-minute representative reminder.
-          if (appointment.startsAt.getTime() - now.getTime() <= appointment.reminderMinutes * 60000) {
-            await notify(tx, appointment.assigneeId, `Upcoming ${appointment.kind.toLowerCase()}: ${appointment.title}`, "/team?module=calendar");
-            await tx.teamCalendarEvent.update({ where: { id: appointment.id }, data: { remindedAt: now } });
-          }
-        }
-        await remindCalendarTasks(tx, a, now);
-        const members = await tx.teamMember.findMany({ where: { workspaceId: a.workspaceId, status: "ACTIVE", user: { status: "ACTIVE" } } });
-        for (const member of members) {
-          const preferences = member.preferences as { digest?: string; fridayReminder?: boolean };
-          const key = preferences.digest === "DAILY" ? `${member.id}:digest:${local.toISOString().slice(0, 10)}` : preferences.digest === "WEEKLY" && day === 5 ? `${member.id}:digest:${week}` : "";
-          if (key && !await tx.teamWorkflowEvent.findUnique({ where: { eventKey: key } })) {
-            const count = await tx.teamTask.count({ where: { ownerId: member.id, archivedAt: null, status: { notIn: ["COMPLETED", "CANCELLED"] } } }); await tx.teamWorkflowEvent.create({ data: { workspaceId: a.workspaceId, eventKey: key } }); await notify(tx, member.id, `Your activity digest: ${count} active assignments`);
-          }
-          const reportKey = `${member.id}:friday:${week}`;
-          if (day === 5 && preferences.fridayReminder && !await tx.teamWorkflowEvent.findUnique({ where: { eventKey: reportKey } })) { await tx.teamWorkflowEvent.create({ data: { workspaceId: a.workspaceId, eventKey: reportKey } }); await notify(tx, member.id, "Review and submit your weekly report", "/team?module=reports"); }
-        }
-      });
-      await teamWrite(owner, (tx, a) => syncCustomerFollowups(tx, a));
-      await teamWrite(owner, async (tx,a)=>{await syncCoordinator(tx,a);await remindAvailability(tx,a);});
-      workspaces++;
+export const GET = cronHandler('team-os', runJob);
+
+async function runJob() {
+  const owners = await prisma.teamMember.findMany({ where: { status: 'ACTIVE', role: { owner: true }, user: { status: 'ACTIVE' } }, include: { role: true } });
+  const handled = new Set<string>(), errors: Array<{ phase: string; workspaceId?: string; code: string }> = [];
+  async function phase(name: string, workspaceId: string | undefined, execute: () => Promise<unknown>) {
+    const started = Date.now();
+    try { await execute(); } catch (error) {
+      const code = error instanceof Prisma.PrismaClientKnownRequestError ? error.code : 'TEAM_AUTOMATION_ERROR';
+      errors.push({ phase: name, workspaceId, code });
+      await prisma.auditLog.create({ data: { actorType: 'system', entity: 'cron_job', entityId: 'team-os', action: 'TEAM_OS_PHASE_FAILED', metadata: { phase: name, workspaceId: workspaceId || null, code, durationMs: Date.now() - started } } });
     }
-    return Response.json({ workspaces, welcomeEmails: await processClientWelcomes() });
-  } catch { return Response.json({ error: "Team automation did not complete; it will retry safely." }, { status: 503 }); }
+  }
+  for (const owner of owners) {
+    if (handled.has(owner.workspaceId)) continue;
+    handled.add(owner.workspaceId);
+    const run = (name: string, execute: Parameters<typeof teamWrite>[1]) => phase(name, owner.workspaceId, () => teamWrite(owner, execute));
+    await run('rules', (tx, a) => ensureCoordinatorRules(tx, a));
+    await phase('workflows', owner.workspaceId, () => teamMutation(owner, 'workflow-sync', {}));
+    await run('daily-work', (tx, a) => syncDailyCrmWork(tx, a));
+    await run('calendar-events', async (tx, a) => {
+      const now = new Date();
+      const events = await tx.teamCalendarEvent.findMany({ where: { workspaceId: a.workspaceId, kind: { not: 'CALL' }, status: 'SCHEDULED', remindedAt: null, OR: [{ endsAt: { gt: now } }, { endsAt: null }], startsAt: { gte: new Date(now.getTime() - 15 * 60000), lte: new Date(now.getTime() + 7 * 86400000) } }, orderBy: [{ startsAt: 'asc' }, { id: 'asc' }], take: 1000 });
+      const due = events.filter(event => event.startsAt.getTime() - now.getTime() <= event.reminderMinutes * 60000);
+      await notifyTeamBatch(tx, a, due.map(event => ({ eventKey: `calendar-event-reminder:${event.id}:${event.scheduleRevision}`, memberId: event.assigneeId, title: `Upcoming ${event.kind.toLowerCase()}: ${event.title}`, href: '/team?module=calendar' })));
+      if (due.length) await tx.teamCalendarEvent.updateMany({ where: { workspaceId: a.workspaceId, id: { in: due.map(event => event.id) }, remindedAt: null }, data: { remindedAt: now } });
+    });
+    await run('task-reminders', (tx, a) => remindCalendarTasks(tx, a, new Date()));
+    await run('digests', async (tx, a) => {
+      const now = new Date(), local = new Date(now.getTime() + 330 * 60000), day = local.getUTCDay(), week = weekStartIndia(now).toISOString().slice(0, 10);
+      const members = await tx.teamMember.findMany({ where: { workspaceId: a.workspaceId, status: 'ACTIVE', user: { status: 'ACTIVE' } }, select: { id: true, preferences: true } });
+      const counts = await tx.teamTask.groupBy({ by: ['ownerId'], where: { workspaceId: a.workspaceId, ownerId: { in: members.map(member => member.id) }, archivedAt: null, status: { notIn: ['COMPLETED', 'CANCELLED'] } }, _count: true });
+      const reminders: TeamReminder[] = [];
+      for (const member of members) {
+        const preferences = member.preferences as { digest?: string; fridayReminder?: boolean } | null;
+        const key = preferences?.digest === 'DAILY' ? `${member.id}:digest:${local.toISOString().slice(0, 10)}` : preferences?.digest === 'WEEKLY' && day === 5 ? `${member.id}:digest:${week}` : '';
+        if (key) reminders.push({ eventKey: key, memberId: member.id, title: `Your activity digest: ${counts.find(item => item.ownerId === member.id)?._count || 0} active assignments` });
+        if (day === 5 && preferences?.fridayReminder) reminders.push({ eventKey: `${member.id}:friday:${week}`, memberId: member.id, title: 'Review and submit your weekly report', href: '/team?module=reports' });
+      }
+      await notifyTeamBatch(tx, a, reminders);
+    });
+    await run('customer-followups', (tx, a) => syncCustomerFollowups(tx, a));
+    await run('coordinator', (tx, a) => syncCoordinator(tx, a));
+    await run('availability', (tx, a) => remindAvailability(tx, a));
+  }
+  let welcomeEmails: { sent: number; skipped?: string } = { sent: 0 };
+  await phase('client-introductions', undefined, async () => {
+    const result = await processClientWelcomes();
+    if (result.disabled) {
+      if (await prisma.teamClientWelcome.count({ where: { status: 'PENDING' } })) throw Error('Client introduction sender is not configured.');
+      welcomeEmails = { sent: 0, skipped: 'no_pending_introductions' };
+    } else welcomeEmails = { sent: result.sent };
+  });
+  return Response.json({ workspaces: handled.size, welcomeEmails, errors, success: errors.length === 0 }, { status: errors.length ? 503 : 200 });
 }

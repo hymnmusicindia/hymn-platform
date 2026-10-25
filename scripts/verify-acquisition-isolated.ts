@@ -37,6 +37,11 @@ async function main() {
       if(process.argv.includes('--browser'))await run(['--import','tsx','scripts/verify-team-coordinator-browser.ts']);
       return;
     }
+    if (process.argv.includes('--team-cron-recovery-only')) {
+      await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-team-cron-recovery.ts']);
+      return;
+    }
     if (process.argv.includes('--lead-stages-only')) {
       await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
       await run(['--conditions=react-server','--import','tsx','scripts/verify-team-lead-stages.ts']);

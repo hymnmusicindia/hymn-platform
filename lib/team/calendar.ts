@@ -1,3 +1,4 @@
+import { notifyTeamBatch } from './notification-batch';
 import { contactNotesAllowed, publicContact, matchingContacts, contactPhone } from "./contact-directory";
 import { registerTeamProspect } from "./service";
 import { ensureContactLead } from './contact-leads';
@@ -177,12 +178,8 @@ async function saveEvent(tx: Prisma.TransactionClient, a: Actor, input: unknown,
 }
 export async function remindCalendarTasks(tx: Prisma.TransactionClient, a: Actor, now: Date) {
   const tasks = await tx.teamTask.findMany({ where: { workspaceId: a.workspaceId, archivedAt: null, status: { notIn: ["COMPLETED", "CANCELLED"] }, dueAt: { gte: new Date(now.getTime() - 15 * 60000), lte: new Date(now.getTime() + 15 * 60000) }, owner: { status: "ACTIVE", user: { status: "ACTIVE" } } }, take: 1000 });
-  for (const task of tasks) {
-    const eventKey = `calendar-task-reminder:${task.id}:${task.dueAt!.toISOString()}`;
-    if (await tx.teamWorkflowEvent.findUnique({ where: { eventKey } })) continue;
-    await tx.teamWorkflowEvent.create({ data: { workspaceId: a.workspaceId, eventKey } });
-    await notify(tx, task.ownerId, `Task due soon: ${task.title}`, `/team?workspace=${a.workspaceId}&module=work&task=${task.id}`);
-  }
+  await notifyTeamBatch(tx, a, tasks.map(task => ({ eventKey: `calendar-task-reminder:${task.id}:${task.dueAt!.toISOString()}`, memberId: task.ownerId, taskId: task.id, title: `Task due soon: ${task.title}`, href: `/team?workspace=${a.workspaceId}&module=work&task=${task.id}` })));
+
 }
 
 export async function calendarRead(a: Actor, resource: string, params: URLSearchParams) {
