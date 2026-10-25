@@ -1,3 +1,4 @@
+import { publicPageMetadata } from "@/lib/seo";
 import { StudioBeatJourney } from "@/components/studio-beat-journey";
 import { ENGINEER_GENRES } from "@/lib/engineer-applications";
 import type { Metadata } from "next";
@@ -6,7 +7,7 @@ import { BadgeCheck, Clock3, Headphones, SlidersHorizontal } from "lucide-react"
 import { listStudioEngineers } from "@/lib/studio-services";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Online Mixing & Mastering Studio", description: "Choose a HYMN engineer, share source files securely, manage revisions and finish a release-ready master in one private workspace.", alternates: { canonical: "/studio" } };
+export const metadata: Metadata = publicPageMetadata("Online Mixing & Mastering Studio", "Choose a HYMN engineer, share source files securely, manage revisions and finish a release-ready master in one private workspace.", "/studio");
 const money = (value: unknown) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(value));
 
 export default async function StudioPage({ searchParams }: { searchParams: Promise<{ genre?: string; maxPrice?: string; turnaround?: string; beatPurchaseId?: string }> }) {

@@ -1,3 +1,4 @@
+import { publicPageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import Image from "next/image";
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
@@ -17,7 +18,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Artist & Music Services", description: "Explore music distribution, release marketing, playlist support and professional services built for independent artists and labels.", alternates: { canonical: "/services" } };
+export const metadata: Metadata = publicPageMetadata("Artist & Music Services", "Explore music distribution, release marketing, playlist support and professional services built for independent artists and labels.", "/services");
 
 type ServiceShowcase = {
   title: string;

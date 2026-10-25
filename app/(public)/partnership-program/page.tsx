@@ -1,8 +1,9 @@
+import { publicPageMetadata } from "@/lib/seo";
 import { PartnershipLeadForm } from "@/components/partnership-lead-form";
 import { ChevronDown } from "lucide-react";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Music Partnership Program", description: "Partner with HYMN Music on producer catalogs, release distribution and artist campaigns.", alternates: { canonical: "/partnership-program" } };
+export const metadata: Metadata = publicPageMetadata("Music Partnership Program", "Partner with HYMN Music on producer catalogs, release distribution and artist campaigns.", "/partnership-program");
 
 export default function PartnershipProgramPage() {
   const sections = [

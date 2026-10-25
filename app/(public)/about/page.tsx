@@ -1,7 +1,8 @@
+import { publicPageMetadata } from "@/lib/seo";
 import { ChevronDown } from "lucide-react";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "About", description: "Meet HYMN Music, an India-based platform connecting independent artists and producers with distribution, beats, studio services, royalties and release support.", alternates: { canonical: "/about" } };
+export const metadata: Metadata = publicPageMetadata("About", "Meet HYMN Music, an India-based platform connecting independent artists and producers with distribution, beats, studio services, royalties and release support.", "/about");
 
 
 export default function AboutPage() {

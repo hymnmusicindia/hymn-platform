@@ -1,3 +1,5 @@
+import { privateRobots } from "@/lib/seo";
+export const metadata = { title: "Sign in", robots: privateRobots };
 import { UnifiedAuthForm } from "@/components/unified-auth-form";
 import type { UserRole } from "@/lib/types";
 import { prisma } from "@/lib/prisma";

@@ -1,15 +1,11 @@
+import { publicPageMetadata } from "@/lib/seo";
 import { BeatStoreExperience } from "@/components/beat-store-experience";
 import { listBeats, listProducerProfiles } from "@/lib/db";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "License Beats from Independent Producers",
-  description: "Preview, compare rights, and license curated beats from HYMN producers.",
-  alternates: { canonical: "/beat-store" },
-  openGraph: { title: "HYMN Beat Store", description: "Curated, release-ready beats with clear licensing.", url: "/beat-store" }
-};
+export const metadata: Metadata = publicPageMetadata("License Beats from Independent Producers", "Preview, compare rights, and license curated beats from HYMN producers.", "/beat-store");
 
 
 export default async function BeatStorePage() {

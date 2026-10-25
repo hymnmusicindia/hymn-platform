@@ -1,3 +1,5 @@
+import { privateRobots } from "@/lib/seo";
+export const metadata = { robots: privateRobots };
 import { AdminPortalLayout } from "@/components/admin-portal-layout";
 import { getAdminAccessForPage } from "@/lib/access";
 import { SiteHeader } from "@/components/site-header";

@@ -1,13 +1,10 @@
+import { publicPageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, HeartHandshake, Quote, Sparkles } from "lucide-react";
 
-export const metadata: Metadata = {
-  title: "Our Mission & Founder",
-  description: "Learn about HYMN Music's artist-first mission and read a message from founder Aditya Ujjain.",
-  alternates: { canonical: "/mission" }
-};
+export const metadata: Metadata = publicPageMetadata("Our Mission & Founder", "Learn about HYMN Music's artist-first mission and read a message from founder Aditya Ujjain.", "/mission");
 
 export default function MissionPage() {
   return (

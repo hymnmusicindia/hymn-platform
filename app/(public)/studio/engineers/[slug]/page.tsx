@@ -1,3 +1,5 @@
+import { cache } from "react";
+import { publicPageMetadata, profileStructuredData, jsonLd, privateRobots } from "@/lib/seo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, BadgeCheck, Check, Clock3, Headphones, Instagram, RotateCcw, ShieldCheck, Star, Youtube } from "lucide-react";
@@ -10,6 +12,13 @@ import { EngineerWorkShowcase } from "@/components/engineer-work-showcase";
 import { portfolioWorks } from "@/lib/engineer-portfolio";
 
 export const dynamic = "force-dynamic";
+
+const getEngineer=cache((slug:string)=>prisma.engineerProfile.findUnique({ where: { slug: slug }, include: { contributorParty: { include: { claimedBy: { select: { avatar: true } } } }, listings: { where: { active: true, paused: false, serviceType: "MIXING_MASTERING" } }, orders: { where: { review: { is: { status: "PUBLISHED" } } }, include: { review: true }, take: 20, orderBy: { completedAt: "desc" } } } }));
+export async function generateMetadata({params}:{params:Promise<{slug:string}>}) {
+  const {slug}=await params,engineer=await getEngineer(slug);
+  if(!engineer||engineer.sellerState!=='ACTIVE'||!engineer.listings.length)return {title:'Engineer unavailable',robots:privateRobots};
+  return publicPageMetadata(`${engineer.professionalName} - Mixing & Mastering`,engineer.bio?.slice(0,160)||`Explore ${engineer.professionalName}'s mixing and mastering work, project prices and client reviews on HYMN Music.`,`/studio/engineers/${encodeURIComponent(slug)}`,engineer.profilePhotoUrl);
+}
 
 function safeUrl(value: unknown) { return typeof value === "string" && /^https?:\/\//i.test(value) ? value : null; }
 function portfolioData(value: unknown) {
@@ -30,7 +39,7 @@ function money(value: unknown) { return `₹${Number(value).toLocaleString("en-I
 
 export default async function EngineerPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ beatPurchaseId?: string }> }) {
   const query = await searchParams;
-  const engineer = await prisma.engineerProfile.findUnique({ where: { slug: (await params).slug }, include: { contributorParty: { include: { claimedBy: { select: { avatar: true } } } }, listings: { where: { active: true, paused: false, serviceType: "MIXING_MASTERING" } }, orders: { where: { review: { is: { status: "PUBLISHED" } } }, include: { review: true }, take: 20, orderBy: { completedAt: "desc" } } } });
+  const engineer = await getEngineer((await params).slug);
   if (!engineer || engineer.sellerState !== "ACTIVE") notFound();
   const listing = engineer.listings[0];
   if (!listing) notFound();
@@ -39,7 +48,7 @@ export default async function EngineerPage({ params, searchParams }: { params: P
   const photo = engineer.profilePhotoUrl ?? engineer.contributorParty.claimedBy?.avatar;
   const bookingUrl = `/studio/start?listing=${listing.publicId}${query.beatPurchaseId ? `&beatPurchaseId=${encodeURIComponent(query.beatPurchaseId)}` : ""}`;
   const rating = engineer.ratingCount ? Number(engineer.ratingAverage).toFixed(1) : null;
-  return <main className={styles.page}><div className="shell">
+  return <main className={styles.page}><script type="application/ld+json" dangerouslySetInnerHTML={{__html:jsonLd(profileStructuredData(engineer.professionalName,`/studio/engineers/${encodeURIComponent(engineer.slug)}`,"Studio","/studio"))}}/><div className="shell">
     <Link href="/studio" className={styles.back}><ArrowLeft size={16}/> Explore engineers</Link>
     <div className={styles.layout}><div className={styles.content}>
       <section className={styles.hero}>

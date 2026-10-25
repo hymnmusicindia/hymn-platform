@@ -45,6 +45,7 @@ export const metadata: Metadata = {
   creator: "HYMN Music",
   publisher: "HYMN Music",
   category: "Music",
+  verification: { google: process.env.GOOGLE_SITE_VERIFICATION || undefined, ...(process.env.BING_SITE_VERIFICATION ? { other: { "msvalidate.01": process.env.BING_SITE_VERIFICATION } } : {}) },
   keywords: ["music distribution India", "digital music distribution", "buy beats online", "beat licensing", "mixing and mastering", "independent artists", "music royalties", "release music on Spotify", "music producer marketplace", "HYMN Music"],
   icons: {
     icon: [{ url: "/favicon.png", type: "image/png", sizes: "96x96" }],
@@ -58,9 +59,9 @@ export const metadata: Metadata = {
     title: "HYMN Music | Music Distribution, Beats & Artist Services",
     description: "From beat licensing and professional mixing to worldwide music distribution and royalty management.",
     url: "/",
-    images: [{ url: "/icon-512.png", width: 512, height: 512, alt: "HYMN Music" }]
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "HYMN Music" }]
   },
-  twitter: { card: "summary", title: "HYMN Music", description: "Music distribution, beats, mixing, mastering and artist services in one platform.", images: ["/icon-512.png"] },
+  twitter: { card: "summary_large_image", title: "HYMN Music", description: "Music distribution, beats, mixing, mastering and artist services in one platform.", images: ["/opengraph-image"] },
   robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 } }
 };
 

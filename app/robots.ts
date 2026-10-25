@@ -5,8 +5,9 @@ export default function robots(): MetadataRoute.Robots {
   const origin = getPublicAppUrl();
   return {
     rules: [
-      { userAgent: "*", allow: ["/", "/about", "/beat-store", "/contact", "/distribution", "/faq", "/mission", "/partnership-program", "/policies", "/services", "/studio"], disallow: ["/admin/", "/api/", "/dashboard/", "/producer/dashboard/", "/checkout/", "/auth/"] },
-      { userAgent: "Googlebot-Image", allow: ["/favicon.png", "/apple-touch-icon.png", "/icon-512.png", "/assets/"] }
+      // Let crawlers see noindex on account/sign-in pages. Authentication still
+      // protects their content. Only explicitly public image APIs are crawlable.
+      { userAgent: "*", allow: ["/", "/api/image-preview", "/api/public-uploads/"], disallow: ["/api/", "/_next/webpack-hmr"] }
     ],
     sitemap: `${origin}/sitemap.xml`,
     host: origin

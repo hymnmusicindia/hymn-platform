@@ -1,3 +1,4 @@
+import { publicPageMetadata } from "@/lib/seo";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -20,11 +21,7 @@ import { getSession } from "@/lib/session";
 import { destinationForRole } from "@/lib/routes";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = {
-  title: "Music Distribution, Beats & Artist Services",
-  description: "Build your next release with HYMN Music: license beats, book mixing and mastering, distribute worldwide, track royalties, and grow your independent music career.",
-  alternates: { canonical: "/" }
-};
+export const metadata: Metadata = publicPageMetadata("Music Distribution, Beats & Artist Services", "Build your next release with HYMN Music: license beats, book mixing and mastering, distribute worldwide, track royalties, and grow your independent music career.", "/");
 
 
 

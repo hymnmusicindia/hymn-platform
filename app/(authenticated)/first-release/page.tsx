@@ -1,3 +1,4 @@
+import { publicPageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import { getCurrentUserForPage } from "@/lib/access";
 import { getFirstReleaseEligibility } from "@/lib/first-release-promotion";
@@ -5,10 +6,8 @@ import { FirstReleaseFunnel } from "@/components/first-release-funnel";
 import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = {
-  title: "Your First Release Is Free | HYMN",
-  description: "Distribute your first Single through HYMN with the ₹99 base release fee on us.",
-  alternates: { canonical: "/first-release" },
-  robots: { index: true, follow: true },
+  ...publicPageMetadata("Your First Release Is Free", "Distribute your first Single through HYMN with the base release fee on us. Review eligibility and current terms before submitting.", "/first-release"),
+  robots: {index:true,follow:true,googleBot:{index:true,follow:true}}
 };
 
 export default async function FirstReleasePage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {

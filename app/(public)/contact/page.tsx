@@ -1,3 +1,4 @@
+import { publicPageMetadata } from "@/lib/seo";
 import Link from "next/link";
 import { ContactForm } from "@/components/contact-form";
 import { ArrowUpRight, LifeBuoy, MessageCircle, BookOpen, AudioLines } from "lucide-react";
@@ -5,7 +6,7 @@ import { getSession } from "@/lib/session";
 import type { Metadata } from "next";
 import "@/app/styles/contact-center.css";
 
-export const metadata: Metadata = { title: "Contact", description: "Talk to HYMN Music about distribution, studio services, release support and partnerships.", alternates: { canonical: "/contact" } };
+export const metadata: Metadata = publicPageMetadata("Contact", "Talk to HYMN Music about distribution, studio services, release support and partnerships.", "/contact");
 
 export default async function ContactPage() {
   const session = await getSession();

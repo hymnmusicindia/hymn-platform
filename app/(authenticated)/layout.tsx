@@ -1,3 +1,5 @@
+import { privateRobots } from "@/lib/seo";
+export const metadata = { robots: privateRobots };
 import { PolicyAgreementBanner } from "@/components/policy-agreement-banner";
 import { getPolicyAgreementStatus, policyRevision } from "@/lib/policy-agreement";
 import { WorkspaceGoalGuide } from "@/components/workspace-goal-guide";
