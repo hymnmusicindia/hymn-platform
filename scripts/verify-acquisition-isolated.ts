@@ -37,6 +37,11 @@ async function main() {
       if(process.argv.includes('--browser'))await run(['--import','tsx','scripts/verify-team-coordinator-browser.ts']);
       return;
     }
+    if (process.argv.includes('--release-corrections-only')) {
+      await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-release-support-corrections.ts'], process.execPath, { ...env, HYMN_STORAGE_ROOT: path.join(fixture, 'storage'), PRIVATE_STORAGE_ROOT: path.join(fixture, 'storage') });
+      return;
+    }
     if (process.argv.includes('--catalogue-acceptance-only')) {
       await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
       await run(['--conditions=react-server','--import','tsx','scripts/verify-direnote-catalogue-acceptance.ts']);
@@ -95,9 +100,8 @@ async function main() {
     if (process.argv.includes('--amendment-identifiers-only')) {
       await run(['node_modules/prisma/build/index.js', 'db', 'push', '--skip-generate']);
       await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-amendment-identifiers.ts']);
-      await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-artist-amendment.ts']);
       await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-amendment-feedback.ts']);
-      await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-automatic-amendment.ts']);
+      await run(['--conditions=react-server', '--import', 'tsx', 'scripts/verify-release-support-corrections.ts'], process.execPath, { ...env, HYMN_STORAGE_ROOT: path.join(fixture, 'storage'), PRIVATE_STORAGE_ROOT: path.join(fixture, 'storage') });
       return;
     }
     if (process.argv.includes("--contacts-followups-only")) {

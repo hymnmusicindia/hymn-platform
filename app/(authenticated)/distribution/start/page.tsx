@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { checkoutPlan } from "@/lib/distribution-checkout-plan";
 import { firstReleaseAttribution } from "@/lib/first-release-flow";
 import { amendmentSourceRevision } from '@/lib/release-amendment-revision';
+import { redirect } from 'next/navigation';
 
 function firstValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
@@ -20,6 +21,8 @@ function firstValue(value?: string | string[]) {
 export default async function DistributionStartPage({ searchParams }: { searchParams?: Promise<{ amend?: string | string[]; draft?: string | string[]; submitted?: string | string[]; edit?: string | string[]; audioAssetId?: string | string[]; correctionField?: string | string[]; resume?: string | string[]; manage?: string | string[]; onboarding?: string | string[]; stage?: string | string[]; campaign?: string | string[]; utm_source?: string | string[]; utm_medium?: string | string[]; utm_campaign?: string | string[]; utm_content?: string | string[]; utm_term?: string | string[] }> }) {
   const user = await getCurrentUserForPage();
   const params = (await searchParams) ?? {};
+  const legacyAmendmentId = Number(firstValue(params.amend));
+  if (Number.isSafeInteger(legacyAmendmentId) && legacyAmendmentId > 0) redirect(`/dashboard/releases/${legacyAmendmentId}?tab=requests`);
   const requestedId = Number(firstValue(params.amend) ?? firstValue(params.edit) ?? firstValue(params.resume) ?? firstValue(params.manage) ?? firstValue(params.draft) ?? "");
   const editingRelease = user && Number.isSafeInteger(requestedId) && requestedId > 0 ? await getDetailedReleaseByUserId(user.id, requestedId) : null;
   const amendmentMode = Boolean(firstValue(params.amend));

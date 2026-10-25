@@ -1,7 +1,6 @@
 import 'server-only';
 import { prisma } from './prisma';
 import { enqueueAmendmentUpdate, amendmentTransactionOptions } from './release-amendment-notifications';
-import { executeArtistAmendment } from './release-artist-amendment';
 import { createAdminTaskOnce, resolveAdminTask } from './task-queue';
 
 /** A provider/validation failure requires staff review, never blind re-ingestion. */
@@ -48,24 +47,8 @@ export async function processAutomaticAmendment(requestId: number) {
   }, { timeout: 180000, maxWait: 10000 });
 }
 async function processClaimedAmendment(requestId: number) {
-  const eligible = await prisma.$transaction(async tx => {
-    const identity = await tx.releaseChangeRequest.findUniqueOrThrow({ where: { id: requestId } });
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422028, ${identity.releaseId}::integer)`;
-    const current = await tx.releaseChangeRequest.findUniqueOrThrow({ where: { id: requestId } });
-    const changes = current.requestedChanges as Record<string, unknown> | null;
-    if (changes?.automaticDelivery !== true || !changes.wizard_metadata || !['submitted', 'approved'].includes(current.status)) return false;
-    if (current.status === 'submitted') {
-      await tx.releaseChangeRequest.update({ where: { id: requestId }, data: { status: 'approved', reviewedAt: new Date(), adminNote: 'Automatic validation and delivery queued; manual QC is required if any check fails.' } });
-      await tx.releaseChangeRequestEvent.create({ data: { requestId, actorType: 'system', previousStatus: current.status, newStatus: 'approved', note: 'Automatic validation and delivery started. This is not a store-live confirmation.' } });
-    }
-    return true;
-  }, amendmentTransactionOptions);
-  if (!eligible) return;
-  try {
-    const result = await executeArtistAmendment(requestId);
-    const current = await prisma.releaseChangeRequest.findUniqueOrThrow({ where: { id: requestId } });
-    if (result.error || !result.submitted || current.status === 'approved') await flagAmendmentManualQc(requestId, result.error || result.validation?.issues?.map(issue => issue.message).join(' ') || 'Delivery was not confirmed. Inspect submission history before retrying.');
-  } catch (error) { await flagAmendmentManualQc(requestId, error instanceof Error ? error.message : 'The amendment could not be validated.'); }
+  const legacy = await prisma.releaseChangeRequest.findUnique({ where: { id: requestId } });
+  if (legacy && ['submitted', 'approved'].includes(legacy.status)) await flagAmendmentManualQc(requestId, 'Legacy amendment retained for manual correction review. Post-release changes use existing recording identifiers, never new ingestion.');
 }
 
 export async function processPendingAutomaticAmendments() {

@@ -1,5 +1,7 @@
 import { enqueueAmendmentUpdate, amendmentTransactionOptions } from './release-amendment-notifications';
 import { applyCompletedWizardAmendment } from './release-amendment-fulfillment';
+import { validateReleaseCorrection, applyCompletedSupportCorrection } from './release-support-corrections';
+import { correctionSchema } from './release-correction-contract';
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { transitionReleaseStatus } from "@/lib/release-status-engine";
@@ -18,13 +20,25 @@ const allowedRequestTransitions: Record<string, string[]> = {
 
 export async function createReleaseChangeRequest(input: { releaseId: number; userId: number; requestType: ReleaseChangeRequestType; reason: string; desiredEffectiveAt?: Date; requestedChanges?: Prisma.InputJsonValue }) {
   if (input.reason.trim().length < 10) throw new Error("Provide a reason of at least 10 characters.");
+  const support = input.requestedChanges && typeof input.requestedChanges === 'object' && !Array.isArray(input.requestedChanges) ? (input.requestedChanges as Record<string, unknown>).supportCorrection : undefined;
+  if (support) {
+    if (input.requestType !== 'metadata_update') throw Error('Use a release correction request for this operation.');
+    const validated = await validateReleaseCorrection(input.releaseId, input.userId, support);
+    input.requestedChanges = { supportCorrection: validated.correction, summary: [{ label: 'Track correction', before: `${validated.track.title} · ${validated.track.isrc}`, after: validated.correction.action.replace(/^request_/, '').replaceAll('_', ' ') }], locked: { upc: validated.release.upc, trackId: validated.track.id, isrc: validated.track.isrc } };
+  }
   return prisma.$transaction(async tx => {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422028, ${input.releaseId}::integer)`;
   const release = await tx.release.findFirst({ where: { id: input.releaseId, userId: input.userId, archivedAt: null } });
   if (!release) throw new Error("Release not found.");
   if (input.requestType !== "correction" && !["LIVE", "PARTIALLY_LIVE", "SCHEDULED", "AWAITING_LIVE_CONFIRMATION", "SENT_TO_DISTRIBUTOR", "DISTRIBUTOR_PROCESSING"].includes(release.status)) throw new Error("This release is not eligible for a post-delivery change request.");
   const existing = await tx.releaseChangeRequest.findFirst({ where: { releaseId: input.releaseId, requestType: input.requestType, status: { in: ["submitted", "under_review", "information_required", "approved", "processing_manually", "submitted_to_partner"] } } });
-  if (existing) return existing;
+  if (existing) {
+    if (support) {
+      const prior = correctionSchema.safeParse((existing.requestedChanges as Record<string, unknown> | null)?.supportCorrection);
+      if (!prior.success || JSON.stringify(prior.data) !== JSON.stringify(correctionSchema.parse(support))) throw Error(`Request #${existing.id} is already active. Track or resolve it before submitting another correction.`);
+    }
+    return existing;
+  }
     const request = await tx.releaseChangeRequest.create({ data: { releaseId: input.releaseId, requestedByUserId: input.userId, requestType: input.requestType, reason: input.reason.trim(), desiredEffectiveAt: input.desiredEffectiveAt, requestedChanges: input.requestedChanges } });
     const event = await tx.releaseChangeRequestEvent.create({ data: { requestId: request.id, actorType: "user", actorId: input.userId, previousStatus: null, newStatus: "submitted", note: input.reason.trim(), metadata: { desiredEffectiveAt: input.desiredEffectiveAt?.toISOString() ?? null, requestedChanges: input.requestedChanges ?? null } } });
     await enqueueAmendmentUpdate(tx, request.id, event.id);
@@ -43,9 +57,17 @@ export async function reviewReleaseChangeRequest(input: { id: number; adminId?: 
   if (!current) throw new Error("Change request not found.");
   if (current.status === input.decision && current.adminNote === input.note.trim() && (!input.providerReference?.trim() || current.providerReference === input.providerReference.trim())) return current;
   if (!allowedRequestTransitions[current.status]?.includes(input.decision)) throw new Error(`Change request cannot move from ${current.status} to ${input.decision}.`);
+  const isSupport = Boolean((current.requestedChanges as Record<string, unknown> | null)?.supportCorrection);
+  if (isSupport && input.decision === 'submitted_to_partner') throw Error('Send the approved correction through its preview to record a confirmed partner receipt.');
+  if (isSupport && ['rejected', 'failed'].includes(input.decision)) {
+    const write = await tx.releaseChangeRequestEvent.findFirst({ where: { requestId: current.id, metadata: { path: ['supportWrite'], equals: true } } });
+    const rejected = await tx.releaseChangeRequestEvent.findFirst({ where: { requestId: current.id, metadata: { path: ['providerStatus'], equals: 'rejected' } } });
+    if (write && !rejected) throw Error('An external correction is unresolved. Reconcile its partner status before closing or replacing it.');
+  }
   if (["submitted_to_partner", "completed"].includes(input.decision) && !input.providerReference?.trim() && !current.providerReference) throw new Error("Partner execution reference is required.");
   if (input.decision === "submitted_to_partner" && !input.providerReference?.trim()) throw new Error("Partner submission reference is required.");
   if (input.decision === 'completed' && current.requestType === 'metadata_update') await applyCompletedWizardAmendment(tx, current);
+  if (input.decision === 'completed') await applyCompletedSupportCorrection(tx, current);
     const request = await tx.releaseChangeRequest.update({ where: { id: input.id }, data: { status: input.decision, adminNote: input.note.trim(), providerReference: input.providerReference?.trim() || undefined, reviewedByAdminId: input.adminId, reviewedAt: new Date(), completedAt: input.decision === "completed" ? new Date() : undefined } });
     const event = await tx.releaseChangeRequestEvent.create({ data: { requestId: input.id, actorType: "admin", actorId: input.adminId, previousStatus: current.status, newStatus: input.decision, note: input.note.trim(), providerReference: input.providerReference?.trim() || current.providerReference } });
     await enqueueAmendmentUpdate(tx, request.id, event.id);

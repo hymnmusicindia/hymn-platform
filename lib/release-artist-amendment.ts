@@ -31,33 +31,10 @@ export function artistAmendmentRevision(amendment: ArtistAmendment, release: Rel
   return createHash('sha256').update(JSON.stringify({ request: amendment.request.id, reviewedRevision: amendment.request.updatedAt.toISOString(), card: artistIdentityFingerprint(amendment.card), release: release.id, upc: release.upcCode, status: release.status, releaseDate: release.releaseDate, originalReleaseDate: release.originalReleaseDate, metadata: release.metadata, artwork: release.artworkUrl, tracks: release.tracks?.map(track => ({ id: track.id, isrc: track.isrc, title: track.trackTitle, audio: track.audioUrl })) })).digest('hex');
 }
 
-/** Internal transport fields only; the customer-facing release flags are untouched. */
-export function artistAmendmentPayload(base: DireNotePayload, amendment: Pick<ArtistAmendment, 'request' | 'card' | 'spotifyUrl'> & { wizard?: boolean }, originalDate: string, now = new Date()) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(originalDate) || originalDate >= now.toISOString().slice(0, 10)) throw Error('A post-release amendment needs the actual original release date in the past.');
-  const payload: DireNotePayload = structuredClone(base);
-  const delivery = new Date(now); delivery.setUTCDate(delivery.getUTCDate() + 3);
-  payload.trackReleaseDate = delivery.toISOString().slice(0, 10);
-  payload.originalReleaseDate = originalDate;
-  payload.releasePreviouslyReleased = 'Yes';
-  delete payload.upc; // DNM documents that omission requests an assigned UPC.
-  delete payload.presaveSpotify; delete payload.presaveApple; delete payload.exclusiveSpotify; delete payload.exclusiveApple;
-  if (amendment.wizard) {
-    payload.tracks = payload.tracks.map(track => ({ ...track, previouslyReleased: 'Yes' }));
-    payload.addrequest = [base.addrequest, `HYMN release amendment #${amendment.request.id}. Previously delivered UPC ${base.upc ?? 'recorded in submission history'}. Retain the supplied ISRCs for existing recordings; return the actual assigned identifiers.`].filter(Boolean).join('\n');
-    return payload;
-  }
-  const name = amendment.card.artistName.trim().toLowerCase();
-  let matched = false;
-  const update = (artist: DireNotePayload['artists'][number]) => {
-    if (artist.name.trim().toLowerCase() !== name) return artist;
-    matched = true; return { ...artist, spotify_url: amendment.spotifyUrl };
-  };
-  payload.artists = payload.artists.map(update);
-  payload.featuring_artists = payload.featuring_artists?.map(update);
-  payload.tracks = payload.tracks.map(track => ({ ...track, previouslyReleased: 'Yes', artists: track.artists?.map(update), featuring_artists: track.featuring_artists?.map(update) }));
-  if (!matched || payload.tracks.some(track => !track.isrc)) throw Error('The approved artist mapping or existing recording identifiers are missing from the amendment payload.');
-  payload.addrequest = [base.addrequest, `HYMN artist mapping amendment #${amendment.request.id}. Previously delivered UPC ${base.upc ?? 'recorded in submission history'}. Correct Spotify artist profile: ${amendment.spotifyUrl}. Existing recordings retain their supplied ISRCs. Do not treat this as a new recording.`].filter(Boolean).join('\n');
-  return payload;
+/** Retained as a hard guard for older callers; corrections never create ingest payloads. */
+export function artistAmendmentPayload(base: DireNotePayload, amendment: Pick<ArtistAmendment, 'request' | 'card' | 'spotifyUrl'> & { wizard?: boolean }, originalDate: string, now = new Date()): DireNotePayload {
+  void base; void amendment; void originalDate; void now;
+  throw Error('Post-release corrections must use existing-recording support requests, not new-release ingestion payloads.');
 }
 
 /** Called only after provider acceptance; never redirect a historical provider artist. */
@@ -85,19 +62,10 @@ export async function acceptArtistAmendment(amendment: ArtistAmendment, attemptI
   }, amendmentTransactionOptions);
 }
 
+/** Historical entry point: never submit a live-release correction as new content. */
 export async function executeArtistAmendment(requestId: number, actorId?: number | null) {
-  const request = await prisma.releaseChangeRequest.findUniqueOrThrow({ where: { id: requestId } });
-  const before = await prisma.release.findUniqueOrThrow({ where: { id: request.releaseId } });
-  const { submitRelease } = await import('./distribution-service');
-  const result = await submitRelease(request.releaseId, { amendmentRequestId: requestId, actorId });
-  if (!result.submitted && !('inProgress' in result && result.inProgress)) {
-    const active = await prisma.distributionSubmissionAttempt.findFirst({ where: { releaseId: request.releaseId, isCurrent: true }, select: { state: true } });
-    if (active?.state === 'submitted' && ['LIVE', 'PARTIALLY_LIVE'].includes(before.status)) {
-      const { updateDetailedReleaseStatus } = await import('./distribution-db');
-      await updateDetailedReleaseStatus(before.id, before.status.toLowerCase() as Release['status'], 'Amendment was not confirmed. The preceding live catalogue remains current.', undefined, { manualOverride: true, actorType: 'system', notify: false });
-    }
-  }
-  return result;
+  void requestId; void actorId;
+  throw Error('This amendment requires the existing-recording correction workflow. New-release ingestion is disabled.');
 }
 
 /** A rejected amendment cannot replace the preceding live delivery. */

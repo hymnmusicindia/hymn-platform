@@ -230,6 +230,7 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
 }
 
 async function submitLockedRelease(releaseId: number, options: { actorId?: number | null; siteUrl?: string; retry?: boolean; adminConfirmedExistingArtists?: boolean; correctionReingest?: boolean; amendmentRequestId?: number }) {
+  if (options.amendmentRequestId) throw new Error('Post-release amendments use existing-recording support requests, never content ingestion. Open the correction request.');
   let release = await getDetailedReleaseById(releaseId);
   if (!release) throw new Error("Release not found.");
   const amendment = options.amendmentRequestId ? await loadArtistAmendment(release, options.amendmentRequestId) : null;
