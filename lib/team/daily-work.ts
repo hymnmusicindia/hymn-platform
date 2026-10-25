@@ -2,6 +2,8 @@ import { Prisma } from "@prisma/client";
 import { crmPreferences, nextCaller } from "./crm-workflow";
 import { can, TeamError, type Actor } from "./policy";
 
+import { acceptsAssignmentsNow, activeWindows } from './availability-rules';
+
 type Tx = Prisma.TransactionClient;
 export function indiaWorkday(now = new Date()) {
   const day = new Date(now.getTime() + 330 * 60000).toISOString().slice(0, 10);
@@ -22,7 +24,7 @@ export async function dailyProgress(tx: Tx, workspaceId: string, memberId: strin
 }
 
 export async function syncDailyCrmWork(tx: Tx, actor: Actor, now = new Date()) {
-  const { day, dueAt } = indiaWorkday(now);
+  const { day, start, end, dueAt } = indiaWorkday(now);
   const members = await tx.teamMember.findMany({ where: { workspaceId: actor.workspaceId, status: "ACTIVE", role: { owner: false }, user: { status: "ACTIVE" } }, include: { role: true, user: { select: { name: true } } } });
   const creator = await tx.teamMember.findFirst({ where: { workspaceId: actor.workspaceId, status: "ACTIVE", role: { owner: true }, user: { status: "ACTIVE" } }, orderBy: { id: "asc" } });
   if (!creator) return { created: 0, completed: 0 };
@@ -32,7 +34,7 @@ export async function syncDailyCrmWork(tx: Tx, actor: Actor, now = new Date()) {
   const waiting = await tx.acquisitionLead.findMany({ where: { workspaceId: actor.workspaceId, acquisitionEmployeeId: null, prospect: { verified: true, suppressed: false, contactEligibility: { in: ["CONSENTED", "LEGITIMATE_INTEREST"] }, stage: { in: ["NEW", "NEEDS_RESEARCH", "QUALIFIED", "READY_TO_CONTACT", "ASSIGNED"] } } }, orderBy: [{ registeredAt: "asc" }, { id: "asc" }], take: 100, include: { prospect: true } });
   for (const lead of waiting) {
     if (!lead.prospect.email && !/^\+?[1-9]\d{7,14}$/.test(lead.prospect.phone.replace(/[\s().-]/g, ""))) continue;
-    const caller = await nextCaller(tx, actor);
+    const caller = await nextCaller(tx, actor, now);
     if (!caller) break;
     await tx.acquisitionLead.update({ where: { id: lead.id }, data: { acquisitionEmployeeId: caller.id } });
     await tx.teamProspect.update({ where: { id: lead.prospectId }, data: { ownerId: caller.id, stage: "READY_TO_CONTACT", version: { increment: 1 } } });
@@ -46,7 +48,12 @@ export async function syncDailyCrmWork(tx: Tx, actor: Actor, now = new Date()) {
     const config = crmPreferences(member.preferences);
     const mode = config.workRole;
     if (!mode || !can(member, "crm.prospects.view") || mode === "researcher" && !can(member, "crm.prospects.create") || mode === "caller" && !can(member, "crm.outreach.manage")) continue;
-    const target = mode === "researcher" ? config.researchTarget || 15 : config.callTarget || 45;
+    const windows=activeWindows(member.preferences,start,end);
+    if(member.availability!=='AVAILABLE'||!windows.length||!acceptsAssignmentsNow(member.preferences,now))continue;
+    const shiftEnd=new Date(Math.min(end.getTime(),Math.max(...windows.map(w=>w.endsAt.getTime()))));
+    if(now>=shiftEnd)continue;
+    const target = mode === "researcher" ? config.researchTarget ?? 15 : config.callTarget ?? 45;
+    if(target<=0)continue;
     const eventKey = `${actor.workspaceId}:crm-daily:${day}:${member.id}:${mode}`;
     let task = await tx.teamTask.findUnique({ where: { eventKey } });
     if (!task) {
@@ -54,7 +61,7 @@ export async function syncDailyCrmWork(tx: Tx, actor: Actor, now = new Date()) {
       const description = mode === "researcher"
         ? `Add ${target} unique, source-checked contacts today with a real phone number including country code or a business email. Save the public source, contact evidence, service interest and research notes in Contacts & Calls. Respect opt-outs; do not add existing HYMN accounts or duplicates. Source-checked eligible contacts route to the available call representative. Only a rep can confirm a verified lead after a real conversation. Your task completes from real CRM records, not a checkbox.`
         : `Work today's researched contacts and overdue follow-ups. Aim to reach ${target} distinct eligible contacts by call or individually reviewed email. Open Contacts & Calls > Call queue, check the source and eligibility, call or open WhatsApp, record actual contact evidence and notes, and schedule the next step in India time. When no leads are ready, review upcoming follow-ups and prepare the outreach plan. Do not invent contacts or mark an attempt as a successful conversation.`;
-      task = await tx.teamTask.create({ data: { workspaceId: actor.workspaceId, creatorId: creator.id, ownerId: member.id, title, description, eventKey, dueAt, priority: "HIGH" } });
+      task = await tx.teamTask.create({ data: { workspaceId: actor.workspaceId, creatorId: creator.id, ownerId: member.id, title, description, eventKey, dueAt:shiftEnd, priority: "HIGH" } });
       await tx.teamAudit.create({ data: { workspaceId: actor.workspaceId, actorId: actor.id, action: "crm.daily_task_created", entityId: task.id, detail: { employeeId: member.id, day, mode, target } } });
       await tx.teamNotification.create({ data: { memberId: member.id, title, href: `/team?module=work&task=${task.id}` } });
       created++;
@@ -77,6 +84,7 @@ export async function syncDailyCrmWork(tx: Tx, actor: Actor, now = new Date()) {
 }
 
 export async function assertDailyTaskChange(tx: Tx, actor: Actor, task: { eventKey: string | null; ownerId: string }, change: Record<string, unknown>) {
+  if(task.eventKey?.startsWith('auto-source:')&&['COMPLETED','IN_REVIEW'].includes(String(change.status)))throw new TeamError('Complete this assignment by saving the actual source check or creator decision in its source module.',409);
   if (!task.eventKey?.includes(":crm-daily:")) return;
   if (change.status === "CANCELLED" && (!can(actor, "acquisition.admin") || String(change.blocker || change.evidence || "").trim().length < 8)) throw new TeamError("Only a programme administrator can cancel daily work, with a documented reason.", 403);
   if (Object.keys(change).some(key => !["id", "version", "status", "blocker", "evidence"].includes(key))) throw new TeamError("Daily CRM assignments are managed by the daily programme. Change the employee's targets instead.");
@@ -86,7 +94,7 @@ export async function assertDailyTaskChange(tx: Tx, actor: Actor, task: { eventK
     const day = task.eventKey.split(":crm-daily:")[1].slice(0, 10);
     const progress = await dailyProgress(tx, actor.workspaceId, task.ownerId, new Date(`${day}T12:00:00+05:30`));
     const researcher = task.eventKey.endsWith(":researcher");
-    const target = researcher ? config.researchTarget || 15 : config.callTarget || 45;
+    const target = researcher ? config.researchTarget ?? 15 : config.callTarget ?? 45;
     if ((researcher ? progress.researched : progress.called) < target) throw new TeamError("The daily CRM target has not been met. Add real eligible leads or record actual contact evidence first.", 409);
   }
 }

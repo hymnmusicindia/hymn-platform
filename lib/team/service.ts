@@ -78,6 +78,17 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
       demand(a, "tasks.update"); if (old.version !== data.version) throw new TeamError("This task changed. Refresh before saving.", 409);
       await assertDailyTaskChange(tx, a, old, object);
       const owner = data.ownerId ?? old.ownerId;
+      if(old.eventKey?.startsWith('auto-source:')&&data.ownerId) {
+        const member=await tx.teamMember.findUniqueOrThrow({where:{id:owner},include:{role:true}});
+        const kind=old.eventKey.split(':')[1];
+        const permission:Permission=kind==='lead'?'crm.prospects.create':kind==='producer'?'operations.producers.approve':'operations.engineers.approve';
+        if(!can(member,permission))throw new TeamError('This employee does not have permission to handle the source record.',403);
+        if(kind!=='lead') {
+          const sourceId=Number(old.eventKey.split(':')[2]);
+          const source=kind==='producer'?await tx.producerApplication.findUnique({where:{id:sourceId},select:{userId:true}}):await tx.engineerApplication.findUnique({where:{id:sourceId},select:{userId:true}});
+          if(source?.userId===member.userId)throw new TeamError('Employees cannot review their own application.',403);
+        }
+      }
       if (data.ownerId) await assertEmployeeAssignee(tx, a.workspaceId, data.ownerId);
       if (owner !== old.ownerId || (old.ownerId !== a.id && Object.keys(data).some(k => !["version", "status"].includes(k)))) demand(a, "tasks.assign");
       if (owner !== old.ownerId) await eligible(tx, a, [owner]);
@@ -125,7 +136,7 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
         for (const reviewer of reviewers) await notify(tx, reviewer.id, `Review requested: ${row.title}`, `/team?module=approvals&task=${id}`);
       }
       if (row.eventKey?.startsWith("support-call:")) await (await import("./callback-calendar")).syncCallbackCalendar(tx, a, row);
-      if(row.eventKey?.startsWith('coordinator:') || ['BEAT_REVIEW','ENGINEER_PROFILE','RELEASE_REVIEW','STUDIO_COORDINATION'].some(type=>row.eventKey?.startsWith(`${a.workspaceId}:${type}:`))) {
+      if(row.eventKey?.startsWith('auto-source:') || row.eventKey?.startsWith('coordinator:') || ['BEAT_REVIEW','ENGINEER_PROFILE','RELEASE_REVIEW','STUDIO_COORDINATION'].some(type=>row.eventKey?.startsWith(`${a.workspaceId}:${type}:`))) {
         const event=await tx.teamCalendarEvent.findUnique({where:{followUpTaskId:row.id}});
         if(event) {
           const closed=['COMPLETED','CANCELLED','BLOCKED','IN_REVIEW'].includes(row.status);

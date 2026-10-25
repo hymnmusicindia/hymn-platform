@@ -30,7 +30,7 @@
   {
     "id": "team-os",
     "method": "GET",
-    "seconds": 900,
+    "seconds": 300,
     "purpose": "Team tasks, digests, calendar notifications and client introductions",
     "flag": "TEAM_AUTOMATION_ENABLED"
   },

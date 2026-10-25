@@ -7,7 +7,7 @@ import { can, demand, TeamError, type Actor, type Permission } from './policy';
 import { audit, notify, taskScope } from './service';
 import { contactPhone, matchingContacts } from './contact-directory';
 import { employeeCallSlot } from './availability';
-import { activeWindows, moveWorkWeek, planMeetsTarget, record, workWeek } from './availability-rules';
+import { acceptsAssignmentsNow, activeWindows, moveWorkWeek, planMeetsTarget, record, workWeek } from './availability-rules';
 import { internalIdentities, matchesInternalIdentity } from './internal-identity';
 import { queueAppointment } from './appointments';
 export const WORK_KINDS={CALL:'Customer callback',RELEASE_HELP:'Release assistance',BEAT_REVIEW:'Beat review',ENGINEER_PROFILE:'Engineer profile review',STUDIO_COORDINATION:'Studio coordination',GENERAL:'General operations'} as const;
@@ -69,7 +69,7 @@ export async function dispatchIntake(tx:Prisma.TransactionClient,a:Actor,id:stri
   if(!permission)throw new TeamError('Unknown routing category.');
   const members=await tx.teamMember.findMany({where:{workspaceId:a.workspaceId,status:'ACTIVE',availability:'AVAILABLE',role:{owner:false},user:{status:'ACTIVE'}},include:{role:true},orderBy:{id:'asc'}});
   const load=await tx.teamTask.groupBy({by:['ownerId'],where:{workspaceId:a.workspaceId,status:{notIn:['COMPLETED','CANCELLED']},archivedAt:null},_count:true});
-  const candidates=members.filter(m=>can(m,permission)&&can(m,'tasks.update')).sort((x,y)=>(load.find(l=>l.ownerId===x.id)?._count||0)-(load.find(l=>l.ownerId===y.id)?._count||0));
+  const candidates=members.filter(m=>can(m,permission)&&can(m,'tasks.update')&&(item.kind!=='CALL'||acceptsAssignmentsNow(m.preferences,now))).sort((x,y)=>(load.find(l=>l.ownerId===x.id)?._count||0)-(load.find(l=>l.ownerId===y.id)?._count||0));
   let chosen:typeof members[number]|undefined, due:Date|null=null;
   let selectedLoad=Infinity;
   const desired=item.requestedAt&&item.requestedAt>now?item.requestedAt:new Date(now.getTime()+30*60000);
@@ -83,7 +83,7 @@ export async function dispatchIntake(tx:Prisma.TransactionClient,a:Actor,id:stri
     if(slot && (!item.requestedAt || slot.getTime()===item.requestedAt.getTime()) && (!due||slot<due)){chosen=member;due=slot;selectedLoad=workload;}
   }
   if(!chosen||!due) {
-    await tx.teamWorkIntake.update({where:{id},data:{reason:item.requestedAt?'No eligible employee is free at the requested time. Awaiting coverage.':'Waiting for an eligible employee with submitted weekly availability and a free slot.'}});return;
+    await tx.teamWorkIntake.update({where:{id},data:{reason:item.requestedAt?'No eligible employee is free at the requested time. Awaiting coverage.':'Waiting for an eligible employee in their active shift with a free slot.'}});return;
   }
   const call=item.kind==='CALL';
   const task=await tx.teamTask.create({data:{workspaceId:a.workspaceId,creatorId:item.creatorId,ownerId:chosen.id,clientId:item.clientId,title:item.summary,description:`${item.details}\n\nSource: ${item.source}\nRouting: ${WORK_KINDS[item.kind as keyof typeof WORK_KINDS]}; eligible employee with a free declared work slot.`,priority:item.requestedAt?'HIGH':call?'HIGH':'NORMAL',dueAt:due,eventKey:call?`support-call:${a.workspaceId}:INTAKE:${item.id}`:`coordinator:${item.id}`,approvalRequired:!call&&item.kind!=='GENERAL',followUpContext:{version:1,kind:call?'ENQUIRY':'COORDINATOR',service:item.kind,source:`intake:${item.id}`,referenceId:item.id,occurredAt:item.createdAt.toISOString(),footnotes:[item.details,`Source: ${item.source}`],routingReason:'Matched required permissions, declared weekly hours and current workload.'}}});
@@ -142,7 +142,7 @@ export async function remindAvailability(tx:Prisma.TransactionClient,a:Actor,now
     const eventKey=`availability-reminder:${member.id}:${target}`;
     if(await tx.teamWorkflowEvent.findUnique({where:{eventKey}}))continue;
     await tx.teamWorkflowEvent.create({data:{workspaceId:a.workspaceId,eventKey}});
-    await notify(tx,member.id,'Submit your weekly free time to receive scheduled work.','/team?module=availability');
+    await notify(tx,member.id,'Your schedule needs coverage. Review your recurring shift or this week’s override.','/team?module=availability');
   }
 }
 /** Start missing operational queues once qualified employees exist. Explicitly

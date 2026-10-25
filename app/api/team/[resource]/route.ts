@@ -39,6 +39,7 @@ export async function POST(request: Request, context: Context) {
     }
     const actor=resource==='accept'?null:await teamActor(new URL(request.url).searchParams.get('workspace')||undefined);
     const result = resource === "accept" ? await acceptTeamInvitation(user, typeof (body as { token?: unknown })?.token === "string" ? (body as { token: string }).token : "") : await teamMutation(actor!, resource, body);
+    if(actor&&['clients-save','prospect-research-save','prospect-call-save'].includes(resource))after(async()=>{const {syncSourceWork}=await import('@/lib/team/autonomous-work');await teamWrite(actor,(tx,a)=>syncSourceWork(tx,a));});
     if(actor&&['availability-save','availability-policy'].includes(resource))after(async()=>{await teamWrite(actor,async(tx,a)=>{await (await import('@/lib/team/coordinator')).syncCoordinator(tx,a);});});
     if(actor&&resource==='coordinator-intake'&&result&&typeof result==='object'&&'id' in result) {
       const intakeId=String(result.id);

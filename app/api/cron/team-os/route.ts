@@ -8,6 +8,7 @@ import { remindCalendarTasks } from '@/lib/team/calendar';
 import { syncCoordinator, remindAvailability, ensureCoordinatorRules } from '@/lib/team/coordinator';
 import { syncCustomerFollowups } from '@/lib/team/customer-followups';
 import { syncDailyCrmWork } from '@/lib/team/daily-work';
+import { repairWorkSchedule, syncSourceWork } from '@/lib/team/autonomous-work';
 import { notifyTeamBatch, type TeamReminder } from '@/lib/team/notification-batch';
 
 export const runtime = 'nodejs';
@@ -31,6 +32,13 @@ async function runJob() {
     const run = (name: string, execute: Parameters<typeof teamWrite>[1]) => phase(name, owner.workspaceId, () => teamWrite(owner, execute));
     await run('rules', (tx, a) => ensureCoordinatorRules(tx, a));
     await phase('workflows', owner.workspaceId, () => teamMutation(owner, 'workflow-sync', {}));
+    await phase('schedule-repair',owner.workspaceId,()=>repairWorkSchedule(owner,new Date(),3));
+    await phase('source-work',owner.workspaceId,async()=>{
+      for(let i=0;i<4;i++){
+        const result=await teamWrite(owner,(tx,a)=>syncSourceWork(tx,a));
+        if(!result.created&&!result.reconciled)break;
+      }
+    });
     await run('daily-work', (tx, a) => syncDailyCrmWork(tx, a));
     await run('calendar-events', async (tx, a) => {
       const now = new Date();

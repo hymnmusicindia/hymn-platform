@@ -26,6 +26,11 @@ async function main() {
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("acquisition_fixture");
+    if (process.argv.includes('--team-autonomy-only')) {
+      await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-team-autonomy.ts']);
+      return;
+    }
     if (process.argv.includes('--team-coordinator-only')) {
       const baseline=path.join(fixture,'coordinator-baseline.prisma');
       writeFileSync(baseline,readFileSync('prisma/schema.prisma','utf8').replace(/^model TeamWorkIntake \{[\s\S]*?^\}\r?\n/gm,'').replace(/^  workIntakes TeamWorkIntake\[\]\r?\n/gm,''));

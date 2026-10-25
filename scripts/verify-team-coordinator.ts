@@ -10,7 +10,7 @@ import { roleTemplates } from '../lib/team/policy';
 async function main(){
   assert.equal(process.env.DATABASE_URL,'postgresql://fixture:fixture@127.0.0.1:55473/acquisition_fixture');
   const workspace=await prisma.teamWorkspace.create({data:{name:'Coordinator fixture',clientCardsImportedAt:new Date()}});
-  async function member(name:string,permissions:string[],owner=false){const role=await prisma.teamRole.create({data:{workspaceId:workspace.id,name,permissions,owner}});const user=await prisma.user.create({data:{name,email:`${name}@coordinator.fixture.invalid`,googleId:name}});return prisma.teamMember.create({data:{workspaceId:workspace.id,userId:user.id,roleId:role.id},include:{role:true}});}
+  async function member(name:string,permissions:string[],owner=false){const role=await prisma.teamRole.create({data:{workspaceId:workspace.id,name,permissions,owner}});const user=await prisma.user.create({data:{name,email:`${name}@coordinator.fixture.invalid`,googleId:name}});return prisma.teamMember.create({data:{workspaceId:workspace.id,userId:user.id,roleId:role.id,preferences:{workAvailability:{recurring:{enabled:false}}}},include:{role:true}});}
   const owner=await member('Owner',[],true),alice=await member('Alice',roleTemplates['Call Representative']),bob=await member('Bob',roleTemplates['Call Representative']),operator=await member('Operator',['tasks.create','calendar.view']),worker=await member('Worker',['tasks.create','tasks.update','tasks.complete','calendar.view','calendar.manage']),viewer=await member('Viewer',['calendar.view']);
   const week=moveWorkWeek(workWeek(),1), slots=[0,1,2,3,4].map(day=>({day,start:540,end:1020}));
   const contact=await prisma.teamClient.create({data:{workspaceId:workspace.id,ownerId:operator.id,name:'Customer',phone:'+919876543201',email:'customer@coordinator.fixture.invalid'}});
@@ -56,7 +56,7 @@ async function main(){
   await assert.rejects(teamMutation(second,'task-update',{id:callback.id,version:callback.version,dueAt:new Date(`${week}T20:00:00+05:30`).toISOString()}),/declared weekly hours/);
   await assert.rejects(teamMutation(second,'availability-save',{week,revision:1,slots:slots.filter(s=>s.day!==0)}),/upcoming call/i);
   const outside=new Date(`${week}T20:00:00+05:30`).toISOString();
-  await assert.rejects(teamMutation(owner,'calendar-save',{kind:'CALL',title:'Outside hours',clientId:contact.id,assigneeId:first.id,startsAt:outside}),/weekly availability/i);
+  await assert.rejects(teamMutation(owner,'calendar-save',{kind:'CALL',title:'Outside hours',clientId:contact.id,assigneeId:first.id,startsAt:outside}),/active working hours/i);
   const official=await teamMutation(owner,'calendar-save',{kind:'CALL',title:'Confirmed customer appointment',clientId:contact.id,assigneeId:'__AUTO__',startsAt:event.startsAt.toISOString()}) as any;
   assert.equal(official.assigneeId,first.id);
   assert.equal(await prisma.teamAppointmentMessage.count({where:{eventId:official.id,kind:'CLIENT_CONFIRM'}}),1);
