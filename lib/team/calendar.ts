@@ -1,5 +1,6 @@
 import { contactNotesAllowed, publicContact, matchingContacts, contactPhone } from "./contact-directory";
 import { registerTeamProspect } from "./service";
+import { ensureContactLead } from './contact-leads';
 import { assertEmployeeAssignee } from "./daily-work";
 import "server-only";
 import { z } from "zod";
@@ -119,6 +120,7 @@ export async function calendarMutation(tx: Prisma.TransactionClient, a: Actor, r
       const changedIdentity = old.phone !== row.phone || old.email !== row.email;
       await tx.teamProspect.updateMany({ where: { clientId: row.id }, data: { name: row.name, email: row.email || null, phone: row.phone, city: row.city, ...(changedIdentity ? { verified: false, contactEligibility: "UNVERIFIED" } : {}), ...(row.status !== "ACTIVE" ? { suppressed: true, stage: "DO_NOT_CONTACT" } : {}), version: { increment: 1 } } });
     }
+    if (!old && !data.research) await ensureContactLead(tx, a, row.id);
     if (data.status !== "ACTIVE") await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, clientId: row.id, status: { notIn: ["COMPLETED", "CANCELLED"] } }, data: { status: "CANCELLED", version: { increment: 1 } } });
     if (data.status !== "ACTIVE") await tx.teamCalendarEvent.updateMany({ where: { clientId: row.id, status: "SCHEDULED", startsAt: { gte: new Date() } }, data: { status: "CANCELLED", version: { increment: 1 } } });
     const registered = emails.length ? await tx.user.count({ where: { OR: emails.map(value => ({ email: { equals: value, mode: "insensitive" } })) } }) : 0;

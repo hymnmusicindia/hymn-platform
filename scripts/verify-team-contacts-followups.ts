@@ -20,6 +20,13 @@ async function main() {
   const owner = await member('Owner', ownerRole.id), alice = await member('Alice', staffRole.id), bob = await member('Bob', staffRole.id);
   const caller = await member('Caller', callerRole.id, true), second = await member('Second', callerRole.id, true);
   const card = await teamMutation(alice, 'clients-save', { name: 'Shared Artist', phone: '+919876543210', notes: 'Alice private note', ownerId: alice.id }) as { id: string; version: number };
+  const intakeLead = await prisma.teamProspect.findUniqueOrThrow({ where: { clientId: card.id }, include: { acquisitionLead: true } });
+  assert.equal(intakeLead.stage, 'NEEDS_RESEARCH');
+  assert.equal(intakeLead.verified, false);
+  assert.equal(intakeLead.contactEligibility, 'UNVERIFIED');
+  assert.equal(intakeLead.notes, '', 'Private contact notes must not leak into the pipeline.');
+  assert.equal(intakeLead.acquisitionLead?.researcherEmployeeId, alice.id);
+  assert.equal(intakeLead.acquisitionLead?.acquisitionEmployeeId, null);
   const read = await calendarRead(bob, 'clients', new URLSearchParams({ clientId: card.id })) as { items: { id: string; notes: string; notesVisible: boolean }[] };
   assert.equal(read.items[0].notes, ''); assert.equal(read.items[0].notesVisible, false);
   const updated = await teamMutation(bob, 'clients-save', { id: card.id, version: card.version, name: 'Shared Artist corrected', phone: '+919876543210', notes: 'Cannot replace private notes', ownerId: alice.id }) as { version: number };
@@ -68,7 +75,8 @@ async function main() {
   await prisma.growthEvent.create({ data: { key: 'fixture-interest', event: 'customer_service_interest', source: 'support_signal', userId: customer.id, properties: { service: 'Studio services' } } });
   assert.equal((await sync()).assigned, 2);
   assert.equal((await sync()).assigned, 0);
-  assert.equal(await prisma.acquisitionLead.count(), 0, 'Support callbacks never claim acquisition credit.');
+  assert.equal(await prisma.acquisitionLead.count({ where: { customerId: customer.id } }), 0, 'Support callbacks never claim acquisition credit.');
+  assert.equal(await prisma.teamProspect.count({ where: { clientId: card.id } }), 1, 'Editing a contact never duplicates its lead.');
   assert.equal(await prisma.teamAppointmentMessage.count({where:{kind:{startsWith:'CLIENT_'}}}), 0, 'Internal callbacks must not send customer appointment emails.');
   const linked = await prisma.teamClient.findUniqueOrThrow({ where: { userId: customer.id } });
   await teamMutation(bob, 'clients-save', { id: linked.id, version: linked.version, ownerId: linked.ownerId, name: linked.name, phone: linked.phone, email: linked.email, status: 'DO_NOT_CONTACT' });
