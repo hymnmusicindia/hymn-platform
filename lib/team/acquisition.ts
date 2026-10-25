@@ -19,7 +19,10 @@ export async function acquisitionRead(a: Actor, resource: string, params: URLSea
   if (resource === "acquisition-targets") {
     demand(a, "crm.prospects.view");
     const members = await prisma.teamMember.findMany({ where: { workspaceId: a.workspaceId, status: "ACTIVE", role: { owner: false }, user: { status: "ACTIVE" }, ...(can(a, "acquisition.admin") ? {} : { id: a.id }) }, include: { user: { select: { name: true } } } });
-    return { items: await Promise.all(members.map(async member => ({ id: member.id, name: member.user.name, ...crmPreferences(member.preferences), ...await dailyProgress(prisma, a.workspaceId, member.id) }))) };
+    const { start, end } = indiaWorkday();
+    const saved = await prisma.acquisitionLead.groupBy({ by: ['researcherEmployeeId'], where: { workspaceId: a.workspaceId, researcherEmployeeId: { in: members.map(member => member.id) } }, _count: true });
+    const addedToday = await prisma.acquisitionLead.groupBy({ by: ['researcherEmployeeId'], where: { workspaceId: a.workspaceId, researcherEmployeeId: { in: members.map(member => member.id) }, registeredAt: { gte: start, lt: end } }, _count: true });
+    return { items: await Promise.all(members.map(async member => ({ id: member.id, name: member.user.name, savedLeads: saved.find(row => row.researcherEmployeeId === member.id)?._count || 0, addedToday: addedToday.find(row => row.researcherEmployeeId === member.id)?._count || 0, ...crmPreferences(member.preferences), ...await dailyProgress(prisma, a.workspaceId, member.id) }))) };
 
   }
   if (resource === "acquisition-daily-plan") {
