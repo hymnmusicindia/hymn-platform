@@ -22,6 +22,7 @@ const researchSchema = z.object({ sourceUrl: z.string().url().max(1000), evidenc
 const clientSchema = z.object({ research: researchSchema.optional(), id: id.optional(), version: z.number().int().positive().optional(), name: z.string().trim().min(1).max(160), phone: z.string().trim().max(40).regex(/^[+\d\s().-]*$/).default(""), email: email.default(""), secondaryEmail: email.default(""), interests: z.array(z.enum(Object.keys(CLIENT_INTERESTS) as [keyof typeof CLIENT_INTERESTS, ...(keyof typeof CLIENT_INTERESTS)[]])).max(7).default([]), state: z.string().trim().max(100).default(""), city: z.string().trim().max(100).default(""), notes: z.string().trim().max(10000).default(""), ownerId: id, status: z.enum(["ACTIVE", "DO_NOT_CONTACT", "ARCHIVED"]).default("ACTIVE") });
 const eventSchema = z.object({ id: id.optional(), version: z.number().int().positive().optional(), title: z.string().trim().min(1).max(200), kind: z.enum(["CALL", "EMAIL", "MEETING", "FOLLOW_UP", "EVENT"]), clientId: id.nullable(), assigneeId: id, startsAt: z.string().datetime({ offset: true }), endsAt: z.string().datetime({ offset: true }).nullish(), notes: z.string().trim().max(10000).default(""), outcome: z.string().trim().max(10000).default(""), status: z.enum(["SCHEDULED", "COMPLETED", "CANCELLED"]).default("SCHEDULED"), reminderMinutes: z.number().int().min(0).max(10080).default(30) });
 export async function calendarMutation(tx: Prisma.TransactionClient, a: Actor, resource: string, input: unknown) {
+  if (resource === 'clients-use-account') return (await import('./contact-identity')).useExistingAccount(tx, a, input);
   if (resource === "calendar-delete") {
     demand(a, "calendar.manage");
     const data = z.object({ id, version: z.number().int().positive() }).parse(input);
@@ -109,8 +110,17 @@ export async function calendarMutation(tx: Prisma.TransactionClient, a: Actor, r
     if(old?.mergedIntoId)throw new TeamError("This card was merged. Open the retained contact before editing.",409);
     const emails = [data.email, data.secondaryEmail].filter(Boolean);
     if((await matchingContacts(tx,a.workspaceId,{...data,excludeId:old?.id})).length)throw new TeamError("A matching contact exists. Review the matching cards and merge them if they are the same person.",409);
+    const identity = await (await import('./contact-identity')).contactIdentityMatches(a, { email: data.email, phone: data.phone, excludeId: old?.id }, tx);
+    if (identity.items.length) throw new TeamError('These details already belong to a saved contact. Use or review that card before saving.', 409);
+    if (identity.accounts.length > 1) throw new TeamError('The phone and email match different accounts. Review the correct account before saving.', 409);
+    if (old && identity.accounts.some(account => account.id !== old.userId)) throw new TeamError('These details belong to another registered account. Review it before changing this card.', 409);
+    if (!old && identity.accounts[0]) {
+      const account = identity.accounts[0];
+      const user = await tx.user.findUniqueOrThrow({ where: { id: account.id }, select: { contactEmail: true } });
+      if ((await matchingContacts(tx, a.workspaceId, { email: account.email, secondaryEmail: user.contactEmail || '', phone: account.phone })).length) throw new TeamError('This registered account has a matching saved card. Select the registered customer to link that card instead of creating another.', 409);
+    }
     const fields = { name: data.name, phone: contactPhone(data.phone), email: data.email, secondaryEmail: data.secondaryEmail, interests: [...new Set(data.interests)], state: data.state, city: data.city, notes: old && !contactNotesAllowed(a, old) ? old.notes : data.notes, ownerId: data.ownerId, status: data.status };
-    let row = old ? await tx.teamClient.update({ where: { id: old.id }, data: { ...fields, version: { increment: 1 } } }) : await tx.teamClient.create({ data: { ...fields, workspaceId: a.workspaceId } });
+    let row = old ? await tx.teamClient.update({ where: { id: old.id }, data: { ...fields, version: { increment: 1 } } }) : await tx.teamClient.create({ data: { ...fields, workspaceId: a.workspaceId, ...(identity.accounts[0] ? { userId: identity.accounts[0].id } : {}) } });
     if (data.research) {
       if (row.userId || row.secondaryEmail && await tx.user.findFirst({ where: { email: { equals: row.secondaryEmail, mode: "insensitive" } }, select: { id: true } })) throw new TeamError("Existing HYMN customers cannot be registered as new acquisition leads.", 409);
       if (await tx.teamProspect.findFirst({ where: { clientId: row.id } })) throw new TeamError("This contact already has a research record. Open its pipeline entry.", 409);

@@ -62,7 +62,7 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
   if (resource === "call-followup-update") return (await import("./customer-followups")).updateCallback(tx, a, input);
   if (resource.startsWith("team-email-")) return (await import("./outreach-email")).outreachMutation(tx, a, resource, input);
   if (resource.startsWith("acquisition-")) return (await import("./acquisition")).acquisitionMutation(tx, a, resource, (input && typeof input === "object" ? input : {}) as Record<string, unknown>);
-    if (["clients-save", "clients-merge", "calendar-save", "calendar-task", "calendar-handoff", "calendar-delete"].includes(resource)) return (await import("./calendar")).calendarMutation(tx, a, resource, input);
+    if (["clients-use-account", "clients-save", "clients-merge", "calendar-save", "calendar-task", "calendar-handoff", "calendar-delete"].includes(resource)) return (await import("./calendar")).calendarMutation(tx, a, resource, input);
     const object = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
     const id = typeof object.id === "string" ? object.id : "";
     if (resource === "tasks") {
@@ -357,6 +357,7 @@ export async function acceptTeamInvitation(user: { id: number; email: string }, 
 }
 
 export async function teamRead(a: Actor, resource: string, params: URLSearchParams) {
+  if(resource==='clients-identity')return (await import('./contact-identity')).contactIdentityMatches(a,{email:params.get('email')||'',phone:params.get('phone')||'',excludeId:params.get('excludeId')||undefined});
   if(resource==='clients-lookup')return (await import('./contact-lookup')).lookupContacts(a,params);
   if(resource==='availability') return (await import('./availability')).availabilityRead(a,params);
   if(resource==='coordinator') return (await import('./coordinator')).coordinatorRead(a);
