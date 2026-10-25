@@ -52,7 +52,7 @@ export async function syncDailyCrmWork(tx: Tx, actor: Actor, now = new Date()) {
     if (!task) {
       const title = mode === "researcher" ? `Research ${target} contactable leads - ${day}` : `Work the call / email queue - ${day}`;
       const description = mode === "researcher"
-        ? `Add ${target} unique, verified leads today with a real phone number including country code or a business email. Save the public source, contact evidence, service interest and research notes in Contacts & Calls. Respect opt-outs; do not add existing HYMN accounts or duplicates. Verified eligible contacts route to the available call representative. Your task completes from real CRM records, not a checkbox.`
+        ? `Add ${target} unique, source-checked contacts today with a real phone number including country code or a business email. Save the public source, contact evidence, service interest and research notes in Contacts & Calls. Respect opt-outs; do not add existing HYMN accounts or duplicates. Source-checked eligible contacts route to the available call representative. Only a rep can confirm a verified lead after a real conversation. Your task completes from real CRM records, not a checkbox.`
         : `Work today's researched contacts and overdue follow-ups. Aim to reach ${target} distinct eligible contacts by call or individually reviewed email. Open Contacts & Calls > Call queue, check the source and eligibility, call or open WhatsApp, record actual contact evidence and notes, and schedule the next step in India time. When no leads are ready, review upcoming follow-ups and prepare the outreach plan. Do not invent contacts or mark an attempt as a successful conversation.`;
       task = await tx.teamTask.create({ data: { workspaceId: actor.workspaceId, creatorId: creator.id, ownerId: member.id, title, description, eventKey, dueAt, priority: "HIGH" } });
       await tx.teamAudit.create({ data: { workspaceId: actor.workspaceId, actorId: actor.id, action: "crm.daily_task_created", entityId: task.id, detail: { employeeId: member.id, day, mode, target } } });
@@ -68,7 +68,7 @@ export async function syncDailyCrmWork(tx: Tx, actor: Actor, now = new Date()) {
     }
     if (task.status === "COMPLETED") continue;
     if (actual >= target) {
-      await tx.teamTask.update({ where: { id: task.id }, data: { status: "COMPLETED", completedAt: now, evidence: `${actual} distinct ${mode === "researcher" ? "verified contactable leads registered" : "contacts reached"} in CRM on ${day} (Asia/Kolkata).`, version: { increment: 1 } } });
+      await tx.teamTask.update({ where: { id: task.id }, data: { status: "COMPLETED", completedAt: now, evidence: `${actual} distinct ${mode === "researcher" ? "source-checked contacts registered" : "contacts reached"} in CRM on ${day} (Asia/Kolkata).`, version: { increment: 1 } } });
       await tx.teamAudit.create({ data: { workspaceId: actor.workspaceId, actorId: actor.id, action: "crm.daily_task_completed", entityId: task.id, detail: { employeeId: member.id, actual, target, day } } });
       completed++;
     }

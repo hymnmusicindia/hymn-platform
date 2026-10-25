@@ -1,3 +1,5 @@
+import { leadStageCodes } from "./lead-stages";
+import { hasLeadVerification } from './lead-verification';
 import { assertEmployeeAssignee, dailyProgress, indiaWorkday, syncDailyCrmWork } from "./daily-work";
 import { crmPreferences, nextCaller } from "./crm-workflow";
 import { z } from "zod";
@@ -22,7 +24,9 @@ export async function acquisitionRead(a: Actor, resource: string, params: URLSea
     const { start, end } = indiaWorkday();
     const saved = await prisma.acquisitionLead.groupBy({ by: ['researcherEmployeeId'], where: { workspaceId: a.workspaceId, researcherEmployeeId: { in: members.map(member => member.id) } }, _count: true });
     const addedToday = await prisma.acquisitionLead.groupBy({ by: ['researcherEmployeeId'], where: { workspaceId: a.workspaceId, researcherEmployeeId: { in: members.map(member => member.id) }, registeredAt: { gte: start, lt: end } }, _count: true });
-    return { items: await Promise.all(members.map(async member => ({ id: member.id, name: member.user.name, savedLeads: saved.find(row => row.researcherEmployeeId === member.id)?._count || 0, addedToday: addedToday.find(row => row.researcherEmployeeId === member.id)?._count || 0, ...crmPreferences(member.preferences), ...await dailyProgress(prisma, a.workspaceId, member.id) }))) };
+    const checked = await prisma.teamProspect.findMany({ where: { workspaceId: a.workspaceId, OR: [{ acquisitionLead: { researcherEmployeeId: { in: members.map(member => member.id) } } }, { outreach: { some: { kind: 'LEAD_VERIFIED', actorId: { in: members.map(member => member.id) } } } }], outreach: { some: { kind: 'LEAD_VERIFIED' } } }, select: { email: true, phone: true, verified: true, suppressed: true, contactEligibility: true, acquisitionLead: { select: { researcherEmployeeId: true } }, outreach: { where: { kind: 'LEAD_VERIFIED' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1, select: { evidence: true, actorId: true, occurredAt: true } } } });
+    const verified = checked.filter(row => hasLeadVerification(row, row.outreach[0]));
+    return { items: await Promise.all(members.map(async member => ({ id: member.id, name: member.user.name, verifiedByYou: verified.filter(row => row.outreach[0]?.actorId === member.id).length, verifiedLeads: verified.filter(row => row.acquisitionLead?.researcherEmployeeId === member.id).length, leadsVerifiedToday: verified.filter(row => row.outreach[0]?.actorId === member.id && row.outreach[0].occurredAt >= start && row.outreach[0].occurredAt < end).length, savedLeads: saved.find(row => row.researcherEmployeeId === member.id)?._count || 0, addedToday: addedToday.find(row => row.researcherEmployeeId === member.id)?._count || 0, ...crmPreferences(member.preferences), ...await dailyProgress(prisma, a.workspaceId, member.id) }))) };
 
   }
   if (resource === "acquisition-daily-plan") {
@@ -67,18 +71,23 @@ export async function acquisitionRead(a: Actor, resource: string, params: URLSea
     const q = params.get("q")?.trim().slice(0, 150); const status = params.get("status");
     const where: Prisma.AcquisitionLeadWhereInput = { workspaceId: a.workspaceId, ...(can(a, "crm.all") && params.get("scope") !== "mine" ? {} : { OR: [{ researcherEmployeeId: a.id }, { acquisitionEmployeeId: a.id }] }), AND: [
       ...(q ? [{ prospect: { OR: [{ name: { contains: q, mode: "insensitive" as const } }, { email: { contains: q, mode: "insensitive" as const } }, { contactName: { contains: q, mode: "insensitive" as const } }] } }] : []),
-      ...(status && ["NEW", "QUALIFIED", "ASSIGNED", "CONTACTED", "INTERESTED", "CONVERTED", "UNQUALIFIED", "DUPLICATE", "NOT_INTERESTED", "DO_NOT_CONTACT", "LOST"].includes(status) ? [{ prospect: { stage: status } }] : []),
+      ...(status && ["NEW", "NEEDS_RESEARCH", "QUALIFIED", "ASSIGNED", "READY_TO_CONTACT", "CONTACTED", "VERIFIED_LEAD", "INTERESTED", "CONVERTED", "UNQUALIFIED", "DUPLICATE", "NOT_INTERESTED", "DO_NOT_CONTACT", "LOST"].includes(status) ? [{ prospect: { stage: { in: leadStageCodes(status) } } }] : []),
     ] };
     const orderKey = params.get("sort"); const orderBy = orderKey === "status" ? { prospect: { stage: "asc" as const } } : orderKey === "owner" ? { acquisitionEmployeeId: "asc" as const } : orderKey === "source" ? { prospect: { sourceUrl: "asc" as const } } : { registeredAt: "desc" as const };
-    const rows = await prisma.acquisitionLead.findMany({ where, take: resource === "acquisition-leads" ? 100 : 5000, orderBy, include: { prospect: { select: { id: true, version: true, ownerId: true, verified: true, name: true, contactName: true, email: true, phone: true, stage: true, sourceUrl: true, evidence: true, discoveredAt: true, notes: true, followUpAt: true, categories: true, contactEligibility: true, suppressed: true } }, researcher: { select: { id: true, user: { select: { name: true } } } }, acquisitionEmployee: { select: { id: true, user: { select: { name: true } } } }, customer: { select: { id: true, name: true, email: true } } } });
-    return { items: rows };
+    const rows = await prisma.acquisitionLead.findMany({ where, take: resource === "acquisition-leads" ? 100 : 5000, orderBy, include: { prospect: { select: { id: true, version: true, ownerId: true, verified: true, name: true, contactName: true, email: true, phone: true, stage: true, sourceUrl: true, evidence: true, discoveredAt: true, notes: true, followUpAt: true, categories: true, contactEligibility: true, suppressed: true, outreach: { where: { kind: 'LEAD_VERIFIED' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1, select: { evidence: true, actorId: true, occurredAt: true } } } }, researcher: { select: { id: true, user: { select: { name: true } } } }, acquisitionEmployee: { select: { id: true, user: { select: { name: true } } } }, customer: { select: { id: true, name: true, email: true } } } });
+    return { items: rows.map(row => {
+      const leadVerified = hasLeadVerification(row.prospect, row.prospect.outreach[0]);
+      const terminal = ['CONVERTED','LOST','NOT_INTERESTED','UNQUALIFIED','DUPLICATE','DO_NOT_CONTACT'].includes(row.prospect.stage);
+      const stage = terminal ? row.prospect.stage : leadVerified ? ['INTERESTED','OFFER_SHARED'].includes(row.prospect.stage) ? row.prospect.stage : 'VERIFIED_LEAD' : ['VERIFIED_LEAD','INTERESTED','OFFER_SHARED'].includes(row.prospect.stage) ? 'CONTACTED' : row.prospect.stage;
+      return { ...row, leadVerified, prospect: { ...row.prospect, stage } };
+    }) };
   }
   if (resource === "acquisition-leads-export") {
     demand(a, "crm.prospects.view");
     const q = params.get("q")?.trim().slice(0, 150); const status = params.get("status");
     const where: Prisma.AcquisitionLeadWhereInput = { workspaceId: a.workspaceId, ...(can(a, "crm.all") && params.get("scope") !== "mine" ? {} : { OR: [{ researcherEmployeeId: a.id }, { acquisitionEmployeeId: a.id }] }), AND: [
       ...(q ? [{ prospect: { OR: [{ name: { contains: q, mode: "insensitive" as const } }, { email: { contains: q, mode: "insensitive" as const } }, { contactName: { contains: q, mode: "insensitive" as const } }] } }] : []),
-      ...(status ? [{ prospect: { stage: status } }] : []),
+      ...(status ? [{ prospect: { stage: { in: leadStageCodes(status) } } }] : []),
     ] };
     const rows = await prisma.acquisitionLead.findMany({ where, take: 5000, orderBy: { registeredAt: "desc" }, include: { prospect: true, researcher: { include: { user: { select: { name: true } } } }, acquisitionEmployee: { include: { user: { select: { name: true } } } }, customer: { select: { id: true, name: true, email: true } } } });
     const quote = (value: unknown) => { const raw = String(value ?? "").replace(/[\r\n]+/g, " "); const safe = /^[=+\-@\t]/.test(raw) ? `'${raw}` : raw; return `"${safe.replace(/"/g, '""')}"`; };
@@ -127,7 +136,7 @@ export async function acquisitionRead(a: Actor, resource: string, params: URLSea
   }
   if (resource === "acquisition-link") {
     const leadId = params.get("leadId") || "";
-    const lead = await prisma.acquisitionLead.findFirst({ where: { id: leadId, workspaceId: a.workspaceId, acquisitionEmployeeId: a.id, prospect: { stage: { in: ["QUALIFIED", "READY_TO_CONTACT", "INTERESTED"] }, suppressed: false } }, select: { id: true } });
+    const lead = await prisma.acquisitionLead.findFirst({ where: { id: leadId, workspaceId: a.workspaceId, acquisitionEmployeeId: a.id, prospect: { stage: { in: ["QUALIFIED", "READY_TO_CONTACT", "VERIFIED_LEAD", "INTERESTED"] }, suppressed: false } }, select: { id: true } });
     if (!lead) throw new TeamError("A qualified lead assigned to you is required to create this link.", 404);
     const token = jwt.sign({ purpose: "acquisition_lead", leadId: lead.id, employeeId: a.id, nonce: randomUUID() }, getUserSessionSecret(), { expiresIn: "30d" });
     return { url: `${getPublicAppUrl()}/a/${encodeURIComponent(token)}` };
@@ -194,7 +203,7 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
     demand(a, "crm.outreach.manage");
     const prospectId = String(body.prospectId || ""); const templateId = String(body.templateId || "");
     const prospect = await tx.teamProspect.findFirst({ where: {
-      id: prospectId, workspaceId: a.workspaceId, suppressed: false, verified: true, stage: { in: ["QUALIFIED", "READY_TO_CONTACT", "INTERESTED"] },
+      id: prospectId, workspaceId: a.workspaceId, suppressed: false, verified: true, stage: { in: ["QUALIFIED", "READY_TO_CONTACT", "VERIFIED_LEAD", "INTERESTED"] },
       ...(can(a, "crm.all") ? {} : { OR: [
         { ownerId: a.id },
         { acquisitionLead: { is: { OR: [{ researcherEmployeeId: a.id }, { acquisitionEmployeeId: a.id }] } } },

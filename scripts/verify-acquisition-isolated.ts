@@ -37,6 +37,11 @@ async function main() {
       if(process.argv.includes('--browser'))await run(['--import','tsx','scripts/verify-team-coordinator-browser.ts']);
       return;
     }
+    if (process.argv.includes('--lead-stages-only')) {
+      await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-team-lead-stages.ts']);
+      return;
+    }
     if (process.argv.includes('--release-corrections-only')) {
       await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
       await run(['--conditions=react-server','--import','tsx','scripts/verify-release-support-corrections.ts'], process.execPath, { ...env, HYMN_STORAGE_ROOT: path.join(fixture, 'storage'), PRIVATE_STORAGE_ROOT: path.join(fixture, 'storage') });

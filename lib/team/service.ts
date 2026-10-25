@@ -1,4 +1,5 @@
 import { syncProspectContact } from "./contact-directory";
+import { leadIdentity, hasLeadVerification } from './lead-verification';
 import { assertEmployeeAssignee, assertDailyTaskChange, syncDailyCrmWork, indiaWorkday } from "./daily-work";
 import { nextCaller } from "./crm-workflow";
 import "server-only";
@@ -209,9 +210,9 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
     if (resource === "notifications") { await tx.teamNotification.updateMany({ where: { memberId: a.id, ...(id ? { id } : {}), readAt: null }, data: { readAt: new Date() } }); return { ok: true }; }
     if (resource === "prospects") return registerTeamProspect(tx, a, input);
     if (resource === "prospect-research-save") {
-      demand(a, "crm.prospects.create");
+      if (!can(a, 'crm.prospects.create')) demand(a, 'crm.outreach.manage');
       const data = z.object({ version: z.number().int().positive(), email: z.string().trim().email().max(254).nullable(), phone: z.string().trim().max(40), sourceUrl: z.string().url().max(1000).refine(value => /^https?:\/\//i.test(value)), evidence: z.string().trim().min(10).max(10000), notes: z.string().trim().max(10000), verified: z.boolean(), contactEligibility: z.enum(["UNVERIFIED", "CONSENTED", "LEGITIMATE_INTEREST", "DO_NOT_CONTACT"]) }).parse(input);
-      const old = await tx.teamProspect.findFirst({ where: { workspaceId: a.workspaceId, id, ...(can(a, "crm.all") ? {} : { acquisitionLead: { is: { researcherEmployeeId: a.id } } }) } });
+      const old = await tx.teamProspect.findFirst({ where: { ...prospectScope(a), id } });
       if (!old) throw new TeamError("Research contact unavailable.", 404);
       if (old.version !== data.version) throw new TeamError("This contact changed. Refresh before saving.", 409);
       if (old.suppressed || ["CONVERTED", "DO_NOT_CONTACT"].includes(old.stage)) throw new TeamError("Closed or suppressed research cannot be changed here.", 403);
@@ -247,8 +248,25 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
         if (old.suppressed || !old.verified || !["CONSENTED", "LEGITIMATE_INTEREST"].includes(old.contactEligibility)) throw new TeamError("Verify an eligible contact before recording a call.", 403);
         if (old.email && await tx.newsletterSubscriber.findFirst({ where: { email: { equals: old.email, mode: "insensitive" }, OR: [{ status: { not: "subscribed" } }, { unsubscribedAt: { not: null } }] } })) throw new TeamError("This contact has opted out.", 403);
         const contactEvent = await tx.teamOutreach.create({ data: { prospectId: id, kind: "CONTACT", actorId: a.id, body: contact.body, evidence: contact.evidence, occurredAt: new Date() } });
-        await audit(tx, a, "outreach.contact", contactEvent.id);
+        await audit(tx, a, "outreach.contact", contactEvent.id, { identity: leadIdentity(old), prospectId: old.id });
       }
+      if (object.verifyLead !== undefined && resource !== 'prospect-call-save') throw new TeamError('Use the call outcome to verify a lead.');
+      if (resource === 'prospect-call-save' && object.verifyLead) {
+        const confirmation = z.object({ talked: z.literal(true), identityConfirmed: z.literal(true), needsConfirmed: z.literal(true), confirmed: z.literal(true) }).parse(object.verifyLead);
+        void confirmation;
+        if (!old.verified || old.suppressed || !['CONSENTED', 'LEGITIMATE_INTEREST'].includes(old.contactEligibility)) throw new TeamError('Check the contact source and outreach permission first.');
+        const conversation = await tx.teamOutreach.findFirst({ where: { prospectId: id, actorId: a.id, kind: 'CONTACT' }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }] });
+        if (!conversation || !await tx.teamAudit.count({ where: { workspaceId: a.workspaceId, actorId: a.id, entityId: conversation.id, action: 'outreach.contact', detail: { path: ['identity'], equals: leadIdentity(old) } } })) throw new TeamError('Record your actual conversation with these current contact details before verifying this lead.');
+        if (old.email && await tx.newsletterSubscriber.count({ where: { email: { equals: old.email, mode: 'insensitive' }, OR: [{ status: { not: 'subscribed' } }, { unsubscribedAt: { not: null } }] } })) throw new TeamError('This contact has opted out.');
+        if (data.stage !== 'VERIFIED_LEAD') throw new TeamError('Choose Verified lead when confirming these checks.');
+        const proof = await tx.teamOutreach.findFirst({ where: { prospectId: id, kind: 'LEAD_VERIFIED' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+        if (!hasLeadVerification(old, proof)) await tx.teamOutreach.create({ data: { prospectId: id, actorId: a.id, kind: 'LEAD_VERIFIED', body: 'Rep confirmed a real conversation, customer identity, contact details and needs.', evidence: leadIdentity(old), occurredAt: new Date() } });
+      }
+      if (data.stage && ['VERIFIED_LEAD', 'INTERESTED', 'OFFER_SHARED', 'CONVERTED'].includes(data.stage)) {
+        const proof = await tx.teamOutreach.findFirst({ where: { prospectId: id, kind: 'LEAD_VERIFIED' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+        if (!hasLeadVerification(old, proof)) throw new TeamError('A rep must speak with this person and confirm their details before moving beyond Talked.');
+      }
+      if (resource === 'prospect-call-save' && object.contact && (!data.stage || ['NEW', 'NEEDS_RESEARCH', 'ASSIGNED', 'QUALIFIED', 'READY_TO_CONTACT'].includes(data.stage))) data.stage = 'CONTACTED';
       if (data.stage === "CONTACTED" && !await tx.teamOutreach.count({ where: { prospectId: id, kind: "CONTACT" } })) throw new TeamError("Record an actual contact event, not a draft.");
       if (data.stage === "CONVERTED") {
         if (!data.customerUserId || !await tx.user.findUnique({ where: { id: data.customerUserId }, select: { id: true } })) throw new TeamError("Conversion must link an existing HYMN customer.");
@@ -305,7 +323,7 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
       if (preference) throw new TeamError("This contact has opted out. Further outreach is suppressed.", 403);
       if (data.kind === "CONTACT" && !prospect.verified) throw new TeamError("Verify the contact source before recording outreach.");
       if (new Date(data.occurredAt).getTime() > Date.now() + 60_000) throw new TeamError("An actual contact event cannot be in the future.");
-      const row = await tx.teamOutreach.create({ data: { ...data, actorId: a.id, occurredAt: new Date(data.occurredAt) } }); await audit(tx, a, `outreach.${data.kind.toLowerCase()}`, row.id); await syncDailyCrmWork(tx, a); return row;
+      const row = await tx.teamOutreach.create({ data: { ...data, actorId: a.id, occurredAt: new Date(data.occurredAt) } }); await audit(tx, a, `outreach.${data.kind.toLowerCase()}`, row.id, data.kind === 'CONTACT' ? { identity: leadIdentity(prospect), prospectId: prospect.id } : {}); await syncDailyCrmWork(tx, a); return row;
     }
     if (resource === "reports") {
       demand(a, "reports.team.view"); const data = reportSchema.parse(input); const weekStart = weekStartIndia(); const since = new Date(weekStart.getTime() - 330 * 60_000);
