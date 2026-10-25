@@ -20,10 +20,26 @@ async function main(){
     const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto(`${origin}/team?workspace=${operator.workspaceId}`);
     await page.getByRole('heading',{name:'Feed the context. Keep work moving.'}).waitFor();
+    await expect(page.getByLabel('What happened?',{exact:true})).toHaveCount(0);
+    const intakeToggle=page.locator('summary').filter({hasText:'Quick data intake'});
+    await intakeToggle.click();
+    await expect(page.getByLabel('Customer name / username',{exact:true})).not.toBeVisible();
+    await intakeToggle.click();
+
+    await page.getByLabel('Customer name / username',{exact:true}).fill('Browser intake customer');
+    await page.getByLabel('Mobile number',{exact:true}).fill('+919876540099');
+    await page.getByLabel('Customer email',{exact:true}).fill('intake-customer@coordinator.fixture.invalid');
+    await page.getByRole('button',{name:'Save customer & continue',exact:true}).click();
+    await page.getByRole('button',{name:'Edit contact card',exact:true}).click();
+    await page.getByLabel('Customer name / username',{exact:true}).fill('Browser intake customer updated');
+    await page.getByRole('button',{name:'Save contact card',exact:true}).click();
+    await expect(page.getByRole('button',{name:'Edit contact card',exact:true})).toBeVisible();
+    await expect.poll(async()=>prisma.teamClient.count({where:{email:'intake-customer@coordinator.fixture.invalid',name:'Browser intake customer updated'}})).toBe(1);
+
     await page.getByLabel('What happened?',{exact:true}).fill('Prepare the verified customer onboarding guide for the team.');
     await expect.poll(async()=>page.evaluate(key=>JSON.parse(sessionStorage.getItem(key)||'{}').details,`team-intake:${operator.id}`)).toBe('Prepare the verified customer onboarding guide for the team.');
     await page.reload();
-    await expect(page.getByLabel('What happened?',{exact:true})).toHaveValue('Prepare the verified customer onboarding guide for the team.');
+    await expect(page.getByLabel('What happened?',{exact:true})).toHaveValue('Prepare the verified customer onboarding guide for the team.',{timeout:30000});
     await page.getByRole('button',{name:'Suggest fields from text',exact:true}).click();
     await page.getByLabel('Work category',{exact:true}).selectOption('GENERAL');
     await page.getByLabel('Short task title',{exact:true}).fill('Browser intake work');
@@ -52,7 +68,7 @@ async function main(){
     assert.deepEqual(errors,[]);
     await page.screenshot({path:'.cache/team-coordinator-calendar.png',fullPage:true});
     console.log('PASS browser: operator paste-to-task persists, mobile intake fits, employee weekly plan submits, and assignment email deep links open the automatic handoff control without browser errors.');
-  }catch(error){if(inspectedPage){await inspectedPage.screenshot({path:'.cache/team-coordinator-browser-failure.png',fullPage:true}).catch(()=>{});console.error((await inspectedPage.locator('body').innerText().catch(()=>'' )).slice(-3500));}console.error(output.slice(-2500));throw error;}finally{
+  }catch(error){console.error('Browser check failed:',error instanceof Error?error.message.slice(0,1800):String(error));if(inspectedPage){await inspectedPage.screenshot({path:'.cache/team-coordinator-browser-failure.png',fullPage:true}).catch(()=>{});console.error((await inspectedPage.locator('body').innerText().catch(()=>'' )).slice(-3500));}console.error(output.slice(-2500));throw error;}finally{
     await browser.close();
     if(process.platform==='win32'&&server.pid)await new Promise<void>(resolve=>{const stop=spawn('taskkill',['/PID',String(server.pid),'/T','/F'],{stdio:'ignore',windowsHide:true});stop.on('exit',()=>resolve());});else server.kill();
     await prisma.$disconnect();

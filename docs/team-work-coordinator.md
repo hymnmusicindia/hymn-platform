@@ -12,7 +12,9 @@ No schedules are fabricated for existing employees. Until an employee submits a 
 
 ## Operator intake
 
-Paste an enquiry or handover, use Suggest fields from text, verify the category/contact fields, and provide a short title and source. Field suggestions use explicit text patterns; they are not an AI judgement or proof of customer intent. Known contact identifiers are matched; ambiguous matches require contact review. A retry key makes a repeated submission safe, and conflicting reuse is rejected. Research outreach eligibility and do-not-contact records cannot be bypassed through intake.
+Start with the customer: search by name/username, mobile or email and choose an existing card, or enter a name and at least one contact channel to save a new card. Edit contact card updates the selected record inline, preserving its other fields and using the contact database's version and duplicate checks. Contact-card saves persist independently of the enquiry. Choose Internal work for operations without a customer.
+
+Continue to the enquiry, paste the handover, use Suggest fields from text, verify the category, and provide a short title and source. The intake section can be collapsed without losing entered information. Field suggestions use explicit text patterns; they are not an AI judgement or proof of customer intent, and do not overwrite a selected customer's identity. Known contact identifiers are matched; ambiguous matches require contact review. A retry key makes a repeated submission safe, and conflicting reuse is rejected. Research outreach eligibility and do-not-contact records cannot be bypassed through intake.
 
 Intake commits before assignment. An authenticated server after-hook attempts routing immediately; the existing scheduled Team OS job retries WAITING entries. If an employee is unavailable, missing a weekly plan or missing the required permissions, input remains saved. Requested callback times are preserved. Expired requested times require a new agreed time; operators can retry, reschedule or cancel their waiting entries. Only managers can manage other operators' intake.
 
