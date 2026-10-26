@@ -1,0 +1,23 @@
+/* Shared defaults use low specificity so component layouts retain control. */
+:where(details) { min-width:0; overflow-wrap:anywhere; }
+:where(details) > summary { display:flex; align-items:center; gap:10px; min-height:44px; padding:12px 0; cursor:pointer; list-style:none; line-height:1.55; }
+:where(details > summary)::marker { content:""; }
+:where(details > summary)::-webkit-details-marker { display:none; }
+:where(details > summary > svg) { flex-shrink:0; }
+/* Components with an existing SVG or named indicator keep that indicator. */
+:where(details > summary:not(:has(.lucide-chevron-down,.lucide-chevron-right,.lucide-chevron-up,.ios-collapse-icon,[data-disclosure-icon],.disclosure-icon)))::after {
+  content:""; display:block; width:8px; height:8px; flex:0 0 8px; margin:0 4px 4px auto;
+  border-right:1.6px solid currentColor; border-bottom:1.6px solid currentColor; transform:rotate(45deg); opacity:.75; transition:transform .18s ease;
+}
+:where(details[open] > summary:not(:has(.lucide-chevron-down,.lucide-chevron-right,.lucide-chevron-up,.ios-collapse-icon,[data-disclosure-icon],.disclosure-icon)))::after { transform:rotate(225deg); margin-block:4px 0; }
+:where(details > summary):focus-visible { outline:2px solid var(--focus,#9cbcff); outline-offset:3px; border-radius:8px; }
+:where(details[open]) > :is(p,ol,ul,form,div) { margin-block-start:12px; margin-block-end:16px; }
+/* Unstyled disclosure boxes previously placed their contents against the border. */
+:where(details:not([class])) { padding:4px 16px; border:1px solid var(--border,#334155); border-radius:12px; margin-block:12px; }
+:where(details:not([class]) > summary) { color:inherit; font-weight:550; }
+:where(details > :is(p,ol,ul,form,div)) { min-width:0; line-height:1.65; }
+:where(button,a,summary) > :where(svg.lucide) { flex-shrink:0; }
+:where(.summary-card,.surface-card,.metric-card) { min-width:0; overflow-wrap:anywhere; }
+@media(prefers-reduced-motion:reduce) { :where(details > summary)::after { transition:none; } }
+
+:where(details > summary) > :where(svg.lucide-chevron-down,svg.lucide-chevron-up,svg.lucide-chevron-right) { margin-inline-start:auto; }

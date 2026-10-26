@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
-import { ArrowDownToLine, ArrowRight, Check, Headphones, Layers3, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { ArrowDownToLine, ArrowRight, Check, ChevronDown, Headphones, Layers3, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import type { BeatStoreLicenseType, StorefrontBeat } from "@/lib/beat-store";
 import styles from "./beat-licence-guide.module.css";
 
@@ -56,6 +56,6 @@ export function BeatLicenceGuide({ beat, onChoose, onBrowse }: { beat: Storefron
       <li><span className={styles.journeyIcon}><SlidersHorizontal size={19} /></span><div><small>02 / CHOOSE</small><strong>Review your licence</strong></div><ArrowRight className={styles.connector} size={18} /></li>
       <li><span className={styles.journeyIcon}><ArrowDownToLine size={19} /></span><div><small>03 / CREATE</small><strong>Get files in My purchases</strong></div></li>
     </ol>
-    <details className={styles.terms}><summary><ShieldCheck size={15} />Before you release <span>+</span></summary><p>File format does not determine usage rights. Check the selected beat’s agreement for stream limits, credits, monetisation and Content ID permissions. Exclusive rights and earlier licences follow the contract.</p></details>
+    <details className={styles.terms}><summary><ShieldCheck size={15} />Before you release <ChevronDown size={16} aria-hidden="true"/></summary><p>File format does not determine usage rights. Check the selected beat’s agreement for stream limits, credits, monetisation and Content ID permissions. Exclusive rights and earlier licences follow the contract.</p></details>
   </section>;
 }
