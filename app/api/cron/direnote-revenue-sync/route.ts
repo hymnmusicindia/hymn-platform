@@ -3,6 +3,7 @@ export const GET = cronHandler("direnote-revenue-sync", runJob);
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDireNoteTrackRevenue } from "@/lib/direnote-service";
+import { isDireNoteRateLimit } from "@/lib/direnote-rate-limit";
 
 export const runtime = "nodejs";
 
@@ -52,13 +53,17 @@ async function runJob(request: Request) {
     ORDER BY observed.checked_at ASC NULLS FIRST, t.id LIMIT 10`;
   const tracks = candidates.filter(track => !checkedIsrcs.has(track.isrc.replace(/[\s-]/g, "").toUpperCase()));
   const deadline = Date.now() + 40000;
+  let retryAfterSeconds = 0;
   const results: Array<{ trackId: number; success: boolean; imported?: number; unmatched?: number; duplicatesIgnored?: number; error?: string }> = [];
   for (const track of tracks) {
     if (Date.now() >= deadline) break;
     try {
       const imported = await getDireNoteTrackRevenue(track.isrc!, actorId, true, { timeoutMs: Math.max(1000, Math.min(12000, deadline - Date.now())) });
       results.push({ trackId: track.id, success: true, imported: imported.ingestion?.imported ?? 0, unmatched: imported.ingestion?.unmatched ?? 0, duplicatesIgnored: imported.ingestion?.duplicatesIgnored ?? 0 });
-    } catch (error) { results.push({ trackId: track.id, success: false, error: error instanceof Error ? error.message : "Revenue sync failed." }); }
+    } catch (error) {
+      if (isDireNoteRateLimit(error)) { retryAfterSeconds = error.retryAfterSeconds; break; }
+      results.push({ trackId: track.id, success: false, error: error instanceof Error ? error.message : "Revenue sync failed." });
+    }
   }
-  return NextResponse.json({ success: true, eligible: candidates.length, checked: results.length, imported: results.reduce((sum, row) => sum + (row.imported ?? 0), 0), unmatched: results.reduce((sum, row) => sum + (row.unmatched ?? 0), 0), duplicatesIgnored: results.reduce((sum, row) => sum + (row.duplicatesIgnored ?? 0), 0), results });
+  return NextResponse.json({ success: true, rateLimited: retryAfterSeconds > 0, retryAfterSeconds, deferredCount: tracks.length - results.length, eligible: candidates.length, checked: results.length, imported: results.reduce((sum, row) => sum + (row.imported ?? 0), 0), unmatched: results.reduce((sum, row) => sum + (row.unmatched ?? 0), 0), duplicatesIgnored: results.reduce((sum, row) => sum + (row.duplicatesIgnored ?? 0), 0), results });
 }

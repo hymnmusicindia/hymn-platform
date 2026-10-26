@@ -4,7 +4,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { getDireNoteIngestStatus } from "@/lib/direnote/direnote-client";
 import { parseDireNoteResponse, redactDireNoteDiagnostic } from "@/lib/direnote";
-import { reserveDireNoteRequest } from "@/lib/direnote-rate-limit";
+import { reserveDireNoteRequest, isDireNoteRateLimit, enforceDireNoteResponseLimit } from "@/lib/direnote-rate-limit";
 import { activateDireNoteAttempt, finishDistributionSubmission } from "@/lib/distribution-idempotency";
 import { markReleaseDistributionSuccess, updateDetailedReleaseStatus, logDistributionEvent, createReleaseAuditLog } from "@/lib/distribution-db";
 import { validIsrc, validReleaseBarcode } from "@/lib/release-input-rules";
@@ -66,6 +66,7 @@ export async function pollDireNoteIngestJobs(options: { limit?: number; releaseI
     take: 50
   });
   let checked = 0, queued = 0, processing = 0, completed = 0, failed = 0, errorCount = 0;
+  let retryAfterSeconds = 0;
   const maxProviderCalls = Math.max(1, Math.min(options.limit ?? 1, 10));
   const results: Array<{ releaseId: number; state: string; progress?: string; error?: string }> = [];
 
@@ -86,9 +87,10 @@ export async function pollDireNoteIngestJobs(options: { limit?: number; releaseI
       continue;
     }
     try {
-      checked++;
       await reserveDireNoteRequest("ingest_status", attempt.releaseId);
+      checked++;
       const response = await getDireNoteIngestStatus({ jobId: reference.jobId, idempotencyKey: reference.idempotencyKey }, { timeoutMs: 20_000 });
+      await enforceDireNoteResponseLimit(response, attempt.releaseId);
       const body = object(response.data);
       const responseJobId = cleanText(body.job_id ?? body.jobId, 200);
       // A documented terminal job failure includes an error string even though
@@ -193,11 +195,12 @@ export async function pollDireNoteIngestJobs(options: { limit?: number; releaseI
       completed++;
       results.push({ releaseId: attempt.releaseId, state: "completed" });
     } catch (error) {
+      if (isDireNoteRateLimit(error)) { retryAfterSeconds = error.retryAfterSeconds; break; }
       const message = error instanceof Error ? error.message : "DireNote job status polling failed.";
       await recordPollFailure(attempt, reference.stored, message);
       errorCount++;
       results.push({ releaseId: attempt.releaseId, state: "poll_error", error: String(redactDireNoteDiagnostic(message)).slice(0, 300) });
     }
   }
-  return { checked, queued, processing, completed, failed, errorCount, deferred: Math.max(0, candidates.length - checked - errorCount), results };
+  return { checked, queued, processing, completed, failed, errorCount, rateLimited: retryAfterSeconds > 0, retryAfterSeconds, deferred: Math.max(0, candidates.length - results.length), results };
 }

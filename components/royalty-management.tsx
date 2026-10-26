@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, History, Search, UploadCloud, X } from "lucide-react";
 import { ContextualHelp } from "@/components/contextual-help";
+import { DistributionRevenueReport } from "@/components/distribution-revenue-report";
 
 type ImportRow = { id: number; originalFileName: string; reportingMonth?: string | null; createdAt: string; status: string; importedBy: { name: string; email: string }; jobs: Array<{ rowCount: number; matchedCount: number; unmatchedCount: number; errorCount: number; totalRevenue: string; progress: number; phase: string }> };
 const phases = ["Uploading", "Validating", "Reading report", "Matching releases", "Applying splits", "Updating dashboards", "Generating ledgers", "Completed"];
@@ -19,6 +20,7 @@ export function RoyaltyManagement() {
   async function rollback(id: number) { const reason = window.prompt("Reason for rolling back this import?"); if (!reason) return; const response = await fetch(`/api/admin/royalties/imports/${id}/rollback`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) }); const data = await readApiResponse(response); setMessage(response.ok ? `Import rolled back (${data.reversedLines} ledger rows reversed).` : data.error || "Rollback failed."); setIsError(!response.ok); if (response.ok) await load(); }
 
   return <div className="grid gap-8">
+    <DistributionRevenueReport onImported={load} />
     <section className="overflow-hidden rounded-[28px] border shadow-sm" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
       <div className="border-b px-6 py-6 sm:px-8" style={{ borderColor: "var(--border)" }}><div className="flex items-start gap-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl" style={{ background: "var(--bg-soft)" }}><UploadCloud size={23} /></span><div><h2 className="text-xl font-semibold sm:text-2xl">Upload revenue report <ContextualHelp faqId="royalty-imports" label="Royalty imports">Distributor reports are validated, matched, and previewed before HYMN creates Royalty Ledger entries.</ContextualHelp></h2><p className="mt-2 max-w-3xl text-sm leading-6" style={{ color: "var(--text-muted)" }}>Upload the monthly distributor statement as CSV or Excel. HYMN validates every row and shows a preview before creating financial records.</p></div></div></div>
       <div className="p-6 sm:p-8"><input ref={inputRef} className="sr-only" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={event => choose(event.target.files?.[0] ?? null)} />

@@ -26,7 +26,7 @@ const environment = { ...process.env,
   HTTPS_PROXY: "", HTTP_PROXY: "", ALL_PROXY: "",
   JWT_SECRET: "fixture-user-session-secret-long-enough", ADMIN_JWT_SECRET: "fixture-admin-session-secret-long-enough",
   CANONICAL_HOST: "127.0.0.1",
-  NEXT_PUBLIC_APP_URL: "http://127.0.0.1:55441", APP_URL: "https://hymnmusic.fun", NEXT_DIST_DIR: ".next-direnote-virtual",
+  NEXT_PUBLIC_APP_URL: "http://127.0.0.1:55441", APP_URL: "https://hymnmusic.fun", NEXT_DIST_DIR: process.env.NEXT_DIST_DIR || ".next-direnote-virtual",
   DIRENOTE_RELEASE_SYNC_ENABLED: "true",
   TEMP: path.resolve(".cache"), TMP: path.resolve(".cache")
 };
@@ -48,6 +48,12 @@ async function main() {
   try {
     await pg.createDatabase("direnote_virtual");
     await run(["node_modules/prisma/build/index.js", "db", "push", "--skip-generate"]);
+    if (process.argv.includes('--reports-only')) {
+      if (process.argv.includes('--build')) await run(["node_modules/next/dist/bin/next", "build", "--webpack"]);
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-distribution-reports.ts']);
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-royalty-ledger-integration.ts']);
+      return;
+    }
     if(process.argv.includes('--qc-report-only')){
       await run(['--conditions=react-server','--import','tsx','scripts/verify-release-qc-details.ts']);
       return;

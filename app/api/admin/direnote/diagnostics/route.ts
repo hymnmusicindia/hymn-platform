@@ -48,7 +48,8 @@ export async function GET() {
     })
   ]);
   const lastSyncAt = lastSync?.startedAt.getTime() ?? 0;
-  const syncHealth = !lastSyncAt ? "unknown" : Date.now() - lastSyncAt > 2 * 60 * 60 * 1000 ? "degraded" : lastSync?.status === "completed" ? "healthy" : "degraded";
+  const rateLimited = (lastSync?.summary as { rateLimited?: boolean } | null)?.rateLimited === true;
+  const syncHealth = !lastSyncAt ? "unknown" : Date.now() - lastSyncAt > 2 * 60 * 60 * 1000 || rateLimited ? "degraded" : lastSync?.status === "completed" ? "healthy" : "degraded";
   return NextResponse.json({ ...status(), lastTest: await lastTest(), syncHealth, lastSync: lastSync ? { ...lastSync, summary: redactDireNoteDiagnostic(lastSync.summary) } : null, lastSuccessfulSync: lastSuccessfulSync ? { completedAt: lastSuccessfulSync.completedAt, runId: lastSuccessfulSync.runId } : null,
     operationalHealth: {
       issueCount: stuckAttempts.length + anomalousReleases.length,

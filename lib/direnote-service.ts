@@ -5,8 +5,8 @@ import { refreshMissingSpotifyArtistPhotos, refreshSpotifyArtistPhoto } from "@/
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { getDireNoteArtistInformation, getDireNoteReleaseInformation, getDireNoteReleaseInformationByReference, getDireNoteRevenueReport, getDireNoteSongwriterInformation, redactDireNoteDiagnostic } from "@/lib/direnote";
-import { importDireNoteRevenueReport } from "@/lib/direnote-revenue";
-import { reserveDireNoteRequest } from "@/lib/direnote-rate-limit";
+import { importDireNoteRevenueReport, normalizeDireNoteRevenueReport } from "@/lib/direnote-revenue";
+import { reserveDireNoteRequest, isDireNoteRateLimit, enforceDireNoteResponseLimit } from "@/lib/direnote-rate-limit";
 import { createNotification } from "@/lib/db";
 import { updateDetailedReleaseStatus } from "@/lib/distribution-db";
 import { createAdminTaskOnce, resolveAdminTask } from "@/lib/task-queue";
@@ -51,11 +51,12 @@ function verifiedX(value: unknown) {
 }
 
 /** Refreshes one locally associated artist from DireNote's v2.3 artist endpoint. */
-export async function syncDireNoteArtistInformation(artistCardId: number, actorId?: number | null, releaseId?: number | null) {
+export async function syncDireNoteArtistInformation(artistCardId: number, actorId?: number | null, releaseId?: number | null, options: { timeoutMs?: number } = {}) {
   const card = await prisma.artistCard.findUnique({ where: { id: artistCardId } });
   if (!card?.direNoteArtistId || card.archivedAt) throw new Error("This artist does not have a stored DireNote artist ID.");
   await reserveDireNoteRequest("artist_information", releaseId ?? null, actorId);
-  const result = await getDireNoteArtistInformation(card.direNoteArtistId);
+  const result = await getDireNoteArtistInformation(card.direNoteArtistId, options);
+  await enforceDireNoteResponseLimit(result, releaseId);
   const payload = record(result.data);
   const artist = record(payload.artist);
   const remoteId = text(artist.artist_id);
@@ -109,11 +110,12 @@ export async function syncDireNoteArtistInformation(artistCardId: number, actorI
 }
 
 /** Refreshes one canonical songwriter/composer identity from DireNote v2.3. */
-export async function syncDireNoteSongwriterInformation(partyId: number, actorId?: number | null, releaseId?: number | null) {
+export async function syncDireNoteSongwriterInformation(partyId: number, actorId?: number | null, releaseId?: number | null, options: { timeoutMs?: number } = {}) {
   const party = await prisma.contributorParty.findUnique({ where: { id: partyId } });
   if (!party?.direNoteSongwriterId || party.mergedIntoId) throw new Error("This contributor does not have an active DireNote songwriter identity.");
   await reserveDireNoteRequest("songwriter_information", releaseId ?? null, actorId);
-  const result = await getDireNoteSongwriterInformation(party.direNoteSongwriterId);
+  const result = await getDireNoteSongwriterInformation(party.direNoteSongwriterId, options);
+  await enforceDireNoteResponseLimit(result, releaseId);
   const payload = record(result.data);
   const songwriter = record(payload.songwriter);
   const remoteId = text(songwriter.songwriter_id);
@@ -331,6 +333,7 @@ export async function syncDireNoteRelease(releaseId: number, actorId?: number | 
   if (!acquired) throw new Error("DireNote release is already being synchronized or submitted.");
   try { return await syncCurrentDireNoteRelease(releaseId, actorId, options.deadlineAt); }
   catch (error) {
+    if (isDireNoteRateLimit(error)) throw error;
     const message = String(redactDireNoteDiagnostic(error instanceof Error ? error.message : "DireNote synchronization failed.")).slice(0, 1000);
     await prisma.release.update({ where: { id: releaseId }, data: { direNoteSyncError: message, direNoteLastAttemptedAt: new Date() } }).catch(() => undefined);
     await prisma.direNoteLog.create({ data: { releaseId, action: "release_sync_failed", success: false, errorMessage: message, createdByAdminId: actorId ?? null } }).catch(() => undefined);
@@ -380,7 +383,8 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     if (isrc) {
       await reserveDireNoteRequest("upc_lookup", releaseId, actorId);
       // Identifier discovery only. Never import this report into the royalty ledger.
-      const report = await getDireNoteRevenueReport(isrc);
+      const report = await getDireNoteRevenueReport(isrc, { timeoutMs: requestTimeout(12000) });
+      await enforceDireNoteResponseLimit(report, releaseId);
       lookupUpc = report.success ? upcFromDireNoteIsrcReport(report.data, isrc, release.title) : null;
       const lookupOutcome = lookupUpc ? "UPC_FOUND_AND_VERIFIED" : report.success
         ? (report.data ? "UPC_NOT_YET_ASSIGNED" : "UPC_RESPONSE_MISSING")
@@ -401,6 +405,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       for (const key of ["release_id", "distributor_release_id"] as const) {
         await reserveDireNoteRequest(`release_information_${key}`, releaseId, actorId);
         const referenceResult = await getDireNoteReleaseInformationByReference(providerReference, key, { timeoutMs: requestTimeout(20_000) });
+        await enforceDireNoteResponseLimit(referenceResult, releaseId);
         const referenceUpc = referenceResult.success ? upcFromDireNoteResponse(referenceResult.data) : null;
         await prisma.direNoteLog.create({ data: {
           releaseId, action: `release_information_${key}`, httpStatus: referenceResult.httpStatus, success: Boolean(referenceUpc),
@@ -431,9 +436,7 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     await reserveDireNoteRequest("release_information_retry", releaseId, actorId);
     result = await getDireNoteReleaseInformation(lookupUpc, { timeoutMs: requestTimeout(20_000) });
   }
-  if (result.httpStatus === 429) {
-    await prisma.direNoteLog.create({ data: { releaseId, action: "provider_rate_limit", success: false, httpStatus: 429, responseJson: { retryAt: new Date(Date.now() + Math.max(60, result.retryAfterSeconds ?? 3600) * 1000).toISOString() } } });
-  }
+  await enforceDireNoteResponseLimit(result, releaseId);
   const payload = record(result.data);
   const remoteRelease = record(payload.release);
   const remoteTracks = currentDireNoteTracks(Array.isArray(payload.tracks) ? payload.tracks.map(record) : Array.isArray(remoteRelease.tracks) ? remoteRelease.tracks.map(record) : []);
@@ -678,12 +681,23 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
 
 /** Returns the documented ISRC report. Accounting ingestion remains explicit and admin-controlled. */
 export async function getDireNoteTrackRevenue(isrc: string, actorId?: number | null, importIntoLedger = false, options: { timeoutMs?: number } = {}) {
+  if (!validIsrc(normalized(isrc))) throw new Error("A valid ISRC is required.");
+  if (importIntoLedger && (!Number.isSafeInteger(actorId) || Number(actorId) <= 0)) throw new Error("Revenue import requires an administrator for audit attribution.");
   const track = await prisma.track.findFirst({ where: { isrc: normalized(isrc) }, select: { releaseId: true } });
   await reserveDireNoteRequest("revenue_report", track?.releaseId ?? null, actorId);
   const result = await getDireNoteRevenueReport(isrc, options);
   const payload = record(result.data);
-  await prisma.direNoteLog.create({ data: { releaseId: track?.releaseId ?? null, action: "revenue_report", httpStatus: result.httpStatus, success: result.success, requestPayloadRedacted: { isrc: normalized(isrc) }, responseJson: redactDireNoteDiagnostic(payload) as never, errorMessage: result.error ?? null, createdByAdminId: actorId ?? null } });
+  const log = await prisma.direNoteLog.create({ data: { releaseId: track?.releaseId ?? null, action: importIntoLedger ? "revenue_report" : "revenue_lookup", httpStatus: result.httpStatus, success: false, requestPayloadRedacted: { isrc: normalized(isrc), importIntoLedger }, responseJson: redactDireNoteDiagnostic(payload) as never, errorMessage: result.error ?? "Revenue processing has not completed.", createdByAdminId: actorId ?? null } });
+  await enforceDireNoteResponseLimit(result, track?.releaseId);
   if (!result.success) throw new Error(result.error || text(payload.message) || "DireNote revenue report lookup failed.");
-  const ingestion = importIntoLedger && actorId ? await importDireNoteRevenueReport(payload, actorId) : null;
-  return { report: payload, ingestion };
+  try {
+    if (normalized(text(record(payload.track).isrc)) !== normalized(isrc)) throw new Error("Revenue report ISRC does not match the requested recording.");
+    normalizeDireNoteRevenueReport(payload);
+    const ingestion = importIntoLedger ? await importDireNoteRevenueReport(payload, actorId!) : null;
+    await prisma.direNoteLog.update({ where: { id: log.id }, data: { success: true, errorMessage: null } });
+    return { report: redactDireNoteDiagnostic(payload), ingestion };
+  } catch (error) {
+    await prisma.direNoteLog.update({ where: { id: log.id }, data: { errorMessage: String(redactDireNoteDiagnostic(error instanceof Error ? error.message : "Revenue import failed.")) } });
+    throw error;
+  }
 }

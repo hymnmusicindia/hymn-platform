@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { syncDireNoteArtistInformation, syncDireNoteRelease, syncDireNoteSongwriterInformation } from "@/lib/direnote-service";
 import { submitRelease } from "@/lib/distribution-service";
 import { getPublicAppUrl } from "@/lib/public-app-url";
+import { isDireNoteRateLimit } from "@/lib/direnote-rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -84,9 +85,7 @@ async function runJob(request: Request) {
         provider: "direnote", isCurrent: true, state: { in: ["submitted", "reconciliation_required"] }, release: { archivedAt: null },
         OR: [
           { lastCheckedAt: null },
-          { lastCheckedAt: { lte: new Date(Date.now() - STATUS_POLL_INTERVAL_MS) } },
-          { upc: null },
-          { providerStatus: { in: ["processing", "changes_required", "rejected", "scheduled", "awaiting_live_confirmation", "partially_live"] } }
+          { lastCheckedAt: { lte: new Date(Date.now() - STATUS_POLL_INTERVAL_MS) } }
         ]
       },
       include: { release: { select: { id: true, title: true } } },
@@ -97,7 +96,7 @@ async function runJob(request: Request) {
     // Recover accepted legacy attempts whose current flag was never persisted.
     // This is status reconciliation only, never a second ingestion request.
     const missingLineageRows = await prisma.distributionSubmissionAttempt.findMany({
-      where: { provider: "direnote", state: "submitted", release: { archivedAt: null,
+      where: { provider: "direnote", state: "submitted", OR: [{ lastCheckedAt: null }, { lastCheckedAt: { lte: new Date(Date.now() - STATUS_POLL_INTERVAL_MS) } }], release: { archivedAt: null,
         distributionSubmissions: { none: { provider: "direnote", isCurrent: true } } } },
       include: { release: { select: { id: true, title: true } } },
       orderBy: [{ lastCheckedAt: { sort: "asc", nulls: "first" } }, { id: "desc" }], take: 5
@@ -106,14 +105,16 @@ async function runJob(request: Request) {
     for (const candidate of missingLineage) if (!candidates.some(item => item.releaseId === candidate.releaseId)) candidates.unshift(candidate);
     const results: Array<{ releaseId: number; title: string; success: boolean; pending?: boolean; reason?: string; error?: string; upc?: string | null; status?: string }> = [];
     let cursor = 0;
+    let retryAfterSeconds = 0;
     const worker = async () => {
-      while (cursor < candidates.length && Date.now() - started < START_WORK_UNTIL_MS) {
+      while (!retryAfterSeconds && cursor < candidates.length && Date.now() - started < START_WORK_UNTIL_MS) {
         const candidate = candidates[cursor++];
         try {
           const outcome = await syncDireNoteRelease(candidate.releaseId, null, { deadlineAt: started + 55_000 });
           results.push({ releaseId: candidate.releaseId, title: candidate.release.title, success: true, ...( "skipped" in outcome ? { pending: true, reason: outcome.skipped } : { upc: outcome.upc, status: outcome.status }) });
         }
         catch (error) {
+          if (isDireNoteRateLimit(error)) { retryAfterSeconds = Math.max(retryAfterSeconds, error.retryAfterSeconds); break; }
           // Failed/missing-UPC records used to stay at the front forever. Rotate
           // them behind unchecked work; retain the error and retry next run.
           await prisma.distributionSubmissionAttempt.updateMany({ where: { id: candidate.id }, data: { lastCheckedAt: new Date() } }).catch(() => undefined);
@@ -141,14 +142,18 @@ async function runJob(request: Request) {
         prisma.contributorParty.findMany({ where: { direNoteSongwriterId: { not: null }, mergedIntoId: null, OR: [{ direNoteLastSyncedAt: null }, { direNoteLastSyncedAt: { lt: staleBefore } }] }, select: { id: true }, take: 3, orderBy: { direNoteLastSyncedAt: { sort: "asc", nulls: "first" } } })
       ]);
       const artists = [...pendingArtists, ...staleArtists];
-      const tasks = [...artists.map(item => () => syncDireNoteArtistInformation(item.id)), ...songwriters.map(item => () => syncDireNoteSongwriterInformation(item.id))];
+      const identityTimeout = () => ({ timeoutMs: Math.max(1000, Math.min(12000, started + 55_000 - Date.now())) });
+      const tasks = [...artists.map(item => () => syncDireNoteArtistInformation(item.id, null, null, identityTimeout())), ...songwriters.map(item => () => syncDireNoteSongwriterInformation(item.id, null, null, identityTimeout()))];
       const outcomes: PromiseSettledResult<unknown>[] = [];
       let identityCursor = 0;
       await Promise.all(Array.from({ length: Math.min(2, tasks.length) }, async () => {
-        while (identityCursor < tasks.length && Date.now() - started < START_WORK_UNTIL_MS) {
+        while (!retryAfterSeconds && identityCursor < tasks.length && Date.now() - started < START_WORK_UNTIL_MS) {
           const task = tasks[identityCursor++];
           try { outcomes.push({ status: "fulfilled", value: await task() }); }
-          catch (reason) { outcomes.push({ status: "rejected", reason }); }
+          catch (reason) {
+            if (isDireNoteRateLimit(reason)) { retryAfterSeconds = Math.max(retryAfterSeconds, reason.retryAfterSeconds); break; }
+            outcomes.push({ status: "rejected", reason });
+          }
         }
       }));
       return outcomes;
@@ -164,10 +169,10 @@ async function runJob(request: Request) {
     const identityResults = identity.value;
     const identityErrors = identityResults.filter(item => item.status === "rejected").length;
     const summary = { runId, candidateCount: candidates.length, autoQcRecoveryCount: autoQcResults.length, autoQcResults, providerRequestCount: results.length + identityResults.length + autoQcResults.length, processedCount: results.length, changedCount: results.filter(result => result.success && !result.pending).length, pendingCount: results.filter(result => result.pending).length, identifierRepairCount: results.filter(result => result.success && Boolean(result.upc)).length, statusRepairCount: results.filter(result => result.success && Boolean(result.status)).length, correctionCount: results.filter(result => result.status === "changes_required").length, identityRefreshCount: identityResults.length - identityErrors, identityErrorCount: identityErrors, errorCount: results.filter(result => !result.success).length + identityErrors + autoQcResults.filter(result => result.outcome === "failed").length, deferredCount: candidates.length - results.length, durationMs: Date.now() - started, eligible: candidates.length, checked: results.length };
-    const diagnosticSummary = { ...summary, syncVersion: "corrections-v2", results };
+    const diagnosticSummary = { ...summary, rateLimited: retryAfterSeconds > 0, retryAfterSeconds, syncVersion: "corrections-v2", results };
     await prisma.direNoteSyncRun.update({ where: { runId }, data: { status: summary.errorCount ? "completed_with_errors" : "completed", completedAt: new Date(), candidateCount: summary.candidateCount, providerRequestCount: summary.providerRequestCount, processedCount: summary.processedCount, changedCount: summary.changedCount, identifierRepairCount: summary.identifierRepairCount, statusRepairCount: summary.statusRepairCount, correctionCount: summary.correctionCount, errorCount: summary.errorCount, deferredCount: summary.deferredCount, durationMs: summary.durationMs, summary: diagnosticSummary } });
     await prisma.direNoteLog.create({ data: { action: "hourly_status_sync", success: summary.errorCount === 0, responseJson: diagnosticSummary } });
-    return NextResponse.json({ success: true, ...summary, results });
+    return NextResponse.json({ success: true, ...diagnosticSummary });
   } catch (error) {
     const message = error instanceof Error ? error.message : "DireNote reconciliation run failed.";
     const durationMs = Date.now() - started;
