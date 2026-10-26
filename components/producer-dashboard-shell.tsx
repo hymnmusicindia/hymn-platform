@@ -5,6 +5,7 @@ import { BeatEditMetadataFields } from "@/components/beat-metadata-fields";
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
 
 import Link from "next/link";
+import { WorkspacePanel as Panel, WorkspaceMetric as StatCard } from "@/components/workspace-panel";
 import { ProducerBeatUploader } from "@/components/producer-beat-uploader";
 import { ProducerStorefrontEditor } from "@/components/producer-storefront-editor";
 import { producerSetup, producerSetupTab } from "@/lib/producer-setup";
@@ -25,30 +26,6 @@ const ReferralPanel = dynamic(() => import("@/components/referral-panel").then((
 const SplitsDashboard = dynamic(() => import("@/components/splits-dashboard").then((module) => module.SplitsDashboard));
 const ProfilePreferencesForm = dynamic(() => import("@/components/profile-preferences-form").then((module) => module.ProfilePreferencesForm));
 
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="metric-card customer-stat-card fade-up h-full">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>{label}</p>
-      <p className="mt-3 text-3xl font-semibold tracking-tight" style={{ color: "var(--text)" }}>{value}</p>
-    </div>
-  );
-}
-
-function Panel({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
-  return (
-    <section className="surface-card customer-module-section overflow-hidden p-5 sm:p-6 lg:p-7 fade-up">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-5" style={{ borderColor: "var(--border)" }}>
-        <div>
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: "var(--accent)" }}>Producer workspace</p>
-          <h2 className="text-xl font-semibold tracking-tight sm:text-2xl" style={{ color: "var(--text)" }}>{title}</h2>
-          {description ? <p className="mt-2 max-w-3xl text-sm leading-6" style={{ color: "var(--text-muted)" }}>{description}</p> : null}
-        </div>
-      </div>
-      <div className="mt-5">{children}</div>
-    </section>
-  );
-}
-
 function StatusPill({ label, active = true }: { label: string; active?: boolean }) {
   const normalized = label.toLowerCase().replace(/_/g, " ");
   const negative = /failed|rejected|denied|missing|issue/.test(normalized);
@@ -68,7 +45,7 @@ function formatMoney(amount: number) {
 function formatDate(value?: string | null) {
   if (!value) return "Not set";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Not set" : date.toLocaleDateString();
+  return Number.isNaN(date.getTime()) ? "Not set" : date.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Kolkata" });
 }
 
 function releaseTitle(release: Release) {
@@ -276,6 +253,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance,
 
   return (
     <DashboardFrame
+      workspaceKind="producer"
       eyebrow="Producer dashboard"
       title={user.name}
       subtitle={user.email}

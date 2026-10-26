@@ -30,6 +30,7 @@ type DashboardNavGroup<T extends string> = {
 };
 
 export function DashboardFrame<T extends string>({
+  workspaceKind = "workspace",
   eyebrow,
   title,
   subtitle,
@@ -51,6 +52,7 @@ export function DashboardFrame<T extends string>({
   hideWorkspaceHeader = false,
   children
 }: {
+  workspaceKind?: "customer" | "producer" | "workspace";
   eyebrow?: string;
   title: string;
   subtitle: React.ReactNode;
@@ -175,7 +177,7 @@ export function DashboardFrame<T extends string>({
   const overviewItem = navItems.find(item => item.key === "overview");
 
   return (
-    <div data-workspace={adminWorkspace ? "admin" : "creator"} data-collapsed={collapsed} className="workspace-v2 hymn-portal-frame dashboard-os-shell lg:grid-cols-[var(--dashboard-sidebar-width,236px),minmax(0,1fr)]" style={{ "--dashboard-sidebar-width": collapsed ? "76px" : "236px" } as React.CSSProperties}>
+    <div data-dashboard-surface={workspaceKind} data-workspace={adminWorkspace ? "admin" : "creator"} data-collapsed={collapsed} className="workspace-v2 hymn-portal-frame dashboard-os-shell lg:grid-cols-[var(--dashboard-sidebar-width,236px),minmax(0,1fr)]" style={{ "--dashboard-sidebar-width": collapsed ? "76px" : "236px" } as React.CSSProperties}>
       <div className="dashboard-os-mobile-head lg:hidden">
         <div>
           <h1 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>{title}</h1>
@@ -197,7 +199,7 @@ export function DashboardFrame<T extends string>({
       />
 
       <aside
-        id="workspace-navigation"
+        id="workspace-navigation" data-dashboard-sidebar
         className={clsx(
           "dashboard-os-sidebar fixed inset-y-0 left-0 z-50 flex w-[min(88vw,340px)] flex-col p-4 shadow-2xl transition-transform duration-300 lg:sticky lg:top-24 lg:z-10 lg:h-[calc(100vh-7rem)] lg:w-full lg:shadow-none",
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
@@ -253,10 +255,10 @@ export function DashboardFrame<T extends string>({
         {!setupMode && <WorkspaceFooter workspace={adminWorkspace ? "admin" : "creator"} adminActivityAllowed={navItems.some(item => item.key === "activity")} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />}
       </aside>
 
-      <div className="portal-workspace grid gap-6">
+      <div data-dashboard-main className="portal-workspace grid gap-6">
         {!hideWorkspaceHeader && <div className="dashboard-os-topbar">
           <span className="portal-section-label">{activeGroup?.label ?? "Workspace"}</span>
-          {!setupMode && !(compactOverview && isOverview) ? <div className="dashboard-os-search">
+          {!setupMode && !(compactOverview && isOverview) ? <div data-dashboard-search className="dashboard-os-search">
             <Search className="h-4 w-4" style={{ color: "var(--text-muted)" }} />
             <input
               aria-label="Search dashboard"
@@ -288,7 +290,7 @@ export function DashboardFrame<T extends string>({
         
 
         <ModuleTabs items={(displayedGroup?.items || []).map(item => ({ ...item, label: item.key === "plans" || item.key === "subscriptions" ? subscriptionLabel : item.label }))} active={activeKey} label={displayedGroup?.label || "Workspace"} onSelect={handleSelect} onFollow={item => { if (["plans", "subscriptions"].includes(item.key)) { openSubscriptions(); return true; } return false; }}/>
-        <div className="portal-page-content" data-workspace-page={isOverview && navItems.some(item => item.key === "overview" && !item.href) ? "dashboard" : undefined}>{children}</div>
+        <div data-dashboard-content className="portal-page-content" data-workspace-page={isOverview && navItems.some(item => item.key === "overview" && !item.href) ? "dashboard" : undefined}>{children}</div>
       </div>
     </div>
   );

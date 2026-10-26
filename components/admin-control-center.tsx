@@ -4,6 +4,7 @@ import { useAdminReleaseFeed } from "./use-admin-release-feed";
 
 import dynamic from "next/dynamic";
 import Link from 'next/link';
+import { WorkspacePanel as SurfaceSection, WorkspaceMetric as StatCard } from "@/components/workspace-panel";
 import { BeatSampleReview } from '@/components/beat-sample-review';
 import { AdminCenteredDialog } from "./admin-centered-dialog";
 import { AdminCatalogGrid, ProducerStorefrontPreview } from "./admin-catalog-grid";
@@ -141,36 +142,11 @@ function formatMoney(amount: number) {
   return `Rs ${amount.toLocaleString("en-IN")}`;
 }
 
-function StatCard({ label, value, detail }: { label: string; value: string | number; detail?: string }) {
-  return (
-    <div className="metric-card admin-stat-card fade-up h-full">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>{label}</p>
-      <p className="mt-3 text-3xl font-semibold tracking-tight" style={{ color: "var(--text)" }}>{value}</p>
-      {detail ? <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{detail}</p> : null}
-    </div>
-  );
-}
-
 function StatusPill({ label, active = true }: { label: string; active?: boolean }) {
   const normalized = label.toLowerCase().replace(/_/g, " ");
   const negative = /failed|rejected|denied|critical|missing|issue/.test(normalized);
   const warning = /pending|review|scheduled|requested|waiting|processing/.test(normalized);
   return <span className={`status-pill ${active ? "status-pill-active" : ""} ${negative ? "admin-status-negative" : warning ? "admin-status-warning" : ""}`}>{normalized}</span>;
-}
-
-function SurfaceSection({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
-  return (
-    <section className="surface-card admin-module-section fade-up p-5 sm:p-6 lg:p-7">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-5" style={{ borderColor: "var(--border)" }}>
-        <div>
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: "var(--accent)" }}>Admin workspace</p>
-          <h2 className="text-xl font-semibold tracking-tight sm:text-2xl" style={{ color: "var(--text)" }}>{title}</h2>
-          {description ? <p className="mt-2 max-w-3xl text-sm leading-6" style={{ color: "var(--text-muted)" }}>{description}</p> : null}
-        </div>
-      </div>
-      <div className="mt-5">{children}</div>
-    </section>
-  );
 }
 
 function EmptyState({ copy }: { copy: string }) {

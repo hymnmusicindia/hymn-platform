@@ -5,6 +5,7 @@ import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import { customerMessage } from "@/lib/customer-message";
 
 import Link from "next/link";
+import { WorkspacePanel as Panel, WorkspaceMetric as StatCard } from "@/components/workspace-panel";
 import { WorkspaceGuidance, type GuideStep } from "@/components/workspace-guidance";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -78,30 +79,6 @@ function releaseMatchesPipeline(release: Release, key: string) {
   return stage ? (stage.statuses as readonly string[]).includes(release.status) : release.status === key;
 }
 
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="metric-card customer-stat-card fade-up h-full">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>{label}</p>
-      <p className="mt-3 text-3xl font-semibold tracking-tight" style={{ color: "var(--text)" }}>{value}</p>
-    </div>
-  );
-}
-
-function Panel({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
-  return (
-    <section className="surface-card customer-module-section overflow-hidden p-5 sm:p-6 lg:p-7 fade-up">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-5" style={{ borderColor: "var(--border)" }}>
-        <div>
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: "var(--accent)" }}>Artist workspace</p>
-          <h2 className="text-xl font-semibold tracking-tight sm:text-2xl" style={{ color: "var(--text)" }}>{title}</h2>
-          {description ? <p className="mt-2 max-w-3xl text-sm leading-6" style={{ color: "var(--text-muted)" }}>{description}</p> : null}
-        </div>
-      </div>
-      <div className="mt-5">{children}</div>
-    </section>
-  );
-}
-
 function StatusPill({ label, active = true }: { label: string; active?: boolean }) {
   const normalized = label.toLowerCase().replace(/_/g, " ");
   const negative = /failed|rejected|denied|missing|issue/.test(normalized);
@@ -137,7 +114,7 @@ function formatMoney(amount: number) {
 function formatDate(value?: string | null) {
   if (!value) return "Not set";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Not set" : date.toLocaleDateString();
+  return Number.isNaN(date.getTime()) ? "Not set" : date.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Kolkata" });
 }
 
 function releaseTitle(release: Release) {
@@ -375,6 +352,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
 
   return (
     <DashboardFrame
+      workspaceKind="customer"
       title={`Welcome back, ${user.name}`}
       subtitle={user.email}
       overviewSubtitle={actionItems.length > 0 ? <button type="button" className="text-left font-medium transition-opacity hover:opacity-70" style={{ color: "var(--accent)" }} onClick={() => selectCustomerTab(actionItems[0].tab)}>{actionItems.length} item{actionItems.length === 1 ? "" : "s"} need your attention <span aria-hidden="true">→</span></button> : <span>Your workspace is clear.</span>}
@@ -682,7 +660,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="font-semibold" style={{ color: "var(--text)" }}>{release.releaseTitle || release.trackName}</p>
                     <span className="text-xs uppercase tracking-[0.22em]" style={{ color: "var(--text-soft)" }}>
-                      {new Date(release.createdAt).toLocaleDateString()}
+                      {new Date(release.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Kolkata" })}
                     </span>
                   </div>
                   <p className="mt-2 text-sm capitalize" style={{ color: "var(--text-muted)" }}>Release status: {release.status.replace(/_/g, " ")}</p>

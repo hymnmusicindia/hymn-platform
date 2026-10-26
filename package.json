@@ -79,7 +79,8 @@
     "producers:reset": "tsx scripts/reset-producer-accounts.ts",
     "audit:release-storage": "tsx scripts/audit-release-storage-reconciliation.ts",
     "email:test-rejected": "node --conditions=react-server --import tsx scripts/send-test-release-email.ts",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:dashboard-design": "node scripts/verify-dashboard-design-browser.cjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
