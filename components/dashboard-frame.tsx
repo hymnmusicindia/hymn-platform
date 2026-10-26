@@ -1,12 +1,13 @@
 "use client";
 
-import { Bell, ChevronDown, ChevronUp, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, X, Plus, Disc3, TrendingUp, Wallet, Music2, Headphones, Settings, Users, LifeBuoy, Store, LayoutGrid, Upload, FileText, Activity, ShieldCheck, ClipboardCheck } from "lucide-react";
+import { Bell, ChevronDown, ChevronUp, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, X, Plus, Disc3, TrendingUp, Headphones, Store, LayoutGrid } from "lucide-react";
 import clsx from "clsx";
 import "@/app/styles/workspace-system.css";
 import { WorkspaceFooter } from "@/components/workspace-footer";
 import { WorkspaceDestinations } from "@/components/workspace-destinations";
 import { consistentWorkspaceNavigation, workspaceNavigation, workspaceGroupDestination } from "@/lib/workspace-navigation";
 import Link from "next/link";
+import { ModuleTabs } from "./module-tabs";
 import { SubscriptionButton, openSubscriptions } from "@/components/subscription-options";
 import { useSubscriptionLabel } from "@/components/subscription-label-context";
 import Image from "next/image";
@@ -106,7 +107,7 @@ export function DashboardFrame<T extends string>({
     return navItems.find(item => item.key === activeKey)?.group ?? "Workspace";
   });
   useEffect(() => {
-    function reveal(event: Event) { setOpenGroup((event as CustomEvent<string>).detail); setCollapsed(false); if(window.innerWidth<1024) setMobileOpen(true); }
+    function reveal(event: Event) { setOpenGroup((event as CustomEvent<string>).detail); setCollapsed(false); setMobileOpen(false); }
     function hide() { setMobileOpen(false); }
     window.addEventListener("hymn-reveal-service",reveal);
     window.addEventListener("hymn-hide-service",hide);
@@ -154,7 +155,8 @@ export function DashboardFrame<T extends string>({
   }, [updateNavScroll, visibleGroups, openGroup, mobileOpen, collapsed]);
   const activeItem = useMemo(() => flatItems.find((item) => item.key === activeKey), [activeKey, flatItems]);
   const activeGroup = useMemo(() => groups.find((group) => group.items.some((item) => item.key === activeKey)), [activeKey, groups]);
-  useEffect(() => { setOpenGroup(activeGroup?.label === "Home" ? "Distribution" : activeGroup?.label ?? "Distribution"); }, [activeGroup?.label]);
+  useEffect(() => { setOpenGroup(activeGroup?.label ?? null); }, [activeGroup?.label]);
+  const displayedGroup = groups.find(group => group.label === openGroup) || activeGroup;
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       window.dispatchEvent(new CustomEvent("hymn-workspace-section", { detail: activeGroup?.label ?? "Workspace" }));
@@ -166,10 +168,6 @@ export function DashboardFrame<T extends string>({
   function handleSelect(key: string) {
     onSelect(key as T);
     setMobileOpen(false);
-  }
-
-  function toggleGroup(label: string) {
-    setOpenGroup(current => current === label ? null : label);
   }
 
   const isOverview = activeKey === "overview";
@@ -237,50 +235,15 @@ export function DashboardFrame<T extends string>({
         <WorkspaceDestinations overviewActive={isOverview} overviewHref={overviewItem?.href} onOverview={overviewItem && !overviewItem.href ? () => handleSelect(overviewItem.key) : undefined} onNavigate={() => setMobileOpen(false)} />
         </div>
         <div ref={navScrollRef} onScroll={updateNavScroll} className="dashboard-nav-scroll mt-4 min-h-0 flex-1 content-start gap-3 overflow-x-hidden overflow-y-auto pr-1 grid">
-          {visibleGroups.map((group) => {
-            const destination = adminWorkspace ? undefined : workspaceGroupDestination(group.label);
-            const groupItems = group.items.filter(item => item.key !== "overview" && item.label !== destination?.label);
-            if (!groupItems.length && !destination) return null;
-            const menuId = `workspace-group-${group.label.replace(/[^a-z]/gi, '-')}`;
-            const closed = openGroup !== group.label;
-            return (
-              <div key={group.label} className="dashboard-os-nav-group">
-                {destination ? <div className="workspace-service-heading"><Link href={destination.href} aria-label={group.label} className={clsx("dashboard-os-group-toggle",collapsed ? "lg:justify-center" : "")} data-guide-route={destination.href} aria-current={activeItem?.label === destination.label ? "page" : undefined} title={collapsed ? group.label : undefined} onClick={()=>{setOpenGroup(group.label);setMobileOpen(false);}}><span>{group.label}</span></Link>{groupItems.length ? <button type="button" className={clsx("workspace-service-toggle",collapsed ? "lg:hidden" : "")} aria-label={`Toggle ${group.label} menu`} aria-expanded={!closed} aria-controls={menuId} onClick={()=>toggleGroup(group.label)}><ChevronDown className="h-3.5 w-3.5"/></button> : null}</div> : <button
-                  type="button"
-                  className={clsx("dashboard-os-group-toggle", collapsed ? "lg:justify-center" : "")}
-                  onClick={() => toggleGroup(group.label)}
-                  aria-expanded={!closed}
-                  title={collapsed ? group.label : undefined}
-                >
-                  <span className={clsx(collapsed ? "lg:hidden" : "")}>
-                    <span>{group.label}</span>
-                    {group.description ? <small>{group.description}</small> : null}
-                  </span>
-                  <ChevronDown className={clsx("h-3.5 w-3.5 transition", closed ? "-rotate-90" : "rotate-0", collapsed ? "lg:hidden" : "")} />
-                </button>}
-                <div id={menuId} className={clsx("grid gap-1.5", closed ? "hidden" : "")}>
-                  {groupItems.map((item) => {
-                    const active = item.key === activeKey;
-                    const itemLabel = item.key === "plans" || item.key === "subscriptions" ? subscriptionLabel : item.label;
-                    const Icon = workspaceNavigation.find(entry => entry.label === item.label)?.icon ?? (/notification|message/.test(item.key)?Bell:/user|artist|producer|team|collaborator|referral|contributor/.test(item.key)?Users:/fraud/.test(item.key)?ShieldCheck:/contract/.test(item.key)?FileText:/activity|audit|health/.test(item.key)?Activity:/review|queue/.test(item.key)?ClipboardCheck:/release|catalog|delivery/.test(item.key)?Disc3:/analytics|sales|growth/.test(item.key)?TrendingUp:/payment|revenue|royalt|earning|payout|reconcil|ledger/.test(item.key)?Wallet:/upload/.test(item.key)?Upload:/studio|mix|master/.test(item.key)?Headphones:/store|purchase/.test(item.key)?Store:/setting|profile|account|integration/.test(item.key)?Settings:/support|help/.test(item.key)?LifeBuoy:/email|newsletter|webhook/.test(item.key)?FileText:item.key==="overview"?LayoutGrid:Music2);
-                    const content = <><Icon className="portal-nav-icon" /><span className={clsx("min-w-0", collapsed ? "lg:hidden" : "")}><span className="block truncate font-semibold">{itemLabel}</span></span></>;
-                    return item.href ? <Link key={item.key} href={item.href} data-guide-route={item.href} data-nav-key={item.key} aria-current={active ? "page" : undefined} onClick={(event) => { setMobileOpen(false); if (item.key === "plans" || item.key === "subscriptions") { event.preventDefault(); openSubscriptions(); } }} className={clsx("dashboard-os-nav-item pressable hover-lift", active ? "is-active" : "is-idle")} title={collapsed ? itemLabel : undefined}>{content}</Link> : (
-                      <button
-                        key={item.key}
-                        data-nav-key={item.key}
-                        type="button"
-                        onClick={() => handleSelect(item.key)}
-                        className={clsx("dashboard-os-nav-item pressable hover-lift", active ? "is-active" : "is-idle")}
-                        aria-current={active ? "page" : undefined}
-                        title={collapsed ? itemLabel : undefined}
-                      >
-                        {content}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
+          {visibleGroups.map(group => {
+            const destination = workspaceGroupDestination(group.label);
+            const selected = activeGroup?.label === group.label;
+            const entry = (selected ? activeItem : undefined) || group.items.find(item => item.label === destination?.label) || group.items.find(item => item.key !== "overview");
+            if (!entry || group.label === "Home") return null;
+            const Icon = workspaceNavigation.find(item => item.group === group.label)?.icon || LayoutGrid;
+            const content = <><Icon className="portal-nav-icon"/><span className={clsx(collapsed ? "lg:hidden" : "")}>{group.label}</span></>;
+            const className = clsx("dashboard-os-nav-item pressable", selected ? "is-active" : "is-idle");
+            return entry.href ? <Link key={group.label} href={entry.href} className={className} data-nav-section={group.label} title={group.label} aria-current={selected ? "page" : undefined} onClick={() => setMobileOpen(false)}>{content}</Link> : <button type="button" key={group.label} className={className} data-nav-section={group.label} title={group.label} aria-current={selected ? "page" : undefined} onClick={() => handleSelect(entry.key)}>{content}</button>;
           })}
         </div>
         <div className={clsx("dashboard-nav-controls mt-2 shrink-0 justify-end gap-1", collapsed ? "hidden" : "flex")} aria-label="Navigation scroll controls">
@@ -324,6 +287,7 @@ export function DashboardFrame<T extends string>({
         </section> : null}
         
 
+        <ModuleTabs items={(displayedGroup?.items || []).map(item => ({ ...item, label: item.key === "plans" || item.key === "subscriptions" ? subscriptionLabel : item.label }))} active={activeKey} label={displayedGroup?.label || "Workspace"} onSelect={handleSelect} onFollow={item => { if (["plans", "subscriptions"].includes(item.key)) { openSubscriptions(); return true; } return false; }}/>
         <div className="portal-page-content" data-workspace-page={isOverview && navItems.some(item => item.key === "overview" && !item.href) ? "dashboard" : undefined}>{children}</div>
       </div>
     </div>

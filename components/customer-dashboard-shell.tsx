@@ -397,6 +397,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         { key: "profile", label: "Artist Profiles", description: "Your store identities", group: "Account", href: "/dashboard?tab=settings" },
         { key: "referral", label: "Referrals", description: "Invites and HYMN credit", group: "Account" },
         { key: "settings", label: "Settings", description: "Profile and security", group: "Account" },
+        { key: "messages", label: "Notifications", description: "Updates and alerts", group: "Account" },
         { key: "support", label: "Help & FAQ", description: "Guidance and support", group: "Support" }
       ]}
       activeKey={activeTab}

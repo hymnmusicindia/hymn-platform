@@ -1,4 +1,5 @@
 import type { AdminPermissionKey } from "@/lib/access";
+import { adminSectionFor } from "@/lib/navigation-sections";
 type Item={key:string;label:string;description:string;group:string;href?:string};
 export const adminWorkspaceNavigation:Item[]=[
         { key: "overview", label: "Operations Dashboard", description: "Queues requiring attention", group: "Command Center" },
@@ -41,7 +42,7 @@ export const adminWorkspaceNavigation:Item[]=[
         { key: "activity", label: "Activity and Logs", description: "Active admins and session history", group: "Platform" },
         { key: "integrations", label: "Integrations & health", description: "Provider configuration and readiness", group: "Platform", href: "/admin/integrations/direnote" },
         { key: "settings", label: "Settings", description: "Platform config", group: "Platform" }
-      ];
+      ].map(item => ({ ...item, group: adminSectionFor(item.key) }));
 const required:Record<string,AdminPermissionKey[]>={
  "manual-catalogue":["system.manage"],"studio-admin":["services.manage"],"contributors-admin":["users.read"],"campaign-redemptions":["users.read"],"leads-admin":["users.manage"],"client-cards-admin":["users.manage"],"audit-admin":["audit.read"],"email-admin":["system.manage"],"webhooks-admin":["system.manage"],
   notifications:["system.manage"],users:["users.read"],artists:["users.read"],producers:["users.read","services.manage"],team:["system.manage"],activity:["audit.read"],analytics:["audit.read"],

@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { chromium, expect } from '@playwright/test';
-import { consistentWorkspaceNavigation, workspaceNavigation, workspaceGroups, workspaceGroupDestination } from '../lib/workspace-navigation';
+import { consistentWorkspaceNavigation, workspaceNavigation, workspaceGroups } from '../lib/workspace-navigation';
 async function main() {
 const legacy = [
  {key:'overview',label:'Overview',group:'Home'},
@@ -12,10 +12,10 @@ const legacy = [
 ];
 const normalized=consistentWorkspaceNavigation(legacy);
 assert.equal(new Set(normalized.map(item=>item.key)).size,normalized.length);
-assert.deepEqual([...new Set(normalized.map(item=>item.group))],['Home',...workspaceGroups.map(group=>group.title)]);
+assert.deepEqual([...new Set(normalized.map(item=>item.group))],['Home',...workspaceGroups.map(group=>group.title),'Money','Account & support']);
 assert.equal(normalized.find(item=>item.key==='upload')?.href,undefined);
 assert.equal(normalized.find(item=>item.key==='earnings')?.href,undefined);
-assert.equal(normalized.find(item=>item.key==='help')?.href,'/dashboard?tab=support');
+assert.equal(normalized.find(item=>item.key==='help')?.href,'/faq');
 assert.equal(normalized.find(item=>item.label==='My releases')?.href,'/dashboard/releases');
 const admin=[{key:'overview',label:'Operations Overview',group:'Command Center'}];
 assert.deepEqual(consistentWorkspaceNavigation(admin),admin);
@@ -28,10 +28,15 @@ try {
  for(const width of [1440,390,320]) {
   await page.setViewportSize({width,height:900});
   await page.goto('http://localhost:3015/faq',{waitUntil:'domcontentloaded',timeout:120000});
-  await expect(page.locator('.dashboard-os-group-toggle').first()).toBeAttached({timeout:30000});
-  assert.deepEqual(await page.locator('.dashboard-os-group-toggle').evaluateAll(nodes=>nodes.map(node=>node.textContent?.trim())),workspaceGroups.map(group=>group.title));
-  const links=page.locator('a[data-nav-key]');
-  assert.deepEqual(await links.evaluateAll(nodes=>nodes.map(node=>({label:node.textContent?.trim(),href:node.getAttribute('href')}))),workspaceNavigation.filter(item=>item.group!=='Home' && workspaceGroupDestination(item.group)?.key!==item.key).map(item=>({label:item.label,href:item.href})));
+  await expect(page.locator('[data-nav-section]').first()).toBeAttached({timeout:30000});
+  assert.deepEqual(await page.locator('[data-nav-section]').evaluateAll(nodes=>nodes.map(node=>node.textContent?.trim())),workspaceGroups.map(group=>group.title));
+  for (const group of workspaceGroups) {
+    await page.evaluate(label => window.dispatchEvent(new CustomEvent('hymn-reveal-service',{detail:label})),group.title);
+    const links = page.locator('[data-module-tabs] a');
+    await expect(links).toHaveCount(group.links.length);
+    assert.deepEqual(await links.evaluateAll(nodes=>nodes.map(node=>({label:node.textContent?.trim(),href:node.getAttribute('href')}))),workspaceNavigation.filter(item=>item.group===group.title).map(item=>({label:item.label,href:item.href})));
+  }
+  await page.evaluate(()=>window.dispatchEvent(new Event('hymn-hide-service')));
   await expect(page.locator('a.workspace-home-link')).toHaveAttribute('href','/');
   await page.waitForFunction(()=>Object.keys(document.querySelector('.workspace-footer button')||{}).some(key=>key.startsWith('__reactProps$')));
   await page.waitForTimeout(1000);

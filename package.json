@@ -6,6 +6,7 @@
     "node": ">=20.19.0"
   },
   "scripts": {
+    "test:navigation-sections": "tsx scripts/verify-navigation-sections.ts && node scripts/verify-navigation-sections-browser.cjs",
     "test:customer-experience": "tsx scripts/verify-customer-experience-isolated.ts --features",
     "test:staff-qc": "tsx scripts/verify-acquisition-isolated.ts --staff-qc-only",
     "test:team-coordinator": "tsx scripts/verify-acquisition-isolated.ts --team-coordinator-only",
