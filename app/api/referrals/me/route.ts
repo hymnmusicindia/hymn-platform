@@ -79,7 +79,7 @@ export async function GET(request: Request) {
       const eligibleAt = item.qualifiedAt && snapshot.success ? new Date(item.qualifiedAt.getTime() + snapshot.data.coolingDays * 86400000).toISOString() : null;
       const lifetime = (item.rewardPolicy as { version?: number } | null)?.version === 3;
       const commissionEarned = (perReferral.find(row => row.referralId === item.id)?._sum.netMinor || 0) / 100;
-      return { id: item.id, lifetime, commissionEarned, person: maskEmail(item.signupEmail), status: item.status, earnings: item.earnings, expectedReward: lifetime ? 0 : snapshot.success ? snapshot.data.amount : 5, riskStatus: item.riskStatus, eligibleAt, createdAt: item.createdAt.toISOString(), rewardedAt: item.rewardedAt?.toISOString() ?? null };
+      return { endedAt:item.endedAt?.toISOString()||null, id: item.id, lifetime, commissionEarned, person: maskEmail(item.signupEmail), status: item.status, earnings: item.earnings, expectedReward: lifetime ? 0 : snapshot.success ? snapshot.data.amount : 5, riskStatus: item.riskStatus, eligibleAt, createdAt: item.createdAt.toISOString(), rewardedAt: item.rewardedAt?.toISOString() ?? null };
     }),
     nextActivityCursor: activities.length > 25 ? activities[24].id : null,
     nextCreditCursor: ledger.length > 25 ? ledger[24].id : null,

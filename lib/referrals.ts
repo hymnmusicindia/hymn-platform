@@ -49,7 +49,7 @@ export async function registerReferralForNewUser(tx: Tx, input: { referredUserId
   const [referredUser, referrer, existing] = await Promise.all([
     tx.user.findUnique({ where: { id: input.referredUserId }, select: { id: true, email: true, status: true, referredById: true, createdAt: true } }),
     tx.user.findFirst({ where: { referralCode: { equals: code, mode: "insensitive" } }, select: { id: true, email: true, referralCode: true, status: true } }),
-    tx.referral.findUnique({ where: { referredUserId: input.referredUserId } })
+    tx.referral.findFirst({ where: { endedAt:null, referredUserId: input.referredUserId } })
   ]);
   if (!referredUser || referredUser.status !== "ACTIVE") throw new Error("Referred account was not found.");
   if (!referrer || referrer.status !== "ACTIVE") throw new Error("This referral code isn't valid.");
@@ -57,7 +57,7 @@ export async function registerReferralForNewUser(tx: Tx, input: { referredUserId
   if (await tx.partnerReferral.findUnique({ where: { userId: input.referredUserId } })) throw new Error("A partner referral has already been associated with this account.");
   if (referrer.id === referredUser.id || referrer.email.toLowerCase() === input.referredEmail.toLowerCase()) throw new Error("You can't use your own referral code.");
 
-  const reverse = await tx.referral.findFirst({ where: { userId: input.referredUserId, referredUserId: referrer.id }, select: { id: true } });
+  const reverse = await tx.referral.findFirst({ where: { endedAt:null, userId: input.referredUserId, referredUserId: referrer.id }, select: { id: true } });
   if (reverse) throw new Error("Circular referrals are not eligible.");
   const ancestors = await tx.$queryRaw<Array<{ id: number }>>`WITH RECURSIVE ancestry AS (
     SELECT id, referred_by, ARRAY[id] AS visited FROM users WHERE id = ${referrer.id}
@@ -69,6 +69,8 @@ export async function registerReferralForNewUser(tx: Tx, input: { referredUserId
   await tx.user.update({ where: { id: input.referredUserId }, data: { referredById: referrer.id, onboardingReferralCode: referrer.referralCode } });
   const referral = await tx.referral.create({ data: {
     userId: referrer.id,
+    activeRecipientId: input.referredUserId,
+    acceptedAt: new Date(),
     referredUserId: input.referredUserId,
     referralCode: referrer.referralCode || code,
     signupEmail: input.referredEmail.toLowerCase(),
@@ -79,11 +81,11 @@ export async function registerReferralForNewUser(tx: Tx, input: { referredUserId
   } });
   await tx.notification.upsert({
     where: { eventKey: `referral:${referral.id}:registered` },
-    create: { userId: referrer.id, title: "A referral joined HYMN", body: "Someone joined HYMN using your referral. Their reward remains pending until a qualifying purchase is verified.", type: "account", href: "/dashboard?tab=referral", actionLabel: "View referrals", eventKey: `referral:${referral.id}:registered`, metadata: { referralId: referral.id } },
+    create: { userId: referrer.id, title: "A referral connected with HYMN", body: "A customer approved your referral connection. Their reward remains pending until a qualifying purchase is verified.", type: "account", href: "/dashboard?tab=referral", actionLabel: "View referrals", eventKey: `referral:${referral.id}:registered`, metadata: { referralId: referral.id } },
     update: {}
   });
   await tx.referralMailJob.createMany({ data: [
-    { eventKey: `referral:${referral.id}:accepted:owner`, userId: referrer.id, subject: "Your invitation was accepted", body: "A new member joined HYMN through your invitation. Your referral connection is active. Say hello in your referral centre. Commission is earned only on eligible paid purchases." },
+    { eventKey: `referral:${referral.id}:accepted:owner`, userId: referrer.id, subject: "Your invitation was accepted", body: "A customer approved your invitation on HYMN. Your referral connection is active. Say hello in your referral centre. Commission is earned only on eligible paid purchases." },
     { eventKey: `referral:${referral.id}:accepted:follower`, userId: referredUser.id, subject: "Your HYMN referral is connected", body: "Your referral invitation was accepted and linked to your account. You can message your referrer in the referral centre. Joining alone does not earn commission." }
   ], skipDuplicates: true });
   await tx.notification.upsert({ where: { eventKey: `referral:${referral.id}:accepted:follower` }, update: {}, create: { userId: referredUser.id, title: "Your referral is connected", body: "Meet your referrer in your referral centre.", type: "account", href: "/dashboard?tab=referral", eventKey: `referral:${referral.id}:accepted:follower` } });
@@ -93,7 +95,7 @@ export async function registerReferralForNewUser(tx: Tx, input: { referredUserId
 
 export async function qualifyReferralInTransaction(tx: Tx, input: { referredUserId: number; transactionType: "checkout_order" | "distribution_order"; transactionId: string | number; paymentId: string; paidAmountInr: number; source: string; test?: boolean; adminCreated?: boolean }) {
   if (input.test || input.adminCreated || input.paidAmountInr <= 0 || !input.paymentId.trim()) return { qualified: false as const, reason: "ineligible_transaction" as const };
-  const referral = await tx.referral.findUnique({ where: { referredUserId: input.referredUserId } });
+  const referral = await tx.referral.findFirst({ where: { endedAt:null, referredUserId: input.referredUserId } });
   if (!referral || !["PENDING", "REGISTERED"].includes(referral.status)) return { qualified: false as const, reason: "no_pending_referral" as const };
   if (referral.rewardPolicy) return { qualified: false as const, reason: "recurring_plan_required" as const };
   if (referral.userId === input.referredUserId) throw new Error("Self-referral cannot qualify.");

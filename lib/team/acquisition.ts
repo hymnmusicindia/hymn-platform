@@ -1,3 +1,4 @@
+import {employeeAttributionAt} from "../employee-referral-attribution";
 import { leadStageCodes } from "./lead-stages";
 import { hasLeadVerification } from './lead-verification';
 import { assertEmployeeAssignee, dailyProgress, indiaWorkday, syncDailyCrmWork } from "./daily-work";
@@ -18,6 +19,19 @@ import { accrueReferralCommission, refreshReferralCommission } from "@/lib/refer
 
 type Tx = Prisma.TransactionClient;
 export async function acquisitionRead(a: Actor, resource: string, params: URLSearchParams) {
+  if(resource==='acquisition-referral-link'){
+    const member=await prisma.teamMember.findFirst({where:{id:a.id,workspaceId:a.workspaceId,status:'ACTIVE',role:{owner:false},user:{status:'ACTIVE'}},include:{user:true}});
+    if(!member)throw new TeamError('An active employee account is required.',403);
+    const code=member.user.referralCode||await prisma.$transaction(async tx=>{
+      await tx.$queryRaw`SELECT id FROM users WHERE id=${a.userId} FOR UPDATE`;
+      const user=await tx.user.findUniqueOrThrow({where:{id:a.userId}});
+      if(user.referralCode)return user.referralCode;
+      const {createUniqueReferralCode}=await import('../referrals');
+      const referralCode=await createUniqueReferralCode(tx,user.name);
+      await tx.user.update({where:{id:user.id},data:{referralCode}});return referralCode;
+    },{timeout:15000});
+    return {code,url:`${getPublicAppUrl()}/join?ref=${encodeURIComponent(code)}`,minimumDays:45};
+  }
   if (resource === "acquisition-targets") {
     demand(a, "crm.prospects.view");
     const members = await prisma.teamMember.findMany({ where: { workspaceId: a.workspaceId, status: "ACTIVE", role: { owner: false }, user: { status: "ACTIVE" }, ...(can(a, "acquisition.admin") ? {} : { id: a.id }) }, include: { user: { select: { name: true } } } });
@@ -46,7 +60,7 @@ export async function acquisitionRead(a: Actor, resource: string, params: URLSea
     const [customer, lead, referral] = await Promise.all([
       prisma.user.findUnique({ where: { id: customerId }, select: { id: true, name: true, email: true, status: true } }),
       prisma.acquisitionLead.findFirst({ where: { workspaceId: a.workspaceId, customerId }, include: { prospect: { select: { id: true, name: true, stage: true } }, researcher: { select: { id: true, user: { select: { name: true, email: true } } } }, acquisitionEmployee: { select: { id: true, user: { select: { name: true, email: true } } } }, commissions: { orderBy: { createdAt: "desc" }, take: 100 } } }),
-      prisma.referral.findUnique({ where: { referredUserId: customerId }, include: { owner: { select: { id: true, name: true, email: true } }, commissions: { where: { level: 1 }, orderBy: { createdAt: "desc" }, take: 100, include: { adjustments: { orderBy: { id: "asc" } } } } } }),
+      prisma.referral.findFirst({ where: { endedAt:null, referredUserId: customerId }, include: { owner: { select: { id: true, name: true, email: true } }, commissions: { where: { level: 1 }, orderBy: { createdAt: "desc" }, take: 100, include: { adjustments: { orderBy: { id: "asc" } } } } } }),
     ]);
     if (!customer) throw new TeamError("Customer not found.", 404);
     return { customer, employeeAttribution: lead, customerReferral: referral ? { id: referral.id, status: referral.status, attributedAt: referral.attributedAt, referrer: referral.owner, commissions: referral.commissions } : null };
@@ -250,8 +264,10 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
     demand(a, "crm.prospects.assign");
     const leadId = String(body.leadId || ""); const employeeId = String(body.employeeId || ""); const reason = String(body.reason || "").trim();
     if (!reason || reason.length < 8 || reason.length > 1000) throw new TeamError("Write a reason for assigning the acquisition representative.");
+    await tx.$queryRaw`SELECT id FROM acquisition_leads WHERE id=${leadId} FOR UPDATE`;
     const lead = await tx.acquisitionLead.findFirst({ where: { id: leadId, workspaceId: a.workspaceId } });
     if (!lead) throw new TeamError("Lead unavailable.", 404);
+    if(lead.referralAcceptedAt&&!lead.referralEndedAt)throw new TeamError("This connection was approved by the customer. A staff reassignment cannot replace that consent.",409);
     if (!await tx.teamMember.findFirst({ where: { id: employeeId, workspaceId: a.workspaceId, status: "ACTIVE", user: { status: "ACTIVE" } } })) throw new TeamError("Choose an active member of this workspace.");
     await assertEmployeeAssignee(tx, a.workspaceId, employeeId);
     await tx.teamProspect.update({ where: { id: lead.prospectId }, data: { ownerId: employeeId, version: { increment: 1 } } });
@@ -324,26 +340,28 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
       if (duplicateAdjustment || duplicateAudit) throw new TeamError("This adjustment reference has already been recorded for this transaction.", 409);
     }
     const updated = await tx.acquisitionRevenueEvidence.update({ where: { id: evidence.id }, data: { workspaceId: a.workspaceId, applicableTaxesMinor: taxes, refundsChargebacksMinor: refunds, directPassThroughCostsMinor: costs, providerFeeMinor: providerFee, eligibleNetRevenueMinor: net, status: "RECONCILED", taxEvidence, costEvidence, reviewedByEmployeeId: a.id, reviewedAt: new Date(), reviewReason: reason } });
-    const attribution = await tx.acquisitionLead.findFirst({ where: { customerId: evidence.customerId, workspaceId: a.workspaceId, attributionLockedAt: { not: null }, acquisitionEmployeeId: { not: null } } });
+    const attribution = await employeeAttributionAt(tx,evidence.customerId,source.createdAt,a.workspaceId);
     const settings = await tx.acquisitionProgramSettings.findUnique({ where: { workspaceId: a.workspaceId } });
-    if (attribution && settings?.enabled && evidence.paymentVerifiedAt >= settings.effectiveAt && settings.eligibleSourceTypes.includes(evidence.sourceType) && !wasReconciled) {
+    if (attribution && await tx.teamMember.count({where:{id:attribution.acquisitionEmployeeId!,status:'ACTIVE',role:{owner:false},user:{status:'ACTIVE'}}}) && settings?.enabled && evidence.paymentVerifiedAt >= settings.effectiveAt && settings.eligibleSourceTypes.includes(evidence.sourceType) && !wasReconciled) {
       // The customer referral programme has separate terms and accounting.
       // Its rewards are intentionally excluded from this employee-only cap.
       const employeeCap = Math.min(settings.maximumRewardRateBps, settings.researcherRateBps + settings.acquisitionRateBps);
-      const researcherRate = Math.min(settings.researcherRateBps, employeeCap);
-      const acquisitionRate = Math.min(settings.acquisitionRateBps, Math.max(0, employeeCap - researcherRate));
+      const research=await tx.teamProspect.findUnique({where:{id:attribution.prospectId},select:{verified:true,contactEligibility:true,suppressed:true}});
+      const researchEligible=!attribution.referralOnly&&(!attribution.referralAcceptedAt||research?.verified&&!research.suppressed&&['CONSENTED','LEGITIMATE_INTEREST'].includes(research.contactEligibility));
+      const researcherRate = researchEligible?Math.min(settings.researcherRateBps, employeeCap):0;
+      const acquisitionRate = Math.min(settings.acquisitionRateBps, Math.max(0, employeeCap - Math.min(settings.researcherRateBps,employeeCap)));
       for (const entry of [{ employeeId: attribution.researcherEmployeeId, role: "RESEARCHER", rate: researcherRate }, { employeeId: attribution.acquisitionEmployeeId!, role: "ACQUISITION", rate: acquisitionRate }]) {
         if (entry.rate <= 0) continue;
         await tx.acquisitionCommission.create({ data: { leadId: attribution.id, sourceType: evidence.sourceType, sourceId: evidence.sourceId, paymentId: evidence.paymentId, customerId: evidence.customerId, employeeId: entry.employeeId, attributionRole: entry.role, eligibleNetRevenueMinor: net, rateBps: entry.rate, amountMinor: Math.floor(net * entry.rate / 10000), currency: evidence.currency, calculationBasis: `Recognised HYMN revenue ${evidence.recognisedRevenueMinor}; less taxes ${taxes}, refunds/chargebacks ${refunds}, direct costs ${costs}, and provider fee ${providerFee}. Tax references and cost references recorded in revenue evidence.`, policyVersion: evidence.policyVersion, paymentVerificationReference: evidence.paymentId, status: "PENDING", eligibleAt: new Date(evidence.paymentVerifiedAt.getTime() + settings.holdPeriodDays * 86_400_000) } });
       }
     }
-    if (attribution && wasReconciled && net !== evidence.eligibleNetRevenueMinor) {
-      const entries = await tx.acquisitionCommission.findMany({ where: { leadId: attribution.id, sourceType: evidence.sourceType, sourceId: evidence.sourceId, entryType: "EARNED" } });
+    if (wasReconciled && net !== evidence.eligibleNetRevenueMinor) {
+      const entries = await tx.acquisitionCommission.findMany({ where: { lead: { workspaceId:a.workspaceId }, sourceType: evidence.sourceType, sourceId: evidence.sourceId, entryType: "EARNED" } });
       for (const earned of entries) {
         const prior = await tx.acquisitionCommission.aggregate({ where: { sourceType: evidence.sourceType, sourceId: evidence.sourceId, employeeId: earned.employeeId, attributionRole: earned.attributionRole, entryType: "ADJUSTMENT" }, _sum: { amountMinor: true } });
         const target = Math.floor(net * earned.rateBps / 10000);
         const delta = target - earned.amountMinor - (prior._sum.amountMinor || 0);
-        if (delta) await tx.acquisitionCommission.create({ data: { leadId: attribution.id, sourceType: evidence.sourceType, sourceId: evidence.sourceId, paymentId: evidence.paymentId, customerId: evidence.customerId, employeeId: earned.employeeId, attributionRole: earned.attributionRole, entryType: "ADJUSTMENT", adjustmentReference, eligibleNetRevenueMinor: net, rateBps: earned.rateBps, amountMinor: delta, currency: evidence.currency, calculationBasis: `Post-reconciliation correction ${adjustmentReference}; revised eligible net revenue ${net}; prior earned amount ${earned.amountMinor}; prior adjustments ${prior._sum.amountMinor || 0}. ${reason}`, policyVersion: earned.policyVersion, paymentVerificationReference: evidence.paymentId, status: "PENDING", eligibleAt: delta < 0 ? new Date() : new Date(Date.now() + (settings?.holdPeriodDays ?? 14) * 86_400_000) } });
+        if (delta) await tx.acquisitionCommission.create({ data: { leadId: earned.leadId, sourceType: evidence.sourceType, sourceId: evidence.sourceId, paymentId: evidence.paymentId, customerId: evidence.customerId, employeeId: earned.employeeId, attributionRole: earned.attributionRole, entryType: "ADJUSTMENT", adjustmentReference, eligibleNetRevenueMinor: net, rateBps: earned.rateBps, amountMinor: delta, currency: evidence.currency, calculationBasis: `Post-reconciliation correction ${adjustmentReference}; revised eligible net revenue ${net}; prior earned amount ${earned.amountMinor}; prior adjustments ${prior._sum.amountMinor || 0}. ${reason}`, policyVersion: earned.policyVersion, paymentVerificationReference: evidence.paymentId, status: "PENDING", eligibleAt: delta < 0 ? new Date() : new Date(Date.now() + (settings?.holdPeriodDays ?? 14) * 86_400_000) } });
       }
     }
     await accrueReferralCommission(tx, evidence.sourceType as import("@/lib/referral-commissions").CommissionSource, Number(evidence.sourceId));
@@ -402,8 +420,10 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
     demand(a, "acquisition.admin");
     const leadId = String(body.leadId || ""); const employeeId = String(body.employeeId || ""); const role = body.role === "RESEARCHER" ? "RESEARCHER" : "ACQUISITION"; const reason = String(body.reason || "").trim();
     if (!reason || reason.length < 8 || reason.length > 1000) throw new TeamError("Admin reassignment requires an explanatory reason.");
+    await tx.$queryRaw`SELECT id FROM acquisition_leads WHERE id=${leadId} FOR UPDATE`;
     const lead = await tx.acquisitionLead.findFirst({ where: { id: leadId, workspaceId: a.workspaceId } });
     if (!lead) throw new TeamError("Lead unavailable.", 404);
+    if(lead.referralAcceptedAt&&!lead.referralEndedAt)throw new TeamError("This connection was approved by the customer. A staff reassignment cannot replace that consent.",409);
     if (!await tx.teamMember.findFirst({ where: { id: employeeId, workspaceId: a.workspaceId } })) throw new TeamError("Choose a member of this workspace.");
     if (role === "ACQUISITION") {
       await assertEmployeeAssignee(tx, a.workspaceId, employeeId);

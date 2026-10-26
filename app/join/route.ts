@@ -1,3 +1,5 @@
+import { getSession } from "@/lib/session";
+import { destinationAfterLogin } from "@/lib/routes";
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -10,8 +12,9 @@ export async function GET(request: NextRequest) {
   const rate = await consumeRateLimit({ scope: "referral.resolve", identity: requestIdentity(request), limit: 60, windowSeconds: 60 });
   if (!rate.allowed) return new NextResponse("Please try again later.", { status: 429 });
   const code = normalizeReferralCode(request.nextUrl.searchParams.get("ref"));
-  const destination = new URL("/login", getPublicAppUrl(request.url));
-  destination.searchParams.set("mode", "signup");
+  const session=await getSession();
+  const destination = new URL(session?destinationAfterLogin(session.role):"/login", getPublicAppUrl(request.url));
+  if(!session)destination.searchParams.set("mode", "signup");
   const invalidInvitation = () => {
     const response = NextResponse.redirect(destination);
     response.cookies.delete(REFERRAL_ATTRIBUTION_COOKIE);

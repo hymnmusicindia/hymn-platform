@@ -61,7 +61,7 @@ export async function syncSourceWork(tx:Prisma.TransactionClient,a:Actor,now=new
   const sources:Source[]=[];
   const leads=await tx.acquisitionLead.findMany({
     where:{
-      workspaceId:a.workspaceId,
+      workspaceId:a.workspaceId,referralOnly:false,
       prospectId:{notIn:existing.filter(t=>t.status!=='COMPLETED'&&t.eventKey?.startsWith(`${prefix}lead:`)).map(t=>t.eventKey!.slice(`${prefix}lead:`.length))},
       prospect:{verified:false,suppressed:false,stage:{notIn:closed},OR:[{clientId:null},{client:{status:'ACTIVE',mergedIntoId:null}}]},
     },

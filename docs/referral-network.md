@@ -1,3 +1,5 @@
+> Current consent, existing-customer eligibility and 45-day removal rules: [Referral consent and safeguards](referral-consent-and-safeguards.md). These supersede conflicting lifecycle descriptions below.
+
 # Referral centre and network commissions
 
 ## What changes

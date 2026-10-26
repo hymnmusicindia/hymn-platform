@@ -34,8 +34,6 @@ export async function POST(request: Request) {
 
     await createSession({ sub: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: profileAvatarDataUrl(user.name, user.role) });
     await ensureAccountClientCard(user.id).catch(error => console.error("Client card account sync failed", { userId: user.id, error }));
-    cookieStore.delete(REFERRAL_ATTRIBUTION_COOKIE);
-    cookieStore.delete(ACQUISITION_ATTRIBUTION_COOKIE);
     after(() => deliverReferralMail().then(() => undefined));
     const referralWelcome = await referralWelcomeForSignup(user.id, startedAt).catch(() => null);
     return NextResponse.json({ user, redirectPath: destinationAfterLogin(user.role), referralWelcome }, { status: 201 });

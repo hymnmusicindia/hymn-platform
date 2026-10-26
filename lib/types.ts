@@ -618,6 +618,7 @@ export interface Coupon {
 }
 
 export interface ReferralActivity {
+  endedAt?: string | null;
   lifetime?: boolean;
   commissionEarned?: number;
   expectedReward?: number;

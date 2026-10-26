@@ -48,7 +48,7 @@ async function main(){
  const pay2=await prisma.subscriptionPayment.create({data:{subscriptionId:sub2.id,razorpayPaymentId:"payment-fixture-2",amount:100000,status:"captured"}});
  const recovery=await reconcileReferralQualifications();assert.ok(recovery.checked>=1,"Missed qualification is recovered without growth analytics.");
  await prisma.$transaction(tx=>reviewSubscriptionReferralPayment(tx,{id:3,paymentId:pay2.razorpayPaymentId,eventType:"refund.processed",amountMinor:100000}));
- const other=await prisma.referral.findUniqueOrThrow({where:{referredUserId:third.id}});assert.equal(other.status,"REJECTED");await assert.rejects(approveRecurringReferral(other.id,null,"fixture invalid approval"));
+ const other=await prisma.referral.findFirstOrThrow({where:{endedAt:null,referredUserId:third.id}});assert.equal(other.status,"REJECTED");await assert.rejects(approveRecurringReferral(other.id,null,"fixture invalid approval"));
  await prisma.referral.update({where:{id:other.id},data:{status:"REWARDED",earnings:100,referredReward:0}});
  const review=await prisma.$transaction(tx=>reverseReferralForTransactionInTransaction(tx,{transactionType:"subscription_payment",transactionId:pay2.id,reason:"refunded"}));assert.equal(review.reviewRequired,true);assert.equal((await prisma.user.findUniqueOrThrow({where:{id:friend.id}})).referralCredits,0);
  await prisma.$transaction(tx=>reverseReferralForTransactionInTransaction(tx,{transactionType:"subscription_payment",transactionId:pay2.id,reason:"refunded"}));

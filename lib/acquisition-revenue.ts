@@ -10,7 +10,7 @@ export const ACQUISITION_ATTRIBUTION_COOKIE = "hymn_acquisition_attribution";
 export async function recordVerifiedAcquisitionRevenue(input: { sourceType: RevenueSource; sourceId: string; customerId: number; paymentId: string; currency: string; recognisedRevenueMinor: number }) {
   if (!input.paymentId || !Number.isSafeInteger(input.recognisedRevenueMinor) || input.recognisedRevenueMinor < 0) throw new Error("Verified revenue evidence is invalid.");
   const attribution = await prisma.acquisitionLead.findFirst({ where: { customerId: input.customerId, attributionLockedAt: { not: null }, acquisitionEmployeeId: { not: null } }, select: { workspaceId: true } });
-  const referral = !attribution ? await prisma.referral.findUnique({ where: { referredUserId: input.customerId }, select: { id: true } }) : null;
+  const referral = !attribution ? await prisma.referral.findFirst({ where: { endedAt:null, referredUserId: input.customerId }, select: { id: true } }) : null;
   if (!attribution && !referral) return null;
   const evidence = await prisma.acquisitionRevenueEvidence.upsert({
     where: { sourceType_sourceId: { sourceType: input.sourceType, sourceId: input.sourceId } },

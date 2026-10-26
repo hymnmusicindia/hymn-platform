@@ -1,3 +1,5 @@
+> Current consent, existing-customer eligibility and 45-day removal rules: [Referral consent and safeguards](referral-consent-and-safeguards.md). These supersede conflicting lifecycle descriptions below.
+
 > Current implementation: [Referral centre and network commissions](referral-network.md). This document also describes the legacy credit programme retained for existing promises.
 
 # Referral system audit and revamp

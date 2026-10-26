@@ -282,6 +282,7 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
       if (data.stage === "CONVERTED") {
         if (!data.customerUserId || !await tx.user.findUnique({ where: { id: data.customerUserId }, select: { id: true } })) throw new TeamError("Conversion must link an existing HYMN customer.");
         const registeredAttribution = await tx.acquisitionLead.findUnique({ where: { prospectId: id } });
+        if(registeredAttribution?.referralAcceptedAt&&registeredAttribution.customerId!==data.customerUserId)throw new TeamError("Customer-approved attribution cannot be moved to another account.",409);
         if (!registeredAttribution?.acquisitionEmployeeId) throw new TeamError("Assign the acquisition employee before converting this lead.", 409);
         if (registeredAttribution.customerId && registeredAttribution.customerId !== data.customerUserId && (!can(a, "acquisition.admin") || !data.reason || data.reason.trim().length < 8)) throw new TeamError("Changing a linked customer requires an admin override reason.", 403);
         if (data.customerUserId) {

@@ -29,7 +29,8 @@ async function main() {
   assert.equal(await prisma.emailLog.count({ where: { eventKey: { in: jobs.map(job => job.eventKey) }, status: "sent" } }), 16);
   await worker.deliverReferralMail(); assert.equal(fixture.sent.length, 16, "Completed jobs do not resend on cron replay.");
   await prisma.referralMailJob.update({ where: { id: jobs[0].id }, data: { status: "SENDING", lockedAt: new Date(Date.now() - 360000) } });
-  await worker.deliverReferralMail(); assert.equal(fixture.sent.length, 17, "A crashed worker lease is recovered.");
+  await worker.deliverReferralMail(); assert.equal(fixture.sent.length, 16, "An uncertain crashed SMTP send is not blindly replayed.");
+  assert.equal((await prisma.referralMailJob.findUniqueOrThrow({where:{id:jobs[0].id}})).status,"REVIEW");
   console.log("PASS transactional referral email outbox, SMTP outage/backoff, concurrent leases, delivery logs, replay and crashed-worker recovery; transport was mocked, no real emails.");
 }
 main().finally(() => prisma.$disconnect());

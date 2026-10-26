@@ -1,6 +1,7 @@
 import { cronHandler } from "@/lib/cron/runtime";
 export const GET = cronHandler("referral-reconciliation", runJob);
 import { deliverReferralMail } from "@/lib/referral-mail";
+import {prisma} from '@/lib/prisma';
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { reconcileReferralQualifications } from "@/lib/referral-reconciliation";
@@ -12,7 +13,10 @@ async function runJob(request: Request) {
     const deadline = Date.now() + 45000;
     const [result, mail] = await Promise.allSettled([reconcileReferralQualifications(Date.now() + 20000), deliverReferralMail(deadline)]);
     if (result.status === "rejected" || mail.status === "rejected") return NextResponse.json({ error: "Some referral work needs a retry. Completed work is safe to replay." }, { status: 503 });
-    return NextResponse.json({ ...result.value, mail: mail.value });
+    const review=await prisma.referralMailJob.count({where:{status:'REVIEW'}});
+    const senderBlocked=mail.value.deferred&&Boolean(await prisma.referralMailJob.count({where:{status:'PENDING'}}));
+    const success=!review&&!senderBlocked;
+    return NextResponse.json({ ...result.value, mail: mail.value,mailAttention:{review,senderBlocked},success },{status:success?200:503});
   }
   catch { return NextResponse.json({error:"Referral reconciliation failed; safe to retry."},{status:503}); }
 }

@@ -25,6 +25,8 @@ async function main() {
   for (const statement of netPolicy.split(";").map(value => value.trim()).filter(Boolean)) await prisma.$executeRawUnsafe(statement);
   assert.equal((await prisma.referralCommission.findMany()).length, 0);
   assert.ok((await prisma.referralProgram.findUniqueOrThrow({ where: { id: 1 } })).netRevenueEffectiveAt);
+  // The historical mail-table recreation predates the separately tested consent migration.
+  await prisma.$executeRawUnsafe("ALTER TABLE referral_mail_jobs ADD COLUMN last_error TEXT");
   // Subsequent legacy integration fixtures exercise preserved pre-launch rates.
   // Customer-only net policy and adjustments are covered by test:acquisition.
   await prisma.referralProgram.update({ where: { id: 1 }, data: { netRevenueEffectiveAt: null } });

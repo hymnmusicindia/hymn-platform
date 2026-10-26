@@ -1,3 +1,5 @@
+> Current consent, existing-customer eligibility and 45-day removal rules: [Referral consent and safeguards](referral-consent-and-safeguards.md). These supersede conflicting lifecycle descriptions below.
+
 > Updated by [Referral centre and network commissions](referral-network.md): new marketplace payments use the 5% cap, and the new migration adds seven-level sale-based allocations and private referral chat. Previously earned amounts stay unchanged.
 
 # Lifetime referral commissions

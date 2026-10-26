@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import {previewReferral,approveReferral} from "../lib/referral-consent";
 import { prisma } from "../lib/prisma";
 import { createPasswordUser, upsertGoogleUser } from "../lib/db";
 
@@ -19,14 +20,16 @@ async function main() {
     const google = await upsertGoogleUser({ name: "Google invitee", email: `google-${suffix}@fixture.invalid`, googleId: `google-${suffix}`, referralCode: owner.referralCode! });
     for (const user of [password, google]) {
       assert.ok(user);
-      assert.equal((await prisma.referral.findUniqueOrThrow({ where: { referredUserId: user.id } })).userId, owner.id);
-      assert.equal(await prisma.referralMailJob.count({ where: { userId: user.id } }), 1);
+      assert.equal(await prisma.referral.count({where:{referredUserId:user.id}}),0,"Signup waits for explicit customer approval.");
+      const offer=await previewReferral(user.id,owner.referralCode!);
+      await prisma.$transaction(tx=>approveReferral(tx,user.id,offer.proof),{timeout:30000});
+      assert.equal(await prisma.referralMailJob.count({where:{userId:user.id}}),1);
     }
     const again = await upsertGoogleUser({ name: "Google invitee", email: `google-${suffix}@fixture.invalid`, googleId: `google-${suffix}`, referralCode: owner.referralCode! });
     assert.equal(again?.id, google?.id);
     assert.equal(await prisma.referral.count({ where: { userId: owner.id } }), 2, "Repeated login does not duplicate attribution.");
     assert.equal(await prisma.referralMailJob.count({ where: { userId: owner.id } }), 2, "Repeated login does not duplicate acceptance mail.");
-    console.log("Password signup, Google signup and repeat login survive >5 seconds of database latency; attribution and email queue remain atomic.");
+    console.log("Password signup, Google signup and repeat login survive >5 seconds of database latency; explicit post-login approval and email queue remain atomic.");
   } finally {
     prisma.$transaction = transaction as typeof prisma.$transaction;
     await prisma.$disconnect();

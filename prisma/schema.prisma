@@ -201,7 +201,7 @@ model User {
   referredBy                    User?                               @relation("UserReferrals", fields: [referredById], references: [id])
   referrals                     User[]                              @relation("UserReferrals")
   sentReferrals                 Referral[]                          @relation("ReferralOwner")
-  receivedReferral              Referral?                           @relation("ReferralRecipient")
+  receivedReferrals             Referral[]                          @relation("ReferralRecipient")
   creditLedgerEntries           CreditLedgerEntry[]
   referralVisits                ReferralVisit[]
   referralCommissionPayouts     ReferralCommissionPayout[]
@@ -1999,7 +1999,10 @@ model FraudEntityLink {
 model Referral {
   id                        Int       @id @default(autoincrement())
   userId                    Int       @map("user_id")
-  referredUserId            Int?      @unique @map("referred_user_id")
+  referredUserId            Int?      @map("referred_user_id")
+  activeRecipientId         Int?      @unique @map("active_recipient_id")
+  acceptedAt                DateTime? @map("accepted_at")
+  endedAt                   DateTime? @map("ended_at")
   referralCode              String    @map("referral_code")
   signupEmail               String    @map("signup_email")
   rewardPolicy              Json?     @map("reward_policy")
@@ -2032,6 +2035,7 @@ model Referral {
 
   @@unique([qualifyingTransactionType, qualifyingTransactionId])
   @@index([userId, status])
+  @@index([referredUserId, createdAt])
   @@index([status, createdAt])
   @@map("referrals")
 }
@@ -3422,6 +3426,11 @@ model TeamMember {
 }
 
 model AcquisitionLead {
+  referralHistory Json @default("[]") @map("referral_history")
+  requiresReferralConsent Boolean @default(true) @map("requires_referral_consent")
+  referralAcceptedAt DateTime? @map("referral_accepted_at")
+  referralEndedAt DateTime? @map("referral_ended_at")
+  referralOnly Boolean @default(false) @map("referral_only")
   id String @id @default(cuid())
   workspaceId String @map("workspace_id")
   prospectId String @unique @map("prospect_id")
@@ -4017,6 +4026,7 @@ model TeamWeeklyReport {
 }
 
 model ReferralMailJob {
+  lastError String? @map("last_error")
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
   id Int @id @default(autoincrement())
   eventKey String @unique @map("event_key")

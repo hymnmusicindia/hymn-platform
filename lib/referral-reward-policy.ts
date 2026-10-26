@@ -11,7 +11,7 @@ export const rewardPolicySchema = z.object({
 });
 export async function newReferralRewardPolicy(tx: Prisma.TransactionClient) {
   void tx;
-  return { version: 3, rates: REFERRAL_COMMISSION_RATES, coolingDays: REFERRAL_HOLD_DAYS, lifetime: true };
+  return { version: 3, rates: REFERRAL_COMMISSION_RATES, coolingDays: REFERRAL_HOLD_DAYS, lifetime: true, consentVersion:1, removalAfterDays:45 };
 }
 export const referralPolicySnapshotSchema = z.object({ version: z.literal(2), amount: z.number().int().min(0).max(10000), coolingDays: z.number().int().min(1).max(90), plans: z.array(z.string()) });
 
@@ -20,7 +20,7 @@ export async function qualifyRecurringReferral(paymentId: number) {
     await accrueReferralCommission(tx, "subscription_payment", paymentId);
     const payment = await tx.subscriptionPayment.findUniqueOrThrow({ where: { id: paymentId }, include: { subscription: true } });
     if (payment.status !== "captured" || payment.amount <= 0 || payment.currency !== "INR") return;
-    const referral = await tx.referral.findUnique({ where: { referredUserId: payment.subscription.userId } });
+    const referral = await tx.referral.findFirst({ where: { endedAt:null, referredUserId: payment.subscription.userId } });
     if (!referral?.rewardPolicy || referral.status !== "PENDING") return;
     const parsed = referralPolicySnapshotSchema.safeParse(referral.rewardPolicy);
     if (!parsed.success) return;

@@ -1,3 +1,6 @@
+import {employeeAttributionAt} from "./employee-referral-attribution";
+import {referralEffectiveAt} from "./referral-consent-policy";
+import {lockReferralGraph} from "./referrals";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { commissionMinor, remainingCommissionMinor, REFERRAL_COMMISSION_RATES, REFERRAL_HOLD_DAYS, REFERRAL_MINIMUM_PAYOUT_MINOR, REFERRAL_NETWORK_RATES_BPS, type ReferralCommissionCategory } from "@/lib/referral-commission-policy";
@@ -39,6 +42,7 @@ export async function accrueReferralCommission(tx: Tx, source: CommissionSource,
     if (userId === row.order.engineerParty.claimedByUserId) baseMinor = 0;
   }
   if (paidMinor <= 0 || !paymentId?.startsWith("pay_")) return;
+  await lockReferralGraph(tx);
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${source + ":" + id}, 0))::text`;
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${paymentId}, 0))::text`;
   const program = await tx.referralProgram.findUnique({ where: { id: 1 } });
@@ -46,10 +50,12 @@ export async function accrueReferralCommission(tx: Tx, source: CommissionSource,
   // New-policy customer rewards wait for reconciled HYMN net revenue.
   // Earlier payments retain their frozen programme terms. Customer rewards
   // remain outside the employee commission cap.
-  const employeeAttribution = await tx.acquisitionLead.findFirst({ where: { customerId: userId, attributionLockedAt: { not: null }, acquisitionEmployeeId: { not: null } }, select: { id: true, workspaceId: true } });
+  const employeeAttribution = await employeeAttributionAt(tx,userId,purchasedAt);
   const netPolicy = Boolean(employeeAttribution || (program.netRevenueEffectiveAt && purchasedAt >= program.netRevenueEffectiveAt));
-  const referral = await tx.referral.findUnique({ where: { referredUserId: userId }, include: { owner: true, referredUser: true } });
+  const referral = await tx.referral.findFirst({ where: { referredUserId: userId,...referralEffectiveAt(purchasedAt) }, include: { owner: true, referredUser: true } });
   if (!referral || referral.status === "REJECTED" || referral.userId === userId || purchasedAt < referral.createdAt || referral.owner.status !== "ACTIVE" || referral.referredUser?.status !== "ACTIVE") return;
+  // Staff invitations use the employee ledger, never a second personal referral reward.
+  if(await tx.teamMember.count({where:{userId:referral.userId,status:'ACTIVE',joinedAt:{lte:purchasedAt}}}))return;
   let netEvidence = null;
   if (netPolicy) {
     netEvidence = await tx.acquisitionRevenueEvidence.upsert({
@@ -80,7 +86,7 @@ export async function accrueReferralCommission(tx: Tx, source: CommissionSource,
   let budget = ["beats", "studio"].includes(category) ? Math.max(0, Math.min(baseMinor, commissionMinor(paidMinor, 500)) - amount) : Math.max(0, baseMinor - amount);
   if (!netPolicy && !testMode && program.networkEffectiveAt && purchasedAt >= program.networkEffectiveAt) {
     for (let level = 2; level <= 7; level++) {
-      const ancestor = await tx.referral.findUnique({ where: { referredUserId: descendant }, include: { owner: { select: { status: true } }, referredUser: { select: { status: true } } } });
+      const ancestor = await tx.referral.findFirst({ where: { referredUserId: descendant,...referralEffectiveAt(purchasedAt) }, include: { owner: { select: { status: true } }, referredUser: { select: { status: true } } } });
       if (!ancestor || visited.has(ancestor.userId) || ancestor.createdAt > purchasedAt || ancestor.status === "REJECTED" || ancestor.riskStatus !== "clear" || ancestor.owner.status !== "ACTIVE" || ancestor.referredUser?.status !== "ACTIVE") break;
       visited.add(ancestor.userId); descendant = ancestor.userId;
       const indirectRate = REFERRAL_NETWORK_RATES_BPS[level - 1];
@@ -137,7 +143,7 @@ export async function refreshReferralCommission(tx: Tx, paymentId: string, now =
     for (let depth = 1; depth <= row.level; depth++) {
       if (!descendant || seen.has(descendant)) { validPath = false; break; }
       seen.add(descendant);
-      const edge = await tx.referral.findUnique({ where: { referredUserId: descendant }, include: { owner: { select: { status: true } }, referredUser: { select: { status: true } } } });
+      const edge = await tx.referral.findFirst({ where: { referredUserId: descendant,...referralEffectiveAt(row.capturedAt) }, include: { owner: { select: { status: true } }, referredUser: { select: { status: true } } } });
       if (!edge || edge.status === "REJECTED" || edge.riskStatus !== "clear" || edge.owner.status !== "ACTIVE" || edge.referredUser?.status !== "ACTIVE") { validPath = false; break; }
       if (depth === row.level && edge.id !== row.referralId) validPath = false;
       descendant = edge.userId;
@@ -164,17 +170,19 @@ export async function refreshReferralCommission(tx: Tx, paymentId: string, now =
 export async function clearedReferralMinor(tx: Tx, userId: number) {
   const rows = await tx.$queryRaw<Array<{ total: bigint }>>`WITH RECURSIVE paths AS (
     SELECT c.id, c.net_minor, c.level, c.referral_id AS target, 1 AS depth,
-      r.id AS edge, r.user_id AS ancestor, ARRAY[r.referred_user_id,r.user_id] AS visited
+      c.captured_at, r.id AS edge, r.user_id AS ancestor, ARRAY[r.referred_user_id,r.user_id] AS visited
     FROM referral_commissions c JOIN referrals beneficiary ON beneficiary.id = c.referral_id
     JOIN referrals r ON r.id = COALESCE(c.origin_referral_id,c.referral_id)
     JOIN users owner ON owner.id = r.user_id JOIN users buyer ON buyer.id = r.referred_user_id
     WHERE beneficiary.user_id = ${userId} AND c.status = 'AVAILABLE'
       AND NOT EXISTS (SELECT 1 FROM payment_webhook_events e WHERE e.payment_id = c.payment_id AND e.signature_valid = true AND e.processing_state <> 'processed' AND e.event_type IN ('refund.created','refund.processed','payment.dispute.created','payment.dispute.lost'))
+      AND r.created_at <= c.captured_at AND (r.ended_at IS NULL OR r.ended_at > c.captured_at)
       AND r.status <> 'REJECTED' AND r.risk_status = 'clear' AND owner.status = 'ACTIVE' AND buyer.status = 'ACTIVE'
-    UNION ALL SELECT p.id,p.net_minor,p.level,p.target,p.depth+1,r.id,r.user_id,p.visited || r.user_id
+    UNION ALL SELECT p.id,p.net_minor,p.level,p.target,p.depth+1,p.captured_at,r.id,r.user_id,p.visited || r.user_id
     FROM paths p JOIN referrals r ON r.referred_user_id = p.ancestor
     JOIN users u ON u.id = r.user_id JOIN users child ON child.id = r.referred_user_id
     WHERE p.depth < p.level AND p.depth < 7 AND NOT r.user_id = ANY(p.visited)
+      AND r.created_at <= p.captured_at AND (r.ended_at IS NULL OR r.ended_at > p.captured_at)
       AND r.status <> 'REJECTED' AND r.risk_status = 'clear' AND u.status = 'ACTIVE' AND child.status = 'ACTIVE'
   ) SELECT COALESCE(SUM(net_minor),0)::bigint AS total FROM paths WHERE depth = level AND edge = target`;
   return Number(rows[0]?.total || 0);

@@ -1,6 +1,6 @@
 import EmbeddedPostgres from "embedded-postgres";
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync,readFileSync,writeFileSync } from "node:fs";
 import path from "node:path";
 
 mkdirSync(".cache", { recursive: true });
@@ -18,6 +18,15 @@ async function main() {
   if (!reuse) await pg.initialise(); await pg.start();
   try {
     if (!reuse) await pg.createDatabase("referral_fixture");
+    if(process.argv.includes('--consent-only')){
+      const baseline=path.join(fixture,'consent-baseline.prisma');
+      const schema=readFileSync('prisma/schema.prisma','utf8').replace('receivedReferrals             Referral[]','receivedReferral              Referral?').replace('referredUserId            Int?      @map','referredUserId            Int?      @unique @map').replace(/^model (Referral|AcquisitionLead|ReferralMailJob) \{[\s\S]*?^\}/gm,block=>block.replace(/^  (activeRecipientId|acceptedAt|endedAt|referralAcceptedAt|referralEndedAt|referralOnly|lastError|requiresReferralConsent|referralHistory) .*\r?\n/gm,'')).replace(/^  @@index\(\[referredUserId, createdAt\]\)\r?\n/gm,'');
+      writeFileSync(baseline,schema);
+      await run(['node_modules/prisma/build/index.js','db','push','--schema',baseline,'--skip-generate','--force-reset']);
+      await run(['node_modules/prisma/build/index.js','db','execute','--file','prisma/migrations/20261026110000_referral_consent_and_effective_periods/migration.sql','--schema','prisma/schema.prisma']);
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-referral-consent.ts']);
+      return;
+    }
     if (process.argv.includes("--auth-only")) { await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-auth-timeout.ts"]); return; }
     if (process.argv.includes("--mail-only")) { await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-mail.ts"]); return; }
     await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", "prisma/schema.prisma", "--skip-generate", "--force-reset"]);
