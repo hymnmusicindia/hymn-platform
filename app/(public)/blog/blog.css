@@ -1,0 +1,11 @@
+.prose-hymn{font-size:1rem;line-height:1.85;color:var(--text-muted)}
+.prose-hymn h2{margin:2.5rem 0 1rem;color:var(--text);font-size:1.65rem;font-weight:650;line-height:1.25;letter-spacing:-.025em}
+.prose-hymn p{margin:1rem 0}
+.prose-hymn ul,.prose-hymn ol{margin:1rem 0;padding-left:1.4rem}
+.prose-hymn li{margin:.55rem 0}
+.prose-hymn a{color:var(--text);text-decoration:underline;text-underline-offset:3px}
+.prose-hymn table{width:100%;border-collapse:collapse;font-size:.9rem}
+.prose-hymn th,.prose-hymn td{border:1px solid var(--border);padding:.75rem;text-align:left;vertical-align:top}
+.prose-hymn th{color:var(--text);font-weight:600}
+.prose-hymn details summary{color:var(--text)}
+.prose-hymn :focus-visible{outline:2px solid currentColor;outline-offset:3px}

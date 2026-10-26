@@ -3,6 +3,7 @@ import { getPublicAppUrl } from "@/lib/public-app-url";
 import { prisma } from "@/lib/prisma";
 import { policyDocuments } from "@/lib/policy-content";
 import { ENGINEER_GENRES } from "@/lib/engineer-applications";
+import { BLOG_ARTICLES, BLOG_CATEGORIES, slugifyCategory } from "@/lib/blog-content";
 
 export const revalidate = 3600;
 
@@ -31,6 +32,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ]);
   return [
     ...routes.map(([path, priority, changeFrequency]) => ({ url: `${origin}${path}`, changeFrequency, priority })),
+    { url: `${origin}/blog`, changeFrequency: "weekly" as const, priority: 0.75 },
+    ...BLOG_CATEGORIES.map(category => ({ url: `${origin}/blog/category/${slugifyCategory(category)}`, changeFrequency: "weekly" as const, priority: 0.55 })),
+    ...BLOG_ARTICLES.map(article => ({ url: `${origin}/blog/${article.slug}`, lastModified: new Date(`${article.updatedAt}T00:00:00.000Z`), changeFrequency: "monthly" as const, priority: article.featured ? 0.7 : 0.6 })),
     {url:`${origin}/studio/readiness`},
     {url:`${origin}/playlist-review-terms`},
     ...policyDocuments.filter(policy=>!['privacy','terms'].includes(policy.slug)).map(policy=>({url:`${origin}/policies/${encodeURIComponent(policy.slug)}`})),

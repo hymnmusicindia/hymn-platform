@@ -25,6 +25,7 @@ export const footerColumns = {
     { href: "/about", label: "About HYMN" },
     { href: "/mission", label: "Mission & Founder" },
     { href: "/contact", label: "Contact" },
+    { href: "/blog", label: "Music Guides" },
     { href: "/services", label: "Services" },
     { href: "/privacy-policy", label: "Privacy Policy" },
     { href: "/terms-of-service", label: "Terms of Service" },
