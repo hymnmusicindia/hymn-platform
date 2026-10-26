@@ -78,3 +78,7 @@ html body .release-library-grid .release-summary-badge {
   html body .release-library-grid > a .release-summary-artwork > span svg { width:34px; height:34px; }
   html body .release-library-grid > a .release-summary-title { margin-top:16px!important; }
 }
+
+/* Long release titles remain identifiable in narrow two-column catalogues. */
+html body .release-summary-tile .release-summary-title { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; white-space:normal; overflow-wrap:anywhere; line-height:1.4; min-height:2.8em; }
+html body .release-summary-tile .release-summary-subtitle { min-width:0; line-height:1.6; }

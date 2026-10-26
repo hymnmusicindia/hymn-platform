@@ -121,11 +121,11 @@ export function ReleaseSummaryCard({
         </span>
       </div>
 
-      <h3 className="release-summary-title mt-3 truncate text-[17px] font-semibold leading-tight" style={{ color: "var(--text)" }}>
+      <h3 className="release-summary-title mt-3 text-[17px] font-semibold leading-tight" title={title} style={{ color: "var(--text)" }}>
         {title}
       </h3>
-      <p className="release-summary-subtitle mt-1 truncate text-sm" style={{ color: "var(--text-muted)" }}>
-        <span className="capitalize">{release.releaseType}</span> · {trackCount} Track{trackCount === 1 ? "" : "s"} · {release.artistName || "Unknown artist"}
+      <p className="release-summary-subtitle mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
+        <span className="block"><span className="capitalize">{release.releaseType}</span> · {trackCount} Track{trackCount === 1 ? "" : "s"}</span><span className="block truncate" title={release.artistName || "Unknown artist"}>{release.artistName || "Unknown artist"}</span>
       </p>
 
       {release.amendment ? <Link href={`/dashboard/releases/${release.id}?tab=requests&request=${release.amendment.id}`} className="mt-3 block text-xs font-semibold" style={{ color: "var(--text)" }}>{amendmentStatusLabel(release.amendment.status)} ? #{release.amendment.id}</Link> : null}

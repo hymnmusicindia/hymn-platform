@@ -1,4 +1,6 @@
 "use client";
+import {displayDateTime} from "@/lib/display-date-time";
+
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import NextImage from "next/image";
@@ -18,7 +20,7 @@ const templates = {
 } as const;
 
 const sourceName = (source: string) => source === "homepage" || source === "website" ? "Website" : source === "instagram" ? "Instagram" : source.replaceAll("_", " ").replace(/\b\w/g, letter => letter.toUpperCase());
-const dateTime = (value: string | null) => value ? new Date(value).toLocaleString() : "—";
+const dateTime = (value: string | null) => value ? displayDateTime(value) : "—";
 
 export function AdminNewsletter() {
   const [view, setView] = useState<View>("audience");

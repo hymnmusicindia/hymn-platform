@@ -1,4 +1,6 @@
 "use client";
+import {displayDateTime} from "@/lib/display-date-time";
+
 
 import { useEffect, useState } from "react";
 
@@ -48,7 +50,7 @@ export function ReleaseSubmissionHistory({ releaseId, admin = false }: { release
     {attempts.map((attempt, index) => <details key={attempt.id} className="border-b py-4" open={attempt.isCurrent}>
       <summary className="cursor-pointer text-sm font-semibold">Attempt {index + 1} · {attempt.isCurrent ? "Current" : "Historical"} · {attempt.status?.replace(/_/g, " ")}</summary>
       <p className="mt-3 text-sm">UPC: {attempt.upc || "Awaiting assignment"}</p>
-      <time className="text-xs">{new Date(attempt.submittedAt).toLocaleString()}</time>
+      <time className="text-xs">{displayDateTime(attempt.submittedAt)}</time>
       {attempt.safeError ? <p className="mt-2 text-sm">{attempt.safeError}</p> : null}
       {admin && ["processing", "reconciliation_required"].includes(attempt.state) ? <button type="button" className="btn-outline mt-3" onClick={() => setRecoveryAttempt(attempt.id)}>Record partner non-receipt confirmation</button> : null}
       {(attempt.tracks ?? []).map(track => <p key={track.id} className="mt-2 text-sm">{track.title}: {track.isrc || "Awaiting ISRC"}</p>)}

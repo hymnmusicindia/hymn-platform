@@ -76,7 +76,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     ]
   };
   return (
-    <html lang="en" data-theme="light" suppressHydrationWarning>
+    <html lang="en" data-scroll-behavior="smooth" data-theme="light" suppressHydrationWarning>
       <head>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
         <script

@@ -21,3 +21,5 @@
 @media(prefers-reduced-motion:reduce) { :where(details > summary)::after { transition:none; } }
 
 :where(details > summary) > :where(svg.lucide-chevron-down,svg.lucide-chevron-up,svg.lucide-chevron-right) { margin-inline-start:auto; }
+
+@media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }

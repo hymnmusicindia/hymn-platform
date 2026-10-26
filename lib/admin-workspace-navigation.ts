@@ -29,7 +29,7 @@ export const adminWorkspaceNavigation:Item[]=[
         { key: "reviews", label: "Reviews", description: "Moderate customer feedback", group: "Marketplace" },
         { key: "contracts", label: "Contracts", description: "Agreements and splits", group: "Support / Legal" },
         { key: "support", label: "Support Tickets", description: "Inbound help", group: "Support / Legal" },
-        {key:"studio-admin",label:"Engineer approvals",description:"Pending Mix / Master applications and Studio delivery",group:"Marketplace",href:"/admin/studio"},
+        {key:"studio-admin",label:"Studio operations",description:"Engineer applications, client projects and Studio delivery",group:"Marketplace",href:"/admin/studio"},
         {key:"contributors-admin",label:"Contributor identities",description:"Canonical creator records",group:"Platform",href:"/admin/contributors"},
         {key:"campaign-redemptions",label:"Promotion redemptions",description:"Recorded discounts and campaign use",group:"Growth / Content",href:"/admin/promotions"},
         {key:"leads-admin",label:"Enquiries",description:"Customer and partnership enquiries",group:"Growth / Content",href:"/admin/leads"},

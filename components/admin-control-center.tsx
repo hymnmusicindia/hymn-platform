@@ -1,4 +1,5 @@
-﻿"use client";
+"use client";
+import {displayDateTime} from "@/lib/display-date-time";
 import { useAdminReleaseFeed } from "./use-admin-release-feed";
 
 import dynamic from "next/dynamic";
@@ -228,7 +229,7 @@ function AdminStoreStatusEditor({ release }: { release: Release }) {
       {row.status === "Denied" || row.status === "Content ID Denied" ? <div className="mt-3 grid gap-3 sm:grid-cols-2"><select className="field" value={row.reason ?? ""} onChange={(event) => update(row.platform, { reason: event.target.value })}><option value="">Select required denial reason</option>{STORE_DENIAL_REASONS.map((reason) => <option key={reason}>{reason}</option>)}</select>{row.reason === "Other" ? <input className="field" placeholder="Explain in the user-facing note" value={row.userFacingNote ?? ""} onChange={(event) => update(row.platform, { userFacingNote: event.target.value })} /> : null}</div> : null}
     </div>)}</div> : <p className="mt-4 text-sm" style={{ color: "var(--text-muted)" }}>No platforms were selected for this release.</p>}
     <div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={!changed.length || saving} onClick={save} className="btn-primary pressable">{saving ? "Saving…" : "Save Store Statuses"}</button><button type="button" disabled={!changed.length || saving} onClick={() => { setDrafts(saved); setFeedback(null); }} className="btn-outline pressable">Reset Changes</button></div>{feedback ? <p className="mt-3 text-sm" style={{ color: feedback.includes("saved") ? "var(--success)" : "var(--danger)" }}>{feedback}</p> : null}
-    <details className="mt-5 rounded-xl border p-4" style={{ borderColor: "var(--border)" }}><summary className="cursor-pointer font-semibold">Store Status History ({history.length})</summary><div className="mt-4 grid gap-2">{history.map((item) => <div key={item.id} className="summary-card"><span>{new Date(item.updatedAt || "").toLocaleString()} · {item.platform}<br /><small>{item.updatedByLabel || "Admin"}{item.reason ? ` · ${item.reason}` : ""}</small></span><span>{item.oldStatus || "Not set"} → {item.status}</span></div>)}{!history.length ? <p className="text-sm" style={{ color: "var(--text-muted)" }}>No status changes recorded yet.</p> : null}</div></details>
+    <details className="mt-5 rounded-xl border p-4" style={{ borderColor: "var(--border)" }}><summary className="cursor-pointer font-semibold">Store Status History ({history.length})</summary><div className="mt-4 grid gap-2">{history.map((item) => <div key={item.id} className="summary-card"><span>{displayDateTime(item.updatedAt || "")} · {item.platform}<br /><small>{item.updatedByLabel || "Admin"}{item.reason ? ` · ${item.reason}` : ""}</small></span><span>{item.oldStatus || "Not set"} → {item.status}</span></div>)}{!history.length ? <p className="text-sm" style={{ color: "var(--text-muted)" }}>No status changes recorded yet.</p> : null}</div></details>
   </div>;
 }
 
@@ -1660,7 +1661,7 @@ export function AdminControlCenter({
                     <div>
                       <p className="font-semibold" style={{ color: "var(--text)" }}>{notification.title}</p>
                       <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{notification.body}</p>
-                      <p className="mt-3 text-xs" style={{ color: "var(--text-soft)" }}>User #{notification.userId} / {new Date(notification.createdAt).toLocaleString()}</p>
+                      <p className="mt-3 text-xs" style={{ color: "var(--text-soft)" }}>User #{notification.userId} / {displayDateTime(notification.createdAt)}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <StatusPill label={notification.type} active />

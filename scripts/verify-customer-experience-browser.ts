@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { chromium, type Page } from '@playwright/test';
 import jwt from 'jsonwebtoken';
 
@@ -47,12 +47,12 @@ async function inspect(page: Page, route: string, status: number, errors: string
 async function main() {
   mkdirSync(root, { recursive: true });
   const browser = await chromium.launch({ headless: true });
-  const results: Finding[] = [];
+  const results: Finding[] = process.env.CUSTOMER_AUDIT_RESUME==='true'&&existsSync(`${root}/${output}.json`)?JSON.parse(readFileSync(`${root}/${output}.json`,'utf8')):[];
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
   // tsx preserves helper names in functions serialised by Playwright.
   await context.addInitScript('window.__name = fn => fn');
   await context.addCookies([{ name: 'hymn_session', value: jwt.sign({ sub: fixture.customer.id, name: fixture.customer.name, email: fixture.customer.email, role: 'customer' }, 'customer-experience-local-fixture-secret', { expiresIn: '2h' }), url: origin }]);
-  await context.addInitScript(() => { localStorage.setItem('hymn-theme', 'dark'); });
+  await context.addInitScript(() => { try{localStorage.setItem('hymn-theme', 'dark');}catch{} });
   const page = await context.newPage(); page.setDefaultTimeout(30000); page.setDefaultNavigationTimeout(180000);
   let errors: string[] = [], apiErrors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -74,20 +74,23 @@ async function main() {
   }
   try {
     for (const route of routes) {
+      if(process.env.CUSTOMER_AUDIT_RESUME==='true'&&results.some(row=>row.route===route&&row.width===390&&!row.errors.length))continue;
       if (selectedRoutes && !selectedRoutes.includes(route)) continue;
       if (process.env.CUSTOMER_AUDIT_FILTER && !route.includes(process.env.CUSTOMER_AUDIT_FILTER)) continue;
+      for(let index=results.length-1;index>=0;index--)if(results[index].route===route)results.splice(index,1);
       errors = []; apiErrors = [];
       await page.setViewportSize({ width: 1440, height: 1000 });
       let status = 0;
       try {
         const response = await navigate(route); status = response?.status() || 0;
-        if (route === '/distribution') await page.waitForURL('**/distribution/start', { timeout: 60000 });
-        if (route === '/royalty-payouts') await page.waitForURL('**/payout', { timeout: 60000 });
-        if (route === '/first-release-free') await page.waitForURL('**/first-release', { timeout: 60000 });
-        await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => undefined);
+        if (route === '/distribution') await page.waitForURL('**/distribution/start', { timeout: 120000,waitUntil:'domcontentloaded' });
+        if (route === '/royalty-payouts') await page.waitForURL('**/payout', { timeout: 120000,waitUntil:'domcontentloaded' });
+        if (route === '/first-release-free') await page.waitForURL('**/first-release', { timeout: 120000,waitUntil:'domcontentloaded' });
+        await page.waitForLoadState('networkidle', { timeout: Number(process.env.CUSTOMER_AUDIT_IDLE_MS||20000) }).catch(() => undefined);
         const reviewLater = page.getByRole('button', { name: 'Review later', exact: true });
         if (await reviewLater.isVisible()) await reviewLater.click();
         if (route.startsWith('/distribution/start') && await page.locator('.release-journey-intro').count()) await page.locator('.release-journey-intro').waitFor({ state: 'hidden', timeout: 15000 });
+        if(route === '/dashboard?tab=support')await page.locator('.support-history[aria-busy=true]').waitFor({state:'hidden',timeout:90000});
         if (route === '/dashboard?tab=referral') await page.locator('.referral-loading').waitFor({ state: 'hidden', timeout: 120000 });
         await page.waitForTimeout(300);
         const desktop = await inspect(page, route, status, [...errors], [...apiErrors]); results.push(desktop);

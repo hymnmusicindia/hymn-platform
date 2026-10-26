@@ -5,7 +5,7 @@ import { FormEvent, useMemo, useState, useTransition } from "react";
 import type { Release, SiteSettings } from "@/lib/types";
 
 function imageSrc(value?: string | null) {
-  return value || "/uploads/releases/artwork/d8b919d9-33cb-4caa-8d02-ff3efd37d39c.jpeg";
+  return value || "/home-hero-crowd.jpg";
 }
 
 export function AdminContentManager({
@@ -16,6 +16,8 @@ export function AdminContentManager({
   initialSiteSettings: SiteSettings;
 }) {
   const [siteSettings, setSiteSettings] = useState(initialSiteSettings);
+  const heroPreview=imageSrc(siteSettings.homeHeroImageUrl);
+  const [failedHero,setFailedHero]=useState<string|null>(null);
   const [releaseSearch, setReleaseSearch] = useState("");
   const [selectedReleaseIds, setSelectedReleaseIds] = useState<number[]>(initialSiteSettings.homeFeaturedReleaseIds ?? []);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -35,7 +37,8 @@ export function AdminContentManager({
 
   function submitHeroImage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     setFeedback(null);
 
     startTransition(async () => {
@@ -47,7 +50,7 @@ export function AdminContentManager({
       }
       setSiteSettings(data.siteSettings);
       setFeedback("Homepage hero image updated.");
-      event.currentTarget.reset();
+      form.reset();
     });
   }
 
@@ -88,11 +91,11 @@ export function AdminContentManager({
           </div>
         </div>
         <div className="mt-5 overflow-hidden rounded-[1.5rem] border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-          <img src={imageSrc(siteSettings.homeHeroImageUrl)} alt="Homepage hero preview" loading="lazy" decoding="async" className="h-64 w-full object-cover" />
+          {failedHero===heroPreview ? <div role="status" className="flex min-h-48 flex-col justify-center gap-2 p-6 text-sm" style={{color:"var(--text-muted)"}}><strong style={{color:"var(--text)"}}>Image preview unavailable</strong><p>Upload a new image or check the image URL below.</p></div> : <img key={heroPreview} src={heroPreview} alt="Homepage hero preview" loading="lazy" decoding="async" onError={()=>setFailedHero(heroPreview)} className="h-64 w-full object-cover" />}
         </div>
         <form onSubmit={submitHeroImage} className="mt-5 grid gap-4">
-          <input name="homeHeroImage" type="file" accept="image/*" className="field" />
-          <input name="homeHeroImageUrl" className="field" placeholder="Or paste an image URL" defaultValue={siteSettings.homeHeroImageUrl ?? ""} />
+          <label className="grid gap-2 text-sm">Upload image<input name="homeHeroImage" type="file" accept="image/*" className="field" /></label>
+          <label className="grid gap-2 text-sm">Image URL<input name="homeHeroImageUrl" className="field" placeholder="Or paste an image URL" defaultValue={siteSettings.homeHeroImageUrl ?? ""} /></label>
           <button type="submit" disabled={isPending} className="btn-primary pressable w-fit">
             {isPending ? "Saving..." : "Update hero image"}
           </button>

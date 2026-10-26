@@ -25,7 +25,7 @@ const goals = ["Releasing my first song", "Building a catalogue", "Making money 
 const sources = ["Instagram", "Artist or friend", "Google", "College or community", "YouTube", "Other"];
 
 export function TypingText({ text, className = "", onDone }: { text: string; className?: string; onDone?: () => void }) {
-  const reduced = useReducedMotion(); const [visible, setVisible] = useState(reduced ? text : ""); const done = useRef(false);
+  const reduced = useReducedMotion(); const [visible, setVisible] = useState(""); const done = useRef(false);
   useEffect(() => { done.current = false; if (reduced) { setVisible(text); onDone?.(); return; } setVisible(""); let i = 0; let timer: ReturnType<typeof setTimeout>; const tick = () => { i++; setVisible(text.slice(0, i)); if (i >= text.length) { if (!done.current) onDone?.(); done.current = true; return; } const char = text[i - 1]; timer = setTimeout(tick, /[.!?]/.test(char) ? 180 : 31); }; timer = setTimeout(tick, 80); return () => clearTimeout(timer); }, [onDone, reduced, text]);
   return <span className={className} aria-label={text}><span aria-hidden="true">{visible}</span><span className="sr-only">{text}</span></span>;
 }

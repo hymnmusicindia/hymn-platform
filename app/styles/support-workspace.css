@@ -111,3 +111,5 @@
 @media(max-width:540px) { .support-mailbox,.support-inline-form {padding:14px;} .support-screenshot-grid img{width:110px;height:80px;} }
 
 .support-intro-actions {display:flex;flex-wrap:wrap;align-items:center;gap:10px;}
+
+.support-intro-actions > button { min-height:44px!important; padding:11px 16px!important; }.support-intro-actions { align-items:stretch; }
