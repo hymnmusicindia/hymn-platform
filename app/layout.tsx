@@ -35,6 +35,7 @@ import "./styles/distribution-consistency.css";
 import "./styles/disclosure-polish.css";
 import "./styles/policy-agreement.css";
 import "./styles/dashboard-design-system.css";
+import "./styles/release-navigation-header.css";
 import { WorkspacePageTransition } from "@/components/workspace-page-transition";
 import { SmartHelpLayer } from "@/components/smart-help-layer";
 

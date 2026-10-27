@@ -6,14 +6,20 @@ import { WorkspaceDestinations } from "@/components/workspace-destinations";
 import { workspaceGroups, workspaceGroupDestination } from "@/lib/workspace-navigation";
 import { useEffect, useState } from "react";
 import { ArrowUpRight, ChevronDown, Menu, Plus, X } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { ReleaseNavigationTarget } from "./release-navigation-slot";
 
 const groups = workspaceGroups;
 
-export function LandingWorkspace({ children, workspaceHref }: {children:React.ReactNode; workspaceHref:string}) {
+export function LandingWorkspace({ children, workspaceHref, releaseNavigation = false }: {children:React.ReactNode; workspaceHref:string; releaseNavigation?:boolean}) {
+  const pathname = usePathname();
+  const activeGroup = groups.find(group => group.links.some(item => item.href.split("?")[0] === pathname))?.title;
+  const [navigationTarget, setNavigationTarget] = useState<HTMLDivElement | null>(null);
   const [open,setOpen] = useState(false);
   const [collapsed,setCollapsed] = useState(false);
   const [navigationReady,setNavigationReady] = useState(false);
-  const [openGroup,setOpenGroup] = useState<string | null>("Distribution");
+  const [openGroup,setOpenGroup] = useState<string | null>(activeGroup ?? "Distribution");
+  useEffect(() => { if (activeGroup) setOpenGroup(activeGroup); }, [activeGroup]);
   useEffect(()=>{
     function toggleNavigation() { if(window.innerWidth<1024)setOpen(value=>!value);else setCollapsed(value=>!value); }
     function revealService(event: Event) { setOpenGroup((event as CustomEvent<string>).detail); setCollapsed(false); if(window.innerWidth<1024) setOpen(true); }
@@ -31,7 +37,7 @@ export function LandingWorkspace({ children, workspaceHref }: {children:React.Re
       <div className="landing-rail-top"><button type="button" aria-label="Close navigation" onClick={()=>setOpen(false)}><X size={18}/></button></div>
       <div className="workspace-launch-row">
       <Link href="/distribution/start" className="landing-new" aria-label="New release"><Plus size={17}/><span>New</span></Link>
-      <WorkspaceDestinations homeActive overviewHref={workspaceHref} onNavigate={()=>setOpen(false)} />
+      <WorkspaceDestinations homeActive={pathname === "/" || pathname === "/home"} overviewHref={workspaceHref} onNavigate={()=>setOpen(false)} />
       </div>
       <nav aria-label="HYMN services">{groups.map(group => {
         const destination = workspaceGroupDestination(group.title);
@@ -45,6 +51,11 @@ export function LandingWorkspace({ children, workspaceHref }: {children:React.Re
       <div className="landing-rail-bottom"><Link href={workspaceHref}>Your workspace <ArrowUpRight size={15}/></Link><Link href="/contact">Talk to HYMN <ArrowUpRight size={15}/></Link><span>Independent music. Shared ambition.</span></div>
       <WorkspaceFooter collapsed={collapsed} onNavigate={()=>setOpen(false)}/>
     </aside>
-    <div className="landing-canvas"><div className="landing-page-content" data-workspace-page="home">{children}</div></div>
+    <div className="landing-canvas">
+      {releaseNavigation ? <div ref={setNavigationTarget} className="release-navigation-header" /> : null}
+      <ReleaseNavigationTarget.Provider value={releaseNavigation ? navigationTarget : undefined}>
+        <div className="landing-page-content" data-workspace-page={pathname === "/" || pathname === "/home" ? "home" : "service"}>{children}</div>
+      </ReleaseNavigationTarget.Provider>
+    </div>
   </div>;
 }

@@ -8,6 +8,7 @@ import "./release-track-manager.css";
 import { ReleaseTrackActions } from "./release-track-actions";
 import layoutStyles from "./distribution-layout.module.css";
 import { ReleaseStageCarousel } from "./release-stage-carousel";
+import { ReleaseNavigationSlot } from "./release-navigation-slot";
 import { loadBioRazorpay as loadRazorpayCheckout } from "@/lib/client-razorpay";
 
 import { customerMessage } from "@/lib/customer-message";
@@ -3709,14 +3710,14 @@ export function ReleaseForm({
           </div>
         </div>
 
-        <div className="release-stage-menu">
+        <ReleaseNavigationSlot><div className="release-stage-menu">
         <ReleaseStageCarousel sections={menuStepIndexes.filter(index => index !== 0 && index !== 1).map(index => {
           const state = stepButtonStyles(index);
           return { id: index, label: stepMenuLabels[index] ?? steps[index], current: state.isCurrent, attention: state.hasCorrection || state.validity === "invalid" };
         })} onSelect={jumpToStep} disabled={stepTransitioning}/>
 
           <div className="release-journey-progress-track" role="progressbar" aria-label="Journey stages reached" aria-valuemin={0} aria-valuemax={menuStepIndexes.length} aria-valuenow={menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1}><span style={{ width: `${((menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1) / menuStepIndexes.length) * 100}%` }} /></div>
-        </div>
+        </div></ReleaseNavigationSlot>
         <aside className="release-workflow-summary hidden lg:block" aria-label="Release summary">
           <div className="release-summary-card rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
             <div className="release-live-preview" aria-label="Release preview">
