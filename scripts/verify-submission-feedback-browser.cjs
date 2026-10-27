@@ -14,7 +14,7 @@ async function main() {
 
 
   const browser=await chromium.launch();
-  try{for(const {width,draft} of [{width:1440,draft:false},{width:390,draft:false},{width:1440,draft:true},{width:390,draft:true}]){
+  try{for(const {width,draft} of [{width:1440,draft:false},{width:390,draft:false},{width:1440,draft:true},{width:390,draft:true},{width:320,draft:false}]){
     const release={id:25,userId:51,status:draft?'draft':'changes_requested',paymentStatus:draft?'pending':'paid',releaseType:'single',wizardFormatIntent:'single',releaseTitle:'Dreamy',trackName:'Dreamy',artistName:'Fixture Artist',labelName:'HYMN Music',contentType:'Original/Exclusive Licensed',primaryGenre:'Hip-Hop',secondaryGenre:'Alternative Hip-Hop',language:'Hindi',releaseDate:'2026-10-19',createdAt:'2026-10-16',copyrightOwner:'Fixture Artist',publishingRights:'Fixture Artist',artworkUrl:'/fixture-cover.jpg',platforms:['Spotify'],ownershipConfirmed:true,noUnauthorizedSamples:true,collaboratorsCredited:true,platformCompliant:true,hymnNotLiable:true,agreedToTerms:true,falseMetadataAcknowledged:true,tracks:[{id:400,trackNumber:1,trackTitle:'Dreamy',language:'Hindi',audioUrl:'/api/assets/185/download',artistProfileIds:[10],primaryArtist:'Fixture Artist',songwriters:'Fixture Writer',composers:'Fixture Writer',producers:'Fixture Producer',duration:'02:37'}]};
     const page=await browser.newPage({viewport:{width,height:1000}});const errors=[];let writes=0,held,finishRequest;
     page.on('pageerror',e=>errors.push(e.message));
@@ -31,6 +31,11 @@ async function main() {
     await page.goto('https://hymn.fixture/');await page.addStyleTag({path:path.join(out,'global.css')});await page.addStyleTag({path:path.join(out,'ui.css')});await page.addScriptTag({path:path.join(out,'ui.js')});
     const submit=page.locator('button[type=submit].release-footer-action.is-primary');await expect(submit).toBeEnabled();await submit.click();
     const dialog=page.getByRole('dialog',{name:'One final confirmation'});await expect(dialog).toBeVisible();expect(writes).toBe(0);expect(await dialog.locator('..').evaluate(el=>getComputedStyle(el).backdropFilter)).toBe('blur(10px)');
+    const agree=dialog.getByRole('button',{name:/I agree/});
+    expect(await agree.evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(226, 236, 250)');
+    expect((await agree.boundingBox()).height).toBeGreaterThanOrEqual(48);
+    const bounds=await dialog.boundingBox();expect(bounds.x).toBeGreaterThanOrEqual(0);expect(bounds.x+bounds.width).toBeLessThanOrEqual(width);
+    await page.screenshot({path:path.join(out,'confirmation-'+width+'-'+(draft?'new':'corrections')+'.png')});
     await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);expect(writes).toBe(0);await expect(submit).toBeFocused();
     await submit.click();await page.clock.install();await page.clock.pauseAt(new Date(Date.now()+1000));await dialog.getByRole('button',{name:/I agree/}).evaluate(button=>{button.click();button.click();});await expect(dialog).toHaveCount(0);
     await expect.poll(()=>writes).toBe(1);await page.clock.runFor(1200);
