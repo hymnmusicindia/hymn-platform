@@ -108,13 +108,13 @@ export function ArtistPicker({
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [appleUrl, setAppleUrl] = useState("");
   const [isProducer, setIsProducer] = useState(false);
-  const [producerLegalName, setProducerLegalName] = useState("");
+  const [producerArtistName, setProducerArtistName] = useState("");
   const [saving, setSaving] = useState(false);
   const [editingProfile, setEditingProfile] = useState<ArtistProfile | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const reachedMax = Boolean(max && valueIds.length >= max);
-  const profileSteps = ["liveMusic", "name", ...(hasLiveMusic ? ["spotify", "apple", "instagram", "youtube", "producer", ...(isProducer ? ["legal"] : [])] : ["instagram"])];
+  const profileSteps = ["liveMusic", "name", ...(hasLiveMusic ? ["spotify", "apple", "instagram", "youtube", "producer", ...(isProducer ? ["producerName"] : [])] : ["instagram"])];
   const activeProfileStep = profileSteps[Math.min(profileStep, profileSteps.length - 1)];
   const isFinalProfileStep = profileStep === profileSteps.length - 1;
   const hasQuery = Boolean(query.trim());
@@ -254,7 +254,7 @@ export function ArtistPicker({
     instagramUrl?: string;
     youtubeUrl?: string;
     isProducer: boolean;
-    producerLegalName?: string;
+    producerArtistName?: string;
   }) {
     const response = await fetch("/api/artists", {
       method: "POST",
@@ -271,7 +271,7 @@ export function ArtistPicker({
         ,instagramUrl: input.instagramUrl
         ,youtubeUrl: input.youtubeUrl
         ,isProducer: input.isProducer
-        ,producerLegalName: input.producerLegalName
+        ,producerArtistName: input.producerArtistName
       })
     });
     const data = await response.json();
@@ -299,7 +299,7 @@ export function ArtistPicker({
     setInstagramUrl("");
     setYoutubeUrl("");
     setIsProducer(false);
-    setProducerLegalName("");
+    setProducerArtistName("");
     setEditingProfile(null);
     setAppleUrl("");
     setSpotifyResults([]);
@@ -321,7 +321,7 @@ export function ArtistPicker({
     setAppleUrl(profile.appleUrl ?? "");
     setYoutubeUrl(profile.youtubeUrl ?? "");
     setIsProducer(Boolean(profile.isProducer));
-    setProducerLegalName(profile.producerLegalName ?? "");
+    setProducerArtistName(profile.producerArtistName ?? profile.name);
     setSpotifyResults([]);
     setSpotifyError(null);
     setProfileStep(0);
@@ -352,8 +352,8 @@ export function ArtistPicker({
       setSpotifyError("Select a Spotify artist, paste a valid Spotify artist profile link, or add an Apple Music profile.");
       return;
     }
-    if (hasLiveMusic && isProducer && !producerLegalName.trim()) {
-      setSpotifyError("Complete legal name is required for a producer profile.");
+    if (hasLiveMusic && isProducer && !producerArtistName.trim()) {
+      setSpotifyError("Producer artist name is required.");
       return;
     }
 
@@ -362,7 +362,7 @@ export function ArtistPicker({
 
     try {
       if (editingProfile) {
-        const response = await fetch(`/api/artists/${editingProfile.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(hasLiveMusic ? { name, hasLiveMusic, spotifyUrl: selectedSpotify?.spotifyUrl ?? manualSpotifyUrl.trim(), instagramUrl: instagramUrl.trim(), appleUrl: appleUrl.trim(), youtubeUrl: youtubeUrl.trim(), isProducer, producerLegalName: isProducer ? producerLegalName.trim() : undefined } : { name, hasLiveMusic: false, instagramUrl: instagramUrl.trim() }) });
+        const response = await fetch(`/api/artists/${editingProfile.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(hasLiveMusic ? { name, hasLiveMusic, spotifyUrl: selectedSpotify?.spotifyUrl ?? manualSpotifyUrl.trim(), instagramUrl: instagramUrl.trim(), appleUrl: appleUrl.trim(), youtubeUrl: youtubeUrl.trim(), isProducer, producerArtistName: isProducer ? producerArtistName.trim() : undefined } : { name, hasLiveMusic: false, instagramUrl: instagramUrl.trim() }) });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Could not update artist profile.");
         const updated = data.profile as ArtistProfile;
@@ -389,7 +389,7 @@ export function ArtistPicker({
         instagramUrl: instagramUrl.trim(),
         youtubeUrl: hasLiveMusic ? youtubeUrl.trim() || undefined : undefined,
         isProducer: Boolean(hasLiveMusic && isProducer),
-        producerLegalName: hasLiveMusic && isProducer ? producerLegalName.trim() : undefined
+        producerArtistName: hasLiveMusic && isProducer ? producerArtistName.trim() : undefined
       });
       onSelect(profile);
       setRecent((current) => [profile, ...current.filter((item) => item.id !== profile.id)].slice(0, 6));
@@ -408,7 +408,7 @@ export function ArtistPicker({
     if (activeProfileStep === "name" && !createName.trim()) return setSpotifyError("Artist name is required.");
     if (activeProfileStep === "liveMusic" && hasLiveMusic === null) return setSpotifyError("Choose whether this artist already has store profiles.");
     if (activeProfileStep === "apple" && !selectedSpotify && !manualSpotifyUrl.trim() && !appleUrl.trim()) return setSpotifyError("Add a Spotify or Apple Music artist profile, or go back and choose first release.");
-    if (activeProfileStep === "legal" && !producerLegalName.trim()) return setSpotifyError("Complete legal name is required for a producer profile.");
+    if (activeProfileStep === "producerName" && !producerArtistName.trim()) return setSpotifyError("Producer artist name is required.");
     setProfileStep((current) => Math.min(current + 1, profileSteps.length - 1));
   }
 
@@ -493,7 +493,7 @@ export function ArtistPicker({
               <button type="button" className="artist-profile-close" aria-label="Close artist profile" disabled={saving} onClick={() => setCreateOpen(false)}><X size={18} /></button>
             </div>
 
-            <div className="artist-profile-steps" aria-label="Profile progress">{profileSteps.map((stage, index) => <span key={stage} className={index === profileStep ? "is-current" : index < profileStep ? "is-complete" : ""} aria-current={index === profileStep ? "step" : undefined} title={stage === "liveMusic" ? "Artist type" : stage === "legal" ? "Legal name" : stage}><span>{index < profileStep ? <Check size={14} /> : ["spotify", "apple", "instagram"].includes(stage) ? <ArtistPlatformIcon platform={stage} /> : stage === "name" ? <UserRound size={16} /> : stage === "liveMusic" ? <Disc3 size={16} /> : stage === "youtube" ? <Youtube size={16} /> : stage === "producer" ? <SlidersHorizontal size={16} /> : <BadgeCheck size={16} />}</span></span>)}</div>
+            <div className="artist-profile-steps" aria-label="Profile progress">{profileSteps.map((stage, index) => <span key={stage} className={index === profileStep ? "is-current" : index < profileStep ? "is-complete" : ""} aria-current={index === profileStep ? "step" : undefined} title={stage === "liveMusic" ? "Artist type" : stage === "producerName" ? "Producer artist name" : stage}><span>{index < profileStep ? <Check size={14} /> : ["spotify", "apple", "instagram"].includes(stage) ? <ArtistPlatformIcon platform={stage} /> : stage === "name" ? <UserRound size={16} /> : stage === "liveMusic" ? <Disc3 size={16} /> : stage === "youtube" ? <Youtube size={16} /> : stage === "producer" ? <SlidersHorizontal size={16} /> : <BadgeCheck size={16} />}</span></span>)}</div>
             </div>
 
             <div className="artist-profile-modal-body" key={activeProfileStep}>
@@ -511,8 +511,8 @@ export function ArtistPicker({
               {activeProfileStep === "instagram" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Optional social profile</p><label htmlFor={`${dialogTitleId}-instagram`} className="mt-2 block text-lg font-semibold" style={{ color: "var(--text)" }}>Add the Instagram profile</label><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Optional. Add an @handle or profile link, or continue without one.</p><input id={`${dialogTitleId}-instagram`} autoFocus className="field mt-4" value={instagramUrl} onChange={(event) => setInstagramUrl(event.target.value)} placeholder="https://instagram.com/yourartistname" /></div> : null}
               {activeProfileStep === "apple" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Optional link</p><label className="mt-2 block text-lg font-semibold" style={{ color: "var(--text)" }}>Add the Apple Music profile</label><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Optional. Add it later.</p><input autoFocus className="field mt-4" value={appleUrl} onChange={(event) => setAppleUrl(event.target.value)} placeholder="https://music.apple.com/..." /></div> : null}
               {activeProfileStep === "youtube" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Optional link</p><label className="mt-2 block text-lg font-semibold" style={{ color: "var(--text)" }}>Add the YouTube channel</label><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Use the artist’s official channel when available.</p><input autoFocus className="field mt-4" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} placeholder="https://youtube.com/@artist" /></div> : null}
-              {activeProfileStep === "producer" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Credits automation</p><h4 className="mt-2 text-lg font-semibold" style={{ color: "var(--text)" }}>Also a producer?</h4><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Add producer credits automatically.</p><div className="mt-4 grid grid-cols-2 gap-3"><button type="button" className={isProducer ? "btn-primary pressable" : "btn-outline pressable"} onClick={() => setIsProducer(true)}>Yes</button><button type="button" className={!isProducer ? "btn-primary pressable" : "btn-outline pressable"} onClick={() => { setIsProducer(false); setProducerLegalName(""); }}>No</button></div></div> : null}
-              {activeProfileStep === "legal" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Producer credit</p><label className="mt-2 block text-lg font-semibold" style={{ color: "var(--text)" }}>What is the producer’s complete legal name?</label><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>For credits only.</p><input autoFocus className="field mt-4" required value={producerLegalName} onChange={(event) => setProducerLegalName(event.target.value)} placeholder="Complete legal name" /></div> : null}
+              {activeProfileStep === "producer" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Credits automation</p><h4 className="mt-2 text-lg font-semibold" style={{ color: "var(--text)" }}>Also a producer?</h4><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Add producer credits automatically.</p><div className="mt-4 grid grid-cols-2 gap-3"><button type="button" className={isProducer ? "btn-primary pressable" : "btn-outline pressable"} onClick={() => { setIsProducer(true); setProducerArtistName(current => current || createName.trim()); }}>Yes</button><button type="button" className={!isProducer ? "btn-primary pressable" : "btn-outline pressable"} onClick={() => { setIsProducer(false); setProducerArtistName(""); }}>No</button></div></div> : null}
+              {activeProfileStep === "producerName" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Producer credit</p><label className="mt-2 block text-lg font-semibold" style={{ color: "var(--text)" }}>What artist name should appear in the producer credit?</label><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Use the producer artist name for public credits.</p><input autoFocus className="field mt-4" required value={producerArtistName} onChange={(event) => setProducerArtistName(event.target.value)} placeholder="Producer artist name" /></div> : null}
 
               {spotifyError ? <p role="alert" className="mt-5 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "color-mix(in srgb, var(--danger) 45%, var(--border))", color: "var(--danger)" }}>{customerMessage(spotifyError)}</p> : null}
             </div>

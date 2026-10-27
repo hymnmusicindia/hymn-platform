@@ -1893,9 +1893,9 @@ export function ReleaseForm({
       primaryArtistQuery: "",
     })));
   const withProfileProducerCredit = (producers: ContributorDraft[], profile: ArtistProfile) => {
-    const legalName = profile.isProducer ? profile.producerLegalName?.trim() : "";
-    if (!legalName || producers.some((producer) => producer.legalName.trim().toLowerCase() === legalName.toLowerCase())) return producers;
-    const credit = { ...createContributor(), legalName, artistName: profile.name };
+    const artistName = profile.isProducer ? (profile.producerArtistName?.trim() || profile.name.trim()) : "";
+    if (!artistName || producers.some((producer) => producer.artistName.trim().toLowerCase() === artistName.toLowerCase())) return producers;
+    const credit = { ...createContributor(), legalName: profile.producerLegalName?.trim() || "", artistName };
     return producers.length === 1 && !producers[0].legalName.trim() && !producers[0].artistName.trim() ? [credit] : [...producers, credit];
   };
   const selectPrimaryArtistForAllTracks = (profile: ArtistProfile) =>
@@ -2296,11 +2296,12 @@ export function ReleaseForm({
     }
   }
 
-  function openContributors(index: number) {
+  function openContributors(index: number, initialRole?: ContributorModalState["initialRole"]) {
     const track = tracks[index];
     setContributorsModal({
       open: true,
       trackIndex: index,
+      initialRole,
       songwriters: track.songwriters,
       composers: track.composers,
       producers: track.producers,
@@ -4232,7 +4233,7 @@ export function ReleaseForm({
                               const names = role === "featured" ? track.featuredArtists : track.remixers;
                               const unlinked = artistCreditNames(names).filter(name => !profilesFor(ids).some(profile => profile.name.toLowerCase() === name.toLowerCase()));
                               return <div key={role} ref={registerField(`track-${index}-${role}`)}>
-                                <ArtistPicker label={role === "featured" ? "Featured artists" : "Remixer"} helper="Optional. Select a saved profile or create one with Instagram details."
+                                <ArtistPicker label={role === "featured" ? "Featured artists" : "Remixer"} helper={role === "featured" ? "Optional. Select a saved profile or create one with Instagram details." : "Optional. Saved for HYMN review only; remixer credits are not currently sent for distribution."}
                                   valueIds={profilesFor(ids)} query={role === "featured" ? track.featuredArtistQuery : track.remixerQuery}
                                   onQueryChange={value => updateTrack(index, role === "featured" ? { featuredArtistQuery: value } : { remixerQuery: value })}
                                   onSelect={profile => selectTrackCredit(index, role, profile)} onRemove={id => removeTrackCredit(index, role, id)}
@@ -4302,9 +4303,12 @@ export function ReleaseForm({
                                   const names = isProducer ? producerNames(entries) : contributorNames(entries);
                                   const complete = isProducer ? producersValid(entries) : contributorsValid(entries);
                                   return (
-                                    <div
+                                    <button
+                                      type="button"
+                                      aria-label={`Edit ${label.toLowerCase()} credits`}
+                                      onClick={() => openContributors(index, label === "Songwriters" ? "songwriters" : label === "Composers" ? "composers" : "producers")}
                                       key={label}
-                                      className="contributor-role"
+                                      className="contributor-role text-left"
                                       style={{
                                         borderColor: complete
                                           ? "var(--border)"
@@ -4343,7 +4347,7 @@ export function ReleaseForm({
                                       >
                                         {names || (isProducer ? "Pending artist name" : "Pending legal name")}
                                       </p>
-                                    </div>
+                                    </button>
                                   );
                                 })}
                             </div>

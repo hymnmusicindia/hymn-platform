@@ -101,6 +101,7 @@ export interface ArtistProfile {
   isLinked: boolean;
   isPrimary?: boolean;
   isProducer?: boolean;
+  producerArtistName?: string | null;
   producerLegalName?: string | null;
   archivedAt?: string | null;
   lastUsedAt?: string | null;

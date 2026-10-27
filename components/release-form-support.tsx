@@ -17,6 +17,7 @@ export type ContributorDraft = { id: string; partyId?: number; hymnProducerId?: 
 
 export type ContributorModalState = {
   open: boolean;
+  initialRole?: "songwriters" | "composers" | "producers";
   trackIndex: number | null;
   songwriters: ContributorDraft[];
   composers: ContributorDraft[];
@@ -168,8 +169,13 @@ export function ContributorsModal({
     if (!state.open) return;
     setLocal({ songwriters: state.songwriters, composers: state.composers, producers: state.producers });
     setApplyToAllTracks(false);
-    setOpenRole(!contributorsValid(state.songwriters) ? "songwriters" : !contributorsValid(state.composers) ? "composers" : !producersValid(state.producers) ? "producers" : null);
+    setOpenRole(state.initialRole ?? (!contributorsValid(state.songwriters) ? "songwriters" : !contributorsValid(state.composers) ? "composers" : !producersValid(state.producers) ? "producers" : null));
   }, [state, contributorsValid, producersValid]);
+
+  useEffect(() => {
+    if (!state.open || !state.initialRole || openRole !== state.initialRole) return;
+    document.querySelector<HTMLInputElement>(`#credit-panel-${openRole} input[placeholder="${openRole === "producers" ? "Producer artist name" : "Full legal name"}"]`)?.focus();
+  }, [state.open, state.initialRole, openRole]);
 
   if (!state.open) return null;
 

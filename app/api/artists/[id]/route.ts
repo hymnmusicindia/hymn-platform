@@ -24,7 +24,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       ...(payload.appleUrl !== undefined ? { appleUrl: payload.appleUrl.trim() || null, appleArtistId: payload.appleUrl ? (payload.appleArtistId ?? parseAppleArtistId(payload.appleUrl)) : null } : {}),
       ...(payload.instagramUrl !== undefined ? { instagramUrl: normalizeInstagramUrl(payload.instagramUrl) } : {}),
       ...(payload.youtubeUrl !== undefined ? { youtubeUrl: payload.youtubeUrl.trim() || null } : {}),
-      ...(payload.isProducer !== undefined ? { isProducer: payload.isProducer, producerLegalName: payload.isProducer ? payload.producerLegalName?.trim() || null : null } : {})
+      ...(payload.isProducer !== undefined ? {
+        isProducer: payload.isProducer,
+        producerArtistName: payload.isProducer ? payload.producerArtistName?.trim() || payload.name?.trim() || null : null,
+        ...(!payload.isProducer ? { producerLegalName: null } : payload.producerLegalName !== undefined ? { producerLegalName: payload.producerLegalName.trim() || null } : {})
+      } : {})
     };
     const profile = await updateArtistProfile(result.user.id, id, patch);
     if (!profile) return NextResponse.json({ error: "Artist profile not found." }, { status: 404 });

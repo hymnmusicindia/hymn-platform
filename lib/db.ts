@@ -2483,17 +2483,24 @@ const portalArtistCardSelect = {
 
 function mapPrismaArtistCard(card: any): ArtistProfile {
   let producerLegalName: string | null = null;
+  let producerArtistName: string | null = null;
+  let isProducer = false;
   try {
     const role = card.role ? JSON.parse(card.role) : null;
-    if (role?.type === "producer" && typeof role.legalName === "string") producerLegalName = role.legalName.trim() || null;
+    if (role?.type === "producer") {
+      isProducer = true;
+      producerArtistName = typeof role.artistName === "string" && role.artistName.trim() ? role.artistName.trim() : card.artistName;
+      producerLegalName = typeof role.legalName === "string" ? role.legalName.trim() || null : null;
+    }
   } catch {
     producerLegalName = null;
   }
-  return { id: card.id, userId: card.userId, name: card.artistName, spotifyArtistId: card.spotifyArtistId ?? null, spotifyUrl: card.spotifyProfileUrl ?? null, appleArtistId: card.appleArtistId ?? null, appleUrl: card.appleMusicProfileUrl ?? null, instagramUrl: card.instagramUrl ?? null, youtubeUrl: card.youtubeUrl ?? null, imageUrl: card.imageUrl ?? null, followers: card.followers ?? null, isLinked: Boolean(card.spotifyProfileUrl || card.appleMusicProfileUrl), isPrimary: Boolean(card.isPrimary), isProducer: Boolean(producerLegalName), producerLegalName, archivedAt: card.archivedAt?.toISOString?.() ?? null, lastUsedAt: null, createdAt: card.createdAt.toISOString(), updatedAt: card.updatedAt.toISOString() };
+  return { id: card.id, userId: card.userId, name: card.artistName, spotifyArtistId: card.spotifyArtistId ?? null, spotifyUrl: card.spotifyProfileUrl ?? null, appleArtistId: card.appleArtistId ?? null, appleUrl: card.appleMusicProfileUrl ?? null, instagramUrl: card.instagramUrl ?? null, youtubeUrl: card.youtubeUrl ?? null, imageUrl: card.imageUrl ?? null, followers: card.followers ?? null, isLinked: Boolean(card.spotifyProfileUrl || card.appleMusicProfileUrl), isPrimary: Boolean(card.isPrimary), isProducer, producerArtistName, producerLegalName, archivedAt: card.archivedAt?.toISOString?.() ?? null, lastUsedAt: null, createdAt: card.createdAt.toISOString(), updatedAt: card.updatedAt.toISOString() };
 }
 
-function artistProducerRole(input: Pick<ArtistProfile, "isProducer" | "producerLegalName">) {
-  return input.isProducer && input.producerLegalName?.trim() ? JSON.stringify({ type: "producer", legalName: input.producerLegalName.trim() }) : null;
+function artistProducerRole(input: Pick<ArtistProfile, "name" | "isProducer" | "producerArtistName" | "producerLegalName">) {
+  const artistName = input.producerArtistName?.trim() || input.name.trim();
+  return input.isProducer && artistName ? JSON.stringify({ type: "producer", artistName, ...(input.producerLegalName?.trim() ? { legalName: input.producerLegalName.trim() } : {}) }) : null;
 }
 
 async function listPostgresArtistCards(input: { userId?: number; query?: string; take?: number } = {}) {

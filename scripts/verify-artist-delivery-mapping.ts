@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { ensureDireNoteArtistMapping, verifyReleaseArtistMappings } from '../lib/direnote-artist-mapping';
 import { buildDireNotePayload, type DireNotePayload } from '../lib/direnote';
 import type { Release, ArtistProfile } from '../lib/types';
+import { createArtistProfile, listArtistProfilesByUser, updateArtistProfile } from '../lib/db';
 import { syncDireNoteArtistInformation } from '../lib/direnote-service';
 import { persistDireNoteArtistIds } from '../lib/distribution-service';
 async function main() {
@@ -10,6 +11,17 @@ async function main() {
   process.env.DIRENOTE_API_PIN = 'fixture-pin'; process.env.DIRENOTE_CLIENT_ID = 'fixture-client';
   const spotify = 'https://open.spotify.com/artist/52BkE1owdr1Oz5duroCyHL', other = 'https://open.spotify.com/artist/66x9igCk2Vdjrhm1ULpe6r';
   const user = await prisma.user.create({ data: { name: 'Mapping fixture', email: 'mapping@fixture.invalid', googleId: 'mapping-fixture' } });
+  const producer = await createArtistProfile({ userId:user.id, name:'Public Artist', isLinked:false, isProducer:true, producerArtistName:'Public Producer' });
+  assert.equal(producer.isProducer,true);
+  assert.equal(producer.producerArtistName,'Public Producer');
+  assert.equal(producer.producerLegalName,null);
+  const updatedProducer = await updateArtistProfile(user.id,producer.id,{producerArtistName:'Updated Producer'});
+  assert.equal(updatedProducer?.producerArtistName,'Updated Producer');
+  const legacyProducer = await prisma.artistCard.create({data:{userId:user.id,artistName:'Legacy Stage Name',role:JSON.stringify({type:'producer',legalName:'Private Legal Name'})}});
+  const legacy = (await listArtistProfilesByUser(user.id)).find(profile=>profile.id===legacyProducer.id);
+  assert.equal(legacy?.isProducer,true);
+  assert.equal(legacy?.producerArtistName,'Legacy Stage Name');
+  assert.equal(legacy?.producerLegalName,'Private Legal Name');
   const card = await prisma.artistCard.create({ data: { userId: user.id, artistName: 'Known Artist', spotifyProfileUrl: spotify, spotifyArtistId: '52BkE1owdr1Oz5duroCyHL', direNoteArtistId: '3175' } });
   const release = await prisma.release.create({ data: { userId: user.id, title: 'Mapping test', artistName: card.artistName, genre: 'Pop', releaseDate: new Date() } });
   let remote: string | null = null, writes = 0, reads = 0, timeout = false, apply = true, wrongName = false, edit = false, raceChange = false;

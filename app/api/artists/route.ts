@@ -71,7 +71,7 @@ export async function POST(request: Request) {
       followers: spotifyUrl ? payload.followers ?? null : null,
       isLinked,
       isProducer: payload.isProducer,
-      producerLegalName: payload.isProducer ? payload.producerLegalName?.trim() || null : null,
+      producerArtistName: payload.isProducer ? payload.producerArtistName?.trim() || payload.name?.trim() || null : null, producerLegalName: payload.isProducer ? payload.producerLegalName?.trim() || null : null,
     });
 
     if (payload.isProducer) {

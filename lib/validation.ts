@@ -75,6 +75,7 @@ const artistProfileFields = z.object({
   followers: z.number().int().nonnegative().nullable().optional(),
   confirmedSpotifyName: z.string().optional(),
   isProducer: z.boolean().optional().default(false),
+  producerArtistName: z.string().trim().max(150).optional(),
   producerLegalName: z.string().trim().max(150).optional()
 });
 
@@ -88,11 +89,12 @@ function requireExistingArtistStoreLink(value: { hasLiveMusic?: boolean; spotify
   }
 }
 
-function requireProducerLegalName(value: { isProducer?: boolean; producerLegalName?: string }, context: z.RefinementCtx) {
-  if (value.isProducer && !value.producerLegalName?.trim()) context.addIssue({ code: z.ZodIssueCode.custom, path: ["producerLegalName"], message: "Complete legal name is required for a producer profile." });
+function requireProducerArtistName(value: { isProducer?: boolean; producerArtistName?: string; name?: string }, context: z.RefinementCtx) {
+  const artistName = value.producerArtistName === undefined ? value.name?.trim() : value.producerArtistName.trim();
+  if (value.isProducer && !artistName) context.addIssue({ code: z.ZodIssueCode.custom, path: ["producerArtistName"], message: "Producer artist name is required." });
 }
 
-export const artistProfileCreateSchema = artistProfileFields.superRefine(requireExistingArtistStoreLink).superRefine(requireProducerLegalName);
+export const artistProfileCreateSchema = artistProfileFields.superRefine(requireExistingArtistStoreLink).superRefine(requireProducerArtistName);
 
 export const spotifySearchSchema = z.object({ q: z.string().min(1) });
 export const spotifyResolveSchema = z.object({ spotifyUrl: z.string().min(1) });
@@ -111,7 +113,7 @@ export const paymentVerifySchema = z.object({
   items: z.array(orderItemSchema).min(1)
 });
 
-export const artistProfileUpdateSchema = artistProfileFields.partial().superRefine(requireProducerLegalName);
+export const artistProfileUpdateSchema = artistProfileFields.partial().superRefine(requireProducerArtistName);
 
 export function normalizeInstagramUrl(value: string) {
   const normalized = value.trim();

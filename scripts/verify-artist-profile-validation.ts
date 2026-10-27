@@ -11,10 +11,10 @@ assert.equal(artistProfileCreateSchema.safeParse(artist).success, false);
 assert.equal(artistProfileCreateSchema.safeParse({ ...artist, spotifyUrl: "https://open.spotify.com/artist/123abc" }).success, true);
 assert.equal(artistProfileCreateSchema.safeParse({ ...artist, appleUrl: "https://music.apple.com/us/artist/test/123456" }).success, true);
 assert.equal(artistProfileCreateSchema.safeParse({ ...artist, hasLiveMusic: false, spotifyUrl: "invalid" }).success, false);
-assert.equal(artistProfileCreateSchema.safeParse({ ...artist, hasLiveMusic: false, isProducer: true }).success, false);
+assert.equal(artistProfileCreateSchema.safeParse({ ...artist, hasLiveMusic: false, isProducer: true }).success, true);
 assert.deepEqual(artistProfileUpdateSchema.parse({ name: "Updated Artist" }), { name: "Updated Artist" });
 assert.equal(artistProfileUpdateSchema.safeParse({ isProducer: true }).success, false);
-assert.equal(artistProfileUpdateSchema.safeParse({ isProducer: true, producerLegalName: "Test Producer" }).success, true);
+assert.equal(artistProfileUpdateSchema.safeParse({ isProducer: true, producerArtistName: "Test Producer" }).success, true);
 console.log("Artist validation passed: first release, existing store links, producer requirements, and partial updates.");
 assert.deepEqual(attachedArtistProfileIds({ metadata: { artistProfileIds: [12, 12, "13", -1] } }, 99), [12]);
 assert.deepEqual(attachedArtistProfileIds({}, null), []);
@@ -30,3 +30,7 @@ assert.equal(artistProfileUpdateSchema.safeParse({ instagramUrl: "invalid" }).su
 assert.equal(normalizeInstagramUrl(" "), "", "Clearing an optional profile must not persist an invalid https:// URL.");
 assert.equal(artistProfileCreateSchema.safeParse({ ...artist, hasLiveMusic: false, instagramUrl: "invalid" }).success, false);
 assert.equal(artistProfileUpdateSchema.safeParse({ instagramUrl: "@debut_artist" }).success, true);
+
+assert.equal(artistProfileCreateSchema.safeParse({name:"Stage Producer",hasLiveMusic:false,isProducer:true,producerArtistName:"Stage Producer"}).success,true);
+assert.equal(artistProfileUpdateSchema.safeParse({isProducer:true,producerLegalName:"Legal Only"}).success,false);
+assert.equal(artistProfileCreateSchema.safeParse({name:"Stage Producer",hasLiveMusic:false,isProducer:true,producerArtistName:" "}).success,false);
