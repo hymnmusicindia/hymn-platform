@@ -29,6 +29,18 @@ async function main() {
     const nav=page.getByRole('navigation',{name:'Release sections',exact:true});await expect(nav).toHaveCount(1);await expect(nav).toBeVisible();
     await expect(page.locator('.release-navigation-header').getByRole('navigation')).toHaveCount(1);
     await expect(page.locator('.release-workflow > .release-stage-menu')).toHaveCount(0);
+    await expect(page.locator('.release-workspace-header,.release-workspace-logo')).toHaveCount(0);
+    const toolbar=page.locator('.release-navigation-header .release-toolbar');
+    await expect(toolbar.getByRole('button',{name:'Quit',exact:true})).toBeVisible();
+    await expect(toolbar.locator('.release-workspace-state').getByRole('button',{name:'Review',exact:true})).toBeVisible();
+    for(const button of [toolbar.getByRole('button',{name:'Quit',exact:true}),toolbar.locator('.release-workspace-state').getByRole('button',{name:'Review',exact:true}),page.locator('.release-footer-action.is-draft')]) {
+      await expect(button).toBeEnabled();await page.mouse.move(0,0);
+      await expect.poll(()=>button.evaluate(el=>getComputedStyle(el).color)).toBe('rgb(222, 222, 216)');
+      expect(await button.evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
+      expect(await button.evaluate(el=>getComputedStyle(el).borderTopWidth)).toBe('0px');
+      await button.hover();await expect.poll(()=>button.evaluate(el=>getComputedStyle(el).color)).toBe('rgb(255, 255, 255)');
+    }
+    await page.mouse.move(0,0);
     await expect(nav.getByRole('button',{name:'Credits & tracks',exact:true})).toHaveAttribute('aria-current','step');
     const checkBounds=async()=>{const bounds=await page.evaluate(()=>{const n=document.querySelector('.release-navigation-header').getBoundingClientRect();const c=document.querySelector('.release-workflow-content').getBoundingClientRect();return {bottom:n.bottom,top:c.top,overflow:document.documentElement.scrollWidth>innerWidth+1}});expect(bounds.bottom).toBeLessThanOrEqual(bounds.top);expect(bounds.overflow).toBe(false)};
     await checkBounds();

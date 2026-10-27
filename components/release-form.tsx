@@ -3607,15 +3607,6 @@ export function ReleaseForm({
         className={clsx(layoutStyles.workflow, "release-workflow distribution-workflow gap-6 rounded-[1.25rem] border p-4 md:p-6 lg:p-8", step !== 0 && step !== 1 && "release-premium-editor", (step === 0 || step === 1) && "is-focused-step", step === 0 && "is-audio-upload-step", step === 0 && musicEntering && "is-entering-from-format", step === 1 && "is-artist-step", step === 3 && "is-tracklist-step", step === 7 && "is-review-mode")}
         style={{ borderColor: "var(--border)", background: "var(--card)" }}
       >
-        <header className="release-workspace-header">
-          <button type="button" onClick={quitReleaseJourney} disabled={submitting} className="release-workspace-quit">Quit</button>
-          <NextImage src="/assets/hymnlogowhite.png" alt="HYMN Music" width={116} height={38} priority className="release-workspace-logo" style={{ filter: "var(--logo-filter)" }} />
-          <div className="release-workspace-state" aria-live="polite">
-            <span className={autosaveEligible && autosaveStatus === "saved" ? "is-saved" : ""}>{autosaveEligible && autosaveStatus === "saved" ? "Saved ✓" : !autosaveEligible && hasUnsavedChanges ? "Unsaved changes" : autosaveLabel}</span>
-            {autosaveStatus === "error" && !draftConflict ? <button type="button" onClick={retryAutosave} disabled={submitting} className="release-workspace-review">Retry save</button> : null}
-            {step !== 7 ? <button type="button" onClick={enterReviewMode} className="release-workspace-review">Review</button> : null}
-          </div>
-        </header>
         {draftConflict ? <div className="release-draft-conflict" role="alert"><span>This draft changed in another tab. Your edits here have not replaced the latest version.</span><button type="button" onClick={() => { if (window.confirm("Open the latest draft? Unsaved changes in this tab will be lost.")) { allowReloadRef.current = true; window.location.reload(); } }}>Open latest draft</button></div> : null}
         {firstReleaseOffer ? <div className="release-free-offer-banner flex items-center justify-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-500">🎁 First release on us</div> : null}
         {step !== 0 && step !== 1 && step !== 7 ? (
@@ -3710,11 +3701,19 @@ export function ReleaseForm({
           </div>
         </div>
 
-        <ReleaseNavigationSlot><div className="release-stage-menu">
+        <ReleaseNavigationSlot><div className="release-stage-menu release-toolbar">
+          <button type="button" onClick={quitReleaseJourney} disabled={submitting} className="release-workspace-quit">Quit</button>
+
         <ReleaseStageCarousel sections={menuStepIndexes.filter(index => index !== 0 && index !== 1).map(index => {
           const state = stepButtonStyles(index);
           return { id: index, label: stepMenuLabels[index] ?? steps[index], current: state.isCurrent, attention: state.hasCorrection || state.validity === "invalid" };
         })} onSelect={jumpToStep} disabled={stepTransitioning}/>
+          <div className="release-workspace-state" aria-live="polite">
+            <span className={autosaveEligible && autosaveStatus === "saved" ? "is-saved" : ""}>{autosaveEligible && autosaveStatus === "saved" ? "Saved ✓" : !autosaveEligible && hasUnsavedChanges ? "Unsaved changes" : autosaveLabel}</span>
+            {autosaveStatus === "error" && !draftConflict ? <button type="button" onClick={retryAutosave} disabled={submitting} className="release-workspace-review">Retry save</button> : null}
+            {step !== 7 ? <button type="button" onClick={enterReviewMode} className="release-workspace-review">Review</button> : null}
+          </div>
+
 
           <div className="release-journey-progress-track" role="progressbar" aria-label="Journey stages reached" aria-valuemin={0} aria-valuemax={menuStepIndexes.length} aria-valuenow={menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1}><span style={{ width: `${((menuStepIndexes.indexOf(step as (typeof menuStepIndexes)[number]) + 1) / menuStepIndexes.length) * 100}%` }} /></div>
         </div></ReleaseNavigationSlot>

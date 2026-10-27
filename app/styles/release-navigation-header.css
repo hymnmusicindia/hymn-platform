@@ -15,3 +15,39 @@ html body .distribution-workflow.distribution-workflow.distribution-workflow > .
 }
 html body .release-navigation-header .release-journey-progress-track { display:none; }
 @media(max-width:767px) { html body .release-navigation-header { margin:12px 12px 0; } }
+
+/* Equal side columns keep the carousel centered between the workspace actions. */
+html body .release-toolbar.release-toolbar.release-toolbar.release-toolbar.release-toolbar.release-toolbar {
+  display:grid!important; grid-template-columns:minmax(140px,1fr) minmax(0,660px) minmax(140px,1fr);
+  align-items:center; gap:12px; padding:0!important;
+}
+html body .release-toolbar > .release-workspace-quit { justify-self:start; }
+html body .release-toolbar .release-workspace-state {
+  display:flex!important; align-items:center; justify-content:flex-end; flex-wrap:wrap;
+  gap:4px 14px; min-width:0; font-size:12px; color:#deded8;
+}
+html body .release-toolbar .release-workspace-state > span { color:#deded8!important; }
+html body .release-toolbar .release-workspace-state > span:hover { color:#fff!important; }
+html body .release-toolbar .release-journey-progress-track { display:none; }
+
+/* Text actions retain their hit areas and focus rings without button boxes. */
+html body :is(.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow,.release-toolbar.release-toolbar)
+button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]):not([aria-pressed]):not([aria-selected]):not([aria-checked]):not([class*="selected-artist"]):not([class*="artist-avatar"]):not([data-distance]) {
+  border:0!important; border-radius:0!important; background:transparent!important;
+  box-shadow:none!important; text-shadow:none!important; color:#deded8!important;
+  min-height:44px; transition:color .18s ease,opacity .18s ease;
+}
+html body :is(.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow,.release-toolbar.release-toolbar)
+button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]):not([aria-pressed]):not([aria-selected]):not([aria-checked]):not([class*="selected-artist"]):not([class*="artist-avatar"]):not([data-distance]):is(:hover,:focus-visible):not(:disabled) { color:#fff!important; }
+html body :is(.distribution-workflow,.release-toolbar) button:focus-visible { outline:2px solid #c5d9f3; outline-offset:3px; }
+html body :is(.distribution-workflow,.release-toolbar) button:disabled { cursor:not-allowed; opacity:.45; }
+html body :is(.distribution-workflow,.release-toolbar) :is(.release-footer-action,.release-workspace-quit,.release-workspace-review,.release-artist-next,.btn-primary,.btn-outline)::before,
+html body :is(.distribution-workflow,.release-toolbar) :is(.release-footer-action,.release-workspace-quit,.release-workspace-review,.release-artist-next,.btn-primary,.btn-outline)::after { content:none!important; }
+@media(max-width:767px) {
+  html body .release-toolbar.release-toolbar.release-toolbar.release-toolbar.release-toolbar.release-toolbar {
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:0 8px;
+  }
+  html body .release-toolbar > nav { grid-row:2; grid-column:1/-1; }
+  html body .release-toolbar > .release-workspace-state { grid-row:1; grid-column:2; }
+}
+@media(prefers-reduced-motion:reduce) { html body :is(.distribution-workflow,.release-toolbar) button { transition:none!important; } }
