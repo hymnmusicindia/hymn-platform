@@ -32,12 +32,23 @@ async function main() {
     await expect(nav.getByRole('button',{name:'Credits & tracks',exact:true})).toHaveAttribute('aria-current','step');
     const checkBounds=async()=>{const bounds=await page.evaluate(()=>{const n=document.querySelector('.release-navigation-header').getBoundingClientRect();const c=document.querySelector('.release-workflow-content').getBoundingClientRect();return {bottom:n.bottom,top:c.top,overflow:document.documentElement.scrollWidth>innerWidth+1}});expect(bounds.bottom).toBeLessThanOrEqual(bounds.top);expect(bounds.overflow).toBe(false)};
     await checkBounds();
+    const checkCarousel=async()=>{
+      await expect.poll(()=>nav.evaluate(el=>{const active=el.querySelector('[aria-current=step]');const n=el.getBoundingClientRect(),a=active.getBoundingClientRect();return Math.abs((a.left+a.width/2)-(n.left+n.width/2))})).toBeLessThan(2);
+      expect(await nav.locator('[data-distance="0"] > span').evaluate(el=>getComputedStyle(el).filter)).toBe('blur(0px)');
+      expect(await nav.locator('[data-distance="1"] > span').first().evaluate(el=>getComputedStyle(el).filter)).toBe('blur(0.7px)');
+      expect(await page.locator('.release-navigation-header').evaluate(el=>getComputedStyle(el).borderTopWidth)).toBe('0px');
+      expect(await nav.locator('[aria-current=step]').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
+    };
+    await checkCarousel();
     await nav.getByRole('button',{name:/Cover artwork/}).click();await expect(nav.getByRole('button',{name:/Cover artwork/})).toHaveAttribute('aria-current','step');await checkBounds();
     await expect(nav.getByRole('button',{name:/Cover artwork/})).toBeEnabled();await nav.getByRole('button',{name:/Cover artwork/}).focus();await page.keyboard.press('ArrowRight');await expect(nav.getByRole('button',{name:/Credits & tracks/})).toHaveAttribute('aria-current','step');
     await expect(page.locator('.landing-rail')).toHaveCount(1);await expect(page.locator('.dashboard-os-sidebar')).toHaveCount(0);
     if(width<1024)await page.getByRole('button',{name:/Explore HYMN/}).click();
     await expect(page.getByRole('navigation',{name:'HYMN services'})).toBeVisible();await expect(page.getByRole('link',{name:'Add release',exact:true})).toBeVisible();
     if(width<1024)await page.locator('#landing-navigation').getByRole('button',{name:'Close navigation',exact:true}).click();await expect(nav.getByRole('button',{name:/Credits & tracks/})).toBeEnabled();
+    await checkCarousel();
+    await nav.dispatchEvent('pointerdown',{isPrimary:true,button:0,clientX:200,clientY:24});await nav.dispatchEvent('pointerup',{isPrimary:true,button:0,clientX:260,clientY:24});
+    await expect(nav.getByRole('button',{name:/Cover artwork/})).toHaveAttribute('aria-current','step');await checkCarousel();await checkBounds();
     await page.screenshot({path:path.join(out,'release-navigation-'+width+'.png'),fullPage:true});expect(errors).toEqual([]);await page.close();console.log('PASS '+width+'px: homepage sidebar, single header navigation, metadata clearance, keyboard navigation and no overflow.');
   }
     for(const pathname of ['/distribution','/audio-library','/studio','/dashboard','/dashboard/customer','/producer/dashboard','/producer-dashboard','/dashboard/admin']) {
