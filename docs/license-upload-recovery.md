@@ -1,0 +1,11 @@
+# License upload recovery
+
+Rights PDFs now use authenticated upload sessions with 512 KiB binary chunks, SHA-256 manifests, resumable progress and idempotent completion. Ownership evidence and AI receipts use distinct session categories and retain their private asset types. Cover licenses use the same transport while retaining their existing PDF/image policy. Audio and artwork upload behavior is unchanged.
+
+All ownership-license controls enforce PDF files up to 10 MiB, matching private-storage validation. Empty browser MIME values are inferred from the filename; the server verifies actual file contents before finalization. Invalid formats, oversized files and authorization failures are not repeatedly retried. Network failures and temporary server errors retry individual requests, and the same file can resume uploaded chunks.
+
+Verification: `npm run test:release-document-upload` covers the actual session route plus the real release editor at desktop/mobile sizes. It tests network resets, retries, resume, processing responses, expired authorization, cancellation, MIME inference, limits and ownership boundaries. `tsx scripts/verify-private-storage.ts` covers private file validation. The broader `verify-upload-storage.ts` currently fails an existing, unrelated beat-card playback CSS assertion; this patch does not change beat cards.
+
+Incident: ONLY FEELINGS, release 116. Read-only inspection found no stored license or recoverable document for the owner. The release still had exclusive ownership saved. Its requested non-exclusive selection was repaired with an optimistic concurrency guard and a `release.rights_upload_recovery` audit event; ineligible monetization selections were disabled as in the editor. Status remains CHANGES_REQUESTED. No license was fabricated, no review was bypassed and no resubmission occurred. The customer must attach their original license PDF after deployment.
+
+The live upload endpoint was reachable during diagnosis, including unauthenticated size probes. The historical connection reset cannot be attributed conclusively without the failed request or hosting logs. This change removes the whole-file multipart dependency for release documents and corrects the confirmed client/server validation mismatch; it cannot guarantee that network interruptions never occur.

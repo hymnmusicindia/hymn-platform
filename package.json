@@ -80,7 +80,8 @@
     "audit:release-storage": "tsx scripts/audit-release-storage-reconciliation.ts",
     "email:test-rejected": "node --conditions=react-server --import tsx scripts/send-test-release-email.ts",
     "lint": "eslint .",
-    "test:dashboard-design": "node scripts/verify-dashboard-design-browser.cjs"
+    "test:dashboard-design": "node scripts/verify-dashboard-design-browser.cjs",
+    "test:release-document-upload": "node scripts/verify-release-document-upload.cjs && node scripts/verify-release-document-browser.cjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

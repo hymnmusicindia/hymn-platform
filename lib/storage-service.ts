@@ -14,7 +14,7 @@ export const uploadConfig = {
   sessionHours: Math.max(1, Math.min(168, Number(process.env.UPLOAD_SESSION_TTL_HOURS || 48))),
 };
 
-export type AssetCategory = "RELEASE_COVER_ART" | "TRACK_AUDIO_MASTER" | "TRACK_AUDIO_PREVIEW" | "RELEASE_DOCUMENT" | "TRACK_DOCUMENT" | "OTHER_RELEASE_ASSET" | "OTHER_TRACK_ASSET";
+export type AssetCategory = "RELEASE_COVER_ART" | "TRACK_AUDIO_MASTER" | "TRACK_AUDIO_PREVIEW" | "RELEASE_DOCUMENT" | "TRACK_DOCUMENT" | "OTHER_RELEASE_ASSET" | "OTHER_TRACK_ASSET" | "RELEASE_LICENSE_RECEIPT" | "RELEASE_AI_RECEIPT" | "TRACK_COVER_LICENSE";
 
 export function storageRootPath() {
   return managedStorageRoot();
