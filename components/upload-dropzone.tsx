@@ -1,4 +1,5 @@
 "use client";
+import { useOperationProgress } from "./ui/use-operation-progress";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CheckCircle2, LoaderCircle, RotateCcw, UploadCloud, X } from "lucide-react";
@@ -25,7 +26,9 @@ export function UploadDropzone({ accept, title, description, helperLines = [], f
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragging, setDragging] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [rawProgress, setProgress] = useState(0);
+  const feedback = useOperationProgress(processing, rawProgress || undefined, !processing && rawProgress === 100);
+  const progress = feedback.value;
   const [success, setSuccess] = useState(false);
   const [lastFile, setLastFile] = useState<File | null>(null);
   const [speed, setSpeed] = useState(0);
@@ -59,7 +62,7 @@ export function UploadDropzone({ accept, title, description, helperLines = [], f
       await onSelect(file, { signal: controller.signal, reportProgress: (loaded, total) => {
         const seconds = Math.max((Date.now() - startedAt) / 1000, 0.1);
         const bytesPerSecond = loaded / seconds;
-        setProgress(Math.max(1, Math.min(99, Math.round((loaded / Math.max(total, 1)) * 100))));
+        setProgress(Math.max(1, Math.min(100, Math.round((loaded / Math.max(total, 1)) * 100))));
         setSpeed(bytesPerSecond);
         setEta(bytesPerSecond > 0 ? Math.max(0, (total - loaded) / bytesPerSecond) : 0);
       } });
@@ -192,7 +195,7 @@ export function UploadDropzone({ accept, title, description, helperLines = [], f
               <div className={clsx("h-full rounded-full", processing ? "shimmer-track" : "")} style={{ width: `${progress}%`, background: processing ? undefined : "var(--accent)" }} />
             </div>
             <p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>
-              {processing ? `Uploading ${progress}%${speed ? ` · ${(speed / 1024 / 1024).toFixed(1)} MB/s · ${Math.ceil(eta)}s left` : ""}` : success ? "Uploaded and attached" : `${progress}%`}
+              {processing ? feedback.indeterminate ? "Initialising... Still waiting for confirmation." : `Uploading ${progress}%${speed ? ` · ${(speed / 1024 / 1024).toFixed(1)} MB/s · ${Math.ceil(eta)}s left` : ""}` : success ? "Uploaded and attached" : `${progress}%`}
             </p>
             {processing ? <button type="button" className="mt-2 inline-flex items-center gap-1 text-xs" style={{ color: "var(--danger)" }} onClick={(event) => { event.stopPropagation(); abortRef.current?.abort(); }}><X className="h-3.5 w-3.5" />Cancel</button> : null}
             {!processing && progress === 0 && lastFile ? <button type="button" className="mt-2 inline-flex items-center gap-1 text-xs" style={{ color: "var(--accent)" }} onClick={(event) => { event.stopPropagation(); void stageFile(lastFile); }}><RotateCcw className="h-3.5 w-3.5" />Retry</button> : null}

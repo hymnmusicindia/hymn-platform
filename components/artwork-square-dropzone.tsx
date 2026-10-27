@@ -1,4 +1,5 @@
 "use client";
+import { useOperationProgress } from "./ui/use-operation-progress";
 
 import { UploadCloud } from "lucide-react";
 import clsx from "clsx";
@@ -18,7 +19,9 @@ export function ArtworkSquareDropzone({ previewUrl, fileName, fileType, dimensio
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragging, setDragging] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [rawProgress, setProgress] = useState(0);
+  const feedback = useOperationProgress(processing, undefined, !processing && rawProgress === 100);
+  const progress = feedback.value;
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const suppressNextClickRef = useRef(false);
 
@@ -35,21 +38,11 @@ export function ArtworkSquareDropzone({ previewUrl, fileName, fileType, dimensio
     setSelectionError(null);
     setProgress(10);
 
-    let active = true;
-    const timer = window.setInterval(() => {
-      if (!active) return;
-      setProgress((current) => Math.min(current + 14, 90));
-    }, 110);
-
     try {
       await onSelect(file);
-      active = false;
-      window.clearInterval(timer);
       setProgress(100);
       setProcessing(false);
     } catch (caughtError) {
-      active = false;
-      window.clearInterval(timer);
       setProcessing(false);
       setProgress(0);
       setSelectionError(caughtError instanceof Error ? caughtError.message : "Could not read this artwork. Choose another JPG.");
@@ -129,6 +122,7 @@ export function ArtworkSquareDropzone({ previewUrl, fileName, fileType, dimensio
         </div>
       ) : null}
 
+      {processing && feedback.indeterminate ? <p role="status">Initialising... Still checking your artwork.</p> : null}
       {!minimalFeedback && (processing || progress === 100) ? (
         <div className="rounded-full border p-1" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
           <div className={clsx("h-2 rounded-full", processing ? "shimmer-track" : "")} style={{ width: `${progress}%`, background: processing ? undefined : "var(--accent)" }} />

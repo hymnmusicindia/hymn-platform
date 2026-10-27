@@ -39,7 +39,17 @@ async function main() {
       await page.getByRole('button',{name:'Move Alpha down',exact:true}).click();
       await expect(rows.nth(0)).toContainText('Beta.wav');
       await expect(rows.nth(1)).toContainText('Alpha.wav');
-      if(width>=768)await page.getByRole('button',{name:'Drag to reorder Alpha',exact:true}).dragTo(rows.nth(2));else await page.getByRole('button',{name:'Move Alpha down',exact:true}).click();
+      if(width>=768){
+        // Native HTML5 data transfer is explicit so headless pointer geometry
+        // cannot drop on a nested playback/replacement control instead.
+        const transfer=await page.evaluateHandle(()=>new DataTransfer());
+        const grip=page.getByRole('button',{name:'Drag to reorder Alpha',exact:true});
+        await grip.dispatchEvent('dragstart',{dataTransfer:transfer});
+        await rows.nth(2).dispatchEvent('dragover',{dataTransfer:transfer});
+        await rows.nth(2).dispatchEvent('drop',{dataTransfer:transfer});
+        await grip.dispatchEvent('dragend',{dataTransfer:transfer});
+        await transfer.dispose();
+      }else await page.getByRole('button',{name:'Move Alpha down',exact:true}).click();
       await expect(rows.nth(2)).toContainText('Alpha.wav');
       await expect.poll(()=>latest?.metadata?.tracks.map(track=>track.trackTitle).join(',')).toBe('Beta,Gamma,Alpha');
       const file=page.getByLabel('Choose replacement audio for Alpha',{exact:true});

@@ -81,7 +81,8 @@
     "email:test-rejected": "node --conditions=react-server --import tsx scripts/send-test-release-email.ts",
     "lint": "eslint .",
     "test:dashboard-design": "node scripts/verify-dashboard-design-browser.cjs",
-    "test:release-document-upload": "node scripts/verify-release-document-upload.cjs && node scripts/verify-release-document-browser.cjs"
+    "test:release-document-upload": "node scripts/verify-release-document-upload.cjs && node scripts/verify-release-document-browser.cjs",
+    "test:submission-feedback": "tsx scripts/verify-operation-progress.ts && node scripts/verify-submission-feedback-browser.cjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

@@ -18,6 +18,9 @@ import { FIRST_RELEASE_BASE_DISCOUNT } from "@/lib/first-release-pricing";
 import { wizardTrackTitle } from "@/lib/distribution-title";
 
 import clsx from "clsx";
+import { OperationProgressLabel } from "./ui/operation-progress-label";
+import { FinalReleaseConfirmation } from "./final-release-confirmation";
+import { useOperationProgress } from "./ui/use-operation-progress";
 import { uploadReleaseDocument } from "@/lib/client-release-document-upload";
 import { normalizeUploadMime } from "@/lib/upload-mime";
 import {
@@ -1165,7 +1168,11 @@ export function ReleaseForm({
   const [submitting, setSubmitting] = useState(false);
   const [useHymnCredits, setUseHymnCredits] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [submissionComplete, setSubmissionComplete] = useState(false);
+  const [finalConfirmationOpen, setFinalConfirmationOpen] = useState(false);
+  const confirmationFingerprintRef = useRef<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const submissionFeedback = useOperationProgress(submitting, uploadProgress > 0 ? uploadProgress : undefined, submissionComplete, status ?? undefined);
   const [batchUploading, setBatchUploading] = useState(false);
   const replacingAudioRef = useRef(new Set<string>());
   const [replacingAudioCount, setReplacingAudioCount] = useState(0);
@@ -1187,6 +1194,7 @@ export function ReleaseForm({
     () => new Set(),
   );
   const artistProfileVerification = useArtistProfileVerification();
+  const submissionDialogRef = useAccessibleDialog(submitting && !artistProfileVerification.open && status !== "Opening Razorpay...", () => {});
   const [knownProfiles, setKnownProfiles] = useState<
     Record<number, ArtistProfile>
   >({});
@@ -3032,6 +3040,7 @@ export function ReleaseForm({
     if (draftConflict) { setStatus("This draft changed in another tab. Open the latest version before saving."); return; }
     if (savingReleaseRef.current && !forSubmission) return;
     savingReleaseRef.current = true;
+    setSubmissionComplete(false);
     setSubmitting(true);
     setUploadProgress(0);
     setStatus("Saving draft...");
@@ -3276,8 +3285,14 @@ export function ReleaseForm({
     return result;
   }
 
-  function completeSubmission(value: Release) {
+  async function finishSubmissionFeedback() {
+    setSubmissionComplete(true);
+    await new Promise(resolve => window.setTimeout(resolve, 350));
+  }
+
+  async function completeSubmission(value: Release) {
     if (!value?.id) throw new Error("Submission confirmation unavailable. Your draft is saved; check Your Releases before paying again.");
+    await finishSubmissionFeedback();
     allowReloadRef.current = true;
     window.history.replaceState(window.history.state, "", distributionSubmittedUrl(value.id));
     setSubmittedRelease(value);
@@ -3310,8 +3325,23 @@ export function ReleaseForm({
       return;
     }
 
+    confirmationFingerprintRef.current = reviewMetadataFingerprint;
+    setFinalConfirmationOpen(true);
+  }
+
+  async function submitConfirmedRelease() {
+    const fingerprint = confirmationFingerprintRef.current;
+    setFinalConfirmationOpen(false);
+    if (savingReleaseRef.current) return;
+    if (!fingerprint || fingerprint !== reviewMetadataFingerprint || draftConflict || validationIssues.length > 0 || !legalComplete) {
+      setStatus("Release details changed. Review the latest details before agreeing again."); return;
+    }
+    confirmationFingerprintRef.current = null;
+    confirmedReviewFingerprintRef.current = fingerprint;
+    setReviewConfirmed(true);
     savingReleaseRef.current = true;
     preparedSubmissionRef.current = null;
+    setSubmissionComplete(false);
     setSubmitting(true);
     setUploadProgress(0);
     setStatus(null);
@@ -3320,18 +3350,19 @@ export function ReleaseForm({
       if (isPaidReleaseResubmission) {
         if (!amendmentMode) await confirmArtistProfilesForSubmission(initialRelease?.id ?? draftReleaseId ?? 0);
         const data = await submitEditedRelease();
-        if (amendmentMode) { setAmendmentReceipt({ ...data.request, existing: data.existingAmendment === true }); setSubmitting(false); setUploadProgress(100); return; }
+        if (amendmentMode) { await finishSubmissionFeedback(); setAmendmentReceipt({ ...data.request, existing: data.existingAmendment === true }); setSubmitting(false); setUploadProgress(100); return; }
         if (data.release?.status === "changes_requested" && data.release?.direNoteStatus) {
+          await finishSubmissionFeedback();
           router.push(`/dashboard/releases/${data.release.id}?tab=corrections`);
           router.refresh();
           return;
         }
-        completeSubmission(data.release);
+        await completeSubmission(data.release);
         setUploadProgress(100);
         return;
       }
 
-      if (!reviewConfirmed || confirmedReviewFingerprintRef.current !== reviewMetadataFingerprint) throw new Error("Confirm the reviewed release information before continuing.");
+      if (fingerprint !== reviewMetadataFingerprint) throw new Error("Confirm the reviewed release information before continuing.");
       const reviewReleaseId = await persistDraftRelease(true);
       if (!reviewReleaseId) throw new Error("Could not save the latest release details. Please retry before submitting.");
       await confirmArtistProfilesForSubmission(reviewReleaseId);
@@ -3374,7 +3405,7 @@ export function ReleaseForm({
 
       if (orderData.paidReleaseReusable === true) {
         const data = await submitEditedRelease();
-        completeSubmission(data.release);
+        await completeSubmission(data.release);
         setUploadProgress(100);
         return;
       }
@@ -3384,7 +3415,7 @@ export function ReleaseForm({
           if (!orderData.paymentId) throw new Error("The captured payment reference is unavailable. Contact HYMN support; do not pay again.");
           setStatus("Resuming your paid release submission...");
           const data = await submitRelease(orderData.orderId, orderData.paymentId, `stored-payment:${orderData.orderId}`, checkoutPlan(orderData, selectedPlan));
-          completeSubmission(data.release);
+          await completeSubmission(data.release);
           setUploadProgress(100);
           return;
         }
@@ -3395,7 +3426,7 @@ export function ReleaseForm({
           coveredBySubscription ? "subscription:active" : "free:first-release",
           checkoutPlan(orderData, selectedPlan),
         );
-        completeSubmission(data.release);
+        await completeSubmission(data.release);
         setUploadProgress(100);
         return;
       }
@@ -3458,7 +3489,7 @@ export function ReleaseForm({
                 const entitlement = await entitlementResponse.json();
                 if (!entitlementResponse.ok || entitlement.requiresPayment !== false || !entitlement.subscriptionCovered) throw new Error(entitlement.error || "Could not create the subscription release entitlement.");
                 const data = await submitRelease(entitlement.orderId, `subscription_${Date.now()}`, "subscription:active", checkoutPlan(entitlement, selectedPlan));
-                completeSubmission(data.release);
+                await completeSubmission(data.release);
                 setUploadProgress(100);
                 resolve();
                 return;
@@ -3469,7 +3500,7 @@ export function ReleaseForm({
                 response.razorpay_signature,
                 checkoutPlan(orderData, selectedPlan),
               );
-              completeSubmission(data.release);
+              await completeSubmission(data.release);
               setUploadProgress(100);
               resolve();
             } catch (error) {
@@ -3547,20 +3578,21 @@ export function ReleaseForm({
   );
   return (
     <>
+      <FinalReleaseConfirmation open={finalConfirmationOpen} onClose={() => { setFinalConfirmationOpen(false); confirmationFingerprintRef.current = null; }} onAgree={() => void submitConfirmedRelease()} />
       {artistProfileVerification.dialog}
       {amendmentMode && initialRelease ? <aside className="mb-5 px-2 py-4" aria-label="Amendment identifiers"><h1 className="text-xl font-semibold">Amend your release</h1><p className="mt-2 text-sm">Your previous release is pre-filled. Changes go to HYMN review; the live release stays unchanged until approved and delivered. Keep the same recording when restoring a missing master.</p><p className="mt-3 text-sm">Locked UPC: <strong>{initialRelease.upcCode}</strong></p>{initialRelease.tracks?.map(track => <p key={track.id} className="mt-1 text-sm">{track.trackTitle} | Locked ISRC: <strong>{track.isrc}</strong></p>)}</aside> : null}
       {submitting && !artistProfileVerification.open && status !== "Opening Razorpay..." ? (
-        <div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/50 p-5 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="release-upload-title" aria-describedby="release-upload-status">
-          <section className="w-full max-w-sm rounded-[2rem] border p-6 text-center shadow-[0_30px_100px_rgba(0,0,0,.55)] sm:p-8" style={{ borderColor: "var(--border)", background: "color-mix(in srgb, var(--card) 94%, transparent)", color: "var(--text)" }}>
-            <div className="relative mx-auto flex h-40 w-40 items-center justify-center rounded-full p-2 transition-[background] duration-300" style={{ background: `conic-gradient(var(--accent) ${Math.max(0, Math.min(100, uploadProgress))}%, rgba(255,255,255,0.09) 0)` }} aria-label={`${uploadProgress}% complete`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress}>
-              <div className="flex h-full w-full flex-col items-center justify-center rounded-full border" style={{ borderColor: "var(--border)", background: "var(--card)" }}><strong className="text-4xl font-semibold tabular-nums">{uploadProgress}%</strong><span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-soft)" }}>Complete</span></div>
+        <CustomerOverlay lockScroll={false}><div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/50 p-5 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="release-upload-title" aria-describedby="release-upload-status">
+          <section ref={submissionDialogRef} tabIndex={-1} className="w-full max-w-sm rounded-[2rem] border p-6 text-center shadow-[0_30px_100px_rgba(0,0,0,.55)] sm:p-8" style={{ borderColor: "var(--border)", background: "color-mix(in srgb, var(--card) 94%, transparent)", color: "var(--text)" }}>
+            <div className="relative mx-auto flex h-40 w-40 items-center justify-center rounded-full p-2 transition-[background] duration-300" style={{ background: `conic-gradient(var(--accent) ${Math.max(0, Math.min(100, submissionFeedback.value))}%, rgba(255,255,255,0.09) 0)` }} aria-label={submissionFeedback.indeterminate ? "Waiting for submission confirmation" : `${submissionFeedback.value}% submission progress`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={submissionFeedback.indeterminate ? undefined : submissionFeedback.value} aria-valuetext={submissionFeedback.indeterminate ? "Initialising... Still waiting for confirmation." : `${submissionFeedback.value}%`}>
+              <div className="flex h-full w-full flex-col items-center justify-center rounded-full border" style={{ borderColor: "var(--border)", background: "var(--card)" }}><strong className="text-4xl font-semibold tabular-nums">{submissionFeedback.indeterminate ? "..." : `${submissionFeedback.value}%`}</strong><span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-soft)" }}>Submission progress</span></div>
             </div>
-            <h2 id="release-upload-title" className="mt-6 text-xl font-semibold">{uploadProgress < 100 ? "Uploading release…" : "Finalising submission…"}</h2>
-            <p id="release-upload-status" className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }} aria-live="polite">{status || "Preparing your secure release submission…"}</p>
-            <div className="mt-5 h-1.5 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}><span className="shimmer-track block h-full rounded-full transition-[width] duration-300" style={{ width: `${Math.max(0, Math.min(100, uploadProgress))}%` }} /></div>
+            <h2 id="release-upload-title" className="mt-6 text-xl font-semibold">{submissionFeedback.indeterminate ? "Initialising..." : submissionComplete ? "Submission confirmed" : uploadProgress >= 100 ? "Finalising submission..." : "Preparing your release..."}</h2>
+            <p id="release-upload-status" className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }} aria-live="polite">{submissionFeedback.indeterminate ? "This is taking longer than expected. We are still waiting for confirmation; keep this window open and do not submit again." : status || "Preparing your secure release submission..."}</p>
+            <div className="mt-5 h-1.5 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}><span className="shimmer-track block h-full rounded-full transition-[width] duration-300" style={{ width: `${Math.max(0, Math.min(100, submissionFeedback.value))}%` }} /></div>
             <p className="mt-4 text-xs" style={{ color: "var(--text-soft)" }}>Keep this window open. Large audio masters can take a few minutes.</p>
           </section>
-        </div>
+        </div></CustomerOverlay>
       ) : null}
       <form
         onSubmit={handleFinalSubmit}
@@ -3769,11 +3801,11 @@ export function ReleaseForm({
               </div>
               {false ? <details className="group mt-4 border-t pt-4" style={{ borderColor: "var(--border)" }} open={rightsDocumentationOpen} onToggle={(event) => setRightsDocumentationOpen(event.currentTarget.open)}>
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.14em] [&::-webkit-details-marker]:hidden" style={{ color: "var(--text-soft)" }}><span>Rights documentation <span className="normal-case font-normal">· Optional</span></span><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" /></summary>
-                <div className="pt-3"><p className="text-xs leading-5" style={{ color: "var(--text-muted)" }}>{release.contentType === "AI Generated" ? "Recommended: Attach your generation receipt, licence or supporting link to help reduce rights-review delays." : release.contentType === "Non-Exclusive Licensed" ? "Recommended: Attach your licence or agreement to help us verify your distribution rights faster." : "Optional: Attach an agreement or ownership document to help speed up review."}</p><label className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-3 text-xs" style={{ borderColor: "var(--border)" }}><span className="flex items-center gap-2"><FileUp className="h-4 w-4" style={{ color: "var(--accent)" }} />{rightsUploadProgress != null ? `Uploading ${rightsUploadProgress}%` : "Choose a PDF up to 10 MB"}</span><input className="sr-only" type="file" accept="application/pdf,.pdf" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { setRightsUploadProgress(0); const releaseId = await ensureUploadDraft(); const url = await uploadPrivateAsset(file, "private_ownership_proof", { releaseId, onProgress: (loaded, total) => setRightsUploadProgress(Math.round((loaded / total) * 100)) }); setRelease((current) => ({ ...current, licenseReceiptUrl: url })); } catch (error) { setRightsUploadError(error instanceof Error ? error.message : "Could not upload rights document."); } finally { setRightsUploadProgress(null); event.target.value = ""; } }} /></label><label className="mt-3 block text-xs" style={{ color: "var(--text-muted)" }}>Document link<input type="url" maxLength={2048} placeholder="https://..." className="field mt-1" value={release.licenseReceiptUrl.startsWith("http") ? release.licenseReceiptUrl : ""} onChange={event => setRelease(current => ({ ...current, licenseReceiptUrl: event.target.value }))} /></label>{release.licenseReceiptUrl && !release.licenseReceiptUrl.startsWith("http") ? <p className="mt-2 text-xs" style={{ color: "var(--success)" }}>Rights document attached · <button type="button" onClick={() => setRelease(current => ({ ...current, licenseReceiptUrl: "" }))}>Remove</button></p> : null}{rightsUploadError ? <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>{rightsUploadError}</p> : null}</div>
+                <div className="pt-3"><p className="text-xs leading-5" style={{ color: "var(--text-muted)" }}>{release.contentType === "AI Generated" ? "Recommended: Attach your generation receipt, licence or supporting link to help reduce rights-review delays." : release.contentType === "Non-Exclusive Licensed" ? "Recommended: Attach your licence or agreement to help us verify your distribution rights faster." : "Optional: Attach an agreement or ownership document to help speed up review."}</p><label className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-3 text-xs" style={{ borderColor: "var(--border)" }}><span className="flex items-center gap-2"><FileUp className="h-4 w-4" style={{ color: "var(--accent)" }} />{rightsUploadProgress != null ? <OperationProgressLabel active measured={rightsUploadProgress ?? undefined} /> : "Choose a PDF up to 10 MB"}</span><input className="sr-only" type="file" accept="application/pdf,.pdf" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { setRightsUploadProgress(0); const releaseId = await ensureUploadDraft(); const url = await uploadPrivateAsset(file, "private_ownership_proof", { releaseId, onProgress: (loaded, total) => setRightsUploadProgress(Math.round((loaded / total) * 100)) }); setRelease((current) => ({ ...current, licenseReceiptUrl: url })); } catch (error) { setRightsUploadError(error instanceof Error ? error.message : "Could not upload rights document."); } finally { setRightsUploadProgress(null); event.target.value = ""; } }} /></label><label className="mt-3 block text-xs" style={{ color: "var(--text-muted)" }}>Document link<input type="url" maxLength={2048} placeholder="https://..." className="field mt-1" value={release.licenseReceiptUrl.startsWith("http") ? release.licenseReceiptUrl : ""} onChange={event => setRelease(current => ({ ...current, licenseReceiptUrl: event.target.value }))} /></label>{release.licenseReceiptUrl && !release.licenseReceiptUrl.startsWith("http") ? <p className="mt-2 text-xs" style={{ color: "var(--success)" }}>Rights document attached · <button type="button" onClick={() => setRelease(current => ({ ...current, licenseReceiptUrl: "" }))}>Remove</button></p> : null}{rightsUploadError ? <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>{rightsUploadError}</p> : null}</div>
               </details> : null}
               {(requiresAiProof || requiresLicenceProof) ? <section ref={registerField("rights-document") as (node: HTMLElement | null) => void} className="mt-4 border-t pt-4" style={{ borderColor: "var(--border)" }}>
                 <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>{requiresAiProof ? "AI-generated content" : "Licence agreement"}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{requiresAiProof ? "Generation receipt and original track/project link are required for distribution." : "HYMN requires your licence or beat agreement for non-exclusive content."}</p></div><span className="text-[10px] font-semibold uppercase" style={{ color: "var(--danger)" }}>Required</span></div>
-                {requiresAiProof ? <p className="mt-3 text-xs font-semibold">Suno receipt PDF</p> : null}<label className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-3 text-xs" style={{ borderColor: "var(--border)" }}><span className="flex items-center gap-2"><FileUp className="h-4 w-4" style={{ color: "var(--accent)" }} />{rightsUploadProgress != null ? `Uploading ${rightsUploadProgress}%` : requiresAiProof ? "Drop generation receipt PDF or browse" : "Drop licence agreement PDF or browse"}</span><span style={{ color: "var(--text-soft)" }}>PDF · Max 10 MB</span><input className="sr-only" type="file" accept="application/pdf" onChange={async (event) => { const file = event.target.files?.[0]; if (file) await uploadRequiredRightsProof(file); event.target.value = ""; }} /></label>
+                {requiresAiProof ? <p className="mt-3 text-xs font-semibold">Suno receipt PDF</p> : null}<label className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-3 text-xs" style={{ borderColor: "var(--border)" }}><span className="flex items-center gap-2"><FileUp className="h-4 w-4" style={{ color: "var(--accent)" }} />{rightsUploadProgress != null ? <OperationProgressLabel active measured={rightsUploadProgress ?? undefined} /> : requiresAiProof ? "Drop generation receipt PDF or browse" : "Drop licence agreement PDF or browse"}</span><span style={{ color: "var(--text-soft)" }}>PDF · Max 10 MB</span><input className="sr-only" type="file" accept="application/pdf" onChange={async (event) => { const file = event.target.files?.[0]; if (file) await uploadRequiredRightsProof(file); event.target.value = ""; }} /></label>
                 {(requiresAiProof ? release.sunoReceiptUrl : release.licenseReceiptUrl) ? <div className="mt-2 flex items-center justify-between text-xs" style={{ color: "var(--success)" }}><span>PDF attached and ready for HYMN.</span><button type="button" onClick={() => setRelease((current) => requiresAiProof ? { ...current, sunoReceiptUrl: "" } : { ...current, licenseReceiptUrl: "" })}>Remove</button></div> : null}
                 {requiresAiProof ? <label className="mt-3 block text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Track / project link<input ref={registerField("ai-generation-link")} type="url" placeholder="https://..." className="field mt-1" value={release.sunoLink} onChange={(event) => setRelease((current) => ({ ...current, sunoLink: event.target.value }))} /></label> : null}
                 {rightsUploadError ? <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>{rightsUploadError}</p> : null}
@@ -3979,7 +4011,7 @@ export function ReleaseForm({
               const audioReady = Boolean(track.existingAudioUrl || (track.audioPreviewUrl && track.audioUploadStatus === "uploaded"));
               const trackReady = metadataReady && audioReady;
               const audioStatusLabel = track.audioUploadStatus === "uploading"
-                ? `Uploading ${track.audioUploadProgress}%`
+                ? <OperationProgressLabel active measured={track.audioUploadProgress} />
                 : track.audioUploadStatus === "failed"
                   ? "Upload paused"
                   : audioReady
@@ -5450,7 +5482,7 @@ export function ReleaseForm({
                     {false ? <div className="mt-5 rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
                       <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Rights documentation</p><span className="text-[10px]" style={{ color: "var(--text-soft)" }}>Optional</span></div>
                       <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }}>{release.contentType === "AI Generated" ? "Recommended: Attach your generation receipt, licence or supporting link to help reduce rights-review delays." : release.contentType === "Non-Exclusive Licensed" ? "Recommended: Attach your licence or agreement to help us verify your distribution rights faster. Content ID is unavailable for non-exclusive content." : "Optional: If you have producer agreements or ownership documents, attach them to help speed up review."}</p>
-                      <label className="mt-4 flex cursor-pointer items-center justify-center gap-3 rounded-xl border border-dashed px-4 py-5 text-center" style={{ borderColor: "var(--border)" }} onDragOver={(event) => event.preventDefault()} onDrop={async (event) => { event.preventDefault(); const file = event.dataTransfer.files?.[0]; if (!file) return; if (normalizeUploadMime(file.type, file.name) !== "application/pdf" || file.size < 1 || file.size > 10 * 1024 * 1024) { setRightsUploadError("Choose a PDF no larger than 10 MB."); return; } try { setRightsUploadError(null); setRightsUploadProgress(0); const releaseId = await ensureUploadDraft(); const url = await uploadPrivateAsset(file, "private_ownership_proof", { releaseId, onProgress: (loaded, total) => setRightsUploadProgress(Math.round((loaded / total) * 100)) }); setRelease((current) => ({ ...current, licenseReceiptUrl: url })); } catch (error) { setRightsUploadError(error instanceof Error ? error.message : "Could not upload rights document."); } finally { setRightsUploadProgress(null); } }}><FileUp className="h-5 w-5" style={{ color: "var(--accent)" }} /><span><strong className="block text-sm">{rightsUploadProgress != null ? `Uploading ${rightsUploadProgress}%` : "Drag & drop your agreement here"}</strong><span className="mt-1 block text-xs" style={{ color: "var(--text-soft)" }}>PDF, JPG or PNG · max 20 MB · Browse files</span></span><input className="sr-only" type="file" accept="application/pdf,.pdf" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; if (normalizeUploadMime(file.type, file.name) !== "application/pdf" || file.size < 1 || file.size > 10 * 1024 * 1024) { setRightsUploadError("Choose a PDF no larger than 10 MB."); return; } try { setRightsUploadError(null); setRightsUploadProgress(0); const releaseId = await ensureUploadDraft(); const url = await uploadPrivateAsset(file, "private_ownership_proof", { releaseId, onProgress: (loaded, total) => setRightsUploadProgress(Math.round((loaded / total) * 100)) }); setRelease((current) => ({ ...current, licenseReceiptUrl: url })); } catch (error) { setRightsUploadError(error instanceof Error ? error.message : "Could not upload rights document."); } finally { setRightsUploadProgress(null); event.target.value = ""; } }} /></label>
+                      <label className="mt-4 flex cursor-pointer items-center justify-center gap-3 rounded-xl border border-dashed px-4 py-5 text-center" style={{ borderColor: "var(--border)" }} onDragOver={(event) => event.preventDefault()} onDrop={async (event) => { event.preventDefault(); const file = event.dataTransfer.files?.[0]; if (!file) return; if (normalizeUploadMime(file.type, file.name) !== "application/pdf" || file.size < 1 || file.size > 10 * 1024 * 1024) { setRightsUploadError("Choose a PDF no larger than 10 MB."); return; } try { setRightsUploadError(null); setRightsUploadProgress(0); const releaseId = await ensureUploadDraft(); const url = await uploadPrivateAsset(file, "private_ownership_proof", { releaseId, onProgress: (loaded, total) => setRightsUploadProgress(Math.round((loaded / total) * 100)) }); setRelease((current) => ({ ...current, licenseReceiptUrl: url })); } catch (error) { setRightsUploadError(error instanceof Error ? error.message : "Could not upload rights document."); } finally { setRightsUploadProgress(null); } }}><FileUp className="h-5 w-5" style={{ color: "var(--accent)" }} /><span><strong className="block text-sm">{rightsUploadProgress != null ? <OperationProgressLabel active measured={rightsUploadProgress ?? undefined} /> : "Drag & drop your agreement here"}</strong><span className="mt-1 block text-xs" style={{ color: "var(--text-soft)" }}>PDF · max 10 MB · Browse files</span></span><input className="sr-only" type="file" accept="application/pdf,.pdf" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; if (normalizeUploadMime(file.type, file.name) !== "application/pdf" || file.size < 1 || file.size > 10 * 1024 * 1024) { setRightsUploadError("Choose a PDF no larger than 10 MB."); return; } try { setRightsUploadError(null); setRightsUploadProgress(0); const releaseId = await ensureUploadDraft(); const url = await uploadPrivateAsset(file, "private_ownership_proof", { releaseId, onProgress: (loaded, total) => setRightsUploadProgress(Math.round((loaded / total) * 100)) }); setRelease((current) => ({ ...current, licenseReceiptUrl: url })); } catch (error) { setRightsUploadError(error instanceof Error ? error.message : "Could not upload rights document."); } finally { setRightsUploadProgress(null); event.target.value = ""; } }} /></label>
                       {rightsUploadError ? <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>{rightsUploadError}</p> : null}
                       {release.licenseReceiptUrl && !release.licenseReceiptUrl.startsWith("http") ? <div className="mt-3 flex justify-between gap-3 text-xs" style={{ color: "var(--success)" }}><span>Rights document attached</span><button type="button" onClick={() => setRelease(current => ({ ...current, licenseReceiptUrl: "" }))}>Remove</button></div> : null}
                       <label className="mt-4 block text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Document link<input type="url" maxLength={2048} placeholder="https://..." className="field mt-2" value={release.licenseReceiptUrl.startsWith("http") ? release.licenseReceiptUrl : ""} onChange={event => setRelease(current => ({ ...current, licenseReceiptUrl: event.target.value }))} /></label>
@@ -6024,7 +6056,6 @@ export function ReleaseForm({
               {title:"Delivery",stage:5,rows:[["Platforms",storeSelections.join(", ")],["Territories",release.territory === "Selected countries" ? release.selectedCountries.join(", ") : "Worldwide"],["Content ID",youtubeContentIdEnabled ? "Enabled" : "Off"],["Social monetisation",socialConsentAccepted ? "Enabled" : "Off"]]}
             ].map(group => <section key={group.title}><header><h3>{group.title}</h3><button type="button" onClick={() => goToStep(group.stage)}>Edit →</button></header><dl>{group.rows.map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value || "Not provided"}</dd></div>)}</dl></section>)}</div>
             {validationIssues.length > 0 ? <section className="record-review-issues"><h3>A few details need your attention</h3>{validationIssues.map(issue => <button type="button" key={`${issue.key}-${issue.trackIndex}`} onClick={() => triggerFieldFocus(issue)}><span>{customerMessage(issue.message)}</span><span aria-hidden="true">→</span></button>)}</section> : <p className="record-review-ready"><CheckCircle2 size={18} /> All required release details are complete.</p>}
-            <div className="review-confirmation record-review-confirmation"><label><input type="checkbox" checked={reviewConfirmed} onChange={(event) => { setReviewConfirmed(event.target.checked); confirmedReviewFingerprintRef.current = event.target.checked ? reviewMetadataFingerprint : null; }} /><span><strong>{reviewConfirmed ? "Confirmed. This is my release." : "One final confirmation"}</strong><span>I have checked the music, credits, rights and delivery details, and I have authority to distribute this release.</span></span></label></div>
                   {isPaidReleaseResubmission ? <section className="payment-summary p-5 md:p-7"><h3 className="text-lg font-semibold">No additional payment</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Your existing release entitlement covers these corrections. Submit the updated release for review.</p></section> : !subscriptionCovered ? <section className="payment-summary p-5 md:p-7">
                     <div className="flex items-end justify-between gap-4 border-b pb-4" style={{ borderColor: "var(--border)" }}>
                       <h3 className="text-lg font-semibold">Payment summary</h3>
@@ -6122,7 +6153,7 @@ export function ReleaseForm({
               </button>
               <button
                 type="submit"
-                disabled={submitting || draftConflict || !legalComplete || (!isPaidReleaseResubmission && !reviewConfirmed) || validationIssues.length > 0}
+                disabled={submitting || draftConflict || !legalComplete || validationIssues.length > 0}
                 className={clsx("release-footer-action is-primary w-full disabled:opacity-60 sm:w-auto", distributionCheckoutAmount === 0 && "is-free-release")}
               >
                 {submitting
