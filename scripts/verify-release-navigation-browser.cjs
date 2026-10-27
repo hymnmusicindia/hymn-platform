@@ -35,12 +35,15 @@ async function main() {
     await expect(toolbar.locator('.release-workspace-state').getByRole('button',{name:'Review',exact:true})).toBeVisible();
     for(const button of [toolbar.getByRole('button',{name:'Quit',exact:true}),toolbar.locator('.release-workspace-state').getByRole('button',{name:'Review',exact:true}),page.locator('.release-footer-action.is-draft')]) {
       await expect(button).toBeEnabled();await page.mouse.move(0,0);
-      await expect.poll(()=>button.evaluate(el=>getComputedStyle(el).color)).toBe('rgb(222, 222, 216)');
+      await expect.poll(()=>button.evaluate(el=>getComputedStyle(el).color)).toBe(await button.evaluate(el=>el.classList.contains('is-draft'))?'rgb(201, 185, 122)':'rgb(222, 222, 216)');
       expect(await button.evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
       expect(await button.evaluate(el=>getComputedStyle(el).borderTopWidth)).toBe('0px');
-      await button.hover();await expect.poll(()=>button.evaluate(el=>getComputedStyle(el).color)).toBe('rgb(255, 255, 255)');
+      await button.hover();await expect.poll(()=>button.evaluate(el=>getComputedStyle(el).color)).toBe(await button.evaluate(el=>el.classList.contains('is-draft'))?'rgb(255, 224, 113)':'rgb(255, 255, 255)');
     }
     await page.mouse.move(0,0);
+    const footerButtons=await page.locator('.release-footer-action').evaluateAll(buttons=>buttons.filter(el=>getComputedStyle(el).display!=='none').map(el=>{const r=el.getBoundingClientRect();return {center:r.top+r.height/2,left:r.left,right:r.right}}));
+    expect(Math.max(...footerButtons.map(b=>b.center))-Math.min(...footerButtons.map(b=>b.center))).toBeLessThan(2);
+    for(const button of footerButtons){expect(button.left).toBeGreaterThanOrEqual(0);expect(button.right).toBeLessThanOrEqual(width)}
     await expect(nav.getByRole('button',{name:'Credits & tracks',exact:true})).toHaveAttribute('aria-current','step');
     const checkBounds=async()=>{const bounds=await page.evaluate(()=>{const n=document.querySelector('.release-navigation-header').getBoundingClientRect();const c=document.querySelector('.release-workflow-content').getBoundingClientRect();return {bottom:n.bottom,top:c.top,overflow:document.documentElement.scrollWidth>innerWidth+1}});expect(bounds.bottom).toBeLessThanOrEqual(bounds.top);expect(bounds.overflow).toBe(false)};
     await checkBounds();

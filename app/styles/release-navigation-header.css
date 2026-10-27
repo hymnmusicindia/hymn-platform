@@ -32,13 +32,13 @@ html body .release-toolbar .release-journey-progress-track { display:none; }
 
 /* Text actions retain their hit areas and focus rings without button boxes. */
 html body :is(.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow,.release-toolbar.release-toolbar)
-button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]):not([aria-pressed]):not([aria-selected]):not([aria-checked]):not([class*="selected-artist"]):not([class*="artist-avatar"]):not([data-distance]) {
+button:where(:not([role="switch"]):not([role="checkbox"]):not([role="radio"]):not([aria-pressed]):not([aria-selected]):not([aria-checked]):not([class*="selected-artist"]):not([class*="artist-avatar"]):not([data-distance])) {
   border:0!important; border-radius:0!important; background:transparent!important;
   box-shadow:none!important; text-shadow:none!important; color:#deded8!important;
   min-height:44px; transition:color .18s ease,opacity .18s ease;
 }
 html body :is(.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow,.release-toolbar.release-toolbar)
-button:not([role="switch"]):not([role="checkbox"]):not([role="radio"]):not([aria-pressed]):not([aria-selected]):not([aria-checked]):not([class*="selected-artist"]):not([class*="artist-avatar"]):not([data-distance]):is(:hover,:focus-visible):not(:disabled) { color:#fff!important; }
+button:where(:not([role="switch"]):not([role="checkbox"]):not([role="radio"]):not([aria-pressed]):not([aria-selected]):not([aria-checked]):not([class*="selected-artist"]):not([class*="artist-avatar"]):not([data-distance])):is(:hover,:focus-visible):not(:disabled) { color:#fff!important; }
 html body :is(.distribution-workflow,.release-toolbar) button:focus-visible { outline:2px solid #c5d9f3; outline-offset:3px; }
 html body :is(.distribution-workflow,.release-toolbar) button:disabled { cursor:not-allowed; opacity:.45; }
 html body :is(.distribution-workflow,.release-toolbar) :is(.release-footer-action,.release-workspace-quit,.release-workspace-review,.release-artist-next,.btn-primary,.btn-outline)::before,
@@ -51,3 +51,20 @@ html body :is(.distribution-workflow,.release-toolbar) :is(.release-footer-actio
   html body .release-toolbar > .release-workspace-state { grid-row:1; grid-column:2; }
 }
 @media(prefers-reduced-motion:reduce) { html body :is(.distribution-workflow,.release-toolbar) button { transition:none!important; } }
+
+/* Keep navigation actions on one line, including narrow phone screens. */
+html body .distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow :is(.release-footer-mobile-actions,.release-focused-actions,.review-submit-bar) {
+  display:flex!important; flex-direction:row!important; flex-wrap:nowrap!important;
+  align-items:center!important; gap:8px!important;
+}
+html body .distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow .release-footer-action {
+  width:auto!important; min-width:0; flex:0 1 auto; padding:10px 8px!important;
+  white-space:normal!important; line-height:1.5; text-align:center;
+}
+html body .distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow .release-footer-action.is-draft { margin-left:auto!important; color:#c9b97a!important; }
+html body .distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow .release-footer-action.is-draft:is(:hover,:focus-visible):not(:disabled) { color:#ffe071!important; }
+@media(max-width:767px) {
+  html body .distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow :is(.release-footer-mobile-actions,.release-focused-actions,.review-submit-bar) { gap:4px!important; padding-inline:8px!important; }
+  html body .distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow .release-footer-action { padding-inline:4px!important; font-size:12px!important; }
+  html body .distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow .release-footer-action.is-primary { flex:0 1 auto; max-width:65%; }
+}
