@@ -117,3 +117,26 @@ html body :is(.landing-rail,.dashboard-os-sidebar) :is(.landing-group-title,.das
     display:none!important;
   }
 }
+
+/* Keep the rail independent of the page; only overflowing service links scroll. */
+html body .hymn-landing .landing-rail {
+  overflow:hidden;
+}
+html body .hymn-landing .landing-rail nav[aria-label="HYMN services"] {
+  flex:0 1 auto!important;
+  overscroll-behavior-y:contain;
+}
+html body .hymn-landing .landing-rail > :not(nav) {
+  flex-shrink:0;
+}
+html body .hymn-landing .landing-rail .workspace-footer-container {
+  margin-top:auto;
+}
+@media(min-width:1024px) {
+  html body .hymn-landing .landing-rail {
+    position:fixed; top:58px; bottom:0; left:0; z-index:30;
+    width:var(--landing-rail); height:calc(100dvh - 58px);
+  }
+  html body .hymn-landing .rail-collapsed .landing-rail { width:76px; }
+  html body .hymn-landing .landing-canvas { grid-column:2; }
+}

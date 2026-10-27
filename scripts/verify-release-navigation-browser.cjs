@@ -40,6 +40,20 @@ async function main() {
       expect(await nav.locator('[aria-current=step]').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
     };
     await checkCarousel();
+    if(width>=1024) {
+      await page.evaluate(()=>{const spacer=document.createElement('div');spacer.id='scroll-check-spacer';spacer.style.height='2400px';document.querySelector('.landing-page-content').append(spacer)});
+      const rail=page.locator('.landing-rail');const before=await rail.boundingBox();
+      await page.evaluate(()=>window.scrollTo(0,1100));await expect.poll(()=>rail.evaluate(el=>el.getBoundingClientRect().top)).toBe(before.y);
+      expect(await page.evaluate(()=>window.scrollY)).toBeGreaterThan(500);
+      await page.setViewportSize({width,height:500});
+      const services=page.getByRole('navigation',{name:'HYMN services'});
+      await services.evaluate(el=>{el.scrollTop=el.scrollHeight});
+      expect(await services.evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
+      await services.hover();const pageScroll=await page.evaluate(()=>window.scrollY);await page.mouse.wheel(0,700);
+      await page.waitForTimeout(200);expect(await page.evaluate(()=>window.scrollY)).toBe(pageScroll);
+      expect(await rail.evaluate(el=>el.scrollTop)).toBe(0);
+      await page.setViewportSize({width,height:900});await page.evaluate(()=>{document.getElementById('scroll-check-spacer').remove();window.scrollTo(0,0)});
+    }
     await nav.getByRole('button',{name:/Cover artwork/}).click();await expect(nav.getByRole('button',{name:/Cover artwork/})).toHaveAttribute('aria-current','step');await checkBounds();
     await expect(nav.getByRole('button',{name:/Cover artwork/})).toBeEnabled();await nav.getByRole('button',{name:/Cover artwork/}).focus();await page.keyboard.press('ArrowRight');await expect(nav.getByRole('button',{name:/Credits & tracks/})).toHaveAttribute('aria-current','step');
     await expect(page.locator('.landing-rail')).toHaveCount(1);await expect(page.locator('.dashboard-os-sidebar')).toHaveCount(0);

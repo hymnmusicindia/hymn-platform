@@ -2,6 +2,8 @@
 
 `PortalLayout` uses the same `LandingWorkspace` as the homepage for public and authenticated service pages. Customer, producer and admin dashboard routes retain their own frames; Team OS retains its separate layout. Service links remain available in the expandable homepage sidebar.
 
+On desktop, the homepage/service rail is fixed below the 58px site header. Its grid column remains reserved for the right-hand canvas. Only the service links scroll when they exceed the available height, with scroll chaining contained; the shortcuts and footer stay anchored. Mobile retains the fixed navigation drawer.
+
 On `/distribution/start`, the shell provides a `ReleaseNavigationTarget` above the page content. `ReleaseNavigationSlot` portals the form's live section controls into this header, keeping the existing validation and stage state in `ReleaseForm`. Standalone forms use an inline fallback. The header stays in document flow, outside the metadata fields, and replaces the former distribution module tabs.
 
 The release section carousel keeps the active section centered and sharp, with adjacent sections softened and faded. Clicking a neighboring section, swiping, or using Arrow keys, Home and End selects sections. The header has no surrounding box or selected-button pill.
