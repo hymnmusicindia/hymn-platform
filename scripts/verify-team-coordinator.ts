@@ -9,7 +9,7 @@ import { roleTemplates } from '../lib/team/policy';
 
 async function main(){
   assert.equal(process.env.DATABASE_URL,'postgresql://fixture:fixture@127.0.0.1:55473/acquisition_fixture');
-  const workspace=await prisma.teamWorkspace.create({data:{name:'Coordinator fixture',clientCardsImportedAt:new Date()}});
+  const workspace=await prisma.teamWorkspace.create({data:{name:'Coordinator fixture',createdAt:new Date('2000-01-01T00:00:00Z'),clientCardsImportedAt:new Date()}});
   async function member(name:string,permissions:string[],owner=false){const role=await prisma.teamRole.create({data:{workspaceId:workspace.id,name,permissions,owner}});const user=await prisma.user.create({data:{name,email:`${name}@coordinator.fixture.invalid`,googleId:name}});return prisma.teamMember.create({data:{workspaceId:workspace.id,userId:user.id,roleId:role.id,preferences:{workAvailability:{recurring:{enabled:false}}}},include:{role:true}});}
   const owner=await member('Owner',[],true),alice=await member('Alice',roleTemplates['Call Representative']),bob=await member('Bob',roleTemplates['Call Representative']),operator=await member('Operator',['tasks.create','calendar.view']),worker=await member('Worker',['tasks.create','tasks.update','tasks.complete','calendar.view','calendar.manage']),viewer=await member('Viewer',['calendar.view']);
   const week=moveWorkWeek(workWeek(),1), slots=[0,1,2,3,4].map(day=>({day,start:540,end:1020}));
@@ -41,7 +41,7 @@ async function main(){
   const delivered:string[]=[];
   const fake=(async (mail:any)=>{assert.match(mail.text,/pass to next available rep/i);delivered.push(mail.to);return {status:'sent'};}) as Parameters<typeof processAppointments>[2];
   await processAppointments(event.id,20,fake);await processAppointments(event.id,20,fake);
-  assert.equal(delivered.length,1,'Assignment email must not be duplicated.');
+  assert.equal(delivered.length,0,'Routine staff assignments stay in-app instead of sending individual emails.');
   const passed=await teamMutation(first,'calendar-handoff',{id:event.id,version:event.version,reason:'Unavailable for this call'}) as any;
   assert.equal(passed.assigneeId,second.id);assert.equal(passed.startsAt.getTime(),event.startsAt.getTime());
   assert.equal((await prisma.teamTask.findUniqueOrThrow({where:{id:assigned.task.id}})).ownerId,second.id);

@@ -8,12 +8,13 @@ import { roleTemplates } from "../lib/team/policy";
 import { assertClientWelcomeRetryAllowed, clientWelcomeTemplate, processClientWelcomes } from "../lib/team/client-welcome";
 
 async function main() {
-  assert.ok(process.env.DATABASE_URL?.includes("127.0.0.1:55461/team_fixture"));
+  assert.ok(["postgresql://fixture:fixture@127.0.0.1:55461/team_fixture", "postgresql://fixture:fixture@127.0.0.1:55473/acquisition_fixture"].includes(process.env.DATABASE_URL || ""));
   const tag = randomUUID();
   const workspace = await prisma.teamWorkspace.create({ data: { name: `Contact fixture ${tag}` } });
   const user = await prisma.user.create({ data: { name: "Team Owner", email: `owner-${tag}@example.test`, googleId: tag } });
-  const role = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name: "Owner", owner: true, permissions: roleTemplates.Owner } });
-  const actor = await prisma.teamMember.create({ data: { workspaceId: workspace.id, userId: user.id, roleId: role.id }, include: { role: true } });
+  const role = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name: "Contact manager", owner: false, permissions: roleTemplates.Owner } });
+  const callPreferences = { workAvailability: { recurring: { enabled: true, slots: [0,1,2,3,4,5,6].map(day => ({day,start:0,end:1440})) } } };
+  const actor = await prisma.teamMember.create({ data: { workspaceId: workspace.id, userId: user.id, roleId: role.id, preferences: callPreferences }, include: { role: true } });
   const registered = await prisma.user.create({ data: { name: "Existing Artist", email: `artist-${tag}@example.test`, googleId: `artist-${tag}` } });
   const linked = await teamMutation(actor, "clients-save", { name: "Existing Artist", email: registered.email.toUpperCase(), secondaryEmail: `secondary-${tag}@example.test`, ownerId: actor.id, interests: ["DISTRIBUTION"], city: "Mumbai", state: "Maharashtra" }) as { id: string; version: number };
   assert.equal(await prisma.teamClientWelcome.count({ where: { clientId: linked.id } }), 0);
@@ -85,27 +86,31 @@ async function main() {
   const callStart = new Date(Date.now() + 3 * 3600000);
   const callInput = { title: "Appointment queue fixture", kind: "CALL", clientId: linked.id, assigneeId: actor.id, startsAt: callStart.toISOString() };
   let call = await teamMutation(actor, "calendar-save", callInput) as { id: string; version: number };
-  assert.equal(await prisma.teamAppointmentMessage.count({ where: { eventId: call.id } }), 4);
+  assert.equal(await prisma.teamAppointmentMessage.count({ where: { eventId: call.id } }), 3);
+  // Legacy queued staff confirmations must also be suppressed after upgrade.
+  await prisma.teamAppointmentMessage.create({ data: { eventId: call.id, revision: 1, kind: "REP_CONFIRM", dueAt: new Date() } });
   const mail: { to: string; text: string; eventKey: string }[] = [];
   const delivery = async (input: { to: string; text: string; eventKey: string }) => { mail.push(input); return { status: "sent" as const }; };
   await Promise.all([processAppointments(call.id, 10, delivery), processAppointments(call.id, 10, delivery)]);
-  assert.equal(mail.length, 2); assert.doesNotMatch(mail.find(m => m.to === registered.email)!.text, /sign up/i);
-  await processAppointments(call.id, 10, delivery, new Date(callStart.getTime() - 41 * 60000)); assert.equal(mail.length, 2);
-  await processAppointments(call.id, 10, delivery, new Date(callStart.getTime() - 40 * 60000)); assert.equal(mail.length, 3);
-  assert.equal(mail[2].to, user.email);
-  await processAppointments(call.id, 10, delivery, new Date(callStart.getTime() - 30 * 60000)); assert.equal(mail.length, 4);
-  assert.equal(mail[3].to, registered.email);
-  await processAppointments(call.id, 10, delivery, new Date(callStart.getTime() - 25 * 60000)); assert.equal(mail.length, 4);
+  assert.equal(mail.length, 1); assert.doesNotMatch(mail.find(m => m.to === registered.email)!.text, /sign up/i);
+  await processAppointments(call.id, 10, delivery, new Date(callStart.getTime() - 41 * 60000)); assert.equal(mail.length, 1);
+  await processAppointments(call.id, 10, delivery, new Date(callStart.getTime() - 40 * 60000)); assert.equal(mail.length, 1);
+  assert.equal(await prisma.teamNotification.count({ where: { memberId: actor.id, title: { startsWith: "Call " } } }), 1);
+  await processAppointments(call.id, 10, delivery, new Date(callStart.getTime() - 30 * 60000)); assert.equal(mail.length, 2);
+  assert.equal(mail[1].to, registered.email);
+  await processAppointments(call.id, 10, delivery, new Date(callStart.getTime() - 25 * 60000)); assert.equal(mail.length, 2);
   const repUser = await prisma.user.create({ data: { name: "Available Rep", email: `rep-${tag}@example.test`, googleId: `rep-${tag}` } });
-  const repRole = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name: "Rep", permissions: roleTemplates["Team Member"] } });
-  const rep = await prisma.teamMember.create({ data: { workspaceId: workspace.id, userId: repUser.id, roleId: repRole.id }, include: { role: true } });
+  const repRole = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name: "Rep", permissions: roleTemplates["Call Representative"] } });
+  const rep = await prisma.teamMember.create({ data: { workspaceId: workspace.id, userId: repUser.id, roleId: repRole.id, preferences: callPreferences }, include: { role: true } });
   call = await teamMutation(actor, "calendar-handoff", { id: call.id, version: call.version, assigneeId: rep.id, reason: "Not available at this time" }) as typeof call;
   await assert.rejects(teamMutation(actor, "calendar-handoff", { id: call.id, version: call.version - 1, assigneeId: actor.id, reason: "Stale retry" }));
   await processAppointments(call.id, 10, delivery);
-  assert.equal(mail.length, 6); assert.equal(mail.filter(m => m.to === repUser.email).length, 1);
-  // An ordinary assigned rep can hand off their call, without tasks.assign.
-  call = await teamMutation(rep, "calendar-handoff", { id: call.id, version: call.version, assigneeId: actor.id, reason: "Another call conflicts" }) as typeof call;
-  assert.equal((await prisma.teamCalendarEvent.findUniqueOrThrow({ where: { id: call.id } })).assigneeId, actor.id);
+  assert.equal(mail.length, 3); assert.equal(mail.filter(m => m.to === repUser.email).length, 0);
+  // An ordinary assigned rep can hand off to an unpassed employee, without tasks.assign.
+  const thirdUser = await prisma.user.create({ data: { name: "Backup Rep", email: `backup-${tag}@example.test`, googleId: `backup-${tag}` } });
+  const thirdRep = await prisma.teamMember.create({ data: { workspaceId: workspace.id, userId: thirdUser.id, roleId: repRole.id, preferences: callPreferences } });
+  call = await teamMutation(rep, "calendar-handoff", { id: call.id, version: call.version, assigneeId: thirdRep.id, reason: "Another call conflicts" }) as typeof call;
+  assert.equal((await prisma.teamCalendarEvent.findUniqueOrThrow({ where: { id: call.id } })).assigneeId, thirdRep.id);
   await assert.rejects(teamMutation(rep, "calendar-handoff", { id: call.id, version: call.version, assigneeId: rep.id, reason: "Not my call now" }));
   const oldJob = await prisma.teamAppointmentMessage.findFirstOrThrow({ where: { eventId: call.id, revision: 1 } });
   await assert.rejects(assertAppointmentRetryAllowed(oldJob.id, registered.email));
@@ -120,12 +125,12 @@ async function main() {
   let appointmentFailures = 0;
   const failDelivery = async () => { appointmentFailures++; return { status: "failed" as const, error: "SMTP timeout fixture" }; };
   await processAppointments(failCall.id, 10, failDelivery); await processAppointments(failCall.id, 10, failDelivery);
-  assert.equal(appointmentFailures, 2); // One attempt per confirmation, no automatic replay.
-  assert.equal(await prisma.teamAppointmentMessage.count({ where: { eventId: failCall.id, status: "REVIEW" } }), 2);
+  assert.equal(appointmentFailures, 1); // One attempt per confirmation, no automatic replay.
+  assert.equal(await prisma.teamAppointmentMessage.count({ where: { eventId: failCall.id, status: "REVIEW" } }), 1);
   await prisma.teamMember.update({ where: { id: rep.id }, data: { availability: "AWAY" } });
   await assert.rejects(teamMutation(actor, "calendar-handoff", { id: failCall.id, version: failCall.version, assigneeId: rep.id, reason: "Unavailable target" }));
   const lateCall = await teamMutation(actor, "calendar-save", { ...callInput, startsAt: new Date(Date.now() + 10 * 60000).toISOString() }) as { id: string };
-  assert.equal(await prisma.teamAppointmentMessage.count({ where: { eventId: lateCall.id } }), 2);
+  assert.equal(await prisma.teamAppointmentMessage.count({ where: { eventId: lateCall.id } }), 1);
   const expiredBefore = mail.length;
   await processAppointments(lateCall.id, 10, delivery, new Date(Date.now() + 11 * 60000)); assert.equal(mail.length, expiredBefore);
   const dncCall = await teamMutation(actor, "calendar-save", { ...callInput, clientId: client.id, startsAt: new Date(callStart.getTime() + 3 * 3600000).toISOString() }) as { id: string };

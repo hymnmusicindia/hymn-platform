@@ -73,13 +73,19 @@ async function main() {
   assert(!email.html.includes('<script>'));
   assert(email.text.includes('Open detailed performance report'));
   assert(!email.text.includes('DireNote'));
+  const callClient = await prisma.teamClient.create({ data: { workspaceId: workspace.id, ownerId: researcher.id, name: 'Agenda artist' } });
+  await prisma.teamCalendarEvent.create({ data: { workspaceId: workspace.id, creatorId: owner.id, assigneeId: researcher.id, clientId: callClient.id, title: 'Planned callback', kind: 'FOLLOW_UP', startsAt: new Date(now.getTime() + 86400000) } });
   await queuePerformanceReports(now);
+  assert.equal(await prisma.emailLog.count({ where: { template: 'team_performance_report', eventKey: { contains: ':daily:' } } }), 0);
   const before = await prisma.emailLog.count({ where: { template: 'team_performance_report' } });
   await Promise.all([queuePerformanceReports(now), queuePerformanceReports(now)]);
   assert.equal(await prisma.emailLog.count({ where: { template: 'team_performance_report' } }), before);
   assert.equal(await prisma.emailLog.count({ where: { template: 'team_performance_report', entityId: owner.id } }), 0);
   assert.equal((await deliverPerformanceReports(now)).enabled, false);
-  const saved = await prisma.emailLog.findFirstOrThrow({ where: { template: 'team_performance_report', entityId: researcher.id, eventKey: { contains: ':daily:2026-10-22' } } });
+  const saved = await prisma.emailLog.findFirstOrThrow({ where: { template: 'team_performance_report', entityId: researcher.id, eventKey: { contains: ':weekly:2026-10-12' } } });
+  assert.match(String((saved.payload as any).text), /Agenda artist/);
+  assert.match(String((saved.payload as any).text), /internal callback/);
+  assert.match(String((saved.payload as any).text), /Open your calendar/);
   // Exercise the real saved-report access and download handlers with fixture authentication.
   const require = createRequire(import.meta.url);
   let identity = researcher.userId;
@@ -103,15 +109,19 @@ async function main() {
   identity = owner.userId; assert.equal((await download()).status, 200);
   identity = 0; assert.equal((await download()).status, 401);
   await lead(5, '2026-10-22T20:00:00+05:30');
-  assert.equal(((await prisma.emailLog.findUniqueOrThrow({ where: { id: saved.id } })).payload as any).report.metrics.leads, 2, 'Saved email snapshot stays unchanged after late data.');
+  assert.equal(((await prisma.emailLog.findUniqueOrThrow({ where: { id: saved.id } })).payload as any).report.metrics.leads, 0, 'Saved email snapshot stays unchanged after late data.');
   await prisma.teamMember.update({ where: { id: colleague.id }, data: { status: 'SUSPENDED' } });
   let sends = 0;
   const deliver = async () => { sends++; return { data: { id: 'fixture-message' }, error: null }; };
   const results = await Promise.all([deliverPerformanceReports(now, deliver), deliverPerformanceReports(now, deliver)]);
-  assert.equal(sends, 2, 'Only researcher daily/weekly messages send; concurrent workers claim once and suspended recipients cancel.');
-  assert.equal(results.reduce((sum, r) => sum + r.sent, 0), 2);
+  assert.equal(sends, 1, 'Only the researcher weekly message sends; concurrent workers claim once and suspended recipients cancel.');
+  assert.equal(results.reduce((sum, r) => sum + r.sent, 0), 1);
   await deliverPerformanceReports(now, deliver);
-  assert.equal(sends, 2);
+  assert.equal(sends, 1);
+  const legacyDaily = await prisma.emailLog.create({ data: { userId: researcher.userId, toEmail: 'researcher@fixture.invalid', subject: 'Legacy daily report', template: 'team_performance_report', eventKey: 'legacy-daily-policy-fixture', entityType: 'team_member', entityId: researcher.id, provider: 'smtp', status: 'pending', payload: { channel: 'team_performance', report: JSON.parse(JSON.stringify(report)), html: 'Old daily report', text: 'Old daily report' } } });
+  await deliverPerformanceReports(now, deliver);
+  assert.equal(sends, 1, 'A queued legacy daily report must never reach SMTP.');
+  assert.equal((await prisma.emailLog.findUniqueOrThrow({ where: { id: legacyDaily.id } })).status, 'cancelled');
   // Uncertain delivery never automatically retries, protecting recipients from duplicates.
   await prisma.emailLog.update({ where: { id: saved.id }, data: { status: 'pending' } });
   await deliverPerformanceReports(now, async () => { throw new Error('Outcome uncertain'); });
@@ -125,6 +135,6 @@ async function main() {
   const beforeRetry = sends;
   await deliverPerformanceReports(retryAt, deliver);
   assert.equal(sends, beforeRetry, 'Backoff prevents immediate resend after a known connection failure.');
-  console.log('PASS Team performance: IST daily/weekly schedule, attribution, role targets, unique contacts, commission currencies/adjustments/holds, private access, immutable snapshots, disabled SMTP, duplicate claims and suspension cancellation.');
+  console.log('PASS Team performance: daily/weekly analytics, weekly-only email, upcoming calls, legacy daily suppression, attribution, role targets, unique contacts, commission currencies/adjustments/holds, private access, immutable snapshots, disabled SMTP, duplicate claims and suspension cancellation.');
 }
 main().finally(() => prisma.$disconnect()).catch(error => { console.error(error); process.exitCode = 1; });

@@ -26,6 +26,11 @@ async function main() {
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("acquisition_fixture");
+    if (process.argv.includes('--team-mail-policy-only')) {
+      await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
+      for (const script of ['verify-team-performance.ts', 'verify-team-client-contacts.ts', 'verify-team-coordinator.ts']) await run(['--conditions=react-server','--import','tsx','scripts/' + script]);
+      return;
+    }
     if (process.argv.includes('--team-autonomy-only')) {
       await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
       await run(['--conditions=react-server','--import','tsx','scripts/verify-team-autonomy.ts']);

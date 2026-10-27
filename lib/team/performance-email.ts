@@ -2,7 +2,7 @@ import 'server-only';
 import { emailLayout, emailText } from '@/lib/email/email-templates';
 import { performanceMoney, type PerformanceReport } from './performance-model';
 
-export function performanceEmail(report: PerformanceReport, reportUrl: string) {
+export function performanceEmail(report: PerformanceReport, reportUrl: string, agenda?: { body: string; url: string }) {
   const label = report.period === 'daily' ? 'Daily' : 'Weekly';
   const range = report.period === 'daily' ? report.startDay : `${report.startDay} – ${report.endDay}`;
   const m = report.metrics;
@@ -13,6 +13,7 @@ export function performanceEmail(report: PerformanceReport, reportUrl: string) {
     ctaLabel: 'Open detailed performance report', ctaUrl: reportUrl,
     notice: `Recorded activity through ${new Date(report.endAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST.${report.provisional ? ' This day-end snapshot excludes entries recorded after capture; check the live report for updates.' : ''} Counts describe logged work, not hours worked.`,
     sections: [
+      ...(agenda ? [{ title: 'Your calls and callbacks for the next seven days', body: agenda.body + '\nRoutine assignments and reminders appear in Team OS rather than separate emails. Check your calendar for new or changed times.', linkLabel: 'Open your calendar', linkUrl: agenda.url }] : []),
       { title: 'Your target', body: report.target === null ? 'No lead or contact quota is configured for your role. Your completed assignments and recorded activity are shown instead.' : `${report.targetActual} / ${report.target} ${report.targetLabel} (${report.target ? Math.round(report.targetActual / report.target * 100) : 0}%). Targets use your current configured role and calendar-day programme, excluding days before you joined.` },
       { title: 'Compared with the previous period', body: `${report.previousLabel}: ${report.previous.leads} leads, ${report.previous.contacts} distinct contacts and ${report.previous.tasksCompleted} completed assignments. Current period: ${m.conversions} customer conversions across attributed leads; ${m.cohortConversions} of the ${m.leads} leads registered in this period have converted.` },
       { title: report.period === 'daily' ? `Commission recorded on ${report.startDay}` : 'Commission recorded in this period', body: `${commission} These are employee acquisition commissions, not customer royalties. Holds, refund adjustments, reconciliation and payout rules still apply. This is not a bank-payment confirmation.` },

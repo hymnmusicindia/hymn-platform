@@ -12,7 +12,7 @@ const object = (v: unknown): Record<string, unknown> => v && typeof v === 'objec
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 export async function queuePerformanceReports(now = new Date(), limit = 20) {
   const members = await prisma.teamMember.findMany({ where: { status: 'ACTIVE', role: { owner: false }, user: { status: 'ACTIVE' } }, select: { id: true, joinedAt: true, userId: true, user: { select: { email: true } } }, orderBy: { id: 'asc' } });
-  const windows = duePerformanceWindows(now);
+  const windows = duePerformanceWindows(now).filter(window => window.period === 'weekly');
   const keys = members.flatMap(member => windows.map(window => `team-performance:${member.id}:${window.period}:${indiaDay(window.start)}`));
   const existing = new Set((await prisma.emailLog.findMany({ where: { eventKey: { in: keys } }, select: { eventKey: true } })).map(row => row.eventKey));
   let queued = 0;
@@ -23,12 +23,15 @@ export async function queuePerformanceReports(now = new Date(), limit = 20) {
     const eventKey = `team-performance:${member.id}:${window.period}:${indiaDay(window.start)}`;
     if (existing.has(eventKey)) continue;
     const report = await buildPerformanceReport(member.id, window.period, indiaDay(window.start), now);
+    const calls = await prisma.teamCalendarEvent.findMany({ where: { workspaceId: report.workspaceId, assigneeId: member.id, status: 'SCHEDULED', kind: { in: ['CALL', 'FOLLOW_UP'] }, startsAt: { gte: now, lt: new Date(now.getTime() + 7 * 86400000) }, client: { status: 'ACTIVE' } }, orderBy: { startsAt: 'asc' }, take: 21, select: { startsAt: true, kind: true, client: { select: { name: true } } } });
+    const when = new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' });
+    const agenda = { body: calls.length ? calls.slice(0, 20).map(call => when.format(call.startsAt) + ' IST: ' + (call.client?.name || 'Client') + (call.kind === 'FOLLOW_UP' ? ' (internal callback)' : ' (scheduled call)')).join('\n') + (calls.length > 20 ? '\nMore calls are available in your calendar.' : '') : 'No calls are currently scheduled for the next seven days.', url: getPublicAppUrl() + '/team?workspace=' + encodeURIComponent(report.workspaceId) + '&module=calendar' };
     await prisma.$transaction(async tx => {
       const row = await tx.emailLog.upsert({ where: { eventKey }, create: { userId: member.userId, toEmail: member.user.email, subject: 'HYMN Team OS performance report', template: 'team_performance_report', eventKey, entityType: 'team_member', entityId: member.id, provider: 'smtp', status: 'pending', payload: json({ channel, report }) }, update: {} });
       if (typeof object(row.payload).html === 'string') return;
       const saved = object(row.payload).report as PerformanceReport;
-      const email = performanceEmail(saved, `${getPublicAppUrl()}/team/performance/${row.id}`);
-      await tx.emailLog.update({ where: { id: row.id }, data: { subject: email.subject, payload: json({ channel, report: saved, html: email.html, text: email.text }) } });
+      const email = performanceEmail(saved, `${getPublicAppUrl()}/team/performance/${row.id}`, agenda);
+      await tx.emailLog.update({ where: { id: row.id }, data: { subject: email.subject, payload: json({ channel, report: saved, agenda, html: email.html, text: email.text }) } });
       await tx.teamNotification.create({ data: { memberId: member.id, title: `Your ${window.period} performance report is ready`, href: `/team/performance/${row.id}` } });
     });
     queued++;
@@ -45,12 +48,17 @@ export async function deliverPerformanceReports(now = new Date(), deliver?: Deli
     const claimedAt = Date.parse(String(object(row.payload).claimedAt || ''));
     if (!Number.isFinite(claimedAt) || claimedAt < now.getTime() - 10 * 60_000) await prisma.emailLog.updateMany({ where: { id: row.id, status: 'sending' }, data: { status: 'review', errorMessage: 'Interrupted SMTP delivery. Verify delivery before resending.' } });
   }
+  const latestWeek = duePerformanceWindows(now).find(window => window.period === 'weekly');
   const rows = await prisma.emailLog.findMany({ where: { ...scope, status: 'pending' }, orderBy: { createdAt: 'asc' }, take: 100 });
   let sent = 0, failed = 0, cancelled = 0, processed = 0;
   const deadline = Date.now() + 20_000;
   for (const row of rows) {
     if (processed >= limit || Date.now() >= deadline) break;
     const payload = object(row.payload);
+    if (object(payload.report).period !== 'weekly' || latestWeek && object(payload.report).startDay !== indiaDay(latestWeek.start)) {
+      if ((await prisma.emailLog.updateMany({ where: { id: row.id, status: 'pending' }, data: { status: 'cancelled', errorMessage: 'Daily or outdated performance email suppressed; only the latest weekly report is delivered.' } })).count) cancelled++;
+      continue;
+    }
     if (payload.nextAttemptAt && Date.parse(String(payload.nextAttemptAt)) > now.getTime()) continue;
     if (!(await prisma.emailLog.updateMany({ where: { id: row.id, status: 'pending' }, data: { status: 'sending', payload: json({ ...payload, claimedAt: now.toISOString() }) } })).count) continue;
     processed++;
