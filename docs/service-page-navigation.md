@@ -12,4 +12,6 @@ Quit sits to the left of the carousel, with the live save status and Review to t
 
 Footer actions stay side by side at every viewport width. Draft uses muted yellow normally and bright yellow on hover or keyboard focus; longer action labels wrap inside their button instead of stacking the buttons.
 
+Footer actions remain in normal document flow at the end of the form, scrolling with the page rather than sticking to the viewport. The top navigation reserves 20px below its controls, and Quit has no underline.
+
 Verification: `node scripts/verify-release-navigation-browser.cjs` exercises the actual portal, sidebar and release form at 1440px, 390px and 320px. It checks a single header navigation, field clearance, no page overflow, section selection, keyboard navigation and mobile sidebar links. `npm run test:submission-feedback` checks submission behavior separately.

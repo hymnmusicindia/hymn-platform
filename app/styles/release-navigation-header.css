@@ -22,6 +22,8 @@ html body .release-toolbar.release-toolbar.release-toolbar.release-toolbar.relea
   align-items:center; gap:12px; padding:0!important;
 }
 html body .release-toolbar > .release-workspace-quit { justify-self:start; }
+html body .release-toolbar > .release-workspace-quit:is(button,:hover,:focus-visible) { text-decoration:none!important; border-bottom:0!important; }
+html body .release-navigation-header { padding-bottom:20px; }
 html body .release-toolbar .release-workspace-state {
   display:flex!important; align-items:center; justify-content:flex-end; flex-wrap:wrap;
   gap:4px 14px; min-width:0; font-size:12px; color:#deded8;
@@ -54,6 +56,7 @@ html body :is(.distribution-workflow,.release-toolbar) :is(.release-footer-actio
 
 /* Keep navigation actions on one line, including narrow phone screens. */
 html body .distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow :is(.release-footer-mobile-actions,.release-focused-actions,.review-submit-bar) {
+  position:static!important; inset:auto!important;
   display:flex!important; flex-direction:row!important; flex-wrap:nowrap!important;
   align-items:center!important; gap:8px!important;
 }

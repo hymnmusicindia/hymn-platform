@@ -32,6 +32,9 @@ async function main() {
     await expect(page.locator('.release-workspace-header,.release-workspace-logo')).toHaveCount(0);
     const toolbar=page.locator('.release-navigation-header .release-toolbar');
     await expect(toolbar.getByRole('button',{name:'Quit',exact:true})).toBeVisible();
+    expect(await toolbar.getByRole('button',{name:'Quit',exact:true}).evaluate(el=>getComputedStyle(el).textDecorationLine)).toBe('none');
+    expect(await page.locator('.release-navigation-header').evaluate(el=>parseFloat(getComputedStyle(el).paddingBottom))).toBeGreaterThanOrEqual(20);
+    expect(await page.locator('.release-footer-action').first().evaluate(el=>getComputedStyle(el.parentElement).position)).toBe('static');
     await expect(toolbar.locator('.release-workspace-state').getByRole('button',{name:'Review',exact:true})).toBeVisible();
     for(const button of [toolbar.getByRole('button',{name:'Quit',exact:true}),toolbar.locator('.release-workspace-state').getByRole('button',{name:'Review',exact:true}),page.locator('.release-footer-action.is-draft')]) {
       await expect(button).toBeEnabled();await page.mouse.move(0,0);
