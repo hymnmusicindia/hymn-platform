@@ -49,6 +49,7 @@ export async function retryTransactionalEmail(logId: number) {
   if (!original) throw new Error("Email log not found.");
   if (original.status !== "failed") throw new Error("Only failed emails can be retried.");
   if (original.template === "team_performance_report") throw new Error("Performance reports are weekly only. Review delivery in the performance outbox; generic retries cannot resend daily reports or bypass membership checks.");
+  if (original.template === "team_next_day_plan") throw new Error("Review nightly plans in their dedicated outbox; generic retries cannot bypass recipient, date or duplicate checks.");
   if (original.template === "team_outreach") throw new Error("Review team outreach inside Team OS; generic retries cannot bypass recipient eligibility checks.");
   if (original.template === "team_call_briefing") throw new Error("Review team briefings in their outbox; generic retries cannot preserve the PDF and membership checks.");
   if (original.template === "support_reply") throw new Error("Review delivery and retry from the support ticket mailbox.");

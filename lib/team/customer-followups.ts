@@ -14,6 +14,8 @@ import { internalIdentities, matchesInternalIdentity } from './internal-identity
 import { queueCallEstablishedEmail } from './call-established-email';
 import { employeeCallSlot } from './availability';
 import { acceptsAssignmentsNow } from './availability-rules';
+import { callLoadScore } from './call-allocation';
+import { callWorkload } from './call-workload';
 
 export const DRAFT_CALL_INACTIVITY_HOURS = 30;
 type Signal = { kind: 'DRAFT_INACTIVE' | 'ENQUIRY' | 'SERVICE_INTEREST' | 'SUPPORT_CALLBACK'; source: string; referenceId: string; service: string; occurredAt: string; footnotes: string[]; draftEditedAt?: string; callbackPhone?: string };
@@ -28,8 +30,8 @@ async function supportCaller(tx: Prisma.TransactionClient, a: Actor, now = new D
   if (!callers.length) return null;
   const previous = await tx.teamTask.findFirst({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: 'support-call:' } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
   const rotated = [...callers.slice((callers.findIndex(m => m.id === previous?.ownerId) + 1) % callers.length), ...callers.slice(0, (callers.findIndex(m => m.id === previous?.ownerId) + 1) % callers.length)];
-  const load = await tx.teamTask.groupBy({ by: ['ownerId'], where: { workspaceId: a.workspaceId, ownerId: { in: callers.map(m => m.id) }, status: { notIn: ['COMPLETED', 'CANCELLED'] }, eventKey: { startsWith: 'support-call:' } }, _count: true });
-  const ranked=rotated.sort((left, right) => (load.find(item => item.ownerId === left.id)?._count || 0) - (load.find(item => item.ownerId === right.id)?._count || 0));
+  const load = await callWorkload(tx, a.workspaceId, callers.map(m => m.id));
+  const ranked=rotated.sort((left, right) => callLoadScore(left.preferences, load.get(left.id) || 0) - callLoadScore(right.preferences, load.get(right.id) || 0));
   for(const member of ranked) if(await employeeCallSlot(tx,a.workspaceId,member.id,nextCallDue(now)))return member;
   return null;
 }

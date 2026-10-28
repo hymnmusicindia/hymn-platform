@@ -44,9 +44,9 @@ export async function processAppointments(eventId?: string, limit = 20, deliver 
       if (job.kind === "REP_REMINDER" && !job.notifiedAt) await prisma.$transaction(async tx => {
         if ((await tx.teamAppointmentMessage.updateMany({ where: { id: job.id, notifiedAt: null }, data: { notifiedAt: now } })).count) await notify(tx, e.assigneeId, `Call ${client.name} at ${when}`, href);
       });
-      // Staff assignments/reminders stay in-app; the weekly report consolidates email.
+      // Staff reminders stay in-app; the nightly plan consolidates schedules.
       // This also drains legacy queued REP_CONFIRM and REP_REMINDER jobs safely.
-      if (rep) { await finish("SKIPPED", "Routine team alerts are in-app and consolidated into the weekly report."); continue; }
+      if (rep) { await finish("SKIPPED", "Routine team alerts are in-app; schedules are consolidated in the nightly plan."); continue; }
       const to = rep ? e.assignee.user.email : client.email;
       if (!to) { await finish("SKIPPED", "No primary email; in-app assignment remains available."); continue; }
       if (deliver === sendTransactionalEmail && !getEmailConfig().enabled) { await finish("PENDING", "SMTP is disabled or not configured."); continue; }
@@ -71,7 +71,7 @@ export async function processAppointments(eventId?: string, limit = 20, deliver 
 
 export async function assertAppointmentRetryAllowed(jobId: string, email: string) {
   const job = await prisma.teamAppointmentMessage.findUnique({ where: { id: jobId }, include: { event: { include: { client: true, assignee: { include: { user: true } } } } } });
-  if (job?.kind.startsWith("REP_")) throw new Error("Routine team appointment emails have been replaced by in-app alerts and the weekly report.");
+  if (job?.kind.startsWith("REP_")) throw new Error("Routine team appointment emails have been replaced by in-app alerts and the nightly plan.");
   const e = job?.event;
   const recipient = job?.kind.startsWith("REP_") ? e?.assignee.user.email : e?.client?.email;
   if (!job || job.status !== "REVIEW" || !e || e.scheduleRevision !== job.revision || e.status !== "SCHEDULED" || !(["CALL","FOLLOW_UP"].includes(e.kind)) || e.kind === "FOLLOW_UP" && !job.kind.startsWith("REP_") || e.startsAt <= new Date() || e.client?.status !== "ACTIVE" || e.assignee.status !== "ACTIVE" || e.assignee.user.status !== "ACTIVE" || recipient?.toLowerCase() !== email.toLowerCase()) throw new Error("Appointment changed, expired or already delivered; this email cannot be retried.");

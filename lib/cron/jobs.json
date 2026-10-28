@@ -38,7 +38,7 @@
     "id": "team-performance",
     "method": "GET",
     "seconds": 60,
-    "purpose": "Daily 23:59 IST and Monday 09:00 IST member performance reports and email outbox",
+      "purpose": "21:00 IST consolidated next-day plans, weekly performance reports and their email outboxes",
     "flag": "TEAM_AUTOMATION_ENABLED"
   },
   {

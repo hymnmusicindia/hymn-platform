@@ -10,6 +10,8 @@ import { employeeCallSlot } from './availability';
 import { acceptsAssignmentsNow, activeWindows, moveWorkWeek, planMeetsTarget, record, workWeek } from './availability-rules';
 import { internalIdentities, matchesInternalIdentity } from './internal-identity';
 import { queueAppointment } from './appointments';
+import { callLoadScore } from './call-allocation';
+import { callWorkload } from './call-workload';
 export const WORK_KINDS={CALL:'Customer callback',RELEASE_HELP:'Release assistance',BEAT_REVIEW:'Beat review',ENGINEER_PROFILE:'Engineer profile review',STUDIO_COORDINATION:'Studio coordination',GENERAL:'General operations'} as const;
 const permissions:Record<keyof typeof WORK_KINDS,Permission>={CALL:'crm.outreach.manage',RELEASE_HELP:'operations.distribution.review',BEAT_REVIEW:'operations.beats.manage',ENGINEER_PROFILE:'operations.engineers.manage',STUDIO_COORDINATION:'operations.studio.review',GENERAL:'tasks.update'};
 const intakeSchema=z.object({clientKey:z.string().uuid(),kind:z.enum(['CALL','RELEASE_HELP','BEAT_REVIEW','ENGINEER_PROFILE','STUDIO_COORDINATION','GENERAL']),summary:z.string().trim().min(3).max(180),details:z.string().trim().min(3).max(6000),source:z.string().trim().min(3).max(500),clientId:z.string().max(80).optional(),name:z.string().trim().max(160).default(''),email:z.union([z.string().trim().email().max(320),z.literal('')]).default(''),phone:z.string().trim().max(40).regex(/^[+\d\s().-]*$/).default(''),requestedAt:z.string().datetime({offset:true}).optional()});
@@ -69,7 +71,9 @@ export async function dispatchIntake(tx:Prisma.TransactionClient,a:Actor,id:stri
   if(!permission)throw new TeamError('Unknown routing category.');
   const members=await tx.teamMember.findMany({where:{workspaceId:a.workspaceId,status:'ACTIVE',availability:'AVAILABLE',role:{owner:false},user:{status:'ACTIVE'}},include:{role:true},orderBy:{id:'asc'}});
   const load=await tx.teamTask.groupBy({by:['ownerId'],where:{workspaceId:a.workspaceId,status:{notIn:['COMPLETED','CANCELLED']},archivedAt:null},_count:true});
-  const candidates=members.filter(m=>can(m,permission)&&can(m,'tasks.update')&&(item.kind!=='CALL'||acceptsAssignmentsNow(m.preferences,now))).sort((x,y)=>(load.find(l=>l.ownerId===x.id)?._count||0)-(load.find(l=>l.ownerId===y.id)?._count||0));
+  const calls = item.kind === 'CALL' ? await callWorkload(tx,a.workspaceId,members.map(m=>m.id)) : null;
+  const score = (m: typeof members[number]) => calls ? callLoadScore(m.preferences,calls.get(m.id)||0) : load.find(l=>l.ownerId===m.id)?._count||0;
+  const candidates=members.filter(m=>can(m,permission)&&can(m,'tasks.update')&&(item.kind!=='CALL'||acceptsAssignmentsNow(m.preferences,now))).sort((x,y)=>score(x)-score(y));
   let chosen:typeof members[number]|undefined, due:Date|null=null;
   let selectedLoad=Infinity;
   const desired=item.requestedAt&&item.requestedAt>now?item.requestedAt:new Date(now.getTime()+30*60000);
@@ -77,7 +81,7 @@ export async function dispatchIntake(tx:Prisma.TransactionClient,a:Actor,id:stri
     await tx.teamWorkIntake.update({where:{id},data:{reason:'Requested callback time has passed. Operator must arrange a new time.'}});return;
   }
   for(const member of candidates) {
-    const workload=load.find(l=>l.ownerId===member.id)?._count||0;
+    const workload=score(member);
     if(workload>selectedLoad)break;
     const slot=await employeeCallSlot(tx,a.workspaceId,member.id,desired,undefined,undefined,permission);
     if(slot && (!item.requestedAt || slot.getTime()===item.requestedAt.getTime()) && (!due||slot<due)){chosen=member;due=slot;selectedLoad=workload;}

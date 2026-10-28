@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { emailLayout, emailText } from '../lib/email/email-templates';
+const input = { title: 'Tomorrow at HYMN', body: 'Your saved work plan.', ctaLabel: 'Open workspace', ctaUrl: 'https://hymn.fixture/team', sections: [{ title: 'Schedule', body: '5:00 PM: First call\n5:30 PM: <script>unsafe</script>' }] };
+const internal = emailLayout({ ...input, audience: 'team' });
+assert(internal.includes('First call<br>5:30 PM: &lt;script&gt;'));
+assert(!internal.includes('<script>')); assert(!internal.includes('Chat with HYMN on WhatsApp')); assert(internal.includes('HYMN TEAM WORKSPACE'));
+assert(!emailText({ ...input, audience: 'team' }).includes('purchase or release'));
+const customer = emailLayout(input);
+assert(customer.includes('Chat with HYMN on WhatsApp')); assert(customer.includes('YOUR MUSIC. MOVING FORWARD.')); assert(emailText(input).includes('Contact HYMN on WhatsApp'));
+console.log('PASS email audiences: readable escaped team agenda without sales blocks; customer email branding and contact footer retained.');
