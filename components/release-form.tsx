@@ -50,6 +50,7 @@ import NextImage from "next/image";
 import { useRouter } from "next/navigation";
 import { artistCreditNames, artistSelectionIssue, selectedArtistCreditNames, restoreArtistProfileIds } from "@/lib/release-artist-validation";
 import { ArtistPicker } from "@/components/artist-picker";
+import { ArtistRoleHelp } from "@/components/artist-role-help";
 import { AudioWaveform } from "@/components/audio-waveform";
 import { GenreSelector } from "@/components/genre-selector";
 import { MoodSelector } from "@/components/mood-selector";
@@ -4192,7 +4193,7 @@ export function ReleaseForm({
                         >
                           <div className="grid gap-3 md:gap-4 lg:grid-cols-3">
                             <div className="release-track-artist-field">
-                              <span className="release-track-artist-label">Primary Artist</span>
+                              <span className="release-track-artist-label">Artist(s)<ArtistRoleHelp /></span>
                               <div className="release-track-artist-avatar-picker">
                                 {track.primaryArtistIds.map((profileId, artistIndex) => {
                                   const profile = knownProfiles[profileId];

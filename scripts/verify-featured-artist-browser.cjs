@@ -29,6 +29,13 @@ async function main() {
     });
     await page.goto('https://hymn.fixture/');await page.addStyleTag({path:path.join(out,'global.css')});await page.addStyleTag({path:path.join(out,'ui.css')});await page.addScriptTag({path:path.join(out,'ui.js')});
     const add=page.getByRole('button',{name:'Add featured artist',exact:true});await expect(add).toHaveClass(/artist-picker-add-trigger/);await expect(page.getByRole('button',{name:'Add primary artist',exact:true})).toHaveClass(/artist-picker-add-trigger/);
+    const help=page.getByRole('button',{name:'About primary and featured artists'});
+    await expect(page.locator('.release-track-artist-label').filter({has:help})).toContainText('Artist(s)');
+    await help.click();const creditHelp=page.getByRole('dialog',{name:'Artist credit help'});
+    await expect(creditHelp).toBeVisible();await expect(creditHelp).toContainText('Appears On');
+    const helpBounds=await creditHelp.boundingBox();expect(helpBounds.x).toBeGreaterThanOrEqual(0);expect(helpBounds.x+helpBounds.width).toBeLessThanOrEqual(width);
+    await page.keyboard.press('Escape');await expect(creditHelp).not.toBeVisible();await expect(help).toBeFocused();
+    await help.click();await page.getByRole('heading',{name:'Track list',exact:true}).click();await expect(creditHelp).not.toBeVisible();
     const library=page.getByRole('dialog',{name:'Add artist profile',exact:true});
     const choose=async name=>{await add.click();await library.getByRole('textbox',{name:'Search artist profiles'}).fill(name);await library.getByRole('button',{name:'Use name: '+name,exact:true}).click()};
     await choose('Known Guest');const known=page.getByRole('button',{name:'Known Guest, featured artist. Click twice to remove.',exact:true});await expect(known).toBeVisible();expect(profileWrites).toBe(0);
