@@ -1,5 +1,6 @@
 "use client";
 
+import { beatUsageSummary } from '@/lib/beat-licence-terms';
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import { BeatFreeDownload } from "@/components/beat-free-download";
 import { customerMessage } from "@/lib/customer-message";
@@ -117,12 +118,13 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
   const options = beatLicenseCatalog.map((entry) => ({
     ...entry,
     price: licensePrice(beat, entry.purchasableKey),
-    disabled: licensePrice(beat, entry.purchasableKey) <= 0 || (entry.purchasableKey === "exclusive" && beat.exclusiveRemaining === 0)
+    disabled: Boolean(beat.availableLicenses && !beat.availableLicenses.includes(entry.purchasableKey)) || licensePrice(beat, entry.purchasableKey) <= 0 || (entry.purchasableKey === "exclusive" && beat.exclusiveRemaining === 0)
   }));
   const selectedOption = options.find((option) => option.purchasableKey === selected) ?? options[0];
 
-  const addToCart = () => writeCartItem(beat, selected);
+  const addToCart = () => {if(!selectedOption.disabled)writeCartItem(beat, selected);};
   const selectAndAdd = (licenseType: LicenseChoice) => {
+    if(options.find(option=>option.purchasableKey===licenseType)?.disabled)return;
     onSelect(licenseType);
     writeCartItem(beat, licenseType);
     onClose();
@@ -139,6 +141,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
     lastTouchRef.current = { license: licenseType, at: now };
   };
   const buyNow = () => {
+    if(selectedOption.disabled)return;
     writeCartItem(beat, selected);
     window.location.href = "/checkout?product=beatstore";
   };
@@ -183,14 +186,15 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
             <p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[var(--text-soft)]">Current choice</p>
             <h3 className="mt-2 text-2xl font-semibold tracking-[-.05em] text-[var(--text)]">{selectedOption.title}</h3>
             <p className="mt-1 text-xl font-semibold text-[var(--accent)]">{formatMoney(selectedOption.price)}</p>
-            <p className="mt-3 text-sm leading-5 text-[var(--text-muted)]">{selectedOption.id === "mp3" ? "For writing, demos and an easy MP3 delivery." : selectedOption.id === "wav" ? "The clean release-ready file most artists need." : selectedOption.id === "stems" ? "Individual parts for a detailed custom mix." : "Full ownership with the exclusive agreement."}</p>
+            <p className="mt-3 text-sm leading-5 text-[var(--text-muted)]">{selectedOption.id === "mp3" ? "For writing, demos and an easy MP3 delivery." : selectedOption.id === "wav" ? "The clean release-ready file most artists need." : selectedOption.id === "stems" ? "Individual parts for a detailed custom mix." : "Exclusive use; copyright transfers only under an express assignment."}</p>
             <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-[var(--text-muted)]">
               <span className="rounded-full border border-[var(--border)] px-3 py-1.5">{selectedOption.delivery}</span>
-              <span className="rounded-full border border-[var(--border)] px-3 py-1.5">{selectedOption.streamLimit}</span>
+              <span className="rounded-full border border-[var(--border)] px-3 py-1.5">{selectedOption.exclusive ? "Exclusive use; prior licences survive" : (beat.generalStreamingLimit == null ? "No numeric stream cap" : beat.generalStreamingLimit.toLocaleString("en-IN")+" audio streams")}</span>
             </div>
+            <details className="mt-3 max-h-36 overflow-y-auto text-xs text-[var(--text-muted)]"><summary className="cursor-pointer py-2 font-semibold">Usage terms before purchase</summary>{selectedOption.exclusive?<p className="leading-5">Exclusive use subject to earlier licences. Copyright is retained unless expressly assigned. Content ID requires exclusive rights to all source material and platform eligibility.</p>:<dl className="grid grid-cols-2 gap-2">{beatUsageSummary(beat).map(row=><div key={row.label}><dt>{row.label}</dt><dd className="font-semibold text-[var(--text)]">{row.value}</dd></div>)}</dl>}<p className="mt-2 leading-5">No resale of standalone files. Sample clearances and separately agreed publishing splits still apply. Obtain written permission before exceeding the grant.</p></details>
             <div className="mt-5 grid gap-2 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
-              <button type="button" onClick={addToCart} className="btn-outline pressable"><ShoppingBag className="mr-2 h-4 w-4" />Add selected</button>
-              <button type="button" onClick={buyNow} className="btn-primary pressable">Buy now &middot; {formatMoney(selectedOption.price)}</button>
+              <button type="button" disabled={selectedOption.disabled} onClick={addToCart} className="btn-outline pressable"><ShoppingBag className="mr-2 h-4 w-4" />Add selected</button>
+              <button type="button" disabled={selectedOption.disabled} onClick={buyNow} className="btn-primary pressable">Buy now &middot; {formatMoney(selectedOption.price)}</button>
             </div>
           </div>
         </div>

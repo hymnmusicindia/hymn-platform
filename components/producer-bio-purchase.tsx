@@ -10,7 +10,7 @@ import { cancelUnpaidCheckout } from "@/lib/client-checkout-reservation";
 import type { BioBeat, BioViewer } from "@/lib/producer-links";
 import s from "./producer-bio-purchase.module.css";
 
-type Quote = { finalAmount:number; lineItems:Array<{label:string;description:string;total:number}> };
+type Quote = { finalAmount:number; lineItems:Array<{label:string;description:string;total:number;usageTerms?:Array<{label:string;value:string}>;licenceClauses?:Array<{title:string;body:string}>}> };
 type Payment = {razorpay_order_id:string;razorpay_payment_id:string;razorpay_signature:string};
 const money=(amount:number)=>`\u20b9${amount.toLocaleString("en-IN")}`;
 
@@ -52,8 +52,11 @@ export function useProducerBioPurchase(initialViewer: BioViewer | null) {
     catch {setError("Your browser could not save the cart. Use Instant buy instead.");}
   }
   function proceed(action:"cart"|"buy",beat:BioBeat,selectedLicence:BeatStoreLicenseType="mp3") {
+    const supported=(beat.availableLicenses??(["mp3","wav","stems","exclusive"] as BeatStoreLicenseType[])).filter(type=>beatLicensePrice(beat,type)>0);
+    if(!supported.length){setError("The producer has not supplied a purchasable file yet.");return;}
+    if(!supported.includes(selectedLicence))selectedLicence=supported[0];
     setError("");setMessage("");
-    if(action==="cart") {const current=readBioCart();const exists=current.some(item=>item.beatId===beat.id);writeCart(exists?current.filter(item=>item.beatId!==beat.id):[...current,{beatId:beat.id,licenseType:"mp3",price:beatLicensePrice(beat,"mp3")}]);setMessage(`${beat.title} ${exists?"removed from":"added to"} cart`);setPanel(null);}
+    if(action==="cart") {const current=readBioCart();const exists=current.some(item=>item.beatId===beat.id);writeCart(exists?current.filter(item=>item.beatId!==beat.id):[...current,{beatId:beat.id,licenseType:selectedLicence,price:beatLicensePrice(beat,selectedLicence)}]);setMessage(`${beat.title} ${exists?"removed from":"added to"} cart`);setPanel(null);}
     else {setBuyBeat(beat);setLicence(selectedLicence);setItems([{beatId:beat.id,licenseType:selectedLicence}]);setPanel("checkout");}
   }
   function request(action:"cart"|"buy",beat:BioBeat) {
@@ -130,8 +133,9 @@ export function useProducerBioPurchase(initialViewer: BioViewer | null) {
     <button className={s.close} aria-label="Close purchase dialog" onClick={()=>setPanel(null)}><X size={20}/></button>
     {panel==="login"?<><p className={s.eyebrow}>ONE QUICK STEP</p><h2>Make it yours.</h2><p>{unconfirmed?"Sign in to confirm your payment. You won’t be charged again.":"Sign in to save your cart or buy instantly."}</p><GoogleAuthButton appearance="quiet" label="Continue with Google" onAuthenticated={authenticated}/></>:panel==="success"?<><Check className={s.successIcon}/><h2>Yours to create with.</h2><p>{deliverySent?`Files and licence sent to ${paidEmail}.`:`Your purchase is complete. Email delivery to ${paidEmail} is pending.`}</p><Link className={s.pay} href="/dashboard?module=purchases">Open your downloads</Link></>:<>
       <p className={s.eyebrow}>{buyBeat?"INSTANT BUY":"YOUR CART"}</p><h2>{buyBeat?.title||"Ready for your next track."}</h2>
-      {buyBeat&&!unconfirmed&&<div className={s.licences} role="radiogroup" aria-label="Choose beat licence">{(["mp3","wav","stems","exclusive"] as const).filter(type=>beatLicensePrice(buyBeat,type)>0).map(type=><button role="radio" aria-checked={licence===type} className={licence===type?s.selected:""} key={type} onClick={()=>{setLicence(type);setItems([{beatId:buyBeat.id,licenseType:type}]);}}>{type.toUpperCase()}<small>{money(beatLicensePrice(buyBeat,type))}</small></button>)}</div>}
+      {buyBeat&&!unconfirmed&&<div className={s.licences} role="radiogroup" aria-label="Choose beat licence">{(["mp3","wav","stems","exclusive"] as const).filter(type=>beatLicensePrice(buyBeat,type)>0&&(!buyBeat.availableLicenses||buyBeat.availableLicenses.includes(type))).map(type=><button role="radio" aria-checked={licence===type} className={licence===type?s.selected:""} key={type} onClick={()=>{setLicence(type);setItems([{beatId:buyBeat.id,licenseType:type}]);}}>{type.toUpperCase()}<small>{money(beatLicensePrice(buyBeat,type))}</small></button>)}</div>}
       {quote&&<div className={s.summary}>{quote.lineItems.map((item,index)=><div key={index}><span>{item.label}<small>{item.description}</small></span><strong>{money(item.total)}</strong></div>)}</div>}
+      {quote?.lineItems.map((item,index)=>item.usageTerms?<details key={index} className="my-3 max-h-52 overflow-y-auto rounded-xl border border-white/15 p-3 text-xs"><summary className="cursor-pointer font-semibold">Licence terms: {item.label}</summary><dl className="my-3 grid grid-cols-2 gap-2">{item.usageTerms.map(row=><div key={row.label}><dt>{row.label}</dt><dd className="font-semibold">{row.value}</dd></div>)}</dl>{item.licenceClauses?.map(clause=><p key={clause.title} className="mb-3 leading-5"><strong>{clause.title}. </strong>{clause.body}</p>)}</details>:null)}
       <p className={s.delivery}><Mail size={15}/> Files + licence by email after payment</p>
       {error&&<p className={s.error} role="alert">{error}</p>}
       <button className={s.pay} disabled={busy||(!unconfirmed&&(loading||!quote||!items.length))} onClick={()=>void pay()}>{busy?<><Loader2 size={18} className={s.spin}/> Confirming...</>:unconfirmed?"Check payment":loading?"Checking price...":`Pay ${money(quote?.finalAmount||0)}`}</button>

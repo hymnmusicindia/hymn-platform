@@ -5,7 +5,8 @@ import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const databaseDir = path.join(mkdtempSync(path.join(tmpdir(), "hymn-direnote-")), "pg");
-const port = 55439;
+const port = Number(process.argv.find(arg=>arg.startsWith("--port="))?.slice(7)) || 55439;
+if(!Number.isInteger(port)||port<55439||port>55449)throw new Error("Use an isolated fixture port between 55439 and 55449.");
 // Child processes use .cache as their temp directory. A fresh CI checkout has no
 // such folder, and Prisma fails resolving a missing temp path before any test runs.
 mkdirSync(path.resolve(".cache"), { recursive: true });
@@ -48,6 +49,11 @@ async function main() {
   try {
     await pg.createDatabase("direnote_virtual");
     await run(["node_modules/prisma/build/index.js", "db", "push", "--skip-generate"]);
+    if(process.argv.includes('--beat-licensing-only')){
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-private-storage-integration.ts']);
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-beat-licensing-integration.ts']);
+      return;
+    }
     if (process.argv.includes('--reports-only')) {
       if (process.argv.includes('--build')) await run(["node_modules/next/dist/bin/next", "build", "--webpack"]);
       await run(['--conditions=react-server','--import','tsx','scripts/verify-distribution-reports.ts']);

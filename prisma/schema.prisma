@@ -2344,6 +2344,7 @@ model CheckoutOrderItem {
   licenseType String        @map("license_type")
   price       Decimal       @db.Decimal(12, 2)
   licenseUrl  String?       @map("license_url")
+  licenseTermsSnapshot Json? @map("license_terms_snapshot")
   createdAt   DateTime      @default(now()) @map("created_at")
   order       CheckoutOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   beat        Beat          @relation(fields: [beatId], references: [id], onDelete: Restrict)

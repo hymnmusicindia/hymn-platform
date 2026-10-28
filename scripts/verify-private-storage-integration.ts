@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { prisma } from "../lib/prisma";
 import { localPrivateStorage } from "../lib/private-storage";
-import { generateBeatLicense } from "../lib/beat-license";
+import { getBeatLicenceAgreement, generateBeatLicense } from "../lib/beat-license";
 
 async function main() {
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -23,7 +23,13 @@ async function main() {
   assert.equal(notifications, 1);
   const wav = Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WAVEfmt ")]);
   const deliverable = await localPrivateStorage.upload({ ownerUserId: producer.id, beatId: beat.id, assetType: "private_beat_deliverable", fileName: "master.wav", mimeType: "audio/wav", bytes: wav });
+  await assert.rejects(()=>localPrivateStorage.createAuthorizedRead({assetId:deliverable.id,requesterUserId:user.id,isAdmin:false}),/Forbidden/,"MP3 buyers must not download a WAV through the generic asset endpoint.");
+  await prisma.beatPurchase.update({where:{id:purchase.id},data:{licenseType:'wav'}});
   assert.equal((await localPrivateStorage.createAuthorizedRead({ assetId: deliverable.id, requesterUserId: user.id, isAdmin: false })).bytes.length, wav.length);
+  const before=await getBeatLicenceAgreement(purchase.id,user.id);
+  await prisma.beat.update({where:{id:beat.id},data:{title:'Edited title',generalStreamingLimit:7,generalVideoLimit:0}});
+  assert.deepEqual((await getBeatLicenceAgreement(purchase.id,user.id)).clauses,before.clauses,'Issued terms remain frozen after catalogue edits');
+  assert.equal((await getBeatLicenceAgreement(purchase.id,user.id)).beatTitle,'Private Master');
   const firstRange = await localPrivateStorage.createAuthorizedRead({ assetId: deliverable.id, requesterUserId: user.id, isAdmin: false, range: "bytes=0-3" });
   assert.equal(firstRange.bytes.toString(), "RIFF");
   assert.equal(firstRange.contentRange, `bytes 0-3/${wav.length}`);
@@ -31,6 +37,7 @@ async function main() {
   await assert.rejects(() => localPrivateStorage.createAuthorizedRead({ assetId: deliverable.id, requesterUserId: user.id, isAdmin: false, range: `bytes=${wav.length}-` }), /range is unavailable/);
   await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { hasAccess: false } });
   await assert.rejects(() => localPrivateStorage.createAuthorizedRead({ assetId: deliverable.id, requesterUserId: user.id, isAdmin: false }), /Forbidden/);
+  await assert.rejects(()=>localPrivateStorage.createAuthorizedRead({assetId:assets[0].id,requesterUserId:user.id,isAdmin:false}),/Forbidden/,'Revoked PDF access must also be blocked through generic asset URLs.');
 
   console.log("Private storage authorization and idempotency integration verification passed.");
 }

@@ -14,7 +14,9 @@ export function BeatStoreCard({beat,active=false,playing=false,onPlay,onAdd,onLi
   useEffect(()=>setFailed(false),[beat.coverImage,beat.artworkUrl]);
   useEffect(()=>{viewed.current=false;},[beat.id]);
   useEffect(()=>{if(!playing||!ready||viewed.current)return;viewed.current=true;void act(beat.id,'view').catch(()=>{viewed.current=false;});},[beat.id,playing,ready,act]);
-  const artwork=!failed&&(beat.coverImage||beat.artworkUrl),entry=beatLicensePrice(beat,'mp3')<=beatLicensePrice(beat,'wav')?'mp3':'wav';
+  const artwork=!failed&&(beat.coverImage||beat.artworkUrl);
+  const entry=(beat.availableLicenses??(['mp3','wav','stems','exclusive'] as BeatStoreLicenseType[])).filter(type=>beatLicensePrice(beat,type)>0).sort((a,b)=>beatLicensePrice(beat,a)-beatLicensePrice(beat,b))[0]??'mp3';
+  const available=!beat.availableLicenses||beat.availableLicenses.includes(entry);
   const price=beatLicensePrice(beat,entry);
   const cover=(size:number)=>artwork?<img src={artworkPreviewUrl(artwork,size)} alt="" loading="lazy" decoding="async" onError={()=>setFailed(true)}/>:<Disc3 aria-hidden="true" size={36}/>;
   return <article className={styles.card} id={`beat-${beat.id}`} data-active={active} data-playing={playing}>
@@ -32,7 +34,7 @@ export function BeatStoreCard({beat,active=false,playing=false,onPlay,onAdd,onLi
       <span title="Unique preview listeners. Each browser or device counts once." aria-label={`${count?.views??'Unavailable'} views`}><Eye size={14}/>{count?.views.toLocaleString('en-IN')??'—'}</span>
       <button type="button" aria-label={`${count?.liked?'Unlike':'Like'} ${beat.title}`} aria-pressed={count?.liked===true} disabled={!ready||liking} title={count?'Like this beat':'Counts unavailable; click to retry your like'} onClick={async()=>{setLiking(true);setError('');try{await act(beat.id,'like',!count?.liked);}catch{setError('Could not save your like. Try again.');}finally{setLiking(false);}}}><Heart size={14} fill={count?.liked?'currentColor':'none'}/>{count?.likes.toLocaleString('en-IN')??'—'}</button>
     </div>
-    <div className={styles.actions}><button type="button" className={styles.price} aria-label={`Choose licence for ${beat.title}`} onClick={()=>onLicense?.(entry)}><ShoppingBag size={14}/><span>₹{price.toLocaleString('en-IN')}</span></button><button type="button" className={styles.cart} onClick={()=>onAdd?.(selectedLicenses[0]??entry)} aria-label={`${selectedLicenses.length?'Remove':'Add'} ${beat.title} ${selectedLicenses.length?'from':'to'} cart`}>{selectedLicenses.length?<Check size={16}/>:<ShoppingBag size={16}/>}</button></div>
+    <div className={styles.actions}><button type="button" className={styles.price} disabled={!available} aria-label={`Choose licence for ${beat.title}`} onClick={()=>onLicense?.(entry)}><ShoppingBag size={14}/><span>₹{price.toLocaleString('en-IN')}</span></button><button type="button" className={styles.cart} disabled={!available} onClick={()=>onAdd?.(selectedLicenses[0]??entry)} aria-label={`${selectedLicenses.length?'Remove':'Add'} ${beat.title} ${selectedLicenses.length?'from':'to'} cart`}>{selectedLicenses.length?<Check size={16}/>:<ShoppingBag size={16}/>}</button></div>
     {error&&<p role="status" className={styles.error}>{error}</p>}
   </article>;
 }

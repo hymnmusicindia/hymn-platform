@@ -444,7 +444,9 @@ export interface ArtistCard {
   updatedAt: string;
 }
 
-export interface BeatPurchase {
+export type BeatPurchase = {
+  beatTitle?: string;
+  downloadUrl?: string;
   id: number;
   userId: number;
   beatId: number;
@@ -508,6 +510,7 @@ export interface Beat {
   previewUrl?: string;
   sampleDeclaration?: "NO_UNCONTROLLED_SAMPLES" | "LICENSED_SAMPLES" | "CONTAINS_UNCONTROLLED_SAMPLES";
   sampleDisclosure?: string | null;
+  availableLicenses?: Array<"mp3" | "wav" | "stems" | "exclusive">;
   generalMaxCommercialReleases?: number;
   generalStreamingLimit?: number | null;
   generalVideoLimit?: number | null;

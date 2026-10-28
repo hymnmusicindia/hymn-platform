@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { localPrivateStorage } from "@/lib/private-storage";
 import type { EmailAttachment } from "./email-client";
+import {canDeliverBeatFile} from '../beat-licence-terms';
 
 // Keep raw files below 10 MiB: MIME/base64 expands the transmitted message.
 export async function purchaseAttachments(purchaseId: number, userId: number, recipient: string): Promise<EmailAttachment[]> {
@@ -16,11 +17,7 @@ export async function purchaseAttachments(purchaseId: number, userId: number, re
     if (!asset || asset.deletedAt || Number(asset.byteSize) > remaining) continue;
     // Do not deliver a higher-tier format with a lower-tier purchase.
     if (asset === purchase.beat.deliverableAsset) {
-      const type = purchase.licenseType.toLowerCase();
-      const allowed = asset.mimeType === "audio/mpeg" ||
-        (["wav", "stems", "exclusive", "general", "premium"].includes(type) && ["audio/wav", "audio/x-wav", "audio/flac"].includes(asset.mimeType)) ||
-        (["stems", "exclusive"].includes(type) && asset.mimeType === "application/zip");
-      if (!allowed) continue;
+      if (!canDeliverBeatFile(purchase.licenseType,asset.mimeType)) continue;
     }
     try {
       const file = await localPrivateStorage.createAuthorizedRead({ assetId: asset.id, requesterUserId: userId, isAdmin: false });

@@ -5,6 +5,19 @@ on:
       - 'components/beat-*'
       - 'components/producer-beat-grid.tsx'
       - 'lib/beat-*'
+      - 'lib/checkout*'
+      - 'lib/db.ts'
+      - 'lib/validation.ts'
+      - 'lib/producer-link*'
+      - 'components/customer-dashboard-shell.tsx'
+      - 'app/api/producer/beats/**'
+      - 'lib/private-storage.ts'
+      - 'lib/email/**'
+      - 'components/checkout-experience.tsx'
+      - 'components/producer-*'
+      - 'app/api/beat-purchases/**'
+      - 'app/api/checkout/**'
+      - 'scripts/verify-direnote-virtual.ts'
       - 'app/api/beats/**'
       - 'prisma/**'
       - 'scripts/verify-beat*'
@@ -17,6 +30,19 @@ on:
       - 'components/beat-*'
       - 'components/producer-beat-grid.tsx'
       - 'lib/beat-*'
+      - 'lib/checkout*'
+      - 'lib/db.ts'
+      - 'lib/validation.ts'
+      - 'lib/producer-link*'
+      - 'components/customer-dashboard-shell.tsx'
+      - 'app/api/producer/beats/**'
+      - 'lib/private-storage.ts'
+      - 'lib/email/**'
+      - 'components/checkout-experience.tsx'
+      - 'components/producer-*'
+      - 'app/api/beat-purchases/**'
+      - 'app/api/checkout/**'
+      - 'scripts/verify-direnote-virtual.ts'
       - 'app/api/beats/**'
       - 'prisma/**'
       - 'scripts/verify-beat*'
@@ -41,5 +67,10 @@ jobs:
       - run: npm ci --fetch-retries=5 --fetch-timeout=120000
       - run: npx prisma generate
       - run: npm run test:beatstore
+      - run: node --import tsx scripts/verify-direnote-virtual.ts --beat-licensing-only
+      - run: node --import tsx scripts/verify-payment-flows-isolated.ts --webhooks-only
+      - run: node --conditions=react-server --import tsx scripts/verify-bio-checkout-verification.ts
+      - run: node scripts/verify-email.cjs
+      - run: node --import tsx scripts/verify-checkout-order-persistence.ts
       - run: npx playwright install --with-deps chromium
       - run: npm run test:beatstore:browser

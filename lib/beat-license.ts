@@ -9,7 +9,8 @@ import { emailAppUrl, sendBeatEmailEvent } from "@/lib/email/email-events";
 import { logAuditEvent } from "@/lib/audit-log";
 import { beatLicenseLabel, normalizeBeatLicenseType } from "@/lib/beat-store";
 
-export const BEAT_LICENCE_VERSION = "2026-10-05";
+import { BEAT_LICENCE_VERSION, beatUsageRights, licenceClauses, type LicenceClause } from './beat-licence-terms';
+export { BEAT_LICENCE_VERSION } from './beat-licence-terms';
 type JsonRecord = Record<string, unknown>;
 
 export type BeatLicenceAgreement = {
@@ -50,15 +51,16 @@ async function sourceForPurchase(purchaseId: number) {
 function buildSnapshot(purchase: Awaited<ReturnType<typeof sourceForPurchase>>, artistName: string) {
   const licenceType = normalizeBeatLicenseType(purchase.licenseType); const exclusive = licenceType === "exclusive";
   const existing = record(purchase.licenseTermsSnapshot); const producer = record(existing.producer); const buyer = record(existing.buyer); const rights = record(existing.rights);
-  return { ...existing, version: stringValue(existing.version, BEAT_LICENCE_VERSION), licenseType: licenceType,
+  const next = { ...existing, version: stringValue(existing.version, BEAT_LICENCE_VERSION), licenseType: licenceType,
     beat: { ...record(existing.beat), id: purchase.beat.id, title: stringValue(record(existing.beat).title, purchase.beat.title) },
-    buyer: { ...buyer, id: purchase.user.id, legalName: stringValue(buyer.legalName, purchase.user.name), artistName, email: purchase.user.email },
-    producer: { ...producer, partyId: purchase.beat.producerParty?.publicId ?? producer.partyId ?? null, creditedName: stringValue(producer.creditedName, purchase.beat.producerParty?.professionalName ?? purchase.beat.user.name), legalName: stringValue(producer.legalName, purchase.beat.producerParty?.legalName ?? "") || null },
+    buyer: { ...buyer, id: purchase.user.id, legalName: stringValue(buyer.legalName, purchase.user.name), artistName:stringValue(buyer.artistName,artistName), email: stringValue(buyer.email,purchase.user.email) },
+    producer: { ...producer, partyId: producer.partyId ?? purchase.beat.producerParty?.publicId ?? null, creditedName: stringValue(producer.creditedName, purchase.beat.producerParty?.professionalName ?? purchase.beat.user.name), legalName: stringValue(producer.legalName, purchase.beat.producerParty?.legalName ?? "") || null },
     purchaseDate: stringValue(existing.purchaseDate, purchase.purchasedAt.toISOString()), currency: stringValue(existing.currency, "INR"),
     price: existing.price ?? (purchase.checkoutOrderItem ? Number(purchase.checkoutOrderItem.price) : null), legalMode: stringValue(existing.legalMode, exclusive ? "EXCLUSIVE_LICENSE" : "NON_EXCLUSIVE_LICENSE"),
-    rights: exclusive ? { commercialUse: true, exclusiveUse: true, copyrightAssigned: existing.legalMode === "RIGHTS_ASSIGNMENT", contentIdPolicy: stringValue(rights.contentIdPolicy, "ALLOWED"), includesWav: true, includesStems: true, ...rights } : { commercialUse: true, maxCommercialReleases: 1, monetizationAllowed: true, creditRequired: true, contentIdPolicy: "NOT_ALLOWED", territory: "Worldwide", includesMp3: licenceType === "mp3", includesWav: licenceType === "wav", includesStems: licenceType === "stems", ...rights },
+    rights: exclusive ? { commercialUse: true, exclusiveUse: true, copyrightAssigned: existing.legalMode === "RIGHTS_ASSIGNMENT", contentIdPolicy: stringValue(rights.contentIdPolicy, purchase.beat.sampleDeclaration==="NO_UNCONTROLLED_SAMPLES"?"ALLOWED":"NOT_ALLOWED"), includesWav: true, includesStems: true, ...rights } : { ...beatUsageRights(purchase.beat), includesMp3: licenceType === "mp3", includesWav: licenceType === "wav", includesStems: licenceType === "stems", ...rights },
     restrictions: { samplesSubjectToProducerDisclosure: true, priorGeneralLicensesRemainValid: true, ...record(existing.restrictions) }
   };
+  return {...next, ...(Array.isArray(existing.clauses) ? {} : {clauses:next.version === BEAT_LICENCE_VERSION ? licenceClauses(exclusive,next.producer.creditedName,next.rights) : agreementClauses(exclusive,next.producer.creditedName,next.buyer.artistName)})};
 }
 
 function agreementFrom(purchase: Awaited<ReturnType<typeof sourceForPurchase>>, snapshot: JsonRecord): BeatLicenceAgreement {
@@ -66,7 +68,7 @@ function agreementFrom(purchase: Awaited<ReturnType<typeof sourceForPurchase>>, 
   const licenceType = normalizeBeatLicenseType(stringValue(snapshot.licenseType, purchase.licenseType)); const exclusive = licenceType === "exclusive";
   const artistName = stringValue(buyer.artistName, purchase.user.artistCards[0]?.artistName ?? purchase.user.name);
   const producerName = stringValue(producer.creditedName, purchase.beat.producerParty?.professionalName ?? purchase.beat.user.name);
-  const files = rights.includesStems ? "WAV and stem files" : rights.includesWav ? "WAV/master file" : "MP3 file";
+  const files = rights.includesStems ? (rights.includesWav ? "WAV and stem files" : "Stem files") : rights.includesWav ? "WAV/master file" : "MP3 file";
   const rightsRows = exclusive ? [
     { label: "Commercial use", value: yesNo(rights.commercialUse) }, { label: "Exclusive use", value: yesNo(rights.exclusiveUse) },
     { label: "Underlying copyright", value: rights.copyrightAssigned ? "Assigned under recorded terms" : "Retained by producer" },
@@ -74,20 +76,21 @@ function agreementFrom(purchase: Awaited<ReturnType<typeof sourceForPurchase>>, 
     { label: "Earlier licences", value: `${Number(snapshot.existingGeneralLicenses ?? 0)} remain valid` }
   ] : [
     { label: "Commercial use", value: yesNo(rights.commercialUse) }, { label: "Commercial releases", value: String(rights.maxCommercialReleases ?? 1) },
+    { label: "Audio streams", value: rights.streamingLimit == null ? "No numeric cap" : String(rights.streamingLimit) }, { label: "Music videos", value: rights.videoLimit == null ? "No numeric cap" : String(rights.videoLimit) }, { label: "Live performances", value: yesNo(rights.performanceRights) },
     { label: "Monetisation", value: yesNo(rights.monetizationAllowed) }, { label: "Content ID", value: stringValue(rights.contentIdPolicy, "NOT_ALLOWED").replaceAll("_", " ") },
     { label: "Producer credit", value: rights.creditRequired ? "Required" : "Not required" },
     { label: "Territory / term", value: `${stringValue(rights.territory, "Worldwide")} / ${rights.termDurationMonths ? `${rights.termDurationMonths} months` : "No fixed term"}` }, { label: "Files supplied", value: files }
   ];
   const rawPrice = snapshot.price; const price = typeof rawPrice === "number" || typeof rawPrice === "string" ? `${stringValue(snapshot.currency, "INR")} ${Number(rawPrice).toLocaleString("en-IN")}` : "Recorded in verified purchase";
   return { purchaseId: purchase.id, licenceNumber: `HYMN-BL-${String(purchase.id).padStart(7, "0")}`, version: stringValue(snapshot.version, purchase.licenseVersion ?? BEAT_LICENCE_VERSION), licenceType, licenceLabel: beatLicenseLabel(licenceType), exclusive,
-    beatTitle: stringValue(beat.title, purchase.beat.title), buyerLegalName: stringValue(buyer.legalName, purchase.user.name), artistName, buyerEmail: purchase.user.email,
+    beatTitle: stringValue(beat.title, purchase.beat.title), buyerLegalName: stringValue(buyer.legalName, purchase.user.name), artistName, buyerEmail: stringValue(buyer.email,purchase.user.email),
     producerName, producerLegalName: stringValue(producer.legalName) || null, purchasedAt: stringValue(snapshot.purchaseDate, purchase.purchasedAt.toISOString()), price,
-    rights: rightsRows, clauses: agreementClauses(exclusive, producerName, artistName), pdfUrl: purchase.licenseUrl ? `/api/beat-purchases/${purchase.id}/license` : null,
+    rights: rightsRows, clauses: Array.isArray(snapshot.clauses) ? snapshot.clauses as LicenceClause[] : agreementClauses(exclusive, producerName, artistName), pdfUrl: purchase.licenseUrl ? `/api/beat-purchases/${purchase.id}/license` : null,
     releaseId: purchase.releaseId, studioOrder: purchase.studioOrders[0] ? { publicId: purchase.studioOrders[0].publicId, status: purchase.studioOrders[0].status } : null };
 }
 
 export async function getBeatLicenceAgreement(purchaseId: number, actorId: number, isAdmin = false) {
-  const purchase = await sourceForPurchase(purchaseId); if (!isAdmin && purchase.userId !== actorId) throw new Error("Beat purchase not found.");
+  const purchase = await sourceForPurchase(purchaseId); if ((!isAdmin && purchase.userId !== actorId) || !purchase.hasAccess) throw new Error("Beat purchase not found.");
   const stored = record(purchase.licenseTermsSnapshot); const snapshot = Object.keys(stored).length ? stored : buildSnapshot(purchase, purchase.user.artistCards[0]?.artistName ?? purchase.user.name);
   return agreementFrom(purchase, snapshot);
 }
@@ -112,9 +115,19 @@ async function buildAgreementPdf(agreement: BeatLicenceAgreement) {
 }
 
 export async function generateBeatLicense(purchaseId: number, actorId: number, isAdmin = false, requestedArtistName?: string) {
+  if(!Number.isSafeInteger(purchaseId)||purchaseId<1||purchaseId>2147483647)throw new Error('Beat purchase not found.');
+  return prisma.$transaction(async tx=>{
+    // Serialise issuance across instances so competing artist-name requests
+    // cannot leave the saved snapshot different from the winning PDF.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(38419, ${purchaseId}::int)`;
+    return generateBeatLicenseLocked(purchaseId,actorId,isAdmin,requestedArtistName);
+  },{maxWait:5000,timeout:60000});
+}
+
+async function generateBeatLicenseLocked(purchaseId: number, actorId: number, isAdmin: boolean, requestedArtistName?: string) {
   const purchase = await sourceForPurchase(purchaseId); if (!isAdmin && purchase.userId !== actorId) throw new Error("Beat purchase not found."); if (!purchase.hasAccess) throw new Error("Licence access has been revoked.");
   if (purchase.licenseAsset && !purchase.licenseAsset.deletedAt) { const existingUrl = `/api/assets/${purchase.licenseAsset.id}/download?filename=${encodeURIComponent(purchase.licenseAsset.safeFilename)}`; if (purchase.licenseUrl !== existingUrl) await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { licenseUrl: existingUrl, licenseUploadedAt: purchase.licenseUploadedAt ?? new Date() } }); return { purchaseId: purchase.id, licenseUrl: existingUrl, agreementUrl: `/licenses/${purchase.id}` }; }
-  const artistName = requestedArtistName?.trim() || purchase.user.artistCards[0]?.artistName?.trim(); if (!artistName || artistName.length < 2 || artistName.length > 80) throw new Error("Add your artist name before generating this licence.");
+  const artistName = stringValue(record(record(purchase.licenseTermsSnapshot).buyer).artistName) || requestedArtistName?.trim() || purchase.user.artistCards[0]?.artistName?.trim(); if (!artistName || artistName.length < 2 || artistName.length > 80) throw new Error("Add your artist name before generating this licence.");
   if (!purchase.user.artistCards[0] && requestedArtistName?.trim()) await prisma.artistCard.createMany({ data: [{ userId: purchase.userId, artistName, isPrimary: true, role: "primary" }], skipDuplicates: true });
   const snapshot = buildSnapshot(purchase, artistName) as Prisma.InputJsonObject; await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { licenseVersion: stringValue(snapshot.version, BEAT_LICENCE_VERSION), licenseTermsSnapshot: snapshot } });
   const agreement = agreementFrom(purchase, snapshot); const bytes = await buildAgreementPdf(agreement); let asset;

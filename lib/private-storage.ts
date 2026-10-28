@@ -6,6 +6,7 @@ import { beatAssetRelativePath, finalRelativePath, localStorageProvider } from "
 import { CANONICAL_HOSTINGER_STORAGE_ROOT, managedStorageRoot } from "@/lib/hostinger-storage";
 import { verifyArtworkIntegrity, verifyAudioIntegrity } from "@/lib/media-integrity";
 import { normalizeUploadMime } from "@/lib/upload-mime";
+import {canDeliverBeatFile} from './beat-licence-terms';
 
 export type PrivateAssetType = "private_support_screenshot" | "private_team_attachment" | "private_audio_master" | "private_studio_source" | "private_studio_delivery" | "private_beat_deliverable" | "private_beat_license" | "private_cover_licence" | "private_ownership_proof" | "private_ai_receipt" | "private_royalty_statement" | "private_payout_report" | "private_payout_proof" | "private_kyc_document" | "private_unreleased_artwork";
 export type PrivateUploadInput = { ownerUserId: number; ownerName?: string; releaseId?: number; beatPurchaseId?: number; beatId?: number; beatTitle?: string; assetType: PrivateAssetType; fileName: string; mimeType: string; bytes: Buffer; retentionUntil?: Date };
@@ -198,8 +199,13 @@ export const localPrivateStorage: PrivateStorageAdapter = {
     }
     const asset = await prisma.storedAsset.findUnique({ where: { id: input.assetId }, include: { studioFile: { include: { order: { include: { engineerParty: { select: { claimedByUserId: true } } } } } } } });
     if (!asset || asset.deletedAt || (asset.retentionUntil && asset.retentionUntil <= new Date())) throw new Error("Asset is unavailable.");
+    if(!input.isAdmin&&asset.assetType==='private_beat_license'){
+      const entitlement=asset.beatPurchaseId?await prisma.beatPurchase.findFirst({where:{id:asset.beatPurchaseId,userId:input.requesterUserId,hasAccess:true},select:{id:true}}):null;
+      if(!entitlement)throw new Error('Forbidden.');
+    }
     if (!input.isAdmin && asset.ownerUserId !== input.requesterUserId) {
-      const purchased = asset.assetType === "private_beat_deliverable" && asset.beatId ? await prisma.beatPurchase.count({ where: { beatId: asset.beatId, userId: input.requesterUserId, hasAccess: true } }) : 0;
+      const purchases = asset.assetType === "private_beat_deliverable" && asset.beatId ? await prisma.beatPurchase.findMany({ where: { beatId: asset.beatId, userId: input.requesterUserId, hasAccess: true },select:{licenseType:true} }) : [];
+      const purchased=purchases.some(p=>canDeliverBeatFile(p.licenseType,asset.mimeType));
       const studioParticipant = asset.studioFile && (asset.studioFile.order.customerId === input.requesterUserId || asset.studioFile.order.engineerParty.claimedByUserId === input.requesterUserId);
       if (!purchased && !studioParticipant) throw new Error("Forbidden.");
     }

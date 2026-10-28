@@ -23,5 +23,5 @@ export function featuredProducerBeats(beats: StorefrontBeat[], sales: Map<number
     || (Date.parse(b.createdAt || "") || 0) - (Date.parse(a.createdAt || "") || 0) || b.id - a.id).slice(0, limit);
 }
 
-export type BioBeat = { id: number; title: string; bpm: number; genre: string; artwork: string; audio: string; mood?: string; keySignature?: string; price: number; generalPrice?: number; stemPrice?: number; exclusivePrice?: number };
+export type BioBeat = { id: number; title: string; bpm: number; genre: string; artwork: string; audio: string; mood?: string; keySignature?: string; price: number; availableLicenses?:Array<"mp3"|"wav"|"stems"|"exclusive">; generalPrice?: number; stemPrice?: number; exclusivePrice?: number };
 export type BioViewer = { name: string; email: string; avatarUrl?: string | null };

@@ -6,6 +6,7 @@ function load(file, mocks = {}, env = {}) {
   const output = ts.transpileModule(fs.readFileSync(file, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
   const context = { exports: {}, Buffer, console, process: { env }, require: name => {
     if (name === "server-only") return {};
+    if (name === "@/lib/customer-message") return load("lib/customer-message.ts");
     assert.ok(name in mocks, `Unexpected dependency ${name}`);
     return mocks[name];
   } };
@@ -56,6 +57,7 @@ async function main() {
   let purchase = { user: { email: "buyer@example.com" }, licenseType: "mp3", licenseAsset: { id: 1, byteSize: 3 }, beat: { deliverableAsset: { id: 2, byteSize: 4, mimeType: "audio/wav" } } };
   let reads = 0;
   const attachment = load("lib/email/purchase-attachments.ts", {
+    "../beat-licence-terms": load("lib/beat-licence-terms.ts"),
     "@/lib/prisma": { prisma: { beatPurchase: { findFirst: async query => { assert.equal(query.where.hasAccess, true); assert.equal(query.where.userId, 7); return purchase; } } } },
     "@/lib/private-storage": { localPrivateStorage: { createAuthorizedRead: async ({ assetId, requesterUserId, isAdmin }) => { assert.equal(requesterUserId, 7); assert.equal(isAdmin, false); reads++; return { bytes: Buffer.from("123"), fileName: String(assetId), mimeType: "application/octet-stream" }; } } }
   });

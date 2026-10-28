@@ -1,0 +1,9 @@
+import type { BeatUsage } from '@/lib/beat-licence-terms';
+
+export function BeatUsageFields({beat={}}:{beat?:BeatUsage}) {
+  return <fieldset className="mt-5 rounded-2xl border border-[var(--border)] p-4"><legend className="px-2 text-sm font-semibold">Non-exclusive usage terms</legend><input type="hidden" name="generalUsageConfigured" value="1"/><p className="mb-4 text-xs leading-5 text-[var(--text-muted)]">Applies to MP3, WAV and stems. Changes affect future purchases only. Blank limits mean no numeric cap; blank duration means no fixed term. Content ID is excluded.</p><div className="grid gap-4 sm:grid-cols-2">
+    {([['generalMaxCommercialReleases','New recordings',beat.generalMaxCommercialReleases??1],['generalStreamingLimit','Total audio streams',beat.generalStreamingLimit??''],['generalVideoLimit','Number of music videos',beat.generalVideoLimit??''],['generalTermDurationMonths','Duration in months',beat.generalTermDurationMonths??'']] as const).map(([name,label,value])=><label key={name} className="text-sm">{label}<input name={name} type="number" className="field mt-1" defaultValue={value} min={name==='generalVideoLimit'?0:1} max="2147483647" step="1" required={name==='generalMaxCommercialReleases'} placeholder="No fixed limit"/></label>)}
+    <label className="text-sm">Territory<input name="generalTerritory" className="field mt-1" maxLength={160} required defaultValue={beat.generalTerritory||'Worldwide'}/></label>
+    <div className="space-y-2 text-sm">{([['generalMonetizationAllowed','Allow monetisation'],['generalPerformanceRights','Allow live performances'],['generalCreditRequired','Require producer credit']] as const).map(([name,label])=><label key={name} className="flex items-center gap-2"><input name={name} type="checkbox" defaultChecked={beat[name]??true}/>{label}</label>)}</div>
+  </div></fieldset>;
+}

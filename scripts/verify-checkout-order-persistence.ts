@@ -21,6 +21,7 @@ async function main() {
     assert.equal(options.timeout, 20000, "Cloud DB latency must not use Prisma's five-second default");
     committed = false;
     const tx = {
+      user:{findUniqueOrThrow:async()=>({id:18,name:"Buyer",email:"buyer@example.test",artistCards:[]})},
       beat: {
         updateMany: async (query: any) => {
           if (query.data.status === "PUBLISHED") {
@@ -29,7 +30,7 @@ async function main() {
           }
           calls.push("reserve"); return { count: reserveCount };
         },
-        findMany: async () => [{ id: 5, status }]
+        findMany: async () => [{ id: 5, status,title:"Beat",user:{name:"Producer"},sampleDeclaration:"NO_UNCONTROLLED_SAMPLES",generalStreamingLimit:25000,generalVideoLimit:1,generalMaxCommercialReleases:1 }]
       },
       auditLog: { create: async () => { calls.push("audit"); } },
       checkoutOrder: { create: async (query: any) => {
@@ -37,6 +38,9 @@ async function main() {
         assert.deepEqual(query.select, { id: true });
         assert.equal(Number(query.data.finalAmount), 120);
         assert.equal(query.data.razorpayOrderId, "order_fixture");
+        assert.equal(query.data.items.create[0].licenseTermsSnapshot.version,'2026-10-29');
+        assert.ok(query.data.items.create[0].licenseTermsSnapshot.clauses.length>8);
+        if(query.data.items.create[0].licenseType!=='exclusive')assert.equal(query.data.items.create[0].licenseTermsSnapshot.rights.streamingLimit,25000);
         writes++; calls.push("write"); return { id: 42 };
       } }
     };

@@ -25,7 +25,7 @@ async function main() {
       await pg.createDatabase("payments_fixture");
       await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", "prisma/schema.prisma", "--skip-generate"]);
     }
-    for (const script of ["verify-payment-webhooks-integration", "verify-studio-services-integration"]) {
+    for (const script of (process.argv.includes("--webhooks-only") ? ["verify-payment-webhooks-integration"] : ["verify-payment-webhooks-integration", "verify-studio-services-integration"])) {
       await run(["--conditions=react-server", "--import", "tsx", `scripts/${script}.ts`]);
     }
     console.log("PASS isolated PostgreSQL payment audit; no production database, payment credentials or outgoing email used.");

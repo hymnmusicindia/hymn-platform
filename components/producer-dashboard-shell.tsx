@@ -2,6 +2,8 @@
 import { customerMessage } from "@/lib/customer-message";
 
 import { BeatEditMetadataFields } from "@/components/beat-metadata-fields";
+import { BeatUsageFields } from './beat-usage-fields';
+import { readBeatUsageForm } from '@/lib/beat-licence-terms';
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
 
 import Link from "next/link";
@@ -189,6 +191,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance,
     const targetBeat = editingBeat;
     const replacementArtwork = formData.get("artwork");
     const patch = {
+      ...readBeatUsageForm(formData),
       title: String(formData.get("title") || ""),
       bpm: Number(formData.get("bpm")),
       genre: String(formData.get("genre") || ""),
@@ -446,7 +449,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance,
                 <div><label className="text-sm font-medium mb-1 block" htmlFor="beat-mp3-price">MP3 Licence price (Rs)</label><input id="beat-mp3-price" name="price" type="number" min="0.01" step="0.01" defaultValue={editingBeat.price} required className="field" /></div>
                 <div><label className="text-sm font-medium mb-1 block">Stems Exclusive Licence price (Rs)</label><input name="exclusivePrice" type="number" min="0" step="0.01" defaultValue={editingBeat.exclusivePrice} required className="field" /></div>
               </div>
-              <div><label className="text-sm font-medium mb-1 block">Description</label><textarea name="description" defaultValue={editingBeat.description} className="field min-h-24" /></div>
+              <BeatUsageFields beat={editingBeat}/><div><label className="text-sm font-medium mb-1 block">Description</label><textarea name="description" defaultValue={editingBeat.description} className="field min-h-24" /></div>
               <label className="grid gap-2 text-sm"><span className="font-medium">Replace cover artwork <span style={{ color: "var(--text-soft)" }}>(optional)</span></span><input name="artwork" type="file" accept="image/jpeg,image/png,image/webp" className="field" /><span className="text-xs leading-5" style={{ color: "var(--text-soft)" }}>JPEG, PNG, or WebP up to 10 MB. After a successful replacement, the previous cover is permanently deleted from storage with no backup.</span></label>
               <div className="mt-4 flex justify-end gap-3">
                 <button type="button" onClick={() => setEditingBeat(null)} className="btn-outline pressable">Cancel</button>

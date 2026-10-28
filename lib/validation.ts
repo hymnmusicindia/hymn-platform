@@ -326,6 +326,14 @@ export const adminStatusSchema = z.object({
 });
 
 export const beatMutationSchema = z.object({
+  generalMaxCommercialReleases: z.coerce.number().int().min(1).max(2147483647).optional(),
+  generalStreamingLimit: z.coerce.number().int().min(1).max(2147483647).nullable().optional(),
+  generalVideoLimit: z.coerce.number().int().min(0).max(2147483647).nullable().optional(),
+  generalTermDurationMonths: z.coerce.number().int().min(1).max(1200).nullable().optional(),
+  generalTerritory: z.string().trim().min(1).max(160).optional(),
+  generalPerformanceRights: z.boolean().optional(),
+  generalMonetizationAllowed: z.boolean().optional(),
+  generalCreditRequired: z.boolean().optional(),
   title: z.string().min(2).optional(),
   bpm: z.coerce.number().int().positive().optional(),
   genre: z.string().min(2).optional(),

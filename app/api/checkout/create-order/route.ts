@@ -58,8 +58,8 @@ export async function POST(request: Request) {
         for (const item of order.items) {
           const purchase = await createBeatPurchase(order.userId, item.beatId, item.licenseType, order.razorpayPaymentId);
           const beat = purchase ? await prisma.beat.findUnique({ where: { id: item.beatId }, select: { title: true } }) : null;
-          if (purchase && beat) await sendBeatEmailEvent({ event: "beat_purchase_success", to: session.email, userId: session.sub, purchaseId: purchase.id, userName: session.name, beatTitle: beat.title, url: emailAppUrl("/dashboard?module=purchases") });
           if (purchase && !purchase.licenseUrl) await generateBeatLicense(purchase.id, order.userId).catch((error) => console.error("Beat license generation failed:", error));
+          if (purchase && beat) await sendBeatEmailEvent({ event: "beat_purchase_success", to: session.email, userId: session.sub, purchaseId: purchase.id, userName: session.name, beatTitle: beat.title, url: emailAppUrl("/dashboard?module=purchases") });
         }
         await createNotification({
           userId: order.userId,

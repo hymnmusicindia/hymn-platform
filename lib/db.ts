@@ -6,6 +6,7 @@ import { randomUUID } from "crypto";
 import mysql from "mysql2/promise";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { beatUsageKeys } from '@/lib/beat-licence-terms';
 import { persistCheckoutOrder } from "@/lib/checkout-order-persistence";
 import { ensureClaimedContributorParty } from "@/lib/contributor-identity";
 import {
@@ -565,12 +566,12 @@ function mapOrders(rows: OrderRow[]) {
 }
 
 type PrismaCheckoutOrderRow = Prisma.CheckoutOrderGetPayload<{
-  include: { user: true; items: { include: { beat: { include: { user: true; audio: true; producerParty: true } } } } };
+  include: { user: true; items: { include: { purchase:true; beat: { include: { user: true; audio: true; producerParty: true } } } } };
 }>;
 
 const checkoutOrderInclude = {
   user: true,
-  items: { include: { beat: { include: { user: true, audio: true, producerParty: true } } } }
+  items: { include: { purchase:true,beat: { include: { user: true, audio: true, producerParty: true } } } }
 } as const;
 
 function mapPrismaCheckoutOrder(row: PrismaCheckoutOrderRow): Order {
@@ -582,8 +583,8 @@ function mapPrismaCheckoutOrder(row: PrismaCheckoutOrderRow): Order {
     paymentStatus: row.paymentStatus as Order["paymentStatus"], createdAt: row.createdAt.toISOString(),
     items: row.items.map(item => ({
       beatId: item.beatId, beatTitle: item.beat.title, producerId: item.beat.userId, producerName: item.beat.user.name,
-      licenseType: item.licenseType as OrderItem["licenseType"], price: Number(item.price), licenseUrl: item.licenseUrl,
-      downloadUrl: item.beat.audio?.publicUrl?.startsWith("/api/assets/") ? item.beat.audio.publicUrl : null
+      licenseType: item.licenseType as OrderItem["licenseType"], price: Number(item.price), licenseUrl: item.purchase?.licenseUrl ? `/api/beat-purchases/${item.purchase.id}/license` : null,
+      downloadUrl: row.paymentStatus === "paid" && item.purchase?.hasAccess ? `/api/beat-purchases/${item.purchase.id}/download` : null
     }))
   };
 }
@@ -1253,7 +1254,7 @@ export async function listBeats() {
   if (usesPostgresPrisma()) {
     const prismaBeats = await prisma.beat.findMany({
       where: { enabled: true },
-      include: { user: true, audio: true, preview: true, artwork: true },
+      include: { user: true, audio: true, preview: true, artwork: true,deliverableAsset:true },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }]
     });
     return prismaBeats.map(mapPrismaBeat);
@@ -1276,7 +1277,7 @@ export async function listAllBeats(limit?: number): Promise<Beat[]> {
   if (usesPostgresPrisma()) {
     try {
       const prismaBeats = await prisma.beat.findMany({
-        include: { user: true, audio: true, preview: true, artwork: true },
+        include: { user: true, audio: true, preview: true, artwork: true,deliverableAsset:true },
         orderBy: { createdAt: 'desc' },
         ...(take ? { take } : {})
       });
@@ -1305,7 +1306,7 @@ export async function listBeatsByProducer(producerId: number): Promise<Beat[]> {
     try {
       const prismaBeats = await prisma.beat.findMany({
         where: { userId: producerId },
-        include: { user: true, audio: true, preview: true, artwork: true },
+        include: { user: true, audio: true, preview: true, artwork: true,deliverableAsset:true },
         orderBy: { createdAt: 'desc' }
       });
       return prismaBeats.map(mapPrismaBeat);
@@ -1386,13 +1387,14 @@ export async function createBeat(input: Omit<Beat, "id" | "createdAt" | "produce
           sampleDeclaration: input.sampleDeclaration ?? "NO_UNCONTROLLED_SAMPLES",
           sampleDisclosure: input.sampleDisclosure ?? null,
           sampleDeclaredAt: new Date(),
+          ...Object.fromEntries(beatUsageKeys.filter(key=>input[key]!==undefined).map(key=>[key,input[key]])),
           enabled: input.enabled ?? true,
           status: input.enabled ? "PUBLISHED" : "PENDING_REVIEW",
           audioUploadId,
           previewUploadId,
           artworkUploadId
         },
-        include: { user: true, audio: true, preview: true, artwork: true }
+        include: { user: true, audio: true, preview: true, artwork: true,deliverableAsset:true }
       });
       console.log("Prisma beat creation successful! Beat ID:", beat.id);
       return mapPrismaBeat(beat);
@@ -1451,15 +1453,16 @@ export async function attachBeatAssets(input: {
     const audio = await tx.upload.create({ data: { userId: input.producerId, kind: "AUDIO", storageKey: input.audio.storageKey, fileName: input.audio.fileName, mimeType: input.audio.mimeType, sizeBytes: input.audio.sizeBytes, checksum: input.audio.checksum || null, publicUrl: input.audio.url } });
     const preview = input.preview ? await tx.upload.create({ data: { userId: input.producerId, kind: "AUDIO", storageKey: input.preview.storageKey, fileName: input.preview.fileName, mimeType: input.preview.mimeType, sizeBytes: input.preview.sizeBytes, publicUrl: input.preview.url } }) : null;
     const artwork = input.artwork ? await tx.upload.create({ data: { userId: input.producerId, kind: "ARTWORK", storageKey: input.artwork.storageKey, fileName: input.artwork.fileName, mimeType: input.artwork.mimeType, sizeBytes: input.artwork.sizeBytes, publicUrl: input.artwork.url } }) : null;
-    const updated = await tx.beat.update({ where: { id: input.beatId }, data: { audioUploadId: audio.id, previewUploadId: preview?.id ?? null, artworkUploadId: artwork?.id ?? null }, include: { user: true, audio: true, preview: true, artwork: true } });
+    const updated = await tx.beat.update({ where: { id: input.beatId }, data: { audioUploadId: audio.id, previewUploadId: preview?.id ?? null, artworkUploadId: artwork?.id ?? null }, include: { user: true, audio: true, preview: true, artwork: true,deliverableAsset:true } });
     return mapPrismaBeat(updated);
   });
 }
 
-export async function updateBeat(id: number, input: Partial<Pick<Beat, "title" | "bpm" | "genre" | "mood" | "price" | "generalPrice" | "stemPrice" | "exclusivePrice" | "description" | "subgenre" | "tags" | "sampleDeclaration" | "sampleDisclosure" | "fileUrl" | "artworkUrl" | "enabled" | "keySignature">>) {
+export async function updateBeat(id: number, input: Partial<Pick<Beat, "title" | "bpm" | "genre" | "mood" | "price" | "generalPrice" | "stemPrice" | "exclusivePrice" | "description" | "subgenre" | "tags" | "sampleDeclaration" | "sampleDisclosure" | "fileUrl" | "artworkUrl" | "enabled" | "keySignature" | typeof beatUsageKeys[number]>>) {
   if (usesPostgresPrisma()) {
     try {
       const data: any = {};
+      for (const key of beatUsageKeys) if(input[key]!==undefined)data[key]=input[key];
       if (input.title !== undefined) data.title = input.title;
       if (input.bpm !== undefined) data.bpm = input.bpm;
       if (input.genre !== undefined) data.genre = input.genre;
@@ -1479,7 +1482,7 @@ export async function updateBeat(id: number, input: Partial<Pick<Beat, "title" |
       const updated = await prisma.beat.update({
         where: { id },
         data,
-        include: { user: true, audio: true, preview: true, artwork: true }
+        include: { user: true, audio: true, preview: true, artwork: true,deliverableAsset:true }
       });
       return mapPrismaBeat(updated);
     } catch (err) {
@@ -1927,9 +1930,10 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
           rights: { commercialUse: true, maxCommercialReleases: item.beat.generalMaxCommercialReleases, streamingLimit: item.beat.generalStreamingLimit, videoLimit: item.beat.generalVideoLimit, performanceRights: item.beat.generalPerformanceRights, monetizationAllowed: item.beat.generalMonetizationAllowed, creditRequired: item.beat.generalCreditRequired, contentIdPolicy: "NOT_ALLOWED", territory: item.beat.generalTerritory, termDurationMonths: item.beat.generalTermDurationMonths, includesMp3: normalizedLicenseType === "mp3", includesWav: normalizedLicenseType === "wav", includesStems: normalizedLicenseType === "stems" },
           restrictions: { nonExclusive: true, samplesSubjectToProducerDisclosure: true }
         };
+        const frozenSnapshot = item.licenseTermsSnapshot && typeof item.licenseTermsSnapshot === 'object' && !Array.isArray(item.licenseTermsSnapshot) ? item.licenseTermsSnapshot as Record<string, any> : licenceSnapshot;
         await tx.beatPurchase.upsert({
           where: { checkoutOrderItemId: item.id },
-          create: { userId: order.userId, beatId: item.beatId, producerPartyId: item.beat.producerPartyId, licenseType: normalizedLicenseType, paymentId, checkoutOrderItemId: item.id, hasAccess: true, licenseVersion: "2026-09-05", licenseTermsSnapshot: licenceSnapshot },
+          create: { userId: order.userId, beatId: item.beatId, producerPartyId: item.beat.producerPartyId, licenseType: normalizedLicenseType, paymentId, checkoutOrderItemId: item.id, hasAccess: true, licenseVersion: String(frozenSnapshot.version), licenseTermsSnapshot: frozenSnapshot },
           update: { paymentId, producerPartyId: item.beat.producerPartyId, hasAccess: true }
         });
         const existingSale = await tx.beatSale.findUnique({ where: { orderId_beatId_licenseType: { orderId: order.id, beatId: item.beatId, licenseType: normalizedLicenseType } } });
@@ -3654,7 +3658,7 @@ export async function createBeatPurchase(userId: number, beatId: number, license
 export async function getBeatPurchasesByUser(userId: number) {
   if (usesPostgresPrisma()) {
     const [purchases, artistCard] = await Promise.all([
-      prisma.beatPurchase.findMany({ where: { userId, hasAccess: true }, orderBy: { purchasedAt: "desc" } }),
+      prisma.beatPurchase.findMany({ where: { userId, hasAccess: true }, orderBy: { purchasedAt: "desc" }, include:{beat:{select:{title:true}}} }),
       prisma.artistCard.findFirst({ where: { userId, archivedAt: null }, orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }], select: { artistName: true } })
     ]);
     
@@ -3662,6 +3666,7 @@ export async function getBeatPurchasesByUser(userId: number) {
       id: p.id,
       userId: p.userId,
       beatId: p.beatId,
+      beatTitle:p.beat.title,downloadUrl:`/api/beat-purchases/${p.id}/download`,
       licenseType: p.licenseType as any,
       purchasedAt: p.purchasedAt.toISOString(),
       licenseUploadedAt: p.licenseUploadedAt?.toISOString() || undefined,
@@ -3763,6 +3768,7 @@ export function mapPrismaBeat(prismaBeat: any): Beat {
     tags: Array.isArray(prismaBeat.tags) ? prismaBeat.tags : [],
     sampleDeclaration: prismaBeat.sampleDeclaration,
     sampleDisclosure: prismaBeat.sampleDisclosure,
+    availableLicenses: prismaBeat.deliverableAsset && !prismaBeat.deliverableAsset.deletedAt ? (prismaBeat.deliverableAsset.mimeType === 'audio/mpeg' ? ['mp3'] : ['audio/wav','audio/x-wav','audio/flac'].includes(prismaBeat.deliverableAsset.mimeType) ? ['wav'] : prismaBeat.deliverableAsset.mimeType === 'application/zip' ? ['stems','exclusive'] : []) : [],
     generalMaxCommercialReleases: prismaBeat.generalMaxCommercialReleases,
     generalStreamingLimit: prismaBeat.generalStreamingLimit,
     generalVideoLimit: prismaBeat.generalVideoLimit,

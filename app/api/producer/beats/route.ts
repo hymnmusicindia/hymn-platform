@@ -14,6 +14,7 @@ import { beatMutationSchema } from "@/lib/validation";
 import { autoPublishProducerBeat } from '@/lib/beat-publication';
 import { normalizeBeatKey, normalizeBeatMoods } from '@/lib/beat-metadata';
 
+import { readBeatUsageForm } from '@/lib/beat-licence-terms';
 function normalizedAudioMime(file: File) {
   const extension = file.name.toLowerCase().split(".").pop();
   if (extension === "mp3" && ["", "audio/mp3", "audio/mpeg"].includes(file.type)) return "audio/mpeg";
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
     const setup = producerSetup(profile, []);
     if (!setup.storefrontReady) return NextResponse.json({ error: setup.restricted ? "Your producer account needs review. Contact HYMN support." : "Complete your storefront name, profile image and cover before uploading your first beat.", href: "/producer/dashboard?tab=profile" }, { status: setup.restricted ? 403 : 409 });
     const formData = await request.formData();
+    const usage = beatMutationSchema.parse(readBeatUsageForm(formData));
     const title = String(formData.get("title") || "").trim();
     const bpm = Number(formData.get("bpm"));
     const genre = String(formData.get("genre") || "").trim();
@@ -83,6 +85,7 @@ export async function POST(request: Request) {
 
     const beatDraft = await createBeat({
       producerId: result.user.id,
+      ...usage,
       title,
       bpm,
       genre,

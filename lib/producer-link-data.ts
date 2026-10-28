@@ -17,7 +17,7 @@ export const getProducerLinkData = cache(async (slug: string) => {
       id: beat.id, title: beat.title, bpm: beat.bpm, genre: beat.genre,
       artwork: beat.coverImage, audio: beat.previewUrl || beat.fileUrl,
       mood: beat.mood, keySignature: beat.keySignature, price: beat.price,
-      generalPrice: beat.generalPrice, stemPrice: beat.stemPrice, exclusivePrice: beat.exclusivePrice
+      availableLicenses:beat.availableLicenses,generalPrice: beat.generalPrice, stemPrice: beat.stemPrice, exclusivePrice: beat.exclusivePrice
     }))
   };
 });

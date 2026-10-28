@@ -14,7 +14,7 @@ type CheckoutItem =
 
 type CheckoutQuote = {
   productId: string;
-  lineItems: Array<{ productId: string; label: string; description: string; quantity: number; unitPrice: number; total: number }>;
+  lineItems: Array<{ usageTerms?:Array<{label:string;value:string}>; licenceClauses?:Array<{title:string;body:string}>; productId: string; label: string; description: string; quantity: number; unitPrice: number; total: number }>;
   originalPrice: number;
   couponCode: string | null;
   couponDiscount: number;
@@ -235,6 +235,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
                   </div>
                   <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>{formatMoney(item.total)}</p>
                 </div>
+                {item.usageTerms?<details className="mt-4 border-t border-[var(--border)] pt-3 text-sm"><summary className="cursor-pointer font-semibold">Licence terms for this purchase</summary><dl className="mt-3 grid grid-cols-2 gap-3">{item.usageTerms.map(row=><div key={row.label}><dt className="text-xs text-[var(--text-muted)]">{row.label}</dt><dd className="font-semibold">{row.value}</dd></div>)}</dl><ol className="mt-4 space-y-3">{item.licenceClauses?.map(clause=><li key={clause.title}><strong>{clause.title}</strong><p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{clause.body}</p></li>)}</ol></details>:null}
               </article>
             ))}
             {loading ? <p className="text-sm" style={{ color: "var(--text-muted)" }}>Refreshing checkout...</p> : null}
