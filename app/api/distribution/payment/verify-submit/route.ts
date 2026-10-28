@@ -288,7 +288,12 @@ export async function POST(request: Request) {
 
     const submissionSiteUrl = getPublicAppUrl(request.url);
     after(async () => {
-      try { if (await runPendingDistributionQc(release.id, submissionSiteUrl)) await submitRelease(release.id, { siteUrl: submissionSiteUrl }); }
+      try {
+        if (await runPendingDistributionQc(release.id, submissionSiteUrl)) {
+          const checked = await getDetailedReleaseById(release.id);
+          await submitRelease(release.id, { siteUrl: submissionSiteUrl, automaticQcRevision: String((checked?.metadata?.autoQc as {revision?:string}|undefined)?.revision || "missing") });
+        }
+      }
       catch (error) { console.error("Background submission QC deferred to scheduled recovery", { releaseId: release.id, error }); }
     });
     after(async () => {

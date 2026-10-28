@@ -1,13 +1,18 @@
 "use client";
 import {displayDateTime} from "@/lib/display-date-time";
 import { useAdminReleaseFeed } from "./use-admin-release-feed";
+import { DistributionReleaseCatalogue as AdminReleaseCatalogue } from "./distribution-release-catalogue";
+import { DistributionReviewQueue } from "./distribution-review-queue";
+import { DistributionOperationsHeader } from "./distribution-operations-header";
+import { DistributionAutomationInsight } from "./distribution-automation-insight";
+import { newestReleaseFirst } from "@/lib/distribution-workspace";
 
 import dynamic from "next/dynamic";
 import Link from 'next/link';
 import { WorkspacePanel as SurfaceSection, WorkspaceMetric as StatCard } from "@/components/workspace-panel";
 import { BeatSampleReview } from '@/components/beat-sample-review';
 import { AdminCenteredDialog } from "./admin-centered-dialog";
-import { AdminCatalogGrid, ProducerStorefrontPreview } from "./admin-catalog-grid";
+import { ProducerStorefrontPreview } from "./admin-catalog-grid";
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import { AdminSubscriptionRevenue } from "@/components/admin-subscription-revenue";
 const AdminRevenueWorkspace = dynamic(() => import("@/components/admin-revenue-workspace").then(m => m.AdminRevenueWorkspace), { loading: () => <p role="status">Loading workspace...</p> });
@@ -43,69 +48,7 @@ import type { AdminStoreStatus, ArtistProfile, Beat, DistributionOrder, Notifica
 type PersistedAdminTask = { id: number; type: string; priority: string; title: string; body: string; href: string; status: string; createdAt: string; entityType?: string; entityId?: string | number };
 const REVIEW_QUEUE_STATUSES = ["submitted", "resubmitted", "in_queue", "in_qc_queue", "under_review", "changes_requested", "approved", "failed"] as const;
 const DELIVERY_FAILED_STATUSES = ["delivery_failed"] as const;
-const CATALOG_STATUSES = ["queued_for_distribution", "submitting_to_distributor", "sent", "sent_to_distributor", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered", "live"] as const;
-
-function AdminReleaseCatalogue({ releases, search, onSearch, assignment, onAssignment, status, onStatus, onOpen }: { releases: Release[]; search: string; onSearch: (value: string) => void; assignment: string; onAssignment: (value: string) => void; status: string; onStatus: (value: string) => void; onOpen: (id: number) => void }) {
-  const rows = releases.filter((release) => {
-    const searchable = [release.releaseTitle, release.trackName, release.artistName, release.ownerEmail, release.upcCode, ...(release.tracks ?? []).map((track) => track.isrc)].filter(Boolean).join(" ").toLowerCase();
-    return (!search.trim() || searchable.includes(search.trim().toLowerCase()))
-      && (assignment === "all" || (assignment === "assigned" ? Boolean(release.ownerUserId || release.releaseSource !== "ADMIN_MANUAL") : !release.ownerUserId && release.releaseSource === "ADMIN_MANUAL"))
-      && (status === "all" || effectiveReleaseStatus(release.status, release.direNoteStatus) === status);
-  });
-  const statuses = Array.from(new Set(releases.map((release) => effectiveReleaseStatus(release.status, release.direNoteStatus)))).sort();
-  return <section>
-    <div className="grid gap-3 sm:grid-cols-[minmax(16rem,1fr),auto,auto]">
-      <label className="sr-only" htmlFor="admin-release-catalogue-search">Search releases</label>
-      <input id="admin-release-catalogue-search" type="search" className="field" placeholder="Search release, artist, user, UPC, ISRC" value={search} onChange={(event) => onSearch(event.target.value)} />
-      <select className="field" aria-label="Filter by assignment" value={assignment} onChange={(event) => onAssignment(event.target.value)}><option value="all">All assignments</option><option value="assigned">Assigned</option><option value="unassigned">Unassigned manual</option></select>
-      <select className="field" aria-label="Filter by status" value={status} onChange={(event) => onStatus(event.target.value)}><option value="all">All statuses</option>{statuses.map((value) => <option key={value} value={value}>{adminReleaseStatusLabel(value as Release["status"]).replace(/_/g, " ")}</option>)}</select>
-    </div>
-    <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>{rows.length} {rows.length === 1 ? "release" : "releases"}</p>
-    <div className="mt-4">
-      <div className="grid gap-3 xl:hidden">
-        {rows.map((release) => <article key={release.id} className="min-w-0 rounded-xl border p-3" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-          <div className="flex min-w-0 items-start gap-3">
-            {release.artworkUrl ? <img src={artworkPreviewUrl(release.artworkUrl, 120)} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" /> : <div className="h-12 w-12 shrink-0 rounded-lg border" style={{ borderColor: "var(--border)", background: "var(--bg)" }} />}
-            <div className="min-w-0 flex-1">
-              <p className="break-words text-sm font-semibold leading-5">{release.releaseTitle || release.trackName}</p>
-              <p className="mt-0.5 break-words text-xs" style={{ color: "var(--text-muted)" }}>{release.artistName || "Artist unavailable"}</p>
-              <p className="mt-0.5 break-all text-[11px]" style={{ color: "var(--text-soft)" }}>{release.ownerEmail || "Unassigned"}</p>
-            </div>
-          </div>
-          <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-2 border-t pt-2" style={{ borderColor: "var(--border)" }}>
-            <StatusPill label={adminReleaseStatusLabel(release.status, release.direNoteStatus)} />
-            <button type="button" className="btn-secondary pressable shrink-0 px-3 py-1.5 text-xs" onClick={() => onOpen(release.id)}>Inspect</button>
-          </div>
-          <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]" style={{ color: "var(--text-muted)" }}>
-            <div className="min-w-0"><dt>UPC</dt><dd className="break-all font-mono">{release.upcCode || "—"}</dd></div>
-            <div><dt>Tracks</dt><dd>{release.tracks?.length ?? 0}</dd></div>
-            <div><dt>Release date</dt><dd>{release.releaseDate ? new Date(release.releaseDate).toLocaleDateString("en-IN") : "—"}</dd></div>
-            <div><dt>Updated</dt><dd>{release.lastEditedAt ? new Date(release.lastEditedAt).toLocaleDateString("en-IN") : new Date(release.createdAt).toLocaleDateString("en-IN")}</dd></div>
-          </dl>
-        </article>)}
-      </div>
-      <div className="hidden overflow-x-auto xl:block">
-        <table className="w-full table-fixed text-left text-xs">
-          <colgroup><col className="w-[6%]" /><col className="w-[15%]" /><col className="w-[12%]" /><col className="w-[17%]" /><col className="w-[12%]" /><col className="w-[6%]" /><col className="w-[14%]" /><col className="w-[8%]" /><col className="w-[7%]" /><col className="w-[7%]" /></colgroup>
-          <thead><tr>{["Artwork", "Release", "Artist", "Assigned user", "UPC", "Tracks", "Status", "Release date", "Updated", "Actions"].map((label) => <th key={label} className="border-b px-2 py-2 text-[10px] font-semibold leading-tight xl:px-2.5 xl:text-[11px]" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>{label}</th>)}</tr></thead>
-          <tbody>{rows.map((release) => <tr key={release.id} onClick={() => onOpen(release.id)} className="cursor-pointer transition-colors hover:bg-[var(--bg-soft)]">
-            <td className="border-b px-2 py-2" style={{ borderColor: "var(--border)" }}>{release.artworkUrl ? <img src={artworkPreviewUrl(release.artworkUrl, 120)} alt="" className="h-9 w-9 rounded-md object-cover" /> : <div className="h-9 w-9 rounded-md border" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} />}</td>
-            <td className="break-words border-b px-2 py-2 font-medium leading-tight" style={{ borderColor: "var(--border)" }}>{release.releaseTitle || release.trackName}</td>
-            <td className="break-words border-b px-2 py-2 leading-tight" style={{ borderColor: "var(--border)" }}>{release.artistName || "—"}</td>
-            <td className="break-all border-b px-2 py-2 text-[11px] leading-tight" style={{ borderColor: "var(--border)" }}>{release.ownerEmail || "Unassigned"}</td>
-            <td className="break-all border-b px-2 py-2 font-mono text-[10px] leading-tight" style={{ borderColor: "var(--border)" }}>{release.upcCode || "—"}</td>
-            <td className="border-b px-2 py-2" style={{ borderColor: "var(--border)" }}>{release.tracks?.length ?? 0}</td>
-            <td className="border-b px-2 py-2" style={{ borderColor: "var(--border)" }}><div className="max-w-full [&>span]:max-w-full [&>span]:break-words"><StatusPill label={adminReleaseStatusLabel(release.status, release.direNoteStatus)} /></div></td>
-            <td className="border-b px-2 py-2 text-[10px] leading-tight" style={{ borderColor: "var(--border)" }}>{release.releaseDate ? new Date(release.releaseDate).toLocaleDateString("en-IN") : "—"}</td>
-            <td className="border-b px-2 py-2 text-[10px] leading-tight" style={{ borderColor: "var(--border)" }}>{release.lastEditedAt ? new Date(release.lastEditedAt).toLocaleDateString("en-IN") : new Date(release.createdAt).toLocaleDateString("en-IN")}</td>
-            <td className="border-b px-2 py-2" style={{ borderColor: "var(--border)" }}><button type="button" className="btn-secondary pressable whitespace-nowrap px-2 py-1.5 text-[10px]" onClick={(event) => { event.stopPropagation(); onOpen(release.id); }}>Inspect</button></td>
-          </tr>)}</tbody>
-        </table>
-      </div>
-      {!rows.length ? <p className="py-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>No releases match these filters.</p> : null}
-    </div>
-  </section>;
-}
+const CATALOG_STATUSES = ["approved", "distributor_processing", "queued_for_distribution", "submitting_to_distributor", "sent", "sent_to_distributor", "scheduled", "processing", "awaiting_live_confirmation", "partially_live", "delivered", "live"] as const;
 
 function AdminIdentifierEditor({ release, canEdit, onSaved }: { release: Release; canEdit: boolean; onSaved: (upc: string | null, tracks: Array<{ id: number; isrc: string | null }>) => void }) {
   const [history, setHistory] = useState<Array<{ id: number; identifierType: string; previousValue: string | null; canonicalValue: string; source: string; reason: string | null; createdAt: string; track: { title: string; trackNumber: number | null } | null }>>([]);
@@ -649,6 +592,7 @@ export function AdminControlCenter({
 }) {
   const hasPermission = (permission: AdminPermissionKey) => adminAccess.permissions.includes(permission);
   const defaultReleaseTab: AdminTab = hasPermission("releases.read") ? "releases" : hasPermission("releases.review") ? "distribution-queue" : "delivery-failed";
+  const [catalogCollection,setCatalogCollection]=useState(initialTab === "delivery"?"delivery":"submitted");
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab === "releases" ? defaultReleaseTab : initialTab ?? "overview");
   const routeTab = useSearchParams().get("tab");
   useEffect(() => {
@@ -656,8 +600,8 @@ export function AdminControlCenter({
     const next = internal && routeTab && adminModuleAllowed(routeTab, adminAccess.permissions) ? routeTab as AdminTab : initialTab || "overview";
     setActiveTab(next === "producers" ? "operations" : next === "releases" ? defaultReleaseTab : next);
   }, [routeTab, initialTab, defaultReleaseTab, adminAccess.permissions]);
-  const isReleaseWorkspace = ["releases", "distribution-queue", "delivery-failed"].includes(activeTab);
-  const { releases, setReleases, refresh: refreshReleaseFeed, refreshing: releasesRefreshing, error: releaseFeedError } = useAdminReleaseFeed(initialReleases, adminAccess.permissions.some(permission => ["releases.read", "releases.review", "distribution.retry", "distribution.submit"].includes(permission)));
+  const isReleaseWorkspace = ["releases", "distribution-queue", "delivery-failed", "delivery"].includes(activeTab);
+  const { releases, setReleases, refresh: refreshReleaseFeed, refreshing: releasesRefreshing, error: releaseFeedError, arrivals: releaseArrivals, dismissArrivals: dismissReleaseArrivals, updatedAt: releaseFeedUpdatedAt } = useAdminReleaseFeed(initialReleases, adminAccess.permissions.some(permission => ["releases.read", "releases.review", "distribution.retry", "distribution.submit"].includes(permission)));
   const [beats, setBeats] = useState(initialBeats);
   const [orders] = useState(initialOrders);
   const [users, setUsers] = useState(initialUsers);
@@ -872,7 +816,7 @@ export function AdminControlCenter({
         ? DELIVERY_FAILED_STATUSES.includes(operationalStatus as typeof DELIVERY_FAILED_STATUSES[number])
         : true;
     return belongsToModule && (!query || searchable.includes(query)) && (queueStatus === "all" || operationalStatus === queueStatus) && (queueType === "all" || release.releaseType === queueType);
-  }), [activeTab, moduleSearch, queueStatus, queueType, releases]);
+  }).sort(newestReleaseFirst), [activeTab, moduleSearch, queueStatus, queueType, releases]);
   const catalogReleases = useMemo(() => releases.filter(release => activeTab !== "delivery" || CATALOG_STATUSES.includes(effectiveReleaseStatus(release.status, release.direNoteStatus) as typeof CATALOG_STATUSES[number])), [releases,activeTab]);
   const selectedCatalogRelease = catalogReleases.find((release) => release.id === selectedReleaseId) ?? catalogReleases[0] ?? null;
   const notificationCountsByType = useMemo(() => {
@@ -996,7 +940,7 @@ export function AdminControlCenter({
     setActiveTab(tab);
     setQueueStatus("all");
     setQueueType("all");
-    if (tab === "delivery") setCatalogTab("distribution");
+    if (tab === "delivery") {setCatalogTab("distribution");setCatalogCollection("delivery");}
     if (!(isReleaseWorkspace && ["releases", "distribution-queue", "delivery-failed"].includes(tab))) setModuleSearch("");
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
@@ -1264,24 +1208,16 @@ export function AdminControlCenter({
       searchPlaceholder={isReleaseWorkspace ? "Search releases..." : `Search ${activeTab.replace(/-/g, " ")}...`}
       quickActions={
         <>
-          {adminModuleAllowed("releases",adminAccess.permissions)?<button type="button" onClick={() => selectAdminTab("releases")} className="btn-outline pressable px-4 py-2 text-sm">Browse releases</button>:null}
-          {adminModuleAllowed("earnings-entry",adminAccess.permissions)?<button type="button" onClick={() => selectAdminTab("earnings-entry")} className="btn-primary pressable px-4 py-2 text-sm">Enter Earnings</button>:null}
-          {adminModuleAllowed("royalties",adminAccess.permissions)?<button type="button" onClick={() => selectAdminTab("royalties")} className="btn-outline pressable px-4 py-2 text-sm">Manage Payouts</button>:null}
+          {!isReleaseWorkspace && adminModuleAllowed("releases",adminAccess.permissions)?<button type="button" onClick={() => selectAdminTab("releases")} className="btn-outline pressable px-4 py-2 text-sm">Browse releases</button>:null}
+          {!isReleaseWorkspace && adminModuleAllowed("earnings-entry",adminAccess.permissions)?<button type="button" onClick={() => selectAdminTab("earnings-entry")} className="btn-primary pressable px-4 py-2 text-sm">Enter Earnings</button>:null}
+          {!isReleaseWorkspace && adminModuleAllowed("royalties",adminAccess.permissions)?<button type="button" onClick={() => selectAdminTab("royalties")} className="btn-outline pressable px-4 py-2 text-sm">Manage Payouts</button>:null}
         </>
       }
     >
       <AdminActivityAndLogs currentPage={activeTab} visible={activeTab === "activity"} />
       <div className="admin-role-strip flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}><div><span style={{ color: "var(--text-muted)" }}>Signed in as </span><strong>{currentAdmin.name}</strong><span style={{ color: "var(--text-muted)" }}> · Admin role: </span><strong className="capitalize">{adminAccess.role.replace(/_/g, " ")}</strong></div><span className="status-pill">{adminAccess.permissions.length} permissions</span></div>
       {feedback ? <div role="status" className="flex items-start justify-between gap-4 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text)" }}><p className="leading-6">{feedback}</p><button type="button" onClick={() => setFeedback(null)} className="pressable shrink-0 rounded-lg p-1" aria-label="Dismiss message"><X className="h-4 w-4" /></button></div> : null}
-      {isReleaseWorkspace ? <nav className="flex flex-wrap items-center gap-2" aria-label="Release workspace views">
-        {([
-          { key: "releases", label: "All releases", permission: "releases.read", count: releases.length },
-          { key: "distribution-queue", label: "QC queue", permission: "releases.review", count: releases.filter(release => effectiveReleaseStatus(release.status, release.direNoteStatus) !== "changes_requested" && REVIEW_QUEUE_STATUSES.includes(effectiveReleaseStatus(release.status, release.direNoteStatus) as typeof REVIEW_QUEUE_STATUSES[number])).length },
-          { key: "delivery-failed", label: "Delivery failed", permission: "distribution.retry", count: releases.filter(release => DELIVERY_FAILED_STATUSES.includes(effectiveReleaseStatus(release.status, release.direNoteStatus) as typeof DELIVERY_FAILED_STATUSES[number])).length },
-        ] as const).filter(view => hasPermission(view.permission)).map(view => <button key={view.key} type="button" onClick={() => selectAdminTab(view.key)} aria-pressed={activeTab === view.key} className="inline-flex min-h-11 items-center gap-3 rounded-full border px-4 py-2 text-sm font-semibold transition-colors" style={{ borderColor: activeTab === view.key ? "var(--text)" : "var(--border)", background: activeTab === view.key ? "var(--text)" : "transparent", color: activeTab === view.key ? "var(--bg)" : "var(--text-muted)" }}>{view.label}<span className="text-xs tabular-nums opacity-75">{view.count}</span></button>)}
-      </nav> : null}
-
-      {isReleaseWorkspace ? <div className="flex flex-wrap items-center justify-between gap-3 text-xs" role="status"><p style={{color:releaseFeedError?"var(--warning)":"var(--text-muted)"}}>{releaseFeedError || "Release updates refresh automatically."}</p><button type="button" className="btn-outline px-3 py-2" disabled={releasesRefreshing} onClick={()=>void refreshReleaseFeed()}>{releasesRefreshing?"Refreshing...":"Refresh releases"}</button></div> : null}
+      {isReleaseWorkspace && <DistributionOperationsHeader releases={releases} active={activeTab} navigate={(view,collection)=>{if(view==="releases"){setCatalogCollection(collection||"submitted");setCatalogStatus("all");setModuleSearch("");}selectAdminTab(view as AdminTab);}} can={hasPermission} refresh={()=>void refreshReleaseFeed(true)} refreshing={releasesRefreshing} error={releaseFeedError} arrivals={releaseArrivals} dismissArrivals={dismissReleaseArrivals} updatedAt={releaseFeedUpdatedAt}/>}
       {activeTab === "overview" ? (
         <div className={overviewStyles.root}>
           <AdminCommandOverview releases={releases} queues={operationalQueues.filter(q => adminModuleAllowed(q.tab, adminAccess.permissions))} permissions={adminAccess.permissions} beats={pendingBeatReviews} support={openSupportTickets} producers={pendingProducerApplications} revenue={formatMoney(revenueSummary.receipts)} navigate={tab => selectAdminTab(tab as AdminTab)} />
@@ -1351,13 +1287,13 @@ export function AdminControlCenter({
 
       {activeTab === "releases" || activeTab === "delivery" ? (
         <div className="workspace-module-layout">
-          <SurfaceSection title={activeTab === "delivery" ? "Distributor Delivery" : "All releases"} description={activeTab === "delivery" ? "Track distribution processing, delivery state, store availability, and live confirmation." : "Every release, from submission to live."}>
-            {activeTab === "releases" ? <AdminReleaseCatalogue releases={catalogReleases} search={moduleSearch} onSearch={setModuleSearch} assignment={catalogAssignment} onAssignment={setCatalogAssignment} status={catalogStatus} onStatus={setCatalogStatus} onOpen={id=>{setSelectedReleaseId(id);setCatalogTab("overview");setCatalogOpen(true);}} /> : <AdminCatalogGrid search={moduleSearch} onSearch={setModuleSearch} releases={catalogReleases} onSelect={id=>{setSelectedReleaseId(id);setCatalogTab("distribution");setCatalogOpen(true);}}/>}
+          <SurfaceSection title={activeTab === "delivery" ? "Distributor Delivery" : "All releases"} description={activeTab === "delivery" ? "Track distribution processing, delivery state, store availability, and live confirmation." : "Newest submissions first. Drafts, corrections and delivery have their own collections."}>
+            <AdminReleaseCatalogue collection={catalogCollection} onCollection={setCatalogCollection} releases={catalogReleases} search={moduleSearch} onSearch={setModuleSearch} assignment={catalogAssignment} onAssignment={setCatalogAssignment} status={catalogStatus} onStatus={setCatalogStatus} onOpen={id=>{setSelectedReleaseId(id);setCatalogTab(activeTab==="delivery"?"distribution":"overview");setCatalogOpen(true);}} />
 
           </SurfaceSection>
           {catalogOpen && <AdminCenteredDialog title={activeTab === "delivery" ? "Delivery Details" : "Catalog Details"} onClose={()=>setCatalogOpen(false)}>
           <SurfaceSection title={activeTab === "delivery" ? "Delivery Details" : "Catalog Details"} description="Distribution state, identifiers, stores, links, and reporting for the selected release.">
-            {selectedCatalogRelease ? <div className="grid gap-5">
+            {selectedCatalogRelease ? <div className="grid gap-5"><DistributionAutomationInsight release={selectedCatalogRelease}/>
               <div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="text-2xl font-semibold">{selectedCatalogRelease.releaseTitle || selectedCatalogRelease.trackName}</h3><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>{selectedCatalogRelease.artistName} · {selectedCatalogRelease.releaseType.toUpperCase()} · Release {selectedCatalogRelease.releaseDate || "—"}</p></div><StatusPill label={adminReleaseStatusLabel(selectedCatalogRelease.status, selectedCatalogRelease.direNoteStatus)} active /></div>
               <nav className="flex gap-1 overflow-x-auto rounded-2xl border p-1.5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} aria-label="Catalog sections">{(["overview", "tracks", "distribution", "identifiers", "stores", "promolink", "earnings", "activity"] as const).map((tab) => <button key={tab} type="button" onClick={() => setCatalogTab(tab)} className={catalogTab === tab ? "btn-primary pressable shrink-0 px-3 py-2 text-xs capitalize" : "pressable shrink-0 rounded-full px-3 py-2 text-xs font-semibold capitalize"} style={catalogTab === tab ? undefined : { color: "var(--text-muted)" }}>{tab === "identifiers" ? "UPC / ISRC" : tab}</button>)}</nav>
               {catalogTab === "overview" ? <div className="grid gap-5"><div className="grid gap-5 rounded-2xl border p-5 sm:grid-cols-[10rem,1fr]" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>{selectedCatalogRelease.artworkUrl ? <img src={artworkPreviewUrl(selectedCatalogRelease.artworkUrl, 320)} alt={selectedCatalogRelease.releaseTitle} className="aspect-square w-full rounded-2xl object-cover" /> : <div className="aspect-square rounded-2xl border border-dashed" style={{ borderColor: "var(--border)" }} />}<div className="grid content-start gap-3 sm:grid-cols-2">{[["Title", selectedCatalogRelease.releaseTitle], ["Artist", selectedCatalogRelease.artistName], ["Label", selectedCatalogRelease.labelName || selectedCatalogRelease.labelDisplayName], ["Language", selectedCatalogRelease.language], ["Genre", [selectedCatalogRelease.primaryGenre, selectedCatalogRelease.secondaryGenre].filter(Boolean).join(" / ")], ["Release type", selectedCatalogRelease.releaseType], ["UPC", selectedCatalogRelease.upcCode || "Pending"], ["Current stage", adminReleaseStatusLabel(selectedCatalogRelease.status, selectedCatalogRelease.direNoteStatus)], ["Release date", selectedCatalogRelease.releaseDate], ["Submitted", selectedCatalogRelease.submittedAt ? new Date(selectedCatalogRelease.submittedAt).toLocaleString("en-IN") : "—"]].map(([label, value]) => <div key={String(label)}><p className="text-xs font-semibold uppercase tracking-[0.1em]" style={{ color: "var(--text-soft)" }}>{label}</p><p className="mt-1 text-sm font-semibold">{value || "—"}</p></div>)}</div></div><div className="grid gap-2"><p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-soft)" }}>Tracks and ISRCs</p>{(selectedCatalogRelease.tracks ?? []).map(track => <div key={track.id} className="summary-card"><span><strong>{track.trackNumber}. {track.trackTitle}</strong><br /><small>{track.primaryArtist}</small></span><strong className="font-mono text-xs">{track.isrc || "ISRC pending"}</strong></div>)}</div></div> : null}
@@ -1387,26 +1323,13 @@ export function AdminControlCenter({
                 </div>
                 <p className="text-xs" style={{ color: "var(--text-muted)" }}>{queueReleases.length} matching submissions</p>
               </div>
-              {queueReleases.map((release) => {
-                const assetReady = Boolean(release.artworkUrl && (release.tracks ?? []).length && (release.tracks ?? []).every((track) => track.audioUrl));
-                const autoQc = (release.metadata as Record<string, any> | null | undefined)?.autoQc as { status?: string; issueCount?: number } | undefined;
-                return <button key={release.id} type="button" onClick={() => { setSelectedReleaseId(release.id); setReviewTab("overview"); }} className="surface-list-item pressable p-4 text-left" style={selectedRelease?.id === release.id ? { borderColor: "var(--accent)", background: "var(--accent-soft)" } : undefined}>
-                  <div className="flex gap-3">
-                    {release.artworkUrl ? <img src={artworkPreviewUrl(release.artworkUrl, 320)} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" /> : <div className="h-16 w-16 shrink-0 rounded-xl border border-dashed" style={{ borderColor: "var(--border)" }} />}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold" style={{ color: "var(--text)" }}>{release.releaseTitle || release.trackName}</p><div className="mt-1 flex flex-wrap items-center gap-2"><p className="truncate text-sm" style={{ color: "var(--text-soft)" }}>{release.artistName} · {release.tracks?.length ?? 0} track{release.tracks?.length === 1 ? "" : "s"} · {release.releaseType.toUpperCase()}</p><AccountStatusBadge status={users.find((user) => user.id === release.userId)?.status} /></div></div><StatusPill label={adminReleaseStatusLabel(release.status, release.direNoteStatus)} active /></div>
-                      <div className="mt-3 grid gap-1 text-xs sm:grid-cols-2" style={{ color: "var(--text-muted)" }}><span>Submitted {release.submittedAt ? new Date(release.submittedAt).toLocaleDateString("en-IN") : "Not submitted"}</span><span>Release {release.releaseDate ? new Date(release.releaseDate).toLocaleDateString("en-IN") : "—"}</span><span>Payment {release.paymentStatus === "paid" ? "Verified" : release.paymentStatus ?? "Pending"}</span><span style={{ color: assetReady ? "var(--success)" : "var(--danger)" }}>Distribution {assetReady ? "Ready to check" : "Issues found"}</span>{autoQc?.status === "passed" ? <span className="font-semibold" style={{ color: "var(--success)" }}>Auto QC passed</span> : autoQc?.status === "issues_found" ? <span className="font-semibold" style={{ color: "var(--danger)" }}>Auto QC paused · {autoQc.issueCount ?? 0} issue{autoQc.issueCount === 1 ? "" : "s"}</span> : null}</div>
-                    </div>
-                  </div>
-                </button>;
-              })}
-              {queueReleases.length === 0 ? <EmptyState copy={activeTab === "delivery-failed" ? "No releases currently need delivery-failure review." : "No submissions match these filters. Submitted releases will appear here for review."} /> : null}
+              <DistributionReviewQueue releases={queueReleases} selectedId={selectedRelease?.id} onSelect={id=>{setSelectedReleaseId(id);setReviewTab("overview");}}/>
             </div>
           </SurfaceSection>
 
           <SurfaceSection title={activeTab === "delivery-failed" ? "Failed Delivery Review" : "Selected Release Review"} description={activeTab === "delivery-failed" ? "Inspect the failure history before returning this release to the QC workflow." : "Inspect metadata, files, rights, readiness, and the complete activity record."}>
             {selectedRelease ? (
-              <div className="grid gap-5">
+              <div className="grid gap-5"><DistributionAutomationInsight release={selectedRelease}/>
                 <div className="flex flex-wrap items-start justify-between gap-4"><div><h3 className="text-2xl font-semibold" style={{ color: "var(--text)" }}>{selectedRelease.releaseTitle || selectedRelease.trackName}</h3><div className="mt-2 flex flex-wrap items-center gap-2"><p className="text-sm" style={{ color: "var(--text-muted)" }}>{selectedRelease.releaseType.toUpperCase()} · {selectedRelease.tracks?.length ?? 0} track{selectedRelease.tracks?.length === 1 ? "" : "s"} · {selectedRelease.artistName}</p><AccountStatusBadge status={users.find((user) => user.id === selectedRelease.userId)?.status} /></div><p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>Submitted {selectedRelease.submittedAt ? new Date(selectedRelease.submittedAt).toLocaleString("en-IN") : "—"} · Release {selectedRelease.releaseDate || "—"} · {selectedRelease.ownerEmail || "Account email unavailable"}</p></div><StatusPill label={adminReleaseStatusLabel(selectedRelease.status, selectedRelease.direNoteStatus)} active /></div>
                 <nav className="flex gap-1 overflow-x-auto rounded-2xl border p-1.5" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }} aria-label="Release review sections">{(["overview", "metadata", "tracks", "assets", "rights", "direnote", "activity"] as const).map((tab) => <button key={tab} type="button" onClick={() => setReviewTab(tab)} className={reviewTab === tab ? "btn-primary pressable shrink-0 px-3 py-2 text-xs capitalize" : "pressable shrink-0 rounded-full px-3 py-2 text-xs font-semibold capitalize"} style={reviewTab === tab ? undefined : { color: "var(--text-muted)" }}>{tab === "assets" ? "Artwork & Audio" : tab === "direnote" ? "Distribution readiness" : tab}</button>)}</nav>
                 {(selectedRelease.metadata?.correctionReview as {status?:string}|undefined)?.status === "pending" ? <ReleaseCorrectionNotice release={selectedRelease} review={() => { setReviewTab("rights"); requestAnimationFrame(() => { const panel = document.getElementById("release-rights-evidence"); panel?.focus({ preventScroll:true }); panel?.scrollIntoView({ behavior:"smooth", block:"start" }); }); }}/> : null}

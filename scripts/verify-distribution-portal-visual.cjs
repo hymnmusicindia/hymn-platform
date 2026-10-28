@@ -26,21 +26,21 @@ const {chromium, expect} = require('@playwright/test');
     const search=page.getByRole('searchbox',{name:'Search title, artist, UPC or ISRC'});
     await expect(search).toBeVisible();
     if(width>=1024){await expect(page.locator('.release-catalogue-desktop-filters')).toBeVisible();await expect(page.locator('.release-library-panel > details')).toBeHidden();}
-    await expect(page.getByRole('button',{name:'Grid view'})).toHaveAttribute('aria-pressed','true');
+    await expect(page.getByRole('button',{name:'List view'})).toHaveAttribute('aria-pressed','true');
     await search.fill('nonexistent release');
     await expect(page.getByRole('heading',{name:'No releases match your search'})).toBeVisible();
     await page.getByRole('button',{name:'Clear search and filters'}).click();
     await expect(search).toHaveValue('');
     await expect(page.getByRole('heading',{name:'No releases match your search'})).toHaveCount(0);
-    await page.getByRole('button',{name:'List view'}).click();
-    await expect(page.getByRole('button',{name:'List view'})).toHaveAttribute('aria-pressed','true');
+    await page.getByRole('button',{name:'Grid view'}).click();
+    await expect(page.getByRole('button',{name:'Grid view'})).toHaveAttribute('aria-pressed','true');
     await search.fill('another missing release');
     await expect(page.getByRole('heading',{name:'No releases match your search'})).toBeVisible();
     await page.getByRole('button',{name:'Clear search and filters'}).click();
     await expect(page.getByRole('heading',{name:'No releases match your search'})).toHaveCount(0);
    }else{
     await expect(page.getByRole('tablist',{name:'Release sections'})).toBeVisible();
-    if(mode==='pending-manage'){await expect(page.getByRole('status',{name:'Amendment status'})).toContainText('Amendment under review');await page.getByRole('button',{name:'Track amendment',exact:true}).click();await expect(page.getByRole('heading',{name:'Request history',exact:true})).toBeVisible();await expect(page.getByText('Restored original master',{exact:false})).toBeVisible();}else{await page.getByRole('button',{name:'Amend release',exact:true}).click();if(await page.evaluate(()=>window.lastPushedUrl)!=='/distribution/start?amend=991')throw Error('Amendment did not open the pre-filled wizard');}
+    if(mode==='pending-manage'){await expect(page.getByRole('status',{name:'Amendment status'})).toContainText('Amendment under review');await page.getByRole('button',{name:'Track amendment',exact:true}).click();await expect(page.getByRole('heading',{name:'Request history',exact:true})).toBeVisible();await expect(page.getByText('Restored original master',{exact:false})).toBeVisible();}else{await page.getByRole('button',{name:'Amend release',exact:true}).click();await expect(page.getByRole('heading',{name:'Correct your live release',exact:true})).toBeVisible();await expect(page.getByLabel('Correction',{exact:true})).toBeVisible();}
     const fits=await page.getByRole('tablist').evaluate(list=>list.scrollWidth<=list.clientWidth+1);
     if(width>=768&&!fits)throw Error('Desktop section navigation does not fit one row');
     await expect(page.getByPlaceholder('Search workspace...')).toBeHidden();

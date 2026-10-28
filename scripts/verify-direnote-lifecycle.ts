@@ -16,6 +16,10 @@ import { assertDireNoteSchemaReady } from "../lib/direnote-schema-readiness";
 import { validateReleaseForDireNote } from "../lib/direnote-readiness";
 import { readTrackLanguage } from "../lib/track-language";
 import { startCheckoutMock, verifySubmissionCheckout } from "./verify-submission-checkout";
+import sharp from 'sharp';
+import { createHash } from 'node:crypto';
+import { localPrivateStorage } from '../lib/private-storage';
+import { artistIdentityFingerprint, cardIdentity } from '../lib/release-artist-verification';
 
 assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/fixture:fixture@127\.0\.0\.1:55439\/direnote_virtual/);
 let mode = "pending";
@@ -146,6 +150,7 @@ async function main() {
   mode = "remark";
   for (let cycle = 0; cycle < 10; cycle++) {
     await prisma.release.update({ where: { id: release.id }, data: { direNoteLastAttemptedAt: new Date(0) } });
+    await prisma.distributionSubmissionAttempt.update({where:{id:firstAttempt.id},data:{lastCheckedAt:new Date(0)}});
     await prisma.direNoteLog.updateMany({ where: { releaseId: release.id, action: { in: ["release_information", "upc_lookup"] } }, data: { createdAt: new Date(0) } });
     const result = await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));
     assert.equal((await result.json()).checked, 1);
@@ -326,11 +331,23 @@ async function main() {
       assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: derived.id } })).status, "SENT_TO_DISTRIBUTOR");
     }
   }
-  await prisma.release.update({ where: { id: single.id }, data: { metadata: { ...(single.metadata as object), autoQc: { status: "pending", checkedAt: new Date().toISOString() } } } });
+  // Automatic delivery now requires actual protected source files and the
+  // artist snapshot established when the customer submitted this package.
+  const privateJpeg=await sharp({create:{width:3000,height:3000,channels:3,background:'#25364a'}}).jpeg().toBuffer();
+  const privateWav=Buffer.alloc(44+44100*4);privateWav.write('RIFF');privateWav.writeUInt32LE(privateWav.length-8,4);privateWav.write('WAVEfmt ',8);privateWav.writeUInt32LE(16,16);privateWav.writeUInt16LE(1,20);privateWav.writeUInt16LE(2,22);privateWav.writeUInt32LE(44100,24);privateWav.writeUInt32LE(176400,28);privateWav.writeUInt16LE(4,32);privateWav.writeUInt16LE(16,34);privateWav.write('data',36);privateWav.writeUInt32LE(privateWav.length-44,40);
+  const privateArt=await localPrivateStorage.upload({ownerUserId:user.id,releaseId:single.id,assetType:'private_unreleased_artwork',fileName:'auto-qc.jpg',mimeType:'image/jpeg',bytes:privateJpeg});
+  const privateAudio=await localPrivateStorage.upload({ownerUserId:user.id,releaseId:single.id,assetType:'private_audio_master',fileName:'auto-qc.wav',mimeType:'audio/wav',bytes:privateWav});
+  const submittedCard=await prisma.artistCard.findUniqueOrThrow({where:{id:artist.id}});
+  await prisma.releaseArtistIdentity.create({data:{releaseId:single.id,artistCardId:artist.id,...cardIdentity(submittedCard),providerArtistId:submittedCard.direNoteArtistId,sourceFingerprint:artistIdentityFingerprint(submittedCard),selectionHash:createHash('sha256').update(JSON.stringify([artist.id])).digest('hex'),confirmedBy:user.id,confirmedAt:new Date()}});
+  await prisma.track.updateMany({where:{releaseId:single.id},data:{audioUrl:privateAudio.downloadPath}});
+  await prisma.release.update({ where: { id: single.id }, data: { artworkUrl:privateArt.downloadPath,metadata: { ...(single.metadata as object), autoQc: { status: "pending", checkedAt: new Date().toISOString() } } } });
   const beforeAutoQc = ingests;
+  const localAppOrigin=process.env.NEXT_PUBLIC_APP_URL;
+  process.env.NEXT_PUBLIC_APP_URL='https://hymn.fixture';
   const autoQcCycle = await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));
+  process.env.NEXT_PUBLIC_APP_URL=localAppOrigin;
   const autoQcSummary = await autoQcCycle.json();
-  assert.equal(autoQcSummary.autoQcResults?.some((item: { releaseId: number; outcome: string }) => item.releaseId === single.id && item.outcome === "submitted"), true, JSON.stringify(autoQcSummary.autoQcResults));
+  assert.equal(autoQcSummary.autoQcResults?.some((item: { releaseId: number; outcome: string }) => item.releaseId === single.id && item.outcome === "submitted"), true, JSON.stringify({results:autoQcSummary.autoQcResults,qc:(await prisma.release.findUniqueOrThrow({where:{id:single.id}})).metadata}));
   assert.equal(ingests, beforeAutoQc + 1, "Passed Auto QC must hand the release to DireNote exactly once.");
   await submitRelease(single.id);
   assert.equal(ingests, beforeAutoQc + 1, "Auto QC recovery and manual replay must share the provider attempt.");
@@ -339,6 +356,7 @@ async function main() {
   const unrelated = await prisma.artistCard.create({ data: { userId: user.id, artistName: "Unattached Artist" } });
   const pollArtist = async () => {
     await prisma.release.update({ where: { id: release.id }, data: { direNoteLastAttemptedAt: new Date(0), status: "DISTRIBUTOR_PROCESSING" } });
+    await prisma.distributionSubmissionAttempt.updateMany({where:{releaseId:release.id,isCurrent:true},data:{lastCheckedAt:new Date(0)}});
     await prisma.direNoteLog.updateMany({ where: { releaseId: release.id }, data: { createdAt: new Date(0) } });
     const response = await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));
     assert.equal((await response.json()).checked, 1);
@@ -383,7 +401,7 @@ async function main() {
   await syncDireNoteRelease(release.id);
   assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: release.id } })).status, "DISTRIBUTOR_PROCESSING", "Historical track approval without an approved schedule remains provider processing.");
   assert.equal(((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: current.id } })).corrections as any).status, "closed");
-  await prisma.distributionSubmissionAttempt.update({ where: { id: current.id }, data: { isCurrent: false } });
+  await prisma.distributionSubmissionAttempt.update({ where: { id: current.id }, data: { isCurrent: false,lastCheckedAt:new Date(0) } });
   const repaired = await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));
   assert.equal((await repaired.json()).checked, 1, "Cron must recover a missing current flag from accepted evidence.");
   assert.equal((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: current.id } })).isCurrent, true);

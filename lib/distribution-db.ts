@@ -14,7 +14,7 @@ import { saveReleaseTracks } from "@/lib/release-track-save";
 import { syncReleaseContributions, releaseSaveTransactionOptions } from "@/lib/release-contributor-sync";
 import { amendmentChanges } from './release-amendment-presentation';
 
-async function withAmendmentStatus(releases: Release[]): Promise<Release[]> {
+export async function withAmendmentStatus(releases: Release[]): Promise<Release[]> {
   if (!releases.length || !isPostgresPrisma()) return releases;
   const requests = await prisma.releaseChangeRequest.findMany({ where: { releaseId: { in: releases.map(item => item.id) }, requestType: { in: ['metadata_update', 'asset_update'] } }, orderBy: { id: 'desc' }, select: { id: true, releaseId: true, status: true, submittedAt: true, updatedAt: true, requestedChanges: true } });
   return releases.map(release => {
@@ -85,6 +85,7 @@ export function deserializeRelease(dbData: any): Release {
   return {
     ...metadata,
     id: dbData.id,
+    recordVersion: Number(dbData.version ?? 0),
     userId: dbData.userId,
     ownerUserId: dbData.ownerUserId ?? null,
     releaseSource: dbData.releaseSource ?? "CUSTOMER_SUBMISSION",

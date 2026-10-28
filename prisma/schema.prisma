@@ -379,6 +379,7 @@ model Release {
   @@index([releaseSource, archivedAt, createdAt])
   @@index([artistProfileId])
   @@index([status, createdAt])
+  @@index([updatedAt, id])
   @@index([distributorReleaseId])
   @@index([upc])
   @@map("releases")

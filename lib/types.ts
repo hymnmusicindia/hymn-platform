@@ -280,6 +280,7 @@ export interface Release {
   metadata?: Record<string, unknown> | null;
   draftCompletionPercent?: number;
   draftVersion?: string | null;
+  recordVersion?: number;
   lastEditedAt?: string | null;
   missingFields?: string[];
   distributionStores?: UserStoreStatus[];

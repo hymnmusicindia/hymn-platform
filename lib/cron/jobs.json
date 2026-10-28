@@ -38,7 +38,7 @@
     "id": "team-performance",
     "method": "GET",
     "seconds": 60,
-      "purpose": "21:00 IST consolidated next-day plans, weekly performance reports and their email outboxes",
+    "purpose": "21:00 IST consolidated next-day plans, weekly performance reports and their email outboxes",
     "flag": "TEAM_AUTOMATION_ENABLED"
   },
   {
@@ -174,5 +174,12 @@
     "method": "GET",
     "seconds": 60,
     "purpose": "Send reviewed support solutions and missed-call rescheduling emails"
+  },
+  {
+    "id": "distribution-automation",
+    "method": "GET",
+    "seconds": 60,
+    "purpose": "Revision-bound automatic QC, safe technical corrections and guarded distribution delivery",
+    "flag": "DISTRIBUTION_AUTOMATION_ENABLED"
   }
 ]

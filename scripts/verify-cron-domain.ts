@@ -16,7 +16,7 @@ async function main() {
     assert(workflows.includes(job.id), `${job.id} needs an independent fallback`);
     assert(vercel.crons.some((row: { path: string }) => row.path === `/api/cron/${job.id}`));
     const source = readFileSync(`app/api/cron/${job.id}/route.ts`, "utf8");
-    assert(source.includes(`cronHandler("${job.id}"`), `${job.id} must use durable run guards`);
+    assert(new RegExp(`cronHandler\\(\\s*["']${job.id}["']`).test(source), `${job.id} must use durable run guards`);
   }
   for (const entry of readdirSync("app/api/cron", { withFileTypes: true }).filter(entry => entry.isDirectory())) {
     const source = readFileSync(`app/api/cron/${entry.name}/route.ts`, "utf8");
@@ -32,7 +32,8 @@ async function main() {
   await assert.rejects(() => runCronJobs(["unknown"], { secret: "fixture", fetcher }), /allowlist/);
   assert.equal(calls, 0);
   assert.equal((await runCronJobs(["health"], { secret: "fixture", fetcher }))[0].healthy, false);
-  let transientCalls = 0, delays: number[] = [];
+  let transientCalls = 0;
+  const delays: number[] = [];
   const recovered = await runCronJobs(["health"], { secret: "fixture", attempts: 3, delay: async ms => { delays.push(ms); }, fetcher: async () => {
     transientCalls++;
     return transientCalls === 1 ? Response.json({ error: "temporary" }, { status: 503 }) : Response.json({ healthy: true });

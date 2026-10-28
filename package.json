@@ -6,6 +6,8 @@
     "node": ">=20.19.0"
   },
   "scripts": {
+    "test:distribution-automation": "node --conditions=react-server --import tsx scripts/verify-distribution-automation-policy.ts && node --import tsx scripts/verify-acquisition-isolated.ts --distribution-automation-only",
+    "test:distribution-operations": "node scripts/verify-distribution-operations-browser.cjs && node scripts/verify-distribution-admin-browser.cjs && node scripts/verify-admin-release-feed.cjs && node scripts/verify-admin-release-delta-feed.cjs",
     "test:navigation-sections": "tsx scripts/verify-navigation-sections.ts && node scripts/verify-navigation-sections-browser.cjs",
     "test:customer-experience": "tsx scripts/verify-customer-experience-isolated.ts --features",
     "test:staff-qc": "tsx scripts/verify-acquisition-isolated.ts --staff-qc-only",

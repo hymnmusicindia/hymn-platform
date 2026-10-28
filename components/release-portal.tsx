@@ -1,4 +1,5 @@
 "use client";
+import { newestReleaseFirst } from "@/lib/distribution-workspace";
 import {displayDateTime} from "@/lib/display-date-time";
 
 
@@ -22,7 +23,6 @@ import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import {
   getReleasePortalAction,
   getReleasePortalDateLabel,
-  getReleasePortalSortKey,
   getReleasePortalStage,
   getReleasePortalStageLabel,
   getReleasePortalTrackCount,
@@ -347,10 +347,7 @@ export function ReleaseManage({ release, initialTab }: { release: Release; initi
 export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel = null, initialTab = null, initialView = null }: { releases: Release[]; selectedReleaseId?: number | null; initialPanel?: string | null; initialTab?: string | null; initialView?: string | null }) {
   const sortedReleases = useMemo(
     () => [...releases].sort((left, right) => {
-      const leftKey = getReleasePortalSortKey(left);
-      const rightKey = getReleasePortalSortKey(right);
-      if (leftKey.rank !== rightKey.rank) return rightKey.rank - leftKey.rank;
-      return rightKey.timestamp - leftKey.timestamp;
+      return newestReleaseFirst(left,right);
     }),
     [releases]
   );
@@ -361,15 +358,25 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
   );
 
   const [search, setSearch] = useState("");
+  const [collection,setCollection] = useState<"releases"|"drafts">("releases");
+  const router = useRouter();
+  const [refreshing,startRefresh] = useTransition();
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [artistFilter, setArtistFilter] = useState("all");
   const [releaseTypeFilter, setReleaseTypeFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState<"all" | "upcoming" | "past" | "undated">("all");
-  const [sortOrder, setSortOrder] = useState<"pipeline" | "newest" | "oldest" | "title">("pipeline");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [sortOrder, setSortOrder] = useState<"pipeline" | "newest" | "oldest" | "title">("newest");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const selectedRelease = useMemo(() => sortedReleases.find((release) => release.id === selectedReleaseId) ?? null, [selectedReleaseId, sortedReleases]);
+  useEffect(()=>{
+    if(selectedReleaseId)return;
+    const refresh=()=>{if(document.visibilityState!=="hidden")startRefresh(()=>router.refresh());};
+    const timer=window.setInterval(refresh,30000);
+    window.addEventListener("focus",refresh);
+    return ()=>{window.clearInterval(timer);window.removeEventListener("focus",refresh);};
+  },[selectedReleaseId,router]);
   const selectedReleaseStatus = selectedRelease ? effectiveReleaseStatus(selectedRelease.status, selectedRelease.direNoteStatus) : null;
 
   useEffect(() => {
@@ -379,7 +386,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [debouncedSearch, statusFilter, artistFilter, releaseTypeFilter, dateFilter, sortOrder]);
+  }, [debouncedSearch, statusFilter, artistFilter, releaseTypeFilter, dateFilter, sortOrder, collection]);
 
   useEffect(() => {
     if (!selectedRelease) return;
@@ -409,7 +416,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
         || (dateFilter === "undated" && !releaseDate)
         || (dateFilter === "upcoming" && Boolean(releaseDate && releaseDate >= today))
         || (dateFilter === "past" && Boolean(releaseDate && releaseDate < today));
-      return matchesSearch && matchesStatus && matchesArtist && matchesReleaseType && matchesDate;
+      return (collection === "drafts" ? stage === "draft" : stage !== "draft") && matchesSearch && matchesStatus && matchesArtist && matchesReleaseType && matchesDate;
     });
     if (sortOrder === "pipeline") return matching;
     return [...matching].sort((left, right) => {
@@ -418,7 +425,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
       const rightTime = new Date(right.createdAt).getTime();
       return sortOrder === "oldest" ? leftTime - rightTime : rightTime - leftTime;
     });
-  }, [artistFilter, dateFilter, debouncedSearch, releaseTypeFilter, sortOrder, sortedReleases, statusFilter]);
+  }, [artistFilter, dateFilter, debouncedSearch, releaseTypeFilter, sortOrder, sortedReleases, statusFilter, collection]);
 
   const visibleReleases = filteredReleases.slice(0, visibleCount);
   const draftRelease = sortedReleases.find((release) => isReleaseUnfinished(release));
@@ -456,10 +463,10 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
 
   if (selectedRelease && initialPanel !== "redressal") return <ReleaseManage release={selectedRelease} initialTab={initialTab} />;
 
-  const hasActiveFilters = Boolean(search.trim()) || statusFilter !== "all" || dateFilter !== "all" || releaseTypeFilter !== "all" || artistFilter !== "all" || sortOrder !== "pipeline";
+  const hasActiveFilters = Boolean(search.trim()) || statusFilter !== "all" || dateFilter !== "all" || releaseTypeFilter !== "all" || artistFilter !== "all" || sortOrder !== "newest";
   function resetCatalogueFilters() {
     setSearch(""); setStatusFilter("all"); setDateFilter("all");
-    setReleaseTypeFilter("all"); setArtistFilter("all"); setSortOrder("pipeline");
+    setReleaseTypeFilter("all"); setArtistFilter("all"); setSortOrder("newest");
   }
 
   const filtersGrid = (
@@ -469,7 +476,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
           <CircleDot aria-hidden="true" className="h-3.5 w-3.5" />
           Status
         </span>
-        <select className="field" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
+        <select className="field" value={statusFilter} onChange={(event) => {setStatusFilter(event.target.value as StatusFilter);setCollection(event.target.value === "draft" ? "drafts" : "releases");}}>
           {STATUS_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
@@ -548,6 +555,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
 
   return (
     <div className={`${catalogueStyles.catalogue} release-portal-page grid gap-6 xl:gap-8`}>
+      <div className={catalogueStyles.collectionBar}><nav aria-label="Your release collections"><button type="button" aria-pressed={collection==="releases"} onClick={()=>{setCollection("releases");setStatusFilter("all");}}>Releases <b>{releases.filter(release=>getReleasePortalStage(release)!=="draft").length}</b></button><button type="button" aria-pressed={collection==="drafts"} onClick={()=>{setCollection("drafts");setStatusFilter("all");}}>Drafts <b>{stats.draft}</b></button></nav><button type="button" disabled={refreshing} onClick={()=>startRefresh(()=>router.refresh())}><RotateCcw size={14}/>{refreshing?"Refreshing...":"Refresh releases"}</button></div>
       {draftRelease ? (
         <section className={catalogueStyles.draft} aria-label="Continue your draft">
           <div className={catalogueStyles.draftArtwork}>

@@ -21,11 +21,17 @@ async function main() {
   // Build the pre-feature schema from the base revision, then apply the
   // acquisition SQL migration exactly as production would. Using HEAD here
   // includes the feature models and makes the migration create duplicate tables.
-  writeFileSync(oldSchema, execFileSync("git", ["show", "83ca6fe86ccb00ed78c9c080413e93284a682e7d:prisma/schema.prisma"], { encoding: "utf8", windowsHide: true }));
+  if(!process.argv.includes('--distribution-automation-only'))writeFileSync(oldSchema, execFileSync("git", ["show", "83ca6fe86ccb00ed78c9c080413e93284a682e7d:prisma/schema.prisma"], { encoding: "utf8", windowsHide: true }));
   const pg = new EmbeddedPostgres({ databaseDir, port, user: "fixture", password: "fixture", persistent: true, initdbFlags: ["--encoding=UTF8", "--locale=C"], postgresFlags: ["-h", "127.0.0.1"] });
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("acquisition_fixture");
+    if (process.argv.includes('--distribution-automation-only')) {
+      await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
+      await run(['--conditions=react-server','scripts/verify-distribution-automation.cjs'],process.execPath,{...env,HYMN_STORAGE_ROOT:path.join(fixture,'storage'),PRIVATE_STORAGE_ROOT:path.join(fixture,'storage'),JWT_SECRET:'automation-fixture-secret-not-for-production',APP_URL:'https://hymn.fixture'});
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-release-support-corrections.ts'],process.execPath,{...env,HYMN_STORAGE_ROOT:path.join(fixture,'storage'),PRIVATE_STORAGE_ROOT:path.join(fixture,'storage')});
+      return;
+    }
     if (process.argv.includes('--team-call-plan-only')) {
       await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
       await run(['--conditions=react-server','--import','tsx','scripts/verify-team-call-plan.ts']);

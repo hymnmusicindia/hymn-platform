@@ -69,9 +69,9 @@ async function runJob(request: Request) {
       if (attemptState === "submitted" || attemptState === "reconciliation_required" || attemptState === "processing" || attemptState === "failed") continue;
       if (candidate.status === "QUEUED_FOR_DISTRIBUTION" && attemptState !== "retryable") continue;
       try {
+        if(!await runPendingDistributionQc(candidate.id, getPublicAppUrl(request.url))) continue;
         const qcRelease = await prisma.release.findUnique({ where: { id: candidate.id }, select: { metadata: true } });
-        if ((qcRelease?.metadata as { autoQc?: { status?: string } } | null)?.autoQc?.status === "pending" && !await runPendingDistributionQc(candidate.id, getPublicAppUrl(request.url))) continue;
-        const result = await submitRelease(candidate.id, { siteUrl: getPublicAppUrl(request.url), retry: attemptState === "retryable" });
+        const result = await submitRelease(candidate.id, { siteUrl: getPublicAppUrl(request.url), retry: attemptState === "retryable", automaticQcRevision: String((qcRelease?.metadata as {autoQc?:{revision?:string}}|null)?.autoQc?.revision || "missing") });
         autoQcResults.push({ releaseId: candidate.id, outcome: result.submitted ? "submitted" : "inProgress" in result && result.inProgress ? "in_progress" : result.retryable ? "retryable" : "failed" });
       } catch (error) {
         console.error("Auto QC DireNote recovery failed", { releaseId: candidate.id, error });

@@ -1,3 +1,4 @@
+.collectionBar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.collectionBar nav{display:flex;gap:6px}.collectionBar button{display:inline-flex;align-items:center;gap:8px;min-height:42px;padding:9px 13px;border:1px solid var(--border);border-radius:9px;background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer}.collectionBar [aria-pressed=true]{background:var(--bg-soft);color:var(--text)}.collectionBar b{font-size:10px}.collectionBar button:focus-visible{outline:2px solid var(--text);outline-offset:3px}
 .catalogue.catalogue.catalogue.catalogue.catalogue.catalogue {
   min-width: 0;
   gap: 28px;

@@ -9,6 +9,13 @@ on:
       - 'lib/contributor-*.ts'
       - 'lib/validation.ts'
       - 'lib/direnote.ts'
+      - 'components/distribution-*'
+      - 'components/use-admin-release-feed.ts'
+      - 'components/release-portal.tsx'
+      - 'app/api/admin/releases/**'
+      - 'app/api/cron/distribution-automation/**'
+      - 'scripts/verify-distribution-*'
+      - 'scripts/verify-admin-release-*'
       - 'components/release-form.tsx'
       - 'components/artist-picker.tsx'
       - 'prisma/**'
@@ -26,6 +33,13 @@ on:
       - 'lib/contributor-*.ts'
       - 'lib/validation.ts'
       - 'lib/direnote.ts'
+      - 'components/distribution-*'
+      - 'components/use-admin-release-feed.ts'
+      - 'components/release-portal.tsx'
+      - 'app/api/admin/releases/**'
+      - 'app/api/cron/distribution-automation/**'
+      - 'scripts/verify-distribution-*'
+      - 'scripts/verify-admin-release-*'
       - 'components/release-form.tsx'
       - 'components/artist-picker.tsx'
       - 'prisma/**'
@@ -60,3 +74,7 @@ jobs:
       - run: node scripts/retry-command.mjs node --import tsx scripts/verify-release-artist-selection.ts
       - run: node scripts/retry-command.mjs node --import tsx scripts/verify-artist-profile-validation.ts
       - run: node scripts/retry-command.mjs node --import tsx scripts/verify-direnote-virtual.ts --release-save-only
+
+      - run: npm run test:distribution-automation
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:distribution-operations

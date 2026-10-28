@@ -1,3 +1,6 @@
+import { assertCurrentAutomaticQc, assertAutomaticQcSources } from "./distribution-qc-evidence";
+import { automaticReleaseRiskHold } from "./distribution-automation-risk";
+import { distributionAutomationDecision } from "./distribution-automation-policy";
 import { loadArtistAmendment, artistAmendmentPayload, acceptArtistAmendment } from '@/lib/release-artist-amendment';
 import { getFeaturedArtistProvisionIssues } from "./featured-artist-requirements";
 import { conflictsWithHistoricalIdentity, assertReleaseArtistVerification, releaseArtistProfiles, selectedReleaseArtistIds, snapshotMatchesCard } from '@/lib/release-artist-verification';
@@ -210,7 +213,7 @@ function httpErrorMode(status: number, providerReason?: string) {
   return { retryable: false, releaseStatus: "delivery_failed" as const, queueStage: "rejected" as const, action: "DIRENOTE_FAILED" };
 }
 
-export async function submitRelease(releaseId: number, options: { actorId?: number | null; siteUrl?: string; retry?: boolean; adminConfirmedExistingArtists?: boolean; correctionReingest?: boolean; amendmentRequestId?: number } = {}) {
+export async function submitRelease(releaseId: number, options: { actorId?: number | null; siteUrl?: string; retry?: boolean; adminConfirmedExistingArtists?: boolean; correctionReingest?: boolean; amendmentRequestId?: number; automaticQcRevision?: string } = {}) {
   return prisma.$transaction(async lock => {
     const rows = await lock.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(81422028, ${releaseId}::integer) AS locked`;
     if (!rows[0]?.locked) {
@@ -232,7 +235,7 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
   }, { timeout: 180_000, maxWait: 5000 });
 }
 
-async function submitLockedRelease(releaseId: number, options: { actorId?: number | null; siteUrl?: string; retry?: boolean; adminConfirmedExistingArtists?: boolean; correctionReingest?: boolean; amendmentRequestId?: number }) {
+async function submitLockedRelease(releaseId: number, options: { actorId?: number | null; siteUrl?: string; retry?: boolean; adminConfirmedExistingArtists?: boolean; correctionReingest?: boolean; amendmentRequestId?: number; automaticQcRevision?: string }) {
   if (options.amendmentRequestId) throw new Error('Post-release amendments use existing-recording support requests, never content ingestion. Open the correction request.');
   let release = await getDetailedReleaseById(releaseId);
   if (!release) throw new Error("Release not found.");
@@ -246,8 +249,18 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     if (withdrawal) throw new Error(withdrawal.success ? `This UPC was withdrawn from DireNote (audit #${withdrawal.id}) and cannot be resubmitted. Create a new release if appropriate.` : `This UPC has an unconfirmed withdrawal (audit #${withdrawal.id}). Reconcile the provider outcome before delivery.`);
   }
   const reviewingCorrections = ["under_review", "approved"].includes(release.status);
-  const correctionAttempt = reviewingCorrections ? await prisma.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: "direnote", isCurrent: true }, select: { corrections: true } }) : null;
+  const correctionAttempt = reviewingCorrections || options.automaticQcRevision ? await prisma.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: "direnote", isCurrent: true }, select: { corrections: true, state: true } }) : null;
   const correctionsResolved = Boolean(correctionAttempt?.corrections && typeof correctionAttempt.corrections === "object" && (correctionAttempt.corrections as Record<string, unknown>).status === "customer_resolved");
+  if (options.automaticQcRevision) {
+    if(process.env.DISTRIBUTION_AUTOMATION_ENABLED === "false") throw new Error("Automatic distribution is paused.");
+    assertCurrentAutomaticQc(release,options.automaticQcRevision);
+    await assertAutomaticQcSources(release);
+    const activeOwner = await prisma.user.findFirst({where:{id:release.userId,status:'ACTIVE'},select:{id:true}});
+    if(!activeOwner) throw new Error('Automatic delivery is paused for this account.');
+    const openAmendment = await prisma.releaseChangeRequest.findFirst({where:{releaseId,status:{notIn:["cancelled","completed","rejected","failed"]}},select:{id:true}});
+    const decision = distributionAutomationDecision(release,{fraudHold:await automaticReleaseRiskHold(releaseId,release.userId),accepted:correctionAttempt?.state === "submitted",uncertainAttempt:Boolean(correctionAttempt && ["processing","reconciliation_required","failed"].includes(correctionAttempt.state)),retryable:correctionAttempt?.state === "retryable",correctionResolved:correctionsResolved,openAmendment:Boolean(openAmendment)});
+    if(!decision.eligible) throw new Error(decision.reason);
+  }
   // Customer corrections return to HYMN review. Admin approval must send the
   // corrected payload, rather than report the previous accepted attempt as a duplicate.
   if (reviewingCorrections && correctionsResolved) options = { ...options, correctionReingest: true };
@@ -345,6 +358,13 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
     throw error;
   }
   await resolveAdminTask(`release:${releaseId}:artist-mapping`);
+  if (options.automaticQcRevision) {
+    const latest = await getDetailedReleaseById(releaseId);
+    if (!latest) throw new Error('The submitted package is no longer available.');
+    assertCurrentAutomaticQc(latest, options.automaticQcRevision);
+    await assertAutomaticQcSources(latest);
+    if(await automaticReleaseRiskHold(releaseId,latest.userId))throw new Error('A new high-risk alert requires review before automatic delivery.');
+  }
   if (!options.retry && release.status === "under_review") {
     await updateDetailedReleaseStatus(releaseId, "approved", "HYMN review approved for DireNote submission.");
   }
