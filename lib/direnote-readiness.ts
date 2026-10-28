@@ -1,6 +1,7 @@
 import type { Release } from "@/lib/types";
 import { buildDireNotePayloadForRelease } from "@/lib/distribution-service";
 import { validateDireNotePayload } from "@/lib/direnote";
+import { getFeaturedArtistProvisionIssues } from "./featured-artist-requirements";
 
 export type DireNoteReadinessIssue = {
   field: string;
@@ -37,6 +38,7 @@ export async function validateReleaseForDireNote(release: Release, options: { si
     return { field, label: field === "contenttype" ? "Content ownership" : field.split(".").pop()?.replace(/_/g, " ") ?? field, message, severity, category: categoryFor(field), fixSuggestion: issue.fixSuggestion ?? issue.suggestion ?? suggestion, userFacing: issue.userFacing !== false && !["pin", "client_id", "endpoint"].includes(field) };
   };
   const issues = result.issues.map((issue: any) => normalize(issue, "error"));
+  if (result.issues.length === 0) issues.push(...(await getFeaturedArtistProvisionIssues(payload)).map(issue=>normalize(issue,"error")));
   const warnings = result.warnings.map((issue: any) => normalize(typeof issue === "string" ? { message: issue, field: "release" } : issue, "warning"));
   const hasIssueMatching = (pattern: RegExp) => issues.some((issue) => pattern.test(issue.field) || pattern.test(issue.message));
   const checklist = [

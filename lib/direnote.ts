@@ -213,17 +213,17 @@ function pickArtistProfile(name: string, profiles: ArtistProfile[] = [], selecte
   return matches[0];
 }
 
-function toDireNoteArtist(name: string, profiles: ArtistProfile[] = [], release?: ExtendedRelease, selectedIds: number[] = []): DireNoteArtist {
+function toDireNoteArtist(name: string, profiles: ArtistProfile[] = [], release?: ExtendedRelease, selectedIds: number[] = [], featured = false): DireNoteArtist {
   const profile = pickArtistProfile(name, profiles, selectedIds);
-  if (!profile && selectedIds.some(id => profiles.some(candidate => candidate.id === id))) {
+  if (!featured && !profile && selectedIds.some(id => profiles.some(candidate => candidate.id === id))) {
     throw new Error(`The selected artist card no longer matches ${name}. Refresh the release and confirm the intended artist card before delivery.`);
   }
-  if (!profile && profiles.some(candidate => candidate.name.trim().toLowerCase() === name.trim().toLowerCase() && (candidate.spotifyUrl || candidate.appleUrl || candidate.spotifyArtistId || candidate.appleArtistId))) {
+  if (!featured && !profile && profiles.some(candidate => candidate.name.trim().toLowerCase() === name.trim().toLowerCase() && (candidate.spotifyUrl || candidate.appleUrl || candidate.spotifyArtistId || candidate.appleArtistId))) {
     throw new Error(`Select the saved HYMN artist card for ${name} before delivery. Its existing store profile must not be omitted.`);
   }
   const meta = release ? releaseMeta(release) : {};
-  const artistMeta = meta.artistLinks?.[name] ?? meta.artistLinks?.[name.trim().toLowerCase()] ?? {};
-  const youtubeUrl = profile?.youtubeUrl ?? artistMeta.youtube_url ?? artistMeta.youtubeUrl ?? meta.youtubeArtistUrl;
+  const artistMeta = featured ? {} : meta.artistLinks?.[name] ?? meta.artistLinks?.[name.trim().toLowerCase()] ?? {};
+  const youtubeUrl = profile?.youtubeUrl ?? artistMeta.youtube_url ?? artistMeta.youtubeUrl ?? (featured ? undefined : meta.youtubeArtistUrl);
   const verifiedYoutube = verifiedArtistStoreLinks({ youtube: youtubeUrl }).youtube?.url;
   const saved = profile ? savedArtistStoreLinks({ ...profile, spotifyProfileUrl: profile.spotifyUrl, appleMusicProfileUrl: profile.appleUrl }) : {};
   return {
@@ -233,7 +233,7 @@ function toDireNoteArtist(name: string, profiles: ArtistProfile[] = [], release?
     // Duplicated releases may contain an old video/album URL. Do not send it
     // as an artist identity link; DireNote correctly rejects those URLs.
     youtube_url: verifiedYoutube,
-    instagram_url: (profile?.instagramUrl ?? artistMeta.instagram_url ?? artistMeta.instagramUrl ?? meta.instagramUrl) ? normalizeInstagramUrl(String(profile?.instagramUrl ?? artistMeta.instagram_url ?? artistMeta.instagramUrl ?? meta.instagramUrl)) : undefined
+    instagram_url: (profile?.instagramUrl ?? artistMeta.instagram_url ?? artistMeta.instagramUrl ?? (featured ? undefined : meta.instagramUrl)) ? normalizeInstagramUrl(String(profile?.instagramUrl ?? artistMeta.instagram_url ?? artistMeta.instagramUrl ?? meta.instagramUrl)) : undefined
   };
 }
 
@@ -298,7 +298,7 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
   const primaryIds = (track: NonNullable<Release["tracks"]>[number]) => attachedArtistProfileIds(track, extended.artistProfileId ?? meta.artistProfileId ?? null);
   const featuredIds = (track: NonNullable<Release["tracks"]>[number]): number[] => track.featuredArtistProfileIds ?? (track.metadata as any)?.featuredArtistProfileIds ?? [];
   const primaryArtists = splitNames(release.artistName || release.tracks?.[0]?.primaryArtist).map((name) => toDireNoteArtist(name, options.artistProfiles, extended, (release.tracks ?? []).flatMap(primaryIds)));
-  const featuringArtists = splitNames(release.tracks?.flatMap((track) => splitNames(track.featuredArtists)).join(",")).map((name) => toDireNoteArtist(name, options.artistProfiles, extended, (release.tracks ?? []).flatMap(featuredIds)));
+  const featuringArtists = splitNames(release.tracks?.flatMap((track) => splitNames(track.featuredArtists)).join(",")).map((name) => toDireNoteArtist(name, options.artistProfiles, extended, (release.tracks ?? []).flatMap(featuredIds), true));
   const contenttype = normalizeContentType(extended);
   assertContentIdEligibility(contenttype, release.youtubeContentIdEnabled);
   const normalizedGenre = normalizeDireNoteGenre(release.primaryGenre || release.genre, release.secondaryGenre);
@@ -352,7 +352,7 @@ export function buildDireNotePayload(release: Release, options: BuildOptions = {
       previouslyReleased: ((track as any).previouslyReleased ?? isPreviouslyReleased) ? "Yes" : "No",
       producers: contributors((track as any).producers ?? (track as any).producer, track.contributors as any, "producer").map((contributor) => contributor.name),
       artists: splitNames(track.primaryArtist || release.artistName).map((name) => toDireNoteArtist(name, options.artistProfiles, extended, primaryIds(track))),
-      featuring_artists: splitNames(track.featuredArtists).map((name) => toDireNoteArtist(name, options.artistProfiles, extended, featuredIds(track))),
+      featuring_artists: splitNames(track.featuredArtists).map((name) => toDireNoteArtist(name, options.artistProfiles, extended, featuredIds(track), true)),
       songwriters: contributors(track.songwriters, track.contributors as any, "songwriter"),
       composers: contributors(track.composers, track.contributors as any, "composer"),
       contributors: Array.isArray(track.contributors) ? track.contributors.map((contributor: any) => mapContributorToDireNote(contributor)).filter(Boolean).map((mapped: any) => ({ name: mapped.contributor.name, role: mapped.role })) : undefined

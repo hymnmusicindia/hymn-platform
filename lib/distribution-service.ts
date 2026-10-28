@@ -1,4 +1,5 @@
 import { loadArtistAmendment, artistAmendmentPayload, acceptArtistAmendment } from '@/lib/release-artist-amendment';
+import { getFeaturedArtistProvisionIssues } from "./featured-artist-requirements";
 import { conflictsWithHistoricalIdentity, assertReleaseArtistVerification, releaseArtistProfiles, selectedReleaseArtistIds, snapshotMatchesCard } from '@/lib/release-artist-verification';
 import {
   buildDireNotePayload,
@@ -174,7 +175,9 @@ export async function buildDireNotePayloadForRelease(release: Release, options: 
 
 export async function validateRelease(release: Release, options: { siteUrl?: string; adminConfirmedExistingArtists?: boolean; replaceProviderIdentifiers?: boolean } = {}) {
   const payload = await buildDireNotePayloadForRelease(release, options);
-  return validationResult(payload, options);
+  const validation = validationResult(payload, options);
+  if (validation.ok) validation.issues.push(...await getFeaturedArtistProvisionIssues(payload));
+  return { ...validation, ok:validation.issues.length === 0 };
 }
 
 export function buildDistributorPayload(release: Release, options: { siteUrl?: string } = {}): DistributorPayload {
@@ -307,6 +310,10 @@ async function submitLockedRelease(releaseId: number, options: { actorId?: numbe
   const payload = amendment ? artistAmendmentPayload(originalPayload, amendment, (release.originalReleaseDate || release.releaseDate).slice(0, 10)) : originalPayload;
   const previousAttempt = options.correctionReingest ? await ensureCurrentDireNoteAttempt(releaseId) : null;
   const validation = validationResult(payload, { ...options, replaceProviderIdentifiers: Boolean(options.correctionReingest) });
+  if (validation.ok) {
+    validation.issues.push(...await getFeaturedArtistProvisionIssues(payload));
+    validation.ok = validation.issues.length === 0;
+  }
   const redactedPayload = redactDireNotePayload(payload);
 
   if (!validation.ok) {

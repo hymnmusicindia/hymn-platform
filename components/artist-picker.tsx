@@ -1,6 +1,7 @@
 "use client";
 
 import { customerMessage } from "@/lib/customer-message";
+import { instagramProfilePattern } from "@/lib/validation";
 
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -24,6 +25,8 @@ type ArtistPickerProps = {
   showRecentQuickAdd?: boolean;
   hideSelectionChips?: boolean;
   focused?: boolean;
+  addLabel?: string;
+  onSelectName?: (name: string) => void;
   onQueryChange: (query: string) => void;
   onSelect: (profile: ArtistProfile) => void;
   onRemove: (profileId: number) => void;
@@ -79,6 +82,8 @@ export function ArtistPicker({
   showRecentQuickAdd = false,
   hideSelectionChips = false,
   focused = false,
+  addLabel = "Add primary artist",
+  onSelectName,
   onQueryChange,
   onSelect,
   onRemove
@@ -109,6 +114,14 @@ export function ArtistPicker({
   const [appleUrl, setAppleUrl] = useState("");
   const [isProducer, setIsProducer] = useState(false);
   const [producerArtistName, setProducerArtistName] = useState("");
+  const [requireInstagram, setRequireInstagram] = useState(false);
+  const [checkingName, setCheckingName] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const nameRequest = useRef<AbortController | null>(null);
+  useEffect(() => {
+    nameRequest.current?.abort(); nameRequest.current = null; setCheckingName(false); setNameError(null);
+  }, [query,open]);
+  useEffect(() => () => nameRequest.current?.abort(), []);
   const [saving, setSaving] = useState(false);
   const [editingProfile, setEditingProfile] = useState<ArtistProfile | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -288,8 +301,9 @@ export function ArtistPicker({
     setOpen(false);
   }
 
-  function openCreateModal() {
-    const initialName = query.trim();
+  function openCreateModal(options: { name?: string; requireInstagram?: boolean } = {}) {
+    const initialName = options.name ?? query.trim();
+    setRequireInstagram(options.requireInstagram ?? Boolean(onSelectName));
     setCreateName(initialName);
     setSpotifySearch(initialName);
     setSelectedSpotify(null);
@@ -310,6 +324,7 @@ export function ArtistPicker({
   }
 
   function openEditModal(profile: ArtistProfile) {
+    setRequireInstagram(false);
     setEditingProfile(profile);
     setCreateName(profile.name);
     setSpotifySearch(profile.name);
@@ -346,6 +361,10 @@ export function ArtistPicker({
     const name = createName.trim();
     if (!name) {
       setSpotifyError("Artist name is required.");
+      return;
+    }
+    if (requireInstagram && !instagramProfilePattern.test(instagramUrl.trim())) {
+      setSpotifyError("Add a valid Instagram profile for this featured artist.");
       return;
     }
     if (hasLiveMusic && !selectedSpotify && !manualSpotifyUrl.trim() && !appleUrl.trim()) {
@@ -407,9 +426,30 @@ export function ArtistPicker({
     setSpotifyError(null);
     if (activeProfileStep === "name" && !createName.trim()) return setSpotifyError("Artist name is required.");
     if (activeProfileStep === "liveMusic" && hasLiveMusic === null) return setSpotifyError("Choose whether this artist already has store profiles.");
+    if (activeProfileStep === "instagram" && requireInstagram && !instagramProfilePattern.test(instagramUrl.trim())) return setSpotifyError("Add a valid Instagram profile for this featured artist.");
     if (activeProfileStep === "apple" && !selectedSpotify && !manualSpotifyUrl.trim() && !appleUrl.trim()) return setSpotifyError("Add a Spotify or Apple Music artist profile, or go back and choose first release.");
     if (activeProfileStep === "producerName" && !producerArtistName.trim()) return setSpotifyError("Producer artist name is required.");
     setProfileStep((current) => Math.min(current + 1, profileSteps.length - 1));
+  }
+
+  async function selectNameOnly() {
+    const name = query.trim();
+    if (!name || !onSelectName || checkingName) return;
+    const controller = new AbortController(); nameRequest.current = controller;
+    setCheckingName(true); setNameError(null);
+    try {
+      const response = await fetch("/api/distribution/featured-artist", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name}), signal:controller.signal });
+      const result = await response.json().catch(()=>null);
+      if (controller.signal.aborted) return;
+      if (!response.ok || !result) throw Error(result?.error || "HYMN could not verify this artist name. Please retry.");
+      if (result.match === "known") { onSelectName(name); onQueryChange(""); setOpen(false); }
+      else if (result.match === "profile-required") {
+        if (!usage.canCreateMore) throw Error("This featured artist needs a profile with Instagram. Your artist profile limit has been reached.");
+        openCreateModal({name,requireInstagram:true});
+      }
+      else throw Error("HYMN could not confirm this artist name. Please retry.");
+    } catch(error) { if (!controller.signal.aborted) setNameError(error instanceof Error ? error.message : "Could not verify this artist name."); }
+    finally { if (nameRequest.current === controller) { nameRequest.current = null; setCheckingName(false); } }
   }
 
   return (
@@ -420,7 +460,7 @@ export function ArtistPicker({
         </label>
       </div>
 
-      {focused ? <button type="button" className="artist-picker-add-trigger" disabled={reachedMax} onClick={() => setOpen((current) => !current)} aria-label={reachedMax ? "Maximum primary artists selected" : "Add primary artist"} aria-expanded={open}><Plus aria-hidden="true" /></button> : <input
+      {focused ? <button type="button" className="artist-picker-add-trigger" disabled={reachedMax} onClick={() => setOpen((current) => !current)} aria-label={reachedMax ? "Maximum artists selected" : addLabel} aria-expanded={open}><Plus aria-hidden="true" /></button> : <input
         className="field"
         value={query}
         disabled={reachedMax}
@@ -474,7 +514,9 @@ export function ArtistPicker({
             </div>;
           })}</div>
           {recent.length === 0 && !profilesLoading ? <div className="artist-library-empty"><UserRound size={30} /><p>Your artist starts here</p></div> : null}
-          <button type="button" className="artist-library-new" disabled={!usage.canCreateMore || profilesLoading} onClick={openCreateModal}><Plus size={19} /><span>New artist</span><ArrowRight size={18} /></button>
+          {nameError ? <p role="alert" className="inline-error">{nameError}</p> : null}
+          {onSelectName && hasQuery ? <button type="button" className="artist-library-new" disabled={checkingName || reachedMax} onClick={() => void selectNameOnly()}>{checkingName ? <LoaderCircle size={18} className="animate-spin"/> : <Plus size={18}/>}<span>{checkingName ? "Checking artist..." : `Use name: ${query.trim()}`}</span></button> : null}
+          <button type="button" className="artist-library-new" disabled={!usage.canCreateMore || profilesLoading} onClick={() => openCreateModal()}><Plus size={19} /><span>New artist</span><ArrowRight size={18} /></button>
           {!usage.canCreateMore && !profilesLoading ? <p className="artist-library-hint">Profile limit reached. Use a saved artist or upgrade.</p> : null}
         </div>
         </ArtistPickerLayer>
@@ -508,7 +550,7 @@ export function ArtistPicker({
 
               {activeProfileStep === "spotify" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Spotify identity</p><label className="mt-3 block text-xl font-semibold" style={{ color: "var(--text)" }}>Find your Spotify</label><p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>Choose your official artist page.</p><input autoFocus className="field mt-6" value={spotifySearch} onChange={(event) => { setSpotifySearch(event.target.value); setSelectedSpotify(null); }} placeholder="Search Spotify artists" />{spotifyLoading ? <p className="mt-3 text-sm" style={{ color: "var(--text-soft)" }}>Searching Spotify...</p> : null}{selectedSpotify ? <div className="selection-chip mt-4 w-full justify-between"><span className="flex items-center gap-2"><ArtistAvatar name={selectedSpotify.name} imageUrl={selectedSpotify.imageUrl} /><span className="min-w-0 truncate">{selectedSpotify.name}</span></span><button type="button" className="text-xs" style={{ color: "var(--text-soft)" }} onClick={() => setSelectedSpotify(null)}>Clear</button></div> : null}{spotifyResults.length > 0 ? <div className="mt-3 grid max-h-48 gap-2 overflow-y-auto">{spotifyResults.map((artist) => <button key={artist.id} type="button" onClick={() => { setSelectedSpotify(artist); setCreateName(artist.name); setManualSpotifyUrl(artist.spotifyUrl); setSpotifySearch(artist.name); setSpotifyResults([]); setSpotifyError(null); }} className="flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left" style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--text)" }}><ArtistAvatar name={artist.name} imageUrl={artist.imageUrl} /><div className="min-w-0 flex-1"><p className="truncate font-medium">{artist.name}</p><p className="truncate text-xs" style={{ color: "var(--text-soft)" }}>{artist.followers ? `${artist.followers.toLocaleString("en-IN")} followers` : "Spotify artist"}</p></div><span className="text-xs" style={{ color: "var(--text-soft)" }}>Select</span></button>)}</div> : null}<button type="button" className="mt-4 text-sm underline underline-offset-4" style={{ color: "var(--text-muted)" }} onClick={() => setShowManualSpotify((value) => !value)}>Paste a link</button>{showManualSpotify ? <input className="field mt-3" value={manualSpotifyUrl} onChange={(event) => setManualSpotifyUrl(event.target.value)} placeholder="https://open.spotify.com/artist/..." /> : null}</div> : null}
 
-              {activeProfileStep === "instagram" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Optional social profile</p><label htmlFor={`${dialogTitleId}-instagram`} className="mt-2 block text-lg font-semibold" style={{ color: "var(--text)" }}>Add the Instagram profile</label><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Optional. Add an @handle or profile link, or continue without one.</p><input id={`${dialogTitleId}-instagram`} autoFocus className="field mt-4" value={instagramUrl} onChange={(event) => setInstagramUrl(event.target.value)} placeholder="https://instagram.com/yourartistname" /></div> : null}
+              {activeProfileStep === "instagram" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>{requireInstagram ? "Required for this featured artist" : "Optional social profile"}</p><label htmlFor={`${dialogTitleId}-instagram`} className="mt-2 block text-lg font-semibold" style={{ color: "var(--text)" }}>Add the Instagram profile</label><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{requireInstagram ? "Add an Instagram handle or profile link so HYMN can provision this featured artist." : "Optional. Add an @handle or profile link, or continue without one."}</p><input id={`${dialogTitleId}-instagram`} autoFocus required={requireInstagram} className="field mt-4" value={instagramUrl} onChange={(event) => setInstagramUrl(event.target.value)} placeholder="https://instagram.com/yourartistname" /></div> : null}
               {activeProfileStep === "apple" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Optional link</p><label className="mt-2 block text-lg font-semibold" style={{ color: "var(--text)" }}>Add the Apple Music profile</label><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Optional. Add it later.</p><input autoFocus className="field mt-4" value={appleUrl} onChange={(event) => setAppleUrl(event.target.value)} placeholder="https://music.apple.com/..." /></div> : null}
               {activeProfileStep === "youtube" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Optional link</p><label className="mt-2 block text-lg font-semibold" style={{ color: "var(--text)" }}>Add the YouTube channel</label><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Use the artist’s official channel when available.</p><input autoFocus className="field mt-4" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} placeholder="https://youtube.com/@artist" /></div> : null}
               {activeProfileStep === "producer" ? <div><p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-soft)" }}>Credits automation</p><h4 className="mt-2 text-lg font-semibold" style={{ color: "var(--text)" }}>Also a producer?</h4><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Add producer credits automatically.</p><div className="mt-4 grid grid-cols-2 gap-3"><button type="button" className={isProducer ? "btn-primary pressable" : "btn-outline pressable"} onClick={() => { setIsProducer(true); setProducerArtistName(current => current || createName.trim()); }}>Yes</button><button type="button" className={!isProducer ? "btn-primary pressable" : "btn-outline pressable"} onClick={() => { setIsProducer(false); setProducerArtistName(""); }}>No</button></div></div> : null}

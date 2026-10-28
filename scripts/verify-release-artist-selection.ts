@@ -7,7 +7,7 @@ const profile = (id: number, name: string, instagramUrl: string): ArtistProfile 
 const judge = profile(1, "JUDGE", "https://instagram.com/hr02_judge");
 const dzee = profile(2, "DZEE", "@dzee");
 assert.equal(artistSelectionIssue("JUDGE", [1], [judge], "primary", true), null);
-assert.match(artistSelectionIssue("DZEE", [], [judge], "featured")!, /DZEE/);
+assert.equal(artistSelectionIssue("DZEE", [], [judge], "featured"), null);
 assert.equal(artistSelectionIssue("DZEE", [2], [judge, { ...dzee, instagramUrl: "" }], "featured"), null);
 assert.match(artistSelectionIssue("DZEE", [2], [judge, { ...dzee, instagramUrl: "invalid" }], "featured")!, /DZEE.*before continuing/);
 assert.match(artistSelectionIssue("DZEE", [2], [judge], "featured")!, /available saved/);

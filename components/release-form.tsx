@@ -4232,13 +4232,28 @@ export function ReleaseForm({
                               const ids = role === "featured" ? track.featuredArtistIds : track.remixerIds;
                               const names = role === "featured" ? track.featuredArtists : track.remixers;
                               const unlinked = artistCreditNames(names).filter(name => !profilesFor(ids).some(profile => profile.name.toLowerCase() === name.toLowerCase()));
-                              return <div key={role} ref={registerField(`track-${index}-${role}`)}>
-                                <ArtistPicker label={role === "featured" ? "Featured artists" : "Remixer"} helper={role === "featured" ? "Optional. Select a saved profile or create one with Instagram details." : "Optional. Saved for HYMN review only; remixer credits are not currently sent for distribution."}
-                                  valueIds={profilesFor(ids)} query={role === "featured" ? track.featuredArtistQuery : track.remixerQuery}
-                                  onQueryChange={value => updateTrack(index, role === "featured" ? { featuredArtistQuery: value } : { remixerQuery: value })}
-                                  onSelect={profile => selectTrackCredit(index, role, profile)} onRemove={id => removeTrackCredit(index, role, id)}
-                                  required={showErrors && issue?.key === `track-${index}-${role}`}/>
-                                {unlinked.map(name => <div key={name} className="mt-2 flex items-start justify-between gap-3 text-xs" style={{ color: "var(--danger)" }}><span>{name} needs a saved artist profile with Instagram.</span><button type="button" className="shrink-0 underline" onClick={() => updateTrack(index, role === "featured" ? { featuredArtists: artistCreditNames(names).filter(item => item !== name).join(", ") } : { remixers: artistCreditNames(names).filter(item => item !== name).join(", ") })}>Remove {name}</button></div>)}
+                              const credits = [...profilesFor(ids).map(profile => ({ name:profile.name, imageUrl:profile.imageUrl, id:profile.id })), ...unlinked.map(name => ({name,imageUrl:null,id:null}))];
+                              return <div key={role} ref={registerField(`track-${index}-${role}`)} className="release-track-artist-field">
+                                <span className="release-track-artist-label">{role === "featured" ? "Featured artists" : "Remixer"}</span>
+                                <div className="release-track-artist-avatar-picker">
+                                  {credits.map(credit => {
+                                    const key = `${track.id}:${role}:${credit.id ?? credit.name}`;
+                                    const armed = trackArtistRemovalCandidate === key;
+                                    return <div key={key} className="release-primary-artist-sort-item is-track-artist"><button type="button" className={clsx("release-track-selected-artist",armed && "is-removal-armed")} title={armed ? `Remove ${credit.name}` : credit.name} aria-label={armed ? `Confirm removal of ${credit.name}` : `${credit.name}, ${role} artist. Click twice to remove.`} onClick={() => {
+                                      if (!armed) { setTrackArtistRemovalCandidate(key); return; }
+                                      if (credit.id != null) removeTrackCredit(index,role,credit.id);
+                                      else updateTrack(index,role === "featured" ? {featuredArtists:artistCreditNames(names).filter(name=>name!==credit.name).join(", ")} : {remixers:artistCreditNames(names).filter(name=>name!==credit.name).join(", ")});
+                                      setTrackArtistRemovalCandidate(null);
+                                    }}>{credit.imageUrl ? <img src={credit.imageUrl} alt=""/> : <span className="release-selected-artist-avatar">{credit.name.slice(0,1).toUpperCase()}</span>}<span className="release-selected-artist-remove" aria-hidden="true"><X/></span></button></div>;
+                                  })}
+                                  <ArtistPicker label={role === "featured" ? "Add featured artist" : "Add remixer"} addLabel={role === "featured" ? "Add featured artist" : "Add remixer"} focused hideSelectionChips
+                                    helper={role === "featured" ? "Optional. Use a matching artist name, or add a profile. New artists need Instagram." : "Optional. Saved for HYMN review only; remixer credits are not currently sent for distribution."}
+                                    valueIds={profilesFor(ids)} query={role === "featured" ? track.featuredArtistQuery : track.remixerQuery}
+                                    onQueryChange={value => updateTrack(index,role === "featured" ? {featuredArtistQuery:value} : {remixerQuery:value})}
+                                    onSelect={profile => selectTrackCredit(index,role,profile)} onRemove={id=>removeTrackCredit(index,role,id)}
+                                    onSelectName={role === "featured" ? name=>updateTrack(index,{featuredArtists:[...artistCreditNames(names).filter(existing=>existing.toLowerCase()!==name.toLowerCase()),name].join(", "),featuredArtistQuery:""}) : undefined}
+                                    required={showErrors && issue?.key === `track-${index}-${role}`}/>
+                                </div>
                               </div>;
                             })}
                           </div>

@@ -4,6 +4,7 @@ import { ensureDireNoteArtistMapping, verifyReleaseArtistMappings } from '../lib
 import { buildDireNotePayload, type DireNotePayload } from '../lib/direnote';
 import type { Release, ArtistProfile } from '../lib/types';
 import { createArtistProfile, listArtistProfilesByUser, updateArtistProfile } from '../lib/db';
+import { resolveFeaturedArtistName } from '../lib/featured-artist-requirements';
 import { syncDireNoteArtistInformation } from '../lib/direnote-service';
 import { persistDireNoteArtistIds } from '../lib/distribution-service';
 async function main() {
@@ -22,6 +23,19 @@ async function main() {
   assert.equal(legacy?.isProducer,true);
   assert.equal(legacy?.producerArtistName,'Legacy Stage Name');
   assert.equal(legacy?.producerLegalName,'Private Legal Name');
+  const beforeFeaturedLookup = globalThis.fetch; let featuredCalls=0;
+  globalThis.fetch=async (_input,init)=>{
+    featuredCalls++; const request=JSON.parse(String(init?.body));
+    assert.equal(new URL(String(_input)).pathname,'/list_artists');assert.equal(request.pin,'fixture-pin');
+    const artists=request.search==='Known Guest' ? (request.page===2?[{artist_id:778,name:'Known Guest'}]:[]) : request.search==='Ambiguous Guest' ? [{artist_id:779,name:'Ambiguous Guest'},{artist_id:780,name:'Ambiguous Guest'}] : [];
+    return new Response(JSON.stringify({success:true,artists,pagination:{has_more:request.search==='Known Guest'&&request.page===1}}),{headers:{'content-type':'application/json'}});
+  };
+  try {
+    assert.equal(await resolveFeaturedArtistName('Known Guest'),'known');assert.equal(featuredCalls,2);
+    assert.equal(await resolveFeaturedArtistName('Known Guest'),'known');assert.equal(featuredCalls,2,'shared database cache avoids repeated lookups');
+    assert.equal(await resolveFeaturedArtistName('New Guest'),'profile-required');
+    assert.equal(await resolveFeaturedArtistName('Ambiguous Guest'),'profile-required');
+  } finally { globalThis.fetch=beforeFeaturedLookup; }
   const card = await prisma.artistCard.create({ data: { userId: user.id, artistName: 'Known Artist', spotifyProfileUrl: spotify, spotifyArtistId: '52BkE1owdr1Oz5duroCyHL', direNoteArtistId: '3175' } });
   const release = await prisma.release.create({ data: { userId: user.id, title: 'Mapping test', artistName: card.artistName, genre: 'Pop', releaseDate: new Date() } });
   let remote: string | null = null, writes = 0, reads = 0, timeout = false, apply = true, wrongName = false, edit = false, raceChange = false;
