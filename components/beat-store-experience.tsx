@@ -8,7 +8,9 @@ import { useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, ChevronDown, Disc3, Filter, Gauge, Music2, Search, ShoppingBag, Sparkles, Users2, WandSparkles, X } from "lucide-react";
 import { beatLicenseLabel, beatLicensePrice, buildBeatStorefront, normalizeBeatLicenseType, type BeatStoreLicenseType, type StorefrontBeat } from "@/lib/beat-store";
 import type { Beat, ProducerProfile } from "@/lib/types";
-import { BeatCard } from "@/components/beat-card";
+import { BeatStoreCard as BeatCard } from "@/components/beat-store-card";
+import { BeatEngagementProvider } from "@/components/beat-engagement-provider";
+import cardStyles from "./beat-store-card.module.css";
 import storeStyles from "./beat-store.module.css";
 import { BeatLicenceGuide } from "@/components/beat-licence-guide";
 import { BeatStoreHero } from "@/components/beat-store-hero";
@@ -716,7 +718,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
               </div>
             ) : null}
 
-            <div className="grid grid-cols-1 gap-2.5">
+            <BeatEngagementProvider ids={visibleBeats.map(beat=>beat.id)}><div className={cardStyles.grid}>
               {visibleBeats.map((beat) => (
                 <BeatCard
                   key={beat.id}
@@ -731,6 +733,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
               ))}
             </div>
 
+            </BeatEngagementProvider>
             <div ref={sentinelRef} className="h-6" />
 
             <div className="flex flex-wrap items-center justify-center gap-3">

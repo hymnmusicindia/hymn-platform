@@ -331,6 +331,7 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
   const [muted, setMutedState] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [licensingOpen, setLicensingOpen] = useState(false);
+  const [licensingBeat, setLicensingBeat] = useState<StorefrontBeat | null>(null);
   const [selectedLicense, setSelectedLicense] = useState<LicenseChoice>("mp3");
 
   useEffect(() => {
@@ -454,7 +455,7 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
     setVolume: (next) => setVolumeState(Math.max(0, Math.min(1, next))),
     setMuted: setMutedState,
     openLicensing: (beat, licenseType = "mp3") => {
-      if (beat) setActiveBeat(beat);
+      setLicensingBeat(beat ?? activeBeat);
       setSelectedLicense(normalizeBeatLicenseType(licenseType));
       setLicensingOpen(true);
     },
@@ -467,7 +468,7 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
         {children}
       </div>
       <BottomPlayer value={value} licensingOpen={licensingOpen} />
-      <LicensingSurface beat={activeBeat} open={licensingOpen} selected={selectedLicense} onSelect={setSelectedLicense} onClose={() => setLicensingOpen(false)} />
+      <LicensingSurface beat={licensingBeat ?? activeBeat} open={licensingOpen} selected={selectedLicense} onSelect={setSelectedLicense} onClose={() => setLicensingOpen(false)} />
     </BeatPreviewContext.Provider>
   );
 }

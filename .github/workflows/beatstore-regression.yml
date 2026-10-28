@@ -1,0 +1,45 @@
+name: Beatstore regression
+on:
+  pull_request:
+    paths:
+      - 'components/beat-*'
+      - 'components/producer-beat-grid.tsx'
+      - 'lib/beat-*'
+      - 'app/api/beats/**'
+      - 'prisma/**'
+      - 'scripts/verify-beat*'
+      - 'scripts/verify-acquisition-isolated.ts'
+      - 'package*.json'
+      - '.github/workflows/beatstore-regression.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'components/beat-*'
+      - 'components/producer-beat-grid.tsx'
+      - 'lib/beat-*'
+      - 'app/api/beats/**'
+      - 'prisma/**'
+      - 'scripts/verify-beat*'
+      - 'scripts/verify-acquisition-isolated.ts'
+      - 'package*.json'
+      - '.github/workflows/beatstore-regression.yml'
+permissions:
+  contents: read
+jobs:
+  beatstore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://fixture:fixture@127.0.0.1:55473/acquisition_fixture
+      DIRECT_URL: postgresql://fixture:fixture@127.0.0.1:55473/acquisition_fixture
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --fetch-retries=5 --fetch-timeout=120000
+      - run: npx prisma generate
+      - run: npm run test:beatstore
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:beatstore:browser

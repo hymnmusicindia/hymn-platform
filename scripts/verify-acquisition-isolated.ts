@@ -21,11 +21,19 @@ async function main() {
   // Build the pre-feature schema from the base revision, then apply the
   // acquisition SQL migration exactly as production would. Using HEAD here
   // includes the feature models and makes the migration create duplicate tables.
-  if(!process.argv.includes('--distribution-automation-only'))writeFileSync(oldSchema, execFileSync("git", ["show", "83ca6fe86ccb00ed78c9c080413e93284a682e7d:prisma/schema.prisma"], { encoding: "utf8", windowsHide: true }));
+  if(!process.argv.includes('--distribution-automation-only')&&!process.argv.includes('--beat-engagement-only'))writeFileSync(oldSchema, execFileSync("git", ["show", "83ca6fe86ccb00ed78c9c080413e93284a682e7d:prisma/schema.prisma"], { encoding: "utf8", windowsHide: true }));
   const pg = new EmbeddedPostgres({ databaseDir, port, user: "fixture", password: "fixture", persistent: true, initdbFlags: ["--encoding=UTF8", "--locale=C"], postgresFlags: ["-h", "127.0.0.1"] });
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("acquisition_fixture");
+    if(process.argv.includes('--beat-engagement-only')) {
+      const baseline=path.join(fixture,'beat-engagement-baseline.prisma');
+      writeFileSync(baseline,readFileSync('prisma/schema.prisma','utf8').replace(/^model BeatEngagement \{[\s\S]*?^\}\r?\n/gm,'').replace(/^  engagements\s+BeatEngagement\[\]\r?\n/gm,''));
+      await run(['node_modules/prisma/build/index.js','db','push','--schema',baseline,'--skip-generate']);
+      await run(['node_modules/prisma/build/index.js','db','execute','--file','prisma/migrations/20261029110000_beat_engagements/migration.sql','--schema','prisma/schema.prisma']);
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-beat-engagement.ts'],process.execPath,{...env,APP_URL:'https://hymn.fixture',NEXT_PUBLIC_APP_URL:'https://hymn.fixture'});
+      return;
+    }
     if (process.argv.includes('--distribution-automation-only')) {
       await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
       await run(['--conditions=react-server','scripts/verify-distribution-automation.cjs'],process.execPath,{...env,HYMN_STORAGE_ROOT:path.join(fixture,'storage'),PRIVATE_STORAGE_ROOT:path.join(fixture,'storage'),JWT_SECRET:'automation-fixture-secret-not-for-production',APP_URL:'https://hymn.fixture'});
