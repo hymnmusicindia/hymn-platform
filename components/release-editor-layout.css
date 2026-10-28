@@ -35,6 +35,8 @@ html body .release-workflow button{box-shadow:none!important;text-shadow:none!im
 html body .release-workflow button::before,html body .release-workflow button::after{box-shadow:none!important;filter:none!important}
 html body .release-workflow .release-footer-action:is(:hover,:focus-visible),html body .release-workflow .release-focused-actions>button:is(:hover,:focus-visible){text-shadow:0 0 8px #ffffff38!important;color:var(--text)!important}
 /* Track artists match the initial artist step. */
+html body .release-workflow .release-track-artist-label{display:flex;align-items:center;min-height:28px;margin:0;line-height:20px}
+html body .release-workflow .release-track-artist-label .language-field-help>button{width:28px;height:28px;min-height:28px;padding:0}
 html body .release-workflow .release-track-artist-avatar-picker{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:8px 0}
 html body .release-workflow .release-track-artist-avatar-picker .release-primary-artist-sort-item{padding:0}
 html body .release-workflow .release-track-artist-avatar-picker .artist-picker-focused{display:flex;align-items:center;gap:0;padding:0;margin:0}

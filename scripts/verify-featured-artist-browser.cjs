@@ -29,9 +29,12 @@ async function main() {
     });
     await page.goto('https://hymn.fixture/');await page.addStyleTag({path:path.join(out,'global.css')});await page.addStyleTag({path:path.join(out,'ui.css')});await page.addScriptTag({path:path.join(out,'ui.js')});
     const add=page.getByRole('button',{name:'Add featured artist',exact:true});await expect(add).toHaveClass(/artist-picker-add-trigger/);await expect(page.getByRole('button',{name:'Add primary artist',exact:true})).toHaveClass(/artist-picker-add-trigger/);
-    const help=page.getByRole('button',{name:'About primary and featured artists'});
-    await expect(page.locator('.release-track-artist-label').filter({has:help})).toContainText('Artist(s)');
-    await help.click();const creditHelp=page.getByRole('dialog',{name:'Artist credit help'});
+    const primaryHelp=page.getByRole('button',{name:'About primary artists',exact:true});
+    await primaryHelp.click();await expect(page.getByRole('dialog',{name:'Primary artist help',exact:true})).not.toContainText('Appears On');await page.keyboard.press('Escape');
+    const help=page.getByRole('button',{name:'About featured artists',exact:true});
+    await expect(page.locator('.release-track-artist-label').filter({has:primaryHelp})).toContainText('Artist(s)');
+    if(width===1440){const labels=await page.locator('.release-track-artist-label').evaluateAll(nodes=>nodes.map(node=>node.getBoundingClientRect().bottom));expect(Math.max(...labels)-Math.min(...labels)).toBeLessThan(1);const rows=await page.locator('.release-track-artist-avatar-picker').evaluateAll(nodes=>nodes.map(node=>node.getBoundingClientRect().top));expect(Math.max(...rows)-Math.min(...rows)).toBeLessThan(1);}
+    await help.click();const creditHelp=page.getByRole('dialog',{name:'Featured artist help'});
     await expect(creditHelp).toBeVisible();await expect(creditHelp).toContainText('Appears On');
     const helpBounds=await creditHelp.boundingBox();expect(helpBounds.x).toBeGreaterThanOrEqual(0);expect(helpBounds.x+helpBounds.width).toBeLessThanOrEqual(width);
     await page.keyboard.press('Escape');await expect(creditHelp).not.toBeVisible();await expect(help).toBeFocused();

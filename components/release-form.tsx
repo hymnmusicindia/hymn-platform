@@ -4235,7 +4235,7 @@ export function ReleaseForm({
                               const unlinked = artistCreditNames(names).filter(name => !profilesFor(ids).some(profile => profile.name.toLowerCase() === name.toLowerCase()));
                               const credits = [...profilesFor(ids).map(profile => ({ name:profile.name, imageUrl:profile.imageUrl, id:profile.id })), ...unlinked.map(name => ({name,imageUrl:null,id:null}))];
                               return <div key={role} ref={registerField(`track-${index}-${role}`)} className="release-track-artist-field">
-                                <span className="release-track-artist-label">{role === "featured" ? "Featured artists" : "Remixer"}</span>
+                                <span className="release-track-artist-label">{role === "featured" ? <>Featured artists<ArtistRoleHelp featured /></> : "Remixer"}</span>
                                 <div className="release-track-artist-avatar-picker">
                                   {credits.map(credit => {
                                     const key = `${track.id}:${role}:${credit.id ?? credit.name}`;
