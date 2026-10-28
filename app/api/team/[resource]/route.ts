@@ -6,6 +6,7 @@ import { teamActor, teamIdentity } from "@/lib/team/access";
 import { TeamError } from "@/lib/team/policy";
 import { teamMutation, teamRead, acceptTeamInvitation, teamWrite } from "@/lib/team/service";
 import { consumeRateLimit } from "@/lib/rate-limit";
+import { recoverTeamRead, teamDatabaseErrorCode } from "@/lib/team/read-recovery";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -14,11 +15,20 @@ function failure(error: unknown) {
   if (error instanceof TeamError) return NextResponse.json({ error: error.message }, { status: error.status, headers });
   if (error instanceof ZodError) return NextResponse.json({ error: error.issues.map(i => `${i.path.join(".")}: ${i.message}`).join("; ") }, { status: 400, headers });
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return NextResponse.json({ error: "This record already exists. Refresh before trying again." }, { status: 409, headers });
+  // Avoid logging raw Prisma errors: they can contain query arguments and PII.
+  console.error("TEAM_WORKSPACE_REQUEST_FAILED", { code: teamDatabaseErrorCode(error) });
   return NextResponse.json({ error: "Team Workspace is temporarily unavailable. Please try again." }, { status: 503, headers });
 }
 type Context = { params: Promise<{ resource: string }> };
 export async function GET(request: Request, context: Context) {
-  try { const url = new URL(request.url); const a = await teamActor(url.searchParams.get("workspace") || undefined); const { resource } = await context.params; return NextResponse.json(await teamRead(a, resource, url.searchParams), { headers }); } catch (error) { return failure(error); }
+  try {
+    const url = new URL(request.url); const { resource } = await context.params;
+    const result = await recoverTeamRead(async () => {
+      const a = await teamActor(url.searchParams.get("workspace") || undefined);
+      return teamRead(a, resource, url.searchParams);
+    });
+    return NextResponse.json(result, { headers });
+  } catch (error) { return failure(error); }
 }
 export async function POST(request: Request, context: Context) {
   try {

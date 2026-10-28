@@ -5,8 +5,8 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { assertProductionDatabaseReady } from '../lib/production-database-safety';
 
-const expected = ['20261019150000_acquisition_payout_cancellation', '20261022090000_shared_contacts_followups'];
-const tables = ['team_workspaces', 'team_tasks', 'team_prospects', 'team_clients', 'acquisition_payouts', 'acquisition_payout_items', 'acquisition_payout_payments', 'acquisition_commissions', 'acquisition_revenue_evidence'];
+const expected = ['20261019150000_acquisition_payout_cancellation', '20261022090000_shared_contacts_followups', '20261026110000_referral_consent_and_effective_periods'];
+const tables = ['team_workspaces', 'team_tasks', 'team_prospects', 'team_clients', 'acquisition_payouts', 'acquisition_payout_items', 'acquisition_payout_payments', 'acquisition_commissions', 'acquisition_revenue_evidence', 'referrals', 'acquisition_leads', 'referral_mail_jobs'];
 async function main() {
   await assertProductionDatabaseReady(undefined, { enforceRestrictedRole: false });
   const db = new PrismaClient();
@@ -42,6 +42,7 @@ async function main() {
     await db.teamTask.findFirst({ select: { id: true, clientId: true, followUpContext: true } });
     await db.teamProspect.findFirst({ select: { id: true, clientId: true } });
     await db.acquisitionPayoutCancellation.count();
+    await db.acquisitionLead.findFirst({ select: { id: true, referralHistory: true, requiresReferralConsent: true, referralAcceptedAt: true, referralEndedAt: true, referralOnly: true } });
     console.log('Team OS schema queries passed. No customer messages or jobs were executed.');
   } finally { await db.$disconnect(); }
 }
