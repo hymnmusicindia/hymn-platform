@@ -25,6 +25,7 @@
 
 .scheduleDay{display:grid;gap:10px}.scheduleDay h4{margin:14px 0 0;color:#d8e4f4;font-size:13px;font-weight:500}.scheduleDay .calendarEmpty{padding:12px;text-align:left;margin:0;border-style:solid;color:#9daabe}
 
+.contactFlow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;padding:18px;border:1px solid #3b4c64;border-radius:14px;background:#17212e}.contactFlow>div{min-width:0}.contactFlow b{display:inline-grid;place-items:center;width:25px;height:25px;margin-right:8px;border-radius:50%;background:#30435e;font-size:12px}.contactFlow strong{font-size:13px}.contactFlow p{margin:9px 0 0;font-size:12px}@media(max-width:600px){.contactFlow{grid-template-columns:1fr;gap:16px}}
 .callbackFields { display:grid; gap:12px; min-width:0; margin-top:12px; }
 .callbackFields p { margin:0; font-size:13px; }
 .callbackFields small { display:block; margin-top:4px; }
