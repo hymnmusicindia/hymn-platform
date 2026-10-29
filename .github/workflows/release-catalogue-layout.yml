@@ -1,0 +1,22 @@
+name: Release catalogue layout
+on:
+  push:
+    branches: [main]
+    paths: ['components/release-portal.tsx', 'components/release-summary-card.tsx', 'components/release-catalogue.module.css', 'components/workspace-records*', 'app/styles/**', 'scripts/verify-release-record-layout.cjs', 'scripts/verify-compact-release-catalogue.cjs', '.github/workflows/release-catalogue-layout.yml']
+  pull_request:
+    paths: ['components/release-portal.tsx', 'components/release-summary-card.tsx', 'components/release-catalogue.module.css', 'components/workspace-records*', 'app/styles/**', 'scripts/verify-release-record-layout.cjs', 'scripts/verify-compact-release-catalogue.cjs', '.github/workflows/release-catalogue-layout.yml']
+permissions:
+  contents: read
+jobs:
+  layout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --fetch-retries=5 --fetch-timeout=120000
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/verify-compact-release-catalogue.cjs
+      - run: node scripts/verify-release-record-layout.cjs

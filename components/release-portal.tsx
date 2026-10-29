@@ -367,7 +367,7 @@ export function ReleasePortal({ releases, selectedReleaseId = null, initialPanel
   const [releaseTypeFilter, setReleaseTypeFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState<"all" | "upcoming" | "past" | "undated">("all");
   const [sortOrder, setSortOrder] = useState<"pipeline" | "newest" | "oldest" | "title">("newest");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const selectedRelease = useMemo(() => sortedReleases.find((release) => release.id === selectedReleaseId) ?? null, [selectedReleaseId, sortedReleases]);
   useEffect(()=>{

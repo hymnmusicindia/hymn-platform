@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import "./workspace-records.css";
 
 export type RecordColumn<T> = { key: string; label: string; render: (row: T) => ReactNode; value?: (row: T) => string | number; primary?: boolean };
 
