@@ -1,19 +1,20 @@
 import Image from "next/image";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { getCurrentUserForPage } from "@/lib/access";
-import { getBeatLicenceAgreement } from "@/lib/beat-license";
+import { getBeatLicenceAgreement, getPublicBeatLicenceAgreement } from "@/lib/beat-license";
 import { LicenceToolbar } from "@/components/licence-toolbar";
 
 export default async function BeatLicencePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUserForPage();
-  if (!user) redirect("/login");
   const purchaseId = Number((await params).id);
   if (!Number.isInteger(purchaseId) || purchaseId < 1) notFound();
-  let licence;
-  try { licence = await getBeatLicenceAgreement(purchaseId, user.id, user.role === "admin"); } catch { notFound(); }
+  let licence: Awaited<ReturnType<typeof getBeatLicenceAgreement>>;
+  try { licence = await getPublicBeatLicenceAgreement(purchaseId); } catch { notFound(); }
+  let canManage=false;
+  if(user){try{licence={...await getBeatLicenceAgreement(purchaseId,user.id,user.role==="admin"),pdfUrl:licence.pdfUrl};canManage=true;}catch{/* Other signed-in visitors see the same public agreement. */}}
 
   return <main className="min-h-screen bg-[#e9e7e1] px-3 py-6 text-[#17181b] sm:px-6 sm:py-10">
-    <LicenceToolbar purchaseId={licence.purchaseId} studioOrderId={licence.studioOrder?.publicId} releaseId={licence.releaseId} pdfUrl={licence.pdfUrl}/>
+    <LicenceToolbar purchaseId={licence.purchaseId} studioOrderId={licence.studioOrder?.publicId} releaseId={licence.releaseId} pdfUrl={licence.pdfUrl} readOnly={!canManage}/>
 
     <article className="mx-auto max-w-[920px] overflow-hidden rounded-[28px] bg-[#fbfaf7] shadow-[0_28px_90px_rgba(20,20,20,.16)] print:rounded-none print:shadow-none">
       <header className="flex flex-wrap items-start justify-between gap-8 bg-[#0c0e12] px-7 py-8 text-white sm:px-12 sm:py-11">
@@ -32,7 +33,7 @@ export default async function BeatLicencePage({ params }: { params: Promise<{ id
 
         <section className="border-t border-black/10 pt-9"><div className="flex items-end justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-black/40">Agreement terms</p><h2 className="mt-2 text-2xl font-semibold tracking-tight">What this licence permits</h2></div><span className="font-mono text-[10px] text-black/35">{licence.licenceNumber}</span></div><ol className="mt-8 grid gap-x-12 gap-y-8 sm:grid-cols-2">{licence.clauses.map((clause, index) => <li key={clause.title} className="relative pl-9"><span className="absolute left-0 top-0 font-mono text-xs font-bold text-black/35">{String(index + 1).padStart(2, "0")}</span><h3 className="font-semibold">{clause.title}</h3><p className="mt-2 text-sm leading-6 text-black/60">{clause.body}</p></li>)}</ol></section>
 
-        <footer className="mt-12 flex flex-wrap items-end justify-between gap-6 border-t border-black/15 pt-7"><div><p className="text-sm font-semibold">Electronically issued by HYMN Music</p><p className="mt-1 max-w-xl text-xs leading-5 text-black/45">Keep this agreement with its purchase, studio project, and distribution records. The versioned purchase snapshot remains the controlling electronic record.</p></div><div className="text-right font-mono text-[10px] text-black/40"><p>Purchase #{licence.purchaseId}</p><p>{licence.buyerEmail}</p></div></footer>
+        <footer className="mt-12 flex flex-wrap items-end justify-between gap-6 border-t border-black/15 pt-7"><div><p className="text-sm font-semibold">Electronically issued by HYMN Music</p><p className="mt-1 max-w-xl text-xs leading-5 text-black/45">Keep this agreement with its purchase, studio project, and distribution records. The versioned purchase snapshot remains the controlling electronic record.</p></div><div className="text-right font-mono text-[10px] text-black/40"><p>Purchase #{licence.purchaseId}</p>{canManage?<p>{licence.buyerEmail}</p>:null}</div></footer>
       </div>
     </article>
   </main>;

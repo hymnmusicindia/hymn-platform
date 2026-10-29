@@ -96,6 +96,36 @@ export async function getBeatLicenceAgreement(purchaseId: number, actorId: numbe
   return agreementFrom(purchase, snapshot);
 }
 
+async function publicLicenceSource(purchaseId: number) {
+  if (!Number.isSafeInteger(purchaseId) || purchaseId < 1 || purchaseId > 2147483647) throw new Error("Beat licence not found.");
+  const purchase = await sourceForPurchase(purchaseId);
+  const snapshot = record(purchase.licenseTermsSnapshot);
+  // Publish issued, frozen grants only; never invent terms from a current artist profile.
+  if (!purchase.hasAccess || !stringValue(snapshot.version) || !stringValue(record(snapshot.buyer).artistName)) throw new Error("Beat licence not found.");
+  assertPurchaseIdentity(purchase);
+  return {purchase,snapshot};
+}
+
+export async function getPublicBeatLicenceAgreement(purchaseId: number) {
+  const {purchase,snapshot} = await publicLicenceSource(purchaseId);
+  return {...agreementFrom(purchase,snapshot),pdfUrl:`/api/beat-purchases/${purchaseId}/license`,releaseId:null,studioOrder:null};
+}
+
+export async function readPublicBeatLicencePdf(purchaseId: number) {
+  const {purchase,snapshot} = await publicLicenceSource(purchaseId);
+  if(purchase.licenseAsset && !purchase.licenseAsset.deletedAt) {
+    try {
+      assertLicenceAsset(purchase,purchase.licenseAsset);
+      // Only this purchase-bound agreement is public. Generic asset/audio access stays private.
+      const asset=await localPrivateStorage.createAuthorizedRead({assetId:purchase.licenseAsset.id,requesterUserId:purchase.userId,isAdmin:true});
+      await verifyAgreementBytes(asset.bytes,purchase);
+      return {bytes:asset.bytes,fileName:asset.fileName};
+    } catch { /* Re-render legacy or unavailable PDFs from the same frozen grant, without changing it. */ }
+  }
+  const agreement=agreementFrom(purchase,snapshot);
+  return {bytes:await buildAgreementPdf(agreement,agreementIdentity(purchase)),fileName:`${agreement.licenceNumber}.pdf`};
+}
+
 function ascii(value: string) { return value.replace(/[^\x20-\x7E]/g, "-"); }
 function wrap(value: string, font: PDFFont, size: number, width: number) { const words = ascii(value).split(/\s+/); const lines: string[] = []; let line = ""; for (const word of words) { const next = line ? `${line} ${word}` : word; if (font.widthOfTextAtSize(next, size) <= width) line = next; else { if (line) lines.push(line); line = word; } } if (line) lines.push(line); return lines; }
 

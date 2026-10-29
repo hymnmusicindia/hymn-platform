@@ -5,12 +5,13 @@ import {build} from 'esbuild';
 import {PDFDocument} from 'pdf-lib';
 import {prisma} from '../lib/prisma';
 import {createOrder,completeCheckoutOrder,getBeatPurchasesByUser} from '../lib/db';
-import {generateBeatLicense,getBeatLicenceAgreement} from '../lib/beat-license';
+import {generateBeatLicense,getBeatLicenceAgreement,getPublicBeatLicenceAgreement,readPublicBeatLicencePdf} from '../lib/beat-license';
 import {localPrivateStorage} from '../lib/private-storage';
 import {purchaseAttachments} from '../lib/email/purchase-attachments';
 import {beatEmail} from '../lib/email/templates/beat-email';
 import {readFile} from 'node:fs/promises';
 import {getBeatPurchaseDetails} from '../lib/beat-purchase-details';
+import {agreementIdentity} from '../lib/beat-delivery-identity';
 import {customerTab} from '../lib/customer-dashboard-tabs';
 
 async function main(){
@@ -64,12 +65,32 @@ async function main(){
    const invoke=(id:string)=>route.GET(new Request(`https://hymnmusic.fun/api/beat-purchases/${id}/${kind}`),{params:Promise.resolve({id})});
    assert.equal((await invoke('bad')).status,404);
    const success=await invoke(String(purchase.id));assert.equal(success.status,200);assert.match(success.headers.get('content-disposition')||'',/attachment/);assert.equal(success.headers.get('cache-control'),'private, no-store');
-   state.licensingActor={id:outsider.id,role:'customer'};assert.equal((await invoke(String(purchase.id))).status,404);
+   state.licensingActor={id:outsider.id,role:'customer'};assert.equal((await invoke(String(purchase.id))).status,kind==='license'?200:404,'Public agreement PDFs are shareable; beat audio stays owner-only.');
    state.licensingActor={id:buyer.id,role:'customer'};
    await prisma.beatPurchase.update({where:{id:purchase.id},data:{hasAccess:false}});assert.equal((await invoke(String(purchase.id))).status,403);
    assert.equal(await getBeatPurchaseDetails(purchase.id,buyer.id),null,'Revoked purchases must not expose the detail page');
    await prisma.beatPurchase.update({where:{id:purchase.id},data:{hasAccess:true}});
  }
+ // Third parties can read issued proof without an account; private purchases and files stay protected.
+ await build({entryPoints:['app/(authenticated)/licenses/[id]/page.tsx'],outfile:'.cache/public-licence-page.cjs',bundle:true,platform:'node',format:'cjs',packages:'external',plugins:[{name:'public-page-session',setup(b){b.onResolve({filter:/^(@\/lib\/(access|prisma)|next\/(navigation|image|link))$/},a=>({path:a.path,namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},a=>({contents:a.path.endsWith('access')?'exports.getCurrentUserForPage=async()=>null':a.path.endsWith('prisma')?'exports.prisma=globalThis.licensingPrisma':a.path.endsWith('navigation')?'exports.notFound=()=>{throw Error("NOT_FOUND")};exports.useRouter=()=>({push(){}})':'exports.default=()=>null'}));}}]});
+ const publicPage=await import('../.cache/public-licence-page.cjs');
+ const pageTree=await publicPage.default({params:Promise.resolve({id:String(purchase.id)})});
+ const toolbar=pageTree.props.children.find((child:any)=>child?.props?.purchaseId===purchase.id);
+ assert.equal(toolbar.props.readOnly,true,'Anonymous agreement pages must not mount owner actions.');assert.equal(toolbar.props.pdfUrl,`/api/beat-purchases/${purchase.id}/license`);
+ const publicAgreement=await getPublicBeatLicenceAgreement(purchase.id);
+ assert.equal(publicAgreement.beatTitle,'Frozen Terms');assert.equal(publicAgreement.releaseId,null);assert.equal(publicAgreement.studioOrder,null);
+ const issuedIdentity=await prisma.beatPurchase.findUniqueOrThrow({where:{id:purchase.id},include:{licenseAsset:true}});
+ const originalChecksum=issuedIdentity.licenseAsset!.checksum;
+ await prisma.storedAsset.update({where:{id:issuedIdentity.licenseAsset!.id},data:{checksum:'0'.repeat(64)}});
+ const recovered=await readPublicBeatLicencePdf(purchase.id);
+ assert.equal((await PDFDocument.load(recovered.bytes)).getSubject(),agreementIdentity(issuedIdentity),'A legacy/unavailable PDF is reconstructed from this exact frozen grant, never another purchase.');
+ await prisma.storedAsset.update({where:{id:issuedIdentity.licenseAsset!.id},data:{checksum:originalChecksum}});
+ assert.equal((await prisma.beatPurchase.findUniqueOrThrow({where:{id:purchase.id}})).downloadCount,issuedIdentity.downloadCount,'Anonymous agreement reads do not alter buyer download history.');
+ await prisma.beatPurchase.update({where:{id:purchase.id},data:{hasAccess:false}});
+ await assert.rejects(()=>getPublicBeatLicenceAgreement(purchase.id),/not found/);await assert.rejects(()=>readPublicBeatLicencePdf(purchase.id),/not found/);
+ await prisma.beatPurchase.update({where:{id:purchase.id},data:{hasAccess:true}});
+ const unissued=await prisma.beatPurchase.create({data:{userId:outsider.id,beatId:beat.id,licenseType:'mp3'}});
+ await assert.rejects(()=>getPublicBeatLicenceAgreement(unissued.id),/not found/,'Do not manufacture a public grant from an account artist profile.');
  // A producer sample certificate is frozen into the purchased licence and never public.
  const certificate=await PDFDocument.create();certificate.addPage().drawText('Sample licence certificate');
  const proof=await localPrivateStorage.upload({ownerUserId:producer.id,assetType:'private_ownership_proof',fileName:'splice-certificate.pdf',mimeType:'application/pdf',bytes:Buffer.from(await certificate.save())});
