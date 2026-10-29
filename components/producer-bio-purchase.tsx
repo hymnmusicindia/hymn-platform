@@ -1,4 +1,6 @@
 "use client";
+import {BeatBuyerFields,emptyBeatBuyer} from "./beat-buyer-fields";
+import {beatBuyerDetailsSchema} from "@/lib/beat-buyer-details";
 import Link from "next/link";
 import { Check, Loader2, Mail, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -106,14 +108,17 @@ export function useProducerBioPurchase(initialViewer: BioViewer | null) {
     } catch(error) {setUnconfirmed(payment);setError(`${error instanceof Error?error.message:"Confirmation pending."} Do not pay again; use Check payment.`);setPanel("checkout");}
     finally {setBusy(false);paying.current=false;verifying.current=false;}
   }
+  const [buyerDetails,setBuyerDetails]=useState(emptyBeatBuyer);
+  useEffect(()=>{setBuyerDetails(value=>({...value,acceptedTerms:false}));},[items]);
   async function pay() {
     if(paying.current)return;
     if(unconfirmed){await confirm(unconfirmed);return;}
     if(!viewer||!quote||!items.length)return;
+    const buyer=beatBuyerDetailsSchema.safeParse(buyerDetails);if(!buyer.success){setError(buyer.error.issues[0].message);return;}
     paying.current=true;setBusy(true);setError("");checkedItems.current=[...items];
     let createdOrderId:string|null=null;
     try {
-      const response=await fetch("/api/checkout/create-order",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:items.map(item=>({type:"beat",beatId:item.beatId,licenseType:item.licenseType})),useReferralCredits:false})});
+      const response=await fetch("/api/checkout/create-order",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:items.map(item=>({type:"beat",beatId:item.beatId,licenseType:item.licenseType})),useReferralCredits:false,buyerDetails:buyer.data})});
       const data=await response.json();
       if(response.status===401){setViewer(null);setPending(buyBeat?{action:"buy",beat:buyBeat,licence}:{action:"checkout"});setPanel("login");throw new Error("Please sign in again to continue.");}
       if(!response.ok)throw new Error(data.error||"Could not start checkout.");
@@ -123,7 +128,7 @@ export function useProducerBioPurchase(initialViewer: BioViewer | null) {
       // Native modal must close before Razorpay opens its own payment dialog.
       dialog.current?.close();setPanel(null);
       let failed=false;let returned=false;
-      const checkout=new window.Razorpay({key:data.key,order_id:data.orderId,amount:data.amount,currency:data.currency,name:"HYMN Music",description:buyBeat?.title||"Beat licences",prefill:{name:viewer.name,email:viewer.email},handler:(payment:Payment)=>{returned=true;setUnconfirmed(payment);void confirm(payment);},modal:{ondismiss:()=>{if(!returned&&!verifying.current){void cancelUnpaidCheckout(data.orderId).finally(()=>{paying.current=false;setBusy(false);if(failed)setPanel("checkout");});}}}});
+      const checkout=new window.Razorpay({key:data.key,order_id:data.orderId,amount:data.amount,currency:data.currency,name:"HYMN Music",description:buyBeat?.title||"Beat licences",prefill:{name:buyer.data.legalName,email:viewer.email,contact:buyer.data.phone},handler:(payment:Payment)=>{returned=true;setUnconfirmed(payment);void confirm(payment);},modal:{ondismiss:()=>{if(!returned&&!verifying.current){void cancelUnpaidCheckout(data.orderId).finally(()=>{paying.current=false;setBusy(false);if(failed)setPanel("checkout");});}}}});
       // Keep Razorpay's retry UI usable; show our error sheet only after it closes.
       checkout.on("payment.failed",event=>{failed=true;setError(event.error?.description||"Payment failed. No beat has been purchased.");});checkout.open();
     } catch(error){if(createdOrderId)await cancelUnpaidCheckout(createdOrderId);setError(error instanceof Error?error.message:"Checkout failed.");setBusy(false);paying.current=false;}
@@ -136,6 +141,7 @@ export function useProducerBioPurchase(initialViewer: BioViewer | null) {
       {buyBeat&&!unconfirmed&&<div className={s.licences} role="radiogroup" aria-label="Choose beat licence">{(["mp3","wav","stems","exclusive"] as const).filter(type=>beatLicensePrice(buyBeat,type)>0&&(!buyBeat.availableLicenses||buyBeat.availableLicenses.includes(type))).map(type=><button role="radio" aria-checked={licence===type} className={licence===type?s.selected:""} key={type} onClick={()=>{setLicence(type);setItems([{beatId:buyBeat.id,licenseType:type}]);}}>{type.toUpperCase()}<small>{money(beatLicensePrice(buyBeat,type))}</small></button>)}</div>}
       {quote&&<div className={s.summary}>{quote.lineItems.map((item,index)=><div key={index}><span>{item.label}<small>{item.description}</small></span><strong>{money(item.total)}</strong></div>)}</div>}
       {quote?.lineItems.map((item,index)=>item.usageTerms?<details key={index} className="my-3 max-h-52 overflow-y-auto rounded-xl border border-white/15 p-3 text-xs"><summary className="cursor-pointer font-semibold">Licence terms: {item.label}</summary><dl className="my-3 grid grid-cols-2 gap-2">{item.usageTerms.map(row=><div key={row.label}><dt>{row.label}</dt><dd className="font-semibold">{row.value}</dd></div>)}</dl>{item.licenceClauses?.map(clause=><p key={clause.title} className="mb-3 leading-5"><strong>{clause.title}. </strong>{clause.body}</p>)}</details>:null)}
+      {!unconfirmed&&<BeatBuyerFields value={buyerDetails} onChange={setBuyerDetails} disabled={busy} email={viewer?.email}/>}
       <p className={s.delivery}><Mail size={15}/> Files + licence by email after payment</p>
       {error&&<p className={s.error} role="alert">{error}</p>}
       <button className={s.pay} disabled={busy||(!unconfirmed&&(loading||!quote||!items.length))} onClick={()=>void pay()}>{busy?<><Loader2 size={18} className={s.spin}/> Confirming...</>:unconfirmed?"Check payment":loading?"Checking price...":`Pay ${money(quote?.finalAmount||0)}`}</button>

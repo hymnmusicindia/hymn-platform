@@ -1,4 +1,6 @@
 "use client";
+import {BeatBuyerFields,emptyBeatBuyer} from "./beat-buyer-fields";
+import {beatBuyerDetailsSchema} from "@/lib/beat-buyer-details";
 import { loadBioRazorpay as loadRazorpayScript } from "@/lib/client-razorpay";
 
 import { customerMessage } from "@/lib/customer-message";
@@ -78,6 +80,7 @@ function readBeatCart(): CheckoutItem[] {
 
 
 export function CheckoutExperience({ product }: { product?: string | null }) {
+  const [buyerDetails,setBuyerDetails]=useState(emptyBeatBuyer);
   const [items, setItems] = useState<CheckoutItem[]>(() => product === "beatstore" ? [] : defaultItems(product));
   const [couponInput, setCouponInput] = useState("");
   const [couponCode, setCouponCode] = useState<string | undefined>();
@@ -129,6 +132,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
     };
   }, [payload]);
 
+  useEffect(()=>{setBuyerDetails(value=>({...value,acceptedTerms:false}));},[items]);
   function applyCoupon() {
     setCouponCode(couponInput.trim() || undefined);
   }
@@ -140,6 +144,8 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
 
   async function proceedToPay() {
     if (!quote || loading || paying || !items.length) return;
+    const buyer=items.some(item=>item.type==="beat")?beatBuyerDetailsSchema.safeParse(buyerDetails):null;
+    if(buyer&&!buyer.success){setFeedback(buyer.error.issues[0].message);return;}
     setPaying(true);
     setFeedback(null);
     let createdOrderId: string | null = null;
@@ -147,7 +153,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
       const response = await fetch("/api/checkout/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({...payload,...(buyer?.success?{buyerDetails:buyer.data}:{})})
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not create order.");
@@ -175,6 +181,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
         currency: data.currency,
         name: "HYMN",
         description: "Secure HYMN checkout",
+        ...(buyer?.success?{prefill:{name:buyer.data.legalName,contact:buyer.data.phone}}:{}),
         ...(data.billingType === "subscription" ? { subscription_id: data.subscriptionId } : { order_id: data.orderId }),
         handler: async (payment: RazorpayResponse) => {
           paymentReturned = true;
@@ -241,6 +248,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
             {loading ? <p className="text-sm" style={{ color: "var(--text-muted)" }}>Refreshing checkout...</p> : null}
           </div>
 
+          {items.some(item=>item.type==="beat")&&!success&&<BeatBuyerFields value={buyerDetails} onChange={setBuyerDetails} disabled={paying}/>}
           {product === "beatstore" ? <><div className="mt-6 rounded-[1.4rem] border p-4" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
             <div className="flex items-center gap-2">
               <BadgePercent className="h-4 w-4" style={{ color: "var(--text-soft)" }} />

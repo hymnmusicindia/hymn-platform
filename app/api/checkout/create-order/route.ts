@@ -40,6 +40,7 @@ export async function POST(request: Request) {
 
     await createOrder({
       userId: session.sub,
+      buyerDetails: payload.buyerDetails,
       productId: quote.productId,
       originalPrice: quote.originalPrice,
       discountApplied: quote.couponDiscount + quote.referralBenefitApplied,

@@ -1,3 +1,4 @@
+import { beatBuyerDetailsSchema } from "./beat-buyer-details";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { normalizeBeatLicenseType } from "@/lib/beat-store";
@@ -7,6 +8,7 @@ import { BEAT_LICENCE_VERSION, beatUsageRights, licenceClauses } from './beat-li
 // Freeze only the identities and legal terms needed for this order alongside
 // inventory reservations. Hydrate the remaining UI/file details after committing.
 export async function persistCheckoutOrder(input: Omit<Order, "id" | "createdAt" | "buyerName" | "buyerEmail">) {
+  const details=input.buyerDetails?beatBuyerDetailsSchema.parse(input.buyerDetails):null;
   return prisma.$transaction(async tx => {
     const beatIds = [...new Set(input.items.map(item => item.beatId))];
     await tx.beat.updateMany({ where: { id: { in: beatIds }, status: "EXCLUSIVE_RESERVED", exclusiveReservationExpiresAt: { lt: new Date() } }, data: { status: "PUBLISHED", exclusiveReservedByUserId: null, exclusiveReservationOrderId: null, exclusiveReservationExpiresAt: null } });
@@ -46,7 +48,7 @@ export async function persistCheckoutOrder(input: Omit<Order, "id" | "createdAt"
           const type=normalizeBeatLicenseType(item.licenseType),exclusive=type==='exclusive';
           const producer=beat.producerParty?.professionalName||beat.user.name;
           const rights=exclusive?{commercialUse:true,exclusiveUse:true,copyrightAssigned:beat.exclusiveLegalMode==='RIGHTS_ASSIGNMENT',contentIdPolicy:beat.sampleDeclaration==='NO_UNCONTROLLED_SAMPLES'?'ALLOWED':'NOT_ALLOWED',includesWav:true,includesStems:true}:{...beatUsageRights(beat),includesMp3:type==='mp3',includesWav:type==='wav',includesStems:type==='stems'};
-          return { beatId: item.beatId, licenseType: type, price: new Prisma.Decimal(item.price), licenseUrl: item.licenseUrl ?? null, licenseTermsSnapshot:{version:BEAT_LICENCE_VERSION,licenseType:type,legalMode:exclusive?beat.exclusiveLegalMode:'NON_EXCLUSIVE_LICENSE',beat:{id:beat.id,title:beat.title},buyer:{id:buyer.id,legalName:buyer.name,artistName:buyer.artistCards[0]?.artistName||'',email:buyer.email},producer:{partyId:beat.producerParty?.publicId??null,creditedName:producer,legalName:beat.producerParty?.legalName??null},purchaseDate:now.toISOString(),price:item.price,currency:'INR',existingGeneralLicenses:beat.generalLicensesSold,rights,clauses:licenceClauses(exclusive,producer,rights)} };
+          return { beatId: item.beatId, licenseType: type, price: new Prisma.Decimal(item.price), licenseUrl: item.licenseUrl ?? null, licenseTermsSnapshot:{version:BEAT_LICENCE_VERSION,licenseType:type,legalMode:exclusive?beat.exclusiveLegalMode:'NON_EXCLUSIVE_LICENSE',beat:{id:beat.id,title:beat.title},buyer:{id:buyer.id,legalName:details?.legalName||buyer.name,artistName:details?.artistName||'',email:buyer.email,...(details?{phone:details.phone,acceptedTermsAt:now.toISOString()}: {})},producer:{partyId:beat.producerParty?.publicId??null,creditedName:producer,legalName:beat.producerParty?.legalName??null},purchaseDate:now.toISOString(),price:item.price,currency:'INR',existingGeneralLicenses:beat.generalLicensesSold,rights,clauses:licenceClauses(exclusive,producer,rights)} };
         }) }
       },
       select: { id: true }

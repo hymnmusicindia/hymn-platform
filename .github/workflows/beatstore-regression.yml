@@ -84,3 +84,4 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:beatstore:browser
       - run: node scripts/verify-beat-purchase-browser.cjs
+      - run: node scripts/verify-beat-buyer-checkout.cjs

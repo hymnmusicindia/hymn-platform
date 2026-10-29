@@ -21,7 +21,7 @@ async function main() {
     assert.equal(options.timeout, 20000, "Cloud DB latency must not use Prisma's five-second default");
     committed = false;
     const tx = {
-      user:{findUniqueOrThrow:async()=>({id:18,name:"Buyer",email:"buyer@example.test",artistCards:[]})},
+      user:{findUniqueOrThrow:async()=>({id:18,name:"Buyer",email:"buyer@example.test",artistCards:[{artistName:"Unconfirmed saved artist"}]})},
       beat: {
         updateMany: async (query: any) => {
           if (query.data.status === "PUBLISHED") {
@@ -39,6 +39,10 @@ async function main() {
         assert.equal(Number(query.data.finalAmount), 120);
         assert.equal(query.data.razorpayOrderId, "order_fixture");
         assert.equal(query.data.items.create[0].licenseTermsSnapshot.version,'2026-10-29');
+        assert.equal(query.data.items.create[0].licenseTermsSnapshot.buyer.artistName,'Confirmed artist');
+        assert.equal(query.data.items.create[0].licenseTermsSnapshot.buyer.legalName,'Confirmed Buyer');
+        assert.equal(query.data.items.create[0].licenseTermsSnapshot.buyer.phone,'+91 9876543210');
+        assert.ok(query.data.items.create[0].licenseTermsSnapshot.buyer.acceptedTermsAt);
         assert.ok(query.data.items.create[0].licenseTermsSnapshot.clauses.length>8);
         if(query.data.items.create[0].licenseType!=='exclusive')assert.equal(query.data.items.create[0].licenseTermsSnapshot.rights.streamingLimit,25000);
         writes++; calls.push("write"); return { id: 42 };
@@ -46,7 +50,8 @@ async function main() {
     };
     const result = await callback(tx); committed = true; return result;
   } };
-  const input = { userId: 18, amount: 120, finalAmount: 120, razorpayOrderId: "order_fixture", paymentStatus: "created", items: [{ beatId: 5, licenseType: "mp3", price: 120 }] };
+  const input = { buyerDetails:{legalName:"Confirmed Buyer",artistName:"Confirmed artist",phone:"+91 9876543210",acceptedTerms:true as const}, userId: 18, amount: 120, finalAmount: 120, razorpayOrderId: "order_fixture", paymentStatus: "created", items: [{ beatId: 5, licenseType: "mp3", price: 120 }] };
+  await assert.rejects(persistCheckoutOrder({...input,buyerDetails:{...input.buyerDetails,artistName:""}}), /artist name/);
   assert.equal(await persistCheckoutOrder(input), 42); assert(committed);
   assert.deepEqual(calls, ["cleanup", "write"]);
   status = "EXCLUSIVE_RESERVED";

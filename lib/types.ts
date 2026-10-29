@@ -592,6 +592,7 @@ export interface OrderItem {
 }
 
 export interface Order {
+  buyerDetails?: import("./beat-buyer-details").BeatBuyerDetails;
   id: number;
   userId: number;
   buyerName?: string;

@@ -11,7 +11,8 @@ async function main() {
   const beat = await prisma.beat.create({ data: { userId: producer.id, title: "Private Master", bpm: 120, genre: "Test", mood: "Test", keySignature: "C", priceCents: 1000, enabled: true, status: "APPROVED" } });
   const purchase = await prisma.beatPurchase.create({ data: { userId: user.id, beatId: beat.id, licenseType: "mp3", paymentId: `pay_${stamp}` } });
 
-  const [first, second] = await Promise.all([generateBeatLicense(purchase.id, user.id), generateBeatLicense(purchase.id, user.id)]);
+  await assert.rejects(()=>generateBeatLicense(purchase.id,user.id),/Add your artist name/,"A saved artist profile is not purchase consent.");
+  const [first, second] = await Promise.all([generateBeatLicense(purchase.id, user.id, false, "Storage Buyer"), generateBeatLicense(purchase.id, user.id, false, "Storage Buyer")]);
   assert.equal(first.licenseUrl, second.licenseUrl);
   assert.match(first.licenseUrl, /^\/api\/assets\/\d+\/download(?:\?filename=[^&]+)?$/);
   const assets = await prisma.storedAsset.findMany({ where: { beatPurchaseId: purchase.id } });

@@ -17,6 +17,6 @@ export async function getBeatPurchaseDetails(id:number,userId:number):Promise<Be
   ]);
   const snapshot=p.licenseTermsSnapshot as {grantReference?:string;buyer?:{artistName?:string};price?:number}|null;
   const master=p.beat.deliverableAsset;
-  const artistName=snapshot?.buyer?.artistName||p.user.artistCards[0]?.artistName||'';
+  const artistName=snapshot?.buyer?.artistName||'';
   return {id,title:agreement.beatTitle,producer:agreement.producerName,artworkUrl:p.beat.artwork?.publicUrl||null,licenseLabel:agreement.licenceLabel,purchasedAt:p.purchasedAt.toISOString(),price:agreement.price,complimentary:Boolean(snapshot?.grantReference&&snapshot.price===0),fileFormat:master?.mimeType==='audio/mpeg'?'MP3':master?.mimeType?.includes('wav')?'WAV':master?.mimeType==='application/zip'?'Stem archive':master?.mimeType==='audio/flac'?'FLAC':'File pending',fileReady:Boolean(master&&!master.deletedAt&&canDeliverBeatFile(p.licenseType,master.mimeType)),pdfReady:Boolean(p.licenseAsset&&!p.licenseAsset.deletedAt),needsArtistName:!artistName,artistName,email:p.user.email,emailState:logs.some(l=>l.status==='sent')?'sent':logs.some(l=>l.status==='queued')||tasks.some(t=>['open','processing'].includes(t.status))?'pending':logs.some(l=>l.status==='failed')||tasks.some(t=>t.status==='review')?'review':'not_requested',releaseId:p.releaseId,agreement};
 }

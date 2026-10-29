@@ -1,3 +1,4 @@
+import { beatBuyerDetailsSchema } from "./beat-buyer-details";
 import { z } from "zod";
 import { BEAT_KEYS, normalizeBeatKey, normalizeBeatMoods, splitBeatMoods } from '@/lib/beat-metadata';
 import { getContentIdEligibility } from "@/lib/content-id-eligibility";
@@ -105,7 +106,7 @@ export const orderItemSchema = z.object({
   price: z.number().positive()
 });
 
-export const paymentCreateSchema = z.object({ items: z.array(orderItemSchema).min(1) });
+export const paymentCreateSchema = z.object({ items: z.array(orderItemSchema).min(1), buyerDetails:beatBuyerDetailsSchema });
 export const paymentVerifySchema = z.object({
   razorpay_order_id: z.string().min(1),
   razorpay_payment_id: z.string().min(1),
@@ -144,7 +145,7 @@ export const checkoutQuoteSchema = z.object({
   useReferralCredits: z.boolean().default(false)
 });
 
-export const checkoutCreateOrderSchema = checkoutQuoteSchema;
+export const checkoutCreateOrderSchema = checkoutQuoteSchema.extend({buyerDetails:beatBuyerDetailsSchema.optional()}).refine(value=>!value.items.some(item=>item.type==="beat")||Boolean(value.buyerDetails),{message:"Complete your licence details before payment.",path:["buyerDetails"]});
 
 export const checkoutVerifySchema = z.object({
   razorpay_order_id: z.string().min(1),

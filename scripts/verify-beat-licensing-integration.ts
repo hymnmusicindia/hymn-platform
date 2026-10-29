@@ -23,11 +23,11 @@ async function main(){
  const producer=await prisma.user.create({data:{name:'Licence Producer',email:`producer-${stamp}@example.test`,googleId:`p-${stamp}`,role:'PRODUCER',status:'ACTIVE'}});
  const buyer=await prisma.user.create({data:{name:'Licence Buyer',email:`buyer-${stamp}@example.test`,googleId:`b-${stamp}`,status:'ACTIVE'}});
  const outsider=await prisma.user.create({data:{name:'Other Buyer',email:`other-${stamp}@example.test`,googleId:`o-${stamp}`,status:'ACTIVE'}});
- await prisma.artistCard.create({data:{userId:buyer.id,artistName:'Stage Name'}});
+ await prisma.artistCard.create({data:{userId:buyer.id,artistName:'Unconfirmed Profile'}});
  const beat=await prisma.beat.create({data:{userId:producer.id,title:'Frozen Terms',bpm:100,genre:'Hip Hop',mood:'Chill',keySignature:'C Minor',priceCents:30000,generalPriceCents:20000,mp3PriceCents:10000,exclusivePriceCents:100000,enabled:true,status:'PUBLISHED',generalStreamingLimit:25000,generalVideoLimit:2,generalTermDurationMonths:12,sampleDeclaration:'NO_UNCONTROLLED_SAMPLES'}});
  const wav=Buffer.concat([Buffer.from('RIFF'),Buffer.alloc(4),Buffer.from('WAVEfmt ')]);
  await localPrivateStorage.upload({ownerUserId:producer.id,beatId:beat.id,assetType:'private_beat_deliverable',fileName:'master.wav',mimeType:'audio/wav',bytes:wav});
- const order=await createOrder({userId:buyer.id,amount:200,originalPrice:200,finalAmount:200,razorpayOrderId:`licence-${stamp}`,paymentStatus:'created',items:[{beatId:beat.id,licenseType:'wav',price:200}]});
+ const order=await createOrder({buyerDetails:{legalName:"Confirmed Legal Name",artistName:"Stage Name",phone:"+91 9876543210",acceptedTerms:true},userId:buyer.id,amount:200,originalPrice:200,finalAmount:200,razorpayOrderId:`licence-${stamp}`,paymentStatus:'created',items:[{beatId:beat.id,licenseType:'wav',price:200}]});
  const item=await prisma.checkoutOrderItem.findFirstOrThrow({where:{orderId:order!.id}});
  assert.equal((item.licenseTermsSnapshot as any).rights.streamingLimit,25000);
  await prisma.beat.update({where:{id:beat.id},data:{generalStreamingLimit:10,generalVideoLimit:0,title:'New catalogue title'}});
@@ -40,7 +40,7 @@ async function main(){
  assert.equal(detail?.title,'Frozen Terms');assert.equal(detail?.pdfReady,true);assert.equal(detail?.fileReady,true);
  assert.equal(await getBeatPurchaseDetails(purchase.id,outsider.id),null,'Standalone purchase details must not expose another account');
  assert.equal(await getBeatPurchaseDetails(NaN,buyer.id),null);
- assert.equal(agreement.beatTitle,'Frozen Terms');assert.equal(agreement.artistName,'Stage Name');
+ assert.equal(agreement.buyerLegalName,'Confirmed Legal Name');assert.equal(agreement.beatTitle,'Frozen Terms');assert.equal(agreement.artistName,'Stage Name');
  assert.equal(agreement.rights.find(r=>r.label==='Audio streams')?.value,'25000');
  assert.equal(agreement.rights.find(r=>r.label==='Music videos')?.value,'2');
  assert.ok(agreement.clauses.some(c=>c.body.includes('25000')));
