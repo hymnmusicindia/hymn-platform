@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { Release } from './types';
+export const DISTRIBUTION_QC_POLICY_VERSION = 3;
 
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 function canonical(value: unknown): string {
@@ -28,7 +29,7 @@ export function distributionAutomationDecision(release: Release, context: { acce
   if (context.accepted && !context.correctionResolved) return hold('The partner already accepted this release. Continue monitoring its current delivery.', 'monitoring');
   if (release.status==='queued_for_distribution'&&!context.retryable)return hold('A queued package has no confirmed safe retry.','reconciliation');
   if (!['queued_for_distribution','submitted','in_queue','in_qc_queue','under_review','resubmitted','approved'].includes(release.status)) return hold('This workflow state requires its existing recovery or customer correction action.');
-  if (/non.?exclusive|ai.generated/i.test(String(release.contentType || '')) || release.tracks?.some(track=>track.isCover)) return hold('Licensed, AI-generated or cover content requires rights evidence review.');
+  if (/non.?exclusive|ai.generated/i.test(String(release.contentType || '')) || release.tracks?.some(track=>track.isCover)) return hold('Licensed, AI-generated or cover content requires rights evidence review before the updated package can be sent.', 'rights_review');
   if (release.reviewIssues && (release.reviewIssues.severity === 'critical_issue' || !['metadata','artwork','audio','release_date','genre_language','platform_destination'].includes(release.reviewIssues.type))) return hold('A rights, identity, contributor or uncertain review decision needs a person.');
   const flags = object(release.metadata);
   if (['copyrightClaim','copyrightClaimed','fraudFlag','manualQcHold','explicitContentMismatch'].some(key=>Boolean(flags[key]))) return hold('A copyright, fraud, explicit-content or manual hold must be resolved by a reviewer.');

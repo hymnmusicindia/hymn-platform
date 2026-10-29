@@ -32,4 +32,10 @@ assert.equal(validQcEvidence({...signed,status:'manual_review_required'}),false)
 assert.equal(validQcEvidence({status:'passed',revision}),false);
 assertCurrentAutomaticQc({...release,metadata:{autoQc:signed}},revision);
 for(const changed of [{...release,id:124},{...release,recordVersion:3},{...release,releaseTitle:'Changed'},{...release,tracks:[{...release.tracks![0],audioUrl:'/other.wav'}]}])assert.throws(()=>assertCurrentAutomaticQc({...changed,metadata:{autoQc:signed}},revision),/changed/);
+
+
+const {correctionReviewSummary,releaseBucket,automationSummary}=require('../lib/distribution-workspace');
+const corrected={...release,status:'under_review',contentType:'Non-Exclusive Licensed',metadata:{...release.metadata,correctionReview:{status:'pending'},autoQc:{status:'manual_review_required',changeKind:'missing_baseline'}}} as Release;
+assert.equal(releaseBucket(corrected),'review');assert.equal(correctionReviewSummary(corrected)?.delivery,'Updated package not yet sent');assert.equal(automationSummary(corrected).label,'Rights review required');assert.equal(correctionReviewSummary({...corrected,status:'sent_to_distributor'}),null);
+
 console.log('PASS automation policy: payment, all declarations, sensitive holds, amendments, accepted/uncertain attempts, safe retries, narrow formatting fixes, change detection and tamper-resistant revision evidence.');

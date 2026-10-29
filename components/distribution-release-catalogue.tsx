@@ -3,11 +3,11 @@ import { useMemo, useState } from 'react';
 import { ArrowDownUp, ArrowUpRight, Disc3, Search, ShieldCheck } from 'lucide-react';
 import type { Release } from '@/lib/types';
 import { adminReleaseStatusLabel } from '@/lib/release-status-presentation';
-import { automationSummary, newestReleaseFirst, releaseBucket } from '@/lib/distribution-workspace';
+import { automationSummary, correctionReviewSummary, newestReleaseFirst, releaseBucket } from '@/lib/distribution-workspace';
 import { artworkPreviewUrl } from '@/lib/artwork-preview';
 import styles from './distribution-operations.module.css';
 
-const views = [{ key: 'submitted', label: 'Submitted' }, { key: 'review', label: 'QC & review' }, { key: 'corrections', label: 'Corrections' }, { key: 'delivery', label: 'In delivery' }, { key: 'live', label: 'Live' }, { key: 'drafts', label: 'Drafts' }, { key: 'exceptions', label: 'Exceptions' }] as const;
+const views = [{ key: 'submitted', label: 'Submitted' }, { key: 'review', label: 'HYMN QC & review' }, { key: 'corrections', label: 'Corrections' }, { key: 'delivery', label: 'In delivery' }, { key: 'live', label: 'Live' }, { key: 'drafts', label: 'Drafts' }, { key: 'exceptions', label: 'Exceptions' }] as const;
 export function DistributionReleaseCatalogue({ releases, search, onSearch, onOpen, assignment, onAssignment, status, onStatus, collection, onCollection }: { releases: Release[]; search: string; onSearch: (value: string) => void; onOpen: (id: number) => void; assignment: string; onAssignment: (value: string) => void; status: string; onStatus: (value: string) => void; collection?:string; onCollection?:(value:string)=>void }) {
   const [localView, setLocalView] = useState<string>('submitted'), [page, setPage] = useState(0), [sort, setSort] = useState('newest');
   const view=collection??localView;
@@ -25,9 +25,10 @@ export function DistributionReleaseCatalogue({ releases, search, onSearch, onOpe
     <div className={styles.tableHead}><span>Release / artist</span><span>Status & QC</span><span>Owner / delivery</span><span>Received</span><ArrowDownUp size={14}/></div>
     <div className={styles.rows}>{rows.slice(current * 20, (current + 1) * 20).map(release => {
       const summary = automationSummary(release);
+      const correction=correctionReviewSummary(release);
       return <button type="button" className={styles.row} key={release.id} onClick={() => onOpen(release.id)} aria-label={`Inspect ${release.releaseTitle || release.trackName}`}>
         <span className={styles.identity}>{release.artworkUrl ? <img src={artworkPreviewUrl(release.artworkUrl,120)} alt="" loading="lazy"/> : <i><Disc3 size={22}/></i>}<span><strong>{release.releaseTitle || release.trackName || 'Untitled release'}</strong><small>{release.artistName} / {release.releaseType.toUpperCase()} / {release.tracks?.length || 0} tracks</small></span></span>
-        <span><b className={styles.status} data-bucket={releaseBucket(release)}>{adminReleaseStatusLabel(release.status, release.direNoteStatus)}</b><small title={summary.detail} data-tone={summary.tone}><ShieldCheck size={12}/>{summary.label}</small></span>
+        <span><b className={styles.status} data-bucket={releaseBucket(release)}>{adminReleaseStatusLabel(release.status, release.direNoteStatus)}</b><small title={summary.detail} data-tone={summary.tone}><ShieldCheck size={12}/>{summary.label}</small>{correction&&<small title={correction.detail}>{correction.delivery}</small>}</span>
         <span><strong className={styles.owner}>{release.ownerEmail || 'Unassigned'}</strong><small>{release.paymentStatus === 'paid' ? 'Payment verified' : 'Payment pending'} / {release.upcCode || 'UPC pending'}</small></span>
         <span className={styles.date}>{new Intl.DateTimeFormat('en-IN',{day:'numeric',month:'short',year:'numeric',timeZone:'Asia/Kolkata'}).format(new Date(release.submittedAt || release.createdAt))}<small>#{release.id}</small></span><ArrowUpRight size={16}/>
       </button>;

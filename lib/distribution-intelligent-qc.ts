@@ -4,7 +4,7 @@ import { automaticReleaseRiskHold } from './distribution-automation-risk';
 import { getDetailedReleaseById, updateDetailedReleaseStatus } from './distribution-db';
 import { validateReleaseForDireNote } from './direnote-readiness';
 import { assertReleaseArtistVerification } from './release-artist-verification';
-import { automaticQcRevision, automationSensitiveSnapshot, distributionAutomationDecision, technicalReleaseFixes, canResolveRequestedFormatting } from './distribution-automation-policy';
+import { DISTRIBUTION_QC_POLICY_VERSION, automaticQcRevision, automationSensitiveSnapshot, distributionAutomationDecision, technicalReleaseFixes, canResolveRequestedFormatting } from './distribution-automation-policy';
 import { signQcEvidence, validQcEvidence, assertAutomaticQcSources } from './distribution-qc-evidence';
 import { localPrivateStorage } from './private-storage';
 import { verifyArtworkIntegrity, verifyAudioIntegrity } from './media-integrity';
@@ -34,9 +34,16 @@ async function recordQc(release: Release, evidence: Record<string,unknown>) {
   return prisma.$transaction(async tx=>{
     const current=await tx.release.findUnique({where:{id:release.id},select:{metadata:true,updatedAt:true,version:true,status:true}});
     if(!current||current.updatedAt.getTime()!==Date.parse(release.draftVersion||'')||!['UNDER_REVIEW','APPROVED','QUEUED_FOR_DISTRIBUTION','CHANGES_REQUESTED'].includes(current.status))return false;
-    const report=json({...evidence,checkedAt:new Date().toISOString(),checkedVersion:current.version,policyVersion:2});report.proof=signQcEvidence(report);
+    const report=json({...evidence,checkedAt:new Date().toISOString(),checkedVersion:current.version,policyVersion:DISTRIBUTION_QC_POLICY_VERSION});report.proof=signQcEvidence(report);
     const changed=await tx.release.updateMany({where:{id:release.id,updatedAt:current.updatedAt,version:current.version,status:current.status},data:{metadata:json({...object(current.metadata),autoQc:report})}});
     if(changed.count)await tx.auditLog.create({data:{actorType:'system',action:'DISTRIBUTION_AUTO_QC_CHECKED',entity:'release',entityId:String(release.id),metadata:json({revision:report.revision,status:report.status,changeKind:report.changeKind,issueCount:report.issueCount,fixCount:report.fixes?.length||0})}});
+    if(changed.count && report.status==='manual_review_required' && current.status!=='CHANGES_REQUESTED'){
+      const existing=await tx.adminTask.findFirst({where:{entityType:'release',entityId:String(release.id),type:{in:['Correction review','Distribution QC review']},status:{in:['open','processing','review']}},orderBy:{createdAt:'desc'}});
+      const correction=object(release.metadata?.correctionReview).status==='pending';
+      const data={title:`${report.changeKind==='rights_review'?'Rights':'QC'} review required: ${release.releaseTitle||release.trackName}`,body:String(report.reason)+(correction?` The corrected package has not yet been sent.${release.upcCode?` Existing UPC: ${release.upcCode}.`:''} Review the attached evidence before approving corrected delivery.`:''),href:`/admin?tab=distribution-queue&releaseId=${release.id}`};
+      if(existing)await tx.adminTask.update({where:{id:existing.id},data});
+      else await tx.adminTask.upsert({where:{eventKey:`release:${release.id}:qc-review:${current.version}`},create:{...data,eventKey:`release:${release.id}:qc-review:${current.version}`,type:'Distribution QC review',priority:'high',entityType:'release',entityId:String(release.id)},update:data});
+    }
     return changed.count===1;
   });
 }
@@ -73,17 +80,17 @@ async function checkRelease(releaseId: number, siteUrl: string) {
   if(!release||!['under_review','approved','queued_for_distribution'].includes(release.status))return false;
   const previous=object(release.metadata?.autoQc), prior=validQcEvidence(previous)?previous:object(previous.previousResult);
   const revision=automaticQcRevision(release), snapshot=automationSensitiveSnapshot(release);
-  if(validQcEvidence(previous)&&previous.revision===revision&&['issues_found','manual_review_required'].includes(String(previous.status)))return false;
+  if(validQcEvidence(previous)&&previous.policyVersion===DISTRIBUTION_QC_POLICY_VERSION&&previous.revision===revision&&['issues_found','manual_review_required'].includes(String(previous.status)))return false;
   const context=await automaticDeliveryContext(releaseId,release.userId);
   const decision=distributionAutomationDecision(release,context);
   const base={revision,snapshot,changeKind:decision.route,reason:decision.reason,issueCount:0,warningCount:0,checks:[] as {label:string;ready:boolean}[],issues:[] as {field:string;message:string}[],fixes:[] as {field:string;before:string;after:string}[]};
-  if(context.correctionResolved&&(!validQcEvidence(prior)||prior.changeKind==='missing_baseline')) {
-    await recordQc(release,{...base,changeKind:'missing_baseline',status:'manual_review_required',reason:'The earlier corrected delivery has no signed QC baseline. A reviewer must compare its identity, rights and creative declarations before resubmission.',issueCount:1});return false;
-  }
   const sensitiveChanged=validQcEvidence(prior)&&typeof prior.snapshot==='string'&&prior.snapshot!==snapshot;
   if(!decision.eligible||sensitiveChanged) {
     const reason=sensitiveChanged?'Artist identity, contributor, rights or explicit-content declarations changed. A reviewer must confirm this change.':decision.reason;
     await recordQc(release,{...base,...(sensitiveChanged?{snapshot:prior.snapshot,changeKind:'sensitive_change'}:{}),status:'manual_review_required',reason,issueCount:1,issues:[{field:'review',message:reason}]});return false;
+  }
+  if(context.correctionResolved&&(!validQcEvidence(prior)||prior.changeKind==='missing_baseline')) {
+    await recordQc(release,{...base,changeKind:'missing_baseline',status:'manual_review_required',reason:'The earlier corrected delivery has no signed QC baseline. A reviewer must compare its identity, rights and creative declarations before resubmission.',issueCount:1});return false;
   }
   if(validQcEvidence(previous)&&previous.revision===revision&&previous.status==='passed'){try{await assertAutomaticQcSources(release);return true;}catch{/* Recheck the actual selected files below. */}}
   try {
