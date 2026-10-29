@@ -18,7 +18,7 @@ export default async function ProducerDashboardPage() {
     producerHasApprovedBeat(user.id)
   ]);
 
-  return <main className="producer-panel-shell py-6 sm:py-8"><ProducerDashboardShell user={user} beats={beats} orders={orders} earnings={earnings} finance={finance} autoPublishUnlocked={autoPublishUnlocked} /></main>;
+  return <><ProducerDashboardShell user={user} beats={beats} orders={orders} earnings={earnings} finance={finance} autoPublishUnlocked={autoPublishUnlocked} /></>;
 }
 
 // vercel trigger 11

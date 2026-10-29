@@ -1,35 +1,10 @@
 import { redirect } from "next/navigation";
-import { CustomerDashboardShell } from "@/components/customer-dashboard-shell";
 import { getCurrentUserForPage } from "@/lib/access";
-import { listOrdersByUser, listReleasesByUser, getSubscriptionByUserId, getBeatPurchasesByUser } from "@/lib/db";
+import { HymnStudioPage } from "@/components/hymn-studio-page";
+import type { StudioQuery } from "@/components/hymn-studio-engineers";
 
-export default async function DashboardPage({ searchParams }: { searchParams?: Promise<{ producerAccess?: string }> }) {
+export default async function DashboardPage({ searchParams }: { searchParams?: Promise<StudioQuery> }) {
   const user = await getCurrentUserForPage();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-
-  const [releases, orders, subscription, purchases] = await Promise.all([
-    listReleasesByUser(user.id),
-    listOrdersByUser(user.id),
-    getSubscriptionByUserId(user.id),
-    getBeatPurchasesByUser(user.id)
-  ]);
-
-  return (
-    <main className="customer-panel-shell py-6 sm:py-8">
-      <CustomerDashboardShell
-        user={user}
-        releases={releases}
-        orders={orders}
-        subscription={subscription}
-        initialBeatPurchases={purchases}
-        producerAccessDisabled={(await searchParams)?.producerAccess === "disabled"}
-      />
-    </main>
-  );
+  if (!user) redirect("/login?next=%2Fstudio");
+  return <HymnStudioPage user={user} query={(await searchParams) || {}}/>;
 }
-
-// vercel trigger 7

@@ -1,0 +1,42 @@
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const { build } = require('esbuild');
+const { chromium, expect } = require('@playwright/test');
+
+async function main() {
+  const out = path.resolve('.cache/hymn-studio-browser');
+  await fs.mkdir(out, { recursive: true });
+  await build({ stdin: { contents: `import React from 'react';import{createRoot}from'react-dom/client';import{HymnPortalRoot}from'./components/hymn-portal-root';import{HymnStudioFrame}from'./components/hymn-studio-frame';import{HymnStudioHome}from'./components/hymn-studio-home';const user={name:'Aditya Ujjain',role:window.fixtureRole};createRoot(document.getElementById('root')).render(<HymnPortalRoot><header className="hymn-studio-header"><div><span>HYMN</span><button aria-label="Toggle service navigation">Toggle</button></div><div className="mobile-workspace-subheader">Legacy mobile navigation</div></header><HymnStudioFrame user={user} workspaceKind={window.fixtureMode} activeKey="overview" navItems={[{key:'overview',label:'Overview',group:'Workspace'},{key:'catalog',label:'My beats',group:'Beatstore'},{key:'sales',label:'Sales & licences',group:'Business'}]} onSelect={key=>{window.selectedTool=key}} onNotificationsClick={()=>{window.selectedTool='messages'}} notificationCount={2}><HymnStudioHome user={user} releases={[{id:42,trackName:'Only Feelings',releaseTitle:'Only Feelings',artistName:'Shivam',status:'changes_requested',createdAt:'2026-10-29T10:00:00Z'},{id:43,trackName:'Next Chapter',status:'draft',artistName:'Aditya',createdAt:'2026-10-30T10:00:00Z'}]} notifications={[{id:1,title:'Your release update',createdAt:'2026-10-29T10:00:00Z'}]} projects={[{publicId:'project-public-1',projectTitle:'My first mix',status:'IN_PROGRESS',updatedAt:'2026-10-29T10:00:00Z',engineerName:'Engineer',deliveryCount:1}]} earnings={{availableBalance:4500}} purchaseCount={1} onTab={key=>{window.selectedTool=key}}/></HymnStudioFrame></HymnPortalRoot>);`, loader: 'tsx', resolveDir: process.cwd() }, bundle:true,outfile:path.join(out,'ui.js'),jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'next-link',setup(b){b.onResolve({filter:/^next\/navigation$/},()=>({path:'navigation',namespace:'nav'}));b.onLoad({filter:/.*/,namespace:'nav'},()=>({contents:`export const usePathname=()=>'/studio';`,loader:'js'}));b.onResolve({filter:/^next\/link$/},()=>({path:'link',namespace:'mock'}));b.onLoad({filter:/.*/,namespace:'mock'},()=>({contents:`import React from'react';export default function Link({prefetch,children,...props}){return <a {...props}>{children}</a>}`,loader:'tsx',resolveDir:process.cwd()}));}}] });
+  const globalFiles = ['app/globals.css','app/styles/dashboard.css','app/styles/portal.css','app/styles/workspace-navigation.css','app/styles/mobile-workspace.css','app/styles/workspace-enterprise.css','app/styles/dashboard-design-system.css'];
+  const globalCss = (await Promise.all(globalFiles.map(p=>fs.readFile(p,'utf8')))).join('\n');
+  const browser = await chromium.launch();
+  try {
+    for (const theme of ['light','dark']) for (const width of [1440,1024,390,320]) {
+      const page = await browser.newPage({viewport:{width,height:1000}});
+      const errors=[];page.on('pageerror',error=>errors.push(error.message));let logoRequests=0;await page.route('http://studio.fixture/assets/hymn-studio-logo.png',async route=>{logoRequests++;await route.fulfill({contentType:'image/png',body:await fs.readFile('public/assets/hymn-studio-logo.png')});});
+      await page.setContent(`<html data-theme="${theme}"><head><base href="http://studio.fixture/"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0"><div id="root"></div></body></html>`);
+      await page.evaluate(()=>{window.fixtureRole='customer';window.fixtureMode='customer';});
+      await page.addStyleTag({content:globalCss});await page.addStyleTag({path:path.join(out,'ui.css')});await page.addScriptTag({path:path.join(out,'ui.js')});
+      await expect(page.getByRole('heading',{name:'Good to see you, Aditya.'})).toBeVisible();await expect(page.locator('.hymn-portal-root')).toHaveCount(0);await expect(page.locator('.mobile-workspace-subheader')).toBeHidden();expect(await page.locator('header.hymn-studio-header').evaluate(el=>el.getBoundingClientRect().height)).toBe(58);
+      await expect(page.getByRole('region',{name:'Studio quick stats'})).toHaveCount(1);await expect.poll(()=>logoRequests).toBeGreaterThan(0);const visibleLogo=width<768?page.getByRole('link',{name:'HYMN Studio home'}).getByRole('img',{name:'HYMN Studio',exact:true}):page.getByRole('complementary',{name:'Studio navigation'}).getByRole('img',{name:'HYMN Studio',exact:true});await expect(visibleLogo).toBeVisible();expect(await visibleLogo.evaluate(el=>getComputedStyle(el).filter)).toBe(theme==='dark'?'invert(1)':'none');await expect(visibleLogo.locator('image')).toHaveAttribute('href','/assets/hymn-studio-logo.png');
+      await expect(page.getByRole('link',{name:'Producer tools',exact:true})).toHaveCount(0);
+      if(width<768)await page.getByRole('button',{name:'Toggle Studio navigation'}).click();
+      const rail=page.getByRole('complementary',{name:'Studio navigation'});
+      await expect(rail.getByRole('link',{name:'My library',exact:true})).toHaveAttribute('href','/library');
+      await expect(rail.getByRole('link',{name:'Mixing & mastering',exact:true})).toHaveAttribute('href','/studio?view=projects');
+      await rail.getByRole('button',{name:'Analytics',exact:true}).click();expect(await page.evaluate(()=>window.selectedTool)).toBe('analytics');
+      if(width<768)await expect(page.getByRole('button',{name:'Toggle Studio navigation'})).toHaveAttribute('aria-expanded','false');
+      await page.keyboard.press('Control+k');await expect(page.getByRole('dialog',{name:'Find a Studio tool'})).toBeVisible();
+      const search=page.getByRole('textbox',{name:'Search Studio tools'});await expect(search).toBeFocused();await search.fill('readiness');await expect(page.getByRole('dialog').getByRole('link',{name:'Mix-readiness check'})).toHaveAttribute('href','/studio/readiness');
+      await page.keyboard.press('Escape');await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expect(page.getByRole('link',{name:'Continue draft →'})).toHaveAttribute('href','/distribution/start?edit=43');
+      await expect(page.getByRole('link',{name:'Open release →'})).toHaveAttribute('href','/dashboard/releases/42');
+      const visual=await page.locator('[data-hymn-studio]').evaluate(el=>({background:getComputedStyle(el).backgroundColor,globalBackground:(()=>{const ref=document.createElement('div');ref.style.background='var(--bg)';document.body.append(ref);const value=getComputedStyle(ref).backgroundColor;ref.remove();return value})(),overflow:document.documentElement.scrollWidth>innerWidth+1}));
+      assert.equal(visual.background,visual.globalBackground);assert.equal(visual.overflow,false);assert.deepEqual(errors,[]);
+      await page.screenshot({path:path.join(out,`${theme}-${width}.png`),fullPage:true});await page.close();console.log(`PASS ${theme} ${width}px navigation, tools, theme, release links, keyboard finder and no overflow`);
+    }
+    const page=await browser.newPage({viewport:{width:1440,height:1000}});await page.setContent('<div id="root"></div>');await page.evaluate(()=>{window.fixtureRole='producer';window.fixtureMode='producer';});await page.addStyleTag({path:path.join(out,'ui.css')});await page.addScriptTag({path:path.join(out,'ui.js')});await expect(page.getByRole('link',{name:'Artist tools',exact:true})).toHaveAttribute('href','/studio');await expect(page.getByRole('button',{name:'My beats',exact:true})).toBeVisible();await expect(page.getByRole('link',{name:'Requested buyer files',exact:true})).toHaveAttribute('href','/producer/deliveries');await page.keyboard.press('Control+k');await page.getByRole('textbox',{name:'Search Studio tools'}).fill('My beats');await page.getByRole('dialog').getByRole('button',{name:'My beats',exact:true}).click();expect(await page.evaluate(()=>window.selectedTool)).toBe('catalog');await expect(page.getByRole('dialog')).toHaveCount(0);await page.close();console.log('PASS producer-only switch, catalogue finder and requested file delivery links');
+  } finally { await browser.close(); }
+}
+main().catch(error=>{console.error(error);process.exitCode=1});

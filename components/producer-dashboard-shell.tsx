@@ -14,11 +14,11 @@ import { producerSetup, producerSetupTab } from "@/lib/producer-setup";
 import { WorkspaceGuidance, type GuideStep } from "@/components/workspace-guidance";
 import dynamic from "next/dynamic";
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
-import { DashboardFrame } from "@/components/dashboard-frame";
+import { HymnStudioFrame } from "@/components/hymn-studio-frame";
+import { HymnStudioHome } from "@/components/hymn-studio-home";
 import { BeatCard } from "@/components/beat-card";
 import { Beat, BeatPurchase, Notification, Order, Release, SupportTicket, User } from "@/lib/types";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
-import { CustomerHome, ProducerHome } from "@/components/simplified-dashboard-home";
 import { FirstLoginReferralPrompt } from "@/components/first-login-referral-prompt";
 import { WorkspaceRecords } from "@/components/workspace-records";
 import { normalizeBeatLicenseType } from "@/lib/beat-store";
@@ -255,8 +255,9 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance,
   ];
 
   return (
-    <DashboardFrame
+    <HymnStudioFrame
       workspaceKind="producer"
+      user={user}
       eyebrow="Producer dashboard"
       title={user.name}
       subtitle={user.email}
@@ -272,7 +273,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance,
         {key:"releases",label:"My releases",group:"Distribution",href:"/dashboard/releases"},
         {key:"new-release",label:"Add release",group:"Distribution",href:"/distribution/start"},
         {key:"splits",label:"Royalty splits",group:"Distribution",href:"/dashboard?tab=collaborators"},
-        {key:"studio",label:"Find an engineer",group:"Mixing / Mastering",href:"/studio"},
+        {key:"studio",label:"Find an engineer",group:"Mixing / Mastering",href:"/studio?view=engineers"},
         {key:"studio-orders",label:"My projects",group:"Mixing / Mastering",href:"/dashboard/studio"},
         {key:"messages",label:"Notifications",group:"Account"},
         {key:"settings",label:"Settings",group:"Account"},
@@ -301,7 +302,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance,
       {setup.complete && <FirstLoginReferralPrompt />}
       {!setup.complete && <nav style={{display:"flex",alignItems:"center",gap:10,fontSize:11,color:"var(--text-muted)"}} aria-label="Producer setup steps"><button style={{padding:"5px 8px",width:"auto"}} aria-current={activeTab === "profile" ? "step" : undefined} onClick={() => selectProducerTab("profile")}>{setup.storefrontReady ? "Done: " : "1. "}Storefront</button><span aria-hidden="true">&rarr;</span><button style={{padding:"5px 8px",width:"auto"}} disabled={!setup.storefrontReady} aria-current={activeTab === "upload" ? "step" : undefined} onClick={() => selectProducerTab("upload")}>2. First beat</button></nav>}
       {setup.complete && ["overview", "catalog", "upload"].includes(activeTab) && <WorkspaceGuidance title={guideBeat ? `Beat path: ${guideBeat.title}` : "Build your first beat listing"} steps={beatGuide}/>}
-      {activeTab === "overview" && setup.complete ? <ProducerHome user={user} beats={catalog} finance={{ ...finance, profile: producerProfile }} notifications={producerNotifications} onTab={(tab) => selectProducerTab(tab)} /> : null}
+      {activeTab === "overview" && setup.complete ? <HymnStudioHome user={user} releases={[]} notifications={producerNotifications} producer={{beats:catalog,finance:{...finance,...earnings}}} onTab={selectProducerTab}/> : null}
       {false && activeTab === "overview" ? <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Catalog size" value={catalog.length} />
         <StatCard label="Enabled beats" value={enabledBeats.length} />
@@ -475,7 +476,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance,
         </div>
       ) : null}
 
-    </DashboardFrame>
+    </HymnStudioFrame>
   );
 }
 

@@ -13,11 +13,11 @@ import dynamic from "next/dynamic";
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { WorkspaceRecords } from "@/components/workspace-records";
 import { SupportWorkspace } from "@/components/support-workspace";
-import { DashboardFrame } from "@/components/dashboard-frame";
+import { HymnStudioFrame } from "@/components/hymn-studio-frame";
+import { HymnStudioHome, type StudioProjectSummary } from "@/components/hymn-studio-home";
 import { BeatCard } from "@/components/beat-card";
 import { Beat, BeatPurchase, Notification, Order, Release, SupportTicket, User } from "@/lib/types";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
-import { CustomerHome, ProducerHome } from "@/components/simplified-dashboard-home";
 import { FirstLoginReferralPrompt } from "@/components/first-login-referral-prompt";
 const PromotionCommunityPage = dynamic(() => import("@/components/community-plans").then(module => module.PromotionCommunityPage));
 const PlaylistReviewMarketplace = dynamic(() => import("@/components/playlist-review-marketplace").then(module => module.PlaylistReviewMarketplace));
@@ -144,7 +144,7 @@ function Timeline({ items }: { items: Array<{ label: string; detail?: string; ac
   );
 }
 
-export function CustomerDashboardShell({ user, releases, orders, subscription, analytics = [], initialBeatPurchases = [], producerAccessDisabled = false }: { user: User; releases: Release[]; orders: Order[]; subscription?: any | null; analytics?: any[]; initialBeatPurchases?:BeatPurchase[]; producerAccessDisabled?: boolean }) {
+export function CustomerDashboardShell({ user, releases, orders, subscription, analytics = [], initialBeatPurchases = [], producerAccessDisabled = false, studioContent, studioSection, studioProjects = [], studioProjectsError = false }: { user: User; releases: Release[]; orders: Order[]; subscription?: any | null; analytics?: any[]; initialBeatPurchases?:BeatPurchase[]; producerAccessDisabled?: boolean; studioContent?: React.ReactNode; studioSection?: string; studioProjects?: StudioProjectSummary[]; studioProjectsError?: boolean }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<CustomerTab>(() => customerTab(searchParams));
@@ -213,7 +213,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   }, [reloadKey]);
 
   useEffect(() => {
-    if (!["overview","purchases","support"].includes(activeTab)) return;
+    if (activeTab !== "purchases" && activeTab !== "support") return;
     let ignore = false;
     fetch("/api/beat-purchases", { cache: "no-store" })
       .then((response) => response.ok ? response.json() : null)
@@ -300,11 +300,13 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
 
   function selectCustomerTab(tab: typeof activeTab) {
     if (tab === "earnings") { router.push("/payout"); return; }
+    if (studioSection) { router.push("/studio?tab=" + tab); return; }
     setActiveTab(tab);
     setDashboardSearch("");
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       url.searchParams.delete("module");
+      url.searchParams.delete("view");
       url.searchParams.set("tab", tab);
       window.history.replaceState(null, "", url.toString());
     }
@@ -347,8 +349,9 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   ];
 
   return (
-    <DashboardFrame
+    <HymnStudioFrame
       workspaceKind="customer"
+      user={user}
       title={`Welcome back, ${user.name}`}
       subtitle={user.email}
       overviewSubtitle={actionItems.length > 0 ? <button type="button" className="text-left font-medium transition-opacity hover:opacity-70" style={{ color: "var(--accent)" }} onClick={() => selectCustomerTab(actionItems[0].tab)}>{actionItems.length} item{actionItems.length === 1 ? "" : "s"} need your attention <span aria-hidden="true">→</span></button> : <span>Your workspace is clear.</span>}
@@ -374,8 +377,8 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
         { key: "messages", label: "Notifications", description: "Updates and alerts", group: "Account" },
         { key: "support", label: "Help & FAQ", description: "Guidance and support", group: "Support" }
       ]}
-      activeKey={activeTab}
-      onSelect={selectCustomerTab}
+      activeKey={studioSection || activeTab}
+      onSelect={(key) => selectCustomerTab(key as CustomerTab)}
       onNotificationsClick={() => selectCustomerTab("messages")}
       notificationCount={notifications.filter((notification) => !notification.readAt).length}
       compactOverview
@@ -392,7 +395,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       workspaceAction={user.role === "producer" ? <WorkspaceSwitcher current="customer" available={["customer", "producer"]} /> : user.role === "admin" ? <WorkspaceSwitcher current="customer" available={["customer", "producer", "admin"]} /> : undefined}
     >
       <FirstLoginReferralPrompt />
-      {["overview", "upload", "releases"].includes(activeTab) && <WorkspaceGuidance title={guideRelease ? `Release path: ${guideRelease.releaseTitle || guideRelease.trackName || "Your music"}` : "Bring your first release to life"} steps={releaseGuide}/>}
+      {false && ["overview", "upload", "releases"].includes(activeTab) && <WorkspaceGuidance title={guideRelease ? `Release path: ${guideRelease.releaseTitle || guideRelease.trackName || "Your music"}` : "Bring your first release to life"} steps={releaseGuide}/>}
       <AccountRestrictionNotice user={user} />
       {producerAccessDisabled ? (
         <section role="alert" className="flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "color-mix(in srgb, var(--danger) 45%, var(--border))", background: "color-mix(in srgb, var(--danger-soft) 72%, var(--card))" }}>
@@ -403,7 +406,8 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
           <button type="button" onClick={switchProducerAccount} className="btn-primary pressable shrink-0">Switch Google account</button>
         </section>
       ) : null}
-      {activeTab === "overview" ? <CustomerHome purchases={beatPurchases} purchaseError={dataErrors.purchases} onRefreshPurchases={()=>setReloadKey(value=>value+1)} user={user} releases={releases} attention={actionItems.map(item => ({ title: item.title, detail: item.detail, cta: item.cta, href: `/dashboard?tab=${item.tab}` }))} earnings={payoutSummary} notifications={notifications} tickets={supportTickets} onEarnings={() => selectCustomerTab("earnings")} workspaceSummary={{ releaseCount: releases.length, needsAttention: releasesNeedingAttention, plan: subscription ? String(subscription.plan).replace(/_/g, " ") : "No active plan", planDaysRemaining: subscription ? planDaysRemaining : null, credit: Number(user.referralCredits || 0) }} /> : null}
+      {studioContent}
+      {!studioContent && activeTab === "overview" ? <HymnStudioHome user={user} releases={releases} notifications={notifications} projects={studioProjects} projectsError={studioProjectsError} errors={dataErrors} onRetry={()=>setReloadKey(value=>value+1)} earnings={payoutSummary} plan={subscription ? String(subscription.plan).replaceAll("_"," ") : undefined} purchaseCount={beatPurchases.length} onTab={selectCustomerTab}/> : null}
       {false && activeTab === "overview" ? (
         <div className="grid gap-6">
           <Panel title="Action centre" description="Items backed by your account, releases and HYMN notifications that need a decision or correction.">
@@ -728,7 +732,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
 
 
 
-    </DashboardFrame>
+    </HymnStudioFrame>
   );
 }
 

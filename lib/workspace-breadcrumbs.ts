@@ -10,6 +10,7 @@ const roots: Record<string, string> = {
 const title = (part: string) => part.replace(/-/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
 
 export function workspaceBreadcrumbs(pathname: string, search = "", active?: ActiveLocation): WorkspaceCrumb[] {
+  if (pathname === '/studio' || pathname === '/dashboard' || pathname === '/dashboard/customer') return [{ label: 'Home', href: '/' }, { label: 'HYMN Studio', href: '/studio' + search }];
   if (pathname === '/library') return [{ label: 'Home', href: '/' }, { label: 'My library', href: '/library' + search }];
   if (/^\/dashboard\/purchases\/[^/]+$/.test(pathname) || /^\/licenses\/[^/]+$/.test(pathname)) return [{ label: 'My library', href: '/library' }, { label: 'Purchases', href: '/library?view=purchases' }, { label: pathname.startsWith('/licenses/') ? 'Licence details' : 'Purchase details', href: pathname }];
   const query = new URLSearchParams(search);

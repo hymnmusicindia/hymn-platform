@@ -12,7 +12,7 @@ export const workspaceNavigation = [
   { key:"collaborators", label:"Royalty splits", group:"Distribution", href:"/dashboard?tab=collaborators", icon:Users },
   { key:"beat-store", label:"Browse beats", group:"Beatstore", href:"/beat-store", icon:Store },
   { key:"sell-beats", label:"Sell beats", group:"Beatstore", href:"/producer/dashboard", icon:Users },
-  { key:"studio", label:"Find an engineer", group:"Mixing / Mastering", href:"/studio", icon:Headphones },
+  { key:"studio", label:"Find an engineer", group:"Mixing / Mastering", href:"/studio?view=engineers", icon:Headphones },
   { key:"studio-engineer", label:"Engineer workspace", group:"Mixing / Mastering", href:"/studio/engineer", icon:Headphones },
   { key:"studio-readiness", label:"Mix-readiness check", group:"Mixing / Mastering", href:"/studio/readiness", icon:Music2 },
   { key:"studio-orders", label:"My projects", group:"Mixing / Mastering", href:"/dashboard/studio", icon:LayoutGrid },
@@ -28,6 +28,7 @@ export const workspaceGroups = Array.from(new Set(workspaceNavigation.map(item=>
 export function workspaceGroupForPath(pathname: string): string | null {
   if (['/', '/home', '/dashboard', '/dashboard/customer', '/dashboard/admin', '/producer/dashboard', '/producer-dashboard'].includes(pathname)) return null;
   const within = (path: string) => pathname === path || pathname.startsWith(path + '/');
+  if (within('/studio')) return 'Mixing / Mastering';
   if (within('/distribution')) return 'Distribution';
   if (within('/licenses')) return 'Beatstore';
   return workspaceGroups.flatMap(group => group.links

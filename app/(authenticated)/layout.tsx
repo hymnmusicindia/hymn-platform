@@ -1,3 +1,4 @@
+import { HymnPortalRoot } from "@/components/hymn-portal-root";
 import { privateRobots } from "@/lib/seo";
 export const metadata = { robots: privateRobots };
 import { PolicyAgreementBanner } from "@/components/policy-agreement-banner";
@@ -14,5 +15,5 @@ export default async function AuthenticatedLayout({ children }: Readonly<{ child
   const session = await getSession();
   const policyStatus = session ? await getPolicyAgreementStatus(session.sub).catch(() => ({ ...policyRevision, accepted: false, acceptedAt: null })) : null;
   const subscriptionLabel = await getSubscriptionMenuLabel(session?.sub);
-  return <SubscriptionLabelProvider label={subscriptionLabel}><div className="hymn-portal-root">{policyStatus ? <PolicyAgreementBanner initialStatus={policyStatus} /> : null}<SiteHeader user={session} /><PortalLayout>{children}</PortalLayout><PostPurchaseReviewPrompt />{session ? <WorkspaceGoalGuide userId={session.sub} /> : null}</div></SubscriptionLabelProvider>;
+  return <SubscriptionLabelProvider label={subscriptionLabel}><HymnPortalRoot>{policyStatus ? <PolicyAgreementBanner initialStatus={policyStatus} /> : null}<SiteHeader user={session} /><PortalLayout user={session}>{children}</PortalLayout><PostPurchaseReviewPrompt />{session ? <WorkspaceGoalGuide userId={session.sub} /> : null}</HymnPortalRoot></SubscriptionLabelProvider>;
 }
