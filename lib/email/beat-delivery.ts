@@ -1,3 +1,4 @@
+import {assertMasterIdentity,assertLicenceAsset,verifyAgreementBytes} from "../beat-delivery-identity";
 import 'server-only';
 import {createHash} from 'node:crypto';
 import {prisma} from '@/lib/prisma';
@@ -48,13 +49,15 @@ export async function deliverRequestedBeats(){
       if(!master||master.deletedAt||!canDeliverBeatFile(purchase.licenseType,master.mimeType)){
         await pending('The licensed master is not ready. No email attempted.');continue;
       }
+      assertMasterIdentity(purchase,purchase.beat.userId,master);
       // Read full bytes, verifying storage authorization and SHA-256 integrity.
       await localPrivateStorage.createAuthorizedRead({assetId:master.id,requesterUserId:purchase.userId,isAdmin:false});
       await generateBeatLicense(id,purchase.userId,false,undefined,{sendEmail:false});
       const ready=await prisma.beatPurchase.findUniqueOrThrow({where:{id},include:{licenseAsset:true}});
       if(!ready.hasAccess||!ready.licenseUrl||!ready.licenseAsset||ready.licenseAsset.deletedAt){await pending('The agreement PDF is not ready. No email attempted.');continue;}
       const pdf=await localPrivateStorage.createAuthorizedRead({assetId:ready.licenseAsset.id,requesterUserId:purchase.userId,isAdmin:false});
-      if(pdf.bytes.subarray(0,4).toString()!=='%PDF')throw Error('The agreement file is not a valid PDF.');
+      assertLicenceAsset(ready,ready.licenseAsset);
+      await verifyAgreementBytes(pdf.bytes,ready);
       const latest=logs[0];
       if(logs.filter(log=>log.status==='failed').length>=3){await review('Three SMTP attempts failed; manual review required.');continue;}
       const delivery=latest?.status==='failed'?await retryTransactionalEmail(latest.id):latest?null:await sendBeatEmailEvent({event:'license_ready',purchaseId:id,userId:purchase.userId,to:purchase.user.email,userName:purchase.user.name,beatTitle:purchase.beat.title,url:emailAppUrl(`/licenses/${id}`)});

@@ -1,3 +1,5 @@
+import {canDeliverBeatFile} from "./beat-licence-terms";
+import {masterManifest} from "./beat-delivery-identity";
 import {exclusiveBeatEligible,exclusiveBeatRestriction} from "./beat-rights-policy";
 import { beatBuyerDetailsSchema } from "./beat-buyer-details";
 import { Prisma } from "@prisma/client";
@@ -13,7 +15,7 @@ export async function persistCheckoutOrder(input: Omit<Order, "id" | "createdAt"
   return prisma.$transaction(async tx => {
     const beatIds = [...new Set(input.items.map(item => item.beatId))];
     await tx.beat.updateMany({ where: { id: { in: beatIds }, status: "EXCLUSIVE_RESERVED", exclusiveReservationExpiresAt: { lt: new Date() } }, data: { status: "PUBLISHED", exclusiveReservedByUserId: null, exclusiveReservationOrderId: null, exclusiveReservationExpiresAt: null } });
-    const beats = await tx.beat.findMany({ where: { id: { in: beatIds }, enabled: true }, include: { producerParty:true,user:{select:{name:true}} } });
+    const beats = await tx.beat.findMany({ where: { id: { in: beatIds }, enabled: true }, include: { deliverableAsset:true,producerParty:true,user:{select:{name:true}} } });
     const buyer = await tx.user.findUniqueOrThrow({where:{id:input.userId},include:{artistCards:{where:{archivedAt:null},orderBy:[{isPrimary:'desc'},{createdAt:'asc'}],take:1}}});
     if (beats.length !== beatIds.length) throw new Error("One or more selected beats are unavailable.");
     const sampleEvidence=await tx.storedAsset.findMany({where:{entityType:"BEAT",entityId:{in:beatIds.map(String)},category:"BEAT_SAMPLE_LICENSE",assetType:"private_ownership_proof",deletedAt:null,mimeType:"application/pdf"},select:{id:true,entityId:true,ownerUserId:true}});
@@ -53,7 +55,7 @@ export async function persistCheckoutOrder(input: Omit<Order, "id" | "createdAt"
           const type=normalizeBeatLicenseType(item.licenseType),exclusive=type==='exclusive';
           const producer=beat.producerParty?.professionalName||beat.user.name;
           const rights=exclusive?{commercialUse:true,exclusiveUse:true,copyrightAssigned:beat.exclusiveLegalMode==='RIGHTS_ASSIGNMENT',contentIdPolicy:beat.sampleDeclaration==='NO_UNCONTROLLED_SAMPLES'?'ALLOWED':'NOT_ALLOWED',includesWav:true,includesStems:true}:{...beatUsageRights(beat),includesMp3:type==='mp3',includesWav:type==='wav',includesStems:type==='stems'};
-          return { beatId: item.beatId, licenseType: type, price: new Prisma.Decimal(item.price), licenseUrl: item.licenseUrl ?? null, licenseTermsSnapshot:{sampleEvidenceIds:sampleEvidence.filter(a=>a.entityId===String(beat.id)&&a.ownerUserId===beat.userId).map(a=>a.id),version:BEAT_LICENCE_VERSION,licenseType:type,legalMode:exclusive?beat.exclusiveLegalMode:'NON_EXCLUSIVE_LICENSE',beat:{id:beat.id,title:beat.title},buyer:{id:buyer.id,legalName:details?.legalName||buyer.name,artistName:details?.artistName||'',email:buyer.email,...(details?{phone:details.phone,acceptedTermsAt:now.toISOString()}: {})},producer:{partyId:beat.producerParty?.publicId??null,creditedName:producer,legalName:beat.producerParty?.legalName??null},purchaseDate:now.toISOString(),price:item.price,currency:'INR',existingGeneralLicenses:beat.generalLicensesSold,rights,clauses:licenceClauses(exclusive,producer,rights)} };
+          return { beatId: item.beatId, licenseType: type, price: new Prisma.Decimal(item.price), licenseUrl: item.licenseUrl ?? null, licenseTermsSnapshot:{deliveryMaster:beat.deliverableAsset&&!beat.deliverableAsset.deletedAt&&beat.deliverableAsset.uploadStatus==='ready'&&canDeliverBeatFile(type,beat.deliverableAsset.mimeType)?masterManifest(beat.deliverableAsset):null,sampleEvidenceIds:sampleEvidence.filter(a=>a.entityId===String(beat.id)&&a.ownerUserId===beat.userId).map(a=>a.id),version:BEAT_LICENCE_VERSION,licenseType:type,legalMode:exclusive?beat.exclusiveLegalMode:'NON_EXCLUSIVE_LICENSE',beat:{id:beat.id,title:beat.title},buyer:{id:buyer.id,legalName:details?.legalName||buyer.name,artistName:details?.artistName||'',email:buyer.email,...(details?{phone:details.phone,acceptedTermsAt:now.toISOString()}: {})},producer:{partyId:beat.producerParty?.publicId??null,creditedName:producer,legalName:beat.producerParty?.legalName??null},purchaseDate:now.toISOString(),price:item.price,currency:'INR',existingGeneralLicenses:beat.generalLicensesSold,rights,clauses:licenceClauses(exclusive,producer,rights)} };
         }) }
       },
       select: { id: true }

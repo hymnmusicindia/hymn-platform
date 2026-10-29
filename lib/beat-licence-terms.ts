@@ -35,7 +35,7 @@ export function licenceClauses(exclusive: boolean, producer: string, rights: Rec
 
 /** An entitlement never authorises a higher-tier file. */
 export function canDeliverBeatFile(license: string, mime: string) {
-  if(mime==='audio/mpeg')return true;
-  if(['audio/wav','audio/x-wav','audio/flac'].includes(mime))return ['wav','stems','exclusive','general','premium'].includes(license.toLowerCase());
+  if(mime==='audio/mpeg')return license.toLowerCase()==='mp3';
+  if(['audio/wav','audio/x-wav'].includes(mime))return ['wav','general','basic','premium'].includes(license.toLowerCase());
   return mime==='application/zip'&&['stems','exclusive'].includes(license.toLowerCase());
 }

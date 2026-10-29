@@ -68,6 +68,7 @@ export async function POST(request: Request) {
     let sampleDisclosure = String(formData.get("sampleDisclosure") || "").trim();
     const evidence = formData.get('sampleLicenseEvidence');
     if (sampleDeclaration !== 'NO_UNCONTROLLED_SAMPLES' && (!(evidence instanceof File) || !evidence.size || evidence.type !== 'application/pdf' || evidence.size > 10 * 1024 * 1024)) return NextResponse.json({error:'Upload a sample licence or certificate as a PDF (up to 10 MB).'},{status:400});
+    if(formData.get('masterContentConfirmed')!=='on')return NextResponse.json({error:'Listen to the selected master and confirm it is the beat named in this submission.'},{status:400});
     if (formData.get('sampleRightsConfirmed') !== 'on') return NextResponse.json({error:'Confirm the sample rights declaration before submitting.'},{status:400});
     if (!title || !genre || !mood || !Number.isFinite(bpm) || bpm < 40 || bpm > 300 || !Number.isFinite(generalPrice) || !Number.isFinite(stemPrice) || !Number.isFinite(exclusivePrice) || (sampleDeclaration==="NO_UNCONTROLLED_SAMPLES"&&exclusivePrice <= Math.max(generalPrice, stemPrice)) || !(file instanceof File)) {
       return NextResponse.json({ error: "Missing required beat fields." }, { status: 400 });
@@ -134,6 +135,7 @@ export async function POST(request: Request) {
     finalized = true;
     await prisma.auditLog.create({data:{actorId:result.user.id,actorType:'user',entity:'beat',entityId:String(beat.id),action:'beat.sample_rights_declared',metadata:{sampleDeclaration,sampleDisclosure,statement:'I confirm my declaration is accurate and that any stated licence covers my use and the rights offered to buyers. I will provide licence evidence on request.'}}});
 
+    await prisma.auditLog.create({data:{actorId:result.user.id,actorType:"user",entity:"beat",entityId:String(beat.id),action:"beat.master_content_confirmed",metadata:{beatTitle:title,checksum:privateAudio.checksum,assetId:privateAudio.id,statement:"Producer confirms listening to the uploaded master and matching it to the submitted beat title."}}});
     const readiness = validateBeatReadiness({ title, bpm, genre, mood, keySignature, price, generalPrice, stemPrice, exclusivePrice, sampleDeclaration, sampleDisclosure, audioUrl: privateAudio.downloadPath, artworkUrl });
     const published = readiness.ready && await autoPublishProducerBeat(beat.id).catch(()=>{console.error("Automatic beat QC deferred",{beatId:beat.id});return false;});
     if (published) return NextResponse.json({ beat: { ...beat, status:'PUBLISHED', enabled:true }, readiness, status:'published' }, { status:201 });

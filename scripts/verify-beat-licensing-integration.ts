@@ -1,4 +1,5 @@
 import {purchasedSampleAgreements,readPurchasedSampleAgreement} from "../lib/beat-sample-evidence";
+import {fixtureWav} from "./direnote-browser-fixture";
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 import {PDFDocument} from 'pdf-lib';
@@ -26,8 +27,8 @@ async function main(){
  const outsider=await prisma.user.create({data:{name:'Other Buyer',email:`other-${stamp}@example.test`,googleId:`o-${stamp}`,status:'ACTIVE'}});
  await prisma.artistCard.create({data:{userId:buyer.id,artistName:'Unconfirmed Profile'}});
  const beat=await prisma.beat.create({data:{userId:producer.id,title:'Frozen Terms',bpm:100,genre:'Hip Hop',mood:'Chill',keySignature:'C Minor',priceCents:30000,generalPriceCents:20000,mp3PriceCents:10000,exclusivePriceCents:100000,enabled:true,status:'PUBLISHED',generalStreamingLimit:25000,generalVideoLimit:2,generalTermDurationMonths:12,sampleDeclaration:'NO_UNCONTROLLED_SAMPLES'}});
- const wav=Buffer.concat([Buffer.from('RIFF'),Buffer.alloc(4),Buffer.from('WAVEfmt ')]);
- await localPrivateStorage.upload({ownerUserId:producer.id,beatId:beat.id,assetType:'private_beat_deliverable',fileName:'master.wav',mimeType:'audio/wav',bytes:wav});
+ const wav=fixtureWav();
+ const master=await localPrivateStorage.upload({ownerUserId:producer.id,beatId:beat.id,assetType:'private_beat_deliverable',fileName:'Frozen Terms.wav',mimeType:'audio/wav',bytes:wav});
  const order=await createOrder({buyerDetails:{legalName:"Confirmed Legal Name",artistName:"Stage Name",phone:"+91 9876543210",acceptedTerms:true},userId:buyer.id,amount:200,originalPrice:200,finalAmount:200,razorpayOrderId:`licence-${stamp}`,paymentStatus:'created',items:[{beatId:beat.id,licenseType:'wav',price:200}]});
  const item=await prisma.checkoutOrderItem.findFirstOrThrow({where:{orderId:order!.id}});
  assert.equal((item.licenseTermsSnapshot as any).rights.streamingLimit,25000);
@@ -74,6 +75,7 @@ async function main(){
  const proof=await localPrivateStorage.upload({ownerUserId:producer.id,assetType:'private_ownership_proof',fileName:'splice-certificate.pdf',mimeType:'application/pdf',bytes:Buffer.from(await certificate.save())});
  await prisma.storedAsset.update({where:{id:proof.id},data:{entityType:'BEAT',entityId:String(beat.id),category:'BEAT_SAMPLE_LICENSE'}});
  await prisma.beat.update({where:{id:beat.id},data:{sampleDeclaration:'LICENSED_SAMPLES',sampleDisclosure:'Splice sample certificate',status:'PUBLISHED',enabled:true}});
+ await prisma.auditLog.create({data:{actorType:'user',actorId:producer.id,entity:'beat',entityId:String(beat.id),action:'beat.master_content_confirmed',metadata:{checksum:master.checksum,beatTitle:'New catalogue title'}}});
  const buyerDetails={legalName:'Sample Buyer',artistName:'Confirmed Stage',phone:'+91 9876543210',acceptedTerms:true as const};
  await assert.rejects(()=>createOrder({buyerDetails,userId:buyer.id,amount:1000,razorpayOrderId:'deny-exclusive-'+stamp,paymentStatus:'created',items:[{beatId:beat.id,licenseType:'exclusive',price:1000}]}),/fully original/,'Sampled beats cannot reserve exclusive inventory.');
  const sampledOrder=await createOrder({buyerDetails,userId:buyer.id,amount:200,originalPrice:200,finalAmount:200,razorpayOrderId:'sampled-'+stamp,paymentStatus:'created',items:[{beatId:beat.id,licenseType:'wav',price:200}]});

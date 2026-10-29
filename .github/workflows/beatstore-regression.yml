@@ -21,6 +21,8 @@ on:
       - 'lib/customer-dashboard-tabs.ts'
       - 'app/(authenticated)/dashboard/purchases/**'
       - 'app/api/producer/beats/**'
+      - 'app/api/producer/deliveries/**'
+      - 'app/(authenticated)/producer/deliveries/**'
       - 'lib/private-storage.ts'
       - 'lib/email/**'
       - 'components/checkout-experience.tsx'
@@ -57,6 +59,8 @@ on:
       - 'lib/customer-dashboard-tabs.ts'
       - 'app/(authenticated)/dashboard/purchases/**'
       - 'app/api/producer/beats/**'
+      - 'app/api/producer/deliveries/**'
+      - 'app/(authenticated)/producer/deliveries/**'
       - 'lib/private-storage.ts'
       - 'lib/email/**'
       - 'components/checkout-experience.tsx'
@@ -96,6 +100,7 @@ jobs:
       - run: node scripts/verify-email.cjs
       - run: node --import tsx scripts/verify-checkout-order-persistence.ts
       - run: npx playwright install --with-deps chromium
+      - run: node scripts/verify-beat-requested-file-browser.cjs
       - run: npm run test:beatstore:browser
       - run: node scripts/verify-beat-purchase-browser.cjs
       - run: node scripts/verify-beat-buyer-checkout.cjs

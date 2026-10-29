@@ -15,8 +15,8 @@ export function BeatStoreCard({beat,active=false,playing=false,onPlay,onAdd,onLi
   useEffect(()=>{viewed.current=false;},[beat.id]);
   useEffect(()=>{if(!playing||!ready||viewed.current)return;viewed.current=true;void act(beat.id,'view').catch(()=>{viewed.current=false;});},[beat.id,playing,ready,act]);
   const artwork=!failed&&(beat.coverImage||beat.artworkUrl);
-  const entry=(beat.availableLicenses??(['mp3','wav','stems','exclusive'] as BeatStoreLicenseType[])).filter(type=>beatLicensePrice(beat,type)>0).sort((a,b)=>beatLicensePrice(beat,a)-beatLicensePrice(beat,b))[0]??'mp3';
-  const available=!beat.availableLicenses||beat.availableLicenses.includes(entry);
+  const entry=(['mp3','wav','stems','exclusive'] as BeatStoreLicenseType[]).filter(type=>beatLicensePrice(beat,type)>0).sort((a,b)=>beatLicensePrice(beat,a)-beatLicensePrice(beat,b))[0]??'mp3';
+  const available=beatLicensePrice(beat,entry)>0;
   const price=beatLicensePrice(beat,entry);
   const cover=(size:number)=>artwork?<img src={artworkPreviewUrl(artwork,size)} alt="" loading="lazy" decoding="async" onError={()=>setFailed(true)}/>:<Disc3 aria-hidden="true" size={36}/>;
   return <article className={styles.card} id={`beat-${beat.id}`} data-active={active} data-playing={playing}>

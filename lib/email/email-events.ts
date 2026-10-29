@@ -27,11 +27,16 @@ export async function sendPayoutEmailEvent(input: Parameters<typeof payoutEmail>
   return sendTransactionalEmail({ ...template, to: input.to, template: input.event, eventKey: `payout:${input.payoutId}:${input.event}:email`, userId: input.userId, entityType: "payout", entityId: input.payoutId });
 }
 
-export async function sendBeatEmailEvent(input: Parameters<typeof beatEmail>[0] & { to: string; userId: number; purchaseId: number }) {
+export async function sendBeatEmailEvent(input: Parameters<typeof beatEmail>[0] & { to: string; userId: number; purchaseId: number; deliveryReference?:string }) {
   const { studioBeatSections } = await import("@/lib/studio-beat-followups");
   const sections = input.event === "beat_purchase_success" ? await studioBeatSections(input.purchaseId, input.userId).catch(() => []) : [];
-  const template = beatEmail({ ...input, studioSections: sections });
-  return sendTransactionalEmail({ ...template, to: input.to, template: input.event, eventKey: `beat:${input.purchaseId}:${input.event}:email`, userId: input.userId, entityType: "beat_purchase", entityId: input.purchaseId });
+  const {purchaseDelivery,queuePurchaseFile}=await import("@/lib/beat-file-fulfilment");
+  const delivery=await purchaseDelivery(input.purchaseId,input.userId);
+  if(delivery.purchase.user.email.toLowerCase()!==input.to.toLowerCase())throw Error("Purchase recipient does not match the signed-in buyer.");
+  const event=delivery.ready?input.event:"beat_file_processing";
+  if(!delivery.ready)await queuePurchaseFile(input.purchaseId);
+  const template = beatEmail({ ...input,beatTitle:(delivery.purchase.licenseTermsSnapshot as {beat?:{title?:string}}|null)?.beat?.title||delivery.purchase.beat.title,event, studioSections: event==="beat_file_processing"?[]:sections });
+  return sendTransactionalEmail({ ...template, to: input.to, template: event, eventKey: `beat:${input.purchaseId}:${event}:email${input.deliveryReference&&event==="license_ready"?":"+input.deliveryReference:""}`, userId: input.userId, entityType: "beat_purchase", entityId: input.purchaseId });
 }
 
 export function emailAppUrl(path: string) { return `${getEmailConfig().appUrl}${path.startsWith("/") ? path : `/${path}`}`; }

@@ -1,3 +1,4 @@
+import {assertLicenceAsset,verifyAgreementBytes} from "@/lib/beat-delivery-identity";
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
@@ -11,7 +12,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!purchase.hasAccess) return NextResponse.json({ error: "License access has been revoked." }, { status: 403 });
   if (!purchase.licenseAsset || purchase.licenseAsset.deletedAt) return NextResponse.json({ error: purchase.licenseUrl ? "This legacy licence must be regenerated before download." : "Licence is still processing." }, { status: 409 });
   try {
+  assertLicenceAsset(purchase,purchase.licenseAsset);
   const asset = await localPrivateStorage.createAuthorizedRead({ assetId: purchase.licenseAsset.id, requesterUserId: user.user.id, isAdmin: user.user.role === "admin", range: _request.headers.get("range") });
+  await verifyAgreementBytes(asset.bytes,purchase);
   await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { downloadedAt: new Date(), downloadCount: { increment: 1 } } });
   return new NextResponse(new Uint8Array(asset.bytes), { status: asset.contentRange ? 206 : 200, headers: {
     "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${asset.fileName.replace(/["\\]/g, "_")}"`,

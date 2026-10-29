@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getEmailClient, getEmailConfig } from "@/lib/email/email-client";
-import { purchaseAttachments } from "@/lib/email/purchase-attachments";
+import { purchaseAttachments,purchaseAttachmentManifest } from "@/lib/email/purchase-attachments";
 
 const recipientSchema = z.string().trim().email().max(320);
 export type EmailDeliveryStatus = "sent" | "failed" | "skipped" | "duplicate_skipped";
@@ -23,8 +23,9 @@ export async function sendTransactionalEmail(input: TransactionalEmailInput): Pr
     const client = getEmailClient({ timeoutMs: input.timeoutMs });
     if (!client || !recipient) return { status: "skipped", logId: log.id };
     try {
-      const attachments = input.entityType === "beat_purchase" && input.userId && input.entityId
-        ? await purchaseAttachments(Number(input.entityId), input.userId, recipient).catch(() => []) : [];
+      const attachments = input.entityType === "beat_purchase" && input.template!=="beat_file_processing" && input.userId && input.entityId
+        ? await purchaseAttachments(Number(input.entityId), input.userId, recipient) : [];
+      if(input.entityType==="beat_purchase"&&input.template!=="beat_file_processing"&&input.userId&&input.entityId){const manifest=await purchaseAttachmentManifest(Number(input.entityId),input.userId,attachments);await emailLog.update({where:{id:log.id},data:{payload:{html:input.html,text:input.text,deliveryManifest:manifest}}});}
       const verifiedAddress = config.from.match(/<([^>]+)>/)?.[1] || config.from;
       const displayName = input.senderName?.replace(/[\r\n"<>]/g, "").trim().slice(0, 160);
       const from = displayName && recipientSchema.safeParse(verifiedAddress).success ? `"${displayName}" <${verifiedAddress}>` : config.from;

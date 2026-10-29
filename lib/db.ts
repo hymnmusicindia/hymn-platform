@@ -1933,11 +1933,12 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
           restrictions: { nonExclusive: true, samplesSubjectToProducerDisclosure: true }
         };
         const frozenSnapshot = item.licenseTermsSnapshot && typeof item.licenseTermsSnapshot === 'object' && !Array.isArray(item.licenseTermsSnapshot) ? item.licenseTermsSnapshot as Record<string, any> : licenceSnapshot;
-        await tx.beatPurchase.upsert({
+        const issuedPurchase=await tx.beatPurchase.upsert({
           where: { checkoutOrderItemId: item.id },
           create: { userId: order.userId, beatId: item.beatId, producerPartyId: item.beat.producerPartyId, licenseType: normalizedLicenseType, paymentId, checkoutOrderItemId: item.id, hasAccess: true, licenseVersion: String(frozenSnapshot.version), licenseTermsSnapshot: frozenSnapshot },
           update: { paymentId, producerPartyId: item.beat.producerPartyId, hasAccess: true }
         });
+        if("deliveryMaster" in frozenSnapshot&&frozenSnapshot.deliveryMaster===null)await tx.adminTask.upsert({where:{eventKey:`beat-purchase:${issuedPurchase.id}:requested-file`},create:{eventKey:`beat-purchase:${issuedPurchase.id}:requested-file`,type:"Beat requested file",priority:"normal",title:`Prepare ${normalizedLicenseType.toUpperCase()}: ${item.beat.title}`,body:"Prepare the purchased beat in the exact requested format.",href:`/producer/deliveries/${issuedPurchase.id}`,entityType:"beat_purchase",entityId:String(issuedPurchase.id)},update:{}});
         const existingSale = await tx.beatSale.findUnique({ where: { orderId_beatId_licenseType: { orderId: order.id, beatId: item.beatId, licenseType: normalizedLicenseType } } });
         if (!existingSale) {
           const grossAmount = new Prisma.Decimal(item.price);
@@ -1962,6 +1963,8 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
       await accrueReferralCommission(tx, "checkout_order", order.id);
       return !alreadyPaid ? qualifyReferralInTransaction(tx, { referredUserId: order.userId, transactionType: "checkout_order", transactionId: order.id, paymentId, paidAmountInr: Number(order.finalAmount), source: "verified_payment" }) : { qualified: false as const, reason: "already_paid" as const };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 20000 });
+    const paidPurchases=await prisma.beatPurchase.findMany({where:{paymentId},select:{id:true}});
+    const {queuePurchaseFile}=await import("./beat-file-fulfilment");for(const p of paidPurchases)await queuePurchaseFile(p.id).catch(()=>console.error("Beat file request deferred",{purchaseId:p.id}));
     if (qualification.qualified) await sendReferralRewardEmails(qualification.referralId).catch(() => undefined);
     return getCheckoutOrderByRazorpayId(razorpayOrderId);
   }

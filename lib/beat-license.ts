@@ -1,3 +1,4 @@
+import {agreementIdentity,assertPurchaseIdentity,assertLicenceAsset,verifyAgreementBytes} from "./beat-delivery-identity";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
@@ -98,8 +99,8 @@ export async function getBeatLicenceAgreement(purchaseId: number, actorId: numbe
 function ascii(value: string) { return value.replace(/[^\x20-\x7E]/g, "-"); }
 function wrap(value: string, font: PDFFont, size: number, width: number) { const words = ascii(value).split(/\s+/); const lines: string[] = []; let line = ""; for (const word of words) { const next = line ? `${line} ${word}` : word; if (font.widthOfTextAtSize(next, size) <= width) line = next; else { if (line) lines.push(line); line = word; } } if (line) lines.push(line); return lines; }
 
-async function buildAgreementPdf(agreement: BeatLicenceAgreement) {
-  const pdf = await PDFDocument.create(); const regular = await pdf.embedFont(StandardFonts.Helvetica); const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+async function buildAgreementPdf(agreement: BeatLicenceAgreement,identity:string) {
+  const pdf = await PDFDocument.create();pdf.setSubject(identity);pdf.setTitle(`${agreement.beatTitle} - ${agreement.licenceNumber}`); const regular = await pdf.embedFont(StandardFonts.Helvetica); const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   let logo: Awaited<ReturnType<PDFDocument["embedPng"]>> | null = null; try { logo = await pdf.embedPng(await fs.readFile(path.join(process.cwd(), "public", "assets", "hymnlogowhite.png"))); } catch { logo = null; }
   let page: PDFPage = pdf.addPage([595.28, 841.89]); let y = 0; let firstPage = true;
   const newPage = () => { if (!firstPage) page = pdf.addPage([595.28, 841.89]); firstPage = false; page.drawRectangle({ x: 0, y: 742, width: 595.28, height: 100, color: rgb(0.045, 0.055, 0.07) }); if (logo) page.drawImage(logo, { x: 42, y: 778, width: 108, height: 35 }); page.drawText("BEAT LICENCE AGREEMENT", { x: 345, y: 795, size: 9, font: bold, color: rgb(0.78, 0.8, 0.84) }); page.drawText(agreement.licenceNumber, { x: 345, y: 778, size: 8, font: regular, color: rgb(0.64, 0.67, 0.72) }); y = 715; };
@@ -126,13 +127,22 @@ export async function generateBeatLicense(purchaseId: number, actorId: number, i
 
 async function generateBeatLicenseLocked(purchaseId: number, actorId: number, isAdmin: boolean, requestedArtistName: string|undefined, sendEmail: boolean) {
   const purchase = await sourceForPurchase(purchaseId); if (!isAdmin && purchase.userId !== actorId) throw new Error("Beat purchase not found."); if (!purchase.hasAccess) throw new Error("Licence access has been revoked.");
-  if (purchase.licenseAsset && !purchase.licenseAsset.deletedAt) { const existingUrl = `/api/assets/${purchase.licenseAsset.id}/download?filename=${encodeURIComponent(purchase.licenseAsset.safeFilename)}`; if (purchase.licenseUrl !== existingUrl) await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { licenseUrl: existingUrl, licenseUploadedAt: purchase.licenseUploadedAt ?? new Date() } }); return { purchaseId: purchase.id, licenseUrl: existingUrl, agreementUrl: `/licenses/${purchase.id}` }; }
+  assertPurchaseIdentity(purchase);
+  if (purchase.licenseAsset && !purchase.licenseAsset.deletedAt) {
+    assertLicenceAsset(purchase,purchase.licenseAsset);
+    const stored=await localPrivateStorage.createAuthorizedRead({assetId:purchase.licenseAsset.id,requesterUserId:purchase.userId,isAdmin:true});
+    let verified=false;try{await verifyAgreementBytes(stored.bytes,purchase);verified=true;}catch{/* Preserve old bytes and legal terms while rebuilding an unverified PDF. */}
+    if(verified){ const existingUrl = `/api/assets/${purchase.licenseAsset.id}/download?filename=${encodeURIComponent(purchase.licenseAsset.safeFilename)}`; if (purchase.licenseUrl !== existingUrl) await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { licenseUrl: existingUrl, licenseUploadedAt: purchase.licenseUploadedAt ?? new Date() } }); return { purchaseId: purchase.id, licenseUrl: existingUrl, agreementUrl: `/licenses/${purchase.id}` }; }
+    await prisma.storedAsset.update({where:{id:purchase.licenseAsset.id},data:{beatPurchaseId:null,uploadStatus:"superseded"}});
+    await logAuditEvent({actorType:"system",entityType:"beat_purchase",entityId:purchase.id,action:"beat_license.verification_rebuild",metadata:{previousAssetId:purchase.licenseAsset.id,reason:"Rebuild PDF identity binding without changing the legal grant"}});
+  }
+  if(purchase.licenseAsset?.deletedAt)await prisma.storedAsset.update({where:{id:purchase.licenseAsset.id},data:{beatPurchaseId:null}});
   const artistName = stringValue(record(record(purchase.licenseTermsSnapshot).buyer).artistName) || requestedArtistName?.trim(); if (!artistName || artistName.length < 2 || artistName.length > 80) throw new Error("Add your artist name before generating this licence.");
   if (!purchase.user.artistCards[0] && requestedArtistName?.trim()) await prisma.artistCard.createMany({ data: [{ userId: purchase.userId, artistName, isPrimary: true, role: "primary" }], skipDuplicates: true });
   const snapshot = buildSnapshot(purchase, artistName) as Prisma.InputJsonObject; await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { licenseVersion: stringValue(snapshot.version, BEAT_LICENCE_VERSION), licenseTermsSnapshot: snapshot } });
-  const agreement = agreementFrom(purchase, snapshot); const bytes = await buildAgreementPdf(agreement); let asset;
+  const agreement = agreementFrom(purchase, snapshot); const bytes = await buildAgreementPdf(agreement,agreementIdentity({...purchase,licenseTermsSnapshot:snapshot})); let asset;
   try { asset = await localPrivateStorage.upload({ ownerUserId: purchase.userId, beatPurchaseId: purchase.id, assetType: "private_beat_license", fileName: `HYMN-${agreement.licenceNumber}.pdf`, mimeType: "application/pdf", bytes }); }
-  catch (error) { const existing = await prisma.storedAsset.findUnique({ where: { beatPurchaseId: purchase.id } }); if (!existing) throw error; asset = { id: existing.id, downloadPath: `/api/assets/${existing.id}/download?filename=${encodeURIComponent(existing.safeFilename)}` }; }
+  catch (error) { const existing = await prisma.storedAsset.findUnique({ where: { beatPurchaseId: purchase.id } }); if (!existing) throw error;assertLicenceAsset(purchase,existing);const existingFile=await localPrivateStorage.createAuthorizedRead({assetId:existing.id,requesterUserId:purchase.userId,isAdmin:false});await verifyAgreementBytes(existingFile.bytes,{...purchase,licenseTermsSnapshot:snapshot}); asset = { id: existing.id, downloadPath: `/api/assets/${existing.id}/download?filename=${encodeURIComponent(existing.safeFilename)}` }; }
   const url = asset.downloadPath; await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { licenseUrl: url, licenseUploadedAt: new Date() } });
   await Promise.all([createNotificationOnce({ eventKey: `beat:${purchase.id}:license_ready`, userId: purchase.userId, title: "Beat licence ready", body: `Your licence for ${purchase.beat.title} is ready to view and download.`, type: "beat", href: `/licenses/${purchase.id}`, actionLabel: "View licence" }), sendEmail && sendBeatEmailEvent({ event: "license_ready", to: purchase.user.email, userId: purchase.userId, purchaseId: purchase.id, userName: purchase.user.name, beatTitle: purchase.beat.title, url: emailAppUrl(`/licenses/${purchase.id}`) }), logAuditEvent({ actorType: isAdmin ? "admin" : "system", actorId, entityType: "beat_purchase", entityId: purchase.id, action: "beat_license.generated", newValue: { licenseUrl: url, agreementUrl: `/licenses/${purchase.id}`, version: BEAT_LICENCE_VERSION }, metadata: { beatId: purchase.beat.id, licenseType: purchase.licenseType, artistName } })]);
   return { purchaseId: purchase.id, licenseUrl: url, agreementUrl: `/licenses/${purchase.id}` };

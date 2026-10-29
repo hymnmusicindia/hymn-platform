@@ -317,7 +317,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance,
           <Panel title="Creative collaboration workspace" description="Catalog, placements, licensing, and artist requests in one premium producer OS.">
             <div className="grid gap-3 sm:grid-cols-3">
               <button type="button" onClick={() => selectProducerTab("upload")} className="btn-primary pressable">Upload Beat</button>
-              <button type="button" onClick={() => selectProducerTab("catalog")} className="btn-outline pressable">Manage Catalog</button>
+              <button type="button" onClick={() => selectProducerTab("catalog")} className="btn-outline pressable">Manage Catalog</button><Link className="btn-outline" href="/producer/deliveries">Requested buyer files</Link>
               <button type="button" onClick={() => selectProducerTab("licensing")} className="btn-outline pressable">Licensing</button>
             </div>
             <div className="mt-6 grid gap-4">
@@ -358,7 +358,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance,
               Showing {filteredCatalog.length} / {catalog.length} beats
             </div>
           </div>
-          <WorkspaceRecords searchable={false} rows={filteredCatalog} rowKey={beat=>beat.id} noun="beats" searchText={beat=>`${beat.title} ${beat.genre} ${beat.bpm} ${beat.status}`} searchPlaceholder="Search catalogue" columns={[
+          <Link href="/producer/deliveries" className="btn-outline mb-4 inline-flex">Requested buyer files</Link><WorkspaceRecords searchable={false} rows={filteredCatalog} rowKey={beat=>beat.id} noun="beats" searchText={beat=>`${beat.title} ${beat.genre} ${beat.bpm} ${beat.status}`} searchPlaceholder="Search catalogue" columns={[
             {key:"beat",label:"Beat",primary:true,value:beat=>beat.title,render:beat=><div className="record-identity">{beat.artworkUrl?<img src={artworkPreviewUrl(beat.artworkUrl, 320)} alt=""/>:<span className="record-art"/>}<div><strong>{beat.title}</strong><small>{beat.genre} / {beat.bpm} BPM</small>{beat.reviewIssues?.reason&&<small style={{color:"var(--danger)"}}>{beat.reviewIssues.reason}</small>}</div></div>},
             {key:"status",label:"Review",value:beat=>beat.status||"",render:beat=><StatusPill label={beat.status||"DRAFT"}/>},
             {key:"price",label:"Starting price",value:beat=>beat.price,render:beat=>formatMoney(beat.generalPrice??beat.price)},

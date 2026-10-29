@@ -57,6 +57,10 @@ async function main() {
   let purchase = { user: { email: "buyer@example.com" }, licenseType: "mp3", licenseAsset: { id: 1, byteSize: 3 }, beat: { deliverableAsset: { id: 2, byteSize: 4, mimeType: "audio/wav" } } };
   let reads = 0;
   const attachment = load("lib/email/purchase-attachments.ts", {
+    "../beat-requested-file-validation":{verifyRequestedBeatFile:async()=>{}},
+    "../beat-file-fulfilment":{purchaseDelivery:async()=>({purchase,ready:true,asset:purchase.beat.deliverableAsset})},
+    "../beat-delivery-identity":{assertMasterIdentity(){},assertLicenceAsset(){},verifyAgreementBytes:async()=>{},agreementIdentity:()=>"fixture"},
+    "node:crypto":require("node:crypto"),
     "../beat-sample-evidence": { purchasedSampleAgreements: async () => [], readPurchasedSampleAgreement: async () => { throw Error("Unexpected sample agreement read"); } },
     "../beat-licence-terms": load("lib/beat-licence-terms.ts"),
     "@/lib/prisma": { prisma: { beatPurchase: { findFirst: async query => { assert.equal(query.where.hasAccess, true); assert.equal(query.where.userId, 7); return purchase; } } } },
@@ -82,7 +86,7 @@ async function main() {
       update: async ({ where, data }) => { const row = [...logs.values()].find(log => log.id === where.id); Object.assign(row, data); return row; }
     } } },
     "@/lib/email/email-client": { getEmailConfig: () => ({ enabled: true, provider: "smtp", from: input.from }), getEmailClient: () => ({ emails: { send: async () => { sends++; if (fail) throw Error("Provider unavailable"); return { data: { id: "sent" }, error: null }; } } }) },
-    "@/lib/email/purchase-attachments": { purchaseAttachments: async () => [] }
+    "@/lib/email/purchase-attachments": { purchaseAttachmentManifest:async()=>({}), purchaseAttachments: async () => [] }
   });
   const event = { ...input, template: "test", eventKey: "unique" };
   assert.equal((await sender.sendTransactionalEmail(event)).status, "sent");

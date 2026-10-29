@@ -104,6 +104,7 @@ async function main() {
       await page.locator('[name="sampleLicenseEvidence"]').setInputFiles({name:'certificate.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nFixture certificate\n%%EOF')});
       await page.locator('[name="sampleDeclaration"]').selectOption('NO_UNCONTROLLED_SAMPLES');
       await page.locator('[name="sampleRightsConfirmed"]').check();
+      await page.locator('[name="masterContentConfirmed"]').check();
       assert.equal(fixture.beats.length,0,"Continue must not submit the final upload automatically");
       await page.getByRole("button", { name: "Submit for review", exact: true }).click();
       await page.getByRole("alert").filter({hasText:"Temporary upload failure"}).waitFor();

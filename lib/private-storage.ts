@@ -1,3 +1,4 @@
+import {assertMasterIdentity,verifyAgreementBytes} from "./beat-delivery-identity";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -204,14 +205,16 @@ export const localPrivateStorage: PrivateStorageAdapter = {
       if(!entitlement)throw new Error('Forbidden.');
     }
     if (!input.isAdmin && asset.ownerUserId !== input.requesterUserId) {
-      const purchases = asset.assetType === "private_beat_deliverable" && asset.beatId ? await prisma.beatPurchase.findMany({ where: { beatId: asset.beatId, userId: input.requesterUserId, hasAccess: true },select:{licenseType:true} }) : [];
-      const purchased=purchases.some(p=>canDeliverBeatFile(p.licenseType,asset.mimeType));
+      const purchases = asset.assetType === "private_beat_deliverable" && asset.beatId ? await prisma.beatPurchase.findMany({ where: { beatId: asset.beatId, userId: input.requesterUserId, hasAccess: true },select:{id:true,userId:true,beatId:true,licenseType:true,licenseTermsSnapshot:true,beat:{select:{userId:true}}} }) : [];
+      let purchased=purchases.some(p=>{try{assertMasterIdentity(p,p.beat.userId,asset);return canDeliverBeatFile(p.licenseType,asset.mimeType);}catch{return false;}});
+      if(asset.assetType==="private_beat_deliverable"&&asset.entityType==="BEAT_PURCHASE"){const p=await prisma.beatPurchase.findFirst({where:{id:Number(asset.entityId),userId:input.requesterUserId,hasAccess:true},include:{beat:{select:{userId:true}}}});if(p)try{assertMasterIdentity(p,p.beat.userId,asset);purchased=canDeliverBeatFile(p.licenseType,asset.mimeType);}catch{/* Deny mismatched requested files. */}}
       const studioParticipant = asset.studioFile && (asset.studioFile.order.customerId === input.requesterUserId || asset.studioFile.order.engineerParty.claimedByUserId === input.requesterUserId);
       if (!purchased && !studioParticipant) throw new Error("Forbidden.");
     }
     const audioRange = input.range && asset.mimeType.startsWith("audio/") ? audioByteRange(input.range, asset.byteSize) : null;
     const bytes = await readLocalAsset(asset.relativePath || asset.objectKey, asset.relativePath, audioRange ?? undefined, asset.byteSize);
     if (!audioRange && crypto.createHash("sha256").update(bytes).digest("hex") !== asset.checksum) throw new Error("Stored private asset failed its SHA-256 integrity check.");
+    if(!input.isAdmin&&asset.assetType==="private_beat_license"&&asset.beatPurchaseId){const p=await prisma.beatPurchase.findUniqueOrThrow({where:{id:asset.beatPurchaseId}});await verifyAgreementBytes(bytes,p);}
     return { bytes, mimeType: asset.mimeType, fileName: asset.safeFilename, contentRange: audioRange?.contentRange, contentLength: audioRange ? String(bytes.length) : undefined };
   },
   async delete(input) {

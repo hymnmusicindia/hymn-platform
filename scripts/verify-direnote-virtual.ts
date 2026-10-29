@@ -53,10 +53,12 @@ async function main() {
       await run(['--conditions=react-server','--import','tsx','scripts/verify-beat-delivery.ts']);
       return;
     }
+    if(process.argv.includes('--beat-file-fulfilment-only')){await run(['--conditions=react-server','--import','tsx','scripts/verify-beat-file-fulfilment.ts']);return;}
     if(process.argv.includes('--marketplace-only')){await run(['--conditions=react-server','--import','tsx','scripts/verify-marketplace-automation.ts']);return;}
     if(process.argv.includes('--beat-licensing-only')){
       await run(['--conditions=react-server','--import','tsx','scripts/verify-private-storage-integration.ts']);
       await run(['--conditions=react-server','--import','tsx','scripts/verify-beat-licensing-integration.ts']);
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-beat-file-fulfilment.ts']);
       await run(['--conditions=react-server','--import','tsx','scripts/verify-marketplace-automation.ts']);
       return;
     }

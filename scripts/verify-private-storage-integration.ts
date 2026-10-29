@@ -25,7 +25,7 @@ async function main() {
   const wav = Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WAVEfmt ")]);
   const deliverable = await localPrivateStorage.upload({ ownerUserId: producer.id, beatId: beat.id, assetType: "private_beat_deliverable", fileName: "master.wav", mimeType: "audio/wav", bytes: wav });
   await assert.rejects(()=>localPrivateStorage.createAuthorizedRead({assetId:deliverable.id,requesterUserId:user.id,isAdmin:false}),/Forbidden/,"MP3 buyers must not download a WAV through the generic asset endpoint.");
-  await prisma.beatPurchase.update({where:{id:purchase.id},data:{licenseType:'wav'}});
+  await prisma.beatPurchase.create({data:{userId:user.id,beatId:beat.id,licenseType:'wav'}});
   assert.equal((await localPrivateStorage.createAuthorizedRead({ assetId: deliverable.id, requesterUserId: user.id, isAdmin: false })).bytes.length, wav.length);
   const before=await getBeatLicenceAgreement(purchase.id,user.id);
   await prisma.beat.update({where:{id:beat.id},data:{title:'Edited title',generalStreamingLimit:7,generalVideoLimit:0}});
@@ -36,7 +36,7 @@ async function main() {
   assert.equal(firstRange.contentRange, `bytes 0-3/${wav.length}`);
   assert.equal(firstRange.contentLength, "4");
   await assert.rejects(() => localPrivateStorage.createAuthorizedRead({ assetId: deliverable.id, requesterUserId: user.id, isAdmin: false, range: `bytes=${wav.length}-` }), /range is unavailable/);
-  await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { hasAccess: false } });
+  await prisma.beatPurchase.updateMany({ where: { userId: user.id, beatId: beat.id }, data: { hasAccess: false } });
   await assert.rejects(() => localPrivateStorage.createAuthorizedRead({ assetId: deliverable.id, requesterUserId: user.id, isAdmin: false }), /Forbidden/);
   await assert.rejects(()=>localPrivateStorage.createAuthorizedRead({assetId:assets[0].id,requesterUserId:user.id,isAdmin:false}),/Forbidden/,'Revoked PDF access must also be blocked through generic asset URLs.');
 

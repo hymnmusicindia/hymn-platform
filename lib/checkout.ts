@@ -60,7 +60,7 @@ async function buildLineItems(input: CheckoutInput): Promise<CheckoutLineItem[]>
       const reservationActive = beat.status === "EXCLUSIVE_RESERVED" && (!beat.exclusiveReservationExpiresAt || new Date(beat.exclusiveReservationExpiresAt).getTime() > Date.now());
       if (reservationActive) throw new Error(`“${beat.title}” is temporarily held by an exclusive checkout. If you closed that checkout, wait for its reservation to clear before trying again.`);
       if (!beat.enabled || (!["PUBLISHED", "EXCLUSIVE_RESERVED"].includes(String(beat.status)))) throw new Error("This beat is not available for licensing.");
-      if(beat.availableLicenses&&!beat.availableLicenses.includes(licenseType))throw new Error('The selected file format has not been supplied for this beat. Choose an available licence.');
+
       const rights=licenseType==='exclusive'?{copyrightAssigned:beat.exclusiveLegalMode==='RIGHTS_ASSIGNMENT',contentIdPolicy:beat.sampleDeclaration==='NO_UNCONTROLLED_SAMPLES'?'ALLOWED':'NOT_ALLOWED'}:beatUsageRights(beat);
       const unitPrice = beatLicensePrice(beat, licenseType);
       if (!Number.isFinite(unitPrice) || unitPrice <= 0) throw new Error("This licence is not available.");
@@ -69,7 +69,7 @@ async function buildLineItems(input: CheckoutInput): Promise<CheckoutLineItem[]>
         label: beat.title,
         usageTerms:licenseType==='exclusive'?[{label:'Rights',value:'Exclusive use; earlier licences survive'},{label:'Copyright',value:beat.exclusiveLegalMode==='RIGHTS_ASSIGNMENT'?'Express assignment':'Retained by producer'},{label:'Content ID',value:beat.sampleDeclaration==='NO_UNCONTROLLED_SAMPLES'?'Subject to platform eligibility':'Not allowed'}]:beatUsageSummary(beat),
         licenceClauses:licenceClauses(licenseType==='exclusive',beat.producerName||'Producer',rights),
-        description: licenseType === "exclusive" ? "Exclusive use subject to earlier licences; Content ID requires platform eligibility" : `${beatLicenseLabel(licenseType)}. General commercial licence with no Content ID.`,
+        description: `${beat.availableLicenses?.includes(licenseType)?"Available file. ":"Producer delivery after purchase: the selected format will be prepared and emailed. "}` + (licenseType === "exclusive" ? "Exclusive use subject to earlier licences; Content ID requires platform eligibility" : `${beatLicenseLabel(licenseType)}. General commercial licence with no Content ID.`),
         quantity: 1,
         unitPrice,
         total: unitPrice,

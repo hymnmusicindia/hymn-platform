@@ -1,7 +1,8 @@
 import {validateBeatReadiness, type BeatReadinessInput} from './beat-readiness';
 import {exclusiveBeatEligible, sampleSourceConflict} from './beat-rights-policy';
-export function beatQcReport(beat:BeatReadinessInput & {sampleDeclared?:boolean; masterVerified?:boolean; storefrontReady?:boolean; restricted?:boolean; evidenceCount?:number}) {
+export function beatQcReport(beat:BeatReadinessInput & {sampleDeclared?:boolean;contentConfirmed?:boolean; masterVerified?:boolean; storefrontReady?:boolean; restricted?:boolean; evidenceCount?:number}) {
   const issues=validateBeatReadiness(beat).issues.map(issue=>issue.message);
+  if(!beat.contentConfirmed)issues.push('Confirm the uploaded recording matches this beat title.');
   if(!beat.sampleDeclared)issues.push('A confirmed producer rights declaration is required.');
   if(!beat.artworkUrl)issues.push('Add cover artwork before automatic publication.');
   if(!beat.masterVerified)issues.push('The private audio master must pass file integrity checks.');
