@@ -16,6 +16,7 @@ on:
       - 'components/checkout-experience.tsx'
       - 'components/producer-*'
       - 'app/api/beat-purchases/**'
+      - 'app/api/cron/release-emails/**'
       - 'app/api/checkout/**'
       - 'scripts/verify-direnote-virtual.ts'
       - 'app/api/beats/**'
@@ -41,6 +42,7 @@ on:
       - 'components/checkout-experience.tsx'
       - 'components/producer-*'
       - 'app/api/beat-purchases/**'
+      - 'app/api/cron/release-emails/**'
       - 'app/api/checkout/**'
       - 'scripts/verify-direnote-virtual.ts'
       - 'app/api/beats/**'
@@ -67,6 +69,7 @@ jobs:
       - run: npm ci --fetch-retries=5 --fetch-timeout=120000
       - run: npx prisma generate
       - run: npm run test:beatstore
+      - run: node --import tsx scripts/verify-direnote-virtual.ts --beat-delivery-only
       - run: node --import tsx scripts/verify-direnote-virtual.ts --beat-licensing-only
       - run: node --import tsx scripts/verify-payment-flows-isolated.ts --webhooks-only
       - run: node --conditions=react-server --import tsx scripts/verify-bio-checkout-verification.ts

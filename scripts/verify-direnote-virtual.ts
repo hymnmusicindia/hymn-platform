@@ -49,6 +49,10 @@ async function main() {
   try {
     await pg.createDatabase("direnote_virtual");
     await run(["node_modules/prisma/build/index.js", "db", "push", "--skip-generate"]);
+    if(process.argv.includes('--beat-delivery-only')){
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-beat-delivery.ts']);
+      return;
+    }
     if(process.argv.includes('--beat-licensing-only')){
       await run(['--conditions=react-server','--import','tsx','scripts/verify-private-storage-integration.ts']);
       await run(['--conditions=react-server','--import','tsx','scripts/verify-beat-licensing-integration.ts']);

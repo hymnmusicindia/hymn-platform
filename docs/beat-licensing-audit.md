@@ -46,3 +46,9 @@ CI runs the licence, mail and checkout snapshot checks on relevant changes. Exis
 ## Production record checks
 
 Read-only database audit found 13 published beats (8 MP3 masters and 5 WAV masters), each with a private deliverable record. The one active pre-existing purchase has a PDF, a paid order and a sent delivery email. Eight MP3-only beats had prices for unavailable WAV/stem/exclusive formats; the new availability checks prevent those formats from being purchased. This checks database records, not every file byte on remote storage. The additive snapshot migration was applied successfully before code publication.
+
+## Explicit delivery requests through HYMN SMTP
+
+An explicitly requested beat delivery is stored as a deduplicated Beat delivery task, bound to the purchase owner and a hash of the account recipient. The existing release-emails scheduler checks one request per run. It verifies active access and reads the licensed master, generates the agreement on live private storage without sending an early email, reads the resulting PDF, then uses the standard HYMN licence-ready SMTP email with authenticated links and size-eligible attachments. It resolves the request only after an SMTP acceptance receipt, or when an existing sent receipt suppresses a duplicate. Missing files/configuration wait; changed recipients and uncertain in-flight SMTP outcomes require review. Failures retry at most three times, with an hourly delay. Expired processing tasks are not automatically reclaimed because their previous SMTP outcome might be unknown. No workstation SMTP credentials or locally generated production file records are needed.
+
+Run `node --import tsx scripts/verify-direnote-virtual.ts --beat-delivery-only` to verify readiness gating, both attachments, disabled SMTP, account-recipient binding, concurrent claims and duplicate suppression without sending actual mail.

@@ -2,5 +2,6 @@ import { repairPendingReviewHandoffs } from '@/lib/release-review-handoff';
 import { cronHandler } from "@/lib/cron/runtime";
 import { deliverReleaseOutbox } from "@/lib/email/release-outbox";
 import { repairRecentAmendmentAcknowledgements } from '@/lib/release-amendment-notifications';
+import {deliverRequestedBeats} from '@/lib/email/beat-delivery';
 export const runtime = "nodejs";
-export const GET = cronHandler("release-emails", async () => { const repairedReviews = await repairPendingReviewHandoffs(); const repairedAmendments = await repairRecentAmendmentAcknowledgements(); return Response.json({ ...await deliverReleaseOutbox(), repairedAmendments, repairedReviews }); });
+export const GET = cronHandler("release-emails", async () => { const repairedReviews = await repairPendingReviewHandoffs(); const repairedAmendments = await repairRecentAmendmentAcknowledgements(); return Response.json({ ...await deliverReleaseOutbox(), repairedAmendments, repairedReviews, beatDelivery:await deliverRequestedBeats() }); });

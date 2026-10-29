@@ -114,17 +114,17 @@ async function buildAgreementPdf(agreement: BeatLicenceAgreement) {
   const pages = pdf.getPages(); pages.forEach((item, index) => item.drawText(`HYMN Music | ${agreement.licenceNumber} | Page ${index + 1} of ${pages.length}`, { x: 45, y: 25, size: 7, font: regular, color: rgb(0.5, 0.52, 0.56) })); return Buffer.from(await pdf.save());
 }
 
-export async function generateBeatLicense(purchaseId: number, actorId: number, isAdmin = false, requestedArtistName?: string) {
+export async function generateBeatLicense(purchaseId: number, actorId: number, isAdmin = false, requestedArtistName?: string, options: {sendEmail?:boolean} = {}) {
   if(!Number.isSafeInteger(purchaseId)||purchaseId<1||purchaseId>2147483647)throw new Error('Beat purchase not found.');
   return prisma.$transaction(async tx=>{
     // Serialise issuance across instances so competing artist-name requests
     // cannot leave the saved snapshot different from the winning PDF.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(38419, ${purchaseId}::int)`;
-    return generateBeatLicenseLocked(purchaseId,actorId,isAdmin,requestedArtistName);
+    return generateBeatLicenseLocked(purchaseId,actorId,isAdmin,requestedArtistName,options.sendEmail!==false);
   },{maxWait:5000,timeout:60000});
 }
 
-async function generateBeatLicenseLocked(purchaseId: number, actorId: number, isAdmin: boolean, requestedArtistName?: string) {
+async function generateBeatLicenseLocked(purchaseId: number, actorId: number, isAdmin: boolean, requestedArtistName: string|undefined, sendEmail: boolean) {
   const purchase = await sourceForPurchase(purchaseId); if (!isAdmin && purchase.userId !== actorId) throw new Error("Beat purchase not found."); if (!purchase.hasAccess) throw new Error("Licence access has been revoked.");
   if (purchase.licenseAsset && !purchase.licenseAsset.deletedAt) { const existingUrl = `/api/assets/${purchase.licenseAsset.id}/download?filename=${encodeURIComponent(purchase.licenseAsset.safeFilename)}`; if (purchase.licenseUrl !== existingUrl) await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { licenseUrl: existingUrl, licenseUploadedAt: purchase.licenseUploadedAt ?? new Date() } }); return { purchaseId: purchase.id, licenseUrl: existingUrl, agreementUrl: `/licenses/${purchase.id}` }; }
   const artistName = stringValue(record(record(purchase.licenseTermsSnapshot).buyer).artistName) || requestedArtistName?.trim() || purchase.user.artistCards[0]?.artistName?.trim(); if (!artistName || artistName.length < 2 || artistName.length > 80) throw new Error("Add your artist name before generating this licence.");
@@ -134,6 +134,6 @@ async function generateBeatLicenseLocked(purchaseId: number, actorId: number, is
   try { asset = await localPrivateStorage.upload({ ownerUserId: purchase.userId, beatPurchaseId: purchase.id, assetType: "private_beat_license", fileName: `HYMN-${agreement.licenceNumber}.pdf`, mimeType: "application/pdf", bytes }); }
   catch (error) { const existing = await prisma.storedAsset.findUnique({ where: { beatPurchaseId: purchase.id } }); if (!existing) throw error; asset = { id: existing.id, downloadPath: `/api/assets/${existing.id}/download?filename=${encodeURIComponent(existing.safeFilename)}` }; }
   const url = asset.downloadPath; await prisma.beatPurchase.update({ where: { id: purchase.id }, data: { licenseUrl: url, licenseUploadedAt: new Date() } });
-  await Promise.all([createNotificationOnce({ eventKey: `beat:${purchase.id}:license_ready`, userId: purchase.userId, title: "Beat licence ready", body: `Your licence for ${purchase.beat.title} is ready to view and download.`, type: "beat", href: `/licenses/${purchase.id}`, actionLabel: "View licence" }), sendBeatEmailEvent({ event: "license_ready", to: purchase.user.email, userId: purchase.userId, purchaseId: purchase.id, userName: purchase.user.name, beatTitle: purchase.beat.title, url: emailAppUrl(`/licenses/${purchase.id}`) }), logAuditEvent({ actorType: isAdmin ? "admin" : "system", actorId, entityType: "beat_purchase", entityId: purchase.id, action: "beat_license.generated", newValue: { licenseUrl: url, agreementUrl: `/licenses/${purchase.id}`, version: BEAT_LICENCE_VERSION }, metadata: { beatId: purchase.beat.id, licenseType: purchase.licenseType, artistName } })]);
+  await Promise.all([createNotificationOnce({ eventKey: `beat:${purchase.id}:license_ready`, userId: purchase.userId, title: "Beat licence ready", body: `Your licence for ${purchase.beat.title} is ready to view and download.`, type: "beat", href: `/licenses/${purchase.id}`, actionLabel: "View licence" }), sendEmail && sendBeatEmailEvent({ event: "license_ready", to: purchase.user.email, userId: purchase.userId, purchaseId: purchase.id, userName: purchase.user.name, beatTitle: purchase.beat.title, url: emailAppUrl(`/licenses/${purchase.id}`) }), logAuditEvent({ actorType: isAdmin ? "admin" : "system", actorId, entityType: "beat_purchase", entityId: purchase.id, action: "beat_license.generated", newValue: { licenseUrl: url, agreementUrl: `/licenses/${purchase.id}`, version: BEAT_LICENCE_VERSION }, metadata: { beatId: purchase.beat.id, licenseType: purchase.licenseType, artistName } })]);
   return { purchaseId: purchase.id, licenseUrl: url, agreementUrl: `/licenses/${purchase.id}` };
 }
