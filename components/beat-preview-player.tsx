@@ -173,7 +173,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
         <div className="mt-3 grid items-center gap-4 md:grid-cols-[16.5rem_1fr]">
           <div className="mx-auto w-full max-w-[13rem] sm:max-w-[16.5rem]">
             <LicenceWheel
-              options={options.map(option => ({ key: option.purchasableKey, label: option.id === "mp3" ? "MP3" : option.id === "wav" ? "WAV" : option.id === "stems" ? "Stems" : "Exclusive", price: option.disabled ? "Unavailable" : `${formatMoney(option.price)}${beat.availableLicenses?.includes(option.purchasableKey)?"":" ? Producer delivery"}`, disabled: option.disabled }))}
+              options={options.map(option => ({ key: option.purchasableKey, label: option.id === "mp3" ? "MP3" : option.id === "wav" ? "WAV" : option.id === "stems" ? "Stems" : "Exclusive", price: option.disabled ? "Unavailable" : `${formatMoney(option.price)}${beat.availableLicenses?.includes(option.purchasableKey)?"":" - Producer delivery"}`, disabled: option.disabled }))}
               highlighted={hoveredLicense ?? selectedOption.purchasableKey}
               onHighlight={key => setHoveredLicense(key as LicenseChoice | null)}
               onSelect={key => onSelect(key as LicenseChoice)}
