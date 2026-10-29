@@ -80,6 +80,10 @@
 :global(html) .banner .hint,:global(html) .banner .hint span,:global(html) .banner .terms,:global(html) .banner .number,:global(html) .banner .detailNumber { color:#aab8cc; }
 :global(html) .banner .cta,:global(html) .banner .detailAction,:global(html) .banner .terms a { color:#e3ecfa; }
 :global(html) .banner .detail { border-color:#ffffff1c; background:#11161d; }
+:global(html[data-theme="light"]) .banner { color:var(--text); }
+:global(html[data-theme="light"]) .banner :is(.heading h2,.caption h3,.detail h3,.cta,.detailAction,.terms a) { color:var(--text); }
+:global(html[data-theme="light"]) .banner :is(.heading h2 span,.heading p,.caption p,.detail p,.hint,.hint span,.terms,.number,.detailNumber) { color:var(--text-muted); }
+:global(html[data-theme="light"]) .banner .detail { border-color:var(--border);background:var(--bg-soft); }
 @media(max-width:1000px) and (min-width:641px) {
  .heading { align-items:flex-start; }
  .heading h2 { font-size:34px; }

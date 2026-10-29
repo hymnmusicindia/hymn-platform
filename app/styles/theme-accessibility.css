@@ -1,0 +1,130 @@
+/* Capture the global palette at the document root, before legacy wrappers override it. */
+html[data-theme="light"] {
+  --text-soft:var(--text-muted);
+  --hymn-theme-bg:var(--bg);
+  --hymn-theme-bg-elevated:var(--bg-elevated);
+  --hymn-theme-bg-soft:var(--bg-soft);
+  --hymn-theme-card:var(--card);
+  --hymn-theme-card-strong:var(--card-strong);
+  --hymn-theme-surface:var(--surface);
+  --hymn-theme-input:var(--input);
+  --hymn-theme-text:var(--text);
+  --hymn-theme-text-muted:var(--text-muted);
+  --hymn-theme-text-soft:var(--text-soft);
+  --hymn-theme-border:var(--border);
+  --hymn-theme-border-strong:var(--border-strong);
+  --hymn-theme-accent:var(--accent);
+  --hymn-theme-accent-strong:var(--accent-strong);
+  --hymn-theme-accent-soft:var(--accent-soft);
+  --hymn-theme-accent-foreground:var(--accent-foreground);
+  --hymn-theme-money:var(--money);
+  --hymn-theme-money-soft:var(--money-soft);
+  --hymn-theme-success:var(--success);
+  --hymn-theme-success-soft:var(--success-soft);
+  --hymn-theme-danger:var(--danger);
+  --hymn-theme-danger-soft:var(--danger-soft);
+  --hymn-theme-error:var(--error);
+  --hymn-theme-error-soft:var(--error-soft);
+  --hymn-theme-warning:var(--warning);
+  --hymn-theme-warning-soft:var(--warning-soft);
+  --hymn-theme-info:var(--info);
+  --hymn-theme-info-soft:var(--info-soft);
+  --hymn-theme-focus:var(--focus);
+  --hymn-theme-hover:var(--hover);
+  --hymn-theme-overlay:var(--overlay);
+  --hymn-theme-material-panel:var(--material-panel);
+  --hymn-theme-material-recess:var(--material-recess);
+  --hymn-theme-material-selected:var(--material-selected);
+  --hymn-theme-material-selected-text:var(--material-selected-text);
+  --hymn-theme-material-ink:var(--material-ink);
+  --hymn-theme-material-edge:var(--material-edge);
+  --hymn-theme-material-highlight:var(--material-highlight);
+  --hymn-theme-material-shadow:var(--material-shadow);
+  --hymn-theme-material-title:var(--material-title);
+  --hymn-theme-logo-filter:var(--logo-filter);
+}
+html[data-theme="light"] body,
+html[data-theme="light"] body :is(.hymn-portal-root.hymn-portal-root,.hymn-portal,.workspace-v2.workspace-v2,[data-dashboard-surface][data-dashboard-surface],.hymn-landing,.admin-dark-workspace) {
+  --bg:var(--hymn-theme-bg);
+  --bg-elevated:var(--hymn-theme-bg-elevated);
+  --bg-soft:var(--hymn-theme-bg-soft);
+  --card:var(--hymn-theme-card);
+  --card-strong:var(--hymn-theme-card-strong);
+  --surface:var(--hymn-theme-surface);
+  --input:var(--hymn-theme-input);
+  --text:var(--hymn-theme-text);
+  --text-muted:var(--hymn-theme-text-muted);
+  --text-soft:var(--hymn-theme-text-soft);
+  --border:var(--hymn-theme-border);
+  --border-strong:var(--hymn-theme-border-strong);
+  --accent:var(--hymn-theme-accent);
+  --accent-strong:var(--hymn-theme-accent-strong);
+  --accent-soft:var(--hymn-theme-accent-soft);
+  --accent-foreground:var(--hymn-theme-accent-foreground);
+  --money:var(--hymn-theme-money);
+  --money-soft:var(--hymn-theme-money-soft);
+  --success:var(--hymn-theme-success);
+  --success-soft:var(--hymn-theme-success-soft);
+  --danger:var(--hymn-theme-danger);
+  --danger-soft:var(--hymn-theme-danger-soft);
+  --error:var(--hymn-theme-error);
+  --error-soft:var(--hymn-theme-error-soft);
+  --warning:var(--hymn-theme-warning);
+  --warning-soft:var(--hymn-theme-warning-soft);
+  --info:var(--hymn-theme-info);
+  --info-soft:var(--hymn-theme-info-soft);
+  --focus:var(--hymn-theme-focus);
+  --hover:var(--hymn-theme-hover);
+  --overlay:var(--hymn-theme-overlay);
+  --material-panel:var(--hymn-theme-material-panel);
+  --material-recess:var(--hymn-theme-material-recess);
+  --material-selected:var(--hymn-theme-material-selected);
+  --material-selected-text:var(--hymn-theme-material-selected-text);
+  --material-ink:var(--hymn-theme-material-ink);
+  --material-edge:var(--hymn-theme-material-edge);
+  --material-highlight:var(--hymn-theme-material-highlight);
+  --material-shadow:var(--hymn-theme-material-shadow);
+  --material-title:var(--hymn-theme-material-title);
+  --logo-filter:var(--hymn-theme-logo-filter);
+  --dash-bg:var(--bg);--dash-surface:var(--card);--dash-soft:var(--bg-soft);--dash-border:var(--border);--dash-text:var(--text);--dash-muted:var(--text-muted);--dash-accent:var(--accent);--dash-focus:var(--focus);
+  --team-bg:var(--bg);--team-card:var(--card);--team-border:var(--border);--team-muted:var(--text-muted);
+  --foreground:var(--text);--ink:var(--text);--text-primary:var(--text);--text-secondary:var(--text-muted);--text-tertiary:var(--text-soft);
+  color-scheme:light;background:var(--bg)!important;color:var(--text);
+}
+
+/* Filled Studio actions declare their own foreground; global text-action hover rules respect it. */
+html body [data-hymn-studio] .btn-primary { --primary-action-text:var(--accent-foreground); }
+.profile-theme-toggle { display:flex;align-items:center;gap:12px;width:100%;min-height:44px;padding:10px 12px;border:0;border-radius:10px;background:transparent;color:var(--text);font:inherit;font-size:14px;text-align:left;cursor:pointer; }
+.profile-theme-toggle:hover { background:var(--hover); }
+.profile-theme-toggle:focus-visible { outline:2px solid var(--focus);outline-offset:2px; }
+html[data-theme="light"] :is(input,textarea)::placeholder { color:var(--text-muted);opacity:1; }
+html[data-theme="light"] body :is(.landing-sidebar,.landing-rail,.dashboard-os-sidebar,[data-dashboard-sidebar]) { background:var(--card)!important;color:var(--text)!important;border-color:var(--border)!important; }
+
+html[data-theme="light"] body [data-dashboard-surface] button:not(.btn-primary):hover { background:var(--hover)!important; }
+html[data-theme="light"] body :is([data-dashboard-sidebar],.landing-rail,.landing-sidebar) img[alt*="HYMN"] { filter:var(--hymn-theme-logo-filter)!important; }
+
+/* Legacy navigation used fixed silver labels, including on porcelain surfaces. */
+html[data-theme="light"] body :is(.landing-rail,.dashboard-os-sidebar) { --sidebar-ink:var(--text);--sidebar-muted:var(--text-muted);--sidebar-hover:var(--hover); }
+html[data-theme="light"] body :is(.landing-rail,.dashboard-os-sidebar) :is(.workspace-destination,.landing-nav-link,.dashboard-os-nav-item):is(:hover,[aria-current="page"],.is-active) { color:var(--text)!important;background:var(--hover)!important; }
+html[data-theme="light"] body :is(.sidebar-newsletter,.sidebar-newsletter-heading svg,.sidebar-newsletter-input input) { color:var(--text); }
+html[data-theme="light"] body :is(.sidebar-newsletter-content>p,.sidebar-newsletter-content>small,.sidebar-newsletter-subscribed small,.sidebar-newsletter-retry,.sidebar-newsletter-subscribed button) { color:var(--text-muted); }
+html[data-theme="light"] body .sidebar-newsletter-input { background:var(--input);border-color:var(--border-strong); }
+html[data-theme="light"] body .sidebar-newsletter-input button { background:var(--accent);color:var(--accent-foreground); }
+html[data-theme="light"] body:has(:is(.hymn-landing,.hymn-home-theme))>footer,
+html[data-theme="light"] body:has(:is(.hymn-landing,.hymn-home-theme))>footer .ios-collapse { background:var(--card)!important;border-color:var(--border)!important; }
+
+/* Public content panels follow the selected palette; photo heroes retain their overlay. */
+html[data-theme="light"] .hymn-landing :is(.landing-canvas,.landing-service,.landing-signup>aside,.landing-artists>div:last-child,.landing-artists article,.landing-beats article,.landing-newsletter) { background:var(--card);border-color:var(--border); }
+html[data-theme="light"] .hymn-landing :is(.landing-section-heading h2,.landing-section-heading>a,.landing-service h3,.landing-service-cta,.landing-signup h2>span,.landing-canvas-bar>span:first-child,.landing-canvas-bar>a) { color:var(--text); }
+html[data-theme="light"] .hymn-landing :is(.landing-section-heading>span,.landing-section-heading .landing-eyebrow,.landing-service>div,.landing-service>div small,.landing-service>p,.landing-canvas-bar,.landing-rail-bottom>span) { color:var(--text-muted); }
+html[data-theme="light"] .hymn-landing .landing-newsletter :is(h2,[aria-label="HYMN social channels"]) { color:var(--text); }
+html[data-theme="light"] .hymn-landing .landing-newsletter img[alt="HYMN Music"] { filter:invert(1); }
+html[data-theme="light"] .hymn-landing .landing-beats :is(.premium-ghost,[class*="text-[#f5c16c]"]) { color:var(--text-muted)!important; }
+html[data-theme="light"] body>footer { background:var(--hymn-theme-card)!important; }
+
+html[data-theme="light"] body :is(.landing-rail,.dashboard-os-sidebar) :is(.workspace-destination,.landing-nav-link,.dashboard-os-nav-item,.landing-group-title,.dashboard-os-group-toggle) { color:var(--hymn-theme-text-muted)!important; }
+html[data-theme="light"] .hymn-landing .landing-signup p,html[data-theme="light"] .hymn-landing .landing-signup p a { color:var(--hymn-theme-text-muted)!important; }
+html[data-theme="light"] .hymn-landing .landing-career { --text:var(--hymn-theme-text);--text-muted:var(--hymn-theme-text-muted); }
+html[data-theme="light"] .hymn-landing .landing-career :is(h2,p,a) { color:var(--hymn-theme-text)!important; }
+html[data-theme="light"] .hymn-landing .landing-career>div { background:var(--hymn-theme-card)!important; }
+html[data-theme="light"] .hymn-landing .landing-beats a.premium-ghost { color:var(--hymn-theme-text-muted)!important; }

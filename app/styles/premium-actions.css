@@ -6,7 +6,7 @@ html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.
   color:var(--text-muted,#a3abb8)!important; transition:color .18s ease!important;
 }
 html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost,.landing-mobile-menu,.site-header-cta,.site-nav-item,.hymn-mobile-page-link,.release-summary-action-button,.release-dashboard-tab):is(:hover,:focus-visible),
-html body :is(.btn-primary,.site-nav-item[aria-current="page"],.hymn-mobile-page-link[aria-current="page"],.release-dashboard-tab[aria-current="page"]) { color:var(--text,#f5f7fa)!important; }
+html body :is(.btn-primary,.site-nav-item[aria-current="page"],.hymn-mobile-page-link[aria-current="page"],.release-dashboard-tab[aria-current="page"]) { color:var(--primary-action-text,var(--text,#f5f7fa))!important; }
 html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost)::before,
 html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost)::after { display:none!important; }
 html body :is(.btn-primary,.btn-outline,.btn-secondary,.btn-ghost,.premium-cta,.premium-ghost):disabled { color:var(--text-soft,#717a88)!important; opacity:.5; cursor:not-allowed; }

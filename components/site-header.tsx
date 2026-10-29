@@ -597,6 +597,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
               </div> : null}
             </div>
             <div className="mt-3 grid gap-1">
+              <ThemeToggle menu />
               {teamAccess ? <Link prefetch={false} href="/team" role="menuitem" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]"><LayoutDashboard className="h-4 w-4" />Team Workspace</Link> : null}
               <Link prefetch={false} href={user.role === "producer" ? "/producer/dashboard?tab=settings" : "/dashboard?tab=settings"} onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
                 <UserRound className="h-4 w-4" />
