@@ -4,14 +4,14 @@ html body .release-workflow.release-workflow.is-audio-upload-step .release-audio
   gap:14px;
   min-height:88px;
   padding:14px 16px;
-  border:1px solid #30343c;
+  border:1px solid var(--border);
   border-radius:6px;
-  background:#1c1f25;
+  background:var(--card);
   box-shadow:none;
 }
 html body .release-workflow.is-audio-upload-step .release-audio-index {
   width:auto; height:auto; border:0; border-radius:0; background:none;
-  color:#78818f; font-size:11px; font-weight:500; font-variant-numeric:tabular-nums;
+  color:var(--text-muted); font-size:11px; font-weight:500; font-variant-numeric:tabular-nums;
 }
 html body .release-workflow.release-workflow.is-audio-upload-step .audio-waveform-inline {
   display:grid; grid-template-columns:40px minmax(160px,.85fr) minmax(140px,1.4fr) 76px;

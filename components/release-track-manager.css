@@ -1,5 +1,5 @@
 /* Music-step master management. Keep control targets visible at every width. */
-html body .release-workflow.release-workflow.is-audio-upload-step .release-managed-master { grid-template-columns:22px 24px minmax(0,1fr); gap:12px; border:1px solid var(--border); background:var(--bg-elevated); padding:18px; box-shadow:0 4px 18px #00000008; }
+html body .release-workflow.release-workflow.is-audio-upload-step .release-managed-master { grid-template-columns:22px 24px minmax(0,1fr); gap:12px; border:1px solid var(--border); background:var(--bg-elevated); padding:18px; box-shadow:var(--shadow-soft); }
 html body .release-workflow.is-audio-upload-step .release-managed-master:not(:has(.release-master-grip)) { grid-template-columns:24px minmax(0,1fr); }
 .release-master-toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:8px 0 14px; }
 .release-master-toolbar strong { font-size:13px; font-weight:650; }

@@ -23,7 +23,7 @@ html body .workflow.workflow.workflow.workflow :global(.release-focused-card) { 
 }
 html body .workflow.workflow.workflow.workflow :global(.release-workflow-nav) > button { border-radius:10px!important; }
 html body .workflow.workflow.workflow.workflow :global(.release-artist-next) { display:inline-flex; align-items:center; justify-content:center; gap:10px; width:auto!important; min-width:140px; height:auto!important; min-height:48px!important; padding:12px 20px!important; border-radius:12px!important; font-size:14px; line-height:1.5; }
-html body .workflow.workflow.workflow.workflow :global(.release-artist-save-error) { grid-column:1/-1; padding:14px 16px; border:1px solid #c87e7e; border-radius:12px; background:#422a30; color:#ffd0d0; font-size:14px; }
+html body .workflow.workflow.workflow.workflow :global(.release-artist-save-error) { grid-column:1/-1; padding:14px 16px; border:1px solid #c87e7e; border-radius:12px; background:var(--card); color:var(--text); font-size:14px; }
 
 html body .workflow.workflow.workflow.workflow :global(.release-stage-menu) {
   display:flex!important; flex-direction:column; align-items:center; gap:6px;
@@ -31,7 +31,7 @@ html body .workflow.workflow.workflow.workflow :global(.release-stage-menu) {
   background:var(--bg,#151c24)!important; box-shadow:none!important;
 }
 html body .workflow.workflow.workflow.workflow :global(.release-stage-menu) :global(.release-journey-progress-track) {
-  flex:none; width:min(180px,45%); height:1px; margin:0; background:#485260;
+  flex:none; width:min(180px,45%); height:1px; margin:0; background:var(--bg-soft);
   border-radius:0; overflow:hidden; opacity:.6;
 }
-html body .workflow.workflow.workflow.workflow :global(.release-stage-menu) :global(.release-journey-progress-track)>span { background:#f4f5f7; }
+html body .workflow.workflow.workflow.workflow :global(.release-stage-menu) :global(.release-journey-progress-track)>span { background:var(--bg-soft); }

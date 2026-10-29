@@ -1,11 +1,11 @@
 .release-section-navigation{min-width:0;margin-top:28px;padding-bottom:18px}
 html body .release-manage-page .release-section-tabs,.release-section-tabs{display:flex;flex-wrap:nowrap;align-items:center;gap:clamp(8px,1.2vw,18px);overflow-x:auto;scrollbar-width:none;padding:8px 0;border:0;background:transparent;border-radius:0;box-shadow:none}
-html body .release-manage-page .release-section-tabs [role=tab],.release-section-tabs [role=tab]{flex:0 0 auto;max-width:100%;display:inline-flex;align-items:center;justify-content:flex-start;gap:4px;min-height:44px;padding:8px 0;border:0;border-radius:0;background:transparent;color:#d2d0cb;filter:blur(.35px);opacity:.8;font-size:11px;font-weight:500;line-height:1.5;white-space:nowrap;text-align:left;cursor:pointer;box-shadow:none;transition:color .2s ease,opacity .2s ease,filter .2s ease}
-html body .release-manage-page .release-section-tabs [role=tab][aria-selected=true],.release-section-tabs [role=tab][aria-selected=true]{background:transparent;border:0;color:#fff;filter:none;opacity:1;font-weight:700;box-shadow:none}
+html body .release-manage-page .release-section-tabs [role=tab],.release-section-tabs [role=tab]{flex:0 0 auto;max-width:100%;display:inline-flex;align-items:center;justify-content:flex-start;gap:4px;min-height:44px;padding:8px 0;border:0;border-radius:0;background:transparent;color:var(--text-muted);filter:blur(.35px);opacity:.8;font-size:11px;font-weight:500;line-height:1.5;white-space:nowrap;text-align:left;cursor:pointer;box-shadow:none;transition:color .2s ease,opacity .2s ease,filter .2s ease}
+html body .release-manage-page .release-section-tabs [role=tab][aria-selected=true],.release-section-tabs [role=tab][aria-selected=true]{background:transparent;border:0;color:var(--text);filter:none;opacity:1;font-weight:700;box-shadow:none}
 .release-section-tabs [role=tab]>svg{display:none}
 .release-section-tabs [role=tab][aria-selected=true]>svg{opacity:1}
-html body .release-manage-page .release-section-tabs [role=tab]:hover{color:#fff;filter:none;opacity:1;background:transparent}
-html body .release-manage-page .release-section-tabs [role=tab]:focus-visible{position:relative;outline:none!important;color:#fff;filter:none;opacity:1}
+html body .release-manage-page .release-section-tabs [role=tab]:hover{color:var(--text);filter:none;opacity:1;background:transparent}
+html body .release-manage-page .release-section-tabs [role=tab]:focus-visible{position:relative;outline:none!important;color:var(--text);filter:none;opacity:1}
 .release-section-tabs [role=tab]:focus-visible::after{content:'';position:absolute;top:3px;left:calc(50% - 1.5px);width:3px;height:3px;border-radius:50%;background:currentColor}
 .release-section-tabs [data-attention=true]>svg{color:var(--warning,#e9b768)}
 .release-section-count{font-size:10px;font-weight:600;font-variant-numeric:tabular-nums;opacity:.75}

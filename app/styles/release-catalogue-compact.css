@@ -15,9 +15,9 @@ html body .release-catalogue-filters .release-filter-control .release-filter-lab
 html body .release-catalogue-filters .release-filter-label svg { width:15px; height:15px; flex-shrink:0; }
 html body .hymn-portal-root .hymn-portal .release-catalogue-filters .release-filter-control select.field {
   color-scheme:dark;
-  color:#f4f5f7!important;
-  background-color:#24272c!important;
-  border:1px solid #565b65!important;
+  color:var(--text)!important;
+  background-color:var(--card)!important;
+  border:1px solid var(--border)!important;
   border-radius:6px!important;
   min-height:40px!important;
   padding:8px 26px 8px 10px!important;
@@ -25,7 +25,7 @@ html body .hymn-portal-root .hymn-portal .release-catalogue-filters .release-fil
   width:100%;
   cursor:pointer;
 }
-html body .release-catalogue-filters select.field option { color:#f4f5f7!important; background:#24272c!important; }
+html body .release-catalogue-filters select.field option { color:var(--text)!important; background:var(--card)!important; }
 html body .release-catalogue-filters select.field:focus-visible { outline:2px solid var(--text)!important; outline-offset:3px; }
 html body .release-catalogue-filters .release-filter-count { display:flex; flex-direction:column; justify-content:center; gap:7px; min-width:0; }
 html body .release-catalogue-filters.release-catalogue-filters { grid-template-columns:repeat(5,minmax(0,1fr)) minmax(100px,.8fr); align-items:stretch; }
@@ -35,14 +35,14 @@ html body .release-catalogue-filters .release-results-count strong { font-size:1
 .release-filters-reset { display:inline-flex; align-items:center; gap:6px; min-height:32px; color:var(--text); font-size:11px; text-align:left; }
 .release-filters-reset:hover { text-decoration:underline; }
 html body .release-library-grid .release-summary-actions .release-summary-action-button {
-  border:1px solid color-mix(in srgb,var(--text,#e4e8ef) 32%,transparent)!important;
+  border:1px solid color-mix(in srgb,var(--text,var(--border)) 32%,transparent)!important;
   border-radius:8px!important;
   background:transparent!important;
   color:var(--text,#e4e8ef)!important;
   box-shadow:none!important;
 }
 html body .release-library-grid .release-summary-actions .release-summary-action-button:hover {
-  border-color:var(--text,#e4e8ef)!important;
+  border-color:var(--text,var(--border))!important;
   background:color-mix(in srgb,var(--text,#e4e8ef) 6%,transparent)!important;
 }
 html body .release-library-grid .release-summary-badge {

@@ -26,22 +26,22 @@ html body .release-toolbar > .release-workspace-quit:is(button,:hover,:focus-vis
 html body .release-navigation-header { padding-bottom:20px; }
 html body .release-toolbar .release-workspace-state {
   display:flex!important; align-items:center; justify-content:flex-end; flex-wrap:wrap;
-  gap:4px 14px; min-width:0; font-size:12px; color:#deded8;
+  gap:4px 14px; min-width:0; font-size:12px; color:var(--text);
 }
-html body .release-toolbar .release-workspace-state > span { color:#deded8!important; }
-html body .release-toolbar .release-workspace-state > span:hover { color:#fff!important; }
+html body .release-toolbar .release-workspace-state > span { color:var(--text)!important; }
+html body .release-toolbar .release-workspace-state > span:hover { color:var(--text)!important; }
 html body .release-toolbar .release-journey-progress-track { display:none; }
 
 /* Text actions retain their hit areas and focus rings without button boxes. */
 html body :is(.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow,.release-toolbar.release-toolbar)
 button:where(:not([role="switch"]):not([role="checkbox"]):not([role="radio"]):not([aria-pressed]):not([aria-selected]):not([aria-checked]):not([class*="selected-artist"]):not([class*="artist-avatar"]):not([data-distance])) {
   border:0!important; border-radius:0!important; background:transparent!important;
-  box-shadow:none!important; text-shadow:none!important; color:#deded8!important;
+  box-shadow:none!important; text-shadow:none!important; color:var(--text-muted)!important;
   min-height:44px; transition:color .18s ease,opacity .18s ease;
 }
 html body :is(.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow,.release-toolbar.release-toolbar)
-button:where(:not([role="switch"]):not([role="checkbox"]):not([role="radio"]):not([aria-pressed]):not([aria-selected]):not([aria-checked]):not([class*="selected-artist"]):not([class*="artist-avatar"]):not([data-distance])):is(:hover,:focus-visible):not(:disabled) { color:#fff!important; }
-html body :is(.distribution-workflow,.release-toolbar) button:focus-visible { outline:2px solid #c5d9f3; outline-offset:3px; }
+button:where(:not([role="switch"]):not([role="checkbox"]):not([role="radio"]):not([aria-pressed]):not([aria-selected]):not([aria-checked]):not([class*="selected-artist"]):not([class*="artist-avatar"]):not([data-distance])):is(:hover,:focus-visible):not(:disabled) { color:var(--text)!important; }
+html body :is(.distribution-workflow,.release-toolbar) button:focus-visible { outline:2px solid var(--focus); outline-offset:3px; }
 html body :is(.distribution-workflow,.release-toolbar) button:disabled { cursor:not-allowed; opacity:.45; }
 html body :is(.distribution-workflow,.release-toolbar) :is(.release-footer-action,.release-workspace-quit,.release-workspace-review,.release-artist-next,.btn-primary,.btn-outline)::before,
 html body :is(.distribution-workflow,.release-toolbar) :is(.release-footer-action,.release-workspace-quit,.release-workspace-review,.release-artist-next,.btn-primary,.btn-outline)::after { content:none!important; }
@@ -64,8 +64,8 @@ html body .distribution-workflow.distribution-workflow.distribution-workflow.dis
   width:auto!important; min-width:0; flex:0 1 auto; padding:10px 8px!important;
   white-space:normal!important; line-height:1.5; text-align:center;
 }
-html body .distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow .release-footer-action.is-draft { margin-left:auto!important; color:#c9b97a!important; }
-html body .distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow .release-footer-action.is-draft:is(:hover,:focus-visible):not(:disabled) { color:#ffe071!important; }
+html body .distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow .release-footer-action.is-draft { margin-left:auto!important; color:var(--money)!important; }
+html body .distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow .release-footer-action.is-draft:is(:hover,:focus-visible):not(:disabled) { color:var(--warning)!important; }
 @media(max-width:767px) {
   html body .distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow :is(.release-footer-mobile-actions,.release-focused-actions,.review-submit-bar) { gap:4px!important; padding-inline:8px!important; }
   html body .distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow.distribution-workflow .release-footer-action { padding-inline:4px!important; font-size:12px!important; }

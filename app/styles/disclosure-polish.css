@@ -13,7 +13,7 @@
 :where(details > summary):focus-visible { outline:2px solid var(--focus,#9cbcff); outline-offset:3px; border-radius:8px; }
 :where(details[open]) > :is(p,ol,ul,form,div) { margin-block-start:12px; margin-block-end:16px; }
 /* Unstyled disclosure boxes previously placed their contents against the border. */
-:where(details:not([class])) { padding:4px 16px; border:1px solid var(--border,#334155); border-radius:12px; margin-block:12px; }
+:where(details:not([class])) { padding:4px 16px; border:1px solid var(--border); border-radius:12px; margin-block:12px; }
 :where(details:not([class]) > summary) { color:inherit; font-weight:550; }
 :where(details > :is(p,ol,ul,form,div)) { min-width:0; line-height:1.65; }
 :where(button,a,summary) > :where(svg.lucide) { flex-shrink:0; }

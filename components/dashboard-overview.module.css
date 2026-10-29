@@ -4,17 +4,17 @@
 .header h1{font-size:clamp(24px,3vw,36px);font-weight:650;letter-spacing:-.04em;line-height:1.15;margin:0}
 .description{color:var(--text-muted,#9ba3b3);font-size:13px;line-height:1.65;margin:8px 0 0}
 .primary,.link{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:12px;font-weight:600;text-decoration:none;cursor:pointer}
-.primary{border:1px solid #dce4ff;background:#dce4ff;color:#141b2b;padding:12px 16px;border-radius:10px;white-space:nowrap}
+.primary{border:1px solid var(--border);background:var(--accent);color:var(--accent-foreground);padding:12px 16px;border-radius:10px;white-space:nowrap}
 .primary svg,.link svg{width:15px;height:15px}
 .link{color:var(--overview-accent);background:none;border:0;padding:4px 0}
 .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-.metric{display:flex;flex-direction:column;gap:8px;text-align:left;padding:18px;border:1px solid var(--border,#303643);background:var(--bg-soft,#1c212b);border-radius:14px;min-width:0;cursor:pointer;color:inherit}
+.metric{display:flex;flex-direction:column;gap:8px;text-align:left;padding:18px;border:1px solid var(--border);background:var(--bg-soft,#1c212b);border-radius:14px;min-width:0;cursor:pointer;color:inherit}
 .metricTop{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--text-muted,#9ba3b3)}
 .metricTop svg{width:16px;height:16px;color:var(--overview-accent)}
 .metric strong{font-size:clamp(23px,2.5vw,32px);font-weight:600;letter-spacing:-.035em;font-variant-numeric:tabular-nums;line-height:1.2}
 .metric small{color:var(--text-muted,#9ba3b3);font-size:11px;line-height:1.5}
 .grid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(260px,1fr);gap:20px;align-items:start}
-.panel{border:1px solid var(--border,#303643);border-radius:16px;background:var(--bg-soft,#1b202a);padding:22px;min-width:0}
+.panel{border:1px solid var(--border);border-radius:16px;background:var(--bg-soft,#1b202a);padding:22px;min-width:0}
 .panelHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}
 .panel h2{font-size:16px;letter-spacing:-.02em;font-weight:600;margin:0}
 .stack{display:grid;gap:20px;min-width:0}
@@ -26,13 +26,13 @@
 .dot{height:8px;width:8px;border-radius:50%;background:var(--segment-color);flex-shrink:0}
 .cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
 .card{display:flex;flex-direction:column;gap:5px;color:inherit;text-decoration:none;text-align:left;min-width:0;border:0;background:none;padding:0;cursor:pointer}
-.art{aspect-ratio:1;position:relative;background:linear-gradient(140deg,#303a51,#171d29);border-radius:12px;display:grid;place-items:center;overflow:hidden;margin-bottom:6px;width:100%}
+.art{aspect-ratio:1;position:relative;background:var(--surface-gradient);border-radius:12px;display:grid;place-items:center;overflow:hidden;margin-bottom:6px;width:100%}
 .art img{object-fit:cover;width:100%;height:100%}
-.art svg{width:28px;height:28px;color:#aebde2}
+.art svg{width:28px;height:28px;color:var(--text-muted)}
 .card strong{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%}
 .card small{font-size:11px;color:var(--text-muted,#9ba3b3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%}
 .badge{font-size:10px;color:var(--overview-accent);margin-top:4px;line-height:1.5}
-.row{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--border,#303643);min-width:0}
+.row{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--border);min-width:0}
 .row:last-child{border-bottom:0;padding-bottom:0}
 .row:first-child{padding-top:0}
 .rowCopy{flex:1;min-width:0}
@@ -50,10 +50,10 @@
 .balanceRows dt{color:var(--text-muted,#9ba3b3)}
 .balanceRows dd{margin:0;text-align:right;overflow-wrap:anywhere}
 .shortcuts{display:flex;flex-wrap:wrap;gap:8px}
-.shortcuts a,.shortcuts button{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border,#303643);border-radius:9px;padding:10px 12px;background:transparent;color:var(--text-muted,#d2d7e1);font-size:12px;cursor:pointer;text-decoration:none}
+.shortcuts a,.shortcuts button{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:9px;padding:10px 12px;background:transparent;color:var(--text-muted,#d2d7e1);font-size:12px;cursor:pointer;text-decoration:none}
 .shortcuts svg{width:15px;height:15px}
 .queues{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-.queue{padding:16px;border:1px solid var(--border,#303643);border-radius:12px;text-align:left;background:var(--bg-soft,#1b202a);color:inherit;cursor:pointer;min-width:0}
+.queue{padding:16px;border:1px solid var(--border);border-radius:12px;text-align:left;background:var(--bg-soft,#1b202a);color:inherit;cursor:pointer;min-width:0}
 .queue[data-urgent=true]{border-color:#e6aa654f;background:linear-gradient(135deg,#e6aa650b,var(--bg-soft,#1b202a))}
 .queue strong{font-size:30px;display:block;margin-bottom:9px;font-variant-numeric:tabular-nums}
 .queue span{font-size:12px;display:block}

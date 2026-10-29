@@ -1,13 +1,13 @@
 /* One operational design system, scoped to dashboard boundaries. */
 html body [data-dashboard-surface][data-dashboard-surface] {
-  --dash-bg:#0c0e12; --dash-surface:#14171d; --dash-soft:#1b2029; --dash-border:#303847;
-  --dash-text:#eef1f6; --dash-muted:#b2bdce; --dash-accent:#dce7fc; --dash-focus:#a9c4fa;
+  --dash-bg:var(--hymn-bg); --dash-surface:var(--hymn-card); --dash-soft:var(--hymn-bg-soft); --dash-border:var(--hymn-border);
+  --dash-text:var(--hymn-text); --dash-muted:var(--hymn-text-muted); --dash-accent:var(--hymn-accent); --dash-focus:var(--hymn-focus);
   --dash-radius:12px; --dash-control-radius:8px; --dash-space:20px;
-  --bg:var(--dash-bg); --bg-soft:var(--dash-soft); --card:var(--dash-surface); --card-soft:var(--dash-soft);
-  --text:var(--dash-text); --text-muted:var(--dash-muted); --text-soft:var(--dash-muted);
-  --border:var(--dash-border); --border-strong:#46536a; --accent:var(--dash-accent); --accent-soft:#243047; --focus:var(--dash-focus);
-  --input-bg:var(--dash-bg); --panel:var(--dash-surface); --ink:var(--dash-text);
-  --team-bg:var(--dash-bg); --team-card:var(--dash-surface); --team-border:var(--dash-border); --team-muted:var(--dash-muted);
+  --bg:var(--hymn-bg); --bg-soft:var(--hymn-bg-soft); --card:var(--hymn-card); --card-soft:var(--hymn-bg-soft);
+  --text:var(--hymn-text); --text-muted:var(--hymn-text-muted); --text-soft:var(--hymn-text-soft);
+  --border:var(--hymn-border); --border-strong:var(--hymn-border-strong); --accent:var(--hymn-accent); --accent-soft:var(--hymn-accent-soft); --focus:var(--hymn-focus);
+  --input-bg:var(--hymn-input); --panel:var(--hymn-card); --ink:var(--hymn-text);
+  --team-bg:var(--hymn-bg); --team-card:var(--hymn-card); --team-border:var(--hymn-border); --team-muted:var(--hymn-text-muted);
   background:var(--dash-bg); color:var(--dash-text); color-scheme:dark; font-family:"HYMN Manrope",Arial,sans-serif; font-size:13px; line-height:1.6;
 }
 html body [data-dashboard-surface][data-dashboard-surface] :is(h1,h2,h3) { color:var(--dash-text); line-height:1.35; letter-spacing:-.025em; }

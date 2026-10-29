@@ -20,7 +20,7 @@
 .playlist-invitation .playlist-invitation-gallery .playlist-testimonials.playlist-testimonials figure { flex-basis:206px; padding:8px 10px; }
 .playlist-invitation .playlist-invitation-gallery { background:transparent; }
 .playlist-invitation .playlist-invitation-benefits { padding-block:9px!important; }
-.playlist-invitation { background:#0b0d10!important; border-color:#272b32; }
+.playlist-invitation { background:var(--bg)!important; border-color:var(--border); }
 .playlist-invitation .playlist-invitation-main { position:relative; isolation:isolate; padding:20px 26px; gap:24px; grid-template-columns:minmax(240px,1fr) minmax(0,1.45fr); }
 .playlist-invitation .playlist-invitation-main::before { content:""; position:absolute; inset:0; z-index:-1; pointer-events:none; background:linear-gradient(100deg,#080a0eee 10%,#101319a8 55%,transparent),radial-gradient(ellipse at 100% 0%,#3b424d45,transparent 65%); }
 .playlist-invitation .playlist-cover-wall { display:grid; gap:8px; mask-image:linear-gradient(90deg,transparent,#000 8%,#000 90%,transparent); }
@@ -33,13 +33,13 @@
 .playlist-invitation .playlist-invitation-gallery .playlist-carousel-controls > button { width:auto; height:28px; padding:0 10px; font-size:10px; border-radius:20px; }
 .playlist-invitation .playlist-invitation-gallery .playlist-testimonials { scroll-snap-type:none; scrollbar-width:none; padding:8px 4px 0; }
 .playlist-invitation .playlist-testimonials::-webkit-scrollbar { display:none; }
-.playlist-invitation .playlist-invitation-gallery .playlist-testimonials figure { flex-basis:220px; padding:10px 12px; background:#15181daa; border-color:#2b3038; }
+.playlist-invitation .playlist-invitation-gallery .playlist-testimonials figure { flex-basis:220px; padding:10px 12px; background:#15181daa; border-color:var(--border); }
 .playlist-invitation .playlist-invitation-gallery .playlist-testimonials figure > div { display:flex; align-items:center; gap:8px; }
 .playlist-invitation .playlist-invitation-gallery .playlist-testimonials figure > div > small { display:none; }
 .playlist-invitation .playlist-invitation-gallery .playlist-testimonials blockquote { font-size:11px; line-height:1.4; -webkit-line-clamp:2; margin:7px 0; }
 .playlist-invitation .playlist-invitation-gallery .playlist-testimonials img,.playlist-invitation .playlist-invitation-gallery .playlist-review-initial { width:24px; height:24px; }
 .playlist-invitation .playlist-invitation-gallery .playlist-testimonials figcaption { font-size:10px; gap:7px; }
-.playlist-invitation .playlist-invitation-benefits { padding-block:12px!important; background:#0c0e11; }
+.playlist-invitation .playlist-invitation-benefits { padding-block:12px!important; background:var(--bg); }
 .playlist-invitation .playlist-invitation-benefits small { display:none; }
 @media(max-width:700px) { .playlist-invitation .playlist-invitation-main { grid-template-columns:1fr; padding:18px; gap:16px; } .playlist-invitation .playlist-cover-wall .playlist-invitation-covers > button { flex-basis:94px; } }
 .playlist-rating { display:flex; align-items:center; gap:8px; }
@@ -47,11 +47,11 @@
 .playlist-stars-base > span { position:absolute; inset:0 auto 0 0; overflow:hidden; color:#e8c981; white-space:nowrap; }
 .playlist-rating b { font-size:11px; font-weight:500; letter-spacing:0; color:var(--text-muted); }
 .playlist-invitation .playlist-invitation-main { grid-template-columns:minmax(240px,1fr) minmax(0,1.35fr); padding:24px 28px; gap:28px; }
-.playlist-invitation .playlist-invitation-copy > svg { color:#d2d7df; width:24px; height:24px; margin-bottom:10px; }
-.playlist-invitation .playlist-invitation-copy h2 { font-size:clamp(29px,3.5vw,44px); font-weight:800; line-height:1.04; letter-spacing:-.055em; max-width:17ch; background:linear-gradient(120deg,#fff 20%,#c0c6d0 70%,#8e97a6); background-clip:text; -webkit-background-clip:text; color:transparent; }
+.playlist-invitation .playlist-invitation-copy > svg { color:var(--text); width:24px; height:24px; margin-bottom:10px; }
+.playlist-invitation .playlist-invitation-copy h2 { font-size:clamp(29px,3.5vw,44px); font-weight:800; line-height:1.04; letter-spacing:-.055em; max-width:17ch; background:var(--surface-gradient); background-clip:text; -webkit-background-clip:text; color:transparent; }
 .playlist-invitation .playlist-invitation-copy p { font-size:13px; line-height:1.5; margin:10px 0; }
-.playlist-invitation .playlist-invitation-cta { background:#f1f2f4; color:#17191d; border-color:#f1f2f4; margin:16px 0 10px; padding:11px 18px; box-shadow:0 4px 16px #0002; }
-.playlist-invitation .playlist-invitation-cta:hover { background:#fff; }
+.playlist-invitation .playlist-invitation-cta { background:var(--accent); color:var(--accent-foreground); border-color:var(--border); margin:16px 0 10px; padding:11px 18px; box-shadow:var(--shadow-soft); }
+.playlist-invitation .playlist-invitation-cta:hover { background:var(--bg-soft); }
 .playlist-invitation .playlist-invitation-covers > button { flex-basis:clamp(120px,14vw,150px); }
 .playlist-invitation .playlist-invitation-covers { padding-block:10px 16px; gap:12px; mask-image:linear-gradient(to right,transparent,#000 6%,#000 92%,transparent); }
 .playlist-invitation .playlist-carousel-controls { margin-bottom:8px; }
@@ -61,7 +61,7 @@
 .playlist-invitation .playlist-testimonials blockquote { font-size:12px; margin:8px 0; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
 .playlist-invitation .playlist-testimonial-empty { padding:10px; font-size:12px; }
 .playlist-invitation .playlist-invitation-benefits { padding:16px 28px; gap:16px; }
-.playlist-invitation .playlist-invitation-benefits svg { color:#c9d0da; }
+.playlist-invitation .playlist-invitation-benefits svg { color:var(--text-muted); }
 .playlist-invitation button:focus-visible { outline-color:#e2e5ea; }
 @media(max-width:700px) {
   .playlist-invitation .playlist-invitation-main { grid-template-columns:1fr; gap:16px; padding:20px; }

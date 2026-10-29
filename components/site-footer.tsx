@@ -5,7 +5,7 @@ import { footerColumns } from "@/lib/site";
 
 export function SiteFooter() {
   return (
-    <footer className="border-t backdrop-blur-xl" style={{ borderColor: "var(--glass-border)", background: "color-mix(in srgb, var(--glass-bg-strong) 82%, transparent)" }}>
+    <footer data-site-footer className="border-t" style={{ borderColor: "var(--glass-border)", background: "color-mix(in srgb, var(--glass-bg-strong) 82%, transparent)" }}>
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid gap-10 lg:grid-cols-[1.2fr,1fr,1fr,1fr]">
           <div className="space-y-4">

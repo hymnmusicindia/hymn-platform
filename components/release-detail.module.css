@@ -33,7 +33,7 @@
 .page .backdrop img{object-position:center 38%}
 .page .shade{z-index:0;background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 38%,transparent) 0%,color-mix(in srgb,var(--bg) 66%,transparent) 48%,color-mix(in srgb,var(--bg) 94%,transparent) 82%,var(--bg) 100%)}
 .hero>:not(.backdrop):not(.shade){position:relative;z-index:1}
-.page .cover{border-radius:14px;box-shadow:0 16px 40px #0003}
+.page .cover{border-radius:14px;box-shadow:var(--shadow-soft)}
 .page .badges>span{border:0;background:transparent;padding:0;letter-spacing:.12em}
 .page .badges>span+span::before{content:'·';margin-right:8px}
 .page .actions{gap:4px 20px}

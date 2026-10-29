@@ -630,7 +630,8 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
   return (
     <header
-      className={clsx("sticky top-0 z-[1200] overflow-visible border-b backdrop-blur-2xl backdrop-saturate-150", workspaceHeader && "hymn-studio-header")}
+      data-site-header
+      className={clsx("sticky top-0 z-[1200] overflow-visible border-b", workspaceHeader && "hymn-studio-header")}
       style={{
         borderColor: scrolled || open ? "var(--header-border)" : "transparent",
         background: scrolled || open ? "var(--header-bg-solid)" : "var(--header-bg)",

@@ -1,8 +1,8 @@
 .anchor{position:absolute;right:10px;top:10px;z-index:20}
-.trigger{display:grid;place-items:center;width:36px;height:36px;border:1px solid #ffffff26;border-radius:50%;background:#0009;color:#fff;box-shadow:0 2px 8px #0003;backdrop-filter:blur(12px);cursor:pointer}
+.trigger{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--border);border-radius:50%;background:#0009;color:var(--text);box-shadow:var(--shadow-soft);backdrop-filter:blur(12px);cursor:pointer}
 .trigger:hover{background:#000c}.trigger:disabled{opacity:.5;cursor:wait}
-.menu{position:fixed;z-index:250;box-sizing:border-box;width:208px;max-width:calc(100vw - 16px);padding:6px;border:1px solid var(--border,#ffffff24);border-radius:12px;background:var(--card,#171d25);color:var(--text,#f4f6fa);box-shadow:0 12px 36px #0006;font-family:inherit;isolation:isolate}
+.menu{position:fixed;z-index:250;box-sizing:border-box;width:208px;max-width:calc(100vw - 16px);padding:6px;border:1px solid var(--border);border-radius:12px;background:var(--card,#171d25);color:var(--text,#f4f6fa);box-shadow:var(--shadow-soft);font-family:inherit;isolation:isolate}
 .menu button{box-sizing:border-box;display:flex;align-items:center;gap:10px;min-height:44px;width:100%;padding:10px 12px;border:0;border-radius:7px;background:transparent;color:inherit;font:inherit;font-size:13px;line-height:20px;text-align:left;white-space:nowrap;cursor:pointer}
 .menu button svg{flex-shrink:0}.menu button:hover,.menu button:focus-visible{background:var(--hover,#ffffff0d)}
-.menu .delete{color:#ef6464}.menu .delete[aria-disabled=true]{opacity:.45;cursor:not-allowed}
+.menu .delete{color:var(--danger)}.menu .delete[aria-disabled=true]{opacity:.45;cursor:not-allowed}
 .trigger:focus-visible,.menu button:focus-visible{outline:2px solid #aacbff;outline-offset:2px}

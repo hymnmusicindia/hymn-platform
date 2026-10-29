@@ -68,7 +68,7 @@ html body .release-workflow.is-audio-upload-step .release-focused-actions > .rel
 }
 html body .release-workflow.is-audio-upload-step .release-focused-actions > .is-draft { display:none; }
 html body .release-workflow.is-audio-upload-step .release-focused-actions > .is-primary { color:var(--text)!important; }
-html body .release-workflow.is-audio-upload-step .release-focused-actions > button:hover:not(:disabled) { color:#fff!important; background:rgb(255 255 255 / .04)!important; text-shadow:none; }
+html body .release-workflow.is-audio-upload-step .release-focused-actions > button:hover:not(:disabled) { color:var(--text)!important; background:rgb(255 255 255 / .04)!important; text-shadow:none; }
 html body .release-workflow.is-audio-upload-step .release-focused-actions > button:focus-visible { outline:1px solid var(--text-muted); outline-offset:3px; }
 @media(max-width:640px) {
   html body .release-workflow.is-audio-upload-step .release-batch-upload > span { flex-direction:column; gap:2px; }

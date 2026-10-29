@@ -1,5 +1,5 @@
 /* Destination pages share HYMN's graphite workspace and silver text actions. */
-.hymn-portal-root { --glass-bg:#202227; --glass-bg-strong:#23252b; --glass-border:#35373e; --hover:rgba(255,255,255,.04); --material-ink:#f5f7fa; --material-title:linear-gradient(110deg,#f5f7fa,#aeb8c4); --material-teal:#b0b2bb; --material-wash:rgba(255,255,255,.025); }
+.hymn-portal-root { --glass-bg:var(--hymn-glass-bg); --glass-bg-strong:var(--hymn-glass-bg-strong); --glass-border:var(--hymn-glass-border); --hover:var(--hymn-hover); --material-ink:var(--hymn-material-ink); --material-title:var(--hymn-material-title); --material-teal:var(--hymn-material-teal); --material-wash:var(--hymn-material-wash); }
 .hymn-public-workspace .portal-workspace { min-height:calc(100dvh - 68px); }
 .hymn-public-workspace .dashboard-os-hero { display:none; }
 .hymn-public-workspace .portal-page-content { padding-top:32px!important; }
@@ -121,15 +121,15 @@ html body .release-workflow .release-focused-actions { position:sticky!important
 @media(prefers-reduced-motion:reduce) { .workspace-options button { transition:none; } }
 
 /* Compact catalogue controls keep the releases themselves in view. */
-.release-catalogue-totals { display:flex; align-items:center; flex-wrap:wrap; gap:0; padding:15px 0; border-bottom:1px solid #ffffff12; }
-.release-catalogue-stat { display:inline-flex; align-items:center; gap:8px; padding:0 22px; border-right:1px solid #ffffff1c; color:#aeb6c3; font-size:11px; white-space:nowrap; }
+.release-catalogue-totals { display:flex; align-items:center; flex-wrap:wrap; gap:0; padding:15px 0; border-bottom:1px solid var(--border); }
+.release-catalogue-stat { display:inline-flex; align-items:center; gap:8px; padding:0 22px; border-right:1px solid var(--border); color:var(--text-muted); font-size:11px; white-space:nowrap; }
 .release-catalogue-stat:first-child { padding-left:0; }
 .release-catalogue-stat:last-child { border-right:0; }
-.release-catalogue-stat strong { font-size:19px; line-height:1.3; font-weight:600; font-variant-numeric:tabular-nums; color:#f1f3f7; }
-.release-catalogue-stat i { width:5px; height:5px; border-radius:50%; background:#8793a7; }
+.release-catalogue-stat strong { font-size:19px; line-height:1.3; font-weight:600; font-variant-numeric:tabular-nums; color:var(--text); }
+.release-catalogue-stat i { width:5px; height:5px; border-radius:50%; background:var(--bg-soft); }
 .release-catalogue-stat[data-kind="total"] i { display:none; }
-.release-catalogue-stat[data-kind="scheduled"] i { background:#bac8dc; }
-.release-catalogue-stat[data-kind="released"] i { background:#8bb89b; }
+.release-catalogue-stat[data-kind="scheduled"] i { background:var(--bg-soft); }
+.release-catalogue-stat[data-kind="released"] i { background:var(--bg-soft); }
 .release-catalogue-filters { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)) 64px; align-items:end; gap:16px; margin-top:14px; }
 html body .release-catalogue-filters .release-filter-control { min-width:0; gap:3px; padding:4px 0!important; }
 html body .release-catalogue-filters .release-filter-label { gap:5px; font-size:8px; letter-spacing:.08em; white-space:nowrap; }
@@ -154,9 +154,9 @@ html body .release-catalogue-filters .release-filter-count { padding:4px 0 8px!i
 .auth-standalone-page > .absolute { border-radius:inherit; }
 .auth-standalone-page > .shell { width:100%; padding:0; }
 .auth-standalone-page .auth-minimal { min-height:420px; max-width:544px; padding:28px 24px 40px; }
-.auth-minimal > a { margin-bottom:44px; color:#abb4c2; font-size:12px; font-weight:500; }
-.auth-minimal > a:hover { color:#fff; }
-.auth-minimal > div:last-child { margin-top:36px; padding-top:28px; border-color:#ffffff0e; }
+.auth-minimal > a { margin-bottom:44px; color:var(--text-muted); font-size:12px; font-weight:500; }
+.auth-minimal > a:hover { color:var(--text); }
+.auth-minimal > div:last-child { margin-top:36px; padding-top:28px; border-color:var(--border); }
 .auth-minimal > div:last-child > details { border-radius:12px; }
 @media(max-width:700px) {
  .hymn-public-workspace .auth-standalone-page { min-height:calc(100svh - 200px); border-radius:18px; padding:24px 12px; }
@@ -164,6 +164,6 @@ html body .release-catalogue-filters .release-filter-count { padding:4px 0 8px!i
  .auth-minimal > a { margin-bottom:40px; min-height:44px; display:inline-flex; align-items:center; }
 }
 
-html body .auth-minimal button.group { background:#f4f6f9!important; color:#171b22!important; border:1px solid #ffffff70!important; border-radius:12px!important; box-shadow:0 8px 24px #00000014!important; }
-html body .auth-minimal button.group:hover { background:#fff!important; }
+html body .auth-minimal button.group { background:var(--accent)!important; color:var(--accent-foreground)!important; border:1px solid var(--border)!important; border-radius:12px!important; box-shadow:var(--shadow-soft)!important; }
+html body .auth-minimal button.group:hover { background:var(--bg-soft)!important; }
 .auth-minimal button.group > span.absolute { display:none; }

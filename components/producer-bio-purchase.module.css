@@ -1,25 +1,25 @@
-.dialog { position:fixed; inset:auto 0 0; margin:0 auto; width:100%; max-width:480px; max-height:90svh; padding:34px 24px max(24px,env(safe-area-inset-bottom)); border:1px solid #ffffff26; border-bottom:0; border-radius:24px 24px 0 0; background:#121722; color:#f5f7fc; color-scheme:dark; overflow:auto; box-shadow:0 -20px 100px #0006; }
+.dialog { position:fixed; inset:auto 0 0; margin:0 auto; width:100%; max-width:480px; max-height:90svh; padding:34px 24px max(24px,env(safe-area-inset-bottom)); border:1px solid var(--border); border-bottom:0; border-radius:24px 24px 0 0; background:var(--card); color:var(--text); color-scheme:dark; overflow:auto; box-shadow:var(--shadow-soft); }
 .dialog::backdrop { background:#02040bb8; backdrop-filter:blur(10px); }
-.dialog .close { position:absolute; top:10px; right:10px; width:44px; height:44px; display:grid; place-items:center; background:none; border:0; color:#bfc8da; }
-.dialog h2 { font-size:26px; line-height:1.2; margin:12px 24px 12px 0; color:#fff; letter-spacing:-.04em; overflow-wrap:anywhere; }
-.dialog p { font-size:13px; color:#bdc8da; line-height:1.6; margin:12px 0 20px; }
-.dialog .eyebrow { margin:0; font-size:9px; letter-spacing:.2em; color:#a8bbdf; }
-.dialog .licences { display:flex; gap:6px; border-bottom:1px solid #ffffff28; margin:20px 0; }
-.dialog .licences button { flex:1; padding:12px 4px; min-height:60px; border:0; border-bottom:2px solid transparent; background:none; color:#c4ccdc; font-size:11px; }
-.dialog .licences .selected { color:#fff; border-bottom-color:#d6e4ff; }
+.dialog .close { position:absolute; top:10px; right:10px; width:44px; height:44px; display:grid; place-items:center; background:none; border:0; color:var(--text-muted); }
+.dialog h2 { font-size:26px; line-height:1.2; margin:12px 24px 12px 0; color:var(--text); letter-spacing:-.04em; overflow-wrap:anywhere; }
+.dialog p { font-size:13px; color:var(--text-muted); line-height:1.6; margin:12px 0 20px; }
+.dialog .eyebrow { margin:0; font-size:9px; letter-spacing:.2em; color:var(--text-muted); }
+.dialog .licences { display:flex; gap:6px; border-bottom:1px solid var(--border); margin:20px 0; }
+.dialog .licences button { flex:1; padding:12px 4px; min-height:60px; border:0; border-bottom:2px solid transparent; background:none; color:var(--text-muted); font-size:11px; }
+.dialog .licences .selected { color:var(--text); border-bottom-color:var(--border); }
 .licences small { display:block; margin-top:6px; font-size:10px; }
-.summary>div { display:flex; justify-content:space-between; gap:16px; padding:12px 0; border-bottom:1px solid #ffffff16; font-size:13px; }
-.summary small { display:block; margin-top:5px; font-size:10px; line-height:1.6; color:#aab7cd; }
+.summary>div { display:flex; justify-content:space-between; gap:16px; padding:12px 0; border-bottom:1px solid var(--border); font-size:13px; }
+.summary small { display:block; margin-top:5px; font-size:10px; line-height:1.6; color:var(--text-muted); }
 .summary strong { flex-shrink:0; }
-.dialog .delivery { display:flex; align-items:center; gap:8px; font-size:11px; color:#bdc8da; }
-.dialog .pay { display:flex; justify-content:center; align-items:center; gap:10px; width:100%; min-height:52px; padding:12px; border:0; border-radius:999px; background:#e5edff; color:#172036; text-decoration:none; font-size:14px; font-weight:700; }
+.dialog .delivery { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--text-muted); }
+.dialog .pay { display:flex; justify-content:center; align-items:center; gap:10px; width:100%; min-height:52px; padding:12px; border:0; border-radius:999px; background:var(--accent); color:var(--accent-foreground); text-decoration:none; font-size:14px; font-weight:700; }
 .pay:disabled { opacity:.45; }
 .dialog .terms { font-size:10px; margin:14px 0 0; text-align:center; }
-.terms a { color:#dce7fc; text-decoration:underline; }
-.dialog .error { color:#ffc2bd; font-size:12px; }
-.successIcon { width:44px; height:44px; color:#bce0d0; }
+.terms a { color:var(--text); text-decoration:underline; }
+.dialog .error { color:var(--danger); font-size:12px; }
+.successIcon { width:44px; height:44px; color:var(--text-muted); }
 .dialog :is(button,a):focus-visible { outline:2px solid #bad2ff; outline-offset:3px; }
 .spin { animation:spin 1s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
-@media(min-width:700px) { .dialog { inset:50% auto auto 50%; transform:translate(-50%,-50%); margin:0; border:1px solid #ffffff26; border-radius:24px; } }
+@media(min-width:700px) { .dialog { inset:50% auto auto 50%; transform:translate(-50%,-50%); margin:0; border:1px solid var(--border); border-radius:24px; } }
 @media(prefers-reduced-motion:reduce) { .spin { animation:none; } }

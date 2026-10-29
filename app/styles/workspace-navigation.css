@@ -1,44 +1,36 @@
 /* Standalone chrome: a quiet rail and luminous type, using HYMN's silver palette. */
 header.hymn-studio-header.hymn-studio-header {
-  height:58px; background:#08090b!important; border:0!important; box-shadow:none!important;
-  /* The workspace chrome stays dark even when its page uses the light theme. */
-  color-scheme:dark; color:var(--text);
-  --text:#f5f7fa; --text-muted:#b0b3bd; --text-soft:#969daa; --logo-filter:none;
-  --text-primary:var(--text); --text-secondary:var(--text-muted); --text-tertiary:var(--text-soft);
-  --foreground:var(--text); --bg:#08090b; --bg-elevated:#14171c;
-  --bg-soft:#1c2026; --card:#22262d; --card-strong:#22262d; --surface:#22262d; --input:#1c2026;
-  --border:#353b45; --border-strong:#555d69;
-  --accent:#f4f7fb; --accent-strong:#fff; --accent-foreground:#11161c; --accent-soft:rgba(199,213,223,.12);
-  --success:#8cdbb0; --danger:#ffb4b4; --info:#a9c5ff; --focus:#c7d5df;
-  --glass-bg:#1c2026; --glass-bg-strong:#22262d; --glass-border:#353b45;
-  --header-bg:#08090b; --header-bg-solid:#08090b; --header-border:#25272d;
+  height:58px; background:var(--bg)!important; border:0!important; box-shadow:none!important;
+  /* The workspace chrome stays dark even when its page uses the light theme. */ color:var(--text);
+  --text-primary:var(--hymn-text); --text-secondary:var(--hymn-text-muted); --text-tertiary:var(--hymn-text-soft);
+  --foreground:var(--hymn-text);
 }
 header.hymn-studio-header>div:first-child { display:flex; justify-content:flex-start; max-width:none; height:58px; min-height:58px; padding:0 20px; gap:0; }
 .hymn-studio-header .header-brand { flex:0 0 204px; }
 .hymn-studio-header .header-brand img { width:100px; height:auto; max-height:35px; filter:none!important; }
-.studio-header-section { display:flex; align-items:center; gap:18px; min-width:0; color:#f5f7fa; font-size:15px; font-weight:600; }
-.studio-header-section button { display:grid; place-items:center; width:32px; height:32px; color:#c8cbd2; }
-.studio-header-section button:hover { color:#fff; }
+.studio-header-section { display:flex; align-items:center; gap:18px; min-width:0; color:var(--text); font-size:15px; font-weight:600; }
+.studio-header-section button { display:grid; place-items:center; width:32px; height:32px; color:var(--text-muted); }
+.studio-header-section button:hover { color:var(--text); }
 .hymn-studio-header>div:first-child>div:last-child { margin-left:auto; gap:12px; }
-.studio-header-plans { display:flex; align-items:center; gap:6px; padding:10px 4px; color:#f5c16c; font-size:12px; font-weight:600; }
-.studio-header-tool { display:grid; place-items:center; width:30px; height:34px; color:#c8cbd2; }
-.hymn-studio-header .site-header-cta { min-width:0; padding:8px 12px; border:0!important; background:none!important; color:#f5f7fa!important; box-shadow:none!important; }
+.studio-header-plans { display:flex; align-items:center; gap:6px; padding:10px 4px; color:var(--money); font-size:12px; font-weight:600; }
+.studio-header-tool { display:grid; place-items:center; width:30px; height:34px; color:var(--text-muted); }
+.hymn-studio-header .site-header-cta { min-width:0; padding:8px 12px; border:0!important; background:none!important; color:var(--text)!important; box-shadow:none!important; }
 .hymn-studio-header .site-header-bare-icon { border:0!important; background:none!important; box-shadow:none!important; }
 .hymn-studio-header .site-header-bare-icon::before,.hymn-studio-header .site-header-bare-icon::after { display:none; }
-.hymn-studio-header .hymn-mobile-page-link { border:0; border-radius:0; background:none; box-shadow:none; color:#a6afbd; }
-.hymn-studio-header .hymn-mobile-page-link[aria-current="page"] { background:none; box-shadow:none; color:#fff; text-shadow:0 0 14px #dce9f970,0 0 3px #ffffff70; }
+.hymn-studio-header .hymn-mobile-page-link { border:0; border-radius:0; background:none; box-shadow:none; color:var(--text-muted); }
+.hymn-studio-header .hymn-mobile-page-link[aria-current="page"] { background:none; box-shadow:none; color:var(--text); text-shadow:none; }
 .hymn-studio-header a:focus-visible,.hymn-studio-header button:focus-visible { outline:2px solid #c7d5df; outline-offset:3px; }
 .hymn-landing .landing-rail { top:58px; height:calc(100dvh - 58px); padding-top:10px; }
 .hymn-landing .landing-rail-top { margin:0; min-height:0; }
 .hymn-landing .landing-new { margin-bottom:20px; }
-.hymn-landing .landing-group-title { padding:0 7px 6px; color:#d5d8de; font-size:13px; font-weight:600; }
+.hymn-landing .landing-group-title { padding:0 7px 6px; color:var(--text); font-size:13px; font-weight:600; }
 .hymn-landing .landing-group-title > svg,.workspace-v2 .dashboard-os-group-toggle > svg { display:none; }
 .hymn-landing .landing-nav-group { margin-top:12px; }
-.hymn-landing .landing-nav-link { position:relative; min-height:34px; padding:8px 12px; gap:12px; border:0; border-radius:0; background:none; color:#969da9; font-size:13px; font-weight:450; box-shadow:none; transition:color .2s,text-shadow .2s; }
-.hymn-landing .landing-nav-link:hover,.hymn-landing .landing-nav-link.is-active { border:0; background:none; color:#fff; box-shadow:none; text-shadow:0 0 14px #dce9f970,0 0 3px #ffffff70; }
+.hymn-landing .landing-nav-link { position:relative; min-height:34px; padding:8px 12px; gap:12px; border:0; border-radius:0; background:none; color:var(--text-muted); font-size:13px; font-weight:450; box-shadow:none; transition:color .2s,text-shadow .2s; }
+.hymn-landing .landing-nav-link:hover,.hymn-landing .landing-nav-link.is-active { border:0; background:none; color:var(--text); box-shadow:none; text-shadow:none; }
 .hymn-landing .landing-nav-link.is-active { font-weight:650; }
-.hymn-landing .landing-nav-link.is-active svg { color:#e5edf6; filter:drop-shadow(0 0 4px #dce9f970); }
-.hymn-landing .landing-service-divider { margin-top:14px; border-top:1px solid #292d34; padding-top:18px; }
+.hymn-landing .landing-nav-link.is-active svg { color:var(--text); filter:drop-shadow(0 0 4px #dce9f970); }
+.hymn-landing .landing-service-divider { margin-top:14px; border-top:1px solid var(--border); padding-top:18px; }
 .hymn-landing .landing-rail-bottom { margin-top:22px; padding-top:18px; }
 .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-nav-item,
 .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-nav-item:hover,
@@ -46,7 +38,7 @@ header.hymn-studio-header>div:first-child { display:flex; justify-content:flex-s
   border:0; border-radius:0; background:none; box-shadow:none; transform:none;
 }
 .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-nav-item.is-active,
-.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-nav-item:hover { color:#fff; text-shadow:0 0 14px #dce9f970,0 0 3px #ffffff70; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-nav-item:hover { color:var(--text); text-shadow:none; }
 .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-sidebar>div:first-child img { display:none; }
 .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-sidebar>div:first-child .dashboard-sidebar-toggle { display:none; }
 .hymn-portal-root.hymn-portal-root .hymn-portal .portal-create { margin-top:0; }
@@ -54,11 +46,11 @@ header.hymn-studio-header>div:first-child { display:flex; justify-content:flex-s
 .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-topbar .portal-section-label,
 .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-topbar .portal-upgrade { display:none; }
 .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-topbar .dashboard-os-icon-button { display:none; }
-.hymn-portal-root.hymn-portal-root .hymn-portal .release-dashboard-tab { border:0!important; border-radius:0; background:none!important; color:#a6afbd!important; box-shadow:none; transform:none; }
-.hymn-portal-root.hymn-portal-root .hymn-portal .release-dashboard-tab[aria-current="page"] { color:#fff!important; text-shadow:0 0 14px #dce9f970,0 0 3px #ffffff70; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .release-dashboard-tab { border:0!important; border-radius:0; background:none!important; color:var(--text-muted)!important; box-shadow:none; transform:none; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .release-dashboard-tab[aria-current="page"] { color:var(--text)!important; text-shadow:none; }
 .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-group-toggle { padding-top:4px; }
 .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-group-toggle:hover { background:none; }
-.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-nav-item[data-nav-key="promotions"] { margin-top:12px; border-top:1px solid #292d34; padding-top:18px; }
+.hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-nav-item[data-nav-key="promotions"] { margin-top:12px; border-top:1px solid var(--border); padding-top:18px; }
 .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-hero { padding-top:32px; }
 .hymn-portal-root.hymn-portal-root .hymn-portal .portal-workspace { min-height:calc(100dvh - 68px); }
 @media(min-width:1024px) {
@@ -83,9 +75,9 @@ header.hymn-studio-header>div:first-child { display:flex; justify-content:flex-s
 @media(prefers-reduced-motion:reduce) { .hymn-studio-header *,.landing-nav-link { transition:none; } }
 
 /* Home is a destination, consistently placed above the service accordions. */
-html body .workspace-home-link { display:flex; align-items:center; justify-content:center; gap:8px; min-height:40px; padding:8px 10px; margin-bottom:4px; color:#d8dee8; font-size:14px; font-weight:600; text-decoration:none; background:none; border:0; border-bottom:1px solid #ffffff14; border-radius:0; box-shadow:none; }
+html body .workspace-home-link { display:flex; align-items:center; justify-content:center; gap:8px; min-height:40px; padding:8px 10px; margin-bottom:4px; color:var(--text); font-size:14px; font-weight:600; text-decoration:none; background:none; border:0; border-bottom:1px solid var(--border); border-radius:0; box-shadow:none; }
 html body .workspace-home-link svg { width:16px; height:16px; flex-shrink:0; stroke-width:1.6; }
-html body .workspace-home-link:is(:hover,:focus-visible,.is-active) { color:#fff; text-shadow:none; }
+html body .workspace-home-link:is(:hover,:focus-visible,.is-active) { color:var(--text); text-shadow:none; }
 html body .workspace-home-link:focus-visible { outline:1px solid #c8ced8; outline-offset:2px; }
 .rail-collapsed .workspace-home-link > span { display:none; }
 .rail-collapsed .workspace-home-link { justify-content:center; }
@@ -127,4 +119,4 @@ html body .workspace-home-link:focus-visible { outline:1px solid #c8ced8; outlin
 
 .workspace-service-heading > a { justify-content:flex-start;text-align:left; }
 
-.workspace-library-link{margin:10px 0 14px;flex-shrink:0;gap:12px}.workspace-library-link[aria-current="page"]{background:#243249;color:#fff}
+.workspace-library-link{margin:10px 0 14px;flex-shrink:0;gap:12px}.workspace-library-link[aria-current="page"]{background:var(--card);color:var(--text)}

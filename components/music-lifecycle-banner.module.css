@@ -2,9 +2,9 @@
 .banner { padding:32px 0 24px; border:0; border-radius:0; background:radial-gradient(ellipse at 50% 20%,#ffffff04,transparent 70%); color:var(--text); font-family:"HYMN Manrope",Arial,sans-serif; }
 .heading { display:flex; align-items:center; justify-content:space-between; gap:24px; }
 .heading h2 { font-size:clamp(28px,3.4vw,44px); font-weight:600; line-height:1.12; letter-spacing:-.05em; text-wrap:balance; }
-.heading h2 span { color:#9faab9; }
-.heading p { font-size:13px; line-height:1.7; color:#aeb8c7; margin-top:10px; }
-.cta { display:inline-flex; align-items:center; justify-content:center; gap:16px; flex-shrink:0; min-height:44px; padding:8px 0; border:0; border-radius:0; background:none; color:#e5eaf2; font-size:12px; font-weight:600; }
+.heading h2 span { color:var(--text-muted); }
+.heading p { font-size:13px; line-height:1.7; color:var(--text-muted); margin-top:10px; }
+.cta { display:inline-flex; align-items:center; justify-content:center; gap:16px; flex-shrink:0; min-height:44px; padding:8px 0; border:0; border-radius:0; background:none; color:var(--text); font-size:12px; font-weight:600; }
 .cta svg { transition:transform .2s; }
 .cta:hover svg { transform:translateX(4px); }
 .journey { display:grid; grid-template-columns:minmax(0,1fr) 30px minmax(0,1fr) 30px minmax(0,1fr); align-items:center; margin:28px 0 22px; }
@@ -26,14 +26,14 @@
 .stage[aria-pressed="true"] :is(.sleeve,.console) { border-color:#8594aa; box-shadow:inset 0 1px 0 #eff5ff55,inset 1px 0 0 #dce9ff20,8px 18px 20px #0009,0 0 22px #c9ddff0c; }
 .stage[aria-pressed="true"] .record { box-shadow:inset 0 1px 0 #eff5ff40,6px 15px 20px #0009; }
 .stage[aria-pressed="true"] .globe { filter:brightness(1.15) drop-shadow(5px 12px 8px #0009); }
-.hint { margin:22px 0 0; color:#c1cbd9; font-size:11px; line-height:1.7; }
-.hint span { color:#94a3b8; margin-left:8px; }
-.detail { display:flex; align-items:center; justify-content:space-between; gap:24px; min-height:100px; padding:18px 20px; margin-bottom:22px; border:1px solid #ffffff12; border-radius:12px; background:#a4b5d207; }
+.hint { margin:22px 0 0; color:var(--text-muted); font-size:11px; line-height:1.7; }
+.hint span { color:var(--text-muted); margin-left:8px; }
+.detail { display:flex; align-items:center; justify-content:space-between; gap:24px; min-height:100px; padding:18px 20px; margin-bottom:22px; border:1px solid var(--border); border-radius:12px; background:var(--bg-soft); }
 .detailCopy { display:flex; align-items:flex-start; gap:16px; }
-.detailNumber { flex-shrink:0; padding-top:3px; color:#9dadc3; font-size:10px; font-variant-numeric:tabular-nums; letter-spacing:.08em; }
+.detailNumber { flex-shrink:0; padding-top:3px; color:var(--text-muted); font-size:10px; font-variant-numeric:tabular-nums; letter-spacing:.08em; }
 .detail h3 { font-size:14px; font-weight:600; line-height:1.5; }
-.detail p { max-width:65ch; margin-top:5px; color:#aeb8c7; font-size:12px; line-height:1.7; }
-.detailAction { display:inline-flex; align-items:center; gap:12px; flex-shrink:0; min-height:44px; font-size:12px; font-weight:600; color:#e5eaf2; }
+.detail p { max-width:65ch; margin-top:5px; color:var(--text-muted); font-size:12px; line-height:1.7; }
+.detailAction { display:inline-flex; align-items:center; gap:12px; flex-shrink:0; min-height:44px; font-size:12px; font-weight:600; color:var(--text); }
 .detailAction svg,.caption > svg { transition:transform .2s; }
 .detailAction:hover svg,.stage:hover .caption > svg { transform:translateX(3px); }
 .stage[aria-pressed="true"] .record { animation:record-turn 1.4s ease-out; }
@@ -44,15 +44,15 @@
 @keyframes record-turn { from { transform:rotate(-30deg); } to { transform:rotate(20deg); } }
 @keyframes wave-level { 0%,100% { transform:scaleY(1); } 50% { transform:scaleY(.35); } }
 @keyframes platform-arrive { 0% { transform:translateY(8px) scale(.85); opacity:.4; } 60% { transform:translateY(-4px) scale(1.06); } 100% { transform:none; opacity:1; } }
-.connector { display:grid; place-items:center; color:#657184; }
+.connector { display:grid; place-items:center; color:var(--text-muted); }
 /* Let the blurred light dissipate outside the art instead of clipping it into
    horizontal bars at the top and bottom. The artwork itself stays unmasked. */
 .art { isolation:isolate; height:170px; display:flex; align-items:center; justify-content:center; position:relative; overflow:visible; background:radial-gradient(ellipse at center,#a4b5d20a,transparent 68%); }
 .caption { display:flex; gap:10px; align-items:flex-start; padding:20px 8px 10px; border:0; }
-.caption > svg { margin-left:auto; flex-shrink:0; color:#8b98aa; margin-top:5px; }
-.number { font-size:10px; line-height:26px; font-variant-numeric:tabular-nums; color:#7d8ba1; }
+.caption > svg { margin-left:auto; flex-shrink:0; color:var(--text-muted); margin-top:5px; }
+.number { font-size:10px; line-height:26px; font-variant-numeric:tabular-nums; color:var(--text-muted); }
 .caption h3 { font-size:17px; font-weight:550; line-height:1.4; letter-spacing:-.025em; }
-.caption p { font-size:12px; line-height:1.6; color:#9dabbf; margin-top:7px; }
+.caption p { font-size:12px; line-height:1.6; color:var(--text-muted); margin-top:7px; }
 .record { width:118px; height:118px; position:absolute; left:calc(50% - 15px); border-radius:50%; background:repeating-radial-gradient(circle,#282d34 0 1px,#0e1116 2px 4px); border:1px solid #4f5867; display:grid; place-items:center; transform:rotate(20deg); transition:transform .7s; box-shadow:0 14px 24px #0005; }
 .stage:hover .record { transform:rotate(55deg); }
 .record span { display:grid; place-items:center; width:34px; height:34px; background:#c5ceda; color:#151922; border-radius:50%; font-size:14px; font-weight:650; }
@@ -61,7 +61,7 @@
 .console { width:180px; padding:18px 15px 12px; border:1px solid #515d70; border-radius:12px; background:linear-gradient(145deg,#282f3b,#171d27); transform:rotate(-4deg); box-shadow:0 18px 28px #0004; }
 .wave { display:flex; height:49px; align-items:center; gap:3px; margin-bottom:10px; }
 .wave i { flex:1; background:linear-gradient(#dbe4f1,#8c9bb2); border-radius:2px; opacity:.85; }
-.controls { display:flex; align-items:center; gap:15px; padding-top:10px; border-top:1px solid #ffffff12; color:#8797ae; }
+.controls { display:flex; align-items:center; gap:15px; padding-top:10px; border-top:1px solid #ffffff12; color:var(--text-muted); }
 .controls span { width:13px; height:13px; border:2px solid #8998ad; border-radius:50%; background:#1b2431; }
 .world { position:relative; display:grid; place-items:center; width:205px; height:150px; }
 .globe { display:block; width:142px; height:142px; background:url("/assets/release-world-grid.svg") center / contain no-repeat; }
@@ -69,21 +69,9 @@
 .platformOne { top:10px; left:14px; background-image:url("/assets/store-logos/symbol-spotify.png"); }
 .platformTwo { right:7px; top:56px; background-image:url("/assets/store-logos/symbol-apple.png"); }
 .platformThree { bottom:6px; left:22px; background-image:url("/assets/store-logos/symbol-youtube.png"); }
-.terms { padding-top:18px; border-top:1px solid #ffffff0e; font-size:11px; line-height:1.75; color:#8d9bb0; }
-.terms a { text-decoration:underline; text-underline-offset:3px; white-space:nowrap; color:#c4cfdf; }
-.banner a:focus-visible,.stage:focus-visible { outline:2px solid #cbd7e9; outline-offset:5px; }
-/* This composition lives on the dark landing canvas, including when a saved
-   light preference remains on <html>. Do not inherit its light text palette. */
-:global(html) .banner { color:#eef2f7; }
-:global(html) .banner .heading h2,:global(html) .banner .caption h3,:global(html) .banner .detail h3 { color:#eef2f7; }
-:global(html) .banner .heading h2 span,:global(html) .banner .heading p,:global(html) .banner .caption p,:global(html) .banner .detail p { color:#b8c3d2; }
-:global(html) .banner .hint,:global(html) .banner .hint span,:global(html) .banner .terms,:global(html) .banner .number,:global(html) .banner .detailNumber { color:#aab8cc; }
-:global(html) .banner .cta,:global(html) .banner .detailAction,:global(html) .banner .terms a { color:#e3ecfa; }
-:global(html) .banner .detail { border-color:#ffffff1c; background:#11161d; }
-:global(html[data-theme="light"]) .banner { color:var(--text); }
-:global(html[data-theme="light"]) .banner :is(.heading h2,.caption h3,.detail h3,.cta,.detailAction,.terms a) { color:var(--text); }
-:global(html[data-theme="light"]) .banner :is(.heading h2 span,.heading p,.caption p,.detail p,.hint,.hint span,.terms,.number,.detailNumber) { color:var(--text-muted); }
-:global(html[data-theme="light"]) .banner .detail { border-color:var(--border);background:var(--bg-soft); }
+.terms { padding-top:18px; border-top:1px solid #ffffff0e; font-size:11px; line-height:1.75; color:var(--text-muted); }
+.terms a { text-decoration:underline; text-underline-offset:3px; white-space:nowrap; color:var(--text); }
+.banner a:focus-visible,.stage:focus-visible { outline:2px solid var(--focus); outline-offset:5px; }
 @media(max-width:1000px) and (min-width:641px) {
  .heading { align-items:flex-start; }
  .heading h2 { font-size:34px; }
@@ -134,3 +122,5 @@
  .detailAction { padding-left:0; }
 }
 @media(prefers-reduced-motion:reduce) { .banner *,.art::before,.art::after { transition:none!important; animation:none!important; } .stage:hover .record { transform:rotate(20deg); } }
+
+.banner { --text:var(--hymn-text);--text-muted:var(--hymn-text-muted);--border:var(--hymn-border);--bg-soft:var(--hymn-bg-soft);color:var(--text);background:none; }

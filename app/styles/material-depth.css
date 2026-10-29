@@ -1,24 +1,4 @@
 /* HYMN: graphite, porcelain and brushed silver. Keep semantic colours separate. */
-:root,html[data-theme="dark"] {
-  --material-ink:#c7d5df; --material-teal:#9ac7bf;
-  --material-wash:rgba(111,155,177,.10); --material-warm:rgba(149,119,90,.065);
-  --accent-soft:rgba(177,201,215,.12); --focus:#a8d7f0; --page-glow:rgba(111,155,177,.12);
-  --material-edge:rgba(255,255,255,.16); --material-highlight:rgba(255,255,255,.075); --material-shadow:rgba(0,0,0,.28);
-  --material-panel:linear-gradient(145deg,#20272e,#11151a 55%,#171716);
-  --material-recess:linear-gradient(180deg,#090c10,#171c22);
-  --material-selected:linear-gradient(165deg,#fff,#e5ebee 58%,#bbc8d1); --material-selected-text:#11161c;
-  --material-title:linear-gradient(115deg,#f5f7fa 8%,#9faeb9 44%,#c0d2d6 67%,#f5f7fa);
-}
-html[data-theme="light"] {
-  --material-ink:#354c5f; --material-teal:#346b61;
-  --material-wash:rgba(105,147,171,.085); --material-warm:rgba(174,139,98,.065);
-  --accent-soft:rgba(90,129,153,.10); --focus:#285d83; --page-glow:rgba(105,147,171,.10);
-  --material-edge:rgba(255,255,255,.9); --material-highlight:rgba(255,255,255,.8); --material-shadow:rgba(35,48,59,.10);
-  --material-panel:linear-gradient(145deg,#fff,#f5f4f0 55%,#e9eef0);
-  --material-recess:linear-gradient(180deg,#e5e8e9,#f4f5f3);
-  --material-selected:linear-gradient(155deg,#39454f,#171d23 60%,#252b2e); --material-selected-text:#fff;
-  --material-title:linear-gradient(115deg,#20272e 8%,#506777 44%,#405d61 67%,#20272e);
-}
 ::selection { background:var(--material-ink); color:var(--bg); }
 .surface-card { border-color:color-mix(in srgb,var(--text) 10%,transparent); background:radial-gradient(ellipse at 95% 0%,var(--material-wash),transparent 55%),var(--material-panel); box-shadow:inset 0 1px 0 var(--material-edge),inset 0 -1px 0 color-mix(in srgb,var(--text) 5%,transparent),0 8px 26px -12px var(--material-shadow); }
 .btn-primary:not(:disabled) { background:var(--material-selected); color:var(--material-selected-text); box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 -1px 0 rgba(0,0,0,.15),0 4px 10px var(--material-shadow); }

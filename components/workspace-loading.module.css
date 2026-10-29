@@ -24,8 +24,8 @@
 .spinner {
   width: 28px;
   height: 28px;
-  border: 2px solid var(--border, #ffffff20);
-  border-top-color: var(--text-muted, #c3cbd7);
+  border: 2px solid var(--border, var(--border));
+  border-top-color: var(--text-muted, var(--border));
   border-radius: 50%;
   animation: spin .85s linear infinite;
 }

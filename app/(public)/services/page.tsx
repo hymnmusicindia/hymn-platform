@@ -164,7 +164,7 @@ function ServiceVisual({ visual }: { visual: ServiceShowcase["visual"] }) {
 export default function ServicesPage() {
   return (
     <main className="overflow-hidden bg-background pb-16 text-foreground">
-      <section className="relative -mt-[73px] min-h-[92vh] overflow-hidden pt-[73px]">
+      <section className="force-dark relative -mt-[73px] min-h-[92vh] overflow-hidden pt-[73px]">
         <div className="absolute inset-0">
           <Image src={images.hero.src} alt={images.hero.alt} fill priority sizes="100vw" className="scale-[1.03] object-cover object-center" />
           <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(9,11,16,0.92)_0%,rgba(9,11,16,0.68)_52%,rgba(9,11,16,0.42)_100%)]" />
@@ -286,7 +286,7 @@ export default function ServicesPage() {
       </section>
 
       <section className="shell py-12 sm:py-16">
-        <div className="relative overflow-hidden rounded-[2.5rem] border border-border bg-surface p-6 shadow-[0_34px_130px_rgba(0,0,0,0.42)] sm:p-10 lg:p-14">
+        <div className="force-dark relative overflow-hidden rounded-[2.5rem] border border-border bg-surface p-6 shadow-[0_34px_130px_rgba(0,0,0,0.42)] sm:p-10 lg:p-14">
           <Image src={images.cta.src} alt={images.cta.alt} fill sizes="100vw" className="object-cover object-center opacity-22 grayscale" />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_76%_24%,rgba(255,255,255,0.14),transparent_28%),radial-gradient(circle_at_18%_70%,rgba(245,193,108,0.08),transparent_26%),linear-gradient(90deg,#12151d_0%,rgba(18,21,29,0.9)_54%,rgba(18,21,29,0.72)_100%)]" />
           <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:54px_54px] motion-safe:animate-[hymn-grid-float_20s_linear_infinite]" />

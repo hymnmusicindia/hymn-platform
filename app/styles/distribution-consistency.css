@@ -1,11 +1,7 @@
 /* Shared distribution palette and controls. Scoped so other portal modules keep their theme. */
 html body :is(.distribution-workflow,.release-portal-page,.release-manage-page) {
-  --bg:#161c25; --bg-elevated:#1d2530; --bg-soft:#222c39;
-  --card:#1d2530; --surface:#222c39; --input:#161e29;
-  --text:#f4f7fc; --text-muted:#c0cad8; --text-soft:#a8b6c8;
-  --border:#3e4c60; --border-strong:#64758e; --focus:#aacbff;
   --editor-line:var(--border); --editor-muted:var(--text-muted); --editor-surface:var(--card);
-  color:var(--text); color-scheme:dark; line-height:1.55;
+  color:var(--text); line-height:1.55;
 }
 /* One column, one scroll owner, and the same sticky stage bar in setup, editing and review. */
 html body .distribution-workflow.distribution-workflow.distribution-workflow {
@@ -29,8 +25,8 @@ html body .distribution-workflow.distribution-workflow.distribution-workflow > .
   display:flex!important; position:sticky!important; top:0!important; z-index:35;
   align-self:stretch; flex-direction:column; gap:8px; width:100%; margin:0; padding:8px;
   overflow:visible;
-  border:1px solid var(--border)!important; border-radius:16px; background:#1d2530!important;
-  box-shadow:0 8px 24px #0003;
+  border:1px solid var(--border)!important; border-radius:16px; background:var(--card)!important;
+  box-shadow:var(--shadow-soft);
 }
 html body .distribution-workflow.distribution-workflow.distribution-workflow .release-stage-menu > .release-workflow-nav > button {
   flex:1 0 auto; display:flex; align-items:center; justify-content:center;
@@ -38,9 +34,9 @@ html body .distribution-workflow.distribution-workflow.distribution-workflow .re
   border-radius:10px!important; background:transparent!important; color:var(--text-muted)!important;
   font-size:12px; font-weight:600; text-decoration:none!important; white-space:nowrap;
 }
-html body .distribution-workflow.distribution-workflow.distribution-workflow .release-stage-menu > .release-workflow-nav > button:hover { background:#2b384a!important; color:#fff!important; }
+html body .distribution-workflow.distribution-workflow.distribution-workflow .release-stage-menu > .release-workflow-nav > button:hover { background:var(--card)!important; color:var(--text)!important; }
 html body .distribution-workflow.distribution-workflow.distribution-workflow .release-stage-menu > .release-workflow-nav > button[aria-current=step] {
-  background:#314765!important; border-color:#87afe4!important; color:#fff!important;
+  background:var(--bg-soft)!important; border-color:#87afe4!important; color:var(--text)!important;
 }
 html body .distribution-workflow.distribution-workflow :is(.release-mobile-step-menu,.release-workflow-summary) { display:none!important; }
 html body .distribution-workflow.distribution-workflow.distribution-workflow :is(.release-workflow-content,.release-editor-panels) {
@@ -67,19 +63,19 @@ html body .distribution-workflow.distribution-workflow .release-existing-identif
   border-radius:10px!important; background:var(--input)!important; color:var(--text-muted)!important;
 }
 html body .distribution-workflow.distribution-workflow .release-existing-identifiers button[aria-pressed=true] {
-  background:#e0edff!important; border-color:#e0edff!important; color:#142238!important;
+  background:var(--accent)!important; border-color:var(--border)!important; color:var(--accent-foreground)!important;
 }
 html body .distribution-workflow.distribution-workflow.distribution-workflow :is(.release-footer-mobile-actions,.release-focused-actions,.review-submit-bar) {
   position:sticky!important; bottom:0; z-index:30; display:flex; flex-wrap:wrap; align-items:center;
   justify-content:space-between; gap:12px; margin:8px 0 0; padding:14px!important;
-  border:1px solid var(--border)!important; border-radius:16px!important; background:#1d2530!important;
+  border:1px solid var(--border)!important; border-radius:16px!important; background:var(--card)!important;
 }
 html body .distribution-workflow.distribution-workflow.distribution-workflow :is(.release-footer-action,.release-focused-actions>button,.release-workspace-quit,.release-workspace-review) {
   min-height:44px; padding:10px 16px!important; border:1px solid var(--border-strong)!important;
-  border-radius:10px!important; background:#293649!important; color:var(--text)!important;
+  border-radius:10px!important; background:var(--card)!important; color:var(--text)!important;
   font-size:13px; text-decoration:none;
 }
-html body .distribution-workflow.distribution-workflow.distribution-workflow :is(.release-footer-action.is-primary,.release-workspace-review) { background:#e0edff!important; border-color:#e0edff!important; color:#142238!important; }
+html body .distribution-workflow.distribution-workflow.distribution-workflow :is(.release-footer-action.is-primary,.release-workspace-review) { background:var(--accent)!important; border-color:var(--border)!important; color:var(--accent-foreground)!important; }
 html body :is(.distribution-workflow,.release-portal-page,.release-manage-page) :is(button,a,input,select,textarea,summary):focus-visible { outline:3px solid var(--focus)!important; outline-offset:3px; }
 html body .distribution-workflow button:disabled { opacity:.5; cursor:not-allowed; }
 html body :is(.release-portal-page,.release-manage-page) :is(.surface-card,.metric-card) { border:1px solid var(--border); border-radius:16px; background:var(--card); }
@@ -95,15 +91,15 @@ html body .release-manage-page .release-section-navigation { position:relative; 
   html body .distribution-workflow.distribution-workflow :is(.card-base,.release-track-panel,.review-confirmation,.record-review-card,.record-review-details,.record-review-tracks) { padding:16px; }
 }
 @media(prefers-reduced-motion:reduce) { html body .distribution-workflow * { scroll-behavior:auto!important; transition:none!important; animation:none!important; } }
-html body .distribution-workflow.distribution-workflow.distribution-workflow .release-stage-menu > .release-workflow-nav > button.is-invalid svg { color:#ffb8b8; }
+html body .distribution-workflow.distribution-workflow.distribution-workflow .release-stage-menu > .release-workflow-nav > button.is-invalid svg { color:var(--danger); }
 /* Catalogue and release workspace: the same controls, readable metadata, and recovery states. */
 html body .release-portal-page .release-library-toolbar { display:grid; grid-template-columns:minmax(180px,1fr) auto auto; align-items:center; gap:12px; }
 html body .release-portal-page .release-search-control { display:block; }
 html body .release-portal-page .release-search-control .field { width:100%; min-height:48px; padding:12px 14px 12px 44px; border:1px solid var(--border-strong); border-radius:12px; background:var(--input); color:var(--text); font-size:14px; }
 html body .release-portal-page .release-view-toggle { gap:4px; }
 html body .release-portal-page .release-view-toggle button { width:44px; height:44px; min-height:44px; border:1px solid transparent; }
-html body .release-portal-page .release-view-toggle button[aria-pressed=true] { background:#314765!important; border-color:#87afe4; color:#fff!important; }
-html body .release-portal-page .release-view-toggle button:hover { color:#fff!important; }
+html body .release-portal-page .release-view-toggle button[aria-pressed=true] { background:var(--bg-soft)!important; border-color:#87afe4; color:var(--text)!important; }
+html body .release-portal-page .release-view-toggle button:hover { color:var(--text)!important; }
 html body .release-portal-page .release-catalogue-filters .release-filters-reset { min-height:44px; font-size:clamp(10px,.8vw,11px); }
 html body .release-portal-page .release-no-results { display:flex; flex-direction:column; align-items:center; gap:16px; padding:56px 24px; text-align:center; border:1px dashed var(--border-strong); border-radius:20px; background:var(--card); }
 html body .release-portal-page .release-no-results > svg { color:var(--text-soft); }
@@ -111,7 +107,7 @@ html body .release-portal-page .release-no-results h2 { font-size:22px; line-hei
 html body .release-portal-page .release-no-results p { max-width:460px; color:var(--text-muted); font-size:14px; line-height:1.7; }
 html body .release-portal-page .release-no-results button { display:inline-flex; align-items:center; justify-content:center; gap:10px; padding:12px 18px; }
 html body .release-manage-page .release-section-tabs [role=tab] { min-height:44px; font-size:clamp(10px,.8vw,11px); }
-html body .release-manage-page .release-section-tabs [role=tab][aria-selected=true] { background:transparent; border-color:transparent; color:#fff; }
+html body .release-manage-page .release-section-tabs [role=tab][aria-selected=true] { background:transparent; border-color:transparent; color:var(--text); }
 html body .release-manage-page .release-section-caption { font-size:12px; padding-bottom:4px; }
 html body .release-manage-page .summary-card { overflow-wrap:anywhere; }
 @media(max-width:767px) {
@@ -123,10 +119,10 @@ html body .release-manage-page .summary-card { overflow-wrap:anywhere; }
   html body .release-portal-page .release-no-results { padding:36px 20px; }
 }
 html body .release-portal-page.release-portal-page.release-portal-page .release-view-toggle button { border-radius:10px!important; }
-html body .release-portal-page.release-portal-page.release-portal-page :is(.release-add-button,.release-no-results .btn-primary) { min-height:44px!important; padding:12px 18px!important; border:1px solid #e0edff!important; border-radius:10px!important; background:#e0edff!important; color:#142238!important; box-shadow:none!important; }
+html body .release-portal-page.release-portal-page.release-portal-page :is(.release-add-button,.release-no-results .btn-primary) { min-height:44px!important; padding:12px 18px!important; border:1px solid var(--border)!important; border-radius:10px!important; background:var(--accent)!important; color:var(--accent-foreground)!important; box-shadow:none!important; }
 html body .release-portal-page.release-portal-page .release-dashboard-tabs { display:flex; flex-wrap:nowrap; overflow-x:auto; padding:6px; gap:6px; border:1px solid var(--border); border-radius:14px; background:var(--card); scrollbar-width:thin; }
 html body .release-portal-page.release-portal-page .release-dashboard-tabs .distribution-dashboard-link { flex:1 0 auto; display:flex; align-items:center; justify-content:center; min-height:44px; padding:10px 14px; border:1px solid transparent!important; border-radius:10px!important; background:transparent!important; color:var(--text-muted)!important; white-space:nowrap; transform:none; }
-html body .release-portal-page.release-portal-page .release-dashboard-tabs .distribution-dashboard-link[aria-current=page] { background:#314765!important; border-color:#87afe4!important; color:#fff!important; }
+html body .release-portal-page.release-portal-page .release-dashboard-tabs .distribution-dashboard-link[aria-current=page] { background:var(--bg-soft)!important; border-color:#87afe4!important; color:var(--text)!important; }
 html body .release-portal-page.release-portal-page .release-dashboard-tabs { min-width:0; max-width:100%; }
 html body .release-portal-page.release-portal-page .release-dashboard-tabs { border-radius:14px!important; background:var(--card)!important; }
 html body .release-portal-page.release-portal-page .release-dashboard-tabs .distribution-dashboard-link { border-radius:10px!important; }

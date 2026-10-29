@@ -27,13 +27,13 @@ html body .release-premium-editor .artwork-requirement-item{padding:8px 0}
 html body .release-premium-editor .artwork-validation{padding-top:10px;margin-top:8px}
 /* Stage state is conveyed by colour, never a filled selection box. */
 html body .release-workflow.release-workflow .release-step-button,html body .release-workflow.release-workflow .release-step-button:is(.is-current,:hover,:focus-visible){background:transparent!important;background-image:none!important;border:0!important;box-shadow:none!important;text-shadow:none!important;transform:none!important}
-html body .release-workflow.release-workflow .release-step-button.is-complete{color:#8cdbb0!important}
-html body .release-workflow.release-workflow .release-step-button.is-invalid{color:#ffb4b4!important}
+html body .release-workflow.release-workflow .release-step-button.is-complete{color:var(--success)!important}
+html body .release-workflow.release-workflow .release-step-button.is-invalid{color:var(--danger)!important}
 html body .release-workflow.release-workflow .release-step-button.is-current{font-weight:750;text-decoration:underline;text-underline-offset:6px;text-decoration-thickness:1px}
 /* No idle glow. A subtle highlight belongs to an intentional interaction. */
 html body .release-workflow button{box-shadow:none!important;text-shadow:none!important;filter:none!important}
 html body .release-workflow button::before,html body .release-workflow button::after{box-shadow:none!important;filter:none!important}
-html body .release-workflow .release-footer-action:is(:hover,:focus-visible),html body .release-workflow .release-focused-actions>button:is(:hover,:focus-visible){text-shadow:0 0 8px #ffffff38!important;color:var(--text)!important}
+html body .release-workflow .release-footer-action:is(:hover,:focus-visible),html body .release-workflow .release-focused-actions>button:is(:hover,:focus-visible){text-shadow:none!important;color:var(--text)!important}
 /* Track artists match the initial artist step. */
 html body .release-workflow .release-track-artist-label{display:flex;align-items:center;min-height:28px;margin:0;line-height:20px}
 html body .release-workflow .release-track-artist-label .language-field-help>button{width:28px;height:28px;min-height:28px;padding:0}

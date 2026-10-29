@@ -63,7 +63,7 @@ export default async function HomePage() {
   return (
     <main id="home" className="hymn-landing">
       <LandingWorkspace workspaceHref="/login">
-      <section className="landing-hero">
+      <section className="landing-hero force-dark">
         <div className="absolute inset-0">
           <picture><source media="(max-width: 640px)" srcSet="/images/home-hero-640.webp"/><img src="/images/home-hero-1280.webp" alt={images.hero.alt} fetchPriority="high" loading="eager" decoding="async" className="absolute inset-0 h-full w-full scale-105 object-cover object-center opacity-52"/></picture>
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_68%_32%,rgba(255,255,255,0.16),transparent_26%),linear-gradient(90deg,rgba(9,11,16,0.96)_0%,rgba(9,11,16,0.76)_46%,rgba(9,11,16,0.5)_100%)]" />
@@ -118,7 +118,7 @@ export default async function HomePage() {
 
       {!session ? (
             <section className="landing-signup">
-            <aside className="force-dark relative mx-auto min-w-0 w-full max-w-[410px] overflow-hidden rounded-[1.65rem] border border-white/15 bg-black/[0.12] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-lg sm:p-6 lg:p-7">
+            <aside className="relative mx-auto min-w-0 w-full max-w-[410px] overflow-hidden rounded-[1.65rem] border border-white/15 bg-black/[0.12] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-lg sm:p-6 lg:p-7">
               <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(255,255,255,0.1),transparent_38%),linear-gradient(145deg,rgba(255,255,255,0.035),transparent_62%)]" />
               <div className="relative">
                 <h2 className="max-w-sm text-[clamp(2.15rem,3.2vw,3.35rem)] font-bold leading-[0.94] tracking-[-0.05em] text-white">

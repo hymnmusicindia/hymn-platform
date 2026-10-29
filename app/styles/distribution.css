@@ -5,7 +5,7 @@
   @apply rounded-[2rem] border;
   background: var(--card);
   border-color: var(--border);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-soft);
 }
 
 /* Card Base Styling */
@@ -13,13 +13,13 @@
   @apply rounded-[1.5rem] border p-4 md:p-5;
   border-color: var(--border);
   background: var(--bg-soft);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-soft);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .card-base:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-soft);
 }
 
 /* Section Headers */
@@ -49,7 +49,7 @@
   outline: none;
   border-color: var(--accent);
   background: var(--card);
-  box-shadow: 0 0 0 3px rgba(89, 223, 224, 0.1);
+  box-shadow: var(--shadow-soft);
 }
 
 .field::placeholder {
@@ -67,13 +67,13 @@
   @apply rounded-[1.7rem] border p-4 md:p-5;
   border-color: var(--border);
   background: var(--card);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-soft);
   transition: all 0.3s ease;
 }
 
 .track-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-soft);
 }
 
 .track-card.expanded {
@@ -214,7 +214,7 @@ select.field {
 
 /* Login Portal Theme Contrast */
 .login-portal-brand {
-  color: #ffffff;
+  color: var(--text);
 }
 
 .login-portal-back {
@@ -225,7 +225,7 @@ select.field {
 
 .login-portal-back:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  color: var(--text);
 }
 
 .login-portal-hero-copy,
@@ -244,18 +244,18 @@ select.field {
 }
 
 html[data-theme="light"] .login-portal-brand {
-  color: #101622;
+  color: var(--text);
 }
 
 html[data-theme="light"] .login-portal-back {
   border-color: rgba(16, 22, 34, 0.14);
   background: rgba(255, 255, 255, 0.66);
-  color: #101622;
+  color: var(--text);
 }
 
 html[data-theme="light"] .login-portal-back:hover {
   background: rgba(255, 255, 255, 0.86);
-  color: #05070b;
+  color: var(--text);
 }
 
 html[data-theme="light"] .login-portal-hero-copy,

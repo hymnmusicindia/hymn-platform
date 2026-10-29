@@ -49,7 +49,7 @@ export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{
       <p className="sr-only">Available on {storeLogos.map(item => item.name).join(", ")}.</p>
     </section>),
     releases: (<section id="released" className="landing-releases home-release-editorial shell">
-        <div className="home-release-stage">
+        <div className="home-release-stage force-dark">
           <div className="home-release-layout">
             <div className="home-release-copy">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/50">#releasedonhymn</p>

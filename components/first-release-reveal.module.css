@@ -16,34 +16,34 @@
 .envelopeRear { z-index:1; perspective:1200px; }
 .envelopeFront { z-index:5; pointer-events:none; }
 .back,.front { position:absolute; inset:0; border-radius:8px; }
-.back { border:1px solid #83858a; background:linear-gradient(145deg,#45464a,#191a1d 72%); box-shadow:0 16px 35px #0004,inset 0 0 0 4px #ffffff07; }
-.flap { position:absolute; top:0; left:0; width:100%; height:145px; transform-origin:50% 0; clip-path:polygon(0 0,100% 0,50% 100%); background:linear-gradient(175deg,#727378,#393a3e 85%,#8a8b90); backface-visibility:visible; }
-.front { clip-path:polygon(0 0,50% 65%,100% 0,100% 100%,0 100%); background:linear-gradient(27deg,#292a2e 49.7%,transparent 50%),linear-gradient(-27deg,#36373b 49.7%,#202125 50%); box-shadow:inset 0 -2px #8a8b8f55; }
+.back { border:1px solid var(--border); background:var(--surface-gradient); box-shadow:var(--shadow-soft); }
+.flap { position:absolute; top:0; left:0; width:100%; height:145px; transform-origin:50% 0; clip-path:polygon(0 0,100% 0,50% 100%); background:var(--surface-gradient); backface-visibility:visible; }
+.front { clip-path:polygon(0 0,50% 65%,100% 0,100% 100%,0 100%); background:var(--surface-gradient); box-shadow:var(--shadow-soft); }
 .front::after { content:""; position:absolute; inset:12px; border:1px solid #ffffff12; border-radius:3px; }
-.front > span { position:absolute; bottom:22px; width:100%; text-align:center; font-size:9px; letter-spacing:.28em; color:#b8b8bd; }
-.seal { position:absolute; z-index:8; top:486px; left:50%; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; width:78px; height:78px; border-radius:50%; border:1px solid #eee; background:radial-gradient(circle at 35% 25%,#fafafa,#c9c9cd 60%,#808186); color:#292a2d; box-shadow:0 6px 0 #141517,0 12px 23px #0007,inset 0 0 0 5px #ffffff35,inset 0 0 0 7px #55565b55; transition:opacity .2s,filter .2s; }
+.front > span { position:absolute; bottom:22px; width:100%; text-align:center; font-size:9px; letter-spacing:.28em; color:var(--text-muted); }
+.seal { position:absolute; z-index:8; top:486px; left:50%; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; width:78px; height:78px; border-radius:50%; border:1px solid var(--border); background:var(--surface-gradient); color:var(--text); box-shadow:var(--shadow-soft); transition:opacity .2s,filter .2s; }
 .seal span { font-size:8px; font-weight:800; letter-spacing:.18em; }
 .seal:not(:disabled):hover { filter:brightness(1.1); }
 .seal:focus-visible { outline:3px solid var(--text); outline-offset:6px; }
 /* The bottom of the paper can never draw below the pocket floor (y=580). */
 .letterWindow { position:absolute; inset:0; z-index:3; clip-path:inset(-200px -50px 100px -50px); pointer-events:none; }
-.letter { position:absolute; top:24px; left:55px; width:390px; padding:22px 26px 16px; pointer-events:auto; color:#28282a; border-radius:2px; background:linear-gradient(180deg,transparent 49.7%,#0000000a 50%,#ffffff66 50.3%,transparent 51%),radial-gradient(#2222220d .4px,transparent .7px) 0 0/5px 5px,#faf9f6; box-shadow:0 2px 0 #d8d7d4,0 4px 0 #f2f1ee,0 15px 30px #0003; }
+.letter { position:absolute; top:24px; left:55px; width:390px; padding:22px 26px 16px; pointer-events:auto; color:var(--text); border-radius:2px; background:linear-gradient(180deg,transparent 49.7%,#0000000a 50%,#ffffff66 50.3%,transparent 51%),radial-gradient(#2222220d .4px,transparent .7px) 0 0/5px 5px,#faf9f6; box-shadow:var(--shadow-soft); }
 .letter::after { content:""; position:absolute; top:0; right:0; width:18px; height:18px; background:linear-gradient(225deg,#c7c6c3 49%,#e9e8e5 51%); clip-path:polygon(0 0,100% 100%,0 100%); }
 .letterhead { display:flex; align-items:center; justify-content:space-between; padding-bottom:12px; border-bottom:1px solid #29292b22; }
 .letterhead img { width:100px; height:auto; filter:brightness(0); }
 .letterhead span { font-size:7px; letter-spacing:.13em; line-height:1.6; text-align:right; }
 .salutation { margin-top:15px; font:italic 14px Georgia,serif; }
 .letter h2 { margin:8px 0; font:28px/1.1 Georgia,serif; letter-spacing:-.035em; }
-.body { font:13px/1.5 Georgia,serif; color:#626266; }
+.body { font:13px/1.5 Georgia,serif; color:var(--text-muted); }
 .letter .receipt { margin:12px 0 0; padding:10px 0; gap:5px; border-block:1px dashed #b5b4b1; font-size:11px; }
-.letter .receipt strong { color:#28282a; font-size:15px; }
-.signature { display:grid; gap:3px; margin-top:12px; font-size:10px; color:#77777b; }
-.signature strong { font:italic 18px Georgia,serif; color:#333337; }
-.terms { font-size:9px; line-height:1.4; margin:10px 0; color:#747478; }
+.letter .receipt strong { color:var(--text); font-size:15px; }
+.signature { display:grid; gap:3px; margin-top:12px; font-size:10px; color:var(--text-muted); }
+.signature strong { font:italic 18px Georgia,serif; color:var(--text); }
+.terms { font-size:9px; line-height:1.4; margin:10px 0; color:var(--text-muted); }
 .action { min-height:46px; }
-.action button { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; min-height:44px; background:#202124; color:white; padding:10px; border-radius:5px; font-size:10px; font-weight:700; }
+.action button { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; min-height:44px; background:var(--card); color:white; padding:10px; border-radius:5px; font-size:10px; font-weight:700; }
 .action button svg { width:15px; }
-.status { display:flex; align-items:center; justify-content:center; gap:5px; margin-top:9px; font-size:8px; letter-spacing:.14em; color:#77777b; }
+.status { display:flex; align-items:center; justify-content:center; gap:5px; margin-top:9px; font-size:8px; letter-spacing:.14em; color:var(--text-muted); }
 .progress { flex:none; text-align:center; margin:0; color:var(--text-soft); font-size:9px; letter-spacing:.18em; }
 .particles { position:absolute; inset:0; z-index:12; pointer-events:none; }
 .particles i { position:absolute; left:50%; top:60%; width:4px; height:4px; background:var(--text-muted); animation:spark .85s ease-out both; animation-delay:calc(var(--i) * 18ms); }
