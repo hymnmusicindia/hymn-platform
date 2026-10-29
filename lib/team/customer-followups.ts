@@ -199,7 +199,7 @@ export async function readCallFollowups(a: Actor, params: URLSearchParams) {
     return { ...task, client: { id: client.id, name: client.name, email: client.email, status: client.status, phone: ['SUPPORT_CALLBACK','FRIENDLY_INTRO'].includes(String(context.kind)) ? String(context.callbackPhone || context.callPhone || client.phone) : client.phone, registered: Boolean(account), coverUrl: mediaUrl(account?.producerProfile?.coverPhotoUrl), avatarUrl: mediaUrl(account?.producerProfile?.avatarUrl || account?.avatar) } };
   }), total: await prisma.teamTask.count({ where }) };
 }
-export async function recordCallbackOutcome(tx: Prisma.TransactionClient, a: Actor, input: unknown, now = new Date()) {
+export async function recordCallbackOutcome(tx: Prisma.TransactionClient, a: Actor, input: unknown, now = new Date(), options: { queueEmail?: boolean } = {}) {
   demand(a, 'crm.outreach.manage'); demand(a, 'tasks.update');
   const data = z.object({ id: z.string().min(1), version: z.number().int().positive(), outcome: z.enum(['TALKED', 'NO_ANSWER', 'CALLBACK', 'INTERESTED', 'RESOLVED', 'NOT_INTERESTED', 'DO_NOT_CONTACT']), notes: z.string().trim().min(3).max(2000), nextAt: z.string().datetime({ offset: true }).optional() }).parse(input);
   const task = await tx.teamTask.findFirst({ where: { id: data.id, workspaceId: a.workspaceId, eventKey: { startsWith: 'support-call:' }, archivedAt: null, ...(!can(a, 'tasks.all') ? { ownerId: a.id } : {}) } });
@@ -240,7 +240,7 @@ export async function recordCallbackOutcome(tx: Prisma.TransactionClient, a: Act
     await tx.teamCalendarEvent.updateMany({ where: { workspaceId: a.workspaceId, clientId: task.clientId, status: 'SCHEDULED' }, data: { status: 'CANCELLED', version: { increment: 1 }, scheduleRevision: { increment: 1 } } });
   }
   await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action: 'support.callback_outcome', entityId: task.id, detail: { outcome: data.outcome, attempts, nextAt: dueAt?.toISOString() || null } } });
-  const followupEmail = ['TALKED', 'RESOLVED', 'INTERESTED', 'CALLBACK'].includes(data.outcome) ? await queueCallEstablishedEmail(tx, a, updated) : null;
+  const followupEmail = options.queueEmail !== false && ['TALKED', 'RESOLVED', 'INTERESTED', 'CALLBACK'].includes(data.outcome) ? await queueCallEstablishedEmail(tx, a, updated) : null;
   return { ...updated, followupEmail };
 }
 

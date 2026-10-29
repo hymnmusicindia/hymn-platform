@@ -1,0 +1,24 @@
+name: Team call reports regression
+on:
+  push:
+    branches: [main]
+    paths: ['components/team/**', 'lib/team/**', 'scripts/*call-report*', 'scripts/verify-acquisition-isolated.ts', '.github/workflows/team-call-reports-regression.yml']
+  pull_request:
+    paths: ['components/team/**', 'lib/team/**', 'scripts/*call-report*', 'scripts/verify-acquisition-isolated.ts', '.github/workflows/team-call-reports-regression.yml']
+permissions:
+  contents: read
+jobs:
+  call-reports:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --fetch-retries=5 --fetch-timeout=120000
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:team-call-reports
+      - run: npm run test:team-call-reports:browser
+      - run: node scripts/verify-team-assistance-browser.cjs

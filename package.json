@@ -6,6 +6,8 @@
     "node": ">=20.19.0"
   },
   "scripts": {
+    "test:team-call-reports": "tsx scripts/verify-acquisition-isolated.ts --team-call-reports-only",
+    "test:team-call-reports:browser": "node scripts/verify-team-call-report-browser.cjs",
     "test:beatstore": "node --import tsx scripts/verify-acquisition-isolated.ts --beat-engagement-only",
     "test:beatstore:browser": "node scripts/verify-beatstore-record-browser.cjs",
     "test:distribution-automation": "node --conditions=react-server --import tsx scripts/verify-distribution-automation-policy.ts && node --import tsx scripts/verify-acquisition-isolated.ts --distribution-automation-only",
