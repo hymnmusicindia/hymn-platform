@@ -26,6 +26,8 @@ export function automationSummary(release: Release) {
   const reason=typeof qc?.reason==='string'?qc.reason:undefined;
   if (bucket === 'drafts') return { label: 'Not submitted', tone: 'muted', detail: 'The artist controls this draft.' };
   if (bucket === 'corrections') return {label:'Corrections needed',tone:'warning',detail:reason||'Open the current correction request before this release can continue.'};
+  if(bucket==='live')return {label:'Monitoring',tone:'success',detail:'Current store availability takes precedence over historical automatic QC notes.'};
+  if(['sent','sent_to_distributor','processing','distributor_processing','delivered','scheduled','awaiting_live_confirmation'].includes(release.status.toLowerCase()))return {label:'Delivery acknowledged',tone:'success',detail:'The provider acknowledged the current delivery. Earlier automatic QC holds are historical; monitor the current provider review and store status.'};
   const correction=correctionReviewSummary(release);
   if(correction)return {label:correction.label,tone:'warning',detail:correction.detail};
   if (qc?.status === 'passed') return { label: 'Checks passed', tone: 'success', detail: reason || 'Technical checks passed. Delivery safeguards remain active.' };
@@ -33,5 +35,5 @@ export function automationSummary(release: Release) {
   if (qc?.status === 'issues_found') return { label: `${qc.issueCount || 1} QC issue${qc.issueCount === 1 ? '' : 's'}`, tone: 'warning', detail: reason || 'Open the release to inspect the checks.' };
   if (qc?.status === 'retryable') return { label: 'Check will retry', tone: 'warning', detail: reason || 'A temporary dependency could not be verified.' };
   if (qc?.status === 'checking') return { label: 'Checking', tone: 'muted', detail: 'The submitted revision is being checked.' };
-  return { label: bucket === 'live' ? 'Monitoring' : 'Awaiting checks', tone: 'muted', detail: reason || 'The next automatic cycle will assess eligible submissions.' };
+  return { label: 'Awaiting checks', tone: 'muted', detail: reason || 'The next automatic cycle will assess eligible submissions.' };
 }

@@ -37,5 +37,8 @@ for(const changed of [{...release,id:124},{...release,recordVersion:3},{...relea
 const {correctionReviewSummary,releaseBucket,automationSummary}=require('../lib/distribution-workspace');
 const corrected={...release,status:'under_review',contentType:'Non-Exclusive Licensed',metadata:{...release.metadata,correctionReview:{status:'pending'},autoQc:{status:'manual_review_required',changeKind:'missing_baseline'}}} as Release;
 assert.equal(releaseBucket(corrected),'review');assert.equal(correctionReviewSummary(corrected)?.delivery,'Updated package not yet sent');assert.equal(automationSummary(corrected).label,'Rights review required');assert.equal(correctionReviewSummary({...corrected,status:'sent_to_distributor'}),null);
+assert.equal(releaseBucket({...corrected,status:'distributor_processing'}),'delivery');
+assert.equal(automationSummary({...corrected,status:'distributor_processing'}).label,'Delivery acknowledged','A historical manual-QC hold must not overrule a later provider acknowledgement.');
+assert.equal(automationSummary({...corrected,status:'live'}).label,'Monitoring');
 
 console.log('PASS automation policy: payment, all declarations, sensitive holds, amendments, accepted/uncertain attempts, safe retries, narrow formatting fixes, change detection and tamper-resistant revision evidence.');
