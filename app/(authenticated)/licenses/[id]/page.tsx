@@ -1,9 +1,8 @@
 import Image from "next/image";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUserForPage } from "@/lib/access";
 import { getBeatLicenceAgreement } from "@/lib/beat-license";
-import { LicenceCycleActions } from "@/components/licence-cycle-actions";
+import { LicenceToolbar } from "@/components/licence-toolbar";
 
 export default async function BeatLicencePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUserForPage();
@@ -14,14 +13,7 @@ export default async function BeatLicencePage({ params }: { params: Promise<{ id
   try { licence = await getBeatLicenceAgreement(purchaseId, user.id, user.role === "admin"); } catch { notFound(); }
 
   return <main className="min-h-screen bg-[#e9e7e1] px-3 py-6 text-[#17181b] sm:px-6 sm:py-10">
-    <div className="mx-auto mb-4 flex max-w-[920px] flex-wrap items-center justify-between gap-3 print:hidden">
-      <Link href="/dashboard?tab=purchases" className="rounded-full border border-black/15 bg-white px-4 py-2 text-sm font-semibold">← Purchases</Link>
-      <div className="flex flex-wrap gap-2">
-        {licence.studioOrder ? <Link href={`/studio/orders/${licence.studioOrder.publicId}`} className="rounded-full border border-black/15 bg-white px-4 py-2 text-sm font-semibold">Open Studio project</Link> : <Link href="/studio" className="rounded-full border border-black/15 bg-white px-4 py-2 text-sm font-semibold">Mix &amp; master</Link>}
-        {licence.releaseId ? <Link href={`/distribution/start?edit=${licence.releaseId}`} className="rounded-full border border-black bg-black px-4 py-2 text-sm font-semibold text-white">Continue release</Link> : <LicenceCycleActions purchaseId={licence.purchaseId} />}
-        {licence.pdfUrl ? <a href={licence.pdfUrl} download className="rounded-full border border-black bg-white px-4 py-2 text-sm font-semibold">Download PDF</a> : null}
-      </div>
-    </div>
+    <LicenceToolbar purchaseId={licence.purchaseId} studioOrderId={licence.studioOrder?.publicId} releaseId={licence.releaseId} pdfUrl={licence.pdfUrl}/>
 
     <article className="mx-auto max-w-[920px] overflow-hidden rounded-[28px] bg-[#fbfaf7] shadow-[0_28px_90px_rgba(20,20,20,.16)] print:rounded-none print:shadow-none">
       <header className="flex flex-wrap items-start justify-between gap-8 bg-[#0c0e12] px-7 py-8 text-white sm:px-12 sm:py-11">
