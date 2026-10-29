@@ -4,12 +4,14 @@ import { workspaceNavigation } from "@/lib/workspace-navigation";
 export type WorkspaceCrumb = { label: string; href: string };
 type ActiveLocation = { group: string; label?: string; href?: string };
 const roots: Record<string, string> = {
-  Administration: "/admin", Team: "/team", Home: "/", Library: "/audio-library", Distribution: "/dashboard/releases", Beatstore: "/beat-store",
+  Administration: "/admin", Team: "/team", Home: "/", Library: "/library", Distribution: "/dashboard/releases", Beatstore: "/beat-store",
   "Mixing / Mastering": "/studio", Account: "/dashboard?tab=settings", Support: "/dashboard?tab=support", Workspace: "/dashboard"
 };
 const title = (part: string) => part.replace(/-/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
 
 export function workspaceBreadcrumbs(pathname: string, search = "", active?: ActiveLocation): WorkspaceCrumb[] {
+  if (pathname === '/library') return [{ label: 'Home', href: '/' }, { label: 'My library', href: '/library' + search }];
+  if (/^\/dashboard\/purchases\/[^/]+$/.test(pathname) || /^\/licenses\/[^/]+$/.test(pathname)) return [{ label: 'My library', href: '/library' }, { label: 'Purchases', href: '/library?view=purchases' }, { label: pathname.startsWith('/licenses/') ? 'Licence details' : 'Purchase details', href: pathname }];
   const query = new URLSearchParams(search);
   const tab = pathname === "/dashboard" ? query.get("tab") : null;
   const exact = workspaceNavigation.find(item => {

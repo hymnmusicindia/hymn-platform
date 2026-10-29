@@ -18,6 +18,7 @@ async function main() {
   assert.equal(requestedArtworkWidth(new Request("https://hymn.local/?w=99999")), null);
   assert.equal(requestedArtworkWidth(new Request("https://hymn.local/?w=192")), 192);
   assert.equal(artworkPreviewUrl("/assets/playlist-images/previews/1.webp", 112), "/api/image-preview?src=%2Fassets%2Fplaylist-images%2Fpreviews%2F1.webp&w=192");
+  assert.equal(artworkPreviewUrl('/api/public-uploads/Beatstore/cover.png', 120), '/api/image-preview?src=%2Fapi%2Fpublic-uploads%2FBeatstore%2Fcover.png&w=192');
   const { GET: staticPreview } = await import("../app/api/image-preview/route");
   const staticImage = await staticPreview(new Request("https://hymn.local/api/image-preview?src=%2Fassets%2Fplaylist-images%2Fpreviews%2F1.webp&w=192"));
   assert.equal(staticImage.status, 200);
@@ -52,6 +53,16 @@ async function main() {
       const body = Buffer.from(await response.arrayBuffer());
       if (query === "?w=192") { assert.equal(response.headers.get("Content-Type"), "image/webp"); assert.equal((await sharp(body).metadata()).width, 192); }
       else assert.deepEqual(body, original, "Original/invalid-width requests remain original bytes");
+    }
+    const edgeSafe = await staticPreview(new Request('https://hymn.local/api/image-preview?src=%2Fapi%2Fpublic-uploads%2Fsite%2Ftest.jpg&w=192'));
+    assert.equal(edgeSafe.status, 200);
+    assert.equal(edgeSafe.headers.get('content-type'), 'image/webp');
+    const resized = Buffer.from(await edgeSafe.arrayBuffer());
+    assert.equal((await sharp(resized).metadata()).width, 192);
+    assert.ok(resized.length < original.length / 3, 'Public preview must not return full-resolution artwork');
+    for (const src of ['/api/public-uploads/../secret.jpg', '/api/public-uploads/site/%2e%2e/%2e%2e/secret.jpg', '/api/public-uploads/private/secret.jpg', '/api/assets/1/download', 'https://evil.invalid/image.jpg']) {
+      const response = await staticPreview(new Request(`https://hymn.local/api/image-preview?src=${encodeURIComponent(src)}&w=192`));
+      assert.equal(response.status, 400, 'Preview must stay within public upload storage');
     }
     const denied = await GET(new NextRequest("https://hymn.local/api/public-uploads/../secret.jpg?w=192"), { params: Promise.resolve({ path: ["..", "secret.jpg"] }) });
     assert.equal(denied.status, 400, "Thumbnail path cannot escape allowed public storage");

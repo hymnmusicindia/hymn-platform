@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, ChevronDown, ChevronUp, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, X, Plus, Disc3, TrendingUp, Headphones, Store, LayoutGrid } from "lucide-react";
+import { Bell, ChevronDown, ChevronUp, Command, Menu, PanelLeftClose, PanelLeftOpen, Search, X, Plus, Disc3, TrendingUp, Headphones, Store, LayoutGrid, Folder } from "lucide-react";
 import clsx from "clsx";
 import "@/app/styles/workspace-system.css";
 import { WorkspaceFooter } from "@/components/workspace-footer";
@@ -148,8 +148,9 @@ export function DashboardFrame<T extends string>({
     window.addEventListener("resize", updateNavScroll);
     return () => { observer.disconnect(); window.removeEventListener("resize", updateNavScroll); };
   }, [updateNavScroll, visibleGroups, openGroup, mobileOpen, collapsed]);
-  const activeItem = useMemo(() => flatItems.find((item) => item.key === activeKey), [activeKey, flatItems]);
-  const activeGroup = useMemo(() => groups.find((group) => group.items.some((item) => item.key === activeKey)), [activeKey, groups]);
+  const navigationKey = ['files', 'purchases'].includes(activeKey) ? 'library' : activeKey;
+  const activeItem = useMemo(() => flatItems.find((item) => item.key === navigationKey), [navigationKey, flatItems]);
+  const activeGroup = useMemo(() => groups.find((group) => group.items.some((item) => item.key === navigationKey)), [navigationKey, groups]);
   useEffect(() => { setOpenGroup(activeGroup?.label ?? null); }, [activeKey, activeGroup?.label]);
   useEffect(() => {
     function reveal(event: Event) { setOpenGroup((event as CustomEvent<string>).detail); setCollapsed(false); setMobileOpen(false); }
@@ -209,7 +210,7 @@ export function DashboardFrame<T extends string>({
         <div className="flex items-start justify-between gap-3 border-b pb-4" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
            <div className={clsx("min-w-0", collapsed ? "lg:hidden" : "") }>
             <div className="mb-5 flex items-center gap-3">
-              <Image src="/assets/hymnlogowhite.png" alt="HYMN" width={112} height={32} className="h-8 w-auto object-contain" />
+              <Image src="/assets/hymn-logo-320.webp" alt="HYMN" width={112} height={32} className="h-8 w-auto object-contain" />
                {eyebrow ? <span className="rounded-full border border-border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.22em]" style={{ background: "var(--bg-soft)", color: "var(--accent)" }}>{eyebrow}</span> : null}
             </div>
           </div>
@@ -236,12 +237,13 @@ export function DashboardFrame<T extends string>({
 
         <WorkspaceDestinations overviewActive={isOverview} overviewHref={overviewItem?.href} onOverview={overviewItem && !overviewItem.href ? () => handleSelect(overviewItem.key) : undefined} onNavigate={() => setMobileOpen(false)} />
         </div>
+        {!adminWorkspace && <Link prefetch={false} href="/library" className="dashboard-os-nav-item workspace-library-link" aria-current={navigationKey === 'library' ? 'page' : undefined} onClick={() => setMobileOpen(false)}><Folder size={17}/><span className={collapsed ? 'lg:hidden' : ''}>My library</span></Link>}
         <div ref={navScrollRef} onScroll={updateNavScroll} className="dashboard-nav-scroll mt-4 min-h-0 flex-1 content-start gap-3 overflow-x-hidden overflow-y-auto pr-1 grid">
           {visibleGroups.map(group => {
             const destination = workspaceGroupDestination(group.label);
             const selected = activeGroup?.label === group.label;
             const entry = (selected ? activeItem : undefined) || group.items.find(item => item.label === destination?.label) || group.items.find(item => item.key !== "overview");
-            if (!entry || group.label === "Home") return null;
+            if (!entry || group.label === "Home" || group.label === 'Library') return null;
             const Icon = workspaceNavigation.find(item => item.group === group.label)?.icon || LayoutGrid;
             const content = <><Icon className="portal-nav-icon"/><span className={clsx(collapsed ? "lg:hidden" : "")}>{group.label}</span></>;
             const className = clsx("dashboard-os-nav-item pressable", selected ? "is-active" : "is-idle");

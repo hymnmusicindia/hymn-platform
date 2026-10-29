@@ -1,0 +1,24 @@
+name: Site loading and library regression
+on:
+  push:
+    branches: [main]
+    paths: ['app/api/image-preview/**', 'app/(authenticated)/library/**', 'app/(authenticated)/audio-library/**', 'app/(authenticated)/dashboard/purchases/page.tsx', 'app/(public)/page.tsx', 'components/user-library*', 'lib/user-library*', 'lib/public-home-data.ts', 'lib/artwork-preview.ts', 'lib/workspace-navigation.ts', 'scripts/verify-site-load-data.ts', 'scripts/verify-user-library-browser.cjs', '.github/workflows/site-load-library-regression.yml']
+  pull_request:
+    paths: ['app/api/image-preview/**', 'app/(authenticated)/library/**', 'app/(authenticated)/audio-library/**', 'app/(authenticated)/dashboard/purchases/page.tsx', 'app/(public)/page.tsx', 'components/user-library*', 'lib/user-library*', 'lib/public-home-data.ts', 'lib/artwork-preview.ts', 'lib/workspace-navigation.ts', 'scripts/verify-site-load-data.ts', 'scripts/verify-user-library-browser.cjs', '.github/workflows/site-load-library-regression.yml']
+permissions:
+  contents: read
+jobs:
+  site-load-library:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --fetch-retries=5 --fetch-timeout=120000
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:site-load
+      - run: npm run test:user-library
+      - run: npm run test:navigation-selection

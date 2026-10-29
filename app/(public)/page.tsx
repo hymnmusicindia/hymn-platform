@@ -56,8 +56,7 @@ const testimonials = [
 
 
 export default async function HomePage() {
-  const session = await getSession();
-  const { beats, producerProfiles, googleAvatarUrls, featuredReviews, featuredReleases } = await getPublicHomePreview();
+  const [session, { beats, producerProfiles, googleAvatarUrls, featuredReviews, featuredReleases }] = await Promise.all([getSession(), getPublicHomePreview()]);
   const { catalog } = buildBeatStorefront(beats, producerProfiles);
   const banners = buildHomePathBanners({featuredReleases,catalog,signedIn:Boolean(session)});
   if (session) return <main id="home" className="hymn-landing"><LandingWorkspace workspaceHref={destinationForRole(session.role)}><HomeGoalWorkspace userId={session.sub} name={session.name} banners={banners} /><HomeReviewsCarousel reviews={featuredReviews}/></LandingWorkspace></main>;
@@ -66,7 +65,7 @@ export default async function HomePage() {
       <LandingWorkspace workspaceHref="/login">
       <section className="landing-hero">
         <div className="absolute inset-0">
-          <Image src={images.hero.src} alt={images.hero.alt} fill priority fetchPriority="high" quality={75} sizes="100vw" className="scale-105 object-cover object-center opacity-52" />
+          <picture><source media="(max-width: 640px)" srcSet="/images/home-hero-640.webp"/><img src="/images/home-hero-1280.webp" alt={images.hero.alt} fetchPriority="high" loading="eager" decoding="async" className="absolute inset-0 h-full w-full scale-105 object-cover object-center opacity-52"/></picture>
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_68%_32%,rgba(255,255,255,0.16),transparent_26%),linear-gradient(90deg,rgba(9,11,16,0.96)_0%,rgba(9,11,16,0.76)_46%,rgba(9,11,16,0.5)_100%)]" />
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(9,11,16,0.22)_0%,rgba(9,11,16,0.18)_46%,#090b10_100%)]" />
           <div className="absolute inset-0 opacity-35 [background-image:radial-gradient(circle_at_20%_30%,rgba(255,255,255,0.25)_0_1px,transparent_1px),radial-gradient(circle_at_80%_45%,rgba(255,255,255,0.34)_0_1px,transparent_1px)] [background-size:90px_90px,140px_140px] motion-safe:animate-[hymn-grid-float_22s_linear_infinite]" />
@@ -83,7 +82,7 @@ export default async function HomePage() {
             </p>
             <AnimatedHeroMetrics />
             <div className="mt-7 h-px max-w-3xl bg-gradient-to-r from-white/20 via-white/10 to-transparent" aria-hidden="true" />
-            <Link
+            <Link prefetch={false}
                 href="/first-release"
                 className="group mt-5 inline-flex max-w-full items-center gap-4 text-left transition duration-300 hover:-translate-y-0.5"
               >
@@ -114,7 +113,7 @@ export default async function HomePage() {
           {href:"/distribution",number:"01",title:"Release your music",copy:"Take your next release to the world's music platforms.",icon:ArrowRight,tag:"Distribution"},
           {href:"/beat-store",number:"02",title:"Find your next sound",copy:"Discover beats and license the one that feels like you.",icon:Headphones,tag:"Beatstore"},
           {href:"/studio",number:"03",title:"Finish your record",copy:"Connect with engineers for mixing and mastering.",icon:Headphones,tag:"Mixing / Mastering"}
-        ].map(service=><Link key={service.number} href={service.href} className="landing-service"><div><span>{service.tag}</span><small>{service.number}</small></div><service.icon size={25}/><h3>{service.title}</h3><p>{service.copy}</p><span className="landing-service-cta">Explore <ArrowRight size={16}/></span></Link>)}</div>
+        ].map(service=><Link prefetch={false} key={service.number} href={service.href} className="landing-service"><div><span>{service.tag}</span><small>{service.number}</small></div><service.icon size={25}/><h3>{service.title}</h3><p>{service.copy}</p><span className="landing-service-cta">Explore <ArrowRight size={16}/></span></Link>)}</div>
       </section>
 
       {!session ? (
@@ -131,9 +130,9 @@ export default async function HomePage() {
                 <GoogleAuthButton label="Continue with Google" expectedRole="customer" appearance="quiet" className="w-full" />
                 <p className="mt-5 text-center text-[8px] leading-5 tracking-tight text-white/45 sm:whitespace-nowrap sm:text-[10px]">
                   By continuing, you agree to our{" "}
-                  <Link href="/terms-of-service" className="text-white/75 underline decoration-white/25 underline-offset-4 transition hover:text-white">Terms of Service</Link>
+                  <Link prefetch={false} href="/terms-of-service" className="text-white/75 underline decoration-white/25 underline-offset-4 transition hover:text-white">Terms of Service</Link>
                   {" "}and{" "}
-                  <Link href="/privacy-policy" className="text-white/75 underline decoration-white/25 underline-offset-4 transition hover:text-white">Privacy Policy</Link>.
+                  <Link prefetch={false} href="/privacy-policy" className="text-white/75 underline decoration-white/25 underline-offset-4 transition hover:text-white">Privacy Policy</Link>.
                 </p>
               </div>
             </aside>
@@ -170,7 +169,7 @@ export default async function HomePage() {
           <div>
             <h2 className="text-4xl font-semibold tracking-[-0.03em] text-[var(--text)] sm:text-5xl">Trusted by artists who move with intent.</h2>
           </div>
-          <Link href="/beat-store" className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
+          <Link prefetch={false} href="/beat-store" className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
             Explore creator tools <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
@@ -210,16 +209,16 @@ export default async function HomePage() {
               Join a premium agency and label ecosystem built for artists who want releases, audiences, identity, monetization, and cultural impact to grow together.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:flex-wrap">
-              <Link href="/login" className="premium-cta inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[#f4f7fb] px-6 py-3 text-sm font-semibold text-[#071013] shadow-[0_0_42px_rgba(255,255,255,0.18)] sm:w-auto sm:min-h-12">
+              <Link prefetch={false} href="/login" className="premium-cta inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[#f4f7fb] px-6 py-3 text-sm font-semibold text-[#071013] shadow-[0_0_42px_rgba(255,255,255,0.18)] sm:w-auto sm:min-h-12">
                 Login
                 <ArrowRight className="h-4 w-4" />
               </Link>
               {!session ? (
-                <Link href="/login?mode=signup" className="premium-ghost inline-flex min-h-11 w-full items-center justify-center rounded-full border border-white/25 bg-white/[0.06] px-6 py-3 text-sm font-semibold text-white backdrop-blur-md transition-colors hover:border-white/45 hover:bg-white/[0.12] sm:w-auto sm:min-h-12">
+                <Link prefetch={false} href="/login?mode=signup" className="premium-ghost inline-flex min-h-11 w-full items-center justify-center rounded-full border border-white/25 bg-white/[0.06] px-6 py-3 text-sm font-semibold text-white backdrop-blur-md transition-colors hover:border-white/45 hover:bg-white/[0.12] sm:w-auto sm:min-h-12">
                   Sign Up
                 </Link>
               ) : null}
-              <Link href="/contact" className="premium-ghost inline-flex min-h-11 w-full items-center justify-center rounded-full border border-white/12 bg-card px-6 py-3 text-sm font-semibold backdrop-blur-xl sm:w-auto sm:min-h-12" style={{ color: "var(--text)" }}>
+              <Link prefetch={false} href="/contact" className="premium-ghost inline-flex min-h-11 w-full items-center justify-center rounded-full border border-white/12 bg-card px-6 py-3 text-sm font-semibold backdrop-blur-xl sm:w-auto sm:min-h-12" style={{ color: "var(--text)" }}>
                 Contact The Team
               </Link>
             </div>

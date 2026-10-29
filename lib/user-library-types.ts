@@ -1,0 +1,1 @@
+export type LibraryAsset = { id: number; originalFilename: string; safeFilename: string; audioUrl: string; mimeType: string; byteSize: number; createdAt: string; released: boolean; coverArtUrl: string | null };

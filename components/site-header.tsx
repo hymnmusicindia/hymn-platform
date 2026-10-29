@@ -78,7 +78,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
   function Breadcrumbs() {
     return <nav className="workspace-breadcrumbs" aria-label="Breadcrumb"><ol>{breadcrumbs.map((crumb, index) => <li key={`${index}-${crumb.href}`}>
       {index > 0 ? <ChevronRight size={13} aria-hidden="true" /> : null}
-      <Link href={crumb.href} aria-current={index === breadcrumbs.length - 1 ? "page" : undefined} title={crumb.label}>{crumb.label}</Link>
+      <Link prefetch={false} href={crumb.href} aria-current={index === breadcrumbs.length - 1 ? "page" : undefined} title={crumb.label}>{crumb.label}</Link>
     </li>)}</ol></nav>;
   }
   const adminWorkspaceHeader = pathname.startsWith("/admin") || pathname.startsWith("/dashboard/admin");
@@ -519,10 +519,10 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
       {appLauncherOpen ? <div role="menu" aria-label="HYMN apps" className={clsx("z-[1260] rounded-[1.35rem] border border-[var(--border-strong)] bg-[var(--card-strong)] p-3 shadow-2xl", mobile ? "fixed left-3 right-3 top-[4.25rem] w-auto" : "absolute right-0 mt-3 w-[min(22rem,calc(100vw-1.5rem))]")}>
         <div className="px-2 pb-3 pt-1"><p className="hymn-kicker">HYMN workspace</p><p className="mt-1 text-sm text-[var(--text-muted)]">Choose where you want to work.</p></div>
         <div className="grid grid-cols-2 gap-2">
-          <Link role="menuitem" href={user.role === "producer" ? "/producer/dashboard" : "/dashboard"} onClick={() => setAppLauncherOpen(false)} className="group rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-4 transition hover:-translate-y-0.5 hover:border-[var(--border-strong)]"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]"><LayoutDashboard className="h-5 w-5"/></span><strong className="mt-3 block text-sm">Dashboard</strong><span className="mt-1 block text-xs leading-5 text-[var(--text-muted)]">Account, releases, and earnings</span></Link>
-          <Link role="menuitem" href="/studio" onClick={() => setAppLauncherOpen(false)} className="group rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-4 transition hover:-translate-y-0.5 hover:border-[var(--border-strong)]"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--info)_12%,transparent)] text-[var(--info)]"><Headphones className="h-5 w-5"/></span><strong className="mt-3 block text-sm">Studio</strong><span className="mt-1 block text-xs leading-5 text-[var(--text-muted)]">Mixing and mastering projects</span></Link>
-          <Link role="menuitem" href="/services" onClick={() => setAppLauncherOpen(false)} className="group col-span-2 flex min-h-20 items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-3 transition hover:-translate-y-0.5 hover:border-[var(--border-strong)]"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--success)_12%,transparent)] text-[var(--success)]"><PackageCheck className="h-5 w-5"/></span><span className="min-w-0"><strong className="block text-sm">Services</strong><span className="mt-0.5 block text-xs leading-5 text-[var(--text-muted)]">Explore everything HYMN can do for your music</span></span></Link>
-          <Link role="menuitem" href="/audio-library" onClick={() => setAppLauncherOpen(false)} className="group col-span-2 flex min-h-20 items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-3 transition hover:-translate-y-0.5 hover:border-[var(--border-strong)]"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)]"><Music2 className="h-5 w-5"/></span><span className="min-w-0"><strong className="block text-sm">Audio Library</strong><span className="mt-0.5 block text-xs leading-5 text-[var(--text-muted)]">Reuse original masters across releases</span></span></Link>
+          <Link prefetch={false} role="menuitem" href={user.role === "producer" ? "/producer/dashboard" : "/dashboard"} onClick={() => setAppLauncherOpen(false)} className="group rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-4 transition hover:-translate-y-0.5 hover:border-[var(--border-strong)]"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent)]"><LayoutDashboard className="h-5 w-5"/></span><strong className="mt-3 block text-sm">Dashboard</strong><span className="mt-1 block text-xs leading-5 text-[var(--text-muted)]">Account, releases, and earnings</span></Link>
+          <Link prefetch={false} role="menuitem" href="/studio" onClick={() => setAppLauncherOpen(false)} className="group rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-4 transition hover:-translate-y-0.5 hover:border-[var(--border-strong)]"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--info)_12%,transparent)] text-[var(--info)]"><Headphones className="h-5 w-5"/></span><strong className="mt-3 block text-sm">Studio</strong><span className="mt-1 block text-xs leading-5 text-[var(--text-muted)]">Mixing and mastering projects</span></Link>
+          <Link prefetch={false} role="menuitem" href="/services" onClick={() => setAppLauncherOpen(false)} className="group col-span-2 flex min-h-20 items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-3 transition hover:-translate-y-0.5 hover:border-[var(--border-strong)]"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--success)_12%,transparent)] text-[var(--success)]"><PackageCheck className="h-5 w-5"/></span><span className="min-w-0"><strong className="block text-sm">Services</strong><span className="mt-0.5 block text-xs leading-5 text-[var(--text-muted)]">Explore everything HYMN can do for your music</span></span></Link>
+          <Link prefetch={false} role="menuitem" href="/library" onClick={() => setAppLauncherOpen(false)} className="group col-span-2 flex min-h-20 items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-soft)] p-3 transition hover:-translate-y-0.5 hover:border-[var(--border-strong)]"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)]"><Music2 className="h-5 w-5"/></span><span className="min-w-0"><strong className="block text-sm">My library</strong><span className="mt-0.5 block text-xs leading-5 text-[var(--text-muted)]">Your files, purchased beats and agreements</span></span></Link>
         </div>
       </div> : null}
     </div>
@@ -597,24 +597,24 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
               </div> : null}
             </div>
             <div className="mt-3 grid gap-1">
-              {teamAccess ? <Link href="/team" role="menuitem" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]"><LayoutDashboard className="h-4 w-4" />Team Workspace</Link> : null}
-              <Link href={user.role === "producer" ? "/producer/dashboard?tab=settings" : "/dashboard?tab=settings"} onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
+              {teamAccess ? <Link prefetch={false} href="/team" role="menuitem" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]"><LayoutDashboard className="h-4 w-4" />Team Workspace</Link> : null}
+              <Link prefetch={false} href={user.role === "producer" ? "/producer/dashboard?tab=settings" : "/dashboard?tab=settings"} onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
                 <UserRound className="h-4 w-4" />
                 Update personal details
               </Link>
-              <Link href="/dashboard/releases" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
+              <Link prefetch={false} href="/dashboard/releases" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
                 <ShieldCheck className="h-4 w-4" />
                 Releases and account status
               </Link>
-              <Link href="/payout" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
+              <Link prefetch={false} href="/payout" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
                 <Bell className="h-4 w-4" />
                 Earnings &amp; payouts
               </Link>
-              <Link href="/faq" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
+              <Link prefetch={false} href="/faq" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium hover:bg-[var(--hover)]">
                 <HelpCircle className="h-4 w-4" />
                 FAQ
               </Link>
-              <Link href="/contact" role="menuitem" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 px-3 py-2 text-sm font-medium">
+              <Link prefetch={false} href="/contact" role="menuitem" onClick={() => setProfileOpen(false)} className="flex items-center gap-3 px-3 py-2 text-sm font-medium">
                 <MessageCircle className="h-4 w-4" /> Contact HYMN
               </Link>
             </div>
@@ -638,13 +638,13 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
       }}
     >
       <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-1 px-3 py-2 sm:min-h-[4.5rem] sm:gap-4 sm:px-6 sm:py-3 lg:px-8">
-        <Link href="/" className="header-brand flex min-w-0 shrink items-center" aria-label="HYMN Music home">
-          <Image src="/assets/hymnlogowhite.png" alt="HYMN Music Logo" width={156} height={52} className="h-7 w-auto max-w-24 object-contain sm:h-9 sm:max-w-none lg:h-10" style={{ filter: "var(--logo-filter)" }} priority />
+        <Link prefetch={false} href="/" className="header-brand flex min-w-0 shrink items-center" aria-label="HYMN Music home">
+          <Image src="/assets/hymn-logo-320.webp" alt="HYMN Music Logo" width={156} height={52} className="h-7 w-auto max-w-24 object-contain sm:h-9 sm:max-w-none lg:h-10" style={{ filter: "var(--logo-filter)" }} priority />
         </Link>
 
         {workspaceHeader ? <div className="studio-header-section"><button type="button" aria-label="Toggle service navigation" onClick={()=>window.dispatchEvent(new Event("hymn-toggle-navigation"))}><PanelLeft size={17}/></button><Breadcrumbs /></div> : <nav className="hymn-page-selector hidden items-center gap-1 lg:flex" aria-label="Main navigation">
           {mainNav.map((item) => (
-            <Link
+            <Link prefetch={false}
               key={item.href}
               href={item.href}
               aria-current={(pathname === item.href || (item.href !== "/" && pathname.startsWith(`${item.href}/`))) ? "page" : undefined}
@@ -657,10 +657,10 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <div className="hidden items-center gap-3 lg:flex">
-            {workspaceHeader ? <>{!adminWorkspaceHeader ? <SubscriptionButton className="studio-header-plans" /> : null}<Link href="/contact" className="studio-header-tool" aria-label="Contact HYMN"><MessageCircle size={18}/></Link><Link href="/faq" className="studio-header-tool" aria-label="FAQ"><HelpCircle size={18}/></Link></> : <SmartHelpToggle />}
+            {workspaceHeader ? <>{!adminWorkspaceHeader ? <SubscriptionButton className="studio-header-plans" /> : null}<Link prefetch={false} href="/contact" className="studio-header-tool" aria-label="Contact HYMN"><MessageCircle size={18}/></Link><Link prefetch={false} href="/faq" className="studio-header-tool" aria-label="FAQ"><HelpCircle size={18}/></Link></> : <SmartHelpToggle />}
             {!isAuthenticated && !workspaceHeader ? <ThemeToggle /> : null}
             {isAuthenticated ? <AppLauncher /> : (
-              <Link
+              <Link prefetch={false}
                 href="/login"
                 className="site-header-cta inline-flex min-w-[120px] items-center justify-center rounded-full border px-4 py-2 text-center text-sm font-semibold"
                 style={{ borderColor: "color-mix(in srgb, var(--accent) 42%, var(--border))", background: "linear-gradient(180deg, var(--accent-strong), var(--accent))", color: "var(--accent-foreground)", boxShadow: "0 0 32px color-mix(in srgb, var(--accent) 18%, transparent)" }}
@@ -676,7 +676,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           <div className="mobile-account-access flex items-center gap-0 lg:hidden">
             {isAuthenticated ? <AppLauncher mobile /> : null}
             {isAuthenticated ? <NotificationBell mobile /> : null}
-            {isAuthenticated ? <ProfileMenu /> : <Link href="/login" className="mobile-login-link"><UserRound size={17} aria-hidden="true" /><span>Login</span></Link>}
+            {isAuthenticated ? <ProfileMenu /> : <Link prefetch={false} href="/login" className="mobile-login-link"><UserRound size={17} aria-hidden="true" /><span>Login</span></Link>}
           </div>
 
           {!adminWorkspaceHeader ? <>
@@ -707,12 +707,12 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
         <div id="site-mobile-nav" className="border-t lg:hidden" style={{ borderColor: "var(--glass-border)", background: "color-mix(in srgb, var(--glass-bg-strong) 88%, transparent)", backdropFilter: "blur(18px) saturate(155%)" }}>
           <div className="mx-auto flex max-h-[calc(100dvh-4rem)] max-w-7xl flex-col gap-3 overflow-y-auto overscroll-contain px-3 py-4 sm:max-h-[calc(100dvh-4.5rem)] sm:px-6">
             {mainNav.map((item) => (
-              <Link key={item.href} href={item.href} aria-current={(pathname === item.href || (item.href !== "/" && pathname.startsWith(`${item.href}/`))) ? "page" : undefined} className="hymn-mobile-page-link rounded-lg border px-4 py-3 transition" onClick={() => setOpen(false)}>
+              <Link prefetch={false} key={item.href} href={item.href} aria-current={(pathname === item.href || (item.href !== "/" && pathname.startsWith(`${item.href}/`))) ? "page" : undefined} className="hymn-mobile-page-link rounded-lg border px-4 py-3 transition" onClick={() => setOpen(false)}>
                 {item.label}
               </Link>
             ))}
             {!isAuthenticated ? (
-              <Link href="/login" className="site-header-cta w-full rounded-full border px-4 py-3 text-center text-sm font-semibold" style={{ borderColor: "color-mix(in srgb, var(--accent) 42%, var(--border))", background: "linear-gradient(180deg, var(--accent-strong), var(--accent))", color: "var(--accent-foreground)" }} onClick={() => setOpen(false)}>
+              <Link prefetch={false} href="/login" className="site-header-cta w-full rounded-full border px-4 py-3 text-center text-sm font-semibold" style={{ borderColor: "color-mix(in srgb, var(--accent) 42%, var(--border))", background: "linear-gradient(180deg, var(--accent-strong), var(--accent))", color: "var(--accent-foreground)" }} onClick={() => setOpen(false)}>
                 Login
               </Link>
             ) : null}
@@ -740,7 +740,7 @@ export function SiteHeader({ user = null }: SiteHeaderProps) {
           </div>
           <div className="site-cart-drawer-footer border-t border-[var(--border)] pt-4">
             <div className="flex items-center justify-between text-sm"><span className="text-[var(--text-muted)]">Total</span><strong className="text-[var(--text)]">₹{cartItems.reduce((sum, item) => sum + Number(item.price || 0), 0).toLocaleString("en-IN")}</strong></div>
-            {cartItems.length ? <Link href="/checkout?product=beatstore" onClick={() => setCartOpen(false)} className="cart-next-action">Continue to checkout <span aria-hidden="true">→</span></Link> : <Link href="/beat-store" onClick={() => setCartOpen(false)} className="cart-next-action">Browse beats <span aria-hidden="true">→</span></Link>}
+            {cartItems.length ? <Link prefetch={false} href="/checkout?product=beatstore" onClick={() => setCartOpen(false)} className="cart-next-action">Continue to checkout <span aria-hidden="true">→</span></Link> : <Link prefetch={false} href="/beat-store" onClick={() => setCartOpen(false)} className="cart-next-action">Browse beats <span aria-hidden="true">→</span></Link>}
           </div>
         </aside>
       </div>, document.body) : null}

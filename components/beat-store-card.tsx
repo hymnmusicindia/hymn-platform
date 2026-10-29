@@ -23,7 +23,7 @@ export function BeatStoreCard({beat,active=false,playing=false,onPlay,onAdd,onLi
     <button type="button" className={styles.artwork} onClick={onPlay} aria-label={`${playing?'Pause':'Play'} ${beat.title}`} aria-pressed={playing}>
       <span className={styles.stage} aria-hidden="true">
         <span className={styles.record}><span className={styles.disc}><span className={styles.label}>{cover(120)}<i/></span></span></span>
-        <span className={styles.sleeve}>{cover(480)}<span className={styles.sleeveEdge}/></span>
+        <span className={styles.sleeve}>{cover(320)}<span className={styles.sleeveEdge}/></span>
       </span>
       {active&&<span className={styles.nowPlaying}>{playing?'Now playing':'Paused'}</span>}
     </button>

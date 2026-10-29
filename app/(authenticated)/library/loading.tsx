@@ -1,0 +1,1 @@
+export default function LoadingLibrary() { return <main aria-busy="true" aria-label="Loading your library" className="mx-auto w-full max-w-6xl px-5 py-10"><h1 className="text-3xl font-semibold">My library</h1><p className="mt-3 text-sm text-[var(--text-muted)]">Loading your files and purchases...</p></main>; }

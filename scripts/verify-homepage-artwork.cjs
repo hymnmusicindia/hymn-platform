@@ -64,6 +64,8 @@ async function main() {
   releases.push({ id: 34, status: "scheduled", artworkUrl: "/cover.jpg" });
   releases.push({ id: 35, status: "live", artworkUrl: "" });
   const homeMocks = {
+    '@prisma/client': { Prisma: {} },
+    './release-media': { canonicalReleaseArtworkUrl: (_id, url) => url },
     "next/cache": { unstable_cache: (fn) => fn },
     "@/lib/db": {
       listAllBeats: async () => [], listProducerProfiles: async () => [], listRecentGoogleAvatarUrls: async () => [],
@@ -73,7 +75,7 @@ async function main() {
     "@/lib/prisma": { prisma: { purchaseReview: { findMany: async () => [] } } }
   };
   const homeSource = fs.readFileSync(path.join(__dirname, "../lib/public-home-data.ts"), "utf8");
-  const homeSandbox = { exports: {}, require: (name) => {
+  const homeSandbox = { exports: {}, process: { env: { DATABASE_URL: '' } }, require: (name) => {
     assert.ok(name in homeMocks, `Unexpected homepage dependency: ${name}`);
     return homeMocks[name];
   } };

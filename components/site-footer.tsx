@@ -29,7 +29,7 @@ export function SiteFooter() {
                 <div className="ios-collapse-content">
                   <div className="ios-collapse-inner mt-4 space-y-3 text-sm" style={{ color: "var(--text-soft)" }}>
                     {section.items.map((item) => (
-                      <Link key={item.label} href={item.href} className="block" style={{ color: "inherit" }}>
+                      <Link prefetch={false} key={item.label} href={item.href} className="block" style={{ color: "inherit" }}>
                         {item.label}
                       </Link>
                     ))}
@@ -43,7 +43,7 @@ export function SiteFooter() {
             <h3 className="text-sm font-semibold" style={{ color: "var(--text)" }}>For Artists</h3>
             <div className="mt-4 space-y-3 text-sm" style={{ color: "var(--text-soft)" }}>
               {footerColumns.artists.map((item) => (
-                <Link key={item.label} href={item.href} className="block" style={{ color: "inherit" }}>
+                <Link prefetch={false} key={item.label} href={item.href} className="block" style={{ color: "inherit" }}>
                   {item.label}
                 </Link>
               ))}
@@ -54,7 +54,7 @@ export function SiteFooter() {
             <h3 className="text-sm font-semibold" style={{ color: "var(--text)" }}>For Producers</h3>
             <div className="mt-4 space-y-3 text-sm" style={{ color: "var(--text-soft)" }}>
               {footerColumns.producers.map((item) => (
-                <Link key={item.label} href={item.href} className="block" style={{ color: "inherit" }}>
+                <Link prefetch={false} key={item.label} href={item.href} className="block" style={{ color: "inherit" }}>
                   {item.label}
                 </Link>
               ))}
@@ -65,7 +65,7 @@ export function SiteFooter() {
             <h3 className="text-sm font-semibold" style={{ color: "var(--text)" }}>Company</h3>
             <div className="mt-4 space-y-3 text-sm" style={{ color: "var(--text-soft)" }}>
               {footerColumns.company.map((item) => (
-                <Link key={item.label} href={item.href} className="block" style={{ color: "inherit" }}>
+                <Link prefetch={false} key={item.label} href={item.href} className="block" style={{ color: "inherit" }}>
                   {item.label}
                 </Link>
               ))}

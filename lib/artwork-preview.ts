@@ -9,6 +9,11 @@ export function artworkPreviewUrl(src: string, width: number) {
   }
   // Only endpoints that already enforce their own public/private access policy.
   const localPath = src.replace(/^https:\/\/(?:www\.)?hymnmusic\.fun(?=\/)/, "");
+  // The hosting edge serves extension-bearing public upload URLs as original
+  // files, ignoring their resize query. Use the dynamic image endpoint instead.
+  if (/^\/api\/public-uploads\/.+\.(?:png|jpe?g|webp)$/i.test(localPath) && !localPath.includes('..') && !localPath.includes('\\')) {
+    return `/api/image-preview?src=${encodeURIComponent(localPath)}&w=${size}`;
+  }
   if (/^\/(?:assets|images)\/[^?#]+\.(?:png|jpe?g|webp)$/i.test(localPath) && !localPath.includes("..") && !localPath.includes("\\")) {
     return `/api/image-preview?src=${encodeURIComponent(localPath)}&w=${size}`;
   }

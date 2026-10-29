@@ -3,7 +3,7 @@ import { Disc3, Folder, Headphones, LayoutGrid, Megaphone, Music2, Plus, ShieldC
 // Shared by the home rail and every artist/producer workspace frame.
 export const workspaceNavigation = [
   { key:"overview", label:"Dashboard", group:"Home", href:"/dashboard", icon:LayoutGrid },
-  { key:"files", label:"My files", group:"Distribution", href:"/audio-library", icon:Folder },
+  { key:"library", label:"My library", group:"Library", href:"/library", icon:Folder },
   { key:"upload", label:"Add release", group:"Distribution", href:"/distribution/start", icon:Plus },
   { key:"releases", label:"My releases", group:"Distribution", href:"/dashboard/releases", icon:Disc3 },
   { key:"analytics", label:"Trends", group:"Distribution", href:"/analytics", icon:TrendingUp },
@@ -11,7 +11,6 @@ export const workspaceNavigation = [
   { key:"content-id", label:"Content ID", group:"Distribution", href:"/dashboard?tab=content-id", icon:ShieldCheck },
   { key:"collaborators", label:"Royalty splits", group:"Distribution", href:"/dashboard?tab=collaborators", icon:Users },
   { key:"beat-store", label:"Browse beats", group:"Beatstore", href:"/beat-store", icon:Store },
-  { key:"purchases", label:"My purchases", group:"Beatstore", href:"/dashboard/purchases", icon:Music2 },
   { key:"sell-beats", label:"Sell beats", group:"Beatstore", href:"/producer/dashboard", icon:Users },
   { key:"studio", label:"Find an engineer", group:"Mixing / Mastering", href:"/studio", icon:Headphones },
   { key:"studio-engineer", label:"Engineer workspace", group:"Mixing / Mastering", href:"/studio/engineer", icon:Headphones },
@@ -22,7 +21,7 @@ export const workspaceNavigation = [
 ];
 
 export const workspaceGroups = Array.from(new Set(workspaceNavigation.map(item=>item.group)))
-  .filter(title=>title!=="Home")
+  .filter(title=>title!=="Home" && title!=="Library")
   .map(title=>({title,links:workspaceNavigation.filter(item=>item.group===title)}));
 
 /** Only the current service owns an expanded menu; overview and unrelated pages own none. */
@@ -48,9 +47,10 @@ export function consistentWorkspaceNavigation(items: NavItem[]): NavItem[] {
   // Administrative operations have a separate, permission-specific information architecture.
   if(items.some(item=>item.group==="Command Center")) return items;
   const producer = items.some(item=>item.key==="catalog" && item.group==="Beatstore");
-  const matched = new Set<NavItem>();
+  // Old destinations remain compatible, but never create duplicate menu entries.
+  const matched = new Set<NavItem>(items.filter(item => ['files', 'purchases', 'audio-library'].includes(item.key) || ['My files', 'My purchases'].includes(item.label)));
   const shared = workspaceNavigation.map(canonical=>{
-    const existing = items.find(item=>item.group!=="Business" && (item.label===canonical.label
+    const existing = items.find(item=>!matched.has(item) && item.group!=="Business" && (item.label===canonical.label
       || (canonical.key==="earnings" && item.key==="earnings")
       || (canonical.key==="studio" && item.label==="Browse services")
       || (canonical.key==="overview" && item.key==="overview")));

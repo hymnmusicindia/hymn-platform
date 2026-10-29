@@ -126,3 +126,5 @@ html body .workspace-home-link:focus-visible { outline:1px solid #c8ced8; outlin
 }
 
 .workspace-service-heading > a { justify-content:flex-start;text-align:left; }
+
+.workspace-library-link{margin:10px 0 14px;flex-shrink:0;gap:12px}.workspace-library-link[aria-current="page"]{background:#243249;color:#fff}

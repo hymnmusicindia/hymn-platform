@@ -59,7 +59,7 @@ export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{
               <p className="mt-6 max-w-md text-sm font-medium leading-7 sm:text-base" style={{ color: "#d4d4d8" }}>
                 Discover the music and independent artists building their next chapter with HYMN.
               </p>
-              <Link href={signedIn ? "/distribution/start" : "/login?mode=signup"} className="home-editorial-link">
+              <Link prefetch={false} href={signedIn ? "/distribution/start" : "/login?mode=signup"} className="home-editorial-link">
                 Your next release is waiting
                 <ArrowRight className="h-4 w-4" />
               </Link>
@@ -89,14 +89,14 @@ export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{
         </div>
       </section>),
     beats: (<section id="beats" className="landing-beats shell py-10">
-        <div className="landing-section-heading"><div><p className="landing-eyebrow">Beatstore</p><h2>A new sound. A new beginning.</h2></div><Link href="/beat-store">Browse all beats <ArrowRight size={16}/></Link></div>
+        <div className="landing-section-heading"><div><p className="landing-eyebrow">Beatstore</p><h2>A new sound. A new beginning.</h2></div><Link prefetch={false} href="/beat-store">Browse all beats <ArrowRight size={16}/></Link></div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {catalog.slice(0, 4).map((beat) => (
             <article key={beat.id} className="overflow-hidden rounded-[1.35rem] border border-border bg-card/76 p-3 shadow-[0_16px_50px_rgba(0,0,0,0.22)]">
               <div className="relative overflow-hidden rounded-[1rem] border border-border">
                 <Image src={artworkPreviewUrl(beat.coverImage, 320)} alt={beat.title} width={900} height={900} className="aspect-square w-full object-cover transition duration-500 hover:scale-[1.03]" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/72 via-transparent to-transparent" />
-                <Link href="/beat-store" aria-label={`Explore ${beat.title}`} className="absolute left-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.15] bg-black/[0.35] text-white backdrop-blur-md">
+                <Link prefetch={false} href="/beat-store" aria-label={`Explore ${beat.title}`} className="absolute left-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.15] bg-black/[0.35] text-white backdrop-blur-md">
                   <Headphones className="h-3.5 w-3.5" />
                 </Link>
               </div>
@@ -105,7 +105,7 @@ export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{
                 <h3 className="mt-1.5 text-lg font-semibold" style={{ color: "var(--text)" }}>{beat.title}</h3>
                 <div className="mt-3 flex items-center justify-between gap-2">
                   <span className="text-sm font-semibold text-[#f5c16c]">Rs {beat.startingPrice}</span>
-                  <Link href="/beat-store" className="premium-ghost rounded-full border border-border px-3 py-1.5 text-[11px] font-semibold text-white/72">Open store</Link>
+                  <Link prefetch={false} href="/beat-store" className="premium-ghost rounded-full border border-border px-3 py-1.5 text-[11px] font-semibold text-white/72">Open store</Link>
                 </div>
               </div>
             </article>
@@ -114,6 +114,6 @@ export function buildHomePathBanners({featuredReleases,catalog,signedIn=false}:{
       </section>),
     journey: <div id="journey" className="landing-banner landing-journey"><MusicLifecycleBanner /></div>,
     producers: <div id="producers" className="landing-banner landing-producers"><HomeProducerInvitation /></div>,
-    studio: <section className="home-path-studio home-studio-editorial"><div><p className="landing-eyebrow">Mixing / Mastering</p><h2>Your sound.<br />Release-ready.</h2><p>Give your next record its finishing touch.</p><Link href="/studio">Explore studio services <ArrowRight size={16}/></Link></div><Image src="/home-studio.jpg" alt="Professional recording studio and mixing console" width={1400} height={900} className="home-path-studio-image" /></section>
+    studio: <section className="home-path-studio home-studio-editorial"><div><p className="landing-eyebrow">Mixing / Mastering</p><h2>Your sound.<br />Release-ready.</h2><p>Give your next record its finishing touch.</p><Link prefetch={false} href="/studio">Explore studio services <ArrowRight size={16}/></Link></div><Image src="/home-studio.jpg" alt="Professional recording studio and mixing console" width={1400} height={900} className="home-path-studio-image" /></section>
   };
 }

@@ -10,9 +10,13 @@ const producer = [
 ];
 const result = consistentWorkspaceNavigation(producer);
 assert.equal(new Set(result.map(n => n.key)).size, result.length);
-assert.deepEqual([...new Set(result.map(n => n.group))], ["Home", ...workspaceGroups.map(g => g.title), "Money"]);
+assert.deepEqual([...new Set(result.map(n => n.group))], ["Home", 'Library', ...workspaceGroups.map(g => g.title), "Money"]);
 for (const key of ["catalog", "upload", "profile", "earnings", "overview"]) assert.equal(result.find(n => n.key === key)?.href, undefined, `${key} must retain its producer callback`);
-for (const label of ["Browse beats", "My purchases", "Sell beats", "Add release", "My files"]) assert.ok(result.some(n => n.label === label));
+for (const label of ["Browse beats", 'My library', "Sell beats", "Add release"]) assert.ok(result.some(n => n.label === label));
+assert.ok(!workspaceGroups.some(group => group.title === 'Library'));
+const legacy = consistentWorkspaceNavigation([...producer, { key: 'files', label: 'My files', group: 'Distribution' }, { key: 'purchases', label: 'My purchases', group: 'Beatstore' }]);
+assert.equal(legacy.filter(item => item.label === 'My library').length, 1);
+assert.ok(!legacy.some(item => ['files', 'purchases'].includes(item.key)));
 const admin = [{ key: "overview", label: "Operations Overview", group: "Command Center" }];
 assert.deepEqual(consistentWorkspaceNavigation(admin), admin);
 console.log("Shared creator menus, producer callbacks, unique keys and admin permissions preserved.");

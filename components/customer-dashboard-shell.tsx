@@ -354,7 +354,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       overviewSubtitle={actionItems.length > 0 ? <button type="button" className="text-left font-medium transition-opacity hover:opacity-70" style={{ color: "var(--accent)" }} onClick={() => selectCustomerTab(actionItems[0].tab)}>{actionItems.length} item{actionItems.length === 1 ? "" : "s"} need your attention <span aria-hidden="true">→</span></button> : <span>Your workspace is clear.</span>}
       navItems={[
         { key: "overview", label: "Overview", description: "What matters now", group: "Home" },
-        { key: "files", label: "My files", group: "Library", href: "/audio-library" },
+        { key: "library", label: "My library", group: "Library", href: "/library" },
         { key: "releases", label: "My releases", description: "Your music and status", group: "Distribution", href: "/dashboard/releases" },
         { key: "upload", label: "Add release", description: "Upload and submit music", group: "Distribution" },
         { key: "analytics", label: "Trends", description: "Streams and audience insights", group: "Distribution" },
