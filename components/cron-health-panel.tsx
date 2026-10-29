@@ -11,7 +11,11 @@ export function CronHealthPanel() {
     try {
       const response = await fetch("/api/admin/cron/health", { cache: "no-store", signal });
       if (!response.ok) throw new Error("Automation health is unavailable; check access and database connectivity.");
-      setHealth(await response.json()); setError("");
+      const data: unknown = await response.json();
+      if (!data || typeof data !== "object" || !("healthy" in data) || typeof data.healthy !== "boolean" || !("jobs" in data) || !Array.isArray(data.jobs) || data.jobs.some(job => !job || typeof job.id !== "string" || typeof job.status !== "string" || typeof job.purpose !== "string" || !(job.lastFinishedAt === null || typeof job.lastFinishedAt === "string"))) {
+        throw new Error("Automation health returned an incomplete response. Refresh health to try again; the rest of your workspace remains available.");
+      }
+      if (!signal?.aborted) { setHealth(data as Health); setError(""); }
     } catch (error) { if (!signal?.aborted) setError(error instanceof Error ? error.message : "Health check failed."); }
     finally { if (!signal?.aborted) setLoading(false); }
   }

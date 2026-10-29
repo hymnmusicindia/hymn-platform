@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-export default function RootError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+export default function RootError({ error }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     console.error("HYMN route error", error);
   }, [error]);
@@ -14,7 +14,7 @@ export default function RootError({ error, reset }: { error: Error & { digest?: 
         <h1 className="mt-3 text-2xl font-semibold">We couldn’t load this page</h1>
         <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>Your data is safe. Try loading the page again, or contact HYMN support if the issue continues.</p>
         {error.digest ? <p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>Reference: {error.digest}</p> : null}
-        <button type="button" className="btn-primary pressable mt-6" onClick={reset}>Try again</button>
+        <button type="button" className="btn-primary pressable mt-6" onClick={() => window.location.reload()}>Reload page</button>
       </section>
     </main>
   );

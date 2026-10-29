@@ -1,3 +1,4 @@
+import { retryAdminRead } from "@/lib/admin-read-retry";
 import { listPlatformRevenue } from "@/lib/platform-revenue";
 import { listSubscriptionRevenue } from "@/lib/subscription-revenue";
 import { adminModuleAllowed } from "@/lib/admin-workspace-navigation";
@@ -56,7 +57,7 @@ type AdminPageProps = {
 };
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
-  const signedInUser = await getCurrentUserForPage();
+  const signedInUser = await retryAdminRead(() => getCurrentUserForPage());
   const adminSession = await getAdminSessionForPage();
   const localAdmin: User | null = adminSession
     ? {
@@ -75,24 +76,24 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const currentAdmin = signedInUser?.role === "admin" ? signedInUser : localAdmin;
 
   if (!currentAdmin) redirect("/admin/login");
-  const adminAccess = await getAdminAccessForPage();
+  const adminAccess = await retryAdminRead(() => getAdminAccessForPage());
   const permissions=adminAccess?.permissions||[];
   const canReadUsers = permissions.includes("users.read");
   const canReadReleases=permissions.some(permission=>["releases.read","releases.review","distribution.retry","distribution.submit"].includes(permission));
   const canReadCommerce=permissions.some(permission=>["payouts.review","royalties.reconcile","services.manage"].includes(permission));
-  const subscriptionRevenuePromise = permissions.some(permission => ["payouts.review", "royalties.reconcile"].includes(permission)) ? listSubscriptionRevenue() : Promise.resolve([]);
+  const readSubscriptionRevenue = () => permissions.some(permission => ["payouts.review", "royalties.reconcile"].includes(permission)) ? listSubscriptionRevenue() : Promise.resolve([]);
   const canReadServices=permissions.includes("services.manage");
   const canReadSystem=permissions.includes("system.manage");
 
   const resolvedSearchParams = await searchParams;
-  const [users, releases, beats, orders, applications, leads, distributionOrders, artistProfiles, siteSettings, notifications, supportTickets, subscriptionRevenue, pendingEngineerApplications] = await Promise.all([
+  const [users, releases, beats, orders, applications, leads, distributionOrders, artistProfiles, siteSettings, notifications, supportTickets, subscriptionRevenue, pendingEngineerApplications] = await retryAdminRead(() => Promise.all([
     canReadUsers ? listUsers() : Promise.resolve([]), canReadReleases ? listAllDetailedReleases() : Promise.resolve([]), canReadServices ? listAllBeats() : Promise.resolve([]),
     canReadCommerce ? listAllOrders() : Promise.resolve([]), canReadServices ? listProducerApplications() : Promise.resolve([]), canReadServices ? listPartnershipLeads() : Promise.resolve([]),
     canReadCommerce ? listAllDistributionOrders() : Promise.resolve([]), canReadUsers ? listAllArtistProfiles() : Promise.resolve([]), getSiteSettings(),
-    canReadSystem ? listLatestNotifications(50) : Promise.resolve([]), canReadServices ? listAllSupportTickets() : Promise.resolve([]), subscriptionRevenuePromise,
+    canReadSystem ? listLatestNotifications(50) : Promise.resolve([]), canReadServices ? listAllSupportTickets() : Promise.resolve([]), readSubscriptionRevenue(),
     canReadServices ? prisma.engineerApplication.count({ where: { status: "PENDING" } }) : Promise.resolve(0)
-  ]);
-  const revenueEntries = permissions.some(permission => ["payouts.review", "royalties.reconcile"].includes(permission)) ? await listPlatformRevenue(distributionOrders, orders, subscriptionRevenue) : [];
+  ]));
+  const revenueEntries = permissions.some(permission => ["payouts.review", "royalties.reconcile"].includes(permission)) ? await retryAdminRead(() => listPlatformRevenue(distributionOrders, orders, subscriptionRevenue)) : [];
   const requestedTabCandidate = resolvedSearchParams?.tab && ADMIN_TABS.includes(resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) ? (resolvedSearchParams.tab as (typeof ADMIN_TABS)[number]) : undefined;
   const requestedTab = requestedTabCandidate && !adminModuleAllowed(requestedTabCandidate,permissions) ? "overview" : requestedTabCandidate;
 

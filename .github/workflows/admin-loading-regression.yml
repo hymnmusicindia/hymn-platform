@@ -1,0 +1,41 @@
+name: Admin loading regression
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/(admin)/**'
+      - 'app/error.tsx'
+      - 'components/admin-portal-layout.tsx'
+      - 'components/cron-health-panel.tsx'
+      - 'components/internal-workspace-switcher.tsx'
+      - 'lib/admin-read-retry.ts'
+      - 'scripts/verify-admin-loading-browser.cjs'
+      - 'scripts/verify-admin-read-retry.ts'
+      - '.github/workflows/admin-loading-regression.yml'
+  pull_request:
+    paths:
+      - 'app/(admin)/**'
+      - 'app/error.tsx'
+      - 'components/admin-portal-layout.tsx'
+      - 'components/cron-health-panel.tsx'
+      - 'components/internal-workspace-switcher.tsx'
+      - 'lib/admin-read-retry.ts'
+      - 'scripts/verify-admin-loading-browser.cjs'
+      - 'scripts/verify-admin-read-retry.ts'
+      - '.github/workflows/admin-loading-regression.yml'
+permissions:
+  contents: read
+jobs:
+  admin-loading:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --fetch-retries=5 --fetch-timeout=120000
+      - run: npx playwright install --with-deps chromium
+      - run: node --import tsx scripts/verify-admin-read-retry.ts
+      - run: node scripts/verify-admin-loading-browser.cjs

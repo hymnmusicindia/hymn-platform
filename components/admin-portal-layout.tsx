@@ -16,7 +16,7 @@ export function AdminPortalLayout({ children, permissions, role = "unassigned", 
   const [counts, setCounts] = useState<Record<string, number>>({});
   useEffect(() => {
     if (!permissions.length) return;
-    let active = true; const refresh = async () => { try { const response = await fetch('/api/admin/navigation-counts', {cache:'no-store'}); if(response.ok) { const data = await response.json(); if(active) setCounts(data.counts); } } catch { /* Preserve counts during a temporary outage. */ } };
+    let active = true; const refresh = async () => { try { const response = await fetch('/api/admin/navigation-counts', {cache:'no-store'}); if(response.ok) { const data = await response.json(); if(active && data.counts && typeof data.counts === "object" && !Array.isArray(data.counts) && Object.values(data.counts).every(value => typeof value === "number" && Number.isFinite(value))) setCounts(data.counts); } } catch { /* Preserve counts during a temporary outage. */ } };
     void refresh(); const timer = setInterval(() => void refresh(), 30000); window.addEventListener('focus', refresh);
     return () => { active = false; clearInterval(timer); window.removeEventListener('focus', refresh); };
   }, [permissions]);
