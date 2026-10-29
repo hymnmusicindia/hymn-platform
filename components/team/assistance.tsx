@@ -5,8 +5,12 @@ import { createPortal } from 'react-dom';
 import { CircleHelp, X, ArrowRight } from 'lucide-react';
 import styles from './assistance.module.css';
 
-type Journey = { title: string; module: string; permission?: string; steps: { selector: string; text: string }[] };
+type Journey = { ownerOnly?: boolean; title: string; module: string; permission?: string; steps: { selector: string; text: string }[] };
 const journeys: Journey[] = [
+  { title: 'Review team updates', module: 'leadership', ownerOnly: true, steps: [
+    { selector: '[data-team-guide="leadership-filters"]', text: 'Choose a period, teammate or activity type. Counts follow these filters, and times are shown in IST.' },
+    { selector: '[data-team-guide="leadership-feed"]', text: 'Read the newest updates first. Use Read call report for the full discussion and next action, or Open contact & reports for the customer card. New updates appear as a refresh prompt without moving the timeline while you read.' },
+  ] },
   { title: 'Write a customer call report', module: 'contacts', permission: 'crm.outreach.manage', steps: [
     { selector: '[data-team-guide="contact-search"]', text: 'Find the customer by name, email or phone. Reports stay on their shared contact card, including calls made from a personal phone.' },
     { selector: '[data-team-guide="call-report-open"]', text: 'Click Call report & history on the correct customer card. This opens their report sheet and all shared reports.' },
@@ -77,7 +81,7 @@ export function TeamAssistance({ navigate, owner, permissions }: { navigate: (mo
     {open && <aside ref={panel} tabIndex={-1} className={styles.panel} aria-label="Team assistance">
       <header><div><small>HYMN TEAM GUIDE</small><h2>{journey?.title || 'What would you like to do?'}</h2></div><button type="button" aria-label="Close assistance" onClick={close}><X size={18}/></button></header>
       {current ? <><p aria-live="polite">{current.text}</p>{!rect && <p className={styles.hint}>No matching control is visible yet. If this queue is empty, there is nothing to process here. Choose another guide or return when a contact is available.</p>}<footer><button type="button" onClick={() => { setJourney(null); setRect(null); }}>All guides</button><span>{step + 1}/{journey!.steps.length}</span><button type="button" onClick={() => step + 1 < journey!.steps.length ? setStep(step + 1) : close()}>{step + 1 < journey!.steps.length ? 'Next' : 'Done'}<ArrowRight size={14}/></button></footer></>
-        : <div className={styles.choices}>{journeys.filter(item => !item.permission || owner || permissions.includes(item.permission)).map(item => <button type="button" key={item.title} onClick={() => { setJourney(item); setStep(0); navigate(item.module); }}>{item.title}<ArrowRight size={15}/></button>)}<p>Guides highlight where to click. You control every edit and save.</p></div>}
+        : <div className={styles.choices}>{journeys.filter(item => (!item.ownerOnly || owner) && (!item.permission || owner || permissions.includes(item.permission))).map(item => <button type="button" key={item.title} onClick={() => { setJourney(item); setStep(0); navigate(item.module); }}>{item.title}<ArrowRight size={15}/></button>)}<p>Guides highlight where to click. You control every edit and save.</p></div>}
     </aside>}
   </>;
   return <>{modalHost ? createPortal(guidance, modalHost) : guidance}<button ref={trigger} type="button" className={styles.launcher} aria-label="Team assistance" aria-expanded={open} onClick={() => { setOpen(value => !value); setJourney(null); }}><CircleHelp size={20}/><span>Assistance</span></button></>;

@@ -72,7 +72,7 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
       if (data.projectId && !await tx.teamProject.findFirst({ where: { ...projectScope(a), id: data.projectId, memberIds: { has: data.ownerId } } })) throw new TeamError("Choose a project accessible to both you and the assignee.");
       await validateLink(tx, a, data.recordType, data.recordId); await dependencies(tx, a, "new", data.dependencyIds);
       const row = await tx.teamTask.create({ data: { ...data, dueAt: data.dueAt ? new Date(data.dueAt) : null, workspaceId: a.workspaceId, creatorId: a.id, approvalRequired: data.approvalRequired || !!data.recordType } });
-      await audit(tx, a, "task.created", row.id, { ownerId: row.ownerId }); await notify(tx, row.ownerId, `Assigned: ${row.title}`, `/team?module=work&task=${row.id}`); return row;
+      await audit(tx, a, "task.created", row.id, { ownerId: row.ownerId, title: row.title }); await notify(tx, row.ownerId, `Assigned: ${row.title}`, `/team?module=work&task=${row.id}`); return row;
     }
     if (resource === "task-update") {
       const data = taskUpdateSchema.parse(input); const old = await taskAccess(tx, a, id);
@@ -125,7 +125,7 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
           await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, id: { not: row.id }, eventKey: { startsWith: `${prospect.id}:` }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, data: { dueAt: row.dueAt, version: { increment: 1 } } });
         }
       }
-      await audit(tx, a, "task.updated", id, { previousStatus: old.status, status: next, previousOwner: old.ownerId, ownerId: owner });
+      await audit(tx, a, "task.updated", id, { title: row.title, previousStatus: old.status, status: next, previousOwner: old.ownerId, ownerId: owner });
       if (owner !== old.ownerId) await notify(tx, owner, `Assigned: ${row.title}`, `/team?module=work&task=${id}`);
       if (a.id !== owner && old.status === "IN_REVIEW" && next !== old.status) await notify(tx, owner, `Review ${next === "COMPLETED" ? "approved" : "updated"}: ${row.title}`, `/team?module=work&task=${id}`);
       if (next === "COMPLETED" && old.status !== next && row.recurrenceDays && !(await tx.teamMember.findUniqueOrThrow({ where: { id: row.ownerId }, include: { role: true } })).role.owner) {
@@ -159,6 +159,7 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
       const body = typeof object.body === "string" ? object.body.trim() : "";
       if (!body || body.length > 4000) throw new TeamError("Write a comment under 4,000 characters.");
       const row = await tx.teamComment.create({ data: { taskId: id, authorId: a.id, body } });
+      await audit(tx, a, 'task.comment_added', id, { commentId: row.id, body });
       if (task.ownerId !== a.id) await notify(tx, task.ownerId, `New comment: ${task.title}`, `/team?module=work&task=${id}`); return row;
     }
     if (resource === "projects") {
@@ -242,7 +243,7 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
       const row = await tx.teamProspect.update({ where: { id }, data: { ...data, email, identityKey: hash(email || phoneKey || old.contactUrl || old.instagramUrl || old.youtubeUrl || old.websiteUrl || old.sourceUrl), verified, suppressed, stage: suppressed ? "DO_NOT_CONTACT" : verified && (email || phoneKey.length >= 8) && ["NEW", "NEEDS_RESEARCH"].includes(old.stage) ? "QUALIFIED" : old.stage, version: { increment: 1 } } });
       if (old.leadId) await tx.growthLead.update({ where: { id: old.leadId }, data: { email: email || "", notes: row.notes } });
       if (suppressed) await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: `${id}:` }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, data: { status: "CANCELLED", version: { increment: 1 } } });
-      await syncProspectContact(tx, id);
+      await syncProspectContact(tx, id, a);
       await audit(tx, a, "prospect.research_updated", id, { verified, contactEligibility: row.contactEligibility });
       await syncDailyCrmWork(tx, a);
       return row;
@@ -308,7 +309,7 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
         await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: `${id}:` }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, data: { ownerId: row.ownerId, version: { increment: 1 } } });
         await notify(tx, row.ownerId, `Prospect assigned: ${row.name}`, "/team?module=crm");
       }
-      await syncProspectContact(tx, id);
+      await syncProspectContact(tx, id, a);
       await audit(tx, a, "prospect.updated", id, { previousStage: old.stage, stage: row.stage });
       if (row.suppressed || ["CONVERTED", "LOST", "NOT_INTERESTED", "UNQUALIFIED", "DUPLICATE"].includes(row.stage)) await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: `${id}:` }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, data: { status: "CANCELLED", version: { increment: 1 } } });
       if (row.stage === "CONVERTED" && old.stage !== row.stage) await notify(tx, row.ownerId, `Customer linked: ${row.name}. Paid status is verified separately.`, "/team?module=analytics");
@@ -370,6 +371,7 @@ export async function acceptTeamInvitation(user: { id: number; email: string }, 
 }
 
 export async function teamRead(a: Actor, resource: string, params: URLSearchParams) {
+  if (resource === 'leadership-activity') return (await import('./leadership-activity')).readLeadershipActivity(a, params);
   if (resource === "call-reports") return (await import("./call-reports")).readCallReports(a, params);
   if(resource==='clients-identity')return (await import('./contact-identity')).contactIdentityMatches(a,{email:params.get('email')||'',phone:params.get('phone')||'',excludeId:params.get('excludeId')||undefined});
   if(resource==='clients-lookup')return (await import('./contact-lookup')).lookupContacts(a,params);
@@ -458,7 +460,7 @@ export async function registerTeamProspect(tx: Prisma.TransactionClient, a: Acto
       }
       if ((row.followUpAt || caller) && !row.suppressed && (caller || !a.role.owner)) await tx.teamTask.create({ data: { workspaceId: a.workspaceId, creatorId: a.id, ownerId: caller?.id || row.ownerId, title: `Follow up: ${row.name}`, eventKey: `${row.id}:call`, dueAt: row.followUpAt || indiaWorkday().dueAt } });
       await tx.acquisitionProgramAudit.create({ data: { workspaceId: a.workspaceId, actorEmployeeId: a.id, action: "lead.registered", entityId: attribution.id, metadata: { researcherEmployeeId: a.id, sourceUrl: data.sourceUrl } } });
-      await syncProspectContact(tx, row.id);
+      await syncProspectContact(tx, row.id, a);
       await (await import("./callback-calendar")).syncProspectCallCalendar(tx, a, row.id);
       await syncDailyCrmWork(tx, a);
       await audit(tx, a, "prospect.created", row.id, { leadId: lead.id, acquisitionLeadId: attribution.id }); return { ...row, ownerId: caller?.id || row.ownerId, stage: caller ? "READY_TO_CONTACT" : row.stage };

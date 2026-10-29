@@ -96,7 +96,7 @@ export async function syncCustomerFollowups(tx: Prisma.TransactionClient, a: Act
     if(count){await tx.supportTicket.update({where:{id:ticket.id},data:{details:json({...details,callbackStatus:'ASSIGNED'})}});assigned+=count;}
   }
   const unlinked = await tx.teamProspect.findMany({ where: { workspaceId: a.workspaceId, clientId: null }, select: { id: true }, take: 20, orderBy: { id: 'asc' }, ...(typeof cursor.prospect === 'string' ? { cursor: { id: cursor.prospect }, skip: 1 } : {}) });
-  for (const p of unlinked) { if (Date.now() > deadline) break; await linkProspectContact(tx, p.id); cursor.prospect = p.id; }
+  for (const p of unlinked) { if (Date.now() > deadline) break; await linkProspectContact(tx, p.id, a, 'AUTOMATION'); cursor.prospect = p.id; }
   if (!unlinked.length) delete cursor.prospect;
   const open = await tx.teamTask.findMany({ where: { workspaceId: a.workspaceId, eventKey: { startsWith: 'support-call:' }, status: { notIn: ['COMPLETED', 'CANCELLED'] } }, select: { id: true, client: { select: { userId: true, email: true, secondaryEmail: true, additionalEmails: true, alternatePhones: true, status: true, phone: true, user: { select: { status: true } }, prospect: { select: { suppressed: true } } } }, followUpContext: true, owner: { select: { status: true, availability: true, user: { select: { status: true } } } }, title: true, description: true, ownerId: true, clientId: true, dueAt: true, status: true }, take: 100, orderBy: { id: 'asc' }, ...(typeof cursor.open === 'string' ? { cursor: { id: cursor.open }, skip: 1 } : {}) });
   if (!open.length) delete cursor.open;
@@ -239,7 +239,7 @@ export async function recordCallbackOutcome(tx: Prisma.TransactionClient, a: Act
     await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, clientId: task.clientId, status: { notIn: ['COMPLETED', 'CANCELLED'] } }, data: { status: 'CANCELLED', version: { increment: 1 } } });
     await tx.teamCalendarEvent.updateMany({ where: { workspaceId: a.workspaceId, clientId: task.clientId, status: 'SCHEDULED' }, data: { status: 'CANCELLED', version: { increment: 1 }, scheduleRevision: { increment: 1 } } });
   }
-  await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action: 'support.callback_outcome', entityId: task.id, detail: { outcome: data.outcome, attempts, nextAt: dueAt?.toISOString() || null } } });
+  await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action: 'support.callback_outcome', entityId: task.id, detail: { outcome: data.outcome, attempts, status, requestedNextAt: data.nextAt || null, clientId: task.clientId, notes: data.notes, occurredAt: now.toISOString(), nextAt: dueAt?.toISOString() || null } } });
   const followupEmail = options.queueEmail !== false && ['TALKED', 'RESOLVED', 'INTERESTED', 'CALLBACK'].includes(data.outcome) ? await queueCallEstablishedEmail(tx, a, updated) : null;
   return { ...updated, followupEmail };
 }
@@ -269,6 +269,6 @@ export async function updateCallback(tx: Prisma.TransactionClient, a: Actor, inp
   const updated = await tx.teamTask.update({ where: { id: task.id }, data: { dueAt, followUpContext: json({ ...context, footnotes: [...(Array.isArray(context.footnotes) ? context.footnotes : []), `${now.toISOString()} - ${body}`].slice(-12) }), version: { increment: 1 } } });
   await tx.teamComment.create({ data: { taskId: task.id, authorId: a.id, body } });
   if (data.nextAt) await syncCallbackCalendar(tx, a, updated);
-  await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action: 'support.callback_updated', entityId: task.id, detail: { rescheduled: Boolean(data.nextAt), noteAdded: Boolean(data.notes) } } });
+  await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action: 'support.callback_updated', entityId: task.id, detail: { rescheduled: Boolean(data.nextAt), noteAdded: Boolean(data.notes), clientId: task.clientId, notes: data.notes || "", nextAt: data.nextAt || "" } } });
   return updated;
 }

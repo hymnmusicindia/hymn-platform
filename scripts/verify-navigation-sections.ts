@@ -22,6 +22,7 @@ const team = sectionItems(teamKeys, teamSectionFor);
 assert.equal(team.length, 6);
 assert.deepEqual(team.flatMap(section => section.items).sort(), teamKeys.sort());
 assert.equal(teamSectionFor("crm"), teamSectionFor("acquisition"));
+assert.equal(teamSectionFor('leadership'), 'Leadership');
 for (const profile of ["customer", "producer"]) {
   const original = [
     { key: "overview", label: "Overview", group: "Home" },

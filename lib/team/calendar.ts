@@ -136,7 +136,7 @@ export async function calendarMutation(tx: Prisma.TransactionClient, a: Actor, r
     if (data.status !== "ACTIVE") await tx.teamCalendarEvent.updateMany({ where: { clientId: row.id, status: "SCHEDULED", startsAt: { gte: new Date() } }, data: { status: "CANCELLED", version: { increment: 1 } } });
     const registered = emails.length ? await tx.user.count({ where: { OR: emails.map(value => ({ email: { equals: value, mode: "insensitive" } })) } }) : 0;
     if (row.email && row.status === "ACTIVE" && !registered) await tx.teamClientWelcome.createMany({ data: [{ clientId: row.id, email: row.email }], skipDuplicates: true });
-    await audit(tx, a, old ? "client.updated" : "client.created", row.id, { status: row.status }); return publicContact(a, row);
+    await audit(tx, a, old ? "client.updated" : "client.created", row.id, { status: row.status, contactName: row.name, ...(old ? { changedFields: ['name', 'phone', 'email', 'secondaryEmail', 'interests', 'state', 'city', 'notes', 'ownerId', 'status'].filter(key => JSON.stringify(old[key as keyof typeof old]) !== JSON.stringify(row[key as keyof typeof row])) } : {}) }); return publicContact(a, row);
   }
   return saveEvent(tx, a, input);
 }

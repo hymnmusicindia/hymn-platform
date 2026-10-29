@@ -1,0 +1,64 @@
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { prisma } from '../lib/prisma';
+import { teamMutation, teamRead } from '../lib/team/service';
+import { readLeadershipActivity } from '../lib/team/leadership-activity';
+import { linkProspectContact } from '../lib/team/contact-directory';
+async function main() {
+  assert.equal(process.env.DATABASE_URL, 'postgresql://fixture:fixture@127.0.0.1:55473/acquisition_fixture');
+  const workspace = await prisma.teamWorkspace.create({ data: { name: 'Leadership activity fixture', clientCardsImportedAt: new Date() } });
+  async function member(name: string, owner = false, permissions = ['crm.outreach.manage', 'crm.prospects.create', 'tasks.update', 'tasks.create']) {
+    const role = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name, owner, permissions } });
+    const user = await prisma.user.create({ data: { name, email: `${randomUUID()}@leadership.fixture.invalid`, googleId: randomUUID() } });
+    return prisma.teamMember.create({ data: { workspaceId: workspace.id, userId: user.id, roleId: role.id }, include: { role: true } });
+  }
+  const owner = await member('Aditya Ujjain', true), coowner = await member('HYMN Music', true), kira = await member('Kira'), admin = await member('Audit administrator', false, ['audit.view', 'reports.all.view']);
+  const now = new Date();
+  const client = await teamMutation(kira, 'clients-save', { name: 'Leadership customer', ownerId: kira.id, phone: '+917654321098' }) as { id: string; version: number };
+  const contactEvent = await prisma.teamAudit.findFirstOrThrow({ where: { action: 'client.created', entityId: client.id } });
+  assert.equal(contactEvent.actorId, kira.id);
+  await teamMutation(kira, 'call-report-save', { clientId: client.id, requestKey: randomUUID(), occurredAt: new Date(now.getTime() - 3600000).toISOString(), source: 'PERSONAL_PHONE', outcome: 'TALKED', discussion: 'Discussed distribution plans and answered the customer questions.', needs: 'Needs release help', nextAction: 'Kira will follow up', commitments: 'Customer will prepare artwork' });
+  const task = await prisma.teamTask.create({ data: { workspaceId: workspace.id, ownerId: kira.id, creatorId: owner.id, clientId: client.id, title: 'Follow up after the call' } });
+  await teamMutation(kira, 'comments', { id: task.id, body: 'The customer shared their planned release date.' });
+  const comment = await prisma.teamAudit.findFirstOrThrow({ where: { action: 'task.comment_added', entityId: task.id } }); assert.equal(comment.actorId, kira.id);
+  const lead = await prisma.teamProspect.create({ data: { workspaceId: workspace.id, ownerId: kira.id, name: 'Lead with new contact', sourceUrl: 'https://fixture.invalid', evidence: 'Fixture source evidence', identityKey: randomUUID(), categories: [], score: {} } });
+  await prisma.$transaction(tx => linkProspectContact(tx, lead.id, kira));
+  const linked = await prisma.teamProspect.findUniqueOrThrow({ where: { id: lead.id } });
+  assert.equal((await prisma.teamAudit.findFirstOrThrow({ where: { entityId: linked.clientId!, action: 'client.created' } })).actorId, kira.id);
+  await prisma.$transaction(tx => linkProspectContact(tx, lead.id, kira));
+  assert.equal(await prisma.teamAudit.count({ where: { entityId: linked.clientId!, action: 'client.created' } }), 1);
+  const audit = (action: string, detail = {}, actorId = kira.id, at = now) => prisma.teamAudit.create({ data: { workspaceId: workspace.id, actorId, entityId: client.id, action, detail, createdAt: at } });
+  await audit('message.edited', { body: 'PRIVATE CHAT' }); await audit('channel.created', { secret: 'PRIVATE CHANNEL' }); await audit('coordinator.synced');
+  await audit('member.profile_updated', { token: 'DO NOT LEAK', privateNotes: 'SECRET NOTES' });
+  const old = await audit('client.created', {}, kira.id, new Date(now.getTime() - 100 * 86400000));
+  await assert.rejects(readLeadershipActivity(kira, new URLSearchParams()), /owners only/);
+  await assert.rejects(readLeadershipActivity(admin, new URLSearchParams()), /owners only/);
+  const read = (actor = owner, query = '') => readLeadershipActivity(actor, new URLSearchParams(query));
+  const first = await read() as any, secondOwner = await read(coowner) as any;
+  assert.equal(first.total, secondOwner.total); assert.ok(first.items.some((row: any) => row.actor.name === 'Kira' && row.action === 'contact.call_report'));
+  const report = first.items.find((row: any) => row.action === 'contact.call_report'); assert.ok(report.fields.some((field: any) => field.value === 'Kira will follow up')); assert.ok(report.links.some((link: any) => link.href.includes(`client=${client.id}`)));
+  assert.equal(first.summary.callReports, 1); assert.equal(first.summary.contactsAdded, 2);
+  assert.ok((await read(owner, 'days=all') as any).items.some((row: any) => row.id === old.id));
+  assert.ok(!JSON.stringify(first).includes('PRIVATE CHAT')); assert.ok(!JSON.stringify(first).includes('DO NOT LEAK')); assert.ok(!first.items.some((row: any) => row.id === old.id));
+  assert.ok(first.items.filter((row: any) => row.action === 'task.comment_added')[0].links.some((link: any) => link.href.includes(`task=${task.id}`)));
+  const calls = await read(owner, 'category=calls') as any; assert.equal(calls.total, 1); assert.equal(calls.items[0].fields.find((field: any) => field.label === 'Called using').value, 'PERSONAL PHONE'.toLowerCase().replace(/^./, c => c.toUpperCase()));
+  await audit('coordinator.contact_created');
+  assert.ok((await read(owner, 'category=work') as any).items.every((row: any) => row.category === 'work'));
+  const mine = await read(owner, `member=${owner.id}`) as any; assert.equal(mine.total, 0);
+  const otherWorkspace = await prisma.teamWorkspace.create({ data: { name: 'Other leadership workspace' } });
+  await prisma.teamAudit.create({ data: { workspaceId: otherWorkspace.id, actorId: owner.id, entityId: client.id, action: 'client.created', detail: { contactName: 'FOREIGN CUSTOMER' } } });
+  assert.ok(!JSON.stringify(await read()).includes('FOREIGN CUSTOMER'));
+  // Stable keyset pagination even when many updates share a timestamp and a new update arrives between pages.
+  for (let index = 0; index < 35; index++) await audit('client.updated', { status: `Fixture ${index}` });
+  const page = await read() as any; assert.equal(page.items.length, 30); assert.ok(page.nextCursor);
+  const newEvent = await audit('client.updated', { status: 'New update after snapshot' }, kira.id, new Date(Date.now() + 1));
+  const next = await read(owner, new URLSearchParams({ snapshot: page.snapshot, cursor: page.nextCursor }).toString()) as any;
+  const ids = [...page.items, ...next.items].map(row => row.id); assert.equal(ids.length, page.total); assert.equal(new Set(ids).size, ids.length); assert.ok(!ids.includes(newEvent.id));
+  const head = await readLeadershipActivity(owner, new URLSearchParams('mode=head'), new Date(Date.now() + 1000)) as { latestId: string }; assert.equal(head.latestId, newEvent.id);
+  const retained = await prisma.teamClient.create({ data: { workspaceId: workspace.id, ownerId: kira.id, name: 'Retained leadership customer' } }); await prisma.teamClient.update({ where: { id: client.id }, data: { mergedIntoId: retained.id } });
+  const mergedReport = (await read(owner, 'category=calls') as any).items[0]; assert.ok(mergedReport.links.some((link: any) => link.href.includes(`client=${retained.id}`)));
+  await assert.rejects(read(owner, 'cursor=invalid'), /Invalid activity page/);
+  await assert.rejects(read(owner, 'days=999'), /Invalid/);
+  console.log('PASS both owners, representative attribution, lead-created contact audit, shared report and task links, filters, IST range, stable cursor pagination, new-update check, merged contacts, private-data exclusion and non-owner denial.');
+}
+main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => prisma.$disconnect());

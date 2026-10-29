@@ -54,7 +54,7 @@ export async function saveCallReport(tx: Prisma.TransactionClient, a: Actor, inp
     if ((existing.detail as { fingerprint?: string }).fingerprint !== fingerprint) throw new TeamError('This save request changed. Start a new report.', 409);
     return { id: existing.id };
   }
-  const { ids } = await family(tx, a, data.clientId);
+  const { contact, ids } = await family(tx, a, data.clientId);
   const occurredAt = new Date(data.occurredAt);
   if (occurredAt.getTime() > now.getTime() + 300000 || occurredAt.getUTCFullYear() < 2000) throw new TeamError('Enter the actual past call date and time.');
   if (data.nextAt && new Date(data.nextAt) <= now) throw new TeamError('Choose a future follow-up time.');
@@ -68,6 +68,6 @@ export async function saveCallReport(tx: Prisma.TransactionClient, a: Actor, inp
     throw new TeamError('Use the assigned callback to record a do-not-contact request so all outreach is stopped.');
   }
   const member = await tx.teamMember.findUniqueOrThrow({ where: { id: a.id }, select: { user: { select: { name: true } } } });
-  await tx.teamAudit.create({ data: { id, workspaceId: a.workspaceId, actorId: a.id, action, entityId: data.clientId, detail: { ...data, fingerprint, authorName: member.user.name || 'Team member' } } });
+  await tx.teamAudit.create({ data: { id, workspaceId: a.workspaceId, actorId: a.id, action, entityId: data.clientId, detail: { ...data, contactName: contact.name, fingerprint, authorName: member.user.name || 'Team member' } } });
   return { id };
 }

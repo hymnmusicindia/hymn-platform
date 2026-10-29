@@ -1,4 +1,5 @@
 "use client";
+import { LeadershipActivity } from "./leadership-activity";
 import { TeamWorkbench } from "./workbench";
 import { TeamReleaseQc } from "./release-qc";
 import { TeamCreatorApplications } from "./creator-applications";
@@ -70,6 +71,7 @@ export function TeamWorkspaceUI({ actor }: { actor: ActorProps }) {
   }, [actor.workspaceId]);
   const refresh = useCallback(async () => {
     try {
+      if (module === "leadership") { setError(""); return; }
       if (module === "referral") { setError(""); return; }
       if (["overview","availability"].includes(module)) {
         const [summary,inbox]=await Promise.all([api<Overview>("overview"),api<{items:Notification[]}>("notifications")]);setOverview(summary);setNotifications(inbox.items);setError("");return;
@@ -124,7 +126,7 @@ export function TeamWorkspaceUI({ actor }: { actor: ActorProps }) {
   const visibleTasks = tasks.filter(t => (module !== "work" || t.ownerId === actor.id) && (module !== "approvals" || t.status === "IN_REVIEW") && (filter === "all" || t.status === filter) && `${t.title} ${t.owner.user.name} ${t.description} ${t.project?.title || ""}`.toLowerCase().includes(search.toLowerCase()));
   const groups = [
     { title: "Workspace", items: [{ id: "overview", title: "Work coordinator", icon: LayoutDashboard }, { id: "availability", title: "Weekly active hours", icon: CalendarDays }, { id: "work", title: "My Work", icon: CheckCheck }, { id: "tasks", title: "All Work", icon: ClipboardList }, { id: "inbox", title: "Inbox", icon: Bell }, { id: "projects", title: "Projects", icon: BriefcaseBusiness }, ...(allowed("chat.use") ? [{ id: "chat", title: "Team Chat", icon: MessageCircle }] : []), { id: "contacts", title: "Contact database", icon: Users }, { id: "emails", title: "Team email", icon: MessageCircle }, ...(allowed("crm.outreach.manage") ? [{ id: "customer-calls", title: "Customer callbacks", icon: MessageCircle }] : []), ...(allowed("calendar.view") ? [{ id: "calendar", title: "Calendar", icon: CalendarDays }] : [])] },
-    { title: "Management", items: [...(allowed("operations.producers.approve") || allowed("operations.engineers.approve") ? [{ id: "creator-applications", title: "Creator approvals", icon: ShieldCheck }] : []),...(allowed("operations.distribution.qc") ? [{ id: "release-qc", title: "Release QC", icon: ShieldCheck }] : []), ...(allowed("team.members.view") ? [{ id: "directory", title: "Team Directory", icon: Users }] : []), ...(allowed("tasks.approve") ? [{ id: "approvals", title: "Approvals", icon: ShieldCheck }] : []), ...(allowed("reports.team.view") ? [{ id: "reports", title: "Reports", icon: FileBarChart }] : []), ...(allowed("audit.view") ? [{ id: "audit", title: "Activity & Audit", icon: ClipboardList }] : []), ...(actor.owner ? [{ id: "settings", title: "Roles & Settings", icon: ShieldCheck }] : [])] },
+    { title: "Management", items: [...(actor.owner ? [{ id: "leadership", title: "Leadership updates", icon: FileBarChart }] : []),...(allowed("operations.producers.approve") || allowed("operations.engineers.approve") ? [{ id: "creator-applications", title: "Creator approvals", icon: ShieldCheck }] : []),...(allowed("operations.distribution.qc") ? [{ id: "release-qc", title: "Release QC", icon: ShieldCheck }] : []), ...(allowed("team.members.view") ? [{ id: "directory", title: "Team Directory", icon: Users }] : []), ...(allowed("tasks.approve") ? [{ id: "approvals", title: "Approvals", icon: ShieldCheck }] : []), ...(allowed("reports.team.view") ? [{ id: "reports", title: "Reports", icon: FileBarChart }] : []), ...(allowed("audit.view") ? [{ id: "audit", title: "Activity & Audit", icon: ClipboardList }] : []), ...(actor.owner ? [{ id: "settings", title: "Roles & Settings", icon: ShieldCheck }] : [])] },
   ];
   if (!actor.owner) groups[0].items.push({ id: "referral", title: "My referral link", icon: Link2 });
   if (allowed("crm.prospects.view")) groups[0].items.push({ id: "acquisition", title: "Contacts & Calls", icon: Users });
@@ -162,6 +164,8 @@ export function TeamWorkspaceUI({ actor }: { actor: ActorProps }) {
       <ModuleTabs items={(activeSection?.items || []).map(item => ({ key: item.id, label: item.title, count: item.id === "inbox" ? notifications.filter(item => !item.readAt).length : 0 }))} active={module === "crm" ? "acquisition" : module} label={activeSection?.label || "Team"} onSelect={navigate}/>
       {loading ? <div className={styles.skeleton} aria-busy="true">Loading workspace records…</div> : null}
       {["work", "acquisition", "crm"].includes(module) && allowed("crm.prospects.view") ? <DailyGuide api={api} revision={tasks} name={actor.name} navigate={navigate} onAdd={() => openContacts()} onTask={async id => { try { const current = await api<Task>(`task?id=${encodeURIComponent(id)}`); setTasks(rows => [...rows.filter(row => row.id !== id), current]); navigate("work"); history.replaceState(null, "", `/team?workspace=${encodeURIComponent(actor.workspaceId)}&module=work&task=${encodeURIComponent(id)}`); setSelected(id); } catch (cause) { setError(cause instanceof Error ? cause.message : "Task unavailable."); } }}/> : null}
+      {module === "overview" && actor.owner ? <section className={styles.panel}><header><div><h2>Team updates</h2><p>Review call reports, new contacts and work updates from every teammate.</p></div><button onClick={() => navigate("leadership")}>Open leadership updates <ArrowUpRight size={15}/></button></header></section> : null}
+      {module === "leadership" ? actor.owner ? <LeadershipActivity api={api}/> : <p role="alert">Leadership updates are available to workspace owners only.</p> : null}
       {module === "overview" && allowed("tasks.create") ? <TeamCoordinator api={api} actor={actor} onNavigate={navigate} onTask={async id => { try { const current = await api<Task>(`task?id=${encodeURIComponent(id)}`); setTasks(rows => [...rows.filter(row => row.id !== id), current]); navigate("work"); setSelected(id); } catch (cause) { setError(cause instanceof Error ? cause.message : "Task unavailable."); } }}/> : null}
       {module === "referral" && !actor.owner ? <TeamReferralLink api={api}/> : null}
       {module === "availability" ? <div data-team-guide="availability"><TeamAvailability api={api} actor={actor}/></div> : null}

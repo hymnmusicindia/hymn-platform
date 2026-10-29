@@ -24,22 +24,26 @@ export async function matchingContacts(tx:Prisma.TransactionClient,workspaceId:s
   if(!emails.length&&!phones.length)return [];
   return tx.teamClient.findMany({where:{workspaceId,mergedIntoId:null,...(input.excludeId?{id:{not:input.excludeId}}:{}),OR:[{id:{in:phones.map(p=>p.id)}},...emails.flatMap(email=>[{email:{equals:email,mode:'insensitive' as const}},{secondaryEmail:{equals:email,mode:'insensitive' as const}},{additionalEmails:{has:email}}])]},orderBy:{createdAt:'asc'},take:20});
 }
-export async function linkProspectContact(tx: Prisma.TransactionClient, prospectId: string) {
+export async function linkProspectContact(tx: Prisma.TransactionClient, prospectId: string, actor?: Actor, origin: 'TEAM' | 'AUTOMATION' = 'TEAM') {
   const p = await tx.teamProspect.findUniqueOrThrow({ where: { id: prospectId } });
+  if (actor && actor.workspaceId !== p.workspaceId) throw new TeamError('Contact belongs to another workspace.', 403);
   if (p.clientId) return p.clientId;
   const phone = contactPhone(p.phone);
   const matches=await matchingContacts(tx,p.workspaceId,{phone,email:p.email||''});
   // Conflicting identities require a human merge; never join unrelated records.
   if (matches.length > 1) return null;
   const card = matches[0] ?? await tx.teamClient.create({ data: { workspaceId: p.workspaceId, ownerId: p.ownerId, name: p.name, phone, email: p.email || '', city: p.city, status: p.suppressed ? 'DO_NOT_CONTACT' : 'ACTIVE' } });
+  if (!matches.length && actor) {
+    await tx.teamAudit.create({ data: { workspaceId: p.workspaceId, actorId: actor.id, action: 'client.created', entityId: card.id, detail: { contactName: card.name, source: 'LEAD', prospectId: p.id, origin } } });
+  }
   if (await tx.teamProspect.findFirst({ where: { clientId: card.id, id: { not: p.id } } })) return null;
   await tx.teamProspect.update({ where: { id: p.id }, data: { clientId: card.id } });
   if (p.suppressed && card.status !== 'DO_NOT_CONTACT') await tx.teamClient.update({ where: { id: card.id }, data: { status: 'DO_NOT_CONTACT', version: { increment: 1 } } });
   return card.id;
 }
 
-export async function syncProspectContact(tx: Prisma.TransactionClient, prospectId: string) {
-  const clientId = await linkProspectContact(tx, prospectId);
+export async function syncProspectContact(tx: Prisma.TransactionClient, prospectId: string, actor?: Actor) {
+  const clientId = await linkProspectContact(tx, prospectId, actor);
   if (!clientId) return;
   const p = await tx.teamProspect.findUniqueOrThrow({ where: { id: prospectId } });
   const card=await tx.teamClient.findUniqueOrThrow({where:{id:clientId}});

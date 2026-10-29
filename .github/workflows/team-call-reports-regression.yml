@@ -1,10 +1,10 @@
-name: Team call reports regression
+name: Team activity and call reports regression
 on:
   push:
     branches: [main]
-    paths: ['components/team/**', 'lib/team/**', 'scripts/*call-report*', 'scripts/verify-acquisition-isolated.ts', '.github/workflows/team-call-reports-regression.yml']
+    paths: ['components/team/**', 'lib/team/**', 'lib/navigation-sections.ts', 'scripts/*call-report*', 'scripts/*leadership*', 'scripts/verify-acquisition-isolated.ts', '.github/workflows/team-call-reports-regression.yml']
   pull_request:
-    paths: ['components/team/**', 'lib/team/**', 'scripts/*call-report*', 'scripts/verify-acquisition-isolated.ts', '.github/workflows/team-call-reports-regression.yml']
+    paths: ['components/team/**', 'lib/team/**', 'lib/navigation-sections.ts', 'scripts/*call-report*', 'scripts/*leadership*', 'scripts/verify-acquisition-isolated.ts', '.github/workflows/team-call-reports-regression.yml']
 permissions:
   contents: read
 jobs:
@@ -19,6 +19,7 @@ jobs:
           cache: npm
       - run: npm ci --fetch-retries=5 --fetch-timeout=120000
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:team-call-reports
+      - run: npm run test:team-leadership
+      - run: npm run test:team-leadership:browser
       - run: npm run test:team-call-reports:browser
       - run: node scripts/verify-team-assistance-browser.cjs

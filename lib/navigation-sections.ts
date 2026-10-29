@@ -25,6 +25,7 @@ const teamSections: Record<string, string[]> = {
   "Contacts & growth": ["contacts", "acquisition", "crm", "customer-calls", "referral"],
   Messages: ["inbox", "chat", "emails"],
   "Quality & reports": ["creator-applications", "release-qc", "reports"],
+  Leadership: ["leadership"],
   "Team & access": ["directory", "audit", "settings"],
 };
 export const teamSectionFor = (key: string) => Object.entries(teamSections).find(([, keys]) => keys.includes(key))?.[0] ?? "Team & access";
