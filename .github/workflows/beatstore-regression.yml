@@ -10,6 +10,9 @@ on:
       - 'lib/validation.ts'
       - 'lib/producer-link*'
       - 'components/customer-dashboard-shell.tsx'
+      - 'components/simplified-dashboard-home.tsx'
+      - 'lib/customer-dashboard-tabs.ts'
+      - 'app/(authenticated)/dashboard/purchases/**'
       - 'app/api/producer/beats/**'
       - 'lib/private-storage.ts'
       - 'lib/email/**'
@@ -36,6 +39,9 @@ on:
       - 'lib/validation.ts'
       - 'lib/producer-link*'
       - 'components/customer-dashboard-shell.tsx'
+      - 'components/simplified-dashboard-home.tsx'
+      - 'lib/customer-dashboard-tabs.ts'
+      - 'app/(authenticated)/dashboard/purchases/**'
       - 'app/api/producer/beats/**'
       - 'lib/private-storage.ts'
       - 'lib/email/**'
@@ -77,3 +83,4 @@ jobs:
       - run: node --import tsx scripts/verify-checkout-order-persistence.ts
       - run: npx playwright install --with-deps chromium
       - run: npm run test:beatstore:browser
+      - run: node scripts/verify-beat-purchase-browser.cjs

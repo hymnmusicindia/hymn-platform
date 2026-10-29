@@ -1,4 +1,5 @@
 "use client";
+import { BeatPurchases } from './beat-purchases';
 import { customerMessage } from "@/lib/customer-message";
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import Image from "next/image";
@@ -7,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Bell, CheckCircle2, Disc3, IndianRupee, LifeBuoy, Music2, Plus, ShoppingBag, Users, Wallet } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { effectiveReleaseStatus, getReleaseStatusPresentation } from "@/lib/release-status-presentation";
-import type { Beat, Notification, Release, SupportTicket, User } from "@/lib/types";
+import type { Beat, BeatPurchase, Notification, Release, SupportTicket, User } from "@/lib/types";
 import s from "./dashboard-overview.module.css";
 
 const money = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value) : "Unavailable";
@@ -33,7 +34,7 @@ function Activity({ notifications, producer=false }: { notifications:Notificatio
 }
 function Artwork({ src }: {src?:string}) { return <span className={s.art}>{src?<Image src={artworkPreviewUrl(src, 96)} alt="" width={240} height={240} unoptimized/>:<Disc3/>}</span>; }
 type ArtistWorkspaceSummary={releaseCount:number;needsAttention:number;plan:string;planDaysRemaining:number|null;credit:number};
-export function CustomerHome({ user,releases,attention,earnings,notifications,tickets,onEarnings,workspaceSummary }: {user:User;releases:Release[];attention:Array<{title:string;detail:string;cta:string;href?:string}>;earnings?:{totalEarnings:number;availableBalance:number;pendingBalance:number}|null;notifications:Notification[];tickets:SupportTicket[];onEarnings:()=>void;workspaceSummary:ArtistWorkspaceSummary}) {
+export function CustomerHome({ purchases=[],purchaseError,onRefreshPurchases,user,releases,attention,earnings,notifications,tickets,onEarnings,workspaceSummary }: {purchases?:BeatPurchase[];purchaseError?:string;onRefreshPurchases?:()=>void;user:User;releases:Release[];attention:Array<{title:string;detail:string;cta:string;href?:string}>;earnings?:{totalEarnings:number;availableBalance:number;pendingBalance:number}|null;notifications:Notification[];tickets:SupportTicket[];onEarnings:()=>void;workspaceSummary:ArtistWorkspaceSummary}) {
   const router=useRouter();
   const catalogue=()=>router.push("/dashboard/releases");
   const live=releases.filter(item=>item.status==="live").length;
@@ -44,6 +45,7 @@ export function CustomerHome({ user,releases,attention,earnings,notifications,ti
   const openTickets=tickets.filter(item=>!["closed","resolved"].includes(item.status));
   return <div className={s.root}><header className={s.header}><div><p className={s.eyebrow}>Artist / Overview</p><h1>Your next chapter, {first(user.name)}.</h1><p className={s.description}>Your music, its progress, and what needs your attention.</p></div><Link className={s.primary} href="/distribution/start"><Plus/>New release</Link></header>
     <div className={s.metrics}><OverviewMetric label="Your catalogue" value={releases.length} detail="Manage your releases" icon={<Music2/>} onClick={catalogue}/><OverviewMetric label="Live releases" value={live} detail="Available to listeners" icon={<Disc3/>} onClick={catalogue}/><OverviewMetric label="Needs attention" value={workspaceSummary.needsAttention} detail="Release actions to review" icon={<Bell/>} onClick={catalogue}/><OverviewMetric label="Available balance" value={money(earnings?.availableBalance)} detail="Open earnings & payouts" icon={<Wallet/>} onClick={onEarnings}/></div>
+    <BeatPurchases purchases={purchases} compact error={purchaseError} onRefresh={onRefreshPurchases}/>
     <div className={s.grid}><div className={s.stack} style={{gridTemplateColumns:"minmax(0,1fr)"}}><OverviewPanel title="Release pipeline" action={<Link className={s.link} href="/dashboard/releases">Catalogue <ArrowRight/></Link>}><OverviewPipeline stages={stages}/></OverviewPanel><OverviewPanel title="Recent releases" action={<Link className={s.link} href="/dashboard/releases">View all <ArrowRight/></Link>}>{releases.length?<div className={s.cards}>{newest(releases).slice(0,4).map(item=><Link className={s.card} href={`/dashboard/releases/${item.id}`} key={item.id}><Artwork src={item.artworkUrl}/><strong>{title(item)}</strong><small>{item.artistName}</small><span className={s.badge}>{getReleaseStatusPresentation(item.status,item.direNoteStatus).label}</span></Link>)}</div>:<OverviewEmpty icon={<Music2/>} title="Make room for your first release"><Link className={s.link} href="/distribution/start">Upload your music <ArrowRight/></Link></OverviewEmpty>}</OverviewPanel><Activity notifications={notifications}/></div>
     <aside className={s.stack}><OverviewPanel title="Your next moves">{attention.slice(0,3).map((item,index)=><div className={s.row} key={index}><span className={s.icon}><ArrowRight/></span><div className={s.rowCopy}><strong>{item.title}</strong><small>{item.detail}</small>{item.href&&<Link className={s.link} href={item.href}>{item.cta}<ArrowRight/></Link>}</div></div>)}{!attention.length&&<OverviewEmpty title="All caught up">No outstanding actions. Keep creating.</OverviewEmpty>}</OverviewPanel><OverviewPanel title="Earnings & plan"><p className={s.eyebrow}>Reported royalties</p><p className={s.balance}>{money(earnings?.totalEarnings)}</p><dl className={s.balanceRows}><div><dt>Pending balance</dt><dd>{money(earnings?.pendingBalance)}</dd></div><div><dt>Distribution plan</dt><dd className="capitalize">{workspaceSummary.plan}</dd></div>{workspaceSummary.planDaysRemaining!==null&&<div><dt>Plan remaining</dt><dd>{workspaceSummary.planDaysRemaining} days</dd></div>}<div><dt>Checkout credit</dt><dd>{money(workspaceSummary.credit)}</dd></div></dl><button className={s.link} onClick={onEarnings}>Manage earnings <ArrowRight/></button></OverviewPanel><OverviewPanel title="Workspace shortcuts"><div className={s.shortcuts}><Link href="/dashboard?tab=collaborators"><Users/>Royalty splits</Link><Link href="/beat-store"><ShoppingBag/>Find beats</Link><Link href="/dashboard?tab=support"><LifeBuoy/>Support{openTickets.length?` (${openTickets.length})`:""}</Link></div></OverviewPanel></aside></div></div>;
 }

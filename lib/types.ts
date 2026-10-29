@@ -446,6 +446,8 @@ export interface ArtistCard {
 
 export type BeatPurchase = {
   beatTitle?: string;
+  producerName?: string;
+  artworkUrl?: string | null;
   downloadUrl?: string;
   id: number;
   userId: number;

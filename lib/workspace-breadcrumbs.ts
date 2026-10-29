@@ -20,6 +20,7 @@ export function workspaceBreadcrumbs(pathname: string, search = "", active?: Act
   let leaf: WorkspaceCrumb | undefined = exact ? { label: exact.label, href: exact.href } : undefined;
   let detail: string | undefined;
   if (pathname.startsWith("/dashboard/releases/")) { group = "Distribution"; leaf = { label: "My releases", href: "/dashboard/releases" }; detail = pathname.endsWith("/qc-report") ? "Quality review" : "Release details"; }
+  else if (pathname.startsWith("/dashboard/purchases/")) { group="Beatstore"; leaf={label:"My purchases",href:"/dashboard/purchases"};detail="Purchase details"; }
   else if (pathname.startsWith("/studio/orders/")) { group = "Mixing / Mastering"; leaf = { label: "My projects", href: "/dashboard/studio" }; detail = "Project details"; }
   else if (pathname.startsWith("/studio/engineers/")) { group = "Mixing / Mastering"; leaf = { label: "Find an engineer", href: "/studio" }; detail = "Engineer profile"; }
   else if (pathname.startsWith("/beat-store/producers/")) { group = "Beatstore"; leaf = { label: "Browse beats", href: "/beat-store" }; detail = "Producer profile"; }
@@ -33,7 +34,7 @@ export function workspaceBreadcrumbs(pathname: string, search = "", active?: Act
     else if (/^\/admin\/referrals\/\d+$/.test(pathname)) { leaf={label:"Referrals",href:"/admin/referrals"}; detail="Referral details"; }
   }
   if (/^\/team\/performance(?:\/\d+)?$/.test(pathname)) { group="Team";leaf={label:"Performance",href:"/team/performance"};if(pathname!=="/team/performance")detail="Saved report"; }
-  if (/^\/licenses\/[^/]+$/.test(pathname)) { group="Beatstore";leaf={label:"My purchases",href:"/dashboard?tab=purchases"};detail="Licence details"; }
+  if (/^\/licenses\/[^/]+$/.test(pathname)) { group="Beatstore";leaf={label:"My purchases",href:"/dashboard/purchases"};detail="Licence details"; }
   if (/^\/p\/[^/]+$/.test(pathname)) { group="Beatstore";leaf={label:"Browse beats",href:"/beat-store"};detail="Producer profile"; }
   if (pathname === "/payout" && query.get("tab") && query.get("tab") !== "overview") {
     const sections: Record<string, string> = { monthly: "Earnings history", quarterly: "Quarter summary", statements: "Statements", requests: "Withdrawals", details: "Payout details" };

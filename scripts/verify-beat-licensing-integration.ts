@@ -8,9 +8,14 @@ import {localPrivateStorage} from '../lib/private-storage';
 import {purchaseAttachments} from '../lib/email/purchase-attachments';
 import {beatEmail} from '../lib/email/templates/beat-email';
 import {readFile} from 'node:fs/promises';
+import {getBeatPurchaseDetails} from '../lib/beat-purchase-details';
+import {customerTab} from '../lib/customer-dashboard-tabs';
 
 async function main(){
  assert.match(process.env.DATABASE_URL||'',/@127\.0\.0\.1:/,'Run only on an isolated database');
+ assert.equal(customerTab(new URLSearchParams('module=purchases')),'purchases','Legacy email links must open Purchases, not Overview');
+ assert.equal(customerTab(new URLSearchParams('tab=purchases')),'purchases');
+ assert.equal(customerTab(new URLSearchParams('module=splits')),'collaborators');
  // Exercise the deployed additive migration, including compatibility with existing rows.
  await prisma.$executeRawUnsafe('ALTER TABLE checkout_order_items DROP COLUMN license_terms_snapshot');
  await prisma.$executeRawUnsafe(await readFile('prisma/migrations/20261029150000_checkout_licence_snapshot/migration.sql','utf8'));
@@ -31,6 +36,10 @@ async function main(){
  assert.equal((purchase.licenseTermsSnapshot as any).rights.streamingLimit,25000,'Fulfilment must use checkout terms, not edited catalogue terms');
  await generateBeatLicense(purchase.id,buyer.id);
  const agreement=await getBeatLicenceAgreement(purchase.id,buyer.id);
+ const detail=await getBeatPurchaseDetails(purchase.id,buyer.id);
+ assert.equal(detail?.title,'Frozen Terms');assert.equal(detail?.pdfReady,true);assert.equal(detail?.fileReady,true);
+ assert.equal(await getBeatPurchaseDetails(purchase.id,outsider.id),null,'Standalone purchase details must not expose another account');
+ assert.equal(await getBeatPurchaseDetails(NaN,buyer.id),null);
  assert.equal(agreement.beatTitle,'Frozen Terms');assert.equal(agreement.artistName,'Stage Name');
  assert.equal(agreement.rights.find(r=>r.label==='Audio streams')?.value,'25000');
  assert.equal(agreement.rights.find(r=>r.label==='Music videos')?.value,'2');
@@ -56,6 +65,7 @@ async function main(){
    state.licensingActor={id:outsider.id,role:'customer'};assert.equal((await invoke(String(purchase.id))).status,404);
    state.licensingActor={id:buyer.id,role:'customer'};
    await prisma.beatPurchase.update({where:{id:purchase.id},data:{hasAccess:false}});assert.equal((await invoke(String(purchase.id))).status,403);
+   assert.equal(await getBeatPurchaseDetails(purchase.id,buyer.id),null,'Revoked purchases must not expose the detail page');
    await prisma.beatPurchase.update({where:{id:purchase.id},data:{hasAccess:true}});
  }
  console.log('PASS actual migration, checkout-to-issued term snapshots, file/PDF delivery, account purchases, email links/attachments, ownership and revoked access. No live payments or email.');

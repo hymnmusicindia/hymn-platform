@@ -3658,7 +3658,7 @@ export async function createBeatPurchase(userId: number, beatId: number, license
 export async function getBeatPurchasesByUser(userId: number) {
   if (usesPostgresPrisma()) {
     const [purchases, artistCard] = await Promise.all([
-      prisma.beatPurchase.findMany({ where: { userId, hasAccess: true }, orderBy: { purchasedAt: "desc" }, include:{beat:{select:{title:true}}} }),
+      prisma.beatPurchase.findMany({ where: { userId, hasAccess: true }, orderBy: { purchasedAt: "desc" }, include:{beat:{select:{title:true,user:{select:{name:true}},producerParty:{select:{professionalName:true}},artwork:{select:{publicUrl:true}}}}} }),
       prisma.artistCard.findFirst({ where: { userId, archivedAt: null }, orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }], select: { artistName: true } })
     ]);
     
@@ -3666,7 +3666,7 @@ export async function getBeatPurchasesByUser(userId: number) {
       id: p.id,
       userId: p.userId,
       beatId: p.beatId,
-      beatTitle:p.beat.title,downloadUrl:`/api/beat-purchases/${p.id}/download`,
+      beatTitle:typeof (p.licenseTermsSnapshot as any)?.beat?.title==="string"?(p.licenseTermsSnapshot as any).beat.title:p.beat.title,producerName:p.beat.producerParty?.professionalName||p.beat.user.name,artworkUrl:normalizePublicUploadUrl(p.beat.artwork?.publicUrl),downloadUrl:`/api/beat-purchases/${p.id}/download`,
       licenseType: p.licenseType as any,
       purchasedAt: p.purchasedAt.toISOString(),
       licenseUploadedAt: p.licenseUploadedAt?.toISOString() || undefined,

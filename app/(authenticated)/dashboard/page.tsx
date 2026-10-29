@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { CustomerDashboardShell } from "@/components/customer-dashboard-shell";
 import { getCurrentUserForPage } from "@/lib/access";
-import { listOrdersByUser, listReleasesByUser, getSubscriptionByUserId } from "@/lib/db";
+import { listOrdersByUser, listReleasesByUser, getSubscriptionByUserId, getBeatPurchasesByUser } from "@/lib/db";
 
 export default async function DashboardPage({ searchParams }: { searchParams?: Promise<{ producerAccess?: string }> }) {
   const user = await getCurrentUserForPage();
@@ -11,10 +11,11 @@ export default async function DashboardPage({ searchParams }: { searchParams?: P
   }
 
 
-  const [releases, orders, subscription] = await Promise.all([
+  const [releases, orders, subscription, purchases] = await Promise.all([
     listReleasesByUser(user.id),
     listOrdersByUser(user.id),
-    getSubscriptionByUserId(user.id)
+    getSubscriptionByUserId(user.id),
+    getBeatPurchasesByUser(user.id)
   ]);
 
   return (
@@ -24,6 +25,7 @@ export default async function DashboardPage({ searchParams }: { searchParams?: P
         releases={releases}
         orders={orders}
         subscription={subscription}
+        initialBeatPurchases={purchases}
         producerAccessDisabled={(await searchParams)?.producerAccess === "disabled"}
       />
     </main>

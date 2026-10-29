@@ -1,5 +1,6 @@
 "use client";
 
+import {customerTab,type CustomerTab} from '@/lib/customer-dashboard-tabs';
 import { openSubscriptions } from "@/components/subscription-options";
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
 import { customerMessage } from "@/lib/customer-message";
@@ -37,13 +38,7 @@ type CustomerPayoutSummary = {
   payoutHistory: Array<{ id: number; status: string; requestedAmount: number; requestDate: string }>;
 };
 type SmartNextAction = { key: string; title: string; reason: string; cta: string; href: string; priority: "critical" | "high" | "normal" };
-const customerTabs = ["overview", "releases", "upload", "analytics", "earnings", "promotions", "collaborators", "distribution", "content-id", "messages", "support", "settings", "purchases", "subscription", "referral", "account"] as const;
-type CustomerTab = typeof customerTabs[number];
-function customerTab(params: { get: (key: string) => string | null }): CustomerTab {
-  if (params.get("module") === "splits") return "collaborators";
-  const tab = params.get("tab");
-  return customerTabs.includes(tab as CustomerTab) && tab !== "earnings" ? tab as CustomerTab : "overview";
-}
+
 
 function SubscriptionActions({ status, cancelAtPeriodEnd }: { status: string; cancelAtPeriodEnd?: boolean }) {
   const [pending, setPending] = useState(false);
@@ -149,7 +144,7 @@ function Timeline({ items }: { items: Array<{ label: string; detail?: string; ac
   );
 }
 
-export function CustomerDashboardShell({ user, releases, orders, subscription, analytics = [], producerAccessDisabled = false }: { user: User; releases: Release[]; orders: Order[]; subscription?: any | null; analytics?: any[]; producerAccessDisabled?: boolean }) {
+export function CustomerDashboardShell({ user, releases, orders, subscription, analytics = [], initialBeatPurchases = [], producerAccessDisabled = false }: { user: User; releases: Release[]; orders: Order[]; subscription?: any | null; analytics?: any[]; initialBeatPurchases?:BeatPurchase[]; producerAccessDisabled?: boolean }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<CustomerTab>(() => customerTab(searchParams));
@@ -160,7 +155,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   const [supportReviewer, setSupportReviewer] = useState(false);
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
   const [supportLoading, setSupportLoading] = useState(true);
-  const [beatPurchases, setBeatPurchases] = useState<BeatPurchase[]>([]);
+  const [beatPurchases, setBeatPurchases] = useState<BeatPurchase[]>(initialBeatPurchases);
   const [smartActions, setSmartActions] = useState<SmartNextAction[]>([]);
   const [payoutSummary, setPayoutSummary] = useState<CustomerPayoutSummary | null>(null);
   const [workspaceAnalytics, setWorkspaceAnalytics] = useState<any[]>(analytics);
@@ -218,7 +213,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
   }, [reloadKey]);
 
   useEffect(() => {
-    if (activeTab !== "purchases" && activeTab !== "support") return;
+    if (!["overview","purchases","support"].includes(activeTab)) return;
     let ignore = false;
     fetch("/api/beat-purchases", { cache: "no-store" })
       .then((response) => response.ok ? response.json() : null)
@@ -309,6 +304,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
     setDashboardSearch("");
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
+      url.searchParams.delete("module");
       url.searchParams.set("tab", tab);
       window.history.replaceState(null, "", url.toString());
     }
@@ -407,7 +403,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
           <button type="button" onClick={switchProducerAccount} className="btn-primary pressable shrink-0">Switch Google account</button>
         </section>
       ) : null}
-      {activeTab === "overview" ? <CustomerHome user={user} releases={releases} attention={actionItems.map(item => ({ title: item.title, detail: item.detail, cta: item.cta, href: `/dashboard?tab=${item.tab}` }))} earnings={payoutSummary} notifications={notifications} tickets={supportTickets} onEarnings={() => selectCustomerTab("earnings")} workspaceSummary={{ releaseCount: releases.length, needsAttention: releasesNeedingAttention, plan: subscription ? String(subscription.plan).replace(/_/g, " ") : "No active plan", planDaysRemaining: subscription ? planDaysRemaining : null, credit: Number(user.referralCredits || 0) }} /> : null}
+      {activeTab === "overview" ? <CustomerHome purchases={beatPurchases} purchaseError={dataErrors.purchases} onRefreshPurchases={()=>setReloadKey(value=>value+1)} user={user} releases={releases} attention={actionItems.map(item => ({ title: item.title, detail: item.detail, cta: item.cta, href: `/dashboard?tab=${item.tab}` }))} earnings={payoutSummary} notifications={notifications} tickets={supportTickets} onEarnings={() => selectCustomerTab("earnings")} workspaceSummary={{ releaseCount: releases.length, needsAttention: releasesNeedingAttention, plan: subscription ? String(subscription.plan).replace(/_/g, " ") : "No active plan", planDaysRemaining: subscription ? planDaysRemaining : null, credit: Number(user.referralCredits || 0) }} /> : null}
       {false && activeTab === "overview" ? (
         <div className="grid gap-6">
           <Panel title="Action centre" description="Items backed by your account, releases and HYMN notifications that need a decision or correction.">
@@ -631,7 +627,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
           {dataErrors.purchases ? <div role="alert" className="mb-4 rounded-xl border p-3 text-sm" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>{dataErrors.purchases} <button type="button" className="ml-2 underline" onClick={() => setReloadKey(value => value + 1)}>Retry</button></div> : null}
           {supportFeedback ? <p role="status" className="mb-4 text-sm" style={{ color: "var(--text)" }}>{supportFeedback}</p> : null}
           <div className="grid gap-4">
-            {beatPurchases.filter(purchase=>!dashboardSearch||`${purchase.beatTitle || ""} ${purchase.id} ${purchase.beatId} ${purchase.licenseType}`.toLowerCase().includes(dashboardSearch.toLowerCase())).map((purchase) => <article key={`purchase-${purchase.id}`} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold" style={{ color: "var(--text)" }}>{purchase.beatTitle || `Beat purchase #${purchase.id}`}</p><p className="mt-1 text-sm capitalize" style={{ color: "var(--text-soft)" }}>Beat #{purchase.beatId} · {purchase.licenseType} · {purchase.licenseUrl ? "Licence ready" : "Licence setup required"}</p></div><StatusPill label={purchase.releaseId ? "release created" : purchase.licenseUrl ? "ready" : "setup required"} active={Boolean(purchase.licenseUrl)} /></div>{purchase.needsArtistName && !purchase.licenseUrl ? <label className="mt-4 block max-w-sm text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Artist or stage name<input value={licenceArtistNames[purchase.id] ?? ""} onChange={(event) => setLicenceArtistNames(current => ({ ...current, [purchase.id]: event.target.value }))} maxLength={80} className="field mt-2 w-full" placeholder="Name used on releases"/><span className="mt-1 block font-normal" style={{ color: "var(--text-soft)" }}>Your account name remains the legal licensee. This name appears as the performing artist.</span></label> : null}<div className="mt-3 flex flex-wrap gap-2">{purchase.downloadUrl ? <a href={purchase.downloadUrl} className="btn-outline pressable px-3 py-2 text-xs">Download beat</a> : null}{purchase.licenseUrl ? <><Link href={`/licenses/${purchase.id}`} className="btn-outline pressable px-3 py-2 text-xs">View agreement</Link><a href={`/api/beat-purchases/${purchase.id}/license`} className="btn-outline pressable px-3 py-2 text-xs">Download PDF</a></> : <button type="button" disabled={Boolean(purchaseAction) || Boolean(purchase.needsArtistName && !(licenceArtistNames[purchase.id] || "").trim())} onClick={() => generatePurchaseLicense(purchase.id)} className="btn-outline pressable px-3 py-2 text-xs disabled:opacity-50">{purchaseAction?.id === purchase.id && purchaseAction.type === "license" ? "Generating licence…" : "Create licence"}</button>}<Link href={`/studio?beatPurchaseId=${purchase.id}`} className="btn-outline pressable px-3 py-2 text-xs">Find a mix engineer</Link><Link href={`/studio/readiness?beatPurchaseId=${purchase.id}`} className="btn-outline pressable px-3 py-2 text-xs">Mix-readiness check</Link><button type="button" disabled={!purchase.licenseUrl || Boolean(purchaseAction)} onClick={() => startReleaseFromPurchase(purchase.id)} className="btn-primary pressable px-3 py-2 text-xs disabled:opacity-50" title={!purchase.licenseUrl ? "Create the licence before starting a release." : undefined}>{purchaseAction?.id === purchase.id && purchaseAction.type === "release" ? "Preparing release…" : purchase.releaseId ? "Continue release" : "Master ready · distribute"}</button></div>{!purchase.licenseUrl ? <p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>Create the agreement first. HYMN carries the same proof into Studio and distribution.</p> : null}</article>)}
+            {beatPurchases.filter(purchase=>!dashboardSearch||`${purchase.beatTitle || ""} ${purchase.id} ${purchase.beatId} ${purchase.licenseType}`.toLowerCase().includes(dashboardSearch.toLowerCase())).map((purchase) => <article key={`purchase-${purchase.id}`} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><Link href={`/dashboard/purchases/${purchase.id}`} className="font-semibold hover:underline" style={{ color: "var(--text)" }}>{purchase.beatTitle || `Beat purchase #${purchase.id}`}</Link><p className="mt-1 text-sm capitalize" style={{ color: "var(--text-soft)" }}>Beat #{purchase.beatId} · {purchase.licenseType} · {purchase.licenseUrl ? "Licence ready" : "Licence setup required"}</p></div><StatusPill label={purchase.releaseId ? "release created" : purchase.licenseUrl ? "ready" : "setup required"} active={Boolean(purchase.licenseUrl)} /></div>{purchase.needsArtistName && !purchase.licenseUrl ? <label className="mt-4 block max-w-sm text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Artist or stage name<input value={licenceArtistNames[purchase.id] ?? ""} onChange={(event) => setLicenceArtistNames(current => ({ ...current, [purchase.id]: event.target.value }))} maxLength={80} className="field mt-2 w-full" placeholder="Name used on releases"/><span className="mt-1 block font-normal" style={{ color: "var(--text-soft)" }}>Your account name remains the legal licensee. This name appears as the performing artist.</span></label> : null}<div className="mt-3 flex flex-wrap gap-2"><Link href={`/dashboard/purchases/${purchase.id}`} className="btn-outline pressable px-3 py-2 text-xs">Purchase details</Link>{purchase.downloadUrl ? <a href={purchase.downloadUrl} className="btn-outline pressable px-3 py-2 text-xs">Download beat</a> : null}{purchase.licenseUrl ? <><Link href={`/licenses/${purchase.id}`} className="btn-outline pressable px-3 py-2 text-xs">View agreement</Link><a href={`/api/beat-purchases/${purchase.id}/license`} className="btn-outline pressable px-3 py-2 text-xs">Download PDF</a></> : <button type="button" disabled={Boolean(purchaseAction) || Boolean(purchase.needsArtistName && !(licenceArtistNames[purchase.id] || "").trim())} onClick={() => generatePurchaseLicense(purchase.id)} className="btn-outline pressable px-3 py-2 text-xs disabled:opacity-50">{purchaseAction?.id === purchase.id && purchaseAction.type === "license" ? "Generating licence…" : "Create licence"}</button>}<Link href={`/studio?beatPurchaseId=${purchase.id}`} className="btn-outline pressable px-3 py-2 text-xs">Find a mix engineer</Link><Link href={`/studio/readiness?beatPurchaseId=${purchase.id}`} className="btn-outline pressable px-3 py-2 text-xs">Mix-readiness check</Link><button type="button" disabled={!purchase.licenseUrl || Boolean(purchaseAction)} onClick={() => startReleaseFromPurchase(purchase.id)} className="btn-primary pressable px-3 py-2 text-xs disabled:opacity-50" title={!purchase.licenseUrl ? "Create the licence before starting a release." : undefined}>{purchaseAction?.id === purchase.id && purchaseAction.type === "release" ? "Preparing release…" : purchase.releaseId ? "Continue release" : "Master ready · distribute"}</button></div>{!purchase.licenseUrl ? <p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>Create the agreement first. HYMN carries the same proof into Studio and distribution.</p> : null}</article>)}
             <WorkspaceRecords rows={filteredOrders} rowKey={order=>order.id} searchText={order=>`${order.id} ${order.paymentStatus} ${order.items.map(item=>item.beatTitle).join(" ")}`} noun="orders" initialSort="date" columns={[
               {key:"order",label:"Order",primary:true,value:order=>order.id,render:order=><><strong>Order #{order.id}</strong><small>{order.items.map(item=>item.beatTitle||`Beat #${item.beatId}`).join(", ")}</small></>},
               {key:"amount",label:"Amount",value:order=>order.amount,render:order=>`Rs ${order.amount.toLocaleString("en-IN")}`},
