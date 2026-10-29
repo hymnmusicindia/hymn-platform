@@ -1,3 +1,4 @@
+import {exclusiveBeatEligible} from "./beat-rights-policy";
 import type { Beat, LicenseType, ProducerProfile } from "@/lib/types";
 import { normalizeBeatKey } from '@/lib/beat-metadata';
 
@@ -56,11 +57,11 @@ export function beatLicenseLabel(value?: string | null) {
   return "Stems Exclusive Licence";
 }
 
-export function beatLicensePrice(beat: Pick<Beat, "price" | "generalPrice" | "stemPrice" | "exclusivePrice"> & { startingPrice?: number }, licenseType: BeatStoreLicenseType) {
+export function beatLicensePrice(beat: Pick<Beat, "price" | "generalPrice" | "stemPrice" | "exclusivePrice"> & { startingPrice?: number; sampleDeclaration?:string; sampleDisclosure?:string|null }, licenseType: BeatStoreLicenseType) {
   if (licenseType === "mp3") return Number(beat.price ?? MP3_LICENSE_PRICE);
   if (licenseType === "wav") return Number(beat.generalPrice ?? beat.startingPrice ?? beat.price ?? 0);
   if (licenseType === "stems") return Number(beat.stemPrice ?? beat.generalPrice ?? beat.startingPrice ?? beat.price ?? 0);
-  return Number(beat.exclusivePrice ?? 0);
+  return exclusiveBeatEligible(beat)?Number(beat.exclusivePrice ?? 0):0;
 }
 
 export const beatLicenseOptions: Array<{

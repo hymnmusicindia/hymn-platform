@@ -28,6 +28,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   try {
     const payload = beatMutationSchema.parse(await request.json());
+    if((payload.sampleDeclaration||prismaBeat.sampleDeclaration)!=="NO_UNCONTROLLED_SAMPLES")payload.exclusivePrice=0;
+    if(payload.sampleDeclaration==="LICENSED_SAMPLES"&&!await prisma.storedAsset.count({where:{entityType:"BEAT",entityId:String(beatId),category:"BEAT_SAMPLE_LICENSE",ownerUserId:prismaBeat.userId,deletedAt:null}}))return NextResponse.json({error:"Attach the sample agreement using the sample licence upload before changing the declaration."},{status:400});
+    if(result.user.role==="producer"&&payload.sampleDeclaration&&payload.sampleDeclaration!==prismaBeat.sampleDeclaration)return NextResponse.json({error:"Use Attach sample / Splice agreement to update sample permissions, or contact HYMN to correct an original-material declaration."},{status:409});
     const merged = { ...prismaBeat, ...payload };
     if (payload.sampleDeclaration !== undefined || payload.sampleDisclosure !== undefined) beatMutationSchema.parse({ sampleDeclaration: merged.sampleDeclaration, sampleDisclosure: merged.sampleDisclosure });
     beatMutationSchema.parse({ price: payload.price ?? prismaBeat.mp3PriceCents / 100, generalPrice: payload.generalPrice ?? prismaBeat.generalPriceCents / 100, stemPrice: payload.stemPrice ?? prismaBeat.priceCents / 100, exclusivePrice: payload.exclusivePrice ?? prismaBeat.exclusivePriceCents / 100 });
@@ -40,7 +43,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (metadataChanged) {
       // A correction request remains a manual review until the team clears it.
       const wasRestricted = !['PUBLISHED','PENDING_REVIEW','DRAFT'].includes(prismaBeat.status) || prismaBeat.reviewIssues != null;
-      if (!wasRestricted && await autoPublishProducerBeat(beatId)) return NextResponse.json({ beat: { ...updated, status:'PUBLISHED', enabled:prismaBeat.status==='PUBLISHED' ? updated.enabled : true } });
+      if (!wasRestricted && await autoPublishProducerBeat(beatId).catch(()=>false)) return NextResponse.json({ beat: { ...updated, status:'PUBLISHED', enabled:prismaBeat.status==='PUBLISHED' ? updated.enabled : true } });
       await prisma.beat.update({ where: { id: beatId }, data: { status: "PENDING_REVIEW", enabled: false, reviewIssues: wasRestricted ? { reason:'Review the corrected beat before publishing.' } : Prisma.JsonNull } });
       await createAdminTaskOnce({ eventKey: `producer:${result.user.id}:beat:${beatId}:review`, type: "Beat Awaiting Approval", priority: "normal", title: `Updated beat ready for review: ${updated.title}`, body: "Producer updated beat metadata. Review the current files and fields.", href: `/admin?tab=operations&beatId=${beatId}`, entityType: "beat", entityId: beatId });
       return NextResponse.json({ beat: { ...updated, status: "PENDING_REVIEW", enabled: false, reviewIssues: null } });

@@ -48,6 +48,7 @@ export async function retryTransactionalEmail(logId: number) {
   const original = await emailLog.findUnique({ where: { id: logId } });
   if (!original) throw new Error("Email log not found.");
   if (original.status !== "failed") throw new Error("Only failed emails can be retried.");
+  if(original.template==="beat_sample_agreement_request"){const beat=await prisma.beat.findUnique({where:{id:Number(original.entityId)},include:{user:true}});if(!beat||beat.user.status!=="ACTIVE"||beat.user.email.toLowerCase()!==original.toEmail.toLowerCase()||await prisma.storedAsset.count({where:{entityType:"BEAT",entityId:String(beat.id),category:"BEAT_SAMPLE_LICENSE",deletedAt:null}}))throw Error("Sample request recipient or evidence changed. Review before retrying.");}
   if (original.template === "team_performance_report") throw new Error("Performance reports are weekly only. Review delivery in the performance outbox; generic retries cannot resend daily reports or bypass membership checks.");
   if (original.template === "team_next_day_plan") throw new Error("Review nightly plans in their dedicated outbox; generic retries cannot bypass recipient, date or duplicate checks.");
   if (original.template === "team_outreach") throw new Error("Review team outreach inside Team OS; generic retries cannot bypass recipient eligibility checks.");

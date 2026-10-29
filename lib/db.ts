@@ -1,3 +1,4 @@
+import {exclusiveBeatEligible,exclusiveBeatRestriction} from "./beat-rights-policy";
 import { customerBrandText } from "@/lib/customer-message";
 import { accrueReferralCommission } from "@/lib/referral-commissions";
 import bcrypt from "bcrypt";
@@ -1895,7 +1896,8 @@ export async function completeCheckoutOrder(razorpayOrderId: string, paymentId: 
       for (const item of order.items) {
         const normalizedLicenseType = normalizeBeatLicenseType(item.licenseType);
         if (normalizedLicenseType === "exclusive") {
-          const sold = await tx.beat.updateMany({ where: { id: item.beatId, status: "EXCLUSIVE_RESERVED", exclusiveReservationOrderId: razorpayOrderId }, data: { status: "EXCLUSIVELY_SOLD", enabled: false, exclusiveReservedByUserId: null, exclusiveReservationOrderId: null, exclusiveReservationExpiresAt: null } });
+          if(!exclusiveBeatEligible(item.beat))throw new Error(exclusiveBeatRestriction);
+          const sold = await tx.beat.updateMany({ where: { id: item.beatId, sampleDeclaration:"NO_UNCONTROLLED_SAMPLES", status: "EXCLUSIVE_RESERVED", exclusiveReservationOrderId: razorpayOrderId }, data: { status: "EXCLUSIVELY_SOLD", enabled: false, exclusiveReservedByUserId: null, exclusiveReservationOrderId: null, exclusiveReservationExpiresAt: null } });
           if (sold.count !== 1 && !alreadyPaid) throw new Error("Exclusive reservation is no longer valid; payment requires manual reconciliation.");
           if (!alreadyPaid) await tx.auditLog.create({ data: { actorId: order.userId, actorRole: "customer", action: "BEAT_EXCLUSIVELY_SOLD", entity: "beat", entityId: String(item.beatId), newValue: { status: "EXCLUSIVELY_SOLD" }, metadata: { orderId: order.id, paymentId, priorGeneralLicenses: item.beat.generalLicensesSold } } });
         } else if (!alreadyPaid) {
@@ -3623,8 +3625,9 @@ export async function listArtistCardsByUser(userId: number) {
 
 export async function createBeatPurchase(userId: number, beatId: number, licenseType: "mp3" | "wav" | "stems" | "general" | "basic" | "premium" | "exclusive", paymentId?: string | null) {
   if (usesPostgresPrisma()) {
-    const beat = await prisma.beat.findUniqueOrThrow({ where: { id: beatId }, select: { producerPartyId: true } });
+    const beat = await prisma.beat.findUniqueOrThrow({ where: { id: beatId }, select: { producerPartyId: true, sampleDeclaration:true, sampleDisclosure:true } });
     const existing = await prisma.beatPurchase.findFirst({ where: paymentId ? { userId, beatId, licenseType, paymentId } : { userId, beatId, licenseType, paymentId: null } });
+    if(!existing&&licenseType==="exclusive"&&!exclusiveBeatEligible(beat))throw new Error(exclusiveBeatRestriction);
     const purchase = existing
       ? await prisma.beatPurchase.update({ where: { id: existing.id }, data: { hasAccess: true, paymentId: paymentId ?? undefined } })
       : await prisma.beatPurchase.create({ data: {
@@ -3768,7 +3771,7 @@ export function mapPrismaBeat(prismaBeat: any): Beat {
     tags: Array.isArray(prismaBeat.tags) ? prismaBeat.tags : [],
     sampleDeclaration: prismaBeat.sampleDeclaration,
     sampleDisclosure: prismaBeat.sampleDisclosure,
-    availableLicenses: prismaBeat.deliverableAsset && !prismaBeat.deliverableAsset.deletedAt ? (prismaBeat.deliverableAsset.mimeType === 'audio/mpeg' ? ['mp3'] : ['audio/wav','audio/x-wav','audio/flac'].includes(prismaBeat.deliverableAsset.mimeType) ? ['wav'] : prismaBeat.deliverableAsset.mimeType === 'application/zip' ? ['stems','exclusive'] : []) : [],
+    availableLicenses: prismaBeat.deliverableAsset && !prismaBeat.deliverableAsset.deletedAt ? (prismaBeat.deliverableAsset.mimeType === 'audio/mpeg' ? ['mp3'] : ['audio/wav','audio/x-wav','audio/flac'].includes(prismaBeat.deliverableAsset.mimeType) ? ['wav'] : prismaBeat.deliverableAsset.mimeType === 'application/zip' ? (exclusiveBeatEligible(prismaBeat)?['stems','exclusive']:['stems']) : []) : [],
     generalMaxCommercialReleases: prismaBeat.generalMaxCommercialReleases,
     generalStreamingLimit: prismaBeat.generalStreamingLimit,
     generalVideoLimit: prismaBeat.generalVideoLimit,

@@ -10,7 +10,9 @@ import { newestReleaseFirst } from "@/lib/distribution-workspace";
 import dynamic from "next/dynamic";
 import Link from 'next/link';
 import { WorkspacePanel as SurfaceSection, WorkspaceMetric as StatCard } from "@/components/workspace-panel";
-import { BeatSampleReview } from '@/components/beat-sample-review';
+import {MarketplaceCatalogue} from './marketplace-catalogue';
+import {OperationsPanels} from './operations-panels';
+import marketplaceStyles from './marketplace-operations.module.css';
 import { AdminCenteredDialog } from "./admin-centered-dialog";
 import { ProducerStorefrontPreview } from "./admin-catalog-grid";
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
@@ -19,7 +21,7 @@ const AdminRevenueWorkspace = dynamic(() => import("@/components/admin-revenue-w
 import { summarizeRevenue, type RevenueEntry } from "@/lib/revenue-report";
 import type { SubscriptionRevenueRow } from "@/lib/subscription-revenue";
 
-import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ReleaseCorrectionNotice, ReleaseRightsEvidence } from "./release-rights-evidence";
 import { ReleaseSubmissionHistory } from "@/components/release-submission-history";
 import { adminReleaseStatusLabel, effectiveReleaseStatus } from "@/lib/release-status-presentation";
@@ -669,6 +671,11 @@ export function AdminControlCenter({
   const [selectedBeatReviewId,setSelectedBeatReviewId]=useState<number|null>(initialBeatId??null);
   const [beatStatusFilter, setBeatStatusFilter] = useState("pending");
   const [producerBeatFilter, setProducerBeatFilter] = useState<number | null>(null);
+  const marketplaceKnownIds=useRef<Set<number>|null>(null);
+  const [marketplaceNotice,setMarketplaceNotice]=useState("");
+  const [marketplaceUpdated,setMarketplaceUpdated]=useState<string|null>(null);
+  const [marketplaceSection,setMarketplaceSection]=useState("catalogue");
+  const [marketplaceReload,setMarketplaceReload]=useState(0);
   const [marketplaceLoading, setMarketplaceLoading] = useState(false);
   const [reviewingBeatId, setReviewingBeatId] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -708,16 +715,18 @@ export function AdminControlCenter({
     if (activeTab !== "operations") return;
     let active = true;
     setMarketplaceLoading(true);
-    Promise.all([
+    Promise.allSettled([
       fetch("/api/admin/beats", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject(new Error("Could not load beats."))),
       fetch("/api/admin/producers", { cache: "no-store" }).then((response) => response.ok ? response.json() : Promise.reject(new Error("Could not load producers.")))
     ]).then(([beatData, producerData]) => {
       if (!active) return;
-      setBeats(Array.isArray(beatData.beats) ? beatData.beats : []);
-      setProducerManagement(Array.isArray(producerData.producers) ? producerData.producers : []);
+      if(beatData.status==="fulfilled"&&Array.isArray(beatData.value.beats)){const rows=beatData.value.beats as Beat[];const previous=marketplaceKnownIds.current;const arrived=previous?rows.filter(beat=>!previous.has(beat.id)).length:0;if(arrived)setMarketplaceNotice(`${arrived} new beat${arrived===1?"":"s"} arrived. Open Catalogue & QC to review.`);marketplaceKnownIds.current=new Set(rows.map(beat=>beat.id));setMarketplaceUpdated(new Date().toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}));setBeats(rows);}
+      if(producerData.status==="fulfilled"&&Array.isArray(producerData.value.producers))setProducerManagement(producerData.value.producers);
+      if(beatData.status==="rejected"||producerData.status==="rejected")setFeedback("Some marketplace records could not refresh. Previously loaded records remain visible; retry Refresh workspace.");
     }).catch((error) => { if (active) setFeedback(error instanceof Error ? error.message : "Marketplace data could not be refreshed."); }).finally(() => { if (active) setMarketplaceLoading(false); });
     return () => { active = false; };
-  }, [activeTab]);
+  }, [activeTab,marketplaceReload]);
+  useEffect(()=>{if(activeTab!=="operations")return;const timer=window.setInterval(()=>{if(document.visibilityState==="visible")setMarketplaceReload(value=>value+1);},45000);return()=>clearInterval(timer);},[activeTab]);
   useEffect(() => {
     if (!initialBeatId || activeTab !== "operations") return;
     setBeatStatusFilter("all");
@@ -764,7 +773,7 @@ export function AdminControlCenter({
       if (!response.ok) { setFeedback(data.error || "Could not review beat."); return; }
       setBeats((items) => items.map((item) => item.id === beat.id ? { ...item, enabled: data.beat.enabled, status: data.beat.status, reviewIssues: data.beat.reviewIssues } : item));
       setFeedback(decision === "approved" ? `${beat.title} is approved and live in the Beat Store.` : `Corrections requested for ${beat.title}.`);
-    } finally {
+    } catch {setFeedback("Beat review could not be saved. Refresh and retry; no success is claimed.");} finally {
       setReviewingBeatId(null);
     }
   }
@@ -1610,9 +1619,9 @@ export function AdminControlCenter({
         {key:"open",label:"Details",render:ticket=><button className="btn-outline" onClick={()=>setSelectedTicketId(ticket.id)}>Open ticket</button>}
       ]}/></SurfaceSection>{(()=>{const ticket=supportTickets.find(item=>item.id===selectedTicketId);return ticket?<div id="support-ticket-detail"><SurfaceSection title={`Ticket #${ticket.id}: ${ticket.subject}`} description={`${ticket.category} / ${ticket.priority||"normal"} priority`}><div className="workspace-ticket-message">{ticket.message}</div><SupportTicketTools key={ticket.id} reviewer ticket={ticket} fallbackEmail={users.find(u=>u.id===ticket.userId)?.email || ""} onUpdated={updated=>setSupportTickets(items=>items.map(t=>t.id===updated.id?updated:t))}/><div className="record-actions mt-4">{(["open","in_progress","resolved","closed"] as SupportTicket["status"][]).map(status=><button key={status} className={ticket.status===status?"btn-primary":"btn-outline"} disabled={isPending||ticket.status===status} onClick={()=>updateTicketStatus(ticket.id,status)}>{status.replaceAll("_"," ")}</button>)}<button className="btn-outline" onClick={()=>setSelectedTicketId(null)}>Close details</button></div></SurfaceSection></div>:null;})()}</div>:null}
 
-      {activeTab === "operations" ? <div className="grid gap-6">
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Approved producers" value={producerManagement.length} detail="Accounts with producer access" /><StatCard label="Published inventory" value={publishedBeats} detail={`${pendingBeatReviews} awaiting review`} /><StatCard label="Verified gross sales" value={formatMoney(producerManagement.reduce((sum, producer) => sum + producer.grossRevenue, 0))} /><StatCard label="Producer earnings" value={formatMoney(producerManagement.reduce((sum, producer) => sum + producer.producerEarnings, 0))} detail="Contractual 70% share" /></section>
-        <SurfaceSection title="Producer operations" description="Live creator accounts, storefront readiness, catalogue health, verified sales, and payout exposure.">
+      {activeTab === "operations" ? <div className="grid min-w-0 gap-5"><header className={marketplaceStyles.refresh}><div><p className="hymn-kicker">MARKETPLACE & STUDIO</p><h2>Keep the creative work moving.</h2><p>Review exceptions, follow purchases and manage your creator network.{marketplaceUpdated?` Updated ${marketplaceUpdated}.`:""}</p></div><button className={marketplaceStyles.action} disabled={marketplaceLoading} onClick={()=>setMarketplaceReload(value=>value+1)}>{marketplaceLoading?'Refreshing...':'Refresh workspace'}</button></header>{marketplaceNotice&&<p role="status" className="rounded-xl border border-[var(--border)] p-4 text-sm">{marketplaceNotice}<button className="ml-4 underline" onClick={()=>{setMarketplaceSection("catalogue");setBeatStatusFilter("all");setMarketplaceNotice("");}}>Show catalogue</button></p>}<section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Needs review" value={pendingBeatReviews} detail="Rights or QC exceptions"/><StatCard label="Live catalogue" value={publishedBeats} detail="Available to customers"/><StatCard label="Producer corrections" value={correctionBeats} detail="Waiting on updated details"/><StatCard label="Paid beat orders" value={orders.filter(order=>order.paymentStatus==='paid').length} detail="Verified payment records"/></section><OperationsPanels activeKey={marketplaceSection} onChange={setMarketplaceSection} panels={[
+ {key:'catalogue',label:'Catalogue & QC',count:beats.length,content:<SurfaceSection title="Beat catalogue" description="Compact records, latest submissions first. Select a beat to inspect files and sample rights."><div className="mb-5 grid gap-3 border-b pb-5 sm:grid-cols-2 xl:grid-cols-[1fr,1fr,auto]" style={{ borderColor: "var(--border)" }}><select className="field" value={beatStatusFilter} onChange={(event) => setBeatStatusFilter(event.target.value)}><option value="pending">Awaiting approval</option><option value="corrections">Corrections requested</option><option value="published">Published</option><option value="hidden">Hidden / suspended</option><option value="all">All beats</option></select><select className="field" value={producerBeatFilter ?? ""} onChange={(event) => setProducerBeatFilter(event.target.value ? Number(event.target.value) : null)}><option value="">All producers</option>{producerManagement.map((producer) => <option key={producer.id} value={producer.id}>{producer.profile?.displayName || producer.name}</option>)}</select><button type="button" onClick={() => { setBeatStatusFilter("pending"); setProducerBeatFilter(null); setModuleSearch(""); }} className="btn-outline pressable">Reset filters</button></div><MarketplaceCatalogue inspectionBeat={beats.find(beat=>beat.id===selectedBeatReviewId)} beats={filteredMarketplaceBeats} selectedId={selectedBeatReviewId} onSelect={setSelectedBeatReviewId} onReview={reviewBeat} onRemove={removeBeat} onRefresh={()=>setMarketplaceReload(value=>value+1)} loading={marketplaceLoading} busyId={reviewingBeatId} canManage={hasPermission('users.manage')}/></SurfaceSection>},
+ {key:'producers',label:'Producers',count:producerManagement.length,content:<SurfaceSection title="Producer operations" description="Live creator accounts, storefront readiness, catalogue health, verified sales, and payout exposure.">
           <WorkspaceRecords rows={producerManagement} rowKey={producer=>producer.id} searchText={producer=>`${producer.name} ${producer.email} ${producer.profile?.displayName} ${producer.status}`} externalSearch={moduleSearch} noun="producers" columns={[
             {key:"name",label:"Producer",primary:true,value:producer=>producer.name,render:producer=><><strong>{producer.profile?.displayName||producer.name}</strong><small>{producer.email}</small></>},
             {key:"status",label:"Storefront",render:producer=><StatusPill label={producer.profile?.status||"Not set up"}/>},
@@ -1623,66 +1632,12 @@ export function AdminControlCenter({
 
 
           {selectedProducerId && <AdminCenteredDialog title="Producer storefront" onClose={()=>setSelectedProducerId(null)}><div id="producer-storefront-details" className="grid gap-5">{producerManagement.filter(p=>p.id===selectedProducerId).map(p=><ProducerStorefrontPreview key={p.id} producer={p} beats={beats}/>)}
-            {producerManagement.filter((producer) => producer.id===selectedProducerId).map((producer) => <ProducerManagementCard key={producer.id} producer={producer} pending={isPending} canManage={hasPermission("users.manage")} onOpenCatalogue={() => { setSelectedProducerId(null); setProducerBeatFilter(producer.id); setBeatStatusFilter("all"); selectAdminTab("operations"); }} onOpenLedger={() => selectAdminTab("royalties")} onSave={updateProducerProfile} onRevoke={() => { const linked = users.find((user) => user.id === producer.id); if (linked && window.confirm(`Revoke producer access for ${producer.name}? Their storefront will be disabled.`)) updateWorkspaceRole(linked, "customer"); }} />)}
+            {producerManagement.filter((producer) => producer.id===selectedProducerId).map((producer) => <ProducerManagementCard key={producer.id} producer={producer} pending={isPending} canManage={hasPermission("users.manage")} onOpenCatalogue={() => { setSelectedProducerId(null); setProducerBeatFilter(producer.id); setBeatStatusFilter("all"); setMarketplaceSection("catalogue"); selectAdminTab("operations"); }} onOpenLedger={() => selectAdminTab("royalties")} onSave={updateProducerProfile} onRevoke={() => { const linked = users.find((user) => user.id === producer.id); if (linked && window.confirm(`Revoke producer access for ${producer.name}? Their storefront will be disabled.`)) updateWorkspaceRole(linked, "customer"); }} />)}
             {producerManagement.length === 0 ? <EmptyState copy="No producers found. Grant producer access from Admin Portal → Users." /> : null}
           </div></AdminCenteredDialog>}
-        </SurfaceSection>
-      </div> : null}
-
-      {activeTab === "operations" ? (
-        <div className="grid gap-6">
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Awaiting approval" value={pendingBeatReviews} detail="Hidden until reviewed" /><StatCard label="Published beats" value={publishedBeats} detail="Visible in the Beat Store" /><StatCard label="Corrections requested" value={correctionBeats} detail="Waiting on producer" /><StatCard label="Beat orders" value={orders.length} detail={`${orders.filter((order) => order.paymentStatus === "paid").length} paid`} /></section>
-          <SurfaceSection title="Beat review and catalogue" description="Live moderation queue. Review metadata, assets, rights declarations, pricing, and storefront state before publishing.">
-            <div className="mb-5 grid gap-3 border-b pb-5 sm:grid-cols-2 xl:grid-cols-[1fr,1fr,auto]" style={{ borderColor: "var(--border)" }}><select className="field" value={beatStatusFilter} onChange={(event) => setBeatStatusFilter(event.target.value)}><option value="pending">Awaiting approval</option><option value="corrections">Corrections requested</option><option value="published">Published</option><option value="hidden">Hidden / suspended</option><option value="all">All beats</option></select><select className="field" value={producerBeatFilter ?? ""} onChange={(event) => setProducerBeatFilter(event.target.value ? Number(event.target.value) : null)}><option value="">All producers</option>{producerManagement.map((producer) => <option key={producer.id} value={producer.id}>{producer.profile?.displayName || producer.name}</option>)}</select><button type="button" onClick={() => { setBeatStatusFilter("pending"); setProducerBeatFilter(null); setModuleSearch(""); }} className="btn-outline pressable">Reset filters</button></div>
-            <WorkspaceRecords rows={filteredMarketplaceBeats} rowKey={beat=>beat.id} searchText={beat=>`${beat.title} ${beat.producerName} ${beat.genre} ${beat.status}`} noun="beats" columns={[
-              {key:"title",label:"Beat",primary:true,value:beat=>beat.title,render:beat=><div className="record-identity">{beat.artworkUrl?<img src={artworkPreviewUrl(beat.artworkUrl, 320)} alt=""/>:null}<div><strong>{beat.title}</strong><small>{beat.producerName}</small></div></div>},
-              {key:"style",label:"Style",render:beat=><><span>{beat.genre}</span><small>{beat.bpm} BPM</small></>},
-              {key:"status",label:"Review",value:beat=>beat.status||"",render:beat=><StatusPill label={beat.status||"DRAFT"}/>},
-              {key:"price",label:"Price",value:beat=>beat.price,render:beat=>formatMoney(beat.generalPrice??beat.price)},
-              {key:"review",label:"Inspect",render:beat=><button className="btn-outline" onClick={()=>setSelectedBeatReviewId(beat.id)}>Review beat</button>}
-            ]}/>
-            {selectedBeatReviewId?<button className="btn-outline my-4" onClick={()=>setSelectedBeatReviewId(null)}>Close beat details</button>:null}
-            <div className="grid gap-4">
-              {beats.filter(beat=>beat.id===selectedBeatReviewId).map((beat) => (
-                <article id={`admin-beat-${beat.id}`} key={beat.id} className="surface-list-item overflow-hidden p-0" style={initialBeatId === beat.id ? { outline: "2px solid var(--accent)", outlineOffset: "2px" } : undefined}>
-                  <div className="grid min-w-0 gap-4 p-4 md:grid-cols-[96px_minmax(0,1fr)] md:gap-5">
-                    {beat.artworkUrl ? (
-                      <img src={artworkPreviewUrl(beat.artworkUrl, 240)} alt={`${beat.title} cover`} className="h-24 w-24 rounded-xl border object-cover shadow-sm" style={{ borderColor: "var(--border)" }} />
-                    ) : (
-                      <div className="flex h-24 w-24 items-center justify-center rounded-xl border text-center text-[10px] font-medium uppercase tracking-[0.12em]" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text-soft)" }}>No artwork</div>
-                    )}
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0"><p className="truncate text-base font-semibold" style={{ color: "var(--text)" }}>{beat.title}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{beat.producerName || `Producer #${beat.producerId}`} · Submitted {new Date(beat.createdAt).toLocaleDateString("en-IN")}</p></div>
-                        <StatusPill label={beat.status ?? (beat.enabled ? "PUBLISHED" : "PENDING_REVIEW")} active={beat.status === "PUBLISHED" || beat.status === "PENDING_REVIEW"} />
-                      </div>
-                      <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 text-sm sm:grid-cols-4">
-                        <div><p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: "var(--text-soft)" }}>Tempo</p><p className="mt-1 font-medium">{beat.bpm} BPM · {beat.keySignature || "Key missing"}</p></div>
-                        <div><p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: "var(--text-soft)" }}>Style</p><p className="mt-1 truncate font-medium">{beat.genre} · {beat.mood}</p></div>
-                        <div><p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: "var(--text-soft)" }}>General</p><p className="mt-1 font-medium">{formatMoney(beat.generalPrice ?? beat.price)}</p></div>
-                        <div><p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: "var(--text-soft)" }}>Exclusive</p><p className="mt-1 font-medium">{formatMoney(beat.exclusivePrice ?? 0)}</p></div>
-                      </div>
-                      <BeatSampleReview declaration={beat.sampleDeclaration} disclosure={beat.sampleDisclosure}/>
-                      {beat.reviewIssues?.reason ? <div className="mt-4 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "color-mix(in srgb, var(--danger) 45%, var(--border))", color: "var(--danger)" }}><strong>Corrections:</strong> {beat.reviewIssues.reason}</div> : null}
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {beat.previewUrl ? <a href={beat.previewUrl} target="_blank" rel="noreferrer" className="btn-outline pressable">Listen to preview</a> : <span className="btn-outline cursor-not-allowed opacity-50">Preview missing</span>}
-                        {beat.status !== "PUBLISHED" ? <button type="button" disabled={reviewingBeatId === beat.id || !hasPermission("users.manage")} onClick={() => reviewBeat(beat, "approved")} className="btn-primary pressable disabled:opacity-40">{reviewingBeatId === beat.id ? "Reviewing…" : "Approve and publish"}</button> : null}
-                        {beat.status !== "PUBLISHED" ? <button type="button" disabled={reviewingBeatId === beat.id || !hasPermission("users.manage")} onClick={() => reviewBeat(beat, "changes_requested")} className="btn-outline pressable disabled:opacity-40">Request corrections</button> : null}
-                        {beat.status !== "ARCHIVED" ? <button type="button" disabled={reviewingBeatId === beat.id || !hasPermission("users.manage")} onClick={() => void removeBeat(beat)} className="btn-outline pressable disabled:opacity-40" style={{ color: "var(--danger)" }}>Remove beat</button> : null}
-                        <button type="button" onClick={() => { setProducerBeatFilter(beat.producerId); setBeatStatusFilter("all"); }} className="btn-outline pressable">Producer catalogue</button>
-                      </div>
-                    </div>
-                  </div>
-                </article>
-              ))}
-              {!marketplaceLoading && filteredMarketplaceBeats.length === 0 ? <EmptyState copy={beats.length ? "No beats match these filters." : "No beats have been submitted yet."} /> : null}
-              {marketplaceLoading ? <p className="py-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>Refreshing marketplace records…</p> : null}
-            </div>
-          </SurfaceSection>
-
-          <div className="grid gap-6 xl:grid-cols-2"><SurfaceSection title="Beat-store orders" description="Buyer, licence, payment, and fulfilment records from live checkout data."><div className="grid gap-3">{orders.filter((order) => searchMatch(order.id, order.buyerName, order.buyerEmail, order.paymentStatus, ...order.items.map((item) => item.beatTitle))).map((order) => <article key={order.id} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">Order #{order.id}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{order.buyerName || order.buyerEmail || `Customer #${order.userId}`} · {new Date(order.createdAt).toLocaleString("en-IN")}</p></div><StatusPill label={order.paymentStatus} active={order.paymentStatus === "paid"} /></div><div className="mt-3 space-y-2">{order.items.map((item) => <div key={`${order.id}-${item.beatId}-${item.licenseType}`} className="flex justify-between gap-3 text-sm"><span>{item.beatTitle || `Beat #${item.beatId}`} · {item.licenseType.replace(/_/g, " ")}</span><strong>{formatMoney(item.price)}</strong></div>)}</div><div className="mt-3 flex justify-between border-t pt-3 text-sm" style={{ borderColor: "var(--border)" }}><span style={{ color: "var(--text-muted)" }}>{order.razorpayPaymentId ? "Payment verified" : "Awaiting payment verification"}</span><strong>{formatMoney(order.amount)}</strong></div></article>)}{orders.length === 0 ? <EmptyState copy="No Beat Store orders yet." /> : null}</div></SurfaceSection>
-
-          <SurfaceSection title="Producer applications" description="Approve or reject producer onboarding.">
+        </SurfaceSection>},
+ {key:'orders',label:'Beat orders',count:orders.length,content:<SurfaceSection title="Beat-store orders" description="Buyer, licence, payment, and fulfilment records from live checkout data."><div className="grid gap-3">{orders.filter((order) => searchMatch(order.id, order.buyerName, order.buyerEmail, order.paymentStatus, ...order.items.map((item) => item.beatTitle))).map((order) => <article key={order.id} className="surface-list-item p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">Order #{order.id}</p><p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{order.buyerName || order.buyerEmail || `Customer #${order.userId}`} · {new Date(order.createdAt).toLocaleString("en-IN")}</p></div><StatusPill label={order.paymentStatus} active={order.paymentStatus === "paid"} /></div><div className="mt-3 space-y-2">{order.items.map((item) => <div key={`${order.id}-${item.beatId}-${item.licenseType}`} className="flex justify-between gap-3 text-sm"><span>{item.beatTitle || `Beat #${item.beatId}`} · {item.licenseType.replace(/_/g, " ")}</span><strong>{formatMoney(item.price)}</strong></div>)}</div><div className="mt-3 flex justify-between border-t pt-3 text-sm" style={{ borderColor: "var(--border)" }}><span style={{ color: "var(--text-muted)" }}>{order.razorpayPaymentId ? "Payment verified" : "Awaiting payment verification"}</span><strong>{formatMoney(order.amount)}</strong></div></article>)}{orders.length === 0 ? <EmptyState copy="No Beat Store orders yet." /> : null}</div></SurfaceSection>},
+ {key:'applications',label:'Applications',count:applications.filter(application=>application.status==='pending').length,content:<SurfaceSection title="Producer applications" description="Approve or reject producer onboarding.">
             <div className="grid gap-4">
               {applications.filter((application) => searchMatch(application.artistName, application.email, application.genreFocus, application.status)).map((application) => (
                 <article key={application.id} className="surface-list-item p-4">
@@ -1694,8 +1649,9 @@ export function AdminControlCenter({
               ))}
               {applications.length === 0 ? <EmptyState copy="No producer applications yet." /> : null}
             </div>
-          </SurfaceSection>
-          </div><SurfaceSection title="Partnership leads" description="Inbound business development and partnership requests.">
+          </SurfaceSection>},
+ {key:'studio',label:'Studio',content:<SurfaceSection title="Studio operations" description="Manage projects, engineer applications, delivery, disputes and payments in the dedicated Studio workspace."><div className="grid gap-4 sm:grid-cols-2"><a className="surface-list-item p-5" href="/admin/studio"><strong>Open Studio workspace</strong><p className="mt-2 text-sm text-[var(--text-muted)]">Projects, engineer roster, applications, trust and performance.</p></a><a className="surface-list-item p-5" href="/studio"><strong>View customer Studio</strong><p className="mt-2 text-sm text-[var(--text-muted)]">Inspect public services and the engineer discovery experience.</p></a></div></SurfaceSection>},
+ {key:'partnerships',label:'Partnerships',count:initialLeads.length,content:<SurfaceSection title="Partnership leads" description="Inbound business development and partnership requests.">
             <div className="grid gap-4">
               {initialLeads.filter((lead) => searchMatch(lead.name, lead.email, lead.collaborationType)).map((lead) => (
                 <article key={lead.id} className="surface-list-item p-4">
@@ -1706,9 +1662,8 @@ export function AdminControlCenter({
               ))}
               {initialLeads.length === 0 ? <EmptyState copy="No partnership leads yet." /> : null}
             </div>
-          </SurfaceSection>
-        </div>
-      ) : null}
+          </SurfaceSection>}
+ ]}/></div>:null}
       {activeTab === "reviews" ? <AdminReviewManager /> : null}
       {activeTab === "team" ? <AdminTeamAccessManager users={users} canManage={hasPermission("system.manage") && isAdminAuthority(adminAccess.role)} /> : null}
       {activeTab === "analytics" ? <SurfaceSection title="Operational reporting" description="Current stored records. Counts describe this catalogue snapshot; revenue is paid order value across the loaded history.">

@@ -10,7 +10,7 @@ export function validateBeatReadiness(beat: BeatReadinessInput) {
     ["price", Number.isFinite(beat.price) && Number(beat.price) > 0, "A valid license price is required."],
     ["generalPrice", beat.generalPrice === undefined || (Number.isFinite(beat.generalPrice) && Number(beat.generalPrice) > 0), "A valid WAV Licence price is required."],
     ["stemPrice", beat.stemPrice === undefined || (Number.isFinite(beat.stemPrice) && Number(beat.stemPrice) > 0), "A valid Stem Files Licence price is required."],
-    ["exclusivePrice", beat.exclusivePrice === undefined || (Number.isFinite(beat.exclusivePrice) && Number(beat.exclusivePrice) > Math.max(Number(beat.generalPrice ?? beat.price ?? 0), Number(beat.stemPrice ?? 0))), "Stems Exclusive Licence price must be higher than WAV and Stem Files prices."],
+    ["exclusivePrice", beat.sampleDeclaration !== "NO_UNCONTROLLED_SAMPLES" || beat.exclusivePrice === undefined || (Number.isFinite(beat.exclusivePrice) && Number(beat.exclusivePrice) > Math.max(Number(beat.generalPrice ?? beat.price ?? 0), Number(beat.stemPrice ?? 0))), "Stems Exclusive Licence price must be higher than WAV and Stem Files prices."],
     ["sampleDeclaration", beat.sampleDeclaration === undefined || ["NO_UNCONTROLLED_SAMPLES", "LICENSED_SAMPLES", "CONTAINS_UNCONTROLLED_SAMPLES"].includes(beat.sampleDeclaration), "Complete the sample declaration."],
     ["sampleDisclosure", !['LICENSED_SAMPLES','CONTAINS_UNCONTROLLED_SAMPLES'].includes(beat.sampleDeclaration ?? '') || Boolean(beat.sampleDisclosure?.trim()), "Provide sample source and licence/clearance details."],
     ["sampleDeclaration", beat.sampleDeclaration !== 'CONTAINS_UNCONTROLLED_SAMPLES', "Sample clearance must be resolved before publication."],

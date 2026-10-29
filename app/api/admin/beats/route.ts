@@ -1,4 +1,5 @@
 export const runtime = "nodejs";
+import {autoPublishProducerBeat} from "@/lib/beat-publication";
 
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/access";
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
 
   try {
     const formData = await request.formData();
+    if(formData.get("sampleRightsConfirmed")!=="on"||formData.get("sampleDeclaration")!=="NO_UNCONTROLLED_SAMPLES")return NextResponse.json({error:"Confirm this is fully original material. Sampled beats must use the producer submission with a sample certificate."},{status:400});
     const title = String(formData.get("title") || "").trim();
     const bpm = Number(formData.get("bpm"));
     const genre = String(formData.get("genre") || "").trim();
@@ -54,11 +56,14 @@ export async function POST(request: Request) {
       exclusivePrice,
       fileUrl,
       artworkUrl,
-      enabled: true
+      sampleDeclaration:"NO_UNCONTROLLED_SAMPLES",
+      enabled: false
     });
     await prisma.storedAsset.update({ where: { id: privateAudio.id }, data: { beatId: beat.id } });
 
-    return NextResponse.json({ beat }, { status: 201 });
+    await prisma.auditLog.create({data:{actorType:"admin",actorId:"sub" in result?Number(result.sub):null,entity:"beat",entityId:String(beat.id),action:"beat.sample_rights_declared",metadata:{sampleDeclaration:"NO_UNCONTROLLED_SAMPLES",source:"admin_original_upload"}}});
+    const published=await autoPublishProducerBeat(beat.id).catch(()=>false);
+    return NextResponse.json({ beat:{...beat,status:published?"PUBLISHED":beat.status,enabled:published},status:published?"published":"pending_review" }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not create beat.";
     return NextResponse.json({ error: message }, { status: 400 });

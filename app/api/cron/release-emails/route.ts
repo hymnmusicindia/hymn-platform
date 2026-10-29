@@ -1,7 +1,9 @@
+import {deliverBeatSampleRequests} from "@/lib/email/beat-sample-requests";
+import {repairPendingBeatQc} from "@/lib/beat-publication";
 import { repairPendingReviewHandoffs } from '@/lib/release-review-handoff';
 import { cronHandler } from "@/lib/cron/runtime";
 import { deliverReleaseOutbox } from "@/lib/email/release-outbox";
 import { repairRecentAmendmentAcknowledgements } from '@/lib/release-amendment-notifications';
 import {deliverRequestedBeats} from '@/lib/email/beat-delivery';
 export const runtime = "nodejs";
-export const GET = cronHandler("release-emails", async () => { const repairedReviews = await repairPendingReviewHandoffs(); const repairedAmendments = await repairRecentAmendmentAcknowledgements(); return Response.json({ ...await deliverReleaseOutbox(), repairedAmendments, repairedReviews, beatDelivery:await deliverRequestedBeats() }); });
+export const GET = cronHandler("release-emails", async () => { const repairedReviews = await repairPendingReviewHandoffs(); const repairedAmendments = await repairRecentAmendmentAcknowledgements(); return Response.json({ ...await deliverReleaseOutbox(), repairedAmendments, repairedReviews, sampleRequests:await deliverBeatSampleRequests().catch(()=>({deferred:true})),beatQc:await repairPendingBeatQc().catch(()=>({deferred:true})), beatDelivery:await deliverRequestedBeats().catch(()=>({deferred:true})) }); });

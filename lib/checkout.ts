@@ -1,3 +1,4 @@
+import {exclusiveBeatEligible,exclusiveBeatRestriction} from "./beat-rights-policy";
 import { findCouponByCode, findUserById, getCouponUsage, listBeats } from "@/lib/db";
 import {beatUsageRights,beatUsageSummary,licenceClauses,type LicenceClause} from './beat-licence-terms';
 import { distributionPlanCards } from "@/lib/distribution-plans";
@@ -55,6 +56,7 @@ async function buildLineItems(input: CheckoutInput): Promise<CheckoutLineItem[]>
       const beat = beats.find((entry) => entry.id === item.beatId);
       if (!beat || !beat.enabled) throw new Error("One of the selected beats is unavailable.");
       const licenseType = normalizeBeatLicenseType(item.licenseType);
+      if(licenseType==="exclusive"&&!exclusiveBeatEligible(beat))throw new Error(exclusiveBeatRestriction);
       const reservationActive = beat.status === "EXCLUSIVE_RESERVED" && (!beat.exclusiveReservationExpiresAt || new Date(beat.exclusiveReservationExpiresAt).getTime() > Date.now());
       if (reservationActive) throw new Error(`“${beat.title}” is temporarily held by an exclusive checkout. If you closed that checkout, wait for its reservation to clear before trying again.`);
       if (!beat.enabled || (!["PUBLISHED", "EXCLUSIVE_RESERVED"].includes(String(beat.status)))) throw new Error("This beat is not available for licensing.");

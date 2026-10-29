@@ -81,6 +81,7 @@ export function AdminOpsPanel({ initialBeats, initialOrders }: { initialBeats: B
           </div>
         </div>
         <form onSubmit={handleBeatSubmit} className="mt-6 grid gap-4 md:grid-cols-2">
+          <input type="hidden" name="sampleDeclaration" value="NO_UNCONTROLLED_SAMPLES"/><label className="md:col-span-2 text-sm"><input type="checkbox" name="sampleRightsConfirmed" required/> I have verified this beat is fully original, without third-party samples or non-exclusive loops. For sampled beats, use the producer submission and attach a certificate.</label>
           <input name="title" required className="field" placeholder="Beat title" />
           <input name="bpm" required type="number" min="1" className="field" placeholder="BPM" />
           <input name="genre" required className="field" placeholder="Genre" />

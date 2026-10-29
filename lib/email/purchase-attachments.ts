@@ -1,3 +1,4 @@
+import {purchasedSampleAgreements,readPurchasedSampleAgreement} from "../beat-sample-evidence";
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { localPrivateStorage } from "@/lib/private-storage";
@@ -29,5 +30,6 @@ export async function purchaseAttachments(purchaseId: number, userId: number, re
       console.warn("Email attachment unavailable", { purchaseId, assetId: asset.id });
     }
   }
+  for(const asset of await purchasedSampleAgreements(purchaseId,userId)){if(Number(asset.byteSize)>remaining)continue;try{const file=await readPurchasedSampleAgreement(purchaseId,userId,asset.id);if(file.bytes.length>remaining)continue;remaining-=file.bytes.length;result.push({filename:file.fileName,content:file.bytes,contentType:file.mimeType});}catch{console.warn("Sample agreement attachment unavailable",{purchaseId,assetId:asset.id});}}
   return result;
 }

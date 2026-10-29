@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -17,14 +18,15 @@ import { producerSetup } from '../lib/producer-setup';
 import { fixtureWav } from './direnote-browser-fixture';
 
 async function main(){
-  if(!process.env.DATABASE_URL?.startsWith('postgresql://fixture:fixture@127.0.0.1:55439/'))throw Error('Isolated fixture database required.');
+  if(!/^postgresql:\/\/fixture:fixture@127\.0\.0\.1:554[0-9]+\//.test(process.env.DATABASE_URL||''))throw Error('Isolated fixture database required.');
   const user=await prisma.user.create({data:{name:'Workflow producer',email:'workflow@example.test',googleId:'workflow',role:'PRODUCER',status:'ACTIVE'}});
   await prisma.producerProfile.create({data:{userId:user.id,displayName:'Workflow producer',bio:'Fixture producer',specialty:'Trap',slug:'workflow-producer',avatarUrl:'/avatar.jpg',coverPhotoUrl:'/cover.jpg',active:true,status:'active'}});
   const audio=await prisma.upload.create({data:{userId:user.id,kind:'AUDIO',storageKey:'fixture',fileName:'master.wav',mimeType:'audio/wav',sizeBytes:1,publicUrl:'/private/master.wav'}});
-  const make=()=>prisma.beat.create({data:{userId:user.id,title:'Workflow beat',bpm:100,genre:'Trap',mood:'Dark, Energetic',keySignature:'C Minor',priceCents:99900,mp3PriceCents:12000,generalPriceCents:50000,exclusivePriceCents:500000,status:'PENDING_REVIEW',enabled:false,audioUploadId:audio.id}});
+  const artwork=await prisma.upload.create({data:{userId:user.id,kind:'ARTWORK',storageKey:'art',fileName:'cover.png',mimeType:'image/png',sizeBytes:10,publicUrl:'/cover.png'}});
+  const make=async()=>{const beat=await prisma.beat.create({data:{userId:user.id,title:'Workflow beat',bpm:100,genre:'Trap',mood:'Dark, Energetic',keySignature:'C Minor',priceCents:99900,mp3PriceCents:12000,generalPriceCents:50000,exclusivePriceCents:500000,status:'PENDING_REVIEW',enabled:false,audioUploadId:audio.id,artworkUploadId:artwork.id}});await localPrivateStorage.upload({ownerUserId:user.id,beatId:beat.id,assetType:'private_beat_deliverable',fileName:'master.wav',mimeType:'audio/wav',bytes:Buffer.from(fixtureWav())});await prisma.auditLog.create({data:{actorId:user.id,actorType:'user',entity:'beat',entityId:String(beat.id),action:'beat.sample_rights_declared',metadata:{sampleDeclaration:'NO_UNCONTROLLED_SAMPLES'}}});return beat;};
   const first=await make();
   assert.equal(await producerHasApprovedBeat(user.id),false);
-  assert.equal(await autoPublishProducerBeat(first.id),false,'First beat requires manual approval.');
+  assert.equal(await autoPublishProducerBeat(first.id),true,'The first original beat should publish when all automatic checks pass.');
   const nativeRequire=createRequire(import.meta.url);
   const compiled=ts.transpileModule(fs.readFileSync('app/api/admin/beats/[id]/review/route.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
   const route={exports:{} as {PATCH:(request:Request,context:{params:Promise<{id:string}>})=>Promise<Response>}};
@@ -36,16 +38,18 @@ async function main(){
   const uploadRoute={exports:{} as {POST:(request:Request)=>Promise<Response>}};
   const adapters:Record<string,unknown>={'@/lib/access':{requireRole:async()=>({user:{id:user.id,name:user.name,role:'producer'}})},'@/lib/db':db,'@/lib/storage':storage,'@/lib/private-storage':{localPrivateStorage},'@/lib/storage-service':{beatAssetRelativePath},'@/lib/beat-readiness':{validateBeatReadiness},'@/lib/task-queue':{createAdminTaskOnce:async()=>{}},'@/lib/prisma':{prisma},'@/lib/producer-setup':{producerSetup},'@/lib/validation':{beatMutationSchema},'@/lib/beat-publication':{autoPublishProducerBeat}};
   vm.runInNewContext(uploadCompiled,{exports:uploadRoute.exports,console,File,Buffer,require:(id:string)=>adapters[id] ?? (id.startsWith('@/')?nativeRequire('../'+id.slice(2)):nativeRequire(id))});
+  const coverBytes=await sharp({create:{width:1000,height:1000,channels:3,background:"#333333"}}).png().toBuffer();
   const upload=async(licensed=false,proof=true,confirmed=true)=>{
     const form=new FormData();for(const [key,value] of Object.entries({title:'Actual upload',bpm:'100',genre:'Trap',mood:'Dark, Chill',keySignature:'Cmin',price:'120',generalPrice:'500',stemPrice:'999',exclusivePrice:'5000',audioFormat:'WAV',sampleDeclaration:licensed?'LICENSED_SAMPLES':'NO_UNCONTROLLED_SAMPLES',sampleDisclosure:licensed?'Splice certificate and buyer permissions':''}))form.set(key,value);
     if(confirmed)form.set('sampleRightsConfirmed','on');
+    form.set('artwork',new File([coverBytes],'cover.png',{type:'image/png'}));
     form.set('file',new File([fixtureWav()],'master.wav',{type:'audio/wav'}));
     if(licensed && proof)form.set('sampleLicenseEvidence',new File(['%PDF-1.4\nFixture licence\n%%EOF'],'certificate.pdf',{type:'application/pdf'}));
     return uploadRoute.exports.POST({formData:async()=>form} as unknown as Request);
   };
   assert.equal((await upload(false,true,false)).status,400,'Rights declaration must be explicit.');
   assert.equal((await upload(true,false)).status,400,'Licensed samples require PDF evidence.');
-  const uploadResponse=await upload();assert.equal(uploadResponse.status,201);const uploaded=await uploadResponse.json();assert.equal(uploaded.status,'published');assert.equal(uploaded.beat.keySignature,'C Minor');
+  const uploadResponse=await upload();const uploaded=await uploadResponse.json();assert.equal(uploadResponse.status,201,JSON.stringify(uploaded));assert.equal(uploaded.status,'published');assert.equal(uploaded.beat.keySignature,'C Minor');
   const licensedResponse=await upload(true);assert.equal(licensedResponse.status,201);const licensedUpload=await licensedResponse.json();assert.equal(licensedUpload.status,'pending_review');
   const proof=await prisma.storedAsset.findFirstOrThrow({where:{entityType:'BEAT',entityId:String(licensedUpload.beat.id),category:'BEAT_SAMPLE_LICENSE'}});
   const master=await prisma.storedAsset.findUniqueOrThrow({where:{beatId:licensedUpload.beat.id}});assert.notEqual(proof.id,master.id,'Sample evidence must not replace the unique master relation.');

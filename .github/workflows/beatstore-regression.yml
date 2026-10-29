@@ -4,6 +4,13 @@ on:
     paths:
       - 'components/beat-*'
       - 'components/producer-beat-grid.tsx'
+      - 'components/marketplace-*'
+      - 'components/operations-panels.tsx'
+      - 'components/studio-project-records.tsx'
+      - 'app/(admin)/admin/studio/**'
+      - 'app/(authenticated)/producer/beats/**'
+      - 'app/api/admin/beats/**'
+      - 'scripts/verify-marketplace*'
       - 'lib/beat-*'
       - 'lib/checkout*'
       - 'lib/db.ts'
@@ -33,6 +40,13 @@ on:
     paths:
       - 'components/beat-*'
       - 'components/producer-beat-grid.tsx'
+      - 'components/marketplace-*'
+      - 'components/operations-panels.tsx'
+      - 'components/studio-project-records.tsx'
+      - 'app/(admin)/admin/studio/**'
+      - 'app/(authenticated)/producer/beats/**'
+      - 'app/api/admin/beats/**'
+      - 'scripts/verify-marketplace*'
       - 'lib/beat-*'
       - 'lib/checkout*'
       - 'lib/db.ts'
@@ -85,3 +99,4 @@ jobs:
       - run: npm run test:beatstore:browser
       - run: node scripts/verify-beat-purchase-browser.cjs
       - run: node scripts/verify-beat-buyer-checkout.cjs
+      - run: node scripts/verify-marketplace-browser.cjs

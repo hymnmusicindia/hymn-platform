@@ -1,4 +1,5 @@
 "use client";
+import {exclusiveBeatEligible} from "@/lib/beat-rights-policy";
 
 import { beatUsageSummary } from '@/lib/beat-licence-terms';
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
@@ -115,16 +116,16 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
   }, [close, open]);
 
   if (!beat || !open) return null;
-  const options = beatLicenseCatalog.map((entry) => ({
+  const options = beatLicenseCatalog.filter(entry=>entry.purchasableKey!=="exclusive"||exclusiveBeatEligible(beat)).map((entry) => ({
     ...entry,
     price: licensePrice(beat, entry.purchasableKey),
     disabled: Boolean(beat.availableLicenses && !beat.availableLicenses.includes(entry.purchasableKey)) || licensePrice(beat, entry.purchasableKey) <= 0 || (entry.purchasableKey === "exclusive" && beat.exclusiveRemaining === 0)
   }));
   const selectedOption = options.find((option) => option.purchasableKey === selected) ?? options[0];
 
-  const addToCart = () => {if(!selectedOption.disabled)writeCartItem(beat, selected);};
+  const addToCart = () => {if(!selectedOption.disabled)writeCartItem(beat, selectedOption.purchasableKey);};
   const selectAndAdd = (licenseType: LicenseChoice) => {
-    if(options.find(option=>option.purchasableKey===licenseType)?.disabled)return;
+    const option=options.find(option=>option.purchasableKey===licenseType);if(!option||option.disabled)return;
     onSelect(licenseType);
     writeCartItem(beat, licenseType);
     onClose();
@@ -173,7 +174,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
           <div className="mx-auto w-full max-w-[13rem] sm:max-w-[16.5rem]">
             <LicenceWheel
               options={options.map(option => ({ key: option.purchasableKey, label: option.id === "mp3" ? "MP3" : option.id === "wav" ? "WAV" : option.id === "stems" ? "Stems" : "Exclusive", price: option.disabled ? "Unavailable" : formatMoney(option.price), disabled: option.disabled }))}
-              highlighted={hoveredLicense ?? selected}
+              highlighted={hoveredLicense ?? selectedOption.purchasableKey}
               onHighlight={key => setHoveredLicense(key as LicenseChoice | null)}
               onSelect={key => onSelect(key as LicenseChoice)}
               onConfirm={key => selectAndAdd(key as LicenseChoice)}

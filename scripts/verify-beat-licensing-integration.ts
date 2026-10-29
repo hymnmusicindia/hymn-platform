@@ -1,3 +1,4 @@
+import {purchasedSampleAgreements,readPurchasedSampleAgreement} from "../lib/beat-sample-evidence";
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 import {PDFDocument} from 'pdf-lib';
@@ -68,6 +69,26 @@ async function main(){
    assert.equal(await getBeatPurchaseDetails(purchase.id,buyer.id),null,'Revoked purchases must not expose the detail page');
    await prisma.beatPurchase.update({where:{id:purchase.id},data:{hasAccess:true}});
  }
+ // A producer sample certificate is frozen into the purchased licence and never public.
+ const certificate=await PDFDocument.create();certificate.addPage().drawText('Sample licence certificate');
+ const proof=await localPrivateStorage.upload({ownerUserId:producer.id,assetType:'private_ownership_proof',fileName:'splice-certificate.pdf',mimeType:'application/pdf',bytes:Buffer.from(await certificate.save())});
+ await prisma.storedAsset.update({where:{id:proof.id},data:{entityType:'BEAT',entityId:String(beat.id),category:'BEAT_SAMPLE_LICENSE'}});
+ await prisma.beat.update({where:{id:beat.id},data:{sampleDeclaration:'LICENSED_SAMPLES',sampleDisclosure:'Splice sample certificate',status:'PUBLISHED',enabled:true}});
+ const buyerDetails={legalName:'Sample Buyer',artistName:'Confirmed Stage',phone:'+91 9876543210',acceptedTerms:true as const};
+ await assert.rejects(()=>createOrder({buyerDetails,userId:buyer.id,amount:1000,razorpayOrderId:'deny-exclusive-'+stamp,paymentStatus:'created',items:[{beatId:beat.id,licenseType:'exclusive',price:1000}]}),/fully original/,'Sampled beats cannot reserve exclusive inventory.');
+ const sampledOrder=await createOrder({buyerDetails,userId:buyer.id,amount:200,originalPrice:200,finalAmount:200,razorpayOrderId:'sampled-'+stamp,paymentStatus:'created',items:[{beatId:beat.id,licenseType:'wav',price:200}]});
+ await completeCheckoutOrder(sampledOrder!.razorpayOrderId,'sampled-payment-'+stamp);
+ const sampledItem=await prisma.checkoutOrderItem.findFirstOrThrow({where:{orderId:sampledOrder!.id}}),sampledPurchase=await prisma.beatPurchase.findUniqueOrThrow({where:{checkoutOrderItemId:sampledItem.id}});
+ await generateBeatLicense(sampledPurchase.id,buyer.id);
+ assert.deepEqual((await purchasedSampleAgreements(sampledPurchase.id,buyer.id)).map(a=>a.id),[proof.id]);
+ assert.equal((await readPurchasedSampleAgreement(sampledPurchase.id,buyer.id,proof.id)).bytes.subarray(0,4).toString(),'%PDF');
+ assert.deepEqual(await purchasedSampleAgreements(sampledPurchase.id,outsider.id),[]);
+ await assert.rejects(()=>readPurchasedSampleAgreement(sampledPurchase.id,outsider.id,proof.id),/not found/);
+ assert.deepEqual(await purchasedSampleAgreements(purchase.id,buyer.id),[],'A later sample document is not silently attached to an older purchase.');
+ assert.equal((await purchaseAttachments(sampledPurchase.id,buyer.id,buyer.email)).length,3,'Receipt attaches master, HYMN agreement and sample certificate.');
+ assert.equal((await getBeatPurchaseDetails(sampledPurchase.id,buyer.id))?.sampleAgreements?.length,1);
+ await prisma.beatPurchase.update({where:{id:sampledPurchase.id},data:{hasAccess:false}});
+ await assert.rejects(()=>readPurchasedSampleAgreement(sampledPurchase.id,buyer.id,proof.id),/not found/);
  console.log('PASS actual migration, checkout-to-issued term snapshots, file/PDF delivery, account purchases, email links/attachments, ownership and revoked access. No live payments or email.');
 }
 main().finally(()=>prisma.$disconnect());

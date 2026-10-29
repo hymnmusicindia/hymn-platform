@@ -428,7 +428,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance,
 
       {editingBeat ? (
         <div role="dialog" aria-modal="true" aria-label="Edit beat" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl">
+          <div className="max-h-[90dvh] overflow-y-auto w-full max-w-lg rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl">
             <h3 className="text-xl font-semibold mb-4" style={{ color: "var(--text)" }}>Edit Beat</h3>
             <form onSubmit={handleBeatEditSubmit} className="grid gap-4">
               <div>
@@ -447,9 +447,9 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance,
                 </div>
                 <div><label className="text-sm font-medium mb-1 block">Stem Files Licence price (Rs)</label><input name="stemPrice" type="number" min="0" step="0.01" defaultValue={editingBeat.stemPrice ?? editingBeat.generalPrice ?? editingBeat.price} required className="field" /></div>
                 <div><label className="text-sm font-medium mb-1 block" htmlFor="beat-mp3-price">MP3 Licence price (Rs)</label><input id="beat-mp3-price" name="price" type="number" min="0.01" step="0.01" defaultValue={editingBeat.price} required className="field" /></div>
-                <div><label className="text-sm font-medium mb-1 block">Stems Exclusive Licence price (Rs)</label><input name="exclusivePrice" type="number" min="0" step="0.01" defaultValue={editingBeat.exclusivePrice} required className="field" /></div>
+                <div><label className="text-sm font-medium mb-1 block">Stems Exclusive Licence price (Rs)</label><input name="exclusivePrice" type="number" min="0" step="0.01" defaultValue={editingBeat.sampleDeclaration==="NO_UNCONTROLLED_SAMPLES"?editingBeat.exclusivePrice:0} disabled={editingBeat.sampleDeclaration!=="NO_UNCONTROLLED_SAMPLES"} className="field" /></div>
               </div>
-              <BeatUsageFields beat={editingBeat}/><div><label className="text-sm font-medium mb-1 block">Description</label><textarea name="description" defaultValue={editingBeat.description} className="field min-h-24" /></div>
+              <Link href={`/producer/beats/${editingBeat.id}/sample-license`} className="text-sm text-[var(--accent)]">Attach sample / Splice agreement ?</Link><BeatUsageFields beat={editingBeat}/><div><label className="text-sm font-medium mb-1 block">Description</label><textarea name="description" defaultValue={editingBeat.description} className="field min-h-24" /></div>
               <label className="grid gap-2 text-sm"><span className="font-medium">Replace cover artwork <span style={{ color: "var(--text-soft)" }}>(optional)</span></span><input name="artwork" type="file" accept="image/jpeg,image/png,image/webp" className="field" /><span className="text-xs leading-5" style={{ color: "var(--text-soft)" }}>JPEG, PNG, or WebP up to 10 MB. After a successful replacement, the previous cover is permanently deleted from storage with no backup.</span></label>
               <div className="mt-4 flex justify-end gap-3">
                 <button type="button" onClick={() => setEditingBeat(null)} className="btn-outline pressable">Cancel</button>

@@ -1,3 +1,4 @@
+import {sampleSourceConflict} from "@/lib/beat-rights-policy";
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
@@ -55,7 +56,8 @@ export async function POST(request: Request) {
     const price = Number(formData.get("price"));
     const generalPrice = Number(formData.get("generalPrice") || price);
     const stemPrice = Number(formData.get("stemPrice") || generalPrice);
-    const exclusivePrice = Number(formData.get("exclusivePrice"));
+    const sampleDeclaration = String(formData.get("sampleDeclaration") || "");
+    const exclusivePrice = sampleDeclaration==="NO_UNCONTROLLED_SAMPLES"?Number(formData.get("exclusivePrice")):0;
     beatMutationSchema.parse({ price, generalPrice, stemPrice, exclusivePrice, mood, keySignature });
     const file = formData.get("file");
     const preview = formData.get("preview");
@@ -63,15 +65,15 @@ export async function POST(request: Request) {
     const audioFormat = String(formData.get("audioFormat") || "").trim();
     const masterMime = file instanceof File ? normalizedAudioMime(file) : "";
 
-    const sampleDeclaration = String(formData.get("sampleDeclaration") || "");
     let sampleDisclosure = String(formData.get("sampleDisclosure") || "").trim();
     const evidence = formData.get('sampleLicenseEvidence');
-    if (sampleDeclaration === 'LICENSED_SAMPLES' && (!(evidence instanceof File) || !evidence.size || evidence.type !== 'application/pdf' || evidence.size > 10 * 1024 * 1024)) return NextResponse.json({error:'Upload a sample licence or certificate as a PDF (up to 10 MB).'},{status:400});
+    if (sampleDeclaration !== 'NO_UNCONTROLLED_SAMPLES' && (!(evidence instanceof File) || !evidence.size || evidence.type !== 'application/pdf' || evidence.size > 10 * 1024 * 1024)) return NextResponse.json({error:'Upload a sample licence or certificate as a PDF (up to 10 MB).'},{status:400});
     if (formData.get('sampleRightsConfirmed') !== 'on') return NextResponse.json({error:'Confirm the sample rights declaration before submitting.'},{status:400});
-    if (!title || !genre || !mood || !Number.isFinite(bpm) || bpm < 40 || bpm > 300 || !Number.isFinite(generalPrice) || !Number.isFinite(stemPrice) || !Number.isFinite(exclusivePrice) || exclusivePrice <= Math.max(generalPrice, stemPrice) || !(file instanceof File)) {
+    if (!title || !genre || !mood || !Number.isFinite(bpm) || bpm < 40 || bpm > 300 || !Number.isFinite(generalPrice) || !Number.isFinite(stemPrice) || !Number.isFinite(exclusivePrice) || (sampleDeclaration==="NO_UNCONTROLLED_SAMPLES"&&exclusivePrice <= Math.max(generalPrice, stemPrice)) || !(file instanceof File)) {
       return NextResponse.json({ error: "Missing required beat fields." }, { status: 400 });
     }
     beatMutationSchema.parse({ sampleDeclaration, sampleDisclosure });
+    if(sampleDeclaration==='NO_UNCONTROLLED_SAMPLES'&&sampleSourceConflict(sampleDisclosure))throw Error('The disclosure mentions third-party material. Select licensed samples and provide the certificate.');
     if (!sampleDeclaration) return NextResponse.json({ error: 'Complete the sample declaration.' }, { status: 400 });
 
     if (audioFormat === "MP3" && !file.name.toLowerCase().endsWith(".mp3")) {
@@ -104,8 +106,9 @@ export async function POST(request: Request) {
       enabled: false
     });
     createdBeatId = beatDraft.id;
-    if (sampleDeclaration === 'LICENSED_SAMPLES' && evidence instanceof File) {
-      const stored = await localPrivateStorage.upload({ownerUserId:result.user.id,assetType:'private_ownership_proof',fileName:evidence.name,mimeType:'application/pdf',bytes:Buffer.from(await evidence.arrayBuffer())});
+    if (sampleDeclaration !== 'NO_UNCONTROLLED_SAMPLES' && evidence instanceof File) {
+      const evidenceBytes=Buffer.from(await evidence.arrayBuffer());if(evidenceBytes.subarray(0,5).toString()!=="%PDF-")throw Error("Choose a genuine sample certificate PDF.");
+      const stored = await localPrivateStorage.upload({ownerUserId:result.user.id,assetType:'private_ownership_proof',fileName:evidence.name,mimeType:'application/pdf',bytes:evidenceBytes});
       privateEvidenceAssetId = stored.id;
       await prisma.storedAsset.update({where:{id:stored.id},data:{entityType:'BEAT',entityId:String(beatDraft.id),category:'BEAT_SAMPLE_LICENSE'}});
       sampleDisclosure += `\nLicence evidence: ${stored.downloadPath}`;
@@ -132,7 +135,7 @@ export async function POST(request: Request) {
     await prisma.auditLog.create({data:{actorId:result.user.id,actorType:'user',entity:'beat',entityId:String(beat.id),action:'beat.sample_rights_declared',metadata:{sampleDeclaration,sampleDisclosure,statement:'I confirm my declaration is accurate and that any stated licence covers my use and the rights offered to buyers. I will provide licence evidence on request.'}}});
 
     const readiness = validateBeatReadiness({ title, bpm, genre, mood, keySignature, price, generalPrice, stemPrice, exclusivePrice, sampleDeclaration, sampleDisclosure, audioUrl: privateAudio.downloadPath, artworkUrl });
-    const published = readiness.ready && await autoPublishProducerBeat(beat.id);
+    const published = readiness.ready && await autoPublishProducerBeat(beat.id).catch(()=>{console.error("Automatic beat QC deferred",{beatId:beat.id});return false;});
     if (published) return NextResponse.json({ beat: { ...beat, status:'PUBLISHED', enabled:true }, readiness, status:'published' }, { status:201 });
     await createAdminTaskOnce({ eventKey: `producer:${result.user.id}:beat:${beat.id}:review`, type: "Beat Awaiting Approval", priority: readiness.ready ? "normal" : "high", title: readiness.ready ? `Beat ready for review: ${title}` : `Beat needs corrections: ${title}`, body: readiness.ready ? "All required beat fields are present." : readiness.issues.map((issue) => issue.message).join(" "), href: `/admin?tab=beats&beatId=${beat.id}`, entityType: "beat", entityId: beat.id }).catch((taskError) => console.error("Beat review task creation failed", { beatId: beat.id, taskError }));
 

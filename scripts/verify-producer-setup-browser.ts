@@ -83,6 +83,7 @@ async function main() {
       await moodSelect.selectOption('Sad');
       assert.equal(await page.locator('[name="mood"]').inputValue(),'Dark, Energetic, Sad');
       await page.getByRole("button", { name: "Continue", exact: true }).click();
+      await page.locator('[name="sampleDeclaration"]').selectOption("NO_UNCONTROLLED_SAMPLES");
       await page.getByRole("button",{name:"Use suggested prices"}).click();
       await page.locator('[name="exclusivePrice"]').fill("50");
       await page.getByRole("button",{name:"Continue",exact:true}).click();
@@ -96,11 +97,13 @@ async function main() {
       await page.locator('[name="sampleDeclaration"]').selectOption("NO_UNCONTROLLED_SAMPLES");
       await page.locator('[name="sampleRightsConfirmed"]').check();
       await page.locator('[name="sampleDeclaration"]').selectOption('LICENSED_SAMPLES');
+      await page.locator('[name="sampleRightsConfirmed"]').check();
       await page.locator('[name="sampleDisclosure"]').fill('Splice, fixture sample, certified licence permitting commercial use.');
       await page.getByRole('button',{name:'Submit for review',exact:true}).click();
       assert.equal(uploadAttempts,0,'Licensed samples require a certificate.');
       await page.locator('[name="sampleLicenseEvidence"]').setInputFiles({name:'certificate.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nFixture certificate\n%%EOF')});
       await page.locator('[name="sampleDeclaration"]').selectOption('NO_UNCONTROLLED_SAMPLES');
+      await page.locator('[name="sampleRightsConfirmed"]').check();
       assert.equal(fixture.beats.length,0,"Continue must not submit the final upload automatically");
       await page.getByRole("button", { name: "Submit for review", exact: true }).click();
       await page.getByRole("alert").filter({hasText:"Temporary upload failure"}).waitFor();

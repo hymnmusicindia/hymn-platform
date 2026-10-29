@@ -12,7 +12,7 @@ async function main(){
   await prisma.artistCard.create({data:{userId:user.id,artistName:'Delivery Artist'}});
   const beat=await prisma.beat.create({data:{userId:producer.id,title:'Ready before email',bpm:100,genre:'Hip Hop',mood:'Chill',keySignature:'C Minor',priceCents:10000,status:'PUBLISHED',enabled:true}});
   const asset=await localPrivateStorage.upload({ownerUserId:producer.id,beatId:beat.id,assetType:'private_beat_deliverable',fileName:'master.mp3',mimeType:'audio/mpeg',bytes:Buffer.concat([Buffer.from('ID3'),Buffer.alloc(30)])});
-  const purchase=await prisma.beatPurchase.create({data:{userId:user.id,beatId:beat.id,licenseType:'mp3'}});
+  const purchase=await prisma.beatPurchase.create({data:{userId:user.id,beatId:beat.id,licenseType:'mp3',licenseTermsSnapshot:{buyer:{artistName:'Delivery Artist'}}}});
   const state=globalThis as any;
   state.beatDeliveryFixture={prisma,enabled:true,sends:0,send:async(input:any)=>{
     const current=await prisma.beatPurchase.findUniqueOrThrow({where:{id:input.purchaseId},include:{licenseAsset:true}});

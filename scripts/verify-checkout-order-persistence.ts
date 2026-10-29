@@ -21,6 +21,7 @@ async function main() {
     assert.equal(options.timeout, 20000, "Cloud DB latency must not use Prisma's five-second default");
     committed = false;
     const tx = {
+      storedAsset:{findMany:async()=>[]},
       user:{findUniqueOrThrow:async()=>({id:18,name:"Buyer",email:"buyer@example.test",artistCards:[{artistName:"Unconfirmed saved artist"}]})},
       beat: {
         updateMany: async (query: any) => {
