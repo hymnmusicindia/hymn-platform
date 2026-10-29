@@ -106,15 +106,8 @@ export function DashboardFrame<T extends string>({
   }, []);
   const [openGroup, setOpenGroup] = useState<string | null>(() => {
     if (navGroups?.length) return navGroups.find(group => group.items.some(item => item.key === activeKey))?.label ?? null;
-    return navItems.find(item => item.key === activeKey)?.group ?? "Workspace";
+    return consistentWorkspaceNavigation(navItems).find(item => item.key === activeKey)?.group ?? null;
   });
-  useEffect(() => {
-    function reveal(event: Event) { setOpenGroup((event as CustomEvent<string>).detail); setCollapsed(false); setMobileOpen(false); }
-    function hide() { setMobileOpen(false); }
-    window.addEventListener("hymn-reveal-service",reveal);
-    window.addEventListener("hymn-hide-service",hide);
-    return () => { window.removeEventListener("hymn-reveal-service",reveal); window.removeEventListener("hymn-hide-service",hide); };
-  }, []);
   const navScrollRef = useRef<HTMLDivElement>(null);
   const [navScroll, setNavScroll] = useState({ canUp: false, canDown: false });
 
@@ -157,7 +150,14 @@ export function DashboardFrame<T extends string>({
   }, [updateNavScroll, visibleGroups, openGroup, mobileOpen, collapsed]);
   const activeItem = useMemo(() => flatItems.find((item) => item.key === activeKey), [activeKey, flatItems]);
   const activeGroup = useMemo(() => groups.find((group) => group.items.some((item) => item.key === activeKey)), [activeKey, groups]);
-  useEffect(() => { setOpenGroup(activeGroup?.label ?? null); }, [activeGroup?.label]);
+  useEffect(() => { setOpenGroup(activeGroup?.label ?? null); }, [activeKey, activeGroup?.label]);
+  useEffect(() => {
+    function reveal(event: Event) { setOpenGroup((event as CustomEvent<string>).detail); setCollapsed(false); setMobileOpen(false); }
+    function hide() { setOpenGroup(activeGroup?.label ?? null); setMobileOpen(false); }
+    window.addEventListener("hymn-reveal-service", reveal);
+    window.addEventListener("hymn-hide-service", hide);
+    return () => { window.removeEventListener("hymn-reveal-service", reveal); window.removeEventListener("hymn-hide-service", hide); };
+  }, [activeGroup?.label]);
   const displayedGroup = groups.find(group => group.label === openGroup) || activeGroup;
   useEffect(() => {
     const frame = requestAnimationFrame(() => {

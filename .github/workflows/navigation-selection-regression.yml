@@ -1,0 +1,22 @@
+name: Navigation selection regression
+on:
+  push:
+    branches: [main]
+    paths: ['components/landing-workspace.tsx', 'components/dashboard-frame.tsx', 'components/admin-navigation-groups.tsx', 'components/team/section-navigation.tsx', 'components/module-tabs.tsx', 'lib/workspace-navigation.ts', 'lib/navigation-sections.ts', 'scripts/fixtures/submenu-selection.tsx', 'scripts/verify-submenu-selection-browser.cjs', '.github/workflows/navigation-selection-regression.yml']
+  pull_request:
+    paths: ['components/landing-workspace.tsx', 'components/dashboard-frame.tsx', 'components/admin-navigation-groups.tsx', 'components/team/section-navigation.tsx', 'components/module-tabs.tsx', 'lib/workspace-navigation.ts', 'lib/navigation-sections.ts', 'scripts/fixtures/submenu-selection.tsx', 'scripts/verify-submenu-selection-browser.cjs', '.github/workflows/navigation-selection-regression.yml']
+permissions:
+  contents: read
+jobs:
+  navigation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --fetch-retries=5 --fetch-timeout=120000
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:navigation-selection

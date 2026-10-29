@@ -25,6 +25,18 @@ export const workspaceGroups = Array.from(new Set(workspaceNavigation.map(item=>
   .filter(title=>title!=="Home")
   .map(title=>({title,links:workspaceNavigation.filter(item=>item.group===title)}));
 
+/** Only the current service owns an expanded menu; overview and unrelated pages own none. */
+export function workspaceGroupForPath(pathname: string): string | null {
+  if (['/', '/home', '/dashboard', '/dashboard/customer', '/dashboard/admin', '/producer/dashboard', '/producer-dashboard'].includes(pathname)) return null;
+  const within = (path: string) => pathname === path || pathname.startsWith(path + '/');
+  if (within('/distribution')) return 'Distribution';
+  if (within('/licenses')) return 'Beatstore';
+  return workspaceGroups.flatMap(group => group.links
+    .filter(item => !item.href.includes('?') && within(item.href))
+    .map(item => ({ group: group.title, length: item.href.length })))
+    .sort((a, b) => b.length - a.length)[0]?.group ?? null;
+}
+
 // Service headings open their main page; the remaining links stay in the menu.
 export function workspaceGroupDestination(group: string) {
   const key = ({ Beatstore: 'beat-store', Distribution: 'releases', 'Mixing / Mastering': 'studio' } as Record<string, string>)[group];

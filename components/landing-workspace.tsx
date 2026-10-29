@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { WorkspaceFooter } from "@/components/workspace-footer";
 import { WorkspaceDestinations } from "@/components/workspace-destinations";
-import { workspaceGroups, workspaceGroupDestination } from "@/lib/workspace-navigation";
+import { workspaceGroups, workspaceGroupDestination, workspaceGroupForPath } from "@/lib/workspace-navigation";
 import { useEffect, useState } from "react";
 import { ArrowUpRight, ChevronDown, Menu, Plus, X } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -13,23 +13,23 @@ const groups = workspaceGroups;
 
 export function LandingWorkspace({ children, workspaceHref, releaseNavigation = false }: {children:React.ReactNode; workspaceHref:string; releaseNavigation?:boolean}) {
   const pathname = usePathname();
-  const activeGroup = groups.find(group => group.links.some(item => item.href.split("?")[0] === pathname))?.title;
+  const activeGroup = workspaceGroupForPath(pathname);
   const [navigationTarget, setNavigationTarget] = useState<HTMLDivElement | null>(null);
   const [open,setOpen] = useState(false);
   const [collapsed,setCollapsed] = useState(false);
   const [navigationReady,setNavigationReady] = useState(false);
-  const [openGroup,setOpenGroup] = useState<string | null>(activeGroup ?? "Distribution");
-  useEffect(() => { if (activeGroup) setOpenGroup(activeGroup); }, [activeGroup]);
+  const [openGroup,setOpenGroup] = useState<string | null>(activeGroup);
+  useEffect(() => { setOpenGroup(activeGroup); }, [pathname, activeGroup]);
   useEffect(()=>{
     function toggleNavigation() { if(window.innerWidth<1024)setOpen(value=>!value);else setCollapsed(value=>!value); }
     function revealService(event: Event) { setOpenGroup((event as CustomEvent<string>).detail); setCollapsed(false); if(window.innerWidth<1024) setOpen(true); }
-    function hideService() { setOpen(false); }
+    function hideService() { setOpenGroup(activeGroup); setOpen(false); }
     window.addEventListener("hymn-reveal-service",revealService);
     window.addEventListener("hymn-hide-service",hideService);
     window.addEventListener("hymn-toggle-navigation",toggleNavigation);
     setNavigationReady(true);
     return ()=>{window.removeEventListener("hymn-toggle-navigation",toggleNavigation);window.removeEventListener("hymn-reveal-service",revealService);window.removeEventListener("hymn-hide-service",hideService);};
-  },[]);
+  },[activeGroup]);
   return <div data-navigation-ready={navigationReady} className={`landing-workspace ${collapsed ? "rail-collapsed" : ""}`}>
     <button type="button" className="landing-mobile-menu" aria-expanded={open} aria-controls="landing-navigation" onClick={()=>setOpen(!open)}><Menu size={18}/> Explore HYMN <ChevronDown size={16}/></button>
     {open && <button className="landing-rail-backdrop" aria-label="Close navigation" onClick={()=>setOpen(false)}/>}
