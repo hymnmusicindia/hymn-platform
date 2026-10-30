@@ -1,12 +1,12 @@
 export function usesHymnStudioShell(pathname: string) {
   return ['/studio','/dashboard','/dashboard/customer','/producer/dashboard','/producer-dashboard','/library','/audio-library','/analytics','/payout'].includes(pathname)
-    || ['/studio/','/dashboard/releases','/dashboard/purchases'].some(path => pathname.startsWith(path));
+    || ['/studio/','/dashboard/purchases'].some(path => pathname.startsWith(path));
 }
 
 export const studioDestinations = [
   { key: 'overview', label: 'Overview', group: 'Workspace', href: '/studio', icon: 'home' },
   { key: 'library', label: 'My library', group: 'Workspace', href: '/library', icon: 'folder' },
-  { key: 'releases', label: 'Releases', group: 'Create & manage', href: '/dashboard/releases', icon: 'disc' },
+  { key: 'releases', label: 'Releases', group: 'Create & manage', href: '/studio?tab=releases', icon: 'disc' },
   { key: 'projects', label: 'Mixing & mastering', group: 'Create & manage', href: '/studio?view=projects', icon: 'headphones' },
   { key: 'engineers', label: 'Find an engineer', group: 'Create & manage', href: '/studio?view=engineers', icon: 'sliders' },
   { key: 'engineer-workspace', label: 'Engineer workspace', group: 'Create & manage', href: '/studio/engineer', icon: 'headphones' },

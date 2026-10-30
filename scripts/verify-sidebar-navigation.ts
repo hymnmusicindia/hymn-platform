@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { studioDestinations, usesHymnStudioShell } from "../lib/studio-navigation";
+import { workspaceGroupDestination, workspaceGroupForPath } from "../lib/workspace-navigation";
 import { consistentWorkspaceNavigation, workspaceGroups } from "../lib/workspace-navigation";
 const producer = [
   { key: "overview", label: "Overview", group: "Workspace" },
@@ -9,6 +11,13 @@ const producer = [
   { key: "releases", label: "My releases", group: "Distribution", href: "/dashboard/releases" }
 ];
 const result = consistentWorkspaceNavigation(producer);
+assert.equal(workspaceGroupDestination('Distribution')?.href, '/dashboard/releases');
+assert.equal(studioDestinations.find(item => item.key === 'releases')?.href, '/studio?tab=releases');
+for (const path of ['/dashboard/releases', '/dashboard/releases/42', '/dashboard/releases/42/qc-report']) {
+  assert.equal(usesHymnStudioShell(path), false, `${path} must retain the public Distribution shell`);
+  assert.equal(workspaceGroupForPath(path), 'Distribution');
+}
+assert.equal(usesHymnStudioShell('/studio'), true);
 assert.equal(new Set(result.map(n => n.key)).size, result.length);
 assert.deepEqual([...new Set(result.map(n => n.group))], ["Home", 'Library', ...workspaceGroups.map(g => g.title), "Money"]);
 for (const key of ["catalog", "upload", "profile", "earnings", "overview"]) assert.equal(result.find(n => n.key === key)?.href, undefined, `${key} must retain its producer callback`);
