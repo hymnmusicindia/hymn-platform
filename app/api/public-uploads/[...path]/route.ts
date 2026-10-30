@@ -5,6 +5,7 @@ import { resolvePublicUploadPaths } from "@/lib/storage";
 import { missingImageResponseHeaders, missingImageSvg } from "@/lib/media-placeholder";
 import { requestedArtworkWidth } from "@/lib/artwork-preview";
 import { artworkThumbnail } from "@/lib/artwork-thumbnail";
+import { audioFileResponse } from "@/lib/audio-file-response";
 
 export const runtime = "nodejs";
 
@@ -28,6 +29,17 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ pa
     const relativePath = segments.map(decodeURIComponent).join("/");
     const mimeType = mediaTypes[path.extname(relativePath).toLowerCase()];
     if (!mimeType) return NextResponse.json({ error: "Unsupported public media type." }, { status: 415 });
+
+    if (mimeType.startsWith("audio/")) {
+      for (const candidate of resolvePublicUploadPaths(relativePath)) {
+        const file = await fs.open(candidate, "r").catch((error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return null;
+          throw error;
+        });
+        if (file) return await audioFileResponse(_request, file, { mimeType, cacheControl: "public, max-age=31536000, immutable" });
+      }
+      throw Object.assign(new Error("Public media not found."), { code: "ENOENT" });
+    }
 
     let bytes: Buffer | null = null;
     for (const candidate of resolvePublicUploadPaths(relativePath)) {
@@ -59,4 +71,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ pa
     }
     return NextResponse.json({ error: "Invalid public media path." }, { status: 400 });
   }
+}
+
+export async function HEAD(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
+  return GET(request, context);
 }

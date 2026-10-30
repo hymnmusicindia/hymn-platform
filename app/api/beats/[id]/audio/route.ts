@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { localPrivateStorage } from "@/lib/private-storage";
-import { audioRange } from "@/lib/audio-range";
+import { openPrivateAssetAudio } from "@/lib/private-storage";
+import { audioFileResponse } from "@/lib/audio-file-response";
 
 export const runtime = "nodejs";
 
@@ -11,25 +11,27 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   if (!Number.isSafeInteger(id) || id <= 0) return new NextResponse(null, { status: 404 });
   const beat = await prisma.beat.findFirst({
     where: { id, enabled: true, status: { in: ["PUBLISHED", "EXCLUSIVE_RESERVED"] } },
-    include: { deliverableAsset: true }
+    include: { deliverableAsset: true, user: { select: { status: true } } }
   });
   const asset = beat?.deliverableAsset;
-  if (!beat || !asset || asset.assetType !== "private_beat_deliverable" || !asset.mimeType.startsWith("audio/")) {
+  if (!beat || beat.user.status !== "ACTIVE" || !asset
+    || asset.deletedAt || (asset.retentionUntil && asset.retentionUntil <= new Date())
+    || asset.ownerUserId !== beat.userId || asset.beatId !== beat.id
+    || asset.assetType !== "private_beat_deliverable" || !asset.mimeType.startsWith("audio/")) {
     return new NextResponse(null, { status: 404, headers: { "Cache-Control": "no-store" } });
   }
   try {
-    // Public state and the beat/asset relation authorize playback; never elevate to admin.
-    const audio = await localPrivateStorage.createAuthorizedRead({ assetId: asset.id, requesterUserId: asset.ownerUserId, isAdmin: false });
-    const size = audio.bytes.length;
-    const rangeHeader = request.headers.get("range");
-    const range = rangeHeader ? audioRange(rangeHeader, size) : undefined;
-    const headers = { "Content-Type": audio.mimeType, "Accept-Ranges": "bytes", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
-    if (range === null) return new NextResponse(null, { status: 416, headers: { ...headers, "Content-Range": `bytes */${size}` } });
-    const bytes = range ? audio.bytes.subarray(range.start, range.end + 1) : audio.bytes;
-    return new NextResponse(new Uint8Array(bytes), { status: range ? 206 : 200, headers: {
-      ...headers, "Content-Length": String(bytes.length), ...(range ? { "Content-Range": `bytes ${range.start}-${range.end}/${size}` } : {})
-    } });
+    // Published state and the linked, active owner's asset authorize streaming.
+    // Original purchase downloads retain their separate entitlement/integrity checks.
+    return await audioFileResponse(request, await openPrivateAssetAudio(asset), {
+      mimeType: asset.mimeType, cacheControl: "private, no-cache",
+      etag: `"${asset.checksum}"`
+    });
   } catch {
     return new NextResponse(null, { status: 404, headers: { "Cache-Control": "no-store" } });
   }
+}
+
+export async function HEAD(request: Request, context: { params: Promise<{ id: string }> }) {
+  return GET(request, context);
 }

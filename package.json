@@ -15,6 +15,7 @@
     "test:team-call-reports:browser": "node scripts/verify-team-call-report-browser.cjs",
     "test:beatstore": "node --import tsx scripts/verify-acquisition-isolated.ts --beat-engagement-only",
     "test:beatstore:browser": "node scripts/verify-beatstore-record-browser.cjs",
+    "test:beat-preview-streaming": "tsx scripts/verify-audio-streaming.ts && node scripts/verify-beat-audio-access.cjs && tsx scripts/verify-audio-streaming-browser.ts && node scripts/verify-beat-preview-playback.cjs",
     "test:distribution-automation": "node --conditions=react-server --import tsx scripts/verify-distribution-automation-policy.ts && node --import tsx scripts/verify-acquisition-isolated.ts --distribution-automation-only",
     "test:distribution-operations": "node scripts/verify-distribution-operations-browser.cjs && node scripts/verify-distribution-admin-browser.cjs && node scripts/verify-admin-release-feed.cjs && node scripts/verify-admin-release-delta-feed.cjs",
     "test:navigation-sections": "tsx scripts/verify-navigation-sections.ts && node scripts/verify-navigation-sections-browser.cjs",

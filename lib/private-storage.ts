@@ -53,6 +53,25 @@ function privateStorageCandidateRoots() {
   return [...new Set([...configured, ...legacy].map((value) => path.resolve(/* turbopackIgnore: true */ value)))];
 }
 
+/** For already-authorized streaming routes; never accepts a client-supplied path. */
+export async function openPrivateAssetAudio(asset: { objectKey: string; relativePath?: string | null; byteSize: number }) {
+  for (const root of privateStorageCandidateRoots()) {
+    for (const key of [...new Set([asset.relativePath, asset.objectKey].filter((value): value is string => Boolean(value)))]) {
+      const target = path.resolve(/* turbopackIgnore: true */ root, key);
+      if (!target.startsWith(`${root}${path.sep}`)) continue;
+      const file = await fs.open(target, "r").catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return null;
+        throw error;
+      });
+      if (!file) continue;
+      const stat = await file.stat().catch(async error => { await file.close(); throw error; });
+      if (!stat.isFile() || stat.size !== asset.byteSize) { await file.close(); throw new Error("Stored asset size does not match its record."); }
+      return file;
+    }
+  }
+  throw Object.assign(new Error("Stored audio is unavailable."), { code: "ENOENT" });
+}
+
 export class AudioRangeNotSatisfiableError extends Error {
   constructor(readonly size: number) { super("Requested audio range is unavailable."); }
 }
