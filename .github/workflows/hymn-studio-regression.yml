@@ -2,9 +2,9 @@ name: HYMN theme and Studio workspace
 on:
   push:
     branches: [main]
-    paths: ['components/**', 'app/globals.css', 'app/styles/**', 'app/layout.tsx', 'lib/release-portal.ts', 'lib/studio-navigation.ts', 'app/(public)/studio/**', 'app/(public)/page.tsx', 'app/(public)/services/page.tsx', 'app/(authenticated)/dashboard/page.tsx', 'scripts/verify-theme-*.cjs', 'scripts/verify-personalized-theme.cjs', 'scripts/verify-header-theme.cjs', 'scripts/verify-hymn-studio-browser.cjs', 'scripts/lib/*.cjs', '.github/workflows/hymn-studio-regression.yml']
+    paths: ['components/**', 'app/globals.css', 'app/styles/**', 'app/layout.tsx', 'lib/release-portal.ts', 'lib/studio-navigation.ts', 'lib/beat-store.ts', 'app/api/beats/**', 'scripts/verify-beat-preview-playback.cjs', 'app/(public)/studio/**', 'app/(public)/page.tsx', 'app/(public)/services/page.tsx', 'app/(authenticated)/dashboard/page.tsx', 'scripts/verify-theme-*.cjs', 'scripts/verify-personalized-theme.cjs', 'scripts/verify-header-theme.cjs', 'scripts/verify-hymn-studio-browser.cjs', 'scripts/lib/*.cjs', '.github/workflows/hymn-studio-regression.yml']
   pull_request:
-    paths: ['components/**', 'app/globals.css', 'app/styles/**', 'app/layout.tsx', 'lib/release-portal.ts', 'lib/studio-navigation.ts', 'app/(public)/studio/**', 'app/(public)/page.tsx', 'app/(public)/services/page.tsx', 'app/(authenticated)/dashboard/page.tsx', 'scripts/verify-theme-*.cjs', 'scripts/verify-personalized-theme.cjs', 'scripts/verify-header-theme.cjs', 'scripts/verify-hymn-studio-browser.cjs', 'scripts/lib/*.cjs', '.github/workflows/hymn-studio-regression.yml']
+    paths: ['components/**', 'app/globals.css', 'app/styles/**', 'app/layout.tsx', 'lib/release-portal.ts', 'lib/studio-navigation.ts', 'lib/beat-store.ts', 'app/api/beats/**', 'scripts/verify-beat-preview-playback.cjs', 'app/(public)/studio/**', 'app/(public)/page.tsx', 'app/(public)/services/page.tsx', 'app/(authenticated)/dashboard/page.tsx', 'scripts/verify-theme-*.cjs', 'scripts/verify-personalized-theme.cjs', 'scripts/verify-header-theme.cjs', 'scripts/verify-hymn-studio-browser.cjs', 'scripts/lib/*.cjs', '.github/workflows/hymn-studio-regression.yml']
 permissions:
   contents: read
 jobs:
@@ -25,5 +25,6 @@ jobs:
       - run: node scripts/verify-theme-components.cjs
       - run: node scripts/verify-theme-contract.cjs
       - run: node scripts/verify-personalized-theme.cjs
+      - run: node scripts/verify-beat-preview-playback.cjs
       - run: npm run test:studio-services
       - run: npm run test:navigation-selection

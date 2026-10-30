@@ -5,16 +5,16 @@ import { audioRange } from "@/lib/audio-range";
 
 export const runtime = "nodejs";
 
-/** Published masters are playable only when a separate preview was not supplied. */
+/** Published linked audio masters also serve as fallback when a preview fails. */
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const id = Number((await context.params).id);
   if (!Number.isSafeInteger(id) || id <= 0) return new NextResponse(null, { status: 404 });
   const beat = await prisma.beat.findFirst({
     where: { id, enabled: true, status: { in: ["PUBLISHED", "EXCLUSIVE_RESERVED"] } },
-    include: { deliverableAsset: true, preview: true }
+    include: { deliverableAsset: true }
   });
   const asset = beat?.deliverableAsset;
-  if (!beat || beat.preview?.publicUrl || !asset || asset.assetType !== "private_beat_deliverable" || !asset.mimeType.startsWith("audio/")) {
+  if (!beat || !asset || asset.assetType !== "private_beat_deliverable" || !asset.mimeType.startsWith("audio/")) {
     return new NextResponse(null, { status: 404, headers: { "Cache-Control": "no-store" } });
   }
   try {

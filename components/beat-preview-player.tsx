@@ -266,7 +266,7 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
           <div className="flex h-9 items-center justify-center gap-1.5">
             <button type="button" onClick={() => value.setShuffle(!value.shuffle)} className={`grid h-8 w-8 place-items-center rounded-full transition ${value.shuffle ? "text-[var(--accent)]" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`} aria-label={value.shuffle ? "Disable shuffle" : "Shuffle beats"}><Shuffle className="h-3.5 w-3.5" /></button>
             <button type="button" onClick={value.previous} className="grid h-8 w-8 place-items-center rounded-full text-[var(--text-muted)] transition hover:text-[var(--text)] disabled:opacity-30" aria-label="Previous beat" disabled={!canUseQueue}><SkipBack className="h-4 w-4" fill="currentColor" /></button>
-            <button type="button" onClick={value.togglePlay} className="mx-1 grid h-9 w-9 place-items-center rounded-full bg-[var(--accent)] text-[var(--accent-foreground)] shadow-[0_5px_18px_rgba(0,0,0,.35)] transition hover:scale-105" aria-label={value.playing ? `Pause ${beat.title}` : `Play ${beat.title}`}>{value.playing ? <Pause className="h-4 w-4" fill="currentColor" /> : <Play className="ml-0.5 h-4 w-4" fill="currentColor" />}</button>
+            <button type="button" onClick={value.togglePlay} className="mx-1 grid h-9 w-9 place-items-center rounded-full bg-transparent text-[var(--text)] shadow-none sm:bg-[var(--accent)] sm:text-[var(--accent-foreground)] transition hover:scale-105" aria-label={value.playing ? `Pause ${beat.title}` : `Play ${beat.title}`}>{value.playing ? <Pause className="h-4 w-4" fill="currentColor" /> : <Play className="ml-0.5 h-4 w-4" fill="currentColor" />}</button>
             <button type="button" onClick={value.next} className="grid h-8 w-8 place-items-center rounded-full text-[var(--text-muted)] transition hover:text-[var(--text)] disabled:opacity-30" aria-label="Next beat" disabled={!canUseQueue}><SkipForward className="h-4 w-4" fill="currentColor" /></button>
             <button type="button" onClick={() => value.setLoop(!value.loop)} className={`relative grid h-8 w-8 place-items-center rounded-full transition ${value.loop ? "text-[var(--accent)]" : "text-[var(--text-muted)] hover:text-[var(--text)]"}`} aria-label={value.loop ? "Disable repeat" : "Repeat beat"}><Repeat className="h-3.5 w-3.5" />{value.loop ? <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-[var(--accent)]" /> : null}</button>
           </div>
@@ -327,6 +327,8 @@ function BottomPlayer({ value, licensingOpen }: { value: BeatPreviewContextValue
 export function BeatPreviewPlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const queueRef = useRef<StorefrontBeat[]>([]);
+  const activeBeatRef = useRef<StorefrontBeat | null>(null);
+  const attemptRef = useRef(0);
   const [activeBeat, setActiveBeat] = useState<StorefrontBeat | null>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -342,7 +344,8 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const savedVolume = Number(window.localStorage.getItem("hymn-beat-preview-volume"));
+    const storedVolume = window.localStorage.getItem("hymn-beat-preview-volume");
+    const savedVolume = storedVolume === null ? 1 : Number(storedVolume);
     if (Number.isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 1) setVolumeState(savedVolume);
   }, []);
 
@@ -355,31 +358,11 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
     return audioRef.current;
   }, []);
 
-  useEffect(() => {
-    const audio = ensureAudio();
-    const sync = () => {
-      setCurrentTime(audio.currentTime || 0);
-      setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
-    };
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
-    const onError = () => { setError("Preview unavailable. Try another beat or refresh."); setPlaying(false); };
-    audio.addEventListener("timeupdate", sync);
-    audio.addEventListener("loadedmetadata", sync);
-    audio.addEventListener("durationchange", sync);
-    audio.addEventListener("play", onPlay);
-    audio.addEventListener("pause", onPause);
-    audio.addEventListener("error", onError);
-    return () => {
-      audio.pause();
-      audio.removeEventListener("timeupdate", sync);
-      audio.removeEventListener("loadedmetadata", sync);
-      audio.removeEventListener("durationchange", sync);
-      audio.removeEventListener("play", onPlay);
-      audio.removeEventListener("pause", onPause);
-      audio.removeEventListener("error", onError);
-    };
-  }, [ensureAudio]);
+  useEffect(() => () => {
+    attemptRef.current++;
+    audioRef.current?.pause();
+    if (audioRef.current) audioRef.current.src = "";
+  }, []);
 
   useEffect(() => {
     const audio = ensureAudio();
@@ -394,29 +377,73 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
   }, [ensureAudio, muted, volume]);
 
   const playBeat = useCallback((beat: StorefrontBeat, queue?: StorefrontBeat[]) => {
-    const audio = ensureAudio();
-    const url = safePreviewUrl(beat);
-    if (!url) {
-      setActiveBeat(beat);
-      setError("Preview unavailable for this beat.");
-      setPlaying(false);
+    if (queue?.length) queueRef.current = queue.filter(item => safePreviewUrl(item));
+    const previous = ensureAudio();
+    if (activeBeatRef.current?.id === beat.id && previous.src && !previous.error) {
+      if (!previous.paused) { previous.pause(); return; }
+      const attempt = attemptRef.current;
+      void previous.play().catch(reason => {
+        if (attempt !== attemptRef.current || reason?.name === "AbortError") return;
+        setError(reason?.name === "NotAllowedError" ? "Tap play to start the preview." : "Unable to play. Tap play to retry.");
+      });
       return;
     }
-    if (queue?.length) queueRef.current = queue.filter((item) => safePreviewUrl(item));
-    setError(null);
-    if (activeBeat?.id === beat.id) {
-      if (audio.paused) void audio.play().catch(() => setError("Tap play again to start the preview."));
-      else audio.pause();
-      return;
-    }
-    audio.pause();
-    audio.src = url;
-    audio.currentTime = 0;
+    const attempt = ++attemptRef.current;
+    previous.pause();
+    previous.removeAttribute("src");
+    previous.load();
+    activeBeatRef.current = beat;
+    setActiveBeat(beat);
+    setPlaying(false);
     setCurrentTime(0);
     setDuration(0);
-    setActiveBeat(beat);
-    void audio.play().catch(() => setError("Preview unavailable. Try again."));
-  }, [activeBeat?.id, ensureAudio]);
+    setError(null);
+    const sources = [...new Set([beat.previewUrl, beat.fileUrl].filter(Boolean))];
+    let index = 0;
+    function start() {
+      if (attempt !== attemptRef.current) return;
+      const url = sources[index++];
+      if (!url) { setPlaying(false); setError("Preview unavailable for this beat. Tap play to retry."); return; }
+      const audio = new Audio();
+      audio.preload = "metadata";
+      audio.volume = previous.volume;
+      audio.muted = previous.muted;
+      audio.loop = previous.loop;
+      audioRef.current = audio;
+      let failed = false;
+      let timeout: ReturnType<typeof setTimeout>;
+      const current = () => attempt === attemptRef.current && audioRef.current === audio;
+      const fail = () => {
+        if (!current() || failed) return;
+        failed = true;
+        clearTimeout(timeout);
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.load();
+        start();
+      };
+      audio.ontimeupdate = audio.onloadedmetadata = audio.ondurationchange = () => {
+        if (!current()) return;
+        setCurrentTime(audio.currentTime || 0);
+        setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
+      };
+      audio.onplaying = () => { clearTimeout(timeout); if (current()) { setPlaying(true); setError(null); } };
+      audio.onpause = () => { clearTimeout(timeout); if (current()) setPlaying(false); };
+      audio.onerror = fail;
+      audio.src = url;
+      timeout = setTimeout(fail, 12000);
+      // Start inside the original tap, without a fetch/await that loses iOS activation.
+      void audio.play().catch(reason => {
+        if (!current() || reason?.name === "AbortError") return;
+        if (reason?.name === "NotAllowedError") {
+          clearTimeout(timeout);
+          setPlaying(false);
+          setError("Tap play to start the preview.");
+        } else fail();
+      });
+    }
+    start();
+  }, [ensureAudio]);
 
   const playQueueOffset = useCallback((offset: number) => {
     if (!activeBeat || !queueRef.current.length) return;
@@ -443,10 +470,7 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
     error,
     playBeat,
     togglePlay: () => {
-      const audio = ensureAudio();
-      if (!activeBeat) return;
-      if (audio.paused) void audio.play().catch(() => setError("Preview unavailable. Try again."));
-      else audio.pause();
+      if (activeBeat) playBeat(activeBeat);
     },
     previous: () => playQueueOffset(-1),
     next: () => playQueueOffset(1),

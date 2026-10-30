@@ -240,7 +240,8 @@ export function buildBeatStorefront(beats: Beat[], producerProfiles: ProducerPro
     
     return {
       ...beat,
-      fileUrl: resolvePreviewUrl(beat.previewUrl) || resolvePreviewUrl(beat.fileUrl),
+      previewUrl: resolvePreviewUrl(beat.previewUrl),
+      fileUrl: resolvePreviewUrl(beat.fileUrl),
       producer,
       coverImage,
       vibeTag,
