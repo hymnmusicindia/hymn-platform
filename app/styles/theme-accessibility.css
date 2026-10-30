@@ -9,6 +9,7 @@ html body header .studio-header-plans { color:var(--money); }
 html body :is(.landing-rail,.dashboard-os-sidebar,[data-dashboard-sidebar]) { background:var(--card)!important;color:var(--text);border-color:var(--border); }
 html body :is(.landing-rail,.dashboard-os-sidebar) :is(.workspace-destination,.landing-nav-link,.dashboard-os-nav-item,.landing-group-title,.dashboard-os-group-toggle) { color:var(--text-muted)!important; }
 html body :is(.landing-rail,.dashboard-os-sidebar) :is(.workspace-destination,.landing-nav-link,.dashboard-os-nav-item):is(:hover,[aria-current="page"],.is-active) { color:var(--text)!important;background:var(--hover)!important;text-shadow:none!important; }
+html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row :is(.landing-new,.portal-new-button,.workspace-destination):is(:hover,:focus-visible,[aria-current="page"]) { background:transparent!important;box-shadow:none!important; }
 html body :is([data-dashboard-sidebar],.landing-rail) img[alt*="HYMN"] { filter:var(--logo-filter)!important; }
 html body .sidebar-newsletter { color:var(--text);border-color:var(--border); }
 html body .sidebar-newsletter :is(p,small,svg) { color:var(--text-muted); }

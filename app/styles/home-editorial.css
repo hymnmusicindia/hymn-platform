@@ -82,4 +82,6 @@
 }
 @media(prefers-reduced-motion:reduce) { .home-platform-track { animation:none; will-change:auto; } .home-editorial-link svg { transition:none; } }
 
-.home-studio-editorial { color:var(--text);border:1px solid var(--border);box-shadow:var(--shadow-soft); }
+.home-studio-editorial { background:#0b0e12;color:#f4f6fa;border:1px solid var(--border);box-shadow:var(--shadow-soft); }
+.home-studio-editorial :is(h2,a) { color:#f4f6fa; }
+.home-studio-editorial p:not(.landing-eyebrow),.home-studio-editorial .landing-eyebrow { color:#c4ccd8; }

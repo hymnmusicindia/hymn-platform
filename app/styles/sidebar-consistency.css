@@ -85,10 +85,7 @@ html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row :is(.la
 html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row .workspace-destination[aria-current="page"] {
   color:var(--text);background:none!important;box-shadow:none!important;
 }
-html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row :is(.portal-create,.landing-new,.workspace-destination):is(:hover,:focus-within) {flex-grow:4;}
-html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row :is(.landing-new,.portal-new-button,.workspace-destination):is(:hover,:focus-visible)>span {
-  max-width:105px;opacity:1;margin-left:6px;
-}
+html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row :is(.portal-create,.landing-new,.workspace-destination):is(:hover,:focus-within) {flex-grow:1;}
 html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-launch-row :is(.landing-new,.portal-new-button):is(:hover,:focus-visible) {background:none!important;color:var(--text);}
 html body :is(.landing-rail,.dashboard-os-sidebar) {--sidebar-row-height:44px;}
 html body .workspace-v2.workspace-v2 .dashboard-os-nav-item,
