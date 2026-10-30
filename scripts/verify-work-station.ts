@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../lib/prisma';
 import { teamMutation, teamRead, teamWrite } from '../lib/team/service';
+import {savePersonalCallPlan,syncPersonalCallPlans} from '../lib/team/personal-call-plan';
+import {employeeCallSlot} from '../lib/team/availability';
+import {indiaWorkday} from '../lib/team/daily-work';
 import { syncWorkStationTickets, recoverWorkStationCoverage } from '../lib/team/work-station';
 import { activitySeconds, workActivity } from '../lib/team/work-station-policy';
 import type { Actor } from '../lib/team/policy';
@@ -112,6 +115,17 @@ async function main() {
     const opened=await teamMutation(rep,'workstation-start',{ticketId:legacyTicket.id,requestKey:randomUUID()});assert.equal(opened.id,legacy.id);
     assert.equal((await detail(legacy.id)).ticket!.id,legacyTicket.id);
     await write('workstation-finish',legacy.id,{outcome:'COMPLETED',closeTicket:true});
+    assert.equal(await teamWrite(boss,(tx,a)=>employeeCallSlot(tx,a.workspaceId,a.id,new Date())),null,'Owners remain excluded until explicit opt-in');
+    await assert.rejects(teamWrite(rep,(tx,a)=>savePersonalCallPlan(tx,a,{enabled:true,dailyLimit:4})),/owner access/);
+    for(let i=0;i<6;i++){const c=await prisma.teamClient.create({data:{workspaceId:ws.id,ownerId:other.id,name:`Personal plan customer ${i}`,phone:`+91987777000${i}`}});await prisma.teamTask.create({data:{workspaceId:ws.id,ownerId:other.id,creatorId:boss.id,clientId:c.id,title:`Friendly introduction ${i}`,eventKey:`support-call:personal-fixture:${i}`,dueAt:new Date(Date.now()-86400000),followUpContext:{kind:'FRIENDLY_INTRO',callPhone:c.phone,pinnedAssignee:true}}});}
+    await teamWrite(boss,(tx,a)=>savePersonalCallPlan(tx,a,{enabled:true,dailyLimit:4}));
+    assert.equal((await teamWrite(boss,(tx,a)=>syncPersonalCallPlans(tx,a))).assigned,4);
+    assert.equal((await teamWrite(boss,(tx,a)=>syncPersonalCallPlans(tx,a))).assigned,0);
+    const personal=await prisma.teamTask.findMany({where:{workspaceId:ws.id,ownerId:boss.id,followUpContext:{path:['personalCallPlan'],equals:true}},orderBy:{dueAt:'asc'}});assert.equal(personal.length,4);
+    const scheduledDay=indiaWorkday(personal[0].dueAt!).day;assert.ok(personal.every(t=>indiaWorkday(t.dueAt!).day===scheduledDay));
+    const extraSlot=await teamWrite(boss,(tx,a)=>employeeCallSlot(tx,a.workspaceId,a.id,personal[0].dueAt!));assert.ok(extraSlot&&indiaWorkday(extraSlot).day!==scheduledDay,'Daily call cap applies to future retries too');
+    await teamMutation(boss,'workstation-start',{taskId:personal[0].id,requestKey:randomUUID()});await write('workstation-finish',personal[0].id,{outcome:'COMPLETED'},boss);
+    assert.equal((await teamWrite(boss,(tx,a)=>syncPersonalCallPlans(tx,a))).assigned,0,'Completing a call must not refill beyond four for the day');
     console.log('PASS Work-station: permissions, privacy, concurrency, pause/resume, persistence, stale writes, three-attempt retry, two-hour email gap, ticket emails and closure, recurrence, review, supervisor recovery and deduplicated routing. No customer mail sent.');
 }
 main().catch(e => { console.error(e); process.exitCode = 1; }).finally(() => prisma.$disconnect());

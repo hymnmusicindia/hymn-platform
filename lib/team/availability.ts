@@ -4,6 +4,8 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { can, demand, TeamError, type Actor, type Permission } from './policy';
 import { audit, notify } from './service';
+import { personalCallPlan } from './personal-call-plan-policy';
+import { indiaWorkday } from './daily-work';
 import { reservationEnd, reservationsOverlap } from './calendar-reservations';
 import { activeWindows, effectiveSlots, moveWorkWeek, planMeetsTarget, planMinutes, record, requiredMinutes, validWorkWeek, withinWorkHours, workAvailability, workWeek } from './availability-rules';
 const weekSchema = z.string().refine(validWorkWeek, 'Choose a Monday-based week.');
@@ -55,13 +57,16 @@ export async function availabilityRead(a:Actor,params:URLSearchParams) {
   return {week,minimumPercent:70,items:members.map(m=>({id:m.id,name:m.user.name,weeklyHours:workAvailability(m.preferences).weeklyMinutes/60,leaveHours:Number(workAvailability(m.preferences).leave[week]||0)/60,requiredHours:requiredMinutes(m.preferences,week)/60,plan:workAvailability(m.preferences).plans[week]||null,previousPlan:workAvailability(m.preferences).plans[moveWorkWeek(week,-1)]||null,effectiveSlots:effectiveSlots(m.preferences,week),planSource:workAvailability(m.preferences).plans[week]?'weekly':workAvailability(m.preferences).recurring.enabled?'recurring':'none',recurring:workAvailability(m.preferences).recurring,compliant:planMeetsTarget(m.preferences,week)}))};
 }
 export async function employeeCallSlot(tx:Prisma.TransactionClient,workspaceId:string,memberId:string,after:Date,eventId?:string,taskId?:string,permission:Permission='crm.outreach.manage') {
-  const member=await tx.teamMember.findFirst({where:{id:memberId,workspaceId,status:'ACTIVE',availability:'AVAILABLE',role:{owner:false},user:{status:'ACTIVE'}},include:{role:true}});
+  const member=await tx.teamMember.findFirst({where:{id:memberId,workspaceId,status:'ACTIVE',availability:'AVAILABLE',user:{status:'ACTIVE'}},include:{role:true}});
+  const personal=member?.role.owner?personalCallPlan(member.preferences):null;
+  if(member?.role.owner&&(!personal?.enabled||permission!=='crm.outreach.manage'))return null;
   if(!member || !can(member,permission) || permission==='crm.outreach.manage' && !can(member,'calendar.manage'))return null;
   const until=new Date(after.getTime()+14*86400000);
   const reservations=await tx.teamCalendarEvent.findMany({where:{workspaceId,assigneeId:memberId,status:'SCHEDULED',...(eventId?{id:{not:eventId}}:{}),...(taskId?{OR:[{followUpTaskId:null},{followUpTaskId:{not:taskId}}]}:{}),startsAt:{gte:new Date(after.getTime()-7*86400000),lt:until}}});
   for(const window of activeWindows(member.preferences,after,until)) {
     let candidate=new Date(Math.ceil(Math.max(after.getTime(),window.startsAt.getTime())/900000)*900000);
     while(candidate.getTime()+30*60000<=Math.min(window.endsAt.getTime(),until.getTime())) {
+      if(personal){const {start,end}=indiaWorkday(candidate);const used=await tx.teamTask.count({where:{workspaceId,ownerId:memberId,archivedAt:null,status:{not:'CANCELLED'},...(taskId?{id:{not:taskId}}:{}),dueAt:{gte:start,lt:end},followUpContext:{path:['personalCallPlan'],equals:true}}});if(used>=personal.dailyLimit)break;}
       const conflicts=reservations.filter(event=>reservationsOverlap({kind:'CALL',startsAt:candidate,endsAt:null},event));
       if(!conflicts.length)return candidate;
       candidate=new Date(Math.ceil(Math.max(...conflicts.map(event=>reservationEnd(event).getTime()))/900000)*900000);

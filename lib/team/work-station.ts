@@ -202,6 +202,7 @@ async function queueActivityMail(tx: Prisma.TransactionClient, a: Actor, task: {
     return { ...job, channel: ticketId ? 'support' : 'outreach' };
 }
 export async function stationMutation(tx: Prisma.TransactionClient, a: Actor, resource: string, input: unknown, now = new Date()) {
+    if(resource==='workstation-personal-plan')return (await import('./personal-call-plan')).savePersonalCallPlan(tx,a,input);
     if (resource === 'workstation-start')
         return startActivity(tx, a, input, now);
     if (resource === 'workstation-release') {

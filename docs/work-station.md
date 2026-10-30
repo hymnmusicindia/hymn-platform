@@ -22,6 +22,7 @@ Ticket context, attachments, replies, reviewed email templates, QC and lead qual
 - Missing-coverage retries are reconsidered when working hours become available. Attempt limits and explicitly requested unavailable times remain supervisor exceptions.
 - Managers can release an abandoned session with a reason; its draft remains in the immutable audit evidence. Assignment/status changes cannot silently overwrite an active session.
 - Completing an activity does not publish releases or beats, approve creator applications, grant financial authority or satisfy daily CRM targets by checkbox. Existing source decisions, dependency/checklist checks, review rules and recurrence continue to apply. Real eligible conversations feed the existing CRM contact metrics.
+- An owner may opt into a personal call plan capped at three or four tasks per India workday. It reassigns only unstarted friendly-introduction calls with a valid customer phone, skips internal identities and restricted contacts, and records the previous owner in the audit log. It never places a call or sends an email. An opted-in owner can take a task that was previously pinned to another teammate; the daily and outstanding-work caps still apply.
 
 ## Storage and recovery
 
