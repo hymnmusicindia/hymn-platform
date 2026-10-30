@@ -113,10 +113,10 @@ export function ArtworkSquareDropzone({ previewUrl, fileName, fileType, dimensio
       {processing ? <p className="text-xs" role="status" style={{ color: "var(--text-muted)" }}>Reading artwork...</p> : null}
 
       {!minimalFeedback && previewUrl && fileName ? (
-        <div className="rounded-xl border px-3 py-2.5 text-xs" style={{ borderColor: "rgba(34,197,94,0.35)", background: "rgba(34,197,94,0.09)", color: "var(--text)" }}>
+        <div className="rounded-xl border px-3 py-2.5 text-xs" style={{ borderColor: "rgba(34,197,94,0.35)", background: "var(--success-soft)", color: "var(--text)" }}>
           <div className="flex items-center justify-between gap-3">
             <span className="truncate font-medium">{fileName}</span>
-            <span style={{ color: "#86efac" }}>Passed</span>
+            <span style={{ color: "var(--success)" }}>Passed</span>
           </div>
           <p className="mt-1" style={{ color: "var(--text-soft)" }}>{[dimensions, fileType].filter(Boolean).join(" • ")}</p>
         </div>

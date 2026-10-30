@@ -127,10 +127,10 @@ export function UploadDropzone({ accept, title, description, helperLines = [], f
           error
             ? { borderColor: "var(--danger)", background: "var(--danger-soft)" }
             : dragging
-              ? { borderColor: "var(--accent)", background: "linear-gradient(180deg, rgba(89,223,224,0.13), rgba(89,223,224,0.055))" }
+              ? { borderColor: "var(--accent)", background: "var(--info-soft)" }
               : {
                   borderColor: "var(--border)",
-                  background: "linear-gradient(150deg, rgba(255,255,255,0.035), transparent 40%), var(--bg-soft)",
+                  background: "var(--bg-soft)",
                   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035)"
                 }
         }
@@ -191,7 +191,7 @@ export function UploadDropzone({ accept, title, description, helperLines = [], f
 
         {processing || progress === 100 ? (
           <div className="mt-4">
-            <div className="h-2 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
+            <div className="h-2 overflow-hidden rounded-full" style={{ background: "var(--bg-soft)" }}>
               <div className={clsx("h-full rounded-full", processing ? "shimmer-track" : "")} style={{ width: `${progress}%`, background: processing ? undefined : "var(--accent)" }} />
             </div>
             <p className="mt-2 text-xs" style={{ color: "var(--text-soft)" }}>

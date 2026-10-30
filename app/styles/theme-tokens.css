@@ -33,7 +33,7 @@
   --hymn-focus:#a5c8ff;
   --hymn-hover:#283341;
   --hymn-disabled:#8995a5;
-  --hymn-overlay:rgba(4,8,14,.72);
+  --hymn-overlay:rgba(4,8,14,.4);
   --hymn-shadow-soft:0 3px 12px rgba(0,0,0,.16);
   --hymn-shadow-strong:0 16px 40px rgba(0,0,0,.32);
   --hymn-page-glow:transparent;
@@ -97,7 +97,7 @@ html[data-theme][data-theme="light"] {
   --hymn-focus:#2357a0;
   --hymn-hover:#e5eaf0;
   --hymn-disabled:#69788a;
-  --hymn-overlay:rgba(14,24,39,.48);
+  --hymn-overlay:rgba(14,24,39,.28);
   --hymn-shadow-soft:0 2px 8px rgba(24,39,60,.06);
   --hymn-shadow-strong:0 16px 40px rgba(24,39,60,.14);
   --hymn-page-glow:transparent;

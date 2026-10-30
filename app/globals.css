@@ -12,19 +12,19 @@
 .beat-player-range::-webkit-slider-runnable-track {
   height: .25rem;
   border-radius: 999px;
-  background: linear-gradient(90deg, #fff 0 var(--beat-progress, 0%), rgba(255,255,255,.26) var(--beat-progress, 0%) 100%);
+  background: linear-gradient(90deg, var(--accent) 0 var(--beat-progress, 0%), var(--border-strong) var(--beat-progress, 0%) 100%);
 }
 
 .beat-player-range::-moz-range-track {
   height: .25rem;
   border-radius: 999px;
-  background: rgba(255,255,255,.14);
+  background: var(--border-strong);
 }
 
 .beat-player-range::-moz-range-progress {
   height: .42rem;
   border-radius: 999px;
-  background: #fff;
+  background: var(--accent);
 }
 
 .beat-player-range::-webkit-slider-thumb {
@@ -34,7 +34,7 @@
   margin-top: -.235rem;
   border: 0;
   border-radius: 999px;
-  background: #fff;
+  background: var(--accent);
   box-shadow: 0 1px 5px rgba(0,0,0,.45);
 }
 
@@ -43,26 +43,26 @@
   height: .72rem;
   border: 0;
   border-radius: 999px;
-  background: #fff;
+  background: var(--accent);
   box-shadow: 0 1px 5px rgba(0,0,0,.45);
 }
 
 .beat-volume-range::-webkit-slider-runnable-track {
   height: .24rem;
   border-radius: 999px;
-  background: linear-gradient(90deg, #fff 0 var(--beat-volume, 0%), rgba(255,255,255,.18) var(--beat-volume, 0%) 100%);
+  background: linear-gradient(90deg, var(--accent) 0 var(--beat-volume, 0%), var(--border-strong) var(--beat-volume, 0%) 100%);
 }
 
 .beat-volume-range::-moz-range-track {
   height: .24rem;
   border-radius: 999px;
-  background: rgba(255,255,255,.18);
+  background: var(--border-strong);
 }
 
 .beat-volume-range::-moz-range-progress {
   height: .24rem;
   border-radius: 999px;
-  background: #fff;
+  background: var(--accent);
 }
 
 .beat-volume-range::-webkit-slider-thumb {
@@ -72,7 +72,7 @@
   margin-top: -.25rem;
   border-radius: 999px;
   border: 0;
-  background: #fff;
+  background: var(--accent);
 }
 
 .beat-volume-range::-moz-range-thumb {
@@ -80,11 +80,11 @@
   height: .75rem;
   border: 0;
   border-radius: 999px;
-  background: #fff;
+  background: var(--accent);
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: inherit;
   --background-main: var(--bg);
   --background-elevated: var(--bg-elevated);
   --background-card: var(--card);
@@ -182,7 +182,7 @@ html[data-theme="light"] {
 }
 
 html[data-theme="light"] .force-dark {
-  color-scheme: dark;
+  color-scheme: inherit;
   --distribution-map-base: rgba(245, 247, 251, 0.72);
   --distribution-map-muted: rgba(245, 247, 251, 0.34);
   --distribution-map-highlight: rgba(255, 255, 255, 0.98);
@@ -199,10 +199,7 @@ body {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   min-height: 100vh;
   background:
-    radial-gradient(circle at 10% 8%, color-mix(in srgb, var(--page-glow) 88%, transparent), transparent 28%),
-    radial-gradient(circle at 90% 4%, rgba(245, 193, 108, 0.08), transparent 24%),
-    radial-gradient(circle at 48% 92%, color-mix(in srgb, var(--page-glow) 45%, transparent), transparent 34%),
-    linear-gradient(180deg, var(--bg) 0%, var(--bg-elevated) 48%, var(--bg) 100%);
+    var(--bg);
   color: var(--text);
   transition: background 220ms ease, color 220ms ease;
   overflow-x: hidden;
@@ -263,8 +260,7 @@ main {
   @apply rounded-[1.75rem] border;
   border-color: var(--glass-border);
   background:
-    linear-gradient(150deg, rgba(255, 255, 255, 0.045), transparent 38%),
-    linear-gradient(165deg, color-mix(in srgb, var(--glass-bg-strong) 94%, transparent) 0%, color-mix(in srgb, var(--glass-bg) 88%, transparent) 100%);
+    var(--card);
   backdrop-filter: blur(22px) saturate(145%);
   box-shadow: var(--glass-shadow);
   transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease, background 220ms ease;
@@ -718,14 +714,14 @@ main {
   gap: 0.9rem;
   border-radius: 1.1rem;
   border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--success-soft);
   padding: 0.9rem 1rem;
-  color: rgba(245, 247, 251, 0.62);
+  color: var(--success);
   transition: border-color 260ms ease, background 260ms ease, transform 260ms ease;
 }
 
 .hymn-success-step:not(.hymn-success-step-future) {
-  color: #f5f7fb;
+  color: var(--success);
 }
 
 .hymn-success-step:not(.hymn-success-step-active):not(.hymn-success-step-future) {
@@ -734,7 +730,7 @@ main {
 
 .hymn-success-step-active {
   border-color: rgba(89, 223, 224, 0.45);
-  background: rgba(89, 223, 224, 0.085);
+  background: var(--success-soft);
   box-shadow: 0 0 42px rgba(89, 223, 224, 0.1);
 }
 
@@ -746,14 +742,14 @@ main {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: rgba(89, 223, 224, 0.12);
-  color: #59dfe0;
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .hymn-success-step-active .hymn-success-step-icon {
   animation: hymn-success-pulse 1.8s ease-in-out infinite;
-  background: #59dfe0;
-  color: #05070b;
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .hymn-success-primary-cta {
@@ -792,8 +788,7 @@ main {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 2rem;
   background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.08), transparent 34%),
-    rgba(16, 20, 27, 0.86);
+    var(--card);
   padding: 1.1rem;
   box-shadow: 0 44px 120px rgba(0, 0, 0, 0.52), 0 0 80px rgba(89, 223, 224, 0.12);
   animation: hymn-success-float 7s ease-in-out infinite;
@@ -1028,13 +1023,13 @@ main {
   border-radius: 0.95rem;
   padding: 0.55rem 0.7rem;
   text-align: left;
-  color: color-mix(in srgb, #f4f7fb 62%, transparent);
+  color: var(--text-muted);
   transition: background 240ms var(--motion-ease), color 240ms var(--motion-ease);
 }
 
 .dashboard-os-group-toggle:hover {
-  background: rgba(255, 255, 255, 0.035);
-  color: #f4f7fb;
+  background: var(--hover);
+  color: var(--text-muted);
 }
 
 .dashboard-os-group-toggle span span {
@@ -1053,7 +1048,7 @@ main {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.68rem;
-  color: #8f97aa;
+  color: var(--text-muted);
 }
 
 .dashboard-os-nav-item {
@@ -1065,7 +1060,7 @@ main {
   border-radius: 1rem;
   padding: 0.9rem;
   text-align: left;
-  color: #8f97aa;
+  color: var(--text-muted);
   transition: transform 240ms var(--motion-ease), border-color 240ms var(--motion-ease), background 240ms var(--motion-ease), color 240ms var(--motion-ease);
   width: 100%;
   min-width: 0;
@@ -1074,14 +1069,14 @@ main {
 
 .dashboard-os-nav-item:hover {
   border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  color: #f4f7fb;
+  background: var(--hover);
+  color: var(--text-muted);
 }
 
 .dashboard-os-nav-item.is-active {
   border-color: rgba(89, 223, 224, 0.28);
-  background: rgba(89, 223, 224, 0.08);
-  color: #f4f7fb;
+  background: var(--card);
+  color: var(--text-muted);
   box-shadow: 0 0 36px rgba(89, 223, 224, 0.08);
 }
 
@@ -1106,7 +1101,7 @@ main {
   gap: 0.75rem;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(9, 11, 16, 0.46);
+  background: var(--card);
   padding: 0 1rem;
 }
 
@@ -1114,7 +1109,7 @@ main {
   width: 100%;
   border: 0;
   background: transparent;
-  color: #f4f7fb;
+  color: var(--text-muted);
   outline: none;
 }
 
@@ -1132,15 +1127,15 @@ main {
   justify-content: center;
   border-radius: 0.9rem;
   border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.035);
-  color: #f4f7fb;
+  background: var(--card);
+  color: var(--text-muted);
   overflow: hidden;
   transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease, transform 200ms ease;
 }
 
 .dashboard-os-icon-button:hover {
   border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.075);
+  background: var(--hover);
 }
 
 .dashboard-os-icon-button:focus-visible {
@@ -1159,7 +1154,7 @@ main {
   height: 0.45rem;
   width: 0.45rem;
   border-radius: 999px;
-  background: #59dfe0;
+  background: var(--card);
   box-shadow: 0 0 14px rgba(89, 223, 224, 0.65);
 }
 
@@ -1170,9 +1165,9 @@ main {
   gap: 0.5rem;
   border-radius: 999px;
   border: 1px solid rgba(89, 223, 224, 0.18);
-  background: rgba(89, 223, 224, 0.08);
+  background: var(--card);
   padding: 0 1rem;
-  color: #f4f7fb;
+  color: var(--text-muted);
   font-size: 0.85rem;
   font-weight: 700;
 }
@@ -1207,7 +1202,7 @@ main {
   min-width: min(100%, 19rem);
   border-radius: 1.35rem;
   padding: 1.1rem;
-  background: rgba(9, 11, 16, 0.42);
+  background: var(--card);
 }
 
 .metric-card {

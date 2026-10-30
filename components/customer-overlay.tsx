@@ -12,5 +12,5 @@ export function CustomerOverlay({ open = true, lockScroll = true, children }: { 
     return () => { document.body.style.overflow = previous; };
   }, [open, lockScroll]);
   if (!open || typeof document === "undefined") return null;
-  return createPortal(<div className="hymn-overlay customer-overlay">{children}</div>, document.body);
+  return createPortal(<div data-theme-surface="overlay" className="hymn-overlay customer-overlay">{children}</div>, document.body);
 }

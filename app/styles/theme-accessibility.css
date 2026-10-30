@@ -50,3 +50,8 @@ html[data-theme] body footer[data-site-footer] { background:var(--hymn-card)!imp
 html[data-theme] body footer[data-site-footer] .ios-collapse { background:var(--hymn-bg-soft)!important;color:var(--hymn-text);border-color:var(--hymn-border)!important;box-shadow:none; }
 
 html body :is(input[type="checkbox"],input[type="radio"],input[type="range"]) { accent-color:var(--info); }
+
+/* Portal roots never paint the screen: only their explicit scrim dims it. */
+html[data-theme] body [data-theme-surface="overlay"] { background:transparent!important;color:var(--text);color-scheme:inherit; }
+html[data-theme] body [data-theme-surface="overlay"] [role="dialog"] { background:var(--card);color:var(--text);border-color:var(--border-strong);box-shadow:var(--shadow-strong); }
+html[data-theme] body [data-theme-surface="overlay"] :is([data-overlay-backdrop],.genre-picker-backdrop) { background:var(--overlay);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px); }

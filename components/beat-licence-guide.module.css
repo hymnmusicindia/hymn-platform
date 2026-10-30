@@ -15,7 +15,7 @@
 .format:hover .art{transform:scale(1.035)}
 .format strong{font-size:21px;line-height:1.2;letter-spacing:-.035em;font-weight:600}
 .caption{font-size:11px;color:var(--text-muted);margin-top:7px}
-.selectionPanel{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px 28px;margin-top:14px;padding:24px;border:1px solid var(--border);border-radius:16px;background:#ffffff03}
+.selectionPanel{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px 28px;margin-top:14px;padding:24px;border:1px solid var(--border);border-radius:16px;background:var(--card)}
 .selectionCopy{display:flex;align-items:flex-start;gap:16px;min-width:0}
 .panelIcon{display:grid;place-items:center;width:48px;height:48px;flex-shrink:0;border-radius:14px;background:color-mix(in srgb,var(--format-color) 10%,transparent);color:var(--format-color)}
 .selectionCopy h3{font-size:15px;font-weight:600;margin:0 0 7px}.selectionCopy h3>span{font-size:12px;font-weight:400;color:var(--text-muted)}

@@ -428,7 +428,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance,
       ]}/></Panel>:null}
 
       {editingBeat ? (
-        <div role="dialog" aria-modal="true" aria-label="Edit beat" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+        <div role="dialog" aria-modal="true" aria-label="Edit beat" className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay)] p-4 backdrop-blur-sm">
           <div className="max-h-[90dvh] overflow-y-auto w-full max-w-lg rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl">
             <h3 className="text-xl font-semibold mb-4" style={{ color: "var(--text)" }}>Edit Beat</h3>
             <form onSubmit={handleBeatEditSubmit} className="grid gap-4">
@@ -462,7 +462,7 @@ export function ProducerDashboardShell({ user, beats, orders, earnings, finance,
       ) : null}
 
       {deletingBeat ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay)] p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl text-center">
             <h3 className="text-xl font-semibold mb-2" style={{ color: "var(--text)" }}>Remove beat?</h3>
             <p className="text-sm mb-6" style={{ color: "var(--text-soft)" }}>

@@ -26,7 +26,7 @@
 .hymn-portal-root #distribution-pricing { padding-top:12px; }
 .hymn-portal-root #distribution-pricing > div { padding:24px 0!important; border:0!important; border-radius:0!important; background:none!important; }
 .hymn-portal-root .distribution-plan-grid { overflow:visible!important; display:grid!important; grid-template-columns:repeat(3,minmax(0,1fr)); }
-.hymn-portal-root .distribution-plan-card { border-radius:6px!important; background:rgba(255,255,255,.025)!important; box-shadow:none!important; transform:none!important; }
+.hymn-portal-root .distribution-plan-card { border-radius:6px!important; background:var(--card)!important; box-shadow:none!important; transform:none!important; }
 .hymn-portal-root .distribution-plan-card:hover { border-color:var(--border-strong)!important; }
 .hymn-portal-root .distribution-page > .shell { padding-block:20px; }
 .hymn-portal-root .distribution-hero { border-radius:6px!important; box-shadow:none!important; }
@@ -55,7 +55,7 @@ html body .hymn-portal-root .hymn-portal .release-library-panel { padding:8px 0!
 html body .release-draft-resume-card::before,html body .release-draft-resume-card::after { display:none!important; }
 html body .release-draft-resume-card.release-draft-resume-card {
   position:relative; padding:24px!important; border:1px solid var(--border)!important; border-left:2px solid var(--money)!important;
-  border-radius:4px!important; background:linear-gradient(105deg,rgba(245,193,108,.055),transparent 65%)!important; box-shadow:none!important;
+  border-radius:4px!important; background:var(--card)!important; box-shadow:none!important;
 }
 .release-draft-resume-card h2 { margin-top:8px; font-size:22px; letter-spacing:-.025em; }
 html body .release-draft-resume-action { display:inline-flex; gap:12px; padding:10px 0!important; background:none!important; color:var(--text-muted)!important; box-shadow:none!important; border:0!important; border-radius:0!important; transform:none!important; }

@@ -78,7 +78,7 @@
 
 .track-card.expanded {
   border-color: var(--accent);
-  background: linear-gradient(135deg, rgba(89, 223, 224, 0.08), rgba(89, 223, 224, 0.04));
+  background: var(--card);
 }
 
 /* Platform Buttons */
@@ -240,7 +240,7 @@ select.field {
 }
 
 .login-portal-feature-muted {
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--text-muted);
 }
 
 html[data-theme="light"] .login-portal-brand {

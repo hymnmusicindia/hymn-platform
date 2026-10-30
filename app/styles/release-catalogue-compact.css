@@ -14,7 +14,7 @@ html body .release-catalogue-filters .release-filter-control .release-filter-lab
 }
 html body .release-catalogue-filters .release-filter-label svg { width:15px; height:15px; flex-shrink:0; }
 html body .hymn-portal-root .hymn-portal .release-catalogue-filters .release-filter-control select.field {
-  color-scheme:dark;
+  color-scheme:inherit;
   color:var(--text)!important;
   background-color:var(--card)!important;
   border:1px solid var(--border)!important;

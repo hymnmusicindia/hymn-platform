@@ -42,7 +42,7 @@ export function GenreSelector({ genre, subgenre, onChange, error = false }: Genr
 
   const dialogRef = useAccessibleDialog(open, closePicker);
   const picker = open ? (
-    <div className="genre-picker-backdrop fixed inset-0 z-[120] flex items-end justify-center bg-black/55 p-0 backdrop-blur-sm sm:items-center sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) closePicker(); }}>
+    <div className="genre-picker-backdrop fixed inset-0 z-[120] flex items-end justify-center bg-[var(--overlay)] p-0 backdrop-blur-sm sm:items-center sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) closePicker(); }}>
       <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Choose genre and subgenre" className="genre-picker-modal flex max-h-[88vh] w-full flex-col overflow-hidden rounded-t-[1.5rem] border shadow-2xl sm:max-w-3xl sm:rounded-[1.5rem]" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
         <header className="flex items-center justify-between gap-4 border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
           <h3 className="font-semibold" style={{ color: "var(--text)" }}>Genre and subgenre</h3>

@@ -20,3 +20,13 @@ Regression coverage:
 The rendered audit covered home, Studio, Beatstore, distribution, services, FAQ, contact and login at 1440px/390px in light/dark modes: 32 combinations and 2,626 text checks in the initial sweep. It found services/FAQ headings and mobile footer panels that the initial Studio-only test did not cover. After corrections, affected routes were rechecked: 24 combinations, 1,903 text checks, no reported contrast failures or horizontal overflow. Review/workflow and authenticated workspace component fixtures also pass in both themes.
 
 These checks use local fallback content where production database access is unavailable. They do not change business records. Authenticated styles use real CSS modules with fixture records. The contrast helper evaluates solid backgrounds and gradient endpoints; text over photographs/composited artwork also needs visual inspection. This is not an assertion that every possible customer record, dialog and third-party widget has been exercised.
+
+## Signed-in surfaces and overlay follow-up
+
+The signed-in home feed and body-mounted goal companion had a separate legacy stylesheet with fixed dark canvases. That stylesheet now consumes the same theme for its canvas, cards, popup, buttons and studio banner. Release badge styles and artwork action controls also consume semantic tokens.
+
+`CustomerOverlay` explicitly marks a transparent portal host. Panels own their surfaces; scrims own the dimming. The shared overlay token uses 28% dimming in light mode and 40% in dark mode. The beat licence picker applies a 12px backdrop blur and has theme-aware panel and SVG wheel paints. Other fullscreen modal scrims, native control colour schemes, player controls, upload validation, pricing notices and workspace-switcher styles now follow the same palette. This changes presentation values, not purchase, submission, download or permission decisions.
+
+`verify-personalized-theme.cjs` bundles the actual signed-in home, portalled guide, licence picker, final confirmation, release action menu and player with the full Tailwind/global/module stylesheet stack. It checks desktop/mobile in both themes, release badge contrast, licence selection, viewport-sized translucent backdrop, Escape dismissal and scroll restoration. Requests use local fixture responses; it does not buy, submit or download anything.
+
+The theme contract additionally checks scoped interface paints and inline JSX styles throughout the component directory. `scripts/lib/theme-paint-policy.cjs` distinguishes interface surfaces from photographic/illustrated artwork and independent producer-page branding. Token fallbacks remain allowed. CI runs for component changes so new inline styles are covered as well as CSS changes.

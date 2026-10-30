@@ -31,12 +31,12 @@
 .playlist-track-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(104px,120px)); gap:10px; align-items:stretch; }
 .playlist-track-card { display:flex; flex-direction:column; padding:5px; min-width:0; text-align:left; border:1px solid var(--border); border-radius:10px; background:var(--bg-soft); color:var(--text); cursor:pointer; transition:border-color .16s ease,background .16s ease; }
 .playlist-track-card:hover { border-color:var(--border); background:color-mix(in srgb,var(--bg-soft) 90%,white); }
-.playlist-track-card[aria-pressed="true"] { border-color:#82c9a2; box-shadow:var(--shadow-soft); background:color-mix(in srgb,#82c9a2 7%,var(--card)); }
+.playlist-track-card[aria-pressed="true"] { border-color:#82c9a2; box-shadow:var(--shadow-soft); background:var(--hover); }
 .playlist-track-card:focus-visible,.playlist-external-toggle:focus-visible { outline:2px solid #a8dec0; outline-offset:4px; }
 .playlist-track-art { aspect-ratio:1; position:relative; display:grid; place-items:center; overflow:hidden; border-radius:9px; background:var(--surface-gradient); color:var(--text-muted); }
 .playlist-track-art > img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:1; }
 .playlist-track-selected { position:absolute; top:10px; right:10px; z-index:2; display:grid; place-items:center; width:26px; height:26px; border-radius:50%; border:1px solid var(--border); background:#141b24a6; color:white; }
-.playlist-track-card[aria-pressed="true"] .playlist-track-selected { background:#82c9a2; color:var(--text); border-color:#82c9a2; }
+.playlist-track-card[aria-pressed="true"] .playlist-track-selected { background:var(--hover); color:var(--text); border-color:#82c9a2; }
 .playlist-track-copy { display:grid; grid-template-rows:16px 34px 17px; gap:5px; padding:8px 3px 5px; }
 .playlist-track-copy strong { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; font-size:12px; line-height:17px; overflow-wrap:anywhere; }
 .playlist-track-copy > span:not(.playlist-track-live) { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:11px; line-height:17px; }
@@ -76,7 +76,7 @@
 .playlist-invitation-benefits span { display:grid; gap:5px; }
 .playlist-invitation-benefits strong { font-size:12px; }
 .playlist-invitation-benefits small { font-size:11px; color:var(--text-muted); line-height:1.6; }
-.playlist-dialog-backdrop { position:fixed; inset:0; z-index:2200; display:grid; place-items:center; padding:24px; background:#000b; backdrop-filter:blur(8px); }
+.playlist-dialog-backdrop { position:fixed; inset:0; z-index:2200; display:grid; place-items:center; padding:24px; background:var(--overlay); backdrop-filter:blur(8px); }
 .playlist-review-dialog { display:flex; flex-direction:column; width:min(1120px,100%); max-height:calc(100dvh - 48px); min-height:0; border:1px solid var(--border); border-radius:18px; background:var(--card); color:var(--text); box-shadow:var(--shadow-soft); overflow:hidden; }
 .playlist-dialog-heading { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:22px 28px; border-bottom:1px solid var(--border); flex-shrink:0; }
 .playlist-dialog-heading h2 { margin:0; font-size:22px; letter-spacing:-.025em; }

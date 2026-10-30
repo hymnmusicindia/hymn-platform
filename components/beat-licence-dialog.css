@@ -1,0 +1,17 @@
+/* The page remains visible behind the licence picker in either theme. */
+.beat-licence-layer { background:transparent; }
+.beat-licence-backdrop {
+  border:0;
+  background:var(--overlay);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+}
+.beat-licence-panel {
+  background:var(--card);
+  color:var(--text);
+  border-color:var(--border-strong);
+  box-shadow:var(--shadow-strong);
+}
+@media(prefers-reduced-transparency:reduce) {
+  .beat-licence-backdrop { backdrop-filter:none;-webkit-backdrop-filter:none; }
+}

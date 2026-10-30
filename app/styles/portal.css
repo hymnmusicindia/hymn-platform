@@ -83,7 +83,7 @@
   .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-mobile-head { display:flex; align-items:center; justify-content:space-between; padding:4px 4px 16px; background:none; border:0; }
   .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-mobile-head h1 { font-size:18px; }
   .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-sidebar { position:fixed; top:0; width:min(88vw,300px); max-width:none; height:100dvh; z-index:1250; }
-  .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-backdrop { z-index:1240; background:#0009; }
+  .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-backdrop { z-index:1240; background:var(--overlay); }
   .hymn-portal-root.hymn-portal-root .hymn-portal .portal-page-content { padding:22px; }
   .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-topbar { padding:12px 20px; flex-wrap:wrap; }
   .hymn-portal-root.hymn-portal-root .hymn-portal .dashboard-os-hero { padding:24px 22px 0; }
@@ -146,7 +146,7 @@
   box-shadow:var(--shadow-soft);
 }
 .hymn-portal [data-workspace="admin"] .dashboard-os-topbar {
-  min-height:66px;border-bottom:1px solid var(--border);background:rgba(18,20,25,.68);backdrop-filter:blur(18px);
+  min-height:66px;border-bottom:1px solid var(--border);background:var(--card);backdrop-filter:blur(18px);
 }
 .hymn-portal [data-workspace="admin"] .portal-section-label { color:var(--text);font-weight:650; }
 .hymn-portal [data-workspace="admin"] .dashboard-os-search { border-color:var(--border);background:var(--card); }
@@ -161,7 +161,7 @@
 .hymn-portal [data-workspace="admin"] :is(th) { color:var(--text-muted);font-size:10px;font-weight:750;letter-spacing:.09em;text-transform:uppercase; }
 .hymn-portal [data-workspace="admin"] :is(td) { color:var(--text);border-color:var(--border); }
 .hymn-portal [data-workspace="admin"] tbody tr { transition:background .16s; }
-.hymn-portal [data-workspace="admin"] tbody tr:hover { background:rgba(255,255,255,.025); }
+.hymn-portal [data-workspace="admin"] tbody tr:hover { background:var(--hover); }
 .hymn-portal [data-workspace="admin"] :is(input,select,textarea).field {
   border-color:var(--border);background:var(--card);color:var(--text);
 }

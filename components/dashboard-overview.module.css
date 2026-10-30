@@ -14,7 +14,7 @@
 .metric strong{font-size:clamp(23px,2.5vw,32px);font-weight:600;letter-spacing:-.035em;font-variant-numeric:tabular-nums;line-height:1.2}
 .metric small{color:var(--text-muted,#9ba3b3);font-size:11px;line-height:1.5}
 .grid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(260px,1fr);gap:20px;align-items:start}
-.panel{border:1px solid var(--border);border-radius:16px;background:var(--bg-soft,#1b202a);padding:22px;min-width:0}
+.panel{border:1px solid var(--border);border-radius:16px;background:var(--card);padding:22px;min-width:0}
 .panelHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}
 .panel h2{font-size:16px;letter-spacing:-.02em;font-weight:600;margin:0}
 .stack{display:grid;gap:20px;min-width:0}

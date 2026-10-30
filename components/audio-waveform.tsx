@@ -359,7 +359,7 @@ export function AudioWaveform({ src, title, subtitle, compact = false, compactMi
         aria-valuetext={`${currentTime} of ${totalTime}`}
         ref={waveformRef}
         className={clsx("group cursor-pointer rounded-[1.2rem] border px-3 py-4", validSrc ? "" : "opacity-60")}
-        style={{ borderColor: "var(--border)", background: "rgba(255,255,255,0.02)" }}
+        style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}
       >
         <div className="flex h-20 items-end gap-[3px]">
           {bars.length > 0 ? (

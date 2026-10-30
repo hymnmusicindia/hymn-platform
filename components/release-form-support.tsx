@@ -41,7 +41,7 @@ function ModalShell({
 
   return (
     <CustomerOverlay><div
-      className="release-dialog-layer fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/45 px-4 py-6 backdrop-blur-md"
+      className="release-dialog-layer fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[var(--overlay)] px-4 py-6 backdrop-blur-md"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -135,7 +135,7 @@ function ContributorIdentityPicker({ entry, role, onSelect }: { entry: Contribut
   }, [query, open]);
 
   return <div className="relative col-span-full">
-    {entry.partyId ? <div className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: "rgba(34,197,94,0.35)", background: "rgba(34,197,94,0.08)" }}><span>Linked HYMN identity {entry.hymnProducerId ? `· ${entry.hymnProducerId}` : ""}</span><button type="button" className="underline" onClick={() => onSelect({ partyId: undefined, hymnProducerId: undefined, claimed: undefined })}>Use a new identity</button></div> : <>
+    {entry.partyId ? <div className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: "rgba(34,197,94,0.35)", background: "var(--success-soft)" }}><span>Linked HYMN identity {entry.hymnProducerId ? `· ${entry.hymnProducerId}` : ""}</span><button type="button" className="underline" onClick={() => onSelect({ partyId: undefined, hymnProducerId: undefined, claimed: undefined })}>Use a new identity</button></div> : <>
       <label className="relative block"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4" aria-hidden="true"/><span className="sr-only">Search existing contributor identity</span><input className="field min-h-10 w-full pl-9 text-sm" value={query} onFocus={() => setOpen(true)} onChange={(event) => { setQuery(event.target.value); setOpen(true); }} placeholder="Search previous collaborator, professional name, or HYMN ID" /></label>
       {open ? <div className="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-xl border p-1 shadow-2xl" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }} role="listbox" aria-label="Contributor identities">
         {results.map((result) => <button key={result.id} type="button" role="option" aria-selected={false} className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-white/5" onClick={() => { onSelect({ partyId: result.id, hymnProducerId: result.publicId, claimed: result.identityState !== "UNCLAIMED", ...(role === "producer" ? { artistName: result.professionalName } : { legalName: result.professionalName }) }); setQuery(""); setOpen(false); }}><span><strong>{result.professionalName}</strong><small className="mt-0.5 block text-muted">{result.publicId}{result.previousCollaborator ? " · Previous collaborator" : ""}</small></span><span className="text-xs text-muted">{result.identityState.toLowerCase()}</span></button>)}
@@ -233,7 +233,7 @@ export function ContributorsModal({
                   <ChevronDown className={clsx("h-5 w-5 shrink-0 transition-transform", openRole === key && "rotate-180")} />
                   </button></h4>
                   <div className="flex items-center gap-2">
-                    <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]" style={complete ? { borderColor: "rgba(34,197,94,0.4)", color: "#86efac", background: "rgba(34,197,94,0.09)" } : { borderColor: "rgba(250,204,21,0.38)", color: "#fde68a", background: "rgba(250,204,21,0.09)" }}>
+                    <span className="rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]" style={complete ? { borderColor: "rgba(34,197,94,0.4)", color: "var(--success)", background: "var(--success-soft)" } : { borderColor: "rgba(250,204,21,0.38)", color: "var(--warning)", background: "var(--warning-soft)" }}>
                       {complete ? "Complete" : "Missing"}
                     </span>
                     <button type="button" className="contributor-add-action btn-outline pressable px-3 py-2 text-xs" onClick={() => addRoleEntry(key)}>+ Add</button>
@@ -265,7 +265,7 @@ export function ContributorsModal({
             );
           })}
         </div>
-        {!valid ? <p className="contributor-validation-message px-4 pb-0 text-sm sm:px-6" style={{ color: "#fca5a5" }}>Songwriters and composers need legal names. Producers need an artist name.</p> : null}
+        {!valid ? <p className="contributor-validation-message px-4 pb-0 text-sm sm:px-6" style={{ color: "var(--danger)" }}>Songwriters and composers need legal names. Producers need an artist name.</p> : null}
         <div className="flex flex-col-reverse gap-2 border-t px-4 py-4 sm:flex-row sm:justify-end sm:px-6" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
           <label className="mr-auto flex items-center gap-2 text-sm"><input type="checkbox" checked={applyToAllTracks} onChange={(event) => setApplyToAllTracks(event.target.checked)} />Apply these track-level credits to all tracks</label>
           <button type="button" className="btn-outline pressable justify-center" onClick={onClose}>Cancel</button>
@@ -528,7 +528,7 @@ export function LegalConsentModal({
           <div className="flex items-center gap-3 text-sm" style={{ color: "var(--text-soft)" }}>
             <p>{allAccepted ? "All legal confirmations are complete." : reachedBottom ? "Tick the acknowledgement box above to continue." : "Read the checklist and scroll to the bottom to continue."}</p>
             {allAccepted ? (
-              <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-400/12 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "rgb(34, 197, 94)" }}>
+              <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-400/12 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--success)" }}>
                 <span className="animate-pulse">✓</span>
                 Ready
               </span>
@@ -599,7 +599,7 @@ export function QueueCard({ reviewing, projectedPosition, eta, percent }: { revi
         <p>Your projected position: <strong style={{ color: "var(--text)" }}>#{projectedPosition}</strong></p>
         <p>Estimated review: <strong style={{ color: "var(--text)" }}>{eta}</strong></p>
       </div>
-      <div className="mt-4 h-3 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}><div className="shimmer-track h-full rounded-full" style={{ width: `${percent}%` }} /></div>
+      <div className="mt-4 h-3 overflow-hidden rounded-full" style={{ background: "var(--bg-soft)" }}><div className="shimmer-track h-full rounded-full" style={{ width: `${percent}%` }} /></div>
       <p className="mt-3 text-sm" style={{ color: "var(--text-soft)" }}>{percent}% of the active review batch has already moved forward.</p>
     </div>
   );

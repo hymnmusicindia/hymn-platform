@@ -88,7 +88,7 @@ export function DistributionPricingStrip({ activePlan, recommendedPlan, showPlan
             </div>
             <span
               className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold"
-              style={{ borderColor: "rgba(34,197,94,0.3)", background: "rgba(34,197,94,0.08)", color: "#16a34a" }}
+              style={{ borderColor: "rgba(34,197,94,0.3)", background: "var(--success-soft)", color: "var(--success)" }}
             >
               <BadgeCheck className="h-4 w-4" />
               Active
@@ -130,7 +130,7 @@ export function DistributionPricingStrip({ activePlan, recommendedPlan, showPlan
                   <div key={feature.label} className="flex items-center gap-2 text-sm" style={{ color: "var(--text-muted)" }}>
                     <span
                       className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
-                      style={{ background: "rgba(34,197,94,0.12)", color: "#16a34a" }}
+                      style={{ background: "var(--success-soft)", color: "var(--success)" }}
                     >
                       <Check className="h-3 w-3" />
                     </span>

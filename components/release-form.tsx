@@ -1003,7 +1003,7 @@ function SearchableSelect({
   const pickerRef = useAccessibleDialog(open, closePicker);
 
   const picker = open ? (
-    <div className="genre-picker-backdrop fixed inset-0 z-[120] flex items-end justify-center bg-black/55 p-0 backdrop-blur-sm sm:items-center sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) closePicker(); }}>
+    <div className="genre-picker-backdrop fixed inset-0 z-[120] flex items-end justify-center bg-[var(--overlay)] p-0 backdrop-blur-sm sm:items-center sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) closePicker(); }}>
       <section ref={pickerRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`Choose ${label.toLowerCase()}`} className="genre-picker-modal flex max-h-[82vh] w-full flex-col overflow-hidden rounded-t-[1.5rem] border shadow-2xl sm:max-w-lg sm:rounded-[1.5rem]" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
         <header className="flex items-center justify-between gap-4 border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
           <h3 className="font-semibold" style={{ color: "var(--text)" }}>Choose {label.toLowerCase()}</h3>
@@ -2650,14 +2650,14 @@ export function ReleaseForm({
       validity === "complete"
         ? {
             borderColor: "rgba(34,197,94,0.45)",
-            background: "rgba(34,197,94,0.14)",
-            color: "rgb(22,163,74)",
+            background: "var(--success-soft)",
+            color: "var(--success)",
           }
         : validity === "invalid"
           ? {
               borderColor: "rgba(248,113,113,0.45)",
-              background: "rgba(248,113,113,0.12)",
-              color: "rgb(239,68,68)",
+              background: "var(--danger-soft)",
+              color: "var(--danger)",
             }
           : isCurrent
             ? { background: "var(--accent)", color: "var(--accent-foreground)" }
@@ -3585,14 +3585,14 @@ export function ReleaseForm({
       {artistProfileVerification.dialog}
       {amendmentMode && initialRelease ? <aside className="mb-5 px-2 py-4" aria-label="Amendment identifiers"><h1 className="text-xl font-semibold">Amend your release</h1><p className="mt-2 text-sm">Your previous release is pre-filled. Changes go to HYMN review; the live release stays unchanged until approved and delivered. Keep the same recording when restoring a missing master.</p><p className="mt-3 text-sm">Locked UPC: <strong>{initialRelease.upcCode}</strong></p>{initialRelease.tracks?.map(track => <p key={track.id} className="mt-1 text-sm">{track.trackTitle} | Locked ISRC: <strong>{track.isrc}</strong></p>)}</aside> : null}
       {submitting && !artistProfileVerification.open && status !== "Opening Razorpay..." ? (
-        <CustomerOverlay lockScroll={false}><div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/50 p-5 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="release-upload-title" aria-describedby="release-upload-status">
+        <CustomerOverlay lockScroll={false}><div className="fixed inset-0 z-[170] flex items-center justify-center bg-[var(--overlay)] p-5 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="release-upload-title" aria-describedby="release-upload-status">
           <section ref={submissionDialogRef} tabIndex={-1} className="w-full max-w-sm rounded-[2rem] border p-6 text-center shadow-[0_30px_100px_rgba(0,0,0,.55)] sm:p-8" style={{ borderColor: "var(--border)", background: "color-mix(in srgb, var(--card) 94%, transparent)", color: "var(--text)" }}>
             <div className="relative mx-auto flex h-40 w-40 items-center justify-center rounded-full p-2 transition-[background] duration-300" style={{ background: `conic-gradient(var(--accent) ${Math.max(0, Math.min(100, submissionFeedback.value))}%, rgba(255,255,255,0.09) 0)` }} aria-label={submissionFeedback.indeterminate ? "Waiting for submission confirmation" : `${submissionFeedback.value}% submission progress`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={submissionFeedback.indeterminate ? undefined : submissionFeedback.value} aria-valuetext={submissionFeedback.indeterminate ? "Initialising... Still waiting for confirmation." : `${submissionFeedback.value}%`}>
               <div className="flex h-full w-full flex-col items-center justify-center rounded-full border" style={{ borderColor: "var(--border)", background: "var(--card)" }}><strong className="text-4xl font-semibold tabular-nums">{submissionFeedback.indeterminate ? "..." : `${submissionFeedback.value}%`}</strong><span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-soft)" }}>Submission progress</span></div>
             </div>
             <h2 id="release-upload-title" className="mt-6 text-xl font-semibold">{submissionFeedback.indeterminate ? "Initialising..." : submissionComplete ? "Submission confirmed" : uploadProgress >= 100 ? "Finalising submission..." : "Preparing your release..."}</h2>
             <p id="release-upload-status" className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }} aria-live="polite">{submissionFeedback.indeterminate ? "This is taking longer than expected. We are still waiting for confirmation; keep this window open and do not submit again." : status || "Preparing your secure release submission..."}</p>
-            <div className="mt-5 h-1.5 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}><span className="shimmer-track block h-full rounded-full transition-[width] duration-300" style={{ width: `${Math.max(0, Math.min(100, submissionFeedback.value))}%` }} /></div>
+            <div className="mt-5 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--bg-soft)" }}><span className="shimmer-track block h-full rounded-full transition-[width] duration-300" style={{ width: `${Math.max(0, Math.min(100, submissionFeedback.value))}%` }} /></div>
             <p className="mt-4 text-xs" style={{ color: "var(--text-soft)" }}>Keep this window open. Large audio masters can take a few minutes.</p>
           </section>
         </div></CustomerOverlay>
@@ -4153,7 +4153,7 @@ export function ReleaseForm({
                               <span className="flex w-full items-center justify-between gap-3 text-left"><span>{track.versionPreset || "Choose version"}</span><ChevronDown className="h-4 w-4 text-[var(--text-soft)]" /></span>
                             </button>
                             {versionPickerTrack === index ? <CustomerOverlay>
-                              <div className="genre-picker-backdrop fixed inset-0 z-[120] flex items-end justify-center bg-black/55 p-0 backdrop-blur-sm sm:items-center sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) setVersionPickerTrack(null); }}>
+                              <div className="genre-picker-backdrop fixed inset-0 z-[120] flex items-end justify-center bg-[var(--overlay)] p-0 backdrop-blur-sm sm:items-center sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) setVersionPickerTrack(null); }}>
                                 <section role="dialog" aria-modal="true" aria-label="Choose track version" className="genre-picker-modal w-full overflow-hidden rounded-t-[1.5rem] border shadow-2xl sm:max-w-md sm:rounded-[1.5rem]" style={{ borderColor: "var(--border)", background: "var(--bg-elevated)" }}>
                                   <header className="flex items-center justify-between gap-4 border-b px-5 py-4" style={{ borderColor: "var(--border)" }}><h3 className="font-semibold" style={{ color: "var(--text)" }}>Track version</h3><button type="button" onClick={() => setVersionPickerTrack(null)} aria-label="Close version picker" className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[var(--text-muted)] transition hover:bg-[var(--bg-soft)]"><X className="h-4 w-4" /></button></header>
                                   <div className="grid gap-1 p-3">{versionOptions.filter((option) => option !== "Explicit").map((option) => { const selected = track.versionPreset === option; return <button key={option} type="button" className="flex min-h-11 items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm font-medium transition hover:bg-[var(--bg-soft)]" style={{ color: "var(--text)" }} onClick={() => { updateTrack(index, { versionPreset: option, customVersion: option === "Other" ? track.customVersion : "" }); setVersionPickerTrack(null); }}><span>{option}</span>{selected ? <Check className="h-4 w-4 text-[var(--accent)]" /> : null}</button>; })}</div>
@@ -4683,7 +4683,7 @@ export function ReleaseForm({
                       className="group relative inline-flex"
                       title="Only available for Yearly+ Plan. Upgrade to use a custom label name."
                     >
-                      <Crown className="h-4 w-4" style={{ color: "#facc15" }} />
+                      <Crown className="h-4 w-4" style={{ color: "var(--warning)" }} />
                       <span
                         className="pointer-events-none absolute left-0 top-6 z-20 hidden w-64 rounded-xl border p-3 text-xs shadow-xl group-hover:block"
                         style={{
@@ -4956,8 +4956,8 @@ export function ReleaseForm({
                     className="rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em]"
                     style={{
                       borderColor: "rgba(34,197,94,0.38)",
-                      background: "rgba(34,197,94,0.1)",
-                      color: "#22c55e",
+                      background: "var(--success-soft)",
+                      color: "var(--success)",
                     }}
                   >
                     Ready
@@ -5051,7 +5051,7 @@ export function ReleaseForm({
                     {artworkPreview && !artworkError ? (
                       <CheckCircle2
                         className="h-5 w-5 shrink-0"
-                        style={{ color: "#22c55e" }}
+                        style={{ color: "var(--success)" }}
                       />
                     ) : null}
                   </div>
@@ -5113,7 +5113,7 @@ export function ReleaseForm({
                               ? {
                                   borderColor: "var(--accent)",
                                   background:
-                                    "linear-gradient(180deg, rgba(89,223,224,0.12), rgba(89,223,224,0.035))",
+                                    "var(--info-soft)",
                                   color: "var(--text)",
                                   boxShadow:
                                     "0 18px 48px rgba(89,223,224,0.08)",
@@ -5208,7 +5208,7 @@ export function ReleaseForm({
                           socialConsentAccepted
                             ? {
                                 borderColor: "#16a34a",
-                                background: "#22c55e",
+                                background: "var(--bg-soft)",
                                 boxShadow: "0 0 0 1px rgba(34,197,94,0.08)",
                               }
                             : {
@@ -5255,7 +5255,7 @@ export function ReleaseForm({
                             active && !locked
                               ? {
                                   borderColor: "var(--accent)",
-                                  background: "rgba(89,223,224,0.12)",
+                                  background: "var(--info-soft)",
                                   boxShadow: "0 0 30px rgba(89,223,224,0.16)",
                                 }
                               : {
@@ -5649,13 +5649,13 @@ export function ReleaseForm({
                           validationIssueCount === 0
                             ? {
                                 borderColor: "rgba(34,197,94,0.4)",
-                                background: "rgba(34,197,94,0.1)",
-                                color: "#86efac",
+                                background: "var(--success-soft)",
+                                color: "var(--success)",
                               }
                             : {
                                 borderColor: "rgba(250,204,21,0.4)",
-                                background: "rgba(250,204,21,0.1)",
-                                color: "#d9a800",
+                                background: "var(--warning-soft)",
+                                color: "var(--warning)",
                               }
                         }
                       >
@@ -5698,13 +5698,13 @@ export function ReleaseForm({
                             item.complete
                               ? {
                                   borderColor: "rgba(34,197,94,0.45)",
-                                  background: "rgba(34,197,94,0.14)",
-                                  color: "#86efac",
+                                  background: "var(--success-soft)",
+                                  color: "var(--success)",
                                 }
                               : {
                                   borderColor: "rgba(250,204,21,0.35)",
-                                  background: "rgba(250,204,21,0.08)",
-                                  color: "#fde68a",
+                                  background: "var(--warning-soft)",
+                                  color: "var(--warning)",
                                 }
                           }
                         >
@@ -5771,19 +5771,19 @@ export function ReleaseForm({
                     style={{
                       borderColor: "var(--border)",
                       background:
-                        "linear-gradient(135deg, rgba(34,197,94,0.13), color-mix(in srgb, var(--card) 94%, transparent))",
+                        "var(--success-soft)",
                     }}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <p
                         className="text-[10px] font-semibold uppercase tracking-[0.2em]"
-                        style={{ color: "#22c55e" }}
+                        style={{ color: "var(--success)" }}
                       >
                         Selected plan
                       </p>
                       <span
                         className="rounded-full border border-emerald-400/35 bg-emerald-400/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.14em]"
-                        style={{ color: "#22c55e" }}
+                        style={{ color: "var(--success)" }}
                       >
                         Active
                       </span>
@@ -5866,7 +5866,7 @@ export function ReleaseForm({
                         <div key={item} className="flex items-center gap-2">
                           <CheckCircle2
                             className="h-3.5 w-3.5 shrink-0"
-                            style={{ color: "#22c55e" }}
+                            style={{ color: "var(--success)" }}
                           />
                           <span style={{ color: "var(--text-muted)" }}>
                             {item}
@@ -5908,7 +5908,7 @@ export function ReleaseForm({
                               style={{
                                 width: `${Math.min(100, (tracks.length / 16) * 100)}%`,
                                 background:
-                                  "linear-gradient(90deg, var(--money), #22c55e)",
+                                  "linear-gradient(90deg,var(--money),var(--success))",
                               }}
                             />
                           </div>
@@ -6034,8 +6034,8 @@ export function ReleaseForm({
                             className="mt-5 rounded-xl border p-3 text-center"
                             style={{
                               borderColor: "rgba(34,197,94,0.35)",
-                              background: "rgba(34,197,94,0.08)",
-                              color: "#22c55e",
+                              background: "var(--success-soft)",
+                              color: "var(--success)",
                             }}
                           >
                             <p className="text-xs font-semibold">
@@ -6197,7 +6197,7 @@ export function ReleaseForm({
               : "release-footer-mobile-actions sticky bottom-3 z-20 grid grid-cols-[0.85fr_0.7fr_1.55fr] items-stretch gap-1.5 rounded-[1.4rem] border p-2 shadow-2xl backdrop-blur-xl md:flex md:flex-wrap md:items-center md:justify-between md:gap-3 md:p-3"}
             style={(step === 0 || step === 1) ? undefined : {
               borderColor: "#41454a",
-              background: "#24272a",
+              background: "var(--bg-soft)",
             }}
           >
             <button

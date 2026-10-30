@@ -1,4 +1,4 @@
-.page { position:relative; isolation:isolate; overflow:hidden; min-height:100svh; padding:env(safe-area-inset-top) 20px env(safe-area-inset-bottom); background:#0c0e13; color:#f7f8fc; color-scheme:dark; }
+.page { position:relative; isolation:isolate; overflow:hidden; min-height:100svh; padding:env(safe-area-inset-top) 20px env(safe-area-inset-bottom); background:#0c0e13; color:#f7f8fc; color-scheme:inherit; }
 .background { position:absolute; z-index:-2; inset:0; height:100%; width:100%; object-fit:cover; opacity:.6; filter:blur(6px); transform:scale(1.04); pointer-events:none; }
 .shade { position:absolute; z-index:-1; inset:0; background:linear-gradient(180deg,#0b0d1333 0%,#0b0d13a6 26%,#0b0d13f2 58%,#0b0d13 100%); pointer-events:none; }
 .column { position:relative; max-width:580px; margin:auto; padding:20px 0 28px; }

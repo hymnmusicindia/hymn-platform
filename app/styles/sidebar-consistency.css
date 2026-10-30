@@ -11,7 +11,7 @@ html body :is(.landing-rail,.dashboard-os-sidebar) {
 html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-destinations {
   display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;
   flex:none;padding:4px;margin:12px 0 8px;border:1px solid var(--border);border-radius:12px;
-  background:linear-gradient(150deg,#ffffff08,#ffffff02);box-shadow:var(--shadow-soft);
+  background:var(--card);box-shadow:var(--shadow-soft);
 }
 html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-destinations:not(:has(> :nth-child(2))) { grid-template-columns:1fr; }
 html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-destination {
@@ -21,8 +21,8 @@ html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-destination {
   font-family:inherit;font-size:12px;font-weight:600;line-height:1.4;letter-spacing:0;text-decoration:none;text-shadow:none;
   transition:background .16s,color .16s,border-color .16s;cursor:pointer;
 }
-html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-destination:hover {color:var(--text);background:#ffffff08;}
-html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-destination[aria-current="page"] {color:var(--text);background:linear-gradient(145deg,#ffffff17,#ffffff09);border-color:var(--border);box-shadow:var(--shadow-soft);}
+html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-destination:hover {color:var(--text);background:var(--hover);}
+html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-destination[aria-current="page"] {color:var(--text);background:var(--card);border-color:var(--border);box-shadow:var(--shadow-soft);}
 html body :is(.landing-rail,.dashboard-os-sidebar) .workspace-destination svg {width:16px;height:16px;flex:none;stroke-width:1.7;}
 html body :is(.landing-rail,.dashboard-os-sidebar) :is(.dashboard-nav-scroll,nav[aria-label="HYMN services"]) {display:block!important;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;margin:4px 0 0!important;padding-right:4px;scrollbar-width:thin;}
 html body :is(.landing-rail,.dashboard-os-sidebar) :is(.landing-nav-group,.dashboard-os-nav-group) {display:block;padding:0!important;margin:0 0 var(--sidebar-group-gap)!important;border:0;background:none;}

@@ -8,7 +8,7 @@ html body [data-dashboard-surface][data-dashboard-surface] {
   --border:var(--hymn-border); --border-strong:var(--hymn-border-strong); --accent:var(--hymn-accent); --accent-soft:var(--hymn-accent-soft); --focus:var(--hymn-focus);
   --input-bg:var(--hymn-input); --panel:var(--hymn-card); --ink:var(--hymn-text);
   --team-bg:var(--hymn-bg); --team-card:var(--hymn-card); --team-border:var(--hymn-border); --team-muted:var(--hymn-text-muted);
-  background:var(--dash-bg); color:var(--dash-text); color-scheme:dark; font-family:"HYMN Manrope",Arial,sans-serif; font-size:13px; line-height:1.6;
+  background:var(--dash-bg); color:var(--dash-text); color-scheme:inherit; font-family:"HYMN Manrope",Arial,sans-serif; font-size:13px; line-height:1.6;
 }
 html body [data-dashboard-surface][data-dashboard-surface] :is(h1,h2,h3) { color:var(--dash-text); line-height:1.35; letter-spacing:-.025em; }
 html body [data-dashboard-surface][data-dashboard-surface] h1 { font-size:clamp(23px,2.4vw,28px)!important; font-weight:650; }

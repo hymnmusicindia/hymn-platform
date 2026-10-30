@@ -2,9 +2,9 @@ name: HYMN theme and Studio workspace
 on:
   push:
     branches: [main]
-    paths: ['components/hymn-studio*', 'components/**/*.css', 'components/home-newsletter.tsx', 'components/site-footer.tsx', 'app/(public)/page.tsx', 'app/(public)/services/page.tsx', 'components/site-header.tsx', 'components/theme-toggle.tsx', 'app/styles/**', 'app/globals.css', 'components/home-path-banners.tsx', 'components/beat-card.tsx', 'app/layout.tsx', 'scripts/verify-header-theme.cjs', 'scripts/verify-theme-surfaces.cjs', 'scripts/verify-theme-components.cjs', 'scripts/verify-theme-contract.cjs', 'components/music-lifecycle-banner.module.css', 'scripts/lib/text-contrast.cjs', 'components/hymn-portal-root.tsx', 'components/customer-dashboard-shell.tsx', 'components/producer-dashboard-shell.tsx', 'components/portal-layout.tsx', 'components/public-workspace.tsx', 'lib/studio-navigation.ts', 'app/(public)/studio/**', 'app/(authenticated)/dashboard/page.tsx', 'scripts/verify-hymn-studio-browser.cjs', '.github/workflows/hymn-studio-regression.yml']
+    paths: ['components/**', 'app/globals.css', 'app/styles/**', 'app/layout.tsx', 'lib/release-portal.ts', 'lib/studio-navigation.ts', 'app/(public)/studio/**', 'app/(public)/page.tsx', 'app/(public)/services/page.tsx', 'app/(authenticated)/dashboard/page.tsx', 'scripts/verify-theme-*.cjs', 'scripts/verify-personalized-theme.cjs', 'scripts/verify-header-theme.cjs', 'scripts/verify-hymn-studio-browser.cjs', 'scripts/lib/*.cjs', '.github/workflows/hymn-studio-regression.yml']
   pull_request:
-    paths: ['components/hymn-studio*', 'components/**/*.css', 'components/home-newsletter.tsx', 'components/site-footer.tsx', 'app/(public)/page.tsx', 'app/(public)/services/page.tsx', 'components/site-header.tsx', 'components/theme-toggle.tsx', 'app/styles/**', 'app/globals.css', 'components/home-path-banners.tsx', 'components/beat-card.tsx', 'app/layout.tsx', 'scripts/verify-header-theme.cjs', 'scripts/verify-theme-surfaces.cjs', 'scripts/verify-theme-components.cjs', 'scripts/verify-theme-contract.cjs', 'components/music-lifecycle-banner.module.css', 'scripts/lib/text-contrast.cjs', 'components/hymn-portal-root.tsx', 'components/customer-dashboard-shell.tsx', 'components/producer-dashboard-shell.tsx', 'components/portal-layout.tsx', 'components/public-workspace.tsx', 'lib/studio-navigation.ts', 'app/(public)/studio/**', 'app/(authenticated)/dashboard/page.tsx', 'scripts/verify-hymn-studio-browser.cjs', '.github/workflows/hymn-studio-regression.yml']
+    paths: ['components/**', 'app/globals.css', 'app/styles/**', 'app/layout.tsx', 'lib/release-portal.ts', 'lib/studio-navigation.ts', 'app/(public)/studio/**', 'app/(public)/page.tsx', 'app/(public)/services/page.tsx', 'app/(authenticated)/dashboard/page.tsx', 'scripts/verify-theme-*.cjs', 'scripts/verify-personalized-theme.cjs', 'scripts/verify-header-theme.cjs', 'scripts/verify-hymn-studio-browser.cjs', 'scripts/lib/*.cjs', '.github/workflows/hymn-studio-regression.yml']
 permissions:
   contents: read
 jobs:
@@ -24,5 +24,6 @@ jobs:
       - run: node scripts/verify-theme-surfaces.cjs
       - run: node scripts/verify-theme-components.cjs
       - run: node scripts/verify-theme-contract.cjs
+      - run: node scripts/verify-personalized-theme.cjs
       - run: npm run test:studio-services
       - run: npm run test:navigation-selection

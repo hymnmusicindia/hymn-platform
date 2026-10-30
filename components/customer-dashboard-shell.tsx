@@ -99,7 +99,7 @@ function AccountRestrictionNotice({ user }: { user: User }) {
     setMessage(response.ok ? "Appeal submitted. Your account is now under review." : data.error || "Could not submit appeal.");
     setPending(false);
   }
-  return <section role="alert" className="mb-5 rounded-2xl border p-4" style={{ borderColor: "color-mix(in srgb, #eab308 55%, var(--border))", background: "color-mix(in srgb, #eab308 10%, var(--card))" }}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">⚠ Account {user.status.replaceAll("_", " ")}</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{user.statusReason || "This account currently requires administrator review."}{user.deletionScheduledAt ? ` Account data is scheduled for cleanup on ${new Date(user.deletionScheduledAt).toLocaleDateString("en-IN")}.` : ""}</p></div>{appealAllowed && !user.appealRequestedAt ? <button type="button" disabled={pending} onClick={appeal} className="btn-outline pressable">{pending ? "Submitting…" : "Appeal for review"}</button> : null}</div>{user.appealRequestedAt ? <p className="mt-3 text-sm font-medium">Appeal submitted {new Date(user.appealRequestedAt).toLocaleDateString("en-IN")}.</p> : null}{message ? <p className="mt-3 text-sm">{customerMessage(message)}</p> : null}</section>;
+  return <section role="alert" className="mb-5 rounded-2xl border p-4" style={{ borderColor: "color-mix(in srgb, #eab308 55%, var(--border))", background: "var(--warning-soft)" }}><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold">⚠ Account {user.status.replaceAll("_", " ")}</p><p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>{user.statusReason || "This account currently requires administrator review."}{user.deletionScheduledAt ? ` Account data is scheduled for cleanup on ${new Date(user.deletionScheduledAt).toLocaleDateString("en-IN")}.` : ""}</p></div>{appealAllowed && !user.appealRequestedAt ? <button type="button" disabled={pending} onClick={appeal} className="btn-outline pressable">{pending ? "Submitting…" : "Appeal for review"}</button> : null}</div>{user.appealRequestedAt ? <p className="mt-3 text-sm font-medium">Appeal submitted {new Date(user.appealRequestedAt).toLocaleDateString("en-IN")}.</p> : null}{message ? <p className="mt-3 text-sm">{customerMessage(message)}</p> : null}</section>;
 }
 
 function formatMoney(amount: number) {
@@ -673,7 +673,7 @@ export function CustomerDashboardShell({ user, releases, orders, subscription, a
       ) : null}
 
       {selectedRelease ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay)] p-4 backdrop-blur-sm">
           <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border p-5 shadow-2xl" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>

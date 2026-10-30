@@ -577,7 +577,7 @@ export function AdminTimedPlaylistManager() {
             value={activeView}
             onChange={(event) => setActiveView(event.target.value as TimedPlaylistModuleView)}
             className="rounded-[1.25rem] border px-4 py-3 text-white outline-none"
-            style={{ borderColor: "rgba(255,255,255,0.1)", background: "rgba(0,0,0,0.25)" }}
+            style={{ borderColor: "rgba(255,255,255,0.1)", background: "var(--bg-soft)" }}
           >
             {MODULE_NAV.map((item) => (
               <option key={item.key} value={item.key} className="bg-[#0f0f0f] text-white">
@@ -696,7 +696,7 @@ export function AdminTimedPlaylistManager() {
                             onChange={(event) => setForm((current) => ({ ...current, spotifyUrl: event.target.value }))}
                             placeholder="Paste a Spotify track link or type a song name"
                             className="w-full rounded-2xl border px-4 py-3 pl-11 pr-10 text-white outline-none"
-                            style={{ borderColor: spotifyUrlError ? "rgba(118, 3, 3, 0.8)" : "rgba(255,255,255,0.1)", background: "rgba(0,0,0,0.25)" }}
+                            style={{ borderColor: spotifyUrlError ? "rgba(118, 3, 3, 0.8)" : "rgba(255,255,255,0.1)", background: "var(--bg-soft)" }}
                           />
                           {form.spotifyUrl.trim() ? (
                             <button
@@ -768,7 +768,7 @@ export function AdminTimedPlaylistManager() {
                             setForm((current) => ({ ...current, playlistName: selected.name, playlistUrl: selected.url }));
                           }}
                           className="rounded-2xl border px-4 py-3 text-white outline-none"
-                          style={{ borderColor: "rgba(255,255,255,0.1)", background: "rgba(0,0,0,0.25)" }}
+                          style={{ borderColor: "rgba(255,255,255,0.1)", background: "var(--bg-soft)" }}
                         >
                           {playlistOptions.map((playlist) => (
                             <option key={playlist.name} value={playlist.name} className="bg-[#0f0f0f] text-white">
@@ -785,7 +785,7 @@ export function AdminTimedPlaylistManager() {
                           value={form.startAt}
                           onChange={(event) => setForm((current) => ({ ...current, startAt: event.target.value }))}
                           className="rounded-2xl border px-4 py-3 text-white outline-none"
-                          style={{ borderColor: "rgba(255,255,255,0.1)", background: "rgba(0,0,0,0.25)" }}
+                          style={{ borderColor: "rgba(255,255,255,0.1)", background: "var(--bg-soft)" }}
                         />
                       </label>
 
@@ -796,7 +796,7 @@ export function AdminTimedPlaylistManager() {
                           value={form.endAt}
                           onChange={(event) => setForm((current) => ({ ...current, endAt: event.target.value }))}
                           className="rounded-2xl border px-4 py-3 text-white outline-none"
-                          style={{ borderColor: timeRangeError ? "rgba(118, 3, 3, 0.8)" : "rgba(255,255,255,0.1)", background: "rgba(0,0,0,0.25)" }}
+                          style={{ borderColor: timeRangeError ? "rgba(118, 3, 3, 0.8)" : "rgba(255,255,255,0.1)", background: "var(--bg-soft)" }}
                         />
                         {timeRangeError ? <span className="text-xs text-[#ffb5b5]">{timeRangeError}</span> : null}
                       </label>

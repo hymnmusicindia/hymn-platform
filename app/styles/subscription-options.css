@@ -1,6 +1,6 @@
 ï»¿/* Focused offer strip and comparable subscription choices. */
 html body .customer-overlay:has(.subscription-dialog) { z-index:2300; }
-.subscription-backdrop { position:fixed; inset:0; display:grid; place-items:center; padding:20px; background:rgba(3,5,9,.8); backdrop-filter:blur(14px); }
+.subscription-backdrop { position:fixed; inset:0; display:grid; place-items:center; padding:20px; background:var(--overlay); backdrop-filter:blur(14px); }
 .subscription-dialog { display:flex; flex-direction:column; width:min(1120px,100%); max-height:calc(100dvh - 40px); min-height:0; overflow:hidden; border:1px solid var(--border); border-radius:10px; background:var(--surface-gradient); color:var(--text); box-shadow:var(--shadow-soft); outline:none; }
 .subscription-dialog-heading { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:18px 26px; border-bottom:1px solid var(--border); flex-shrink:0; }
 .subscription-dialog-heading p { margin:0 0 6px; font-size:9px; font-weight:600; letter-spacing:.2em; color:var(--text-muted); }

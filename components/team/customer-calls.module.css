@@ -60,7 +60,7 @@
 .root .notice { background:var(--card); border-color:var(--border); color:var(--text); }
 .empty { padding:24px; border:1px dashed var(--border); border-radius:16px; text-align:center; }
 .confirmDialog { width:min(460px,calc(100vw - 32px)); padding:26px; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:20px; box-shadow:var(--shadow-soft); }
-.confirmDialog::backdrop { background:#030911b8; backdrop-filter:blur(5px); }
+.confirmDialog::backdrop { background:var(--overlay); backdrop-filter:blur(5px); }
 .confirmIcon { width:48px; height:48px; display:grid; place-items:center; border-radius:15px; background:var(--card); color:var(--text-muted); margin-bottom:16px; }
 .confirmDialog h3 { font-size:20px; line-height:1.4; margin:0 0 12px; overflow-wrap:anywhere; }
 .confirmDialog p { color:var(--text-muted); font-size:13px; line-height:1.7; margin:0 0 24px; }

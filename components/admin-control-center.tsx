@@ -1685,7 +1685,7 @@ export function AdminControlCenter({
       ]}/></SurfaceSection>:null}
       {activeTab === "promotions" || activeTab === "fraud" ? <SurfaceSection title={activeTab==="promotions"?"Promotion operations":"Fraud investigations"}><a className="btn-primary" href={activeTab==="promotions"?"/admin/campaigns":"/admin/fraud"}>Open {activeTab==="promotions"?"campaign workspace":"investigation workspace"}</a></SurfaceSection>:null}
       {confirmStatusAction && selectedRelease ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[var(--overlay)] p-4 backdrop-blur-sm animate-in fade-in zoom-in-95 duration-200">
           <section role="dialog" aria-modal="true" aria-label="Confirm Action" className="w-full max-w-md rounded-[1.5rem] border p-5 shadow-2xl sm:p-7" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
             <h2 className="text-xl font-semibold text-center" style={{ color: "var(--text)" }}>Are you sure?</h2>
             <p className="mt-3 text-center text-sm" style={{ color: "var(--text-muted)" }}>
@@ -1710,7 +1710,7 @@ export function AdminControlCenter({
         </div>
       ) : null}
       {isSubmittingToDireNote ? (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/75 p-4 backdrop-blur-md animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-[var(--overlay)] p-4 backdrop-blur-md animate-in fade-in duration-200">
           <section role="status" aria-label="Submitting to DireNote" className="w-full max-w-md rounded-[1.75rem] border p-8 shadow-2xl text-center flex flex-col items-center justify-center gap-5" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
             <div className="relative flex items-center justify-center">
               <div className="h-16 w-16 animate-spin rounded-full border-4 border-t-transparent" style={{ borderColor: "var(--border-strong)", borderTopColor: "var(--accent)" }} />
@@ -1728,7 +1728,7 @@ export function AdminControlCenter({
         </div>
       ) : null}
       {direNoteResult ? (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[var(--overlay)] p-4 backdrop-blur-sm animate-in fade-in duration-200">
           <section role="alertdialog" aria-modal="true" aria-labelledby="direnote-result-title" className="w-full max-w-md rounded-[1.5rem] border p-6 shadow-2xl sm:p-7" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex min-w-0 items-start gap-3">
@@ -1748,7 +1748,7 @@ export function AdminControlCenter({
         </div>
       ) : null}
       {reviewAction && selectedRelease ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[var(--overlay)] p-4 backdrop-blur-sm">
           <section role="dialog" aria-modal="true" aria-label="Release review reason" className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-[1.5rem] border p-5 shadow-2xl sm:p-7" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
             <div className="flex items-start justify-between gap-4">
               <div><p className="text-xs uppercase tracking-[0.2em]" style={{ color: "var(--accent)" }}>{reviewAction === "rejected" ? "Reject Release" : "Request Metadata Changes"}</p><h2 className="mt-2 text-2xl font-semibold" style={{ color: "var(--text)" }}>{adminReleaseTitle(selectedRelease)}</h2></div>

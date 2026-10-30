@@ -2,6 +2,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const postcss = require('postcss');
+const ts = require('typescript');
+const { isInterfacePaint, hasFixedColor } = require('./lib/theme-paint-policy.cjs');
 
 const tokenFile = 'app/styles/theme-tokens.css';
 const root = postcss.parse(fs.readFileSync(tokenFile, 'utf8'));
@@ -31,6 +33,31 @@ for (const file of ['app/globals.css', ...files('app/styles'), ...files('compone
   if (file.replaceAll('\\', '/') === tokenFile) continue;
   postcss.parse(fs.readFileSync(file, 'utf8')).walkDecls(declaration => {
     if (names.has(declaration.prop.slice(2))) assert.ok(declaration.value.startsWith('var('), `${file}: local palette override ${declaration.toString()}`);
+    if (declaration.parent.selector && isInterfacePaint(file.replaceAll('\\', '/'), declaration.parent.selector, declaration.prop)) {
+      assert.ok(!hasFixedColor(declaration.value), `${file}: fixed interface paint ${declaration.parent.selector}: ${declaration.toString()}`);
+    }
   });
 }
-console.log('PASS light/dark text, semantic fills, primary actions, input boundaries and single-source theme contract');
+function components(directory) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? components(path.join(directory, entry.name)) : entry.name.endsWith('.tsx') ? [path.join(directory, entry.name)] : []);
+}
+// These paint photographs/hero artwork or Google's independently branded sign-in control.
+const brandedArtwork = /(?:animated-hero-metrics|home-path-banners|google-auth-button)\.tsx$/;
+for (const file of components('components')) {
+  if (brandedArtwork.test(file)) continue;
+  const source = ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  function visit(node) {
+    if (ts.isJsxAttribute(node) && node.name.getText(source) === 'className' && node.initializer && ts.isStringLiteral(node.initializer)) {
+      const value = node.initializer.text;
+      if (/\bfixed\b/.test(value) && /\binset-(?:0|x-0)\b/.test(value)) assert.ok(!/\bbg-black\/[\d.]+/.test(value), `${file}: fullscreen scrims must use the shared overlay token`);
+    }
+    if (ts.isPropertyAssignment(node) && ['color', 'background', 'backgroundColor'].includes(node.name.getText(source)) && ts.isStringLiteral(node.initializer) && hasFixedColor(node.initializer.text)) {
+      let parent = node.parent;
+      while (parent && !ts.isJsxAttribute(parent)) parent = parent.parent;
+      assert.ok(!parent || parent.name.getText(source) !== 'style', `${file}:${source.getLineAndCharacterOfPosition(node.pos).line + 1} fixed inline interface paint ${node.getText(source)}`);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(source);
+}
+console.log('PASS light/dark text, semantic fills, primary actions, input boundaries, interface paints and inline-style theme contract');

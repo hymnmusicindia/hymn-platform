@@ -1,10 +1,10 @@
 .workspace-footer { position:relative; display:flex; align-items:center; gap:4px; margin-top:auto; padding:12px 2px 2px; flex-shrink:0; border-top:1px solid var(--border); }
 .workspace-footer > :is(a,button) { display:grid; place-items:center; width:40px; height:40px; color:var(--text-muted); border-radius:8px; background:none; border:0; }
-.workspace-footer > :is(a,button):hover { color:var(--text); background:#ffffff08; }
+.workspace-footer > :is(a,button):hover { color:var(--text); background:var(--hover); }
 .workspace-footer .workspace-footer-more { margin-left:auto; }
 .workspace-footer-links { position:absolute; z-index:90; bottom:54px; left:0; right:0; min-width:160px; padding:7px; background:var(--card); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-soft); }
 .workspace-footer-links a { display:block; padding:12px; font-size:12px; color:var(--text); text-decoration:none; border-radius:6px; }
-.workspace-footer-links a:hover { background:#ffffff09; }
+.workspace-footer-links a:hover { background:var(--hover); }
 .workspace-footer :is(a,button):focus-visible { outline:2px solid #b6c6df; outline-offset:2px; }
 .hymn-landing .landing-rail { display:flex; flex-direction:column; overflow:visible; }
 .hymn-landing .landing-rail > nav { flex:1; min-height:0; overflow-y:auto; }

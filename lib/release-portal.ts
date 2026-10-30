@@ -92,56 +92,56 @@ export function getReleasePortalTrackCount(release: Release) {
 export function getReleasePortalBadgeStyle(stage: ReleasePortalStage) {
   if (stage === "draft") {
     return {
-      borderColor: "rgba(245, 158, 11, 0.45)",
-      background: "rgba(245, 158, 11, 0.12)",
-      color: "rgb(217, 119, 6)"
+      borderColor: "var(--warning)",
+      background: "var(--warning-soft)",
+      color: "var(--warning)"
     } as const;
   }
   if (stage === "scheduled") {
     return {
-      borderColor: "rgba(59, 130, 246, 0.4)",
-      background: "rgba(59, 130, 246, 0.1)",
-      color: "rgb(37, 99, 235)"
+      borderColor: "var(--info)",
+      background: "var(--info-soft)",
+      color: "var(--info)"
     } as const;
   }
 
   if (stage === "rejected") {
     return {
-      borderColor: "rgba(239, 68, 68, 0.4)",
-      background: "rgba(239, 68, 68, 0.1)",
-      color: "rgb(220, 38, 38)"
+      borderColor: "var(--danger)",
+      background: "var(--danger-soft)",
+      color: "var(--danger)"
     } as const;
   }
 
   if (stage === "changes_requested") {
     return {
-      borderColor: "rgba(239, 68, 68, 0.48)",
-      background: "rgba(239, 68, 68, 0.14)",
-      color: "rgb(248, 113, 113)"
+      borderColor: "var(--danger)",
+      background: "var(--danger-soft)",
+      color: "var(--danger)"
     } as const;
   }
 
   if (stage === "review") {
     return {
-      borderColor: "rgba(234, 179, 8, 0.48)",
-      background: "rgba(234, 179, 8, 0.14)",
-      color: "rgb(202, 138, 4)"
+      borderColor: "var(--warning)",
+      background: "var(--warning-soft)",
+      color: "var(--warning)"
     } as const;
   }
 
   if (stage === "partially_live") {
     return {
-      borderColor: "rgba(59, 130, 246, 0.46)",
-      background: "rgba(59, 130, 246, 0.13)",
-      color: "rgb(37, 99, 235)"
+      borderColor: "var(--info)",
+      background: "var(--info-soft)",
+      color: "var(--info)"
     } as const;
   }
 
   if (stage === "released") {
     return {
-      borderColor: "rgba(16, 185, 129, 0.4)",
-      background: "rgba(16, 185, 129, 0.1)",
-      color: "rgb(5, 150, 105)"
+      borderColor: "var(--success)",
+      background: "var(--success-soft)",
+      color: "var(--success)"
     } as const;
   }
 

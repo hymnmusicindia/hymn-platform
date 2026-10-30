@@ -499,7 +499,7 @@ export function ArtistPicker({
 
       {open ? (
         <ArtistPickerLayer portal={focused}>
-        {focused ? <button type="button" className="fixed inset-0 z-[90] cursor-default bg-black/65 backdrop-blur-sm" onClick={() => setOpen(false)} aria-label="Close artist profile popup" /> : null}
+        {focused ? <button type="button" className="fixed inset-0 z-[90] cursor-default bg-[var(--overlay)] backdrop-blur-sm" onClick={() => setOpen(false)} aria-label="Close artist profile popup" /> : null}
         <div ref={focused ? libraryDialogRef as React.RefObject<HTMLDivElement | null> : undefined} tabIndex={focused ? -1 : undefined} role={focused ? "dialog" : undefined} aria-modal={focused ? "true" : undefined} aria-label="Add artist profile" className={`artist-library ${focused ? "is-focused" : "is-inline"}`}>
           <div className="artist-library-heading"><div><h3>Add artist</h3><span>{usage.currentCount} / {usage.allowedLimit} profiles</span></div><button type="button" onClick={() => setOpen(false)} aria-label="Close artist profile popup"><X size={19} /></button></div>
           <label className="artist-library-search"><Search size={18} aria-hidden="true" /><input data-autofocus autoFocus={focused} value={query} aria-label="Search artist profiles" placeholder="Find your artist" onChange={event => onQueryChange(event.target.value)} /></label>

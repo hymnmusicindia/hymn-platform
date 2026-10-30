@@ -65,7 +65,7 @@ function PayoutModal({ summary, onClose, onSuccess }: { summary: PayoutSummary; 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.currentTarget === event.target && !isPending) onClose(); }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay)] p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.currentTarget === event.target && !isPending) onClose(); }}>
       <form ref={dialogRef as React.RefObject<HTMLFormElement | null>} role="dialog" aria-modal="true" aria-labelledby="payout-dialog-title" tabIndex={-1} onSubmit={submit} className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border p-5 shadow-2xl sm:p-6" style={{ borderColor: "var(--border)", background: "var(--card-strong)" }}>
         <div className="flex items-start justify-between gap-4">
           <div>
