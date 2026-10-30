@@ -16,6 +16,7 @@ async function main() {
     const rep = await member('Kira', perms), other = await member('Other', perms), boss = await member('Aditya', [], true), viewer = await member('Viewer', []);
     const client = await prisma.teamClient.create({ data: { workspaceId: ws.id, ownerId: rep.id, name: 'Customer', phone: '+919876543210', email: 'customer@station.fixture.invalid', notes: 'PRIVATE CONTACT NOTE' } });
     const draft = { notes: 'Discussed the release requirements and next steps.', needs: 'Distribution', commitments: 'Send checklist', nextAction: 'Follow up tomorrow', services: ['DISTRIBUTION'], checklist: [] };
+    const emptyDraft = { notes: '', needs: '', commitments: '', nextAction: '', services: [], checklist: [] };
     const task = await prisma.teamTask.create({ data: { workspaceId: ws.id, ownerId: rep.id, creatorId: boss.id, clientId: client.id, title: 'Call customer', dueAt: new Date(), followUpContext: { kind: 'CALL' } } });
     async function detail(id: string, a: Actor = rep) { return teamRead(a, 'workstation-activity', new URLSearchParams({ id })); }
     async function write(resource: string, id: string, extra: Record<string, unknown> = {}, a: Actor = rep) { const d = await detail(id, a); return teamMutation(a, resource, { id, activityId: d.activity!.id, version: d.task.version, draft, ...extra }); }
@@ -42,8 +43,10 @@ async function main() {
     for (let attempt = 1; attempt <= 3; attempt++) {
         if (attempt > 1)
             await teamMutation(rep, 'workstation-start', { taskId: task.id, requestKey: randomUUID() });
-        const finished = await write('workstation-finish', task.id, { outcome: 'NO_ANSWER' });
+        const finished = await write('workstation-finish', task.id, { outcome: 'NO_ANSWER', draft: emptyDraft });
         assert.equal(finished.status, attempt === 3 ? 'BLOCKED' : 'TODO');
+        assert.equal((await detail(task.id)).activity!.notes, 'Call not answered.');
+        assert.equal((await detail(task.id)).activity!.needs, '');
         if (attempt < 3)
             assert.ok(finished.nextAt);
     }
@@ -55,6 +58,14 @@ async function main() {
     await teamMutation(rep, 'workstation-start', { taskId: retry.id, requestKey: randomUUID() });
     await write('workstation-finish', retry.id, { outcome: 'NO_ANSWER' });
     assert.equal(await prisma.teamOutreachEmail.count({ where: { clientId: client.id, template: 'activity-missed-call' } }), 2);
+    const wrongNumber = await prisma.teamTask.create({ data: { workspaceId: ws.id, ownerId: rep.id, creatorId: boss.id, clientId: client.id, title: 'Verify customer number', followUpContext: { kind: 'CALL' } } });
+    await teamMutation(rep, 'workstation-start', { taskId: wrongNumber.id, requestKey: randomUUID() });
+    const requestedSlot = await teamWrite(rep, (tx, a) => employeeCallSlot(tx, a.workspaceId, a.id, new Date(Date.now() + 2 * 86400000), undefined, wrongNumber.id));
+    assert.ok(requestedSlot);
+    const wrongFinished = await write('workstation-finish', wrongNumber.id, { outcome: 'WRONG_NUMBER', nextAt: requestedSlot!.toISOString(), draft: emptyDraft });
+    assert.equal(wrongFinished.status, 'TODO');
+    assert.match((await detail(wrongNumber.id)).task.blocker, /Verify or correct/);
+    assert.equal((await detail(wrongNumber.id)).activity!.notes, 'Wrong number reported; verify contact details before retrying.');
     const customer = await prisma.user.create({ data: { name: 'Ticket customer', email: 'ticket@station.fixture.invalid', googleId: randomUUID() } });
     const ticket = await prisma.supportTicket.create({ data: { userId: customer.id, subject: 'Need help with release', message: 'Please call me about my release.', details: { callbackRequestedAt: new Date().toISOString(), callbackStatus: 'REQUESTED' } } });
     const ticketTask = await teamMutation(rep, 'workstation-start', { ticketId: ticket.id, requestKey: randomUUID() });

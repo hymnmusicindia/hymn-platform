@@ -259,10 +259,11 @@ export async function stationMutation(tx: Prisma.TransactionClient, a: Actor, re
     else if (resource === 'workstation-finish') {
         demand(a, 'tasks.complete');
         const result = z.object({ outcome: z.enum(['COMPLETED', 'FOLLOW_UP', 'NO_ANSWER', 'BUSY', 'WRONG_NUMBER', 'DO_NOT_CONTACT', 'BLOCKED']), nextAt: z.string().datetime({ offset: true }).optional(), closeTicket: z.boolean().default(false) }).parse(input);
-        if (activity.notes.trim().length < 10)
+        const noContact = ['NO_ANSWER', 'BUSY', 'WRONG_NUMBER'].includes(result.outcome);
+        if (!noContact && activity.notes.trim().length < 10)
             throw new TeamError('Add a brief report of what happened (at least 10 characters).');
         const calling = !result.closeTicket && ['CALL', 'SUPPORT'].includes(activity.kind) && (activity.kind === 'CALL' || context.kind === 'SUPPORT_CALLBACK');
-        if (!terminal.includes(task.status) && calling && ['COMPLETED', 'NO_ANSWER', 'BUSY', 'FOLLOW_UP', 'WRONG_NUMBER'].includes(result.outcome) && !whatsappNumber(String(context.callbackPhone || context.callPhone || (task.clientId ? (await contact(tx, a, task.clientId)).phone : ''))))
+        if (!terminal.includes(task.status) && calling && ['COMPLETED', 'NO_ANSWER', 'BUSY', 'FOLLOW_UP'].includes(result.outcome) && !whatsappNumber(String(context.callbackPhone || context.callPhone || (task.clientId ? (await contact(tx, a, task.clientId)).phone : ''))))
             throw new TeamError('Request a usable phone number before recording a call. You can save a blocked report meanwhile.');
         if (['NO_ANSWER', 'BUSY', 'WRONG_NUMBER', 'DO_NOT_CONTACT'].includes(result.outcome) && !calling)
             throw new TeamError('Use call outcomes only for call activities.');
@@ -272,7 +273,8 @@ export async function stationMutation(tx: Prisma.TransactionClient, a: Actor, re
             throw new TeamError('Complete task dependencies and checklist before marking the work completed.');
         if (result.nextAt && new Date(result.nextAt) <= now)
             throw new TeamError('Choose a future follow-up time.');
-        activity = { ...activity, status: 'FINISHED', endedAt: now.toISOString(), outcome: result.outcome };
+        const report = result.outcome === 'NO_ANSWER' ? 'Call not answered.' : result.outcome === 'BUSY' ? 'Customer was busy.' : result.outcome === 'WRONG_NUMBER' ? 'Wrong number reported; verify contact details before retrying.' : activity.notes.trim();
+        activity = { ...activity, ...(noContact ? { notes: report, needs: '', commitments: '', nextAction: '', services: [] } : {}), status: 'FINISHED', endedAt: now.toISOString(), outcome: result.outcome };
         let status = task.status, dueAt = task.dueAt, blocker = '';
         if (terminal.includes(task.status)) {
             status = task.status;
@@ -286,8 +288,22 @@ export async function stationMutation(tx: Prisma.TransactionClient, a: Actor, re
             blocker = task.blocker;
         }
         else if (result.outcome === 'WRONG_NUMBER' || result.outcome === 'BLOCKED') {
-            status = 'BLOCKED';
-            blocker = activity.notes.slice(0, 2000);
+            if (result.outcome === 'WRONG_NUMBER' && result.nextAt) {
+                const desired = new Date(result.nextAt);
+                const slot = await employeeCallSlot(tx, a.workspaceId, a.id, desired, undefined, task.id, 'tasks.update');
+                if (slot?.getTime() === desired.getTime()) {
+                    status = 'TODO';
+                    dueAt = slot;
+                    blocker = 'Verify or correct the contact number before this scheduled attempt. Wrong numbers are never auto-retried.';
+                } else {
+                    status = 'BLOCKED';
+                    dueAt = slot;
+                    blocker = 'Requested retry time is unavailable. Verify the contact number and ask a supervisor to schedule coverage.';
+                }
+            } else {
+                status = 'BLOCKED';
+                blocker = activity.notes.slice(0, 2000);
+            }
         }
         else if (result.outcome === 'FOLLOW_UP') {
             const desired = result.nextAt ? new Date(result.nextAt) : new Date(now.getTime() + 86400000);
