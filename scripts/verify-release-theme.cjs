@@ -24,6 +24,7 @@ const { textContrast } = require('./lib/text-contrast.cjs');
                     await page.addStyleTag({ path: path.join(out, 'ui.css') });
                     await page.addScriptTag({ path: path.join(out, 'ui.js') });
                     await page.waitForSelector('.release-workflow');
+                    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), theme + ' ' + width + ' stage ' + stage + ' page overflow');
                     assert.deepEqual(errors, []);
                     if (stage === 5)
                         assert.ok(await page.getByText('HYMN requires your licence or beat agreement for non-exclusive content.').isVisible());

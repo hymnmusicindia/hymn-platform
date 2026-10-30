@@ -8,6 +8,8 @@
   .customer-overlay button { min-height:44px; }
 }
 @media(max-width:1023px) {
+  /* Centered tool pages must fill the rail's content width, not their min-content width. */
+  .landing-page-content > main { width:100%;max-width:100%;min-width:0;box-sizing:border-box; }
   html { scroll-padding-top:120px; }
   html body header.hymn-studio-header { height:104px!important; }
   html body .hymn-studio-header > div:first-child { height:60px; min-height:60px; padding:0 18px; }
