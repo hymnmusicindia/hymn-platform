@@ -67,7 +67,7 @@ export async function syncSourceWork(tx:Prisma.TransactionClient,a:Actor,now=new
     },
     include:{prospect:true},orderBy:{registeredAt:'asc'},take:10,
   });
-  for(const lead of leads)sources.push({key:`${prefix}lead:${lead.prospectId}`,title:`Check saved contact: ${lead.prospect.name}`,description:`Open Contacts & Calls and check this saved contact's details, public source and eligibility. Record evidence and useful notes. Do not mark a conversation or consent that did not happen.\nContact reference: ${lead.prospectId}\n/team?module=crm`,permission:'crm.prospects.create',preferred:lead.researcherEmployeeId,clientId:lead.prospect.clientId});
+  for(const lead of leads)sources.push({key:`${prefix}lead:${lead.prospectId}`,title:`Check saved contact: ${lead.prospect.name}`,description:`Open Contacts & research and check this saved contact's details, public source and eligibility. Record evidence and useful notes. Do not mark a conversation or consent that did not happen.\nContact reference: ${lead.prospectId}\n/team?module=crm`,permission:'crm.prospects.create',preferred:lead.researcherEmployeeId,clientId:lead.prospect.clientId});
   const primary=await tx.teamWorkspace.findFirst({orderBy:{createdAt:'asc'},select:{id:true}});
   if(primary?.id===a.workspaceId)for(const kind of ['producer','engineer'] as const) {
     const ids=existing.filter(t=>t.status!=='COMPLETED'&&t.eventKey?.startsWith(`${prefix}${kind}:`)).map(t=>Number(t.eventKey!.split(':')[2]));

@@ -80,6 +80,14 @@ export async function POST(request: Request, context: Context) {
       const id = String(result.id);
       after(async () => { const { processTeamOutreachEmail } = await import("@/lib/team/outreach-email"); await processTeamOutreachEmail(id, 1); });
     }
+    if (resource.startsWith('workstation-') && result && typeof result === 'object') {
+      const row = result as { email?: { id?: string; status?: string; channel?: string }; id?: string; status?: string; channel?: string };
+      const mail = row.email || (resource === 'workstation-email' ? row : null);
+      if (mail?.id && mail.status === 'QUEUED') after(async () => {
+        if (mail.channel === 'support') await (await import('@/lib/support')).processSupportMail(mail.id);
+        else await (await import('@/lib/team/outreach-email')).processTeamOutreachEmail(mail.id,1);
+      });
+    }
     return NextResponse.json(result, { headers });
   } catch (error) { return failure(error); }
 }

@@ -6,8 +6,8 @@ import styles from './workspace.module.css';
 type Application = { id: number; updatedAt: string; user: { name: string }; producerName?: string; professionalName?: string; bio: string; genre?: string; genres?: string[]; specialties?: string[]; yearsExperience?: number; experienceLevel?: string; pricing?: string; startingPrice?: string; turnaroundDays?: number; portfolioLinks?: string[]; sampleBeats?: string[]; portfolioUrl?: string; instagram?: string; instagramUrl?: string; youtube?: string; soundcloud?: string; spotify?: string };
 type Queue = { producers: Application[]; engineers: Application[] };
 function safeUrl(value: string) { try { const url = new URL(value, window.location.origin); return ['https:', 'http:'].includes(url.protocol) ? url.href : null; } catch { return null; } }
-export function TeamCreatorApplications({ api }: { api: <T>(resource: string, body?: unknown) => Promise<T> }) {
-  const [queue, setQueue] = useState<Queue>({ producers: [], engineers: [] }), [selected, setSelected] = useState('');
+export function TeamCreatorApplications({ api, initialSelection = '' }: { initialSelection?:string; api: <T>(resource: string, body?: unknown) => Promise<T> }) {
+  const [queue, setQueue] = useState<Queue>({ producers: [], engineers: [] }), [selected, setSelected] = useState(initialSelection);
   const [busy, setBusy] = useState(false), [loading, setLoading] = useState(true), [error, setError] = useState(''), [message, setMessage] = useState(''), [decision, setDecision] = useState('APPROVE');
   const load = useCallback(async () => { setLoading(true); try { setQueue(await api<Queue>('creator-applications')); setError(''); } catch (e) { setError(e instanceof Error ? e.message : 'Could not load applications.'); } finally { setLoading(false); } }, [api]);
   useEffect(() => { void load(); }, [load]);

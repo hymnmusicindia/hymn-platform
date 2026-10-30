@@ -35,7 +35,7 @@ async function supportCaller(tx: Prisma.TransactionClient, a: Actor, now = new D
   for(const member of ranked) if(await employeeCallSlot(tx,a.workspaceId,member.id,nextCallDue(now)))return member;
   return null;
 }
-async function accountCard(tx: Prisma.TransactionClient, a: Actor, user: { id: number; name: string; email: string; mobile: string | null }) {
+export async function accountCard(tx: Prisma.TransactionClient, a: Actor, user: { id: number; name: string; email: string; mobile: string | null }) {
   const linked = await tx.teamClient.findUnique({ where: { userId: user.id } });
   if (linked) return linked.workspaceId === a.workspaceId ? linked : null;
   const existing = await tx.teamClient.findFirst({ where: { workspaceId: a.workspaceId, mergedIntoId:null, OR: [{ additionalEmails:{has:user.email.toLowerCase()} },{ email: { equals: user.email, mode: 'insensitive' } }, { secondaryEmail: { equals: user.email, mode: 'insensitive' } }] } });
@@ -91,6 +91,7 @@ export async function syncCustomerFollowups(tx: Prisma.TransactionClient, a: Act
     const details=supportDetails(fresh.details);
     if(details.callbackStatus!=='REQUESTED'||!['OPEN','IN_PROGRESS'].includes(fresh.status))continue;
     if(ticket.user.status!=='ACTIVE'||!whatsappNumber(details.callbackPhone))continue;
+    if(await tx.teamTask.findFirst({where:{workspaceId:a.workspaceId,recordType:'support',recordId:ticket.id,status:{notIn:['COMPLETED','CANCELLED']},archivedAt:null}}))continue;
     const client=await accountCard(tx,a,ticket.user);if(!client)continue;
     const count=await emit(tx,a,{...client,phone:details.callbackPhone!},{kind:'SUPPORT_CALLBACK',source:`ticket:${ticket.id}:${details.callbackRequestedAt}`,referenceId:String(ticket.id),service:`Support ticket #${ticket.id}`,occurredAt:details.callbackRequestedAt!,callbackPhone:details.callbackPhone,footnotes:[`Customer requested a callback on ${details.callbackPhone}`,`Ticket #${ticket.id}: ${ticket.subject}`,`Preferred time: ${details.callbackPreference || 'Not supplied'}`,ticket.message.slice(0,2000),'Internal callback task only; arrange the requested time with the customer before confirming an appointment. Record the actual outcome.']},now);
     if(count){await tx.supportTicket.update({where:{id:ticket.id},data:{details:json({...details,callbackStatus:'ASSIGNED'})}});assigned+=count;}
@@ -114,7 +115,7 @@ export async function syncCustomerFollowups(tx: Prisma.TransactionClient, a: Act
     if (context.kind === 'SUPPORT_CALLBACK') {
       const ticket = await tx.supportTicket.findUnique({where:{id:Number(context.referenceId)},select:{id:true,status:true,details:true}});
       const details = supportDetails(ticket?.details);
-      obsolete ||= !ticket || ['RESOLVED','CLOSED'].includes(ticket.status) || !['REQUESTED','ASSIGNED'].includes(details.callbackStatus || '') || String(context.source) !== `ticket:${ticket.id}:${details.callbackRequestedAt}`;
+      obsolete ||= !ticket || ['RESOLVED','CLOSED'].includes(ticket.status) || !['REQUESTED','ASSIGNED',...(object(context.workActivity).id?['NO_ANSWER']:[])].includes(details.callbackStatus || '') || String(context.source) !== `ticket:${ticket.id}:${details.callbackRequestedAt}`;
     }
     obsolete ||= internal;
     if (!obsolete && task.status !== 'BLOCKED') {
@@ -199,10 +200,10 @@ export async function readCallFollowups(a: Actor, params: URLSearchParams) {
     return { ...task, client: { id: client.id, name: client.name, email: client.email, status: client.status, phone: ['SUPPORT_CALLBACK','FRIENDLY_INTRO'].includes(String(context.kind)) ? String(context.callbackPhone || context.callPhone || client.phone) : client.phone, registered: Boolean(account), coverUrl: mediaUrl(account?.producerProfile?.coverPhotoUrl), avatarUrl: mediaUrl(account?.producerProfile?.avatarUrl || account?.avatar) } };
   }), total: await prisma.teamTask.count({ where }) };
 }
-export async function recordCallbackOutcome(tx: Prisma.TransactionClient, a: Actor, input: unknown, now = new Date(), options: { queueEmail?: boolean } = {}) {
+export async function recordCallbackOutcome(tx: Prisma.TransactionClient, a: Actor, input: unknown, now = new Date(), options: { queueEmail?: boolean; workStation?: boolean } = {}) {
   demand(a, 'crm.outreach.manage'); demand(a, 'tasks.update');
   const data = z.object({ id: z.string().min(1), version: z.number().int().positive(), outcome: z.enum(['TALKED', 'NO_ANSWER', 'CALLBACK', 'INTERESTED', 'RESOLVED', 'NOT_INTERESTED', 'DO_NOT_CONTACT']), notes: z.string().trim().min(3).max(2000), nextAt: z.string().datetime({ offset: true }).optional() }).parse(input);
-  const task = await tx.teamTask.findFirst({ where: { id: data.id, workspaceId: a.workspaceId, eventKey: { startsWith: 'support-call:' }, archivedAt: null, ...(!can(a, 'tasks.all') ? { ownerId: a.id } : {}) } });
+  const task = await tx.teamTask.findFirst({ where: { id: data.id, workspaceId: a.workspaceId, ...(!options.workStation ? { eventKey: { startsWith: 'support-call:' } } : {}), archivedAt: null, ...(!can(a, 'tasks.all') ? { ownerId: a.id } : {}) } });
   if (!task || !task.clientId) throw new TeamError('Callback unavailable.', 404);
   if (task.version !== data.version) throw new TeamError('Callback changed. Refresh before recording the result.', 409);
   if (['COMPLETED', 'CANCELLED','BLOCKED'].includes(task.status)) throw new TeamError('This callback is closed or requires manual review.', 409);
@@ -210,7 +211,7 @@ export async function recordCallbackOutcome(tx: Prisma.TransactionClient, a: Act
   const attempts = Number(context.attempts || 0) + 1;
   let dueAt = task.dueAt;
   const noAnswerAttempts = data.outcome === 'NO_ANSWER' ? Number(context.noAnswerAttempts || 0) + 1 : 0;
-  let status = context.kind === 'SUPPORT_CALLBACK' && data.outcome === 'NO_ANSWER' ? 'BLOCKED' : ['TALKED', 'RESOLVED', 'NOT_INTERESTED', 'DO_NOT_CONTACT'].includes(data.outcome) ? 'COMPLETED' : data.outcome === 'NO_ANSWER' && noAnswerAttempts >= 3 ? 'BLOCKED' : 'TODO';
+  let status = !options.workStation && context.kind === 'SUPPORT_CALLBACK' && data.outcome === 'NO_ANSWER' ? 'BLOCKED' : ['TALKED', 'RESOLVED', 'NOT_INTERESTED', 'DO_NOT_CONTACT'].includes(data.outcome) ? 'COMPLETED' : data.outcome === 'NO_ANSWER' && noAnswerAttempts >= 3 ? 'BLOCKED' : 'TODO';
   let schedulingBlocked=false;
   if (data.outcome === 'CALLBACK' && !data.nextAt) throw new TeamError('Choose the callback time requested by the customer.');
   if (status === 'TODO') {
@@ -220,7 +221,7 @@ export async function recordCallbackOutcome(tx: Prisma.TransactionClient, a: Act
     if(data.nextAt&&(!available||available.getTime()!==desired.getTime())){status='BLOCKED';schedulingBlocked=true;dueAt=desired;}
     else if(!available){status='BLOCKED';schedulingBlocked=true;dueAt=null;}else dueAt=available;
   }
-  const updated = await tx.teamTask.update({ where: { id: task.id }, data: { status, dueAt, completedAt: status === 'COMPLETED' ? now : null, blocker: status === 'BLOCKED' ? (schedulingBlocked ? (data.nextAt ? `Outcome saved. Customer-requested time ${data.nextAt} needs coverage; arrange a representative or agree a new time.` : 'Outcome saved. No declared free time for the next callback; arrange availability or coverage.') : context.kind === 'SUPPORT_CALLBACK' ? 'Customer unavailable. Await customer rescheduling; support can send the missed-call template.' : 'Three attempts recorded. Review before any further outreach.') : '', followUpContext: json({ ...context, attempts, noAnswerAttempts, outcome: data.outcome, lastOutcomeAt: now.toISOString(), tip: callbackTip(String(context.kind), data.outcome), footnotes: [...(Array.isArray(context.footnotes) ? context.footnotes : []), `${now.toISOString()} - ${data.outcome}: ${data.notes}`].slice(-12) }), version: { increment: 1 } } });
+  const updated = await tx.teamTask.update({ where: { id: task.id }, data: { status, dueAt, completedAt: status === 'COMPLETED' ? now : null, blocker: status === 'BLOCKED' ? (schedulingBlocked ? (data.nextAt ? `Outcome saved. Customer-requested time ${data.nextAt} needs coverage; arrange a representative or agree a new time.` : 'Outcome saved. No declared free time for the next callback; arrange availability or coverage.') : !options.workStation && context.kind === 'SUPPORT_CALLBACK' ? 'Customer unavailable. Await customer rescheduling; support can send the missed-call template.' : 'Three attempts recorded. Review before any further outreach.') : '', followUpContext: json({ ...context, attempts, noAnswerAttempts, outcome: data.outcome, lastOutcomeAt: now.toISOString(), tip: callbackTip(String(context.kind), data.outcome), footnotes: [...(Array.isArray(context.footnotes) ? context.footnotes : []), `${now.toISOString()} - ${data.outcome}: ${data.notes}`].slice(-12) }), version: { increment: 1 } } });
   if (context.kind === 'SUPPORT_CALLBACK') {
     const ticketId=Number(context.referenceId);
     await tx.$queryRaw`SELECT id FROM support_tickets WHERE id = ${ticketId} FOR UPDATE`;
@@ -236,8 +237,8 @@ export async function recordCallbackOutcome(tx: Prisma.TransactionClient, a: Act
   if (data.outcome === 'DO_NOT_CONTACT') {
     await tx.teamClient.update({ where: { id: task.clientId }, data: { status: 'DO_NOT_CONTACT', version: { increment: 1 } } });
     await tx.teamProspect.updateMany({ where: { clientId: task.clientId }, data: { suppressed: true, stage: 'DO_NOT_CONTACT', version: { increment: 1 } } });
-    await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, clientId: task.clientId, status: { notIn: ['COMPLETED', 'CANCELLED'] } }, data: { status: 'CANCELLED', version: { increment: 1 } } });
-    await tx.teamCalendarEvent.updateMany({ where: { workspaceId: a.workspaceId, clientId: task.clientId, status: 'SCHEDULED' }, data: { status: 'CANCELLED', version: { increment: 1 }, scheduleRevision: { increment: 1 } } });
+    await tx.teamTask.updateMany({ where: { workspaceId: a.workspaceId, clientId: task.clientId, status: { notIn: ['COMPLETED', 'CANCELLED'] }, ...(options.workStation ? { OR: [{eventKey:{endsWith:':call'}},{ eventKey: { startsWith: 'support-call:' } }, { followUpContext: { path: ['kind'], equals: 'CALL' } }, { followUpContext: { path: ['kind'], equals: 'SUPPORT_CALLBACK' } }] } : {}) }, data: { status: 'CANCELLED', version: { increment: 1 } } });
+    await tx.teamCalendarEvent.updateMany({ where: { workspaceId: a.workspaceId, clientId: task.clientId, status: 'SCHEDULED', ...(options.workStation?{followUpTask:{OR:[{eventKey:{endsWith:':call'}},{eventKey:{startsWith:'support-call:'}},{followUpContext:{path:['kind'],equals:'CALL'}},{followUpContext:{path:['kind'],equals:'SUPPORT_CALLBACK'}}]}}:{}) }, data: { status: 'CANCELLED', version: { increment: 1 }, scheduleRevision: { increment: 1 } } });
   }
   await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action: 'support.callback_outcome', entityId: task.id, detail: { outcome: data.outcome, attempts, status, requestedNextAt: data.nextAt || null, clientId: task.clientId, notes: data.notes, occurredAt: now.toISOString(), nextAt: dueAt?.toISOString() || null } } });
   const followupEmail = options.queueEmail !== false && ['TALKED', 'RESOLVED', 'INTERESTED', 'CALLBACK'].includes(data.outcome) ? await queueCallEstablishedEmail(tx, a, updated) : null;

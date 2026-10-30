@@ -11,12 +11,7 @@ const journeys: Journey[] = [
     { selector: '[data-team-guide="leadership-filters"]', text: 'Choose a period, teammate or activity type. Counts follow these filters, and times are shown in IST.' },
     { selector: '[data-team-guide="leadership-feed"]', text: 'Read the newest updates first. Use Read call report for the full discussion and next action, or Open contact & reports for the customer card. New updates appear as a refresh prompt without moving the timeline while you read.' },
   ] },
-  { title: 'Write a customer call report', module: 'contacts', permission: 'crm.outreach.manage', steps: [
-    { selector: '[data-team-guide="contact-search"]', text: 'Find the customer by name, email or phone. Reports stay on their shared contact card, including calls made from a personal phone.' },
-    { selector: '[data-team-guide="call-report-open"]', text: 'Click Call report & history on the correct customer card. This opens their report sheet and all shared reports.' },
-    { selector: '[data-team-guide="call-report-time"]', text: 'Enter the actual call date and time in IST, choose the phone source and outcome. Record the discussion, customer needs, agreements and next action, then Save report to contact. Earlier reports remain unchanged.' },
-    { selector: '[data-team-guide="call-report-history"]', text: 'Reopen this sheet any time to read shared history. Add update appends a dated report without replacing the original. For scheduled callback completion, use the same sheet from Customer callbacks.' },
-  ] },
+  {title:'Start work and save a client report',module:'work-station',steps:[{selector:'[data-team-guide="station-queue"]',text:'Choose today, overdue or customer tickets. Start an assigned activity, or use Manual activity to find or add a contact.'},{selector:'[data-team-guide="activity-notes"]',text:'Start the activity to run the timer. Add notes, service interests and next actions. Notes autosave. Pause before leaving.'},{selector:'[data-team-guide="activity-finish"]',text:'Record the real outcome. No answer schedules a working-hours retry, up to three attempts. Eligible missed-call emails respect a two-hour gap.'}]},
   { title: 'Find or add a contact', module: 'contacts', steps: [
     { selector: '[data-team-guide="contact-search"]', text: 'Search by name, email or phone first. Open the existing card if this person is already saved.' },
     { selector: '[data-team-guide="contact-add"]', text: 'No match? Click Add contact. Enter their real details, then save once. Matching records will be reviewed before saving.' },
@@ -25,13 +20,7 @@ const journeys: Journey[] = [
     { selector: '[data-team-guide="research-queue"]', text: 'Choose Source checks to see contacts still waiting for research.' },
     { selector: '[data-team-guide="source-results"] [data-team-guide="lead-card"]', text: 'Open a contact. In Step 1, save the public source, evidence and outreach eligibility. Mark the source checked only after verifying it. This does not mark a verified lead.' },
   ] },
-  { title: 'Call a lead and record the result', module: 'acquisition', permission: 'crm.outreach.manage', steps: [
-    { selector: '[data-team-guide="call-queue"]', text: 'Choose Call queue to find assigned contacts and follow-ups.' },
-    { selector: '[data-team-guide="call-results"] [data-team-guide="lead-card"]', text: 'Open the assigned contact, review their details, then record the real conversation and next call in Step 2. Never mark a call from opening WhatsApp alone.' },
-  ] },
-  { title: 'Find customer callbacks', module: 'customer-calls', permission: 'crm.outreach.manage', steps: [
-    { selector: '[data-team-guide="customer-calls"]', text: 'Customer callbacks are separate from new sales leads. Open your assigned callback to record the outcome or reschedule it.' },
-  ] },
+  {title:'Handle a support ticket',module:'work-station',steps:[{selector:'[data-team-guide="station-queue"]',text:'Choose Customer tickets and open a ticket activity. Read its messages and callback request. Use Email templates to request a missing phone number or send a reviewed solution signed with your name and role. Complete the resolution report and select Close ticket when resolved.'}]},
   { title: 'Set my working hours', module: 'availability', steps: [
     { selector: '[data-team-guide="availability"]', text: 'Set your recurring shift or this week\'s hours here. Calling access alone does not make you available for assignments.' },
   ] },

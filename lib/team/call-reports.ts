@@ -34,7 +34,7 @@ export async function readCallReports(a: Actor, params: URLSearchParams) {
   demand(a, 'clients.view');
   const { contact, ids } = await family(prisma, a, params.get('clientId') || '');
   const offset = Math.max(0, Math.min(100000, Number(params.get('offset')) || 0));
-  const where = { workspaceId: a.workspaceId, action, entityId: { in: ids } };
+  const where = { workspaceId: a.workspaceId, action: { in: [action, 'contact.activity_report'] }, entityId: { in: ids } };
   const [items, total] = await Promise.all([
     prisma.teamAudit.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: Math.floor(offset), take: 30 }),
     prisma.teamAudit.count({ where }),

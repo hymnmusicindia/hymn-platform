@@ -54,7 +54,13 @@ async function dependencies(tx: Tx, a: Actor, id: string, ids: string[]) {
 }
 
 export async function teamMutation(identity: Actor, resource: string, input: unknown) {
-  return teamWrite(identity, async (tx, a) => {
+  return teamWrite(identity, (tx,a)=>teamMutationTx(tx,a,resource,input));
+}
+
+/** Reuse canonical mutations inside the already locked workspace transaction. */
+export async function teamMutationTx(tx:Tx,a:Actor,resource:string,input:unknown) {
+  if (resource === "workstation-email") return (await import("./work-station")).stationEmail(tx,a,input);
+  if (resource.startsWith("workstation-")) return (await import("./work-station")).stationMutation(tx,a,resource,input);
   if (['availability-save','availability-policy'].includes(resource)) return (await import('./availability')).availabilityMutation(tx,a,resource,input);
   if (resource === 'coordinator-intake') return (await import('./coordinator')).coordinatorIntake(tx,a,input);
   if (resource === 'coordinator-update') return (await import('./coordinator')).coordinatorUpdate(tx,a,input);
@@ -77,6 +83,7 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
     if (resource === "task-update") {
       const data = taskUpdateSchema.parse(input); const old = await taskAccess(tx, a, id);
       demand(a, "tasks.update"); if (old.version !== data.version) throw new TeamError("This task changed. Refresh before saving.", 409);
+      if((await import('./work-station-policy')).activityOpen(old.followUpContext))throw new TeamError('Pause and release the activity in Work-station before changing its assignment or status.',409);
       await assertDailyTaskChange(tx, a, old, object);
       const owner = data.ownerId ?? old.ownerId;
       if(old.eventKey?.startsWith('auto-source:')&&data.ownerId) {
@@ -345,7 +352,6 @@ export async function teamMutation(identity: Actor, resource: string, input: unk
       const row = await tx.teamWeeklyReport.create({ data: { ...data, memberId: a.id, weekStart, metrics: { tasksCompleted: completed, artistsContacted: contacted.length, repliesRecorded: replies, prospectsAdded: prospects } } }); await audit(tx, a, "report.submitted", row.id); return row;
     }
     return (await import("./advanced")).advancedMutation(tx, a, resource, input);
-  });
 }
 
 export async function acceptTeamInvitation(user: { id: number; email: string }, token: string) {
@@ -371,6 +377,7 @@ export async function acceptTeamInvitation(user: { id: number; email: string }, 
 }
 
 export async function teamRead(a: Actor, resource: string, params: URLSearchParams) {
+  if (resource.startsWith("workstation")) return (await import("./work-station")).stationRead(a,resource,params);
   if (resource === 'leadership-activity') return (await import('./leadership-activity')).readLeadershipActivity(a, params);
   if (resource === "call-reports") return (await import("./call-reports")).readCallReports(a, params);
   if(resource==='clients-identity')return (await import('./contact-identity')).contactIdentityMatches(a,{email:params.get('email')||'',phone:params.get('phone')||'',excludeId:params.get('excludeId')||undefined});

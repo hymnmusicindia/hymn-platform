@@ -21,7 +21,7 @@ export const adminModuleKey = (key?: string) => ({ "distribution-queue": "releas
 
 const teamSections: Record<string, string[]> = {
   Home: ["overview"],
-  "Work & schedule": ["work", "tasks", "projects", "approvals", "calendar", "availability"],
+  "Work-station": ["work-station", "work", "tasks", "projects", "approvals", "calendar", "availability"],
   "Contacts & growth": ["contacts", "acquisition", "crm", "customer-calls", "referral"],
   Messages: ["inbox", "chat", "emails"],
   "Quality & reports": ["creator-applications", "release-qc", "reports"],

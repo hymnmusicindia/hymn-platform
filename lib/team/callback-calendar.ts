@@ -11,7 +11,7 @@ export async function callbackSlot(tx: Prisma.TransactionClient, workspaceId: st
   return slot;
 }
 export async function syncCallbackCalendar(tx: Prisma.TransactionClient, a: Actor, task: { id: string; title: string; ownerId: string; clientId: string | null; dueAt: Date | null; status: string; description: string }) {
-  const status = ['COMPLETED', 'CANCELLED', 'BLOCKED'].includes(task.status) ? 'CANCELLED' : 'SCHEDULED';
+  const status = ['COMPLETED', 'CANCELLED', 'BLOCKED', 'IN_REVIEW'].includes(task.status) ? 'CANCELLED' : 'SCHEDULED';
   const old = await tx.teamCalendarEvent.findUnique({ where: { followUpTaskId: task.id } });
   if (!task.dueAt || !task.clientId) {
     if(old&&status==='CANCELLED'){const event=await tx.teamCalendarEvent.update({where:{id:old.id},data:{status:'CANCELLED',version:{increment:1},scheduleRevision:{increment:1}}});await queueAppointment(tx,event);}

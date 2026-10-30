@@ -6,6 +6,7 @@ import { weekStartIndia } from '@/lib/team/policy';
 import { processClientWelcomes } from '@/lib/team/client-welcome';
 import { remindCalendarTasks } from '@/lib/team/calendar';
 import { syncCoordinator, remindAvailability, ensureCoordinatorRules } from '@/lib/team/coordinator';
+import { syncWorkStationTickets,recoverWorkStationCoverage } from '@/lib/team/work-station';
 import { syncCustomerFollowups } from '@/lib/team/customer-followups';
 import { syncDailyCrmWork } from '@/lib/team/daily-work';
 import { repairWorkSchedule, syncSourceWork } from '@/lib/team/autonomous-work';
@@ -61,6 +62,8 @@ async function runJob() {
       }
       await notifyTeamBatch(tx, a, reminders);
     });
+    await run('work-station-coverage',(tx,a)=>recoverWorkStationCoverage(tx,a));
+    await run('work-station-tickets',(tx,a)=>syncWorkStationTickets(tx,a));
     await run('customer-followups', (tx, a) => syncCustomerFollowups(tx, a));
     await run('coordinator', (tx, a) => syncCoordinator(tx, a));
     await run('availability', (tx, a) => remindAvailability(tx, a));

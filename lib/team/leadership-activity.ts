@@ -9,7 +9,7 @@ type Category = typeof activityCategories[number];
 const prefixes: Record<Exclude<Category, 'all' | 'other'>, string[]> = {
   calls: ['contact.call_report', 'support.callback_'], contacts: ['client.', 'coordinator.contact_created'],
   leads: ['prospect.', 'prospects.', 'outreach.', 'enquiry.'],
-  work: ['task.', 'tasks.', 'project.', 'coordinator.', 'approval.', 'document.'],
+  work: ['workstation.','contact.activity_report','task.', 'tasks.', 'project.', 'coordinator.', 'approval.', 'document.'],
   schedule: ['calendar.', 'availability.'], reports: ['report.'],
   team: ['member.', 'role.', 'owner.', 'invitation.'],
 };
@@ -21,6 +21,7 @@ export function activityCategory(action: string): Exclude<Category, 'all'> {
   return (Object.entries(prefixes).find(([, values]) => values.some(prefix => action.startsWith(prefix)))?.[0] || 'other') as Exclude<Category, 'all'>;
 }
 const titles: Record<string, string> = {
+  'contact.activity_report':'Saved an activity report', 'workstation.started':'Started an activity','workstation.paused':'Paused an activity','workstation.resumed':'Resumed an activity','workstation.ticket_closed':'Closed a support ticket','workstation.email_queued':'Queued a client email','workstation.missed_email':'Queued a missed-call email',
   'contact.call_report': 'Saved a call report', 'client.created': 'Added a contact', 'client.updated': 'Updated a contact', 'client.merged': 'Merged duplicate contacts',
   'client.account_linked': 'Linked a registered customer', 'coordinator.contact_created': 'Added a contact',
   'task.created': 'Created a task', 'task.updated': 'Updated a task', 'task.comment_added': 'Added a work update', 'task.archived': 'Archived a task',
@@ -86,7 +87,7 @@ export async function readLeadershipActivity(a: Actor, params: URLSearchParams, 
     prisma.teamWorkIntake.findMany({ where: { workspaceId: a.workspaceId, id: { in: visible.filter(row => row.action.startsWith('coordinator.')).map(row => row.entityId) } }, select: { id: true, summary: true, clientId: true, taskId: true } }),
   ]);
   const clientIds = [...new Set([
-    ...details.filter(({ row }) => row.action.startsWith('client.') || row.action === 'contact.call_report' || row.action === 'coordinator.contact_created').map(({ row }) => row.entityId),
+    ...details.filter(({ row }) => row.action.startsWith('client.') || ['contact.call_report','contact.activity_report'].includes(row.action) || row.action === 'coordinator.contact_created').map(({ row }) => row.entityId),
     ...details.map(({ detail }) => string(detail.clientId)), ...tasks.map(row => row.clientId), ...prospects.map(row => row.clientId), ...outreaches.map(row => row.prospect.clientId), ...events.map(row => row.clientId), ...intakes.map(row => row.clientId),
   ].filter((id): id is string => Boolean(id)))];
   const clients = await prisma.teamClient.findMany({ where: { workspaceId: a.workspaceId, id: { in: clientIds } }, select: { id: true, name: true, mergedIntoId: true } });
@@ -97,7 +98,7 @@ export async function readLeadershipActivity(a: Actor, params: URLSearchParams, 
   const items = details.map(({ row, detail }) => {
     const category = activityCategory(row.action);
     const task = tasks.find(item => item.id === row.entityId), prospect = prospects.find(item => item.id === row.entityId), outreach = outreaches.find(item => item.id === row.entityId), event = events.find(item => item.id === row.entityId), intake = intakes.find(item => item.id === row.entityId);
-    const clientId = row.action.startsWith('client.') || row.action === 'contact.call_report' || row.action === 'coordinator.contact_created' ? row.entityId : task?.clientId || prospect?.clientId || outreach?.prospect.clientId || event?.clientId || intake?.clientId || string(detail.clientId);
+    const clientId = row.action.startsWith('client.') || ['contact.call_report','contact.activity_report'].includes(row.action) || row.action === 'coordinator.contact_created' ? row.entityId : task?.clientId || prospect?.clientId || outreach?.prospect.clientId || event?.clientId || intake?.clientId || string(detail.clientId);
     const original = contactMap.get(clientId || ''), contact = original?.mergedIntoId ? contactMap.get(original.mergedIntoId) : original;
     const links: { label: string; href: string }[] = [];
     if (contact && !contact.mergedIntoId) links.push({ label: 'Open contact & reports', href: route('contacts', { client: contact.id }) });
@@ -112,7 +113,7 @@ export async function readLeadershipActivity(a: Actor, params: URLSearchParams, 
     if (row.action.startsWith('approval.')) links.push({ label: 'Open approvals', href: route('approvals') });
     const fields = [
       ['Call time (IST)', string(detail.occurredAt) || outreach?.occurredAt?.toISOString() || ''],
-      ['Outcome', string(detail.outcome)], ['Called using', row.action === 'contact.call_report' ? readable(string(detail.source).toLowerCase()) : ''], ['Discussion', string(detail.discussion) || string(detail.notes) || outreach?.body || ''],
+      ['Recorded by', string(detail.authorName)], ['Role',string(detail.authorRole)], ['Duration (seconds)', typeof detail.elapsedSeconds==='number'?String(detail.elapsedSeconds):''], ['Services',Array.isArray(detail.services)?detail.services.join(', '):''], ['Outcome', string(detail.outcome)], [row.action==='contact.call_report'?'Called using':'Activity source', ['contact.call_report','contact.activity_report'].includes(row.action) ? readable(string(detail.source).toLowerCase()) : ''], ['Discussion', string(detail.discussion) || string(detail.notes) || outreach?.body || ''],
       ['Customer needs', string(detail.needs)], ['Agreements', string(detail.commitments)], ['Next action', string(detail.nextAction)],
       ['Requested follow-up', row.action === 'support.callback_outcome' ? string(detail.requestedNextAt) : string(detail.nextAt)],
       ['Next scheduled callback', row.action === 'support.callback_outcome' && detail.status === 'TODO' ? string(detail.nextAt) : ''], ['Work update', string(detail.body)],
@@ -132,7 +133,7 @@ export async function readLeadershipActivity(a: Actor, params: URLSearchParams, 
   for (const group of groups) { const category = activityCategory(group.action); byCategory[category] = (byCategory[category] || 0) + group._count; byMember.set(group.actorId, (byMember.get(group.actorId) || 0) + group._count); }
   return { items, latestId: items[0]?.id || null, nextCursor: rows.length > 30 ? encodeCursor(visible[visible.length - 1]) : null,
     snapshot: snapshot.toISOString(), from: start.toISOString(), total: groups.reduce((sum, row) => sum + row._count, 0),
-    summary: { callReports: groups.filter(row => row.action === 'contact.call_report').reduce((sum, row) => sum + row._count, 0), contactsAdded: groups.filter(row => ['client.created', 'coordinator.contact_created'].includes(row.action)).reduce((sum, row) => sum + row._count, 0), workUpdates: byCategory.work || 0, contributors: byMember.size },
+    summary: { callReports: groups.filter(row => row.action==='contact.call_report').reduce((sum, row) => sum + row._count, 0), contactsAdded: groups.filter(row => ['client.created', 'coordinator.contact_created'].includes(row.action)).reduce((sum, row) => sum + row._count, 0), workUpdates: byCategory.work || 0, contributors: byMember.size },
     members: members.map(row => ({ id: row.id, name: row.user.name, status: row.status, updates: byMember.get(row.id) || 0 })),
   };
 }

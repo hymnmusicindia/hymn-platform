@@ -21,11 +21,16 @@ async function main() {
   // Build the pre-feature schema from the base revision, then apply the
   // acquisition SQL migration exactly as production would. Using HEAD here
   // includes the feature models and makes the migration create duplicate tables.
-  if(!process.argv.includes('--distribution-automation-only')&&!process.argv.includes('--beat-engagement-only')&&!process.argv.includes('--team-call-reports-only')&&!process.argv.includes('--team-leadership-only')&&!process.argv.includes('--site-load-only'))writeFileSync(oldSchema, execFileSync("git", ["show", "83ca6fe86ccb00ed78c9c080413e93284a682e7d:prisma/schema.prisma"], { encoding: "utf8", windowsHide: true }));
+  if(!process.argv.includes('--work-station-only')&&!process.argv.includes('--distribution-automation-only')&&!process.argv.includes('--beat-engagement-only')&&!process.argv.includes('--team-call-reports-only')&&!process.argv.includes('--team-leadership-only')&&!process.argv.includes('--site-load-only'))writeFileSync(oldSchema, execFileSync("git", ["show", "83ca6fe86ccb00ed78c9c080413e93284a682e7d:prisma/schema.prisma"], { encoding: "utf8", windowsHide: true }));
   const pg = new EmbeddedPostgres({ databaseDir, port, user: "fixture", password: "fixture", persistent: true, initdbFlags: ["--encoding=UTF8", "--locale=C"], postgresFlags: ["-h", "127.0.0.1"] });
   await pg.initialise(); await pg.start();
   try {
     await pg.createDatabase("acquisition_fixture");
+    if(process.argv.includes('--work-station-only')) {
+      await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
+      for(const script of ['verify-work-station.ts','verify-team-call-reports.ts','verify-team-leadership.ts'])await run(['--conditions=react-server','--import','tsx','scripts/'+script]);
+      return;
+    }
     if(process.argv.includes('--beat-engagement-only')) {
       const baseline=path.join(fixture,'beat-engagement-baseline.prisma');
       writeFileSync(baseline,readFileSync('prisma/schema.prisma','utf8').replace(/^model BeatEngagement \{[\s\S]*?^\}\r?\n/gm,'').replace(/^  engagements\s+BeatEngagement\[\]\r?\n/gm,''));

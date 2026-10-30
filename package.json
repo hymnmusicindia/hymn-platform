@@ -9,6 +9,8 @@
     "test:site-load": "tsx scripts/verify-acquisition-isolated.ts --site-load-only && tsx scripts/verify-artwork-preview.ts && node scripts/verify-homepage-artwork.cjs",
     "test:user-library": "node scripts/verify-user-library-browser.cjs",
     "test:navigation-selection": "tsx scripts/verify-sidebar-navigation.ts && tsx scripts/verify-navigation-sections.ts && node scripts/verify-submenu-selection-browser.cjs",
+    "test:work-station": "tsx scripts/verify-acquisition-isolated.ts --work-station-only",
+    "test:work-station:browser": "node scripts/verify-work-station-browser.cjs",
     "test:team-leadership": "tsx scripts/verify-acquisition-isolated.ts --team-leadership-only",
     "test:team-leadership:browser": "node scripts/verify-team-leadership-browser.cjs",
     "test:team-call-reports": "tsx scripts/verify-acquisition-isolated.ts --team-call-reports-only",
