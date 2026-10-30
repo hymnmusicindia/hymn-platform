@@ -20,7 +20,7 @@ html body .distribution-workflow.distribution-workflow .release-workspace-header
 html body .distribution-workflow .release-workspace-logo { width:96px; height:auto; margin-inline:auto; }
 html body .distribution-workflow .release-workspace-state { display:flex; align-items:center; gap:12px; font-size:13px; }
 html body .distribution-workflow .release-journey-progress-track { flex:1; height:4px; border-radius:99px; overflow:hidden; background:var(--border); }
-html body .distribution-workflow .release-journey-progress-track > span { display:block; height:100%; background:#aacbff; }
+html body .distribution-workflow .release-journey-progress-track > span { display:block; height:100%; background:var(--info); }
 html body .distribution-workflow.distribution-workflow.distribution-workflow > .release-stage-menu {
   display:flex!important; position:sticky!important; top:0!important; z-index:35;
   align-self:stretch; flex-direction:column; gap:8px; width:100%; margin:0; padding:8px;
@@ -36,7 +36,7 @@ html body .distribution-workflow.distribution-workflow.distribution-workflow .re
 }
 html body .distribution-workflow.distribution-workflow.distribution-workflow .release-stage-menu > .release-workflow-nav > button:hover { background:var(--card)!important; color:var(--text)!important; }
 html body .distribution-workflow.distribution-workflow.distribution-workflow .release-stage-menu > .release-workflow-nav > button[aria-current=step] {
-  background:var(--bg-soft)!important; border-color:#87afe4!important; color:var(--text)!important;
+  background:var(--bg-soft)!important; border-color:var(--border)!important; color:var(--text)!important;
 }
 html body .distribution-workflow.distribution-workflow :is(.release-mobile-step-menu,.release-workflow-summary) { display:none!important; }
 html body .distribution-workflow.distribution-workflow.distribution-workflow :is(.release-workflow-content,.release-editor-panels) {
@@ -98,7 +98,7 @@ html body .release-portal-page .release-search-control { display:block; }
 html body .release-portal-page .release-search-control .field { width:100%; min-height:48px; padding:12px 14px 12px 44px; border:1px solid var(--border-strong); border-radius:12px; background:var(--input); color:var(--text); font-size:14px; }
 html body .release-portal-page .release-view-toggle { gap:4px; }
 html body .release-portal-page .release-view-toggle button { width:44px; height:44px; min-height:44px; border:1px solid transparent; }
-html body .release-portal-page .release-view-toggle button[aria-pressed=true] { background:var(--bg-soft)!important; border-color:#87afe4; color:var(--text)!important; }
+html body .release-portal-page .release-view-toggle button[aria-pressed=true] { background:var(--bg-soft)!important; border-color:var(--border); color:var(--text)!important; }
 html body .release-portal-page .release-view-toggle button:hover { color:var(--text)!important; }
 html body .release-portal-page .release-catalogue-filters .release-filters-reset { min-height:44px; font-size:clamp(10px,.8vw,11px); }
 html body .release-portal-page .release-no-results { display:flex; flex-direction:column; align-items:center; gap:16px; padding:56px 24px; text-align:center; border:1px dashed var(--border-strong); border-radius:20px; background:var(--card); }
@@ -122,7 +122,7 @@ html body .release-portal-page.release-portal-page.release-portal-page .release-
 html body .release-portal-page.release-portal-page.release-portal-page :is(.release-add-button,.release-no-results .btn-primary) { min-height:44px!important; padding:12px 18px!important; border:1px solid var(--border)!important; border-radius:10px!important; background:var(--accent)!important; color:var(--accent-foreground)!important; box-shadow:none!important; }
 html body .release-portal-page.release-portal-page .release-dashboard-tabs { display:flex; flex-wrap:nowrap; overflow-x:auto; padding:6px; gap:6px; border:1px solid var(--border); border-radius:14px; background:var(--card); scrollbar-width:thin; }
 html body .release-portal-page.release-portal-page .release-dashboard-tabs .distribution-dashboard-link { flex:1 0 auto; display:flex; align-items:center; justify-content:center; min-height:44px; padding:10px 14px; border:1px solid transparent!important; border-radius:10px!important; background:transparent!important; color:var(--text-muted)!important; white-space:nowrap; transform:none; }
-html body .release-portal-page.release-portal-page .release-dashboard-tabs .distribution-dashboard-link[aria-current=page] { background:var(--bg-soft)!important; border-color:#87afe4!important; color:var(--text)!important; }
+html body .release-portal-page.release-portal-page .release-dashboard-tabs .distribution-dashboard-link[aria-current=page] { background:var(--bg-soft)!important; border-color:var(--border)!important; color:var(--text)!important; }
 html body .release-portal-page.release-portal-page .release-dashboard-tabs { min-width:0; max-width:100%; }
 html body .release-portal-page.release-portal-page .release-dashboard-tabs { border-radius:14px!important; background:var(--card)!important; }
 html body .release-portal-page.release-portal-page .release-dashboard-tabs .distribution-dashboard-link { border-radius:10px!important; }

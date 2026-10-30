@@ -46,13 +46,13 @@ html body .master-library { min-height:0; margin:0; padding:0; background:none; 
 .master-library-released { color:var(--text-muted); font-size:10px; }
 .master-library-preview { min-width:0; }
 html body .master-library .audio-waveform-inline-minimal { display:grid; grid-template-columns:26px minmax(0,1fr); gap:12px; width:100%; min-width:0; margin:0; min-height:36px; padding:0; background:none; }
-html body .master-library .audio-waveform-inline-play { width:26px; height:32px; padding:0; border:0; border-radius:0; background:none; color:#a4adbb; box-shadow:none; transform:none; }
-html body .master-library .audio-waveform-inline-play:hover { background:none; color:#fff; }
+html body .master-library .audio-waveform-inline-play { width:26px; height:32px; padding:0; border:0; border-radius:0; background:none; color:var(--text); box-shadow:none; transform:none; }
+html body .master-library .audio-waveform-inline-play:hover { background:none; color:var(--text); }
 html body .master-library .audio-waveform-inline-play svg { width:12px; height:12px; }
 html body .master-library .audio-waveform-inline-track { height:28px; filter:none; }
 html body .master-library .audio-waveform-live { height:28px; transform:scaleY(.55); opacity:.7; gap:2px; }
 html body .master-library .audio-waveform-live>span { flex:1; min-width:1px; max-width:2px; border-radius:0; }
-html body .master-library .audio-waveform-playhead { background:#e5edf6; box-shadow:none; }
+html body .master-library .audio-waveform-playhead { background:var(--text); box-shadow:none; }
 .master-library-date { color:var(--text-muted); font-size:11px; white-space:nowrap; }
 .master-library-actions { position:relative; justify-self:end; }
 .master-library-actions>button { display:grid; place-items:center; width:32px; height:32px; padding:0; border:0; background:none; color:var(--text-muted); }

@@ -21,12 +21,12 @@ html body .release-workflow.release-workflow.is-audio-upload-step .audio-wavefor
 html body .release-workflow.is-audio-upload-step .audio-waveform-inline > audio { display:none; }
 html body .release-workflow.is-audio-upload-step .audio-waveform-inline-play {
   grid-column:1; grid-row:1; width:40px; height:40px; min-height:40px;
-  border:1px solid #3b414b; background:#252a32; color:#e2e6ed; box-shadow:none;
+  border:1px solid var(--border); background:var(--bg-soft); color:var(--text); box-shadow:none;
 }
-html body .release-workflow.is-audio-upload-step .audio-waveform-inline-play:hover { background:#333a45; transform:none; color:#fff; }
+html body .release-workflow.is-audio-upload-step .audio-waveform-inline-play:hover { background:var(--hover); transform:none; color:var(--text); }
 html body .release-workflow.is-audio-upload-step .audio-waveform-inline-copy { grid-column:2; grid-row:1; gap:5px; }
-html body .release-workflow.is-audio-upload-step .audio-waveform-inline-copy strong { font-size:13px; font-weight:550; letter-spacing:0; color:#edf0f5; }
-html body .release-workflow.is-audio-upload-step .audio-waveform-inline-copy > span { font-size:11px; text-transform:none; letter-spacing:0; color:#929ba9; }
+html body .release-workflow.is-audio-upload-step .audio-waveform-inline-copy strong { font-size:13px; font-weight:550; letter-spacing:0; color:var(--text-muted); }
+html body .release-workflow.is-audio-upload-step .audio-waveform-inline-copy > span { font-size:11px; text-transform:none; letter-spacing:0; color:var(--text-muted); }
 html body .release-workflow.release-workflow.is-audio-upload-step .audio-waveform-inline-track {
   grid-column:3; grid-row:1; width:100%; height:40px; min-width:0; overflow:hidden;
   filter:none!important; background:none; border:0;
@@ -36,9 +36,9 @@ html body .release-workflow.is-audio-upload-step .audio-waveform-live > span {
   flex:1 1 0; min-width:0; max-width:2px; border-radius:0; opacity:1; box-shadow:none;
 }
 html body .release-workflow.is-audio-upload-step .audio-waveform-live.is-pending { opacity:.3; }
-html body .release-workflow.is-audio-upload-step .audio-waveform-playhead { box-shadow:none; background:#e5eaf2; }
+html body .release-workflow.is-audio-upload-step .audio-waveform-playhead { box-shadow:none; background:var(--text); }
 html body .release-workflow.release-workflow.is-audio-upload-step .audio-waveform-inline-time {
-  display:block; grid-column:4; grid-row:1; min-width:0; font-size:10px; color:#929ba9;
+  display:block; grid-column:4; grid-row:1; min-width:0; font-size:10px; color:var(--text-muted);
   font-variant-numeric:tabular-nums; text-align:right;
 }
 html body .release-workflow.is-audio-upload-step .release-audio-row-actions button { width:32px; height:40px; min-height:40px; background:none; }

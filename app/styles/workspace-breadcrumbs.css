@@ -5,7 +5,7 @@
 .workspace-breadcrumbs a { display:inline-flex; align-items:center; min-height:36px; color:var(--text-muted); font-size:12px; font-weight:500; text-decoration:none; }
 .workspace-breadcrumbs li:first-child a { color:var(--text); font-size:15px; font-weight:600; }
 .workspace-breadcrumbs svg { flex-shrink:0; color:var(--text-muted); }
-.workspace-breadcrumbs a:hover { color:white; }
+.workspace-breadcrumbs a:hover { color:var(--text); }
 .workspace-breadcrumbs a:focus-visible { outline:2px solid #abbfff; outline-offset:-2px; border-radius:4px; }
 .studio-header-section { flex:1; overflow:hidden; }
 .studio-header-section > button { flex-shrink:0; }

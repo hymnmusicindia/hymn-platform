@@ -30,3 +30,12 @@ The signed-in home feed and body-mounted goal companion had a separate legacy st
 `verify-personalized-theme.cjs` bundles the actual signed-in home, portalled guide, licence picker, final confirmation, release action menu and player with the full Tailwind/global/module stylesheet stack. It checks desktop/mobile in both themes, release badge contrast, licence selection, viewport-sized translucent backdrop, Escape dismissal and scroll restoration. Requests use local fixture responses; it does not buy, submit or download anything.
 
 The theme contract additionally checks scoped interface paints and inline JSX styles throughout the component directory. `scripts/lib/theme-paint-policy.cjs` distinguishes interface surfaces from photographic/illustrated artwork and independent producer-page branding. Token fallbacks remain allowed. CI runs for component changes so new inline styles are covered as well as CSS changes.
+
+
+## Release workflow cascade audit
+
+The release editor retained three local dark palette constants, and its record-review stylesheet retained pale text while later rules supplied light cards. The old artwork exclusion also treated record-review copy as vinyl illustration paint. The editor aliases now inherit theme tokens, record-review is checked as interface UI, and all release form/review/upload/mobile paints use theme colours. Checked switches and audio progress retain visible foregrounds. Shared overlay text, breadcrumbs, notification panels, support/FAQ states, selected team controls and curation dialogs were also corrected.
+
+`node scripts/verify-release-theme.cjs` bundles the actual ReleaseForm and its imported controls, with the full global/Tailwind/module cascade. It renders all seven stages in light/dark themes at 1440, 390 and 320 pixels (42 combinations), using a local draft with non-exclusive rights to exercise the licence PDF prompt. It checks visible enabled text/control contrast and relevant hover/focus states and saves screenshots in `.cache/release-theme`. No releases are submitted and no production records change.
+
+The contrast helper now converts modern computed CSS colour spaces through the browser, rather than interpreting normalised colour channels as RGB bytes. The static contract covers editor palette aliases and named white/black paints and checks text against elevated, soft, strong-card and hover surfaces too. CI includes the rendered release regression. Decorative artwork and user-branded producer pages remain separate from interface surfaces.

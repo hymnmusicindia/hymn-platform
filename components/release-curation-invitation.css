@@ -1,5 +1,5 @@
-.curation-invitation { position:relative; width:min(560px,100%); max-height:calc(100dvh - 48px); overflow-y:auto; overscroll-behavior:contain; border:1px solid var(--border); border-radius:22px; background:radial-gradient(ellipse at 100% 0%,#4c566135,transparent 55%),#171b22; color:var(--text); box-shadow:var(--shadow-soft); padding:28px; scrollbar-width:thin; }
-.curation-invitation-close { position:absolute; top:18px; right:18px; display:grid; place-items:center; width:36px; height:36px; border:1px solid var(--border); border-radius:50%; color:var(--text-muted); background:#ffffff04; cursor:pointer; }
+.curation-invitation { position:relative; width:min(560px,100%); max-height:calc(100dvh - 48px); overflow-y:auto; overscroll-behavior:contain; border:1px solid var(--border); border-radius:22px; background:var(--card); color:var(--text); box-shadow:var(--shadow-soft); padding:28px; scrollbar-width:thin; }
+.curation-invitation-close { position:absolute; top:18px; right:18px; display:grid; place-items:center; width:36px; height:36px; border:1px solid var(--border); border-radius:50%; color:var(--text-muted); background:var(--card); cursor:pointer; }
 .curation-invitation-symbol { display:grid; place-items:center; width:44px; height:44px; border:1px solid var(--border); border-radius:13px; background:var(--surface-gradient); color:var(--text); margin-bottom:18px; }
 .curation-invitation-heading h2 { margin:0; font-size:clamp(26px,3vw,34px); font-weight:750; letter-spacing:-.045em; line-height:1.15; padding-bottom:.1em; }
 .curation-invitation-heading h2 span { color:var(--text-muted); }
@@ -21,7 +21,7 @@
 .curation-pick strong { font-size:12px; line-height:1.4; }
 .curation-pick > div > span:not(.curation-pick-check) { color:var(--text-muted); font-size:10px; line-height:1.5; }
 .curation-picks-empty { display:flex; align-items:center; gap:12px; padding:18px; border:1px dashed var(--border); border-radius:10px; color:var(--text-muted); font-size:12px; }
-.curation-invitation-steps { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:20px 0; padding:16px 0; border-block:1px solid #343c47; list-style:none; }
+.curation-invitation-steps { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:20px 0; padding:16px 0; border-block:1px solid var(--border-strong); list-style:none; }
 .curation-invitation-steps li { display:grid; justify-items:center; text-align:center; gap:8px; font-size:10px; color:var(--text-muted); }
 .curation-invitation-steps svg { color:var(--text); }
 .curation-invitation-footer { display:grid; grid-template-columns:1fr; gap:12px; }
@@ -32,5 +32,5 @@
 .curation-invitation-cta:hover { background:var(--bg-soft); }
 .curation-invitation-later { justify-self:center; padding:4px 12px; min-height:32px; border:0; background:none; color:var(--text-muted); font-size:12px; cursor:pointer; }
 .curation-invitation-footer > small { color:var(--text-muted); text-align:center; font-size:10px; line-height:1.55; }
-.curation-invitation :is(button,a):focus-visible { outline:2px solid #e2e7ef; outline-offset:3px; }
+.curation-invitation :is(button,a):focus-visible { outline:2px solid var(--focus); outline-offset:3px; }
 @media(max-width:600px) { .curation-invitation { padding:22px; border-radius:18px; max-height:calc(100dvh - 20px); } .curation-picks-grid { gap:8px; } .curation-pick { grid-template-columns:1fr; } .curation-pick-art { width:100%; max-width:96px; } .curation-picks-heading { align-items:flex-start; flex-direction:column; gap:4px; } }

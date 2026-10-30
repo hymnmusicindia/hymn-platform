@@ -30,7 +30,7 @@
 .playlist-catalogue-rate small { font-size:11px; font-weight:400; color:var(--text-muted); }
 .playlist-track-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(104px,120px)); gap:10px; align-items:stretch; }
 .playlist-track-card { display:flex; flex-direction:column; padding:5px; min-width:0; text-align:left; border:1px solid var(--border); border-radius:10px; background:var(--bg-soft); color:var(--text); cursor:pointer; transition:border-color .16s ease,background .16s ease; }
-.playlist-track-card:hover { border-color:var(--border); background:color-mix(in srgb,var(--bg-soft) 90%,white); }
+.playlist-track-card:hover { border-color:var(--border); background:var(--hover); }
 .playlist-track-card[aria-pressed="true"] { border-color:#82c9a2; box-shadow:var(--shadow-soft); background:var(--hover); }
 .playlist-track-card:focus-visible,.playlist-external-toggle:focus-visible { outline:2px solid #a8dec0; outline-offset:4px; }
 .playlist-track-art { aspect-ratio:1; position:relative; display:grid; place-items:center; overflow:hidden; border-radius:9px; background:var(--surface-gradient); color:var(--text-muted); }

@@ -1,7 +1,7 @@
 /* Release editor: quiet surfaces, clear hierarchy, compact work areas. */
 .release-editor-panels { display:contents; }
 html body .release-workflow.release-premium-editor {
-  --editor-line:#343943; --editor-muted:#9ca6b5; --editor-surface:#20242c;
+  --editor-line:var(--border); --editor-muted:var(--text-muted); --editor-surface:var(--card);
   display:grid; grid-template-columns:148px minmax(0,1fr); gap:14px 28px;
   width:100%; max-width:none; min-height:0!important; padding:20px!important;
   border:0!important; border-radius:0!important; background:none!important; box-shadow:none!important;
@@ -19,7 +19,7 @@ html body .release-premium-editor .release-step-intro { padding:0 0 16px; margin
 html body .release-premium-editor :is(.release-step-intro h2,.release-tracklist-heading h2,.review-page-heading h2) { font-size:clamp(26px,2.6vw,36px); font-weight:600; line-height:1.13; letter-spacing:-.035em; }
 html body .release-premium-editor :is(.release-step-intro p,.release-tracklist-heading p) { font-size:12px; line-height:1.6; color:var(--editor-muted); }
 html body .release-premium-editor :is(.field,.input) { min-height:42px; padding:10px 12px; border:1px solid var(--border); border-radius:4px; background:var(--card); box-shadow:none; font-size:13px; }
-html body .release-premium-editor :is(.field,.input):focus { border-color:var(--border); outline:1px solid #a9b5c8; outline-offset:1px; }
+html body .release-premium-editor :is(.field,.input):focus { border-color:var(--border); outline:1px solid var(--focus); outline-offset:1px; }
 html body .release-workflow.release-premium-editor :is(.field,.input) { border-radius:4px!important; background:var(--card)!important; }
 html body .release-premium-editor .release-editor-panels [class*="rounded-"]:not(.rounded-full) { border-radius:6px!important; box-shadow:none!important; }
 html body .release-premium-editor label { font-size:12px; }
@@ -33,7 +33,7 @@ html body .release-workflow.release-premium-editor .release-footer-mobile-action
 html body .release-workflow.release-premium-editor .release-footer-action { width:auto; min-height:44px; padding:10px 8px; border:0!important; border-radius:0!important; background:none!important; background-image:none!important; box-shadow:none!important; color:var(--editor-muted)!important; font-size:12px; }
 html body .release-workflow.release-premium-editor .release-footer-action.is-primary { color:var(--text)!important; }
 html body .release-workflow.release-premium-editor .release-footer-action:hover:not(:disabled) { color:var(--text)!important; }
-html body .release-workflow.release-premium-editor .release-footer-action:focus-visible { outline:1px solid #a9b5c8; outline-offset:2px; }
+html body .release-workflow.release-premium-editor .release-footer-action:focus-visible { outline:1px solid var(--focus); outline-offset:2px; }
 /* Artwork pairs a correctly sized square with concise requirements. */
 html body .release-premium-editor .release-artwork-stage { grid-template-columns:minmax(220px,.8fr) minmax(260px,1.2fr); gap:24px; align-items:start; }
 html body .release-premium-editor .release-artwork-stage > div:first-child > div:first-child > button { max-width:300px; border-radius:6px; }
