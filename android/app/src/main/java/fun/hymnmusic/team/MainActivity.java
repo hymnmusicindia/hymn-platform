@@ -230,17 +230,18 @@ public final class MainActivity extends Activity {
                     CompletableFuture<JSONObject> tasks = CompletableFuture.supplyAsync(() -> readApi("tasks", "mine=1&offset=0"), io);
                     JSONObject overviewData = homeResult(overview), calendarData = homeResult(upcoming), inboxData = homeResult(inbox), taskData = homeResult(tasks);
                     boolean partial = overview.isCompletedExceptionally() || upcoming.isCompletedExceptionally() || inbox.isCompletedExceptionally() || tasks.isCompletedExceptionally();
-                    runOnUiThread(() -> { if (screenGeneration.get() == generation) { updateInboxSummary(inboxData); renderHome(overviewData, taskData, calendarData, inboxData, partial); } });
+                    runOnUiThread(() -> { if (screenGeneration.get() == generation) { TeamCallReminderScheduler.sync(getApplicationContext(), calendarData.optJSONArray("callReminders"), memberId); updateInboxSummary(inboxData); renderHome(overviewData, taskData, calendarData, inboxData, partial); } });
                 } else if (requestedPage.equals("workspace-detail")) {
                     JSONObject overview = api.get("overview", workspace, ""); runOnUiThread(() -> { if (screenGeneration.get() == generation) renderWorkspaceDetail(overview); });
                 } else if (requestedPage.equals("tasks")) {
                     String query = "mine=1&offset=0" + (taskFilter.equals("all") ? "" : "&status=" + taskFilter);
                     JSONObject tasks = api.get("tasks", workspace, query); runOnUiThread(() -> { if (screenGeneration.get() == generation) renderRows("My assigned tasks", tasks.optJSONArray("items"), "tasks"); });
                 } else if (requestedPage.equals("schedule")) {
-                    JSONObject calendar = calendarRange(); runOnUiThread(() -> { if (screenGeneration.get() == generation) renderRows("Coming up", calendar.optJSONArray("items"), "schedule"); });
+                    JSONObject calendar = calendarRange(); runOnUiThread(() -> { if (screenGeneration.get() == generation) { TeamCallReminderScheduler.sync(getApplicationContext(), calendar.optJSONArray("callReminders"), memberId); renderRows("Coming up", calendar.optJSONArray("items"), "schedule"); } });
                 } else if (requestedPage.equals("alerts")) {
                     JSONObject inbox = api.get("notifications", workspace, "offset=0"); runOnUiThread(() -> { if (screenGeneration.get() == generation) { updateInboxSummary(inbox); renderRows("Notifications", inbox.optJSONArray("items"), "alerts"); } });
                 } else if (requestedPage.equals("workstation")) loadTool("workstation", generation);
+                else if (requestedTool.equals("notifications")) runOnUiThread(() -> { if (screenGeneration.get() == generation) renderTool("notifications", new JSONObject()); });
                 else if (!requestedTool.isEmpty()) loadTool(requestedTool, generation);
                 else runOnUiThread(() -> { if (screenGeneration.get() == generation) renderTools(); });
             } catch (Exception e) { runOnUiThread(() -> { if (screenGeneration.get() == generation) renderError(e.getMessage()); }); }
@@ -564,12 +565,23 @@ public final class MainActivity extends Activity {
 
     private void renderTools() {
         content.removeAllViews(); addText("Workspace", 22, NAVY, true); addText("Everything your team needs, together.", 13, MUTED, false); addSpace(14);
-        Button appearance = button(nightMode ? "☀  Switch to day mode" : "☾  Switch to night mode", false); LinearLayout.LayoutParams appearanceParams = new LinearLayout.LayoutParams(-1, dp(46)); appearanceParams.bottomMargin = dp(16); content.addView(appearance, appearanceParams); appearance.setOnClickListener(v -> toggleTheme());
-        String[][] groups = {{"Work", "Work-station|workstation", "Projects|projects", "Reports|reports"}, {"Connect", "Calls & follow-ups|call-followups", "Team chat|channels", "Team email history|team-email-history"}, {"People & operations", "Team directory|members", "Availability|availability", "Work coordinator|coordinator", "Creator approvals|creator-applications", "Operations|operations", "Contacts & research|acquisition-dashboard"}, {"Activity", "Call reports|call-reports", "Activity & audit|audit"}};
+        Button appearance = button(nightMode ? "☀  Switch to day mode" : "☾  Switch to night mode", false); LinearLayout.LayoutParams appearanceParams = new LinearLayout.LayoutParams(-1, dp(46)); appearanceParams.bottomMargin = dp(10); content.addView(appearance, appearanceParams); appearance.setOnClickListener(v -> toggleTheme());
+        addSectionTitle("Phone notifications");
+        addText("These controls affect alerts on this phone only. HYMN inbox messages and email preferences stay unchanged.", 12, MUTED, false);
+        addPhoneNotificationSetting("Client call reminders", TeamPhoneNotifications.MUTE_CALLS, "Upcoming calls assigned to you");
+        addPhoneNotificationSetting("Team updates", TeamPhoneNotifications.MUTE_UPDATES, "Inbox and important workspace alerts");
+        TextView timing = text("Call reminders are scheduled for 30 minutes before the call. Use Snooze 10 min or Mute on a phone notification to control it.", 11, MUTED, false); timing.setPadding(dp(12), dp(10), dp(12), dp(10)); timing.setBackground(shape(surface(), BORDER, 12)); LinearLayout.LayoutParams timingParams = new LinearLayout.LayoutParams(-1, -2); timingParams.bottomMargin = dp(16); content.addView(timing, timingParams);
+        String[][] groups = {{"Work", "Work-station|workstation", "Projects|projects", "Reports|reports"}, {"Connect", "Calls & follow-ups|call-followups", "Team chat|channels", "Team email history|team-email-history"}, {"People & operations", "Team directory|members", "Availability|availability", "Work coordinator|coordinator", "Creator approvals|creator-applications", "Operations|operations", "Contacts & research|acquisition-dashboard"}, {"Activity", "Call reports|call-reports", "Activity & audit|audit"}, {"Preferences", "Phone notifications|notifications"}};
         for (String[] group : groups) {
             addSectionTitle(group[0]);
             for (int i = 1; i < group.length; i++) {
                 String[] item = group[i].split("\\|");
+                if (item[1].equals("notifications")) {
+                    LinearLayout card = new LinearLayout(this); card.setGravity(Gravity.CENTER_VERTICAL); card.setPadding(dp(15), dp(11), dp(14), dp(11)); card.setBackground(shape(surface(), BORDER, 14)); LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, dp(58)); p.bottomMargin = dp(8); content.addView(card, p);
+                    ImageView icon = new ImageView(this); icon.setImageResource(R.drawable.ic_notification); icon.setColorFilter(BLUE); icon.setPadding(dp(7), dp(7), dp(7), dp(7)); LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(dp(34), dp(34)); ip.rightMargin = dp(12); card.addView(icon, ip);
+                    card.addView(text(item[0], 14, NAVY, true), new LinearLayout.LayoutParams(0, -2, 1)); TextView arrow = text("›", 22, MUTED, false); card.addView(arrow);
+                    card.setOnClickListener(v -> { tool = "notifications"; loadPageData(); }); continue;
+                }
                 LinearLayout card = new LinearLayout(this); card.setGravity(Gravity.CENTER_VERTICAL); card.setPadding(dp(15), dp(11), dp(14), dp(11)); card.setBackground(shape(surface(), BORDER, 14)); LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, dp(58)); p.bottomMargin = dp(8); content.addView(card, p);
                 TextView icon = text(toolIcon(item[1]), 19, BLUE, true); icon.setGravity(Gravity.CENTER); LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(dp(34), dp(34)); ip.rightMargin = dp(12); icon.setBackground(shape(Color.rgb(237, 243, 252), 0, 11)); card.addView(icon, ip);
                 card.addView(text(item[0], 14, NAVY, true), new LinearLayout.LayoutParams(0, -2, 1)); card.addView(text("›", 22, MUTED, false));
@@ -586,6 +598,15 @@ public final class MainActivity extends Activity {
         return "✦";
     }
 
+    private void addPhoneNotificationSetting(String title, String preferenceKey, String subtitle) {
+        LinearLayout row = new LinearLayout(this); row.setGravity(Gravity.CENTER_VERTICAL); row.setPadding(dp(14), dp(10), dp(10), dp(10)); row.setBackground(shape(surface(), BORDER, 13)); LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2); rowParams.bottomMargin = dp(8); content.addView(row, rowParams);
+        LinearLayout labels = new LinearLayout(this); labels.setOrientation(LinearLayout.VERTICAL); row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1)); labels.addView(text(title, 13, NAVY, true)); TextView hint = text(subtitle, 10, MUTED, false); LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(-1, -2); hintParams.topMargin = dp(4); labels.addView(hint, hintParams);
+        android.content.SharedPreferences prefs = getSharedPreferences(TeamPhoneNotifications.PREFS, MODE_PRIVATE);
+        boolean muted = prefs.getBoolean(preferenceKey, false);
+        android.widget.Switch toggle = new android.widget.Switch(this); toggle.setText(muted ? "Muted" : "On"); toggle.setTextColor(MUTED); toggle.setTextSize(10); toggle.setChecked(!muted); row.addView(toggle, new LinearLayout.LayoutParams(-2, dp(48)));
+        toggle.setOnCheckedChangeListener((button, enabled) -> { prefs.edit().putBoolean(preferenceKey, !enabled).apply(); toggle.setText(enabled ? "On" : "Muted"); });
+    }
+
     private void loadTool(String selected, int generation) {
         String extra = selected.equals("workstation") ? "bucket=" + workBucket : "";
         try { JSONObject data = api.get(selected, workspace, extra); runOnUiThread(() -> { if (screenGeneration.get() == generation) renderTool(selected, data); }); }
@@ -594,6 +615,12 @@ public final class MainActivity extends Activity {
 
     private void renderTool(String selected, JSONObject data) {
         content.removeAllViews(); addText(toolName(selected), 22, NAVY, true); addText("Live data from HYMN Team OS", 12, MUTED, false); addSpace(14);
+        if (selected.equals("notifications")) {
+            addText("Control team notification delivery on this phone without changing your HYMN inbox or email preferences.", 12, MUTED, false); addSpace(10);
+            addPhoneNotificationSetting("Client call reminders", TeamPhoneNotifications.MUTE_CALLS, "30 minutes before calls assigned to you");
+            addPhoneNotificationSetting("Team updates", TeamPhoneNotifications.MUTE_UPDATES, "Important inbox and workspace alerts");
+            return;
+        }
         if (selected.equals("workstation")) {
             LinearLayout filters = new LinearLayout(this); filters.setGravity(Gravity.CENTER_VERTICAL); filters.setOrientation(LinearLayout.HORIZONTAL); String[][] buckets = {{"Today", "today"}, {"Upcoming", "upcoming"}, {"Overdue", "overdue"}, {"Done", "finished"}};
             for (String[] bucket : buckets) { Button filter = button(bucket[0], workBucket.equals(bucket[1])); filter.setTextSize(11); filter.setPadding(dp(9), 0, dp(9), 0); LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(0, dp(40), 1); fp.rightMargin = dp(5); filters.addView(filter, fp); filter.setOnClickListener(v -> { workBucket = bucket[1]; loadPageData(); }); }
@@ -627,7 +654,7 @@ public final class MainActivity extends Activity {
     }
     private void signOut() {
         screenGeneration.incrementAndGet();
-        io.execute(() -> { try { api.request("POST", "/api/auth/logout", new JSONObject(), true); } catch (Exception ignored) { } api.clear(); WorkManager.getInstance(getApplicationContext()).cancelUniqueWork("hymn-team-notification-sync"); runOnUiThread(this::showLogin); });
+        io.execute(() -> { try { api.request("POST", "/api/auth/logout", new JSONObject(), true); } catch (Exception ignored) { } api.clear(); WorkManager manager = WorkManager.getInstance(getApplicationContext()); manager.cancelUniqueWork("hymn-team-notification-sync"); manager.cancelUniqueWork("hymn-team-notification-sync-now"); manager.cancelAllWorkByTag("hymn-team-call-reminder"); getSharedPreferences("hymn_team_call_reminders", MODE_PRIVATE).edit().clear().apply(); runOnUiThread(this::showLogin); });
     }
 
     private void toggleTheme() {
@@ -642,10 +669,13 @@ public final class MainActivity extends Activity {
         if (notificationSyncStarted) return;
         notificationSyncStarted = true;
         Constraints constraints = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
-        PeriodicWorkRequest request = new PeriodicWorkRequest.Builder(TeamNotificationWorker.class, 15, TimeUnit.MINUTES).setConstraints(constraints).build();
+        PeriodicWorkRequest request = new PeriodicWorkRequest.Builder(TeamNotificationWorker.class, 15, TimeUnit.MINUTES).setConstraints(constraints).addTag("hymn-team-notification-sync").build();
         WorkManager.getInstance(getApplicationContext()).enqueueUniquePeriodicWork("hymn-team-notification-sync", ExistingPeriodicWorkPolicy.KEEP, request);
+        androidx.work.OneTimeWorkRequest initialSync = new androidx.work.OneTimeWorkRequest.Builder(TeamNotificationWorker.class).setConstraints(constraints).addTag("hymn-team-notification-sync").build();
+        WorkManager.getInstance(getApplicationContext()).enqueueUniqueWork("hymn-team-notification-sync-now", androidx.work.ExistingWorkPolicy.KEEP, initialSync);
         boolean asked = getSharedPreferences("hymn_team_settings", MODE_PRIVATE).getBoolean("notification_permission_asked", false);
-        if (Build.VERSION.SDK_INT >= 33 && !asked && ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            if (asked) return;
             getSharedPreferences("hymn_team_settings", MODE_PRIVATE).edit().putBoolean("notification_permission_asked", true).apply();
             requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 401);
         }

@@ -13,7 +13,7 @@ export async function queueAppointment(tx: Prisma.TransactionClient, event: Team
   await tx.teamAppointmentMessage.updateMany({ where: { eventId: event.id, status: "PENDING" }, data: { status: "CANCELLED" } });
   if (!['CALL','FOLLOW_UP'].includes(event.kind) || event.status !== "SCHEDULED" || !event.clientId || event.startsAt <= now) return;
   const jobs = event.kind === "CALL" ? [{kind: "CLIENT_CONFIRM", dueAt: now}] : [];
-  for (const [kind, minutes] of [["CLIENT_REMINDER", 30], ["REP_REMINDER", 40]] as const) {
+  for (const [kind, minutes] of [["CLIENT_REMINDER", 30], ["REP_REMINDER", 30]] as const) {
     if(event.kind==='FOLLOW_UP'&&kind==='CLIENT_REMINDER')continue;
     const dueAt = new Date(event.startsAt.getTime() - minutes * 60000);
     // Last-minute bookings get confirmation, not two consecutive emails.
@@ -42,7 +42,8 @@ export async function processAppointments(eventId?: string, limit = 20, deliver 
       // Notification is independent of SMTP configuration and deduplicated with
       // the job in one transaction. Initial assignment is notified on save.
       if (job.kind === "REP_REMINDER" && !job.notifiedAt) await prisma.$transaction(async tx => {
-        if ((await tx.teamAppointmentMessage.updateMany({ where: { id: job.id, notifiedAt: null }, data: { notifiedAt: now } })).count) await notify(tx, e.assigneeId, `Call ${client.name} at ${when}`, href);
+        const reminderTitle = `${e.kind === "FOLLOW_UP" ? "Callback" : "Client call"} with ${client.name} in 30 minutes · ${when}`;
+        if ((await tx.teamAppointmentMessage.updateMany({ where: { id: job.id, notifiedAt: null }, data: { notifiedAt: now } })).count) await notify(tx, e.assigneeId, reminderTitle, href);
       });
       // Staff reminders stay in-app; the nightly plan consolidates schedules.
       // This also drains legacy queued REP_CONFIRM and REP_REMINDER jobs safely.

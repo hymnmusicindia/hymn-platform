@@ -1,21 +1,16 @@
 package fun.hymnmusic.team;
 
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.content.Context;
-import android.content.Intent;
-import android.os.Build;
 import androidx.annotation.NonNull;
-import androidx.core.app.NotificationCompat;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import java.util.HashSet;
+import java.util.Set;
 
 /** Battery-conscious native notification sync while the app is backgrounded. */
 public final class TeamNotificationWorker extends Worker {
-    private static final String CHANNEL = "hymn_team_updates";
     public TeamNotificationWorker(@NonNull Context context, @NonNull WorkerParameters params) { super(context, params); }
 
     @NonNull @Override public Result doWork() {
@@ -27,6 +22,10 @@ public final class TeamNotificationWorker extends Worker {
             if (workspace.isEmpty()) return Result.success();
             JSONObject inbox = api.get("notifications", workspace, "offset=0");
             JSONArray items = inbox.optJSONArray("items");
+            JSONObject calendar = api.get("calendar", workspace, reminderRange());
+            JSONArray events = calendar.optJSONArray("callReminders");
+            if (events == null) events = calendar.optJSONArray("items");
+            TeamCallReminderScheduler.sync(getApplicationContext(), events, session.optString("memberId", ""), true);
             if (items == null || items.length() == 0) return Result.success();
             String last = api.lastNotificationId();
             JSONObject newest = items.optJSONObject(0);
@@ -37,7 +36,7 @@ public final class TeamNotificationWorker extends Worker {
             for (int i = 0; i < items.length(); i++) {
                 JSONObject item = items.optJSONObject(i); if (item == null) continue;
                 if (item.optString("id").equals(last)) break;
-                if (first) { notify(item); first = false; }
+                if (first && item.isNull("readAt")) { notify(item); first = false; }
             }
             if (!newestId.isEmpty()) api.setLastNotificationId(newestId);
             return Result.success();
@@ -46,17 +45,15 @@ public final class TeamNotificationWorker extends Worker {
 
     private void notify(JSONObject item) {
         Context context = getApplicationContext();
-        NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-        if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(new NotificationChannel(CHANNEL, "HYMN Team updates", NotificationManager.IMPORTANCE_DEFAULT));
-        Intent open = new Intent(context, MainActivity.class).putExtra("screen", "alerts").addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent pending = PendingIntent.getActivity(context, 0, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(item.optString("title", "HYMN Team update"))
-            .setContentText("Open HYMN Team to view this update.")
-            .setContentIntent(pending)
-            .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT);
-        manager.notify(item.optString("id", "").hashCode(), builder.build());
+        String id = item.optString("id", "");
+        TeamPhoneNotifications.show(context, id.hashCode(), "update:" + id,
+            item.optString("title", "HYMN Team update"), "Open HYMN Team to view this update.", false, "", "", 1);
+    }
+
+    private String reminderRange() throws Exception {
+        long from = System.currentTimeMillis();
+        long to = System.currentTimeMillis() + 60L * 86400000L;
+        return "start=" + java.net.URLEncoder.encode(java.time.Instant.ofEpochMilli(from).toString(), "UTF-8")
+            + "&end=" + java.net.URLEncoder.encode(java.time.Instant.ofEpochMilli(to).toString(), "UTF-8");
     }
 }

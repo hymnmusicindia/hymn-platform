@@ -15,6 +15,6 @@ The debug APK is at `app/build/outputs/apk/debug/app-debug.apk`. The Android OAu
 
 ## Native notifications
 
-Android schedules a network-aware WorkManager sync at the platform's minimum periodic interval (15 minutes) and displays new HYMN team alerts as native notifications. Android 13+ asks the user for notification permission. This is a resilient polling fallback; real-time FCM delivery requires a Firebase Android app and server credentials, which are not configured in this repository.
+Android schedules assigned client-call reminders for 30 minutes before the appointment and verifies the current schedule before showing them. WorkManager syncs important team alerts at its minimum periodic interval (15 minutes); the web app's configured push queue delivers to subscribed browser devices. Android 13+ asks the user for notification permission. Real-time FCM delivery to the native APK requires a Firebase Android app and server credentials, which are not configured in this repository. Phone-only controls in Tools can mute call reminders or team alerts without changing HYMN inbox or email preferences. Phone notifications also offer Snooze 10 min and Mute actions.
 
 The user session cookie is stored with AndroidX EncryptedSharedPreferences. Calls use the system dialer and require user confirmation before dialing. Email actions hand off to the user's mail app.

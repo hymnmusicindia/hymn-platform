@@ -241,5 +241,6 @@ export async function calendarRead(a: Actor, resource: string, params: URLSearch
     prisma.teamCalendarEvent.count({ where }),
     prisma.teamTask.findMany({ where: { ...taskScope(a), dueAt: { gte: new Date(start), lt: new Date(end) }, status: { notIn: ["COMPLETED", "CANCELLED"] } }, take: 1000, orderBy: { dueAt: "asc" }, select: { id: true, title: true, dueAt: true, ownerId: true, priority: true, status: true } })
   ]);
-  return { items: items.map(item => ({ ...item, ...(item.client ? { client: publicContact(a, item.client) } : {}) })), total, deadlines };
+  const visible = items.map(item => ({ ...item, ...(item.client ? { client: publicContact(a, item.client) } : {}) }));
+  return { items: visible, callReminders: visible.filter(item => item.kind === "CALL" && item.status === "SCHEDULED" && item.assigneeId === a.id && item.startsAt > new Date()), total, deadlines };
 }
