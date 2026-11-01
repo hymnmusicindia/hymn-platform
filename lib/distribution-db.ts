@@ -1513,8 +1513,19 @@ export async function updatePaidDistributionRelease(input: {
           : null;
         if (saved.userId !== input.userId || !["DRAFT", "AWAITING_PAYMENT", "CHANGES_REQUESTED", "REJECTED", "RESUBMITTED"].includes(saved.status) || (saved.paymentStatus !== "paid" && !verifiedCheckout)) throw new Error("This release is no longer open for paid corrections.");
         const providerCorrection = saved.status === "CHANGES_REQUESTED" && Boolean(saved.direNoteStatus);
-        if (providerCorrection && (tracks.length !== saved.tracks.length || tracks.some((track, index) => track.trackNumber !== saved.tracks[index].trackNumber))) {
-          throw new Error("Keep the existing track order and count while correcting a provider submission.");
+        if (providerCorrection) {
+          const originalTrackIds = saved.tracks.map(track => track.id);
+          const submittedRefs = tracks.map(track => {
+            const metadata = track.metadata && typeof track.metadata === "object" ? track.metadata as Record<string, unknown> : {};
+            const ref = typeof metadata.clientTrackId === "string" ? metadata.clientTrackId : "";
+            const id = ref.match(/^existing-track-(\d+)$/)?.[1];
+            return id ? Number(id) : null;
+          });
+          const keptTrackIds = submittedRefs.filter((id): id is number => id !== null);
+          const originalPositions = keptTrackIds.map(id => originalTrackIds.indexOf(id));
+          if (submittedRefs.some(id => id === null || !originalTrackIds.includes(id)) || originalPositions.some((position, index) => position < 0 || (index > 0 && position <= originalPositions[index - 1]))) {
+            throw new Error("Keep the existing recordings in their original order. Disputed tracks can be removed; new recordings must be submitted through HYMN support.");
+          }
         }
         await tx.release.update({
           where: { id: input.releaseId },
@@ -1533,12 +1544,17 @@ export async function updatePaidDistributionRelease(input: {
           select: { id: true }
         });
         const savedTracks = await saveReleaseTracks(tx, input.releaseId, tracks.map((track, index) => {
-          const previous = saved.tracks.find(item => item.trackNumber === track.trackNumber);
+          const metadata = track.metadata && typeof track.metadata === "object" ? track.metadata as Record<string, unknown> : {};
+          const clientTrackId = typeof metadata.clientTrackId === "string" ? metadata.clientTrackId : "";
+          const originalId = clientTrackId.match(/^existing-track-(\d+)$/)?.[1];
+          const previous = (providerCorrection && originalId
+            ? saved.tracks.find(item => item.id === Number(originalId))
+            : saved.tracks.find(item => item.trackNumber === track.trackNumber));
           const trackMetadata = { ...(typeof previous?.metadata === "object" && previous.metadata ? previous.metadata : {}), ...track, isrc: previous?.isrc ?? track.isrc } as any;
           return { title: track.trackTitle || `Track ${index + 1}`, trackNumber: track.trackNumber || index + 1, primaryArtist: track.primaryArtist || input.metadata.artistName, audioUrl: track.audioUrl || null, isrc: providerCorrection ? previous?.isrc ?? null : previous?.isrc ?? track.isrc ?? null, metadata: trackMetadata };
         }), saved.tracks);
         await syncReleaseContributions(tx, { actorUserId: input.userId, tracks: savedTracks.map((track, i) => ({ trackId: track.id, contributions: tracks[i].contributors ?? [] })) });
-        if (!providerCorrection) await tx.track.deleteMany({ where: { releaseId: input.releaseId, trackNumber: { notIn: tracks.map(track => track.trackNumber) } } });
+        await tx.track.deleteMany({ where: { releaseId: input.releaseId, trackNumber: { notIn: tracks.map(track => track.trackNumber) } } });
         if (providerCorrection) {
           const attempt = await tx.distributionSubmissionAttempt.findFirst({ where: { releaseId: input.releaseId, provider: "direnote", isCurrent: true } });
           if (attempt) await tx.distributionSubmissionAttempt.update({ where: { id: attempt.id }, data: { corrections: { ...(typeof attempt.corrections === "object" && attempt.corrections ? attempt.corrections : {}), status: "customer_resolved", artistResolvedAt: new Date().toISOString() } } });

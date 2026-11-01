@@ -424,6 +424,16 @@ function isPlaceholderTrackTitle(value: string) {
 function correctionMentions(release: Release | null | undefined, pattern: RegExp) {
   return Boolean(release?.reviewIssues?.fields.some((issue) => pattern.test(`${issue.field} ${issue.label} ${issue.note ?? ""}`)));
 }
+function correctionRequiresTrackAudio(release: Release | null | undefined, index: number) {
+  return Boolean(release?.reviewIssues?.fields.some((issue) => {
+    const text = `${issue.field} ${issue.label} ${issue.note ?? ""}`;
+    // Provider commentary often mentions audio generally. Require an explicit
+    // track field or a clear request to replace that track's master.
+    if (new RegExp(`^tracks\\.${index}\\.(?:audio_url|audio)$`, "i").test(issue.field.trim())) return true;
+    const trackRef = new RegExp(`\\b(?:track|recording)\\s*#?${index + 1}\\b`, "i").test(text);
+    return trackRef && /(?:replace|upload|provide|resend).{0,50}(?:audio|master)|(?:audio|master).{0,50}(?:replace|upload|provide|resend)/i.test(text);
+  }));
+}
 function fileNameFromUrl(value: string) {
   if (!value) return "";
   const clean = value.split("?")[0].split("#")[0];
@@ -781,7 +791,7 @@ function createTracksFromRelease(
        audioUploadProgress: track?.audioUrl || initialRelease?.audioUrl || (audioLibraryPrefill && !initialRelease ? audioLibraryPrefill.audioUrl : "") ? 100 : 0,
       audioBytesUploaded: 0,
       audioTotalBytes: 0,
-      requiresAudioReplacement: correctionMentions(initialRelease, new RegExp(`audio|tracks\\.${index}\\.audio_url`, "i")),
+      requiresAudioReplacement: correctionRequiresTrackAudio(initialRelease, index),
        audioPreviewUrl: track?.audioUrl || initialRelease?.audioUrl || (audioLibraryPrefill && !initialRelease ? audioLibraryPrefill.audioUrl : ""),
       duration: track?.duration?.trim() || "",
       titleLanguage: readTrackLanguage(track),
@@ -1615,6 +1625,7 @@ export function ReleaseForm({
           artistProfileIds: track.primaryArtistIds,
           featuredArtistProfileIds: track.featuredArtistIds,
           remixerProfileIds: track.remixerIds,
+          metadata: { clientTrackId: track.id },
           featuredArtists: track.featuredArtists,
           additionalPrimaryArtists: track.remixers,
           songwriters: contributorNames(track.songwriters),
@@ -2993,6 +3004,7 @@ export function ReleaseForm({
           artistProfileIds: track.primaryArtistIds,
           featuredArtistProfileIds: track.featuredArtistIds,
           remixerProfileIds: track.remixerIds,
+          metadata: { clientTrackId: track.id },
           uploadedAudioUrl: uploaded.trackAudioUrls[index],
           uploadedCoverLicenseUrl: uploaded.trackLicenseUrls[index],
         })),
