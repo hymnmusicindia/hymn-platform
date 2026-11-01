@@ -7,8 +7,8 @@ android {
         applicationId 'fun.hymnmusic.team'
         minSdk 26
         targetSdk 35
-        versionCode 3
-        versionName '2.0.0'
+        versionCode 4
+        versionName '2.0.1'
         def googleClientId = project.findProperty('googleClientId') ?: System.getenv('GOOGLE_CLIENT_ID') ?: System.getenv('NEXT_PUBLIC_GOOGLE_CLIENT_ID') ?: ''
         buildConfigField 'String', 'GOOGLE_WEB_CLIENT_ID', '"' + googleClientId + '"'
     }
@@ -17,6 +17,8 @@ android {
 }
 
 dependencies {
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
     implementation 'androidx.credentials:credentials:1.5.0'
     implementation 'androidx.credentials:credentials-play-services-auth:1.5.0'
     implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'

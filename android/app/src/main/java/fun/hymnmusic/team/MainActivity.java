@@ -91,6 +91,8 @@ public final class MainActivity extends Activity {
     private volatile Bitmap cachedProfileBitmap;
     private volatile String cachedProfileUrl = "";
     private JSONObject session;
+    private JSONObject activeWorkDetail;
+    private boolean workActionBusy = false;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -392,22 +394,95 @@ public final class MainActivity extends Activity {
     }
 
     private void startWork(JSONObject task) {
-        showLoading("Starting activity…");
-        io.execute(() -> { try { JSONObject request = new JSONObject().put("taskId", task.getString("id")).put("requestKey", UUID.randomUUID().toString()); JSONObject result = api.post("workstation-start", workspace, request); runOnUiThread(() -> openWorkActivity(result.optString("id", task.optString("id")))); } catch (Exception e) { runOnUiThread(() -> renderError(e.getMessage())); } });
+        final int generation = screenGeneration.get();
+        showContentLoading("Starting activity…");
+        io.execute(() -> {
+            try {
+                JSONObject request = new JSONObject().put("taskId", task.getString("id")).put("requestKey", UUID.randomUUID().toString());
+                JSONObject result = api.post("workstation-start", workspace, request);
+                String taskId = result.optString("id", task.optString("id"));
+                runOnUiThread(() -> { if (generation == screenGeneration.get()) openWorkActivity(taskId, generation); });
+            } catch (Exception e) {
+                runOnUiThread(() -> { if (generation == screenGeneration.get()) renderError(e.getMessage()); });
+            }
+        });
     }
 
     private void openWorkActivity(String id) {
-        showLoading("Opening Work-station activity…");
-        io.execute(() -> { try { JSONObject detail = api.get("workstation-activity", workspace, "id=" + java.net.URLEncoder.encode(id, "UTF-8")); runOnUiThread(() -> renderWorkActivity(detail)); } catch (Exception e) { runOnUiThread(() -> renderError(e.getMessage())); } });
+        openWorkActivity(id, screenGeneration.get());
+    }
+
+    private void openWorkActivity(String id, int generation) {
+        showContentLoading("Opening Work-station activity…");
+        io.execute(() -> {
+            try {
+                JSONObject detail = api.get("workstation-activity", workspace, "id=" + java.net.URLEncoder.encode(id, "UTF-8"));
+                runOnUiThread(() -> { if (generation == screenGeneration.get()) renderWorkActivity(detail); });
+            } catch (Exception e) {
+                runOnUiThread(() -> { if (generation == screenGeneration.get()) renderError(e.getMessage()); });
+            }
+        });
+    }
+
+    /** Keep the workspace and navigation attached while an action is in flight. */
+    private void showContentLoading(String label) {
+        if (content == null) return;
+        content.removeAllViews();
+        LinearLayout status = new LinearLayout(this);
+        status.setGravity(Gravity.CENTER);
+        status.setOrientation(LinearLayout.VERTICAL);
+        status.setPadding(dp(18), dp(28), dp(18), dp(28));
+        status.setBackground(shape(surface(), BORDER, 14));
+        ProgressBar bar = new ProgressBar(this);
+        status.addView(bar, new LinearLayout.LayoutParams(dp(36), dp(36)));
+        TextView labelView = text(label, 13, MUTED, false);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(-2, -2);
+        labelParams.topMargin = dp(12);
+        status.addView(labelView, labelParams);
+        content.addView(status, new LinearLayout.LayoutParams(-1, -2));
     }
 
     private void renderWorkActivity(JSONObject detail) {
         content.removeAllViews(); JSONObject task = detail.optJSONObject("task"), activity = detail.optJSONObject("activity"); if (task == null || activity == null) { addEmpty("Activity data is unavailable."); return; }
+        activeWorkDetail = detail;
+        workActionBusy = false;
         String id = task.optString("id"), activityId = activity.optString("id"), status = activity.optString("status"); int version = task.optInt("version");
+        JSONObject visibleDraft;
+        JSONObject recovery = null;
+        try {
+            visibleDraft = WorkActivityRecovery.draft(activity);
+            JSONObject saved = api.workDraft(workDraftKey(id));
+            if (saved != null && activityId.equals(saved.optString("activityId"))) {
+                try { visibleDraft = WorkActivityRecovery.merge(saved.getJSONObject("base").getJSONObject("task"), saved.getJSONObject("base").getJSONObject("activity"), saved.getJSONObject("draft"), task, activity); }
+                catch (WorkActivityRecovery.Conflict conflict) { recovery = saved; }
+            } else if (saved != null) recovery = saved;
+        } catch (Exception e) { toastError("The saved draft could not be restored. Your server activity is still available."); visibleDraft = activity; }
         addText(task.optString("title", "Work activity"), 22, NAVY, true); addText(status.equals("RUNNING") ? "Timer running" : status.equals("PAUSED") ? "Paused" : "Activity report", 12, MUTED, false); addSpace(14);
-        EditText notes = new EditText(this); styleInput(notes); notes.setHint("Add notes, what the contact needs, and your next action"); notes.setText(activity.optString("notes", "")); notes.setGravity(Gravity.TOP); notes.setMinLines(5); notes.setPadding(dp(14), dp(12), dp(14), dp(12)); notes.setBackground(shape(surface(), BORDER, 12)); content.addView(notes, new LinearLayout.LayoutParams(-1, dp(150)));
+        EditText notes = new EditText(this); styleInput(notes); notes.setHint("Add notes, what the contact needs, and your next action"); notes.setText(visibleDraft.optString("notes", "")); notes.setGravity(Gravity.TOP); notes.setMinLines(5); notes.setPadding(dp(14), dp(12), dp(14), dp(12)); notes.setBackground(shape(surface(), BORDER, 12)); content.addView(notes, new LinearLayout.LayoutParams(-1, dp(150)));
         ArrayList<CheckBox> checklist = new ArrayList<>(); JSONArray checks = task.optJSONArray("checklist");
-        if (checks != null && checks.length() > 0) { addSpace(10); addSectionTitle("Checklist"); for (int i=0;i<checks.length();i++) { JSONObject item = checks.optJSONObject(i); if (item == null) continue; CheckBox check = new CheckBox(this); check.setText(item.optString("text", "Checklist item")); check.setTextColor(NAVY); check.setTextSize(13); check.setChecked(item.optBoolean("done")); checklist.add(check); content.addView(check); } }
+        JSONArray flags = visibleDraft.optJSONArray("checklist");
+        if (checks != null && checks.length() > 0) { addSpace(10); addSectionTitle("Checklist"); for (int i=0;i<checks.length();i++) { JSONObject item = checks.optJSONObject(i); if (item == null) continue; CheckBox check = new CheckBox(this); check.setText(item.optString("text", "Checklist item")); check.setTextColor(NAVY); check.setTextSize(13); check.setChecked(flags != null && i < flags.length() ? flags.optBoolean(i) : item.optBoolean("done")); checklist.add(check); content.addView(check); } }
+        final JSONObject baseDetail = detail;
+        Runnable keepDraft = () -> { try { persistWorkDraft(id, baseDetail, activityDraft(notes.getText().toString(), checklistFlags(checklist), baseDetail)); } catch (Exception e) { toastError("Could not save the draft on this phone. Keep this screen open and try Save notes."); } };
+        notes.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            public void onTextChanged(CharSequence s, int start, int before, int count) { keepDraft.run(); }
+            public void afterTextChanged(android.text.Editable s) { }
+        });
+        for (CheckBox check : checklist) check.setOnCheckedChangeListener((view, checked) -> keepDraft.run());
+        if (recovery != null) {
+            final JSONObject retained = recovery;
+            addEmpty("Your saved draft needs review because this activity changed. The latest server version is shown.");
+            Button review = button("Review saved notes", false); content.addView(review);
+            review.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle("Saved notes on this phone")
+                .setMessage(retained.optJSONObject("draft") == null ? "No saved notes found." : retained.optJSONObject("draft").optString("notes", "No notes"))
+                .setNegativeButton("Keep latest", null).setPositiveButton(status.equals("FINISHED") ? "Copy notes" : "Restore notes", (dialog, which) -> {
+                    JSONObject draft = retained.optJSONObject("draft"); if (draft == null) return;
+                    if (status.equals("FINISHED")) ((android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(android.content.ClipData.newPlainText("Saved activity notes", draft.optString("notes", "")));
+                    else notes.setText(draft.optString("notes", ""));
+                }).show());
+        }
+        if (status.equals("FINISHED")) { notes.setEnabled(false); for (CheckBox check : checklist) check.setEnabled(false); addEmpty("This activity has finished. Return to the work queue to see its current status."); return; }
         addSpace(12); LinearLayout actions = new LinearLayout(this); actions.setGravity(Gravity.CENTER_VERTICAL); actions.setOrientation(LinearLayout.HORIZONTAL);
         Button save = button("Save notes", false); actions.addView(save, new LinearLayout.LayoutParams(0, dp(46), 1)); Button toggle = button(status.equals("RUNNING") ? "Pause" : "Resume", true); LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, dp(46), 1); tp.leftMargin = dp(8); actions.addView(toggle, tp); content.addView(actions);
         save.setOnClickListener(v -> saveWorkActivity(id, activityId, version, notes.getText().toString(), checklistFlags(checklist), "workstation-save"));
@@ -416,20 +491,84 @@ public final class MainActivity extends Activity {
     }
 
     private JSONArray checklistFlags(ArrayList<CheckBox> checks) { JSONArray result = new JSONArray(); for (CheckBox check : checks) result.put(check.isChecked()); return result; }
-    private JSONObject activityDraft(String notes, JSONArray checklist) throws Exception { return new JSONObject().put("notes", notes).put("needs", "").put("commitments", "").put("nextAction", "").put("services", new JSONArray()).put("checklist", checklist); }
+    private String workDraftKey(String id) { return workspace + ":" + memberId + ":" + id; }
+    private JSONObject activityDraft(String notes, JSONArray checklist, JSONObject detail) throws Exception {
+        return WorkActivityRecovery.draft(detail.getJSONObject("activity")).put("notes", notes).put("checklist", checklist);
+    }
+    private void persistWorkDraft(String id, JSONObject base, JSONObject draft) throws Exception {
+        JSONObject activity = base.getJSONObject("activity");
+        JSONObject snapshot = new JSONObject().put("task", new JSONObject().put("checklist", base.getJSONObject("task").optJSONArray("checklist")))
+            .put("activity", WorkActivityRecovery.draft(activity).put("id", activity.getString("id")));
+        api.saveWorkDraft(workDraftKey(id), new JSONObject().put("activityId", activity.getString("id")).put("base", snapshot).put("draft", draft));
+    }
 
     private void saveWorkActivity(String id, String activityId, int version, String notes, JSONArray checklist, String action) {
-        try { JSONObject body = new JSONObject().put("id", id).put("activityId", activityId).put("version", version).put("draft", activityDraft(notes, checklist)); io.execute(() -> { try { api.post(action, workspace, body); runOnUiThread(() -> openWorkActivity(id)); } catch (Exception e) { runOnUiThread(() -> toastError(e.getMessage())); } }); }
-        catch (Exception e) { toastError(e.getMessage()); }
+        submitWorkChange(id, activityId, notes, checklist, action, null);
     }
 
     private void finishWorkActivity(String id, String activityId, int version, String notes, JSONArray checklist) {
         if (notes.trim().length() < 10) { toastError("Add a brief activity report before finishing."); return; }
         String[] outcomes = {"COMPLETED", "FOLLOW_UP", "BLOCKED"}; String[] labels = {"Completed", "Follow up", "Blocked"};
         new AlertDialog.Builder(this).setTitle("Finish activity").setItems(labels, (dialog, which) -> {
-            try { JSONObject body = new JSONObject().put("id", id).put("activityId", activityId).put("version", version).put("draft", activityDraft(notes, checklist)).put("outcome", outcomes[which]).put("closeTicket", false); io.execute(() -> { try { api.post("workstation-finish", workspace, body); runOnUiThread(() -> showPage("home")); } catch (Exception e) { runOnUiThread(() -> toastError(e.getMessage())); } }); }
+            try { submitWorkChange(id, activityId, notes, checklist, "workstation-finish", new JSONObject().put("outcome", outcomes[which]).put("closeTicket", false)); }
             catch (Exception e) { toastError(e.getMessage()); }
         }).show();
+    }
+
+    private void setWorkControlsEnabled(View view, boolean enabled) {
+        if (view instanceof Button || view instanceof EditText || view instanceof CheckBox) view.setEnabled(enabled);
+        if (view instanceof ViewGroup) { ViewGroup group = (ViewGroup) view; for (int i = 0; i < group.getChildCount(); i++) setWorkControlsEnabled(group.getChildAt(i), enabled); }
+    }
+
+    private void submitWorkChange(String id, String activityId, String notes, JSONArray checklist, String action, JSONObject extra) {
+        if (workActionBusy || activeWorkDetail == null) return;
+        final JSONObject base, draft;
+        final int generation = screenGeneration.get();
+        final LinearLayout workContent = content;
+        try {
+            base = new JSONObject(activeWorkDetail.toString());
+            draft = activityDraft(notes, checklist, base);
+            persistWorkDraft(id, base, draft);
+        } catch (Exception e) { toastError("Could not retain your draft. Please try again before leaving this screen."); return; }
+        workActionBusy = true; setWorkControlsEnabled(workContent, false);
+        final TextView actionStatus = text(action.equals("workstation-resume") ? "Resuming activity…" : action.equals("workstation-pause") ? "Pausing activity…" : "Saving activity…", 13, BLUE, true);
+        workContent.addView(actionStatus, 0);
+        io.execute(() -> {
+            try {
+                for (int attempt = 0; attempt < 2; attempt++) {
+                    JSONObject latest = api.get("workstation-activity", workspace, "id=" + java.net.URLEncoder.encode(id, "UTF-8"));
+                    JSONObject task = latest.getJSONObject("task"), activity = latest.getJSONObject("activity");
+                    if (!activityId.equals(activity.optString("id")) || !memberId.equals(task.optString("ownerId"))) throw new WorkActivityRecovery.Conflict();
+                    JSONObject merged = WorkActivityRecovery.merge(base.getJSONObject("task"), base.getJSONObject("activity"), draft, task, activity);
+                    if (activity.optString("status").equals("FINISHED")) {
+                        if (action.equals("workstation-finish") && extra != null && extra.optString("outcome").equals(activity.optString("outcome")) && WorkActivityRecovery.equal(merged, WorkActivityRecovery.draft(activity))) break;
+                        throw new IllegalStateException("This activity has already finished. Your notes are saved on this phone; reopen the activity to review its report.");
+                    }
+                    JSONObject body = extra == null ? new JSONObject() : new JSONObject(extra.toString());
+                    body.put("id", id).put("activityId", activityId).put("version", task.getInt("version")).put("draft", merged);
+                    try { api.post(action, workspace, body); break; }
+                    catch (TeamApi.ApiException e) { if (e.status == 409 && attempt == 0) continue; throw e; }
+                    catch (java.io.IOException uncertain) {
+                        // A timeout does not mean the write failed. Read it back before offering a retry.
+                        JSONObject confirmed = api.get("workstation-activity", workspace, "id=" + java.net.URLEncoder.encode(id, "UTF-8"));
+                        JSONObject saved = confirmed.getJSONObject("activity");
+                        if (!WorkActivityRecovery.confirmed(action, activityId, extra == null ? "" : extra.optString("outcome"), merged, saved)) throw uncertain;
+                        break;
+                    }
+                }
+                if (generation == screenGeneration.get()) api.clearWorkDraft(workDraftKey(id));
+                runOnUiThread(() -> { if (generation != screenGeneration.get()) return; workActionBusy = false; if (action.equals("workstation-finish")) showPage("home"); else openWorkActivity(id); });
+            } catch (Exception error) {
+                runOnUiThread(() -> {
+                    if (generation != screenGeneration.get()) return;
+                    workActionBusy = false; setWorkControlsEnabled(workContent, true); workContent.removeView(actionStatus);
+                    new AlertDialog.Builder(this).setTitle("Activity not updated")
+                        .setMessage(safe(error.getMessage()) + "\n\nYour draft is saved on this phone.")
+                        .setNegativeButton("Keep editing", null)
+                        .setPositiveButton("Reload activity", (dialog, which) -> openWorkActivity(id)).show();
+                });
+            }
+        });
     }
 
     private boolean hasPermission(String permission) {
