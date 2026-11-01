@@ -390,7 +390,10 @@ export async function teamRead(a: Actor, resource: string, params: URLSearchPara
   if (["clients", "calendar", "client-account-match", "client-duplicates", "client-merge-history"].includes(resource)) return (await import("./calendar")).calendarRead(a, resource, params);
   const offset = Math.max(0, Math.min(100000, Number(params.get("offset")) || 0));
   const page = { take: 50, skip: offset };
-  if (resource === "session") return { memberId: a.id, workspaceId: a.workspaceId, owner: a.role.owner, permissions: a.role.permissions };
+  if (resource === "session") {
+    const member = await prisma.teamMember.findUnique({ where: { id: a.id }, select: { department: true, jobTitle: true, joinedAt: true, user: { select: { name: true, email: true, avatar: true } }, workspace: { select: { name: true } }, role: { select: { name: true } } } });
+    return { memberId: a.id, workspaceId: a.workspaceId, workspaceName: member?.workspace.name ?? "HYMN Team", name: member?.user.name ?? "Team member", email: member?.user.email ?? "", avatarUrl: member?.user.avatar ?? null, department: member?.department ?? "", jobTitle: member?.jobTitle ?? "", joinedAt: member?.joinedAt.toISOString() ?? null, roleName: member?.role.name ?? "Team member", owner: a.role.owner, permissions: a.role.permissions };
+  }
   if (resource === "task") {
     const item = await prisma.teamTask.findFirst({ where: { ...taskScope(a), id: params.get("id") ?? "" }, include: { owner: { select: memberSelect }, project: { select: { title: true } } } });
     if (!item) throw new TeamError("Task unavailable.", 404);
@@ -422,7 +425,7 @@ export async function teamRead(a: Actor, resource: string, params: URLSearchPara
   if (resource === "reports") { demand(a, "reports.team.view"); return { items: await prisma.teamWeeklyReport.findMany({ where: can(a, "reports.all.view") ? { member: { workspaceId: a.workspaceId } } : { memberId: a.id }, ...page, orderBy: { weekStart: "desc" }, include: { member: { select: memberSelect } } }) }; }
   if (resource === "audit") { demand(a, "audit.view"); return { items: await prisma.teamAudit.findMany({ where: { workspaceId: a.workspaceId }, ...page, orderBy: { createdAt: "desc" } }) }; }
   if (resource === "overview") {
-    const where = taskScope(a); const [active, overdue, blocked, reviews, completed, workload] = await Promise.all([prisma.teamTask.count({ where: { ...where, status: { notIn: ["COMPLETED", "CANCELLED"] } } }), prisma.teamTask.count({ where: { ...where, status: { notIn: ["COMPLETED", "CANCELLED"] }, dueAt: { lt: new Date() } } }), prisma.teamTask.count({ where: { ...where, status: "BLOCKED" } }), prisma.teamTask.count({ where: { ...where, status: "IN_REVIEW" } }), prisma.teamTask.count({ where: { ...where, status: "COMPLETED" } }), prisma.teamTask.groupBy({ by: ["ownerId"], where: { ...where, status: { notIn: ["COMPLETED", "CANCELLED"] } }, _count: true })]); return { active, overdue, blocked, reviews, completed, workload };
+    const where = taskScope(a); const [active, overdue, blocked, reviews, completed, workload, statusBreakdown] = await Promise.all([prisma.teamTask.count({ where: { ...where, status: { notIn: ["COMPLETED", "CANCELLED"] } } }), prisma.teamTask.count({ where: { ...where, status: { notIn: ["COMPLETED", "CANCELLED"] }, dueAt: { lt: new Date() } } }), prisma.teamTask.count({ where: { ...where, status: "BLOCKED" } }), prisma.teamTask.count({ where: { ...where, status: "IN_REVIEW" } }), prisma.teamTask.count({ where: { ...where, status: "COMPLETED" } }), prisma.teamTask.groupBy({ by: ["ownerId"], where: { ...where, status: { notIn: ["COMPLETED", "CANCELLED"] } }, _count: true }), prisma.teamTask.groupBy({ by: ["status"], where: { ...where, status: { not: "CANCELLED" } }, _count: true })]); return { active, overdue, blocked, reviews, completed, workload, statusBreakdown };
   }
   if (resource === "operations") {
     // Coordinators get operational metadata only: never payment amounts, private

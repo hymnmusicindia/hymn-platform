@@ -1,0 +1,27 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'fun.hymnmusic.team'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'fun.hymnmusic.team'
+        minSdk 26
+        targetSdk 35
+        versionCode 3
+        versionName '2.0.0'
+        def googleClientId = project.findProperty('googleClientId') ?: System.getenv('GOOGLE_CLIENT_ID') ?: System.getenv('NEXT_PUBLIC_GOOGLE_CLIENT_ID') ?: ''
+        buildConfigField 'String', 'GOOGLE_WEB_CLIENT_ID', '"' + googleClientId + '"'
+    }
+    buildFeatures { buildConfig true }
+
+}
+
+dependencies {
+    implementation 'androidx.credentials:credentials:1.5.0'
+    implementation 'androidx.credentials:credentials-play-services-auth:1.5.0'
+    implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+    implementation 'androidx.work:work-runtime:2.10.1'
+    implementation 'androidx.core:core:1.15.0'
+    implementation 'com.google.android.material:material:1.12.0'
+}
