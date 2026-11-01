@@ -1255,7 +1255,7 @@ export async function listBeats() {
   if (usesPostgresPrisma()) {
     const prismaBeats = await prisma.beat.findMany({
       where: { enabled: true },
-      include: { user: true, audio: true, preview: true, artwork: true,deliverableAsset:true },
+      include: { user: true, audio: true, preview: true, artwork: true, deliverableAsset: { select: { deletedAt: true, mimeType: true } } },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }]
     });
     return prismaBeats.map(mapPrismaBeat);
@@ -1278,7 +1278,7 @@ export async function listAllBeats(limit?: number): Promise<Beat[]> {
   if (usesPostgresPrisma()) {
     try {
       const prismaBeats = await prisma.beat.findMany({
-        include: { user: true, audio: true, preview: true, artwork: true,deliverableAsset:true },
+        include: { user: true, audio: true, preview: true, artwork: true, deliverableAsset: { select: { deletedAt: true, mimeType: true } } },
         orderBy: { createdAt: 'desc' },
         ...(take ? { take } : {})
       });
@@ -1307,7 +1307,7 @@ export async function listBeatsByProducer(producerId: number): Promise<Beat[]> {
     try {
       const prismaBeats = await prisma.beat.findMany({
         where: { userId: producerId },
-        include: { user: true, audio: true, preview: true, artwork: true,deliverableAsset:true },
+        include: { user: true, audio: true, preview: true, artwork: true, deliverableAsset: { select: { deletedAt: true, mimeType: true } } },
         orderBy: { createdAt: 'desc' }
       });
       return prismaBeats.map(mapPrismaBeat);
@@ -1395,7 +1395,7 @@ export async function createBeat(input: Omit<Beat, "id" | "createdAt" | "produce
           previewUploadId,
           artworkUploadId
         },
-        include: { user: true, audio: true, preview: true, artwork: true,deliverableAsset:true }
+        include: { user: true, audio: true, preview: true, artwork: true, deliverableAsset: { select: { deletedAt: true, mimeType: true } } }
       });
       console.log("Prisma beat creation successful! Beat ID:", beat.id);
       return mapPrismaBeat(beat);
@@ -1454,7 +1454,7 @@ export async function attachBeatAssets(input: {
     const audio = await tx.upload.create({ data: { userId: input.producerId, kind: "AUDIO", storageKey: input.audio.storageKey, fileName: input.audio.fileName, mimeType: input.audio.mimeType, sizeBytes: input.audio.sizeBytes, checksum: input.audio.checksum || null, publicUrl: input.audio.url } });
     const preview = input.preview ? await tx.upload.create({ data: { userId: input.producerId, kind: "AUDIO", storageKey: input.preview.storageKey, fileName: input.preview.fileName, mimeType: input.preview.mimeType, sizeBytes: input.preview.sizeBytes, publicUrl: input.preview.url } }) : null;
     const artwork = input.artwork ? await tx.upload.create({ data: { userId: input.producerId, kind: "ARTWORK", storageKey: input.artwork.storageKey, fileName: input.artwork.fileName, mimeType: input.artwork.mimeType, sizeBytes: input.artwork.sizeBytes, publicUrl: input.artwork.url } }) : null;
-    const updated = await tx.beat.update({ where: { id: input.beatId }, data: { audioUploadId: audio.id, previewUploadId: preview?.id ?? null, artworkUploadId: artwork?.id ?? null }, include: { user: true, audio: true, preview: true, artwork: true,deliverableAsset:true } });
+    const updated = await tx.beat.update({ where: { id: input.beatId }, data: { audioUploadId: audio.id, previewUploadId: preview?.id ?? null, artworkUploadId: artwork?.id ?? null }, include: { user: true, audio: true, preview: true, artwork: true, deliverableAsset: { select: { deletedAt: true, mimeType: true } } } });
     return mapPrismaBeat(updated);
   });
 }
@@ -1483,7 +1483,7 @@ export async function updateBeat(id: number, input: Partial<Pick<Beat, "title" |
       const updated = await prisma.beat.update({
         where: { id },
         data,
-        include: { user: true, audio: true, preview: true, artwork: true,deliverableAsset:true }
+        include: { user: true, audio: true, preview: true, artwork: true, deliverableAsset: { select: { deletedAt: true, mimeType: true } } }
       });
       return mapPrismaBeat(updated);
     } catch (err) {

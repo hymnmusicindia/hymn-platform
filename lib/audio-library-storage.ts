@@ -20,7 +20,7 @@ export function audioLibraryLimitForPlan(plan: string | null | undefined, active
 export async function getAudioLibraryStorage(userId: number) {
   const [subscription, total] = await Promise.all([
     prisma.subscription.findUnique({ where: { userId }, select: { plan: true, status: true, expiryDate: true, currentPeriodEnd: true } }),
-    prisma.storedAsset.aggregate({ where: { ownerUserId: userId, assetType: 'private_audio_master', uploadStatus: 'ready', deletedAt: null, libraryVisible: true }, _sum: { byteSize: true } }),
+    prisma.storedAsset.aggregate({ where: { ownerUserId: userId, assetType: 'private_audio_master', uploadStatus: 'ready', deletedAt: null, category: 'TRACK_AUDIO_MASTER' }, _sum: { byteSize: true } }),
   ]);
   const expiresAt = Math.max(...[subscription?.expiryDate, subscription?.currentPeriodEnd].map(value => value?.getTime() || 0));
   const active = Boolean(subscription && subscription.status.toLowerCase() === 'active' && expiresAt > Date.now());

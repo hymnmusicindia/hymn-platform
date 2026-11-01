@@ -4,7 +4,7 @@ import type { LibraryAsset } from './user-library-types';
 
 export async function getLibraryAssets(userId: number): Promise<LibraryAsset[]> {
   const assets = await prisma.storedAsset.findMany({
-    where: { ownerUserId: userId, assetType: 'private_audio_master', uploadStatus: 'ready', deletedAt: null, libraryVisible: true },
+    where: { ownerUserId: userId, assetType: 'private_audio_master', uploadStatus: 'ready', deletedAt: null, category: 'TRACK_AUDIO_MASTER' },
     select: { id: true, originalFilename: true, safeFilename: true, mimeType: true, byteSize: true, createdAt: true, release: { select: { status: true, artworkUrl: true } }, releaseAssetLinks: { select: { release: { select: { status: true, artworkUrl: true } } }, orderBy: { createdAt: 'desc' }, take: 10 } },
     orderBy: { createdAt: 'desc' },
   });

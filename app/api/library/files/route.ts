@@ -7,8 +7,8 @@ export async function DELETE() {
   if ('error' in auth) return auth.error;
   try {
     const result = await prisma.storedAsset.updateMany({
-      where: { ownerUserId: auth.user.id, assetType: 'private_audio_master', uploadStatus: 'ready', deletedAt: null, libraryVisible: true },
-      data: { libraryVisible: false },
+      where: { ownerUserId: auth.user.id, assetType: 'private_audio_master', uploadStatus: 'ready', deletedAt: null, category: 'TRACK_AUDIO_MASTER' },
+      data: { category: 'TRACK_AUDIO_MASTER_LIBRARY_HIDDEN' },
     });
     return NextResponse.json({ removed: result.count }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
