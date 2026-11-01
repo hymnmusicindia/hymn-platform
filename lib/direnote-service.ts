@@ -145,13 +145,13 @@ export async function syncDireNoteSongwriterInformation(partyId: number, actorId
   } });
 }
 
-async function persistArtistLinks(tx: Prisma.TransactionClient, releaseId: number, userId: number, external: RecordValue, trackMetadata: unknown, releaseArtistProfileId: number | null) {
+async function persistArtistLinks(tx: Prisma.TransactionClient, releaseId: number, userId: number, external: RecordValue, trackMetadata: unknown, releaseArtistProfileId: number | null, writableArtistCardIds: ReadonlySet<number>) {
   const artist = record(external.artist);
   const name = text(artist.name);
   const direNoteArtistId = text(artist.artist_id);
   const links = verifiedArtistStoreLinks(artist.links);
   if (!name || (!direNoteArtistId && !Object.keys(links).length)) return false;
-  const ids = attachedArtistProfileIds(trackMetadata, releaseArtistProfileId);
+  const ids = attachedArtistProfileIds(trackMetadata, releaseArtistProfileId).filter(id => writableArtistCardIds.has(id));
   if (!ids.length) return false;
   const candidates = await tx.artistCard.findMany({ where: { id: { in: ids }, userId, archivedAt: null } });
   const matches = candidates.filter(card => card.artistName.trim().toLocaleLowerCase() === name.toLocaleLowerCase());
@@ -214,15 +214,16 @@ async function persistArtistLinks(tx: Prisma.TransactionClient, releaseId: numbe
   return changed;
 }
 
-async function persistSongwriterIdsFromTrack(tx: Prisma.TransactionClient, releaseId: number, trackId: number, external: RecordValue) {
+type TrackContributionWithParty = Prisma.TrackContributionGetPayload<{ include: { party: true } }>;
+
+async function persistSongwriterIdsFromTrack(tx: Prisma.TransactionClient, releaseId: number, trackId: number, external: RecordValue, contributions: TrackContributionWithParty[]) {
   let changed = false;
-  const contributions = await tx.trackContribution.findMany({ where: { trackId, role: { in: ["SONGWRITER", "LYRICIST", "COMPOSER"] }, party: { mergedIntoId: null } }, include: { party: true } });
   for (const [key, roles] of [["songwriter", ["SONGWRITER", "LYRICIST"]], ["composer", ["COMPOSER"]]] as const) {
     const remote = record(external[key]);
     const songwriterId = text(remote.songwriter_id);
     const name = text(remote.name);
     if (!/^\d+$/.test(songwriterId) || !name) continue;
-    const matches = contributions.filter(item => (roles as readonly string[]).includes(item.role) && (item.creditedName.trim().toLocaleLowerCase() === name.toLocaleLowerCase() || item.party.legalName?.trim().toLocaleLowerCase() === name.toLocaleLowerCase()));
+    const matches = contributions.filter(item => item.trackId === trackId && (roles as readonly string[]).includes(item.role) && (item.creditedName.trim().toLocaleLowerCase() === name.toLocaleLowerCase() || item.party.legalName?.trim().toLocaleLowerCase() === name.toLocaleLowerCase()));
     const parties = [...new Map(matches.map(item => [item.party.id, item.party])).values()];
     if (parties.length !== 1) continue;
     const party = parties[0];
@@ -537,7 +538,17 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
     const stillCurrent = await tx.distributionSubmissionAttempt.findFirst({ where: { id: attempt.id, isCurrent: true } });
     if (!stillCurrent) throw new Error("DireNote attempt was superseded during status lookup. Retry the current attempt.");
     const currentRelease = await tx.release.findUniqueOrThrow({ where: { id: releaseId }, include: { tracks: true } });
-    for (const cardId of selectedReleaseArtistIds(currentRelease.tracks, currentRelease.artistProfileId)) await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422030, ${cardId}::integer)`;
+    const artistCardIds = selectedReleaseArtistIds(currentRelease.tracks, currentRelease.artistProfileId).sort((a, b) => a - b);
+    const writableArtistCardIds = new Set<number>();
+    // Status reconciliation can safely defer artist-card propagation if another
+    // release or the owner is editing that shared card. Never let a cross-release
+    // card lock consume the entire cron transaction budget.
+    for (const cardId of artistCardIds) {
+      const lock = await tx.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(81422030, ${cardId}::integer) AS locked`;
+      if (lock[0]?.locked) writableArtistCardIds.add(cardId);
+    }
+    const trackIds = currentRelease.tracks.map(track => track.id);
+    const releaseContributions = trackIds.length ? await tx.trackContribution.findMany({ where: { trackId: { in: trackIds }, role: { in: ["SONGWRITER", "LYRICIST", "COMPOSER"] }, party: { mergedIntoId: null } }, include: { party: true } }) : [];
     const openDiscrepancies = new Set((await tx.direNoteReconciliationDiscrepancy.findMany({ where: { releaseId, status: "open" }, select: { field: true } })).map(item => item.field));
     const receivedUpc = normalizeDireNoteUpc(remoteRelease.upc_code) || lookupUpc;
     if (record(record(currentRelease.metadata).direNote).identifierAssignmentPending === true && (!receivedUpc || remoteTracks.length !== currentRelease.tracks.length || currentRelease.tracks.some(track => {
@@ -569,9 +580,9 @@ async function syncCurrentDireNoteRelease(releaseId: number, actorId?: number | 
       const externalIsrc = text(external.isrc);
       if (externalIsrc && normalized(externalIsrc) !== normalized(track.isrc ?? "")) await tx.externalIdentifierHistory.create({ data: { releaseId, trackId: track.id, provider: "direnote", identifierType: "isrc", previousValue: track.isrc, canonicalValue: externalIsrc, source: "release_information_sync" } });
       await tx.track.update({ where: { id: track.id }, data: { isrc: externalIsrc || track.isrc, distributorStatus: mapDireNoteStatus(external.status), metadata: json({ ...(record(track.metadata)), direNote: { ...(record(record(track.metadata).direNote)), lastSyncedAt: new Date().toISOString(), external: redactDireNoteDiagnostic(external) } }) } });
-      const artistChanged = await persistArtistLinks(tx, releaseId, release.userId, external, track.metadata, release.artistProfileId);
+      const artistChanged = await persistArtistLinks(tx, releaseId, release.userId, external, track.metadata, release.artistProfileId, writableArtistCardIds);
       artistLinksChanged = artistChanged || artistLinksChanged;
-      const songwriterChanged = await persistSongwriterIdsFromTrack(tx, releaseId, track.id, external);
+      const songwriterChanged = await persistSongwriterIdsFromTrack(tx, releaseId, track.id, external, releaseContributions);
       songwriterIdsChanged = songwriterChanged || songwriterIdsChanged;
       const localMetadata = record(track.metadata);
       const trackComparisons = [

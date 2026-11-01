@@ -132,7 +132,7 @@ export async function assertReleaseArtistVerification(userId: number, releaseId:
 
   }
   if (freeze) await prisma.$transaction(async tx => {
-    for (const id of ctx.ids) await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422030, ${id}::integer)`;
+    for (const id of [...ctx.ids].sort((a, b) => a - b)) await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422030, ${id}::integer)`;
     for (const original of ctx.cards) {
       const card = await tx.artistCard.findUniqueOrThrow({ where: { id: original.id } });
       if (card.archivedAt || artistIdentityFingerprint(card) !== artistIdentityFingerprint(original)) throw new ArtistVerificationError('The artist card changed during submission. Refresh and confirm the latest profile.');

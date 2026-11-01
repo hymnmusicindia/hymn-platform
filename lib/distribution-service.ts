@@ -48,7 +48,7 @@ export async function persistDireNoteArtistIds(releaseId: number, artists: Array
     if (!release) return [] as number[];
     const attachedIds = selectedReleaseArtistIds(release.tracks, release.artistProfileId);
     if (!attachedIds.length) return [] as number[];
-    for (const id of attachedIds) await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422030, ${id}::integer)`;
+    for (const id of attachedIds.sort((a, b) => a - b)) await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422030, ${id}::integer)`;
     const attempt = attemptId ? await tx.distributionSubmissionAttempt.findFirst({ where: { id: attemptId, releaseId, isCurrent: true } }) : null;
     if (attemptId && !attempt) return [] as number[];
     const cards = await tx.artistCard.findMany({ where: { id: { in: attachedIds }, userId: release.userId, archivedAt: null } });
