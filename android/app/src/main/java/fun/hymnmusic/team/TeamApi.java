@@ -93,7 +93,7 @@ final class TeamApi {
             connection.setConnectTimeout(10000);
             // Workstation writes may wait 10s for the workspace lock and run
             // for up to 30s. A 12s client timeout abandoned valid server work.
-            connection.setReadTimeout(path.startsWith("/api/team/workstation") ? (method.equals("GET") ? 25000 : 50000) : path.equals("/api/auth/google") ? 30000 : path.startsWith("/api/team/chat-") ? (method.equals("GET") ? 20000 : 30000) : 12000);
+            connection.setReadTimeout(path.startsWith("/api/team/workstation") ? (method.equals("GET") ? 25000 : 50000) : path.startsWith("/api/auth/") ? 30000 : path.startsWith("/api/team/chat-") ? (method.equals("GET") ? 20000 : 30000) : 12000);
             connection.setUseCaches(false);
             connection.setRequestProperty("Accept", "application/json");
             connection.setRequestProperty("X-HYMN-Client", "android-team");
@@ -109,7 +109,7 @@ final class TeamApi {
                 try (OutputStream out = connection.getOutputStream()) { out.write(body.toString().getBytes(StandardCharsets.UTF_8)); }
             }
             int status = connection.getResponseCode();
-            if ("/api/auth/google".equals(path) && status >= 200 && status < 300) {
+            if (("/api/auth/google".equals(path)||"/api/auth/team-email".equals(path)) && status >= 200 && status < 300) {
                 for (java.util.Map.Entry<String, java.util.List<String>> entry : connection.getHeaderFields().entrySet()) {
                     if (entry.getKey() == null || !entry.getKey().equalsIgnoreCase("Set-Cookie")) continue;
                     for (String header : entry.getValue()) if (header.startsWith("hymn_session=")) {

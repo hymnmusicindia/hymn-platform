@@ -1,0 +1,63 @@
+import assert from "node:assert/strict";
+import jwt from "jsonwebtoken";
+import { prisma } from "../lib/prisma";
+import { requestTeamEmailCode, verifyTeamEmailCode, TeamEmailSignInError } from "../lib/team/email-sign-in";
+import { GET, POST } from "../app/api/auth/team-email/route";
+
+async function main() {
+  assert.ok(process.env.DATABASE_URL?.includes("127.0.0.1:55486/team_email_fixture"), "Isolated fixture only");
+  const workspace = await prisma.teamWorkspace.create({ data: { name: "Email sign-in fixture" } });
+  const role = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name: "Member", permissions: ["chat.read"] } });
+  let number = 0;
+  const member = async (active = true) => {
+    const user = await prisma.user.create({ data: { email: `member-${++number}@example.test`, googleId: `email-test-${number}`, name: "Member", role: "CUSTOMER" } });
+    await prisma.teamMember.create({ data: { workspaceId: workspace.id, userId: user.id, roleId: role.id, status: active ? "ACTIVE" : "INACTIVE" } });
+    return user;
+  };
+  const invalid = (work: () => Promise<unknown>, status = 401) => assert.rejects(work, error => error instanceof TeamEmailSignInError && error.status === status);
+  const issued = async (email: string) => {
+    let code = "";
+    const result = await requestTeamEmailCode(email, `request-${++number}`, async (_, digits) => { code = digits; });
+    return { ...result, code };
+  };
+  const first = await member(), code = await issued(first.email);
+  assert.match(code.code, /^\d{6}$/); assert.equal(code.expiresIn, 600);
+  assert.equal((jwt.decode(code.challenge) as jwt.JwtPayload).c.length, 64);
+  assert.equal((await verifyTeamEmailCode(` ${first.email.toUpperCase()} `, code.challenge, code.code, "success")).id, first.id);
+  await invalid(() => verifyTeamEmailCode(first.email, code.challenge, code.code, "replay"));
+  const concurrent = await member(), parallel = await issued(concurrent.email);
+  const results = await Promise.allSettled(Array.from({ length: 2 }, () => verifyTeamEmailCode(concurrent.email, parallel.challenge, parallel.code, "concurrent")));
+  assert.equal(results.filter(result => result.status === "fulfilled").length, 1, "Concurrent redemption creates at most one login");
+  const guesses = await member(), guessing = await issued(guesses.email);
+  const wrong = guessing.code === "000000" ? "111111" : "000000";
+  for (let i = 0; i < 5; i++) await invalid(() => verifyTeamEmailCode(guesses.email, guessing.challenge, wrong, "guesses"));
+  await invalid(() => verifyTeamEmailCode(guesses.email, guessing.challenge, guessing.code, "guesses"), 429);
+  const revoked = await member(), revocation = await issued(revoked.email);
+  await prisma.teamMember.updateMany({ where: { userId: revoked.id }, data: { status: "INACTIVE" } });
+  await invalid(() => verifyTeamEmailCode(revoked.email, revocation.challenge, revocation.code, "revoked"));
+  const banned = await member(), banning = await issued(banned.email);
+  await prisma.user.update({ where: { id: banned.id }, data: { status: "BANNED" } });
+  await invalid(() => verifyTeamEmailCode(banned.email, banning.challenge, banning.code, "banned"));
+  const unknown = await issued("unknown@example.test"), inactive = await member(false), inactiveCode = await issued(inactive.email);
+  assert.equal(unknown.code, ""); assert.equal(inactiveCode.code, ""); assert.equal(unknown.message, code.message);
+  const decoded = jwt.decode(unknown.challenge) as jwt.JwtPayload;
+  assert.deepEqual(Object.keys(decoded).sort(), Object.keys(jwt.decode(code.challenge) as object).sort());
+  assert.equal("sub" in decoded, false); assert.equal("role" in decoded, false);
+  const tamper = await member(), tampered = await issued(tamper.email);
+  await invalid(() => verifyTeamEmailCode("other@example.test", tampered.challenge, tampered.code, "wrong-email"));
+  const expired = jwt.sign({ ...jwt.decode(tampered.challenge) as object, exp: Math.floor(Date.now()/1000)-1 }, process.env.JWT_SECRET!);
+  await invalid(() => verifyTeamEmailCode(tamper.email, expired, tampered.code, "expired"));
+  const signature = tampered.challenge.split("."); signature[2] = (signature[2][0] === "a" ? "b" : "a") + signature[2].slice(1);
+  await invalid(() => verifyTeamEmailCode(tamper.email, signature.join("."), tampered.code, "tampered"));
+  await invalid(() => requestTeamEmailCode(tamper.email, "resend", async () => {}), 429);
+  assert.equal((await GET()).headers.get("Cache-Control"), "private, no-store");
+  const req = (body: unknown, origin = "https://hymnmusic.fun") => new Request("https://hymnmusic.fun/api/auth/team-email", { method: "POST", headers: { "Content-Type": "application/json", Origin: origin }, body: JSON.stringify(body) });
+  assert.equal((await POST(req({ action: "request", email: "bad" }))).status, 400);
+  assert.equal((await POST(req({ action: "request", email: first.email }, "https://evil.example"))).status, 403);
+  assert.equal((await POST(req({ action: "verify", email: first.email, challenge: code.challenge, code: "123456", role: "ADMIN" }))).status, 400);
+  const response = await POST(req({ action: "request", email: "not-a-member@example.test" }));
+  assert.equal(response.status, 503, "Email-disabled deployments fail explicitly rather than claiming a code was sent"); assert.equal(response.headers.get("Set-Cookie"), null);
+  assert.equal((await prisma.user.findUniqueOrThrow({ where: { id: first.id } })).role, "CUSTOMER");
+  console.log("Team email sign-in: delivery, replay, concurrent redemption, attempt limits, revoked/banned membership, account privacy, tampering, expiry, origin and input checks passed.");
+}
+main().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => prisma.$disconnect());

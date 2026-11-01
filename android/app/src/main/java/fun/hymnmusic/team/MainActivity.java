@@ -136,12 +136,44 @@ public final class MainActivity extends Activity {
         if (chatView != null) { chatView.close(); chatView = null; }
         signInAttempt.finish();clearSignInDeadline();
         loginView=new TeamLoginView(this,nightMode,this::beginGoogleSignIn,this::openBrowserSignIn,this::copySignInDetails);
+        loginView.enableEmailSignIn(new TeamEmailSignInView.Actions(){
+            @Override public void request(String email){emailSignIn(email,"","");}
+            @Override public void verify(String email,String challenge,String code){emailSignIn(email,challenge,code);}
+        });
         if(!api.cookie().isEmpty())loginView.google.setText("Retry connection");
         message=loginView.message;
         setSafeContentView(loginView.view);
     }
 
     private void signInStatus(String text,boolean error){if(loginView!=null)loginView.status(text,error);}
+    private void emailSignIn(String email,String challenge,String code){
+        if(signInAttempt.phase()!=TeamSignInAttempt.Phase.IDLE)return;
+        final int attempt=signInAttempt.begin(),generation=screenGeneration.get();if(attempt<0)return;
+        signInAttempt.advance(attempt,TeamSignInAttempt.Phase.TOKEN_EXCHANGE);
+        final boolean verifying=!challenge.isEmpty();
+        android.view.inputmethod.InputMethodManager keyboard=(android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);if(keyboard!=null)keyboard.hideSoftInputFromWindow(loginView.view.getWindowToken(),0);
+        loginView.busy(true);updater.setPromptAllowed(false);signInStatus(verifying?"Verifying your sign-in code":"Sending your sign-in code",false);
+        io.execute(()->{
+            try{
+                JSONObject body=new JSONObject().put("action",verifying?"verify":"request").put("email",email);
+                if(verifying)body.put("challenge",challenge).put("code",code);
+                JSONObject result=api.request("POST","/api/auth/team-email",body,false);
+                if(verifying&&(!result.optBoolean("signedIn")||api.cookie().isEmpty()))throw new IllegalStateException("HYMN did not finish signing you in. Please try again.");
+                if(!verifying&&result.optString("challenge").isEmpty())throw new IllegalStateException("Email sign-in is not available yet. Please try again shortly.");
+                runOnUiThread(()->{
+                    if(isDestroyed()||screenGeneration.get()!=generation||!signInAttempt.current(attempt))return;
+                    finishSignIn();
+                    if(verifying){loginView.emailSignIn.clearCode();loadSession();}
+                    else{loginView.emailSignIn.sent(email,result.optString("challenge"),result.optInt("expiresIn",600),result.optInt("resendAfter",60));signInStatus("",false);}
+                });
+            }catch(Exception error){runOnUiThread(()->{
+                if(isDestroyed()||screenGeneration.get()!=generation||!signInAttempt.current(attempt))return;
+                finishSignIn();if(verifying)loginView.emailSignIn.clearCode();
+                String value=error instanceof java.io.IOException?"Could not reach HYMN. Check your connection and try again.":error instanceof TeamApi.ApiException&&((TeamApi.ApiException)error).status==404?"Email sign-in is being deployed. Please try again shortly.":safe(error.getMessage());
+                signInStatus(value,true);
+            });}
+        });
+    }
     private void clearSignInDeadline(){if(signInDeadline!=null){signInHandler.removeCallbacks(signInDeadline);signInDeadline=null;}}
     private void finishSignIn(){signInAttempt.finish();clearSignInDeadline();signInCancellation=null;updater.setPromptAllowed(true);if(loginView!=null)loginView.busy(false);}
     private void openBrowserSignIn(){try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(TeamApi.BASE+"/team")));}catch(Exception error){signInStatus("No browser is available. Install or enable a browser and try again.",true);}}

@@ -1,5 +1,13 @@
 # HYMN Team Android
 
+### Email sign-in without Google Play services
+
+Version 2.1.8 adds a native **Continue with email** form. Members enter their team email and a six-digit emailed code without a browser redirect. Google sign-in remains available. Deploy `/api/auth/team-email` before distributing the APK; its readiness response must report `teamEmailSignIn: "v1"` and `available: true`. The server uses the existing SMTP configuration and database-backed `security_rate_limits`; no migration or new credential is required.
+
+Codes last ten minutes, permit five attempts and can be redeemed once, including simultaneous requests across server processes. Only active accounts with active team memberships can sign in. The server rechecks membership at redemption and retains the account's existing role. Challenges contain secret-keyed HMACs rather than plaintext codes or account-existence information. Request and verification limits persist in PostgreSQL; codes are not cached or logged. The native app stores the resulting session in its existing encrypted preferences.
+
+Run `node --import tsx scripts/verify-team-email-sign-in-isolated.ts` for isolated database security checks. This fixture mocks code delivery and never sends real emails. Android instrumentation includes `TeamEmailSignInViewTest` for validation, resend cooldown and loading-state recovery.
+
 This is a native Android client for the HYMN team workspace. It does not open the website as its app UI. The Android UI provides Google sign-in, Home, Tasks, Schedule, Alerts, Work-station, Calls & follow-ups, team email history, Activity & Audit, Team Chat, Projects and Team Directory. It includes a workspace detail screen, account photo synced from HYMN, task status analytics, day/night appearance, mobile back navigation and quick links. Data is read and updated through the authenticated HYMN Team APIs. Access control remains enforced on the server.
 
 ## Build

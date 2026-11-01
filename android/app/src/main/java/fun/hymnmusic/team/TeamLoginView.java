@@ -20,6 +20,7 @@ final class TeamLoginView {
     private final ImageView headerLogo;
     private final Button browser,details;
     private boolean working;
+    TeamEmailSignInView emailSignIn;
     TeamLoginView(Activity activity, boolean dark, Runnable signIn) {
         this(activity,dark,signIn,()->{},()->{});
     }
@@ -49,7 +50,7 @@ final class TeamLoginView {
         message=label("",12,palette.muted,false);message.setTag("team-sign-in-status");message.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);message.setVisibility(View.GONE);add(contents,message,12);
         browser=new Button(activity);browser.setText("Open Team OS in browser");browser.setAllCaps(false);browser.setTextSize(13);browser.setTextColor(palette.text);browser.setBackground(shape(palette.elevated,palette.border,12));browser.setMinHeight(dp(48));browser.setVisibility(View.GONE);browser.setOnClickListener(v->openBrowser.run());add(contents,browser,12);
         details=new Button(activity);details.setText("Copy sign-in details");details.setAllCaps(false);details.setTextSize(12);details.setTextColor(palette.muted);details.setBackgroundColor(android.graphics.Color.TRANSPARENT);details.setMinHeight(dp(48));details.setVisibility(View.GONE);details.setOnClickListener(v->copyDetails.run());add(contents,details,4);
-        TextView privacy=label("Use the Google account invited to your team.\nYour workspace stays private.",12,palette.muted,false);privacy.setLineSpacing(dp(3),1);add(contents,privacy,18);
+        TextView privacy=label("Use the email address invited to your team.\nYour workspace stays private.",12,palette.muted,false);privacy.setLineSpacing(dp(3),1);add(contents,privacy,18);
         TextView footer=label("HYMN MUSIC  /  TOGETHER IN SYNC",9,palette.muted,true);footer.setLetterSpacing(.12f);add(contents,footer,26);
         loading=new TeamLoadingView(activity,palette);loading.setVisibility(View.GONE);card.addView(loading,new FrameLayout.LayoutParams(-1,-1));
     }
@@ -66,6 +67,15 @@ final class TeamLoginView {
         }
     }
     void recovery(){browser.setVisibility(View.VISIBLE);details.setVisibility(View.VISIBLE);}
+
+    void enableEmailSignIn(TeamEmailSignInView.Actions actions){
+        if(emailSignIn!=null)return;
+        emailSignIn=new TeamEmailSignInView(activity,palette,actions);emailSignIn.setVisibility(View.GONE);
+        Button emailButton=new Button(activity);emailButton.setTag("team-email-start");emailButton.setText("Continue with email");emailButton.setAllCaps(false);emailButton.setTextSize(14);emailButton.setTypeface(Typeface.DEFAULT,Typeface.BOLD);emailButton.setTextColor(palette.accentForeground);emailButton.setBackground(shape(palette.accent,palette.accent,14));emailButton.setMinHeight(dp(54));
+        emailButton.setOnClickListener(v->{emailButton.setVisibility(View.GONE);emailSignIn.setVisibility(View.VISIBLE);status("",false);});
+        int index=contents.indexOfChild(google);LinearLayout.LayoutParams buttonParams=new LinearLayout.LayoutParams(-1,-2);buttonParams.topMargin=dp(24);contents.addView(emailButton,index,buttonParams);
+        LinearLayout.LayoutParams formParams=new LinearLayout.LayoutParams(-1,-2);formParams.topMargin=dp(18);contents.addView(emailSignIn,index+1,formParams);
+    }
 
     private int dp(float value){return Math.round(value*activity.getResources().getDisplayMetrics().density);}
     private TextView label(String value,float size,int color,boolean bold){TextView label=new TextView(activity);label.setText(value);label.setTextSize(size);label.setTextColor(color);label.setGravity(Gravity.CENTER);if(bold)label.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return label;}
