@@ -55,7 +55,9 @@ final class TeamApi {
         try {
             connection.setRequestMethod(method);
             connection.setConnectTimeout(10000);
-            connection.setReadTimeout(12000);
+            // Workstation writes may wait 10s for the workspace lock and run
+            // for up to 30s. A 12s client timeout abandoned valid server work.
+            connection.setReadTimeout(path.startsWith("/api/team/workstation") ? (method.equals("GET") ? 25000 : 50000) : 12000);
             connection.setUseCaches(false);
             connection.setRequestProperty("Accept", "application/json");
             connection.setRequestProperty("X-HYMN-Client", "android-team");
@@ -95,6 +97,7 @@ final class TeamApi {
 
     JSONObject get(String resource, String workspace, String extraQuery) throws Exception {
         String query = "workspace=" + enc(workspace) + (extraQuery == null || extraQuery.isEmpty() ? "" : "&" + extraQuery);
+        if (resource.equals("workstation") || resource.equals("workstation-activity")) query += "&view=mobile";
         return request("GET", "/api/team/" + resource + "?" + query, null, true);
     }
 

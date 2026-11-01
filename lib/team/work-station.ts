@@ -42,6 +42,10 @@ export async function stationRead(a: Actor, resource: string, p: URLSearchParams
         const task = await ownTask(prisma, a, p.get('id') || '');
         if (task.ownerId !== a.id && !can(a, 'tasks.all'))
             throw new TeamError('Activity unavailable.', 403);
+        // Native editor needs only the task/version and activity draft. Do not
+        // block every open, save preflight and timeout readback on web history.
+        if (p.get('view') === 'mobile')
+            return { task: { ...task, owner: null }, activity: workActivity(task.followUpContext), client: null, ticket: null, history: [] };
         const client = task.clientId ? await contact(prisma, a, task.clientId) : null;
         const ticketId = ticketIdOf(task);
         const ticket = ticketId && ticketAccess(a) ? (await primary(prisma, a), await prisma.supportTicket.findUnique({ where: { id: ticketId }, include: { replies: { orderBy: { createdAt: 'asc' } } } })) : null;
@@ -65,6 +69,10 @@ export async function stationRead(a: Actor, resource: string, p: URLSearchParams
     const base: Prisma.TeamTaskWhereInput = { ...taskScope(a), ...(!team ? { ownerId: a.id } : {}) };
     const date: Prisma.TeamTaskWhereInput = bucket === 'upcoming' ? { dueAt: { gte: end } } : bucket === 'overdue' ? { dueAt: { lt: start } } : bucket === 'finished' ? {} : { OR: [{ dueAt: { lt: end } }, { dueAt: null }, { followUpContext: { path: ['workActivity', 'status'], equals: 'RUNNING' } }, { followUpContext: { path: ['workActivity', 'status'], equals: 'PAUSED' } }] };
     const where: Prisma.TeamTaskWhereInput = { ...base, ...date, status: bucket === 'finished' ? { in: terminal } : { notIn: terminal }, ...(p.get('q') ? { AND: [{ OR: [{ title: { contains: p.get('q')!.slice(0, 160), mode: 'insensitive' } }, { client: { name: { contains: p.get('q')!.slice(0, 160), mode: 'insensitive' } } }, {project:{title:{contains:p.get('q')!.slice(0,160),mode:'insensitive'}}}] }] } : {}) };
+    if (p.get('view') === 'mobile') {
+        const items = await prisma.teamTask.findMany({ where, select: { ...summarySelect, owner: false }, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], skip: offset, take: 31 });
+        return { items: items.slice(0, 30), hasMore: items.length > 30, day, canSupport: ticketAccess(a), canTeam: can(a, 'tasks.all') };
+    }
     const [items, total, active, counts] = await Promise.all([prisma.teamTask.findMany({ where, select: summarySelect, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], skip: offset, take: 30 }), prisma.teamTask.count({ where }), prisma.teamTask.findFirst({ where: { workspaceId: a.workspaceId, ownerId: a.id, archivedAt: null, status: { notIn: terminal }, OR: [{ followUpContext: { path: ['workActivity', 'status'], equals: 'RUNNING' } }, { followUpContext: { path: ['workActivity', 'status'], equals: 'PAUSED' } }] }, select: summarySelect }), prisma.teamTask.groupBy({ by: ['status'], where: { ...base, ...date }, _count: true })]);
     return { items, total, active, counts, day, canSupport: ticketAccess(a), canTeam: can(a, 'tasks.all') };
 }

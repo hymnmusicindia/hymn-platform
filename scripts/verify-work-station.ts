@@ -23,6 +23,25 @@ async function main() {
     const key = randomUUID();
     const start = await teamMutation(rep, 'workstation-start', { taskId: task.id, requestKey: key });
     assert.equal(start.id, task.id);
+    const mobileDetail = await teamRead(rep, 'workstation-activity', new URLSearchParams({ id: task.id, view: 'mobile' }));
+    assert.equal(mobileDetail.task.id, task.id);
+    assert.equal(mobileDetail.task.version, (await detail(task.id)).task.version);
+    assert.equal(mobileDetail.activity!.status, 'RUNNING');
+    assert.equal(mobileDetail.ticket, null);
+    assert.deepEqual(mobileDetail.history, []);
+    assert.ok(!JSON.stringify(mobileDetail).includes('PRIVATE CONTACT NOTE'));
+    await assert.rejects(teamRead(other, 'workstation-activity', new URLSearchParams({ id: task.id, view: 'mobile' })), /unavailable|not found/i);
+    await assert.rejects(teamRead(viewer, 'workstation-activity', new URLSearchParams({ id: task.id, view: 'mobile' })), /permission|not found/i);
+    const mobileQueue = await teamRead(rep, 'workstation', new URLSearchParams({ view: 'mobile' }));
+    assert.ok(mobileQueue.items.some(item => item.id === task.id));
+    assert.ok(mobileQueue.items.every(item => item.ownerId === rep.id));
+    assert.equal(mobileQueue.hasMore, false);
+    assert.ok(!('counts' in mobileQueue));
+    assert.ok(!('total' in mobileQueue));
+    if (process.argv.includes('--mobile-only')) {
+        console.log('PASS Mobile workstation reads: activity/version parity, active state, privacy, task scope, denied access, lean queue response.');
+        return;
+    }
     await assert.rejects(teamMutation(viewer, 'workstation-start', { taskId: task.id, requestKey: randomUUID() }), /permission/);
     assert.ok(!JSON.stringify(await detail(task.id)).includes('PRIVATE CONTACT NOTE'));
     await assert.rejects(detail(task.id, other), /unavailable|not found/i);

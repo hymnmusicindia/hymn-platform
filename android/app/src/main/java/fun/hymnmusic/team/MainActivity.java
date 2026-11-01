@@ -394,6 +394,12 @@ public final class MainActivity extends Activity {
     }
 
     private void startWork(JSONObject task) {
+        JSONObject context = task.optJSONObject("followUpContext");
+        JSONObject existing = context == null ? null : context.optJSONObject("workActivity");
+        if (existing != null && !existing.optString("id").isEmpty() && !existing.optString("status").equals("FINISHED")) {
+            openWorkActivity(task.optString("id"));
+            return;
+        }
         final int generation = screenGeneration.get();
         showContentLoading("Starting activity…");
         io.execute(() -> {
@@ -403,7 +409,7 @@ public final class MainActivity extends Activity {
                 String taskId = result.optString("id", task.optString("id"));
                 runOnUiThread(() -> { if (generation == screenGeneration.get()) openWorkActivity(taskId, generation); });
             } catch (Exception e) {
-                runOnUiThread(() -> { if (generation == screenGeneration.get()) renderError(e.getMessage()); });
+                runOnUiThread(() -> { if (generation == screenGeneration.get()) renderActivityLoadError(e, () -> startWork(task)); });
             }
         });
     }
@@ -419,12 +425,20 @@ public final class MainActivity extends Activity {
                 JSONObject detail = api.get("workstation-activity", workspace, "id=" + java.net.URLEncoder.encode(id, "UTF-8"));
                 runOnUiThread(() -> { if (generation == screenGeneration.get()) renderWorkActivity(detail); });
             } catch (Exception e) {
-                runOnUiThread(() -> { if (generation == screenGeneration.get()) renderError(e.getMessage()); });
+                runOnUiThread(() -> { if (generation == screenGeneration.get()) renderActivityLoadError(e, () -> openWorkActivity(id)); });
             }
         });
     }
 
     /** Keep the workspace and navigation attached while an action is in flight. */
+    private void renderActivityLoadError(Exception error, Runnable retryAction) {
+        content.removeAllViews();
+        addText("Couldn't reach this activity", 20, NAVY, true); addSpace(8);
+        addText(error instanceof java.io.IOException ? "The connection to HYMN took too long or was interrupted. Your saved draft is still on this phone." : safe(error.getMessage()), 13, MUTED, false);
+        addSpace(14); Button retry = button("Retry activity", true); content.addView(retry); retry.setOnClickListener(v -> retryAction.run());
+        addSpace(8); Button queue = button("Back to work queue", false); content.addView(queue); queue.setOnClickListener(v -> showPage("workstation"));
+    }
+
     private void showContentLoading(String label) {
         if (content == null) return;
         content.removeAllViews();
