@@ -9,7 +9,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { can, demand, TeamError, statuses, onboardingTemplates, assertAcyclic, assertTaskTransition, weekStartIndia, type Actor, type Permission } from "./policy";
+import { can, demand, TeamError, statuses, assertAcyclic, assertTaskTransition, weekStartIndia, type Actor, type Permission } from "./policy";
 import { taskSchema, taskUpdateSchema, projectSchema, inviteSchema, roleSchema, prospectSchema, prospectUpdateSchema, outreachSchema, messageSchema, channelSchema, reportSchema } from "./validation";
 
 type Tx = Prisma.TransactionClient;
@@ -356,27 +356,7 @@ export async function teamMutationTx(tx:Tx,a:Actor,resource:string,input:unknown
     return (await import("./advanced")).advancedMutation(tx, a, resource, input);
 }
 
-export async function acceptTeamInvitation(user: { id: number; email: string }, token: string) {
-  if (!/^[a-f0-9]{64}$/.test(token)) throw new TeamError("Invalid invitation.");
-  const invite = await prisma.teamInvitation.findUnique({ where: { tokenHash: hash(token) } });
-  if (!invite) throw new TeamError("Invitation unavailable.", 404);
-  return prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT id FROM team_workspaces WHERE id = ${invite.workspaceId} FOR UPDATE`;
-    const current = await tx.teamInvitation.findUnique({ where: { id: invite.id }, include: { role: true } });
-    const account = await tx.user.findUnique({ where: { id: user.id }, select: { status: true, email: true } });
-    if (!current || current.acceptedAt || current.revokedAt || current.expiresAt <= new Date() || current.email !== account?.email.toLowerCase() || account.status !== "ACTIVE" || current.role.owner) throw new TeamError("Invitation expired, used, revoked, or belongs to a different account.", 403);
-    if (await tx.teamMember.findUnique({ where: { workspaceId_userId: { workspaceId: current.workspaceId, userId: user.id } } })) throw new TeamError("A membership already exists. Ask the owner to restore it if needed.", 409);
-    const member = await tx.teamMember.create({ data: { workspaceId: current.workspaceId, userId: user.id, roleId: current.roleId, department: current.department, jobTitle: current.jobTitle } });
-    await tx.teamInvitation.update({ where: { id: current.id }, data: { acceptedAt: new Date() } });
-    const template = onboardingTemplates.find(t => t.role === current.role.name && t.jobTitle === current.jobTitle);
-    if (template) {
-      await tx.teamMember.update({ where: { id: member.id }, data: { responsibilities: template.target } });
-      const task = await tx.teamTask.create({ data: { workspaceId: member.workspaceId, creatorId: member.id, ownerId: member.id, title: "Week one: your HYMN onboarding objective", description: template.target, dueAt: new Date(Date.now() + 7 * 86400000), approvalRequired: true, eventKey: `${member.id}:onboarding` } });
-      await notify(tx, member.id, "Your week-one assignment is ready", `/team?module=work&task=${task.id}`);
-    }
-    await audit(tx, { ...member, role: current.role }, "invitation.accepted", current.id); return { workspaceId: member.workspaceId };
-  });
-}
+export { acceptTeamInvitation } from './invitations';
 
 export async function teamRead(a: Actor, resource: string, params: URLSearchParams) {
   if (resource.startsWith('chat-')) return (await import('./chat')).chatRead(a, resource, params);

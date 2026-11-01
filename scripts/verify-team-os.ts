@@ -72,7 +72,7 @@ async function main() {
   const invitee = await prisma.user.create({ data: { name: "Invitee", email: "invitee@example.test", googleId: "fixture-invitee" } });
   await rejected(() => acceptTeamInvitation({ id: marketplace.userId, email: "wrong@example.test" }, String(invite.token)), 403);
   await acceptTeamInvitation(invitee, String(invite.token));
-  await rejected(() => acceptTeamInvitation(invitee, String(invite.token)), 403);
+  assert.equal((await acceptTeamInvitation(invitee, String(invite.token))).alreadyJoined, true);
   assert.equal(await prisma.teamMember.count({ where: { userId: invitee.id, status: "ACTIVE" } }), 1);
   await rejected(() => teamMutation(growth, "roles", { name: "Self promoted", permissions: ["settings.manage"] }), 403);
   await teamMutation(owner, "members", { id: growth.id, status: "SUSPENDED" });
