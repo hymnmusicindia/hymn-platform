@@ -28,11 +28,11 @@ async function main() {
     } }]
   });
   const css = await postcss([tailwind(path.resolve("tailwind.config.ts"))]).process(await fs.readFile("app/globals.css", "utf8"), { from: path.resolve("app/globals.css") });
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: true, args: ["--enable-features=WebContentsForceDark"] });
   try {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 700 } });
+    const page = await browser.newPage({ viewport: { width: 1280, height: 700 }, colorScheme: "dark" });
     const updates = [];
-    await page.route("https://hymn.local/", route => route.fulfill({ contentType: "text/html", body: '<div id="root"></div>' }));
+    await page.route("https://hymn.local/", route => route.fulfill({ contentType: "text/html", body: '<meta name="color-scheme" content="only light"><div id="root"></div>' }));
     await page.route("**/api/account/presence", async route => {
       if (route.request().method() === "PATCH") {
         const body = route.request().postDataJSON();
@@ -78,8 +78,12 @@ async function main() {
     await page.locator('[data-profile-menu-root] > button:visible').click();
     await page.getByRole('menuitem',{name:'Switch to dark mode'}).click();
     assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'dark');
+    assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).colorScheme),'dark only');
+    assert.equal(await page.locator('meta[name="color-scheme"]').getAttribute('content'),'only dark');
     await page.getByRole('menuitem',{name:'Switch to light mode'}).click();
     assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'light');
+    assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).colorScheme),'light only');
+    assert.equal(await page.locator('meta[name="color-scheme"]').getAttribute('content'),'only light');
     await page.screenshot({ path: path.join(output, "header-presence.png") });
     console.log(`Header badge placement and persisted presence controls passed. Preview: ${output}`);
   } finally {

@@ -716,6 +716,10 @@ public final class MainActivity extends Activity {
 
     private void renderTools() {
         content.removeAllViews(); addText("Workspace", 22, NAVY, true); addText("Everything your team needs, together.", 13, MUTED, false); addSpace(14);
+        Button updateApp = button("HYMN Team " + BuildConfig.VERSION_NAME + " · Check for updates", false);
+        content.addView(updateApp, new LinearLayout.LayoutParams(-1, dp(48)));
+        updateApp.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://hymnmusic.fun/team/app"))));
+        addSpace(10);
         Button appearance = button(nightMode ? "☀  Switch to day mode" : "☾  Switch to night mode", false); LinearLayout.LayoutParams appearanceParams = new LinearLayout.LayoutParams(-1, dp(46)); appearanceParams.bottomMargin = dp(10); content.addView(appearance, appearanceParams); appearance.setOnClickListener(v -> toggleTheme());
         addSectionTitle("Phone notifications");
         addText("These controls affect alerts on this phone only. HYMN inbox messages and email preferences stay unchanged.", 12, MUTED, false);

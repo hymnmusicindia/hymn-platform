@@ -2,6 +2,10 @@
 
 The header profile menu uses the existing animated Sun/Moon control. It changes the document theme, saves `hymn-theme`, and synchronizes other mounted controls. Desktop and mobile profile menus share the control.
 
+Android browser auto-darkening can otherwise transform light backgrounds and text while retaining a black logo or independently recolouring controls. The pre-paint initializer, document `color-scheme` metadata, CSS and mounted theme controls now declare `only light` or `only dark` together. The toggle waits for hydration before accepting input and still works when browser storage is unavailable. Native Android disables platform Force Dark because it supplies its own day/night palettes. This does not disable operating-system forced-colour accessibility support.
+
+The header regression runs with Chromium forced darkening enabled and a dark system preference. `scripts/verify-team-app-download.cjs` checks the public install page in both HYMN themes at 320, 390 and 1440 pixels, 4.5:1 text contrast, clipboard/fallback behavior and download headers, version, size and SHA-256. Samsung Internet and physical-device display settings still need device verification; Chromium emulation does not reproduce every vendor rendering mode.
+
 The blank Studio subscription button was caused by the global text-action stylesheet overriding its foreground while the Studio module retained a filled background. Filled Studio actions now declare their intended foreground, respected by normal, hover and focus styles.
 
 `app/styles/theme-tokens.css` now owns both palettes. Its `--hymn-*` primitives feed the public site, Studio, distribution, admin, producer, team and overlay aliases. Local palettes in the older stylesheets have been removed or converted to these aliases. Neutral surfaces are opaque, elevation uses restrained shared shadows, and gradients pair with theme-aware text. The header is white in light mode and graphite in dark mode; its former blur and fixed black background are removed.

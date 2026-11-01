@@ -198,4 +198,5 @@ html[data-theme][data-theme="light"] {
   --sidebar-ink:var(--text);--sidebar-muted:var(--text-muted);--sidebar-hover:var(--hover);
   color:var(--text);color-scheme:inherit;
 }
-html[data-theme="light"] {color-scheme:light}html[data-theme="dark"],html .force-dark {color-scheme:dark}
+/* HYMN supplies both palettes; prevent Android auto-darkening from splitting foreground/background pairs. */
+:root,html[data-theme="light"] {color-scheme:only light}html[data-theme="dark"],html .force-dark {color-scheme:only dark}

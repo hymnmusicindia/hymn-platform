@@ -82,6 +82,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang="en" data-scroll-behavior="smooth" data-theme="light" suppressHydrationWarning>
       <head>
+        <meta name="color-scheme" content="only light" />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
         <script
           id="hymn-theme-initializer"
@@ -91,10 +92,13 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                 var stored = localStorage.getItem("hymn-theme");
                 var theme = stored === "dark" || stored === "light" ? stored : "light";
                 document.documentElement.dataset.theme = theme;
+                document.documentElement.style.colorScheme = "only " + theme;
+                document.querySelector('meta[name="color-scheme"]').content = "only " + theme;
                 var language = localStorage.getItem("hymn_preferred_language");
                 if (language) document.documentElement.lang = language;
               } catch (error) {
                 document.documentElement.dataset.theme = "light";
+                document.documentElement.style.colorScheme = "only light";
               }
             })();`
           }}

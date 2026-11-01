@@ -2,25 +2,18 @@
 
 import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
-
-type ThemeMode = "dark" | "light";
-
-function applyTheme(theme: ThemeMode, persist = true) {
-  document.documentElement.dataset.theme = theme;
-  if (persist) {
-    localStorage.setItem("hymn-theme", theme);
-  }
-}
+import { applyDocumentTheme, type ThemeMode } from "@/lib/theme-client";
 
 export function ThemeToggle({ compact = false, menu = false }: { compact?: boolean; menu?: boolean }) {
   const [theme, setTheme] = useState<ThemeMode>("light");
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem("hymn-theme");
+    let stored: string | null = null;
+    try { stored = localStorage.getItem("hymn-theme"); } catch { /* Use the default when browser storage is unavailable. */ }
     const nextTheme: ThemeMode = stored === "light" || stored === "dark" ? stored : "light";
     setTheme(nextTheme);
-    applyTheme(nextTheme, stored === "light" || stored === "dark");
+    applyDocumentTheme(nextTheme, stored === "light" || stored === "dark");
     setReady(true);
     const observer = new MutationObserver(() => {
       const current = document.documentElement.dataset.theme;
@@ -33,12 +26,13 @@ export function ThemeToggle({ compact = false, menu = false }: { compact?: boole
   function toggleTheme() {
     const nextTheme: ThemeMode = theme === "dark" ? "light" : "dark";
     setTheme(nextTheme);
-    applyTheme(nextTheme);
+    applyDocumentTheme(nextTheme);
   }
 
   return (
     <button
       type="button"
+      disabled={!ready}
       aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
       aria-pressed={theme === "dark"}
       role={menu ? "menuitem" : undefined}
