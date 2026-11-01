@@ -25,6 +25,8 @@ final class TeamAppUpdater implements AutoCloseable {
     private final Activity activity;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private volatile boolean closed,busy;
+    private volatile boolean promptAllowed=true;
+    void setPromptAllowed(boolean allowed){promptAllowed=allowed;}
     private File pending;
     TeamAppUpdater(Activity activity){this.activity=activity;}
     private boolean active(){return !closed&&!activity.isFinishing()&&!activity.isDestroyed();}
@@ -44,7 +46,7 @@ final class TeamAppUpdater implements AutoCloseable {
             if(code<=BuildConfig.VERSION_CODE){if(force)toast("HYMN Team is up to date.");return;}
             if(!force&&prefs.getInt("promptedCode",0)==code&&System.currentTimeMillis()-prefs.getLong("promptedAt",0)<24*60*60*1000L)return;
             final JSONObject update=release;final String source=base;
-            activity.runOnUiThread(()->{if(!active())return;prefs.edit().putInt("promptedCode",code).putLong("promptedAt",System.currentTimeMillis()).apply();
+            activity.runOnUiThread(()->{if(!active()||!promptAllowed)return;prefs.edit().putInt("promptedCode",code).putLong("promptedAt",System.currentTimeMillis()).apply();
                 new AlertDialog.Builder(activity).setTitle("Update HYMN Team")
                     .setMessage("Version "+update.optString("version")+" is ready. Download and install it to get the latest improvements. Your account and data stay on this device.")
                     .setNegativeButton("Later",null).setPositiveButton("Update",(dialog,which)->download(source,update)).show();});
@@ -89,7 +91,7 @@ final class TeamAppUpdater implements AutoCloseable {
     }
     void resumeInstall(){if(pending!=null&&activity.getPackageManager().canRequestPackageInstalls())install();}
     private void install(){
-        if(pending==null||!active())return;
+        if(pending==null||!active()||!promptAllowed)return;
         try{if(!activity.getPackageManager().canRequestPackageInstalls()){
             new AlertDialog.Builder(activity).setTitle("Allow HYMN Team updates").setMessage("Allow this app to install updates on the next screen, then return here to continue.")
                 .setNegativeButton("Later",null).setPositiveButton("Open settings",(dialog,which)->activity.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+activity.getPackageName())))).show();return;}

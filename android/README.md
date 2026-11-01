@@ -48,3 +48,9 @@ Foreground chat uses authenticated server-sent events with immediate same-worker
 Encrypted local history and a persisted outgoing queue keep conversation opening and composing responsive. Each queued send retains its client key across retries, so the existing server idempotency prevents duplicate records. Confirmations replace pending bubbles without clearing a newer draft. Network failures retry; access and validation failures require review. Draft writes are debounced. The send-arrow icon has a 48dp target and an accessibility label.
 
 Run `node scripts/test-team-chat-stream.cjs` for isolated stream delivery, permission revocation and cleanup checks. Android unit tests include the module permission matrix and existing encrypted chat cache/recovery coverage.
+
+## Sign-in and shared palette
+
+The explicit Google button uses `GetSignInWithGoogleOption`, following https://developer.android.com/identity/sign-in/credential-manager-siwg-implementation. The Web OAuth client ID remains the token audience; the Android OAuth client must still match the app package and signing certificate. Cancellation returns a neutral, manually retryable state; requests never automatically restart after consent is declined. Duplicate taps are disabled, lifecycle cancellation stops abandoned requests, and update dialogs/installers are deferred during sign-in.
+
+`TeamLoginView` centers a maximum-440dp card within a fill-viewport scroll container. Short windows and larger fonts can scroll instead of clipping. Status messages use accessible live announcements and theme-appropriate contrast. `TeamPalette` mirrors the light/dark values in `app/styles/theme-tokens.css` for native screens. `TeamPaletteTest` checks contrast for labels, errors and primary actions. `TeamLoginViewTest` covers card centering and sizing on phone/tablet/short viewports plus busy and status states.

@@ -47,7 +47,8 @@ import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.NetworkType;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
+import android.os.CancellationSignal;
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -70,11 +71,15 @@ import java.net.URL;
 /** Native HYMN Team app. All records and permissions come from the HYMN Team API. */
 public final class MainActivity extends Activity {
     private int NAVY, MUTED, BG, BLUE, BORDER;
+    private TeamPalette themePalette;
     // Separate requests keep a slow module from blocking navigation or sign-in callbacks.
     private final ExecutorService io = Executors.newFixedThreadPool(4);
     private final AtomicInteger screenGeneration = new AtomicInteger();
     private TeamApi api;
     private TeamAppUpdater updater;
+    private TeamLoginView loginView;
+    private boolean signInBusy;
+    private CancellationSignal signInCancellation;
     private long lastAccessCheck;
     private boolean checkingAccess;
     private LinearLayout root, top, content, bottom;
@@ -108,13 +113,10 @@ public final class MainActivity extends Activity {
     }
 
     private int dp(float value) { return (int)(value * getResources().getDisplayMetrics().density + 0.5f); }
-    private int surface() { return nightMode ? Color.rgb(23, 33, 49) : Color.WHITE; }
+    private int surface() { return themePalette.card; }
     private void applyThemePalette() {
-        NAVY = nightMode ? Color.rgb(232, 238, 248) : Color.rgb(16, 30, 50);
-        MUTED = nightMode ? Color.rgb(159, 174, 195) : Color.rgb(101, 116, 139);
-        BG = nightMode ? Color.rgb(14, 21, 33) : Color.rgb(244, 246, 249);
-        BLUE = nightMode ? Color.rgb(133, 177, 255) : Color.rgb(40, 92, 180);
-        BORDER = nightMode ? Color.rgb(45, 60, 81) : Color.rgb(224, 230, 238);
+        TeamPalette palette=themePalette=new TeamPalette(nightMode);
+        NAVY=palette.text; MUTED=palette.muted; BG=palette.background; BLUE=palette.accent; BORDER=palette.border;
         if (getWindow() != null) TeamSafeArea.configureWindow(getWindow(), nightMode);
     }
     private void setSafeContentView(View screen) {
@@ -129,39 +131,43 @@ public final class MainActivity extends Activity {
     private void showLogin() {
         screenGeneration.incrementAndGet(); session=null;
         if (chatView != null) { chatView.close(); chatView = null; }
-        LinearLayout screen = new LinearLayout(this); screen.setOrientation(LinearLayout.VERTICAL); screen.setGravity(Gravity.CENTER_HORIZONTAL); screen.setPadding(dp(26), dp(42), dp(26), dp(30)); screen.setBackgroundColor(BG);
-        ImageView logo = new ImageView(this); logo.setImageResource(R.drawable.hymn_logo); logo.setScaleType(ImageView.ScaleType.FIT_CENTER); screen.addView(logo, new LinearLayout.LayoutParams(dp(76), dp(76)));
-        TextView title = text("Your team, in your pocket.", 25, NAVY, true); title.setGravity(Gravity.CENTER); LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-1, -2); tp.topMargin = dp(24); screen.addView(title, tp);
-        TextView sub = text("Work, schedules and team updates in one place.", 14, MUTED, false); sub.setGravity(Gravity.CENTER); LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, -2); sp.topMargin = dp(10); sp.bottomMargin = dp(34); screen.addView(sub, sp);
-        Button google = button("G     Continue with Google", true); screen.addView(google, new LinearLayout.LayoutParams(-1, dp(54))); google.setOnClickListener(v -> beginGoogleSignIn());
-        message = text("", 12, Color.rgb(180, 45, 45), false); LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(-1, -2); mp.topMargin = dp(14); screen.addView(message, mp);
-        TextView footer = text("Secure sign-in with your HYMN team Google account", 12, MUTED, false); footer.setGravity(Gravity.CENTER); LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(-1, -2); fp.topMargin = dp(30); screen.addView(footer, fp);
-        setSafeContentView(screen);
+        signInBusy=false;
+        loginView=new TeamLoginView(this,nightMode,this::beginGoogleSignIn);
+        message=loginView.message;
+        setSafeContentView(loginView.view);
     }
 
+    private void signInStatus(String text,boolean error){if(loginView!=null)loginView.status(text,error);}
+    private void finishSignIn(){signInBusy=false;signInCancellation=null;updater.setPromptAllowed(true);if(loginView!=null)loginView.busy(false);}
+
     private Button button(String label, boolean primary) {
-        Button b = new Button(this); b.setText(label); b.setAllCaps(false); b.setTextSize(14); b.setTypeface(Typeface.DEFAULT, Typeface.BOLD); b.setTextColor(primary ? (nightMode ? Color.rgb(16, 30, 50) : Color.WHITE) : NAVY); b.setBackground(shape(primary ? (nightMode ? BLUE : NAVY) : surface(), primary ? (nightMode ? BLUE : NAVY) : BORDER, 13));
+        Button b = new Button(this); b.setText(label); b.setAllCaps(false); b.setTextSize(14); b.setTypeface(Typeface.DEFAULT, Typeface.BOLD); b.setTextColor(primary ? themePalette.accentForeground : NAVY); b.setBackground(shape(primary ? (nightMode ? BLUE : NAVY) : surface(), primary ? (nightMode ? BLUE : NAVY) : BORDER, 13));
         return b;
     }
 
     private void beginGoogleSignIn() {
-        if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isEmpty()) { message.setText("Google sign-in is not configured in this APK. Build with the HYMN web OAuth client ID."); return; }
-        message.setText("Opening secure Google sign-in…");
+        if(signInBusy)return;
+        if(BuildConfig.GOOGLE_WEB_CLIENT_ID.isEmpty()){signInStatus("Sign-in is temporarily unavailable. Please contact HYMN support.",true);return;}
+        signInBusy=true;loginView.busy(true);updater.setPromptAllowed(false);signInStatus("Choose your team Google account to continue.",false);
+        final int generation=screenGeneration.get();signInCancellation=new CancellationSignal();
         try {
-            GetGoogleIdOption option = new GetGoogleIdOption.Builder().setFilterByAuthorizedAccounts(false).setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID).setAutoSelectEnabled(false).build();
-            GetCredentialRequest request = new GetCredentialRequest.Builder().addCredentialOption(option).build();
-            CredentialManager manager = CredentialManager.create(this);
-            manager.getCredentialAsync(this, request, null, io, new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
-                @Override public void onResult(GetCredentialResponse response) { submitGoogleCredential(response.getCredential()); }
-                @Override public void onError(@NonNull GetCredentialException error) { runOnUiThread(() -> message.setText("Google sign-in failed: " + safe(error.getMessage()))); }
+            GetSignInWithGoogleOption option=new GetSignInWithGoogleOption.Builder(BuildConfig.GOOGLE_WEB_CLIENT_ID).build();
+            GetCredentialRequest request=new GetCredentialRequest.Builder().addCredentialOption(option).build();
+            CredentialManager.create(this).getCredentialAsync(this,request,signInCancellation,ContextCompat.getMainExecutor(this),new CredentialManagerCallback<GetCredentialResponse,GetCredentialException>(){
+                @Override public void onResult(GetCredentialResponse response){if(isDestroyed()||screenGeneration.get()!=generation)return;signInStatus("Connecting to your HYMN workspace…",false);submitGoogleCredential(response.getCredential());}
+                @Override public void onError(@NonNull GetCredentialException error){if(isDestroyed()||screenGeneration.get()!=generation)return;finishSignIn();
+                    signInStatus(TeamSignInErrors.message(error),TeamSignInErrors.isError(error));
+                    android.util.Log.w("HYMNAuth","Google credential request: "+error.getType());
+                }
             });
-        } catch (Exception e) { message.setText("Google sign-in could not start. Please try again."); }
+        }catch(Exception error){finishSignIn();signInStatus("Google sign-in could not start. Please try again.",true);}
     }
 
     private void submitGoogleCredential(Credential credential) {
+        final int generation=screenGeneration.get();
         io.execute(() -> {
             try {
-                if (!(credential instanceof CustomCredential)) throw new IllegalStateException("Choose a Google account to continue.");
+                if (!(credential instanceof CustomCredential) || (!GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL.equals(credential.getType()) && !GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_SIWG_CREDENTIAL.equals(credential.getType()))) throw new IllegalStateException("Choose a Google account to continue.");
                 GoogleIdTokenCredential google = GoogleIdTokenCredential.createFrom(((CustomCredential) credential).getData());
                 memberName = google.getDisplayName() == null ? "Team member" : google.getDisplayName();
                 Uri picture = google.getProfilePictureUri();
@@ -175,8 +181,8 @@ public final class MainActivity extends Activity {
                 if (saved.has("avatarUrl") && !saved.isNull("avatarUrl") && !saved.optString("avatarUrl").isEmpty()) profileImageUrl = saved.optString("avatarUrl");
                 else if (profileImageUrl.isEmpty()) profileImageUrl = getSharedPreferences("hymn_team_settings", MODE_PRIVATE).getString("profile_picture_url", "");
                 if (workspace.isEmpty()) throw new IllegalStateException("This Google account does not have an active HYMN team membership.");
-                runOnUiThread(() -> showPage("home"));
-            } catch (Exception e) { api.clear(); runOnUiThread(() -> { showLogin(); message.setText(safe(e.getMessage())); }); }
+                runOnUiThread(() -> { if(isDestroyed()||screenGeneration.get()!=generation)return; finishSignIn(); showPage("home"); });
+            } catch (Exception e) { runOnUiThread(() -> { if(isDestroyed()||screenGeneration.get()!=generation)return; api.clear(); finishSignIn(); showLogin(); signInStatus(safe(e.getMessage()),true); }); }
         });
     }
 
@@ -915,7 +921,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onPause() { if (chatView != null) chatView.pause(); super.onPause(); }
     @Override protected void onResume() { super.onResume(); if(updater!=null){updater.resumeInstall();updater.check(false);} refreshAccess(); if (chatView != null) chatView.resume(); }
-    @Override protected void onDestroy() { if(updater!=null)updater.close(); if (chatView != null) chatView.close(); if (avatarRepository != null) avatarRepository.close(); io.shutdownNow(); super.onDestroy(); }
+    @Override protected void onDestroy() { if(signInCancellation!=null)signInCancellation.cancel(); if(updater!=null)updater.close(); if (chatView != null) chatView.close(); if (avatarRepository != null) avatarRepository.close(); io.shutdownNow(); super.onDestroy(); }
 
     @Override public void onBackPressed() {
         navigateBack();
