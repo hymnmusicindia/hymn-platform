@@ -29,6 +29,7 @@ import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.PopupWindow;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
@@ -84,6 +85,9 @@ public final class MainActivity extends Activity {
     private boolean notificationSyncStarted = false;
     private boolean nightMode = false;
     private String previousPage = "home";
+    private String profileImageUrl = "";
+    private JSONArray inboxItems = new JSONArray();
+    private TextView inboxBadge;
     private volatile Bitmap cachedProfileBitmap;
     private volatile String cachedProfileUrl = "";
     private JSONObject session;
@@ -145,11 +149,15 @@ public final class MainActivity extends Activity {
                 if (!(credential instanceof CustomCredential)) throw new IllegalStateException("Choose a Google account to continue.");
                 GoogleIdTokenCredential google = GoogleIdTokenCredential.createFrom(((CustomCredential) credential).getData());
                 memberName = google.getDisplayName() == null ? "Team member" : google.getDisplayName();
+                Uri picture = google.getProfilePictureUri();
+                if (picture != null) { profileImageUrl = picture.toString(); getSharedPreferences("hymn_team_settings", MODE_PRIVATE).edit().putString("profile_picture_url", profileImageUrl).apply(); }
                 JSONObject payload = new JSONObject().put("credential", google.getIdToken());
                 api.request("POST", "/api/auth/google", payload, false);
                 JSONObject saved = api.get("session", "", ""); session = saved;
                 workspace = saved.optString("workspaceId", ""); memberName = saved.optString("name", "Team member");
                 memberId = saved.optString("memberId", "");
+                if (saved.has("avatarUrl") && !saved.isNull("avatarUrl") && !saved.optString("avatarUrl").isEmpty()) profileImageUrl = saved.optString("avatarUrl");
+                else if (profileImageUrl.isEmpty()) profileImageUrl = getSharedPreferences("hymn_team_settings", MODE_PRIVATE).getString("profile_picture_url", "");
                 if (workspace.isEmpty()) throw new IllegalStateException("This Google account does not have an active HYMN team membership.");
                 runOnUiThread(() -> showPage("home"));
             } catch (Exception e) { api.clear(); runOnUiThread(() -> { showLogin(); message.setText(safe(e.getMessage())); }); }
@@ -162,6 +170,8 @@ public final class MainActivity extends Activity {
             try {
                 JSONObject result = api.get("session", "", "");
                 session = result; workspace = result.optString("workspaceId", ""); memberId = result.optString("memberId", ""); memberName = result.optString("name", "Team member");
+                profileImageUrl = result.optString("avatarUrl", "");
+                if (profileImageUrl.isEmpty() || profileImageUrl.equals("null")) profileImageUrl = getSharedPreferences("hymn_team_settings", MODE_PRIVATE).getString("profile_picture_url", "");
                 if (workspace.isEmpty()) throw new IllegalStateException("No active HYMN team membership found.");
                 session = result; runOnUiThread(() -> showPage(getIntent().getStringExtra("screen") == null ? "home" : getIntent().getStringExtra("screen")));
             } catch (Exception e) { api.clear(); runOnUiThread(this::showLogin); }
@@ -180,26 +190,26 @@ public final class MainActivity extends Activity {
         page = next; tool = ""; screenGeneration.incrementAndGet();
         root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(BG);
         bottom = null;
-        top = new LinearLayout(this); top.setGravity(Gravity.CENTER_VERTICAL); top.setPadding(dp(12), dp(10), dp(12), dp(10)); top.setBackgroundColor(surface());
-        Button back = button("‹", false); back.setTextSize(26); back.setPadding(0, 0, 0, dp(3)); top.addView(back, new LinearLayout.LayoutParams(dp(38), dp(42))); back.setOnClickListener(v -> navigateBack());
-        ImageView logo = new ImageView(this); logo.setImageResource(R.drawable.hymn_logo); logo.setScaleType(ImageView.ScaleType.FIT_CENTER); top.addView(logo, new LinearLayout.LayoutParams(dp(38), dp(38)));
-        LinearLayout titleBox = new LinearLayout(this); titleBox.setOrientation(LinearLayout.VERTICAL); titleBox.setPadding(dp(9), 0, 0, 0); heading = text("HYMN TEAM", 10, MUTED, true); titleBox.addView(heading); TextView workspaceLabel = text("●  " + session.optString("workspaceName", "Team workspace"), 12, NAVY, true); workspaceLabel.setSingleLine(true); workspaceLabel.setEllipsize(TextUtils.TruncateAt.END); LinearLayout.LayoutParams workspaceParams = new LinearLayout.LayoutParams(-1, -2); workspaceParams.topMargin = dp(3); titleBox.addView(workspaceLabel, workspaceParams); top.addView(titleBox, new LinearLayout.LayoutParams(0, -2, 1)); workspaceLabel.setOnClickListener(v -> showPage("workspace-detail"));
-        FrameLayout avatarFrame = new FrameLayout(this); LinearLayout.LayoutParams avatarFrameParams = new LinearLayout.LayoutParams(dp(36), dp(36)); avatarFrameParams.rightMargin = dp(5); top.addView(avatarFrame, avatarFrameParams);
+        top = new LinearLayout(this); top.setGravity(Gravity.CENTER_VERTICAL); top.setPadding(dp(8), dp(7), dp(8), dp(7)); top.setBackgroundColor(surface());
+        ImageView back = new ImageView(this); back.setImageResource(R.drawable.ic_back); back.setColorFilter(NAVY); back.setScaleType(ImageView.ScaleType.CENTER); back.setPadding(dp(11), dp(11), dp(11), dp(11)); back.setBackground(shape(surface(), BORDER, 13)); back.setClickable(true); back.setFocusable(true); LinearLayout.LayoutParams backParams = new LinearLayout.LayoutParams(dp(44), dp(44)); backParams.rightMargin = dp(5); top.addView(back, backParams); back.setOnClickListener(v -> navigateBack());
+        ImageView logo = new ImageView(this); logo.setImageResource(R.drawable.hymn_logo); logo.setScaleType(ImageView.ScaleType.FIT_CENTER); LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(dp(32), dp(32)); logoParams.rightMargin = dp(5); top.addView(logo, logoParams);
+        LinearLayout titleBox = new LinearLayout(this); titleBox.setOrientation(LinearLayout.VERTICAL); titleBox.setPadding(dp(2), 0, dp(4), 0); heading = text("HYMN TEAM", 9, MUTED, true); titleBox.addView(heading); TextView workspaceLabel = text("HYMN  ·  " + session.optString("workspaceName", "Team workspace"), 11, NAVY, true); workspaceLabel.setSingleLine(true); workspaceLabel.setEllipsize(TextUtils.TruncateAt.END); LinearLayout.LayoutParams workspaceParams = new LinearLayout.LayoutParams(-1, -2); workspaceParams.topMargin = dp(3); titleBox.addView(workspaceLabel, workspaceParams); top.addView(titleBox, new LinearLayout.LayoutParams(0, -2, 1)); workspaceLabel.setOnClickListener(v -> showPage("workspace-detail"));
+        FrameLayout avatarFrame = new FrameLayout(this); LinearLayout.LayoutParams avatarFrameParams = new LinearLayout.LayoutParams(dp(38), dp(38)); avatarFrameParams.leftMargin = dp(3); top.addView(avatarFrame, avatarFrameParams);
         TextView avatarFallback = text(firstName(memberName).substring(0, 1).toUpperCase(Locale.ROOT), 14, Color.WHITE, true); avatarFallback.setGravity(Gravity.CENTER); avatarFallback.setBackground(shape(nightMode ? Color.rgb(50, 72, 105) : BLUE, 0, 20)); avatarFrame.addView(avatarFallback, new FrameLayout.LayoutParams(-1, -1));
-        ImageView avatar = new ImageView(this); avatar.setScaleType(ImageView.ScaleType.CENTER_CROP); avatar.setBackground(shape(Color.TRANSPARENT, 0, 20)); avatar.setClipToOutline(true); avatarFrame.addView(avatar, new FrameLayout.LayoutParams(-1, -1)); String avatarUrl = session.optString("avatarUrl", ""); if (!avatarUrl.isEmpty() && !avatarUrl.equals("null")) loadAvatar(avatar, avatarUrl); avatarFrame.setOnClickListener(v -> showPage("workspace-detail"));
-        Button refresh = button("↻", false); refresh.setMinWidth(dp(34)); top.addView(refresh, new LinearLayout.LayoutParams(dp(36), dp(42))); refresh.setOnClickListener(v -> loadPageData());
-        Button logout = button("Sign out", false); logout.setTextSize(11); logout.setPadding(dp(8), 0, dp(8), 0); LinearLayout.LayoutParams logoutParams = new LinearLayout.LayoutParams(-2, dp(42)); logoutParams.leftMargin = dp(6); top.addView(logout, logoutParams); logout.setOnClickListener(v -> confirmSignOut()); root.addView(top);
-        ScrollView scroll = new ScrollView(this); content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL); content.setPadding(dp(16), dp(16), dp(16), dp(22)); scroll.setFillViewport(true); scroll.addView(content); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        ImageView avatar = new ImageView(this); avatar.setScaleType(ImageView.ScaleType.CENTER_CROP); avatar.setBackground(shape(Color.TRANSPARENT, 0, 20)); avatar.setClipToOutline(true); avatarFrame.addView(avatar, new FrameLayout.LayoutParams(-1, -1)); String avatarUrl = profileImageUrl; if (!avatarUrl.isEmpty() && !avatarUrl.equals("null")) loadAvatar(avatar, avatarUrl); avatarFrame.setOnClickListener(v -> showPage("workspace-detail"));
+        FrameLayout inboxFrame = new FrameLayout(this); LinearLayout.LayoutParams inboxParams = new LinearLayout.LayoutParams(dp(42), dp(44)); inboxParams.leftMargin = dp(2); top.addView(inboxFrame, inboxParams); ImageView inboxIcon = new ImageView(this); inboxIcon.setImageResource(R.drawable.ic_inbox_nav); inboxIcon.setColorFilter(NAVY); inboxIcon.setPadding(dp(11), dp(11), dp(11), dp(11)); inboxIcon.setBackground(shape(surface(), BORDER, 13)); inboxFrame.addView(inboxIcon, new FrameLayout.LayoutParams(-1, -1)); inboxIcon.setOnClickListener(v -> showInboxPopup(inboxIcon)); inboxBadge = text("", 8, Color.WHITE, true); inboxBadge.setGravity(Gravity.CENTER); inboxBadge.setBackground(shape(Color.rgb(208, 54, 64), 0, 10)); FrameLayout.LayoutParams badgeParams = new FrameLayout.LayoutParams(dp(17), dp(17), Gravity.TOP | Gravity.END); inboxFrame.addView(inboxBadge, badgeParams); inboxBadge.setVisibility(View.GONE); updateInboxBadge();
+        ImageView refresh = new ImageView(this); refresh.setImageResource(R.drawable.ic_refresh); refresh.setColorFilter(NAVY); refresh.setPadding(dp(10), dp(10), dp(10), dp(10)); refresh.setBackground(shape(surface(), BORDER, 13)); LinearLayout.LayoutParams refreshParams = new LinearLayout.LayoutParams(dp(40), dp(44)); refreshParams.leftMargin = dp(4); top.addView(refresh, refreshParams); refresh.setOnClickListener(v -> loadPageData());
+        Button logout = button("Sign out", false); logout.setTextSize(10); logout.setPadding(dp(7), 0, dp(7), 0); LinearLayout.LayoutParams logoutParams = new LinearLayout.LayoutParams(-2, dp(44)); logoutParams.leftMargin = dp(5); top.addView(logout, logoutParams); logout.setOnClickListener(v -> confirmSignOut()); root.addView(top);        ScrollView scroll = new ScrollView(this); content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL); content.setPadding(dp(16), dp(16), dp(16), dp(22)); scroll.setFillViewport(true); scroll.addView(content); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         if (!page.equals("workspace-detail")) { bottom = new LinearLayout(this); bottom.setGravity(Gravity.CENTER); bottom.setBackgroundColor(surface()); bottom.setPadding(dp(5), dp(5), dp(5), dp(5)); root.addView(bottom, new LinearLayout.LayoutParams(-1, dp(72))); }
         setContentView(root); if (bottom != null && !page.equals("workspace-detail")) buildNavigation(); loadPageData(); startNotificationSync();
     }
 
     private void buildNavigation() {
-        String[] labels = {"Home", "My work", "Schedule", "Inbox", "Tools"}; String[] icons = {"⌂", "✓", "▦", "♧", "•••"}; String[] keys = {"home", "tasks", "schedule", "alerts", "more"};
+        String[] labels = {"Home", "Work-station", "Schedule", "Inbox", "Tools"}; int[] icons = {R.drawable.ic_home_nav, R.drawable.ic_workstation_nav, R.drawable.ic_calendar_nav, R.drawable.ic_inbox_nav, R.drawable.ic_tools_nav}; String[] keys = {"home", "workstation", "schedule", "alerts", "more"};
         for (int i = 0; i < labels.length; i++) {
             final String key = keys[i]; boolean selected = page.equals(key);
             LinearLayout item = new LinearLayout(this); item.setGravity(Gravity.CENTER); item.setOrientation(LinearLayout.VERTICAL); item.setBackground(shape(selected ? (nightMode ? Color.rgb(35, 53, 78) : Color.rgb(235, 242, 255)) : Color.TRANSPARENT, 0, 14)); bottom.addView(item, new LinearLayout.LayoutParams(0, -1, 1));
-            TextView icon = text(icons[i], 20, selected ? BLUE : MUTED, true); icon.setGravity(Gravity.CENTER); item.addView(icon);
+            ImageView icon = new ImageView(this); icon.setImageResource(icons[i]); icon.setColorFilter(selected ? BLUE : MUTED); icon.setPadding(dp(2), dp(2), dp(2), dp(2)); LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(22), dp(22)); iconParams.bottomMargin = dp(3); item.addView(icon, iconParams);
             TextView label = text(labels[i], 10, selected ? BLUE : MUTED, selected); label.setGravity(Gravity.CENTER); item.addView(label);
             item.setOnClickListener(v -> showPage(key));
         }
@@ -210,7 +220,7 @@ public final class MainActivity extends Activity {
         final int generation = screenGeneration.incrementAndGet(); final String requestedPage = page; final String requestedTool = tool;
         content.removeAllViews(); heading.setText(requestedTool.isEmpty() ? "HYMN  /  " + requestedPage.toUpperCase(Locale.ROOT) : toolName(requestedTool).toUpperCase(Locale.ROOT));
         if (requestedPage.equals("home")) renderHomeLoading();
-        else { TextView wait = text(requestedTool.equals("workstation") ? "Loading your work queue…" : "Loading your workspace…", 13, MUTED, false); content.addView(wait); }
+        else { TextView wait = text(requestedTool.equals("workstation") || requestedPage.equals("workstation") ? "Loading your work queue…" : "Loading your workspace…", 13, MUTED, false); content.addView(wait); }
         io.execute(() -> {
             try {
                 if (requestedPage.equals("home")) {
@@ -220,7 +230,7 @@ public final class MainActivity extends Activity {
                     CompletableFuture<JSONObject> tasks = CompletableFuture.supplyAsync(() -> readApi("tasks", "mine=1&offset=0"), io);
                     JSONObject overviewData = homeResult(overview), calendarData = homeResult(upcoming), inboxData = homeResult(inbox), taskData = homeResult(tasks);
                     boolean partial = overview.isCompletedExceptionally() || upcoming.isCompletedExceptionally() || inbox.isCompletedExceptionally() || tasks.isCompletedExceptionally();
-                    runOnUiThread(() -> { if (screenGeneration.get() == generation) renderHome(overviewData, taskData, calendarData, inboxData, partial); });
+                    runOnUiThread(() -> { if (screenGeneration.get() == generation) { updateInboxSummary(inboxData); renderHome(overviewData, taskData, calendarData, inboxData, partial); } });
                 } else if (requestedPage.equals("workspace-detail")) {
                     JSONObject overview = api.get("overview", workspace, ""); runOnUiThread(() -> { if (screenGeneration.get() == generation) renderWorkspaceDetail(overview); });
                 } else if (requestedPage.equals("tasks")) {
@@ -229,8 +239,9 @@ public final class MainActivity extends Activity {
                 } else if (requestedPage.equals("schedule")) {
                     JSONObject calendar = calendarRange(); runOnUiThread(() -> { if (screenGeneration.get() == generation) renderRows("Coming up", calendar.optJSONArray("items"), "schedule"); });
                 } else if (requestedPage.equals("alerts")) {
-                    JSONObject inbox = api.get("notifications", workspace, "offset=0"); runOnUiThread(() -> { if (screenGeneration.get() == generation) renderRows("Notifications", inbox.optJSONArray("items"), "alerts"); });
-                } else if (!requestedTool.isEmpty()) loadTool(requestedTool, generation);
+                    JSONObject inbox = api.get("notifications", workspace, "offset=0"); runOnUiThread(() -> { if (screenGeneration.get() == generation) { updateInboxSummary(inbox); renderRows("Notifications", inbox.optJSONArray("items"), "alerts"); } });
+                } else if (requestedPage.equals("workstation")) loadTool("workstation", generation);
+                else if (!requestedTool.isEmpty()) loadTool(requestedTool, generation);
                 else runOnUiThread(() -> { if (screenGeneration.get() == generation) renderTools(); });
             } catch (Exception e) { runOnUiThread(() -> { if (screenGeneration.get() == generation) renderError(e.getMessage()); }); }
         });
@@ -245,8 +256,8 @@ public final class MainActivity extends Activity {
         ProgressBar spinner = new ProgressBar(this); LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(dp(22), dp(22)); pp.rightMargin = dp(12); card.addView(spinner, pp);
         card.addView(text("Syncing your latest team updates…", 13, MUTED, false)); LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2); cp.bottomMargin = dp(18); content.addView(card, cp);
         addSectionTitle("Quick access");
-        String[][] shortcuts = {{"My work", "tasks"}, {"Schedule", "schedule"}, {"Work-station", "workstation"}};
-        for (String[] shortcut : shortcuts) { Button action = button(shortcut[0] + "  →", false); LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, dp(48)); ap.bottomMargin = dp(8); content.addView(action, ap); action.setOnClickListener(v -> { if (shortcut[1].equals("workstation")) { showPage("more"); tool = "workstation"; workBucket = "today"; loadPageData(); } else showPage(shortcut[1]); }); }
+        String[][] shortcuts = {{"Schedule", "schedule"}, {"Open inbox", "alerts"}};
+        for (String[] shortcut : shortcuts) { Button action = button(shortcut[0] + "  →", false); LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, dp(48)); ap.bottomMargin = dp(8); content.addView(action, ap); action.setOnClickListener(v -> showPage(shortcut[1])); }
     }
 
     private String calendarQuery() {
@@ -268,7 +279,8 @@ public final class MainActivity extends Activity {
         addMetric(metrics, "OPEN TASKS", overview.optInt("active")); addMetric(metrics, "DUE SOON", count(calendar.optJSONArray("deadlines"))); addMetric(metrics, "NEW ALERTS", unread(inbox.optJSONArray("items"))); content.addView(metrics);
         addPieChart(overview);
         addSpace(22); addSectionTitle("Coming up"); JSONArray events = calendar.optJSONArray("items"); if (events == null || events.length() == 0) addEmpty("Nothing scheduled in the next 14 days."); else for (int i = 0; i < Math.min(events.length(), 5); i++) addRecord(events.optJSONObject(i), "schedule");
-        addSpace(16); addSectionTitle("Your next tasks"); JSONArray tasks = tasksData.optJSONArray("items"); if (tasks == null || tasks.length() == 0) addEmpty("You’re clear for now. Open My work to see all assignments."); else for (int i = 0; i < Math.min(tasks.length(), 4); i++) addRecord(tasks.optJSONObject(i), "tasks");
+        addSpace(16); addSectionTitle("Your tasks"); JSONArray tasks = tasksData.optJSONArray("items"); if (tasks == null || tasks.length() == 0) addEmpty("You’re clear for now. New assignments will appear here."); else for (int i = 0; i < Math.min(tasks.length(), 4); i++) addRecord(tasks.optJSONObject(i), "tasks");
+        if (tasks != null && tasks.length() > 0) { Button allTasks = button("View all assigned tasks  →", false); LinearLayout.LayoutParams taskParams = new LinearLayout.LayoutParams(-1, dp(46)); taskParams.bottomMargin = dp(10); content.addView(allTasks, taskParams); allTasks.setOnClickListener(v -> showPage("tasks")); }
     }
 
     private void addWorkspaceCard() {
@@ -298,7 +310,7 @@ public final class MainActivity extends Activity {
     private void renderWorkspaceDetail(JSONObject overview) {
         content.removeAllViews(); addText("Workspace", 24, NAVY, true); addText("Your HYMN team at a glance", 13, MUTED, false); addSpace(18);
         LinearLayout profile = new LinearLayout(this); profile.setGravity(Gravity.CENTER_VERTICAL); profile.setPadding(dp(16), dp(16), dp(16), dp(16)); profile.setBackground(shape(surface(), BORDER, 16)); LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-1, -2); pp.bottomMargin = dp(12); content.addView(profile, pp);
-        FrameLayout frame = new FrameLayout(this); LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(dp(64), dp(64)); fp.rightMargin = dp(14); profile.addView(frame, fp); TextView initials = text(firstName(memberName).substring(0, 1).toUpperCase(Locale.ROOT), 22, Color.WHITE, true); initials.setGravity(Gravity.CENTER); initials.setBackground(shape(BLUE, 0, 40)); frame.addView(initials, new FrameLayout.LayoutParams(-1, -1)); ImageView photo = new ImageView(this); photo.setScaleType(ImageView.ScaleType.CENTER_CROP); photo.setBackground(shape(Color.TRANSPARENT, 0, 40)); photo.setClipToOutline(true); frame.addView(photo, new FrameLayout.LayoutParams(-1, -1)); String url = session.optString("avatarUrl", ""); if (!url.isEmpty() && !url.equals("null")) loadAvatar(photo, url);
+        FrameLayout frame = new FrameLayout(this); LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(dp(64), dp(64)); fp.rightMargin = dp(14); profile.addView(frame, fp); TextView initials = text(firstName(memberName).substring(0, 1).toUpperCase(Locale.ROOT), 22, Color.WHITE, true); initials.setGravity(Gravity.CENTER); initials.setBackground(shape(BLUE, 0, 40)); frame.addView(initials, new FrameLayout.LayoutParams(-1, -1)); ImageView photo = new ImageView(this); photo.setScaleType(ImageView.ScaleType.CENTER_CROP); photo.setBackground(shape(Color.TRANSPARENT, 0, 40)); photo.setClipToOutline(true); frame.addView(photo, new FrameLayout.LayoutParams(-1, -1)); String url = profileImageUrl; if (!url.isEmpty() && !url.equals("null")) loadAvatar(photo, url);
         LinearLayout info = new LinearLayout(this); info.setOrientation(LinearLayout.VERTICAL); profile.addView(info, new LinearLayout.LayoutParams(0, -2, 1)); info.addView(text(memberName, 17, NAVY, true)); info.addView(text(session.optString("email", ""), 11, MUTED, false)); LinearLayout.LayoutParams roleParams = new LinearLayout.LayoutParams(-1, -2); roleParams.topMargin = dp(5); info.addView(text(session.optString("roleName", "Team member") + " · " + session.optString("department", "HYMN Team"), 11, BLUE, true), roleParams);
         LinearLayout ws = new LinearLayout(this); ws.setOrientation(LinearLayout.VERTICAL); ws.setPadding(dp(16), dp(16), dp(16), dp(16)); ws.setBackground(shape(surface(), BORDER, 16)); LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(-1, -2); wp.bottomMargin = dp(12); content.addView(ws, wp); ws.addView(text("ACTIVE WORKSPACE", 10, MUTED, true)); TextView wsName = text(session.optString("workspaceName", "HYMN Team"), 20, NAVY, true); LinearLayout.LayoutParams wn = new LinearLayout.LayoutParams(-1, -2); wn.topMargin = dp(7); ws.addView(wsName, wn); ws.addView(text("Your tasks, schedules and team activity are organized here.", 12, MUTED, false));
         LinearLayout stats = new LinearLayout(this); stats.setOrientation(LinearLayout.HORIZONTAL); LinearLayout.LayoutParams stp = new LinearLayout.LayoutParams(-1, -2); stp.topMargin = dp(15); ws.addView(stats, stp); addMetric(stats, "OPEN", overview.optInt("active")); addMetric(stats, "REVIEW", overview.optInt("reviews")); addMetric(stats, "DONE", overview.optInt("completed"));
@@ -307,10 +319,22 @@ public final class MainActivity extends Activity {
     }
 
     private void loadAvatar(ImageView target, String imageUrl) {
-        Bitmap cached = cachedProfileBitmap; if (cached != null && imageUrl.equals(cachedProfileUrl)) { target.setImageBitmap(cached); return; }
-        io.execute(() -> { HttpURLConnection connection = null; try { URL url = new URL(imageUrl); String host = url.getHost() == null ? "" : url.getHost().toLowerCase(Locale.ROOT); if (!"https".equalsIgnoreCase(url.getProtocol()) || !(host.equals("googleusercontent.com") || host.endsWith(".googleusercontent.com"))) return; connection = (HttpURLConnection) url.openConnection(); connection.setConnectTimeout(5000); connection.setReadTimeout(6000); connection.setInstanceFollowRedirects(true); if (connection.getContentLengthLong() > 2_000_000L) return; Bitmap bitmap = BitmapFactory.decodeStream(connection.getInputStream()); if (bitmap != null) { cachedProfileBitmap = bitmap; cachedProfileUrl = imageUrl; runOnUiThread(() -> target.setImageBitmap(bitmap)); } } catch (Exception ignored) { } finally { if (connection != null) connection.disconnect(); } });
+        Bitmap cached = cachedProfileBitmap;
+        if (cached != null && imageUrl.equals(cachedProfileUrl)) { target.setImageBitmap(cached); return; }
+        io.execute(() -> {
+            HttpURLConnection connection = null;
+            try {
+                URL url = new URL(imageUrl); String host = url.getHost() == null ? "" : url.getHost().toLowerCase(Locale.ROOT);
+                if (!"https".equalsIgnoreCase(url.getProtocol()) || !(host.equals("googleusercontent.com") || host.endsWith(".googleusercontent.com"))) return;
+                connection = (HttpURLConnection) url.openConnection(); connection.setConnectTimeout(8000); connection.setReadTimeout(8000); connection.setInstanceFollowRedirects(true); connection.setUseCaches(true);
+                connection.setRequestProperty("Accept", "image/*"); connection.setRequestProperty("User-Agent", "HYMN-Team-Android");
+                int status = connection.getResponseCode(); if (status < 200 || status >= 300 || connection.getContentLengthLong() > 2_000_000L) return;
+                Bitmap bitmap = BitmapFactory.decodeStream(connection.getInputStream());
+                if (bitmap != null) { cachedProfileBitmap = bitmap; cachedProfileUrl = imageUrl; runOnUiThread(() -> { if (!isFinishing()) target.setImageBitmap(bitmap); }); }
+            } catch (Exception ignored) { }
+            finally { if (connection != null) connection.disconnect(); }
+        });
     }
-
     private void addMetric(LinearLayout row, String label, int value) {
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL); card.setPadding(dp(13), dp(13), dp(8), dp(12)); card.setBackground(shape(surface(), BORDER, 14)); LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(92), 1); params.rightMargin = dp(7); row.addView(card, params);
         card.addView(text(label, 9, MUTED, true)); TextView number = text(String.valueOf(value), 24, NAVY, true); LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(-2, -2); np.topMargin = dp(8); card.addView(number, np);
@@ -458,6 +482,80 @@ public final class MainActivity extends Activity {
     }
 
     private void markRead(String id) { try { mutate("notifications", new JSONObject().put("id", id), "Alert marked as read."); } catch (Exception e) { toastError(e.getMessage()); } }
+
+    private void updateInboxSummary(JSONObject result) {
+        JSONArray items = result.optJSONArray("items");
+        if (items != null) inboxItems = items;
+        updateInboxBadge();
+    }
+
+    private void updateInboxBadge() {
+        if (inboxBadge == null) return;
+        int total = unread(inboxItems);
+        inboxBadge.setText(total > 9 ? "9+" : String.valueOf(total));
+        inboxBadge.setVisibility(total > 0 ? View.VISIBLE : View.GONE);
+    }
+
+    private void showInboxPopup(View anchor) {
+        int width = Math.min(dp(340), getResources().getDisplayMetrics().widthPixels - dp(24));
+        int height = Math.min(dp(480), getResources().getDisplayMetrics().heightPixels - dp(180));
+        PopupWindow popup = new PopupWindow(this);
+        popup.setWidth(width); popup.setHeight(Math.max(dp(250), height)); popup.setFocusable(true); popup.setOutsideTouchable(true); popup.setBackgroundDrawable(shape(surface(), BORDER, 16)); popup.setElevation(dp(12));
+        popup.setContentView(buildInboxPopup(popup));
+        int[] anchorPosition = new int[2]; anchor.getLocationOnScreen(anchorPosition);
+        int xOffset = getResources().getDisplayMetrics().widthPixels - width - dp(12) - anchorPosition[0];
+        popup.showAsDropDown(anchor, xOffset, dp(6));
+        io.execute(() -> {
+            try {
+                JSONObject fresh = api.get("notifications", workspace, "offset=0");
+                runOnUiThread(() -> { updateInboxSummary(fresh); if (popup.isShowing()) popup.setContentView(buildInboxPopup(popup)); });
+            } catch (Exception ignored) { }
+        });
+    }
+
+    private View buildInboxPopup(PopupWindow popup) {
+        LinearLayout panel = new LinearLayout(this); panel.setOrientation(LinearLayout.VERTICAL); panel.setPadding(dp(16), dp(15), dp(16), dp(12)); panel.setBackground(shape(surface(), BORDER, 16));
+        LinearLayout titleRow = new LinearLayout(this); titleRow.setGravity(Gravity.CENTER_VERTICAL); panel.addView(titleRow, new LinearLayout.LayoutParams(-1, -2));
+        titleRow.addView(text("Inbox", 18, NAVY, true), new LinearLayout.LayoutParams(0, -2, 1));
+        Button close = button("Close", false); close.setTextSize(11); titleRow.addView(close, new LinearLayout.LayoutParams(-2, dp(36))); close.setOnClickListener(v -> popup.dismiss());
+        int unreadCount = unread(inboxItems); TextView summary = text(unreadCount == 0 ? "You’re all caught up" : unreadCount + " unread update" + (unreadCount == 1 ? "" : "s"), 11, MUTED, false); LinearLayout.LayoutParams summaryParams = new LinearLayout.LayoutParams(-1, -2); summaryParams.topMargin = dp(3); summaryParams.bottomMargin = dp(10); panel.addView(summary, summaryParams);
+        ScrollView scroll = new ScrollView(this); LinearLayout list = new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL); scroll.addView(list); panel.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        if (inboxItems.length() == 0) { TextView empty = text("No messages yet. New team updates will appear here.", 13, MUTED, false); empty.setGravity(Gravity.CENTER); empty.setPadding(dp(18), dp(25), dp(18), dp(25)); list.addView(empty); }
+        for (int i = 0; i < inboxItems.length(); i++) {
+            JSONObject item = inboxItems.optJSONObject(i); if (item == null) continue;
+            boolean unreadItem = item.isNull("readAt");
+            LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL); card.setPadding(dp(12), dp(11), dp(12), dp(11)); card.setBackground(shape(unreadItem ? (nightMode ? Color.rgb(29, 46, 68) : Color.rgb(242, 247, 255)) : surface(), BORDER, 12)); LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(-1, -2); cardParams.bottomMargin = dp(8); list.addView(card, cardParams);
+            card.addView(text(item.optString("title", "Team update"), 13, NAVY, true));
+            String created = item.optString("createdAt", ""); if (!created.isEmpty()) { TextView time = text(formatDate(created), 10, MUTED, false); LinearLayout.LayoutParams timeParams = new LinearLayout.LayoutParams(-1, -2); timeParams.topMargin = dp(5); card.addView(time, timeParams); }
+            TextView state = text(unreadItem ? "Unread · tap to review" : "Read", 10, unreadItem ? BLUE : MUTED, unreadItem); LinearLayout.LayoutParams stateParams = new LinearLayout.LayoutParams(-1, -2); stateParams.topMargin = dp(6); card.addView(state, stateParams);
+            card.setOnClickListener(v -> showInboxMessage(item, popup));
+        }
+        return panel;
+    }
+
+    private void showInboxMessage(JSONObject item, PopupWindow popup) {
+        boolean unreadItem = item.isNull("readAt"); String title = item.optString("title", "Team update");
+        String detail = item.optString("description", "This update was sent to your HYMN team inbox.");
+        AlertDialog.Builder dialog = new AlertDialog.Builder(this).setTitle(title).setMessage(detail).setNegativeButton("Close", (d, w) -> { });
+        dialog.setPositiveButton(unreadItem ? "Done · mark read" : "Done", (d, w) -> { if (unreadItem) markInboxRead(item.optString("id"), popup); else popup.dismiss(); }).show();
+    }
+
+    private void markInboxRead(String id, PopupWindow popup) {
+        if (id == null || id.isEmpty()) return;
+        io.execute(() -> {
+            try {
+                api.post("notifications", workspace, new JSONObject().put("id", id));
+                runOnUiThread(() -> {
+                    for (int i = 0; i < inboxItems.length(); i++) {
+                        JSONObject old = inboxItems.optJSONObject(i); if (old == null || !id.equals(old.optString("id"))) continue;
+                        try { inboxItems.put(i, new JSONObject(old.toString()).put("readAt", new Date().toInstant().toString())); } catch (Exception ignored) { }
+                        break;
+                    }
+                    updateInboxBadge(); if (popup.isShowing()) popup.setContentView(buildInboxPopup(popup));
+                });
+            } catch (Exception error) { runOnUiThread(() -> toastError("Couldn’t mark this message as read. " + safe(error.getMessage()))); }
+        });
+    }
 
     private void mutate(String resource, JSONObject body, String success) {
         showLoading("Saving your change…");
