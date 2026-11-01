@@ -7,8 +7,8 @@ import androidx.credentials.exceptions.NoCredentialException;
 final class TeamSignInErrors {
     static boolean isError(Exception error){return !(error instanceof GetCredentialCancellationException);}
     static String message(Exception error){
-        if(error instanceof GetCredentialCancellationException)return "Sign-in wasn't completed. Tap Continue with Google when you're ready.";
-        if(error instanceof NoCredentialException)return "Add your team Google account in Android Settings, then try again. Make sure Google Play services is enabled.";
+        if(error instanceof GetCredentialCancellationException)return "Google did not complete sign-in. Tap Continue to retry, or open Team OS in the browser.";
+        if(error instanceof NoCredentialException)return "Google could not provide a sign-in credential. Check Google Play services, or open Team OS in the browser.";
         return "Google couldn't complete sign-in. Check your connection and Google Play services, then try again.";
     }
 }

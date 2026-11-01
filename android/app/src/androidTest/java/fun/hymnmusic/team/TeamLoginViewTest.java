@@ -10,6 +10,34 @@ import static org.junit.Assert.*;
 
 @RunWith(AndroidJUnit4.class)
 public class TeamLoginViewTest {
+    @Test public void loadingReplacesAllContentAndMovesLogoToRingCenter() throws Exception {
+        try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
+            TeamLoginView[] shown=new TeamLoginView[1];int[] height=new int[1];
+            java.util.concurrent.CountDownLatch attached=new java.util.concurrent.CountDownLatch(1);
+            scenario.onActivity(activity->{
+                TeamLoginView login=new TeamLoginView(activity,true,()->{});shown[0]=login;
+                TeamSafeArea.configureWindow(activity.getWindow(),true);activity.setContentView(TeamSafeArea.wrap(activity,login.view,new TeamPalette(true).background));
+                login.view.postOnAnimation(()->login.view.postOnAnimation(attached::countDown));
+            });
+            assertTrue(attached.await(10,java.util.concurrent.TimeUnit.SECONDS));
+            scenario.onActivity(activity->{TeamLoginView login=shown[0];height[0]=login.card.getHeight();login.busy(true);
+                assertEquals(View.INVISIBLE,login.contents.getVisibility());assertEquals(View.VISIBLE,login.loading.getVisibility());assertFalse(login.google.isShown());assertFalse(login.google.isEnabled());
+                login.status("Connecting to your private team workspace",false);
+            });
+            float[] translation={Float.MAX_VALUE};
+            for(int attempt=0;attempt<60;attempt++){scenario.onActivity(activity->translation[0]=shown[0].loading.logo.getTranslationY());if(Math.abs(translation[0])<.5f)break;android.os.SystemClock.sleep(50);}
+            assertEquals("Logo transition completes",0,translation[0],.5f);
+            scenario.onActivity(activity->{TeamLoginView login=shown[0];assertEquals(height[0],login.card.getHeight());
+                assertEquals(login.loading.getWidth()/2f,login.loading.logo.getLeft()+login.loading.logo.getWidth()/2f,.5f);
+                assertEquals(login.loading.getHeight()/2f,login.loading.logo.getTop()+login.loading.logo.getHeight()/2f+login.loading.logo.getTranslationY(),.5f);
+            });
+            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+            android.graphics.Bitmap screenshot=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();assertNotNull(screenshot);
+            java.io.File directory=new java.io.File(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().getTargetContext().getExternalFilesDir(null),"ui-proof");assertTrue(directory.isDirectory()||directory.mkdirs());
+            try(java.io.FileOutputStream output=new java.io.FileOutputStream(new java.io.File(directory,"sign-in-loading.png"))){assertTrue(screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output));}screenshot.recycle();
+            scenario.onActivity(activity->{TeamLoginView login=shown[0];login.busy(false);login.status("Google did not complete sign-in.",false);login.recovery();assertEquals(View.VISIBLE,login.contents.getVisibility());assertEquals(View.GONE,login.loading.getVisibility());assertTrue(login.google.isEnabled());});
+        }
+    }
     @Test public void captureBothThemesForVisualReview() throws Exception {
         androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand("wm size 390x844").close();
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){

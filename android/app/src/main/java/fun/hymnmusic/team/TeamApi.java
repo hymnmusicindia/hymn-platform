@@ -93,7 +93,7 @@ final class TeamApi {
             connection.setConnectTimeout(10000);
             // Workstation writes may wait 10s for the workspace lock and run
             // for up to 30s. A 12s client timeout abandoned valid server work.
-            connection.setReadTimeout(path.startsWith("/api/team/workstation") ? (method.equals("GET") ? 25000 : 50000) : path.startsWith("/api/team/chat-") ? (method.equals("GET") ? 20000 : 30000) : 12000);
+            connection.setReadTimeout(path.startsWith("/api/team/workstation") ? (method.equals("GET") ? 25000 : 50000) : path.equals("/api/auth/google") ? 30000 : path.startsWith("/api/team/chat-") ? (method.equals("GET") ? 20000 : 30000) : 12000);
             connection.setUseCaches(false);
             connection.setRequestProperty("Accept", "application/json");
             connection.setRequestProperty("X-HYMN-Client", "android-team");

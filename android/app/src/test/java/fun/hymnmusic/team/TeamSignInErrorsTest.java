@@ -12,10 +12,10 @@ public class TeamSignInErrorsTest {
         assertTrue(TeamSignInErrors.message(cancelled).contains("Tap Continue"));
         assertFalse(TeamSignInErrors.message(cancelled).contains("by the user"));
     }
-    @Test public void missingAccountExplainsHowToContinue(){
+    @Test public void unavailableCredentialDoesNotAssumeAnAccountIsMissing(){
         Exception missing=new NoCredentialException("internal provider diagnostic");
         assertTrue(TeamSignInErrors.isError(missing));
-        assertTrue(TeamSignInErrors.message(missing).contains("Android Settings"));
+        assertTrue(TeamSignInErrors.message(missing).contains("Google Play services"));
         assertFalse(TeamSignInErrors.message(missing).contains("internal provider"));
     }
     @Test public void providerFailuresDoNotExposeRawDiagnostics(){
