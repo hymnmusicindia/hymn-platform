@@ -54,13 +54,14 @@ final class TeamChatView {
     private LinearLayout column() { LinearLayout v = new LinearLayout(activity); v.setOrientation(1); return v; }
     private GradientDrawable shape(int color, int radius) { GradientDrawable d = new GradientDrawable(); d.setColor(color); d.setCornerRadius(dp(radius)); return d; }
     private TextView label(String value, int size, int color, boolean bold) { TextView t = new TextView(activity); t.setText(value); t.setTextColor(color); t.setTextSize(size); if (bold) t.setTypeface(null, Typeface.BOLD); return t; }
-    private Button button(String title) { Button b = new Button(activity); b.setText(title); b.setAllCaps(false); b.setTextColor(accent); b.setTextSize(13); b.setBackground(shape(surface, 14)); return b; }
+    private Button button(String title) { Button b = new Button(activity); b.setText(title); b.setAllCaps(false); b.setTextColor(accent); b.setTextSize(13); b.setMinWidth(0); b.setMinimumWidth(0); b.setPadding(dp(14), 0, dp(14), 0); b.setBackground(shape(surface, 14)); return b; }
     private void space(LinearLayout box, int n) { box.addView(new View(activity), new LinearLayout.LayoutParams(1, dp(n))); }
     private JSONObject user(JSONObject person) { JSONObject u = person == null ? null : person.optJSONObject("user"); return u == null ? new JSONObject() : u; }
     private View avatar(String name, String url, int size) {
         FrameLayout frame = new FrameLayout(activity); frame.setLayoutParams(new LinearLayout.LayoutParams(dp(size), dp(size)));
         TextView initials = label(name.isEmpty() ? "H" : name.substring(0, 1).toUpperCase(Locale.ROOT), Math.max(9, size / 3), accent, true); initials.setGravity(Gravity.CENTER); initials.setBackground(shape(surface == Color.WHITE ? Color.rgb(226, 235, 244) : border, size)); frame.addView(initials, new FrameLayout.LayoutParams(-1, -1));
         ImageView image = new ImageView(activity); image.setScaleType(ImageView.ScaleType.CENTER_CROP); image.setBackground(shape(Color.TRANSPARENT, size)); image.setClipToOutline(true); frame.addView(image, new FrameLayout.LayoutParams(-1, -1)); if (!url.isEmpty() && !url.equals("null")) avatars.load(image, url);
+        image.setOutlineProvider(new android.view.ViewOutlineProvider() { @Override public void getOutline(View v, android.graphics.Outline outline) { outline.setOval(0, 0, v.getWidth(), v.getHeight()); } });
         frame.setContentDescription(name); return frame;
     }
     void start() { showList(); }
@@ -75,11 +76,13 @@ final class TeamChatView {
     private void showList() {
         generation++; syncing = false; channel = null; fingerprint = ""; body.removeAllViews(); body.setPadding(dp(16), dp(12), dp(16), 0);
         LinearLayout heading = new LinearLayout(activity); heading.setGravity(Gravity.CENTER_VERTICAL); heading.addView(label("Chats", 25, ink, true), new LinearLayout.LayoutParams(0, -2, 1));
-        Button direct = button("New chat"); heading.addView(direct); direct.setOnClickListener(v -> choose(false)); Button group = button("New group"); heading.addView(group); group.setOnClickListener(v -> choose(true)); body.addView(heading);
+        Button direct = button("New chat"); direct.setBackground(shape(accent, 14)); direct.setTextColor(surface); heading.addView(direct, new LinearLayout.LayoutParams(-2, dp(42))); direct.setOnClickListener(v -> choose(false)); Button group = button("New group"); LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(-2, dp(42)); gp.leftMargin = dp(8); heading.addView(group, gp); group.setOnClickListener(v -> choose(true)); body.addView(heading); space(body, 12);
         EditText find = new EditText(activity); find.setTextColor(ink); find.setHintTextColor(muted); find.setHint("Search conversations"); find.setTextSize(14); find.setSingleLine(true); find.setPadding(dp(14), dp(9), dp(14), dp(9)); find.setBackground(shape(surface, 18)); find.setText(search); body.addView(find, new LinearLayout.LayoutParams(-1, dp(44)));
         find.addTextChangedListener(new android.text.TextWatcher() { public void beforeTextChanged(CharSequence s, int start, int count, int after) {} public void onTextChanged(CharSequence s, int start, int before, int count) { search = s.toString(); if (lastList != null) { fingerprint = ""; renderList(lastList); } } public void afterTextChanged(android.text.Editable s) {} });
-        connection = label("Connecting to your team…", 12, muted, false); body.addView(connection); space(body, 10);
+        connection = label("Updating conversations…", 12, muted, false); connection.setPadding(0, dp(9), 0, dp(4)); body.addView(connection); space(body, 10);
         scroll = new ScrollView(activity); thread = column(); scroll.addView(thread); body.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1)); schedule(0);
+        if (lastList != null) renderList(lastList);
+        else try { JSONObject cached = api.chatDraft("directory:" + workspace + ":" + me); if (System.currentTimeMillis() - cached.optLong("at") < 300000 && cached.optJSONObject("data") != null) renderList(cached.getJSONObject("data")); } catch (Exception ignored) { }
     }
 
     private void open(JSONObject next) {
@@ -104,17 +107,18 @@ final class TeamChatView {
 
     private void refresh() {
         if (paused || closed || syncing) return;
-        syncing = true; final int token = generation; final String id = channel == null ? "" : channel.optString("id");
+        syncing = true; final int token = generation; final String id = channel == null ? "" : channel.optString("id"); final String query = channel == null ? "" : messageQuery(id);
         network.execute(() -> { try {
-            JSONObject data = id.isEmpty() ? api.get("chat-conversations", workspace, "") : api.get("messages", workspace, "channel=" + java.net.URLEncoder.encode(id, "UTF-8"));
+            JSONObject data = id.isEmpty() ? api.get("chat-conversations", workspace, "") : api.get("chat-messages", workspace, query);
             main.post(() -> { if (closed || token != generation) return; syncing = false; failures = 0;
-                if (id.isEmpty()) renderList(data); else updateThread(data);
+                if (id.isEmpty()) { if (!data.toString().equals(fingerprint)) try { api.saveChatDraft("directory:" + workspace + ":" + me, new JSONObject().put("at", System.currentTimeMillis()).put("data", data)); } catch (Exception ignored) {} renderList(data); } else updateThread(data);
                 hint(id.isEmpty() ? "Private conversations with your team" : "Live sync · " + (channel.optBoolean("direct") ? "Personal chat" : "Group chat")); schedule(id.isEmpty() ? 5000 : 2000);
             });
         } catch (Exception e) { main.post(() -> { if (closed || token != generation) return; syncing = false; failures++; hint("Reconnecting… " + (messages.isEmpty() && id.length() > 0 ? "Your draft is kept." : ""));
-            if (e instanceof TeamApi.ApiException && (((TeamApi.ApiException)e).status == 401 || ((TeamApi.ApiException)e).status == 403 || ((TeamApi.ApiException)e).status == 404)) { saveComposer(); messages.clear(); thread.removeAllViews(); members = new JSONArray(); people.clear(); hint("Chat unavailable. Return to Chats or sign in again."); return; }
+            if (e instanceof TeamApi.ApiException && (((TeamApi.ApiException)e).status == 401 || ((TeamApi.ApiException)e).status == 403 || ((TeamApi.ApiException)e).status == 404)) { saveComposer(); messages.clear(); thread.removeAllViews(); members = new JSONArray(); people.clear(); lastList = null; try { api.saveChatDraft("directory:" + workspace + ":" + me, new JSONObject()); } catch (Exception ignored) {} hint("Chat unavailable. Return to Chats or sign in again."); return; }
             schedule(Math.min(15000, 2000L * failures)); }); } });
     }
+    private String messageQuery(String id) { return "channel=" + android.net.Uri.encode(id) + (channel != null && !channel.optString("peerId").isEmpty() ? "&peer=" + android.net.Uri.encode(channel.optString("peerId")) : ""); }
 
     private void renderList(JSONObject data) {
         lastList = data;
@@ -123,9 +127,9 @@ final class TeamChatView {
         String next = data.toString(); if (next.equals(fingerprint)) return; fingerprint = next; thread.removeAllViews();
         JSONArray rows = data.optJSONArray("items"); if (rows == null || rows.length() == 0) { thread.addView(label("Start a conversation with a teammate or create a group.", 15, muted, false)); return; }
         for (int i = 0; i < rows.length(); i++) { JSONObject c = rows.optJSONObject(i); if (c == null || !c.optString("name").toLowerCase(Locale.ROOT).contains(search.toLowerCase(Locale.ROOT))) continue;
-            LinearLayout row = new LinearLayout(activity); row.setGravity(Gravity.CENTER_VERTICAL); row.setPadding(dp(2), dp(14), dp(2), dp(14)); row.addView(avatar(c.optString("name", "Team"), c.optString("avatar", ""), 50));
+            LinearLayout row = new LinearLayout(activity); row.setGravity(Gravity.CENTER_VERTICAL); row.setPadding(dp(12), dp(14), dp(12), dp(14)); row.setBackground(shape(surface, 16)); row.addView(avatar(c.optString("name", "Team"), c.optString("avatar", ""), 50));
             LinearLayout text = column(); text.setPadding(dp(12), 0, dp(8), 0); text.addView(label(c.optString("name", "Team"), 16, ink, true)); JSONObject last = c.optJSONObject("lastMessage"); TextView preview = label(last == null ? "Say hello" : last.optString("body"), 13, muted, false); preview.setSingleLine(true); preview.setEllipsize(android.text.TextUtils.TruncateAt.END); text.addView(preview); row.addView(text, new LinearLayout.LayoutParams(0, -2, 1));
-            LinearLayout meta = column(); meta.setGravity(Gravity.RIGHT); if (last != null) meta.addView(label(time(last.optString("createdAt")), 10, muted, false)); if (c.optInt("unread") > 0) { TextView count = label(String.valueOf(c.optInt("unread")), 11, Color.WHITE, true); count.setGravity(Gravity.CENTER); count.setBackground(shape(Color.rgb(30, 135, 100), 20)); meta.addView(count, new LinearLayout.LayoutParams(dp(25), dp(25))); } row.addView(meta); thread.addView(row); View line = new View(activity); line.setBackgroundColor(border); thread.addView(line, new LinearLayout.LayoutParams(-1, dp(1))); row.setOnClickListener(v -> open(c));
+            LinearLayout meta = column(); meta.setGravity(Gravity.RIGHT); if (last != null) meta.addView(label(time(last.optString("createdAt")), 10, muted, false)); if (c.optInt("unread") > 0) { TextView count = label(String.valueOf(c.optInt("unread")), 11, Color.WHITE, true); count.setGravity(Gravity.CENTER); count.setBackground(shape(Color.rgb(30, 135, 100), 20)); meta.addView(count, new LinearLayout.LayoutParams(dp(25), dp(25))); } row.addView(meta); LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(-1, -2); rp.bottomMargin = dp(8); thread.addView(row, rp); row.setOnClickListener(v -> open(c));
         }
     }
 
@@ -179,7 +183,8 @@ final class TeamChatView {
         if (closed || paused) return;
         button.setEnabled(false); final int token = generation; final String id = channel.optString("id");
         final int offset = (int)messages.values().stream().filter(m -> !m.has("_state")).count();
-        network.execute(() -> { try { JSONObject result = api.get("messages", workspace, "channel=" + java.net.URLEncoder.encode(id, "UTF-8") + "&offset=" + offset); main.post(() -> { if (closed || token != generation) return; updateThread(result); button.setEnabled(true); if (result.optJSONArray("items") != null && result.optJSONArray("items").length() < 50) { historyEnd = true; renderMessages(); } }); }
+        final String query = messageQuery(id) + "&offset=" + offset;
+        network.execute(() -> { try { JSONObject result = api.get("chat-messages", workspace, query); main.post(() -> { if (closed || token != generation) return; updateThread(result); button.setEnabled(true); if (result.optJSONArray("items") != null && result.optJSONArray("items").length() < 50) { historyEnd = true; renderMessages(); } }); }
             catch (Exception e) { main.post(() -> { if (closed || token != generation) return; button.setEnabled(true); hint("Earlier messages couldn't load. Tap to retry."); }); } });
     }
     private void send() {
@@ -188,7 +193,8 @@ final class TeamChatView {
         saveComposer();
         final String id = channel.optString("id"), key = pendingKey; final int token = generation; sending = true; send.setEnabled(false); composer.setEnabled(false); send.setText("Sending");
         try { messages.put("pending:" + key, new JSONObject().put("id", "pending:" + key).put("authorId", me).put("body", text).put("createdAt", java.time.Instant.now().toString()).put("_state", "sending")); renderMessages(); } catch (Exception ignored) {}
-        network.execute(() -> { try { JSONObject result = api.post("chat-send", workspace, new JSONObject().put("channelId", id).put("body", text).put("clientKey", key)); main.post(() -> { if (closed || token != generation) return; completeSend(result, key); }); }
+        final String peer = channel.optString("peerId");
+        network.execute(() -> { try { JSONObject result = api.post("chat-send", workspace, new JSONObject().put("channelId", id).put("body", text).put("clientKey", key).put("peerId", peer)); main.post(() -> { if (closed || token != generation) return; completeSend(result, key); }); }
             catch (Exception e) { main.post(() -> { if (closed || token != generation) return;
                 for (JSONObject received : messages.values()) if ((me + ":" + key).equals(received.optString("clientKey"))) { completeSend(received, key); return; }
                 sending = false; composer.setEnabled(true); send.setEnabled(true); send.setText("Retry"); try { JSONObject pending = messages.get("pending:" + key); if (pending != null) pending.put("_state", "failed"); } catch (Exception ignored) {} renderMessages(); hint("Message not confirmed. Tap Retry; your message is kept."); }); } });
@@ -199,15 +205,27 @@ final class TeamChatView {
     private void choose(boolean group) {
         ArrayList<JSONObject> options = new ArrayList<>(); for (int i = 0; i < members.length(); i++) { JSONObject m = members.optJSONObject(i); if (m != null && !me.equals(m.optString("id"))) options.add(m); }
         options.sort(Comparator.comparing(p -> user(p).optString("name", "Teammate")));
-        String[] names = new String[options.size()]; for (int i = 0; i < names.length; i++) names[i] = user(options.get(i)).optString("name", "Teammate");
-        if (names.length == 0) { new AlertDialog.Builder(activity).setMessage("No other active teammates are available yet.").setPositiveButton("OK", null).show(); return; }
-        if (!group) { new AlertDialog.Builder(activity).setTitle("New conversation").setItems(names, (d, index) -> { try { create("chat-direct", new JSONObject().put("memberId", options.get(index).optString("id"))); } catch (Exception ignored) {} }).show(); return; }
-        boolean[] selected = new boolean[names.length];
-        new AlertDialog.Builder(activity).setTitle("Choose group members").setMultiChoiceItems(names, selected, (d, i, checked) -> selected[i] = checked).setNegativeButton("Cancel", null).setPositiveButton("Next", (d, which) -> {
-            JSONArray ids = new JSONArray(); for (int i = 0; i < selected.length; i++) if (selected[i]) ids.put(options.get(i).optString("id")); if (ids.length() == 0) return;
-            EditText name = new EditText(activity); name.setHint("Group name");
-            new AlertDialog.Builder(activity).setTitle("Name your group").setView(name).setNegativeButton("Cancel", null).setPositiveButton("Create", (dialog, w) -> { try { create("chat-group", new JSONObject().put("name", name.getText().toString()).put("memberIds", ids)); } catch (Exception ignored) {} }).show();
-        }).show();
+        if (options.isEmpty()) { hint("Your team directory is updating. Please try again shortly."); schedule(0); return; }
+        showPeople(options, group);
+    }
+    private void showPeople(ArrayList<JSONObject> options, boolean group) {
+        LinearLayout panel = column(); panel.setPadding(dp(16), dp(8), dp(16), dp(8)); panel.setBackgroundColor(surface);
+        EditText filter = new EditText(activity); filter.setTextColor(ink); filter.setHintTextColor(muted); filter.setHint("Search teammates"); filter.setSingleLine(true); filter.setTextSize(14); panel.addView(filter);
+        ScrollView list = new ScrollView(activity); LinearLayout rows = column(); list.addView(rows); panel.addView(list, new LinearLayout.LayoutParams(-1, dp(340)));
+        Set<String> selected = new HashSet<>();
+        AlertDialog dialog = new AlertDialog.Builder(activity).setTitle(group ? "Add group members" : "New chat").setView(panel).setNegativeButton("Cancel", null).setPositiveButton(group ? "Next" : "Done", null).create();
+        Runnable draw = () -> { rows.removeAllViews(); for (JSONObject p : options) {
+            JSONObject u = user(p); String name = u.optString("name", "Teammate"); if (!name.toLowerCase(Locale.ROOT).contains(filter.getText().toString().toLowerCase(Locale.ROOT))) continue;
+            LinearLayout row = new LinearLayout(activity); row.setGravity(Gravity.CENTER_VERTICAL); row.setPadding(0, dp(10), 0, dp(10)); row.addView(avatar(name, u.optString("avatar", ""), 44)); LinearLayout details = column(); details.setPadding(dp(12), 0, dp(6), 0); details.addView(label(name, 15, ink, true)); details.addView(label(p.optString("jobTitle", "Team member"), 11, muted, false)); row.addView(details, new LinearLayout.LayoutParams(0, -2, 1)); rows.addView(row);
+            if (group) { CheckBox check = new CheckBox(activity); check.setChecked(selected.contains(p.optString("id"))); row.addView(check); check.setOnCheckedChangeListener((v, value) -> { if (value) selected.add(p.optString("id")); else selected.remove(p.optString("id")); dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(!selected.isEmpty()); }); row.setOnClickListener(v -> check.setChecked(!check.isChecked())); }
+            else row.setOnClickListener(v -> { dialog.dismiss(); String id = p.optString("directChannelId"); if (id.isEmpty()) { hint("Team chat is updating. Refresh and try again."); schedule(0); return; } try { open(new JSONObject().put("id", id).put("name", name).put("avatar", u.optString("avatar", "")).put("peerId", p.optString("id")).put("direct", true)); } catch (Exception ignored) {} });
+        } };
+        filter.addTextChangedListener(new android.text.TextWatcher() { public void beforeTextChanged(CharSequence s, int start, int count, int after) {} public void onTextChanged(CharSequence s, int start, int before, int count) { draw.run(); } public void afterTextChanged(android.text.Editable s) {} });
+        dialog.show(); draw.run(); dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(!group);
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> { if (!group) { dialog.dismiss(); return; } dialog.dismiss(); JSONArray ids = new JSONArray(); for (String id : selected) ids.put(id);
+            EditText name = new EditText(activity); name.setHint("Group name"); name.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(100)});
+            AlertDialog title = new AlertDialog.Builder(activity).setTitle("Name your group").setView(name).setNegativeButton("Cancel", null).setPositiveButton("Create group", null).create(); title.show(); title.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w -> { if (name.getText().toString().trim().length() < 2) { name.setError("Use at least two characters"); return; } title.dismiss(); try { create("chat-group", new JSONObject().put("name", name.getText().toString()).put("memberIds", ids).put("requestKey", UUID.randomUUID().toString())); } catch (Exception ignored) {} });
+        });
     }
     private void create(String resource, JSONObject request) {
         if (closed || paused) return;
@@ -215,7 +233,7 @@ final class TeamChatView {
             JSONObject result = api.post(resource, workspace, request); JSONObject next = new JSONObject().put("id", result.getString("id")).put("name", result.optString("name")).put("direct", resource.equals("chat-direct"));
             if (resource.equals("chat-direct")) { JSONObject u = user(people.get(request.optString("memberId"))); next.put("name", u.optString("name", "Teammate")).put("avatar", u.optString("avatar", "")); }
             main.post(() -> { if (!closed && token == generation) open(next); });
-        } catch (Exception e) { main.post(() -> { if (!closed && token == generation) new AlertDialog.Builder(activity).setMessage(e.getMessage()).setPositiveButton("OK", null).show(); }); } });
+        } catch (Exception e) { main.post(() -> { if (closed || token != generation) return; hint("Couldn't confirm the group yet. Retry safely without creating a duplicate."); Button retry = button("Retry creating group"); thread.addView(retry, 0); retry.setOnClickListener(v -> { thread.removeView(retry); create(resource, request); }); }); } });
     }
     private String time(String value) { try { return java.time.Instant.parse(value).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")); } catch (Exception ignored) { return ""; } }
 }

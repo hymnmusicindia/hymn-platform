@@ -92,14 +92,13 @@ public final class MainActivity extends Activity {
     private JSONObject activeWorkDetail;
     private boolean workActionBusy = false;
     private TeamChatView chatView;
-    private final android.util.LruCache<String, Bitmap> avatarCache = new android.util.LruCache<String, Bitmap>(8192) {
-        @Override protected int sizeOf(String key, Bitmap value) { return value.getByteCount() / 1024; }
-    };
+    private AvatarRepository avatarRepository;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         nightMode = getSharedPreferences("hymn_team_settings", MODE_PRIVATE).getBoolean("night_mode", false); applyThemePalette();
         api = new TeamApi(this);
+        avatarRepository = new AvatarRepository(this, api);
         if (api.cookie().isEmpty()) showLogin(); else loadSession();
     }
 
@@ -331,22 +330,7 @@ public final class MainActivity extends Activity {
     }
 
     private void loadAvatar(ImageView target, String imageUrl) {
-        Bitmap known = avatarCache.get(imageUrl); if (known != null) { target.setImageBitmap(known); return; }
-        io.execute(() -> {
-            HttpURLConnection connection = null;
-            try {
-                URL url = new URL(imageUrl.startsWith("/") ? TeamApi.BASE + imageUrl : imageUrl); String host = url.getHost() == null ? "" : url.getHost().toLowerCase(Locale.ROOT);
-                boolean hymnPhoto = host.equals("hymnmusic.fun") || host.equals("www.hymnmusic.fun");
-                if (!"https".equalsIgnoreCase(url.getProtocol()) || !(hymnPhoto || host.equals("googleusercontent.com") || host.endsWith(".googleusercontent.com"))) return;
-                connection = (HttpURLConnection) url.openConnection(); connection.setConnectTimeout(8000); connection.setReadTimeout(8000); connection.setInstanceFollowRedirects(true); connection.setUseCaches(true);
-                connection.setRequestProperty("Accept", "image/*"); connection.setRequestProperty("User-Agent", "HYMN-Team-Android");
-                if (hymnPhoto) { connection.setInstanceFollowRedirects(false); connection.setRequestProperty("Cookie", api.cookie()); }
-                int status = connection.getResponseCode(); if (status < 200 || status >= 300 || connection.getContentLengthLong() > 2_000_000L) return;
-                Bitmap bitmap = BitmapFactory.decodeStream(connection.getInputStream());
-                if (bitmap != null) { avatarCache.put(imageUrl, bitmap); runOnUiThread(() -> { if (!isFinishing()) target.setImageBitmap(bitmap); }); }
-            } catch (Exception ignored) { }
-            finally { if (connection != null) connection.disconnect(); }
-        });
+        if (avatarRepository != null) avatarRepository.load(target, imageUrl);
     }
     private void addMetric(LinearLayout row, String label, int value) {
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL); card.setPadding(dp(13), dp(13), dp(8), dp(12)); card.setBackground(shape(surface(), BORDER, 14)); LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(92), 1); params.rightMargin = dp(7); row.addView(card, params);
@@ -870,7 +854,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onPause() { if (chatView != null) chatView.pause(); super.onPause(); }
     @Override protected void onResume() { super.onResume(); if (chatView != null) chatView.resume(); }
-    @Override protected void onDestroy() { if (chatView != null) chatView.close(); io.shutdownNow(); super.onDestroy(); }
+    @Override protected void onDestroy() { if (chatView != null) chatView.close(); if (avatarRepository != null) avatarRepository.close(); io.shutdownNow(); super.onDestroy(); }
 
     @Override public void onBackPressed() {
         navigateBack();

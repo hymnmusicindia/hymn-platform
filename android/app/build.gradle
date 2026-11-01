@@ -7,8 +7,8 @@ android {
         applicationId 'fun.hymnmusic.team'
         minSdk 26
         targetSdk 35
-        versionCode 6
-        versionName '2.1.0'
+        versionCode 7
+        versionName '2.1.1'
         def googleClientId = project.findProperty('googleClientId') ?: System.getenv('GOOGLE_CLIENT_ID') ?: System.getenv('NEXT_PUBLIC_GOOGLE_CLIENT_ID') ?: ''
         buildConfigField 'String', 'GOOGLE_WEB_CLIENT_ID', '"' + googleClientId + '"'
     }
