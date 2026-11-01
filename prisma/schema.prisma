@@ -1275,6 +1275,7 @@ model StoredAsset {
   safeFilename            String                   @map("safe_filename")
   mimeType                String                   @map("mime_type")
   byteSize                Int                      @map("byte_size")
+  libraryVisible          Boolean                  @default(true) @map("library_visible")
   checksum                String
   providerDeliveryToken   String?                  @unique @map("provider_delivery_token")
   providerDeliveryUrl     String?                  @map("provider_delivery_url")

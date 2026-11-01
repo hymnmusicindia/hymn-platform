@@ -167,7 +167,7 @@ export async function POST(request: Request) {
       return Number.isInteger(assetId) && assetId > 0 && savedTrack?.id ? [{ assetId, releaseId: release.id, trackId: savedTrack.id }] : [];
     });
     if (libraryLinks.length) {
-      const ownedAssets = await prisma.storedAsset.findMany({ where: { id: { in: libraryLinks.map((item: { assetId: number }) => item.assetId) }, ownerUserId: session.sub, assetType: "private_audio_master", uploadStatus: "ready", deletedAt: null }, select: { id: true } });
+      const ownedAssets = await prisma.storedAsset.findMany({ where: { id: { in: libraryLinks.map((item: { assetId: number }) => item.assetId) }, ownerUserId: session.sub, assetType: "private_audio_master", uploadStatus: "ready", deletedAt: null, libraryVisible: true }, select: { id: true } });
       const allowed = new Set(ownedAssets.map((item: { id: number }) => item.id));
       await prisma.releaseAssetLink.createMany({ data: libraryLinks.filter((item: { assetId: number }) => allowed.has(item.assetId)).map((item: { assetId: number; releaseId: number; trackId: number | null }) => ({ ...item, role: "TRACK_AUDIO_MASTER" })), skipDuplicates: true });
     }

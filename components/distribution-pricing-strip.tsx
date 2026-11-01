@@ -26,6 +26,7 @@ export const planPerks = {
   ],
   half_yearly: [
     { label: "Unlimited releases", included: true },
+    { label: "Audio library storage up to 500 MB", included: true },
     { label: "5 artist profiles", included: true },
     { label: "Metadata, artwork, and audio review", included: true },
     { label: "Release tracking dashboard", included: true },
@@ -35,6 +36,7 @@ export const planPerks = {
   ],
   yearly: [
     { label: "Unlimited releases", included: true },
+    { label: "Audio library storage up to 1 GB", included: true },
     { label: "7 artist profiles", included: true },
     { label: "Metadata, artwork, and audio review", included: true },
     { label: "Release tracking dashboard", included: true },
@@ -44,6 +46,7 @@ export const planPerks = {
   ],
   yearly_plus: [
     { label: "Unlimited releases", included: true },
+    { label: "Audio library storage up to 10 GB", included: true },
     { label: "15 artist profiles", included: true },
     { label: "Custom label/imprint name", included: true },
     { label: "Release tracking dashboard", included: true },

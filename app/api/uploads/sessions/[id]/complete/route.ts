@@ -8,6 +8,7 @@ import { finalRelativePath, localStorageProvider, validateSessionHeader } from "
 import { validatePrivateUpload, type PrivateAssetType } from "@/lib/private-storage";
 import { documentPolicyForCategory } from "@/lib/release-document-policy";
 import { verifyArtworkIntegrity, verifyAudioIntegrity } from "@/lib/media-integrity";
+import { audioLibraryLimitForPlan } from "@/lib/audio-library-storage";
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireUser(); if ("error" in auth) return auth.error;
@@ -48,7 +49,21 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const objectKey = relativePath;
     const storageProvider = "LOCAL";
     const { asset, completed } = await prisma.$transaction(async tx => {
-      const asset = await tx.storedAsset.create({ data: { ownerUserId: session.userId, releaseId: session.releaseId, trackId: session.trackId, assetType: session.assetCategory === "TRACK_AUDIO_MASTER" ? "private_audio_master" : session.assetCategory === "RELEASE_COVER_ART" ? "private_unreleased_artwork" : documentType || "private_ownership_proof", storageProvider, storageRoot: "HYMN_STORAGE_ROOT", relativePath, objectKey, originalFilename: session.originalFilename, safeFilename, storedFilename: safeFilename, mimeType: session.mimeType, byteSize: assembled.size, checksum: assembled.checksum, category: session.assetCategory, entityType: session.trackId || session.clientTrackId ? "TRACK" : "RELEASE", entityId: String(session.trackId || session.clientTrackId || session.releaseId), accessClassification: "private", uploadStatus: "ready" } });
+      let libraryVisible = true;
+      if (session.assetCategory === "TRACK_AUDIO_MASTER") {
+        // Serialize audio completions per user so concurrent uploads cannot all
+        // claim the same remaining library capacity.
+        await tx.$queryRaw`SELECT id FROM users WHERE id = ${session.userId} FOR UPDATE`;
+        const [subscription, usage] = await Promise.all([
+          tx.subscription.findUnique({ where: { userId: session.userId }, select: { plan: true, status: true, expiryDate: true, currentPeriodEnd: true } }),
+          tx.storedAsset.aggregate({ where: { ownerUserId: session.userId, assetType: "private_audio_master", uploadStatus: "ready", deletedAt: null, libraryVisible: true }, _sum: { byteSize: true } }),
+        ]);
+        const expiry = Math.max(...[subscription?.expiryDate, subscription?.currentPeriodEnd].map(value => value?.getTime() || 0));
+        const active = Boolean(subscription && subscription.status.toLowerCase() === "active" && expiry > Date.now());
+        const limit = audioLibraryLimitForPlan(subscription?.plan, active);
+        libraryVisible = (usage._sum.byteSize || 0) + assembled.size <= limit;
+      }
+      const asset = await tx.storedAsset.create({ data: { ownerUserId: session.userId, releaseId: session.releaseId, trackId: session.trackId, assetType: session.assetCategory === "TRACK_AUDIO_MASTER" ? "private_audio_master" : session.assetCategory === "RELEASE_COVER_ART" ? "private_unreleased_artwork" : documentType || "private_ownership_proof", storageProvider, storageRoot: "HYMN_STORAGE_ROOT", relativePath, objectKey, originalFilename: session.originalFilename, safeFilename, storedFilename: safeFilename, mimeType: session.mimeType, byteSize: assembled.size, checksum: assembled.checksum, category: session.assetCategory, entityType: session.trackId || session.clientTrackId ? "TRACK" : "RELEASE", entityId: String(session.trackId || session.clientTrackId || session.releaseId), accessClassification: "private", uploadStatus: "ready", libraryVisible } });
       const completed = await tx.uploadSession.update({ where: { id }, data: { status: "COMPLETED", finalAssetId: asset.id, completedAt: new Date(), bytesUploaded: session.totalSize } });
       return { asset, completed };
     });
