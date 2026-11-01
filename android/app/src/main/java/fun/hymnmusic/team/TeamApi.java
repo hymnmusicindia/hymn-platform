@@ -47,6 +47,8 @@ final class TeamApi {
     }
     void saveWorkDraft(String key, JSONObject value) throws Exception { prefs().edit().putString("work_draft:" + key, value.toString()).apply(); }
     void clearWorkDraft(String key) throws Exception { prefs().edit().remove("work_draft:" + key).apply(); }
+    JSONObject chatDraft(String key) throws Exception { String value = prefs().getString("chat_draft:" + key, "{}"); return new JSONObject(value); }
+    void saveChatDraft(String key, JSONObject draft) throws Exception { prefs().edit().putString("chat_draft:" + key, draft.toString()).apply(); }
     String lastNotificationId() { try { return prefs().getString("last_notification_id", ""); } catch (Exception ignored) { return ""; } }
     void setLastNotificationId(String id) { try { prefs().edit().putString("last_notification_id", id).apply(); } catch (Exception ignored) { } }
 

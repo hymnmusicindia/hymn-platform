@@ -88,11 +88,13 @@ public final class MainActivity extends Activity {
     private String profileImageUrl = "";
     private JSONArray inboxItems = new JSONArray();
     private TextView inboxBadge;
-    private volatile Bitmap cachedProfileBitmap;
-    private volatile String cachedProfileUrl = "";
     private JSONObject session;
     private JSONObject activeWorkDetail;
     private boolean workActionBusy = false;
+    private TeamChatView chatView;
+    private final android.util.LruCache<String, Bitmap> avatarCache = new android.util.LruCache<String, Bitmap>(8192) {
+        @Override protected int sizeOf(String key, Bitmap value) { return value.getByteCount() / 1024; }
+    };
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -188,6 +190,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showPage(String next) {
+        if (chatView != null) { chatView.close(); chatView = null; }
         if (!next.equals(page) && !next.equals("workspace-detail")) previousPage = page;
         page = next; tool = ""; screenGeneration.incrementAndGet();
         root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(BG);
@@ -202,12 +205,13 @@ public final class MainActivity extends Activity {
         FrameLayout inboxFrame = new FrameLayout(this); LinearLayout.LayoutParams inboxParams = new LinearLayout.LayoutParams(dp(42), dp(44)); inboxParams.leftMargin = dp(2); top.addView(inboxFrame, inboxParams); ImageView inboxIcon = new ImageView(this); inboxIcon.setImageResource(R.drawable.ic_inbox_nav); inboxIcon.setColorFilter(NAVY); inboxIcon.setPadding(dp(11), dp(11), dp(11), dp(11)); inboxIcon.setBackground(shape(surface(), BORDER, 13)); inboxFrame.addView(inboxIcon, new FrameLayout.LayoutParams(-1, -1)); inboxIcon.setOnClickListener(v -> showInboxPopup(inboxIcon)); inboxBadge = text("", 8, Color.WHITE, true); inboxBadge.setGravity(Gravity.CENTER); inboxBadge.setBackground(shape(Color.rgb(208, 54, 64), 0, 10)); FrameLayout.LayoutParams badgeParams = new FrameLayout.LayoutParams(dp(17), dp(17), Gravity.TOP | Gravity.END); inboxFrame.addView(inboxBadge, badgeParams); inboxBadge.setVisibility(View.GONE); updateInboxBadge();
         ImageView refresh = new ImageView(this); refresh.setImageResource(R.drawable.ic_refresh); refresh.setColorFilter(NAVY); refresh.setPadding(dp(10), dp(10), dp(10), dp(10)); refresh.setBackground(shape(surface(), BORDER, 13)); LinearLayout.LayoutParams refreshParams = new LinearLayout.LayoutParams(dp(40), dp(44)); refreshParams.leftMargin = dp(4); top.addView(refresh, refreshParams); refresh.setOnClickListener(v -> loadPageData());
         Button logout = button("Sign out", false); logout.setTextSize(10); logout.setPadding(dp(7), 0, dp(7), 0); LinearLayout.LayoutParams logoutParams = new LinearLayout.LayoutParams(-2, dp(44)); logoutParams.leftMargin = dp(5); top.addView(logout, logoutParams); logout.setOnClickListener(v -> confirmSignOut()); root.addView(top);        ScrollView scroll = new ScrollView(this); content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL); content.setPadding(dp(16), dp(16), dp(16), dp(22)); scroll.setFillViewport(true); scroll.addView(content); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        if (page.equals("chats")) { scroll.removeView(content); root.removeView(scroll); content.setPadding(0, 0, 0, 0); root.addView(content, new LinearLayout.LayoutParams(-1, 0, 1)); }
         if (!page.equals("workspace-detail")) { bottom = new LinearLayout(this); bottom.setGravity(Gravity.CENTER); bottom.setBackgroundColor(surface()); bottom.setPadding(dp(5), dp(5), dp(5), dp(5)); root.addView(bottom, new LinearLayout.LayoutParams(-1, dp(72))); }
         setContentView(root); if (bottom != null && !page.equals("workspace-detail")) buildNavigation(); loadPageData(); startNotificationSync();
     }
 
     private void buildNavigation() {
-        String[] labels = {"Home", "Work-station", "Schedule", "Inbox", "Tools"}; int[] icons = {R.drawable.ic_home_nav, R.drawable.ic_workstation_nav, R.drawable.ic_calendar_nav, R.drawable.ic_inbox_nav, R.drawable.ic_tools_nav}; String[] keys = {"home", "workstation", "schedule", "alerts", "more"};
+        String[] labels = {"Home", "Work-station", "Schedule", "Chats", "Tools"}; int[] icons = {R.drawable.ic_home_nav, R.drawable.ic_workstation_nav, R.drawable.ic_calendar_nav, R.drawable.ic_chat_nav, R.drawable.ic_tools_nav}; String[] keys = {"home", "workstation", "schedule", "chats", "more"};
         for (int i = 0; i < labels.length; i++) {
             final String key = keys[i]; boolean selected = page.equals(key);
             LinearLayout item = new LinearLayout(this); item.setGravity(Gravity.CENTER); item.setOrientation(LinearLayout.VERTICAL); item.setBackground(shape(selected ? (nightMode ? Color.rgb(35, 53, 78) : Color.rgb(235, 242, 255)) : Color.TRANSPARENT, 0, 14)); bottom.addView(item, new LinearLayout.LayoutParams(0, -1, 1));
@@ -220,7 +224,12 @@ public final class MainActivity extends Activity {
     private void loadPageData() {
         if (content == null) return;
         final int generation = screenGeneration.incrementAndGet(); final String requestedPage = page; final String requestedTool = tool;
+        if (chatView != null) { chatView.close(); chatView = null; }
         content.removeAllViews(); heading.setText(requestedTool.isEmpty() ? "HYMN  /  " + requestedPage.toUpperCase(Locale.ROOT) : toolName(requestedTool).toUpperCase(Locale.ROOT));
+        if (requestedPage.equals("chats")) {
+            chatView = new TeamChatView(this, api, workspace, memberId, NAVY, MUTED, BG, surface(), BLUE, BORDER, this::loadAvatar);
+            content.addView(chatView.view(), new LinearLayout.LayoutParams(-1, -1)); chatView.start(); return;
+        }
         if (requestedPage.equals("home")) renderHomeLoading();
         else { TextView wait = text(requestedTool.equals("workstation") || requestedPage.equals("workstation") ? "Loading your work queue…" : "Loading your workspace…", 13, MUTED, false); content.addView(wait); }
         io.execute(() -> {
@@ -322,18 +331,19 @@ public final class MainActivity extends Activity {
     }
 
     private void loadAvatar(ImageView target, String imageUrl) {
-        Bitmap cached = cachedProfileBitmap;
-        if (cached != null && imageUrl.equals(cachedProfileUrl)) { target.setImageBitmap(cached); return; }
+        Bitmap known = avatarCache.get(imageUrl); if (known != null) { target.setImageBitmap(known); return; }
         io.execute(() -> {
             HttpURLConnection connection = null;
             try {
-                URL url = new URL(imageUrl); String host = url.getHost() == null ? "" : url.getHost().toLowerCase(Locale.ROOT);
-                if (!"https".equalsIgnoreCase(url.getProtocol()) || !(host.equals("googleusercontent.com") || host.endsWith(".googleusercontent.com"))) return;
+                URL url = new URL(imageUrl.startsWith("/") ? TeamApi.BASE + imageUrl : imageUrl); String host = url.getHost() == null ? "" : url.getHost().toLowerCase(Locale.ROOT);
+                boolean hymnPhoto = host.equals("hymnmusic.fun") || host.equals("www.hymnmusic.fun");
+                if (!"https".equalsIgnoreCase(url.getProtocol()) || !(hymnPhoto || host.equals("googleusercontent.com") || host.endsWith(".googleusercontent.com"))) return;
                 connection = (HttpURLConnection) url.openConnection(); connection.setConnectTimeout(8000); connection.setReadTimeout(8000); connection.setInstanceFollowRedirects(true); connection.setUseCaches(true);
                 connection.setRequestProperty("Accept", "image/*"); connection.setRequestProperty("User-Agent", "HYMN-Team-Android");
+                if (hymnPhoto) { connection.setInstanceFollowRedirects(false); connection.setRequestProperty("Cookie", api.cookie()); }
                 int status = connection.getResponseCode(); if (status < 200 || status >= 300 || connection.getContentLengthLong() > 2_000_000L) return;
                 Bitmap bitmap = BitmapFactory.decodeStream(connection.getInputStream());
-                if (bitmap != null) { cachedProfileBitmap = bitmap; cachedProfileUrl = imageUrl; runOnUiThread(() -> { if (!isFinishing()) target.setImageBitmap(bitmap); }); }
+                if (bitmap != null) { avatarCache.put(imageUrl, bitmap); runOnUiThread(() -> { if (!isFinishing()) target.setImageBitmap(bitmap); }); }
             } catch (Exception ignored) { }
             finally { if (connection != null) connection.disconnect(); }
         });
@@ -799,11 +809,7 @@ public final class MainActivity extends Activity {
     }
 
     private void openChat(String id, String name) {
-        chatChannelId = id; chatChannelName = name;
-        content.removeAllViews(); addText(name, 21, NAVY, true); addText("Team conversation", 12, MUTED, false); addSpace(12);
-        LinearLayout compose = new LinearLayout(this); compose.setGravity(Gravity.CENTER_VERTICAL); EditText input = new EditText(this); styleInput(input); input.setHint("Write a message"); input.setTextSize(13); input.setMinHeight(dp(48)); input.setBackground(shape(surface(), BORDER, 12)); compose.addView(input, new LinearLayout.LayoutParams(0, -2, 1)); Button send = button("Send", true); LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(dp(78), dp(48)); sp.leftMargin = dp(8); compose.addView(send, sp); content.addView(compose);
-        send.setOnClickListener(v -> { String body = input.getText().toString().trim(); if (body.isEmpty()) return; try { JSONObject payload = new JSONObject().put("channelId", chatChannelId).put("body", body).put("clientKey", UUID.randomUUID().toString()).put("mentions", new JSONArray()); io.execute(() -> { try { api.post("messages", workspace, payload); runOnUiThread(() -> openChat(chatChannelId, chatChannelName)); } catch (Exception e) { runOnUiThread(() -> toastError(e.getMessage())); } }); } catch (Exception ignored) { } });
-        io.execute(() -> { try { String channel = java.net.URLEncoder.encode(id, "UTF-8"); JSONObject messages = api.get("messages", workspace, "channel=" + channel); runOnUiThread(() -> { JSONArray items = messages.optJSONArray("items"); if (items == null || items.length() == 0) addEmpty("Start this conversation with a message."); else for (int i=0;i<items.length();i++) { JSONObject row = items.optJSONObject(i); if (row == null) continue; JSONObject author = row.optJSONObject("author"); String who = author != null && author.optJSONObject("user") != null ? author.optJSONObject("user").optString("name", "Teammate") : "Teammate"; LinearLayout card = toolCard(who, row.optString("body", "")); } }); } catch (Exception e) { runOnUiThread(() -> addEmpty(safe(e.getMessage()))); } });
+        showPage("chats"); if (chatView != null) chatView.openExternal(id, name);
     }
     private void signOut() {
         screenGeneration.incrementAndGet();
@@ -843,6 +849,7 @@ public final class MainActivity extends Activity {
     private void renderError(String error) { content.removeAllViews(); addText("Couldn’t load this section", 20, NAVY, true); addSpace(8); addText(safe(error), 13, MUTED, false); addSpace(14); Button retry = button("Try again", true); content.addView(retry); retry.setOnClickListener(v -> loadPageData()); if (page.equals("more") && !tool.isEmpty()) { Button back = button("Back to workspace", false); LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, dp(46)); bp.topMargin = dp(8); content.addView(back, bp); back.setOnClickListener(v -> { tool = ""; loadPageData(); }); } }
 
     private void navigateBack() {
+        if (page.equals("chats") && chatView != null && chatView.back()) return;
         if (page.equals("more") && !tool.isEmpty()) { tool = ""; loadPageData(); return; }
         if (page.equals("workspace-detail")) { String target = previousPage; if (target.equals("workspace-detail")) target = "home"; showPage(target); return; }
         if (!page.equals("home")) { String target = previousPage; if (target.equals(page) || target.equals("workspace-detail")) target = "home"; showPage(target); return; }
@@ -861,7 +868,9 @@ public final class MainActivity extends Activity {
     private void email(String address) { try { startActivity(new Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:" + Uri.encode(address)))); } catch (Exception e) { toastError("No email app is available."); } }
     private void toastError(String error) { new AlertDialog.Builder(this).setMessage(safe(error)).setPositiveButton("OK", null).show(); }
 
-    @Override protected void onDestroy() { io.shutdownNow(); super.onDestroy(); }
+    @Override protected void onPause() { if (chatView != null) chatView.pause(); super.onPause(); }
+    @Override protected void onResume() { super.onResume(); if (chatView != null) chatView.resume(); }
+    @Override protected void onDestroy() { if (chatView != null) chatView.close(); io.shutdownNow(); super.onDestroy(); }
 
     @Override public void onBackPressed() {
         navigateBack();

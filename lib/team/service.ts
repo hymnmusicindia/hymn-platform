@@ -1,4 +1,6 @@
 import { syncProspectContact } from "./contact-directory";
+import { channelScope } from './chat-policy';
+export { channelScope } from './chat-policy';
 import { leadIdentity, hasLeadVerification } from './lead-verification';
 import { assertEmployeeAssignee, assertDailyTaskChange, syncDailyCrmWork, indiaWorkday } from "./daily-work";
 import { nextCaller } from "./crm-workflow";
@@ -16,7 +18,6 @@ const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 export const taskScope = (a: Actor): Prisma.TeamTaskWhereInput => ({ workspaceId: a.workspaceId, archivedAt: null, ...(!can(a, "tasks.all") ? { OR: [{ ownerId: a.id }, { creatorId: a.id }, { collaboratorIds: { has: a.id } }, { project: { memberIds: { has: a.id } } }] } : {}) });
 export const projectScope = (a: Actor): Prisma.TeamProjectWhereInput => ({ workspaceId: a.workspaceId, ...(!can(a, "tasks.all") ? { memberIds: { has: a.id } } : {}) });
 export const prospectScope = (a: Actor): Prisma.TeamProspectWhereInput => ({ workspaceId: a.workspaceId, ...(!can(a, "crm.all") ? { OR: [{ ownerId: a.id }, { acquisitionLead: { is: { researcherEmployeeId: a.id } } }, { acquisitionLead: { is: { acquisitionEmployeeId: a.id } } }] } : {}) });
-export const channelScope = (a: Actor): Prisma.TeamChannelWhereInput => ({ workspaceId: a.workspaceId, OR: [{ private: false }, { memberIds: { has: a.id } }] });
 export async function audit(tx: Tx, a: Actor, action: string, entityId: string, detail: Prisma.InputJsonValue = {}) { await tx.teamAudit.create({ data: { workspaceId: a.workspaceId, actorId: a.id, action, entityId, detail } }); }
 export async function notify(tx: Tx, memberId: string, title: string, href = "/team?module=work") { const member = await tx.teamMember.findUnique({ where: { id: memberId }, select: { preferences: true, status: true } }); if (member?.status !== "ACTIVE" || (member.preferences as { notifications?: boolean }).notifications === false) return; await tx.teamNotification.create({ data: { memberId, title, href } }); }
 export async function eligible(tx: Tx, a: Actor, ids: string[]) {
@@ -54,6 +55,7 @@ async function dependencies(tx: Tx, a: Actor, id: string, ids: string[]) {
 }
 
 export async function teamMutation(identity: Actor, resource: string, input: unknown) {
+  if (resource.startsWith('chat-')) return (await import('./chat')).chatMutation(identity, resource, input);
   return teamWrite(identity, (tx,a)=>teamMutationTx(tx,a,resource,input));
 }
 
@@ -377,6 +379,7 @@ export async function acceptTeamInvitation(user: { id: number; email: string }, 
 }
 
 export async function teamRead(a: Actor, resource: string, params: URLSearchParams) {
+  if (resource.startsWith('chat-')) return (await import('./chat')).chatRead(a, resource, params);
   if (resource.startsWith("workstation")) return (await import("./work-station")).stationRead(a,resource,params);
   if (resource === 'leadership-activity') return (await import('./leadership-activity')).readLeadershipActivity(a, params);
   if (resource === "call-reports") return (await import("./call-reports")).readCallReports(a, params);
@@ -414,7 +417,7 @@ export async function teamRead(a: Actor, resource: string, params: URLSearchPara
     demand(a, "chat.use"); const channelId = params.get("channel") ?? "";
     const channel = await prisma.teamChannel.findFirst({ where: { ...channelScope(a), id: channelId } });
     if (!channel) throw new TeamError("Conversation unavailable.", 404);
-    const items = await prisma.teamMessage.findMany({ where: { channelId }, ...page, orderBy: [{ createdAt: "desc" }, { id: "desc" }], include: { author: { select: memberSelect } } });
+    const items = await prisma.teamMessage.findMany({ where: { channelId, deletedAt: null }, ...page, orderBy: [{ createdAt: "desc" }, { id: "desc" }], include: { author: { select: { id: true, user: { select: { name: true, avatar: true } } } } } });
     const readerIds = [...new Set(items.flatMap(m => m.readMemberIds))].filter(id => !channel.private || channel.memberIds.includes(id));
     const readers = readerIds.length ? await prisma.teamMember.findMany({ where: { workspaceId: a.workspaceId, status: "ACTIVE", user: { status: "ACTIVE" }, id: { in: readerIds } }, select: { id: true, user: { select: { name: true, avatar: true } } } }) : [];
     return { items: items.reverse(), readers };
