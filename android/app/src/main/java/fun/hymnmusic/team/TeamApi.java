@@ -18,8 +18,11 @@ final class TeamApi {
     static final String BASE = "https://hymnmusic.fun";
     private static final String PREFS = "hymn_team_secure_session";
     private static final String KEY_COOKIE = "session_cookie";
+    private static final String CHAT_CACHE_KEY = "hymn_team_chat_downloads_v1";
     private final Context context;
     private android.content.SharedPreferences securePrefs;
+    private final java.util.Map<String, ChatCache> chatCaches = new java.util.HashMap<>();
+    private static final java.util.concurrent.ExecutorService CHAT_DISK = java.util.concurrent.Executors.newSingleThreadExecutor(r -> { Thread t = new Thread(r, "hymn-chat-storage"); t.setDaemon(true); return t; });
 
     TeamApi(Context context) { this.context = context.getApplicationContext(); }
 
@@ -49,6 +52,14 @@ final class TeamApi {
     void clearWorkDraft(String key) throws Exception { prefs().edit().remove("work_draft:" + key).apply(); }
     JSONObject chatDraft(String key) throws Exception { String value = prefs().getString("chat_draft:" + key, "{}"); return new JSONObject(value); }
     void saveChatDraft(String key, JSONObject draft) throws Exception { prefs().edit().putString("chat_draft:" + key, draft.toString()).apply(); }
+    synchronized ChatCache chatCache(String workspace, String member) throws Exception {
+        String scope = workspace + ":" + member; ChatCache store = chatCaches.get(scope); if (store != null) return store;
+        new MasterKey.Builder(context, CHAT_CACHE_KEY).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build();
+        java.security.KeyStore keys = java.security.KeyStore.getInstance("AndroidKeyStore"); keys.load(null);
+        store = new ChatCache(new java.io.File(context.getNoBackupFilesDir(), "chat-downloads"), workspace, member, (javax.crypto.SecretKey)keys.getKey(CHAT_CACHE_KEY, null));
+        chatCaches.put(scope, store); return store;
+    }
+    void chatDisk(Runnable work) { CHAT_DISK.execute(work); }
     String lastNotificationId() { try { return prefs().getString("last_notification_id", ""); } catch (Exception ignored) { return ""; } }
     void setLastNotificationId(String id) { try { prefs().edit().putString("last_notification_id", id).apply(); } catch (Exception ignored) { } }
 

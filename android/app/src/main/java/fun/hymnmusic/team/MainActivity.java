@@ -226,7 +226,11 @@ public final class MainActivity extends Activity {
         if (chatView != null) { chatView.close(); chatView = null; }
         content.removeAllViews(); heading.setText(requestedTool.isEmpty() ? "HYMN  /  " + requestedPage.toUpperCase(Locale.ROOT) : toolName(requestedTool).toUpperCase(Locale.ROOT));
         if (requestedPage.equals("chats")) {
-            chatView = new TeamChatView(this, api, workspace, memberId, NAVY, MUTED, BG, surface(), BLUE, BORDER, this::loadAvatar);
+            chatView = new TeamChatView(this, api, workspace, memberId, NAVY, MUTED, BG, surface(), BLUE, BORDER, new TeamChatView.AvatarLoader() {
+                public void load(ImageView image, String url) { loadAvatar(image, url); }
+                public long cachedBytes() { return avatarRepository == null ? 0 : avatarRepository.cachedBytes(); }
+                public void clearCache() throws Exception { if (avatarRepository != null) avatarRepository.clearCache(); }
+            });
             content.addView(chatView.view(), new LinearLayout.LayoutParams(-1, -1)); chatView.start(); return;
         }
         if (requestedPage.equals("home")) renderHomeLoading();

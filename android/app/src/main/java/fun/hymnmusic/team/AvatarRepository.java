@@ -25,6 +25,8 @@ final class AvatarRepository {
         @Override protected int sizeOf(String key, Bitmap value) { return Math.max(1, value.getByteCount() / 1024); }
     };
     private volatile boolean closed;
+    private final Object diskLock = new Object();
+    private long epoch;
     AvatarRepository(Activity activity, TeamApi api) { this.activity = activity; this.api = api; directory = new File(activity.getCacheDir(), "team-avatars"); }
 
     void load(ImageView target, String source) {
@@ -33,6 +35,7 @@ final class AvatarRepository {
         ConcurrentLinkedQueue<WeakReference<ImageView>> queue = new ConcurrentLinkedQueue<>(); queue.add(new WeakReference<>(target));
         ConcurrentLinkedQueue<WeakReference<ImageView>> existing = pending.putIfAbsent(source, queue);
         if (existing != null) { existing.add(new WeakReference<>(target)); return; }
+        final long token; synchronized (diskLock) { token = epoch; }
         workers.execute(() -> {
             Bitmap picture = null; HttpURLConnection connection = null;
             try {
@@ -52,10 +55,10 @@ final class AvatarRepository {
                     if (options.outWidth <= 0 || options.outHeight <= 0) return;
                     options.inSampleSize = 1; while (Math.max(options.outWidth, options.outHeight) / options.inSampleSize > 256) options.inSampleSize *= 2;
                     options.inJustDecodeBounds = false; picture = BitmapFactory.decodeByteArray(data, 0, data.length, options);
-                    if (picture != null) { try { directory.mkdirs(); try (OutputStream out = new FileOutputStream(file)) { picture.compress(Bitmap.CompressFormat.PNG, 100, out); } trim(); } catch (IOException ignored) { } }
+                    if (picture != null) { synchronized (diskLock) { if (token == epoch && !closed) try { directory.mkdirs(); try (OutputStream out = new FileOutputStream(file)) { picture.compress(Bitmap.CompressFormat.PNG, 100, out); } trim(); } catch (IOException ignored) { } } }
                 }
-                if (picture != null) { memory.put(source, picture); final Bitmap ready = picture; activity.runOnUiThread(() -> {
-                    if (closed || activity.isFinishing()) return;
+                if (picture != null) { synchronized (diskLock) { if (token != epoch || closed) return; memory.put(source, picture); } final Bitmap ready = picture; activity.runOnUiThread(() -> {
+                    synchronized (diskLock) { if (closed || activity.isFinishing() || token != epoch) return; }
                     for (WeakReference<ImageView> reference : queue) { ImageView image = reference.get(); if (image != null) image.setImageBitmap(ready); }
                 }); }
             } catch (Exception ignored) { /* Initials remain visible when a photo is unavailable. */ }
@@ -68,4 +71,6 @@ final class AvatarRepository {
         for (File f : files) { if (size <= 8_000_000) break; long length = f.length(); if (f.delete()) size -= length; }
     }
     void close() { closed = true; workers.shutdownNow(); pending.clear(); }
+    long cachedBytes() { synchronized (diskLock) { File[] files = directory.listFiles(); long size = 0; if (files != null) for (File f : files) if (f.isFile()) size += f.length(); return size; } }
+    void clearCache() throws IOException { synchronized (diskLock) { epoch++; memory.evictAll(); pending.clear(); File[] files = directory.listFiles(); if (files != null) for (File f : files) if (f.isFile() && !f.delete()) throw new IOException("Some downloaded photos couldn't be cleared"); } }
 }

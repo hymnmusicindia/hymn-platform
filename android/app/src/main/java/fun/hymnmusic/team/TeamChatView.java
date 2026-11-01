@@ -17,7 +17,7 @@ import java.util.concurrent.*;
 
 /** Native chat, with a stable composer and foreground-only live synchronization. */
 final class TeamChatView {
-    interface AvatarLoader { void load(ImageView image, String url); }
+    interface AvatarLoader { void load(ImageView image, String url); default long cachedBytes() { return 0; } default void clearCache() throws Exception {} }
     private final Activity activity;
     private final TeamApi api;
     private final String workspace, me;
@@ -41,12 +41,15 @@ final class TeamChatView {
     private String fingerprint = "", pendingKey = "", pendingBody = "";
     private String search = "";
     private JSONObject lastList;
+    private ChatCache downloads;
+    private boolean remoteVerified, clearingDownloads;
     private final Runnable tick = this::refresh;
     private final Runnable readVisible = this::markVisible;
 
     TeamChatView(Activity activity, TeamApi api, String workspace, String me, int ink, int muted, int background, int surface, int accent, int border, AvatarLoader avatars) {
         this.activity = activity; this.api = api; this.workspace = workspace; this.me = me;
         this.ink = ink; this.muted = muted; this.background = background; this.surface = surface; this.accent = accent; this.border = border; this.avatars = avatars;
+        try { downloads = api.chatCache(workspace, me); } catch (Exception ignored) { }
         root = column(); root.setBackgroundColor(background); body = column(); root.addView(body, new LinearLayout.LayoutParams(-1, -1));
     }
     View view() { return root; }
@@ -74,25 +77,25 @@ final class TeamChatView {
     private void hint(String text) { if (connection != null) connection.setText(text); }
 
     private void showList() {
-        generation++; syncing = false; channel = null; fingerprint = ""; body.removeAllViews(); body.setPadding(dp(16), dp(12), dp(16), 0);
+        generation++; syncing = false; remoteVerified = false; channel = null; messages.clear(); messageViews.clear(); marking.clear(); fingerprint = ""; body.removeAllViews(); body.setPadding(dp(16), dp(12), dp(16), 0);
         LinearLayout heading = new LinearLayout(activity); heading.setGravity(Gravity.CENTER_VERTICAL); heading.addView(label("Chats", 25, ink, true), new LinearLayout.LayoutParams(0, -2, 1));
         Button direct = button("New chat"); direct.setBackground(shape(accent, 14)); direct.setTextColor(surface); heading.addView(direct, new LinearLayout.LayoutParams(-2, dp(42))); direct.setOnClickListener(v -> choose(false)); Button group = button("New group"); LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(-2, dp(42)); gp.leftMargin = dp(8); heading.addView(group, gp); group.setOnClickListener(v -> choose(true)); body.addView(heading); space(body, 12);
         EditText find = new EditText(activity); find.setTextColor(ink); find.setHintTextColor(muted); find.setHint("Search conversations"); find.setTextSize(14); find.setSingleLine(true); find.setPadding(dp(14), dp(9), dp(14), dp(9)); find.setBackground(shape(surface, 18)); find.setText(search); body.addView(find, new LinearLayout.LayoutParams(-1, dp(44)));
         find.addTextChangedListener(new android.text.TextWatcher() { public void beforeTextChanged(CharSequence s, int start, int count, int after) {} public void onTextChanged(CharSequence s, int start, int before, int count) { search = s.toString(); if (lastList != null) { fingerprint = ""; renderList(lastList); } } public void afterTextChanged(android.text.Editable s) {} });
-        connection = label("Updating conversations…", 12, muted, false); connection.setPadding(0, dp(9), 0, dp(4)); body.addView(connection); space(body, 10);
+        LinearLayout status = new LinearLayout(activity); status.setGravity(Gravity.CENTER_VERTICAL); connection = label("Updating conversations…", 12, muted, false); connection.setPadding(0, dp(9), 0, dp(4)); status.addView(connection, new LinearLayout.LayoutParams(0, -2, 1)); Button storage = button("Storage"); status.addView(storage, new LinearLayout.LayoutParams(-2, dp(40))); storage.setOnClickListener(v -> showStorage()); body.addView(status); space(body, 10);
         scroll = new ScrollView(activity); thread = column(); scroll.addView(thread); body.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1)); schedule(0);
         if (lastList != null) renderList(lastList);
         else try { JSONObject cached = api.chatDraft("directory:" + workspace + ":" + me); if (System.currentTimeMillis() - cached.optLong("at") < 300000 && cached.optJSONObject("data") != null) renderList(cached.getJSONObject("data")); } catch (Exception ignored) { }
     }
 
     private void open(JSONObject next) {
-        saveComposer(); generation++; syncing = false; sending = false; historyEnd = false; channel = next; messages.clear(); messageViews.clear(); marking.clear(); loaded = 0; fingerprint = ""; initial = true;
+        saveComposer(); generation++; syncing = false; sending = false; historyEnd = false; remoteVerified = false; clearingDownloads = false; channel = next; messages.clear(); messageViews.clear(); marking.clear(); loaded = 0; fingerprint = ""; initial = true;
         body.removeAllViews(); body.setPadding(0, 0, 0, 0);
         LinearLayout bar = new LinearLayout(activity); bar.setGravity(Gravity.CENTER_VERTICAL); bar.setPadding(dp(12), dp(8), dp(12), dp(8)); bar.setBackgroundColor(surface);
         Button back = button("‹"); bar.addView(back, new LinearLayout.LayoutParams(dp(44), dp(44))); back.setOnClickListener(v -> back());
         bar.addView(avatar(next.optString("name", "Team"), next.optString("avatar", ""), 40));
         LinearLayout names = column(); names.setPadding(dp(10), 0, 0, 0); TextView title = label(next.optString("name", "Conversation"), 17, ink, true); title.setSingleLine(true); title.setEllipsize(android.text.TextUtils.TruncateAt.END); names.addView(title);
-        connection = label("Connecting…", 11, muted, false); names.addView(connection); bar.addView(names, new LinearLayout.LayoutParams(0, -2, 1)); body.addView(bar);
+        connection = label("Opening saved messages…", 11, muted, false); names.addView(connection); bar.addView(names, new LinearLayout.LayoutParams(0, -2, 1)); Button menu = button("⋮"); menu.setContentDescription("Chat storage options"); bar.addView(menu, new LinearLayout.LayoutParams(dp(44), dp(44))); menu.setOnClickListener(v -> showStorage()); body.addView(bar);
         scroll = new ScrollView(activity); scroll.setFillViewport(true); thread = column(); thread.setPadding(dp(12), dp(12), dp(12), dp(12)); scroll.addView(thread); body.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         scroll.getViewTreeObserver().addOnScrollChangedListener(() -> { main.removeCallbacks(readVisible); main.postDelayed(readVisible, 250); });
         LinearLayout compose = new LinearLayout(activity); compose.setGravity(Gravity.BOTTOM); compose.setPadding(dp(10), dp(8), dp(10), dp(8)); compose.setBackgroundColor(surface);
@@ -100,7 +103,7 @@ final class TeamChatView {
         pendingBody = ""; pendingKey = "";
         try { JSONObject draft = api.chatDraft(draftKey()); pendingBody = draft.optString("pendingBody"); pendingKey = draft.optString("pendingKey"); composer.setText(draft.optString("text")); } catch (Exception ignored) { hint("Your saved draft couldn't load. Reopen this chat to retry."); }
         composer.addTextChangedListener(new android.text.TextWatcher() { public void beforeTextChanged(CharSequence s, int start, int count, int after) {} public void onTextChanged(CharSequence s, int start, int before, int count) { saveComposer(); } public void afterTextChanged(android.text.Editable s) {} });
-        compose.addView(composer, new LinearLayout.LayoutParams(0, -2, 1)); send = button("Send"); LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(dp(70), dp(48)); sp.leftMargin = dp(8); compose.addView(send, sp); send.setOnClickListener(v -> send()); body.addView(compose); schedule(0);
+        compose.addView(composer, new LinearLayout.LayoutParams(0, -2, 1)); send = button("Send"); LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(dp(70), dp(48)); sp.leftMargin = dp(8); compose.addView(send, sp); send.setOnClickListener(v -> send()); body.addView(compose); restoreDownloads(); schedule(0);
     }
     private String draftKey() { return workspace + ":" + me + ":" + channel.optString("id"); }
     private void saveComposer() { if (channel != null && composer != null) try { api.saveChatDraft(draftKey(), new JSONObject().put("text", composer.getText().toString()).put("pendingBody", pendingBody).put("pendingKey", pendingKey)); } catch (Exception ignored) { hint("Could not save this draft on your phone. Keep the chat open until sent."); } }
@@ -111,11 +114,11 @@ final class TeamChatView {
         network.execute(() -> { try {
             JSONObject data = id.isEmpty() ? api.get("chat-conversations", workspace, "") : api.get("chat-messages", workspace, query);
             main.post(() -> { if (closed || token != generation) return; syncing = false; failures = 0;
-                if (id.isEmpty()) { if (!data.toString().equals(fingerprint)) try { api.saveChatDraft("directory:" + workspace + ":" + me, new JSONObject().put("at", System.currentTimeMillis()).put("data", data)); } catch (Exception ignored) {} renderList(data); } else updateThread(data);
+                if (id.isEmpty()) { if (!data.toString().equals(fingerprint)) try { api.saveChatDraft("directory:" + workspace + ":" + me, new JSONObject().put("at", System.currentTimeMillis()).put("data", data)); } catch (Exception ignored) {} renderList(data); } else { remoteVerified = true; updateThread(data); }
                 hint(id.isEmpty() ? "Private conversations with your team" : "Live sync · " + (channel.optBoolean("direct") ? "Personal chat" : "Group chat")); schedule(id.isEmpty() ? 5000 : 2000);
             });
         } catch (Exception e) { main.post(() -> { if (closed || token != generation) return; syncing = false; failures++; hint("Reconnecting… " + (messages.isEmpty() && id.length() > 0 ? "Your draft is kept." : ""));
-            if (e instanceof TeamApi.ApiException && (((TeamApi.ApiException)e).status == 401 || ((TeamApi.ApiException)e).status == 403 || ((TeamApi.ApiException)e).status == 404)) { saveComposer(); messages.clear(); thread.removeAllViews(); members = new JSONArray(); people.clear(); lastList = null; try { api.saveChatDraft("directory:" + workspace + ":" + me, new JSONObject()); } catch (Exception ignored) {} hint("Chat unavailable. Return to Chats or sign in again."); return; }
+            if (e instanceof TeamApi.ApiException && (((TeamApi.ApiException)e).status == 401 || ((TeamApi.ApiException)e).status == 403 || ((TeamApi.ApiException)e).status == 404)) { saveComposer(); messages.clear(); thread.removeAllViews(); members = new JSONArray(); people.clear(); lastList = null; if (downloads != null) api.chatDisk(() -> { try { if (((TeamApi.ApiException)e).status == 401) downloads.clearAll(); else if (!id.isEmpty()) downloads.clear(id); } catch (Exception ignored) {} }); try { api.saveChatDraft("directory:" + workspace + ":" + me, new JSONObject()); } catch (Exception ignored) {} hint("Chat unavailable. Return to Chats or sign in again."); return; }
             schedule(Math.min(15000, 2000L * failures)); }); } });
     }
     private String messageQuery(String id) { return "channel=" + android.net.Uri.encode(id) + (channel != null && !channel.optString("peerId").isEmpty() ? "&peer=" + android.net.Uri.encode(channel.optString("peerId")) : ""); }
@@ -133,15 +136,17 @@ final class TeamChatView {
         }
     }
 
-    private void updateThread(JSONObject data) {
+    private void updateThread(JSONObject data) { updateThread(data, true); }
+    private void updateThread(JSONObject data, boolean latest) {
         JSONArray readers = data.optJSONArray("readers"); if (readers != null) for (int i = 0; i < readers.length(); i++) { JSONObject p = readers.optJSONObject(i); if (p != null) people.put(p.optString("id"), p); }
         JSONArray rows = data.optJSONArray("items"); if (rows == null) rows = new JSONArray(); loaded = Math.max(loaded, rows.length());
-        boolean changed = false;
+        boolean changed = latest && ChatCache.pruneMissing(messages, rows);
+        if (latest && rows.length() < 50) historyEnd = true;
         for (int i = 0; i < rows.length(); i++) { JSONObject m = rows.optJSONObject(i); if (m == null) continue; String id = m.optString("id"); JSONObject old = messages.put(id, m); if (old == null || !old.toString().equals(m.toString())) changed = true;
             String key = m.optString("clientKey"); if (key.startsWith(me + ":")) { messages.remove("pending:" + key.substring(me.length() + 1)); if (!sending && !pendingKey.isEmpty() && key.equals(me + ":" + pendingKey)) { pendingKey = ""; pendingBody = ""; composer.setText(""); send.setText("Send"); } }
         }
         if (!changed && !initial) { markVisible(); return; }
-        renderMessages();
+        renderMessages(); persistDownloads();
     }
     private void renderMessages() {
         boolean bottom = initial || scroll.getChildCount() == 0 || scroll.getScrollY() + scroll.getHeight() >= thread.getHeight() - dp(100); int y = scroll.getScrollY();
@@ -169,7 +174,7 @@ final class TeamChatView {
         thread.addView(row);
     }
     private void markVisible() {
-        if (closed || paused || channel == null || !activity.hasWindowFocus()) return;
+        if (closed || paused || channel == null || !remoteVerified || clearingDownloads || !activity.hasWindowFocus()) return;
         JSONArray ids = new JSONArray(); Rect bounds = new Rect();
         for (Map.Entry<String, View> entry : messageViews.entrySet()) { JSONObject m = messages.get(entry.getKey()); if (m == null || me.equals(m.optString("authorId")) || marking.contains(entry.getKey())) continue;
             boolean seen = false; JSONArray read = m.optJSONArray("readMemberIds"); if (read != null) for (int i = 0; i < read.length(); i++) if (me.equals(read.optString(i))) seen = true;
@@ -184,7 +189,7 @@ final class TeamChatView {
         button.setEnabled(false); final int token = generation; final String id = channel.optString("id");
         final int offset = (int)messages.values().stream().filter(m -> !m.has("_state")).count();
         final String query = messageQuery(id) + "&offset=" + offset;
-        network.execute(() -> { try { JSONObject result = api.get("chat-messages", workspace, query); main.post(() -> { if (closed || token != generation) return; updateThread(result); button.setEnabled(true); if (result.optJSONArray("items") != null && result.optJSONArray("items").length() < 50) { historyEnd = true; renderMessages(); } }); }
+        network.execute(() -> { try { JSONObject result = api.get("chat-messages", workspace, query); main.post(() -> { if (closed || token != generation) return; updateThread(result, false); button.setEnabled(true); if (result.optJSONArray("items") != null && result.optJSONArray("items").length() < 50) { historyEnd = true; renderMessages(); persistDownloads(); } }); }
             catch (Exception e) { main.post(() -> { if (closed || token != generation) return; button.setEnabled(true); hint("Earlier messages couldn't load. Tap to retry."); }); } });
     }
     private void send() {
@@ -200,7 +205,62 @@ final class TeamChatView {
                 sending = false; composer.setEnabled(true); send.setEnabled(true); send.setText("Retry"); try { JSONObject pending = messages.get("pending:" + key); if (pending != null) pending.put("_state", "failed"); } catch (Exception ignored) {} renderMessages(); hint("Message not confirmed. Tap Retry; your message is kept."); }); } });
     }
     private void completeSend(JSONObject result, String key) {
-        sending = false; composer.setEnabled(true); send.setEnabled(true); send.setText("Send"); pendingBody = ""; pendingKey = ""; composer.setText(""); messages.remove("pending:" + key); messages.put(result.optString("id"), result); renderMessages(); schedule(0);
+        sending = false; remoteVerified = true; composer.setEnabled(true); send.setEnabled(true); send.setText("Send"); pendingBody = ""; pendingKey = ""; composer.setText(""); messages.remove("pending:" + key); messages.put(result.optString("id"), result); renderMessages(); persistDownloads(); schedule(0);
+    }
+    private void restoreDownloads() {
+        if (downloads == null || channel == null) return;
+        final String id = channel.optString("id"); final int token = generation;
+        api.chatDisk(() -> { try {
+            JSONObject saved = downloads.read(id);
+            main.post(() -> { if (closed || token != generation || remoteVerified || clearingDownloads) return;
+                if (saved == null) { hint("Syncing messages…"); return; }
+                JSONArray rows = saved.optJSONArray("items"), readers = saved.optJSONArray("readers");
+                if (readers != null) for (int i = 0; i < readers.length(); i++) { JSONObject p = readers.optJSONObject(i); if (p != null) people.put(p.optString("id"), p); }
+                if (rows != null) for (int i = 0; i < rows.length(); i++) { JSONObject m = rows.optJSONObject(i); if (m != null && !messages.containsKey(m.optString("id"))) messages.put(m.optString("id"), m); }
+                loaded = rows == null ? 0 : rows.length(); historyEnd = saved.optBoolean("historyEnd"); renderMessages(); hint("Saved on this phone · syncing updates…");
+            });
+        } catch (Exception ignored) { } });
+    }
+    private void persistDownloads() {
+        if (downloads == null || channel == null || clearingDownloads || !remoteVerified) return;
+        final String id = channel.optString("id"); final JSONObject descriptor = channel;
+        final ArrayList<JSONObject> rows = new ArrayList<>(messages.values()), readers = new ArrayList<>(people.values());
+        final boolean complete = historyEnd; final long epoch = downloads.epoch();
+        api.chatDisk(() -> { try { downloads.put(id, ChatCache.snapshot(descriptor, rows, readers, complete), epoch); } catch (Exception ignored) { } });
+    }
+    private String storageSize(long bytes) {
+        if (bytes == 0) return "0 KB";
+        return bytes < 1_000_000 ? String.format(Locale.getDefault(), "%.0f KB", bytes / 1000d) : String.format(Locale.getDefault(), "%.1f MB", bytes / 1_000_000d);
+    }
+    private void showStorage() {
+        final String id = channel == null ? "" : channel.optString("id");
+        LinearLayout panel = column(); panel.setPadding(dp(20), dp(12), dp(20), dp(12)); panel.setBackgroundColor(surface);
+        TextView usage = label("Calculating downloaded messages…", 15, ink, true); panel.addView(usage); space(panel, 8);
+        ProgressBar meter = new ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal); meter.setMax(100); panel.addView(meter, new LinearLayout.LayoutParams(-1, dp(6))); space(panel, 12);
+        TextView photos = label("Profile photos…", 13, muted, false); panel.addView(photos); space(panel, 14);
+        TextView help = label("Recent messages are saved on this phone for faster opening. Older messages load from HYMN when needed.\n\nClearing downloads keeps shared messages and unsent drafts.", 13, muted, false); panel.addView(help); space(panel, 16);
+        AlertDialog dialog = new AlertDialog.Builder(activity).setTitle("Chat storage").setView(panel).setPositiveButton("Done", null).create();
+        Button one = button("Clear this chat's downloads"), all = button("Clear all chat downloads"), pictures = button("Clear downloaded photos");
+        one.setEnabled(downloads != null && !id.isEmpty()); all.setEnabled(downloads != null); panel.addView(one, new LinearLayout.LayoutParams(-1, dp(46))); space(panel, 6); panel.addView(all, new LinearLayout.LayoutParams(-1, dp(46))); space(panel, 6); panel.addView(pictures, new LinearLayout.LayoutParams(-1, dp(46)));
+        one.setOnClickListener(v -> { dialog.dismiss(); confirmClear(id, false, false); }); all.setOnClickListener(v -> { dialog.dismiss(); confirmClear("", true, false); }); pictures.setOnClickListener(v -> { dialog.dismiss(); confirmClear("", false, true); }); dialog.show();
+        api.chatDisk(() -> { long bytes = downloads == null ? 0 : downloads.bytes(); int count = downloads == null ? 0 : downloads.count(); long images = avatars.cachedBytes();
+            main.post(() -> { if (closed || !dialog.isShowing()) return; usage.setText(downloads == null ? "Local message storage is unavailable" : storageSize(bytes) + " of 20 MB · " + count + " saved chats"); meter.setProgress((int)Math.min(100, bytes * 100 / ChatCache.LIMIT_BYTES)); photos.setText("Downloaded profile photos: " + storageSize(images)); });
+        });
+    }
+    private void confirmClear(String id, boolean all, boolean photos) {
+        String title = photos ? "Clear downloaded photos?" : all ? "Clear all chat downloads?" : "Clear this chat's downloads?";
+        String explanation = photos ? "Profile photos will download again when needed." : "Remove downloaded messages from this phone. Shared messages stay on HYMN and your unsent drafts are kept. Reopen a chat to download its messages again.";
+        new AlertDialog.Builder(activity).setTitle(title).setMessage(explanation).setNegativeButton("Cancel", null).setPositiveButton("Clear downloads", (dialog, which) -> {
+            saveComposer(); if (!photos) { clearingDownloads = true; generation++; syncing = false; main.removeCallbacks(tick); main.removeCallbacks(readVisible); }
+            final int token = generation;
+            api.chatDisk(() -> {
+                String result;
+                try { if (photos) avatars.clearCache(); else if (downloads != null) { if (all) downloads.clearAll(); else downloads.clear(id); } result = photos ? "Downloaded photos cleared" : "Downloaded messages cleared"; }
+                catch (Exception e) { result = "Some downloads couldn't be cleared. Please try again."; }
+                final String message = result;
+                main.post(() -> { if (closed || token != generation) return; if (!photos) showList(); hint(message); Toast.makeText(activity, message, Toast.LENGTH_SHORT).show(); });
+            });
+        }).show();
     }
     private void choose(boolean group) {
         ArrayList<JSONObject> options = new ArrayList<>(); for (int i = 0; i < members.length(); i++) { JSONObject m = members.optJSONObject(i); if (m != null && !me.equals(m.optString("id"))) options.add(m); }
