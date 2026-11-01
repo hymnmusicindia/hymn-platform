@@ -21,6 +21,9 @@ final class TeamApi {
     private static final String CHAT_CACHE_KEY = "hymn_team_chat_downloads_v1";
     private final Context context;
     private android.content.SharedPreferences securePrefs;
+    private volatile String cacheScope = "";
+    private final java.util.concurrent.atomic.AtomicLong cacheEpoch = new java.util.concurrent.atomic.AtomicLong();
+    private final android.util.LruCache<String, JSONObject> screenCache = new android.util.LruCache<>(16);
     private final java.util.Map<String, ChatCache> chatCaches = new java.util.HashMap<>();
     private static final java.util.concurrent.ExecutorService CHAT_DISK = java.util.concurrent.Executors.newSingleThreadExecutor(r -> { Thread t = new Thread(r, "hymn-chat-storage"); t.setDaemon(true); return t; });
 
@@ -39,7 +42,27 @@ final class TeamApi {
         try { return prefs().getString(KEY_COOKIE, ""); } catch (Exception ignored) { return ""; }
     }
 
-    void clear() { try { prefs().edit().remove(KEY_COOKIE).apply(); } catch (Exception ignored) { } }
+    synchronized void clear() { cacheScope = ""; invalidateViews(); try { prefs().edit().remove(KEY_COOKIE).apply(); } catch (Exception ignored) { } }
+    private synchronized void invalidateViews(){cacheEpoch.incrementAndGet();screenCache.evictAll();try{android.content.SharedPreferences.Editor edit=prefs().edit();for(String key:prefs().getAll().keySet())if(key.startsWith("view_cache:"))edit.remove(key);edit.apply();}catch(Exception ignored){}}
+    synchronized void setCacheScope(JSONObject session) {
+        String next=session.optString("workspaceId")+":"+session.optString("memberId")+":"+session.optBoolean("owner")+":"+session.optJSONArray("permissions");
+        if (!next.equals(cacheScope)) { cacheEpoch.incrementAndGet(); screenCache.evictAll(); }
+        cacheScope=next;
+    }
+    private String cacheKey(String resource,String workspace,String query) {
+        if(cacheScope.isEmpty() || !java.util.Arrays.asList("overview","tasks","calendar","notifications","projects","members","workstation","call-followups","reports").contains(resource))return "";
+        try { java.security.MessageDigest digest=java.security.MessageDigest.getInstance("SHA-256");byte[] bytes=digest.digest((cacheScope+":"+workspace+":"+resource+":"+query).getBytes(StandardCharsets.UTF_8));StringBuilder key=new StringBuilder("view_cache:");for(byte b:bytes)key.append(String.format(java.util.Locale.ROOT,"%02x",b&255));return key.toString(); }catch(Exception ignored){return "";}
+    }
+    synchronized JSONObject cached(String resource,String workspace,String query) {
+        String key=cacheKey(resource,workspace,query);if(key.isEmpty())return null;
+        try {JSONObject saved=screenCache.get(key);if(saved==null){String value=prefs().getString(key,"");if(value.isEmpty())return null;saved=new JSONObject(value);screenCache.put(key,saved);}if(System.currentTimeMillis()-saved.optLong("at")>15*60*1000L)return null;return new JSONObject(saved.getJSONObject("data").toString());}catch(Exception ignored){return null;}
+    }
+    private synchronized void remember(String key,JSONObject data,long epoch) {
+        if(key.isEmpty()||epoch!=cacheEpoch.get())return;
+        try {JSONObject saved=new JSONObject().put("at",System.currentTimeMillis()).put("data",data);String value=saved.toString();if(value.length()>200000)return;screenCache.put(key,saved);
+            chatDisk(()->{synchronized(TeamApi.this){try{if(epoch!=cacheEpoch.get()||cacheScope.isEmpty())return;android.content.SharedPreferences.Editor edit=prefs().edit();java.util.List<String> keys=new java.util.ArrayList<>();for(String existing:prefs().getAll().keySet())if(existing.startsWith("view_cache:"))keys.add(existing);while(keys.size()>=16)edit.remove(keys.remove(0));edit.putString(key,value).apply();}catch(Exception ignored){}}});
+        }catch(Exception ignored){}
+    }
     static final class ApiException extends IllegalStateException {
         final int status;
         ApiException(int status, String message) { super(message); this.status = status; }
@@ -111,11 +134,15 @@ final class TeamApi {
     JSONObject get(String resource, String workspace, String extraQuery) throws Exception {
         String query = "workspace=" + enc(workspace) + (extraQuery == null || extraQuery.isEmpty() ? "" : "&" + extraQuery);
         if (resource.equals("workstation") || resource.equals("workstation-activity")) query += "&view=mobile";
-        return request("GET", "/api/team/" + resource + "?" + query, null, true);
+        long epoch=cacheEpoch.get();String key=cacheKey(resource,workspace,extraQuery);
+        try {JSONObject data=request("GET", "/api/team/" + resource + "?" + query, null, true);remember(key,data,epoch);return data;}
+        catch(ApiException error){if(error.status==401||error.status==403)invalidateViews();throw error;}
     }
 
     JSONObject post(String resource, String workspace, JSONObject body) throws Exception {
-        return request("POST", "/api/team/" + resource + "?workspace=" + enc(workspace), body, true);
+        try { JSONObject result=request("POST", "/api/team/" + resource + "?workspace=" + enc(workspace), body, true);
+            if(!resource.startsWith("chat-"))invalidateViews(); return result;
+        } catch(ApiException error) { if(error.status==401||error.status==403)invalidateViews();throw error; }
     }
 
     private static String enc(String value) throws Exception { return URLEncoder.encode(value == null ? "" : value, "UTF-8"); }

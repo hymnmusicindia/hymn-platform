@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { demand, TeamError, type Actor } from './policy';
 import { channelScope, directChatId } from './chat-policy';
 import { messageSchema } from './validation';
+import { publishChatChange } from './chat-events';
 
 const person = { id: true, jobTitle: true, user: { select: { name: true, avatar: true } } } as const;
 const active = (workspaceId: string): Prisma.TeamMemberWhereInput => ({ workspaceId, status: 'ACTIVE', user: { status: 'ACTIVE' }, role: { OR: [{ owner: true }, { permissions: { has: 'chat.use' } }] } });
@@ -43,7 +44,7 @@ export async function chatRead(a: Actor, resource: string, params: URLSearchPara
 // Chat has its own short transaction. It must not queue behind workstation's
 // workspace-wide coordinator lock. Revalidate membership on every write.
 export async function chatMutation(identity: Actor, resource: string, input: unknown) {
-  return prisma.$transaction(async tx => {
+  const result = await prisma.$transaction(async tx => {
     const a = await tx.teamMember.findUnique({ where: { id: identity.id }, include: { role: true, user: { select: { name: true, status: true } } } });
     if (!a || a.workspaceId !== identity.workspaceId || a.status !== 'ACTIVE' || a.user.status !== 'ACTIVE') throw new TeamError('Team access has been revoked.', 403);
     demand(a, 'chat.use');
@@ -99,4 +100,7 @@ export async function chatMutation(identity: Actor, resource: string, input: unk
     }
     return message;
   }, { maxWait: 5000, timeout: 10000 });
+  const channelId = result && typeof result === 'object' && 'channelId' in result ? String(result.channelId) : input && typeof input === 'object' && 'channelId' in input ? String(input.channelId) : result && typeof result === 'object' && 'id' in result ? String(result.id) : '';
+  if (channelId) publishChatChange(identity.workspaceId, channelId);
+  return result;
 }

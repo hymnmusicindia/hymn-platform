@@ -41,6 +41,7 @@ import androidx.credentials.GetCredentialRequest;
 import androidx.credentials.GetCredentialResponse;
 import androidx.credentials.exceptions.GetCredentialException;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
 import androidx.work.Constraints;
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.NetworkType;
@@ -62,8 +63,6 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -75,6 +74,9 @@ public final class MainActivity extends Activity {
     private final ExecutorService io = Executors.newFixedThreadPool(4);
     private final AtomicInteger screenGeneration = new AtomicInteger();
     private TeamApi api;
+    private TeamAppUpdater updater;
+    private long lastAccessCheck;
+    private boolean checkingAccess;
     private LinearLayout root, top, content, bottom;
     private TextView heading, message;
     private ProgressBar progress;
@@ -93,11 +95,14 @@ public final class MainActivity extends Activity {
     private boolean workActionBusy = false;
     private TeamChatView chatView;
     private AvatarRepository avatarRepository;
+    private final java.util.Set<String> unavailableModules = new java.util.HashSet<>();
+    private boolean moduleVisible(String module) { return !unavailableModules.contains(module) && TeamModuleAccess.visible(session, module); }
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         nightMode = getSharedPreferences("hymn_team_settings", MODE_PRIVATE).getBoolean("night_mode", false); applyThemePalette();
         api = new TeamApi(this);
+        updater = new TeamAppUpdater(this);
         avatarRepository = new AvatarRepository(this, api);
         if (api.cookie().isEmpty()) showLogin(); else loadSession();
     }
@@ -110,13 +115,20 @@ public final class MainActivity extends Activity {
         BG = nightMode ? Color.rgb(14, 21, 33) : Color.rgb(244, 246, 249);
         BLUE = nightMode ? Color.rgb(133, 177, 255) : Color.rgb(40, 92, 180);
         BORDER = nightMode ? Color.rgb(45, 60, 81) : Color.rgb(224, 230, 238);
-        if (getWindow() != null) { getWindow().setStatusBarColor(BG); getWindow().setNavigationBarColor(surface()); getWindow().getDecorView().setSystemUiVisibility(nightMode ? 0 : View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR); }
+        if (getWindow() != null) TeamSafeArea.configureWindow(getWindow(), nightMode);
+    }
+    private void setSafeContentView(View screen) {
+        FrameLayout safeArea = TeamSafeArea.wrap(this, screen, BG);
+        setContentView(safeArea);
+        ViewCompat.requestApplyInsets(safeArea);
     }
     private GradientDrawable shape(int color, int stroke, int radius) { GradientDrawable d = new GradientDrawable(); d.setColor(color); d.setCornerRadius(dp(radius)); if (stroke != 0) d.setStroke(dp(1), stroke); return d; }
     private TextView text(String value, float size, int color, boolean bold) { TextView v = new TextView(this); v.setText(value); v.setTextSize(size); v.setTextColor(color); if (bold) v.setTypeface(Typeface.DEFAULT, Typeface.BOLD); return v; }
     private void styleInput(EditText input) { input.setTextColor(NAVY); input.setHintTextColor(MUTED); }
 
     private void showLogin() {
+        screenGeneration.incrementAndGet(); session=null;
+        if (chatView != null) { chatView.close(); chatView = null; }
         LinearLayout screen = new LinearLayout(this); screen.setOrientation(LinearLayout.VERTICAL); screen.setGravity(Gravity.CENTER_HORIZONTAL); screen.setPadding(dp(26), dp(42), dp(26), dp(30)); screen.setBackgroundColor(BG);
         ImageView logo = new ImageView(this); logo.setImageResource(R.drawable.hymn_logo); logo.setScaleType(ImageView.ScaleType.FIT_CENTER); screen.addView(logo, new LinearLayout.LayoutParams(dp(76), dp(76)));
         TextView title = text("Your team, in your pocket.", 25, NAVY, true); title.setGravity(Gravity.CENTER); LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-1, -2); tp.topMargin = dp(24); screen.addView(title, tp);
@@ -124,7 +136,7 @@ public final class MainActivity extends Activity {
         Button google = button("G     Continue with Google", true); screen.addView(google, new LinearLayout.LayoutParams(-1, dp(54))); google.setOnClickListener(v -> beginGoogleSignIn());
         message = text("", 12, Color.rgb(180, 45, 45), false); LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(-1, -2); mp.topMargin = dp(14); screen.addView(message, mp);
         TextView footer = text("Secure sign-in with your HYMN team Google account", 12, MUTED, false); footer.setGravity(Gravity.CENTER); LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(-1, -2); fp.topMargin = dp(30); screen.addView(footer, fp);
-        setContentView(screen);
+        setSafeContentView(screen);
     }
 
     private Button button(String label, boolean primary) {
@@ -159,6 +171,7 @@ public final class MainActivity extends Activity {
                 JSONObject saved = api.get("session", "", ""); session = saved;
                 workspace = saved.optString("workspaceId", ""); memberName = saved.optString("name", "Team member");
                 memberId = saved.optString("memberId", "");
+                api.setCacheScope(saved); unavailableModules.clear();
                 if (saved.has("avatarUrl") && !saved.isNull("avatarUrl") && !saved.optString("avatarUrl").isEmpty()) profileImageUrl = saved.optString("avatarUrl");
                 else if (profileImageUrl.isEmpty()) profileImageUrl = getSharedPreferences("hymn_team_settings", MODE_PRIVATE).getString("profile_picture_url", "");
                 if (workspace.isEmpty()) throw new IllegalStateException("This Google account does not have an active HYMN team membership.");
@@ -173,6 +186,7 @@ public final class MainActivity extends Activity {
             try {
                 JSONObject result = api.get("session", "", "");
                 session = result; workspace = result.optString("workspaceId", ""); memberId = result.optString("memberId", ""); memberName = result.optString("name", "Team member");
+                api.setCacheScope(result); unavailableModules.clear();
                 profileImageUrl = result.optString("avatarUrl", "");
                 if (profileImageUrl.isEmpty() || profileImageUrl.equals("null")) profileImageUrl = getSharedPreferences("hymn_team_settings", MODE_PRIVATE).getString("profile_picture_url", "");
                 if (workspace.isEmpty()) throw new IllegalStateException("No active HYMN team membership found.");
@@ -185,10 +199,11 @@ public final class MainActivity extends Activity {
         LinearLayout screen = new LinearLayout(this); screen.setGravity(Gravity.CENTER); screen.setOrientation(LinearLayout.VERTICAL); screen.setBackgroundColor(BG);
         ImageView logo = new ImageView(this); logo.setImageResource(R.drawable.hymn_logo); screen.addView(logo, new LinearLayout.LayoutParams(dp(72), dp(72)));
         ProgressBar bar = new ProgressBar(this); LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(dp(44), dp(44)); bp.topMargin = dp(22); screen.addView(bar, bp);
-        TextView t = text(label, 14, MUTED, false); LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-2, -2); tp.topMargin = dp(12); screen.addView(t, tp); setContentView(screen);
+        TextView t = text(label, 14, MUTED, false); LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(-2, -2); tp.topMargin = dp(12); screen.addView(t, tp); setSafeContentView(screen);
     }
 
     private void showPage(String next) {
+        if (!moduleVisible(next)) next = "home";
         if (chatView != null) { chatView.close(); chatView = null; }
         if (!next.equals(page) && !next.equals("workspace-detail")) previousPage = page;
         page = next; tool = ""; screenGeneration.incrementAndGet();
@@ -206,13 +221,14 @@ public final class MainActivity extends Activity {
         Button logout = button("Sign out", false); logout.setTextSize(10); logout.setPadding(dp(7), 0, dp(7), 0); LinearLayout.LayoutParams logoutParams = new LinearLayout.LayoutParams(-2, dp(44)); logoutParams.leftMargin = dp(5); top.addView(logout, logoutParams); logout.setOnClickListener(v -> confirmSignOut()); root.addView(top);        ScrollView scroll = new ScrollView(this); content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL); content.setPadding(dp(16), dp(16), dp(16), dp(22)); scroll.setFillViewport(true); scroll.addView(content); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         if (page.equals("chats")) { scroll.removeView(content); root.removeView(scroll); content.setPadding(0, 0, 0, 0); root.addView(content, new LinearLayout.LayoutParams(-1, 0, 1)); }
         if (!page.equals("workspace-detail")) { bottom = new LinearLayout(this); bottom.setGravity(Gravity.CENTER); bottom.setBackgroundColor(surface()); bottom.setPadding(dp(5), dp(5), dp(5), dp(5)); root.addView(bottom, new LinearLayout.LayoutParams(-1, dp(72))); }
-        setContentView(root); if (bottom != null && !page.equals("workspace-detail")) buildNavigation(); loadPageData(); startNotificationSync();
+        setSafeContentView(root); if (bottom != null && !page.equals("workspace-detail")) buildNavigation(); loadPageData(); startNotificationSync();
     }
 
     private void buildNavigation() {
         String[] labels = {"Home", "Work-station", "Schedule", "Chats", "Tools"}; int[] icons = {R.drawable.ic_home_nav, R.drawable.ic_workstation_nav, R.drawable.ic_calendar_nav, R.drawable.ic_chat_nav, R.drawable.ic_tools_nav}; String[] keys = {"home", "workstation", "schedule", "chats", "more"};
         for (int i = 0; i < labels.length; i++) {
             final String key = keys[i]; boolean selected = page.equals(key);
+            if (!moduleVisible(key)) continue;
             LinearLayout item = new LinearLayout(this); item.setGravity(Gravity.CENTER); item.setOrientation(LinearLayout.VERTICAL); item.setBackground(shape(selected ? (nightMode ? Color.rgb(35, 53, 78) : Color.rgb(235, 242, 255)) : Color.TRANSPARENT, 0, 14)); bottom.addView(item, new LinearLayout.LayoutParams(0, -1, 1));
             ImageView icon = new ImageView(this); icon.setImageResource(icons[i]); icon.setColorFilter(selected ? BLUE : MUTED); icon.setPadding(dp(2), dp(2), dp(2), dp(2)); LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(22), dp(22)); iconParams.bottomMargin = dp(3); item.addView(icon, iconParams);
             TextView label = text(labels[i], 10, selected ? BLUE : MUTED, selected); label.setGravity(Gravity.CENTER); item.addView(label);
@@ -233,19 +249,20 @@ public final class MainActivity extends Activity {
             });
             content.addView(chatView.view(), new LinearLayout.LayoutParams(-1, -1)); chatView.start(); return;
         }
+        if (requestedPage.equals("home")) { loadHomeProgressively(generation); return; }
+        if (requestedPage.equals("more") && requestedTool.isEmpty()) { renderTools(); return; }
+        if (!requestedTool.isEmpty() && !moduleVisible(requestedTool)) { tool = ""; renderTools(); return; }
         if (requestedPage.equals("home")) renderHomeLoading();
         else { TextView wait = text(requestedTool.equals("workstation") || requestedPage.equals("workstation") ? "Loading your work queue…" : "Loading your workspace…", 13, MUTED, false); content.addView(wait); }
+        JSONObject savedPage=null;
+        if(requestedPage.equals("workspace-detail")) savedPage=api.cached("overview",workspace,"");
+        else if(requestedPage.equals("tasks")) savedPage=api.cached("tasks",workspace,"mine=1&offset=0"+(taskFilter.equals("all")?"":"&status="+taskFilter));
+        else if(requestedPage.equals("schedule")) savedPage=api.cached("calendar",workspace,calendarQuery());
+        else if(requestedPage.equals("alerts")) savedPage=api.cached("notifications",workspace,"offset=0");
+        if(savedPage!=null){ if(requestedPage.equals("workspace-detail"))renderWorkspaceDetail(savedPage);else renderRows(requestedPage.equals("tasks")?"My assigned tasks":requestedPage.equals("schedule")?"Coming up":"Notifications",savedPage.optJSONArray("items"),requestedPage);addText("Saved on this phone - refreshing-",11,MUTED,false); }
         io.execute(() -> {
             try {
-                if (requestedPage.equals("home")) {
-                    CompletableFuture<JSONObject> overview = CompletableFuture.supplyAsync(() -> readApi("overview", ""), io);
-                    CompletableFuture<JSONObject> upcoming = CompletableFuture.supplyAsync(() -> readApi("calendar", calendarQuery()), io);
-                    CompletableFuture<JSONObject> inbox = CompletableFuture.supplyAsync(() -> readApi("notifications", "offset=0"), io);
-                    CompletableFuture<JSONObject> tasks = CompletableFuture.supplyAsync(() -> readApi("tasks", "mine=1&offset=0"), io);
-                    JSONObject overviewData = homeResult(overview), calendarData = homeResult(upcoming), inboxData = homeResult(inbox), taskData = homeResult(tasks);
-                    boolean partial = overview.isCompletedExceptionally() || upcoming.isCompletedExceptionally() || inbox.isCompletedExceptionally() || tasks.isCompletedExceptionally();
-                    runOnUiThread(() -> { if (screenGeneration.get() == generation) { TeamCallReminderScheduler.sync(getApplicationContext(), calendarData.optJSONArray("callReminders"), memberId); updateInboxSummary(inboxData); renderHome(overviewData, taskData, calendarData, inboxData, partial); } });
-                } else if (requestedPage.equals("workspace-detail")) {
+                if (requestedPage.equals("workspace-detail")) {
                     JSONObject overview = api.get("overview", workspace, ""); runOnUiThread(() -> { if (screenGeneration.get() == generation) renderWorkspaceDetail(overview); });
                 } else if (requestedPage.equals("tasks")) {
                     String query = "mine=1&offset=0" + (taskFilter.equals("all") ? "" : "&status=" + taskFilter);
@@ -258,12 +275,36 @@ public final class MainActivity extends Activity {
                 else if (requestedTool.equals("notifications")) runOnUiThread(() -> { if (screenGeneration.get() == generation) renderTool("notifications", new JSONObject()); });
                 else if (!requestedTool.isEmpty()) loadTool(requestedTool, generation);
                 else runOnUiThread(() -> { if (screenGeneration.get() == generation) renderTools(); });
-            } catch (Exception e) { runOnUiThread(() -> { if (screenGeneration.get() == generation) renderError(e.getMessage()); }); }
+            } catch (Exception e) { sectionFailed(e, generation, requestedTool.isEmpty() ? requestedPage : requestedTool); }
         });
     }
 
-    private JSONObject readApi(String resource, String query) { try { return api.get(resource, workspace, query); } catch (Exception error) { throw new CompletionException(error); } }
-    private JSONObject homeResult(CompletableFuture<JSONObject> request) { try { return request.join(); } catch (Exception ignored) { return new JSONObject(); } }
+    private void sectionFailed(Exception error, int generation, String module) {
+        runOnUiThread(() -> {
+            if (screenGeneration.get() != generation) return;
+            if (error instanceof TeamApi.ApiException && ((TeamApi.ApiException) error).status == 401) { api.clear(); showLogin(); return; }
+            if (error instanceof TeamApi.ApiException && ((TeamApi.ApiException) error).status == 403) {
+                unavailableModules.add(module); tool = ""; showPage("more");
+                final String previousCookie=api.cookie(); io.execute(() -> { try { JSONObject updated = api.get("session", workspace, ""); runOnUiThread(() -> { if(!previousCookie.equals(api.cookie()))return; session = updated; api.setCacheScope(updated); if (page.equals("more")) { bottom.removeAllViews(); buildNavigation(); renderTools(); } }); } catch (Exception refreshError) { if(refreshError instanceof TeamApi.ApiException && (((TeamApi.ApiException)refreshError).status==401 || ((TeamApi.ApiException)refreshError).status==403)) runOnUiThread(() -> { if(previousCookie.equals(api.cookie())){api.clear(); showLogin();} }); } });
+                return;
+            }
+            renderError(error.getMessage());
+        });
+    }
+
+    private void loadHomeProgressively(int generation) {
+        String[] resources = {"overview", "tasks", "calendar", "notifications"};
+        String[] queries = {"", "mine=1&offset=0", calendarQuery(), "offset=0"};
+        JSONObject[] data = new JSONObject[4]; boolean cached = false; final boolean calendarAllowed=moduleVisible("schedule");
+        for (int i=0;i<4;i++) { if(i==2&&!calendarAllowed)continue; data[i]=api.cached(resources[i],workspace,queries[i]); cached |= data[i]!=null; }
+        if(cached) renderHome(data[0]==null?new JSONObject():data[0],data[1]==null?new JSONObject():data[1],data[2]==null?new JSONObject():data[2],data[3]==null?new JSONObject():data[3],true); else renderHomeLoading();
+        int[] remaining={calendarAllowed?4:3}; boolean[] failed={false};
+        for(int i=0;i<4;i++){if(i==2&&!calendarAllowed)continue;final int index=i;io.execute(()->{
+            try {JSONObject fresh=api.get(resources[index],workspace,queries[index]);runOnUiThread(()->{if(screenGeneration.get()!=generation)return;data[index]=fresh;remaining[0]--;if(index==2)TeamCallReminderScheduler.sync(getApplicationContext(),fresh.optJSONArray("callReminders"),memberId);if(index==3)updateInboxSummary(fresh);renderHome(data[0]==null?new JSONObject():data[0],data[1]==null?new JSONObject():data[1],data[2]==null?new JSONObject():data[2],data[3]==null?new JSONObject():data[3],failed[0]||remaining[0]>0);});}
+            catch(Exception error){if(error instanceof TeamApi.ApiException&&(((TeamApi.ApiException)error).status==401||((TeamApi.ApiException)error).status==403)){sectionFailed(error,generation,"home");return;}runOnUiThread(()->{if(screenGeneration.get()!=generation)return;remaining[0]--;failed[0]=true;renderHome(data[0]==null?new JSONObject():data[0],data[1]==null?new JSONObject():data[1],data[2]==null?new JSONObject():data[2],data[3]==null?new JSONObject():data[3],true);});}
+        });}
+    }
+
 
     private void renderHomeLoading() {
         addText("Good to see you, " + firstName(memberName) + ".", 23, NAVY, true); addText("Your work and schedule, together.", 13, MUTED, false); addSpace(16);
@@ -272,28 +313,25 @@ public final class MainActivity extends Activity {
         card.addView(text("Syncing your latest team updates…", 13, MUTED, false)); LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2); cp.bottomMargin = dp(18); content.addView(card, cp);
         addSectionTitle("Quick access");
         String[][] shortcuts = {{"Schedule", "schedule"}, {"Open inbox", "alerts"}};
-        for (String[] shortcut : shortcuts) { Button action = button(shortcut[0] + "  →", false); LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, dp(48)); ap.bottomMargin = dp(8); content.addView(action, ap); action.setOnClickListener(v -> showPage(shortcut[1])); }
+        for (String[] shortcut : shortcuts) { if (!moduleVisible(shortcut[1])) continue; Button action = button(shortcut[0] + "  →", false); LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, dp(48)); ap.bottomMargin = dp(8); content.addView(action, ap); action.setOnClickListener(v -> showPage(shortcut[1])); }
     }
 
     private String calendarQuery() {
         Calendar now = Calendar.getInstance(TimeZone.getTimeZone("Asia/Kolkata")); Calendar end = (Calendar) now.clone(); end.add(Calendar.DAY_OF_YEAR, 14);
+        now.set(Calendar.HOUR_OF_DAY,0);now.set(Calendar.MINUTE,0);now.set(Calendar.SECOND,0);now.set(Calendar.MILLISECOND,0);end=(Calendar)now.clone();end.add(Calendar.DAY_OF_YEAR,14);
         try { return "start=" + java.net.URLEncoder.encode(now.toInstant().toString(), "UTF-8") + "&end=" + java.net.URLEncoder.encode(end.toInstant().toString(), "UTF-8"); } catch (Exception ignored) { return ""; }
     }
 
-    private JSONObject calendarRange() throws Exception {
-        Calendar now = Calendar.getInstance(TimeZone.getTimeZone("Asia/Kolkata")); Calendar end = (Calendar) now.clone(); end.add(Calendar.DAY_OF_YEAR, 14);
-        String start = java.net.URLEncoder.encode(now.toInstant().toString(), "UTF-8"), finish = java.net.URLEncoder.encode(end.toInstant().toString(), "UTF-8");
-        return api.get("calendar", workspace, "start=" + start + "&end=" + finish);
-    }
+    private JSONObject calendarRange() throws Exception { return api.get("calendar", workspace, calendarQuery()); }
 
     private void renderHome(JSONObject overview, JSONObject tasksData, JSONObject calendar, JSONObject inbox, boolean partial) {
         content.removeAllViews(); addText("Good to see you, " + firstName(memberName) + ".", 23, NAVY, true); addText("Your work and schedule, together.", 13, MUTED, false); addSpace(16);
         if (partial) { TextView notice = text("Some details are taking longer to sync. Your workspace is still ready.", 12, BLUE, true); notice.setPadding(dp(13), dp(12), dp(13), dp(12)); notice.setBackground(shape(nightMode ? Color.rgb(28, 45, 69) : Color.rgb(235, 242, 255), 0, 12)); LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(-1, -2); np.bottomMargin = dp(12); content.addView(notice, np); }
         addWorkspaceCard();
         LinearLayout metrics = new LinearLayout(this); metrics.setOrientation(LinearLayout.HORIZONTAL);
-        addMetric(metrics, "OPEN TASKS", overview.optInt("active")); addMetric(metrics, "DUE SOON", count(calendar.optJSONArray("deadlines"))); addMetric(metrics, "NEW ALERTS", unread(inbox.optJSONArray("items"))); content.addView(metrics);
-        addPieChart(overview);
-        addSpace(22); addSectionTitle("Coming up"); JSONArray events = calendar.optJSONArray("items"); if (events == null || events.length() == 0) addEmpty("Nothing scheduled in the next 14 days."); else for (int i = 0; i < Math.min(events.length(), 5); i++) addRecord(events.optJSONObject(i), "schedule");
+        addMetric(metrics, "OPEN TASKS", overview.has("active") ? String.valueOf(overview.optInt("active")) : "-"); addMetric(metrics, "DUE SOON", calendar.has("deadlines") ? String.valueOf(count(calendar.optJSONArray("deadlines"))) : "-"); addMetric(metrics, "NEW ALERTS", inbox.has("items") ? String.valueOf(unread(inbox.optJSONArray("items"))) : "-"); content.addView(metrics);
+        if (overview.has("active")) addPieChart(overview);
+        if(moduleVisible("schedule")){ addSpace(22); addSectionTitle("Coming up"); JSONArray events = calendar.optJSONArray("items"); if (events == null || events.length() == 0) addEmpty(calendar.has("items") ? "Nothing scheduled in the next 14 days." : "Updating your schedule-"); else for (int i = 0; i < Math.min(events.length(), 5); i++) addRecord(events.optJSONObject(i), "schedule"); }
         addSpace(16); addSectionTitle("Your tasks"); JSONArray tasks = tasksData.optJSONArray("items"); if (tasks == null || tasks.length() == 0) addEmpty("You’re clear for now. New assignments will appear here."); else for (int i = 0; i < Math.min(tasks.length(), 4); i++) addRecord(tasks.optJSONObject(i), "tasks");
         if (tasks != null && tasks.length() > 0) { Button allTasks = button("View all assigned tasks  →", false); LinearLayout.LayoutParams taskParams = new LinearLayout.LayoutParams(-1, dp(46)); taskParams.bottomMargin = dp(10); content.addView(allTasks, taskParams); allTasks.setOnClickListener(v -> showPage("tasks")); }
     }
@@ -329,14 +367,15 @@ public final class MainActivity extends Activity {
         LinearLayout info = new LinearLayout(this); info.setOrientation(LinearLayout.VERTICAL); profile.addView(info, new LinearLayout.LayoutParams(0, -2, 1)); info.addView(text(memberName, 17, NAVY, true)); info.addView(text(session.optString("email", ""), 11, MUTED, false)); LinearLayout.LayoutParams roleParams = new LinearLayout.LayoutParams(-1, -2); roleParams.topMargin = dp(5); info.addView(text(session.optString("roleName", "Team member") + " · " + session.optString("department", "HYMN Team"), 11, BLUE, true), roleParams);
         LinearLayout ws = new LinearLayout(this); ws.setOrientation(LinearLayout.VERTICAL); ws.setPadding(dp(16), dp(16), dp(16), dp(16)); ws.setBackground(shape(surface(), BORDER, 16)); LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(-1, -2); wp.bottomMargin = dp(12); content.addView(ws, wp); ws.addView(text("ACTIVE WORKSPACE", 10, MUTED, true)); TextView wsName = text(session.optString("workspaceName", "HYMN Team"), 20, NAVY, true); LinearLayout.LayoutParams wn = new LinearLayout.LayoutParams(-1, -2); wn.topMargin = dp(7); ws.addView(wsName, wn); ws.addView(text("Your tasks, schedules and team activity are organized here.", 12, MUTED, false));
         LinearLayout stats = new LinearLayout(this); stats.setOrientation(LinearLayout.HORIZONTAL); LinearLayout.LayoutParams stp = new LinearLayout.LayoutParams(-1, -2); stp.topMargin = dp(15); ws.addView(stats, stp); addMetric(stats, "OPEN", overview.optInt("active")); addMetric(stats, "REVIEW", overview.optInt("reviews")); addMetric(stats, "DONE", overview.optInt("completed"));
-        addPieChart(overview); addSectionTitle("Workspace shortcuts"); String[][] actions = {{"My work", "tasks"}, {"Schedule", "schedule"}, {"Team tools", "more"}}; for (String[] action : actions) { Button shortcut = button("Open " + action[0] + "  →", false); LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, dp(48)); ap.bottomMargin = dp(8); content.addView(shortcut, ap); shortcut.setOnClickListener(v -> showPage(action[1])); }
+        addPieChart(overview); addSectionTitle("Workspace shortcuts"); String[][] actions = {{"My work", "tasks"}, {"Schedule", "schedule"}, {"Team tools", "more"}}; for (String[] action : actions) { if(!moduleVisible(action[1]))continue; Button shortcut = button("Open " + action[0] + "  →", false); LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, dp(48)); ap.bottomMargin = dp(8); content.addView(shortcut, ap); shortcut.setOnClickListener(v -> showPage(action[1])); }
         addSpace(8); addText("Profile photo and account details are synced from your HYMN account.", 11, MUTED, false);
     }
 
     private void loadAvatar(ImageView target, String imageUrl) {
         if (avatarRepository != null) avatarRepository.load(target, imageUrl);
     }
-    private void addMetric(LinearLayout row, String label, int value) {
+    private void addMetric(LinearLayout row, String label, int value) { addMetric(row,label,String.valueOf(value)); }
+    private void addMetric(LinearLayout row, String label, String value) {
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL); card.setPadding(dp(13), dp(13), dp(8), dp(12)); card.setBackground(shape(surface(), BORDER, 14)); LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(92), 1); params.rightMargin = dp(7); row.addView(card, params);
         card.addView(text(label, 9, MUTED, true)); TextView number = text(String.valueOf(value), 24, NAVY, true); LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(-2, -2); np.topMargin = dp(8); card.addView(number, np);
     }
@@ -364,7 +403,7 @@ public final class MainActivity extends Activity {
         String date = row.optString("dueAt", row.optString("startsAt", row.optString("createdAt", "")));
         if (!date.isEmpty()) { TextView dt = text(formatDate(date), 11, MUTED, false); LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.topMargin = dp(6); card.addView(dt, p); }
         LinearLayout actions = new LinearLayout(this); actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL); actions.setOrientation(LinearLayout.HORIZONTAL); LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(-1, -2); ap.topMargin = dp(8);
-        if (kind.equals("tasks") && row.has("version")) {
+        if (kind.equals("tasks") && row.has("version") && TeamModuleAccess.has(session,"tasks.complete")) {
             Button done = button("Mark done", false); done.setTextSize(11); actions.addView(done, new LinearLayout.LayoutParams(-2, dp(40)));
             done.setOnClickListener(v -> updateTask(row));
         }
@@ -718,7 +757,7 @@ public final class MainActivity extends Activity {
         content.removeAllViews(); addText("Workspace", 22, NAVY, true); addText("Everything your team needs, together.", 13, MUTED, false); addSpace(14);
         Button updateApp = button("HYMN Team " + BuildConfig.VERSION_NAME + " · Check for updates", false);
         content.addView(updateApp, new LinearLayout.LayoutParams(-1, dp(48)));
-        updateApp.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://hymnmusic.fun/team/app"))));
+        updateApp.setOnClickListener(v -> updater.check(true));
         addSpace(10);
         Button appearance = button(nightMode ? "☀  Switch to day mode" : "☾  Switch to night mode", false); LinearLayout.LayoutParams appearanceParams = new LinearLayout.LayoutParams(-1, dp(46)); appearanceParams.bottomMargin = dp(10); content.addView(appearance, appearanceParams); appearance.setOnClickListener(v -> toggleTheme());
         addSectionTitle("Phone notifications");
@@ -728,9 +767,12 @@ public final class MainActivity extends Activity {
         TextView timing = text("Call reminders are scheduled for 30 minutes before the call. Use Snooze 10 min or Mute on a phone notification to control it.", 11, MUTED, false); timing.setPadding(dp(12), dp(10), dp(12), dp(10)); timing.setBackground(shape(surface(), BORDER, 12)); LinearLayout.LayoutParams timingParams = new LinearLayout.LayoutParams(-1, -2); timingParams.bottomMargin = dp(16); content.addView(timing, timingParams);
         String[][] groups = {{"Work", "Work-station|workstation", "Projects|projects", "Reports|reports"}, {"Connect", "Calls & follow-ups|call-followups", "Team chat|channels", "Team email history|team-email-history"}, {"People & operations", "Team directory|members", "Availability|availability", "Work coordinator|coordinator", "Creator approvals|creator-applications", "Operations|operations", "Contacts & research|acquisition-dashboard"}, {"Activity", "Call reports|call-reports", "Activity & audit|audit"}, {"Preferences", "Phone notifications|notifications"}};
         for (String[] group : groups) {
+            boolean visible=false;for(int i=1;i<group.length;i++)if(moduleVisible(group[i].split("\\|")[1]))visible=true;
+            if(!visible)continue;
             addSectionTitle(group[0]);
             for (int i = 1; i < group.length; i++) {
                 String[] item = group[i].split("\\|");
+                if (!moduleVisible(item[1])) continue;
                 if (item[1].equals("notifications")) {
                     LinearLayout card = new LinearLayout(this); card.setGravity(Gravity.CENTER_VERTICAL); card.setPadding(dp(15), dp(11), dp(14), dp(11)); card.setBackground(shape(surface(), BORDER, 14)); LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, dp(58)); p.bottomMargin = dp(8); content.addView(card, p);
                     ImageView icon = new ImageView(this); icon.setImageResource(R.drawable.ic_notification); icon.setColorFilter(BLUE); icon.setPadding(dp(7), dp(7), dp(7), dp(7)); LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(dp(34), dp(34)); ip.rightMargin = dp(12); card.addView(icon, ip);
@@ -763,9 +805,11 @@ public final class MainActivity extends Activity {
     }
 
     private void loadTool(String selected, int generation) {
+        if(!moduleVisible(selected)){runOnUiThread(()->{tool="";renderTools();});return;}
         String extra = selected.equals("workstation") ? "bucket=" + workBucket : "";
+        JSONObject saved=api.cached(selected,workspace,extra);if(saved!=null)runOnUiThread(()->{if(screenGeneration.get()==generation){renderTool(selected,saved);addText("Saved on this phone · refreshing…",11,MUTED,false);}});
         try { JSONObject data = api.get(selected, workspace, extra); runOnUiThread(() -> { if (screenGeneration.get() == generation) renderTool(selected, data); }); }
-        catch (Exception error) { runOnUiThread(() -> { if (screenGeneration.get() == generation) renderError(error.getMessage()); }); }
+        catch (Exception error) { sectionFailed(error,generation,selected); }
     }
 
     private void renderTool(String selected, JSONObject data) {
@@ -786,7 +830,7 @@ public final class MainActivity extends Activity {
             if (selected.equals("workstation")) rows = data.optJSONArray("items");
             else if (selected.equals("team-email-inbox")) rows = data.optJSONArray("items");
         }
-        if (rows == null || rows.length() == 0) addEmpty(selected.equals("workstation") ? "Nothing in this queue. Try another filter or check back later." : "No items available, or your role does not include this module.");
+        if (rows == null || rows.length() == 0) addEmpty(selected.equals("workstation") ? "Nothing in this queue. Try another filter or check back later." : "No items here yet.");
         else if (selected.equals("channels")) {
             for (int i = 0; i < rows.length(); i++) { JSONObject channel = rows.optJSONObject(i); if (channel == null) continue; LinearLayout card = toolCard(channel.optString("name", "Team channel"), "Open conversation"); card.setOnClickListener(v -> openChat(channel.optString("id"), channel.optString("name"))); }
         } else for (int i = 0; i < rows.length(); i++) addRecord(rows.optJSONObject(i), selected);
@@ -860,9 +904,18 @@ public final class MainActivity extends Activity {
     private void email(String address) { try { startActivity(new Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:" + Uri.encode(address)))); } catch (Exception e) { toastError("No email app is available."); } }
     private void toastError(String error) { new AlertDialog.Builder(this).setMessage(safe(error)).setPositiveButton("OK", null).show(); }
 
+    private void refreshAccess() {
+        if(session==null||checkingAccess||api.cookie().isEmpty()||System.currentTimeMillis()-lastAccessCheck<30000)return;
+        checkingAccess=true;lastAccessCheck=System.currentTimeMillis();final String cookie=api.cookie();
+        io.execute(()->{try{JSONObject updated=api.get("session",workspace,"");runOnUiThread(()->{checkingAccess=false;if(!cookie.equals(api.cookie())||session==null)return;
+            boolean changed=session.optBoolean("owner")!=updated.optBoolean("owner")||!String.valueOf(session.optJSONArray("permissions")).equals(String.valueOf(updated.optJSONArray("permissions")));
+            session=updated;api.setCacheScope(updated);if(changed){unavailableModules.clear();if(!moduleVisible(page)||(!tool.isEmpty()&&!moduleVisible(tool))){tool="";showPage("home");}else showPage(page);}
+        });}catch(Exception error){runOnUiThread(()->{checkingAccess=false;if(cookie.equals(api.cookie())&&error instanceof TeamApi.ApiException&&(((TeamApi.ApiException)error).status==401||((TeamApi.ApiException)error).status==403)){api.clear();showLogin();}});}});
+    }
+
     @Override protected void onPause() { if (chatView != null) chatView.pause(); super.onPause(); }
-    @Override protected void onResume() { super.onResume(); if (chatView != null) chatView.resume(); }
-    @Override protected void onDestroy() { if (chatView != null) chatView.close(); if (avatarRepository != null) avatarRepository.close(); io.shutdownNow(); super.onDestroy(); }
+    @Override protected void onResume() { super.onResume(); if(updater!=null){updater.resumeInstall();updater.check(false);} refreshAccess(); if (chatView != null) chatView.resume(); }
+    @Override protected void onDestroy() { if(updater!=null)updater.close(); if (chatView != null) chatView.close(); if (avatarRepository != null) avatarRepository.close(); io.shutdownNow(); super.onDestroy(); }
 
     @Override public void onBackPressed() {
         navigateBack();
