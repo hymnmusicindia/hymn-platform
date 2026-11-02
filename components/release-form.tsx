@@ -4903,9 +4903,8 @@ export function ReleaseForm({
         ) : null}
         {step === 5 ? (
           <section className={clsx("release-delivery-stage grid gap-6", stepMotion)}>
-            <div className="grid gap-6">
-              <div className="grid gap-6">
-                <div
+            <div className={layoutStyles.deliveryGrid}>
+              <div className={layoutStyles.deliveryStores}><div
                   ref={
                     registerField("store-selection") as (
                       node: HTMLDivElement | null,
@@ -4946,9 +4945,8 @@ export function ReleaseForm({
                       setYoutubeContentIdModalOpen(false);
                     }
                   }} />
-                </div>
-
-                <div
+                </div></div>
+              <div className={layoutStyles.deliveryOptions}><div
                   ref={
                     registerField("social-confirmation") as (
                       node: HTMLDivElement | null,
@@ -5079,9 +5077,7 @@ export function ReleaseForm({
                     ) : null}
                   </div>
                   ) : null}
-                </div>
-
-                <div>
+                </div><div>
                   <div
                     ref={
                       registerField("country-selector") as (
@@ -5123,12 +5119,7 @@ export function ReleaseForm({
                       }
                     />
                   </div>
-                </div>
-
-
-              </div>
-
-
+                </div></div>
             </div>
           </section>
         ) : null}
@@ -5142,7 +5133,7 @@ export function ReleaseForm({
             <section className="record-review-tracks"><header><h3>The music</h3><button type="button" onClick={() => goToStep(3)}>Edit tracks & credits →</button></header>{tracks.map((track,index) => <div className="record-review-track" key={track.id}><span className="record-track-number">{String(index+1).padStart(2,"0")}</span><div><AudioWaveform src={track.existingAudioUrl || track.audioPreviewUrl} title={track.trackTitle || "Untitled track"} subtitle={[namesFor(track.primaryArtistIds) || track.primaryArtistQuery,track.duration,track.explicitContent ? "Explicit" : "Clean"].filter(Boolean).join(" · ")} compact /><div className="record-track-credits"><span><b>Songwriters</b> {track.songwriters.map(entry => entry.legalName || entry.artistName).filter(Boolean).join(", ") || "Not provided"}</span><span><b>Composers</b> {track.composers.map(entry => entry.legalName || entry.artistName).filter(Boolean).join(", ") || "Not provided"}</span><span><b>Producers</b> {track.producers.map(entry => entry.artistName || entry.legalName).filter(Boolean).join(", ") || "Not provided"}</span></div></div></div>)}</section>
             <div className="record-review-details">{[
               {title:"Release details",stage:2,rows:[["Genre",release.primaryGenre],["Subgenre",release.secondaryGenre],["Language",release.language],["Mood",release.mood]]},
-              {title:"Rights & ownership",stage:5,rows:[["Copyright",release.copyrightOwner],["Recording rights",release.publishingRights],["Content ownership",release.contentType],["Rights proof",release.licenseReceiptUrl ? "Attached" : "Not attached"]]},
+              {title:"Rights & ownership",stage:1,rows:[["Copyright",release.copyrightOwner],["Recording rights",release.publishingRights],["Content ownership",release.contentType],["Rights proof",release.licenseReceiptUrl ? "Attached" : "Not attached"]]},
               {title:"Delivery",stage:5,rows:[["Platforms",storeSelections.join(", ")],["Territories",release.territory === "Selected countries" ? release.selectedCountries.join(", ") : "Worldwide"],["Content ID",youtubeContentIdEnabled ? "Enabled" : "Off"],["Social monetisation",socialConsentAccepted ? "Enabled" : "Off"]]}
             ].map(group => <section key={group.title}><header><h3>{group.title}</h3><button type="button" onClick={() => goToStep(group.stage)}>Edit →</button></header><dl>{group.rows.map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value || "Not provided"}</dd></div>)}</dl></section>)}</div>
             {validationIssues.length > 0 ? <section className="record-review-issues"><h3>A few details need your attention</h3>{validationIssues.map(issue => <button type="button" key={`${issue.key}-${issue.trackIndex}`} onClick={() => triggerFieldFocus(issue)}><span>{customerMessage(issue.message)}</span><span aria-hidden="true">→</span></button>)}</section> : <p className="record-review-ready"><CheckCircle2 size={18} /> All required release details are complete.</p>}
