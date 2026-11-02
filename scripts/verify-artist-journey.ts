@@ -106,6 +106,11 @@ async function main() {
     assert.equal(object((await prisma.teamTask.findUniqueOrThrow({ where: { id: task.id } })).followUpContext).kind, 'TASK');
     const desk = await rawRead(assigned, 'artist-desk', new URLSearchParams()) as {promises:{done:number}};
     assert.equal(desk.promises.done,1);
+    const supportTicket=await prisma.supportTicket.create({data:{userId:user.id,subject:'Callback assistance',message:'Please help with my release.',details:{email:'alternate@journey.fixture.invalid'}}});
+    const supportTask=await prisma.teamTask.create({data:{workspaceId:workspace.id,ownerId:assigned.id,creatorId:owner.id,clientId:task.clientId,title:'Support reply',recordType:'support',recordId:supportTicket.id}});
+    const supportView=await rawRead(assigned,'artist-activity',new URLSearchParams({id:supportTask.id})) as {client:{email:string};emailTemplates:{distribution:{subject:string}}};
+    assert.equal(supportView.client.email,'alternate@journey.fixture.invalid');
+    assert.equal(supportView.emailTemplates.distribution.subject,'Prepare your release with HYMN');
     const report = await teamRead(owner, 'artist-performance', new URLSearchParams());
     assert.ok(report.groups);
     await assert.rejects(teamRead(rep, 'artist-performance', new URLSearchParams()), /permission/);

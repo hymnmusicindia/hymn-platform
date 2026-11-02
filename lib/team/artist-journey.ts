@@ -14,6 +14,8 @@ import { syncCallbackCalendar } from './callback-calendar';
 import { acceptsAssignmentsNow } from './availability-rules';
 import { internalUserWhere } from './internal-identity';
 import { notifyTeamBatch } from './notification-batch';
+import {activityEmailTemplates,activityEmailLabels} from './work-station-policy';
+import { supportDetails } from '@/lib/support';
 type Db = Prisma.TransactionClient;
 const openStatuses = ['COMPLETED', 'CANCELLED'];
 const href = (taskId: string, workspace: string) => `/team?workspace=${workspace}&module=work-station&task=${taskId}`;
@@ -151,12 +153,15 @@ export async function artistRead(a: Actor, resource: string, p: URLSearchParams)
     }
     if (resource === 'artist-activity') {
         const task = await artistTask(prisma, a, p.get('id') || '');
+        let recipient=task.client!.email;
+        const c=object(task.followUpContext),reference=Number(c.referenceId),ticketId=task.recordType==='support'?task.recordId:Number.isSafeInteger(reference)&&String(c.source).split(':')[0]==='ticket'&&String(c.source).split(':')[1]===String(reference)?reference:null;
+        if(ticketId&&task.client!.userId&&(can(a,'support.reply')||can(a,'crm.outreach.manage'))&&(await prisma.teamWorkspace.findFirst({orderBy:{createdAt:'asc'},select:{id:true}}))?.id===a.workspaceId){const ticket=await prisma.supportTicket.findFirst({where:{id:ticketId,userId:task.client!.userId},include:{user:{select:{email:true}}}});if(ticket)recipient=String(supportDetails(ticket.details).email||ticket.user.email);}
         const userId = task.client!.userId;
         if (!userId)
-            return { registered: false, promises: [], recaps: [], insight: null };
+            return { registered: false, emailTemplates:activityEmailTemplates,emailLabels:activityEmailLabels,client:{name:task.client!.name,email:recipient}, promises: [], recaps: [], insight: null };
         const [insight, rows] = await Promise.all([artistInsight(userId), prisma.growthEvent.findMany({ where: { userId, event: { in: ['artist_promise', 'artist_recap'] }, properties: { path: ['workspaceId'], equals: a.workspaceId } }, orderBy: { createdAt: 'desc' }, take: 50 })]);
         const manageable = await prisma.teamTask.findMany({ where: { workspaceId: a.workspaceId, ownerId: a.id, id: { in: rows.map(r => String(object(r.properties).taskId)) } }, select: { id: true } }), ids = new Set(manageable.map(t => t.id));
-        return { registered: true, insight:object(task.followUpContext).experimentGroup==='COMPARISON'?{...insight,suggestion:'Observation only. Respond if the artist requests help; do not initiate behaviour-triggered contact.'}:insight, promises: rows.filter(r => r.event === 'artist_promise').map(r => ({ ...object(r.properties), eventId: r.id, canComplete: ids.has(String(object(r.properties).taskId)) })), recaps: rows.filter(r => r.event === 'artist_recap').map(r => ({ id: r.id, ...object(r.properties) })) };
+        return { registered: true, emailTemplates:activityEmailTemplates,emailLabels:activityEmailLabels,client:{name:task.client!.name,email:recipient}, insight:object(task.followUpContext).experimentGroup==='COMPARISON'?{...insight,suggestion:'Observation only. Respond if the artist requests help; do not initiate behaviour-triggered contact.'}:insight, promises: rows.filter(r => r.event === 'artist_promise').map(r => ({ ...object(r.properties), eventId: r.id, canComplete: ids.has(String(object(r.properties).taskId)) })), recaps: rows.filter(r => r.event === 'artist_recap').map(r => ({ id: r.id, ...object(r.properties) })) };
     }
     if (resource === 'artist-performance') {
         demand(a, 'reports.all.view');

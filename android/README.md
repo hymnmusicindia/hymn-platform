@@ -1,5 +1,9 @@
 # HYMN Team Android
 
+Version 2.1.10 adds the native **Artist priorities & promises** desk and an **Artist journey, promises & email** panel inside each customer activity. It shows the artist goal, current blocker, contact choices, shared playback context, release readiness, commitments and reviewed recaps. Customer email uses the server's shared HYMN templates and durable queue. The activity's encrypted notes remain attached underneath the panel. Dialogs scroll and resize around the keyboard; fields use the shared day/night palette.
+
+Publish the matching web/API release before distributing 2.1.10. The artist panel requires `/api/team/artist-activity` and `/api/team/artist-desk`. Access is checked on every request; an app update does not grant new permissions. Existing installations use the normal in-app update prompt and Android installer confirmation.
+
 ### Email sign-in without Google Play services
 
 Version 2.1.8 adds a native **Continue with email** form. Members enter their team email and a six-digit emailed code without a browser redirect. Version 2.1.9 removes native Google sign-in and its SDKs; email-code verification is the app's sign-in method. Deploy `/api/auth/team-email` before distributing the APK; its readiness response must report `teamEmailSignIn: "v1"` and `available: true`. The server uses the existing SMTP configuration and database-backed `security_rate_limits`; no migration or new credential is required.

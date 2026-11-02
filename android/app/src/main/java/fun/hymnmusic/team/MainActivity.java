@@ -530,6 +530,10 @@ public final class MainActivity extends Activity {
                     else notes.setText(draft.optString("notes", ""));
                 }).show());
         }
+        if (!task.optString("clientId").isEmpty() && !task.isNull("clientId")) {
+            Button journey = button("Artist journey, promises & email", false); LinearLayout.LayoutParams jp = new LinearLayout.LayoutParams(-1, dp(50)); jp.topMargin = dp(12); content.addView(journey, jp);
+            journey.setOnClickListener(v -> { if (!status.equals("FINISHED")) keepDraft.run(); new ArtistJourneyDialog(this, api, io, themePalette, workspace, id, activityId, task.optString("ownerId").equals(memberId) && hasPermission("tasks.update"), !status.equals("FINISHED") && (hasPermission("crm.outreach.manage") || hasPermission("support.reply"))).show(); });
+        }
         if (status.equals("FINISHED")) { notes.setEnabled(false); for (CheckBox check : checklist) check.setEnabled(false); addEmpty("This activity has finished. Return to the work queue to see its current status."); return; }
         addSpace(12); LinearLayout actions = new LinearLayout(this); actions.setGravity(Gravity.CENTER_VERTICAL); actions.setOrientation(LinearLayout.HORIZONTAL);
         Button save = button("Save notes", false); actions.addView(save, new LinearLayout.LayoutParams(0, dp(46), 1)); Button toggle = button(status.equals("RUNNING") ? "Pause" : "Resume", true); LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, dp(46), 1); tp.leftMargin = dp(8); actions.addView(toggle, tp); content.addView(actions);
@@ -817,6 +821,7 @@ public final class MainActivity extends Activity {
             addPhoneNotificationSetting("Team updates", TeamPhoneNotifications.MUTE_UPDATES, "Important inbox and workspace alerts");
             return;
         }
+        if (selected.equals("workstation") && hasPermission("crm.outreach.manage") && hasPermission("tasks.update")) { Button priorities=button("Artist priorities & promises",true);content.addView(priorities);addSpace(12);priorities.setOnClickListener(v->ArtistJourneyDialog.showDesk(this,api,io,themePalette,workspace,this::startWork)); }
         if (selected.equals("workstation")) {
             LinearLayout filters = new LinearLayout(this); filters.setGravity(Gravity.CENTER_VERTICAL); filters.setOrientation(LinearLayout.HORIZONTAL); String[][] buckets = {{"Today", "today"}, {"Upcoming", "upcoming"}, {"Overdue", "overdue"}, {"Done", "finished"}};
             for (String[] bucket : buckets) { Button filter = button(bucket[0], workBucket.equals(bucket[1])); filter.setTextSize(11); filter.setPadding(dp(9), 0, dp(9), 0); LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(0, dp(40), 1); fp.rightMargin = dp(5); filters.addView(filter, fp); filter.setOnClickListener(v -> { workBucket = bucket[1]; loadPageData(); }); }
