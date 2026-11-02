@@ -1,5 +1,5 @@
 import type { Release, ReleaseStatus } from "@/lib/types";
-import { isDireNoteCorrectionStatus } from "@/lib/release-status-presentation";
+import { isDireNoteCorrectionStatus, effectiveReleaseStatus } from "@/lib/release-status-presentation";
 
 export function releaseDateReached(value?: string | null, now = new Date()) {
   if (!value) return true;
@@ -47,7 +47,9 @@ export function isDireNoteAccepted(release: Release) {
 }
 
 export function automaticStatusCopy(release: Release) {
-  if (isDireNoteCorrectionStatus(release.direNoteStatus)) return "HYMN requires corrections before this release can continue. Open the correction details to review the requested changes.";
+  const marker = release.metadata?.correctionReview as {status?: string} | undefined;
+  if (marker?.status === "pending" && ["under_review", "resubmitted", "approved"].includes(release.status.toLowerCase()) && isDireNoteCorrectionStatus(release.direNoteStatus)) return "The correction request is still open. HYMN received your response and is reviewing it before sending the updated package. You do not need to submit the same response again.";
+  if (isDireNoteCorrectionStatus(release.direNoteStatus) && effectiveReleaseStatus(release.status, release.direNoteStatus, release.metadata) === "changes_requested") return "HYMN requires corrections before this release can continue. Open the correction details to review the requested changes.";
   if (release.status === "under_review" || release.status === "submitted" || release.status === "in_queue") return "HYMN is reviewing your metadata, artwork, audio, and rights.";
   if (["approved", "queued_for_distribution", "submitting_to_distributor", "sent_to_distributor", "distributor_processing", "processing"].includes(release.status)) return release.releaseTiming === "quick_release"
     ? "HYMN is processing your quick release. After partner approval, store availability usually takes 2–7 days."

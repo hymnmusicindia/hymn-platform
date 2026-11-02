@@ -3,7 +3,7 @@ import { effectiveReleaseStatus } from './release-status-presentation';
 
 export type ReleaseBucket = 'drafts' | 'review' | 'corrections' | 'delivery' | 'live' | 'exceptions';
 export function releaseBucket(release: Release): ReleaseBucket {
-  const status = effectiveReleaseStatus(release.status, release.direNoteStatus);
+  const status = effectiveReleaseStatus(release.status, release.direNoteStatus, release.metadata);
   if (['draft', 'awaiting_payment'].includes(status)) return 'drafts';
   if (['changes_requested', 'distributor_changes_required'].includes(status)) return 'corrections';
   if (['live', 'partially_live'].includes(status)) return 'live';

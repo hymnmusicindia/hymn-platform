@@ -31,8 +31,21 @@ const map: Record<string, { label: string; description: string; tone: ReleaseSta
   live: { label: "Live", description: "Your release is available and reporting will follow.", tone: "success", step: 4, nextAction: "View performance" },
   failed: { label: "Delivery Issue", description: "HYMN needs your attention to continue delivery.", tone: "danger", step: 2, nextAction: "Resolve issue" }
 };
-export function getReleaseStatusPresentation(status?: string | null, providerStatus?: string | null) {
-  const normalizedStatus = effectiveReleaseStatus(String(status || "draft"), providerStatus);
+export function pendingCorrectionReview(status: string, providerStatus?: string | null, metadata?: Record<string, unknown> | null) {
+  const marker = metadata?.correctionReview as { status?: string } | undefined;
+  if (marker?.status !== "pending" || !["under_review", "resubmitted", "approved"].includes(status.toLowerCase()) || !isDireNoteCorrectionStatus(providerStatus)) return null;
+  const qc = metadata?.autoQc as { changeKind?: string } | undefined;
+  return {
+    label: qc?.changeKind === "rights_review" ? "Correction awaiting rights review" : "Correction response under review",
+    description: "The correction request is still open. HYMN received your response and must review it before sending the updated package. You do not need to submit the same response again.",
+    tone: "warning" as const, step: 1, nextAction: "View correction response"
+  };
+}
+
+export function getReleaseStatusPresentation(status?: string | null, providerStatus?: string | null, metadata?: Record<string, unknown> | null) {
+  const pending = pendingCorrectionReview(String(status || "draft"), providerStatus, metadata);
+  if (pending) return pending;
+  const normalizedStatus = effectiveReleaseStatus(String(status || "draft"), providerStatus, metadata);
   if (["released", "distributed"].includes(normalizedStatus)) return map.live;
   if (normalizedStatus === "awaiting_payment") return { label: "Payment Required", description: "Complete checkout to submit your release.", tone: "warning" as const, step: 0, nextAction: "Continue checkout" };
   if (map[normalizedStatus]) return map[normalizedStatus];
@@ -47,8 +60,10 @@ export function isDireNoteCorrectionStatus(providerStatus?: string | null) {
   return /\b(?:changes? (?:required|requested)|corrections? (?:required|requested)|correction (?:required|request(?:ed)?)|action required|fix required)\b/.test(provider);
 }
 
-export function effectiveReleaseStatus(status: string, providerStatus?: string | null) {
+export function effectiveReleaseStatus(status: string, providerStatus?: string | null, metadata?: Record<string, unknown> | null) {
   const localStatus = status.toLowerCase();
+  if (["draft", "awaiting_payment", "live", "partially_live", "taken_down", "takedown_requested", "takedown_processing", "archived"].includes(localStatus)) return localStatus;
+  if (metadata && isDireNoteCorrectionStatus(providerStatus) && !pendingCorrectionReview(status, providerStatus, metadata) && !["draft", "awaiting_payment"].includes(localStatus)) return "changes_requested";
   // A user's successful correction submission advances the HYMN workflow while
   // HYMN can still report the correction from the previous submission.
   // Keep the newer local lifecycle state visible until a fresh provider sync
@@ -59,8 +74,9 @@ export function effectiveReleaseStatus(status: string, providerStatus?: string |
 
 /** Human labels for operational release states. Kept client-safe so admin and
  * customer surfaces cannot drift by each maintaining their own formatter. */
-export function adminReleaseStatusLabel(status: string, providerStatus?: string | null) {
-  const effectiveStatus = effectiveReleaseStatus(status, providerStatus);
+export function adminReleaseStatusLabel(status: string, providerStatus?: string | null, metadata?: Record<string, unknown> | null) {
+  if (pendingCorrectionReview(status, providerStatus, metadata)) return "Correction review required";
+  const effectiveStatus = effectiveReleaseStatus(status, providerStatus, metadata);
   if (effectiveStatus === "changes_requested" && isDireNoteCorrectionStatus(providerStatus)) return "Correction Required";
   const labels: Record<string, string> = {
     approved: "Approved - awaiting delivery",
@@ -71,4 +87,11 @@ export function adminReleaseStatusLabel(status: string, providerStatus?: string 
     rejected: providerStatus === "rejected" ? "Rejected by HYMN" : "Rejected"
   };
   return labels[status.toLowerCase()] ?? status.replace(/_/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+export function releaseSyncHealth(release: {direNoteStatus?: string | null; direNoteLastSyncedAt?: string | null; direNoteSyncError?: string | null}, now = Date.now()) {
+  if (!release.direNoteStatus) return null;
+  const checked = Date.parse(release.direNoteLastSyncedAt || "");
+  if (!release.direNoteSyncError && Number.isFinite(checked) && now - checked <= 60 * 60 * 1000) return null;
+  return { label: "Status refresh delayed", detail: "The last verified delivery status is shown. HYMN will retry the status check; a delayed check does not confirm approval or delivery." };
 }

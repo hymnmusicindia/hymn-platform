@@ -5,6 +5,23 @@ import type { ReleaseStatus } from './types';
 import { getPublicAppUrl } from './public-app-url';
 import { prisma } from './prisma';
 
+/** Escalate unattended responses without approving rights or reopening artist work. */
+export async function escalateOverdueCorrectionReviews(now = new Date()) {
+  const releases = await prisma.release.findMany({where:{archivedAt:null,status:{in:['UNDER_REVIEW','RESUBMITTED','APPROVED']},metadata:{path:['correctionReview','status'],equals:'pending'}},select:{id:true,metadata:true},orderBy:{id:'asc'},take:100});
+  let escalated = 0;
+  for (const release of releases) {
+    const marker = (release.metadata as Record<string,unknown>|null)?.correctionReview as {receivedAt?:string;submissionKey?:string}|undefined;
+    const received = Date.parse(marker?.receivedAt || '');
+    if (!marker?.submissionKey || !Number.isFinite(received) || now.getTime()-received < 24*60*60*1000) continue;
+    escalated += await prisma.$transaction(async tx => {
+      const changed = await tx.adminTask.updateMany({where:{eventKey:`release:${release.id}:correction-review:${marker.submissionKey}`,status:{in:['open','processing','review']},priority:{not:'critical'}},data:{priority:'critical'}});
+      if (changed.count) await tx.auditLog.create({data:{actorType:'system',action:'CORRECTION_REVIEW_OVERDUE',entity:'release',entityId:String(release.id),metadata:{receivedAt:marker.receivedAt,submissionKey:marker.submissionKey,reason:'Correction response has awaited review for over 24 hours. Existing reviewer task escalated; no rights decision or delivery was performed.'}}});
+      return changed.count;
+    });
+  }
+  return escalated;
+}
+
 /** Called in the same transaction as the paid metadata/track save. */
 export async function finalizeReleaseReviewHandoff(tx: Prisma.TransactionClient, input: { releaseId: number; userId: number; submissionKey?: string }) {
   const release = await tx.release.findUniqueOrThrow({ where: { id: input.releaseId }, include: { user: true } });

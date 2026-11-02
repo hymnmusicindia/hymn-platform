@@ -1,10 +1,10 @@
 import { Release, ReleaseStatus } from "@/lib/types";
-import { CUSTOMER_REVIEW_STATUSES, effectiveReleaseStatus } from "@/lib/release-status-presentation";
+import { CUSTOMER_REVIEW_STATUSES, effectiveReleaseStatus, pendingCorrectionReview } from "@/lib/release-status-presentation";
 
 export type ReleasePortalStage = "draft" | "review" | "reconciling" | "changes_requested" | "scheduled" | "processing" | "partially_live" | "released" | "rejected" | "queued" | "sending" | "partner_received" | "payment_required" | "delivery_issue" | "takedown_pending" | "taken_down" | "archived" | "unknown";
 
 export function getReleasePortalStage(release: Release): ReleasePortalStage {
-  const s = effectiveReleaseStatus(release.status, release.direNoteStatus);
+  const s = effectiveReleaseStatus(release.status, release.direNoteStatus, release.metadata);
   const metadata = release.metadata && typeof release.metadata === "object" ? release.metadata as Record<string, unknown> : {};
   const direNote = metadata.direNote && typeof metadata.direNote === "object" ? metadata.direNote as Record<string, unknown> : {};
   if (direNote.reconciliationInProgress === true) return "reconciling";
@@ -28,7 +28,11 @@ export function getReleasePortalStage(release: Release): ReleasePortalStage {
   return "unknown";
 }
 
-export function getReleasePortalStageLabel(stage: ReleasePortalStage) {
+export function getReleasePortalStageLabel(stage: ReleasePortalStage, release?: Release) {
+  if (stage === "review" && release) {
+    const pending = pendingCorrectionReview(release.status, release.direNoteStatus, release.metadata);
+    if (pending) return pending.label;
+  }
   if (stage === "reconciling") return "Reconciling";
   const operational: Partial<Record<ReleasePortalStage, string>> = { queued: "Queued for Distribution", sending: "Sending to Partner", partner_received: "Received by Partner", payment_required: "Payment Required", delivery_issue: "Delivery Needs Attention", takedown_pending: "Takedown Pending", taken_down: "Taken Down", archived: "Archived", unknown: "Status Pending" };
   if (operational[stage]) return operational[stage]!;

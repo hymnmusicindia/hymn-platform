@@ -29,10 +29,10 @@ assert.equal(contentIdCorrection.label, "Rights · Content ID");
 assert.equal(extractDireNoteCorrections({ remarks: "TRACK 2 SEEMS LIKE AN INSTRUMENTAL. PLEASE SELECT RELEVANT TRACK LANGUAGE" }, tracks, 19)[0].field, "tracks.1.trackLanguage");
 assert.equal(issues.length, 1);
 assert.match(issues[0].field, /^tracks\.1\.providerCorrection\./);
-assert.equal(issues[0].label, "Track 2 · pink · DireNote correction");
+assert.equal(issues[0].label, "Track 2 · pink · HYMN correction");
 assert.match(issues[0].note, /instrumental/);
 assert.equal(extractDireNoteCorrections({ message: "Release information fetched successfully", tracks: [{ status: "Pending", remarks: "NONE" }, { remarks: "ISRC generated" }] }, tracks, 19).length, 0);
-assert.equal(extractDireNoteCorrections({ release: { remarks: "Please update the artwork" } }, tracks, 19)[0].label, "Release · DireNote correction");
+assert.equal(extractDireNoteCorrections({ release: { remarks: "Please update the artwork" } }, tracks, 19)[0].label, "Release · HYMN correction");
 assert.equal(extractDireNoteCorrections({ tracks: [{ ...payload.tracks[1], status: "Correction Required" }] }, tracks, 19).length, 1);
 assert.equal(extractDireNoteCorrections({ tracks: [{ ...payload.tracks[1], remarks: undefined, remark }] }, tracks, 19).length, 1);
 assert.equal(matchDireNoteTrack({ isrc: "", track_name: "" }, tracks), undefined);
@@ -55,6 +55,7 @@ async function main() {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify(response), { status: 200 });
   const release: any = { id: 19, userId: 7, title: "Magenta", status: "SENT_TO_DISTRIBUTOR", upc: "8901234567890", artistName: "Fixture artist", version: 1, metadata: {}, createdAt: new Date(), releaseDate: new Date("2027-01-01"), tracks: tracks.map(track => ({ ...track, createdAt: new Date(), metadata: {} })) };
+  release.user = { status: "PAUSED" }; // This mock must never enqueue real mail.
   const notifications: any[] = [];
   const tasks = new Map();
   let transitions = 0;
@@ -74,6 +75,7 @@ async function main() {
   db.release.updateMany = async ({ data }: any) => { const { version, ...rest } = data; Object.assign(release, rest); if (version) release.version++; return { count: 1 }; };
   db.track.findMany = async () => structuredClone(release.tracks);
   db.trackContribution.findMany = async () => [];
+  db.releaseChangeRequest.findMany = async () => [];
   db.track.update = async ({ where, data }: any) => Object.assign(release.tracks.find((track: any) => track.id === where.id), data);
   db.direNoteLog.count = async () => 0;
   db.direNoteLog.findFirst = async () => null;
@@ -117,6 +119,8 @@ async function main() {
     await updateDetailedReleaseStatus(19, "changes_requested", "Already awaiting corrections", undefined, { manualOverride: true });
     assert.equal(notificationWrites, 1, "A no-op status transition must not notify again");
     release.status = "RESUBMITTED";
+    attempts[0].corrections.status = "customer_resolved";
+    release.metadata.correctionReview = { status: "pending", submissionKey: "fixture-response" };
     await syncDireNoteRelease(19);
     assert.equal(release.status, "RESUBMITTED", "Old remarks must not reopen a resubmission");
     response = { ...payload, tracks: payload.tracks.map(track => ({ ...track, remarks: "NONE" })) };
@@ -127,9 +131,12 @@ async function main() {
     assert.equal(release.status, "CHANGES_REQUESTED", "Pending must not clear unresolved corrections");
     release.upc = "auto-generated";
     attempts[0].upc = null;
-    await assert.rejects(() => syncDireNoteRelease(19), /Awaiting UPC/);
+    await assert.rejects(() => syncDireNoteRelease(19), /Stored provider UPC conflicts/, "Known verified identifiers must not be replaced by an invalid local placeholder");
     assert.equal(release.upc, "auto-generated");
     release.upc = null; // Invalid historical identities require explicit repair, not silent overwrite.
+    release.metadata = {};
+    attempts[0].rawStatusPayload = {};
+    attempts[0].responseRedacted = {};
     const requested: string[] = [];
     db.externalIdentifierHistory.create = async () => ({});
     globalThis.fetch = async (_url, init) => {
@@ -181,6 +188,24 @@ async function main() {
     globalThis.fetch = async () => new Response(JSON.stringify({ ...payload, release: { upc_code: release.upc }, tracks: payload.tracks.map(track => ({ ...track, status: "Rejected", remarks: "NONE" })) }), { status: 200 });
     await syncDireNoteRelease(19);
     assert.equal(release.status, "REJECTED", "Bare rejection without correction instructions remains rejected");
+    release.status = "UNDER_REVIEW";
+    const observedAt = release.direNoteLastSyncedAt;
+    globalThis.fetch = async () => Response.json({success:true,release:{upc_code:release.upc},tracks:[{...payload.tracks[0],status:"Live",remarks:"NONE"}]});
+    await assert.rejects(() => syncDireNoteRelease(19), /DIRENOTE_INCOMPLETE_STATUS/);
+    assert.equal(release.status,"UNDER_REVIEW","One live track cannot mark an incomplete album live");
+    assert.equal(release.direNoteLastSyncedAt,observedAt,"Failed/incomplete responses must not advance successful freshness");
+    globalThis.fetch = async () => Response.json({success:true,release:{upc_code:release.upc},tracks:[0,1].map(()=>({...payload.tracks[0],status:"Live",remarks:"NONE"}))});
+    await assert.rejects(() => syncDireNoteRelease(19), /DIRENOTE_INCOMPLETE_STATUS/);
+    globalThis.fetch = async () => {release.version++;release.metadata={...release.metadata,customerEdit:"keep"};return Response.json({...payload,release:{upc_code:release.upc},tracks:payload.tracks.map(track=>({...track,remarks:"NONE"}))});};
+    await assert.rejects(() => syncDireNoteRelease(19), /DIRENOTE_SYNC_DEFERRED/);
+    assert.equal(release.metadata.customerEdit,"keep","Concurrent edits must survive a stale provider response");
+    globalThis.fetch = async () => Response.json({...payload,release:{upc_code:release.upc},tracks:payload.tracks.map(track=>({...track,remarks:"Please replace the unreadable artwork"}))});
+    attempts[0].corrections.status="customer_resolved";
+    release.metadata.correctionReview={status:"pending",submissionKey:"fixture-new-response"};
+    await syncDireNoteRelease(19);
+    assert.equal(release.status,"CHANGES_REQUESTED","A changed provider correction must reopen customer action");
+    assert.equal(attempts[0].corrections.status,"customer_action_required");
+    assert.equal(release.metadata.correctionReview.status,"changes_requested");
     console.log("DireNote correction parser and sync regression verification passed.");
   } finally { globalThis.fetch = originalFetch; }
 }

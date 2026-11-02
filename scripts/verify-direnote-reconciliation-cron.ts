@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma";
 import { GET as cron } from "../app/api/cron/direnote-release-sync/route";
 import { GET as revenueCron } from "../app/api/cron/direnote-revenue-sync/route";
 import { pollDireNoteIngestJobs } from "../lib/direnote-ingest-jobs";
+import { extractDireNoteCorrections, direNoteCorrectionFingerprint } from "../lib/direnote-corrections";
 
 assert.match(process.env.DATABASE_URL ?? "", /^postgresql:\/\/fixture:fixture@127\.0\.0\.1:55439\/direnote_virtual/);
 process.env.CRON_SECRET = "fixture-cron";
@@ -49,12 +50,18 @@ async function main() {
     status: "UNDER_REVIEW", paymentStatus: "paid", upc: abandonedUpc, direNoteStatus: "processing",
     tracks: { create: [{ title: abandonedTitle, trackNumber: 1, isrc: `INDN2${String(2603200 + 9).padStart(7, "0")}`, primaryArtist: "Fixture Artist", metadata: { language: "English", version: "Original" } }] }
   }, include: { tracks: true } });
-  await prisma.distributionSubmissionAttempt.create({ data: {
+  const resolvedAttempt = await prisma.distributionSubmissionAttempt.create({ data: {
     releaseId: abandoned.id, provider: "direnote", state: "submitted", isCurrent: true,
     idempotencyKey: "reconciliation-cron-abandoned", payloadHash: "reconciliation-cron-abandoned", upc: abandonedUpc,
     providerStatus: "changes_required", corrections: { status: "customer_resolved" },
     trackIdentifiers: [{ id: abandoned.tracks[0].id, title: abandonedTitle, trackNumber: 1, isrc: abandoned.tracks[0].isrc }]
   } });
+  releasesByUpc.set(abandonedUpc,{title:abandonedTitle,isrc:abandoned.tracks[0].isrc!});
+  const baseline = {success:true,release:{upc_code:abandonedUpc,album_name:abandonedTitle,status:"Pending"},tracks:[{track_number:1,track_name:abandonedTitle,isrc:abandoned.tracks[0].isrc,status:"Rejected",remarks:"Please provide an acceptable sample licence."}]};
+  const fingerprint = direNoteCorrectionFingerprint(extractDireNoteCorrections(baseline,abandoned.tracks,abandoned.id,resolvedAttempt.id));
+  await prisma.distributionSubmissionAttempt.update({where:{id:resolvedAttempt.id},data:{corrections:{status:"customer_resolved",fingerprint}}});
+  await prisma.release.update({where:{id:abandoned.id},data:{metadata:{direNote:{appliedCorrectionFingerprint:fingerprint},correctionReview:{status:"pending",receivedAt:"2020-01-01T00:00:00Z",submissionKey:"overdue-fixture"},autoQc:{status:"manual_review_required"}}}});
+  const reviewTask=await prisma.adminTask.create({data:{eventKey:`release:${abandoned.id}:correction-review:overdue-fixture`,entityType:"release",entityId:String(abandoned.id),type:"Correction review",priority:"high",title:"Review submitted rights evidence",body:"Existing response awaiting review",href:`/admin?tab=distribution-queue&releaseId=${abandoned.id}`}});
 
   globalThis.fetch = async (input, init) => {
     const url = String(input);
@@ -79,11 +86,15 @@ async function main() {
     const first = await cron(new Request("http://localhost/api/cron/direnote-release-sync", { headers: { authorization: "Bearer fixture-cron" } }));
     const firstResult = await first.json();
     const failedFixture = fixtures.find(fixture => fixture.upc === failedUpc)!;
-    assert.equal(firstResult.candidateCount, 8, "The batch includes every current reconciliation-required attempt and excludes the abandoned resolved-correction attempt.");
-    assert.equal(firstResult.checked, 8, "The worker must continue through all eligible releases after one provider failure.");
+    assert.equal(firstResult.candidateCount, 9, "Pending correction responses must remain in the provider polling batch.");
+    assert.equal(firstResult.checked, 9, "The worker must continue through all eligible releases after one provider failure.");
+    assert.equal((await prisma.release.findUniqueOrThrow({where:{id:abandoned.id}})).status,"UNDER_REVIEW","An unchanged provider correction must preserve the submitted response");
+    assert.ok((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({where:{id:resolvedAttempt.id}})).lastCheckedAt,"Pending review must still fetch fresh provider observations");
+    assert.equal((await prisma.adminTask.findUniqueOrThrow({where:{id:reviewTask.id}})).priority,"critical","Overdue review must escalate the existing task");
     assert.equal(firstResult.errorCount, 1, `A failed status lookup must be reported while other releases still sync: ${JSON.stringify(firstResult.results)}`);
     assert.equal(firstResult.results.find((item: any) => item.releaseId === failedFixture.id).success, false);
-    assert.equal(firstResult.results.filter((item: any) => item.status === "changes_required").length, 7);
+    assert.equal(firstResult.results.filter((item: any) => item.status === "changes_required").length, 8);
+    assert.equal(firstResult.statusRepairCount,7,"Observation of an unchanged pending response is not a status repair");
     assert.equal(ingestRequests, 0, "Status polling must never repeat provider ingestion for an ambiguous accepted attempt.");
     for (const fixture of fixtures.filter(fixture => fixture.id !== failedFixture.id)) {
       assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: fixture.id } })).status, "CHANGES_REQUESTED");
@@ -97,8 +108,10 @@ async function main() {
     const secondResult = await second.json();
     assert.equal(secondResult.checked, 8, "The failed release and already-corrected releases remain eligible for later reconciliation.");
     assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: failedFixture.id } })).status, "CHANGES_REQUESTED");
+    assert.equal(secondResult.statusRepairCount,1,"Unchanged observations must not inflate repair counts");
+    assert.equal(await prisma.auditLog.count({where:{action:"CORRECTION_REVIEW_OVERDUE",entityId:String(abandoned.id)}}),1,"Escalation must not repeat each polling cycle");
     for (const fixture of fixtures) assert.equal(await prisma.emailLog.count({ where: { entityId: String(fixture.id), template: "release_changes_requested" } }), 1, "Repeated correction polling must not duplicate the artist email.");
-    assert.equal(statusRequests, 18, "Only the failed release should consume two bounded retries before succeeding in the next run.");
+    assert.equal(statusRequests, 19, "The pending correction response is polled once; only the failed release consumes bounded retries.");
     await prisma.distributionSubmissionAttempt.updateMany({ where: { releaseId: { in: fixtures.map(fixture => fixture.id) }, isCurrent: true }, data: { lastCheckedAt: new Date(0) } });
     const reserved = await prisma.direNoteLog.count({ where: { action: "rate_limit_reservation" } });
     await prisma.direNoteLog.createMany({ data: Array.from({ length: Math.max(0, 95 - reserved) }, () => ({ action: "rate_limit_reservation", success: true, requestPayloadRedacted: { fixture: "budget-exhaustion" } })) });
@@ -111,7 +124,7 @@ async function main() {
     assert.equal(limitedResult.checked, 0);
     assert.equal(limitedResult.deferredCount, 8);
     assert.equal(limitedResult.errorCount, 0);
-    assert.equal(statusRequests, 18, "Budget exhaustion must not send provider requests");
+    assert.equal(statusRequests, 19, "Budget exhaustion must not send provider requests");
     assert.equal(await prisma.direNoteLog.count({ where: { action: "release_sync_failed" } }), failuresBefore);
     assert.equal(await prisma.distributionSubmissionAttempt.count({ where: { releaseId: { in: fixtures.map(fixture => fixture.id) }, lastCheckedAt: new Date(0) } }), 8, "Deferred releases must remain immediately eligible");
     await prisma.user.update({ where: { id: user.id }, data: { role: "ADMIN" } });

@@ -9,6 +9,7 @@ import { syncDireNoteArtistInformation, syncDireNoteRelease, syncDireNoteSongwri
 import { submitRelease } from "@/lib/distribution-service";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 import { isDireNoteRateLimit } from "@/lib/direnote-rate-limit";
+import { escalateOverdueCorrectionReviews } from "@/lib/release-review-handoff";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -55,6 +56,7 @@ async function runJob(request: Request) {
     // The provider attempt is the synchronization identity. Release status is
     // a customer-facing projection repaired by syncDireNoteRelease.
     await prisma.direNoteSyncRun.create({ data: { runId } });
+    await escalateOverdueCorrectionReviews();
     // Recover a verified, QC-passed release if its request ended before the
     // background handoff ran. The submission lock and attempt state prevent duplicates.
     const autoQcCandidates = await prisma.release.findMany({
@@ -92,7 +94,7 @@ async function runJob(request: Request) {
       orderBy: [{ lastCheckedAt: { sort: "asc", nulls: "first" } }, { id: "asc" }],
       take: Math.max(CONCURRENCY, Math.min(Number(process.env.DIRENOTE_RELEASE_SYNC_BATCH_SIZE || 30), 100))
     });
-    const candidates = candidateRows.filter(item => !item.corrections || typeof item.corrections !== "object" || Array.isArray(item.corrections) || (item.corrections as Prisma.JsonObject).status !== "customer_resolved");
+    const candidates = [...candidateRows];
     // Recover accepted legacy attempts whose current flag was never persisted.
     // This is status reconciliation only, never a second ingestion request.
     const missingLineageRows = await prisma.distributionSubmissionAttempt.findMany({
@@ -101,9 +103,9 @@ async function runJob(request: Request) {
       include: { release: { select: { id: true, title: true } } },
       orderBy: [{ lastCheckedAt: { sort: "asc", nulls: "first" } }, { id: "desc" }], take: 5
     });
-    const missingLineage = missingLineageRows.filter(item => !item.corrections || typeof item.corrections !== "object" || Array.isArray(item.corrections) || (item.corrections as Prisma.JsonObject).status !== "customer_resolved");
+    const missingLineage = missingLineageRows;
     for (const candidate of missingLineage) if (!candidates.some(item => item.releaseId === candidate.releaseId)) candidates.unshift(candidate);
-    const results: Array<{ releaseId: number; title: string; success: boolean; pending?: boolean; reason?: string; error?: string; upc?: string | null; status?: string }> = [];
+    const results: Array<{ releaseId: number; title: string; success: boolean; pending?: boolean; reason?: string; error?: string; upc?: string | null; status?: string; changed?: boolean; identifiersChanged?: boolean; statusChanged?: boolean }> = [];
     let cursor = 0;
     let retryAfterSeconds = 0;
     const worker = async () => {
@@ -111,7 +113,7 @@ async function runJob(request: Request) {
         const candidate = candidates[cursor++];
         try {
           const outcome = await syncDireNoteRelease(candidate.releaseId, null, { deadlineAt: started + 55_000 });
-          results.push({ releaseId: candidate.releaseId, title: candidate.release.title, success: true, ...( "skipped" in outcome ? { pending: true, reason: outcome.skipped } : { upc: outcome.upc, status: outcome.status }) });
+          results.push({ releaseId: candidate.releaseId, title: candidate.release.title, success: true, ...( "skipped" in outcome ? { pending: true, reason: outcome.skipped } : { upc: outcome.upc, status: outcome.status, statusChanged: outcome.diff.statusChanged, identifiersChanged: outcome.diff.upcChanged || outcome.diff.isrcChanges.length > 0, changed: outcome.diff.statusChanged || outcome.diff.upcChanged || outcome.diff.isrcChanges.length > 0 || outcome.diff.correctionsChanged || outcome.diff.artistLinksChanged || outcome.diff.songwriterIdsChanged }) });
         }
         catch (error) {
           if (isDireNoteRateLimit(error)) { retryAfterSeconds = Math.max(retryAfterSeconds, error.retryAfterSeconds); break; }
@@ -121,7 +123,7 @@ async function runJob(request: Request) {
           const message = error instanceof Error ? error.message : "Sync failed.";
           // DireNote assigns UPCs after delivery, so waiting for one is an expected
           // state. Counting it as an error failed the whole job every run.
-          if (/^Awaiting (UPC|DireNote identifiers)/.test(message)) results.push({ releaseId: candidate.releaseId, title: candidate.release.title, success: true, pending: true, reason: message });
+          if (/^Awaiting (UPC|DireNote identifiers)|^DIRENOTE_SYNC_DEFERRED:|^DireNote sync deferred/.test(message)) results.push({ releaseId: candidate.releaseId, title: candidate.release.title, success: true, pending: true, reason: message });
           else results.push({ releaseId: candidate.releaseId, title: candidate.release.title, success: false, error: message });
         }
       }
@@ -168,7 +170,7 @@ async function runJob(request: Request) {
     if (identity.status === "rejected") throw identity.reason;
     const identityResults = identity.value;
     const identityErrors = identityResults.filter(item => item.status === "rejected").length;
-    const summary = { runId, candidateCount: candidates.length, autoQcRecoveryCount: autoQcResults.length, autoQcResults, providerRequestCount: results.length + identityResults.length + autoQcResults.length, processedCount: results.length, changedCount: results.filter(result => result.success && !result.pending).length, pendingCount: results.filter(result => result.pending).length, identifierRepairCount: results.filter(result => result.success && Boolean(result.upc)).length, statusRepairCount: results.filter(result => result.success && Boolean(result.status)).length, correctionCount: results.filter(result => result.status === "changes_required").length, identityRefreshCount: identityResults.length - identityErrors, identityErrorCount: identityErrors, errorCount: results.filter(result => !result.success).length + identityErrors + autoQcResults.filter(result => result.outcome === "failed").length, deferredCount: candidates.length - results.length, durationMs: Date.now() - started, eligible: candidates.length, checked: results.length };
+    const summary = { runId, candidateCount: candidates.length, autoQcRecoveryCount: autoQcResults.length, autoQcResults, providerRequestCount: results.length + identityResults.length + autoQcResults.length, processedCount: results.length, changedCount: results.filter(result => result.success && result.changed).length, pendingCount: results.filter(result => result.pending).length, identifierRepairCount: results.filter(result => result.success && result.identifiersChanged).length, statusRepairCount: results.filter(result => result.success && result.statusChanged).length, correctionCount: results.filter(result => result.status === "changes_required").length, identityRefreshCount: identityResults.length - identityErrors, identityErrorCount: identityErrors, errorCount: results.filter(result => !result.success).length + identityErrors + autoQcResults.filter(result => result.outcome === "failed").length, deferredCount: candidates.length - results.length, durationMs: Date.now() - started, eligible: candidates.length, checked: results.length };
     const diagnosticSummary = { ...summary, rateLimited: retryAfterSeconds > 0, retryAfterSeconds, syncVersion: "corrections-v2", results };
     await prisma.direNoteSyncRun.update({ where: { runId }, data: { status: summary.errorCount ? "completed_with_errors" : "completed", completedAt: new Date(), candidateCount: summary.candidateCount, providerRequestCount: summary.providerRequestCount, processedCount: summary.processedCount, changedCount: summary.changedCount, identifierRepairCount: summary.identifierRepairCount, statusRepairCount: summary.statusRepairCount, correctionCount: summary.correctionCount, errorCount: summary.errorCount, deferredCount: summary.deferredCount, durationMs: summary.durationMs, summary: diagnosticSummary } });
     await prisma.direNoteLog.create({ data: { action: "hourly_status_sync", success: summary.errorCount === 0, responseJson: diagnosticSummary } });

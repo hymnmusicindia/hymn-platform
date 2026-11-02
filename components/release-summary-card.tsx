@@ -11,6 +11,7 @@ import { Disc3, Gift, Pencil, Settings, X } from "lucide-react";
 import { amendmentStatusLabel } from '@/lib/release-amendment-presentation';
 import type { Release } from "@/lib/types";
 import { showFirstReleaseBadge } from "@/lib/first-release-flow";
+import { releaseSyncHealth } from "@/lib/release-status-presentation";
 import { useSubscriptionLabel } from "@/components/subscription-label-context";
 import {
   getReleasePortalBadgeStyle,
@@ -32,6 +33,7 @@ export function ReleaseSummaryCard({
 }) {
   const title = release.releaseTitle?.trim() || release.trackName || "Untitled release";
   const stage = getReleasePortalStage(release);
+  const syncHealth = releaseSyncHealth(release);
   const trackCount = getReleasePortalTrackCount(release);
   const needsCorrection = stage === "changes_requested";
   const primaryActionLabel = release.status === "draft" ? "Edit" : needsCorrection ? "Fix release" : actionLabel;
@@ -114,13 +116,15 @@ export function ReleaseSummaryCard({
 
       <div className="release-summary-meta-row mt-3 flex min-w-0 items-center justify-between gap-3">
         <span
-          className="release-summary-badge inline-flex max-w-[62%] truncate rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]"
+          className="release-summary-badge inline-flex max-w-full rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]"
+          title={getReleasePortalStageLabel(stage, release)}
           style={getReleasePortalBadgeStyle(stage)}
         >
-          {getReleasePortalStageLabel(stage)}
+          {getReleasePortalStageLabel(stage, release)}
         </span>
       </div>
 
+      {syncHealth ? <p className="mt-2 text-xs" role="status" title={syncHealth.detail} style={{color:"var(--warning)"}}>{syncHealth.label}</p> : null}
       <h3 className="release-summary-title mt-3 text-[17px] font-semibold leading-tight" title={title} style={{ color: "var(--text)" }}>
         {title}
       </h3>
