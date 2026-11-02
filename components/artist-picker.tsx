@@ -473,7 +473,7 @@ export function ArtistPicker({
       />}
 
       <p className="px-[.8rem] text-xs leading-5" style={{ color: "var(--text-soft)" }}>
-        {helper === "Max 3 artists" ? "Max 3 primary artists per release" : helper}
+        {helper}
       </p>
 
       {showRecentQuickAdd && recent.length > 0 && !focused ? <div className="artist-picker-quick-add">

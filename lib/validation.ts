@@ -209,7 +209,7 @@ export const distributionTrackSchema = z.object({
   explicitContent: z.boolean(),
   dolbyAtmos: z.boolean(),
   metadata: z.record(z.unknown()).optional(),
-  artistProfileIds: z.array(z.number().int().positive()).min(1, "Select at least one saved primary artist card.").max(3),
+  artistProfileIds: z.array(z.number().int().positive()).min(1, "Select at least one saved primary artist card."),
   featuredArtistProfileIds: z.array(z.number().int().positive()).optional(),
   remixerProfileIds: z.array(z.number().int().positive()).optional()
 });

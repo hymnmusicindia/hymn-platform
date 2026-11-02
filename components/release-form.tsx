@@ -744,8 +744,7 @@ function createTracksFromRelease(
         : [];
     const savedPrimaryArtistIds = savedArtistProfileIds
       .map((id: unknown) => Number(id))
-      .filter((id: number): id is number => Number.isInteger(id) && id > 0)
-      .slice(0, 3);
+      .filter((id: number): id is number => Number.isInteger(id) && id > 0);
     return {
       id: typeof (trackMetadata.clientTrackId ?? nestedTrackMetadata.clientTrackId) === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(String(trackMetadata.clientTrackId ?? nestedTrackMetadata.clientTrackId))
         ? String(trackMetadata.clientTrackId ?? nestedTrackMetadata.clientTrackId)
@@ -2380,13 +2379,6 @@ export function ReleaseForm({
         trackIndex: index,
         message: "Enter the custom version label for tracks using Other.",
       };
-    if (track.primaryArtistIds.length > 3)
-      return {
-        step: 3,
-        key: `track-${index}-artists`,
-        trackIndex: index,
-        message: "Each track needs 1 to 3 primary artist profiles.",
-      };
     if (track.primaryArtistIds.length === 0)
       return {
         step: 3,
@@ -3781,16 +3773,15 @@ export function ReleaseForm({
               </div> : null}
               <ArtistPicker
                 label="Add artist"
-                helper="Max 3 artists"
+                helper="Select the primary artists credited on this release"
                 valueIds={profilesFor(tracks[0]?.primaryArtistIds ?? [])}
                 query={tracks[0]?.primaryArtistQuery ?? ""}
-                max={3}
                 showRecentQuickAdd
                 hideSelectionChips
                 focused
                 required={showErrors && !primaryArtistComplete}
                 onQueryChange={(value) => updateTrack(0, { primaryArtistQuery: value })}
-                onSelect={(profile) => { if (tracks[0].primaryArtistIds.length >= 3 && !tracks[0].primaryArtistIds.includes(profile.id)) return; upsertKnownProfile(profile); selectPrimaryArtistForAllTracks(profile); }}
+                onSelect={(profile) => { upsertKnownProfile(profile); selectPrimaryArtistForAllTracks(profile); }}
                 onRemove={() => undefined}
               />
               </div>
@@ -4221,10 +4212,9 @@ export function ReleaseForm({
                                 })}
                                 <ArtistPicker
                                   label="Add primary artist"
-                                  helper="Max 3 artists"
+                                  helper="Select the primary artists credited on this track"
                                   valueIds={profilesFor(track.primaryArtistIds)}
                                   query={track.primaryArtistQuery}
-                                  max={3}
                                   hideSelectionChips
                                   focused
                                   required={showErrors && issue?.key === `track-${index}-artists`}
