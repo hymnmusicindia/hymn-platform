@@ -1,4 +1,5 @@
 "use client";
+import { StoreChoice } from "./distribution/store-choice";
 import { ReleaseAmendmentConfirmation } from './release-amendment-confirmation';
 import { activeAmendmentStatuses } from '@/lib/release-amendment-presentation';
 import "./release-welcome.css";
@@ -571,121 +572,6 @@ function createInitialLegalState(
     ),
     fraudWarningAccepted: true,
   };
-}
-
-function LogoImage({
-  src,
-  alt,
-  className,
-}: {
-  src: string;
-  alt: string;
-  className?: string;
-}) {
-  return (
-    <img
-      src={src}
-      alt={alt}
-      className={clsx("block object-contain", className)}
-      referrerPolicy="no-referrer"
-      loading="lazy"
-    />
-  );
-}
-
-function PlatformLogo({
-  platform,
-  className,
-}: {
-  platform: string;
-  className?: string;
-}) {
-  if (platform === "Spotify") {
-    return (
-      <LogoImage
-        src="/assets/store-logos/spotify.png"
-        alt="Spotify"
-        className={className}
-      />
-    );
-  }
-  if (platform === "Apple Music") {
-    return (
-      <LogoImage
-        src="/assets/store-logos/apple-music.png"
-        alt="Apple Music"
-        className={className}
-      />
-    );
-  }
-  if (platform === "Amazon Music") {
-    return (
-      <LogoImage
-        src="/assets/store-logos/amazon-music.svg"
-        alt="Amazon Music"
-        className={className}
-      />
-    );
-  }
-  if (platform === "YouTube Music") {
-    return (
-      <LogoImage
-        src="/assets/store-logos/youtube-music.svg"
-        alt="YouTube Music"
-        className={className}
-      />
-    );
-  }
-  if (platform === "JioSaavn") {
-    return (
-      <span className="jiosaavn-mark relative block h-10 w-10 overflow-hidden" title="JioSaavn">
-        <LogoImage
-          src="/assets/store-logos/jiosaavn.svg"
-          alt="JioSaavn"
-          className="absolute left-1 top-1 h-8 w-auto max-w-none object-left"
-        />
-      </span>
-    );
-  }
-  if (platform === "Gaana") {
-    return (
-      <LogoImage
-        src="/assets/store-logos/gaana.png"
-        alt="Gaana"
-        className={className}
-      />
-    );
-  }
-  if (platform === "Instagram / Facebook") {
-    return (
-      <LogoImage
-        src="/assets/store-logos/meta.png"
-        alt="Meta"
-        className={className}
-      />
-    );
-  }
-  if (platform === "TikTok") {
-    return (
-      <LogoImage
-        src="/assets/store-logos/tiktok-color.png"
-        alt="TikTok"
-        className={className}
-      />
-    );
-  }
-  if (platform === "150+ More Stores") {
-    return (
-      <span className="more-stores-mark relative block h-[54px] w-16" title="150+ stores">
-        <LogoImage
-          src="/assets/store-logos/distribution-network-v2.svg"
-          alt="150+ stores"
-          className="h-[54px] w-16"
-        />
-      </span>
-    );
-  }
-  return null;
 }
 
 function createTracksFromRelease(
@@ -5089,56 +4975,24 @@ export function ReleaseForm({
                         className="text-[10px] font-semibold uppercase tracking-[0.18em]"
                         style={{ color: "var(--text-soft)" }}
                       >
-                        Selected Stores
+                        Music stores & streaming
                       </p>
                       <h3
                         className="mt-1 text-xl font-semibold tracking-[-.025em]"
                         style={{ color: "var(--text)" }}
                       >
-                        {storeSelections.length} Selected
+                        {storeSelections.length} selected
                       </h3>
                     </div>
                   </div>
+                  <p className="mb-4 text-sm" style={{ color: "var(--text-muted)" }}>Choose your delivery preferences. Individual store exclusions are not currently supported by the distribution connection. Availability depends on each store's acceptance.</p>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    {storePlatforms.map((platform) => {
-                      const active = platforms.includes(platform.name);
-                      return (
-                        <button
-                          key={platform.name}
-                          type="button"
-                          className={clsx(
-                            "store-platform-option pressable group flex min-h-[64px] w-full items-center gap-3 border px-1 py-3 text-left transition duration-200",
-                            !active && "opacity-65",
-                          )}
-                          style={
-                            active
-                              ? {
-                                  borderColor: "var(--accent)",
-                                  background:
-                                    "var(--info-soft)",
-                                  color: "var(--text)",
-                                  boxShadow:
-                                    "0 18px 48px rgba(89,223,224,0.08)",
-                                }
-                              : {
-                                  borderColor: "var(--border)",
-                                  background: "transparent",
-                                  color: "var(--text-muted)",
-                                }
-                          }
-                          onClick={() => togglePlatform(platform.name, "store")}
-                          aria-pressed={active}
-                        >
-                          <span className="flex h-9 w-24 shrink-0 items-center justify-center">
-                            <PlatformLogo
-                              platform={platform.name}
-                              className="max-h-7 w-auto max-w-[92px]"
-                            />
-                          </span>
-                          <span className="sr-only">{platform.name}</span>
-                        </button>
-                      );
-                    })}
+                    {storePlatforms.map((platform) => (
+                      <StoreChoice key={platform.name} name={platform.name}
+                        checked={platforms.includes(platform.name)}
+                        onChange={() => togglePlatform(platform.name, "store")} />
+                    ))}
+                    {platforms.includes("150+ More Stores") ? <StoreChoice name="150+ More Stores" checked onChange={() => togglePlatform("150+ More Stores", "store")} /> : null}
                   </div>
                 </div>
 
@@ -5172,7 +5026,7 @@ export function ReleaseForm({
                         className="mt-1 text-xl font-semibold tracking-[-.025em]"
                         style={{ color: "var(--text)" }}
                       >
-                        UGC platforms
+                        Social platforms & fingerprinting
                       </h3>
                     </div>
                     <button
@@ -5235,52 +5089,20 @@ export function ReleaseForm({
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
-                    {socialPlatforms.map((platform) => {
-                      const active = platforms.includes(platform.name);
-                      const locked = !socialConsentAccepted || !contentIdEligibility.eligible;
-                      const iconClass = platform.name === "Instagram / Facebook"
-                        ? "h-8 w-auto max-w-[96px]"
-                        : "max-h-9 w-auto max-w-[96px]";
-
-                      return (
-                        <button
-                          key={platform.name}
-                          type="button"
-                          disabled={locked}
-                          className={clsx(
-                            "ugc-platform-option pressable group relative flex min-h-[64px] w-full items-center justify-center border px-1 py-3 transition duration-200",
-                            locked
-                              ? "cursor-not-allowed opacity-50 grayscale"
-                              : "",
-                          )}
-                          style={
-                            active && !locked
-                              ? {
-                                  borderColor: "var(--accent)",
-                                  background: "var(--info-soft)",
-                                  boxShadow: "0 0 30px rgba(89,223,224,0.16)",
-                                }
-                              : {
-                                  borderColor: "var(--border)",
-                                  background: "var(--card)",
-                                }
-                          }
-                          onClick={() =>
-                            togglePlatform(platform.name, "social")
-                          }
-                          aria-label={`${locked ? "Locked" : active ? "Remove" : "Select"} ${platform.name}`}
-                          aria-pressed={active}
-                        >
-                          <span className="sr-only">{platform.name}</span>
-                          <span className="flex h-9 w-24 shrink-0 items-center justify-center">
-                            <PlatformLogo
-                              platform={platform.name}
-                              className={iconClass}
-                            />
-                          </span>
-                        </button>
-                      );
-                    })}
+                    {socialPlatforms.map((platform) => (
+                      <StoreChoice key={platform.name} name={platform.name}
+                        checked={platforms.includes(platform.name)}
+                        disabled={!socialConsentAccepted || !contentIdEligibility.eligible}
+                        onChange={() => togglePlatform(platform.name, "social")} />
+                    ))}
+                    <StoreChoice name="YouTube Content ID" checked={youtubeContentIdEnabled}
+                      disabled={!socialConsentAccepted || !contentIdEligibility.eligible}
+                      onChange={() => {
+                        if (youtubeContentIdEnabled) {
+                          setYoutubeContentIdEnabled(false);
+                          setYoutubeContentIdChannelUrl("");
+                        } else openYoutubeContentIdModal();
+                      }} />
                   </div>
 
                   {platforms.includes("YouTube Music") ? (

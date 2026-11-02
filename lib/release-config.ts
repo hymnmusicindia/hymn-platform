@@ -9,16 +9,44 @@ export const versionOptions = ["Original", "Explicit", "Clean (Censored)", "Remi
 export const storePlatforms = [
   { name: "Spotify", icon: "SP" },
   { name: "Apple Music", icon: "AM" },
+  { name: "YouTube Music", icon: "YT" },
   { name: "Amazon Music", icon: "AZ" },
   { name: "JioSaavn", icon: "JS" },
   { name: "Gaana", icon: "GA" },
-  { name: "150+ More Stores", icon: "150+" }
+  { name: "iTunes", icon: "IT" },
+  { name: "Shazam", icon: "SH" },
+  { name: "Deezer", icon: "DE" },
+  { name: "Tidal", icon: "TI" },
+  { name: "Pandora", icon: "PA" },
+  { name: "SoundCloud", icon: "SC" },
+  { name: "Audiomack", icon: "AU" },
+  { name: "Anghami", icon: "AN" },
+  { name: "Boomplay", icon: "BO" },
+  { name: "Napster", icon: "NA" },
+  { name: "iHeartRadio", icon: "IH" },
+  { name: "Wynk Music", icon: "WY" },
+  { name: "Hungama", icon: "HU" },
+  { name: "Qobuz", icon: "QO" },
+  { name: "Beatport", icon: "BE" },
+  { name: "Traxsource", icon: "TR" },
+  { name: "7digital", icon: "7D" },
+  { name: "Tencent Music (QQ Music, Kugou, Kuwo)", icon: "TM" },
+  { name: "NetEase Cloud Music", icon: "NE" },
+  { name: "Yandex Music", icon: "YA" },
+  { name: "VK Music", icon: "VK" },
+  { name: "KKBOX", icon: "KK" },
+  { name: "JOOX", icon: "JO" },
+  { name: "LINE MUSIC", icon: "LI" },
+  { name: "Melon", icon: "ME" },
+  { name: "Genie Music", icon: "GE" },
+  { name: "FLO", icon: "FL" },
+  { name: "Bugs", icon: "BU" }
 ] as const;
 
 export const socialPlatforms = [
   { name: "Instagram / Facebook", icon: "IG" },
   { name: "TikTok", icon: "TT" },
-  { name: "YouTube Music", icon: "YT" }
+  { name: "Snapchat", icon: "SN" }
 ] as const;
 
 const configuredChannels: ReadonlyArray<DistributionChannel> = [...storePlatforms.map(item => item.name), ...socialPlatforms.map(item => item.name)];

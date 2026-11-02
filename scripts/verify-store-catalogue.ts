@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { storePlatforms, socialPlatforms } from '../lib/release-config';
+import { isDistributionChannel } from '../lib/distribution-capabilities';
+import { getUgcAddonPrice, getYoutubeContentIdAddonPrice } from '../lib/distribution-pricing';
+
+const evidence=JSON.parse(readFileSync('docs/evidence/direnote-stores-2026-11-03.json','utf8'));
+const names=[...storePlatforms,...socialPlatforms].map(p=>p.name==='Instagram / Facebook'?'Meta (Facebook and Instagram)':p.name);
+assert.equal(new Set(names).size,names.length);
+assert.deepEqual([...names,'YouTube Content ID'].sort(),evidence.stores.slice().sort());
+for(const item of [...storePlatforms,...socialPlatforms]) assert(isDistributionChannel(item.name));
+assert(isDistributionChannel('150+ More Stores'),'Existing draft preference remains valid');
+assert(!isDistributionChannel('Audible Magic Identification'),'Do not invent an unsupported destination');
+assert.equal(getUgcAddonPrice(['YouTube Music'],'one_time'),0);
+assert.equal(getUgcAddonPrice(['Snapchat'],'one_time'),50);
+assert.equal(getYoutubeContentIdAddonPrice('one_time',true),200);
+assert.equal(getYoutubeContentIdAddonPrice('one_time',false),0);
+const assets=JSON.parse(readFileSync('public/assets/store-logos/original/sources.json','utf8'));
+assert(assets.assets.every((a:any)=>a.file&&a.source&&!a.unavailable));
+for(const a of assets.assets) assert(readFileSync('public/assets/store-logos/original/'+a.file).length>0);
+console.log('PASS exact provider catalogue coverage, supported/legacy preferences, ordinary YouTube delivery pricing, paid social and Content ID separation, original asset provenance');

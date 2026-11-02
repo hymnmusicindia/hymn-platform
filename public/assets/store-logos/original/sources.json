@@ -1,0 +1,223 @@
+{
+  "verifiedAt": "2026-11-03",
+  "assets": [
+    {
+      "key": "spotify",
+      "file": "spotify.ico",
+      "source": "https://open.spotify.com/favicon.ico",
+      "website": "https://open.spotify.com"
+    },
+    {
+      "key": "apple",
+      "file": "apple.ico",
+      "source": "https://music.apple.com/favicon.ico",
+      "website": "https://music.apple.com"
+    },
+    {
+      "key": "amazon",
+      "file": "amazon.png",
+      "source": "https://m.media-amazon.com/images/G/01/music/logo/1.0/smile_256x256.png",
+      "website": "https://music.amazon.com"
+    },
+    {
+      "key": "youtube",
+      "file": "youtube.png",
+      "source": "https://music.youtube.com/img/favicon_144.png",
+      "website": "https://music.youtube.com"
+    },
+    {
+      "key": "jiosaavn",
+      "file": "jiosaavn.ico",
+      "source": "https://www.jiosaavn.com/favicon.ico",
+      "website": "https://www.jiosaavn.com"
+    },
+    {
+      "key": "gaana",
+      "file": "gaana.png",
+      "source": "https://a10.gaanacdn.com/images/gaanawebsite/Gaana_logo_192.png",
+      "website": "https://gaana.com"
+    },
+    {
+      "key": "wynk",
+      "file": "wynk.png",
+      "source": "https://wynk.in/assets/icons/icon-512x512.png",
+      "website": "https://wynk.in"
+    },
+    {
+      "key": "hungama",
+      "file": "hungama.ico",
+      "source": "https://www.hungama.com/favicon.ico",
+      "website": "https://www.hungama.com"
+    },
+    {
+      "key": "deezer",
+      "file": "deezer.png",
+      "source": "https://www.deezer.com/favicon.ico",
+      "website": "https://www.deezer.com"
+    },
+    {
+      "key": "tidal",
+      "file": "tidal.ico",
+      "source": "https://tidal.com/favicon.ico",
+      "website": "https://tidal.com"
+    },
+    {
+      "key": "pandora",
+      "file": "pandora.ico",
+      "source": "https://www.pandora.com/favicon.ico",
+      "website": "https://www.pandora.com"
+    },
+    {
+      "key": "soundcloud",
+      "file": "soundcloud.ico",
+      "source": "https://soundcloud.com/favicon.ico",
+      "website": "https://soundcloud.com"
+    },
+    {
+      "key": "audiomack",
+      "file": "audiomack.png",
+      "source": "https://audiomack.com/images/manifest/logo-512.png",
+      "website": "https://audiomack.com"
+    },
+    {
+      "key": "anghami",
+      "website": "https://www.anghami.com",
+      "file": "anghami.png",
+      "source": "https://icons.duckduckgo.com/ip3/www.anghami.com.ico",
+      "note": "Original website favicon served by the DuckDuckGo favicon cache; no recreation."
+    },
+    {
+      "key": "boomplay",
+      "file": "boomplay.ico",
+      "source": "https://www.boomplay.com/favicon.ico",
+      "website": "https://www.boomplay.com"
+    },
+    {
+      "key": "napster",
+      "file": "napster.png",
+      "source": "https://cdn.prod.website-files.com/69ae6251111a514c4038172a/69b162f5db8482341a9f75f0_webclip-napster.png",
+      "website": "https://www.napster.com"
+    },
+    {
+      "key": "iheart",
+      "file": "iheart.ico",
+      "source": "https://www.iheart.com/favicon.ico",
+      "website": "https://www.iheart.com"
+    },
+    {
+      "key": "facebook",
+      "file": "facebook.ico",
+      "source": "https://www.facebook.com/favicon.ico",
+      "website": "https://www.facebook.com"
+    },
+    {
+      "key": "tiktok",
+      "file": "tiktok.png",
+      "source": "https://www.tiktok.com/favicon.ico",
+      "website": "https://www.tiktok.com"
+    },
+    {
+      "key": "snapchat",
+      "file": "snapchat.png",
+      "source": "https://www.snapchat.com/apple-touch-icon.png",
+      "website": "https://www.snapchat.com"
+    },
+    {
+      "key": "shazam",
+      "file": "shazam.png",
+      "source": "https://assets.shazam.com/website/images/favicons/favicon-16x16",
+      "website": "https://www.shazam.com"
+    },
+    {
+      "key": "qobuz",
+      "file": "qobuz.ico",
+      "source": "https://www.qobuz.com/favicon.ico",
+      "website": "https://www.qobuz.com"
+    },
+    {
+      "key": "beatport",
+      "website": "https://www.beatport.com",
+      "file": "beatport.png",
+      "source": "https://icons.duckduckgo.com/ip3/www.beatport.com.ico",
+      "note": "Original website favicon served by the DuckDuckGo favicon cache; no recreation."
+    },
+    {
+      "key": "traxsource",
+      "file": "traxsource.ico",
+      "source": "https://www.traxsource.com/favicon.ico",
+      "website": "https://www.traxsource.com"
+    },
+    {
+      "key": "sevendigital",
+      "website": "https://www.7digital.com",
+      "file": "sevendigital.ico",
+      "source": "https://icons.duckduckgo.com/ip3/uk.7digital.com.ico"
+    },
+    {
+      "key": "tencent",
+      "website": "https://y.qq.com",
+      "file": "tencent.png",
+      "source": "https://y.qq.com/mediastyle/yqq/img/logo.png"
+    },
+    {
+      "key": "netease",
+      "file": "netease.ico",
+      "source": "https://music.163.com/favicon.ico",
+      "website": "https://music.163.com"
+    },
+    {
+      "key": "yandex",
+      "file": "yandex.ico",
+      "source": "https://music.yandex.com/favicon.ico",
+      "website": "https://music.yandex.com"
+    },
+    {
+      "key": "vk",
+      "file": "vk.png",
+      "source": "https://vk.com/favicon.ico",
+      "website": "https://vk.com"
+    },
+    {
+      "key": "kkbox",
+      "file": "kkbox.ico",
+      "source": "https://www.kkbox.com/favicon.ico",
+      "website": "https://www.kkbox.com"
+    },
+    {
+      "key": "joox",
+      "file": "joox.ico",
+      "source": "https://www.joox.com/favicon.ico",
+      "website": "https://www.joox.com"
+    },
+    {
+      "key": "line",
+      "file": "line.png",
+      "source": "https://music.line.me/favicon.ico",
+      "website": "https://music.line.me"
+    },
+    {
+      "key": "melon",
+      "file": "melon.ico",
+      "source": "https://www.melon.com/favicon.ico",
+      "website": "https://www.melon.com"
+    },
+    {
+      "key": "genie",
+      "file": "genie.ico",
+      "source": "https://www.genie.co.kr/resources/favicon_32.ico?v=202602091400",
+      "website": "https://www.genie.co.kr"
+    },
+    {
+      "key": "flo",
+      "file": "flo.png",
+      "source": "https://www.music-flo.com/favicon.ico",
+      "website": "https://www.music-flo.com"
+    },
+    {
+      "key": "bugs",
+      "file": "bugs.ico",
+      "source": "https://music.bugs.co.kr/favicon.ico",
+      "website": "https://music.bugs.co.kr"
+    }
+  ]
+}

@@ -209,7 +209,7 @@ export async function updateStoreStatuses(input: { releaseId: number; adminId: n
 
   const liveStores = stores.filter((store) => store.status === "Live");
   if (liveStores.length > 0) {
-    const requiredPlatforms = (release.platforms ?? []).filter((platform) => !["Facebook & Instagram", "Instagram / Facebook", "TikTok", "Audible Magic Identification", "Gracenote"].includes(platform));
+    const requiredPlatforms = (release.platforms ?? []).filter((platform) => !["Facebook & Instagram", "Instagram / Facebook", "TikTok", "Snapchat", "Audible Magic Identification", "Gracenote"].includes(platform));
     const allRequiredLive = requiredPlatforms.length > 0 && requiredPlatforms.every((platform) => stores.some((store) => store.platform === platform && store.status === "Live"));
     const automaticStatus: ReleaseStatus = allRequiredLive ? "live" : "partially_live";
     if (release.status !== automaticStatus) {
