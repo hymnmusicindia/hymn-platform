@@ -166,7 +166,7 @@ async function main() {
   if (process.argv.includes("--browser")) { browser = await startDireNoteBrowser(user.id); await browser.correction(release.id); await browser.artistWizard(); await browser.newReleaseJourney(); }
   const detailed = await getDetailedReleaseById(release.id);
   assert(detailed);
-  const editedTracks = detailed.tracks!.map(track => ({ ...track, language: "Hindi", version: track.trackNumber === 2 ? "Instrumental" : track.version }));
+  const editedTracks = detailed.tracks!.map(track => ({ ...track, metadata: { ...track.metadata, clientTrackId: `existing-track-${track.id}` }, language: "Hindi", version: track.trackNumber === 2 ? "Instrumental" : track.version }));
   if (browser) await browser.editLanguage(release.id);
   else await updatePaidDistributionRelease({ userId: user.id, releaseId: release.id, metadata: { ...detailed, tracks: editedTracks } });
   const savedInstrumental = (await getDetailedReleaseById(release.id))?.tracks?.[1];
@@ -178,6 +178,31 @@ async function main() {
   assert.equal((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: firstAttempt.id } })).corrections && ((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: firstAttempt.id } })).corrections as any).status, "customer_resolved");
   await syncDireNoteRelease(release.id);
   assert.equal(((await prisma.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id: firstAttempt.id } })).corrections as any).status, "customer_resolved");
+  // An accepted old package must never masquerade as acceptance of corrections
+  // when a competing approval or scheduled status refresh prevents this action.
+  const pendingReview = await prisma.release.findUniqueOrThrow({ where: { id: release.id } });
+  await prisma.$transaction(async lock => {
+    await lock.$executeRaw`SELECT pg_advisory_xact_lock(81422028, ${release.id}::integer)`;
+    const busy = await submitRelease(release.id);
+    assert.equal(busy.submitted, false, "The old accepted attempt is not a new approval.");
+    assert.equal("inProgress" in busy && busy.inProgress, true);
+    assert.equal("retryAfterSeconds" in busy && busy.retryAfterSeconds, 10);
+  });
+  const reviewLease = `direnote-release-sync:${release.id}`;
+  await prisma.$executeRaw`UPDATE "cron_leases" SET "leased_until" = NOW() + INTERVAL '5 minutes' WHERE "lease_key" = ${reviewLease}`;
+  try {
+    const busy = await submitRelease(release.id);
+    assert.equal(busy.submitted, false, "A status refresh cannot approve the corrected package.");
+    assert.equal("inProgress" in busy && busy.inProgress, true);
+    assert.equal("retryAfterSeconds" in busy && busy.retryAfterSeconds, 10);
+    assert.match(busy.error || "", /has not been processed/);
+    const unchanged = await prisma.release.findUniqueOrThrow({ where: { id: release.id } });
+    assert.equal(unchanged.status, pendingReview.status);
+    assert.deepEqual((unchanged.metadata as any).correctionReview, (pendingReview.metadata as any).correctionReview);
+    assert.equal(ingests, 1, "Busy approval must neither create nor acknowledge a new delivery.");
+  } finally {
+    await prisma.$executeRaw`UPDATE "cron_leases" SET "leased_until" = NOW() - INTERVAL '1 second' WHERE "lease_key" = ${reviewLease}`;
+  }
   await prisma.distributionSubmissionAttempt.update({ where: { id: firstAttempt.id }, data: { startedAt: new Date(0) } });
   if (browser) await browser.submit(release.id);
   await updateDetailedReleaseStatus(release.id, "approved", "Fixture admin approved the corrected metadata.");

@@ -217,19 +217,15 @@ export async function submitRelease(releaseId: number, options: { actorId?: numb
   return prisma.$transaction(async lock => {
     const rows = await lock.$queryRaw<Array<{ locked: boolean }>>`SELECT pg_try_advisory_xact_lock(81422028, ${releaseId}::integer) AS locked`;
     if (!rows[0]?.locked) {
-      const [release, accepted] = await Promise.all([
-        getDetailedReleaseById(releaseId),
-        prisma.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: "direnote", isCurrent: true, state: "submitted" }, select: { id: true } })
-      ]);
-      return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: Boolean(accepted), duplicate: true, inProgress: !accepted, retryable: false, error: accepted ? undefined : "DireNote is already processing this release. Its status will update shortly." };
+      const release = await getDetailedReleaseById(releaseId);
+      // An accepted *earlier* attempt is not acknowledgement of this action.
+      // In particular, a corrected package may still be awaiting approval.
+      return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: false, duplicate: true, inProgress: true, retryable: true, retryAfterSeconds: 10, error: "Another release action is running. This approval or delivery request has not been processed. Try again shortly." };
     }
     const syncing = await lock.$queryRaw<Array<{ active: boolean }>>`SELECT EXISTS (SELECT 1 FROM "cron_leases" WHERE "lease_key" = ${`direnote-release-sync:${releaseId}`} AND "leased_until" > NOW()) AS active`;
     if (syncing[0]?.active) {
-      const [release, accepted] = await Promise.all([
-        getDetailedReleaseById(releaseId),
-        prisma.distributionSubmissionAttempt.findFirst({ where: { releaseId, provider: "direnote", isCurrent: true, state: "submitted" }, select: { id: true } })
-      ]);
-      return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: Boolean(accepted), duplicate: true, inProgress: !accepted, retryable: false, error: accepted ? undefined : "DireNote synchronization is in progress. Its status will update shortly." };
+      const release = await getDetailedReleaseById(releaseId);
+      return { release, validation: { ok: true, issues: [], warnings: [] }, submitted: false, duplicate: true, inProgress: true, retryable: true, retryAfterSeconds: 10, error: "A release status refresh is running. This approval or delivery request has not been processed. Try again shortly." };
     }
     return submitLockedRelease(releaseId, options);
   }, { timeout: 180_000, maxWait: 5000 });

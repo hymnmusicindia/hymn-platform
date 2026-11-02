@@ -974,10 +974,11 @@ export function AdminControlCenter({
         });
         const data = await response.json().catch(() => ({}));
         if (data.inProgress) {
+          setDireNoteCooldowns((current) => ({ ...current, [id]: Date.now() + Math.max(1, Number(data.retryAfterSeconds) || 10) * 1000 }));
           if (data.release) setReleases((items) => items.map((item) => item.id === id ? data.release : item));
           const message = data.message || "DireNote is processing this release. Its status will update shortly.";
           setFeedback(message);
-          setDireNoteResult({ type: "pending", title: "Distribution in progress", message });
+          setDireNoteResult({ type: "pending", title: "Request waiting — retry shortly", message });
           return;
         }
         if (!response.ok) {

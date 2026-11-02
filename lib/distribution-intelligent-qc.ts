@@ -89,10 +89,7 @@ async function checkRelease(releaseId: number, siteUrl: string) {
     const reason=sensitiveChanged?'Artist identity, contributor, rights or explicit-content declarations changed. A reviewer must confirm this change.':decision.reason;
     await recordQc(release,{...base,...(sensitiveChanged?{snapshot:prior.snapshot,changeKind:'sensitive_change'}:{}),status:'manual_review_required',reason,issueCount:1,issues:[{field:'review',message:reason}]});return false;
   }
-  if(context.correctionResolved&&(!validQcEvidence(prior)||prior.changeKind==='missing_baseline')) {
-    await recordQc(release,{...base,changeKind:'missing_baseline',status:'manual_review_required',reason:'The earlier corrected delivery has no signed QC baseline. A reviewer must compare its identity, rights and creative declarations before resubmission.',issueCount:1});return false;
-  }
-  if(validQcEvidence(previous)&&previous.revision===revision&&previous.status==='passed'){try{await assertAutomaticQcSources(release);return true;}catch{/* Recheck the actual selected files below. */}}
+  if(validQcEvidence(previous)&&previous.policyVersion===DISTRIBUTION_QC_POLICY_VERSION&&previous.revision===revision&&previous.status==='passed'){try{await assertAutomaticQcSources(release);return true;}catch{/* Recheck the actual selected files below. */}}
   try {
     const fixes=technicalReleaseFixes(release);
     if(release.status==='queued_for_distribution'&&fixes.length){await recordQc(release,{...base,status:'manual_review_required',reason:'A queued retry requires a reviewer before changing its original package.',issueCount:1});return false;}
@@ -121,7 +118,7 @@ async function checkRelease(releaseId: number, siteUrl: string) {
       verified.push({id:asset.id,checksum:asset.checksum});
     }
     base.checks.push({label:'Protected artwork and audio integrity',ready:true},{label:'Customer declarations and identity checks',ready:true});
-    return recordQc(release,{...base,status:'passed',reason:'Metadata, private-file integrity, identity and customer declarations passed for this submitted revision.',assetChecks:verified});
+    return recordQc(release,{...base,status:'passed',reason:'Technical files, metadata and customer declarations passed. Detailed rights and content QC are performed by the distribution partner.',rightsReview:'distribution_partner',assetChecks:verified});
   } catch(error) {
     if(!release)return false;
     const message=error instanceof Error?error.message:'A required check could not be completed.';const temporary=/ENOENT|ECONN|ETIMEDOUT|timeout|unavailable|rate.limit|temporar/i.test(message);const retryCount=Number(previous.retryCount||0)+1;

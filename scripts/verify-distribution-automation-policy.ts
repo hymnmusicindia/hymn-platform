@@ -9,7 +9,12 @@ assert.equal(distributionAutomationDecision(release,context).eligible,true);
 for(const field of ['ownershipConfirmed','noUnauthorizedSamples','collaboratorsCredited','platformCompliant','hymnNotLiable','agreedToTerms','falseMetadataAcknowledged'])assert.equal(distributionAutomationDecision({...release,[field]:false},context).eligible,false,field);
 for(const status of ['draft','awaiting_payment','live','partially_live','delivery_failed','distributor_changes_required'] as Release['status'][])assert.equal(distributionAutomationDecision({...release,status},context).eligible,false,status);
 assert.equal(distributionAutomationDecision({...release,paymentStatus:'pending'},context).eligible,false);
-for(const contentType of ['non-exclusive','ai_generated'])assert.equal(distributionAutomationDecision({...release,contentType} as Release,context).eligible,false);
+for(const contentType of ['non-exclusive','ai_generated'])assert.equal(distributionAutomationDecision({...release,contentType} as Release,context).eligible,true,'Partner-led deep QC must not be blocked by ownership type alone.');
+for(const type of ['rights_ownership','license_ai_proof'] as const){
+  const response={...release,reviewIssues:{type,severity:'required_correction' as const,fields:[]}};
+  assert.equal(distributionAutomationDecision(response,context).eligible,false,'An unresolved correction still needs customer action.');
+  assert.equal(distributionAutomationDecision(response,{...context,accepted:true,correctionResolved:true}).eligible,true,'A submitted rights response is checked technically and forwarded to the partner.');
+}
 assert.equal(distributionAutomationDecision(release,{...context,uncertainAttempt:true}).route,'reconciliation');
 assert.equal(distributionAutomationDecision(release,{...context,accepted:true}).route,'monitoring');
 assert.equal(distributionAutomationDecision(release,{...context,accepted:true,correctionResolved:true}).route,'corrected_submission');
@@ -40,5 +45,8 @@ assert.equal(releaseBucket(corrected),'review');assert.equal(correctionReviewSum
 assert.equal(releaseBucket({...corrected,status:'distributor_processing'}),'delivery');
 assert.equal(automationSummary({...corrected,status:'distributor_processing'}).label,'Delivery acknowledged','A historical manual-QC hold must not overrule a later provider acknowledgement.');
 assert.equal(automationSummary({...corrected,status:'live'}).label,'Monitoring');
+const readyCorrection={...corrected,metadata:{...corrected.metadata,autoQc:{status:'passed',policyVersion:4,rightsReview:'distribution_partner'}}} as Release;
+assert.equal(automationSummary(readyCorrection).label,'Corrections ready for delivery');
+assert.equal(require('../lib/release-status-presentation').adminReleaseStatusLabel('under_review','changes_required',readyCorrection.metadata),'Corrections ready for delivery');
 
 console.log('PASS automation policy: payment, all declarations, sensitive holds, amendments, accepted/uncertain attempts, safe retries, narrow formatting fixes, change detection and tamper-resistant revision evidence.');

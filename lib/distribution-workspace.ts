@@ -17,6 +17,8 @@ export function newestReleaseFirst(a: Release, b: Release) {
 export function correctionReviewSummary(release: Release) {
   const marker=release.metadata?.correctionReview as {status?:string}|undefined;
   if(marker?.status!=='pending'||!['under_review','resubmitted','approved'].includes(release.status.toLowerCase()))return null;
+  const qc=release.metadata?.autoQc as {status?:string;policyVersion?:number;rightsReview?:string}|undefined;
+  if(qc?.policyVersion===4 && qc.status==='passed' && qc.rightsReview==='distribution_partner')return {label:'Corrections ready for delivery',detail:'HYMN technical checks passed. The updated evidence will be sent for detailed partner QC.',delivery:'Updated package awaiting delivery'};
   const rights=/non.?exclusive|ai.generated/i.test(String(release.contentType||''))||release.reviewIssues?.type==='rights_ownership'||release.tracks?.some(track=>track.isCover);
   return {label:rights?'Rights review required':'Corrections awaiting review',detail:rights?'HYMN received the updated package. A reviewer must check the rights evidence before the corrections can be sent to the existing provider release.':'HYMN received the updated package. The corrections have not yet been sent to the existing provider release.',delivery:'Updated package not yet sent'};
 }

@@ -34,7 +34,11 @@ const map: Record<string, { label: string; description: string; tone: ReleaseSta
 export function pendingCorrectionReview(status: string, providerStatus?: string | null, metadata?: Record<string, unknown> | null) {
   const marker = metadata?.correctionReview as { status?: string } | undefined;
   if (marker?.status !== "pending" || !["under_review", "resubmitted", "approved"].includes(status.toLowerCase()) || !isDireNoteCorrectionStatus(providerStatus)) return null;
-  const qc = metadata?.autoQc as { changeKind?: string } | undefined;
+  const qc = metadata?.autoQc as { changeKind?: string; status?: string; policyVersion?: number; rightsReview?: string } | undefined;
+  if (qc?.policyVersion === 4 && qc.status === 'passed' && qc.rightsReview === 'distribution_partner') return {
+    label: 'Corrections ready for delivery', description: 'HYMN technical checks passed. The updated package is awaiting delivery for detailed partner QC.',
+    tone: 'progress' as const, step: 1, nextAction: 'Track corrected delivery'
+  };
   return {
     label: qc?.changeKind === "rights_review" ? "Correction awaiting rights review" : "Correction response under review",
     description: "The correction request is still open. HYMN received your response and must review it before sending the updated package. You do not need to submit the same response again.",
@@ -75,7 +79,8 @@ export function effectiveReleaseStatus(status: string, providerStatus?: string |
 /** Human labels for operational release states. Kept client-safe so admin and
  * customer surfaces cannot drift by each maintaining their own formatter. */
 export function adminReleaseStatusLabel(status: string, providerStatus?: string | null, metadata?: Record<string, unknown> | null) {
-  if (pendingCorrectionReview(status, providerStatus, metadata)) return "Correction review required";
+  const pending = pendingCorrectionReview(status, providerStatus, metadata);
+  if (pending) return pending.label === 'Corrections ready for delivery' ? pending.label : "Correction review required";
   const effectiveStatus = effectiveReleaseStatus(status, providerStatus, metadata);
   if (effectiveStatus === "changes_requested" && isDireNoteCorrectionStatus(providerStatus)) return "Correction Required";
   const labels: Record<string, string> = {

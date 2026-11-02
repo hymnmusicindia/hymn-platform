@@ -18,7 +18,7 @@ export async function processDistributionAutomation(siteUrl = getPublicAppUrl())
     WHERE r.archived_at IS NULL AND u.status='ACTIVE' AND r.payment_status='paid'
       AND r.status IN ('SUBMITTED','UNDER_REVIEW','IN_QC_QUEUE','IN_QUEUE','RESUBMITTED','APPROVED','QUEUED_FOR_DISTRIBUTION','CHANGES_REQUESTED')
       AND (COALESCE(r.metadata->'autoQc'->>'status','pending') IN ('pending','passed')
-        OR (r.metadata->'autoQc'->>'status'='manual_review_required' AND r.metadata->'autoQc'->>'changeKind'='missing_baseline'
+        OR (r.metadata->'autoQc'->>'status'='manual_review_required' AND r.metadata->'autoQc'->>'changeKind' IN ('missing_baseline','rights_review')
           AND COALESCE(r.metadata->'autoQc'->>'policyVersion','')<>${String(DISTRIBUTION_QC_POLICY_VERSION)})
         OR (r.metadata->'autoQc'->>'status'='retryable' AND COALESCE(r.metadata->'autoQc'->>'nextCheckAt','')<=${new Date().toISOString()})
         OR CASE WHEN COALESCE(r.metadata->'autoQc'->>'checkedVersion','') ~ '^[0-9]{1,9}$' THEN (r.metadata->'autoQc'->>'checkedVersion')::integer ELSE -1 END <> r.version)
