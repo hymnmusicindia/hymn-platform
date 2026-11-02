@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import {conversationGuide,withoutLegacyIntroduction,currentConversationBrief,INTRODUCTION_BRIEF} from '../lib/team/conversation-guide';
+const customer={name:'Aryan',email:'customer@fixture.invalid',status:'ACTIVE',interests:['DISTRIBUTION'],customerType:'artist',preferredLanguage:'hi',registered:true};
+const initial=conversationGuide({repName:'Aaditya Giri',customer});
+assert.match(initial.intro,/Aaditya Giri/);assert.match(initial.intro,/Aryan/);assert.ok(!initial.intro.includes('Kira'));assert.equal(initial.focus[0].title,'Music distribution');assert.match(initial.profile.join(' '),/Hindi/);assert.match(initial.profile.join(' '),/current experience/);
+const beats=conversationGuide({repName:'Manha',customer,selectedServices:['BEAT_PURCHASE'],needs:'A mellow beat for a Hindi single',nextAction:'Send two relevant previews'});
+assert.equal(beats.focus.length,1);assert.equal(beats.focus[0].title,'Buying beats');assert.match(beats.focus[0].questions.join(' '),/licence/);assert.ok(!JSON.stringify(beats.focus).includes('Music distribution'));assert.match(beats.next.join(' '),/mellow beat/);
+assert.equal(conversationGuide({repName:'Rep',customer:{...customer,interests:['BEAT_SALES']}}).focus[0].title,'Selling beats');
+assert.equal(conversationGuide({repName:'Rep',customer:{...customer,interests:[],purpose:'producer'}}).focus[0].title,'Selling beats');
+assert.equal(conversationGuide({repName:'Rep',customer,service:'Beat Store'}).focus[0].title,'Buying beats');
+assert.equal(conversationGuide({repName:'Rep',customer:{...customer,interests:['BEAT_PURCHASE']},service:'release'}).focus[0].title,'Music distribution','The current activity topic takes priority over a general saved interest.');
+const unknown=conversationGuide({repName:'Rep',customer:null});assert.equal(unknown.focus.length,0);assert.match(unknown.next.join(' '),/Ask which service/);
+for(const status of ['DO_NOT_CONTACT','ARCHIVED']){const guide=conversationGuide({repName:'Rep',customer:{...customer,status},selectedServices:['BEAT_PURCHASE']});assert.equal(guide.focus.length,0);assert.match(guide.intro,/Do not initiate/);}
+assert.equal(conversationGuide({repName:'Rep',customer,selectedServices:['__proto__','BEAT_PURCHASE','BEAT_PURCHASE']}).focus.length,1);
+const old='Introduce yourself as Kira from HYMN Music and ask if this is a convenient time. These are founder-supplied contacts, not newly researched acquisition leads.\n\nContact supplied as: Aryan\nSpecific context: Asked about distribution.';
+assert.equal(withoutLegacyIntroduction(old),'Contact supplied as: Aryan\nSpecific context: Asked about distribution.');
+const task={description:old,version:7,followUpContext:{tip:old.split('\n\n')[0],workActivity:{id:'running-call',notes:'Keep these live notes'}}};
+const cleaned=currentConversationBrief(task);assert.equal(cleaned.version,7);assert.deepEqual(cleaned.followUpContext.workActivity,task.followUpContext.workActivity);assert.equal(cleaned.followUpContext.tip,INTRODUCTION_BRIEF);assert.ok(!cleaned.description.includes('Kira'));assert.ok(task.description.includes('Kira'),'Read-time cleanup leaves stored history untouched.');
+assert.equal(withoutLegacyIntroduction('Call notes supplied by Kira: customer requested a callback.'),'Call notes supplied by Kira: customer requested a callback.','Actual authored notes are not renamed or removed.');
+assert.ok(!INTRODUCTION_BRIEF.includes('Kira'));
+console.log('PASS personalised conversation guide: actual rep, service focus, saved preferences, live selections, unknown needs, contact restrictions and safe legacy cleanup.');

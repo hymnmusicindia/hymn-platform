@@ -12,6 +12,7 @@ import { syncCallbackCalendar } from './callback-calendar';
 import { accountCard, recordCallbackOutcome } from './customer-followups';
 import { linkProspectContact } from './contact-directory';
 import { CLIENT_INTERESTS } from './client-interests';
+import { currentConversationBrief } from './conversation-guide';
 import { whatsappNumber } from './phone';
 import { teamSenderRole } from './outreach-content';
 import { activityOpen, workActivity, activitySeconds, activityEmailTemplates, MISSED_EMAIL_GAP_MS, type WorkActivity } from './work-station-policy';
@@ -39,7 +40,7 @@ export async function stationRead(a: Actor, resource: string, p: URLSearchParams
         return { id: c.id, name: c.name, email: c.email, phone: c.phone, interests: c.interests, status: c.status };
     }
     if (resource === 'workstation-activity') {
-        const task = await ownTask(prisma, a, p.get('id') || '');
+        const task = currentConversationBrief(await ownTask(prisma, a, p.get('id') || ''));
         if (task.ownerId !== a.id && !can(a, 'tasks.all'))
             throw new TeamError('Activity unavailable.', 403);
         // Native editor needs only the task/version and activity draft. Do not
@@ -49,9 +50,9 @@ export async function stationRead(a: Actor, resource: string, p: URLSearchParams
         const client = task.clientId ? await contact(prisma, a, task.clientId) : null;
         const ticketId = ticketIdOf(task);
         const ticket = ticketId && ticketAccess(a) ? (await primary(prisma, a), await prisma.supportTicket.findUnique({ where: { id: ticketId }, include: { replies: { orderBy: { createdAt: 'asc' } } } })) : null;
-        const owner = await prisma.teamMember.findUnique({ where: { id: task.ownerId }, select: { jobTitle: true, user: { select: { name: true } } } });
+        const [owner,profile] = await Promise.all([prisma.teamMember.findUnique({ where: { id: task.ownerId }, select: { jobTitle: true, user: { select: { name: true } } } }),client?.userId?prisma.user.findUnique({where:{id:client.userId},select:{onboardingUserType:true,onboardingPurpose:true,preferredLanguage:true}}):null]);
         const reports = client ? await prisma.teamAudit.findMany({ where: { workspaceId: a.workspaceId, entityId: { in: [client.id, ...(await prisma.teamClient.findMany({ where: { workspaceId: a.workspaceId, mergedIntoId: client.id }, select: { id: true } })).map(c => c.id)] }, action: { in: ['contact.call_report', 'contact.activity_report'] } }, orderBy: { createdAt: 'desc' }, take: 15 }) : [];
-        return { task: { ...task, owner }, activity: workActivity(task.followUpContext), client: client ? { id: client.id, name: client.name, email: client.email, phone: client.phone, interests: client.interests, status: client.status } : null, ticket, history: reports.map(r => ({ id: r.id, createdAt: r.createdAt, ...obj(r.detail) })) };
+        return { task: { ...task, owner }, activity: workActivity(task.followUpContext), client: client ? { id: client.id, name: client.name, email: client.email, phone: client.phone, interests: client.interests, status: client.status,registered:Boolean(client.userId),customerType:profile?.onboardingUserType||'',purpose:profile?.onboardingPurpose||'',preferredLanguage:profile?.preferredLanguage||'' } : null, ticket, history: reports.map(r => ({ id: r.id, createdAt: r.createdAt, ...obj(r.detail) })) };
     }
     if (resource === 'workstation-tickets') {
         if (!ticketAccess(a))
@@ -71,10 +72,10 @@ export async function stationRead(a: Actor, resource: string, p: URLSearchParams
     const where: Prisma.TeamTaskWhereInput = { ...base, ...date, status: bucket === 'finished' ? { in: terminal } : { notIn: terminal }, ...(p.get('q') ? { AND: [{ OR: [{ title: { contains: p.get('q')!.slice(0, 160), mode: 'insensitive' } }, { client: { name: { contains: p.get('q')!.slice(0, 160), mode: 'insensitive' } } }, {project:{title:{contains:p.get('q')!.slice(0,160),mode:'insensitive'}}}] }] } : {}) };
     if (p.get('view') === 'mobile') {
         const items = await prisma.teamTask.findMany({ where, select: { ...summarySelect, owner: false }, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], skip: offset, take: 31 });
-        return { items: items.slice(0, 30), hasMore: items.length > 30, day, canSupport: ticketAccess(a), canTeam: can(a, 'tasks.all') };
+        return { items: items.slice(0, 30).map(currentConversationBrief), hasMore: items.length > 30, day, canSupport: ticketAccess(a), canTeam: can(a, 'tasks.all') };
     }
     const [items, total, active, counts] = await Promise.all([prisma.teamTask.findMany({ where, select: summarySelect, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], skip: offset, take: 30 }), prisma.teamTask.count({ where }), prisma.teamTask.findFirst({ where: { workspaceId: a.workspaceId, ownerId: a.id, archivedAt: null, status: { notIn: terminal }, OR: [{ followUpContext: { path: ['workActivity', 'status'], equals: 'RUNNING' } }, { followUpContext: { path: ['workActivity', 'status'], equals: 'PAUSED' } }] }, select: summarySelect }), prisma.teamTask.groupBy({ by: ['status'], where: { ...base, ...date }, _count: true })]);
-    return { items, total, active, counts, day, canSupport: ticketAccess(a), canTeam: can(a, 'tasks.all') };
+    return { items:items.map(currentConversationBrief), total, active:active?currentConversationBrief(active):null, counts, day, canSupport: ticketAccess(a), canTeam: can(a, 'tasks.all') };
 }
 const startSchema = z.object({ requestKey: z.string().uuid(), taskId: z.string().optional(), clientId: z.string().optional(), ticketId: z.number().int().positive().optional(), kind: z.enum(['CALL', 'TASK', 'SUPPORT', 'QC']).default('CALL'), title: z.string().trim().min(3).max(180).default('Manual customer activity') });
 async function startActivity(tx: Prisma.TransactionClient, a: Actor, input: unknown, now: Date) {

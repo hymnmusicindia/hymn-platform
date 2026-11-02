@@ -8,7 +8,8 @@ import { callWindowStart } from './call-rules';
 import { assertEmployeeAssignee } from './daily-work';
 
 export const callListRow=z.object({name:z.string().trim().min(1).max(160),phone:z.string().min(8).max(40),email:z.string().email().or(z.literal('')).default(''),notes:z.string().min(3).max(5000),existingUserId:z.number().int().positive().optional()});
-export const INTRODUCTION_BRIEF='Introduce yourself as Kira from HYMN Music and ask if this is a convenient time. Be friendly and understand their work first. Explain HYMN music distribution, promotion and playlist pitching, beats, and mixing/mastering, starting with their stated interest. Let them know HYMN is available whenever they need help and invite them to reach out. Confirm their preferred name, missing email and current needs. Explain current published plans and prices accurately. Record the actual outcome, questions and any requested follow-up. Honour a request not to be contacted. These are founder-supplied contacts, not newly researched acquisition leads.';
+import {INTRODUCTION_BRIEF} from './conversation-guide';
+export {INTRODUCTION_BRIEF};
 function weekday(value:Date){let date=callWindowStart(value);while([0,6].includes(new Date(date.getTime()+330*60000).getUTCDay()))date=callWindowStart(new Date(date.getTime()+86400000));return date;}
 const dayKey=(value:Date)=>new Date(value.getTime()+330*60000).toISOString().slice(0,10);
 export async function importCallContact(tx:Prisma.TransactionClient,a:Actor,input:unknown,options:{batch:string;assigneeId:string;parentTaskId:string;now?:Date}) {
