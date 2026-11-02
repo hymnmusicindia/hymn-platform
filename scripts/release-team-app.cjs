@@ -36,11 +36,6 @@ function main() {
     if (!env.JAVA_HOME && fs.existsSync(studioJava)) env.JAVA_HOME = studioJava;
     const sdk = path.join(os.homedir(), 'AppData/Local/Android/Sdk');
     if (!env.ANDROID_HOME && fs.existsSync(sdk)) env.ANDROID_HOME = sdk;
-    if (!env.GOOGLE_CLIENT_ID) {
-      const file = path.join(root, '.env.hostinger');
-      if (fs.existsSync(file)) env.GOOGLE_CLIENT_ID = require('dotenv').parse(fs.readFileSync(file)).GOOGLE_CLIENT_ID;
-    }
-    if (!env.GOOGLE_CLIENT_ID) throw Error('Set GOOGLE_CLIENT_ID to the existing HYMN Web OAuth client ID before building.');
     const old = fs.readFileSync(source);
     fs.writeFileSync(source, JSON.stringify(version, null, 2) + '\n');
     try {

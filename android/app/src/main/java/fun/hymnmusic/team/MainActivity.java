@@ -33,13 +33,6 @@ import android.widget.PopupWindow;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
-import androidx.credentials.Credential;
-import androidx.credentials.CredentialManager;
-import androidx.credentials.CredentialManagerCallback;
-import androidx.credentials.CustomCredential;
-import androidx.credentials.GetCredentialRequest;
-import androidx.credentials.GetCredentialResponse;
-import androidx.credentials.exceptions.GetCredentialException;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.ViewCompat;
 import androidx.work.Constraints;
@@ -47,9 +40,6 @@ import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.NetworkType;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
-import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
-import android.os.CancellationSignal;
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONArray;
@@ -79,10 +69,7 @@ public final class MainActivity extends Activity {
     private TeamAppUpdater updater;
     private TeamLoginView loginView;
     private final TeamSignInAttempt signInAttempt=new TeamSignInAttempt();
-    private final android.os.Handler signInHandler=new android.os.Handler(android.os.Looper.getMainLooper());
-    private Runnable signInDeadline;
     private String lastSignInDetails="";
-    private CancellationSignal signInCancellation;
     private long lastAccessCheck;
     private boolean checkingAccess;
     private LinearLayout root, top, content, bottom;
@@ -134,13 +121,13 @@ public final class MainActivity extends Activity {
     private void showLogin() {
         screenGeneration.incrementAndGet(); session=null;
         if (chatView != null) { chatView.close(); chatView = null; }
-        signInAttempt.finish();clearSignInDeadline();
-        loginView=new TeamLoginView(this,nightMode,this::beginGoogleSignIn,this::openBrowserSignIn,this::copySignInDetails);
+        signInAttempt.finish();
+        loginView=new TeamLoginView(this,nightMode,this::loadSession,this::openBrowserSignIn,this::copySignInDetails);
         loginView.enableEmailSignIn(new TeamEmailSignInView.Actions(){
             @Override public void request(String email){emailSignIn(email,"","");}
             @Override public void verify(String email,String challenge,String code){emailSignIn(email,challenge,code);}
         });
-        if(!api.cookie().isEmpty())loginView.google.setText("Retry connection");
+        if(!api.cookie().isEmpty()){loginView.primary.setText("Retry connection");loginView.primary.setOnClickListener(v->loadSession());}
         message=loginView.message;
         setSafeContentView(loginView.view);
     }
@@ -174,66 +161,19 @@ public final class MainActivity extends Activity {
             });}
         });
     }
-    private void clearSignInDeadline(){if(signInDeadline!=null){signInHandler.removeCallbacks(signInDeadline);signInDeadline=null;}}
-    private void finishSignIn(){signInAttempt.finish();clearSignInDeadline();signInCancellation=null;updater.setPromptAllowed(true);if(loginView!=null)loginView.busy(false);}
+    private void finishSignIn(){signInAttempt.finish();updater.setPromptAllowed(true);if(loginView!=null)loginView.busy(false);}
     private void openBrowserSignIn(){try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(TeamApi.BASE+"/team")));}catch(Exception error){signInStatus("No browser is available. Install or enable a browser and try again.",true);}}
     private void copySignInDetails(){android.content.ClipboardManager clipboard=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);if(clipboard!=null){clipboard.setPrimaryClip(android.content.ClipData.newPlainText("HYMN sign-in details",lastSignInDetails));android.widget.Toast.makeText(this,"Sign-in details copied",android.widget.Toast.LENGTH_SHORT).show();}}
     @SuppressWarnings("deprecation") private void recordSignInFailure(String result){
-        String fingerprint="unavailable",services="unavailable";
+        String fingerprint="unavailable";
         try{android.content.pm.Signature signature=getPackageManager().getPackageInfo(getPackageName(),PackageManager.GET_SIGNATURES).signatures[0];byte[] digest=java.security.MessageDigest.getInstance("SHA-1").digest(signature.toByteArray());StringBuilder value=new StringBuilder();for(byte b:digest){if(value.length()>0)value.append(':');value.append(String.format(Locale.ROOT,"%02X",b&255));}fingerprint=value.toString();}catch(Exception ignored){}
-        try{services=getPackageManager().getPackageInfo("com.google.android.gms",0).versionName;}catch(Exception ignored){}
-        lastSignInDetails="HYMN Team "+BuildConfig.VERSION_NAME+"\nStage: "+signInAttempt.phase()+"\nResult: "+result+"\nPackage: "+getPackageName()+"\nSHA-1: "+fingerprint+"\nWeb client: "+BuildConfig.GOOGLE_WEB_CLIENT_ID+"\nAndroid API: "+Build.VERSION.SDK_INT+"\nGoogle Play services: "+services;
+        lastSignInDetails="HYMN Team "+BuildConfig.VERSION_NAME+"\nStage: "+signInAttempt.phase()+"\nResult: "+result+"\nPackage: "+getPackageName()+"\nSHA-1: "+fingerprint+"\nAndroid API: "+Build.VERSION.SDK_INT;
     }
 
 
     private Button button(String label, boolean primary) {
         Button b = new Button(this); b.setText(label); b.setAllCaps(false); b.setTextSize(14); b.setTypeface(Typeface.DEFAULT, Typeface.BOLD); b.setTextColor(primary ? themePalette.accentForeground : NAVY); b.setBackground(shape(primary ? (nightMode ? BLUE : NAVY) : surface(), primary ? (nightMode ? BLUE : NAVY) : BORDER, 13));
         return b;
-    }
-
-    private void beginGoogleSignIn() {
-        if(signInAttempt.phase()!=TeamSignInAttempt.Phase.IDLE)return;
-        if(!api.cookie().isEmpty()){loadSession();return;}
-        if(BuildConfig.GOOGLE_WEB_CLIENT_ID.isEmpty()){signInStatus("Sign-in is temporarily unavailable. Please contact HYMN support.",true);return;}
-        final int attempt=signInAttempt.begin();if(attempt<0)return;loginView.busy(true);updater.setPromptAllowed(false);signInStatus("Choose your team Google account to continue.",false);
-        final int generation=screenGeneration.get();signInCancellation=new CancellationSignal();
-        signInDeadline=()->{if(isDestroyed()||screenGeneration.get()!=generation||!signInAttempt.waitingForGoogle(attempt))return;recordSignInFailure("GOOGLE_TIMEOUT");CancellationSignal pending=signInCancellation;finishSignIn();if(pending!=null)pending.cancel();signInStatus("Google did not finish signing in. Try again, or open Team OS in your browser.",true);loginView.recovery();};
-        signInHandler.postDelayed(signInDeadline,120000);
-        try {
-            GetSignInWithGoogleOption option=new GetSignInWithGoogleOption.Builder(BuildConfig.GOOGLE_WEB_CLIENT_ID).build();
-            GetCredentialRequest request=new GetCredentialRequest.Builder().addCredentialOption(option).build();
-            CredentialManager.create(this).getCredentialAsync(this,request,signInCancellation,ContextCompat.getMainExecutor(this),new CredentialManagerCallback<GetCredentialResponse,GetCredentialException>(){
-                @Override public void onResult(GetCredentialResponse response){if(isDestroyed()||screenGeneration.get()!=generation||!signInAttempt.waitingForGoogle(attempt))return;clearSignInDeadline();signInCancellation=null;signInAttempt.advance(attempt,TeamSignInAttempt.Phase.TOKEN_EXCHANGE);signInStatus("Connecting to your HYMN workspace…",false);submitGoogleCredential(response.getCredential(),attempt);}
-                @Override public void onError(@NonNull GetCredentialException error){if(isDestroyed()||screenGeneration.get()!=generation||!signInAttempt.waitingForGoogle(attempt))return;recordSignInFailure(error.getType());finishSignIn();
-                    signInStatus(TeamSignInErrors.message(error),TeamSignInErrors.isError(error));loginView.recovery();
-                    android.util.Log.w("HYMNAuth","Google credential request: "+error.getType());
-                }
-            });
-        }catch(Exception error){recordSignInFailure(error.getClass().getSimpleName());finishSignIn();signInStatus("Google sign-in could not start. Please try again or use the browser.",true);loginView.recovery();}
-    }
-
-    private void submitGoogleCredential(Credential credential,int attempt) {
-        final int generation=screenGeneration.get();
-        io.execute(() -> {
-            try {
-                if (!(credential instanceof CustomCredential) || (!GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL.equals(credential.getType()) && !GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_SIWG_CREDENTIAL.equals(credential.getType()))) throw new IllegalStateException("Choose a Google account to continue.");
-                GoogleIdTokenCredential google = GoogleIdTokenCredential.createFrom(((CustomCredential) credential).getData());
-                memberName = google.getDisplayName() == null ? "Team member" : google.getDisplayName();
-                Uri picture = google.getProfilePictureUri();
-                if (picture != null) { profileImageUrl = picture.toString(); getSharedPreferences("hymn_team_settings", MODE_PRIVATE).edit().putString("profile_picture_url", profileImageUrl).apply(); }
-                JSONObject payload = new JSONObject().put("credential", google.getIdToken());
-                api.request("POST", "/api/auth/google", payload, false);
-                if(!signInAttempt.advance(attempt,TeamSignInAttempt.Phase.WORKSPACE))return;
-                JSONObject saved = api.get("session", "", ""); session = saved;
-                workspace = saved.optString("workspaceId", ""); memberName = saved.optString("name", "Team member");
-                memberId = saved.optString("memberId", "");
-                api.setCacheScope(saved); unavailableModules.clear();
-                if (saved.has("avatarUrl") && !saved.isNull("avatarUrl") && !saved.optString("avatarUrl").isEmpty()) profileImageUrl = saved.optString("avatarUrl");
-                else if (profileImageUrl.isEmpty()) profileImageUrl = getSharedPreferences("hymn_team_settings", MODE_PRIVATE).getString("profile_picture_url", "");
-                if (workspace.isEmpty()) throw new IllegalStateException("This Google account does not have an active HYMN team membership.");
-                runOnUiThread(() -> { if(isDestroyed()||screenGeneration.get()!=generation||!signInAttempt.current(attempt))return; finishSignIn(); showPage("home"); });
-            } catch (Exception e) { runOnUiThread(() -> { if(isDestroyed()||screenGeneration.get()!=generation||!signInAttempt.current(attempt))return; recordSignInFailure(e instanceof TeamApi.ApiException?"HTTP_"+((TeamApi.ApiException)e).status:e.getClass().getSimpleName()); boolean retryable=e instanceof java.io.IOException||e instanceof TeamApi.ApiException&&(((TeamApi.ApiException)e).status>=500||((TeamApi.ApiException)e).status==429);if(signInAttempt.phase()!=TeamSignInAttempt.Phase.WORKSPACE||!retryable)api.clear(); finishSignIn(); showLogin(); signInStatus(e instanceof java.io.IOException?"Could not reach HYMN. Check your connection and try again.":safe(e.getMessage()),true);loginView.recovery(); }); }
-        });
     }
 
     private void loadSession() {
@@ -914,7 +854,7 @@ public final class MainActivity extends Activity {
     }
 
     private void confirmSignOut() {
-        new AlertDialog.Builder(this).setTitle("Sign out?").setMessage("You can sign back in with your HYMN team Google account.").setNegativeButton("Cancel", null).setPositiveButton("Sign out", (d, w) -> signOut()).show();
+        new AlertDialog.Builder(this).setTitle("Sign out?").setMessage("You can sign back in with your HYMN team email.").setNegativeButton("Cancel", null).setPositiveButton("Sign out", (d, w) -> signOut()).show();
     }
 
     private void startNotificationSync() {
@@ -972,7 +912,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onPause() { if (chatView != null) chatView.pause(); super.onPause(); }
     @Override protected void onResume() { super.onResume(); if(updater!=null){updater.resumeInstall();updater.check(false);} refreshAccess(); if (chatView != null) chatView.resume(); }
-    @Override protected void onDestroy() { signInAttempt.finish();clearSignInDeadline(); if(signInCancellation!=null)signInCancellation.cancel(); if(updater!=null)updater.close(); if (chatView != null) chatView.close(); if (avatarRepository != null) avatarRepository.close(); io.shutdownNow(); super.onDestroy(); }
+    @Override protected void onDestroy() { signInAttempt.finish();  if(updater!=null)updater.close(); if (chatView != null) chatView.close(); if (avatarRepository != null) avatarRepository.close(); io.shutdownNow(); super.onDestroy(); }
 
     @Override public void onBackPressed() {
         navigateBack();

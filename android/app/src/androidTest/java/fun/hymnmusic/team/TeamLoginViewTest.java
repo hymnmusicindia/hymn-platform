@@ -21,7 +21,7 @@ public class TeamLoginViewTest {
             });
             assertTrue(attached.await(10,java.util.concurrent.TimeUnit.SECONDS));
             scenario.onActivity(activity->{TeamLoginView login=shown[0];height[0]=login.card.getHeight();login.busy(true);
-                assertEquals(View.INVISIBLE,login.contents.getVisibility());assertEquals(View.VISIBLE,login.loading.getVisibility());assertFalse(login.google.isShown());assertFalse(login.google.isEnabled());
+                assertEquals(View.INVISIBLE,login.contents.getVisibility());assertEquals(View.VISIBLE,login.loading.getVisibility());assertFalse(login.primary.isShown());assertFalse(login.primary.isEnabled());
                 login.status("Connecting to your private team workspace",false);
             });
             float[] translation={Float.MAX_VALUE};
@@ -35,7 +35,7 @@ public class TeamLoginViewTest {
             android.graphics.Bitmap screenshot=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().getUiAutomation().takeScreenshot();assertNotNull(screenshot);
             java.io.File directory=new java.io.File(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().getTargetContext().getExternalFilesDir(null),"ui-proof");assertTrue(directory.isDirectory()||directory.mkdirs());
             try(java.io.FileOutputStream output=new java.io.FileOutputStream(new java.io.File(directory,"sign-in-loading.png"))){assertTrue(screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output));}screenshot.recycle();
-            scenario.onActivity(activity->{TeamLoginView login=shown[0];login.busy(false);login.status("Google did not complete sign-in.",false);login.recovery();assertEquals(View.VISIBLE,login.contents.getVisibility());assertEquals(View.GONE,login.loading.getVisibility());assertTrue(login.google.isEnabled());});
+            scenario.onActivity(activity->{TeamLoginView login=shown[0];login.busy(false);login.status("Sign-in did not complete.",false);login.recovery();assertEquals(View.VISIBLE,login.contents.getVisibility());assertEquals(View.GONE,login.loading.getVisibility());assertTrue(login.primary.isEnabled());});
         }
     }
     @Test public void captureBothThemesForVisualReview() throws Exception {
@@ -81,8 +81,8 @@ public class TeamLoginViewTest {
                     assertEquals(width/2f,card.getLeft()+card.getWidth()/2f,density);
                     assertEquals(center.getHeight()/2f,card.getTop()+card.getHeight()/2f,density);
                     assertTrue(card.getLeft()>=0);assertTrue(card.getRight()<=width);
-                    assertTrue(login.google.isEnabled());login.busy(true);assertFalse(login.google.isEnabled());login.busy(false);assertTrue(login.google.isEnabled());
-                    login.status("Sign-in wasn't completed. Tap Continue with Google when you're ready.",false);assertEquals(View.VISIBLE,login.message.getVisibility());
+                    assertTrue(login.primary.isEnabled());login.busy(true);assertFalse(login.primary.isEnabled());login.busy(false);assertTrue(login.primary.isEnabled());
+                    login.status("Sign-in wasn't completed. Tap Continue with email when you're ready.",false);assertEquals(View.VISIBLE,login.message.getVisibility());
                     login.status("",false);assertEquals(View.GONE,login.message.getVisibility());
                 }
             });

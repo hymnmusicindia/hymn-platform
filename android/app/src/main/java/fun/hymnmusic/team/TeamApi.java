@@ -109,7 +109,7 @@ final class TeamApi {
                 try (OutputStream out = connection.getOutputStream()) { out.write(body.toString().getBytes(StandardCharsets.UTF_8)); }
             }
             int status = connection.getResponseCode();
-            if (("/api/auth/google".equals(path)||"/api/auth/team-email".equals(path)) && status >= 200 && status < 300) {
+            if ("/api/auth/team-email".equals(path) && status >= 200 && status < 300) {
                 for (java.util.Map.Entry<String, java.util.List<String>> entry : connection.getHeaderFields().entrySet()) {
                     if (entry.getKey() == null || !entry.getKey().equalsIgnoreCase("Set-Cookie")) continue;
                     for (String header : entry.getValue()) if (header.startsWith("hymn_session=")) {

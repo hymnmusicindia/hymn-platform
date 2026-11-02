@@ -13,6 +13,8 @@ public class TeamEmailSignInViewTest {
                 for(boolean dark:new boolean[]{false,true}){
                     String[] submitted={"","",""};int[] requests={0};
                     TeamLoginView login=new TeamLoginView(activity,dark,()->{});
+                    assertNull("Google sign-in must not be offered",login.view.findViewWithTag("team-google-sign-in"));
+                    assertEquals("Continue with email",login.primary.getText().toString());
                     login.enableEmailSignIn(new TeamEmailSignInView.Actions(){
                         public void request(String email){submitted[0]=email;requests[0]++;}
                         public void verify(String email,String challenge,String code){submitted[0]=email;submitted[1]=challenge;submitted[2]=code;}

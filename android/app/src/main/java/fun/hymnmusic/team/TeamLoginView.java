@@ -10,7 +10,7 @@ import android.widget.*;
 /** Centered, scrollable entry screen; system insets are owned by TeamSafeArea. */
 final class TeamLoginView {
     final ScrollView view;
-    final Button google;
+    final Button primary;
     final TextView message;
     private final Activity activity;
     private final TeamPalette palette;
@@ -45,8 +45,7 @@ final class TeamLoginView {
         String[] names={"Your work","Schedule","Team chat"};int[] icons={R.drawable.ic_workstation_nav,R.drawable.ic_calendar_nav,R.drawable.ic_chat_nav};
         for(int i=0;i<names.length;i++){LinearLayout item=new LinearLayout(activity);item.setOrientation(LinearLayout.VERTICAL);item.setGravity(Gravity.CENTER);ImageView icon=new ImageView(activity);icon.setImageResource(icons[i]);icon.setColorFilter(palette.text);item.addView(icon,new LinearLayout.LayoutParams(dp(20),dp(20)));TextView caption=label(names[i],11,palette.muted,false);LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,-2);cp.topMargin=dp(7);item.addView(caption,cp);features.addView(item,new LinearLayout.LayoutParams(0,-2,1));}
         add(contents,features,24);
-        google=new Button(activity);google.setTag("team-google-sign-in");google.setText("Continue with Google");google.setAllCaps(false);google.setTextSize(14);google.setTypeface(Typeface.DEFAULT,Typeface.BOLD);google.setTextColor(0xff1f1f1f);google.setBackground(shape(0xffffffff,0xff747775,14));google.setPadding(dp(16),dp(14),dp(16),dp(14));google.setMinHeight(dp(54));
-        android.graphics.drawable.Drawable mark=activity.getDrawable(R.drawable.google_g);mark.setBounds(0,0,dp(20),dp(20));google.setCompoundDrawablesRelative(mark,null,null,null);google.setCompoundDrawablePadding(dp(10));google.setGravity(Gravity.CENTER);google.setOnClickListener(v->signIn.run());LinearLayout.LayoutParams gp=new LinearLayout.LayoutParams(-1,-2);gp.topMargin=dp(24);contents.addView(google,gp);
+        primary=new Button(activity);primary.setTag("team-email-start");primary.setText("Continue with email");primary.setAllCaps(false);primary.setTextSize(14);primary.setTypeface(Typeface.DEFAULT,Typeface.BOLD);primary.setTextColor(palette.accentForeground);primary.setBackground(shape(palette.accent,palette.accent,14));primary.setMinHeight(dp(54));primary.setOnClickListener(v->signIn.run());LinearLayout.LayoutParams gp=new LinearLayout.LayoutParams(-1,-2);gp.topMargin=dp(24);contents.addView(primary,gp);
         message=label("",12,palette.muted,false);message.setTag("team-sign-in-status");message.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);message.setVisibility(View.GONE);add(contents,message,12);
         browser=new Button(activity);browser.setText("Open Team OS in browser");browser.setAllCaps(false);browser.setTextSize(13);browser.setTextColor(palette.text);browser.setBackground(shape(palette.elevated,palette.border,12));browser.setMinHeight(dp(48));browser.setVisibility(View.GONE);browser.setOnClickListener(v->openBrowser.run());add(contents,browser,12);
         details=new Button(activity);details.setText("Copy sign-in details");details.setAllCaps(false);details.setTextSize(12);details.setTextColor(palette.muted);details.setBackgroundColor(android.graphics.Color.TRANSPARENT);details.setMinHeight(dp(48));details.setVisibility(View.GONE);details.setOnClickListener(v->copyDetails.run());add(contents,details,4);
@@ -56,7 +55,7 @@ final class TeamLoginView {
     }
     void status(String value,boolean error){if(working){loading.setContentDescription(value);loading.announceForAccessibility(value);return;}message.setText(value);message.setTextColor(error?palette.error:palette.muted);message.setVisibility(value.isEmpty()?View.GONE:View.VISIBLE);message.setPadding(dp(12),dp(10),dp(12),dp(10));message.setBackground(error?shape(palette.errorSoft,0,12):null);}
     void busy(boolean busy){
-        if(working==busy)return;working=busy;google.setEnabled(!busy);
+        if(working==busy)return;working=busy;primary.setEnabled(!busy);
         if(busy){
             int[] source=new int[2],target=new int[2];headerLogo.getLocationInWindow(source);card.getLocationInWindow(target);
             float offset=source[1]+headerLogo.getHeight()/2f-(target[1]+card.getHeight()/2f);
@@ -71,9 +70,8 @@ final class TeamLoginView {
     void enableEmailSignIn(TeamEmailSignInView.Actions actions){
         if(emailSignIn!=null)return;
         emailSignIn=new TeamEmailSignInView(activity,palette,actions);emailSignIn.setVisibility(View.GONE);
-        Button emailButton=new Button(activity);emailButton.setTag("team-email-start");emailButton.setText("Continue with email");emailButton.setAllCaps(false);emailButton.setTextSize(14);emailButton.setTypeface(Typeface.DEFAULT,Typeface.BOLD);emailButton.setTextColor(palette.accentForeground);emailButton.setBackground(shape(palette.accent,palette.accent,14));emailButton.setMinHeight(dp(54));
-        emailButton.setOnClickListener(v->{emailButton.setVisibility(View.GONE);emailSignIn.setVisibility(View.VISIBLE);status("",false);});
-        int index=contents.indexOfChild(google);LinearLayout.LayoutParams buttonParams=new LinearLayout.LayoutParams(-1,-2);buttonParams.topMargin=dp(24);contents.addView(emailButton,index,buttonParams);
+        primary.setOnClickListener(v->{primary.setVisibility(View.GONE);emailSignIn.setVisibility(View.VISIBLE);status("",false);});
+        int index=contents.indexOfChild(primary);
         LinearLayout.LayoutParams formParams=new LinearLayout.LayoutParams(-1,-2);formParams.topMargin=dp(18);contents.addView(emailSignIn,index+1,formParams);
     }
 

@@ -2,24 +2,17 @@
 
 ### Email sign-in without Google Play services
 
-Version 2.1.8 adds a native **Continue with email** form. Members enter their team email and a six-digit emailed code without a browser redirect. Google sign-in remains available. Deploy `/api/auth/team-email` before distributing the APK; its readiness response must report `teamEmailSignIn: "v1"` and `available: true`. The server uses the existing SMTP configuration and database-backed `security_rate_limits`; no migration or new credential is required.
+Version 2.1.8 adds a native **Continue with email** form. Members enter their team email and a six-digit emailed code without a browser redirect. Version 2.1.9 removes native Google sign-in and its SDKs; email-code verification is the app's sign-in method. Deploy `/api/auth/team-email` before distributing the APK; its readiness response must report `teamEmailSignIn: "v1"` and `available: true`. The server uses the existing SMTP configuration and database-backed `security_rate_limits`; no migration or new credential is required.
 
 Codes last ten minutes, permit five attempts and can be redeemed once, including simultaneous requests across server processes. Only active accounts with active team memberships can sign in. The server rechecks membership at redemption and retains the account's existing role. Challenges contain secret-keyed HMACs rather than plaintext codes or account-existence information. Request and verification limits persist in PostgreSQL; codes are not cached or logged. The native app stores the resulting session in its existing encrypted preferences.
 
 Run `node --import tsx scripts/verify-team-email-sign-in-isolated.ts` for isolated database security checks. This fixture mocks code delivery and never sends real emails. Android instrumentation includes `TeamEmailSignInViewTest` for validation, resend cooldown and loading-state recovery.
 
-This is a native Android client for the HYMN team workspace. It does not open the website as its app UI. The Android UI provides Google sign-in, Home, Tasks, Schedule, Alerts, Work-station, Calls & follow-ups, team email history, Activity & Audit, Team Chat, Projects and Team Directory. It includes a workspace detail screen, account photo synced from HYMN, task status analytics, day/night appearance, mobile back navigation and quick links. Data is read and updated through the authenticated HYMN Team APIs. Access control remains enforced on the server.
+This is a native Android client for the HYMN team workspace. It does not open the website as its app UI. The Android UI provides email-code sign-in, Home, Tasks, Schedule, Alerts, Work-station, Calls & follow-ups, team email history, Activity & Audit, Team Chat, Projects and Team Directory. It includes a workspace detail screen, account photo synced from HYMN, task status analytics, day/night appearance, mobile back navigation and quick links. Data is read and updated through the authenticated HYMN Team APIs. Access control remains enforced on the server.
 
 ## Build
 
-Use Android Studio's bundled JDK 17 or newer and the Android SDK (API 36). Supply the same Google **Web application** OAuth client ID used by HYMN's server, either as `GOOGLE_CLIENT_ID` or Gradle property `googleClientId`:
-
-```powershell
-$env:GOOGLE_CLIENT_ID = "your-web-oauth-client-id"
-gradle assembleDebug
-```
-
-The debug APK is at `app/build/outputs/apk/debug/app-debug.apk`. The Android OAuth client must authorize package `fun.hymnmusic.team` and the SHA-1 certificate used to sign the APK.
+Use Android Studio's bundled JDK 17 or newer and the Android SDK (API 36). Run `gradle assembleDebug` from `android`. The APK is at `app/build/outputs/apk/debug/app-debug.apk`. No Google OAuth client configuration is needed for the native app.
 
 ## Download releases
 
@@ -27,7 +20,7 @@ The public install page is `/team/app`; `/team/app/download` always serves the c
 
 Run `node scripts/release-team-app.cjs` from the repository root for an update. It increments the patch version and Android versionCode in `android/team-release.json`, builds the app, runs Android unit tests, and prepares a versioned APK plus SHA-256 and release metadata in `public/downloads/hymn-team`. Deploy these files with the web changes. Both Android Settings and the install page then show the same new version. The native Tools screen checks the public release metadata. Newer versions also check on foreground (at most every four hours) and prompt at most once a day for each update. A user-confirmed update downloads inside the app, checks its size, SHA-256, package, version and installed signing certificate, then opens Android's installer. Android may first ask the user to allow installs from HYMN Team; installation always requires confirmation. Existing older binaries need one manual update to gain this capability.
 
-Set `JAVA_HOME`, `ANDROID_HOME`, `GOOGLE_CLIENT_ID` and, if necessary, `TEAM_APP_GRADLE` for your Android build environment. On Windows the script detects Android Studio's JDK/SDK and a cached Gradle installation. Use the same signing key for every update; the existing app uses the local Android debug signing key. Do not change that key when distributing an update to existing installs. For release signing, migrate the build and publisher together before distributing the first release-signed build.
+Set `JAVA_HOME`, `ANDROID_HOME` and, if necessary, `TEAM_APP_GRADLE` for your Android build environment. On Windows the script detects Android Studio's JDK/SDK and a cached Gradle installation. Use the same signing key for every update; the existing app uses the local Android debug signing key. Do not change that key when distributing an update to existing installs. For release signing, migrate the build and publisher together before distributing the first release-signed build.
 
 `--keep-version` builds the version already declared in the JSON file; `--stage-only` stages an APK that was already built and verifies its output metadata. Neither option allows overwriting an already published versionCode.
 
@@ -59,7 +52,7 @@ Run `node scripts/test-team-chat-stream.cjs` for isolated stream delivery, permi
 
 ## Sign-in and shared palette
 
-The explicit Google button uses `GetSignInWithGoogleOption`, following https://developer.android.com/identity/sign-in/credential-manager-siwg-implementation. The Web OAuth client ID remains the token audience; the Android OAuth client must still match the app package and signing certificate. Cancellation returns a neutral, manually retryable state; requests never automatically restart after consent is declined. Duplicate taps are disabled, lifecycle cancellation stops abandoned requests, and update dialogs/installers are deferred during sign-in.
+Email-code sign-in keeps verification inside the native app. Duplicate taps are disabled, stale results are ignored, and update prompts are deferred while a sign-in request is active.
 
 `TeamLoginView` centers a maximum-440dp card within a fill-viewport scroll container. Short windows and larger fonts can scroll instead of clipping. Status messages use accessible live announcements and theme-appropriate contrast. `TeamPalette` mirrors the light/dark values in `app/styles/theme-tokens.css` for native screens. `TeamPaletteTest` checks contrast for labels, errors and primary actions. `TeamLoginViewTest` covers card centering and sizing on phone/tablet/short viewports plus busy and status states.
 
@@ -67,8 +60,4 @@ The explicit Google button uses `GetSignInWithGoogleOption`, following https://d
 
 During an active request, the sign-in card hides all normal content and moves the HYMN logo into a large animated progress ring. Hidden content retains the card’s dimensions; success leaves for the workspace, and failures restore controls. The same loader is used when restoring a saved session. Animation honors Android’s disabled-animation setting and stops when hidden or detached.
 
-Each attempt has a distinct ID and monotonic stage. Late cancellation/results from an older attempt cannot dismiss a newer request. A Google provider request expires after two minutes without automatically retrying; HYMN token exchange has a 30-second read timeout. Recovery offers Team OS in the external browser and a user-triggered copy of non-secret diagnostics (stage, SDK error type, APK version, package/signing fingerprint, public web client ID, Android/Play-services versions). Browser access opens the web workspace; it does not import a browser session into the native app.
-
-If Google stalls before returning a credential, verify the Android OAuth client in the same Google Cloud project as the Web client: package `fun.hymnmusic.team`, SHA-1 `18:9F:3C:D5:BE:BC:64:35:7D:53:43:55:06:7C:D6:C5:EC:69:87:D5` for the current signing key. Google documents that cancellation can reflect a technical authorization/configuration issue, not only a user dismissal: https://developer.android.com/identity/sign-in/credential-manager-troubleshooting-guide. This repository cannot verify or create Cloud Console clients without access to that Google Cloud project.
-
-Authentication dependencies use stable AndroidX Credentials 1.6.0 and Google ID 1.2.1, verified against the official release notes and Google Maven repository.
+Each attempt has a distinct ID and monotonic stage. Late results cannot replace a newer request. HYMN sign-in requests have a 30-second read timeout. Transient connection failures retain an existing session and offer Retry connection. Optional recovery diagnostics contain only the APK version, package/signing fingerprint, request stage, error code and Android version.

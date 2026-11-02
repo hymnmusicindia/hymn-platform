@@ -11,8 +11,6 @@ android {
         versionCode teamRelease.versionCode
         versionName teamRelease.versionName
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
-        def googleClientId = project.findProperty('googleClientId') ?: System.getenv('GOOGLE_CLIENT_ID') ?: System.getenv('NEXT_PUBLIC_GOOGLE_CLIENT_ID') ?: ''
-        buildConfigField 'String', 'GOOGLE_WEB_CLIENT_ID', '"' + googleClientId + '"'
     }
     buildFeatures { buildConfig true }
 
@@ -24,9 +22,6 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20240303'
-    implementation 'androidx.credentials:credentials:1.6.0'
-    implementation 'androidx.credentials:credentials-play-services-auth:1.6.0'
-    implementation 'com.google.android.libraries.identity.googleid:googleid:1.2.1'
     implementation 'androidx.security:security-crypto:1.1.0-alpha06'
     implementation 'androidx.work:work-runtime:2.10.1'
     implementation 'androidx.core:core:1.15.0'
