@@ -5056,7 +5056,7 @@ export function ReleaseForm({
                   </div>
 
                   {platforms.includes("YouTube Music") ? (
-                  <div className="ugc-content-id-reveal mt-5 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t pt-4 text-sm" style={{ borderColor: "var(--border)" }}>
+                  <div className={layoutStyles.contentIdAction} style={{ borderColor: "var(--border)" }}>
                     <span style={{ color: "var(--text-muted)" }}>
                       {!contentIdEligibility.eligible ? contentIdEligibility.reason : youtubeContentIdEnabled
                         ? "YouTube Content ID is enabled."
@@ -5065,7 +5065,7 @@ export function ReleaseForm({
                     <button
                       type="button"
                       disabled={!socialConsentAccepted || !contentIdEligibility.eligible}
-                      className="font-semibold text-[var(--accent)] underline-offset-4 transition hover:underline disabled:cursor-not-allowed disabled:opacity-40"
+                      className={layoutStyles.contentIdButton}
                       onClick={() => openYoutubeContentIdModal()}
                     >
                       {youtubeContentIdEnabled ? "Review" : "Claim it"}
@@ -5077,7 +5077,7 @@ export function ReleaseForm({
                     ) : null}
                   </div>
                   ) : null}
-                </div><div>
+                </div></div><div className={layoutStyles.deliveryTerritories}><div>
                   <div
                     ref={
                       registerField("country-selector") as (

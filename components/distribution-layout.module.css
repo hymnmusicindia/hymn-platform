@@ -44,12 +44,34 @@ html body .workflow.workflow.workflow.workflow :global(.release-delivery-stage) 
   grid-column:1/-1!important; grid-row:auto!important; width:100%; max-width:none; min-width:0;
 }
 html body .workflow.workflow.workflow.workflow .deliveryGrid {
-  display:grid; grid-template-columns:minmax(0,1fr)!important; gap:20px!important; align-items:start; width:100%; min-width:0;
+  display:grid; grid-template-columns:minmax(0,1fr)!important; gap:16px!important; align-items:stretch; width:100%; min-width:0;
 }
 html body .workflow.workflow.workflow.workflow :is(.deliveryStores,.deliveryOptions) { min-width:0; }
-html body .workflow.workflow.workflow.workflow .deliveryOptions { display:grid; gap:20px!important; align-content:start; }
+html body .workflow.workflow.workflow.workflow .deliveryOptions { display:flex; flex-direction:column; }
 html body .workflow.workflow.workflow.workflow .deliveryStores > div,
 html body .workflow.workflow.workflow.workflow .deliveryOptions > div { margin:0; }
 @media(min-width:1100px) {
-  html body .workflow.workflow.workflow.workflow .deliveryGrid { grid-template-columns:minmax(0,1.2fr) minmax(340px,.85fr)!important; gap:24px!important; }
+  html body .workflow.workflow.workflow.workflow .deliveryGrid { grid-template-columns:repeat(2,minmax(0,1fr))!important; gap:16px!important; }
 }
+html body .workflow.workflow.workflow.workflow .deliveryTerritories { grid-column:1/-1; min-width:0; }
+html body .workflow.workflow.workflow.workflow :is(.deliveryStores,.deliveryOptions) > div {
+  height:100%; box-sizing:border-box; padding:16px!important; border-radius:12px!important;
+  display:flex; flex-direction:column;
+}
+html body .workflow.workflow.workflow.workflow :is(.deliveryStores,.deliveryOptions) > div > div:first-child {
+  margin-bottom:12px; padding-bottom:12px; gap:10px;
+}
+html body .workflow.workflow.workflow.workflow :is(.deliveryStores,.deliveryOptions) h3 { font-size:16px; line-height:1.35; }
+html body .workflow.workflow.workflow.workflow .deliveryOptions :global(.grid) { gap:4px 8px; }
+html body .workflow.workflow.workflow.workflow .contentIdAction {
+  display:flex; align-items:center; gap:12px; margin-top:auto; border-top:1px solid var(--border);
+  padding-top:12px; font-size:11px; line-height:1.55; flex-wrap:wrap;
+}
+html body .workflow.workflow.workflow.workflow .contentIdAction > span:first-child { flex:1 1 180px; }
+html body .workflow.workflow.workflow.workflow .contentIdButton {
+  flex-shrink:0; min-height:36px; padding:7px 12px; border:1px solid var(--border-strong); border-radius:8px;
+  background:var(--bg-soft); color:var(--text); font-size:11px; font-weight:600; line-height:1.4;
+}
+html body .workflow.workflow.workflow.workflow .contentIdButton:disabled { opacity:.55; cursor:not-allowed; }
+html body .workflow.workflow.workflow.workflow .contentIdButton:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+html body .workflow.workflow.workflow.workflow .deliveryTerritories > div > div { padding:14px 16px!important; border-radius:12px!important; }
