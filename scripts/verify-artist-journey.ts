@@ -1,0 +1,137 @@
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { prisma } from '../lib/prisma';
+import { defaultJourney, customerCallWindow, nextCustomerWindow, intentScore, mergedSegments, meaningfulListen, object } from '../lib/artist-journey-policy';
+import { saveJourneyProfile, readJourneyProfile, recordArtistSignal, listeningSummary, requestArtistHelp } from '../lib/artist-journey';
+import { teamMutation as rawMutation, teamRead as rawRead, teamWrite } from '../lib/team/service';
+import { syncArtistJourneys, syncArtistPromises, reconcileArtistWork, assertArtistAction } from '../lib/team/artist-journey';
+const teamMutation = async (...args: Parameters<typeof rawMutation>) => await rawMutation(...args) as {
+    id: string;
+};
+const teamRead = async (...args: Parameters<typeof rawRead>) => await rawRead(...args) as unknown as {
+    insight: {
+        listens: {
+            uniqueSeconds: number;
+        }[];
+    };
+    groups: unknown[];
+};
+async function main() {
+    assert.equal(process.env.DATABASE_URL, 'postgresql://fixture:fixture@127.0.0.1:55473/acquisition_fixture');
+    const now = new Date();
+    assert.deepEqual(mergedSegments([[0, 10], [5, 15], [30, 40]], 35), [[0, 15], [30, 35]]);
+    assert.equal(meaningfulListen({ beatId: 1, seconds: 60, uniqueSeconds: 10, duration: 100, sessions: 3, lastAt: now.toISOString() }), false, 'Loops cannot inflate unique completion');
+    assert.equal(intentScore([{ key: 'play', label: 'a', points: 10, kind: 'OBSERVED', service: 'beats', observedAt: now.toISOString() }, { key: 'play', label: 'b', points: 10, kind: 'OBSERVED', service: 'beats', observedAt: now.toISOString() }]).score, 10);
+    assert.equal(intentScore([{ key: 'old', label: 'old', points: 100, kind: 'OBSERVED', service: 'beats', observedAt: new Date(now.getTime() - 20 * 86400000).toISOString() }]).score, 0);
+    const cp = { ...defaultJourney, contact: 'CALL' as const, weekdays: [1, 2, 3, 4, 5, 6, 0] };
+    assert.equal(customerCallWindow(cp, new Date('2026-11-03T05:00:00Z')), true);
+    assert.equal(customerCallWindow(cp, new Date('2026-11-03T16:00:00Z')), false);
+    assert.ok(nextCustomerWindow(cp, new Date('2026-11-03T16:00:00Z')));
+    const workspace = await prisma.teamWorkspace.create({ data: { name: 'Artist journey fixture', clientCardsImportedAt: now } });
+    async function member(name: string, owner = false, perms = ['tasks.update', 'tasks.create', 'tasks.complete', 'crm.outreach.manage', 'calendar.manage']) { const role = await prisma.teamRole.create({ data: { workspaceId: workspace.id, name, owner, permissions: perms } }), user = await prisma.user.create({ data: { name, email: `${randomUUID()}@journey.fixture.invalid`, googleId: randomUUID() } }); return prisma.teamMember.create({ data: { workspaceId: workspace.id, userId: user.id, roleId: role.id, jobTitle: 'Artist success representative', preferences: { artistRouting: { services: ['beats'], languages: ['hi'] } } }, include: { role: true } }); }
+    const owner = await member('Owner', true), rep = await member('Representative'), other = await member('Other'), viewer = await member('Viewer', false, []);
+    const user = await prisma.user.create({ data: { name: 'Artist', email: 'artist@journey.fixture.invalid', mobile: '+919876543210', preferredLanguage: 'hi', googleId: randomUUID() } });
+    const beat = await prisma.beat.create({ data: { userId: user.id, title: 'A beat', bpm: 90, genre: 'Hip Hop', mood: 'Chill', keySignature: 'C minor', priceCents: 10000, status: 'PUBLISHED' } });
+    assert.equal((await recordArtistSignal(user.id, { kind: 'licence', beatId: beat.id })).recorded, false);
+    let p = await saveJourneyProfile(user.id, { ...defaultJourney, goal: 'FIND_BEAT', mode: 'ACTIVE', analytics: true, shortlist: [beat.id] });
+    await assert.rejects(saveJourneyProfile(user.id, { ...p, revision: 0 }), /changed/);
+    await assert.rejects(saveJourneyProfile(user.id, { ...p, timezone: 'not-a-timezone' }));
+    const session = randomUUID(), start = new Date(now.getTime() - 60000);
+    const listen = (seq: number, segments: [
+        number,
+        number
+    ][]) => ({ kind: 'listen', beatId: beat.id, session, seq, duration: 60, segments });
+    await recordArtistSignal(user.id, listen(1, [[0, 10]]), start);
+    await recordArtistSignal(user.id, listen(2, [[10, 20]]), new Date(start.getTime() + 10000));
+    await recordArtistSignal(user.id, listen(3, [[20, 30]]), new Date(start.getTime() + 20000));
+    await recordArtistSignal(user.id, listen(3, [[20, 30]]), new Date(start.getTime() + 21000));
+    assert.equal((await listeningSummary(user.id))[0].uniqueSeconds, 30);
+    await assert.rejects(recordArtistSignal(user.id, listen(4, [[30, 60]]), new Date(start.getTime() + 21000)), /Invalid playback/);
+    await recordArtistSignal(user.id, { kind: 'licence', beatId: beat.id });
+    await recordArtistSignal(user.id, { kind: 'favourite', beatId: beat.id, active: true });
+    await recordArtistSignal(user.id, { kind: 'cart', beatId: beat.id, active: true });
+    const request = { requestKey: randomUUID(), reason: 'SHORTLIST', message: 'Please help me choose the right licence.', channel: 'MESSAGE' };
+    const requested = await requestArtistHelp(user.id, request);
+    assert.equal((await requestArtistHelp(user.id, request)).id, requested.id);
+    await assert.rejects(requestArtistHelp(user.id, { ...request, message: 'A different question with the same key.' }), /changed/);
+    const sync = () => teamWrite(owner, (tx, a) => syncArtistJourneys(tx, a, now));
+    await sync();
+    let task = await prisma.teamTask.findFirstOrThrow({ where: { workspaceId: workspace.id, client: { userId: user.id } } });
+    assert.equal(await prisma.teamTask.count({ where: { clientId: task.clientId, status: { notIn: ['COMPLETED', 'CANCELLED'] } } }), 1);
+    const assigned = task.ownerId === rep.id ? rep : other;
+    assert.equal(object(task.followUpContext).kind, 'TASK', 'Message request cannot become an unsolicited call');
+    await sync();
+    assert.equal(await prisma.teamTask.count({ where: { clientId: task.clientId } }), 1);
+    const view = await teamRead(assigned, 'artist-activity', new URLSearchParams({ id: task.id }));
+    assert.equal(view.insight!.listens[0].uniqueSeconds, 30);
+    await assert.rejects(teamRead(viewer, 'artist-activity', new URLSearchParams({ id: task.id })), /unavailable/);
+    const promise = { id: randomUUID(), taskId: task.id, version: 0, text: 'Send the final licence information', party: 'HYMN', dueAt: new Date(now.getTime() + 86400000).toISOString(), evidence: 'MANUAL' };
+    const promiseResult = await teamMutation(assigned, 'artist-promise-save', promise);
+    assert.equal((await teamMutation(assigned, 'artist-promise-save', promise)).id, promiseResult.id);
+    assert.equal(await prisma.growthEvent.count({ where: { event: 'artist_promise' } }), 1);
+    await assert.rejects(teamMutation(viewer, 'artist-promise-save', { ...promise, id: randomUUID() }), /permission|unavailable/);
+    await assert.rejects(teamMutation(assigned, 'artist-promise-complete', { taskId: task.id, id: promise.id, version: 0, evidence: 'Reviewed.' }));
+    await teamWrite(owner, (tx, a) => syncArtistPromises(tx, a, new Date(now.getTime() + 2 * 86400000)));
+    await teamWrite(owner, (tx, a) => syncArtistPromises(tx, a, new Date(now.getTime() + 2 * 86400000)));
+    assert.equal(await prisma.teamNotification.count({ where: { title: { startsWith: 'Promise needs attention:' } } }), 1);
+    await teamMutation(assigned, 'artist-promise-complete', { taskId: task.id, id: promise.id, version: 1, evidence: 'Reviewed the grant and sent the agreed information.' });
+    const recap = { taskId: task.id, requestKey: randomUUID(), summary: 'Discussed the available licences and the intended release.', nextSteps: 'Artist will confirm the intended use before purchase.', beatIds: [beat.id], reviewed: true };
+    const published = await teamMutation(assigned, 'artist-recap-publish', recap);
+    assert.equal((await teamMutation(assigned, 'artist-recap-publish', recap)).id, published.id);
+    await assert.rejects(teamMutation(assigned, 'artist-recap-publish', { ...recap, summary: 'A different recap using the same request key.' }), /changed/);
+    assert.equal(await prisma.notification.count({ where: { userId: user.id, title: 'Your HYMN session recap is ready' } }), 1);
+    p = await saveJourneyProfile(user.id, { ...p, analytics: false, contact: 'NONE' });
+    assert.deepEqual(await listeningSummary(user.id), []);
+    await recordArtistSignal(user.id, listen(4, [[30, 40]]), now);
+    assert.deepEqual(await listeningSummary(user.id), []);
+    await assert.rejects(teamWrite(assigned, tx => assertArtistAction(tx, { ...task, followUpContext: { artistJourney: true, kind: 'CALL' } }, 'START', now)), /contact choice/);
+    const release = await prisma.release.create({ data: { userId: user.id, title: 'Needs correction', artistName: 'Artist', genre: 'Hip Hop', releaseDate: new Date(now.getTime() + 5 * 86400000), status: 'CHANGES_REQUESTED' } });
+    const sourceTask = await prisma.teamTask.create({ data: { workspaceId: workspace.id, creatorId: owner.id, ownerId: assigned.id, clientId: task.clientId, title: 'Correction support', followUpContext: { artistJourney: true, kind: 'TASK', sourceRecord: { recordType: 'release', recordId: release.id } } } });
+    await prisma.release.update({ where: { id: release.id }, data: { status: 'RESUBMITTED' } });
+    await assert.rejects(teamWrite(assigned, tx => assertArtistAction(tx, sourceTask, 'START')), /resolved/);
+    await teamWrite(owner, (tx, a) => reconcileArtistWork(tx, a, now));
+    assert.equal((await prisma.teamTask.findUniqueOrThrow({ where: { id: sourceTask.id } })).status, 'CANCELLED');
+    // Callback preference and availability produce an internal slot, not a booking.
+    p = await saveJourneyProfile(user.id, { ...p, contact: 'CALL', mode: 'ACTIVE', weekdays: [0, 1, 2, 3, 4, 5, 6], startHour: 10, endHour: 18 });
+    await prisma.teamTask.updateMany({ where: { clientId: task.clientId, status: { notIn: ['COMPLETED', 'CANCELLED'] } }, data: { status: 'COMPLETED', completedAt: now } });
+    const callback = await requestArtistHelp(user.id, { requestKey: randomUUID(), reason: 'GOAL', message: 'Please call me to discuss the next release.', channel: 'CALL' });
+    await sync();
+    task = await prisma.teamTask.findFirstOrThrow({ where: { clientId: task.clientId, status: { notIn: ['COMPLETED', 'CANCELLED'] } } });
+    assert.equal(object(task.followUpContext).helpRequestId, callback.id);
+    assert.equal(object(task.followUpContext).kind, 'CALL');
+    assert.ok(task.dueAt && customerCallWindow(p, task.dueAt));
+    assert.equal(await prisma.teamAppointmentMessage.count({ where: { event: { followUpTaskId: task.id }, kind: 'CLIENT_CONFIRM' } }), 0);
+    p = await saveJourneyProfile(user.id, { ...p, contact: 'MESSAGE' });
+    await teamWrite(owner, (tx, a) => reconcileArtistWork(tx, a, now)); // A later contact change revokes the earlier callback permission
+    assert.equal(object((await prisma.teamTask.findUniqueOrThrow({ where: { id: task.id } })).followUpContext).kind, 'TASK');
+    const desk = await rawRead(assigned, 'artist-desk', new URLSearchParams()) as {promises:{done:number}};
+    assert.equal(desk.promises.done,1);
+    const report = await teamRead(owner, 'artist-performance', new URLSearchParams());
+    assert.ok(report.groups);
+    await assert.rejects(teamRead(rep, 'artist-performance', new URLSearchParams()), /permission/);
+    const second = await prisma.user.create({data:{name:'Second artist',email:'second@journey.fixture.invalid',googleId:randomUUID()}});
+    await sync();
+    const secondTask = await prisma.teamTask.findFirstOrThrow({where:{client:{userId:second.id},status:{notIn:['COMPLETED','CANCELLED']}}});
+    const secondRep = secondTask.ownerId===rep.id?rep:other;
+    await rawMutation(secondRep,'workstation-start',{taskId:secondTask.id,requestKey:randomUUID()});
+    const deferred = await requestArtistHelp(second.id,{requestKey:randomUUID(),reason:'GOAL',message:'I need help with artwork.',channel:'MESSAGE'});
+    await sync();
+    assert.equal(await prisma.teamWorkflowEvent.count({where:{eventKey:`artist-work:${workspace.id}:help:${deferred.id}`}}),0,'An active call leaves a new request pending');
+    const running = await prisma.teamTask.findUniqueOrThrow({where:{id:secondTask.id}}),activity=object(object(running.followUpContext).workActivity);
+    await rawMutation(secondRep,'workstation-finish',{id:running.id,version:running.version,activityId:activity.id,draft:{notes:'Explained the initial artist workspace and next steps.',needs:'Artwork help',commitments:'',nextAction:'Review the new request',services:[],checklist:[]},outcome:'COMPLETED'});
+    await sync();
+    const recovered = await prisma.teamTask.findFirstOrThrow({where:{client:{userId:second.id},status:{notIn:['COMPLETED','CANCELLED']}}});
+    assert.equal(object(recovered.followUpContext).helpRequestId,deferred.id,'Unconsumed requests survive cursor advancement');
+    const comparison=await prisma.user.create({data:{id:2000,name:'Comparison artist',email:'comparison@journey.fixture.invalid',googleId:randomUUID(),mobile:'+919876543219'}});
+    await saveJourneyProfile(comparison.id,{...defaultJourney,goal:'FIND_BEAT',mode:'ACTIVE',contact:'CALL',analytics:true});
+    await prisma.teamWorkflowEvent.create({data:{workspaceId:workspace.id,eventKey:`artist-work:${workspace.id}:onboard:${comparison.id}`}});
+    for(const kind of ['licence','favourite','cart'])await recordArtistSignal(comparison.id,{kind,beatId:beat.id,active:true});
+    await sync();
+    const comparisonTask=await prisma.teamTask.findFirstOrThrow({where:{client:{userId:comparison.id},status:{notIn:['COMPLETED','CANCELLED']}}});
+    assert.equal(object(comparisonTask.followUpContext).experimentGroup,'COMPARISON');
+    assert.equal(object(comparisonTask.followUpContext).kind,'TASK');
+    await assert.rejects(teamWrite(owner,tx=>assertArtistAction(tx,comparisonTask,'EMAIL')),/observation-only/);
+    assert.equal(await prisma.emailLog.count(), 0, 'No real customer email is sent by journey automation');
+    console.log('PASS artist journeys: opt-in playback, unique listening, replay/invalid telemetry, preference revisions, routing, one active activity, message/call choice, time windows, promises, reminders, recap deduplication, source cancellation, permissions and no outbound email.');
+}
+main().catch(e => { console.error(e); process.exitCode = 1; }).finally(() => prisma.$disconnect());

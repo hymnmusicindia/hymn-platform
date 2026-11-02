@@ -1,4 +1,5 @@
 ﻿"use client";
+import { artistSignal } from "./artist-listening";
 import { splitBeatMoods } from "@/lib/beat-metadata";
 
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
@@ -473,6 +474,7 @@ export function BeatStoreExperience({ beats, producerProfiles = [] }: { beats: B
 
   const toggleCart = (beat: StorefrontBeat, licenseType: LicenseChoice = "mp3") => {
     const price = licensePrice(beat, licenseType);
+    artistSignal({kind:"cart",beatId:beat.id,license:licenseType,active:!cart.some(item=>item.beatId===beat.id&&item.licenseType===licenseType)});
     setCart((current) => {
       const exists = current.some((item) => item.beatId === beat.id && item.licenseType === licenseType);
       if (exists) {

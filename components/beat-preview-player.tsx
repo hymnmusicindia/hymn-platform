@@ -4,6 +4,7 @@ import {exclusiveBeatEligible} from "@/lib/beat-rights-policy";
 
 import { beatUsageSummary } from '@/lib/beat-licence-terms';
 import { artworkPreviewUrl } from "@/lib/artwork-preview";
+import { ArtistBeatHelp, artistSignal, useArtistListening } from '@/components/artist-listening';
 import { BeatFreeDownload } from "@/components/beat-free-download";
 import { customerMessage } from "@/lib/customer-message";
 
@@ -77,6 +78,7 @@ function writeCartItem(beat: StorefrontBeat, licenseType: LicenseChoice) {
     ...cartItemsFromStorage().filter((item) => Number(item?.beatId) !== beat.id),
     { beatId: beat.id, licenseType, price: licensePrice(beat, licenseType) }
   ];
+  artistSignal({kind:"cart",beatId:beat.id,license:licenseType,active:true});
   window.localStorage.setItem("hymn-beat-cart", JSON.stringify(next));
   window.dispatchEvent(new CustomEvent("hymn-cart-updated", { detail: { count: next.length, items: next } }));
 }
@@ -157,7 +159,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
         aria-modal="true"
         aria-label={`Licence ${beat.title}`}
         tabIndex={-1}
-        className="beat-licence-panel relative my-auto w-full max-w-[44rem] overflow-hidden rounded-[1.6rem] border p-3 outline-none sm:p-4"
+        className="beat-licence-panel relative my-auto max-h-[calc(100dvh-8rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-[44rem] overflow-y-auto overscroll-contain rounded-[1.6rem] border p-3 outline-none sm:p-4"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 gap-4">
@@ -194,6 +196,7 @@ function LicensingSurface({ beat, open, selected, onSelect, onClose }: { beat: S
               <span className="rounded-full border border-[var(--border)] px-3 py-1.5">{selectedOption.exclusive ? "Exclusive use; prior licences survive" : (beat.generalStreamingLimit == null ? "No numeric stream cap" : beat.generalStreamingLimit.toLocaleString("en-IN")+" audio streams")}</span>
             </div>
             <details className="mt-3 max-h-36 overflow-y-auto text-xs text-[var(--text-muted)]"><summary className="cursor-pointer py-2 font-semibold">Usage terms before purchase</summary>{selectedOption.exclusive?<p className="leading-5">Exclusive use subject to earlier licences. Copyright is retained unless expressly assigned. Content ID requires exclusive rights to all source material and platform eligibility.</p>:<dl className="grid grid-cols-2 gap-2">{beatUsageSummary(beat).map(row=><div key={row.label}><dt>{row.label}</dt><dd className="font-semibold text-[var(--text)]">{row.value}</dd></div>)}</dl>}<p className="mt-2 leading-5">No resale of standalone files. Sample clearances and separately agreed publishing splits still apply. Obtain written permission before exceeding the grant.</p></details>
+            <ArtistBeatHelp beatId={beat.id}/>
             <div className="mt-5 grid gap-2 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
               <button type="button" disabled={selectedOption.disabled} onClick={addToCart} className="btn-outline pressable"><ShoppingBag className="mr-2 h-4 w-4" />Add selected</button>
               <button type="button" disabled={selectedOption.disabled} onClick={buyNow} className="btn-primary pressable">Buy now &middot; {formatMoney(selectedOption.price)}</button>
@@ -330,6 +333,7 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
   const activeBeatRef = useRef<StorefrontBeat | null>(null);
   const attemptRef = useRef(0);
   const [activeBeat, setActiveBeat] = useState<StorefrontBeat | null>(null);
+  useArtistListening(audioRef, activeBeat?.id ?? null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -485,7 +489,8 @@ export function BeatPreviewPlayerProvider({ children }: { children: ReactNode })
     setVolume: (next) => setVolumeState(Math.max(0, Math.min(1, next))),
     setMuted: setMutedState,
     openLicensing: (beat, licenseType = "mp3") => {
-      setLicensingBeat(beat ?? activeBeat);
+      const chosen=beat ?? activeBeat;if(chosen)artistSignal({kind:"licence",beatId:chosen.id,license:licenseType});
+      setLicensingBeat(chosen);
       setSelectedLicense(normalizeBeatLicenseType(licenseType));
       setLicensingOpen(true);
     },

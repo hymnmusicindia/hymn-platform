@@ -16,6 +16,7 @@ import { employeeCallSlot } from './availability';
 import { acceptsAssignmentsNow } from './availability-rules';
 import { callLoadScore } from './call-allocation';
 import { callWorkload } from './call-workload';
+import { readJourneyProfile } from '@/lib/artist-journey';
 
 export const DRAFT_CALL_INACTIVITY_HOURS = 30;
 type Signal = { kind: 'DRAFT_INACTIVE' | 'ENQUIRY' | 'SERVICE_INTEREST' | 'SUPPORT_CALLBACK'; source: string; referenceId: string; service: string; occurredAt: string; footnotes: string[]; draftEditedAt?: string; callbackPhone?: string };
@@ -42,8 +43,13 @@ export async function accountCard(tx: Prisma.TransactionClient, a: Actor, user: 
   if (existing) return existing.userId && existing.userId !== user.id ? null : tx.teamClient.update({ where: { id: existing.id }, data: { userId: user.id, ...(!existing.phone && user.mobile ? { phone: user.mobile } : {}), version: { increment: 1 } } });
   return tx.teamClient.create({ data: { workspaceId: a.workspaceId, ownerId: a.id, userId: user.id, name: user.name, email: user.email, phone: user.mobile || '' } });
 }
-async function emit(tx: Prisma.TransactionClient, a: Actor, client: { id: string; name: string; phone: string; status: string }, signal: Signal, now: Date) {
+async function emit(tx: Prisma.TransactionClient, a: Actor, client: { id: string; name: string; phone: string; status: string; userId?: number|null }, signal: Signal, now: Date) {
   if (client.status !== 'ACTIVE' || !whatsappNumber(client.phone)) return 0;
+  if (client.userId && signal.kind !== 'SUPPORT_CALLBACK') {
+    const p=await readJourneyProfile(client.userId,tx);
+    if (['NONE','MESSAGE'].includes(p.contact)||p.mode==='LATER'&&(!p.after||new Date(p.after)>now)) return 0;
+    if (['SERVICE_INTEREST','DRAFT_INACTIVE'].includes(signal.kind)&&p.contact!=='CALL') return 0;
+  }
   if (await tx.teamProspect.findFirst({ where: { clientId: client.id, suppressed: true } })) return 0;
   const eventKey = `support-signal:${a.workspaceId}:${signal.kind}:${signal.source}`;
   if (await tx.teamWorkflowEvent.findUnique({ where: { eventKey } })) return 0;
@@ -107,6 +113,10 @@ export async function syncCustomerFollowups(tx: Prisma.TransactionClient, a: Act
     const context = object(task.followUpContext);
     const internal = context.kind !== 'SUPPORT_CALLBACK' && Boolean(task.client && matchesInternalIdentity(staff, task.client));
     let obsolete = !task.client || task.client.status !== 'ACTIVE' || !whatsappNumber(context.kind === 'SUPPORT_CALLBACK' ? String(context.callbackPhone || '') : context.kind === 'FRIENDLY_INTRO' ? String(context.callPhone || '') : task.client.phone) || Boolean(task.client.prospect?.suppressed) || Boolean(task.client.user && task.client.user.status !== 'ACTIVE');
+    if(task.client?.userId&&context.kind!=='SUPPORT_CALLBACK'){
+      const p=await readJourneyProfile(task.client.userId,tx);
+      obsolete ||= ['NONE','MESSAGE'].includes(p.contact)||p.mode==='LATER'&&(!p.after||new Date(p.after)>now)||['SERVICE_INTEREST','DRAFT_INACTIVE'].includes(String(context.kind))&&p.contact!=='CALL';
+    }
     if (context.kind === 'DRAFT_INACTIVE') {
       const release = await tx.release.findUnique({ where: { id: Number(context.referenceId) }, select: { status: true, archivedAt: true, lastEditedAt: true, createdAt: true } });
       obsolete ||= !release || release.status !== 'DRAFT' || Boolean(release.archivedAt) || (release.lastEditedAt || release.createdAt).toISOString() !== context.draftEditedAt;

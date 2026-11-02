@@ -4,6 +4,7 @@ import { isSameAppOrigin } from '@/lib/request-origin';
 import { consumeRateLimit } from '@/lib/rate-limit';
 import { serviceForPath } from '@/lib/team/service-interest';
 import { internalUserWhere } from '@/lib/team/internal-identity';
+import { readJourneyProfile } from '@/lib/artist-journey';
 export async function POST(request: Request) {
   if (!isSameAppOrigin(request)) return Response.json({ error: 'Invalid origin.' }, { status: 403 });
   if (Number(request.headers.get('content-length') || 0) > 1024) return new Response(null, { status: 413 });
@@ -12,6 +13,7 @@ export async function POST(request: Request) {
     if (!session || process.env.TEAM_AUTOMATION_ENABLED === 'false') return new Response(null, { status: 204 });
     const user = await prisma.user.findFirst({ where: { id: session.sub, status: 'ACTIVE', role: { in: ['CUSTOMER', 'PRODUCER'] }, NOT: internalUserWhere }, select: { id: true } });
     if (!user) return new Response(null, { status: 204 });
+    if (!(await readJourneyProfile(user.id)).analytics) return new Response(null, { status: 204 });
     const limit = await consumeRateLimit({ scope: 'customer-service-interest', identity: String(user.id), limit: 20, windowSeconds: 86400 });
     if (!limit.allowed) return new Response(null, { status: 429 });
     const raw = await request.text(); if (raw.length > 1024) return new Response(null, { status: 413 });

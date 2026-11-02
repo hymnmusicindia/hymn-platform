@@ -70,9 +70,15 @@ export async function processTeamOutreachEmail(id?: string, limit = 10, deliver 
     if (deliver === sendTransactionalEmail && !getEmailConfig().enabled) { await prisma.teamOutreachEmail.updateMany({ where: { id: job.id, status: 'QUEUED' }, data: { error: 'Email sender is not configured. The message remains queued.' } }); results.push({ id: job.id, status: 'QUEUED', error: 'Email sender is not configured.' }); continue; }
     if (!(await prisma.teamOutreachEmail.updateMany({ where: { id: job.id, status: 'QUEUED' }, data: { status: 'SENDING', error: null } })).count) continue;
     try {
-      const member = await prisma.teamMember.findFirst({ where: { id: job.memberId, workspaceId: job.workspaceId, status: 'ACTIVE', user: { status: 'ACTIVE' } } });
-      if (!member) throw new TeamError('Sender is no longer an active team member.');
+      const member = await prisma.teamMember.findFirst({ where: { id: job.memberId, workspaceId: job.workspaceId, status: 'ACTIVE', user: { status: 'ACTIVE' } }, include:{role:true} });
+      if (!member || !can(member,'crm.outreach.manage')) throw new TeamError('Sender is no longer authorised for customer outreach.');
       const client = await eligibleContact(prisma, job.workspaceId, job.clientId, job.recipient);
+      if(job.requestKey.startsWith('workstation-mail:')){
+        const activityId=job.requestKey.split(':')[3];
+        const task=await prisma.teamTask.findFirst({where:{workspaceId:job.workspaceId,clientId:job.clientId,followUpContext:{path:['workActivity','id'],equals:activityId}}});
+        if(!task||task.ownerId!==job.memberId)throw new TeamError('The source activity changed. Review before sending.');
+        await (await import('./artist-journey')).assertArtistAction(prisma,task,'EMAIL');
+      }
       const token = jwt.sign({ purpose: 'team_outreach_unsubscribe', email: job.recipient }, getUserSessionSecret(), { expiresIn: '365d' });
       const unsubscribe = `${getPublicAppUrl()}/api/team-outreach/unsubscribe?token=${encodeURIComponent(token)}`;
       const text = customerBrandText(personalTeamMessage({ recipientName: client.name, senderName: job.senderName, senderRole: job.senderRole, body: job.body }), [client.name, job.senderName]);

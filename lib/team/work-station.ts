@@ -131,9 +131,10 @@ async function startActivity(tx: Prisma.TransactionClient, a: Actor, input: unkn
             throw new TeamError('Check the source and outreach eligibility before calling.', 403);
         const linkedId=crmTask.clientId||await linkProspectContact(tx,crmTask.id,a);if(!linkedId)throw new TeamError('Save a usable contact identity before starting this activity.');client=await contact(tx,a,linkedId);
     }
-    const kind = task.recordType === 'release' ? 'QC' : task.recordType === 'support' || context.kind === 'SUPPORT_CALLBACK' ? 'SUPPORT' : crmTask || task.eventKey?.startsWith('support-call:') || context.kind === 'CALL' || context.kind === 'MANUAL' ? 'CALL' : data.taskId ? 'TASK' : data.kind;
+    const kind = context.artistJourney===true ? (context.kind==='CALL'?'CALL':'TASK') : task.recordType === 'release' ? 'QC' : task.recordType === 'support' || context.kind === 'SUPPORT_CALLBACK' ? 'SUPPORT' : crmTask || task.eventKey?.startsWith('support-call:') || context.kind === 'CALL' || context.kind === 'MANUAL' ? 'CALL' : data.taskId ? 'TASK' : data.kind;
     const isCall = kind === 'CALL' || kind === 'SUPPORT' && !!(context.kind === 'SUPPORT_CALLBACK');
     if (isCall) {
+        await (await import('./artist-journey')).assertArtistAction(tx,{...task,clientId:client?.id||null,followUpContext:context.kind==='SUPPORT_CALLBACK'?context:{...context,kind:'CALL'}},'START',now);
         demand(a, 'crm.outreach.manage');
         if (!client || client.status !== 'ACTIVE')
             throw new TeamError('Choose an active contact for this call.');
@@ -388,6 +389,7 @@ export async function stationEmail(tx: Prisma.TransactionClient, a: Actor, input
     demand(a, 'tasks.update');
     if (task.ownerId !== a.id || activity?.memberId !== a.id || activity?.id !== data.activityId || activity.status === 'FINISHED' || terminal.includes(task.status))
         throw new TeamError('Open your own active activity before sending.', 403);
+    await (await import('./artist-journey')).assertArtistAction(tx,task,'EMAIL',now);
     if (ticketIdOf(task)) {
         if (!ticketAccess(a)) throw new TeamError('Support permission required.', 403);
         if (data.recipient) {

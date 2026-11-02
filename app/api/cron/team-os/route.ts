@@ -9,6 +9,7 @@ import { syncCoordinator, remindAvailability, ensureCoordinatorRules } from '@/l
 import { syncPersonalCallPlans } from '@/lib/team/personal-call-plan';
 import { syncWorkStationTickets,recoverWorkStationCoverage } from '@/lib/team/work-station';
 import { syncCustomerFollowups } from '@/lib/team/customer-followups';
+import { syncArtistJourneys, syncArtistPromises, reconcileArtistWork } from '@/lib/team/artist-journey';
 import { syncDailyCrmWork } from '@/lib/team/daily-work';
 import { repairWorkSchedule, syncSourceWork } from '@/lib/team/autonomous-work';
 import { notifyTeamBatch, type TeamReminder } from '@/lib/team/notification-batch';
@@ -67,6 +68,9 @@ async function runJob() {
     await run('work-station-coverage',(tx,a)=>recoverWorkStationCoverage(tx,a));
     await run('work-station-tickets',(tx,a)=>syncWorkStationTickets(tx,a));
     await run('customer-followups', (tx, a) => syncCustomerFollowups(tx, a));
+    await run('artist-journeys', (tx, a) => syncArtistJourneys(tx, a));
+    await run('artist-work-review', (tx, a) => reconcileArtistWork(tx, a));
+    await run('artist-promises', (tx, a) => syncArtistPromises(tx, a));
     await run('coordinator', (tx, a) => syncCoordinator(tx, a));
     await run('availability', (tx, a) => remindAvailability(tx, a));
   }

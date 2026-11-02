@@ -1,5 +1,6 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { artistSignal } from './artist-listening';
 import type { BeatEngagementCounts } from '@/lib/beat-engagement';
 
 type State={counts:Record<number,BeatEngagementCounts>;ready:boolean;act:(id:number,action:'view'|'like',liked?:boolean)=>Promise<void>};
@@ -27,7 +28,7 @@ export function BeatEngagementProvider({ids,children}:{ids:number[];children:Rea
     const write=(writes.current.get(id)||Promise.resolve()).catch(()=>{}).then(async()=>{
       const response=await fetch('/api/beats/engagement',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({beatId:id,action,...(action==='like'?{liked}: {})})});
       const data=await response.json();if(!response.ok||!data.counts)throw Error(data.error||'Please retry.');
-      setCounts(current=>({...current,[id]:data.counts}));
+      setCounts(current=>({...current,[id]:data.counts}));if(action==='like')artistSignal({kind:'favourite',beatId:id,active:liked===true});
     });
     writes.current.set(id,write);
     const cleanup=()=>{if(writes.current.get(id)===write)writes.current.delete(id);};
