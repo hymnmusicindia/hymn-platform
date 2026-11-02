@@ -15,7 +15,7 @@ const api=async<T,>(resource:string,body?:any):Promise<T>=>{
  if(body){state.writes.push({resource,body});const row=tasks.find(t=>t.id===body.id||t.id===body.taskId)||(body.ticketId?support:task);
   if(path==='clients-save'){if(body.email==='duplicate@fixture.invalid')throw Error('A matching contact exists. Review the matching cards before saving.');if(body.version!==client.version)throw Error('Client changed. Refresh first.');Object.assign(client,body,{version:client.version+1});return structuredClone(client) as T;}
   if(path==='workstation-start'){if(!row.followUpContext.workActivity||row.followUpContext.workActivity.status==='FINISHED'){row.followUpContext.workActivity={id:crypto.randomUUID(),kind:row===support?'SUPPORT':'CALL',memberId:actor.id,startedAt:new Date(Date.now()-60000).toISOString(),lastSavedAt:new Date().toISOString(),status:'RUNNING',pausedMs:0,notes:'',needs:'',commitments:'',nextAction:'',services:[],checklist:[]};row.status='IN_PROGRESS';row.version++;}return{id:row.id} as T;}
-  if(path==='workstation-email'){ticket.replies.push({id:'reply',body:body.body,status:'QUEUED',createdAt:new Date().toISOString()});return{id:'mail',status:'QUEUED',channel:'support'} as T;}
+  if(path==='workstation-email'){if(body.id==='ticket-task')ticket.replies.push({id:'reply',body:body.body,status:'QUEUED',createdAt:new Date().toISOString()});return{id:'mail',status:'QUEUED',channel:'support'} as T;}
   const a=row.followUpContext.workActivity!;Object.assign(a,body.draft);a.lastSavedAt=new Date().toISOString();row.version++;
   if(path==='workstation-pause'){a.status='PAUSED';a.pausedAt=new Date().toISOString();}
   if(path==='workstation-resume'){a.status='RUNNING';delete a.pausedAt;}

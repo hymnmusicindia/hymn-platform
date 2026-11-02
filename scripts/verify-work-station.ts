@@ -7,6 +7,7 @@ import {employeeCallSlot} from '../lib/team/availability';
 import {indiaWorkday} from '../lib/team/daily-work';
 import { syncWorkStationTickets, recoverWorkStationCoverage } from '../lib/team/work-station';
 import { activitySeconds, workActivity } from '../lib/team/work-station-policy';
+import { processTeamOutreachEmail } from '../lib/team/outreach-email';
 import type { Actor } from '../lib/team/policy';
 async function main() {
     assert.equal(process.env.DATABASE_URL, 'postgresql://fixture:fixture@127.0.0.1:55473/acquisition_fixture');
@@ -45,6 +46,30 @@ async function main() {
     await assert.rejects(teamMutation(viewer, 'workstation-start', { taskId: task.id, requestKey: randomUUID() }), /permission/);
     assert.ok(!JSON.stringify(await detail(task.id)).includes('PRIVATE CONTACT NOTE'));
     await assert.rejects(detail(task.id, other), /unavailable|not found/i);
+    const customerMail = { id: task.id, activityId: (await detail(task.id)).activity!.id, requestKey: randomUUID(), kind: 'distribution', recipient: client.email, subject: 'Your release checklist from HYMN', body: 'Please prepare your final audio, artwork and track credits.', reviewed: true };
+    const customerJob = await teamMutation(rep, 'workstation-email', customerMail);
+    assert.equal(customerJob.status, 'QUEUED');
+    assert.equal(customerJob.channel, 'outreach');
+    assert.equal((await teamMutation(rep, 'workstation-email', customerMail)).id, customerJob.id);
+    await assert.rejects(teamMutation(rep, 'workstation-email', { ...customerMail, body: 'A different message using the same request key.' }), /request changed/);
+    await assert.rejects(teamMutation(rep, 'workstation-email', { ...customerMail, recipient: 'wrong@fixture.invalid' }), /email changed/);
+    await assert.rejects(teamMutation(rep, 'workstation-email', { ...customerMail, reviewed: false }));
+    await assert.rejects(teamMutation(other, 'workstation-email', customerMail), /permission|not found|active activity/i);
+    let delivered = 0;
+    const fakeDelivery = async (message: { html: string; text: string; to: string }) => {
+        delivered++;
+        assert.equal(message.to, client.email);
+        assert.match(message.html, /hymnlogowhite\.png/);
+        assert.match(message.html, /stop HYMN team outreach emails/);
+        assert.match(message.text, /Kira here, Call representative at HYMN Music/);
+        return { status: 'sent' as const };
+    };
+    await Promise.all([processTeamOutreachEmail(customerJob.id, 1, fakeDelivery), processTeamOutreachEmail(customerJob.id, 1, fakeDelivery)]);
+    assert.equal(delivered, 1);
+    await prisma.teamClient.update({ where: { id: client.id }, data: { status: 'DO_NOT_CONTACT' } });
+    assert.equal((await teamMutation(rep, 'workstation-email', { ...customerMail, requestKey: randomUUID() })).status, 'SKIPPED');
+    await prisma.teamClient.update({ where: { id: client.id }, data: { status: 'ACTIVE' } });
+    assert.equal((await detail(task.id)).activity!.status, 'RUNNING');
     const competing = await prisma.teamTask.create({ data: { workspaceId: ws.id, ownerId: other.id, creatorId: boss.id, clientId: client.id, title: 'Same customer' } });
     await assert.rejects(teamMutation(other, 'workstation-start', { taskId: competing.id, requestKey: randomUUID() }), /teammate.*already/);
     const stale = await detail(task.id);
@@ -155,7 +180,7 @@ async function main() {
     const scheduledDay=indiaWorkday(personal[0].dueAt!).day;assert.ok(personal.every(t=>indiaWorkday(t.dueAt!).day===scheduledDay));
     const extraSlot=await teamWrite(boss,(tx,a)=>employeeCallSlot(tx,a.workspaceId,a.id,personal[0].dueAt!));assert.ok(extraSlot&&indiaWorkday(extraSlot).day!==scheduledDay,'Daily call cap applies to future retries too');
     await teamMutation(boss,'workstation-start',{taskId:personal[0].id,requestKey:randomUUID()});await write('workstation-finish',personal[0].id,{outcome:'COMPLETED'},boss);
-    assert.equal((await teamWrite(boss,(tx,a)=>syncPersonalCallPlans(tx,a))).assigned,0,'Completing a call must not refill beyond four for the day');
+    assert.equal((await teamWrite(boss,(tx,a)=>syncPersonalCallPlans(tx,a,personal[0].dueAt!))).assigned,0,'Completing a call must not refill beyond four for the scheduled day');
     console.log('PASS Work-station: permissions, privacy, concurrency, pause/resume, persistence, stale writes, three-attempt retry, two-hour email gap, ticket emails and closure, recurrence, review, supervisor recovery and deduplicated routing. No customer mail sent.');
 }
 main().catch(e => { console.error(e); process.exitCode = 1; }).finally(() => prisma.$disconnect());

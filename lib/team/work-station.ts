@@ -205,6 +205,9 @@ async function queueActivityMail(tx: Prisma.TransactionClient, a: Actor, task: {
             return { status: 'SKIPPED', reason: 'No valid contact email.' };
         if (await tx.teamOutreachSuppression.findUnique({ where: { email } }) || await tx.newsletterSubscriber.findFirst({ where: { email: { equals: email, mode: 'insensitive' }, OR: [{ unsubscribedAt: { not: null } }, { status: { not: 'subscribed' } }] } }) || await tx.teamProspect.findFirst({ where: { clientId: client.id, OR: [{ suppressed: true }, { verified: false }, { contactEligibility: { notIn: ['CONSENTED', 'LEGITIMATE_INTEREST'] } }] } }))
             return { status: 'SKIPPED', reason: 'Email preferences or verification prevent outreach.' };
+        const prior = await tx.teamOutreachEmail.findUnique({ where: { requestKey } });
+        if (prior && (prior.workspaceId !== a.workspaceId || prior.memberId !== a.id || prior.clientId !== client.id || prior.recipient !== email || prior.subject !== title || prior.body !== text || prior.template !== `activity-${kind}`))
+            throw new TeamError('Email request changed. Review and send as a new request.', 409);
         job = await tx.teamOutreachEmail.upsert({ where: { requestKey }, create: { requestKey, workspaceId: a.workspaceId, memberId: a.id, clientId: client.id, recipient: email, senderName: member.user.name, senderRole: teamSenderRole(member), template: `activity-${kind}`, subject: title, body: text }, update: {} });
     }
     await audit(tx, a, kind === 'missed-call' ? 'workstation.missed_email' : 'workstation.email_queued', client.id, { taskId: task.id, kind, jobId: job.id });
@@ -380,12 +383,24 @@ export async function stationMutation(tx: Prisma.TransactionClient, a: Actor, re
     return { id: task.id };
 }
 export async function stationEmail(tx: Prisma.TransactionClient, a: Actor, input: unknown, now = new Date()) {
-    const data = z.object({ id: z.string(), activityId: z.string().uuid(), requestKey: z.string().uuid(), kind: z.enum(['phone-request', 'solution', 'missed-call']), subject: z.string().trim().min(3).max(200).regex(/^[^\r\n]+$/), body: z.string().trim().min(10).max(8000), reviewed: z.literal(true) }).parse(input);
+    const data = z.object({ id: z.string(), activityId: z.string().uuid(), requestKey: z.string().uuid(), kind: z.enum(Object.keys(activityEmailTemplates) as [keyof typeof activityEmailTemplates, ...(keyof typeof activityEmailTemplates)[]]), recipient: z.string().trim().email().optional(), subject: z.string().trim().min(3).max(200).regex(/^[^\r\n]+$/), body: z.string().trim().min(10).max(8000), reviewed: z.literal(true) }).parse(input);
     const task = await ownTask(tx, a, data.id), activity = workActivity(task.followUpContext);
-    if (task.ownerId !== a.id || activity?.id !== data.activityId || activity.status === 'FINISHED')
+    demand(a, 'tasks.update');
+    if (task.ownerId !== a.id || activity?.memberId !== a.id || activity?.id !== data.activityId || activity.status === 'FINISHED' || terminal.includes(task.status))
         throw new TeamError('Open your own active activity before sending.', 403);
-    if (!ticketAccess(a) || !ticketIdOf(task))
-        throw new TeamError('This template is only for an assigned support ticket.', 403);
+    if (ticketIdOf(task)) {
+        if (!ticketAccess(a)) throw new TeamError('Support permission required.', 403);
+        if (data.recipient) {
+            await primary(tx, a);
+            const ticket = await tx.supportTicket.findUniqueOrThrow({ where: { id: ticketIdOf(task)! }, include: { user: { select: { email: true } } } });
+            if (data.recipient.toLowerCase() !== String(supportDetails(ticket.details).email || ticket.user.email).toLowerCase()) throw new TeamError('Customer email changed. Reload and review the recipient.', 409);
+        }
+    } else {
+        demand(a, 'crm.outreach.manage');
+        if (!task.clientId) throw new TeamError('Link a customer before sending email.');
+        const client = await contact(tx, a, task.clientId);
+        if (data.recipient && data.recipient.toLowerCase() !== client.email.toLowerCase()) throw new TeamError('Customer email changed. Reload and review the recipient.', 409);
+    }
     if (/\[Add the actual|{{|}}/.test(data.body))
         throw new TeamError('Replace template placeholders with the actual solution.');
     if (data.kind === 'missed-call')

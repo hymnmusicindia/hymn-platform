@@ -31,7 +31,15 @@ export const activityOpen = (context: unknown) => { const a = workActivity(conte
 export function retryDisposition(attempts: number, hasSlot: boolean) { return attempts >= 3 ? 'REVIEW' : hasSlot ? 'SCHEDULED' : 'NEEDS_COVERAGE'; }
 export const MISSED_EMAIL_GAP_MS = 2 * 60 * 60 * 1000;
 export const activityEmailTemplates = {
+    followup: { subject: 'Your next steps with HYMN', body: 'Thank you for connecting with HYMN. Please reply with your current priority and any questions so we can help you choose the next step.' },
+    distribution: { subject: 'Prepare your release with HYMN', body: 'To prepare your release, please have your final audio, cover artwork, artist details, track credits and rights or licence documents ready. Reply with your planned release date and any questions. Our team will confirm the requirements and next steps before submission.' },
+    beats: { subject: 'Find the right beat with HYMN', body: 'Please share your preferred genre, mood, reference tracks and budget, along with any beat you are considering. Let us know how you plan to release the song so we can help clarify the available licence terms before you purchase.' },
+    mixing: { subject: 'Your mixing and mastering enquiry', body: 'Please share your reference tracks, project requirements and preferred deadline. Let us know whether you need mixing, mastering or both. We will confirm file delivery instructions, scope, pricing and availability before work begins.' },
     'phone-request': { subject: 'A phone number for your HYMN callback', body: 'We would like to help with your callback request, but do not have a usable phone number. Please reply with your phone number including country code, preferred time and timezone. We will confirm an available slot.' },
     solution: { subject: 'Your HYMN support update', body: 'Thank you for contacting HYMN.\n\n[Add the actual solution and next steps here.]\n\nPlease reply if you need further assistance.' },
     'missed-call': { subject: 'We tried calling you from HYMN', body: 'We tried calling you but could not connect. Please reply with a convenient time and timezone. Any suggested retry is an internal plan; we will confirm an appointment with you.' }
 } as const;
+export const activityEmailLabels: Record<keyof typeof activityEmailTemplates, string> = {
+    followup: 'Conversation follow-up', distribution: 'Distribution / release checklist', beats: 'Beat selection / licensing', mixing: 'Mixing and mastering requirements',
+    'phone-request': 'Request callback phone number', solution: 'Solution / next steps', 'missed-call': 'Missed call'
+};
