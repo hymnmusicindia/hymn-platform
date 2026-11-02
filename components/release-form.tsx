@@ -1212,7 +1212,9 @@ export function ReleaseForm({
     [],
   );
   const [platforms, setPlatforms] = useState<string[]>(
-    () => [...new Set([...defaultStorePlatforms, ...(initialRelease?.platforms ?? [])])],
+    () => initialRelease?.platforms
+      ? [...new Set([...initialRelease.platforms, ...(initialRelease.platforms.includes("150+ More Stores") ? defaultStorePlatforms.filter(name=>!["Spotify", "Apple Music", "YouTube Music", "Amazon Music", "JioSaavn"].includes(name)) : [])])]
+      : defaultStorePlatforms,
   );
 
   useEffect(() => {
@@ -4980,11 +4982,18 @@ export function ReleaseForm({
                         className="mt-1 text-xl font-semibold tracking-[-.025em]"
                         style={{ color: "var(--text)" }}
                       >
-                        Included music stores
+                        Music store preferences
                       </h3>
                     </div>
                   </div>
-                  <IncludedStores />
+                  <IncludedStores selected={platforms} onChange={(next) => {
+                    setPlatforms(next);
+                    if (!next.includes("YouTube Music")) {
+                      setYoutubeContentIdEnabled(false);
+                      setYoutubeContentIdChannelUrl("");
+                      setYoutubeContentIdModalOpen(false);
+                    }
+                  }} />
                 </div>
 
                 <div
