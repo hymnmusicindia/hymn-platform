@@ -1,5 +1,6 @@
 "use client";
 import { StoreChoice } from "./distribution/store-choice";
+import { IncludedStores } from "./distribution/included-stores";
 import { ReleaseAmendmentConfirmation } from './release-amendment-confirmation';
 import { activeAmendmentStatuses } from '@/lib/release-amendment-presentation';
 import "./release-welcome.css";
@@ -1211,9 +1212,7 @@ export function ReleaseForm({
     [],
   );
   const [platforms, setPlatforms] = useState<string[]>(
-    initialRelease?.platforms?.length
-      ? initialRelease.platforms
-      : defaultStorePlatforms,
+    () => [...new Set([...defaultStorePlatforms, ...(initialRelease?.platforms ?? [])])],
   );
 
   useEffect(() => {
@@ -4981,19 +4980,11 @@ export function ReleaseForm({
                         className="mt-1 text-xl font-semibold tracking-[-.025em]"
                         style={{ color: "var(--text)" }}
                       >
-                        {storeSelections.length} selected
+                        Included music stores
                       </h3>
                     </div>
                   </div>
-                  <p className="mb-4 text-sm" style={{ color: "var(--text-muted)" }}>Choose your delivery preferences. Individual store exclusions are not currently supported by the distribution connection. Availability depends on each store's acceptance.</p>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {storePlatforms.map((platform) => (
-                      <StoreChoice key={platform.name} name={platform.name}
-                        checked={platforms.includes(platform.name)}
-                        onChange={() => togglePlatform(platform.name, "store")} />
-                    ))}
-                    {platforms.includes("150+ More Stores") ? <StoreChoice name="150+ More Stores" checked onChange={() => togglePlatform("150+ More Stores", "store")} /> : null}
-                  </div>
+                  <IncludedStores />
                 </div>
 
                 <div
