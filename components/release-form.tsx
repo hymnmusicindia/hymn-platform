@@ -29,7 +29,6 @@ import { normalizeUploadMime } from "@/lib/upload-mime";
 import {
   AlertCircle,
   ArrowRight,
-  BookmarkPlus,
   Check,
   CheckCircle2,
   Crown,
@@ -345,7 +344,6 @@ const stepMenuLabels: Record<number, string> = {
   5: "Delivery",
   7: "Review",
 };
-const COPYRIGHT_OWNER_PREFERENCES_KEY = "hymn:copyright-owner-preferences";
 const defaultLegalState: LegalState = {
   ownershipConfirmation: false,
   noInfringement: false,
@@ -1203,9 +1201,6 @@ export function ReleaseForm({
   const [legal, setLegal] = useState<LegalState>(() =>
     createInitialLegalState(initialRelease),
   );
-  const [savedCopyrightOwners, setSavedCopyrightOwners] = useState<string[]>(
-    [],
-  );
   const defaultStorePlatforms = useMemo(
     () =>
       storePlatforms.map((platform) => platform.name),
@@ -1312,49 +1307,6 @@ export function ReleaseForm({
     [tracks.length],
   );
 
-  useEffect(() => {
-    try {
-      const stored = JSON.parse(
-        window.localStorage.getItem(COPYRIGHT_OWNER_PREFERENCES_KEY) || "[]",
-      );
-      if (Array.isArray(stored))
-        setSavedCopyrightOwners(
-          stored
-            .filter(
-              (item): item is string =>
-                typeof item === "string" && Boolean(item.trim()),
-            )
-            .slice(0, 8),
-        );
-    } catch {
-      setSavedCopyrightOwners([]);
-    }
-  }, []);
-
-  function saveCopyrightOwnerPreference() {
-    const owner = release.copyrightOwner.trim();
-    if (!owner) return;
-    const next = [
-      owner,
-      ...savedCopyrightOwners.filter(
-        (item) => item.toLowerCase() !== owner.toLowerCase(),
-      ),
-    ].slice(0, 8);
-    setSavedCopyrightOwners(next);
-    window.localStorage.setItem(
-      COPYRIGHT_OWNER_PREFERENCES_KEY,
-      JSON.stringify(next),
-    );
-  }
-
-  function removeCopyrightOwnerPreference(owner: string) {
-    const next = savedCopyrightOwners.filter((item) => item !== owner);
-    setSavedCopyrightOwners(next);
-    window.localStorage.setItem(
-      COPYRIGHT_OWNER_PREFERENCES_KEY,
-      JSON.stringify(next),
-    );
-  }
   const ugcAddOnAmount = useMemo(
     () => getUgcAddonPrice(platforms, selectedPlan),
     [platforms, selectedPlan],
@@ -2396,13 +2348,13 @@ export function ReleaseForm({
   const destinationsIssues = (): ValidationIssue[] =>
     [
       !(DIRENOTE_CONTENT_TYPES as readonly string[]).includes(release.contentType)
-        ? { step: 5, key: "content-type", message: "Select the content ownership for this release." } : null,
+        ? { step: 1, key: "content-type", message: "Select the content ownership for this release." } : null,
       requiresLicenceProof && !release.licenseReceiptUrl.trim()
-        ? { step: 5, key: "rights-document", message: "Upload your licence agreement PDF before submitting this release." } : null,
+        ? { step: 1, key: "rights-document", message: "Upload your licence agreement PDF before submitting this release." } : null,
       requiresAiProof && !release.sunoReceiptUrl.trim()
-        ? { step: 5, key: "rights-document", message: "Upload your AI-generation receipt PDF before submitting this release." } : null,
+        ? { step: 1, key: "rights-document", message: "Upload your AI-generation receipt PDF before submitting this release." } : null,
       requiresAiProof && !release.sunoLink.trim()
-        ? { step: 5, key: "ai-generation-link", message: "Add the original AI-generation track or project link before submitting this release." } : null,
+        ? { step: 1, key: "ai-generation-link", message: "Add the original AI-generation track or project link before submitting this release." } : null,
       platforms.length === 0
         ? {
             step: 5,
@@ -2412,14 +2364,14 @@ export function ReleaseForm({
         : null,
       !release.copyrightOwner.trim()
         ? {
-            step: 5,
+            step: 1,
             key: "copyright-owner",
             message: "Copyright owner is required before continuing.",
           }
         : null,
       !release.publishingRights.trim()
         ? {
-            step: 5,
+            step: 1,
             key: "publishing-rights",
             message: "P-Line is required before continuing.",
           }
@@ -2442,7 +2394,7 @@ export function ReleaseForm({
         : null,
       !Object.values(legal).every(Boolean)
         ? {
-            step: 5,
+            step: 1,
             key: "legal-checks",
             message:
               "Confirm the rights and permissions for this release before continuing.",
@@ -2469,7 +2421,7 @@ export function ReleaseForm({
   const canAddMusic = (!singleReleaseGift || uploadedMusicTracks === 0) && tracks.length < 30;
   const stepChecks = [
     audioComplete,
-    primaryArtistComplete,
+    primaryArtistComplete && !destinationsIssues().some((issue) => issue.step === 1),
     !releaseInfoIssue(),
     tracks.every((track, index) => !trackIssue(track, index)),
     !artworkIssue(),
@@ -2505,7 +2457,7 @@ export function ReleaseForm({
 
   function firstIssueForStep(stepIndex: number): ValidationIssue | null {
     if (stepIndex === 0) return !audioComplete ? { step: 0, key: "audio-upload", message: "Upload every audio master before continuing." } : null;
-    if (stepIndex === 1) return primaryArtistIssue;
+    if (stepIndex === 1) return primaryArtistIssue ?? destinationsIssues().find((issue) => issue.step === 1) ?? null;
     if (stepIndex === 2) return releaseInfoIssue();
     if (stepIndex === 3)
       return (
@@ -2515,18 +2467,18 @@ export function ReleaseForm({
     if (stepIndex === 4) return artworkIssue();
     if (stepIndex === 5) return destinationsIssues().find((issue) => issue.step === stepIndex) ?? null;
     return (
-      [3, 2, 4, 5, 6].map((index) => firstIssueForStep(index)).find(Boolean) ??
+      [1, 3, 2, 4, 5].map((index) => firstIssueForStep(index)).find(Boolean) ??
       null
     );
   }
 
   function stepHasCorrection(stepIndex: number) {
     const correctionKeysByStep: Record<number, string[]> = {
-      1: ["primary-artist"],
+      1: ["primary-artist", "ownership-rights", "copyright-owner", "publishing-rights", "content-type"],
       2: ["release-title", "record-label", "genre-picker", "mood", "language", "release-date"],
       3: ["audio-upload"],
       4: ["artwork-upload", "audio-upload"],
-      5: ["ownership-rights", "copyright-owner", "publishing-rights", "content-type"],
+      5: [],
     };
     return (correctionKeysByStep[stepIndex] ?? []).some((key) => correctionFieldActive(key));
   }
@@ -3702,7 +3654,7 @@ export function ReleaseForm({
                 {requiresAiProof ? <label className="mt-3 block text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Track / project link<input ref={registerField("ai-generation-link")} type="url" placeholder="https://..." className="field mt-1" value={release.sunoLink} onChange={(event) => setRelease((current) => ({ ...current, sunoLink: event.target.value }))} /></label> : null}
                 {rightsUploadError ? <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>{rightsUploadError}</p> : null}
               </section> : null}
-              <div className="mt-5 border-t pt-5" style={{ borderColor: "var(--border)" }}>
+              <div ref={registerField("legal-checks")} className="mt-5 border-t pt-5" style={{ borderColor: "var(--border)" }}>
                 <p className="font-semibold">Release rights and permissions</p>
                 <p className="mt-3 text-sm leading-6" style={{ color: "var(--text-muted)" }}>I own or control the rights to this recording and artwork, have permission from all contributors, and have supplied accurate metadata that complies with destination rules. Infringing or fraudulent submissions may lead to removal and account restrictions.</p>
                 <label className="mt-4 flex cursor-pointer items-start gap-3 text-sm font-semibold"><input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0" checked={legalComplete} onChange={event => setReleaseRightsConfirmed(event.target.checked)} /><span>I confirm the rights, permissions and accuracy of this release.</span></label>
@@ -4951,7 +4903,7 @@ export function ReleaseForm({
         ) : null}
         {step === 5 ? (
           <section className={clsx("release-delivery-stage grid gap-6", stepMotion)}>
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr),360px]">
+            <div className="grid gap-6">
               <div className="grid gap-6">
                 <div
                   ref={
@@ -5173,716 +5125,10 @@ export function ReleaseForm({
                   </div>
                 </div>
 
-                <div
-                  className="overflow-hidden rounded-[1.6rem] border shadow-lg"
-                  style={{
-                    borderColor: "var(--border)",
-                    background: "var(--card)",
-                    boxShadow: "0 18px 50px rgba(0,0,0,0.09)",
-                  }}
-                >
-                  <div
-                    className="flex items-start gap-3 border-b p-5"
-                    style={{
-                      borderColor: "var(--border)",
-                      background:
-                        "linear-gradient(135deg, color-mix(in srgb, var(--accent) 7%, var(--card)), var(--card))",
-                    }}
-                  >
-                    <span
-                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border"
-                      style={{
-                        borderColor: "var(--border)",
-                        background: "var(--bg-soft)",
-                        color: "var(--accent)",
-                      }}
-                    >
-                      <ShieldCheck className="h-5 w-5" />
-                    </span>
-                    <div>
-                      <p
-                        className="text-[10px] font-semibold uppercase tracking-[0.2em]"
-                        style={{ color: "var(--text-soft)" }}
-                      >
-                        Master rights
-                      </p>
-                      <h3
-                        className="mt-1 text-lg font-semibold"
-                        style={{ color: "var(--text)" }}
-                      >
-                        Rights preferences and documentation
-                      </h3>
-                      <p
-                        className="mt-1 text-sm leading-6"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        Reuse a saved rights owner or attach optional proof for review.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="p-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <p
-                        className="text-[10px] font-semibold uppercase tracking-[0.16em]"
-                        style={{ color: "var(--text-soft)" }}
-                      >
-                        Quick select
-                      </p>
-                      {savedCopyrightOwners.length ? (
-                        <span
-                          className="text-[10px]"
-                          style={{ color: "var(--text-soft)" }}
-                        >
-                          Saved preferences
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {[
-                        "Independent Artist",
-                        "HYMN Music India",
-                        release.recordLabelName,
-                      ]
-                        .filter(
-                          (value, index, values): value is string =>
-                            Boolean(value) && values.indexOf(value) === index,
-                        )
-                        .map((owner) => (
-                          <button
-                            key={owner}
-                            type="button"
-                            onClick={() =>
-                              setRelease((current) => ({
-                                ...current,
-                                copyrightOwner: owner,
-                                publishingRights: owner,
-                              }))
-                            }
-                            className="rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5"
-                            style={
-                              release.copyrightOwner === owner
-                                ? {
-                                    borderColor: "var(--accent)",
-                                    background: "var(--accent-soft)",
-                                    color: "var(--text)",
-                                  }
-                                : {
-                                    borderColor: "var(--border)",
-                                    background: "var(--bg-soft)",
-                                    color: "var(--text-muted)",
-                                  }
-                            }
-                          >
-                            {owner}
-                          </button>
-                        ))}
-                      {savedCopyrightOwners.map((owner) => (
-                        <span
-                          key={`saved-${owner}`}
-                          className="inline-flex overflow-hidden rounded-full border"
-                          style={{
-                            borderColor:
-                              release.copyrightOwner === owner
-                                ? "var(--accent)"
-                                : "var(--border)",
-                            background:
-                              release.copyrightOwner === owner
-                                ? "var(--accent-soft)"
-                                : "var(--bg-soft)",
-                          }}
-                        >
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setRelease((current) => ({
-                                ...current,
-                                copyrightOwner: owner,
-                                publishingRights: owner,
-                              }))
-                            }
-                            className="px-3 py-1.5 text-xs font-semibold"
-                            style={{ color: "var(--text)" }}
-                          >
-                            {owner}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              removeCopyrightOwnerPreference(owner)
-                            }
-                            aria-label={`Remove saved owner ${owner}`}
-                            className="border-l px-2 transition hover:bg-red-500/10"
-                            style={{
-                              borderColor: "var(--border)",
-                              color: "var(--text-soft)",
-                            }}
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                    <button type="button" disabled={!release.copyrightOwner.trim() || savedCopyrightOwners.some((owner) => owner.toLowerCase() === release.copyrightOwner.trim().toLowerCase())} onClick={saveCopyrightOwnerPreference} className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-xs font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45" style={{ borderColor: "var(--border)", background: "var(--bg-soft)", color: "var(--text)" }}><BookmarkPlus className="h-4 w-4" />Save current C-Line choice</button>
-                    {false ? <div className="mt-5 rounded-xl border p-4" style={{ borderColor: "var(--border)", background: "var(--bg-soft)" }}>
-                      <div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-soft)" }}>Rights documentation</p><span className="text-[10px]" style={{ color: "var(--text-soft)" }}>Optional</span></div>
-                      <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-muted)" }}>{release.contentType === "AI Generated" ? "Recommended: Attach your generation receipt, licence or supporting link to help reduce rights-review delays." : release.contentType === "Non-Exclusive Licensed" ? "Recommended: Attach your licence or agreement to help us verify your distribution rights faster. Content ID is unavailable for non-exclusive content." : "Optional: If you have producer agreements or ownership documents, attach them to help speed up review."}</p>
-                      <label className="mt-4 flex cursor-pointer items-center justify-center gap-3 rounded-xl border border-dashed px-4 py-5 text-center" style={{ borderColor: "var(--border)" }} onDragOver={(event) => event.preventDefault()} onDrop={async (event) => { event.preventDefault(); const file = event.dataTransfer.files?.[0]; if (!file) return; if (normalizeUploadMime(file.type, file.name) !== "application/pdf" || file.size < 1 || file.size > 10 * 1024 * 1024) { setRightsUploadError("Choose a PDF no larger than 10 MB."); return; } try { setRightsUploadError(null); setRightsUploadProgress(0); const releaseId = await ensureUploadDraft(); const url = await uploadPrivateAsset(file, "private_ownership_proof", { releaseId, onProgress: (loaded, total) => setRightsUploadProgress(Math.round((loaded / total) * 100)) }); setRelease((current) => ({ ...current, licenseReceiptUrl: url })); } catch (error) { setRightsUploadError(error instanceof Error ? error.message : "Could not upload rights document."); } finally { setRightsUploadProgress(null); } }}><FileUp className="h-5 w-5" style={{ color: "var(--accent)" }} /><span><strong className="block text-sm">{rightsUploadProgress != null ? <OperationProgressLabel active measured={rightsUploadProgress ?? undefined} /> : "Drag & drop your agreement here"}</strong><span className="mt-1 block text-xs" style={{ color: "var(--text-soft)" }}>PDF · max 10 MB · Browse files</span></span><input className="sr-only" type="file" accept="application/pdf,.pdf" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; if (normalizeUploadMime(file.type, file.name) !== "application/pdf" || file.size < 1 || file.size > 10 * 1024 * 1024) { setRightsUploadError("Choose a PDF no larger than 10 MB."); return; } try { setRightsUploadError(null); setRightsUploadProgress(0); const releaseId = await ensureUploadDraft(); const url = await uploadPrivateAsset(file, "private_ownership_proof", { releaseId, onProgress: (loaded, total) => setRightsUploadProgress(Math.round((loaded / total) * 100)) }); setRelease((current) => ({ ...current, licenseReceiptUrl: url })); } catch (error) { setRightsUploadError(error instanceof Error ? error.message : "Could not upload rights document."); } finally { setRightsUploadProgress(null); event.target.value = ""; } }} /></label>
-                      {rightsUploadError ? <p className="mt-2 text-xs" style={{ color: "var(--danger)" }}>{rightsUploadError}</p> : null}
-                      {release.licenseReceiptUrl && !release.licenseReceiptUrl.startsWith("http") ? <div className="mt-3 flex justify-between gap-3 text-xs" style={{ color: "var(--success)" }}><span>Rights document attached</span><button type="button" onClick={() => setRelease(current => ({ ...current, licenseReceiptUrl: "" }))}>Remove</button></div> : null}
-                      <label className="mt-4 block text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Document link<input type="url" maxLength={2048} placeholder="https://..." className="field mt-2" value={release.licenseReceiptUrl.startsWith("http") ? release.licenseReceiptUrl : ""} onChange={event => setRelease(current => ({ ...current, licenseReceiptUrl: event.target.value }))} /></label>
-                    </div> : null}
-                  </div>
-                </div>
+
               </div>
 
-              <aside className="grid gap-5 self-start xl:sticky xl:top-24">
-                <div
-                  className="overflow-hidden rounded-[1.6rem] border shadow-xl"
-                  style={{
-                    borderColor: "var(--border)",
-                    background: "var(--card)",
-                    boxShadow: "0 22px 60px rgba(0,0,0,0.12)",
-                  }}
-                >
-                  <div
-                    className="flex gap-4 border-b p-5"
-                    style={{
-                      borderColor: "var(--border)",
-                      background:
-                        "linear-gradient(135deg, color-mix(in srgb, var(--accent) 9%, var(--card)), var(--card))",
-                    }}
-                  >
-                    <div
-                      className="h-20 w-20 shrink-0 overflow-hidden rounded-[1.15rem] border shadow-sm"
-                      style={{
-                        borderColor: "var(--border)",
-                        background: "var(--bg-soft)",
-                      }}
-                    >
-                      {artworkPreview ? (
-                        <img
-                          src={artworkPreview}
-                          alt="Cover art thumbnail"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center">
-                          <Disc3
-                            className="h-7 w-7"
-                            style={{ color: "var(--text-soft)" }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1 self-center">
-                      <div className="flex items-center justify-between gap-2">
-                        <p
-                          className="text-[10px] font-semibold uppercase tracking-[0.2em]"
-                          style={{ color: "var(--text-soft)" }}
-                        >
-                          Release summary
-                        </p>
-                        <span
-                          className="rounded-full border px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.12em]"
-                          style={{
-                            borderColor: "var(--border)",
-                            background: "var(--bg-soft)",
-                            color: "var(--text-muted)",
-                          }}
-                        >
-                          {releaseType === "single"
-                            ? "Single"
-                            : releaseType === "ep"
-                              ? "EP"
-                              : "Album"}
-                        </span>
-                      </div>
-                      <h3
-                        className="mt-2 truncate text-xl font-semibold leading-tight"
-                        style={{ color: "var(--text)" }}
-                      >
-                        {displayedReleaseTitle}
-                      </h3>
-                      <p
-                        className="mt-1.5 truncate text-sm"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        {namesFor(tracks[0]?.primaryArtistIds ?? []) ||
-                          tracks[0]?.primaryArtistQuery ||
-                          "Artist pending"}
-                      </p>
-                    </div>
-                  </div>
-                  <div
-                    className="grid grid-cols-2 gap-px border-b"
-                    style={{
-                      borderColor: "var(--border)",
-                      background: "var(--border)",
-                    }}
-                  >
-                    {[
-                      [releaseDateSummaryTitle, releaseDateSummaryValue],
-                      ["Stores", `${storeSelections.length} selected`],
-                      [
-                        "Monetization",
-                        socialConsentAccepted ? "Enabled" : "Off",
-                      ],
-                      ["Plan", currentPlan.title],
-                    ].map(([label, value]) => (
-                      <div
-                        key={label}
-                        className="min-w-0 p-4"
-                        style={{ background: "var(--card)" }}
-                      >
-                        <span
-                          className="block text-[10px] font-semibold uppercase tracking-[0.14em]"
-                          style={{ color: "var(--text-soft)" }}
-                        >
-                          {label}
-                        </span>
-                        <span
-                          className="mt-1.5 block truncate text-sm font-semibold"
-                          style={{ color: "var(--text)" }}
-                        >
-                          {value}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="p-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p
-                          className="text-[10px] font-semibold uppercase tracking-[0.18em]"
-                          style={{ color: "var(--text-soft)" }}
-                        >
-                          Submission status
-                        </p>
-                        <p
-                          className="mt-1 text-2xl font-semibold"
-                          style={{ color: "var(--text)" }}
-                        >
-                          {validationIssueCount === 0
-                            ? "Ready to submit"
-                            : `${validationIssueCount} ${validationIssueCount === 1 ? "detail" : "details"} left`}
-                        </p>
-                      </div>
-                      <span
-                        className="rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em]"
-                        style={
-                          validationIssueCount === 0
-                            ? {
-                                borderColor: "rgba(34,197,94,0.4)",
-                                background: "var(--success-soft)",
-                                color: "var(--success)",
-                              }
-                            : {
-                                borderColor: "rgba(250,204,21,0.4)",
-                                background: "var(--warning-soft)",
-                                color: "var(--warning)",
-                              }
-                        }
-                      >
-                        {validationIssueCount === 0 ? "Ready" : "Needs attention"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
 
-                <div
-                  className="rounded-[1.5rem] border p-5"
-                  style={{
-                    borderColor: "var(--border)",
-                    background: "var(--bg-soft)",
-                  }}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h3
-                        className="text-xl font-semibold"
-                        style={{ color: "var(--text)" }}
-                      >
-                        Submission checklist
-                      </h3>
-                    </div>
-                    <ShieldCheck
-                      className="h-6 w-6"
-                      style={{ color: "var(--accent)" }}
-                    />
-                  </div>
-                  <div className="mt-4 grid gap-2">
-                    {readinessItems.map((item) => (
-                      <div
-                        key={item.label}
-                        className="flex items-center gap-3 text-sm"
-                      >
-                        <span
-                          className="inline-flex h-6 w-6 items-center justify-center rounded-full border"
-                          style={
-                            item.complete
-                              ? {
-                                  borderColor: "rgba(34,197,94,0.45)",
-                                  background: "var(--success-soft)",
-                                  color: "var(--success)",
-                                }
-                              : {
-                                  borderColor: "rgba(250,204,21,0.35)",
-                                  background: "var(--warning-soft)",
-                                  color: "var(--warning)",
-                                }
-                          }
-                        >
-                          {item.complete ? (
-                            <CheckCircle2 className="h-4 w-4" />
-                          ) : (
-                            "!"
-                          )}
-                        </span>
-                        <span style={{ color: "var(--text-muted)" }}>
-                          {item.complete
-                            ? item.shortLabel
-                            : `${item.shortLabel} Pending`}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div
-                  ref={
-                    registerField("legal-checks") as (
-                      node: HTMLDivElement | null,
-                    ) => void
-                  }
-                  className={clsx(
-                    "rounded-[1.5rem] border p-4",
-                    showErrors && destinationsIssue()?.key === "legal-checks"
-                      ? "field-shake"
-                      : "",
-                  )}
-                  style={{
-                    borderColor: legalComplete
-                      ? "rgba(34,197,94,0.32)"
-                      : "rgba(250,204,21,0.32)",
-                    background: "var(--bg-soft)",
-                  }}
-                >
-                  <div>
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold" style={{ color: "var(--text)" }}>Release rights and permissions</p>
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: legalComplete ? "var(--success)" : "var(--text-soft)" }}>{legalComplete ? "Agreed" : "Required"}</span>
-                    </div>
-                    <details className="legal-declaration-details mt-4"><summary className="cursor-pointer py-3 text-sm font-semibold">Review release rights and permissions</summary>
-                    <div className="mt-5 grid gap-3 border-t pt-5 text-sm leading-6" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
-                      <p>✓ I confirm that I own or control all rights required to distribute this content.</p>
-                      <p>✓ I confirm that all collaborators, contributors and rights holders have authorized this release.</p>
-                      <p>✓ I understand that false ownership claims, copyright infringement or fraudulent submissions may result in removal of my release and suspension of my HYMN account.</p>
-                    </div>
-                    </details><p className="mt-5 border-t pt-5 text-sm font-semibold" style={{ borderColor: "var(--border)", color: legalComplete ? "var(--success)" : "var(--danger)" }}>{legalComplete ? "Release rights confirmed." : "Return to Delivery and confirm the rights for this release before submitting."}</p>
-                  </div>
-                </div>
-
-                <div
-                  className="overflow-hidden rounded-[1.6rem] border shadow-xl"
-                  style={{
-                    borderColor: "rgba(34,197,94,0.3)",
-                    background: "var(--card)",
-                    boxShadow: "0 22px 60px rgba(0,0,0,0.11)",
-                  }}
-                >
-                  <div
-                    className="border-b p-5"
-                    style={{
-                      borderColor: "var(--border)",
-                      background:
-                        "var(--success-soft)",
-                    }}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p
-                        className="text-[10px] font-semibold uppercase tracking-[0.2em]"
-                        style={{ color: "var(--success)" }}
-                      >
-                        Selected plan
-                      </p>
-                      <span
-                        className="rounded-full border border-emerald-400/35 bg-emerald-400/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.14em]"
-                        style={{ color: "var(--success)" }}
-                      >
-                        Active
-                      </span>
-                    </div>
-                    <h3
-                      className="mt-2 text-xl font-semibold"
-                      style={{ color: "var(--text)" }}
-                    >
-                      HYMN Distribution Review
-                    </h3>
-                    <p
-                      className="mt-1 text-sm"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      {tracks.length} track{tracks.length === 1 ? "" : "s"} ·{" "}
-                      {currentPlan.title}
-                    </p>
-                  </div>
-                  {!subscriptionCovered ? <div
-                    className="grid grid-cols-2 gap-px border-b"
-                    style={{
-                      borderColor: "var(--border)",
-                      background: "var(--border)",
-                    }}
-                  >
-                    <div className="p-4" style={{ background: "var(--card)" }}>
-                      <p
-                        className="text-[10px] font-semibold uppercase tracking-[0.14em]"
-                        style={{ color: "var(--text-soft)" }}
-                      >
-                        Release fee
-                      </p>
-                      <p
-                        className="mt-1.5 text-lg font-semibold"
-                        style={{ color: "var(--text)" }}
-                      >
-                        {isPaidReleaseResubmission ? "Already covered" : firstReleaseOffer && finalDistributionAmount === 0 ? "FREE" : <>₹ {finalDistributionAmount.toLocaleString("en-IN")}</>}
-                      </p>
-                    </div>
-                    <div className="p-4" style={{ background: "var(--card)" }}>
-                      <p
-                        className="text-[10px] font-semibold uppercase tracking-[0.14em]"
-                        style={{ color: "var(--text-soft)" }}
-                      >
-                        You save
-                      </p>
-                      <p
-                        className="mt-1.5 text-lg font-semibold"
-                        style={{
-                          color:
-                            trackPricingQuote.discountAmount > 0
-                              ? "#22c55e"
-                              : "var(--text)",
-                        }}
-                      >
-                        &#8377;{" "}
-                        {selectedPlan === "one_time"
-                          ? (trackPricingQuote.discountAmount + firstReleaseDiscount).toLocaleString(
-                              "en-IN",
-                            )
-                          : "0"}
-                      </p>
-                    </div>
-                  </div> : null}
-                  <div className="p-5">
-                    <p
-                      className="text-[10px] font-semibold uppercase tracking-[0.18em]"
-                      style={{ color: "var(--text-soft)" }}
-                    >
-                      Included review
-                    </p>
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                      {[
-                        "Metadata QC",
-                        "Artwork QC",
-                        "Copyright Check",
-                        "Distributor Submission",
-                        "Release Monitoring",
-                      ].map((item) => (
-                        <div key={item} className="flex items-center gap-2">
-                          <CheckCircle2
-                            className="h-3.5 w-3.5 shrink-0"
-                            style={{ color: "var(--success)" }}
-                          />
-                          <span style={{ color: "var(--text-muted)" }}>
-                            {item}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    {selectedPlan === "one_time" && !firstReleaseOffer ? (
-                      <div
-                        className="mt-5 border-t pt-5"
-                        style={{ borderColor: "var(--border)" }}
-                      >
-                        <div>
-                          <p
-                            className="text-[10px] font-semibold uppercase tracking-[0.18em]"
-                            style={{ color: "var(--text-soft)" }}
-                          >
-                            Bulk discount journey
-                          </p>
-                          <p
-                            className="mt-1 text-xs leading-5"
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            {tracks.length} of 16 tracks toward the maximum
-                            discount
-                            {trackPricingQuote.discountRate > 0
-                              ? ` · ${Math.round(trackPricingQuote.discountRate * 100)}% currently applied`
-                              : ""}
-                            .
-                          </p>
-                        </div>
-                        <div className="relative mt-5 px-2">
-                          <div
-                            className="absolute left-5 right-5 top-3 h-1 rounded-full"
-                            style={{ background: "var(--bg-soft)" }}
-                          >
-                            <div
-                              className="h-full rounded-full transition-all duration-500"
-                              style={{
-                                width: `${Math.min(100, (tracks.length / 16) * 100)}%`,
-                                background:
-                                  "linear-gradient(90deg,var(--money),var(--success))",
-                              }}
-                            />
-                          </div>
-                          <div className="relative grid grid-cols-3 gap-2">
-                            {[
-                              [6, 8],
-                              [12, 10],
-                              [16, 15],
-                            ].map(([threshold, discount]) => {
-                              const unlocked = tracks.length >= threshold;
-                              const next =
-                                !unlocked &&
-                                trackPricingQuote.nextThreshold === threshold;
-                              return (
-                                <div key={threshold} className="text-center">
-                                  <span
-                                    className="mx-auto inline-flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-semibold shadow-sm"
-                                    style={{
-                                      borderColor: unlocked
-                                        ? "#22c55e"
-                                        : next
-                                          ? "var(--money)"
-                                          : "var(--border)",
-                                      background: unlocked
-                                        ? "#22c55e"
-                                        : "var(--card)",
-                                      color: unlocked
-                                        ? "white"
-                                        : next
-                                          ? "var(--money)"
-                                          : "var(--text-soft)",
-                                    }}
-                                  >
-                                    {unlocked ? (
-                                      <Check className="h-4 w-4" />
-                                    ) : (
-                                      threshold
-                                    )}
-                                  </span>
-                                  <p
-                                    className="mt-2 text-xs font-semibold"
-                                    style={{
-                                      color: unlocked
-                                        ? "#22c55e"
-                                        : "var(--text)",
-                                    }}
-                                  >
-                                    {discount}% off
-                                  </p>
-                                  <p
-                                    className="mt-0.5 text-[10px]"
-                                    style={{ color: "var(--text-soft)" }}
-                                  >
-                                    Save ₹
-                                    {Math.round(
-                                      (threshold * 99 * discount) / 100,
-                                    ).toLocaleString("en-IN")}
-                                  </p>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                        {trackPricingQuote.nextThreshold ? (
-                          <div
-                            className="mt-5 rounded-xl border p-3"
-                            style={{
-                              borderColor:
-                                "color-mix(in srgb, var(--money) 48%, var(--border))",
-                              background:
-                                "color-mix(in srgb, var(--money) 9%, var(--card))",
-                            }}
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <p
-                                  className="text-xs font-semibold"
-                                  style={{ color: "var(--text)" }}
-                                >
-                                  Unlock{" "}
-                                  {Math.round(
-                                    (trackPricingQuote.nextThresholdDiscount ??
-                                      0) * 100,
-                                  )}
-                                  % off
-                                </p>
-                                <p
-                                  className="mt-1 text-[11px]"
-                                  style={{ color: "var(--text-muted)" }}
-                                >
-                                  Add{" "}
-                                  {trackPricingQuote.nextThreshold -
-                                    tracks.length}{" "}
-                                  more track
-                                  {trackPricingQuote.nextThreshold -
-                                    tracks.length ===
-                                  1
-                                    ? ""
-                                    : "s"}{" "}
-                                  and save ₹
-                                  {(
-                                    trackPricingQuote.nextThresholdSavings ?? 0
-                                  ).toLocaleString("en-IN")}{" "}
-                                  at that tier.
-                                </p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => goToStep(3)}
-                                className="shrink-0 rounded-full border px-3 py-2 text-[11px] font-semibold transition hover:-translate-y-0.5"
-                                style={{
-                                  borderColor: "var(--money)",
-                                  background: "var(--money)",
-                                  color: "var(--money-foreground)",
-                                }}
-                              >
-                                Add tracks
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div
-                            className="mt-5 rounded-xl border p-3 text-center"
-                            style={{
-                              borderColor: "rgba(34,197,94,0.35)",
-                              background: "var(--success-soft)",
-                              color: "var(--success)",
-                            }}
-                          >
-                            <p className="text-xs font-semibold">
-                              Maximum 15% bulk discount unlocked
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <p
-                        className="mt-5 border-t pt-4 text-xs leading-5"
-                        style={{
-                          borderColor: "var(--border)",
-                          color: "var(--text-soft)",
-                        }}
-                      >
-                        Subscription pricing is fixed for the selected plan.
-                        Switch plans using the pricing cards above the form.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </aside>
             </div>
           </section>
         ) : null}
