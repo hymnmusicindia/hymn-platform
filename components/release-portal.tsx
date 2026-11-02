@@ -29,7 +29,7 @@ import {
   isReleaseUnfinished
 } from "@/lib/release-portal";
 import { automaticStatusCopy } from "@/lib/release-status-engine";
-import { effectiveReleaseStatus, releaseSyncHealth } from "@/lib/release-status-presentation";
+import { effectiveReleaseStatus, releaseSyncHealth, releaseUpcLabel } from "@/lib/release-status-presentation";
 import { ReleaseSummaryCard } from "@/components/release-summary-card";
 import catalogueStyles from "./release-catalogue.module.css";
 
@@ -124,6 +124,7 @@ function releaseMetadata(release: Release) {
 }
 
 function resolvedUpc(release: Release) {
+  if ((release.metadata?.direNote as {identifierAssignmentPending?:boolean}|undefined)?.identifierAssignmentPending) return releaseUpcLabel(release);
   if (release.upcCode?.trim()) return release.upcCode.trim();
   return release.status === "draft" ? "Will be assigned after distribution" : "Awaiting assignment";
 }

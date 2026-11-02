@@ -153,6 +153,8 @@ export async function activateDireNoteAttempt(id: number, input: { upc: string |
   return prisma.$transaction(async tx => {
     const attempt = await tx.distributionSubmissionAttempt.findUniqueOrThrow({ where: { id } });
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422027, ${attempt.releaseId}::integer)`;
+    const current = await tx.distributionSubmissionAttempt.findFirst({where:{releaseId:attempt.releaseId,provider:'direnote',isCurrent:true},orderBy:{id:'desc'},select:{id:true}});
+    if(current && current.id>id)throw Error('A newer submission is current. The older provider result cannot replace its identifiers.');
     const release = await tx.release.findUniqueOrThrow({ where: { id: attempt.releaseId }, include: { tracks: true } });
     const replaceIdentifiers = options.replaceIdentifiers === true;
     input = { ...input, upc: replaceIdentifiers ? input.upc : input.upc || release.upc };
@@ -161,6 +163,8 @@ export async function activateDireNoteAttempt(id: number, input: { upc: string |
     const incoming = (Array.isArray(input.trackIdentifiers) ? input.trackIdentifiers : []) as Array<{ id: number; isrc: string | null }>;
     if (new Set(incoming.map(item => item.id)).size !== incoming.length || incoming.some(item => !release.tracks.some(track => track.id === item.id))) throw new Error('Submission track identities are duplicated or do not match this release.');
     for (const identifier of incoming) if (identifier.isrc && !validIsrc(identifier.isrc)) throw new Error('DireNote returned an invalid ISRC. Reconcile the recording identity before continuing.');
+    const assignedIsrcs=incoming.map(item=>item.isrc).filter(Boolean);
+    if(new Set(assignedIsrcs).size!==assignedIsrcs.length)throw Error('DireNote returned duplicate recording identifiers. Reconcile the completed job before continuing.');
     const assignmentPending = replaceIdentifiers && !(input.upc && incoming.length === release.tracks.length && release.tracks.length > 0 && incoming.every(item => Boolean(item.isrc)));
     const displayedUpc = assignmentPending ? release.upc : input.upc;
     const lockSource = `submission_attempt:${id}:locked`;

@@ -23,15 +23,13 @@ function walkDireNoteObjects(value: unknown, seen = new Set<unknown>()): Array<R
 
 export function upcFromDireNoteResponse(value: unknown): string | null {
   const candidates = walkDireNoteObjects(value);
+  const identifiers=new Set<string>();
   for (const candidate of candidates) {
-    const upc = normalizeDireNoteUpc(candidate.upc ?? candidate.UPC ?? candidate.upc_code ?? candidate.upcCode);
-    if (upc) return upc;
-    for (const key of Object.keys(candidate)) {
-      const nested = normalizeDireNoteUpc(candidate[key]);
-      if (nested) return nested;
+    for(const key of ['upc','UPC','upc_code','upcCode']){
+      const upc=normalizeDireNoteUpc(candidate[key]);if(upc)identifiers.add(upc);
     }
   }
-  return null;
+  return identifiers.size===1?[...identifiers][0]:null;
 }
 
 const normalizeText = (value: unknown) => typeof value === "string" ? value.trim().replace(/\s+/g, " ").toLowerCase() : "";
@@ -58,12 +56,15 @@ function trackReleaseTitle(track: Record<string, unknown>) {
 export function upcFromDireNoteIsrcReport(payload: unknown, isrc: string, releaseTitle: string): string | null {
   const expectedIsrc = normalizeIsrc(isrc);
   if (!expectedIsrc) return null;
+  const matches=new Set<string>(),root=record(payload),data=record(root.data),result=record(root.result);
+  // A sibling track's UPC is never a fallback for the matched recording.
+  const envelopeUpc=upcFromDireNoteResponse({release:root.release,dataRelease:data.release,resultRelease:result.release});
   for (const track of trackRecords(payload)) {
     if (normalizeIsrc(track.isrc) !== expectedIsrc) continue;
     const receivedTitle = trackReleaseTitle(track);
     if (receivedTitle && normalizeText(releaseTitle) && receivedTitle !== normalizeText(releaseTitle)) continue;
-    const upc = normalizeDireNoteUpc(track.upc ?? track.UPC ?? track.upc_code ?? track.upcCode) ?? upcFromDireNoteResponse(payload);
-    if (upc) return upc;
+    const upc = normalizeDireNoteUpc(track.upc ?? track.UPC ?? track.upc_code ?? track.upcCode) ?? envelopeUpc;
+    if (upc) matches.add(upc);
   }
-  return null;
+  return matches.size===1?[...matches][0]:null;
 }

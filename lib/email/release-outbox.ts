@@ -7,22 +7,22 @@ import { qcReportSummary } from '@/lib/direnote-qc-details';
 import { readReleaseQcReport } from '@/lib/direnote-qc-store';
 const object = (value: unknown): Record<string, any> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : {};
 
-export async function enqueueRenderedEmail(db: any, input: { eventKey: string; template: string; to: string; userId: number; releaseId: number; subject: string; html: string; text: string; expectedStatus: string; draftEditedAt?: string; providerApproved?: boolean }) {
-  const data = { toEmail: input.to, userId: input.userId, template: input.template, entityType: "release", entityId: String(input.releaseId), subject: input.subject, provider: "smtp", payload: { channel: "release_outbox", html: input.html, text: input.text, expectedStatus: input.expectedStatus, draftEditedAt: input.draftEditedAt ?? null, providerApproved: input.providerApproved === true } };
+export async function enqueueRenderedEmail(db: any, input: { eventKey: string; template: string; to: string; userId: number; releaseId: number; subject: string; html: string; text: string; expectedStatus: string; draftEditedAt?: string; providerApproved?: boolean; correctionBinding?:string; correctionAttemptId?:number }) {
+  const data = { toEmail: input.to, userId: input.userId, template: input.template, entityType: "release", entityId: String(input.releaseId), subject: input.subject, provider: "smtp", payload: { channel: "release_outbox", html: input.html, text: input.text, expectedStatus: input.expectedStatus, draftEditedAt: input.draftEditedAt ?? null, providerApproved: input.providerApproved === true,correctionBinding:input.correctionBinding??null,correctionAttemptId:input.correctionAttemptId??null } };
   const log = await db.emailLog.upsert({ where: { eventKey: input.eventKey }, create: { ...data, eventKey: input.eventKey, status: "pending" }, update: {} });
   // Skipped means SMTP was never attempted. Sent/uncertain outcomes are never reset.
   if (log.status === "skipped") await db.emailLog.updateMany({ where: { id: log.id, status: "skipped" }, data: { ...data, status: "pending", errorMessage: null } });
   return log.id as number;
 }
 
-export async function enqueueReleaseEmail(db: any, event: string, input: { to: string; userId: number; correctionEventKey?: string; statusEventKey?: string } & ReleaseEmailData) {
+export async function enqueueReleaseEmail(db: any, event: string, input: { to: string; userId: number; correctionEventKey?: string; statusEventKey?: string; correctionBinding?:string; correctionAttemptId?:number } & ReleaseEmailData) {
   if (event === "release_submitted") {
     const existing = await db.emailLog.findFirst({ where: { entityType: "release", entityId: String(input.releaseId), template: event, status: { in: ["sent", "pending", "sending", "review"] } }, select: { id: true } });
     if (existing) return existing.id as number;
   }
   // A submission receipt is one milestone per release, not per status version.
   const suffix = event === "release_submitted" ? "" : input.correctionEventKey ? `:${input.correctionEventKey}` : input.statusEventKey ? `:${input.statusEventKey}` : "";
-  return enqueueRenderedEmail(db, { ...releaseStatusEmail(event, input), to: input.to, userId: input.userId, releaseId: Number(input.releaseId), template: event, expectedStatus: input.releaseStatus.toUpperCase(), providerApproved: input.providerApproved, eventKey: `release:${input.releaseId}:${event}${suffix}:email` });
+  return enqueueRenderedEmail(db, { ...releaseStatusEmail(event, input), to: input.to, userId: input.userId, releaseId: Number(input.releaseId), template: event, expectedStatus: input.releaseStatus.toUpperCase(), providerApproved: input.providerApproved,correctionBinding:input.correctionBinding,correctionAttemptId:input.correctionAttemptId, eventKey: `release:${input.releaseId}:${event}${suffix}:email` });
 }
 
 /** Called inside the status transaction: SMTP is never part of that transaction. */
@@ -42,7 +42,7 @@ export async function queueReleaseStatusUpdate(db: any, releaseId: number, statu
     const report=await readReleaseQcReport(releaseId,db);
     if(report)qcSummary=qcReportSummary(report);
   }
-  return enqueueReleaseEmail(db, event, { qcReportUrl: ['release_changes_requested','release_rejected'].includes(event) ? `${getPublicAppUrl()}/dashboard/releases/${releaseId}/qc-report` : undefined, qcSummary, to: release.user.email, userId: release.userId, userName: release.user.name, releaseId, releaseTitle: release.title, artistName: release.artistName, releaseStatus: status, statusEventKey: `v${release.version}`, releaseDate: releaseTiming === "schedule_release" ? release.releaseDate.toISOString().slice(0, 10) : undefined, manageReleaseUrl: `${getPublicAppUrl()}/dashboard/releases/${releaseId}`, correctionUrl: `${getPublicAppUrl()}/dashboard/releases/${releaseId}?tab=corrections`, rejectionReason: status === "changes_requested" ? (release.correctionReason ?? providerMessages.join("\n")) || undefined : release.rejectionReason ?? undefined, correctionEventKey: status === "changes_requested" ? correctionKey + (requestedReminderKey ? `:${requestedReminderKey}` : "") : undefined, providerApproved: providerScheduleApproved });
+  return enqueueReleaseEmail(db, event, { correctionBinding: status==='changes_requested' ? String(provider.correctionEventKey||'')||undefined : undefined, correctionAttemptId: status==='changes_requested' ? Number(provider.currentAttemptId)||undefined : undefined, qcReportUrl: ['release_changes_requested','release_rejected'].includes(event) ? `${getPublicAppUrl()}/dashboard/releases/${releaseId}/qc-report` : undefined, qcSummary, to: release.user.email, userId: release.userId, userName: release.user.name, releaseId, releaseTitle: release.title, artistName: release.artistName, releaseStatus: status, statusEventKey: `v${release.version}`, releaseDate: releaseTiming === "schedule_release" ? release.releaseDate.toISOString().slice(0, 10) : undefined, manageReleaseUrl: `${getPublicAppUrl()}/dashboard/releases/${releaseId}`, correctionUrl: `${getPublicAppUrl()}/dashboard/releases/${releaseId}?tab=corrections`, rejectionReason: status === "changes_requested" ? (release.correctionReason ?? providerMessages.join("\n")) || undefined : release.rejectionReason ?? undefined, correctionEventKey: status === "changes_requested" ? correctionKey + (requestedReminderKey ? `:${requestedReminderKey}` : "") : undefined, providerApproved: providerScheduleApproved });
 }
 
 export async function deliverReleaseOutbox(releaseIds?: number[], limit = 5, deliver?: (input: { from: string; to: string; subject: string; html: string; text: string; replyTo?: string; preserveNames?: string[] }) => Promise<{ data: { id?: string } | null; error: { message: string } | null }>, emailLogIds?: number[]) {
@@ -64,6 +64,13 @@ export async function deliverReleaseOutbox(releaseIds?: number[], limit = 5, del
     processed++;
     const release = await prisma.release.findUnique({ where: { id: Number(job.entityId) }, include: { user: { select: { email: true, status: true } } } });
     const currentProviderStatus = String(release?.direNoteStatus ?? "").toLowerCase().replaceAll("_", " ");
+    if(job.template==='release_changes_requested' && (payload.correctionBinding || payload.correctionAttemptId)){
+      const provider=object(object(release?.metadata).direNote);
+      const currentAttempt=payload.correctionAttemptId?await prisma.distributionSubmissionAttempt.findFirst({where:{releaseId:Number(job.entityId),provider:'direnote',isCurrent:true},select:{id:true}}):null;
+      if(payload.correctionBinding && payload.correctionBinding!==provider.correctionEventKey || payload.correctionAttemptId && payload.correctionAttemptId!==currentAttempt?.id){
+        await prisma.emailLog.update({where:{id:job.id},data:{status:'cancelled',errorMessage:'The correction or submission was superseded before email delivery.'}});cancelled++;continue;
+      }
+    }
     const providerScheduleApproved = ["scheduled", "ready for distribution", "approved for distribution", "release date approved"].includes(currentProviderStatus);
     if (job.template === "release_scheduled" && (String(object(release?.metadata).releaseTiming ?? "quick_release") !== "schedule_release" || !providerScheduleApproved || !payload.providerApproved)) {
       await prisma.emailLog.update({ where: { id: job.id }, data: { status: "cancelled", errorMessage: "Scheduled-release notices are only sent for schedule_release after provider approval." } });

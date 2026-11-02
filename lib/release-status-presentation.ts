@@ -1,4 +1,8 @@
 export type ReleaseStatusTone = "neutral" | "progress" | "success" | "warning" | "danger";
+export function releaseUpcLabel(release: {upcCode?:string|null;metadata?:Record<string,unknown>|null}) {
+  const provider=release.metadata?.direNote as {identifierAssignmentPending?:boolean}|undefined;
+  return provider?.identifierAssignmentPending ? `UPC awaiting assignment${release.upcCode?` (previous: ${release.upcCode})`:''}` : release.upcCode || 'UPC pending';
+}
 export const CUSTOMER_REVIEW_STATUSES = new Set([
   "submitted", "resubmitted", "in_queue", "in_qc_queue", "under_review",
   "approved", "queued_for_distribution", "submitting_to_distributor",

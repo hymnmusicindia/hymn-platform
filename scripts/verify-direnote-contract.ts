@@ -48,6 +48,9 @@ assert.equal(parseDireNoteResponse({ success: true, data: { release: { upc_code:
 assert.equal(upcFromDireNoteResponse({ release: { upc_code: "8901234567892" } }), "8901234567892");
 assert.equal(upcFromDireNoteResponse({ direnoteResponse: { data: { release: { upc_code: "8901234567893" } } } }), "8901234567893");
 assert.equal(upcFromDireNoteResponse({ data: { release: { nested: { upc_code: "8901234567894" } } } }), "8901234567894");
+assert.equal(upcFromDireNoteResponse({release_id:'8901234567894',phone:'919999999999',timestamp:1793635200000}),null,'Unrelated numeric IDs must never become UPCs.');
+assert.equal(upcFromDireNoteResponse({phone:'919999999999',release:{upc_code:'8901234567894'}}),'8901234567894');
+assert.equal(upcFromDireNoteResponse({upc:'8901234567894',result:{upc_code:'8901234567893'}}),null,'Conflicting identifier evidence requires reconciliation.');
 
 async function verifyClientContract() {
 process.env.DIRENOTE_CLIENT_ID = "contract-client";

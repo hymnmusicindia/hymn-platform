@@ -21,6 +21,8 @@ assert.equal(upcFromDireNoteIsrcReport({ data: { track: { isrc: tracks[0].isrc, 
 assert.equal(upcFromDireNoteIsrcReport({ result: { tracks: [{ isrc: tracks[1].isrc, release_name: "Magenta", upc: "8901234567891" }, { isrc: tracks[0].isrc, release_name: "Magenta", UPC: "8901234567890" }] } }, tracks[0].isrc, "Magenta"), "8901234567890");
 assert.equal(upcFromDireNoteIsrcReport({ data: { track: { isrc: tracks[0].isrc, upc: "8901234567890" } } }, tracks[0].isrc, "Magenta"), "8901234567890");
 assert.equal(upcFromDireNoteIsrcReport({ data: { release: { upc_code: "8901234567890" }, track: { isrc: tracks[0].isrc, release_title: "Magenta" } } }, tracks[0].isrc, "Magenta"), "8901234567890");
+assert.equal(upcFromDireNoteIsrcReport({tracks:[{isrc:tracks[0].isrc,release_title:'Magenta'},{isrc:tracks[1].isrc,upc:'8901234567891'}]},tracks[0].isrc,'Magenta'),null,'Never adopt a sibling recording UPC.');
+assert.equal(upcFromDireNoteIsrcReport({tracks:[{isrc:tracks[0].isrc,upc:'8901234567890'},{isrc:tracks[0].isrc,upc:'8901234567891'}]},tracks[0].isrc,'Magenta'),null,'Ambiguous matched recordings must remain unresolved.');
 const payload = { success: true, release: { status: "Pending" }, tracks: tracks.map((track, index) => ({ track_name: track.title, isrc: track.isrc, status: "Pending", remarks: index ? remark : "NONE" })) };
 const issues = extractDireNoteCorrections(payload, tracks, 19);
 const contentIdCorrection = extractDireNoteCorrections({ release: { remarks: "PLEASE CLARIFY WHY THE CONTENT ID SET TO 'NO'" } }, tracks, 19)[0];

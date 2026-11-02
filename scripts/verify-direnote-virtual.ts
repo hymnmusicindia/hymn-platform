@@ -110,6 +110,10 @@ async function main() {
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-direnote-v24-http.ts"]);
       return;
     }
+    if (process.argv.includes('--identifier-sync-only')) {
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-direnote-identifier-sync.ts']);
+      return;
+    }
     if (process.argv.includes("--lifecycle-only")) {
       await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-direnote-lifecycle.ts"]);
       return;
