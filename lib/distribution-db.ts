@@ -95,6 +95,7 @@ export function deserializeRelease(dbData: any): Release {
     artistName: dbData.artistName,
     primaryGenre: dbData.genre,
     releaseType: dbData.releaseType || metadata.releaseType || "single",
+    releaseDate: dbData.releaseDate?.toISOString?.().slice(0,10) ?? metadata.releaseDate ?? "",
     artworkUrl: canonicalReleaseArtworkUrl(Number(dbData.id), dbData.artworkUrl || metadata.artworkUrl),
     audioUrl: dbData.audioUrl || metadata.audioUrl || "",
     paymentStatus: dbData.paymentStatus || "pending",

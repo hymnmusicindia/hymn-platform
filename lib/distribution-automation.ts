@@ -5,7 +5,7 @@ import { submitRelease } from './distribution-service';
 import { getDetailedReleaseById } from './distribution-db';
 import { getPublicAppUrl } from './public-app-url';
 import { processPendingAutomaticAmendments } from './release-amendment-automation';
-import { DISTRIBUTION_QC_POLICY_VERSION } from './distribution-automation-policy';
+import { DISTRIBUTION_QC_POLICY_VERSION, earliestPartnerReleaseDate } from './distribution-automation-policy';
 
 export async function processDistributionAutomation(siteUrl = getPublicAppUrl()) {
   if (process.env.DISTRIBUTION_AUTOMATION_ENABLED === 'false') {
@@ -18,6 +18,7 @@ export async function processDistributionAutomation(siteUrl = getPublicAppUrl())
     WHERE r.archived_at IS NULL AND u.status='ACTIVE' AND r.payment_status='paid'
       AND r.status IN ('SUBMITTED','UNDER_REVIEW','IN_QC_QUEUE','IN_QUEUE','RESUBMITTED','APPROVED','QUEUED_FOR_DISTRIBUTION','CHANGES_REQUESTED')
       AND (COALESCE(r.metadata->'autoQc'->>'status','pending') IN ('pending','passed')
+        OR (r.metadata->'correctionReview'->>'status'='pending' AND r.status IN ('UNDER_REVIEW','RESUBMITTED','APPROVED') AND r.metadata->>'liveAt' IS NULL AND r.release_date<${new Date(earliestPartnerReleaseDate())})
         OR (r.metadata->'autoQc'->>'status'='manual_review_required' AND r.metadata->'autoQc'->>'changeKind' IN ('missing_baseline','rights_review')
           AND COALESCE(r.metadata->'autoQc'->>'policyVersion','')<>${String(DISTRIBUTION_QC_POLICY_VERSION)})
         OR (r.metadata->'autoQc'->>'status'='retryable' AND COALESCE(r.metadata->'autoQc'->>'nextCheckAt','')<=${new Date().toISOString()})

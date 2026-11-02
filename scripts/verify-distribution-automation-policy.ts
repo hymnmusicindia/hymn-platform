@@ -24,6 +24,9 @@ assert.equal(distributionAutomationDecision({...release,status:'queued_for_distr
 for(const flag of ['copyrightClaim','copyrightClaimed','fraudFlag','manualQcHold','explicitContentMismatch'])assert.equal(distributionAutomationDecision({...release,metadata:{[flag]:true}},context).eligible,false);
 const whitespace={...release,releaseTitle:'  Original  ',tracks:[{...release.tracks![0],trackTitle:' Original '}]};
 assert.deepEqual(technicalReleaseFixes(whitespace).map(fix=>fix.after),['Original','Original']);
+const delayed={...release,releaseDate:'2026-11-01',metadata:{correctionReview:{status:'pending'}}} as Release;
+assert.deepEqual(technicalReleaseFixes(delayed,new Date('2026-11-02T23:59:00Z')),[{field:'releaseDate',before:'2026-11-01',after:'2026-11-04'}]);
+for(const changed of [{...delayed,liveAt:'2026-11-01'},{...delayed,status:'live'},{...delayed,status:'draft'},{...delayed,releaseDate:'2026-12-01'},{...delayed,metadata:{}}] as Release[])assert.deepEqual(technicalReleaseFixes(changed,new Date('2026-11-02T23:59:00Z')),[],'Only undelivered submitted corrections with insufficient lead time are rescheduled.');
 assert.equal(automationSensitiveSnapshot(release),automationSensitiveSnapshot({...release,releaseTitle:'Other title'}));
 assert.notEqual(automationSensitiveSnapshot(release),automationSensitiveSnapshot({...release,artistName:'Different artist'}));
 const requested={...whitespace,status:'changes_requested',reviewIssues:{type:'metadata',severity:'minor_issue',fields:[{field:'releaseTitle',label:'Title'}]}} as Release;

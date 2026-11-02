@@ -14,6 +14,11 @@ Actual identity changes, critical/manual holds, fraud alerts and uncertain
 earlier writes retain their existing handling. No draft or unanswered correction
 is submitted automatically.
 
+An undelivered submitted correction whose requested date no longer meets the
+partner's two-day lead time moves to the earliest valid date. The old/new dates
+are recorded in the audit log and QC fixes. Live releases, drafts, and valid
+future dates are not rescheduled. A cached QC result cannot hide an expired date.
+
 Busy submission locks and status-refresh leases return pending with a short
 retry delay. An earlier accepted attempt can no longer be reported as acceptance
 of an approval that was never processed. Current correction review tasks close

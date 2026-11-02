@@ -39,11 +39,16 @@ export function distributionAutomationDecision(release: Release, context: { acce
   return { eligible: true, route: context.correctionResolved ? 'corrected_submission' : 'new_submission', reason: context.correctionResolved ? 'The customer submitted a corrected pre-delivery package; all checks must pass again.' : 'Paid, consented submission is eligible for automatic technical QC.' };
 }
 
-export function technicalReleaseFixes(release: Release) {
+export function earliestPartnerReleaseDate(now = new Date()) {
+  return new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()+2)).toISOString().slice(0,10);
+}
+export function technicalReleaseFixes(release: Release, now = new Date()) {
   const fixes: {field:string;before:string;after:string}[] = [];
   const trim = (field:string,value:unknown) => { if(typeof value==='string' && value.trim() && value!==value.trim()) fixes.push({field,before:value,after:value.trim()}); };
   trim('releaseTitle',release.releaseTitle);
   release.tracks?.forEach((track,index)=>trim(`tracks.${index}.trackTitle`,track.trackTitle));
+  const marker=object(release.metadata?.correctionReview), date=String(release.releaseDate||'').slice(0,10), earliest=earliestPartnerReleaseDate(now);
+  if(marker.status==='pending' && !release.liveAt && ['under_review','resubmitted','approved'].includes(release.status) && /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Date.parse(date)) && date<earliest)fixes.push({field:'releaseDate',before:date,after:earliest});
   return fixes;
 }
 

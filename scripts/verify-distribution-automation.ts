@@ -7,7 +7,7 @@ import { runIntelligentDistributionQc } from '../lib/distribution-intelligent-qc
 import { assertAutomaticQcSources, assertCurrentAutomaticQc, signQcEvidence, validQcEvidence } from '../lib/distribution-qc-evidence';
 import { submitRelease } from '../lib/distribution-service';
 import { adminReleaseDelta } from '../lib/admin-release-delta';
-import { automaticQcRevision, automationSensitiveSnapshot } from '../lib/distribution-automation-policy';
+import { automaticQcRevision, automationSensitiveSnapshot, earliestPartnerReleaseDate } from '../lib/distribution-automation-policy';
 import { processDistributionAutomation } from '../lib/distribution-automation';
 
 const fixture=globalThis as typeof globalThis & {qcReadiness?:()=>Promise<unknown>;qcSubmissions?:number};
@@ -79,6 +79,7 @@ async function main(){
     await prisma.release.update({where:{id:legacyCorrection.row.id},data:{version:{increment:1}}});
     assert.equal(await runIntelligentDistributionQc(legacyCorrection.row.id,'https://hymn.fixture'),true,'Legacy corrections get full current technical checks without a redundant deep-QC hold.');
     const licensedCorrection=await make('Licensed correction',{contentType:'Non-Exclusive Licensed',correctionReview:{status:'pending'}});
+    await prisma.release.update({where:{id:licensedCorrection.row.id},data:{releaseDate:new Date('2020-01-01')}});
     await prisma.distributionSubmissionAttempt.create({data:{releaseId:licensedCorrection.row.id,state:'submitted',isCurrent:true,idempotencyKey:'licensed-correction',payloadHash:'licensed',upc:'3473620319451',corrections:{status:'customer_resolved'}}});
     const licensedBefore=(await getDetailedReleaseById(licensedCorrection.row.id))!;
     const legacyQc={status:'manual_review_required',changeKind:'missing_baseline',policyVersion:2,checkedVersion:licensedCorrection.row.version,revision:automaticQcRevision(licensedBefore),snapshot:automationSensitiveSnapshot(licensedBefore),reason:'Generic legacy baseline hold'};
@@ -86,6 +87,8 @@ async function main(){
     await prisma.adminTask.create({data:{eventKey:'fixture:licensed-correction',type:'Correction review',priority:'high',title:'Correction received',body:'Pending',href:'/admin?tab=distribution-queue',entityType:'release',entityId:String(licensedCorrection.row.id)}});
     assert.equal(await runIntelligentDistributionQc(licensedCorrection.row.id,'https://hymn.fixture'),true);
     const licensedAfter=(await getDetailedReleaseById(licensedCorrection.row.id))!;
+    assert.equal(licensedAfter.releaseDate.slice(0,10),earliestPartnerReleaseDate(),'A missed correction date advances to the earliest valid delivery date.');
+    assert.equal(await prisma.auditLog.count({where:{entityId:String(licensedCorrection.row.id),action:'DISTRIBUTION_RELEASE_DATE_RESCHEDULED'}}),1,'The old and new dates must be audited once.');
     const licensedQc=licensedAfter.metadata!.autoQc as {reason:string;changeKind:string;policyVersion:number};
     assert.match(licensedQc.reason,/distribution partner/);assert.equal(licensedQc.changeKind,'corrected_submission');assert.equal(licensedQc.policyVersion,4);
     assert.equal((await prisma.release.findUniqueOrThrow({where:{id:licensedCorrection.row.id}})).status,'UNDER_REVIEW');

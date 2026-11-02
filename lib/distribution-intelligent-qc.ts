@@ -54,13 +54,14 @@ async function applyFormatting(release: Release, fixes: ReturnType<typeof techni
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422028, ${release.id}::integer)`;
     const row=await tx.release.findFirst({where:{id:release.id,updatedAt:new Date(release.draftVersion!),status:{in:['UNDER_REVIEW','APPROVED']}}});if(!row)return false;
     const title=fixes.find(fix=>fix.field==='releaseTitle');
+    const releaseDate=fixes.find(fix=>fix.field==='releaseDate');
     for(const fix of fixes.filter(item=>item.field.startsWith('tracks.'))) {
       const track=release.tracks?.[Number(fix.field.split('.')[1])];if(track)await tx.track.updateMany({where:{id:track.id,releaseId:release.id},data:{title:fix.after}});
     }
     const metadata=object(row.metadata);
-    const saved=await tx.release.updateMany({where:{id:row.id,updatedAt:row.updatedAt,version:row.version},data:{...(title?{title:title.after}:{}),metadata:json({...metadata,...(title?{releaseTitle:title.after}:{}),autoQc:{...object(metadata.autoQc),status:'pending',technicalFixes:fixes}}),version:{increment:1}}});
+    const saved=await tx.release.updateMany({where:{id:row.id,updatedAt:row.updatedAt,version:row.version},data:{...(title?{title:title.after}:{}),...(releaseDate?{releaseDate:new Date(releaseDate.after)}:{}),metadata:json({...metadata,...(title?{releaseTitle:title.after}:{}),...(releaseDate?{releaseDate:releaseDate.after}:{}),autoQc:{...object(metadata.autoQc),status:'pending',technicalFixes:fixes}}),version:{increment:1}}});
     if(saved.count!==1)throw Error('The submitted package changed during formatting checks.');
-    await tx.auditLog.create({data:{actorType:'system',action:'DISTRIBUTION_TECHNICAL_FORMATTING_FIXED',entity:'release',entityId:String(row.id),metadata:json({fixes})}});return true;
+    await tx.auditLog.create({data:{actorType:'system',action:releaseDate?'DISTRIBUTION_RELEASE_DATE_RESCHEDULED':'DISTRIBUTION_TECHNICAL_FORMATTING_FIXED',entity:'release',entityId:String(row.id),metadata:json({fixes})}});return true;
   });
   return changed?getDetailedReleaseById(release.id):null;
 }
@@ -80,7 +81,8 @@ async function checkRelease(releaseId: number, siteUrl: string) {
   if(!release||!['under_review','approved','queued_for_distribution'].includes(release.status))return false;
   const previous=object(release.metadata?.autoQc), prior=validQcEvidence(previous)?previous:object(previous.previousResult);
   const revision=automaticQcRevision(release), snapshot=automationSensitiveSnapshot(release);
-  if(validQcEvidence(previous)&&previous.policyVersion===DISTRIBUTION_QC_POLICY_VERSION&&previous.revision===revision&&['issues_found','manual_review_required'].includes(String(previous.status)))return false;
+  const needsDateRecovery=technicalReleaseFixes(release).some(fix=>fix.field==='releaseDate');
+  if(!needsDateRecovery&&validQcEvidence(previous)&&previous.policyVersion===DISTRIBUTION_QC_POLICY_VERSION&&previous.revision===revision&&['issues_found','manual_review_required'].includes(String(previous.status)))return false;
   const context=await automaticDeliveryContext(releaseId,release.userId);
   const decision=distributionAutomationDecision(release,context);
   const base={revision,snapshot,changeKind:decision.route,reason:decision.reason,issueCount:0,warningCount:0,checks:[] as {label:string;ready:boolean}[],issues:[] as {field:string;message:string}[],fixes:[] as {field:string;before:string;after:string}[]};
@@ -89,7 +91,7 @@ async function checkRelease(releaseId: number, siteUrl: string) {
     const reason=sensitiveChanged?'Artist identity, contributor, rights or explicit-content declarations changed. A reviewer must confirm this change.':decision.reason;
     await recordQc(release,{...base,...(sensitiveChanged?{snapshot:prior.snapshot,changeKind:'sensitive_change'}:{}),status:'manual_review_required',reason,issueCount:1,issues:[{field:'review',message:reason}]});return false;
   }
-  if(validQcEvidence(previous)&&previous.policyVersion===DISTRIBUTION_QC_POLICY_VERSION&&previous.revision===revision&&previous.status==='passed'){try{await assertAutomaticQcSources(release);return true;}catch{/* Recheck the actual selected files below. */}}
+  if(!needsDateRecovery&&validQcEvidence(previous)&&previous.policyVersion===DISTRIBUTION_QC_POLICY_VERSION&&previous.revision===revision&&previous.status==='passed'){try{await assertAutomaticQcSources(release);return true;}catch{/* Recheck the actual selected files below. */}}
   try {
     const fixes=technicalReleaseFixes(release);
     if(release.status==='queued_for_distribution'&&fixes.length){await recordQc(release,{...base,status:'manual_review_required',reason:'A queued retry requires a reviewer before changing its original package.',issueCount:1});return false;}
