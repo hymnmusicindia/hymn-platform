@@ -19,6 +19,8 @@ export function useAdminReleaseFeed(initial: Release[], enabled: boolean) {
   const refresh = useCallback(async (fullSnapshot=false) => {
     if (!enabled || controller.current || !active.current) return;
     const request = new AbortController(); controller.current = request;
+    let timedOut = false;
+    const timeout = window.setTimeout(() => { timedOut = true; request.abort(); }, 20000);
     const startedAt = revision.current; setRefreshing(true);
     try {
       let incoming=[...latest.current],nextCursor=fullSnapshot?null:cursor.current;
@@ -36,16 +38,16 @@ export function useAdminReleaseFeed(initial: Release[], enabled: boolean) {
         nextCursor=typeof data.watermark==='string'?data.next?{since:data.next.since,afterId:data.next.afterId,until:data.watermark}:{since:new Date(Date.parse(data.watermark)-30000).toISOString(),afterId:0}:null;
         if(!data.next)break;
       }
-      if (active.current && startedAt === revision.current) {
+      if (active.current && controller.current === request && !request.signal.aborted && startedAt === revision.current) {
         const fresh = incoming.filter(release => releaseBucket(release) !== 'drafts' && (!known.current.has(release.id) || known.current.get(release.id) === 'drafts'));
         setArrivals(count => count + fresh.length);
         known.current = new Map(incoming.map(release => [release.id,releaseBucket(release)]));
         cursor.current=nextCursor;latest.current=incoming;
         write([...incoming].sort(newestReleaseFirst)); setUpdatedAt(new Date().toISOString());
       }
-      if (active.current) setError(null);
-    } catch (failure) { if (active.current && !request.signal.aborted) setError(failure instanceof Error ? failure.message : 'Could not refresh releases.'); }
-    finally { if(controller.current === request) controller.current = null; if(active.current) setRefreshing(false); }
+      if (active.current && controller.current === request && !request.signal.aborted) setError(null);
+    } catch (failure) { if (active.current && controller.current === request && (timedOut || !request.signal.aborted)) setError(timedOut ? 'Release refresh timed out. Showing the last loaded catalogue. Retry to refresh this queue.' : failure instanceof Error ? failure.message : 'Could not refresh releases.'); }
+    finally { window.clearTimeout(timeout); if(controller.current === request) { controller.current = null; if(active.current) setRefreshing(false); } }
   }, [enabled]);
   useEffect(() => {
     active.current = true; void refresh();
