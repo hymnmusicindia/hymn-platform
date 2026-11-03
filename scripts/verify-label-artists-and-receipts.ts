@@ -56,7 +56,7 @@ async function main() {
   await deliverSubscriptionReceipts(job.id, async () => { throw Object.assign(Error('no connection'), { code: 'ECONNREFUSED' }); }, db, now); assert.equal(job.status, 'pending'); assert.equal(job.retryCount, 1);
   await deliverSubscriptionReceipts(job.id, send, db, now); assert.equal(sends, 1, 'backoff must prevent immediate retries');
   job.payload.nextAttemptAt = undefined;
-  await deliverSubscriptionReceipts(job.id, async () => { throw Error('uncertain outcome'); }, db, now); assert.equal(job.status, 'review');
+  const uncertain = await deliverSubscriptionReceipts(job.id, async () => { throw Error('uncertain outcome'); }, db, now); assert.equal(job.status, 'review'); assert.equal(uncertain.failed, 1, 'Scheduled health checks must see delivery failures.');
   payment.status = 'failed'; rows.length = 0; assert.equal(await queueSubscriptionReceipt(payment.id, db), null);
   payment.status = 'captured'; payment.amount = 199901; await assert.rejects(queueSubscriptionReceipt(payment.id, db));
   console.log('Label pricing boundaries, discount threshold, verified capacity, expiring offline slots, receipt reconciliation, PDF integrity, duplicate sends, recipient changes, backoff and uncertain SMTP outcomes passed. No real mail or payments.');

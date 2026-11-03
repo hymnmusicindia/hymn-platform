@@ -146,7 +146,7 @@ async function resolvePlanVersion(product: SubscriptionProduct, extraArtists = 0
     const gateway = razorpay;
     // A transaction-level lock prevents concurrent checkouts creating duplicate variants.
     return prisma.$transaction(async tx => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(49813, ${extraArtists})`;
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(49813, ${extraArtists}::integer)`;
       const saved = await tx.subscriptionPlanVersion.findFirst({ where: { product, amount: artistQuote.total, currency: 'INR', billingInterval: '12 months', active: true }, orderBy: { id: 'asc' } });
       const provider = saved ? await gateway.plans.fetch(saved.razorpayPlanId) : await gateway.plans.create({ period: 'monthly', interval: 12, item: { name: `HYMN Yearly+ | 15 + ${extraArtists} artists`, amount: artistQuote.total, currency: 'INR', description: 'Annual subscription including extra artist profiles' }, notes: { hymn_extra_artists: String(extraArtists), hymn_pricing: 'label-artists-v1' } });
       validateSubscriptionProviderPlan(provider, { amount: artistQuote.total, currency: 'INR', months: 12, planEnv: 'Yearly+ artist slots' });

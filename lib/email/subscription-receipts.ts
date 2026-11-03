@@ -116,17 +116,17 @@ export async function queueSubscriptionReceipt(paymentId: number, db = prisma) {
 type Delivery = (input: { from: string; to: string; subject: string; html: string; text: string; replyTo?: string; attachments: EmailAttachment[] }) => Promise<{ data: { id?: string } | null; error: { message: string } | null }>;
 export async function deliverSubscriptionReceipts(logId?: number, deliver?: Delivery, db = prisma, now = new Date()) {
   const config = getEmailConfig();
-  if (!config.enabled && !deliver) return { sent: 0, enabled: false };
+  if (!config.enabled && !deliver) return { sent: 0, failed: 0, enabled: false };
   const scope = { template: SUBSCRIPTION_RECEIPT_TEMPLATE };
   // An interrupted/ambiguous SMTP send needs review, never a blind duplicate receipt.
   await db.emailLog.updateMany({ where: { ...scope, status: 'sending', payload: { path: ['claimedAt'], lt: new Date(now.getTime() - 600000).toISOString() } }, data: { status: 'review', errorMessage: 'Interrupted receipt delivery; verify SMTP outcome before retrying.' } });
   const jobs = await db.emailLog.findMany({ where: { ...scope, status: 'pending', ...(logId ? { id: logId } : {}) }, orderBy: { id: 'asc' }, take: 4 });
-  let sent = 0;
+  let sent = 0, failed = 0;
   const deadline = Date.now() + 15000;
   for (const job of jobs) {
     if (Date.now() + 10000 > deadline) break;
     const parsed = snapshotSchema.safeParse(job.payload);
-    if (!parsed.success) { await db.emailLog.updateMany({ where: { id: job.id, status: 'pending' }, data: { status: 'review', errorMessage: 'Invalid receipt payload; review required.' } }); continue; }
+    if (!parsed.success) { await db.emailLog.updateMany({ where: { id: job.id, status: 'pending' }, data: { status: 'review', errorMessage: 'Invalid receipt payload; review required.' } }); failed++; continue; }
     const s = parsed.data;
     if (s.nextAttemptAt && Date.parse(s.nextAttemptAt) > now.getTime()) continue;
     const claimed = await db.emailLog.updateMany({ where: { id: job.id, status: 'pending' }, data: { status: 'sending', payload: json({ ...s, claimedAt: now.toISOString() }) } });
@@ -136,7 +136,7 @@ export async function deliverSubscriptionReceipts(logId?: number, deliver?: Deli
       if (!payment || payment.status !== 'captured' || payment.amount !== s.gatewayPaid || payment.currency !== 'INR' || payment.razorpayPaymentId !== s.gatewayPayment || payment.subscription.userId !== job.userId || payment.subscription.user.email.toLowerCase() !== job.toEmail.toLowerCase() || s.email.toLowerCase() !== job.toEmail.toLowerCase()) throw Error('Receipt payment or recipient changed.');
       await receiptAttachment(s);
     } catch {
-      await db.emailLog.update({ where: { id: job.id }, data: { status: 'review', errorMessage: 'Receipt recipient, payment or PDF needs review.' } }); continue;
+      await db.emailLog.update({ where: { id: job.id }, data: { status: 'review', errorMessage: 'Receipt recipient, payment or PDF needs review.' } }); failed++; continue;
     }
     const input = { title: 'Your HYMN receipt', body: `Payment received: ${money(s.total)}. Your detailed PDF receipt is attached. ${s.artists} artist profiles are included, with ${s.freeArtists} complimentary.`, ctaLabel: 'Open your subscription', ctaUrl: `${config.appUrl}/dashboard?tab=subscription`, sections: [{ title: 'Payment record', body: `Gateway: ${money(s.gatewayPaid)}${s.offlinePaid ? `. Offline, confirmed by HYMN: ${money(s.offlinePaid)}.` : '.'}` }, { title: 'Renewal', body: s.renewalNote }] };
     try {
@@ -144,13 +144,14 @@ export async function deliverSubscriptionReceipts(logId?: number, deliver?: Deli
       if (result.error || !result.data?.id) throw Error('SMTP acceptance not confirmed.');
       await db.emailLog.update({ where: { id: job.id }, data: { status: 'sent', sentAt: new Date(), providerMessageId: result.data.id, errorMessage: null } }); sent++;
     } catch (error) {
+      failed++;
       const e = error as { code?: string; command?: string };
       const safe = ['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN'].includes(e.code || '') || e.code === 'ETIMEDOUT' && e.command === 'CONN';
       const retryCount = job.retryCount + 1;
       await db.emailLog.update({ where: { id: job.id }, data: { status: safe && retryCount <= 5 ? 'pending' : 'review', retryCount, errorMessage: safe ? 'SMTP connection unavailable; retry scheduled.' : 'Receipt delivery uncertain; verify before resending.', payload: json({ ...s, nextAttemptAt: new Date(now.getTime() + Math.min(3600, 60 * 2 ** retryCount) * 1000).toISOString() }) } });
     }
   }
-  return { sent, enabled: true };
+  return { sent, failed, enabled: true };
 }
 
 /** Repair recent missed enqueue events; never bulk-email historical customers. */
@@ -166,5 +167,5 @@ export async function repairSubscriptionReceipts(db = prisma) {
       if (payment) await db.emailLog.upsert({ where: { eventKey: `subscription-receipt:${payment.razorpayPaymentId}` }, update: {}, create: { userId: payment.subscription.userId, toEmail: payment.subscription.user.email, subject: 'HYMN receipt requires payment review', template: SUBSCRIPTION_RECEIPT_TEMPLATE, eventKey: `subscription-receipt:${payment.razorpayPaymentId}`, entityType: 'subscription_payment', entityId: String(payment.id), status: 'review', errorMessage: 'Receipt pricing or snapshot needs review before email delivery.' } });
     }
   }
-  return { queued, review };
+  return { queued, review, errorCount: review };
 }
