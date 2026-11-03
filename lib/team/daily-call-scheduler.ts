@@ -13,14 +13,14 @@ import {internalIdentities,matchesInternalIdentity} from './internal-identity';
 import {whatsappNumber} from './phone';
 import {readJourneyProfile} from '@/lib/artist-journey';
 import {preferredSlot} from './artist-journey';
-import {notifyTeamBatch} from './notification-batch';
+import {notifyTeamBatch,type TeamReminder} from './notification-batch';
 import {CALL_DUTIES,CALL_DUTY_VERSION,callContext,callDayLimit,callPriority,callTaskWhere,isCallWork} from './daily-call-policy';
 const json=(value:unknown)=>JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 
 /** Run under teamWrite's workspace lock. Existing source tasks remain the canonical calls. */
 export async function syncDailyCallSchedule(tx:Prisma.TransactionClient,a:Actor,now=new Date()){
  demand(a,'tasks.assign');
- const {day,start,end}=indiaWorkday(now),deadline=Date.now()+18000;
+ const {day,start,end}=indiaWorkday(now),deadline=Date.now()+12000;
  const workspace=await tx.teamWorkspace.findUniqueOrThrow({where:{id:a.workspaceId},select:{customerFollowupCursor:true}});
  const cursor=callContext(workspace.customerFollowupCursor),position=callContext(cursor.dailyCallScheduler);
  const members=(await tx.teamMember.findMany({where:{workspaceId:a.workspaceId,status:'ACTIVE',role:{owner:false},user:{status:'ACTIVE'}},include:{role:true},orderBy:{id:'asc'}})).filter(m=>{
@@ -40,6 +40,7 @@ export async function syncDailyCallSchedule(tx:Prisma.TransactionClient,a:Actor,
  const used=new Map(ids.map(id=>[id,today.filter(t=>t.ownerId===id).length+standalone.filter(e=>e.assigneeId===id).length]));
  const capacities=new Map(members.map(m=>[m.id,callDayLimit(m.preferences,activeWindows(m.preferences,start,end).reduce((n,w)=>n+(w.endsAt.getTime()-w.startsAt.getTime())/60000,0))]));
  const planningKeys=members.flatMap(m=>[`${a.workspaceId}:${CALL_DUTY_VERSION}:${m.id}`,`daily-call-plan:${a.workspaceId}:${day}:${m.id}`]);
+ const reminders:TeamReminder[]=[];
  const priorPlans=new Map((await tx.teamTask.findMany({where:{workspaceId:a.workspaceId,eventKey:{in:planningKeys}},select:{id:true,eventKey:true,title:true}})).map(t=>[t.eventKey,t]));
  for(const member of members){
    if(Date.now()>deadline)break;
@@ -51,13 +52,15 @@ export async function syncDailyCallSchedule(tx:Prisma.TransactionClient,a:Actor,
      duty=await tx.teamTask.create({data:{workspaceId:a.workspaceId,creatorId:a.id,ownerId:member.id,eventKey:dutyKey,title:'Updated call-representative duties and tools',description,priority:'NORMAL',checklist:CALL_DUTIES.map(text=>({text,done:false})),followUpContext:{kind:'TASK',dutyVersion:CALL_DUTY_VERSION}}});
      await tx.teamMember.update({where:{id:member.id},data:{responsibilities:`${responsibilities}\n\n${CALL_DUTY_VERSION}\n${description}`.trim()}});
      await tx.teamAudit.create({data:{workspaceId:a.workspaceId,actorId:a.id,action:'calls.duties_updated',entityId:member.id,detail:{version:CALL_DUTY_VERSION,taskId:duty.id,previousResponsibilities:responsibilities}}});
-     await notifyTeamBatch(tx,a,[{eventKey:`duty-notice:${dutyKey}`,memberId:member.id,title:duty.title,taskId:duty.id,href:`/team?workspace=${a.workspaceId}&module=work-station&task=${duty.id}`}]);result.duties++;
+     reminders.push({eventKey:`duty-notice:${dutyKey}`,memberId:member.id,title:duty.title,taskId:duty.id,href:`/team?workspace=${a.workspaceId}&module=work-station&task=${duty.id}`});result.duties++;
    }
    const limit=capacities.get(member.id)||0;if(member.availability!=='AVAILABLE'||limit===0)continue;result.capacity+=limit;
    const eventKey=`daily-call-plan:${a.workspaceId}:${day}:${member.id}`;
    const existing=priorPlans.get(eventKey);
-   if(!existing){const plan=await tx.teamTask.create({data:{workspaceId:a.workspaceId,creatorId:a.id,ownerId:member.id,eventKey,title:`Daily call plan · ${day}`,description:`Open Work-station and Schedule for the live queue. Today's capacity is at most ${limit} reserved 30-minute call slots, reduced by existing appointments and other work. Prioritize promised callbacks, support requests and corrections, then eligible onboarding and customer interest. Only actual source tasks are calls; this planning card does not record a completed call. Check the updated duties and keep needs, commitments and next actions current. Calls are added only when your assignment-hours policy permits and a free slot exists.`,dueAt:new Date(end.getTime()-1),followUpContext:{kind:'TASK',dailyCallPlan:true,day,capacity:limit,dutyVersion:CALL_DUTY_VERSION}}});await notifyTeamBatch(tx,a,[{eventKey:`plan-notice:${eventKey}`,memberId:member.id,title:plan.title,taskId:plan.id,href:`/team?workspace=${a.workspaceId}&module=work-station&task=${plan.id}`}]);result.plans++;}
+   if(!existing){const plan=await tx.teamTask.create({data:{workspaceId:a.workspaceId,creatorId:a.id,ownerId:member.id,eventKey,title:`Daily call plan · ${day}`,description:`Open Work-station and Schedule for the live queue. Today's capacity is at most ${limit} reserved 30-minute call slots, reduced by existing appointments and other work. Prioritize promised callbacks, support requests and corrections, then eligible onboarding and customer interest. Only actual source tasks are calls; this planning card does not record a completed call. Check the updated duties and keep needs, commitments and next actions current. Calls are added only when your assignment-hours policy permits and a free slot exists.`,dueAt:new Date(end.getTime()-1),followUpContext:{kind:'TASK',dailyCallPlan:true,day,capacity:limit,dutyVersion:CALL_DUTY_VERSION}}});reminders.push({eventKey:`plan-notice:${eventKey}`,memberId:member.id,title:plan.title,taskId:plan.id,href:`/team?workspace=${a.workspaceId}&module=work-station&task=${plan.id}`});result.plans++;}
  }
+ await notifyTeamBatch(tx,a,reminders.splice(0));
+ if(Date.now()>deadline)return result;
  const candidates=await tx.teamTask.findMany({where:{workspaceId:a.workspaceId,archivedAt:null,status:'TODO',...(position.day===day&&typeof position.after==='string'?{id:{gt:position.after}}:{}),client:{status:'ACTIVE',mergedIntoId:null},AND:[callTaskWhere,{OR:[{dueAt:null},{dueAt:{lt:now}}]}]},include:{client:{include:{prospect:true,user:{select:{status:true}}}},owner:{include:{role:true}}},orderBy:{id:'asc'},take:100});
  const lastCandidate=candidates.at(-1)?.id;
  const slots=new Map<string,Date|null>();
@@ -86,7 +89,7 @@ export async function syncDailyCallSchedule(tx:Prisma.TransactionClient,a:Actor,
      const changed=await tx.teamTask.update({where:{id:task.id},data:{ownerId:member.id,dueAt,followUpContext:json({...c,dailyCallScheduled:{day,version:CALL_DUTY_VERSION,previousOwnerId:task.ownerId,reason:'Available capacity and priority; original source and attribution retained.'}}),version:{increment:1}}});
      await syncCallbackCalendar(tx,a,changed);
      await tx.teamAudit.create({data:{workspaceId:a.workspaceId,actorId:a.id,action:'calls.daily_scheduled',entityId:task.id,detail:{day,from:task.ownerId,to:member.id,dueAt:dueAt.toISOString()}}});
-     await notifyTeamBatch(tx,a,[{eventKey:`daily-call-assigned:${day}:${task.id}:${member.id}`,memberId:member.id,title:`Call scheduled: ${task.title}`,taskId:task.id,href:`/team?workspace=${a.workspaceId}&module=work-station&task=${task.id}`}]);
+     reminders.push({eventKey:`daily-call-assigned:${day}:${task.id}:${member.id}`,memberId:member.id,title:`Call scheduled: ${task.title}`,taskId:task.id,href:`/team?workspace=${a.workspaceId}&module=work-station&task=${task.id}`});
      if(priorToday)used.set(priorToday.ownerId,Math.max(0,(used.get(priorToday.ownerId)||0)-1));
      used.set(member.id,(used.get(member.id)||0)+1);
      if(member.id!==task.ownerId){load.set(task.ownerId,Math.max(0,(load.get(task.ownerId)||0)-1));load.set(member.id,(load.get(member.id)||0)+1);}
@@ -94,6 +97,7 @@ export async function syncDailyCallSchedule(tx:Prisma.TransactionClient,a:Actor,
    }
    if(!assigned){result.held++;slots.clear();}
  }
+ await notifyTeamBatch(tx,a,reminders);
  if(Date.now()<=deadline&&result.scheduled<12)await tx.teamWorkspace.update({where:{id:a.workspaceId},data:{customerFollowupCursor:json({...cursor,dailyCallScheduler:{day,after:candidates.length===100?lastCandidate:null}})}});
  return result;
 }
