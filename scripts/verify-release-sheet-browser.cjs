@@ -22,7 +22,7 @@ async function main() {
     const page=await browser.newPage({viewport:{width,height:900},reducedMotion:'reduce'}),errors=[],writes=[];let entry=false;
     page.on('pageerror',e=>errors.push(e.message));await page.route('https://hymn.fixture/**',async route=>{const req=route.request(),url=new URL(req.url());
       if(req.method()!=='GET')writes.push({url:url.pathname,body:req.postDataJSON()});
-      if(req.resourceType()==='document'){const release=entry?{...fixtureRelease,artistName:'',tracks:[{...fixtureRelease.tracks[0],primaryArtist:'',artistProfileIds:[],audioUrl:''}]}:fixtureRelease;return route.fulfill({contentType:'text/html',body:`<html data-theme="${theme}"><body><div id="root"></div><script>window.fixtureRelease=${JSON.stringify(release)};window.fixtureEntry=${entry};window.fixtureAmendment=false</script></body></html>`});}
+      if(req.resourceType()==='document'){const release=entry?{...fixtureRelease,artistName:'',tracks:[{...fixtureRelease.tracks[0],primaryArtist:'',artistProfileIds:[],audioUrl:''}]}:fixtureRelease;return route.fulfill({contentType:'text/html',body:`<html data-theme="${theme}"><body><div><header data-site-header style="position:sticky;top:0;z-index:1200;height:64px;background:var(--bg)"></header><div id="root"></div><script>window.fixtureRelease=${JSON.stringify(release)};window.fixtureEntry=${entry};window.fixtureAmendment=false</script></div></body></html>`});}
       if(url.pathname.startsWith('/api/assets/'))return route.fulfill({contentType:'audio/wav',body:wav()});
       if(url.pathname==='/fixture-cover.png')return route.fulfill({contentType:'image/png',body:await require('sharp')({create:{width:3000,height:3000,channels:3,background:'#405f82'}}).png().toBuffer()});
       if(url.pathname.startsWith('/assets/'))try{return await route.fulfill({body:await fs.readFile(path.join('public',url.pathname))});}catch{}
@@ -35,12 +35,22 @@ async function main() {
     const nav=page.getByRole('navigation',{name:'Release sections',exact:true});await expect(nav).toHaveCount(1);
     for(const [id,label] of [[3,'Credits & tracks'],[4,'Cover artwork'],[2,'Release details'],[5,'Delivery']]){
       await page.locator(`[data-release-section="${id}"]`).evaluate(el=>el.scrollIntoView({block:'start'}));
-      if(id===4)await expect(page.locator('.release-navigation-header')).toBeInViewport();
+      await expect(page.locator('.release-navigation-header')).toBeInViewport();
+      await expect.poll(()=>page.locator('.release-navigation-header').evaluate(el=>{
+        const r=el.getBoundingClientRect(),h=document.querySelector('[data-site-header]').getBoundingClientRect();
+        return r.top>=h.bottom-1 && r.bottom<=innerHeight && el.contains(document.elementFromPoint(r.left+r.width/2,r.top+10));
+      })).toBe(true);
       await expect(nav.getByRole('button',{name:label,exact:false})).toHaveAttribute('aria-current','step');
     }
     await expect(page.locator('[data-release-section]')).toHaveCount(4);
-    await page.locator('[data-release-section="2"]').evaluate(el=>el.scrollIntoView({block:'start'}));
-    await page.locator('.release-navigation-header .release-workspace-state').getByRole('button',{name:'Review',exact:true}).click();
+    await page.locator('[data-site-header]').evaluate(el=>el.style.height='96px');
+    await expect.poll(()=>page.locator('.release-navigation-header').evaluate(el=>parseFloat(getComputedStyle(el).top))).toBe(96);
+    const bottomReview=page.getByRole('button',{name:'Review release',exact:true});
+    await bottomReview.scrollIntoViewIfNeeded();await expect(bottomReview).toBeVisible();
+    await expect(page.locator('.release-navigation-header')).toBeInViewport();
+    assert.notEqual(await bottomReview.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
+    assert.equal(await bottomReview.getAttribute('type'),'button');
+    await bottomReview.click();
     const dialog=page.getByRole('dialog',{name:'Review your release',exact:true});
     if(!await dialog.isVisible()){console.log('review status',await page.locator('[role="alert"]').allTextContents(),await page.locator('.release-editor-status').innerText());}
     await expect(dialog).toBeVisible();await expect(dialog.getByText('Dreamy',{exact:true}).first()).toBeVisible();

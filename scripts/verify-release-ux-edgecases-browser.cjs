@@ -38,7 +38,7 @@ async function main() {
     });
     await page.goto('https://hymn.fixture/distribution/start');await page.addStyleTag({path:path.join(out,'global.css')});const layout=await fs.readFile('app/layout.tsx','utf8');for(const m of layout.matchAll(/import "\.\/styles\/([^"]+)"/g))await page.addStyleTag({path:'app/styles/'+m[1]});await page.addStyleTag({path:path.join(out,'ui.css')});await page.addScriptTag({path:path.join(out,'ui.js')});
     await expect(page.locator('[data-release-section]')).toHaveCount(4);
-    const review=()=>page.locator('.release-navigation-header .release-workspace-state').getByRole('button',{name:'Review',exact:true}).click();await review();
+    const review=()=>page.getByRole('button',{name:'Review release',exact:true}).click();await review();
     if(mode==='missing'){
       const message=page.locator('#release-field-error-track-0-title-language');await expect(message).toBeVisible();await expect(message).toContainText('Select a language for Track 1.');
       const group=message.locator('..');const button=group.getByRole('button',{name:'Select track language',exact:true});await expect(button).toHaveAttribute('aria-invalid','true');await expect(button).toHaveAttribute('aria-describedby',/release-field-error-track-0-title-language/);

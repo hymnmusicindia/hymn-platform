@@ -5075,6 +5075,7 @@ export function ReleaseForm({
         {entryStage === 0 ? <div className={layoutStyles.entryActions}><button type="button" onClick={continueFromMusic} disabled={tracks.some(track => track.audioUploadStatus === "uploading") || replacingAudioCount > 0}>{audioComplete ? "Continue to release information" : "Skip for now"}<ArrowRight size={16}/></button></div> : null}
             <div className={layoutStyles.sheetDraftAction}>
           <button type="button" onClick={saveDraftRelease} disabled={submitting} hidden={Boolean(initialRelease && initialRelease.status !== "draft")} className="release-footer-action is-draft">Draft</button>
+          {entryStage === null ? <button type="button" onClick={enterReviewMode} disabled={submitting} className={layoutStyles.sheetReviewAction}>Review release <ArrowRight size={16} aria-hidden="true" /></button> : null}
         </div>
         <ReleaseFieldErrors issues={validationIssues} shown={validationErrorKeys} fields={fieldRefs}/>
         {status ? (
