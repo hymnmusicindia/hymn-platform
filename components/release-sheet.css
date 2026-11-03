@@ -1,0 +1,14 @@
+/* Avoid two competing page scroll containers, which break sticky navigation. */
+html body:has(.release-single-sheet.release-single-sheet) { overflow:visible!important; }
+html:has(.release-single-sheet.release-single-sheet) { overflow-x:clip!important; overflow-y:auto!important; }
+html:has(.release-single-sheet):has(.customer-overlay [aria-modal="true"]),
+html body:has(.release-single-sheet):has(.customer-overlay [aria-modal="true"]) { overflow:hidden!important; }
+html body:has(.release-single-sheet) .release-navigation-header {
+  position:sticky!important; top:0; z-index:80; margin-top:0; padding:10px 0!important; flex-shrink:0;
+  background:color-mix(in srgb,var(--bg) 94%,transparent); backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--border);
+}
+html body:has(.release-single-sheet) :is(.landing-canvas,.landing-page-content,.hymn-landing,.landing-layout,.landing-workspace) { overflow:visible!important; }
+@media(max-width:767px) {
+  html body:has(.release-single-sheet) .release-navigation-header { padding-top:max(8px,env(safe-area-inset-top))!important; }
+}

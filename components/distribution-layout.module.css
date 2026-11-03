@@ -75,3 +75,31 @@ html body .workflow.workflow.workflow.workflow .contentIdButton {
 html body .workflow.workflow.workflow.workflow .contentIdButton:disabled { opacity:.55; cursor:not-allowed; }
 html body .workflow.workflow.workflow.workflow .contentIdButton:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 html body .workflow.workflow.workflow.workflow .deliveryTerritories > div > div { padding:14px 16px!important; border-radius:12px!important; }
+
+/* One stable sheet: scrolling changes the navigation highlight, never the layout. */
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-mobile-step-menu),
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-workflow-summary),
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-workflow-nav) { display:none!important; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-editor-panels) { display:flex!important; flex-direction:column; gap:40px; width:100%; }
+.sheetSection { width:100%; min-width:0; scroll-margin-top:160px; display:grid; gap:20px; padding-bottom:32px; border-bottom:1px solid var(--border); }
+.sheetHeading h2 { margin:0; color:var(--text); font-size:clamp(20px,2vw,26px); line-height:1.3; letter-spacing:-.02em; font-weight:600; }
+html body .workflow.workflow.workflow.workflow.singleSheet .sheetSection > section { width:100%; min-width:0; margin:0; padding-block:0!important; grid-column:auto!important; grid-row:auto!important; animation:none!important; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-artist-stage) { min-height:0!important; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-focused-side-nav) { display:none!important; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-tracklist-stage) { display:grid!important; grid-template-columns:minmax(0,1fr)!important; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-audio-stage),
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-onboarding-assets),
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-onboarding-audio) { display:grid; grid-template-columns:minmax(0,1fr)!important; min-height:0!important; height:auto!important; max-width:none!important; width:100%; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-audio-queue) { max-height:none!important; overflow:visible!important; }
+.sheetDraftAction { display:flex; justify-content:flex-end; gap:12px; padding-block:12px; }
+.sheetDraftAction button { min-height:44px; padding:10px 18px; }
+.entryActions { display:flex; justify-content:flex-end; padding:12px 0; }
+.entryActions button { display:inline-flex; align-items:center; justify-content:center; gap:10px; min-height:44px; padding:12px 18px; border:1px solid var(--border-strong); border-radius:10px; background:var(--accent); color:var(--accent-foreground,var(--bg)); font-size:14px; font-weight:600; }
+html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-artist-stage) { padding:20px 0!important; }
+@media(max-width:767px) {
+  html body .workflow.workflow.workflow.workflow.singleSheet { padding:16px 12px!important; }
+  html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-editor-panels) { gap:28px; }
+  .sheetSection { gap:16px; padding-bottom:24px; scroll-margin-top:145px; }
+  .entryActions button { width:100%; }
+}
+@media(prefers-reduced-motion:reduce) { .sheetSection { scroll-behavior:auto; } }
