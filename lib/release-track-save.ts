@@ -25,7 +25,7 @@ export async function saveReleaseTracks(db: Prisma.TransactionClient, releaseId:
   const refs = rows.map(row => clientTrackId(row.metadata));
   const knownRefs = refs.filter((ref): ref is string => Boolean(ref));
   if (new Set(knownRefs).size !== knownRefs.length) throw new Error("Each recording must have a unique track identity.");
-  const identityTracks = existing.length && knownRefs.length ? await db.track.findMany({ where: { releaseId, id: { in: existing.map(track => track.id) } }, select: { id: true, trackNumber: true, title: true, audioUrl: true, metadata: true } }) : [];
+  const identityTracks = existing.length ? await db.track.findMany({ where: { releaseId, id: { in: existing.map(track => track.id) } }, select: { id: true, trackNumber: true, title: true, audioUrl: true, metadata: true } }) : [];
   const previous = new Map(existing.map(track => [track.trackNumber, track]));
   const used = new Set<number>();
   const reserved = new Set(identityTracks.filter(track => knownRefs.includes(clientTrackId(track.metadata) || "") || knownRefs.includes(`existing-track-${track.id}`)).map(track => track.id));
@@ -49,6 +49,13 @@ export async function saveReleaseTracks(db: Prisma.TransactionClient, releaseId:
   const removed = identityTracks.filter(track => !used.has(track.id));
   if (removed.length) await db.track.updateMany({ where: { releaseId, id: { in: removed.map(track => track.id) } }, data: { trackNumber: Math.max(...numbers) + existing.length + 1 } });
   const created = rows.filter((_, index) => !matches[index]);
+  // Autosave omits unchanged licence uploads. Preserve the reference belonging
+  // to the matched recording, including after a reorder, rather than its row.
+  rows.forEach((row,index)=>{
+    const prior=identityTracks.find(track=>track.id===matches[index]?.id)?.metadata;
+    const incoming=row.metadata as Prisma.InputJsonObject;
+    if(prior && typeof prior==='object' && !Array.isArray(prior) && incoming && typeof incoming==='object' && !Array.isArray(incoming) && incoming.coverLicenseUrl===undefined && typeof prior.coverLicenseUrl==='string')row.metadata={...incoming,coverLicenseUrl:prior.coverLicenseUrl};
+  });
   if (created.length) await db.track.createMany({ data: created.map(row => ({ ...row, releaseId })) });
   const updated = rows.flatMap((row, index) => {
     const track = matches[index];

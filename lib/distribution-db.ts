@@ -7,6 +7,7 @@ import { createNotification, findUserById } from "@/lib/db";
 import { emailAppUrl, sendReleaseEmail } from "@/lib/email/email-events";
 import { transitionReleaseStatus } from "@/lib/release-status-engine";
 import { canonicalReleaseArtworkUrl } from "@/lib/release-media";
+import { resolvePrivateReleaseArtworkUrl } from '@/lib/release-asset-resolution';
 import type { Prisma } from "@prisma/client";
 import { redactDireNoteDiagnostic } from "@/lib/direnote";
 import { findDistributionPlan } from "@/lib/distribution-plans";
@@ -666,6 +667,7 @@ export async function duplicateReleaseForUser(userId: number, releaseId: number)
   const persistedArtwork = isPostgresPrisma()
     ? await prisma.release.findFirst({ where: { id: releaseId, userId }, select: { artworkUrl: true } })
     : null;
+  const duplicateArtwork=isPostgresPrisma()?await resolvePrivateReleaseArtworkUrl({userId,releaseId,value:persistedArtwork?.artworkUrl || source.artworkUrl}):source.artworkUrl;
   const { id: _id, userId: _userId, status: _status, createdAt: _createdAt, queuePosition: _queuePosition,
     estimatedReviewTime: _estimatedReviewTime, tracks, reviewIssues: _reviewIssues, rejectionReason: _rejectionReason,
     correctionReason: _correctionReason, reviewedAt: _reviewedAt, reviewedBy: _reviewedBy,
@@ -687,7 +689,7 @@ export async function duplicateReleaseForUser(userId: number, releaseId: number)
       ...(duplicateSafeValue(safeSource) as typeof safeSource),
       // Keep the owned private asset reference. The display model contains a
       // release-scoped route which would otherwise point back to the source.
-      artworkUrl: persistedArtwork?.artworkUrl ?? safeSource.artworkUrl,
+      artworkUrl: duplicateArtwork,
       releaseTitle: copyTitle,
       trackName: copyTitle,
       youtubeContentIdEnabled: false,

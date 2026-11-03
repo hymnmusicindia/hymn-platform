@@ -13,6 +13,7 @@ import { distributionEditSchema } from "@/lib/validation";
 import { assertDireNoteAssetFormat } from "@/lib/distribution-asset-format";
 import { resolvePrivateReleaseArtworkUrl } from "@/lib/release-asset-resolution";
 import { prisma } from "@/lib/prisma";
+import {validateReleaseDocument} from '@/lib/release-attachment-validation';
 
 type EditTrackPayload = Omit<ReleaseTrack, "id" | "releaseId" | "createdAt"> & {
   coverLicenseUrl?: string;
@@ -82,6 +83,8 @@ export async function POST(request: Request) {
     }
     await assertDireNoteAssetFormat({ userId: existingRelease.userId, url: artworkUrl, kind: "artwork", label: "Cover artwork" });
 
+    await validateReleaseDocument({userId:session.sub,value:parsed.metadata.licenseReceiptUrl,kind:'ownership',allowLink:true});
+    await validateReleaseDocument({userId:session.sub,value:parsed.metadata.sunoReceiptUrl,kind:'ai',allowLink:true});
     const tracks: EditTrackPayload[] = [];
     for (const track of parsed.metadata.tracks) {
       const audioUpload = formData.get(track.audioFileKey);
@@ -94,7 +97,8 @@ export async function POST(request: Request) {
       }
       await assertDireNoteAssetFormat({ userId: existingRelease.userId, url: audioUrl, kind: "audio", label: `Audio for ${track.trackTitle}` });
 
-      let coverLicenseUrl: string | undefined = track.uploadedCoverLicenseUrl;
+      const previousLicence=existingRelease.tracks?.find(item=>item.trackNumber===track.trackNumber)?.coverLicenseUrl;
+      let coverLicenseUrl: string | undefined = track.uploadedCoverLicenseUrl || previousLicence;
       if (track.coverLicenseFileKey) {
         const licenseUpload = formData.get(track.coverLicenseFileKey);
         if (licenseUpload instanceof File) {
@@ -104,6 +108,7 @@ export async function POST(request: Request) {
         }
       }
 
+      if(coverLicenseUrl && coverLicenseUrl!=='previously_uploaded')coverLicenseUrl=await validateReleaseDocument({userId:session.sub,value:coverLicenseUrl,kind:'cover'});
       tracks.push({
         trackTitle: track.trackTitle,
         language: track.language,

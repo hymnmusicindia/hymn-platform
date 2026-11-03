@@ -8,6 +8,7 @@ import { recordGrowthEvent } from "@/lib/growth";
 import { prisma } from "@/lib/prisma";
 import { releaseSaveFailure } from "@/lib/release-track-save";
 import { firstReleaseAttribution } from "@/lib/first-release-flow";
+import {validateReleaseDocument} from '@/lib/release-attachment-validation';
 
 export const maxDuration = 180;
 
@@ -38,11 +39,11 @@ export async function POST(request: Request) {
       return url;
     };
 
-    const artworkUrl = await resolvePrivateReleaseArtworkUrl({
+    const artworkUrl = rejectPublicDeliverable(await resolvePrivateReleaseArtworkUrl({
       userId: session.sub,
       releaseId: draftReleaseId,
-      value: rejectPublicDeliverable(metadata.uploadedArtworkUrl ?? metadata.existingArtworkUrl ?? existingRelease?.artworkUrl ?? "")
-    });
+      value: metadata.uploadedArtworkUrl || metadata.existingArtworkUrl || existingRelease?.artworkUrl || ""
+    }));
     const requestedFirstReleaseOffer = metadata.promotionCode === FIRST_RELEASE_PROMOTION_CODE;
     const existingMetadata = existingRelease?.metadata && typeof existingRelease.metadata === "object" ? existingRelease.metadata as Record<string, unknown> : {};
     const existingFirstReleaseOffer = existingMetadata.promotionCode === FIRST_RELEASE_PROMOTION_CODE;
@@ -62,7 +63,8 @@ export async function POST(request: Request) {
 
       let coverLicenseUrl: string | undefined;
       if (track.isCover) {
-        coverLicenseUrl = track.uploadedCoverLicenseUrl ? rejectPublicDeliverable(track.uploadedCoverLicenseUrl) : (track.existingCoverLicenseConfirmed || track.coverLicenseConfirmed ? "previously_uploaded" : undefined);
+        const previous=existingTrack?.coverLicenseUrl;
+        coverLicenseUrl=previous==='previously_uploaded' && !track.uploadedCoverLicenseUrl ? previous : await validateReleaseDocument({userId:session.sub,value:track.uploadedCoverLicenseUrl || previous,kind:'cover'});
       }
 
       tracks.push({

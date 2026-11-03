@@ -50,11 +50,22 @@ async function main() {
   assert.equal(duplicate.tracks[0].isrc ?? null, null, "A duplicated release does not reuse the source recording identifier");
   assert.equal((await prisma.release.findUniqueOrThrow({ where: { id: duplicate.id } })).artworkUrl, `/api/assets/${singleArtwork.id}/download?filename=cover.jpg`, "A duplicated release retains the owned private artwork asset rather than the source release route");
   assert.equal(duplicate.artworkUrl, `/api/releases/${duplicate.id}/artwork?filename=cover.jpg`);
+  await prisma.$transaction(async tx=>{
+    const artworkUrl=await resolvePrivateReleaseArtworkUrl({userId:user.id,releaseId:duplicate.id,value:duplicate.artworkUrl},tx);
+    await tx.release.update({where:{id:duplicate.id},data:{artworkUrl}});
+  });
+  assert.equal((await prisma.release.findUniqueOrThrow({where:{id:duplicate.id}})).artworkUrl,`/api/assets/${singleArtwork.id}/download?filename=cover.jpg`,'Autosaving the display URL preserves the private asset');
+  const secondCopy=await duplicateReleaseForUser(user.id,duplicate.id);assert(secondCopy);
+  assert.equal((await prisma.release.findUniqueOrThrow({where:{id:secondCopy.id}})).artworkUrl,`/api/assets/${singleArtwork.id}/download?filename=cover.jpg`,'A duplicate of an autosaved duplicate retains the private artwork');
+  const copiedTrack=await prisma.track.findFirstOrThrow({where:{releaseId:duplicate.id}});
+  await prisma.track.update({where:{id:copiedTrack.id},data:{metadata:{...(copiedTrack.metadata as object),coverLicenseUrl:'/api/assets/123/download?filename=licence.pdf'}}});
   await prisma.release.update({ where: { id: duplicate.id }, data: { artworkUrl: `/api/releases/${single.id}/artwork` } });
   assert.equal(await resolvePrivateReleaseArtworkUrl({ userId: user.id, releaseId: duplicate.id, value: `/api/releases/${single.id}/artwork` }), `/api/assets/${singleArtwork.id}/download?filename=cover.jpg`, "Legacy duplicates resolve the same owner's source artwork route back to its private JPEG asset");
   const renamed = await saveDraftDistributionRelease({ userId: user.id, draftReleaseId: duplicate.id, metadata: { ...metadata, releaseType: "single", releaseTitle: duplicate.releaseTitle, tracks: [{ ...track(1), trackTitle: "Renamed Single" }] } });
   assert.equal(renamed.releaseTitle, "Renamed Single");
   assert.equal(renamed.tracks[0].trackTitle, "Renamed Single", "Renaming a duplicated single track also updates its release title");
+  const savedTrack=await prisma.track.findUniqueOrThrow({where:{id:copiedTrack.id}});
+  assert.equal((savedTrack.metadata as Record<string,unknown>).coverLicenseUrl,'/api/assets/123/download?filename=licence.pdf','Saving unchanged tracks preserves their actual licence reference');
   await prisma.$transaction(async tx => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(81422028, ${release.id}::integer)`;
     await assert.rejects(saveDraftDistributionRelease({ userId: user.id, draftReleaseId: release.id, metadata }), /being saved or submitted/);

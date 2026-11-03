@@ -13,6 +13,7 @@ import { prisma } from '@/lib/prisma';
 import { enqueueAmendmentUpdate, amendmentTransactionOptions } from '@/lib/release-amendment-notifications';
 
 import { summarizeAmendment } from '@/lib/release-amendment-presentation';
+import {validateReleaseDocument} from '@/lib/release-attachment-validation';
 
 class ActiveAmendmentError extends Error {
   constructor(readonly releaseId: number, readonly request: { id: number; status: string }) { super('Your earlier amendment was received and is being reviewed. Open its details to track progress.'); }
@@ -35,10 +36,13 @@ export async function POST(request: Request) {
     if (!artwork) throw Error('Cover artwork is required.');
     await assertDireNoteAssetFormat({ userId: user.sub, url: artwork, kind: 'artwork', label: 'Cover artwork' });
     metadata.existingArtworkUrl = artwork;
+    await validateReleaseDocument({userId:user.sub,value:metadata.licenseReceiptUrl,kind:'ownership',allowLink:true});
+    await validateReleaseDocument({userId:user.sub,value:metadata.sunoReceiptUrl,kind:'ai',allowLink:true});
     for (const track of metadata.tracks) {
       const audio = track.uploadedAudioUrl || track.existingAudioUrl;
       if (!audio) throw Error(`Restore the original master for ${track.trackTitle}.`);
       await assertDireNoteAssetFormat({ userId: user.sub, url: audio, kind: 'audio', label: track.trackTitle });
+      if(track.uploadedCoverLicenseUrl)await validateReleaseDocument({userId:user.sub,value:track.uploadedCoverLicenseUrl,kind:'cover'});
     }
     const fingerprint = createHash('sha256').update(JSON.stringify(metadata)).digest('hex');
     const change = await prisma.$transaction(async tx => {

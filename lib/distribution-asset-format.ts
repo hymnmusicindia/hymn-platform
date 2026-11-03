@@ -33,10 +33,11 @@ function fileNameFromUrl(value: string) {
   }
 }
 
-export async function assertDireNoteAssetFormat(input: { userId: number; url: string; kind: DistributionAssetKind; label: string }) {
+export async function assertDireNoteAssetFormat(input: { userId: number; url: string; kind: DistributionAssetKind; label: string },db:Pick<typeof prisma,'storedAsset'>=prisma) {
   const assetId = privateAssetId(input.url);
+  if(process.env.NODE_ENV==='production' && (!assetId || !input.url.startsWith('/api/assets/')))throw Error(`${input.label} upload is unavailable. Upload the file again using HYMN private storage.`);
   if (assetId) {
-    const asset = await prisma.storedAsset.findFirst({
+    const asset = await db.storedAsset.findFirst({
       where: { id: assetId, ownerUserId: input.userId, deletedAt: null },
       select: { mimeType: true, safeFilename: true, uploadStatus: true },
     });

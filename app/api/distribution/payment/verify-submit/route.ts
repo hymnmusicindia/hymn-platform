@@ -23,6 +23,7 @@ import { releaseReviewSnapshotHash } from "@/lib/release-review-snapshot";
 import { findReleaseIdentifierConflicts } from "@/lib/release-identifier-conflicts";
 import { runPendingDistributionQc } from "@/lib/distribution-auto-qc";
 import { getPublicAppUrl } from "@/lib/public-app-url";
+import { validateReleaseDocument } from '@/lib/release-attachment-validation';
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -140,6 +141,9 @@ export async function POST(request: Request) {
     }
     await assertDireNoteAssetFormat({ userId: session.sub, url: artworkUrl, kind: "artwork", label: "Cover artwork" });
 
+    await validateReleaseDocument({userId:session.sub,value:parsed.metadata.licenseReceiptUrl,kind:'ownership',allowLink:true});
+    await validateReleaseDocument({userId:session.sub,value:parsed.metadata.sunoReceiptUrl,kind:'ai',allowLink:true});
+    const attachmentRelease=await getDetailedReleaseById(parsed.draftReleaseId);
     const tracks = [];
     for (const track of parsed.metadata.tracks) {
       const audioUrl = requirePrivateAsset(track.uploadedAudioUrl || track.existingAudioUrl, `Audio for ${track.trackTitle}`);
@@ -150,7 +154,8 @@ export async function POST(request: Request) {
 
       let coverLicenseUrl: string | undefined;
       if (track.isCover) {
-        coverLicenseUrl = track.uploadedCoverLicenseUrl ? requirePrivateAsset(track.uploadedCoverLicenseUrl, `Cover licence for ${track.trackTitle}`) : (track.existingCoverLicenseConfirmed ? "previously_uploaded" : undefined);
+        const previous=attachmentRelease?.userId===session.sub?attachmentRelease.tracks?.find(item=>item.trackNumber===track.trackNumber)?.coverLicenseUrl:undefined;
+        coverLicenseUrl = previous==='previously_uploaded' && !track.uploadedCoverLicenseUrl ? previous : await validateReleaseDocument({userId:session.sub,value:track.uploadedCoverLicenseUrl || previous,kind:'cover'});
         if (!coverLicenseUrl && track.coverLicenseConfirmed) {
           return NextResponse.json({ error: `Cover license missing for ${track.trackTitle}.` }, { status: 400 });
         }

@@ -5,6 +5,7 @@ export const maxDuration = 180;
 import { requireUser } from "@/lib/access";
 import { draftTitleForSave } from "@/lib/draft-policy";
 import { getDetailedReleaseByUserId } from "@/lib/distribution-db";
+import { resolvePrivateReleaseArtworkUrl } from '@/lib/release-asset-resolution';
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser(); if ("error" in user) return user.error;
   const release = await getDetailedReleaseByUserId(user.session.sub, Number((await params).id));
@@ -30,8 +31,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return { conflict: true as const, latestUpdatedAt: current.updatedAt.toISOString() };
   }
   const existing = typeof current?.metadata === "object" && current.metadata ? current.metadata as Record<string, unknown> : {};
+  const artworkUrl=typeof body.artworkUrl==='string' ? await resolvePrivateReleaseArtworkUrl({userId:user.session.sub,releaseId:id,value:body.artworkUrl},tx):undefined;
   const updated = await tx.release.update({ where: { id }, data: {
-    metadata: { ...existing, ...metadata, promotionCode: existing.promotionCode ?? null, campaignAttribution: existing.campaignAttribution ?? {}, lastEditedAt: new Date().toISOString() } as any,
+    metadata: { ...existing, ...metadata, ...(artworkUrl!==undefined?{artworkUrl}:{}), promotionCode: existing.promotionCode ?? null, campaignAttribution: existing.campaignAttribution ?? {}, lastEditedAt: new Date().toISOString() } as any,
     releaseType: ["single", "ep", "album"].includes(metadata.releaseType) ? metadata.releaseType : undefined,
     title: typeof body.title === "string" ? draftTitleForSave(body.title) : undefined,
     artistName: typeof body.artistName === "string" && body.artistName.trim() ? body.artistName.trim() : undefined,
@@ -40,7 +42,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     draftCompletionPercent: Number.isFinite(Number((metadata as any).draftCompletionPercent)) ? Math.max(0, Math.min(100, Number((metadata as any).draftCompletionPercent))) : undefined,
     missingFields: Array.isArray((metadata as any).missingFields) ? (metadata as any).missingFields : undefined,
     lastEditedAt: new Date(),
-    artworkUrl: typeof body.artworkUrl === "string" ? body.artworkUrl : undefined,
+    artworkUrl,
     audioUrl: typeof body.audioUrl === "string" ? body.audioUrl : undefined,
     reviewConfirmedAt: null,
     reviewConfirmedBy: null,
