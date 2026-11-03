@@ -103,3 +103,13 @@ html body .workflow.workflow.workflow.workflow.entrySheet :global(.release-artis
   .entryActions button { width:100%; }
 }
 @media(prefers-reduced-motion:reduce) { .sheetSection { scroll-behavior:auto; } }
+
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-artwork-stage) button:is([aria-label="Replace cover artwork"],[aria-label="Upload cover artwork"]) {
+  border:1px solid var(--border-strong)!important; border-radius:12px!important; background:var(--bg-soft)!important;
+  padding:5px!important; outline:1px solid color-mix(in srgb,var(--border) 65%,transparent); outline-offset:3px;
+}
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-artwork-stage) button:is([aria-label="Replace cover artwork"],[aria-label="Upload cover artwork"]) > img {
+  inset:5px!important; width:calc(100% - 10px)!important; height:calc(100% - 10px)!important; border-radius:7px;
+}
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-existing-identifiers) { margin:0; padding:16px; border-radius:12px; }
+html body .workflow.workflow.workflow.workflow.singleSheet :global(.release-save-defaults) { padding:14px 16px; gap:12px; border-radius:10px; }

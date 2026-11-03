@@ -1,0 +1,25 @@
+.panel { border:1px solid var(--border); border-radius:12px; background:var(--card); min-width:0; }
+.panel summary { display:flex; align-items:center; gap:12px; min-height:64px; padding:14px 16px; cursor:pointer; list-style:none; color:var(--text); }
+.panel summary::-webkit-details-marker { display:none; }
+.panel summary>svg { flex-shrink:0; color:var(--text-muted); }
+.panel summary>span:nth-child(2) { display:grid; gap:4px; flex:1; }
+.panel summary strong { font-size:13px; font-weight:600; }
+.panel summary small { font-size:11px; color:var(--text-muted); }
+.count { font-size:11px; white-space:nowrap; color:var(--text-muted); }
+.panel[open] summary>svg:last-child { transform:rotate(180deg); }
+.body { border-top:1px solid var(--border); padding:0 16px 16px; }
+.body>p { font-size:12px; line-height:1.6; color:var(--text-muted); margin:14px 0 4px; }
+.item { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 0; border-bottom:1px solid var(--border); }
+.value { min-width:0; overflow-wrap:anywhere; }
+.value>div { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.value strong { font-size:12px; }
+.value>div>span,.value small { font-size:10px; color:var(--text-muted); }
+.value p { margin:6px 0; font-size:13px; line-height:1.5; color:var(--text); }
+.value small { display:block; line-height:1.5; }
+.actions { display:flex; flex-shrink:0; align-items:center; gap:6px; }
+.actions button,.confirmMatching { min-height:36px; padding:8px 10px; border:1px solid var(--border-strong); border-radius:8px; font-size:11px; font-weight:600; color:var(--text); background:var(--bg-soft); }
+.actions button:last-child { border-color:transparent; background:transparent; color:var(--text-muted); }
+.actions button:disabled { opacity:.5; cursor:not-allowed; }
+.confirmMatching { margin-top:14px; }
+.panel :is(button,summary):focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+@media(max-width:599px) { .item { align-items:flex-start; flex-direction:column; gap:8px; }.actions { width:100%; justify-content:flex-end; }.panel summary { gap:8px; padding:12px; }.panel summary small { max-width:22ch; }.body { padding-inline:12px; } }

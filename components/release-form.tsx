@@ -10,6 +10,9 @@ import "./release-mobile.css";
 import "./release-track-manager.css";
 import { ReleaseTrackActions } from "./release-track-actions";
 import layoutStyles from "./distribution-layout.module.css";
+import { ReleasePrefillPanel } from "./distribution/release-prefill-panel";
+import { matchingSafePrefills, usablePrefill } from "@/lib/release-prefill-review";
+import { ReleaseFieldErrors } from "./distribution/release-field-errors";
 import { ReleaseReviewDialog } from "./distribution/release-review-dialog";
 import { useReleaseSheetNavigation } from "./distribution/use-release-sheet-navigation";
 import { ReleaseStageCarousel } from "./release-stage-carousel";
@@ -218,7 +221,7 @@ import type {
   DistributionQueueSummary,
   Release,
 } from "@/lib/types";
-import { DIRENOTE_LANGUAGES, DIRENOTE_CONTENT_TYPES, normalizeDireNoteContentType } from "@/lib/direnote-config";
+import { DIRENOTE_GENRES, DIRENOTE_SUBGENRES_BY_GENRE, DIRENOTE_LANGUAGES, DIRENOTE_CONTENT_TYPES, normalizeDireNoteContentType } from "@/lib/direnote-config";
 import { readTrackLanguage } from "@/lib/track-language";
 import { releaseAlreadyInReview } from "@/lib/release-correction-workflow";
 import { LanguageFieldHelp } from "@/components/language-field-help";
@@ -336,7 +339,7 @@ const steps = [
   "",
   "Review & submit",
 ] as const;
-const visibleStepIndexes = [1, 0, 2, 4, 3, 5, 7] as const;
+const visibleStepIndexes = [1, 0, 3, 4, 2, 5, 7] as const;
 const menuStepIndexes = visibleStepIndexes;
 const stepMenuLabels: Record<number, string> = {
   0: "Music",
@@ -1198,7 +1201,7 @@ export function ReleaseForm({
   // the right to distribute non-exclusive content. Original and exclusively
   // controlled masters are covered by the ownership declaration instead.
   const requiresLicenceProof = release.contentType === "Non-Exclusive Licensed";
-  const [pendingPrefills, setPendingPrefills] = useState(() => new Set(prefillSuggestions.map((item) => item.field)));
+  const [pendingPrefills, setPendingPrefills] = useState(() => new Set(prefillSuggestions.filter(item => item.field !== "recordLabelName" || selectedPlan === "yearly_plus").map(item => item.field)));
   const [preferencesStatus, setPreferencesStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [legal, setLegal] = useState<LegalState>(() =>
     createInitialLegalState(initialRelease),
@@ -1701,6 +1704,7 @@ export function ReleaseForm({
 
   function triggerFieldFocus(issue: ValidationIssue) {
     if (issue.key === "audio-upload" || issue.key === "release-primary-artists") setExpandedTrack(0);
+    setValidationErrorKeys(current => new Set([...current, issue.key]));
     if (issue.trackIndex != null) setExpandedTrack(issue.trackIndex);
     goToStep(issue.step);
     setShakingField(issue.key);
@@ -1714,7 +1718,8 @@ export function ReleaseForm({
         target instanceof HTMLSelectElement ||
         target instanceof HTMLButtonElement
       )
-        target.focus();
+        target.focus({preventScroll:true});
+      else target.querySelector<HTMLElement>('button:not([disabled]),input:not([type="hidden"]),select,textarea,[tabindex="0"]')?.focus({preventScroll:true});
     }, 80);
     window.setTimeout(
       () =>
@@ -1773,14 +1778,22 @@ export function ReleaseForm({
     setExpandedTrack(tracks.length);
   };
 
-  function resolvePrefill(field: ReleasePrefillSuggestion["field"], keep: boolean) {
-    if (!keep) setRelease((current) => ({ ...current, [field]: "" }));
-    setPendingPrefills((current) => { const next = new Set(current); next.delete(field); return next; });
+  function resolvePrefill(field: ReleasePrefillSuggestion["field"], use: boolean) {
+    const suggestion=prefillSuggestions.find(item=>item.field===field);
+    if(!suggestion)return;
+    if(use&&!usablePrefill(suggestion,release,customLabelAllowed))return;
+    setRelease(current=>{
+      if(!use)return current[field]===suggestion.value?{...current,[field]:""}:current;
+      const next={...current,[field]:suggestion.value};
+      if(field==="primaryGenre"&&!(DIRENOTE_SUBGENRES_BY_GENRE[next.primaryGenre]??[]).includes(next.secondaryGenre))next.secondaryGenre="";
+      return next;
+    });
+    setPendingPrefills(current=>{const next=new Set(current);next.delete(field);return next;});
   }
 
   function approveSafePrefills() {
-    const sensitive = new Set<ReleasePrefillSuggestion["field"]>(["copyrightOwner", "publishingRights"]);
-    setPendingPrefills((current) => new Set([...current].filter((field) => sensitive.has(field))));
+    const matched=new Set(matchingSafePrefills(prefillSuggestions,pendingPrefills,release,customLabelAllowed).map(item=>item.field));
+    setPendingPrefills(current=>new Set([...current].filter(field=>!matched.has(field))));
   }
 
   async function saveCurrentReleaseDefaults() {
@@ -2190,90 +2203,92 @@ export function ReleaseForm({
     updateTrack(index, role === "featured" ? { featuredArtistIds: selected.map(item => item.id), featuredArtists: names } : { remixerIds: selected.map(item => item.id), remixers: names });
   }
 
-  function trackIssue(
+  function trackIssues(
     track: TrackDraft,
     index: number,
-  ): ValidationIssue | null {
+  ): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
     const artistIssue = trackArtistIssue(track, index);
-    if (artistIssue) return artistIssue;
+    if (artistIssue) issues.push(artistIssue);
     if (track.versionPreset !== "Instrumental" && !(DIRENOTE_LANGUAGES as readonly string[]).includes(track.titleLanguage))
-      return { step: 3, key: `track-${index}-title-language`, trackIndex: index, message: `Select a language for Track ${index + 1}.` };
+      issues.push({ step: 3, key: `track-${index}-title-language`, trackIndex: index, message: `Select a language for Track ${index + 1}.` });
     if (!track.trackTitle.trim() || isPlaceholderTrackTitle(track.trackTitle))
-      return {
+      issues.push({
         step: 3,
         key: `track-${index}-title`,
         trackIndex: index,
         message: "Enter the actual title for every track before continuing.",
-      };
+      });
     if (track.suggestedTitleUnconfirmed)
-      return { step: 3, key: `track-${index}-title`, trackIndex: index, message: "Confirm or edit the title suggested from the audio filename." };
+      issues.push({ step: 3, key: `track-${index}-title`, trackIndex: index, message: "Confirm or edit the title suggested from the audio filename." });
     if (track.requiresAudioReplacement)
-      return {
+      issues.push({
         step: 3,
         key: `track-${index}-audio`,
         trackIndex: index,
         message: "Replace this audio master with a HYMN-compliant WAV or MP3 file.",
-      };
+      });
     if (track.versionPreset === "Other" && !track.customVersion.trim())
-      return {
+      issues.push({
         step: 3,
         key: `track-${index}-version`,
         trackIndex: index,
         message: "Enter the custom version label for tracks using Other.",
-      };
+      });
     if (track.primaryArtistIds.length === 0)
-      return {
+      issues.push({
         step: 3,
         key: `track-${index}-artists`,
         trackIndex: index,
         message: "Select at least one saved primary artist card for every track.",
-      };
+      });
     if (
       !contributorsValid(track.songwriters) ||
       !contributorsValid(track.composers) ||
       !producersValid(track.producers)
     )
-      return {
+      issues.push({
         step: 3,
         key: `track-${index}-contributors`,
         trackIndex: index,
         message:
           "Each track needs songwriter and composer legal names, plus a producer artist name.",
-      };
+      });
     if (!track.audioFile && !track.existingAudioUrl && !track.audioPreviewUrl)
-      return {
+      issues.push({
         step: 3,
         key: `track-${index}-audio`,
         trackIndex: index,
         message: "Upload audio for every track before continuing.",
-      };
+      });
     if (track.isCover && !track.originalArtist.trim())
-      return {
+      issues.push({
         step: 3,
         key: `track-${index}-original-artist`,
         trackIndex: index,
         message: "Cover songs need the original artist name.",
-      };
+      });
     if (track.isCover && !track.originalTrackLink.trim())
-      return {
+      issues.push({
         step: 3,
         key: `track-${index}-original-link`,
         trackIndex: index,
         message: "Cover songs need a reference link to the original release.",
-      };
+      });
     if (
       track.isCover &&
       !track.coverLicenseFile &&
       !track.existingCoverLicenseConfirmed
     )
-      return {
+      issues.push({
         step: 3,
         key: `track-${index}-cover-license`,
         trackIndex: index,
         message: "Cover songs need a PDF license or rights proof upload.",
-      };
-    return null;
+      });
+    return issues.filter((issue,index)=>issues.findIndex(other=>other.key===issue.key)===index);
   }
+  function trackIssue(track: TrackDraft,index:number):ValidationIssue|null { return trackIssues(track,index)[0] ?? null; }
 
   const releaseInfoIssues = (): ValidationIssue[] =>
     [
@@ -2282,21 +2297,13 @@ export function ReleaseForm({
         : null,
       release.releasePreviouslyReleased && !release.upcCode.trim()
         ? {
-            step: 2,
+            step: 3,
             key: "existing-upc",
             message:
               "Existing UPC is required for a previously released release.",
           }
         : null,
-      release.releasePreviouslyReleased &&
-      tracks.some((track) => !track.existingIsrcCode.trim())
-        ? {
-            step: 2,
-            key: "existing-isrc",
-            message:
-              "Each track requires its existing ISRC for a previously released release.",
-          }
-        : null,
+      ...(release.releasePreviouslyReleased ? tracks.flatMap((track,index)=>track.existingIsrcCode.trim()?[]:[{step:3,key:`track-${index}-isrc`,trackIndex:index,message:`Enter the existing ISRC for Track ${index+1}.`}]) : []),
       requiresReleaseTitle && !release.releaseTitle.trim()
         ? {
             step: 2,
@@ -2314,18 +2321,18 @@ export function ReleaseForm({
             message: "Enter the record label or imprint name.",
           }
         : null,
-      !release.primaryGenre || !release.secondaryGenre
+      !(DIRENOTE_GENRES as readonly string[]).includes(release.primaryGenre) || !(DIRENOTE_SUBGENRES_BY_GENRE[release.primaryGenre]??[]).includes(release.secondaryGenre)
         ? {
             step: 2,
             key: "genre-picker",
-            message: "Choose both a genre and subgenre before continuing.",
+            message: "Choose a valid genre and matching subgenre.",
           }
         : null,
-      !release.language.trim()
+      !(DIRENOTE_LANGUAGES as readonly string[]).includes(release.language)
         ? {
             step: 2,
             key: "language",
-            message: "Language is required before continuing.",
+            message: "Choose a supported release language.",
           }
         : null,
       !releaseDateValid
@@ -2411,13 +2418,17 @@ export function ReleaseForm({
   const primaryArtistIssue: ValidationIssue | null = primaryArtistProblem ? { step: 1, key: "release-primary-artists", message: primaryArtistProblem } : null;
   const validationIssues = [
     primaryArtistIssue,
-    ...tracks
-      .map((track, index) => trackIssue(track, index))
-      .filter((issue): issue is ValidationIssue => Boolean(issue)),
+    ...tracks.flatMap((track,index)=>trackIssues(track,index)),
     ...releaseInfoIssues(),
     artworkIssue(),
     ...destinationsIssues(),
   ].filter((issue): issue is ValidationIssue => Boolean(issue));
+  const invalidFieldKeys = validationIssues.map(issue=>issue.key).join("|");
+  useEffect(()=>{
+    const invalid=new Set(invalidFieldKeys.split("|").filter(Boolean));
+    setValidationErrorKeys(current=>{const next=new Set([...current].filter(key=>invalid.has(key)));return next.size===current.size?current:next;});
+  },[invalidFieldKeys]);
+
   const primaryArtistComplete = !primaryArtistIssue;
   const audioAssetsComplete = tracks.every((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl));
   const uploadedMusicTracks = tracks.filter((track) => Boolean(track.audioFile || track.existingAudioUrl || track.audioPreviewUrl)).length;
@@ -2449,7 +2460,7 @@ export function ReleaseForm({
       ...track.primaryArtistIds.map((id) => `profile:${id}`),
     ]),
   ).size;
-  const showErrors = attemptedStep === step || submitting;
+  const showErrors = validationErrorKeys.size > 0 || submitting;
   const stepValidity = steps.map((_, index) =>
     stepChecks[index]
       ? "complete"
@@ -2548,9 +2559,9 @@ export function ReleaseForm({
     const issue = validationIssues[0];
     if (issue) {
       setVisitedSteps((current) => new Set([...current, issue.step]));
-      jumpToStep(issue.step);
-      setValidationErrorKeys((current) => new Set([...current, issue.key]));
-      setStatus(issue.message);
+      triggerFieldFocus(issue);
+      setValidationErrorKeys(new Set(validationIssues.map(item => item.key)));
+      setStatus(null);
       return;
     }
     goToStep(7);
@@ -2619,7 +2630,7 @@ export function ReleaseForm({
     setEntryStage(null);
     setAttemptedStep(null);
     setStatus(null);
-    setStep(2);
+    setStep(3);
   }
 
   async function uploadFilesDirectly() {
@@ -3114,9 +3125,7 @@ export function ReleaseForm({
       const issue = validationIssues[0];
       setValidationErrorKeys(new Set(validationIssues.map((item) => item.key)));
       setAttemptedStep(issue.step);
-      setStatus(
-        `${validationIssues.length} validation issue${validationIssues.length === 1 ? "" : "s"} found. Fix the highlighted fields before submitting.`,
-      );
+      setStatus(null);
       triggerFieldFocus(issue);
       return;
     }
@@ -3346,11 +3355,11 @@ export function ReleaseForm({
 
   const [entryStage, setEntryStage] = useState<1 | 0 | null>(() => initialRelease && tracks[0]?.primaryArtistIds.length ? (initialStage === 0 ? 0 : null) : 1);
   const [reviewOpen, setReviewOpen] = useState(false);
-  const lastSheetStage = useRef(2);
+  const lastSheetStage = useRef(3);
   const sheetNavigation = useReleaseSheetNavigation({
     enabled: entryStage === null && !journeyIntro && !submittedRelease && !amendmentReceipt,
     paused: reviewOpen,
-    initialStage: correctionTrackIndex !== null ? 3 : initialStage != null && [2,4,3,5].includes(initialStage) ? initialStage : 2,
+    initialStage: correctionTrackIndex !== null ? 3 : initialStage != null && [2,4,3,5].includes(initialStage) ? initialStage : 3,
     onActive: stage => { lastSheetStage.current = stage; setStep(stage); },
   });
 
@@ -3406,6 +3415,12 @@ export function ReleaseForm({
         onSubmit={handleFinalSubmit}
         onChangeCapture={() => setHasStartedEditing(true)}
         onInputCapture={() => setHasStartedEditing(true)}
+        onBlurCapture={event=>{
+          const target=event.target as HTMLElement,related=event.relatedTarget as Node|null;
+          const touched=Object.entries(fieldRefs.current).filter(([,node])=>node?.contains(target)&&(!related||!node.contains(related))).map(([key])=>key);
+          const invalid=touched.filter(key=>validationIssues.some(issue=>issue.key===key));
+          if(invalid.length)setValidationErrorKeys(current=>new Set([...current,...invalid]));
+        }}
         onClickCapture={(event) => {
           if ((event.target as HTMLElement).closest("button")) setHasStartedEditing(true);
         }}
@@ -3590,9 +3605,72 @@ export function ReleaseForm({
             {artistSaveError ? <p id="artist-save-error" className="release-artist-save-error" role="alert">{customerMessage(artistSaveError)}</p> : null}
             {primaryArtistComplete ? <button type="button" onClick={continueFromArtists} disabled={stepTransitioning} aria-busy={stepTransitioning} aria-describedby={artistSaveError ? "artist-save-error" : undefined} aria-label="Continue to upload music" className="release-artist-next">{stepTransitioning ? <><LoaderCircle size={18} className="animate-spin" aria-hidden="true" /> Saving artists...</> : <>Continue <ArrowRight size={20} aria-hidden="true" /></>}</button> : null}
           </section>) : null}
-{entryStage === null ? (<section className={layoutStyles.sheetSection} data-release-section="2" id="release-section-2" aria-labelledby="release-section-2-title">
-          <header className={layoutStyles.sheetHeading}><h2 id="release-section-2-title">Release information</h2></header>
-          {!amendmentMode ? (<div className="card-base release-existing-identifiers mb-5">
+{entryStage === 0 ? (<section ref={registerField("audio-upload") as (node: HTMLElement | null) => void} className={clsx("release-audio-stage", stepMotion)}>
+
+            <div className="release-focused-intro release-music-heading">
+              <div><h2>Add your music</h2><p>{uploadedMusicTracks ? `${uploadedMusicTracks} track${uploadedMusicTracks === 1 ? "" : "s"} added` : "Start with your audio master"}</p></div>
+              <div className="release-music-format"><span>{releaseType === "ep" ? "EP" : releaseType === "album" ? "Album" : "Single"}</span></div>
+            </div>
+            <div className="release-onboarding-assets">
+            <div className="release-onboarding-audio">
+              {canAddMusic ? <label className="release-batch-upload" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (!batchUploading && !replacingAudioCount) void handleAudioBatch(event.dataTransfer.files); }}>
+                <UploadCloud aria-hidden="true" />
+                <span><strong>{batchUploading ? "Uploading…" : uploadedMusicTracks ? "Add tracks" : "Choose audio"}</strong><small>WAV or MP3 <span className="release-desktop-upload-hint">· Drag files here</span></small></span>
+                <input type="file" accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" multiple disabled={batchUploading || replacingAudioCount > 0} onChange={(event) => { if (event.target.files) void handleAudioBatch(event.target.files); event.target.value = ""; }} />
+              </label> : null}
+              {pendingAudioUploads.length ? <div className="release-resume-uploads" role="status"><strong>Continue an interrupted upload</strong><p>Choose the original file. Uploaded chunks will be reused where possible.</p>{pendingAudioUploads.map((session) => <label key={session.id}><span>{session.originalFilename} · {Math.round(session.bytesUploaded / Math.max(session.totalSize, 1) * 100)}% received</span><span className="release-resume-file">Choose file<input type="file" accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" onChange={(event) => { const file = event.target.files?.[0]; if (file) void resumeAudioUpload(session, file); event.target.value = ""; }} /></span></label>)}</div> : null}
+            {uploadedMusicTracks > 0 && <div className="release-master-toolbar"><div><strong>Track sequence</strong><p>{amendmentMode ? "Original track order and ISRCs are locked." : "Drag the handle or use the arrows to set your release order."}</p></div><span>{uploadedMusicTracks} audio {uploadedMusicTracks === 1 ? "master" : "masters"}</span></div>}
+            {trackListNotice && <p className="release-master-notice" role="status">{trackListNotice}</p>}
+            <div className={clsx("release-audio-queue", tracks.length > 4 && "is-scrollable")}>
+              {!tracks.some((track) => track.audioUploadStatus !== "idle" || track.audioPreviewUrl || track.existingAudioUrl) && !singleReleaseGift ? null : tracks.map((track, index) => {
+                const hasAudio = Boolean((track.audioPreviewUrl || track.existingAudioUrl) && track.audioUploadStatus === "uploaded");
+                const isUploading = track.audioUploadStatus === "uploading";
+                return (
+                  <article key={track.id} className={clsx("release-audio-queue-item release-managed-master", hasAudio && "is-ready", isUploading && "is-uploading", draggedTrackIndex === index && "is-dragging")}
+                    onDragOver={event => { if (!amendmentMode && !batchUploading && !replacingAudioCount && event.dataTransfer.types.includes("application/x-hymn-track")) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }}
+                    onDrop={event => { const id = event.dataTransfer.getData("application/x-hymn-track"); if (!id) return; event.preventDefault(); reorderTrack(tracks.findIndex(item => item.id === id), index); setDraggedTrackIndex(null); }}>
+                    {!amendmentMode && tracks.length > 1 && <button type="button" className="release-master-grip" draggable={!batchUploading && !replacingAudioCount && !tracks.some(item => item.audioUploadStatus === "uploading")} disabled={batchUploading || replacingAudioCount > 0 || tracks.some(item => item.audioUploadStatus === "uploading")} onDragStart={event => { event.dataTransfer.setData("application/x-hymn-track", track.id); event.dataTransfer.effectAllowed = "move"; setDraggedTrackIndex(index); }} onDragEnd={() => setDraggedTrackIndex(null)} aria-label={`Drag to reorder ${track.trackTitle || `track ${index + 1}`}`} title="Drag to reorder; arrow buttons also available"><GripVertical size={18}/></button>}
+                    {isUploading ? <span className="release-audio-queue-progress" style={{ width: `${track.audioUploadProgress}%` }} aria-hidden="true" /> : null}
+                    <span className="release-audio-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+                    <div className="release-audio-queue-main">
+                      {isUploading ? (
+                        <div className="release-audio-uploading-copy" role="status" aria-live="polite">
+                          <span className="truncate">{track.audioFileName || `Track ${index + 1}`}</span>
+                          <strong>{track.audioUploadProgress}%</strong>
+                        </div>
+                      ) : hasAudio ? (
+                        <div className="release-audio-inline-details">
+                          <AudioWaveform
+                            src={track.existingAudioUrl || track.audioPreviewUrl}
+                            title={track.trackTitle || track.audioFileName || `Track ${index + 1}`}
+                            subtitle={[track.audioFileName, track.duration, fileFormat(track.audioFile, track.audioFileName)].filter(Boolean).join(" • ")}
+                            compact
+                          />
+                        </div>
+                      ) : (
+                        <UploadDropzone accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" iconOnly compact ctaLabel="Add track" title={`Track ${index + 1} audio`} description="Choose a WAV or MP3 master" helperLines={[]} fileName={track.audioFile?.name || track.audioFileName} fileFormat={fileFormat(track.audioFile, track.audioFileName)} onSelect={async (file, controls) => handleAudioFile(index, file, controls)} />
+                      )}
+                    </div>
+                    {hasAudio ? <ReleaseTrackActions name={track.trackTitle || track.audioFileName || `track ${index + 1}`} index={index} count={tracks.length} disabled={batchUploading || replacingAudioCount > 0 || tracks.some(item => item.audioUploadStatus === "uploading")} orderLocked={amendmentMode} replace={(file, signal, progress) => replaceTrackAudio(track.id, file, signal, progress)} move={direction => moveTrack(index, direction)} remove={() => tracks.length > 1 ? removeTrack(index) : clearTrackAudio(index)}/> : tracks.length > 1 ? <button type="button" disabled={batchUploading || replacingAudioCount > 0 || isUploading} className="release-audio-remove" onClick={() => removeTrack(index)} aria-label={`Remove empty track ${index + 1}`}><X /></button> : null}
+                  </article>
+                );
+              })}
+            </div>
+            </div>
+            </div>
+          </section>) : null}
+{entryStage === null ? (<section className={layoutStyles.sheetSection} data-release-section="3" id="release-section-3" aria-label="Tracks and credits">
+<header className="release-tracklist-heading">
+              <div>
+                <h2>Track list</h2>
+                <p>{tracks.length} track{tracks.length === 1 ? "" : "s"}</p>
+              </div>
+              <div>
+                <button type="button" onClick={() => setExpandedTrack(-1)} disabled={expandedTrack === -1}><ChevronUp /> Collapse all</button>
+                <span><GripVertical /> Drag rows to reorder</span>
+              </div>
+            </header>
+{!amendmentMode ? (<div className="card-base release-existing-identifiers mb-5">
             <p className="text-sm font-semibold">Already released?</p>
             <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
               Use this if the release was previously distributed and already has
@@ -3663,6 +3741,7 @@ export function ReleaseForm({
                     >
                       <span>{`Track ${index + 1} — ${track.trackTitle || "Untitled track"}`}</span>
                       <input
+                        ref={registerField(`track-${index}-isrc`)}
                         className={fieldClass(
                           `track-${index}-isrc`,
                           Boolean(
@@ -3685,510 +3764,9 @@ export function ReleaseForm({
               </div>
             ) : null}
           </div>) : null}
-<section
-            className={clsx(
-              "release-metadata-stage grid gap-5 md:grid-cols-[1.1fr,0.9fr]",
-              stepMotion,
-            )}
-          >
-            {pendingPrefills.size > 0 ? <div ref={registerField("prefill-review")} className="release-prefill-review md:col-span-2">
-              <div><p><span aria-hidden="true">⚡</span> {pendingPrefills.size} suggestion{pendingPrefills.size === 1 ? "" : "s"} ready for review</p><span>Based on your saved preferences and previous release. Nothing becomes final until you approve it.</span></div>
-              <div className="release-prefill-items">{prefillSuggestions.filter((item) => pendingPrefills.has(item.field)).map((item) => <div key={item.field}><span><b>{({ language: "Title language", primaryGenre: "Genre", secondaryGenre: "Subgenre", recordLabelName: "Label", copyrightOwner: "C-Line / composition owner", publishingRights: "P-Line / master owner" } as const)[item.field]}</b><small>{item.value} · {item.source === "USER_DEFAULT" ? "Saved default" : "Previous release"}</small></span><span><button type="button" onClick={() => resolvePrefill(item.field, true)} aria-label={`Approve ${item.field}`}>Approve</button><button type="button" onClick={() => resolvePrefill(item.field, false)} aria-label={`Clear ${item.field}`}>Clear</button></span></div>)}</div>
-              {[...pendingPrefills].some((field) => field !== "copyrightOwner" && field !== "publishingRights") ? <button type="button" onClick={approveSafePrefills} className="release-prefill-approve-all">Approve safe suggestions</button> : null}
-            </div> : null}
-            <div className="release-details-fields grid gap-5">
-              {requiresReleaseTitle ? (
-                <div>
-                  <label
-                    className="mb-2 block text-sm font-medium"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    {correctionLabel(releaseType === "ep" ? "EP Name" : "Album Name", "release-title")}
-                  </label>
-                  <input
-                    ref={registerField("release-title")}
-                    className={fieldClass(
-                      "release-title",
-                      Boolean(
-                        showErrors &&
-                          releaseInfoIssue()?.key === "release-title",
-                      ),
-                    )}
-                    value={release.releaseTitle}
-                    onChange={(event) => {
-                      clearCorrectionField("release-title");
-                      setRelease((current) => ({
-                        ...current,
-                        releaseTitle: event.target.value,
-                      }));
-                    }}
-                    placeholder={
-                      releaseType === "ep"
-                        ? "Enter EP name"
-                        : "Enter album name"
-                    }
-                  />
-                </div>
-              ) : (
-                <div className="border-b pb-5" style={{ borderColor: "var(--border)" }}>
-                  <p className="text-base font-semibold" style={{ color: "var(--text)" }}>Single release</p>
-                </div>
-              )}
-              <div>
-                <label
-                  className="mb-2 flex items-center gap-2 text-sm font-medium"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  {correctionLabel("Label", "record-label")}
-                  {!customLabelAllowed ? (
-                    <span
-                      className="group relative inline-flex"
-                      title="Only available for Yearly+ Plan. Upgrade to use a custom label name."
-                    >
-                      <Crown className="h-4 w-4" style={{ color: "var(--warning)" }} />
-                      <span
-                        className="pointer-events-none absolute left-0 top-6 z-20 hidden w-64 rounded-xl border p-3 text-xs shadow-xl group-hover:block"
-                        style={{
-                          borderColor: "var(--border)",
-                          background: "var(--bg-elevated)",
-                          color: "var(--text-muted)",
-                        }}
-                      >
-                        Only available for Yearly+ Plan. Upgrade to use a custom
-                        label name.
-                      </span>
-                    </span>
-                  ) : null}
-                </label>
-                <input
-                  ref={registerField("record-label")}
-                  disabled={!customLabelAllowed}
-                  className={fieldClass(
-                    "record-label",
-                    Boolean(
-                      showErrors && releaseInfoIssue()?.key === "record-label",
-                    ),
-                  )}
-                  value={release.recordLabelName}
-                  onChange={(event) => {
-                    clearCorrectionField("record-label");
-                    setRelease((current) => ({
-                      ...current,
-                      recordLabelName: event.target.value,
-                    }));
-                  }}
-                  placeholder="HYMN Music or your imprint"
-                />
-              </div>
-              <div
-                ref={
-                  registerField("genre-picker") as (
-                    node: HTMLDivElement | null,
-                  ) => void
-                }
-                className={clsx(showErrors && releaseInfoIssue()?.key === "genre-picker" ? "field-shake" : "")}
-              >
-                <label
-                  className="mb-2 block text-sm font-medium"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  {correctionLabel("Genre + subgenre", "genre-picker")}
-                </label>
-                <GenreSelector
-                  genre={release.primaryGenre}
-                  subgenre={release.secondaryGenre}
-                  onChange={(genre, subgenre) => {
-                    clearCorrectionField("genre-picker");
-                    setRelease((current) => ({
-                      ...current,
-                      primaryGenre: genre,
-                      secondaryGenre: subgenre,
-                    }));
-                  }}
-                  error={Boolean(
-                    showErrors && releaseInfoIssue()?.key === "genre-picker",
-                  )}
-                />
-              </div>
-              <div
-                ref={
-                  registerField("mood") as (node: HTMLDivElement | null) => void
-                }
-              >
-                <label
-                  className="mb-2 block text-sm font-medium"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  {correctionLabel("Mood (optional)", "mood")}
-                </label>
-                <MoodSelector
-                  value={release.mood}
-                  error={Boolean(showErrors && releaseInfoIssue()?.key === "mood")}
-                  onChange={(mood) => {
-                    clearCorrectionField("mood");
-                    setRelease((current) => ({ ...current, mood }));
-                  }}
-                />
-              </div>
-              <div
-                ref={
-                  registerField("language") as (
-                    node: HTMLDivElement | null,
-                  ) => void
-                }
-              >
-                <SearchableSelect
-                  label="Release language"
-                  help={<LanguageFieldHelp />}
-                  correctionRequired={correctionFieldActive("language")}
-                  value={release.language}
-                  options={languageOptions}
-                  placeholder="Select release language"
-                  invalid={Boolean(showErrors && releaseInfoIssue()?.key === "language")}
-                  onChange={(value) => {
-                    clearCorrectionField("language");
-                    setRelease((current) => ({ ...current, language: value }));
-                  }}
-                />
-              </div>
-            </div>
-            <div className="grid gap-5">
-              <div className="border-t pt-5" style={{ borderColor: "var(--border)" }}>
-                <div className="mb-4"><h3 className="text-lg font-semibold" style={{ color: "var(--text)" }}>Release timing</h3></div>
-                {release.releasePreviouslyReleased ? <label className="mb-4 block text-sm" ref={registerField("original-release-date")}>
-                  Original release date
-                  <input type="date" className="field mt-2" value={release.originalReleaseDate} max={toDateInputValue(addDays(today, -1))} onChange={event => setRelease(current => ({ ...current, originalReleaseDate: event.target.value }))} />
-                </label> : null}
-                <div>
-                <div className="release-timing-selector grid sm:grid-cols-2">
-                  <button
-                    type="button"
-                    aria-pressed={release.releaseTiming === "quick_release"}
-                    className="release-timing-option relative min-w-0 px-3 py-4 text-left"
-                    onClick={() => {
-                      clearCorrectionField("release-date");
-                      setRelease((current) => ({
-                        ...current,
-                        releaseTiming: "quick_release",
-                      }));
-                    }}
-                  >
-                    <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold" style={{ color: "var(--text)" }}>As soon as possible</p><span className="release-timing-indicator" aria-hidden="true">{release.releaseTiming === "quick_release" ? <Check className="h-3.5 w-3.5" /> : null}</span></div>
-                    <p
-                      className="mt-2 text-xs leading-5"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Your release will go live as soon as possible after approval. Availability varies by store.
-                    </p>
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={release.releaseTiming === "schedule_release"}
-                    className="release-timing-option relative min-w-0 px-3 py-4 text-left"
-                    onClick={() => {
-                      clearCorrectionField("release-date");
-                      setRelease((current) => ({
-                        ...current,
-                        releaseTiming: "schedule_release",
-                      }));
-                    }}
-                  >
-                    <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold" style={{ color: "var(--text)" }}>Schedule a date</p><span className="release-timing-indicator" aria-hidden="true">{release.releaseTiming === "schedule_release" ? <Check className="h-3.5 w-3.5" /> : null}</span></div>
-                    <p
-                      className="mt-2 text-xs leading-5"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Earliest available<br /><strong style={{ color: "var(--text)" }}>{minimumScheduledDate}</strong>
-                    </p>
-                  </button>
-                </div>
-                {release.releaseTiming === "schedule_release" ? (
-                  <div className="mt-4 rounded-xl border p-4" style={{ borderColor: "var(--accent)", background: "var(--accent-soft)" }}>
-                    {scheduledDateWasMoved ? <div className="mb-4 flex items-start gap-2 rounded-lg border p-3 text-sm leading-5" role="alert" style={{ borderColor: "var(--warning)", background: "var(--warning-soft)", color: "var(--text-muted)" }}><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--warning)" }} /><p>Your previous release date is now too close for delivery. We moved it to the earliest available date, <strong style={{ color: "var(--text)" }}>{minimumScheduledDate}</strong>. Choose a later date if that works better.</p></div> : null}
-                    <label
-                      className="mb-2 block text-sm font-medium"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      {correctionLabel("Scheduled release date", "release-date")}
-                    </label>
-                    <input
-                      ref={registerField("release-date")}
-                      className={fieldClass(
-                        "release-date",
-                        Boolean(
-                          showErrors &&
-                            releaseInfoIssue()?.key === "release-date",
-                        ),
-                      )}
-                      type="date"
-                      min={minimumScheduledDate}
-                      value={release.scheduledReleaseDate}
-                      onChange={(event) => {
-                        clearCorrectionField("release-date");
-                        setRelease((current) => ({
-                          ...current,
-                          scheduledReleaseDate: event.target.value,
-                        }));
-                      }}
-                    />
-                  </div>
-                ) : null}
-                <p className="mt-4 text-xs leading-5" style={{ color: "var(--text-muted)" }}>
-                  Estimated HYMN review: {queue?.averageApprovalTime || "24-48 hours"}. Delivery begins after approval.
-                </p>
-                </div>
-              </div>
-            </div>
-            <div className="release-save-defaults md:col-span-2">
-              <div><p>Make the next release faster</p><span>Save artist, language, genre, label, and rights values as editable distribution defaults.</span></div>
-              <span className="release-save-default-actions"><button type="button" onClick={saveCurrentReleaseDefaults} disabled={preferencesStatus === "saving"}>{preferencesStatus === "saving" ? "Saving…" : preferencesStatus === "saved" ? "Defaults saved ✓" : preferencesStatus === "error" ? "Try again" : "Use these for future releases"}</button><button type="button" onClick={clearReleaseDefaults} className="is-clear">Clear saved defaults</button></span>
-            </div>
-          </section>
-        </section>) : null}
-{entryStage === null ? (<section className={layoutStyles.sheetSection} data-release-section="4" id="release-section-4" aria-labelledby="release-section-4-title">
-          <header className={layoutStyles.sheetHeading}><h2 id="release-section-4-title">Cover art</h2></header>
-          <section
-            className={clsx(
-              "release-artwork-stage grid items-start gap-5 lg:grid-cols-[minmax(300px,0.85fr),minmax(0,1.15fr)]",
-              stepMotion,
-            )}
-          >
-            <div
-              ref={
-                registerField("artwork-upload") as (
-                  node: HTMLDivElement | null,
-                ) => void
-              }
-            >
-              <ArtworkSquareDropzone
-                minimalFeedback
-                previewUrl={artworkPreview}
-                fileName={artworkFile?.name}
-                fileType={fileFormat(artworkFile)}
-                dimensions={artworkDimensions}
-                error={
-                  showErrors && artworkIssue()
-                    ? (artworkIssue()?.message ?? null)
-                    : artworkError
-                }
-                onSelect={async (file) => {
-                  await handleArtwork(file);
-                }}
-              />
-              {artworkScanning ? (
-                <div
-                  className="mt-3 flex items-center gap-2 px-1 text-xs"
-                  style={{
-                    color: "var(--text-muted)",
-                  }}
-                >
-                  <LoaderCircle className="h-4 w-4 animate-spin" />
-                  Scanning artwork for excessive text…
-                </div>
-              ) : null}
-              {artworkWarning ? (
-                <ArtworkWarning warning={artworkWarning} />
-              ) : null}
-            </div>
-            <div
-              className="artwork-requirements overflow-hidden"
-              style={{
-                borderColor: "var(--border)",
-                background: "var(--card)",
-                boxShadow: "0 18px 50px rgba(0,0,0,0.09)",
-              }}
-            >
-              <div
-                className="artwork-requirements-header flex items-start justify-between gap-4 border-b pb-5"
-                style={{
-                  borderColor: "var(--border)",
-                  background:
-                    "linear-gradient(135deg, color-mix(in srgb, var(--accent) 7%, var(--card)), var(--card))",
-                }}
-              >
-                <div>
-                  <h3
-                    className="text-xl font-semibold"
-                    style={{ color: "var(--text)" }}
-                  >
-                    Artwork requirements
-                  </h3>
-                </div>
-                {artworkPreview && !artworkError ? (
-                  <span
-                    className="rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em]"
-                    style={{
-                      borderColor: "rgba(34,197,94,0.38)",
-                      background: "var(--success-soft)",
-                      color: "var(--success)",
-                    }}
-                  >
-                    Ready
-                  </span>
-                ) : null}
-              </div>
-              <div className="artwork-requirements-body pt-5">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {[
-                    ["Resolution", "Minimum 3000 × 3000 px"],
-                    ["File format", "JPG / JPEG only"],
-                    ["Aspect ratio", "Perfect square · 1:1"],
-                    ["Content", "Clear, original, and store-safe"],
-                  ].map(([label, detail]) => (
-                    <div
-                      key={label}
-                      className="artwork-requirement-item border-b py-4"
-                      style={{
-                        borderColor: "var(--border)",
-                        background: "var(--bg-soft)",
-                      }}
-                    >
-                      <div className="flex items-start gap-2.5">
-                        <span
-                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
-                          style={{
-                            background:
-                              artworkPreview && !artworkError
-                                ? "rgba(34,197,94,0.12)"
-                                : "var(--card)",
-                            color:
-                              artworkPreview && !artworkError
-                                ? "#22c55e"
-                                : "var(--text-soft)",
-                          }}
-                        >
-                          <CheckCircle2 className="h-4 w-4" />
-                        </span>
-                        <div>
-                          <p
-                            className="text-xs font-semibold"
-                            style={{ color: "var(--text)" }}
-                          >
-                            {label}
-                          </p>
-                          <p
-                            className="mt-1 text-[11px] leading-5"
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            {detail}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div
-                  className={clsx("artwork-validation mt-5 border-t pt-5", !(artworkPreview && !artworkError) && "is-pending")}
-                  style={{
-                    borderColor:
-                      artworkPreview && !artworkError
-                        ? "rgba(34,197,94,0.35)"
-                        : "color-mix(in srgb, var(--money) 40%, var(--border))",
-                    background:
-                      artworkPreview && !artworkError
-                        ? "rgba(34,197,94,0.08)"
-                        : "color-mix(in srgb, var(--money) 8%, var(--card))",
-                  }}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p
-                        className="text-xs font-semibold"
-                        style={{ color: "var(--text)" }}
-                      >
-                        {artworkPreview && !artworkError
-                          ? "Artwork validation passed"
-                          : "Upload artwork to validate"}
-                      </p>
-                      <p
-                        className="mt-1 text-[11px]"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        {artworkPreview && !artworkError
-                          ? [artworkDimensions, fileFormat(artworkFile)]
-                              .filter(Boolean)
-                              .join(" · ") || "Existing artwork is ready"
-                          : "We’ll check dimensions, format, aspect ratio, and excessive text."}
-                      </p>
-                    </div>
-                    {artworkPreview && !artworkError ? (
-                      <CheckCircle2
-                        className="h-5 w-5 shrink-0"
-                        style={{ color: "var(--success)" }}
-                      />
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-        </section>) : null}
-{entryStage === 0 ? (<section ref={registerField("audio-upload") as (node: HTMLElement | null) => void} className={clsx("release-audio-stage", stepMotion)}>
 
-            <div className="release-focused-intro release-music-heading">
-              <div><h2>Add your music</h2><p>{uploadedMusicTracks ? `${uploadedMusicTracks} track${uploadedMusicTracks === 1 ? "" : "s"} added` : "Start with your audio master"}</p></div>
-              <div className="release-music-format"><span>{releaseType === "ep" ? "EP" : releaseType === "album" ? "Album" : "Single"}</span></div>
-            </div>
-            <div className="release-onboarding-assets">
-            <div className="release-onboarding-audio">
-              {canAddMusic ? <label className="release-batch-upload" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (!batchUploading && !replacingAudioCount) void handleAudioBatch(event.dataTransfer.files); }}>
-                <UploadCloud aria-hidden="true" />
-                <span><strong>{batchUploading ? "Uploading…" : uploadedMusicTracks ? "Add tracks" : "Choose audio"}</strong><small>WAV or MP3 <span className="release-desktop-upload-hint">· Drag files here</span></small></span>
-                <input type="file" accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" multiple disabled={batchUploading || replacingAudioCount > 0} onChange={(event) => { if (event.target.files) void handleAudioBatch(event.target.files); event.target.value = ""; }} />
-              </label> : null}
-              {pendingAudioUploads.length ? <div className="release-resume-uploads" role="status"><strong>Continue an interrupted upload</strong><p>Choose the original file. Uploaded chunks will be reused where possible.</p>{pendingAudioUploads.map((session) => <label key={session.id}><span>{session.originalFilename} · {Math.round(session.bytesUploaded / Math.max(session.totalSize, 1) * 100)}% received</span><span className="release-resume-file">Choose file<input type="file" accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" onChange={(event) => { const file = event.target.files?.[0]; if (file) void resumeAudioUpload(session, file); event.target.value = ""; }} /></span></label>)}</div> : null}
-            {uploadedMusicTracks > 0 && <div className="release-master-toolbar"><div><strong>Track sequence</strong><p>{amendmentMode ? "Original track order and ISRCs are locked." : "Drag the handle or use the arrows to set your release order."}</p></div><span>{uploadedMusicTracks} audio {uploadedMusicTracks === 1 ? "master" : "masters"}</span></div>}
-            {trackListNotice && <p className="release-master-notice" role="status">{trackListNotice}</p>}
-            <div className={clsx("release-audio-queue", tracks.length > 4 && "is-scrollable")}>
-              {!tracks.some((track) => track.audioUploadStatus !== "idle" || track.audioPreviewUrl || track.existingAudioUrl) && !singleReleaseGift ? null : tracks.map((track, index) => {
-                const hasAudio = Boolean((track.audioPreviewUrl || track.existingAudioUrl) && track.audioUploadStatus === "uploaded");
-                const isUploading = track.audioUploadStatus === "uploading";
-                return (
-                  <article key={track.id} className={clsx("release-audio-queue-item release-managed-master", hasAudio && "is-ready", isUploading && "is-uploading", draggedTrackIndex === index && "is-dragging")}
-                    onDragOver={event => { if (!amendmentMode && !batchUploading && !replacingAudioCount && event.dataTransfer.types.includes("application/x-hymn-track")) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }}
-                    onDrop={event => { const id = event.dataTransfer.getData("application/x-hymn-track"); if (!id) return; event.preventDefault(); reorderTrack(tracks.findIndex(item => item.id === id), index); setDraggedTrackIndex(null); }}>
-                    {!amendmentMode && tracks.length > 1 && <button type="button" className="release-master-grip" draggable={!batchUploading && !replacingAudioCount && !tracks.some(item => item.audioUploadStatus === "uploading")} disabled={batchUploading || replacingAudioCount > 0 || tracks.some(item => item.audioUploadStatus === "uploading")} onDragStart={event => { event.dataTransfer.setData("application/x-hymn-track", track.id); event.dataTransfer.effectAllowed = "move"; setDraggedTrackIndex(index); }} onDragEnd={() => setDraggedTrackIndex(null)} aria-label={`Drag to reorder ${track.trackTitle || `track ${index + 1}`}`} title="Drag to reorder; arrow buttons also available"><GripVertical size={18}/></button>}
-                    {isUploading ? <span className="release-audio-queue-progress" style={{ width: `${track.audioUploadProgress}%` }} aria-hidden="true" /> : null}
-                    <span className="release-audio-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-                    <div className="release-audio-queue-main">
-                      {isUploading ? (
-                        <div className="release-audio-uploading-copy" role="status" aria-live="polite">
-                          <span className="truncate">{track.audioFileName || `Track ${index + 1}`}</span>
-                          <strong>{track.audioUploadProgress}%</strong>
-                        </div>
-                      ) : hasAudio ? (
-                        <div className="release-audio-inline-details">
-                          <AudioWaveform
-                            src={track.existingAudioUrl || track.audioPreviewUrl}
-                            title={track.trackTitle || track.audioFileName || `Track ${index + 1}`}
-                            subtitle={[track.audioFileName, track.duration, fileFormat(track.audioFile, track.audioFileName)].filter(Boolean).join(" • ")}
-                            compact
-                          />
-                        </div>
-                      ) : (
-                        <UploadDropzone accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" iconOnly compact ctaLabel="Add track" title={`Track ${index + 1} audio`} description="Choose a WAV or MP3 master" helperLines={[]} fileName={track.audioFile?.name || track.audioFileName} fileFormat={fileFormat(track.audioFile, track.audioFileName)} onSelect={async (file, controls) => handleAudioFile(index, file, controls)} />
-                      )}
-                    </div>
-                    {hasAudio ? <ReleaseTrackActions name={track.trackTitle || track.audioFileName || `track ${index + 1}`} index={index} count={tracks.length} disabled={batchUploading || replacingAudioCount > 0 || tracks.some(item => item.audioUploadStatus === "uploading")} orderLocked={amendmentMode} replace={(file, signal, progress) => replaceTrackAudio(track.id, file, signal, progress)} move={direction => moveTrack(index, direction)} remove={() => tracks.length > 1 ? removeTrack(index) : clearTrackAudio(index)}/> : tracks.length > 1 ? <button type="button" disabled={batchUploading || replacingAudioCount > 0 || isUploading} className="release-audio-remove" onClick={() => removeTrack(index)} aria-label={`Remove empty track ${index + 1}`}><X /></button> : null}
-                  </article>
-                );
-              })}
-            </div>
-            </div>
-            </div>
-          </section>) : null}
-{entryStage === null ? (<section className={layoutStyles.sheetSection} data-release-section="3" id="release-section-3" aria-label="Tracks and credits">
           <section className={clsx("release-tracklist-stage grid gap-3", stepMotion)}>
-            <header className="release-tracklist-heading">
-              <div>
-                <h2>Track list</h2>
-                <p>{tracks.length} track{tracks.length === 1 ? "" : "s"}</p>
-              </div>
-              <div>
-                <button type="button" onClick={() => setExpandedTrack(-1)} disabled={expandedTrack === -1}><ChevronUp /> Collapse all</button>
-                <span><GripVertical /> Drag rows to reorder</span>
-              </div>
-            </header>
+
             {tracks.map((track, index) => {
               const expanded = expandedTrack === index;
               const issue = showErrors ? trackIssue(track, index) : null;
@@ -4561,7 +4139,7 @@ export function ReleaseForm({
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2 text-xs"><div className="min-w-0"><strong className="block truncate">{audioReady ? (track.trackTitle || track.audioFileName || `Track ${index + 1}`) : track.audioUploadStatus === "uploading" ? "Audio uploading" : "Audio needed"}</strong>{audioReady ? <span className="block text-[var(--text-muted)]">Audio ready</span> : null}</div>{audioReady ? <ReleaseTrackActions name={track.trackTitle || track.audioFileName || `track ${index + 1}`} index={index} count={tracks.length} disabled={batchUploading || replacingAudioCount > 0 || tracks.some(item => item.audioUploadStatus === "uploading")} orderLocked={amendmentMode} replace={(file, signal, progress) => replaceTrackAudio(track.id, file, signal, progress)} move={direction => moveTrack(index, direction)} remove={() => tracks.length > 1 ? removeTrack(index) : clearTrackAudio(index)}/> : null}</div>
                           {!audioReady ? <UploadDropzone accept="audio/wav,audio/x-wav,audio/mpeg,.wav,.mp3" iconOnly compact ctaLabel="Add track" title={`Track ${index + 1} audio`} description="Choose a WAV or MP3 master" helperLines={[]} fileName={track.audioFile?.name || track.audioFileName} fileFormat={fileFormat(track.audioFile, track.audioFileName)} onSelect={async (file, controls) => handleAudioFile(index, file, controls)} /> : null}
-                          {showErrors && issue?.key === `track-${index}-audio` ? <p className="text-xs text-[var(--danger)]">{issue.message}</p> : null}
+
                           {track.audioUploadStatus === "uploading" || track.audioUploadStatus === "failed" ? (
                             <div className="grid gap-2 rounded-[1rem] border px-3 py-3" style={{ borderColor: track.audioUploadStatus === "failed" ? "color-mix(in srgb,var(--danger) 38%,var(--border))" : "var(--border)", background: "var(--card)" }} aria-live="polite">
                               <div className="flex min-w-0 items-center justify-between gap-3 text-xs font-semibold">
@@ -4803,6 +4381,443 @@ export function ReleaseForm({
               >
                 {tracks.length >= 30 ? "Maximum 30 tracks" : "+ Add another track"}
               </button>}
+          </section>
+        </section>) : null}
+{entryStage === null ? (<section className={layoutStyles.sheetSection} data-release-section="4" id="release-section-4" aria-labelledby="release-section-4-title">
+          <header className={layoutStyles.sheetHeading}><h2 id="release-section-4-title">Cover art</h2></header>
+          <section
+            className={clsx(
+              "release-artwork-stage grid items-start gap-5 lg:grid-cols-[minmax(300px,0.85fr),minmax(0,1.15fr)]",
+              stepMotion,
+            )}
+          >
+            <div
+              ref={
+                registerField("artwork-upload") as (
+                  node: HTMLDivElement | null,
+                ) => void
+              }
+            >
+              <ArtworkSquareDropzone
+                minimalFeedback
+                previewUrl={artworkPreview}
+                fileName={artworkFile?.name}
+                fileType={fileFormat(artworkFile)}
+                dimensions={artworkDimensions}
+                error={
+                  showErrors && artworkIssue()
+                    ? (artworkIssue()?.message ?? null)
+                    : artworkError
+                }
+                onSelect={async (file) => {
+                  await handleArtwork(file);
+                }}
+              />
+              {artworkScanning ? (
+                <div
+                  className="mt-3 flex items-center gap-2 px-1 text-xs"
+                  style={{
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                  Scanning artwork for excessive text…
+                </div>
+              ) : null}
+              {artworkWarning ? (
+                <ArtworkWarning warning={artworkWarning} />
+              ) : null}
+            </div>
+            <div
+              className="artwork-requirements overflow-hidden"
+              style={{
+                borderColor: "var(--border)",
+                background: "var(--card)",
+                boxShadow: "0 18px 50px rgba(0,0,0,0.09)",
+              }}
+            >
+              <div
+                className="artwork-requirements-header flex items-start justify-between gap-4 border-b pb-5"
+                style={{
+                  borderColor: "var(--border)",
+                  background:
+                    "linear-gradient(135deg, color-mix(in srgb, var(--accent) 7%, var(--card)), var(--card))",
+                }}
+              >
+                <div>
+                  <h3
+                    className="text-xl font-semibold"
+                    style={{ color: "var(--text)" }}
+                  >
+                    Artwork requirements
+                  </h3>
+                </div>
+                {artworkPreview && !artworkError ? (
+                  <span
+                    className="rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em]"
+                    style={{
+                      borderColor: "rgba(34,197,94,0.38)",
+                      background: "var(--success-soft)",
+                      color: "var(--success)",
+                    }}
+                  >
+                    Ready
+                  </span>
+                ) : null}
+              </div>
+              <div className="artwork-requirements-body pt-5">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {[
+                    ["Resolution", "Minimum 3000 × 3000 px"],
+                    ["File format", "JPG / JPEG only"],
+                    ["Aspect ratio", "Perfect square · 1:1"],
+                    ["Content", "Clear, original, and store-safe"],
+                  ].map(([label, detail]) => (
+                    <div
+                      key={label}
+                      className="artwork-requirement-item border-b py-4"
+                      style={{
+                        borderColor: "var(--border)",
+                        background: "var(--bg-soft)",
+                      }}
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <span
+                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+                          style={{
+                            background:
+                              artworkPreview && !artworkError
+                                ? "rgba(34,197,94,0.12)"
+                                : "var(--card)",
+                            color:
+                              artworkPreview && !artworkError
+                                ? "#22c55e"
+                                : "var(--text-soft)",
+                          }}
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                        </span>
+                        <div>
+                          <p
+                            className="text-xs font-semibold"
+                            style={{ color: "var(--text)" }}
+                          >
+                            {label}
+                          </p>
+                          <p
+                            className="mt-1 text-[11px] leading-5"
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            {detail}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div
+                  className={clsx("artwork-validation mt-5 border-t pt-5", !(artworkPreview && !artworkError) && "is-pending")}
+                  style={{
+                    borderColor:
+                      artworkPreview && !artworkError
+                        ? "rgba(34,197,94,0.35)"
+                        : "color-mix(in srgb, var(--money) 40%, var(--border))",
+                    background:
+                      artworkPreview && !artworkError
+                        ? "rgba(34,197,94,0.08)"
+                        : "color-mix(in srgb, var(--money) 8%, var(--card))",
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p
+                        className="text-xs font-semibold"
+                        style={{ color: "var(--text)" }}
+                      >
+                        {artworkPreview && !artworkError
+                          ? "Artwork validation passed"
+                          : "Upload artwork to validate"}
+                      </p>
+                      <p
+                        className="mt-1 text-[11px]"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        {artworkPreview && !artworkError
+                          ? [artworkDimensions, fileFormat(artworkFile)]
+                              .filter(Boolean)
+                              .join(" · ") || "Existing artwork is ready"
+                          : "We’ll check dimensions, format, aspect ratio, and excessive text."}
+                      </p>
+                    </div>
+                    {artworkPreview && !artworkError ? (
+                      <CheckCircle2
+                        className="h-5 w-5 shrink-0"
+                        style={{ color: "var(--success)" }}
+                      />
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </section>) : null}
+{entryStage === null ? (<section className={layoutStyles.sheetSection} data-release-section="2" id="release-section-2" aria-labelledby="release-section-2-title">
+          <header className={layoutStyles.sheetHeading}><h2 id="release-section-2-title">Release information</h2></header>
+
+<section
+            className={clsx(
+              "release-metadata-stage grid gap-5 md:grid-cols-[1.1fr,0.9fr]",
+              stepMotion,
+            )}
+          >
+            {pendingPrefills.size > 0 ? <div ref={registerField("prefill-review")} className="md:col-span-2"><ReleasePrefillPanel suggestions={prefillSuggestions} pending={pendingPrefills} current={release} customLabelAllowed={customLabelAllowed} onResolve={resolvePrefill} onConfirmMatching={approveSafePrefills} hasError={validationErrorKeys.has("prefill-review")} /></div> : null}
+            <div className="release-details-fields grid gap-5">
+              {requiresReleaseTitle ? (
+                <div>
+                  <label
+                    className="mb-2 block text-sm font-medium"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    {correctionLabel(releaseType === "ep" ? "EP Name" : "Album Name", "release-title")}
+                  </label>
+                  <input
+                    ref={registerField("release-title")}
+                    className={fieldClass(
+                      "release-title",
+                      Boolean(
+                        showErrors &&
+                          releaseInfoIssue()?.key === "release-title",
+                      ),
+                    )}
+                    value={release.releaseTitle}
+                    onChange={(event) => {
+                      clearCorrectionField("release-title");
+                      setRelease((current) => ({
+                        ...current,
+                        releaseTitle: event.target.value,
+                      }));
+                    }}
+                    placeholder={
+                      releaseType === "ep"
+                        ? "Enter EP name"
+                        : "Enter album name"
+                    }
+                  />
+                </div>
+              ) : (
+                <div className="border-b pb-5" style={{ borderColor: "var(--border)" }}>
+                  <p className="text-base font-semibold" style={{ color: "var(--text)" }}>Single release</p>
+                </div>
+              )}
+              <div>
+                <label
+                  className="mb-2 flex items-center gap-2 text-sm font-medium"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  {correctionLabel("Label", "record-label")}
+                  {!customLabelAllowed ? (
+                    <span
+                      className="group relative inline-flex"
+                      title="Only available for Yearly+ Plan. Upgrade to use a custom label name."
+                    >
+                      <Crown className="h-4 w-4" style={{ color: "var(--warning)" }} />
+                      <span
+                        className="pointer-events-none absolute left-0 top-6 z-20 hidden w-64 rounded-xl border p-3 text-xs shadow-xl group-hover:block"
+                        style={{
+                          borderColor: "var(--border)",
+                          background: "var(--bg-elevated)",
+                          color: "var(--text-muted)",
+                        }}
+                      >
+                        Only available for Yearly+ Plan. Upgrade to use a custom
+                        label name.
+                      </span>
+                    </span>
+                  ) : null}
+                </label>
+                <input
+                  ref={registerField("record-label")}
+                  disabled={!customLabelAllowed}
+                  className={fieldClass(
+                    "record-label",
+                    Boolean(
+                      showErrors && releaseInfoIssue()?.key === "record-label",
+                    ),
+                  )}
+                  value={release.recordLabelName}
+                  onChange={(event) => {
+                    clearCorrectionField("record-label");
+                    setRelease((current) => ({
+                      ...current,
+                      recordLabelName: event.target.value,
+                    }));
+                  }}
+                  placeholder="HYMN Music or your imprint"
+                />
+              </div>
+              <div
+                ref={
+                  registerField("genre-picker") as (
+                    node: HTMLDivElement | null,
+                  ) => void
+                }
+                className={clsx(showErrors && releaseInfoIssue()?.key === "genre-picker" ? "field-shake" : "")}
+              >
+                <label
+                  className="mb-2 block text-sm font-medium"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  {correctionLabel("Genre + subgenre", "genre-picker")}
+                </label>
+                <GenreSelector
+                  genre={release.primaryGenre}
+                  subgenre={release.secondaryGenre}
+                  onChange={(genre, subgenre) => {
+                    clearCorrectionField("genre-picker");
+                    setRelease((current) => ({
+                      ...current,
+                      primaryGenre: genre,
+                      secondaryGenre: subgenre,
+                    }));
+                  }}
+                  error={Boolean(
+                    showErrors && releaseInfoIssue()?.key === "genre-picker",
+                  )}
+                />
+              </div>
+              <div
+                ref={
+                  registerField("mood") as (node: HTMLDivElement | null) => void
+                }
+              >
+                <label
+                  className="mb-2 block text-sm font-medium"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  {correctionLabel("Mood (optional)", "mood")}
+                </label>
+                <MoodSelector
+                  value={release.mood}
+                  error={Boolean(showErrors && releaseInfoIssue()?.key === "mood")}
+                  onChange={(mood) => {
+                    clearCorrectionField("mood");
+                    setRelease((current) => ({ ...current, mood }));
+                  }}
+                />
+              </div>
+              <div
+                ref={
+                  registerField("language") as (
+                    node: HTMLDivElement | null,
+                  ) => void
+                }
+              >
+                <SearchableSelect
+                  label="Release language"
+                  help={<LanguageFieldHelp />}
+                  correctionRequired={correctionFieldActive("language")}
+                  value={release.language}
+                  options={languageOptions}
+                  placeholder="Select release language"
+                  invalid={Boolean(showErrors && releaseInfoIssue()?.key === "language")}
+                  onChange={(value) => {
+                    clearCorrectionField("language");
+                    setRelease((current) => ({ ...current, language: value }));
+                  }}
+                />
+              </div>
+            </div>
+            <div className="grid gap-5">
+              <div className="border-t pt-5" style={{ borderColor: "var(--border)" }}>
+                <div className="mb-4"><h3 className="text-lg font-semibold" style={{ color: "var(--text)" }}>Release timing</h3></div>
+                {release.releasePreviouslyReleased ? <label className="mb-4 block text-sm" ref={registerField("original-release-date")}>
+                  Original release date
+                  <input type="date" className="field mt-2" value={release.originalReleaseDate} max={toDateInputValue(addDays(today, -1))} onChange={event => setRelease(current => ({ ...current, originalReleaseDate: event.target.value }))} />
+                </label> : null}
+                <div>
+                <div className="release-timing-selector grid sm:grid-cols-2">
+                  <button
+                    type="button"
+                    aria-pressed={release.releaseTiming === "quick_release"}
+                    className="release-timing-option relative min-w-0 px-3 py-4 text-left"
+                    onClick={() => {
+                      clearCorrectionField("release-date");
+                      setRelease((current) => ({
+                        ...current,
+                        releaseTiming: "quick_release",
+                      }));
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold" style={{ color: "var(--text)" }}>As soon as possible</p><span className="release-timing-indicator" aria-hidden="true">{release.releaseTiming === "quick_release" ? <Check className="h-3.5 w-3.5" /> : null}</span></div>
+                    <p
+                      className="mt-2 text-xs leading-5"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Your release will go live as soon as possible after approval. Availability varies by store.
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={release.releaseTiming === "schedule_release"}
+                    className="release-timing-option relative min-w-0 px-3 py-4 text-left"
+                    onClick={() => {
+                      clearCorrectionField("release-date");
+                      setRelease((current) => ({
+                        ...current,
+                        releaseTiming: "schedule_release",
+                      }));
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold" style={{ color: "var(--text)" }}>Schedule a date</p><span className="release-timing-indicator" aria-hidden="true">{release.releaseTiming === "schedule_release" ? <Check className="h-3.5 w-3.5" /> : null}</span></div>
+                    <p
+                      className="mt-2 text-xs leading-5"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      Earliest available<br /><strong style={{ color: "var(--text)" }}>{minimumScheduledDate}</strong>
+                    </p>
+                  </button>
+                </div>
+                {release.releaseTiming === "schedule_release" ? (
+                  <div className="mt-4 rounded-xl border p-4" style={{ borderColor: "var(--accent)", background: "var(--accent-soft)" }}>
+                    {scheduledDateWasMoved ? <div className="mb-4 flex items-start gap-2 rounded-lg border p-3 text-sm leading-5" role="alert" style={{ borderColor: "var(--warning)", background: "var(--warning-soft)", color: "var(--text-muted)" }}><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--warning)" }} /><p>Your previous release date is now too close for delivery. We moved it to the earliest available date, <strong style={{ color: "var(--text)" }}>{minimumScheduledDate}</strong>. Choose a later date if that works better.</p></div> : null}
+                    <label
+                      className="mb-2 block text-sm font-medium"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      {correctionLabel("Scheduled release date", "release-date")}
+                    </label>
+                    <input
+                      ref={registerField("release-date")}
+                      className={fieldClass(
+                        "release-date",
+                        Boolean(
+                          showErrors &&
+                            releaseInfoIssue()?.key === "release-date",
+                        ),
+                      )}
+                      type="date"
+                      min={minimumScheduledDate}
+                      value={release.scheduledReleaseDate}
+                      onChange={(event) => {
+                        clearCorrectionField("release-date");
+                        setRelease((current) => ({
+                          ...current,
+                          scheduledReleaseDate: event.target.value,
+                        }));
+                      }}
+                    />
+                  </div>
+                ) : null}
+                <p className="mt-4 text-xs leading-5" style={{ color: "var(--text-muted)" }}>
+                  Estimated HYMN review: {queue?.averageApprovalTime || "24-48 hours"}. Delivery begins after approval.
+                </p>
+                </div>
+              </div>
+            </div>
+            <div className="release-save-defaults md:col-span-2">
+              <div><p>Make the next release faster</p><span>Save artist, language, genre, label, and rights values as editable distribution defaults.</span></div>
+              <span className="release-save-default-actions"><button type="button" onClick={saveCurrentReleaseDefaults} disabled={preferencesStatus === "saving"}>{preferencesStatus === "saving" ? "Saving…" : preferencesStatus === "saved" ? "Defaults saved ✓" : preferencesStatus === "error" ? "Try again" : "Use these for future releases"}</button><button type="button" onClick={clearReleaseDefaults} className="is-clear">Clear saved defaults</button></span>
+            </div>
           </section>
         </section>) : null}
 {entryStage === null ? (<section className={layoutStyles.sheetSection} data-release-section="5" id="release-section-5" aria-label="Rights and delivery">
@@ -5056,12 +5071,12 @@ export function ReleaseForm({
                 </div></div>
             </div>
           </section>
-        </section>) : null}
-</div>
+        </section>) : null}</div>
         {entryStage === 0 ? <div className={layoutStyles.entryActions}><button type="button" onClick={continueFromMusic} disabled={tracks.some(track => track.audioUploadStatus === "uploading") || replacingAudioCount > 0}>{audioComplete ? "Continue to release information" : "Skip for now"}<ArrowRight size={16}/></button></div> : null}
             <div className={layoutStyles.sheetDraftAction}>
           <button type="button" onClick={saveDraftRelease} disabled={submitting} hidden={Boolean(initialRelease && initialRelease.status !== "draft")} className="release-footer-action is-draft">Draft</button>
         </div>
+        <ReleaseFieldErrors issues={validationIssues} shown={validationErrorKeys} fields={fieldRefs}/>
         {status ? (
           <p
             className="text-xs md:text-sm"

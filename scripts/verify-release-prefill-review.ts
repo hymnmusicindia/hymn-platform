@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import { matchingSafePrefills,usablePrefill,type PrefillValues } from '../lib/release-prefill-review';
+import type { ReleasePrefillSuggestion } from '../lib/release-prefill';
+const current:PrefillValues={language:'Hindi',primaryGenre:'Hip-Hop',secondaryGenre:'Alternative Hip-Hop',recordLabelName:'My Label',copyrightOwner:'My composition',publishingRights:'My recording'};
+const items:ReleasePrefillSuggestion[]=(Object.keys(current) as (keyof PrefillValues)[]).map(field=>({field,value:current[field],source:'PREVIOUS_RELEASE',confidence:'SUGGESTION'}));
+const pending=new Set(items.map(item=>item.field));
+assert.deepEqual(matchingSafePrefills(items,pending,current,true).map(item=>item.field),['language','primaryGenre','secondaryGenre','recordLabelName']);
+assert(!matchingSafePrefills(items,pending,current,false).some(item=>item.field==='recordLabelName'));
+assert(!matchingSafePrefills(items,pending,{...current,language:'English'},true).some(item=>item.field==='language'),'Bulk confirmation never overwrites a manual edit');
+assert(!usablePrefill({...items[0],field:'language',value:'Not a supported language'},current,true));
+assert(!usablePrefill({...items[0],field:'secondaryGenre',value:'Alternative Hip-Hop'},{...current,primaryGenre:'Classical'},true),'A subgenre must match the currently selected genre');
+assert(!usablePrefill({...items[0],value:'   '},current,true));
+assert.deepEqual(matchingSafePrefills(items,new Set(['copyrightOwner','publishingRights']),current,true),[],'Ownership is never bulk-confirmed');
+assert.deepEqual(matchingSafePrefills(items,new Set(),current,true),[]);
+console.log('PASS prefill policy: manual edits, unsupported languages, incompatible subgenres, locked labels, blank values and separate rights confirmations');

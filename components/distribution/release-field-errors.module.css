@@ -1,0 +1,4 @@
+.message { display:flex; align-items:flex-start; gap:7px; margin:8px 0 2px; color:var(--danger); font-size:12px; font-weight:500; line-height:1.55; }
+.message svg { flex-shrink:0; margin-top:2px; }
+html body .invalid.invalid { border-color:var(--danger)!important; }
+html body .invalid.invalid:not(input):not(select):not(textarea):not(button) { box-shadow:inset 3px 0 0 var(--danger); border-radius:6px; padding-left:12px; }
