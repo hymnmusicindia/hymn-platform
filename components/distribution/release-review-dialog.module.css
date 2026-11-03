@@ -1,22 +1,65 @@
-.backdrop { position:fixed; inset:0; z-index:1900; overflow-y:auto; overscroll-behavior:contain; display:flex; align-items:flex-start; justify-content:center; padding:32px 20px; background:#0009; backdrop-filter:blur(12px); }
-.letter { width:min(100%,920px); min-width:0; margin:auto; padding:28px 32px; border:1px solid var(--border); border-radius:16px; background:var(--card); color:var(--text); box-shadow:0 28px 90px #0005; outline:none; }
-.toolbar { position:sticky; top:0; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:16px; padding-block:8px 16px; margin-bottom:24px; border-bottom:1px solid var(--border); background:var(--card); }
+.backdrop { position:fixed; inset:0; z-index:1900; overflow:hidden; overscroll-behavior:contain; display:flex; align-items:center; justify-content:center; padding:32px 20px; background:#0009; backdrop-filter:blur(12px); }
+.letter { display:flex; flex-direction:column; width:min(100%,920px); max-height:100%; min-width:0; min-height:0; margin:auto; overflow:hidden; border:1px solid var(--border); border-radius:16px; background:var(--card); color:var(--text); box-shadow:0 28px 90px #0005; outline:none; }
+.toolbar { flex-shrink:0; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 24px; border-bottom:1px solid var(--border); background:var(--card); }
+.content { min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:24px 32px; }
+.actions { flex-shrink:0; padding:16px 24px; border-top:1px solid var(--border); background:var(--card); box-shadow:0 -8px 24px #00000008; }
 .toolbar > span { font-size:10px; font-weight:600; letter-spacing:.18em; color:var(--text-muted); }
+.brand { display:flex; align-items:center; gap:16px; }
+.brand strong { color:var(--text); font-size:19px; letter-spacing:-.07em; line-height:1; }
+.brand strong span { font-size:8px; vertical-align:super; margin-left:3px; }
+.brand > span { padding-left:16px; border-left:1px solid var(--border-strong); color:var(--text-muted); font-size:11px; letter-spacing:.04em; }
 .toolbar button { display:grid; place-items:center; width:44px; height:44px; flex-shrink:0; border:1px solid var(--border); border-radius:50%; background:var(--bg-soft); color:var(--text); }
 .letter :global(.record-review-card) { grid-template-columns:180px minmax(0,1fr); }
 .letter :global(.record-review-heading) h2 { font-size:clamp(24px,4vw,36px); }
 .letter :global(.record-review-details) { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .letter :global(.record-review-details) > section:last-child { grid-column:1/-1; }
-.letter :global(.review-submit-bar) { position:static!important; display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding-top:20px; border-top:1px solid var(--border); background:transparent; }
-.letter :global(.review-submit-bar) > button { min-height:44px; padding:12px 16px; border-radius:10px; }
-.letter :global(.review-submit-bar) > button[type="submit"] { margin-left:auto; background:var(--accent); color:var(--accent-foreground,var(--bg)); border:1px solid var(--border-strong); }
+.letter.letter.letter :global(.review-submit-bar) { position:static!important; display:flex!important; flex-wrap:wrap; align-items:center; gap:10px; margin:0!important; padding:0!important; border:0!important; background:transparent!important; }
+.letter.letter.letter :global(.review-submit-bar) > button { width:auto!important; min-height:44px; padding:12px 16px!important; border-radius:10px!important; border:1px solid var(--border-strong)!important; background:var(--bg-soft)!important; color:var(--text)!important; font-size:13px; line-height:1.4; font-weight:600; text-shadow:none!important; box-shadow:none!important; transition:filter .15s ease,transform .15s ease; }
+.letter.letter.letter :global(.review-submit-bar) > button[type="submit"] { margin-left:auto; background:var(--accent)!important; color:var(--accent-foreground)!important; border-color:var(--accent)!important; }
+.letter.letter.letter :global(.review-submit-bar) > button:hover:not(:disabled) { filter:brightness(.94); transform:translateY(-1px); }
+.letter.letter.letter :global(.review-submit-bar) > button:disabled { opacity:.6; cursor:not-allowed; }
 .letter :global(.record-review-details) dd { overflow-wrap:anywhere; }
 .letter button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.letter.letter.letter :global(.release-record-review) { gap:24px; }
+.letter.letter.letter :global(.record-review-heading) { align-items:flex-start; gap:20px; }
+.letter.letter.letter :global(.record-review-heading) h2 { font-size:clamp(24px,3vw,30px); line-height:1.2; letter-spacing:-.035em; margin:0; }
+.letter.letter.letter :global(.record-review-heading) :global(.record-review-intro) { max-width:45ch; margin:10px 0 0; font-size:13px; line-height:1.6; letter-spacing:0; text-transform:none; color:var(--text-muted); }
+.letter.letter.letter :global(.record-review-heading) > span { flex-shrink:0; padding:7px 11px; font-size:11px; background:var(--success-soft); color:var(--text); }
+.letter.letter.letter :global(.record-review-card) { position:relative; grid-template-columns:180px minmax(0,1fr); padding:24px; gap:28px; border:1px solid var(--border-strong); border-top:3px solid var(--accent); border-radius:12px; background:linear-gradient(120deg,color-mix(in srgb,var(--accent) 7%,var(--card)),var(--card) 70%); }
+.letter.letter.letter :global(.record-review-cover) { width:100%; border:1px solid var(--border-strong); border-radius:6px; outline:4px solid var(--card); box-shadow:0 10px 24px #0002; }
+.letter.letter.letter :global(.record-review-identity) h3 { font-size:clamp(24px,3vw,34px); line-height:1.2; }
+.letter.letter.letter :global(.record-review-identity) > p { color:var(--text-muted); font-size:10px; letter-spacing:.12em; }
+.letter.letter.letter :global(.record-review-identity) dl { padding-top:12px; border-top:1px solid var(--border); }
+.letter.letter.letter :global(.record-review-tracks),.letter.letter.letter :global(.record-review-details) > section { padding:20px; border-radius:10px; background:var(--card); border-color:var(--border); }
+.letter.letter.letter :global(.record-review-details) { gap:16px; }
+.letter.letter.letter :global(.record-review-details) dl > div { display:grid; grid-template-columns:minmax(80px,.8fr) minmax(0,1.2fr); gap:12px; padding-bottom:12px; border-bottom:1px solid var(--border); }
+.letter.letter.letter :global(.record-review-details) dl > div:last-child { border-bottom:0; padding-bottom:0; }
+.letter.letter.letter :global(.record-review-details) dt { margin:0; font-size:11px; line-height:1.6; }
+.letter.letter.letter :global(.record-review-details) dd { font-size:12px; line-height:1.6; }
+.letter.letter.letter :global(.record-track-number) { font-variant-numeric:tabular-nums; color:var(--text-muted); font-weight:600; }
+.letter.letter.letter :global(.record-track-credits) { gap:8px 18px; font-size:11px; }
+.letter.letter.letter :global(.record-review-ready) { padding:12px 16px; font-size:12px; }
+.letter.letter.letter :global(.payment-summary) { border-style:dashed; background:var(--bg-soft); border-radius:10px; }
+.letter.letter.letter :global(.record-review-payment) { background:var(--bg-soft); padding:16px 20px; font-size:12px; }
+.letter.letter.letter :global(.record-review-payment) strong { font-size:15px; color:var(--text); }
 @media(max-width:600px) {
   .backdrop { padding:12px max(10px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)); }
-  .letter { padding:18px 16px; border-radius:12px; }
+  .letter { border-radius:12px; }
+  .toolbar { padding:8px 16px; }
+  .content { padding:20px 16px; }
+  .actions { padding:12px 16px max(12px,env(safe-area-inset-bottom)); }
   .letter :global(.record-review-card),.letter :global(.record-review-details) { grid-template-columns:minmax(0,1fr); }
   .letter :global(.record-review-cover) { width:140px; }
-  .letter :global(.review-submit-bar) { flex-direction:column; align-items:stretch; }
-  .letter :global(.review-submit-bar) button { width:100%; min-height:44px; }
+  .letter.letter.letter :global(.record-review-card) { grid-template-columns:100px minmax(0,1fr); padding:18px; gap:18px; }
+  .letter.letter.letter :global(.record-review-identity) { gap:8px; }
+  .letter.letter.letter :global(.record-review-identity) h3 { font-size:22px; }
+  .letter.letter.letter :global(.record-review-identity) dl { grid-template-columns:1fr; gap:10px; }
+  .letter.letter.letter :global(.record-review-heading) { flex-direction:column; gap:12px; }
+  .letter.letter.letter :global(.record-review-details) { grid-template-columns:minmax(0,1fr); }
+  .letter.letter.letter :global(.record-review-tracks),.letter.letter.letter :global(.record-review-details) > section { padding:16px; }
+  .letter.letter.letter :global(.review-submit-bar) { display:grid!important; grid-template-columns:1fr 1fr; gap:8px; }
+  .letter.letter.letter :global(.review-submit-bar) > button { width:100%!important; margin:0!important; padding:10px!important; font-size:12px; }
+  .letter.letter.letter :global(.review-submit-bar) > button[type="submit"] { grid-column:1/-1; }
 }
+@media(max-width:360px) { .letter.letter.letter :global(.record-review-card) { grid-template-columns:minmax(0,1fr); } .letter.letter.letter :global(.record-review-cover) { width:120px; justify-self:start; } }
+@media(prefers-reduced-motion:reduce) { .letter.letter.letter :global(.review-submit-bar) > button { transition:none; transform:none!important; } }

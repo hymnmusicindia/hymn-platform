@@ -5091,9 +5091,51 @@ export function ReleaseForm({
         ) : null}
         </div>
       </form>
-      <ReleaseReviewDialog open={reviewOpen && !finalConfirmationOpen && !submitting} onClose={() => { setReviewOpen(false); setStep(lastSheetStage.current); }}>
+      <ReleaseReviewDialog open={reviewOpen && !finalConfirmationOpen && !submitting} onClose={() => { setReviewOpen(false); setStep(lastSheetStage.current); }} actions={
+            <div
+              className="review-submit-bar sticky bottom-3 z-20 grid gap-3 py-3 backdrop-blur-xl sm:grid-cols-[auto,1fr,auto]"
+              style={{
+                borderColor: "var(--border)",
+                background: "color-mix(in srgb, var(--card) 90%, transparent)",
+              }}
+            >
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => goToStep(5)}
+                className="release-footer-action is-muted w-full sm:w-auto"
+              >
+                ← Back to release
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={saveDraftRelease}
+                hidden={Boolean(initialRelease && initialRelease.status !== "draft")}
+                style={initialRelease && initialRelease.status !== "draft" ? { display: "none" } : undefined}
+                className="release-footer-action is-draft w-full sm:ml-auto sm:w-auto"
+              >
+                Draft
+              </button>
+              <button
+                type="submit" form="release-distribution-form"
+                disabled={submitting || draftConflict || !legalComplete || validationIssues.length > 0}
+                className={clsx("release-footer-action is-primary w-full disabled:opacity-60 sm:w-auto", distributionCheckoutAmount === 0 && "is-free-release")}
+              >
+                {submitting
+                  ? "Processing…"
+                  : isPaidReleaseResubmission
+                    ? amendmentMode ? "Submit amendment" : "Submit corrections →"
+                  : subscriptionCovered
+                    ? "Confirm & Submit Release →"
+                    : distributionCheckoutAmount === 0
+                      ? "Submit your release →"
+                      : `Continue to Checkout · Rs ${distributionCheckoutAmount.toLocaleString("en-IN")} →`}
+              </button>
+            </div>
+      }>
         <section className="release-review-stage release-record-review">
-            <header className="record-review-heading"><div><p>YOUR NEXT RELEASE</p><h2>Ready for the world?</h2></div><span>{validationIssues.length === 0 ? "Ready for review" : `${validationIssues.length} items to finish`}</span></header>
+            <header className="record-review-heading"><div><p>YOUR NEXT RELEASE</p><h2>Check your release</h2><p className="record-review-intro">Your artwork, music and details, together in one final look.</p></div><span>{validationIssues.length === 0 ? "Ready for review" : `${validationIssues.length} items to finish`}</span></header>
             <article className="record-review-card">
               <div className="record-review-cover">{artworkPreview ? <img src={artworkPreview} alt={`${displayedReleaseTitle} artwork`} /> : <Disc3 aria-label="Artwork missing" />}</div>
               <div className="record-review-identity"><p>{releaseType.toUpperCase()} · {tracks.length} {tracks.length === 1 ? "TRACK" : "TRACKS"}</p><h3>{displayedReleaseTitle}</h3><span>{primaryArtistName || "Primary artist missing"}</span><dl><div><dt>{releaseDateSummaryTitle}</dt><dd>{releaseDateSummaryValue}</dd></div><div><dt>Label</dt><dd>{release.recordLabelName || "Not provided"}</dd></div></dl><button type="button" onClick={() => goToStep(4)}>Edit artwork →</button></div>
@@ -5175,47 +5217,7 @@ export function ReleaseForm({
 
 
             <div className="record-review-payment"><span>{isPaidReleaseResubmission ? "Corrections to your existing release" : subscriptionCovered ? "Covered by your plan" : "Total payable"}</span><strong>{isPaidReleaseResubmission || subscriptionCovered ? "No additional payment" : distributionCheckoutAmount === 0 ? "₹0" : `₹${distributionCheckoutAmount.toLocaleString("en-IN")}`}</strong></div>
-            <div
-              className="review-submit-bar sticky bottom-3 z-20 grid gap-3 py-3 backdrop-blur-xl sm:grid-cols-[auto,1fr,auto]"
-              style={{
-                borderColor: "var(--border)",
-                background: "color-mix(in srgb, var(--card) 90%, transparent)",
-              }}
-            >
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={() => goToStep(5)}
-                className="release-footer-action is-muted w-full sm:w-auto"
-              >
-                ← Back to release
-              </button>
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={saveDraftRelease}
-                hidden={Boolean(initialRelease && initialRelease.status !== "draft")}
-                style={initialRelease && initialRelease.status !== "draft" ? { display: "none" } : undefined}
-                className="release-footer-action is-draft w-full sm:ml-auto sm:w-auto"
-              >
-                Draft
-              </button>
-              <button
-                type="submit" form="release-distribution-form"
-                disabled={submitting || draftConflict || !legalComplete || validationIssues.length > 0}
-                className={clsx("release-footer-action is-primary w-full disabled:opacity-60 sm:w-auto", distributionCheckoutAmount === 0 && "is-free-release")}
-              >
-                {submitting
-                  ? "Processing…"
-                  : isPaidReleaseResubmission
-                    ? amendmentMode ? "Submit amendment" : "Submit corrections →"
-                  : subscriptionCovered
-                    ? "Confirm & Submit Release →"
-                    : distributionCheckoutAmount === 0
-                      ? "Submit your release →"
-                      : `Continue to Checkout · Rs ${distributionCheckoutAmount.toLocaleString("en-IN")} →`}
-              </button>
-            </div>
+
           </section>
       </ReleaseReviewDialog>
       <MonetisationConsentModal

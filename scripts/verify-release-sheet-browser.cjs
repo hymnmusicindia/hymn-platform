@@ -54,6 +54,24 @@ async function main() {
     const dialog=page.getByRole('dialog',{name:'Review your release',exact:true});
     if(!await dialog.isVisible()){console.log('review status',await page.locator('[role="alert"]').allTextContents(),await page.locator('.release-editor-status').innerText());}
     await expect(dialog).toBeVisible();await expect(dialog.getByText('Dreamy',{exact:true}).first()).toBeVisible();
+    const reviewActions=dialog.locator('.review-submit-bar');
+    const submit=reviewActions.locator('button[type="submit"]');
+    for(const scroll of [0,0.5,1]) {
+      await dialog.locator('[data-review-scroll]').evaluate((el,ratio)=>{el.scrollTop=(el.scrollHeight-el.clientHeight)*ratio;},scroll);
+      for(const button of await reviewActions.getByRole('button').all()) {
+        await expect(button).toBeInViewport();
+        assert(await button.evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2));}),'Review actions stay uncovered while content scrolls');
+      }
+    }
+    const contrast=await submit.evaluate(el=>{
+      const style=getComputedStyle(el),rgb=s=>s.match(/[\d.]+/g).slice(0,3).map(Number),lum=c=>c.map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;}).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+      const a=lum(rgb(style.color)),b=lum(rgb(style.backgroundColor));return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);
+    });assert(contrast>=4.5,`Submit contrast must meet 4.5:1, got ${contrast}`);
+    await page.setViewportSize({width,height:540});
+    for(const button of await reviewActions.getByRole('button').all())await expect(button).toBeInViewport();
+    assert(await dialog.locator('[data-review-scroll]').evaluate(el=>el.clientHeight>0&&el.scrollHeight>el.clientHeight),'Short screens retain a scrollable review body');
+    assert(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1),'Review does not overflow horizontally');
+    await page.setViewportSize({width,height:900});
     assert.equal(await dialog.getByRole('button',{name:/Continue to Checkout|Submit your release|Confirm & Submit Release/}).getAttribute('form'),'release-distribution-form');
     await dialog.getByRole('button',{name:/Continue to Checkout|Submit your release|Confirm & Submit Release/}).click();
     const finalDialog=page.getByRole('dialog',{name:'One final confirmation',exact:true});await expect(finalDialog).toBeVisible();await expect(dialog).not.toBeVisible();await finalDialog.getByRole('button',{name:'Back to review',exact:true}).click();await expect(dialog).toBeVisible();
