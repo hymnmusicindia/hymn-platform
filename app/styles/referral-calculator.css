@@ -96,3 +96,45 @@
 @media(prefers-reduced-motion:reduce) { .earn-goal-track span { transition:none; } }
 /* Comfortable mobile tap targets without expanding the desktop controls. */
 @media(max-width:620px) { .earn-source-row .earn-stepper button { min-height:44px; width:30px; } .earn-people > .earn-stepper button { min-height:44px; width:32px; } }
+/* Compact calculator and connected referral branches. */
+.earn-heading { padding-bottom:16px; margin-bottom:16px; }
+.earn-view-tabs { margin:14px 0; }
+.earn-section-title { margin-bottom:10px; }
+.earn-source-list { gap:4px; }
+.earn-source-row { padding:4px 7px; }
+.earn-purchase-editor { margin-top:10px; padding:12px; }
+.earn-editor-heading { margin-bottom:8px; }
+.earn-purchase-editor select { margin-bottom:8px; min-height:34px; padding:6px; }
+.earn-purchase-editor > small { margin-top:6px; }
+.earn-result { padding:18px; }
+.earn-donut { width:164px; padding:5px; margin:14px auto; }
+.earn-donut output { font-size:29px; margin:7px 0; }
+.earn-split { padding-bottom:12px; }
+.earn-breakdown { gap:9px; padding:13px 0; }
+.earn-payout-goal { padding-top:12px; }
+.earn-start { margin-top:13px; padding:11px; }
+.earn-branches { display:grid; grid-template-columns:1fr 1fr; align-items:center; gap:28px; margin-top:22px; padding-top:22px; border-top:1px solid var(--border); }
+.earn-branch-copy h3 { margin:8px 0; font-size:20px; line-height:1.25; letter-spacing:-.025em; }
+.earn-branch-copy > p:not(.earn-eyebrow) { font-size:12px; line-height:1.7; color:var(--text-muted); margin:0; }
+.earn-branch-example { margin-top:12px; padding:12px; border-radius:10px; background:color-mix(in srgb,#b39861 8%,var(--surface)); border:1px solid var(--border); }
+.earn-branch-example > strong { font-size:11px; }
+.earn-branch-example p { margin:7px 0; font-size:12px; line-height:1.7; color:var(--text-muted); }
+.earn-branch-example b { color:var(--text); font-weight:600; }
+.earn-branch-example small { display:block; font-size:10px; line-height:1.6; color:var(--text-muted); }
+.earn-branch-visual { min-width:0; padding:12px; border:1px solid var(--border); border-radius:12px; background:color-mix(in srgb,var(--text) 2%,var(--surface)); }
+.earn-branch-row { display:flex; justify-content:space-around; position:relative; gap:12px; }
+.earn-branch-node { display:flex; align-items:center; justify-content:center; flex-direction:column; gap:3px; width:104px; min-height:44px; padding:6px; border:1px solid #b39861; border-radius:9px; background:var(--surface); font-size:12px; font-weight:650; position:relative; }
+.earn-branch-node small { font-size:9px; color:var(--text-muted); font-weight:400; text-align:center; }
+.earn-branch-root { background:var(--text); color:var(--surface); }
+.earn-branch-root small { color:var(--surface); }
+.earn-branch-muted { border-color:var(--border); color:var(--text-muted); }
+.earn-branch-fork { padding-top:16px; position:relative; }
+.earn-branch-fork::before { content:''; position:absolute; top:0; left:25%; right:25%; height:16px; border:1px solid #b39861; border-bottom:0; }
+.earn-branch-fork > .earn-branch-fork { width:50%; }
+.earn-branch-buyer { display:flex; justify-content:center; padding-top:16px; position:relative; }
+.earn-branch-buyer::before { content:''; position:absolute; top:0; height:16px; border-left:1px solid #b39861; }
+.earn-branch-visual > p { text-align:center; color:var(--text-muted); font-size:9px; line-height:1.6; margin:10px 0 0; }
+@media(min-width:1100px) { .earn-source-list { grid-template-columns:1fr 1fr; } .earn-source-row { gap:4px; } .earn-source-select { gap:6px; } .earn-source-select > span { width:25px; height:28px; } .earn-source-select strong { font-size:10px; } .earn-source-row .earn-stepper button { width:22px; } .earn-source-row .earn-stepper input { width:24px; } }
+@media(max-width:760px) { .earn-branches { gap:18px; } .earn-branch-fork > .earn-branch-fork { width:70%; } }
+@media(max-width:620px) { .earn-heading { padding-bottom:14px; margin-bottom:14px; } .earn-result { padding:18px; } .earn-donut { width:164px; } .earn-donut output { font-size:29px; } .earn-branches { grid-template-columns:1fr; gap:16px; } .earn-branch-fork > .earn-branch-fork { width:65%; } .earn-view-tabs button { min-height:44px; } .earn-mobile-summary { margin-bottom:14px; } }
+.earn-branch-buyer { width:50%; }

@@ -11,6 +11,12 @@ async function main() {
     for (const width of [1440, 768, 390, 320]) {
       await page.setViewportSize({ width, height: 950 }); await page.goto(`${base}/referrals`, { timeout: 120000 });
       const calc = page.locator('.referral-calculator'); await expect(calc.locator('output')).toHaveText('₹600.00');
+      await expect(calc.locator('.earn-branches')).toContainText('eligible HYMN net');
+      await expect(calc.locator('.earn-branch-node')).toHaveCount(6);
+      if (width === 1440) {
+        expect(await calc.locator('.earn-workbench').evaluate(n => n.getBoundingClientRect().height)).toBeLessThan(660);
+        expect(await calc.locator('.earn-result').evaluate(n => n.getBoundingClientRect().height)).toBeLessThan(600);
+      }
       await calc.getByRole('spinbutton', { name: 'Paying referrals', exact: true }).fill('10'); await expect(calc.locator('output')).toHaveText('₹240.00');
       await calc.getByRole('button', { name: 'Increase Studio purchases per person', exact: true }).click(); await expect(calc.locator('output')).toHaveText('₹300.00');
       await calc.getByRole('button', { name: 'Increase Renewals purchases per person', exact: true }).click(); await expect(calc.locator('output')).toHaveText('₹500.00');
