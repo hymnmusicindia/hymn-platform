@@ -1,0 +1,21 @@
+.form { --auth-bg:var(--surface); --auth-text:var(--text); --auth-muted:var(--text-muted); --auth-border:var(--border); --auth-button:var(--text); --auth-button-text:var(--surface); color:var(--auth-text); display:grid; gap:14px; width:100%; }
+.form[data-tone=dark] { --auth-bg:#17242a; --auth-text:#f5f8fa; --auth-muted:#c1cdd2; --auth-border:#52626b; --auth-button:#e6d2a3; --auth-button-text:#17242a; }
+.heading { display:flex; align-items:center; gap:8px; font-size:14px; font-weight:600; flex-wrap:wrap; }
+.heading small { margin-left:auto; font-size:10px; font-weight:400; color:var(--auth-muted); }
+.form label { display:grid; gap:7px; font-size:12px; color:var(--auth-muted); }
+.form input { min-width:0; width:100%; min-height:46px; padding:12px 14px; border:1px solid var(--auth-border); border-radius:10px; background:var(--auth-bg); color:var(--auth-text); font-size:16px; outline-offset:3px; }
+.form input:disabled { opacity:.75; }
+.primary { min-height:48px; padding:12px 16px; display:flex; align-items:center; justify-content:center; gap:12px; background:var(--auth-button); color:var(--auth-button-text); border:0; border-radius:10px; font-size:13px; font-weight:650; }
+.actions { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.actions button { min-height:44px; display:flex; align-items:center; gap:6px; font-size:11px; background:none; color:var(--auth-text); border:0; padding:4px 0; }
+.actions button:disabled { color:var(--auth-muted); opacity:.7; }
+.note { margin:0; color:var(--auth-muted); font-size:11px; line-height:1.7; text-align:center; }
+.error { margin:0; padding:10px 12px; border:1px solid #bc4c4c; border-radius:8px; color:var(--danger,#b42318); font-size:12px; line-height:1.6; }
+.form[data-tone=dark] .error { color:#ffb4ad; }
+.form .code { text-align:center; letter-spacing:.45em; font-size:23px; font-weight:600; }
+.loading { min-height:200px; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; }
+.ring { width:86px; height:86px; border:3px solid var(--auth-border); border-top-color:#b39861; border-radius:50%; animation:turn 1s linear infinite; }
+.loading strong { position:absolute; top:calc(50% - 39px); font-size:32px; line-height:40px; }
+.loading > span:last-child { color:var(--auth-muted); font-size:12px; }
+@keyframes turn { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .ring { animation:none; border-color:#b39861; } }

@@ -5,6 +5,7 @@ import Image from "next/image";
 import { ArrowLeft, Check } from "lucide-react";
 import { useState } from "react";
 import { GoogleAuthButton } from "@/components/google-auth-button";
+import { EmailAuthForm } from "@/components/email-auth-form";
 import type { UserRole } from "@/lib/types";
 
 type AuthRole = Exclude<UserRole, "admin">;
@@ -60,7 +61,9 @@ export function UnifiedAuthForm({
           {appliedCode && code !== appliedCode ? <p className="mt-2 text-xs">{appliedCode} stays applied until you apply a new code.</p> : null}
           {referralState ? <p className="mt-2 flex items-center gap-1.5 text-xs" style={{ color: referralState === "Referral code applied" ? "var(--success)" : "var(--danger)" }}>{referralState === "Referral code applied" ? <Check className="h-3.5 w-3.5" /> : null}{referralState}</p> : null}
         </details> : null}
-        <GoogleAuthButton returnTo={returnTo} label="Continue with Google" className="w-full" appearance="quiet" expectedRole={initialRole} referralCode={appliedCode || undefined} autoPrompt />
+        <EmailAuthForm signup={initialMode === 'signup'} returnTo={returnTo}/>
+        <div className="my-5 flex items-center gap-3 text-xs text-[var(--text-muted)]"><span className="h-px flex-1 bg-[var(--border)]"/>or<span className="h-px flex-1 bg-[var(--border)]"/></div>
+        <GoogleAuthButton returnTo={returnTo} label="Continue with Google" className="w-full" appearance="quiet" expectedRole={initialRole} referralCode={appliedCode || undefined} />
       </div>
     </section>
   );

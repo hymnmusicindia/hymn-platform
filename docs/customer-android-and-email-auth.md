@@ -1,0 +1,41 @@
+# HYMN Music customer Android app and email sign-in
+
+The customer app is the native `android/music` module (`fun.hymnmusic.app`). The staff app remains `android/app` (`fun.hymnmusic.team`). Customer screens use Android views, the document picker, MediaPlayer and HTTPS JSON APIs. The app does not render website HTML. Razorpay's official Android checkout SDK handles payment entry; HYMN's existing server endpoints verify signatures, payment capture, ownership, pricing, release reviews and entitlements.
+
+## Email sign-in
+
+`POST /api/auth/email` requests or verifies a six-digit email code. Requesting a code does not create an account. Successful verification creates a customer or signs into the existing active customer/producer identity. Administrator and merged/inactive identities cannot enter through this flow. Existing roles and account names are preserved.
+
+Codes expire after ten minutes. Requests and attempts have persistent limits; resends invalidate older challenges. A keyed code digest is bound to the email and challenge ID. Verification consumes a locked database row in the same transaction as identity creation. Session cookies use the existing HttpOnly session system. The native app stores its cookie and recovery state in Android encrypted preferences. No schema migration or new environment secret is needed; the existing email configuration and user session secret are used.
+
+## Native workflows
+
+- Email signup/login, profile, preferences, appearance and logout.
+- Artist profiles and explicit store identity confirmation.
+- Release drafts, track metadata, private artwork/audio/documents, device draft recovery, server version conflict protection, review, payment/subscription entitlement submission, correction resubmission and release status.
+- Beat discovery, previews, licence details, server quotes, checkout, owned downloads and release handoff.
+- Plan purchase, annual artist-slot pricing through the existing quote service and renewal actions.
+- Studio engineer discovery, project creation, payment, private source upload, messages, deliveries, approval, revisions, scope payment, reviews, cancellation and release handoff.
+- Playlist listening/feedback purchases using external Spotify tracks or the customer's HYMN catalogue, submission tracking, listening-link updates, cancellation, concerns and curator feedback.
+- Referral link sharing, branches, messages, server-calculated illustrations and referral payout requests.
+- Income summaries, payout credentials, withdrawal requests, history, support callbacks, notifications, policy reader and order history.
+
+Server authorization and validation remain authoritative. A displayed client success is never sufficient evidence of payment or payout completion. Independent curator settlement remains the existing HYMN-reviewed process. The application does not add a customer self-service curator withdrawal endpoint.
+
+## Build and release
+
+Run `node scripts/release-music-app.cjs`. A first build creates an ignored signing key under `android/.signing/`; subsequent builds reuse it and increment `android/music-release.json`. The command builds the release APK, runs JVM tests, checks the package/version metadata and publishes a content-hashed APK plus `public/downloads/hymn-music/release.json`.
+
+Back up `android/.signing/customer-release.jks` and `customer.properties` securely together. They must never be committed or uploaded to public storage. The same key is required for every future APK update.
+
+Publish the source, manifest and selected versioned APK together. `/music/app` is the shareable install page; `/music/app/download` streams the latest APK with the version, content length and hash in response headers. The session API reports the latest published Android version. Android still requires user approval to install an update; ordinary applications cannot silently replace themselves.
+
+## Validation
+
+- `node --import tsx scripts/verify-customer-email-isolated.ts`: isolated PostgreSQL fixture, mocked mail; no production accounts or emails.
+- `node scripts/verify-email-auth-ui.cjs`: real React form in Chromium, mocked OTP API, four viewport widths, error/retry and resend behaviour.
+- `:music:testDebugUnitTest`: HTTPS origin and external-scheme boundaries.
+- `:music:connectedDebugAndroidTest`: native view tree, sign-in controls and navigation visibility.
+- Release APK compilation and signing verification.
+
+These checks do not charge a real card, request a real payout or prove delivery to every email provider. Live transaction completion requires the payment provider's normal confirmation and reconciliation.

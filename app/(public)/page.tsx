@@ -12,7 +12,7 @@ import { buildHomePathBanners } from "@/components/home-path-banners";
 import { HomeGoalWorkspace } from "@/components/home-goal-workspace";
 import { LandingWorkspace } from "@/components/landing-workspace";
 import { AnimatedHeroMetrics } from "@/components/animated-hero-metrics";
-import { GoogleAuthButton } from "@/components/google-auth-button";
+import { EmailAuthForm } from "@/components/email-auth-form";
 import { HomeNewsletter } from "@/components/home-newsletter";
 import { beatStoreReviews, buildBeatStorefront } from "@/lib/beat-store";
 import { HomeReviewsCarousel } from "@/components/home-reviews-carousel";
@@ -127,7 +127,8 @@ export default async function HomePage() {
                   <span className="mt-1.5 block">starts here.</span>
                 </h2>
                 <div className="my-5 h-px bg-gradient-to-r from-white/20 via-white/8 to-transparent" />
-                <GoogleAuthButton label="Continue with Google" expectedRole="customer" appearance="quiet" className="w-full" />
+                <EmailAuthForm signup dark />
+                <Link href="/music/app" className="mt-4 block text-center text-xs font-semibold text-[#e6d2a3] underline underline-offset-4">Get HYMN Music for Android</Link>
                 <p className="mt-5 text-center text-[8px] leading-5 tracking-tight text-white/45 sm:whitespace-nowrap sm:text-[10px]">
                   By continuing, you agree to our{" "}
                   <Link prefetch={false} href="/terms-of-service" className="text-white/75 underline decoration-white/25 underline-offset-4 transition hover:text-white">Terms of Service</Link>

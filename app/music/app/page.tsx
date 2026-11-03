@@ -1,0 +1,9 @@
+import Link from 'next/link';
+import { getMusicAppRelease } from '@/lib/music-app-release';
+import { MusicAppLinks } from '@/components/music-app-links';
+export const dynamic = 'force-dynamic';
+export const metadata = { title: 'HYMN Music for Android' };
+export default async function MusicAppPage() {
+  const release = await getMusicAppRelease();
+  return <main style={{ minHeight: '100dvh', background: '#0e1116', color: '#f2f5f8', padding: '48px 20px', display: 'grid', placeItems: 'center' }}><section style={{ width: '100%', maxWidth: 520, padding: 'clamp(22px, 5vw, 40px)', background: '#171d25', border: '1px solid #354150', borderRadius: 24 }}><p style={{ color: '#e6d2a3', fontSize: 12, letterSpacing: 3 }}>HYMN / MUSIC</p><h1 style={{ fontSize: 'clamp(32px, 8vw, 48px)', lineHeight: 1.1, margin: '20px 0' }}>Your music.<br/>In your pocket.</h1><p style={{ color: '#bbc5d1', lineHeight: 1.7, marginBottom: 24 }}>Release music, find beats, work with engineers and reach playlist curators from the HYMN Android app.</p>{release ? <><p style={{ marginBottom: 16 }}>Version {release.version} · {(release.size / 1048576).toFixed(1)} MB</p><MusicAppLinks/></> : <p role="status">The Android app is being prepared. Please check back shortly.</p>}<h2 style={{ fontSize: 18, marginTop: 30 }}>Install in a moment</h2><ol style={{ paddingLeft: 22, lineHeight: 1.9, color: '#bbc5d1' }}><li>Download and open the APK on your Android phone.</li><li>Allow installation from your browser if Android asks.</li><li>Open HYMN Music and sign in with your email code.</li></ol><p style={{ fontSize: 12, color: '#bbc5d1', margin: '18px 0' }}>Use this same link for future updates. Install the new version over the existing app to keep your account.</p><Link href="/" style={{ color: '#e6d2a3' }}>Back to HYMN ↗</Link></section></main>;
+}

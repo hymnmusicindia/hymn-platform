@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { GoogleAuthButton } from "@/components/google-auth-button";
+import { EmailAuthForm } from "@/components/email-auth-form";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import { ONBOARDING_SEEN_KEY, saveOnboardingContext, type OnboardingContext } from "@/lib/onboarding-client";
 
@@ -12,7 +12,7 @@ export function OnboardingLoginModal({ open, title, body, redirectAfterLogin, co
     <section ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="onboarding-login-title" className="w-full rounded-t-[1.25rem] border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_94%,transparent)] p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-12px_50px_rgba(0,0,0,.28)] backdrop-blur-2xl sm:max-w-[27rem] sm:rounded-[1.25rem] sm:p-7 sm:shadow-[0_28px_90px_rgba(0,0,0,.42)]">
       <div className="flex items-start justify-between gap-5"><h2 id="onboarding-login-title" className="max-w-[21rem] text-xl font-semibold leading-7 tracking-[-.025em] sm:text-[1.4rem]">{title}</h2>{allowDismiss ? <button onClick={onClose} aria-label="Close" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[var(--text-muted)] transition hover:bg-[var(--hover)] hover:text-[var(--text)] focus-visible:ring-2"><X className="h-4 w-4" /></button> : null}</div>
       <p className="mt-3 text-[.84rem] leading-6 text-[var(--text-muted)]">{body}</p>
-      <div className="mt-6 border-t border-[var(--border)] pt-5"><GoogleAuthButton appearance="quiet" onAuthenticated={async () => {
+      <div className="mt-6 border-t border-[var(--border)] pt-5"><EmailAuthForm onAuthenticated={async () => {
         saveOnboardingContext(context); localStorage.setItem(ONBOARDING_SEEN_KEY, "true");
         if (context.name) {
           const current = await fetch("/api/user/onboarding-preferences").then(response => response.ok ? response.json() : null).catch(() => null);

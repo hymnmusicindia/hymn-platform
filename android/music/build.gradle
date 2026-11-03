@@ -1,0 +1,31 @@
+apply plugin: 'com.android.application'
+def releaseInfo = new groovy.json.JsonSlurper().parse(rootProject.file('music-release.json'))
+def signingFile = rootProject.file('.signing/customer.properties')
+android {
+    namespace 'fun.hymnmusic.app'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'fun.hymnmusic.app'
+        minSdk 26
+        targetSdk 35
+        versionCode releaseInfo.versionCode
+        versionName releaseInfo.versionName
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+    }
+    buildFeatures { buildConfig true }
+    if (signingFile.exists()) {
+        def credentials = new Properties()
+        signingFile.withInputStream { credentials.load(it) }
+        signingConfigs { customer { storeFile rootProject.file('.signing/customer-release.jks'); storePassword credentials.storePassword; keyAlias 'hymn-music'; keyPassword credentials.storePassword } }
+        buildTypes { release { signingConfig signingConfigs.customer } }
+    }
+}
+dependencies {
+    implementation platform('org.jetbrains.kotlin:kotlin-bom:1.8.22')
+    implementation 'androidx.core:core:1.15.0'
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+    implementation 'com.razorpay:checkout:1.6.41'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+}
