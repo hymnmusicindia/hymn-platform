@@ -12,8 +12,9 @@ async function main() {
   const state: any = { status: "created", providerStatus: "created", providerPlan: "plan_half_fixture", creates: 0 };
   (globalThis as any).subscriptionResume = {
     db: {
+      $transaction:async (run:any)=>run((globalThis as any).subscriptionResume.db),$queryRaw:async()=>[],
       subscription: { findUnique: async () => ({ id: 7, userId: 18, plan: "half_yearly", razorpaySubscriptionId: "sub_fixture", status: state.status, autoRenewal: state.autoRenewal, expiryDate: state.expiryDate, currentPeriodEnd: null }), upsert: async () => { if (!state.lapsed) throw new Error("Retry must not overwrite a subscription"); return { id: 7 }; } },
-      auditLog: { create: async () => ({}) },
+      auditLog: {findFirst:async()=>null, create: async () => ({}) },
       subscriptionPlanVersion: { upsert: async () => ({ id: 3, razorpayPlanId: "plan_half_fixture", amount: 69900, currency: "INR" }) }
     },
     provider: { plans: { fetch: async () => ({ item: { amount: 69900, currency: "INR" }, period: "monthly", interval: 6 }) }, subscriptions: {

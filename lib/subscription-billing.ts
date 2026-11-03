@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import type {Subscriptions} from 'razorpay/dist/types/subscriptions';
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { razorpay } from "@/lib/razorpay";
@@ -9,6 +10,7 @@ import { qualifyPartnerPayment } from "@/lib/growth-partners";
 import { recordGrowthEvent } from "@/lib/growth";
 import { SubscriptionPlanConfigurationError, validateSubscriptionProviderPlan } from "@/lib/subscription-plan-validation";
 import { recordVerifiedAcquisitionRevenue } from "@/lib/acquisition-revenue";
+import {annualCompatibilityRequired,validateCompatibleAnnualPlan,validSubscriptionCycleCount,isUnstartedSubscription} from './subscription-recurrence';
 
 export const SUBSCRIPTION_PRODUCTS = ["half_yearly", "yearly", "yearly_plus"] as const;
 export type SubscriptionProduct = typeof SUBSCRIPTION_PRODUCTS[number];
@@ -135,11 +137,19 @@ export function verifySubscriptionCheckoutSignature(paymentId: string, subscript
 
 async function resolvePlanVersion(product: SubscriptionProduct) {
   const policy = SUBSCRIPTION_POLICIES[product];
-  const razorpayPlanId = process.env[policy.planEnv]?.trim();
+  let razorpayPlanId = process.env[policy.planEnv]?.trim();
   if (!razorpayPlanId) throw new SubscriptionPlanConfigurationError(`${policy.planEnv} is not configured.`);
   if (!razorpay) throw new Error("Razorpay is not configured.");
   const providerPlan = await razorpay.plans.fetch(razorpayPlanId);
   validateSubscriptionProviderPlan(providerPlan, { ...policy, months: product === "half_yearly" ? 6 : 12 });
+  if(annualCompatibilityRequired(providerPlan)){
+    const mapping=await prisma.auditLog.findFirst({where:{entity:'subscription_plan_compatibility',entityId:razorpayPlanId,action:'SUBSCRIPTION_PLAN_COMPATIBILITY_REGISTERED'},orderBy:[{createdAt:'desc'},{id:'desc'}],select:{metadata:true}});
+    const compatibleId=(mapping?.metadata as {compatiblePlanId?:unknown}|null)?.compatiblePlanId;
+    if(typeof compatibleId!=='string'||!compatibleId.startsWith('plan_'))throw new SubscriptionPlanConfigurationError('The annual UPI-compatible billing plan has not been registered.');
+    const compatible=await razorpay.plans.fetch(compatibleId);
+    validateCompatibleAnnualPlan(compatible,razorpayPlanId,{...policy,months:12});
+    razorpayPlanId=compatible.id;
+  }
   return prisma.subscriptionPlanVersion.upsert({
     where: { razorpayPlanId },
     create: { product, razorpayPlanId, amount: policy.amount, currency: policy.currency, billingInterval: policy.billingInterval },
@@ -147,29 +157,72 @@ async function resolvePlanVersion(product: SubscriptionProduct) {
   });
 }
 
+async function retireFailedAnnualMandate(id:string,provider:Subscriptions.RazorpaySubscription){
+  if(!razorpay)throw new Error('Payment service unavailable.');
+  if(!isUnstartedSubscription(provider)&&!(provider.status==='cancelled'&&provider.paid_count===0&&!provider.current_start))return false;
+  const invoices=await razorpay.invoices.all({subscription_id:id,count:100});
+  if(invoices.items.length>=100||invoices.items.some(i=>i.status==='paid'||Number(i.amount_paid)>0||i.paid_at))return false;
+  const invoiceIds=new Set(invoices.items.map(i=>i.id));
+  const payments=await razorpay.payments.all({from:provider.created_at,count:100});
+  // Do not guess when the bounded read cannot prove every relevant payment is terminal.
+  if(payments.items.length>=100)return false;
+  const attempts=payments.items.filter(p=>p.invoice_id&&invoiceIds.has(p.invoice_id));
+  if(!attempts.length||attempts.some(p=>p.status!=='failed'||Date.now()-p.created_at*1000<300000))return false;
+  if(provider.status!=='cancelled'){
+    const latest=await razorpay.subscriptions.fetch(id);
+    if(!isUnstartedSubscription(latest))return false;
+    const cancelled=await razorpay.subscriptions.cancel(id,false);
+    if(cancelled.status!=='cancelled'||cancelled.paid_count!==0||cancelled.current_start)return false;
+  }
+  const confirmed=await razorpay.subscriptions.fetch(id);
+  return confirmed.status==='cancelled'&&confirmed.paid_count===0&&!confirmed.current_start;
+}
+
 export async function createProviderSubscription(userId: number, product: SubscriptionProduct) {
   if (!razorpay) throw new Error("Razorpay is not configured.");
-  const existing = await prisma.subscription.findUnique({ where: { userId } });
+  const gateway=razorpay;
   const policy = SUBSCRIPTION_POLICIES[product];
+  validSubscriptionCycleCount(policy.totalCount,product==='half_yearly'?6:12);
   const version = await resolvePlanVersion(product);
+  // Serialize browser retries for this customer; another checkout must reuse the committed mandate.
+  return prisma.$transaction(async tx=>{
+  await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
+  const existing = await tx.subscription.findUnique({ where: { userId } });
   if (existing?.razorpaySubscriptionId && !["cancelled", "completed", "expired", "halted"].includes(existing.status) && !subscriptionTermLapsed(existing)) {
     if (existing.plan === product && ["created", "authenticated"].includes(existing.status)) {
-      const provider = await razorpay.subscriptions.fetch(existing.razorpaySubscriptionId);
+      const provider = await gateway.subscriptions.fetch(existing.razorpaySubscriptionId);
       if (["created", "authenticated"].includes(provider.status) && provider.plan_id === version.razorpayPlanId) {
         return { local: existing, provider, policy, version };
       }
+      if(existing.status==='created'&&provider.plan_id===process.env[policy.planEnv]?.trim()&&provider.plan_id!==version.razorpayPlanId&&product!=='half_yearly'){
+        if(await tx.subscriptionPayment.count({where:{subscriptionId:existing.id}})===0&&await retireFailedAnnualMandate(provider.id,provider)){
+          await tx.subscription.update({where:{id:existing.id},data:{status:'cancelled',autoRenewal:false,cancelledAt:new Date()}});
+          await tx.auditLog.create({data:{actorId:userId,action:'SUBSCRIPTION_FAILED_MANDATE_RETIRED',entity:'subscriptions',entityId:String(existing.id),metadata:{providerId:provider.id,previousPlanId:provider.plan_id,replacementPlanId:version.razorpayPlanId,reason:'Unstarted annual mandate with only terminal failed payments; compatibility refresh requested by customer.'}}});
+        }else throw new Error('Your earlier UPI authorisation needs a status check. Wait a few minutes and retry. If your bank shows a debit, contact HYMN support before paying again.');
+      }else throw new Error("An active or pending subscription already exists for this account. Check its status before starting another payment.");
+    }else{
+      throw new Error("An active or pending subscription already exists for this account. Check its status before starting another payment.");
     }
-    throw new Error("An active or pending subscription already exists for this account. Check its status before starting another payment.");
   }
-  const provider = await razorpay.subscriptions.create({ plan_id: version.razorpayPlanId, total_count: policy.totalCount, quantity: 1, customer_notify: true, notes: { hymn_user_id: String(userId), hymn_product: product, hymn_plan_version_id: String(version.id) } });
+  const pending=await tx.auditLog.findFirst({where:{entity:'subscription_checkout_attempt',entityId:String(userId),action:'SUBSCRIPTION_CREATE_STARTED'},orderBy:[{createdAt:'desc'},{id:'desc'}],select:{requestId:true}});
+  if(pending?.requestId&&!await tx.auditLog.findFirst({where:{requestId:pending.requestId,action:{in:['SUBSCRIPTION_CREATE_COMMITTED','SUBSCRIPTION_CREATE_REJECTED']}},select:{id:true}}))throw new Error('An earlier checkout is still being checked. Contact HYMN support before starting another payment.');
+  const requestId=crypto.randomUUID();
+  // Independent durable intent survives a transaction/transport failure. No user FK is
+  // written here because this transaction holds the customer's row lock.
+  await prisma.auditLog.create({data:{action:'SUBSCRIPTION_CREATE_STARTED',entity:'subscription_checkout_attempt',entityId:String(userId),requestId,metadata:{product,planVersionId:version.id}}});
+  let provider:Subscriptions.RazorpaySubscription;
+  try{provider=await gateway.subscriptions.create({ plan_id: version.razorpayPlanId, total_count: policy.totalCount, quantity: 1, customer_notify: true, notes: { hymn_user_id: String(userId), hymn_product: product, hymn_plan_version_id: String(version.id),hymn_checkout_request_id:requestId } });}
+  catch(error){const status=Number((error as {statusCode?:unknown})?.statusCode);if([400,401,403,404,422].includes(status))await prisma.auditLog.create({data:{action:'SUBSCRIPTION_CREATE_REJECTED',entity:'subscription_checkout_attempt',entityId:String(userId),requestId,metadata:{status}}});throw error;}
   const now = new Date();
-  const local = await prisma.subscription.upsert({
+  const local = await tx.subscription.upsert({
     where: { userId },
     create: { userId, plan: product, planName: policy.name, planVersionId: version.id, razorpayPlanId: version.razorpayPlanId, razorpaySubscriptionId: provider.id, expiryDate: now, status: String(provider.status || "created"), releaseLimit: policy.releaseLimit, artistLimit: artistProfileLimitForPlan(product), availableFeatures: JSON.stringify(policy.features), daysRemaining: 0, autoRenewal: true, providerSyncedAt: now },
     update: { plan: product, planName: policy.name, planVersionId: version.id, razorpayPlanId: version.razorpayPlanId, razorpaySubscriptionId: provider.id, expiryDate: now, status: String(provider.status || "created"), releasesUsed: 0, releaseLimit: policy.releaseLimit, artistLimit: artistProfileLimitForPlan(product), availableFeatures: JSON.stringify(policy.features), daysRemaining: 0, autoRenewal: true, cancelAtPeriodEnd: false, cancelledAt: null, currentPeriodStart: null, currentPeriodEnd: null, providerSyncedAt: now }
   });
-  await prisma.auditLog.create({ data: { actorId: userId, action: "SUBSCRIPTION_PROVIDER_CREATED", entity: "subscriptions", entityId: String(local.id), metadata: { product, planVersionId: version.id, razorpaySubscriptionId: provider.id } } });
+  await tx.auditLog.create({ data: { actorId: userId, action: "SUBSCRIPTION_PROVIDER_CREATED", entity: "subscriptions", entityId: String(local.id), metadata: { product, planVersionId: version.id, razorpaySubscriptionId: provider.id } } });
+  await tx.auditLog.create({data:{action:'SUBSCRIPTION_CREATE_COMMITTED',entity:'subscription_checkout_attempt',entityId:String(userId),requestId,metadata:{providerId:provider.id,subscriptionId:local.id}}});
   return { local, provider, policy, version };
+  },{maxWait:10000,timeout:30000});
 }
 
 type ProviderSubscription = { id: string; plan_id?: string; status?: string; current_start?: number | null; current_end?: number | null; start_at?: number | null; ended_at?: number | null; charge_at?: number | null; notes?: Record<string, unknown> };
@@ -178,7 +231,15 @@ const fromUnix = (value?: number | null) => value ? new Date(value * 1000) : nul
 
 export async function synchronizeProviderSubscription(entity: ProviderSubscription, payment?: ProviderPayment | null) {
   const existing = await prisma.subscription.findUnique({ where: { razorpaySubscriptionId: entity.id } });
-  if (!existing) throw new Error("Razorpay subscription is not linked to a HYMN account.");
+  if (!existing) {
+    // A delayed cancellation/creation event from the retired, proven-unpaid
+    // mandate must never cancel the replacement or trigger endless webhook retries.
+    if(!payment?.id&&['created','cancelled'].includes(entity.status||'')){
+      const retired=await prisma.auditLog.findFirst({where:{entity:'subscriptions',action:'SUBSCRIPTION_FAILED_MANDATE_RETIRED',metadata:{path:['providerId'],equals:entity.id}},orderBy:{id:'desc'},select:{entityId:true}});
+      if(retired?.entityId){const current=await prisma.subscription.findUnique({where:{id:Number(retired.entityId)}});if(current)return current;}
+    }
+    throw new Error("Razorpay subscription is not linked to a HYMN account.");
+  }
   if (entity.plan_id && existing.razorpayPlanId && entity.plan_id !== existing.razorpayPlanId) throw new Error("Razorpay plan does not match the persisted subscription.");
   const providerStatus = String(entity.status || existing.status).toLowerCase();
   const currentStart = fromUnix(entity.current_start) || existing.currentPeriodStart;
@@ -195,7 +256,7 @@ export async function synchronizeProviderSubscription(entity: ProviderSubscripti
   const cancelledAt = providerStatus === "cancelled" ? (fromUnix(entity.ended_at) || now) : existing.cancelledAt;
   const billingPeriodRenewed = subscriptionPeriodAdvanced(existing.currentPeriodStart, currentStart);
   const subscription = await prisma.$transaction(async tx => {
-    const updated = await tx.subscription.update({ where: { id: existing.id }, data: { status, currentPeriodStart: currentStart, currentPeriodEnd: currentEnd, expiryDate, nextRenewalDate: !paidThrough && ["active", "pending"].includes(status) ? (fromUnix(entity.charge_at) || currentEnd) : null, startedAt: existing.startedAt || fromUnix(entity.start_at) || currentStart, cancelledAt, daysRemaining, ...(billingPeriodRenewed ? { releasesUsed: 0 } : {}), autoRenewal: !paidThrough && !["cancelled", "completed", "expired"].includes(status) && !existing.cancelAtPeriodEnd, ...(paidThrough ? { cancelAtPeriodEnd: true } : {}), providerSyncedAt: now } });
+    const updated = await tx.subscription.update({ where: { id: existing.id,razorpaySubscriptionId:entity.id }, data: { status, currentPeriodStart: currentStart, currentPeriodEnd: currentEnd, expiryDate, nextRenewalDate: !paidThrough && ["active", "pending"].includes(status) ? (fromUnix(entity.charge_at) || currentEnd) : null, startedAt: existing.startedAt || fromUnix(entity.start_at) || currentStart, cancelledAt, daysRemaining, ...(billingPeriodRenewed ? { releasesUsed: 0 } : {}), autoRenewal: !paidThrough && !["cancelled", "completed", "expired"].includes(status) && !existing.cancelAtPeriodEnd, ...(paidThrough ? { cancelAtPeriodEnd: true } : {}), providerSyncedAt: now } });
     if (payment?.id) await tx.subscriptionPayment.upsert({ where: { razorpayPaymentId: payment.id }, create: { subscriptionId: existing.id, planSnapshot: existing.plan, razorpayPaymentId: payment.id, razorpayInvoiceId: payment.invoice_id || null, amount: Number(payment.amount || 0), currency: String(payment.currency || "INR").toUpperCase(), status: String(payment.status || "captured"), billingPeriodStart: currentStart, billingPeriodEnd: currentEnd, createdAt: fromUnix(payment.created_at) || now }, update: { status: String(payment.status || "captured"), razorpayInvoiceId: payment.invoice_id || undefined } });
     await tx.auditLog.create({ data: { action: "SUBSCRIPTION_PROVIDER_SYNCHRONIZED", entity: "subscriptions", entityId: String(existing.id), metadata: { providerStatus, paidThrough, paymentId: payment?.id || null, billingPeriodRenewed, releaseAllowanceReset: billingPeriodRenewed } as Prisma.InputJsonObject } });
     return updated;

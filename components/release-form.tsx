@@ -1,4 +1,5 @@
 "use client";
+import {subscriptionPaymentFailureMessage} from "@/lib/subscription-recurrence";
 import { StoreChoice } from "./distribution/store-choice";
 import { IncludedStores } from "./distribution/included-stores";
 import { ReleaseAmendmentConfirmation } from './release-amendment-confirmation';
@@ -3316,7 +3317,7 @@ export function ReleaseForm({
           theme: { color: "#7db7ff" },
         });
         razorpay.on("payment.failed", (response) => {
-          const reason = response.error?.description || "Razorpay could not complete this payment.";
+          const reason = subscriptionPaymentFailureMessage(response.error?.description);
           setStatus(`${reason} No payment was captured. You can safely try checkout again.`);
           reject(new Error(`${reason} No payment was captured. You can safely try checkout again.`));
           razorpay.close();

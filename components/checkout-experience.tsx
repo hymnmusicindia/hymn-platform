@@ -1,4 +1,5 @@
 "use client";
+import {subscriptionPaymentFailureMessage} from "@/lib/subscription-recurrence";
 import {BeatBuyerFields,emptyBeatBuyer} from "./beat-buyer-fields";
 import {beatBuyerDetailsSchema} from "@/lib/beat-buyer-details";
 import { loadBioRazorpay as loadRazorpayScript } from "@/lib/client-razorpay";
@@ -213,7 +214,7 @@ export function CheckoutExperience({ product }: { product?: string | null }) {
         }
       });
       checkout.on("payment.failed", (response) => {
-        setFeedback(response.error?.description || "Payment failed. Please try again.");
+        setFeedback(subscriptionPaymentFailureMessage(response.error?.description));
       });
       checkout.open();
     } catch (error) {
