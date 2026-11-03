@@ -36,6 +36,7 @@ export type PerformanceReport = {
   commissions: { currency: string; earnedMinor: number; adjustmentMinor: number; netMinor: number; pendingMinor: number; clearedMinor: number; reservedMinor: number }[];
   days: { day: string; leads: number; qualifiedLeads: number; contacts: number; tasksCompleted: number }[];
   tips: string[]; wins: string[];
+  activity?: {calls:number;conversations:number;unanswered:number;clientUpdates:number;otherReports:number;activitySeconds:number;outcomes:{label:string;count:number}[];days:{day:string;calls:number;clientUpdates:number;otherReports:number}[]};
 };
 export function performanceFeedback(r: Pick<PerformanceReport, 'target' | 'targetActual' | 'targetLabel' | 'metrics' | 'overdueFollowUps' | 'overdueTasks' | 'blockedTasks' | 'workRole'>) {
   const tips: string[] = [], wins: string[] = [];

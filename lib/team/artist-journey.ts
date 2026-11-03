@@ -427,7 +427,7 @@ export async function reconcileArtistWork(tx: Db, a: Actor, now = new Date()) {
 export async function assertArtistAction(tx: Db, task: {
     clientId: string | null;
     followUpContext: unknown;
-}, channel: 'START' | 'EMAIL', now = new Date()) {
+}, channel: 'START' | 'EMAIL', now = new Date(), customerReturned=false) {
     const c = object(task.followUpContext);
     if (!task.clientId)
         return;
@@ -441,7 +441,7 @@ export async function assertArtistAction(tx: Db, task: {
         throw new TeamError('This is an observation-only comparison activity. Respond only if the artist requests help.');
     if (channel === 'EMAIL' && raw && !explicit && (p.contact === 'NONE' || p.contact === 'ASK_FIRST' || p.mode === 'LATER' && (!p.after || new Date(p.after) > now)))
         throw new TeamError('The artist’s contact choice does not allow proactive email.');
-    if (channel === 'START' && c.kind === 'CALL' && raw && !explicit && (p.contact !== 'CALL' || !customerCallWindow(p, now)))
+    if (channel === 'START' && c.kind === 'CALL' && raw && !explicit && (customerReturned?p.contact==='NONE':p.contact !== 'CALL' || !customerCallWindow(p, now)))
         throw new TeamError('The artist’s current contact choice or preferred hours do not allow this call. Review their journey first.', 409);
     if (c.artistJourney !== true)
         return;

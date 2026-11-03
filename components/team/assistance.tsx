@@ -29,6 +29,9 @@ const journeys: Journey[] = [
 export function TeamAssistance({ navigate, owner, permissions }: { navigate: (module: string) => void; owner: boolean; permissions: string[] }) {
   const [open, setOpen] = useState(false), [journey, setJourney] = useState<Journey | null>(null), [step, setStep] = useState(0);
   const [modalHost, setModalHost] = useState<HTMLElement | null>(null);
+  const [minimized,setMinimized]=useState(false);
+  useEffect(()=>{try{setMinimized(localStorage.getItem('hymn:assistance-minimized')==='1');}catch{}},[]);
+  const minimize=(value:boolean)=>{setMinimized(value);setOpen(false);try{localStorage.setItem('hymn:assistance-minimized',value?'1':'0');}catch{}};
   const [rect, setRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const trigger = useRef<HTMLButtonElement>(null), panel = useRef<HTMLElement>(null);
   const current = journey?.steps[step];
@@ -73,5 +76,5 @@ export function TeamAssistance({ navigate, owner, permissions }: { navigate: (mo
         : <div className={styles.choices}>{journeys.filter(item => (!item.ownerOnly || owner) && (!item.permission || owner || permissions.includes(item.permission))).map(item => <button type="button" key={item.title} onClick={() => { setJourney(item); setStep(0); navigate(item.module); }}>{item.title}<ArrowRight size={15}/></button>)}<p>Guides highlight where to click. You control every edit and save.</p></div>}
     </aside>}
   </>;
-  return <>{modalHost ? createPortal(guidance, modalHost) : guidance}<button ref={trigger} type="button" className={styles.launcher} aria-label="Team assistance" aria-expanded={open} onClick={() => { setOpen(value => !value); setJourney(null); }}><CircleHelp size={20}/><span>Assistance</span></button></>;
+  return <>{modalHost ? createPortal(guidance, modalHost) : guidance}<div className={styles.launcherGroup}>{minimized?<button type="button" className={styles.restore} aria-label="Show assistance" title="Show assistance" onClick={()=>minimize(false)}><CircleHelp size={18}/></button>:<><button ref={trigger} type="button" className={styles.launcher} aria-label="Team assistance" aria-expanded={open} onClick={() => { setOpen(value => !value); setJourney(null); }}><CircleHelp size={20}/><span>Assistance</span></button><button className={styles.hide} type="button" aria-label="Hide assistance" title="Hide assistance" onClick={()=>minimize(true)}><X size={14}/></button></>}</div></>;
 }

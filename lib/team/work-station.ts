@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { supportDetails } from '@/lib/support';
 import { can, demand, TeamError, assertTaskTransition, type Actor } from './policy';
 import { taskScope, teamMutationTx } from './service';
+import {sharedWorkScope,mayHelp} from './shared-work';
 import { indiaWorkday, assertDailyTaskChange } from './daily-work';
 import { employeeCallSlot } from './availability';
 import { syncCallbackCalendar } from './callback-calendar';
@@ -40,10 +41,11 @@ export async function stationRead(a: Actor, resource: string, p: URLSearchParams
         return { id: c.id, name: c.name, email: c.email, phone: c.phone, interests: c.interests, status: c.status };
     }
     if (resource === 'workstation-activity') {
-        const row=await prisma.teamTask.findFirst({where:{...taskScope(a),id:p.get('id')||''},include:{client:{select:{id:true,name:true,phone:true,email:true,interests:true,status:true}}}});
+        const shared=p.get('team')==='1'&&mayHelp(a);
+        const row=await prisma.teamTask.findFirst({where:{...(shared?sharedWorkScope(a):taskScope(a)),id:p.get('id')||''},include:{client:{select:{id:true,name:true,phone:true,email:true,interests:true,status:true}}}});
         if(!row)throw new TeamError('Activity not found.',404);
         const task = currentConversationBrief(row);
-        if (task.ownerId !== a.id && !can(a, 'tasks.all'))
+        if (task.ownerId !== a.id && !can(a, 'tasks.all')&&!shared)
             throw new TeamError('Activity unavailable.', 403);
         // Native editor needs only the task/version and activity draft. Do not
         // block every open, save preflight and timeout readback on web history.
@@ -68,19 +70,19 @@ export async function stationRead(a: Actor, resource: string, p: URLSearchParams
     const { start, end, day } = indiaWorkday();
     const bucket = p.get('bucket') || 'today';
     const offset = z.coerce.number().int().min(0).max(100000).catch(0).parse(p.get('offset') || 0);
-    const team = p.get('team') === '1' && can(a, 'tasks.all');
-    const base: Prisma.TeamTaskWhereInput = { ...taskScope(a), ...(!team ? { ownerId: a.id } : {}) };
-    const date: Prisma.TeamTaskWhereInput = bucket === 'upcoming' ? { dueAt: { gte: end } } : bucket === 'overdue' ? { dueAt: { lt: start } } : bucket === 'finished' ? {} : { OR: [{ dueAt: { lt: end } }, { dueAt: null }, { followUpContext: { path: ['workActivity', 'status'], equals: 'RUNNING' } }, { followUpContext: { path: ['workActivity', 'status'], equals: 'PAUSED' } }] };
-    const where: Prisma.TeamTaskWhereInput = { ...base, ...date, status: bucket === 'finished' ? { in: terminal } : { notIn: terminal }, ...(p.get('q') ? { AND: [{ OR: [{ title: { contains: p.get('q')!.slice(0, 160), mode: 'insensitive' } }, { client: { name: { contains: p.get('q')!.slice(0, 160), mode: 'insensitive' } } }, {project:{title:{contains:p.get('q')!.slice(0,160),mode:'insensitive'}}}] }] } : {}) };
+    const team = p.get('team') === '1' && (can(a,'tasks.all')||mayHelp(a));
+    const base: Prisma.TeamTaskWhereInput = { ...(team?sharedWorkScope(a):taskScope(a)), ...(!team ? { ownerId: a.id } : {}) };
+    const date: Prisma.TeamTaskWhereInput = bucket==='assigned'?{}:bucket==='unanswered'?{OR:[{followUpContext:{path:['workActivity','outcome'],equals:'NO_ANSWER'}},{followUpContext:{path:['workActivity','outcome'],equals:'BUSY'}}]}:bucket === 'upcoming' ? { dueAt: { gte: end } } : bucket === 'overdue' ? { dueAt: { lt: start } } : bucket === 'finished' ? {} : { OR: [{ dueAt: { lt: end } }, { dueAt: null }, { followUpContext: { path: ['workActivity', 'status'], equals: 'RUNNING' } }, { followUpContext: { path: ['workActivity', 'status'], equals: 'PAUSED' } }] };
+    const where: Prisma.TeamTaskWhereInput = { AND:[base,date], status: bucket === 'finished' ? { in: terminal } : { notIn: terminal }, ...(p.get('q') ? { AND: [base,date,{ OR: [{ title: { contains: p.get('q')!.slice(0, 160), mode: 'insensitive' } }, { client: { name: { contains: p.get('q')!.slice(0, 160), mode: 'insensitive' } } }, {project:{title:{contains:p.get('q')!.slice(0,160),mode:'insensitive'}}}] }] } : {}) };
     if (p.get('view') === 'mobile') {
         const items = await prisma.teamTask.findMany({ where, select: { ...summarySelect, owner: false }, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], skip: offset, take: 31 });
-        return { items: items.slice(0, 30).map(currentConversationBrief), hasMore: items.length > 30, day, canSupport: ticketAccess(a), canTeam: can(a, 'tasks.all') };
+        return { items: items.slice(0, 30).map(currentConversationBrief), hasMore: items.length > 30, day, canSupport: ticketAccess(a), canTeam: can(a, 'tasks.all')||mayHelp(a) };
     }
     const [items, total, active, counts] = await Promise.all([prisma.teamTask.findMany({ where, select: summarySelect, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], skip: offset, take: 30 }), prisma.teamTask.count({ where }), prisma.teamTask.findFirst({ where: { workspaceId: a.workspaceId, ownerId: a.id, archivedAt: null, status: { notIn: terminal }, OR: [{ followUpContext: { path: ['workActivity', 'status'], equals: 'RUNNING' } }, { followUpContext: { path: ['workActivity', 'status'], equals: 'PAUSED' } }] }, select: summarySelect }), prisma.teamTask.groupBy({ by: ['status'], where: { ...base, ...date }, _count: true })]);
-    return { items:items.map(currentConversationBrief), total, active:active?currentConversationBrief(active):null, counts, day, canSupport: ticketAccess(a), canTeam: can(a, 'tasks.all') };
+    return { items:items.map(currentConversationBrief), total, active:active?currentConversationBrief(active):null, counts, day, canSupport: ticketAccess(a), canTeam: can(a, 'tasks.all')||mayHelp(a) };
 }
 const startSchema = z.object({ requestKey: z.string().uuid(), taskId: z.string().optional(), clientId: z.string().optional(), ticketId: z.number().int().positive().optional(), kind: z.enum(['CALL', 'TASK', 'SUPPORT', 'QC']).default('CALL'), title: z.string().trim().min(3).max(180).default('Manual customer activity') });
-async function startActivity(tx: Prisma.TransactionClient, a: Actor, input: unknown, now: Date) {
+async function startActivity(tx: Prisma.TransactionClient, a: Actor, input: unknown, now: Date, customerReturned=false) {
     demand(a, 'tasks.update');
     const data = startSchema.parse(input);
     const same = await tx.teamTask.findUnique({ where: { eventKey: `workstation-manual:${a.workspaceId}:${a.id}:${data.requestKey}` } });
@@ -136,7 +138,7 @@ async function startActivity(tx: Prisma.TransactionClient, a: Actor, input: unkn
     const kind = context.artistJourney===true ? (context.kind==='CALL'?'CALL':'TASK') : task.recordType === 'release' ? 'QC' : task.recordType === 'support' || context.kind === 'SUPPORT_CALLBACK' ? 'SUPPORT' : crmTask || task.eventKey?.startsWith('support-call:') || context.kind === 'CALL' || context.kind === 'MANUAL' ? 'CALL' : data.taskId ? 'TASK' : data.kind;
     const isCall = kind === 'CALL' || kind === 'SUPPORT' && !!(context.kind === 'SUPPORT_CALLBACK');
     if (isCall) {
-        await (await import('./artist-journey')).assertArtistAction(tx,{...task,clientId:client?.id||null,followUpContext:context.kind==='SUPPORT_CALLBACK'?context:{...context,kind:'CALL'}},'START',now);
+        await (await import('./artist-journey')).assertArtistAction(tx,{...task,clientId:client?.id||null,followUpContext:context.kind==='SUPPORT_CALLBACK'?context:{...context,kind:'CALL'}},'START',now,customerReturned);
         demand(a, 'crm.outreach.manage');
         if (!client || client.status !== 'ACTIVE')
             throw new TeamError('Choose an active contact for this call.');
@@ -217,6 +219,50 @@ async function queueActivityMail(tx: Prisma.TransactionClient, a: Actor, task: {
     return { ...job, channel: ticketId ? 'support' : 'outreach' };
 }
 export async function stationMutation(tx: Prisma.TransactionClient, a: Actor, resource: string, input: unknown, now = new Date()) {
+    if(resource==='workstation-claim'){
+        demand(a,'tasks.update');demand(a,'tasks.complete');
+        const d=z.object({id:z.string(),version:z.number().int().positive()}).parse(input);
+        const task=await tx.teamTask.findFirst({where:{...sharedWorkScope(a),id:d.id},include:{owner:{include:{role:true}}}});
+        if(!task)throw new TeamError('Shared work unavailable.',404);
+        if(task.ownerId===a.id)return {id:task.id};
+        if(task.version!==d.version)throw new TeamError('Assignment changed. Refresh before taking this work.',409);
+        const c=obj(task.followUpContext);
+        if(task.owner.role.owner||task.status!=='TODO'||activityOpen(c)||c.pinnedAssignee||c.personalCallPlan||c.dutyVersion||c.dailyCallPlan)throw new TeamError('This assignment is reserved or already active. Ask its owner or a supervisor.',409);
+        const appointment=await tx.teamCalendarEvent.findUnique({where:{followUpTaskId:task.id}});
+        if(appointment?.kind==='CALL'&&appointment.status==='SCHEDULED')throw new TeamError('A confirmed appointment requires supervisor reassignment.',409);
+        if(appointment?.status==='SCHEDULED'){
+            const slot=await employeeCallSlot(tx,a.workspaceId,a.id,appointment.startsAt,appointment.id,task.id);
+            if(!slot||slot.getTime()!==appointment.startsAt.getTime())throw new TeamError('This time conflicts with your hours or workload. Ask a supervisor to reschedule before taking it.',409);
+        }
+        if(['CALL','SUPPORT_CALLBACK','FRIENDLY_INTRO'].includes(String(c.kind))||task.eventKey?.endsWith(':call'))demand(a,'crm.outreach.manage');
+        const prospectId=task.eventKey?.startsWith('auto-source:lead:')?task.eventKey.slice('auto-source:lead:'.length):task.eventKey?.endsWith(':call')?task.eventKey.slice(0,-5):null;
+        if(prospectId){
+            demand(a,'crm.prospects.view');demand(a,'crm.outreach.manage');
+            const prospect=await tx.teamProspect.findFirst({where:{id:prospectId,workspaceId:a.workspaceId}});
+            if(!prospect||prospect.ownerId!==task.ownerId||prospect.suppressed)throw new TeamError('The source assignment changed or is restricted. Ask a supervisor.',409);
+            await tx.teamProspect.update({where:{id:prospect.id},data:{ownerId:a.id,version:{increment:1}}});
+            await audit(tx,a,'workstation.source_claimed',task.id,{prospectId,previousOwnerId:prospect.ownerId,ownerId:a.id,reason:'Teammate voluntarily picked up the operational assignment; acquisition attribution retained.'});
+        }
+        const updated=await tx.teamTask.update({where:{id:task.id},data:{ownerId:a.id,version:{increment:1}}});
+        if(appointment)await tx.teamCalendarEvent.update({where:{id:appointment.id},data:{assigneeId:a.id,scheduleRevision:{increment:1}}});
+        await audit(tx,a,'workstation.claimed',task.id,{previousOwnerId:task.ownerId,ownerId:a.id,title:task.title});
+        await tx.teamNotification.create({data:{memberId:task.ownerId,title:'A teammate picked up your assignment: '+task.title,href:`/team?module=work-station&task=${task.id}`}});
+        return {id:updated.id};
+    }
+    if(resource==='workstation-reopen'){
+        demand(a,'tasks.update');demand(a,'crm.outreach.manage');
+        const d=z.object({id:z.string(),version:z.number().int().positive(),reason:z.string().trim().min(10).max(1000),customerReturned:z.literal(true)}).parse(input);
+        const task=await ownTask(tx,a,d.id),previous=workActivity(task.followUpContext);
+        if(task.ownerId!==a.id)throw new TeamError('Take the assignment before reopening its activity.',403);
+        if(task.version!==d.version)throw new TeamError('Activity changed. Reload before reopening.',409);
+        if(!previous||previous.status!=='FINISHED'||!['NO_ANSWER','BUSY'].includes(previous.outcome||'')||task.status==='CANCELLED')throw new TeamError('Only an unanswered or busy call can be reopened here.',409);
+        const updated=await tx.teamTask.update({where:{id:task.id},data:{status:'TODO',completedAt:null,blocker:'',dueAt:now,version:{increment:1}}});
+        await audit(tx,a,'workstation.reopened',task.id,{previousActivityId:previous.id,previousStatus:task.status,previousDueAt:task.dueAt?.toISOString(),reason:d.reason,customerReturned:true});
+        // Starting revalidates contact eligibility and competing activities; failures roll back reopening.
+        const result=await startActivity(tx,a,{taskId:updated.id,requestKey:randomUUID()},now,true);
+        await syncCallbackCalendar(tx,a,await tx.teamTask.findUniqueOrThrow({where:{id:task.id}}));
+        return result;
+    }
     if(resource==='workstation-personal-plan')return (await import('./personal-call-plan')).savePersonalCallPlan(tx,a,input);
     if (resource === 'workstation-start')
         return startActivity(tx, a, input, now);

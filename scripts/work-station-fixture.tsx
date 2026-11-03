@@ -19,12 +19,13 @@ const api=async<T,>(resource:string,body?:any):Promise<T>=>{
   if(path==='artist-recap-publish'){recaps.push({id:'recap',...body,publishedAt:new Date().toISOString(),senderName:actor.name});return {id:'recap',url:'/artist-journey?recap=recap'} as T;}
   if(path==='artist-routing-save')return {saved:true} as T;
   if(path==='clients-save'){if(body.email==='duplicate@fixture.invalid')throw Error('A matching contact exists. Review the matching cards before saving.');if(body.version!==client.version)throw Error('Client changed. Refresh first.');Object.assign(client,body,{version:client.version+1});return structuredClone(client) as T;}
+  if(path==='workstation-reopen'){row.followUpContext.workActivity=undefined;row.status='TODO';return api('workstation-start',{taskId:row.id}) as Promise<T>;}
   if(path==='workstation-start'){if(!row.followUpContext.workActivity||row.followUpContext.workActivity.status==='FINISHED'){row.followUpContext.workActivity={id:crypto.randomUUID(),kind:row===support?'SUPPORT':'CALL',memberId:actor.id,startedAt:new Date(Date.now()-60000).toISOString(),lastSavedAt:new Date().toISOString(),status:'RUNNING',pausedMs:0,notes:'',needs:'',commitments:'',nextAction:'',services:[],checklist:[]};row.status='IN_PROGRESS';row.version++;}return{id:row.id} as T;}
   if(path==='workstation-email'){if(body.id==='ticket-task')ticket.replies.push({id:'reply',body:body.body,status:'QUEUED',createdAt:new Date().toISOString()});return{id:'mail',status:'QUEUED',channel:'support'} as T;}
   const a=row.followUpContext.workActivity!;Object.assign(a,body.draft);a.lastSavedAt=new Date().toISOString();row.version++;
   if(path==='workstation-pause'){a.status='PAUSED';a.pausedAt=new Date().toISOString();}
   if(path==='workstation-resume'){a.status='RUNNING';delete a.pausedAt;}
-  if(path==='workstation-finish'){a.status='FINISHED';row.status=body.outcome==='NO_ANSWER'?'TODO':'COMPLETED';if(body.closeTicket)ticket.status='CLOSED';history.unshift({id:crypto.randomUUID(),occurredAt:a.startedAt,authorName:actor.name,authorRole:actor.jobTitle,discussion:a.notes,outcome:body.outcome});return{id:row.id,completed:true,status:row.status,email:body.outcome==='NO_ANSWER'?{status:'QUEUED'}:null} as T;}
+  if(path==='workstation-finish'){a.status='FINISHED';a.outcome=body.outcome;row.status=body.outcome==='NO_ANSWER'?'TODO':'COMPLETED';if(body.closeTicket)ticket.status='CLOSED';history.unshift({id:crypto.randomUUID(),occurredAt:a.startedAt,authorName:actor.name,authorRole:actor.jobTitle,discussion:a.notes,outcome:body.outcome});return{id:row.id,completed:true,status:row.status,email:body.outcome==='NO_ANSWER'?{status:'QUEUED'}:null} as T;}
   return{id:row.id} as T;
  }
  if(path==='artist-desk')return{items:[],promises:{open:0,overdue:0,done:0},routing:{services:['beats'],languages:['hi']}} as T;

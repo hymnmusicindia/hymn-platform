@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
@@ -56,6 +57,17 @@ async function main() {
   await commission(500, 'USD', 'EARNED', '2026-10-22T18:00:00+05:30');
   const report = await buildPerformanceReport(researcher.id, 'daily', '2026-10-22', now);
   assert.deepEqual(report.metrics, { leads: 2, qualifiedLeads: 1, contacts: 1, contactEvents: 2, replies: 1, conversions: 0, cohortConversions: 0, tasksCompleted: 1 });
+  const evidenceClient=await prisma.teamClient.create({data:{workspaceId:workspace.id,ownerId:researcher.id,name:'Recorded caller work'}});
+  const activityId=randomUUID();
+  for(const [action,detail] of [['contact.call_report',{activityId,occurredAt:'2026-10-22T10:00:00+05:30',outcome:'NO_ANSWER',elapsedSeconds:65}],['contact.call_report',{occurredAt:'2026-10-22T11:00:00+05:30',outcome:'TALKED',elapsedSeconds:120}],['client.updated',{changedFields:['email']}],['client.updated',{changedFields:[]}],['contact.call_report',{occurredAt:'2026-10-22T10:00:00+05:30',amendsReportId:'old-report',outcome:'NO_ANSWER'}]] as const)await prisma.teamAudit.create({data:{workspaceId:workspace.id,actorId:researcher.id,entityId:evidenceClient.id,action,detail:JSON.parse(JSON.stringify(detail)),createdAt:new Date('2026-10-22T17:00:00+05:30')}});
+  const detailed=await buildPerformanceReport(researcher.id,'daily','2026-10-22',now);
+  assert.equal(detailed.activity!.calls,2);assert.equal(detailed.activity!.conversations,1);assert.equal(detailed.activity!.unanswered,1);assert.equal(detailed.activity!.clientUpdates,1);assert.equal(detailed.activity!.activitySeconds,185);assert.equal(detailed.metrics.contacts,2);
+  await prisma.teamProspect.update({where:{id:first.prospectId},data:{clientId:evidenceClient.id}});
+  const mirror=await prisma.teamOutreach.create({data:{prospectId:first.prospectId,actorId:researcher.id,kind:'CONTACT',occurredAt:new Date('2026-10-22T10:00:00+05:30'),body:'Mirrored workstation activity',evidence:`Work-station activity ${activityId}`}});
+  const deduplicated=await buildPerformanceReport(researcher.id,'daily','2026-10-22',now);assert.equal(deduplicated.metrics.contacts,1);assert.equal(deduplicated.metrics.contactEvents,4,'A mirrored CRM row and activity report count as one event');
+  await prisma.teamOutreach.delete({where:{id:mirror.id}});await prisma.teamProspect.update({where:{id:first.prospectId},data:{clientId:null}});
+  // Keep the remaining legacy report assertions isolated from the new activity fixture.
+  await prisma.teamAudit.deleteMany({where:{workspaceId:workspace.id,entityId:evidenceClient.id}});
   assert.equal(report.previous.leads, 1);
   assert.equal(report.target, 3);
   assert.equal(report.targetActual, 1);

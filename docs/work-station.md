@@ -2,6 +2,12 @@
 
 Work-station is the default team execution surface. Today, overdue, upcoming and finished work share one queue. Customer tickets can be opened directly into an accountable activity. Old My Work, All Work, Customer callbacks and Release QC URLs resolve to the same surface and retain task deep links.
 
+All assigned shows open assignments across dates. Include teammates exposes shared work within the member's permitted sources and project membership. Take assignment performs a versioned, workspace-locked handoff and notifies the previous owner. It cannot take owner-reserved, pinned, active/paused, duty-plan or confirmed appointment work. Existing reservations must fit the receiving member's hours and capacity. Linked CRM operational ownership follows a voluntary handoff; research/acquisition attribution stays intact.
+
+Unanswered collects unfinished no-answer and busy calls. When the customer returns, the accountable teammate confirms this and supplies a short note before Reopen & start activity. A new timer/session begins while the old report remains immutable. This can reopen an attempt-limit blocker for a real inbound return, but cannot override opt-outs, restricted sources, competing sessions or cancelled tasks. Requested contact hours do not prevent a confirmed incoming return; proactive retries keep their existing limits. Opening the list or reopening sends no new missed-call email.
+
+The assistance launcher can be hidden to a small restore icon. The device remembers that preference where browser storage is available.
+
 ## Staff workflow
 
 1. Open an assigned task or customer ticket, or choose Manual activity. Search existing contacts before adding a new one.
