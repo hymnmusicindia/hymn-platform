@@ -13,6 +13,7 @@ import { syncArtistJourneys, syncArtistPromises, reconcileArtistWork } from '@/l
 import { syncDailyCrmWork } from '@/lib/team/daily-work';
 import { repairWorkSchedule, syncSourceWork } from '@/lib/team/autonomous-work';
 import { notifyTeamBatch, type TeamReminder } from '@/lib/team/notification-batch';
+import {syncDailyCallSchedule} from '@/lib/team/daily-call-scheduler';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -71,6 +72,7 @@ async function runJob() {
     await run('artist-journeys', (tx, a) => syncArtistJourneys(tx, a));
     await run('artist-work-review', (tx, a) => reconcileArtistWork(tx, a));
     await run('artist-promises', (tx, a) => syncArtistPromises(tx, a));
+    await run('daily-call-schedule',(tx,a)=>syncDailyCallSchedule(tx,a));
     await run('coordinator', (tx, a) => syncCoordinator(tx, a));
     await run('availability', (tx, a) => remindAvailability(tx, a));
   }

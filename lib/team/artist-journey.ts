@@ -172,7 +172,7 @@ export async function artistRead(a: Actor, resource: string, p: URLSearchParams)
     }
     throw new TeamError('Unknown artist view.', 404);
 }
-async function preferredSlot(tx: Db, workspaceId: string, memberId: string, p: JourneyPreferences, after: Date, taskId?: string) { let candidate = nextCustomerWindow(p, after); for (let i = 0; i < 20 && candidate; i++) {
+export async function preferredSlot(tx: Db, workspaceId: string, memberId: string, p: JourneyPreferences, after: Date, taskId?: string) { let candidate = nextCustomerWindow(p, after); for (let i = 0; i < 20 && candidate; i++) {
     const slot = await employeeCallSlot(tx, workspaceId, memberId, candidate, undefined, taskId);
     if (!slot || slot.getTime() > after.getTime() + 14 * 86400000)
         return null;

@@ -42,6 +42,11 @@ async function main() {
       await run(['--conditions=react-server','--import','tsx','scripts/verify-work-station.ts','--mobile-only']);
       return;
     }
+    if(process.argv.includes('--daily-calls-only')) {
+      await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-team-call-plan.ts']);
+      await run(['--conditions=react-server','--import','tsx','scripts/verify-daily-call-scheduler.ts']);return;
+    }
     if(process.argv.includes('--work-station-only')) {
       await run(['node_modules/prisma/build/index.js','db','push','--schema','prisma/schema.prisma','--skip-generate']);
       for(const script of ['verify-work-station.ts','verify-team-call-reports.ts','verify-team-leadership.ts'])await run(['--conditions=react-server','--import','tsx','scripts/'+script]);

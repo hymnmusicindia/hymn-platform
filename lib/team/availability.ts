@@ -6,6 +6,7 @@ import { can, demand, TeamError, type Actor, type Permission } from './policy';
 import { audit, notify } from './service';
 import { personalCallPlan } from './personal-call-plan-policy';
 import { indiaWorkday } from './daily-work';
+import {callDayLimit,callTaskWhere} from './daily-call-policy';
 import { reservationEnd, reservationsOverlap } from './calendar-reservations';
 import { activeWindows, effectiveSlots, moveWorkWeek, planMeetsTarget, planMinutes, record, requiredMinutes, validWorkWeek, withinWorkHours, workAvailability, workWeek } from './availability-rules';
 const weekSchema = z.string().refine(validWorkWeek, 'Choose a Monday-based week.');
@@ -63,10 +64,17 @@ export async function employeeCallSlot(tx:Prisma.TransactionClient,workspaceId:s
   if(!member || !can(member,permission) || permission==='crm.outreach.manage' && !can(member,'calendar.manage'))return null;
   const until=new Date(after.getTime()+14*86400000);
   const reservations=await tx.teamCalendarEvent.findMany({where:{workspaceId,assigneeId:memberId,status:'SCHEDULED',...(eventId?{id:{not:eventId}}:{}),...(taskId?{OR:[{followUpTaskId:null},{followUpTaskId:{not:taskId}}]}:{}),startsAt:{gte:new Date(after.getTime()-7*86400000),lt:until}}});
+  const limited=!personal&&permission==='crm.outreach.manage';
+  const [callTasks,otherCalls]=limited?await Promise.all([
+    tx.teamTask.findMany({where:{workspaceId,ownerId:memberId,archivedAt:null,status:{not:'CANCELLED'},...(taskId?{id:{not:taskId}}:{}),dueAt:{gte:indiaWorkday(after).start,lt:until},...callTaskWhere},select:{dueAt:true}}),
+    tx.teamCalendarEvent.findMany({where:{workspaceId,assigneeId:memberId,followUpTaskId:null,kind:{in:['CALL','FOLLOW_UP']},status:{in:['SCHEDULED','COMPLETED']},...(eventId?{id:{not:eventId}}:{}),startsAt:{gte:indiaWorkday(after).start,lt:until}},select:{startsAt:true}})
+  ]):[[],[]];
+  const daily=new Map<string,{used:number;limit:number}>();
   for(const window of activeWindows(member.preferences,after,until)) {
     let candidate=new Date(Math.ceil(Math.max(after.getTime(),window.startsAt.getTime())/900000)*900000);
     while(candidate.getTime()+30*60000<=Math.min(window.endsAt.getTime(),until.getTime())) {
       if(personal){const {start,end}=indiaWorkday(candidate);const used=await tx.teamTask.count({where:{workspaceId,ownerId:memberId,archivedAt:null,status:{not:'CANCELLED'},...(taskId?{id:{not:taskId}}:{}),dueAt:{gte:start,lt:end},followUpContext:{path:['personalCallPlan'],equals:true}}});if(used>=personal.dailyLimit)break;}
+      if(limited){const {day,start,end}=indiaWorkday(candidate);if(!daily.has(day))daily.set(day,{used:callTasks.filter(t=>t.dueAt&&t.dueAt>=start&&t.dueAt<end).length+otherCalls.filter(e=>e.startsAt>=start&&e.startsAt<end).length,limit:callDayLimit(member.preferences,activeWindows(member.preferences,start,end).reduce((sum,w)=>sum+(w.endsAt.getTime()-w.startsAt.getTime())/60000,0))});const capacity=daily.get(day)!;if(capacity.used>=capacity.limit)break;}
       const conflicts=reservations.filter(event=>reservationsOverlap({kind:'CALL',startsAt:candidate,endsAt:null},event));
       if(!conflicts.length)return candidate;
       candidate=new Date(Math.ceil(Math.max(...conflicts.map(event=>reservationEnd(event).getTime()))/900000)*900000);
