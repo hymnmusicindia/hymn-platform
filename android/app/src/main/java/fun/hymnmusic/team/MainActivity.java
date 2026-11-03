@@ -88,6 +88,9 @@ public final class MainActivity extends Activity {
     private JSONObject session;
     private JSONObject activeWorkDetail;
     private boolean workActionBusy = false;
+    private Runnable afterWorkSave;
+    private EditText activityNeeds,activityCommitments,activityNextAction;
+    private boolean refreshActivityOnResume;
     private TeamChatView chatView;
     private AvatarRepository avatarRepository;
     private final java.util.Set<String> unavailableModules = new java.util.HashSet<>();
@@ -200,6 +203,8 @@ public final class MainActivity extends Activity {
     }
 
     private void showPage(String next) {
+        afterWorkSave=null;
+        activeWorkDetail=null;
         if (!moduleVisible(next)) next = "home";
         if (chatView != null) { chatView.close(); chatView = null; }
         if (!next.equals(page) && !next.equals("workspace-detail")) previousPage = page;
@@ -212,10 +217,9 @@ public final class MainActivity extends Activity {
         LinearLayout titleBox = new LinearLayout(this); titleBox.setOrientation(LinearLayout.VERTICAL); titleBox.setPadding(dp(2), 0, dp(4), 0); heading = text("HYMN TEAM", 9, MUTED, true); titleBox.addView(heading); TextView workspaceLabel = text("HYMN  ·  " + session.optString("workspaceName", "Team workspace"), 11, NAVY, true); workspaceLabel.setSingleLine(true); workspaceLabel.setEllipsize(TextUtils.TruncateAt.END); LinearLayout.LayoutParams workspaceParams = new LinearLayout.LayoutParams(-1, -2); workspaceParams.topMargin = dp(3); titleBox.addView(workspaceLabel, workspaceParams); top.addView(titleBox, new LinearLayout.LayoutParams(0, -2, 1)); workspaceLabel.setOnClickListener(v -> showPage("workspace-detail"));
         FrameLayout avatarFrame = new FrameLayout(this); LinearLayout.LayoutParams avatarFrameParams = new LinearLayout.LayoutParams(dp(38), dp(38)); avatarFrameParams.leftMargin = dp(3); top.addView(avatarFrame, avatarFrameParams);
         TextView avatarFallback = text(firstName(memberName).substring(0, 1).toUpperCase(Locale.ROOT), 14, Color.WHITE, true); avatarFallback.setGravity(Gravity.CENTER); avatarFallback.setBackground(shape(nightMode ? Color.rgb(50, 72, 105) : BLUE, 0, 20)); avatarFrame.addView(avatarFallback, new FrameLayout.LayoutParams(-1, -1));
-        ImageView avatar = new ImageView(this); avatar.setScaleType(ImageView.ScaleType.CENTER_CROP); avatar.setBackground(shape(Color.TRANSPARENT, 0, 20)); avatar.setClipToOutline(true); avatarFrame.addView(avatar, new FrameLayout.LayoutParams(-1, -1)); String avatarUrl = profileImageUrl; if (!avatarUrl.isEmpty() && !avatarUrl.equals("null")) loadAvatar(avatar, avatarUrl); avatarFrame.setOnClickListener(v -> showPage("workspace-detail"));
+        ImageView avatar = new ImageView(this); avatar.setScaleType(ImageView.ScaleType.CENTER_CROP); avatar.setBackground(shape(Color.TRANSPARENT, 0, 20)); avatar.setClipToOutline(true); avatarFrame.addView(avatar, new FrameLayout.LayoutParams(-1, -1)); String avatarUrl = profileImageUrl; if (!avatarUrl.isEmpty() && !avatarUrl.equals("null")) loadAvatar(avatar, avatarUrl); avatarFrame.setContentDescription("Open profile menu"); avatarFrame.setOnClickListener(v -> showProfileMenu());
         FrameLayout inboxFrame = new FrameLayout(this); LinearLayout.LayoutParams inboxParams = new LinearLayout.LayoutParams(dp(42), dp(44)); inboxParams.leftMargin = dp(2); top.addView(inboxFrame, inboxParams); ImageView inboxIcon = new ImageView(this); inboxIcon.setImageResource(R.drawable.ic_inbox_nav); inboxIcon.setColorFilter(NAVY); inboxIcon.setPadding(dp(11), dp(11), dp(11), dp(11)); inboxIcon.setBackground(shape(surface(), BORDER, 13)); inboxFrame.addView(inboxIcon, new FrameLayout.LayoutParams(-1, -1)); inboxIcon.setOnClickListener(v -> showInboxPopup(inboxIcon)); inboxBadge = text("", 8, Color.WHITE, true); inboxBadge.setGravity(Gravity.CENTER); inboxBadge.setBackground(shape(Color.rgb(208, 54, 64), 0, 10)); FrameLayout.LayoutParams badgeParams = new FrameLayout.LayoutParams(dp(17), dp(17), Gravity.TOP | Gravity.END); inboxFrame.addView(inboxBadge, badgeParams); inboxBadge.setVisibility(View.GONE); updateInboxBadge();
-        ImageView refresh = new ImageView(this); refresh.setImageResource(R.drawable.ic_refresh); refresh.setColorFilter(NAVY); refresh.setPadding(dp(10), dp(10), dp(10), dp(10)); refresh.setBackground(shape(surface(), BORDER, 13)); LinearLayout.LayoutParams refreshParams = new LinearLayout.LayoutParams(dp(40), dp(44)); refreshParams.leftMargin = dp(4); top.addView(refresh, refreshParams); refresh.setOnClickListener(v -> loadPageData());
-        Button logout = button("Sign out", false); logout.setTextSize(10); logout.setPadding(dp(7), 0, dp(7), 0); LinearLayout.LayoutParams logoutParams = new LinearLayout.LayoutParams(-2, dp(44)); logoutParams.leftMargin = dp(5); top.addView(logout, logoutParams); logout.setOnClickListener(v -> confirmSignOut()); root.addView(top);        ScrollView scroll = new ScrollView(this); content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL); content.setPadding(dp(16), dp(16), dp(16), dp(22)); scroll.setFillViewport(true); scroll.addView(content); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        root.addView(top); ScrollView scroll = new ScrollView(this); content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL); content.setPadding(dp(16), dp(16), dp(16), dp(22)); scroll.setFillViewport(true); scroll.addView(content); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         if (page.equals("chats")) { scroll.removeView(content); root.removeView(scroll); content.setPadding(0, 0, 0, 0); root.addView(content, new LinearLayout.LayoutParams(-1, 0, 1)); }
         if (!page.equals("workspace-detail")) { bottom = new LinearLayout(this); bottom.setGravity(Gravity.CENTER); bottom.setBackgroundColor(surface()); bottom.setPadding(dp(5), dp(5), dp(5), dp(5)); root.addView(bottom, new LinearLayout.LayoutParams(-1, dp(72))); }
         setSafeContentView(root); if (bottom != null && !page.equals("workspace-detail")) buildNavigation(); loadPageData(); startNotificationSync();
@@ -506,17 +510,27 @@ public final class MainActivity extends Activity {
             } else if (saved != null) recovery = saved;
         } catch (Exception e) { toastError("The saved draft could not be restored. Your server activity is still available."); visibleDraft = activity; }
         addText(task.optString("title", "Work activity"), 22, NAVY, true); addText(status.equals("RUNNING") ? "Timer running" : status.equals("PAUSED") ? "Paused" : "Activity report", 12, MUTED, false); addSpace(14);
+        TextView clock=text(ActivityClock.display(ActivityClock.seconds(activity,System.currentTimeMillis())),32,NAVY,true);clock.setTypeface(Typeface.MONOSPACE,Typeface.BOLD);clock.setContentDescription("Activity elapsed time");content.addView(clock);addSpace(12);
+        Runnable tick=new Runnable(){public void run(){if(!clock.isAttachedToWindow())return;clock.setText(ActivityClock.display(ActivityClock.seconds(activity,System.currentTimeMillis())));if(status.equals("RUNNING"))clock.postDelayed(this,1000);}};
+        clock.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener(){public void onViewAttachedToWindow(View v){clock.post(tick);}public void onViewDetachedFromWindow(View v){clock.removeCallbacks(tick);}});
+        JSONObject customer=detail.optJSONObject("client");if(customer==null)customer=task.optJSONObject("client");
+        if(customer!=null){addSectionTitle(customer.optString("name","Customer"));String phone=customer.optString("phone","");if(!phone.isEmpty()&&!phone.equals("null")){Button call=button("Call "+phone,false);content.addView(call);call.setOnClickListener(v->dial(phone));}String email=customer.optString("email","");if(!email.isEmpty()&&!email.equals("null"))addText(email,13,MUTED,false);addSpace(12);}
+        String brief=task.optString("description","");if(!brief.isEmpty())addText(brief,13,MUTED,false);
+        Button full=button("All activity details & actions",false);content.addView(full,new LinearLayout.LayoutParams(-1,dp(48)));addSpace(14);
         EditText notes = new EditText(this); styleInput(notes); notes.setHint("Add notes, what the contact needs, and your next action"); notes.setText(visibleDraft.optString("notes", "")); notes.setGravity(Gravity.TOP); notes.setMinLines(5); notes.setPadding(dp(14), dp(12), dp(14), dp(12)); notes.setBackground(shape(surface(), BORDER, 12)); content.addView(notes, new LinearLayout.LayoutParams(-1, dp(150)));
+        activityNeeds=activityInput("Customer needs",visibleDraft.optString("needs",""));activityCommitments=activityInput("Promises & commitments",visibleDraft.optString("commitments",""));activityNextAction=activityInput("Next action",visibleDraft.optString("nextAction",""));
         ArrayList<CheckBox> checklist = new ArrayList<>(); JSONArray checks = task.optJSONArray("checklist");
         JSONArray flags = visibleDraft.optJSONArray("checklist");
         if (checks != null && checks.length() > 0) { addSpace(10); addSectionTitle("Checklist"); for (int i=0;i<checks.length();i++) { JSONObject item = checks.optJSONObject(i); if (item == null) continue; CheckBox check = new CheckBox(this); check.setText(item.optString("text", "Checklist item")); check.setTextColor(NAVY); check.setTextSize(13); check.setChecked(flags != null && i < flags.length() ? flags.optBoolean(i) : item.optBoolean("done")); checklist.add(check); content.addView(check); } }
         final JSONObject baseDetail = detail;
         Runnable keepDraft = () -> { try { persistWorkDraft(id, baseDetail, activityDraft(notes.getText().toString(), checklistFlags(checklist), baseDetail)); } catch (Exception e) { toastError("Could not save the draft on this phone. Keep this screen open and try Save notes."); } };
+        full.setOnClickListener(v->{if(status.equals("FINISHED"))openFullWorkspace("work-station","Activity",id);else{afterWorkSave=()->openFullWorkspace("work-station","Activity",id);saveWorkActivity(id,activityId,version,notes.getText().toString(),checklistFlags(checklist),"workstation-save");}});
         notes.addTextChangedListener(new android.text.TextWatcher() {
             public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
             public void onTextChanged(CharSequence s, int start, int before, int count) { keepDraft.run(); }
             public void afterTextChanged(android.text.Editable s) { }
         });
+        for(EditText field:new EditText[]{activityNeeds,activityCommitments,activityNextAction})field.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int start,int count,int after){}public void onTextChanged(CharSequence s,int start,int before,int count){keepDraft.run();}public void afterTextChanged(android.text.Editable s){}});
         for (CheckBox check : checklist) check.setOnCheckedChangeListener((view, checked) -> keepDraft.run());
         if (recovery != null) {
             final JSONObject retained = recovery;
@@ -534,7 +548,7 @@ public final class MainActivity extends Activity {
             Button journey = button("Artist journey, promises & email", false); LinearLayout.LayoutParams jp = new LinearLayout.LayoutParams(-1, dp(50)); jp.topMargin = dp(12); content.addView(journey, jp);
             journey.setOnClickListener(v -> { if (!status.equals("FINISHED")) keepDraft.run(); new ArtistJourneyDialog(this, api, io, themePalette, workspace, id, activityId, task.optString("ownerId").equals(memberId) && hasPermission("tasks.update"), !status.equals("FINISHED") && (hasPermission("crm.outreach.manage") || hasPermission("support.reply"))).show(); });
         }
-        if (status.equals("FINISHED")) { notes.setEnabled(false); for (CheckBox check : checklist) check.setEnabled(false); addEmpty("This activity has finished. Return to the work queue to see its current status."); return; }
+        if (status.equals("FINISHED")) { notes.setEnabled(false);activityNeeds.setEnabled(false);activityCommitments.setEnabled(false);activityNextAction.setEnabled(false); for (CheckBox check : checklist) check.setEnabled(false); addEmpty("This activity has finished. Return to the work queue to see its current status."); return; }
         addSpace(12); LinearLayout actions = new LinearLayout(this); actions.setGravity(Gravity.CENTER_VERTICAL); actions.setOrientation(LinearLayout.HORIZONTAL);
         Button save = button("Save notes", false); actions.addView(save, new LinearLayout.LayoutParams(0, dp(46), 1)); Button toggle = button(status.equals("RUNNING") ? "Pause" : "Resume", true); LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, dp(46), 1); tp.leftMargin = dp(8); actions.addView(toggle, tp); content.addView(actions);
         save.setOnClickListener(v -> saveWorkActivity(id, activityId, version, notes.getText().toString(), checklistFlags(checklist), "workstation-save"));
@@ -543,9 +557,11 @@ public final class MainActivity extends Activity {
     }
 
     private JSONArray checklistFlags(ArrayList<CheckBox> checks) { JSONArray result = new JSONArray(); for (CheckBox check : checks) result.put(check.isChecked()); return result; }
+    private EditText activityInput(String label,String value){addSpace(12);addText(label,12,MUTED,true);EditText field=new EditText(this);styleInput(field);field.setText(value);field.setHint(label);field.setTextSize(14);field.setMinLines(2);field.setGravity(Gravity.TOP);field.setPadding(dp(12),dp(10),dp(12),dp(10));field.setBackground(shape(surface(),BORDER,10));content.addView(field,new LinearLayout.LayoutParams(-1,-2));return field;}
     private String workDraftKey(String id) { return workspace + ":" + memberId + ":" + id; }
     private JSONObject activityDraft(String notes, JSONArray checklist, JSONObject detail) throws Exception {
-        return WorkActivityRecovery.draft(detail.getJSONObject("activity")).put("notes", notes).put("checklist", checklist);
+        JSONObject draft=WorkActivityRecovery.draft(detail.getJSONObject("activity")).put("notes", notes).put("checklist", checklist);
+        if(activityNeeds!=null)draft.put("needs",activityNeeds.getText().toString()).put("commitments",activityCommitments.getText().toString()).put("nextAction",activityNextAction.getText().toString());return draft;
     }
     private void persistWorkDraft(String id, JSONObject base, JSONObject draft) throws Exception {
         JSONObject activity = base.getJSONObject("activity");
@@ -583,12 +599,13 @@ public final class MainActivity extends Activity {
             persistWorkDraft(id, base, draft);
         } catch (Exception e) { toastError("Could not retain your draft. Please try again before leaving this screen."); return; }
         workActionBusy = true; setWorkControlsEnabled(workContent, false);
-        final TextView actionStatus = text(action.equals("workstation-resume") ? "Resuming activity…" : action.equals("workstation-pause") ? "Pausing activity…" : "Saving activity…", 13, BLUE, true);
+        final TextView actionStatus = text(action.equals("workstation-resume") ? "Resuming activity…" : action.equals("workstation-pause") ? "Pausing activity…" : "Saved on this phone · syncing…", 13, BLUE, true);
         workContent.addView(actionStatus, 0);
         io.execute(() -> {
             try {
+                JSONObject acceptedDetail=null;
                 for (int attempt = 0; attempt < 2; attempt++) {
-                    JSONObject latest = api.get("workstation-activity", workspace, "id=" + java.net.URLEncoder.encode(id, "UTF-8"));
+                    JSONObject latest = attempt==0?base:api.get("workstation-activity", workspace, "id=" + java.net.URLEncoder.encode(id, "UTF-8"));
                     JSONObject task = latest.getJSONObject("task"), activity = latest.getJSONObject("activity");
                     if (!activityId.equals(activity.optString("id")) || !memberId.equals(task.optString("ownerId"))) throw new WorkActivityRecovery.Conflict();
                     JSONObject merged = WorkActivityRecovery.merge(base.getJSONObject("task"), base.getJSONObject("activity"), draft, task, activity);
@@ -598,7 +615,7 @@ public final class MainActivity extends Activity {
                     }
                     JSONObject body = extra == null ? new JSONObject() : new JSONObject(extra.toString());
                     body.put("id", id).put("activityId", activityId).put("version", task.getInt("version")).put("draft", merged);
-                    try { api.post(action, workspace, body); break; }
+                    try { JSONObject result=api.post(action, workspace, body);if(result.optJSONObject("activity")!=null){acceptedDetail=new JSONObject(latest.toString());acceptedDetail.getJSONObject("task").put("version",result.getInt("taskVersion"));acceptedDetail.put("activity",result.getJSONObject("activity"));}break; }
                     catch (TeamApi.ApiException e) { if (e.status == 409 && attempt == 0) continue; throw e; }
                     catch (java.io.IOException uncertain) {
                         // A timeout does not mean the write failed. Read it back before offering a retry.
@@ -609,11 +626,12 @@ public final class MainActivity extends Activity {
                     }
                 }
                 if (generation == screenGeneration.get()) api.clearWorkDraft(workDraftKey(id));
-                runOnUiThread(() -> { if (generation != screenGeneration.get()) return; workActionBusy = false; if (action.equals("workstation-finish")) showPage("home"); else openWorkActivity(id); });
+                final JSONObject accepted=acceptedDetail;
+                runOnUiThread(() -> { if (generation != screenGeneration.get()) return; workActionBusy = false; Runnable next=afterWorkSave;afterWorkSave=null;if (action.equals("workstation-finish")) showPage("home"); else if(accepted!=null)renderWorkActivity(accepted);else openWorkActivity(id);if(next!=null)next.run(); });
             } catch (Exception error) {
                 runOnUiThread(() -> {
                     if (generation != screenGeneration.get()) return;
-                    workActionBusy = false; setWorkControlsEnabled(workContent, true); workContent.removeView(actionStatus);
+                    workActionBusy = false; afterWorkSave=null; setWorkControlsEnabled(workContent, true); workContent.removeView(actionStatus);
                     new AlertDialog.Builder(this).setTitle("Activity not updated")
                         .setMessage(safe(error.getMessage()) + "\n\nYour draft is saved on this phone.")
                         .setNegativeButton("Keep editing", null)
@@ -749,44 +767,35 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private boolean mutationBusy;
     private void mutate(String resource, JSONObject body, String success) {
-        showLoading("Saving your change…");
-        io.execute(() -> { try { api.post(resource, workspace, body); runOnUiThread(() -> { showPage(page); }); } catch (Exception e) { runOnUiThread(() -> new AlertDialog.Builder(this).setTitle("Couldn’t save").setMessage(safe(e.getMessage())).setPositiveButton("OK", (d,w) -> showPage(page)).show()); } });
+        if(mutationBusy)return;mutationBusy=true;final int generation=screenGeneration.get();
+        android.widget.Toast.makeText(this,"Saving…",android.widget.Toast.LENGTH_SHORT).show();
+        io.execute(()->{try{api.post(resource,workspace,body);runOnUiThread(()->{mutationBusy=false;if(generation!=screenGeneration.get())return;android.widget.Toast.makeText(this,success,android.widget.Toast.LENGTH_SHORT).show();loadPageData();});}catch(Exception e){runOnUiThread(()->{mutationBusy=false;if(generation!=screenGeneration.get())return;new AlertDialog.Builder(this).setTitle("Could not save").setMessage(safe(e.getMessage())).setPositiveButton("Keep editing",null).show();});}});
     }
 
+    private void showProfileMenu() {
+        String[] items={"Workspace details",nightMode?"Switch to light mode":"Switch to dark mode","Phone notifications","Refresh workspace","Check for updates","Sign out"};
+        new AlertDialog.Builder(this).setTitle(memberName).setItems(items,(dialog,index)->{
+            if(index==0)showPage("workspace-detail");else if(index==1)toggleTheme();else if(index==2){showPage("more");tool="notifications";loadPageData();}else if(index==3)loadPageData();else if(index==4)updater.check(true);else confirmSignOut();
+        }).show();
+    }
+    private void openFullWorkspace(String module,String title,String task) {
+        refreshActivityOnResume=task!=null&&!task.isEmpty();Intent intent=new Intent(this,TeamWorkspaceActivity.class);intent.putExtra("workspace",workspace);intent.putExtra("module",module);intent.putExtra("title",title);intent.putExtra("task",task);startActivity(intent);
+    }
     private void renderTools() {
-        content.removeAllViews(); addText("Workspace", 22, NAVY, true); addText("Everything your team needs, together.", 13, MUTED, false); addSpace(14);
-        Button updateApp = button("HYMN Team " + BuildConfig.VERSION_NAME + " · Check for updates", false);
-        content.addView(updateApp, new LinearLayout.LayoutParams(-1, dp(48)));
-        updateApp.setOnClickListener(v -> updater.check(true));
-        addSpace(10);
-        Button appearance = button(nightMode ? "☀  Switch to day mode" : "☾  Switch to night mode", false); LinearLayout.LayoutParams appearanceParams = new LinearLayout.LayoutParams(-1, dp(46)); appearanceParams.bottomMargin = dp(10); content.addView(appearance, appearanceParams); appearance.setOnClickListener(v -> toggleTheme());
-        addSectionTitle("Phone notifications");
-        addText("These controls affect alerts on this phone only. HYMN inbox messages and email preferences stay unchanged.", 12, MUTED, false);
-        addPhoneNotificationSetting("Client call reminders", TeamPhoneNotifications.MUTE_CALLS, "Upcoming calls assigned to you");
-        addPhoneNotificationSetting("Team updates", TeamPhoneNotifications.MUTE_UPDATES, "Inbox and important workspace alerts");
-        TextView timing = text("Call reminders are scheduled for 30 minutes before the call. Use Snooze 10 min or Mute on a phone notification to control it.", 11, MUTED, false); timing.setPadding(dp(12), dp(10), dp(12), dp(10)); timing.setBackground(shape(surface(), BORDER, 12)); LinearLayout.LayoutParams timingParams = new LinearLayout.LayoutParams(-1, -2); timingParams.bottomMargin = dp(16); content.addView(timing, timingParams);
-        String[][] groups = {{"Work", "Work-station|workstation", "Projects|projects", "Reports|reports"}, {"Connect", "Calls & follow-ups|call-followups", "Team chat|channels", "Team email history|team-email-history"}, {"People & operations", "Team directory|members", "Availability|availability", "Work coordinator|coordinator", "Creator approvals|creator-applications", "Operations|operations", "Contacts & research|acquisition-dashboard"}, {"Activity", "Call reports|call-reports", "Activity & audit|audit"}, {"Preferences", "Phone notifications|notifications"}};
-        for (String[] group : groups) {
-            boolean visible=false;for(int i=1;i<group.length;i++)if(moduleVisible(group[i].split("\\|")[1]))visible=true;
-            if(!visible)continue;
-            addSectionTitle(group[0]);
-            for (int i = 1; i < group.length; i++) {
-                String[] item = group[i].split("\\|");
-                if (!moduleVisible(item[1])) continue;
-                if (item[1].equals("notifications")) {
-                    LinearLayout card = new LinearLayout(this); card.setGravity(Gravity.CENTER_VERTICAL); card.setPadding(dp(15), dp(11), dp(14), dp(11)); card.setBackground(shape(surface(), BORDER, 14)); LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, dp(58)); p.bottomMargin = dp(8); content.addView(card, p);
-                    ImageView icon = new ImageView(this); icon.setImageResource(R.drawable.ic_notification); icon.setColorFilter(BLUE); icon.setPadding(dp(7), dp(7), dp(7), dp(7)); LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(dp(34), dp(34)); ip.rightMargin = dp(12); card.addView(icon, ip);
-                    card.addView(text(item[0], 14, NAVY, true), new LinearLayout.LayoutParams(0, -2, 1)); TextView arrow = text("›", 22, MUTED, false); card.addView(arrow);
-                    card.setOnClickListener(v -> { tool = "notifications"; loadPageData(); }); continue;
-                }
-                LinearLayout card = new LinearLayout(this); card.setGravity(Gravity.CENTER_VERTICAL); card.setPadding(dp(15), dp(11), dp(14), dp(11)); card.setBackground(shape(surface(), BORDER, 14)); LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, dp(58)); p.bottomMargin = dp(8); content.addView(card, p);
-                TextView icon = text(toolIcon(item[1]), 19, BLUE, true); icon.setGravity(Gravity.CENTER); LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(dp(34), dp(34)); ip.rightMargin = dp(12); icon.setBackground(shape(Color.rgb(237, 243, 252), 0, 11)); card.addView(icon, ip);
-                card.addView(text(item[0], 14, NAVY, true), new LinearLayout.LayoutParams(0, -2, 1)); card.addView(text("›", 22, MUTED, false));
-                card.setOnClickListener(v -> { tool = item[1]; if (tool.equals("workstation")) workBucket = "today"; loadPageData(); });
-            }
-        }
-        addSpace(8); Button logout = button("Sign out of HYMN Team", false); content.addView(logout, new LinearLayout.LayoutParams(-1, dp(48))); logout.setOnClickListener(v -> confirmSignOut());
+        content.removeAllViews();addText("Tools",24,NAVY,true);addText("Find what you need. Open a category to explore.",13,MUTED,false);addSpace(16);
+        EditText search=new EditText(this);styleInput(search);search.setHint("Search tools");search.setSingleLine();search.setTextSize(14);search.setPadding(dp(14),dp(10),dp(14),dp(10));search.setBackground(shape(surface(),BORDER,12));content.addView(search,new LinearLayout.LayoutParams(-1,dp(48)));addSpace(16);
+        LinearLayout results=new LinearLayout(this);results.setOrientation(LinearLayout.VERTICAL);content.addView(results);
+        String[][] groups={{"Work","Work-station|workstation|work-station","Projects|projects|projects","Weekly active hours|availability|availability","Work coordinator|coordinator|overview"},{"Customers & communication","Contact database|contacts|contacts","Calls & follow-ups|call-followups|work-station","Team email|emails|emails","Contacts & research|acquisition-dashboard|acquisition","My referral link|referral|referral"},{"Team & operations","Team directory|members|directory","Creator approvals|creator-applications|creator-applications","Operations|operations|operations","Approvals|approvals|approvals","Reports|reports|reports","Activity & audit|audit|audit","Leadership updates|leadership|leadership","Roles & settings|settings|settings"}};
+        Runnable draw=()->{results.removeAllViews();String query=search.getText().toString().trim().toLowerCase(Locale.ROOT);int found=0;
+            for(String[] group:groups){ArrayList<String[]> visible=new ArrayList<>();for(int i=1;i<group.length;i++){String[] item=group[i].split("\\|");if(moduleVisible(item[1])&&(query.isEmpty()||item[0].toLowerCase(Locale.ROOT).contains(query)))visible.add(item);}if(visible.isEmpty())continue;found+=visible.size();
+                Button category=button(group[0]+" · "+visible.size()+"  +",false);LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(52));cp.bottomMargin=dp(10);results.addView(category,cp);
+                LinearLayout entries=new LinearLayout(this);entries.setOrientation(LinearLayout.VERTICAL);entries.setVisibility(query.isEmpty()?View.GONE:View.VISIBLE);results.addView(entries);
+                category.setOnClickListener(v->{boolean open=entries.getVisibility()!=View.VISIBLE;entries.setVisibility(open?View.VISIBLE:View.GONE);category.setText(group[0]+" · "+visible.size()+(open?"  −":"  +"));});
+                for(String[] item:visible){Button row=button(item[0]+"  ›",false);row.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);row.setPadding(dp(18),0,dp(14),0);row.setTextSize(13);LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,dp(52));rp.bottomMargin=dp(8);entries.addView(row,rp);row.setOnClickListener(v->{if(item[1].equals("workstation"))showPage("workstation");else openFullWorkspace(item[2],item[0],"");});}
+            }if(found==0){TextView empty=text("No tools match your search.",13,MUTED,false);results.addView(empty);}
+        };draw.run();search.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence x,int st,int c,int af){}public void onTextChanged(CharSequence x,int st,int before,int count){draw.run();}public void afterTextChanged(android.text.Editable x){}});
     }
 
     private String toolIcon(String key) {
@@ -855,7 +864,7 @@ public final class MainActivity extends Activity {
     }
 
     private void toggleTheme() {
-        nightMode = !nightMode; getSharedPreferences("hymn_team_settings", MODE_PRIVATE).edit().putBoolean("night_mode", nightMode).apply(); applyThemePalette(); showPage("more");
+        nightMode = !nightMode; getSharedPreferences("hymn_team_settings", MODE_PRIVATE).edit().putBoolean("night_mode", nightMode).apply(); applyThemePalette(); String keepTool=tool; showPage(page); if(!keepTool.isEmpty()){tool=keepTool;loadPageData();}
     }
 
     private void confirmSignOut() {
@@ -916,7 +925,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onPause() { if (chatView != null) chatView.pause(); super.onPause(); }
-    @Override protected void onResume() { super.onResume(); if(updater!=null){updater.resumeInstall();updater.check(false);} refreshAccess(); if (chatView != null) chatView.resume(); }
+    @Override protected void onResume() { super.onResume(); if(updater!=null){updater.resumeInstall();updater.check(false);} refreshAccess(); if (chatView != null) chatView.resume();if(refreshActivityOnResume&&activeWorkDetail!=null){refreshActivityOnResume=false;JSONObject task=activeWorkDetail.optJSONObject("task");if(task!=null)openWorkActivity(task.optString("id"));} }
     @Override protected void onDestroy() { signInAttempt.finish();  if(updater!=null)updater.close(); if (chatView != null) chatView.close(); if (avatarRepository != null) avatarRepository.close(); io.shutdownNow(); super.onDestroy(); }
 
     @Override public void onBackPressed() {

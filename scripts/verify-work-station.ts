@@ -28,6 +28,8 @@ async function main() {
     assert.equal(mobileDetail.task.id, task.id);
     assert.equal(mobileDetail.task.version, (await detail(task.id)).task.version);
     assert.equal(mobileDetail.activity!.status, 'RUNNING');
+    assert.equal(mobileDetail.client?.id,client.id);
+    assert.equal(mobileDetail.client?.phone,client.phone);
     assert.equal(mobileDetail.ticket, null);
     assert.deepEqual(mobileDetail.history, []);
     assert.ok(!JSON.stringify(mobileDetail).includes('PRIVATE CONTACT NOTE'));
@@ -73,7 +75,9 @@ async function main() {
     const competing = await prisma.teamTask.create({ data: { workspaceId: ws.id, ownerId: other.id, creatorId: boss.id, clientId: client.id, title: 'Same customer' } });
     await assert.rejects(teamMutation(other, 'workstation-start', { taskId: competing.id, requestKey: randomUUID() }), /teammate.*already/);
     const stale = await detail(task.id);
-    await write('workstation-save', task.id);
+    const savedMobile=await write('workstation-save', task.id);
+    assert.equal(savedMobile.taskVersion,(await detail(task.id)).task.version);
+    assert.equal(savedMobile.activity?.notes,draft.notes);
     await assert.rejects(teamMutation(rep, 'workstation-save', { id: task.id, activityId: stale.activity!.id, version: stale.task.version, draft }), /changed/);
     assert.equal((await detail(task.id)).activity!.notes, draft.notes);
     await write('workstation-pause', task.id);

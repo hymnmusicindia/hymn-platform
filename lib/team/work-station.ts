@@ -40,13 +40,15 @@ export async function stationRead(a: Actor, resource: string, p: URLSearchParams
         return { id: c.id, name: c.name, email: c.email, phone: c.phone, interests: c.interests, status: c.status };
     }
     if (resource === 'workstation-activity') {
-        const task = currentConversationBrief(await ownTask(prisma, a, p.get('id') || ''));
+        const row=await prisma.teamTask.findFirst({where:{...taskScope(a),id:p.get('id')||''},include:{client:{select:{id:true,name:true,phone:true,email:true,interests:true,status:true}}}});
+        if(!row)throw new TeamError('Activity not found.',404);
+        const task = currentConversationBrief(row);
         if (task.ownerId !== a.id && !can(a, 'tasks.all'))
             throw new TeamError('Activity unavailable.', 403);
         // Native editor needs only the task/version and activity draft. Do not
         // block every open, save preflight and timeout readback on web history.
         if (p.get('view') === 'mobile')
-            return { task: { ...task, owner: null }, activity: workActivity(task.followUpContext), client: null, ticket: null, history: [] };
+            return { task: { ...task, owner: null }, activity: workActivity(task.followUpContext), client: task.client, ticket: null, history: [] };
         const client = task.clientId ? await contact(prisma, a, task.clientId) : null;
         const ticketId = ticketIdOf(task);
         const ticket = ticketId && ticketAccess(a) ? (await primary(prisma, a), await prisma.supportTicket.findUnique({ where: { id: ticketId }, include: { replies: { orderBy: { createdAt: 'asc' } } } })) : null;
@@ -381,7 +383,7 @@ export async function stationMutation(tx: Prisma.TransactionClient, a: Actor, re
     await tx.teamTask.update({ where: { id: task.id }, data: { followUpContext: json({ ...context, workActivity: activity }), version: { increment: 1 } } });
     if (resource !== 'workstation-save')
         await audit(tx, a, resource === 'workstation-pause' ? 'workstation.paused' : 'workstation.resumed', task.id, { clientId: task.clientId, activityId: activity.id });
-    return { id: task.id };
+    return { id: task.id, taskVersion: task.version + 1, activity };
 }
 export async function stationEmail(tx: Prisma.TransactionClient, a: Actor, input: unknown, now = new Date()) {
     const data = z.object({ id: z.string(), activityId: z.string().uuid(), requestKey: z.string().uuid(), kind: z.enum(Object.keys(activityEmailTemplates) as [keyof typeof activityEmailTemplates, ...(keyof typeof activityEmailTemplates)[]]), recipient: z.string().trim().email().optional(), subject: z.string().trim().min(3).max(200).regex(/^[^\r\n]+$/), body: z.string().trim().min(10).max(8000), reviewed: z.literal(true) }).parse(input);

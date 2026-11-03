@@ -27,6 +27,11 @@ final class TeamModuleAccess {
             case "creator-applications": return has(session,"operations.producers.approve") || has(session,"operations.engineers.approve");
             case "operations": return has(session,"operations.distribution.review") || has(session,"operations.beats.manage") || has(session,"operations.engineers.manage") || has(session,"operations.studio.review");
             case "acquisition-dashboard": return has(session,"crm.prospects.view");
+            case "contacts": return has(session,"clients.view");
+            case "emails": return has(session,"crm.outreach.manage") || has(session,"support.reply");
+            case "approvals": return has(session,"tasks.approve");
+            case "settings": case "leadership": return session.optBoolean("owner");
+            case "referral": return !session.optBoolean("owner");
             case "audit": return has(session,"audit.view");
             // Standalone call reports require a contact ID and are opened from contact records.
             default: return false;

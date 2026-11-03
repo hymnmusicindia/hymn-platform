@@ -7,6 +7,7 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/team_update_paths" />
         </provider>
         <receiver android:name=".TeamNotificationActionReceiver" android:exported="false" />
+        <activity android:name=".TeamWorkspaceActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>

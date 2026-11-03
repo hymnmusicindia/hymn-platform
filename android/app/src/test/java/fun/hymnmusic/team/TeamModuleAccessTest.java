@@ -33,4 +33,11 @@ public class TeamModuleAccessTest {
         assertFalse(TeamModuleAccess.visible(owner,"call-reports"));
         assertFalse(TeamModuleAccess.visible(null,"home"));
     }
+    @Test public void fullToolsKeepIndependentAuthorization() throws Exception {
+        assertTrue(TeamModuleAccess.visible(member("clients.view"),"contacts"));
+        assertFalse(TeamModuleAccess.visible(member("clients.view"),"settings"));
+        assertFalse(TeamModuleAccess.visible(member("clients.view"),"approvals"));
+        assertTrue(TeamModuleAccess.visible(member("tasks.approve"),"approvals"));
+        assertTrue(TeamModuleAccess.visible(member("crm.outreach.manage"),"emails"));
+    }
 }
