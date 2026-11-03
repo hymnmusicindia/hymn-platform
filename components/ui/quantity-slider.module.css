@@ -1,0 +1,15 @@
+.control { --slider-accent:#b39861; --slider-rest:color-mix(in srgb,var(--text) 13%,transparent); width:100%; }
+.rail { position:relative; height:44px; display:flex; align-items:center; }
+.track { position:absolute; left:0; right:0; height:6px; border-radius:20px; pointer-events:none; background:linear-gradient(to right,var(--slider-accent) 0 var(--slider-fill),var(--slider-rest) var(--slider-fill) 100%); box-shadow:inset 0 1px 2px #0000000a; }
+.rail input[type=range] { position:relative; z-index:1; appearance:none; -webkit-appearance:none; width:100%; height:44px; padding:0; margin:0; cursor:pointer; background:transparent; border:0; outline:none; touch-action:pan-y; }
+.rail input[type=range]::-webkit-slider-runnable-track { height:6px; background:transparent; border:0; }
+.rail input[type=range]::-moz-range-track { height:6px; background:transparent; border:0; }
+.rail input[type=range]::-webkit-slider-thumb { appearance:none; -webkit-appearance:none; width:22px; height:22px; margin-top:-8px; border-radius:50%; background:#f9fafb; border:5px solid var(--slider-accent); box-shadow:0 2px 6px #0003,0 0 0 4px color-mix(in srgb,var(--slider-accent) 12%,transparent); transition:box-shadow .15s; }
+.rail input[type=range]::-moz-range-thumb { box-sizing:border-box; width:22px; height:22px; border-radius:50%; background:#f9fafb; border:5px solid var(--slider-accent); box-shadow:0 2px 6px #0003,0 0 0 4px color-mix(in srgb,var(--slider-accent) 12%,transparent); }
+.rail input[type=range]:hover::-webkit-slider-thumb,.rail input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow:0 2px 6px #0003,0 0 0 7px color-mix(in srgb,var(--slider-accent) 22%,transparent); }
+.rail input[type=range]:focus-visible { outline:2px solid var(--slider-accent); outline-offset:1px; border-radius:8px; }
+.ends { display:flex; justify-content:space-between; color:var(--text-muted); font-size:10px; line-height:1; margin-top:-1px; }
+.markers { display:flex; flex-wrap:wrap; gap:6px; margin-top:13px; }
+.markers button { flex:1; min-height:33px; padding:6px 9px; border:1px solid var(--border); background:transparent; color:var(--text-muted); font-size:10px; border-radius:7px; }
+.markers button[aria-pressed=true] { background:color-mix(in srgb,var(--slider-accent) 13%,transparent); border-color:var(--slider-accent); color:var(--text); }
+@media(prefers-reduced-motion:reduce) { .rail input[type=range]::-webkit-slider-thumb { transition:none; } }

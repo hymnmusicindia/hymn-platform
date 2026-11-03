@@ -35,6 +35,7 @@ async function main() {
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-lifetime-referrals.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-network.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-mail.ts"]);
+    await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-net-network.ts"]);
     if (process.argv.includes("--payments")) for (const script of ["verify-payment-webhooks-integration", "verify-studio-services-integration"]) await run(["--conditions=react-server", "--import", "tsx", `scripts/${script}.ts`]);
   } finally {
     if (process.platform === "win32") await run(["-D", databaseDir, "-m", "fast", "-w", "stop"], path.resolve("node_modules/@embedded-postgres/windows-x64/native/bin/pg_ctl.exe"));

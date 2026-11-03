@@ -24,7 +24,10 @@ async function main() {
   const netPolicy = readFileSync("prisma/migrations/20261019140000_customer_referral_net_revenue/migration.sql", "utf8");
   for (const statement of netPolicy.split(";").map(value => value.trim()).filter(Boolean)) await prisma.$executeRawUnsafe(statement);
   assert.equal((await prisma.referralCommission.findMany()).length, 0);
-  assert.ok((await prisma.referralProgram.findUniqueOrThrow({ where: { id: 1 } })).netRevenueEffectiveAt);
+  assert.ok((await prisma.referralProgram.findUniqueOrThrow({ where: { id: 1 }, select: { netRevenueEffectiveAt: true } })).netRevenueEffectiveAt);
+  const netNetwork = readFileSync('prisma/migrations/20261104010000_referral_net_network/migration.sql', 'utf8');
+  for (const statement of netNetwork.split(';').map(value => value.trim()).filter(Boolean)) await prisma.$executeRawUnsafe(statement);
+  assert.equal((await prisma.referralProgram.findUniqueOrThrow({ where: { id: 1 } })).netNetworkEffectiveAt, null, 'The additive migration must not silently activate new payouts.');
   // The historical mail-table recreation predates the separately tested consent migration.
   await prisma.$executeRawUnsafe("ALTER TABLE referral_mail_jobs ADD COLUMN last_error TEXT");
   // Subsequent legacy integration fixtures exercise preserved pre-launch rates.

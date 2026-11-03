@@ -4,6 +4,7 @@ import {lockReferralGraph} from "./referrals";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { commissionMinor, remainingCommissionMinor, REFERRAL_COMMISSION_RATES, REFERRAL_HOLD_DAYS, REFERRAL_MINIMUM_PAYOUT_MINOR, REFERRAL_NETWORK_RATES_BPS, type ReferralCommissionCategory } from "@/lib/referral-commission-policy";
+import { netNetworkActive, netReferralAmounts, REFERRAL_NET_NETWORK_RATES_BPS, REFERRAL_NET_TOTAL_CAP_BPS } from '@/lib/referral-commission-policy';
 
 type Tx = Prisma.TransactionClient;
 export type CommissionSource = "distribution_order" | "checkout_order" | "subscription_payment" | "studio_payment";
@@ -75,21 +76,25 @@ export async function accrueReferralCommission(tx: Tx, source: CommissionSource,
   }
   if (!netPolicy && ["beats", "studio"].includes(category)) rateBps = Math.min(rateBps, 500);
   const amount = testMode ? 0 : commissionMinor(Math.min(baseMinor, paidMinor), rateBps);
+  const netNetwork = netPolicy && netNetworkActive(program, purchasedAt, rateBps);
   // Freeze the whole allocation once. Replays must not award new ancestors
   // after an account changes, or reinterpret an old payment using new rates.
   await tx.$queryRaw`SELECT id FROM referrals WHERE id = ${referral.id} FOR UPDATE`;
   if (await tx.referralCommission.findFirst({ where: { OR: [{ paymentId }, { sourceType: source, sourceId: String(id) }] } })) return;
   const eligibleAt = new Date(Date.now() + REFERRAL_HOLD_DAYS * 86400000);
-  const allocations = [{ referralId: referral.id, originReferralId: referral.id, level: 1, paymentId, sourceType: source, sourceId: String(id), category, paidMinor, baseMinor: Math.min(baseMinor, paidMinor), rateBps, originalMinor: amount, netMinor: amount, policyVersion: netPolicy ? 2 : 1, eligibleNetRevenueMinor: netPolicy ? baseMinor : null, status: testMode ? "EXCLUDED" : "PENDING", capturedAt: purchasedAt, eligibleAt }];
+  const allocations = [{ referralId: referral.id, originReferralId: referral.id, level: 1, paymentId, sourceType: source, sourceId: String(id), category, paidMinor, baseMinor: Math.min(baseMinor, paidMinor), rateBps, originalMinor: amount, netMinor: amount, policyVersion: netNetwork ? 3 : netPolicy ? 2 : 1, eligibleNetRevenueMinor: netPolicy ? baseMinor : null, status: testMode ? "EXCLUDED" : "PENDING", capturedAt: purchasedAt, eligibleAt }];
   let descendant = referral.userId;
   const visited = new Set([userId, descendant]);
   let budget = ["beats", "studio"].includes(category) ? Math.max(0, Math.min(baseMinor, commissionMinor(paidMinor, 500)) - amount) : Math.max(0, baseMinor - amount);
-  if (!netPolicy && !testMode && program.networkEffectiveAt && purchasedAt >= program.networkEffectiveAt) {
+  if (netNetwork) budget = Math.min(budget, Math.max(0, commissionMinor(Math.min(baseMinor, paidMinor), REFERRAL_NET_TOTAL_CAP_BPS) - amount));
+  if (!testMode && (netNetwork || !netPolicy && program.networkEffectiveAt && purchasedAt >= program.networkEffectiveAt)) {
     for (let level = 2; level <= 7; level++) {
       const ancestor = await tx.referral.findFirst({ where: { referredUserId: descendant,...referralEffectiveAt(purchasedAt) }, include: { owner: { select: { status: true } }, referredUser: { select: { status: true } } } });
       if (!ancestor || visited.has(ancestor.userId) || ancestor.createdAt > purchasedAt || ancestor.status === "REJECTED" || ancestor.riskStatus !== "clear" || ancestor.owner.status !== "ACTIVE" || ancestor.referredUser?.status !== "ACTIVE") break;
       visited.add(ancestor.userId); descendant = ancestor.userId;
-      const indirectRate = REFERRAL_NETWORK_RATES_BPS[level - 1];
+      // Staff receive employee compensation, never a second personal network reward.
+      if (await tx.teamMember.count({ where: { userId: ancestor.userId, status: 'ACTIVE', joinedAt: { lte: purchasedAt } } })) break;
+      const indirectRate = (netNetwork ? REFERRAL_NET_NETWORK_RATES_BPS : REFERRAL_NETWORK_RATES_BPS)[level - 1];
       const reward = Math.min(budget, commissionMinor(amount, indirectRate)); budget -= reward;
       if (reward > 0) allocations.push({ ...allocations[0], referralId: ancestor.id, level, baseMinor: amount, rateBps: indirectRate, originalMinor: reward, netMinor: reward });
     }
@@ -152,9 +157,18 @@ export async function refreshReferralCommission(tx: Tx, paymentId: string, now =
   const refundedMinor = dispute === "payment.dispute.lost" ? row.paidMinor : Math.min(row.paidMinor, [...refunds.values()].reduce((a, b) => a + b, 0));
   let reconciledEvidence: { eligibleNetRevenueMinor: number | null; status: string } | null = null;
   if (row.policyVersion >= 2) reconciledEvidence = await tx.acquisitionRevenueEvidence.findUnique({ where: { paymentId }, select: { eligibleNetRevenueMinor: true, status: true } });
-  const netMinor = row.policyVersion >= 2
-    ? (reconciledEvidence?.status === "RECONCILED" && reconciledEvidence.eligibleNetRevenueMinor !== null ? commissionMinor(reconciledEvidence.eligibleNetRevenueMinor, row.rateBps) : row.netMinor)
+  const origin = rows.find(entry => entry.level === 1);
+  let netMinor = row.policyVersion >= 2
+    ? (reconciledEvidence?.status === "RECONCILED" && reconciledEvidence.eligibleNetRevenueMinor !== null ? commissionMinor(Math.min(reconciledEvidence.eligibleNetRevenueMinor, row.paidMinor), row.rateBps) : row.netMinor)
     : remainingCommissionMinor(row.originalMinor, row.paidMinor, refundedMinor);
+  if (row.policyVersion >= 3) {
+    if (refundedMinor >= row.paidMinor) netMinor = 0;
+    else if (reconciledEvidence?.status === 'RECONCILED' && reconciledEvidence.eligibleNetRevenueMinor !== null && origin) {
+      const frozenRates = Array.from({ length: 7 }, (_, i) => rows.find(entry => entry.level === i + 1)?.rateBps ?? 0);
+      netMinor = netReferralAmounts(reconciledEvidence.eligibleNetRevenueMinor, row.paidMinor, origin.rateBps, frozenRates)[row.level - 1] ?? 0;
+    }
+    if (!origin) validPath = false;
+  }
   const held = !validPath || unknownRefund || pendingRefunds.size > 0 || dispute === "payment.dispute.created" || row.referral.riskStatus !== "clear" || row.referral.status === "REJECTED" || row.referral.owner.status !== "ACTIVE" || row.referral.referredUser?.status !== "ACTIVE" || (row.policyVersion >= 2 && reconciledEvidence?.status !== "RECONCILED");
   const status = netMinor === 0 ? "REVERSED" : held ? "HELD" : row.eligibleAt > now ? "PENDING" : "AVAILABLE";
   if (row.netMinor !== netMinor || row.status !== status || row.refundedMinor !== refundedMinor) {

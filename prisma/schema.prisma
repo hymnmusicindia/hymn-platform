@@ -2042,6 +2042,7 @@ model Referral {
 }
 
 model ReferralProgram {
+  netNetworkEffectiveAt DateTime? @map("net_network_effective_at")
   netRevenueEffectiveAt DateTime? @map("net_revenue_effective_at")
   networkEffectiveAt DateTime? @map("network_effective_at")
   id          Int      @id @default(1)

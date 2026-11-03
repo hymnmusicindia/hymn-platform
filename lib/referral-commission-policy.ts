@@ -19,6 +19,17 @@ export function remainingCommissionMinor(originalMinor: number, paidMinor: numbe
 
 // Indirect rewards are shares of the direct commission, never recruitment fees.
 export const REFERRAL_NETWORK_RATES_BPS = [0, 100, 50, 50, 50, 50, 50] as const;
+// Version 3: additional shares of the direct reward, not of gross customer spend.
+export const REFERRAL_NET_NETWORK_RATES_BPS = [0, 1000, 500, 500, 500, 500, 500] as const;
+export const REFERRAL_NET_TOTAL_CAP_BPS = 270;
+export function netNetworkActive(program: { netNetworkEffectiveAt?: Date | null }, capturedAt: Date, directRateBps: number) {
+  return directRateBps === 200 && !!program.netNetworkEffectiveAt && capturedAt >= program.netNetworkEffectiveAt;
+}
+export function netReferralAmounts(netMinor: number, paidMinor: number, directRateBps: number, networkRates: readonly number[]) {
+  const base = Math.min(netMinor, paidMinor), direct = commissionMinor(base, directRateBps);
+  let budget = Math.max(0, commissionMinor(base, REFERRAL_NET_TOTAL_CAP_BPS) - direct);
+  return [direct, ...networkRates.slice(1, 7).map(rate => { const reward = Math.min(budget, commissionMinor(direct, rate)); budget -= reward; return reward; })];
+}
 export function referralReleaseLabel(eligibleAt: string, now = Date.now()) {
   const remaining = new Date(eligibleAt).getTime() - now;
   if (!Number.isFinite(remaining)) return "Payment checks pending";
