@@ -204,6 +204,11 @@ export async function createProviderSubscription(userId: number, product: Subscr
       throw new Error("An active or pending subscription already exists for this account. Check its status before starting another payment.");
     }
   }
+  if(existing?.status==='cancelled'&&existing.plan===product&&existing.razorpaySubscriptionId&&existing.razorpayPlanId===process.env[policy.planEnv]?.trim()&&existing.razorpayPlanId!==version.razorpayPlanId&&product!=='half_yearly'){
+    const old=await gateway.subscriptions.fetch(existing.razorpaySubscriptionId);
+    if(await tx.subscriptionPayment.count({where:{subscriptionId:existing.id}})!==0||old.status!=='cancelled'||!await retireFailedAnnualMandate(old.id,old))throw new Error('The previous subscription needs payment review before another checkout can start. Contact HYMN support.');
+    await tx.auditLog.create({data:{action:'SUBSCRIPTION_FAILED_MANDATE_RETIRED',entity:'subscriptions',entityId:String(existing.id),metadata:{providerId:old.id,previousPlanId:old.plan_id,replacementPlanId:version.razorpayPlanId,reason:'Confirmed unpaid legacy cancellation recovered before replacement.'}}});
+  }
   const pending=await tx.auditLog.findFirst({where:{entity:'subscription_checkout_attempt',entityId:String(userId),action:'SUBSCRIPTION_CREATE_STARTED'},orderBy:[{createdAt:'desc'},{id:'desc'}],select:{requestId:true}});
   if(pending?.requestId&&!await tx.auditLog.findFirst({where:{requestId:pending.requestId,action:{in:['SUBSCRIPTION_CREATE_COMMITTED','SUBSCRIPTION_CREATE_REJECTED']}},select:{id:true}}))throw new Error('An earlier checkout is still being checked. Contact HYMN support before starting another payment.');
   const requestId=crypto.randomUUID();
