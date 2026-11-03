@@ -3318,8 +3318,8 @@ export function ReleaseForm({
         });
         razorpay.on("payment.failed", (response) => {
           const reason = subscriptionPaymentFailureMessage(response.error?.description);
-          setStatus(`${reason} No payment was captured. You can safely try checkout again.`);
-          reject(new Error(`${reason} No payment was captured. You can safely try checkout again.`));
+          setStatus(`${reason} Your draft is saved. Check payment status before retrying.`);
+          reject(new Error(`${reason} Your draft is saved. Check payment status before retrying.`));
           razorpay.close();
         });
         razorpay.open();
