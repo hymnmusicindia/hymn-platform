@@ -10,6 +10,9 @@ import { distributionPlanCards } from "@/lib/distribution-plans";
 import { useAccessibleDialog } from "@/components/ui/use-accessible-dialog";
 import { useSubscriptionLabel } from "@/components/subscription-label-context";
 
+import { LabelArtistSelector } from '@/components/label-artist-selector';
+import { labelArtistQuote } from '@/lib/label-artist-pricing';
+
 const subscriptions = distributionPlanCards.filter(plan => plan.key !== "one_time");
 const sharedBenefits = planPerks.half_yearly.filter(feature => feature.included &&
   subscriptions.every(plan => planPerks[plan.key].some(item => item.label === feature.label && item.included)));
@@ -42,6 +45,7 @@ export function SubscriptionButton({ className }: { className?: string }) {
 export function SubscriptionOptions() {
   const subscriptionLabel = useSubscriptionLabel();
   const currentPlan = ({ "Half-Yearly": "half_yearly", "Yearly": "yearly", "Yearly+": "yearly_plus" } as Record<string, string>)[subscriptionLabel] ?? null;
+  const [extraArtists, setExtraArtists] = useState(0);
   const [open, setOpen] = useState(false);
   const [offer, setOffer] = useState<OfferState>("loading");
   const show = useCallback(() => { setOffer("loading"); setOpen(true); }, []);
@@ -108,9 +112,11 @@ export function SubscriptionOptions() {
           <div className="subscription-comparison-grid">
             {subscriptions.map(plan => <article key={plan.key} className="distribution-plan-card subscription-comparison-card" data-featured={plan.featured} data-current={plan.key === currentPlan}>
               <header><span>{plan.key === currentPlan ? "YOUR CURRENT PLAN" : plan.key === "half_yearly" ? "FLEXIBLE START" : plan.key === "yearly" ? "MOST POPULAR" : "FOR LABELS & TEAMS"}</span><h3>{plan.title}</h3><p>{plan.key === "half_yearly" ? "Build your release rhythm." : plan.key === "yearly" ? "Plan a full year of music." : "Grow a multi-artist catalogue."}</p></header>
-              <div className="subscription-price"><strong>₹{plan.price.toLocaleString("en-IN")}</strong><span> / {plan.cadence}</span><small>Total subscription price</small></div>
-              {plan.key === currentPlan ? <Link href="/dashboard?tab=subscription" onClick={close} className="subscription-plan-action"><span><Check size={15} /> Your current plan</span><ArrowRight size={16} /></Link> : <Link href={`/checkout?product=subscription-${plan.key}`} onClick={close} className="subscription-plan-action">{plan.cta}<ArrowRight size={16} /></Link>}
-              <dl><div><dt>Artist profiles</dt><dd>{plan.artistLimit}</dd></div><div><dt>Support</dt><dd>{plan.key === "half_yearly" ? "Standard" : plan.key === "yearly" ? "Faster response" : "24/7 priority"}</dd></div><div><dt>Custom label name</dt><dd>{plan.label_editable ? "Included" : "Not included"}</dd></div></dl>
+              <div className="subscription-price"><strong>₹{(plan.key === "yearly_plus" ? labelArtistQuote(extraArtists).total / 100 : plan.price).toLocaleString("en-IN")}</strong><span> / {plan.cadence}</span><small>Total subscription price</small></div>
+              {plan.key === "yearly_plus" && <LabelArtistSelector value={extraArtists} onChange={setExtraArtists}/>}
+              {plan.key === currentPlan ? <Link href={plan.key === "yearly_plus" && extraArtists ? "/dashboard?tab=support" : "/dashboard?tab=subscription"} onClick={close} className="subscription-plan-action"><span><Check size={15} /> {plan.key === "yearly_plus" && extraArtists ? "Request more artist slots" : "Your current plan"}</span><ArrowRight size={16} /></Link> : <Link href={`/checkout?product=subscription-${plan.key}${plan.key === "yearly_plus" ? `&extraArtists=${extraArtists}` : ""}`} onClick={close} className="subscription-plan-action">{plan.cta}<ArrowRight size={16} /></Link>}
+              {plan.key === "yearly_plus" && currentPlan === "yearly_plus" && extraArtists > 0 && <p className="subscription-value-note">This is an estimate for a new annual plan. Contact HYMN to expand your existing subscription without paying for the base plan again.</p>}
+              <dl><div><dt>Artist profiles</dt><dd>{plan.key === "yearly_plus" ? 15 + extraArtists : plan.artistLimit}</dd></div><div><dt>Support</dt><dd>{plan.key === "half_yearly" ? "Standard" : plan.key === "yearly" ? "Faster response" : "24/7 priority"}</dd></div><div><dt>Custom label name</dt><dd>{plan.label_editable ? "Included" : "Not included"}</dd></div></dl>
               {plan.key === "yearly" ? <p className="subscription-value-note">Save ₹{(distributionPlanCards[1].price * 2 - plan.price).toLocaleString("en-IN")} vs two 6-month subscriptions</p> : <p className="subscription-value-note">{plan.key === "half_yearly" ? "A shorter commitment" : "Your label. Your artists."}</p>}
             </article>)}
           </div>

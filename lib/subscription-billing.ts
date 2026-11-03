@@ -11,6 +11,8 @@ import { recordGrowthEvent } from "@/lib/growth";
 import { SubscriptionPlanConfigurationError, validateSubscriptionProviderPlan } from "@/lib/subscription-plan-validation";
 import { recordVerifiedAcquisitionRevenue } from "@/lib/acquisition-revenue";
 import {annualCompatibilityRequired,validateCompatibleAnnualPlan,validSubscriptionCycleCount,isUnstartedSubscription} from './subscription-recurrence';
+import { labelArtistQuote } from './label-artist-pricing';
+import { queueSubscriptionReceipt } from './email/subscription-receipts';
 
 export const SUBSCRIPTION_PRODUCTS = ["half_yearly", "yearly", "yearly_plus"] as const;
 export type SubscriptionProduct = typeof SUBSCRIPTION_PRODUCTS[number];
@@ -135,8 +137,23 @@ export function verifySubscriptionCheckoutSignature(paymentId: string, subscript
   return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
-async function resolvePlanVersion(product: SubscriptionProduct) {
+async function resolvePlanVersion(product: SubscriptionProduct, extraArtists = 0) {
+  if (extraArtists && product !== 'yearly_plus') throw Error('Extra artists require Yearly+.');
+  const artistQuote = labelArtistQuote(extraArtists);
   const policy = SUBSCRIPTION_POLICIES[product];
+  if (extraArtists) {
+    if (!razorpay) throw Error('Payment service unavailable.');
+    const gateway = razorpay;
+    // A transaction-level lock prevents concurrent checkouts creating duplicate variants.
+    return prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(49813, ${extraArtists})`;
+      const saved = await tx.subscriptionPlanVersion.findFirst({ where: { product, amount: artistQuote.total, currency: 'INR', billingInterval: '12 months', active: true }, orderBy: { id: 'asc' } });
+      const provider = saved ? await gateway.plans.fetch(saved.razorpayPlanId) : await gateway.plans.create({ period: 'monthly', interval: 12, item: { name: `HYMN Yearly+ | 15 + ${extraArtists} artists`, amount: artistQuote.total, currency: 'INR', description: 'Annual subscription including extra artist profiles' }, notes: { hymn_extra_artists: String(extraArtists), hymn_pricing: 'label-artists-v1' } });
+      validateSubscriptionProviderPlan(provider, { amount: artistQuote.total, currency: 'INR', months: 12, planEnv: 'Yearly+ artist slots' });
+      if (String((provider.notes as Record<string, unknown> | undefined)?.hymn_extra_artists) !== String(extraArtists)) throw Error('Artist slot billing configuration mismatch.');
+      return saved ?? tx.subscriptionPlanVersion.create({ data: { product, amount: artistQuote.total, currency: 'INR', billingInterval: '12 months', razorpayPlanId: provider.id } });
+    }, { maxWait: 10000, timeout: 20000 });
+  }
   let razorpayPlanId = process.env[policy.planEnv]?.trim();
   if (!razorpayPlanId) throw new SubscriptionPlanConfigurationError(`${policy.planEnv} is not configured.`);
   if (!razorpay) throw new Error("Razorpay is not configured.");
@@ -178,12 +195,12 @@ async function retireFailedAnnualMandate(id:string,provider:Subscriptions.Razorp
   return confirmed.status==='cancelled'&&confirmed.paid_count===0&&!confirmed.current_start;
 }
 
-export async function createProviderSubscription(userId: number, product: SubscriptionProduct) {
+export async function createProviderSubscription(userId: number, product: SubscriptionProduct, extraArtists = 0) {
   if (!razorpay) throw new Error("Razorpay is not configured.");
   const gateway=razorpay;
   const policy = SUBSCRIPTION_POLICIES[product];
   validSubscriptionCycleCount(policy.totalCount,product==='half_yearly'?6:12);
-  const version = await resolvePlanVersion(product);
+  const version = await resolvePlanVersion(product, extraArtists);
   // Serialize browser retries for this customer; another checkout must reuse the committed mandate.
   return prisma.$transaction(async tx=>{
   await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
@@ -221,8 +238,8 @@ export async function createProviderSubscription(userId: number, product: Subscr
   const now = new Date();
   const local = await tx.subscription.upsert({
     where: { userId },
-    create: { userId, plan: product, planName: policy.name, planVersionId: version.id, razorpayPlanId: version.razorpayPlanId, razorpaySubscriptionId: provider.id, expiryDate: now, status: String(provider.status || "created"), releaseLimit: policy.releaseLimit, artistLimit: artistProfileLimitForPlan(product), availableFeatures: JSON.stringify(policy.features), daysRemaining: 0, autoRenewal: true, providerSyncedAt: now },
-    update: { plan: product, planName: policy.name, planVersionId: version.id, razorpayPlanId: version.razorpayPlanId, razorpaySubscriptionId: provider.id, expiryDate: now, status: String(provider.status || "created"), releasesUsed: 0, releaseLimit: policy.releaseLimit, artistLimit: artistProfileLimitForPlan(product), availableFeatures: JSON.stringify(policy.features), daysRemaining: 0, autoRenewal: true, cancelAtPeriodEnd: false, cancelledAt: null, currentPeriodStart: null, currentPeriodEnd: null, providerSyncedAt: now }
+    create: { userId, plan: product, planName: policy.name, planVersionId: version.id, razorpayPlanId: version.razorpayPlanId, razorpaySubscriptionId: provider.id, expiryDate: now, status: String(provider.status || "created"), releaseLimit: policy.releaseLimit, artistLimit: artistProfileLimitForPlan(product) + extraArtists, availableFeatures: JSON.stringify(policy.features), daysRemaining: 0, autoRenewal: true, providerSyncedAt: now },
+    update: { plan: product, planName: policy.name, planVersionId: version.id, razorpayPlanId: version.razorpayPlanId, razorpaySubscriptionId: provider.id, expiryDate: now, status: String(provider.status || "created"), releasesUsed: 0, releaseLimit: policy.releaseLimit, artistLimit: artistProfileLimitForPlan(product) + extraArtists, availableFeatures: JSON.stringify(policy.features), daysRemaining: 0, autoRenewal: true, cancelAtPeriodEnd: false, cancelledAt: null, currentPeriodStart: null, currentPeriodEnd: null, providerSyncedAt: now }
   });
   await tx.auditLog.create({ data: { actorId: userId, action: "SUBSCRIPTION_PROVIDER_CREATED", entity: "subscriptions", entityId: String(local.id), metadata: { product, planVersionId: version.id, razorpaySubscriptionId: provider.id } } });
   await tx.auditLog.create({data:{action:'SUBSCRIPTION_CREATE_COMMITTED',entity:'subscription_checkout_attempt',entityId:String(userId),requestId,metadata:{providerId:provider.id,subscriptionId:local.id}}});
@@ -262,11 +279,14 @@ export async function synchronizeProviderSubscription(entity: ProviderSubscripti
   const billingPeriodRenewed = subscriptionPeriodAdvanced(existing.currentPeriodStart, currentStart);
   const subscription = await prisma.$transaction(async tx => {
     const updated = await tx.subscription.update({ where: { id: existing.id,razorpaySubscriptionId:entity.id }, data: { status, currentPeriodStart: currentStart, currentPeriodEnd: currentEnd, expiryDate, nextRenewalDate: !paidThrough && ["active", "pending"].includes(status) ? (fromUnix(entity.charge_at) || currentEnd) : null, startedAt: existing.startedAt || fromUnix(entity.start_at) || currentStart, cancelledAt, daysRemaining, ...(billingPeriodRenewed ? { releasesUsed: 0 } : {}), autoRenewal: !paidThrough && !["cancelled", "completed", "expired"].includes(status) && !existing.cancelAtPeriodEnd, ...(paidThrough ? { cancelAtPeriodEnd: true } : {}), providerSyncedAt: now } });
-    if (payment?.id) await tx.subscriptionPayment.upsert({ where: { razorpayPaymentId: payment.id }, create: { subscriptionId: existing.id, planSnapshot: existing.plan, razorpayPaymentId: payment.id, razorpayInvoiceId: payment.invoice_id || null, amount: Number(payment.amount || 0), currency: String(payment.currency || "INR").toUpperCase(), status: String(payment.status || "captured"), billingPeriodStart: currentStart, billingPeriodEnd: currentEnd, createdAt: fromUnix(payment.created_at) || now }, update: { status: String(payment.status || "captured"), razorpayInvoiceId: payment.invoice_id || undefined } });
+    if (payment?.id) await tx.subscriptionPayment.upsert({ where: { razorpayPaymentId: payment.id }, create: { subscriptionId: existing.id, planSnapshot: existing.plan, razorpayPaymentId: payment.id, razorpayInvoiceId: payment.invoice_id || null, amount: Number(payment.amount || 0), currency: String(payment.currency || "INR").toUpperCase(), status: String(payment.status || "unknown"), billingPeriodStart: currentStart, billingPeriodEnd: currentEnd, createdAt: fromUnix(payment.created_at) || now }, update: { status: String(payment.status || "unknown"), razorpayInvoiceId: payment.invoice_id || undefined } });
     await tx.auditLog.create({ data: { action: "SUBSCRIPTION_PROVIDER_SYNCHRONIZED", entity: "subscriptions", entityId: String(existing.id), metadata: { providerStatus, paidThrough, paymentId: payment?.id || null, billingPeriodRenewed, releaseAllowanceReset: billingPeriodRenewed } as Prisma.InputJsonObject } });
     return updated;
   });
   if (payment?.id && payment.status === "captured") {
+    // Durable enqueue is independent of growth/referral side effects. Cron repairs missed events.
+    try { const saved = await prisma.subscriptionPayment.findUniqueOrThrow({ where: { razorpayPaymentId: payment.id } }); await queueSubscriptionReceipt(saved.id); }
+    catch { console.warn(JSON.stringify({ scope: 'subscription_receipt', status: 'enqueue_retry_required' })); }
     try {
       const persisted = await prisma.subscriptionPayment.findUniqueOrThrow({ where: { razorpayPaymentId: payment.id } });
       await recordVerifiedAcquisitionRevenue({ sourceType: "subscription_payment", sourceId: String(persisted.id), customerId: subscription.userId, paymentId: payment.id, currency: persisted.currency, recognisedRevenueMinor: persisted.amount });
@@ -280,12 +300,22 @@ export async function synchronizeProviderSubscription(entity: ProviderSubscripti
   return subscription;
 }
 
-export async function fetchAndSynchronizeSubscription(userId: number, providerSubscriptionId: string) {
+export async function fetchAndSynchronizeSubscription(userId: number, providerSubscriptionId: string, paymentId?: string) {
   const local = await prisma.subscription.findUnique({ where: { userId } });
   if (!local || local.razorpaySubscriptionId !== providerSubscriptionId) throw new Error("Subscription does not belong to the authenticated user.");
   if (!razorpay) throw new Error("Razorpay is not configured.");
   const provider = await razorpay.subscriptions.fetch(providerSubscriptionId);
-  return synchronizeProviderSubscription(provider as ProviderSubscription);
+  let payment: ProviderPayment | undefined;
+  if (paymentId) {
+    const captured = await razorpay.payments.fetch(paymentId);
+    if (!captured.invoice_id) throw Error('Subscription payment invoice is not available yet. Please refresh your subscription shortly.');
+    const invoice = await razorpay.invoices.fetch(captured.invoice_id);
+    if ((invoice as typeof invoice & { subscription_id?: string }).subscription_id !== providerSubscriptionId) throw Error('Payment does not belong to this subscription.');
+    const version = local.planVersionId ? await prisma.subscriptionPlanVersion.findUnique({ where: { id: local.planVersionId } }) : null;
+    if (!version || Number(captured.amount) !== version.amount || captured.currency !== version.currency) throw Error('Subscription payment amount does not match the authorised plan.');
+    payment = captured as ProviderPayment;
+  }
+  return synchronizeProviderSubscription(provider as ProviderSubscription, payment);
 }
 
 export async function synchronizeSubscriptionPayment(providerSubscriptionId: string, payment: ProviderPayment) {

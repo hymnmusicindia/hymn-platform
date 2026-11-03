@@ -135,7 +135,8 @@ export const checkoutItemSchema = z.discriminatedUnion("type", [
     plan: z.enum(["one_time", "half_yearly", "yearly", "yearly_plus"]),
     trackCount: z.number().int().min(1).max(100).default(1),
     platforms: z.array(z.string().min(1).refine(isDistributionChannel, "Choose a supported distribution channel.")).default(["Spotify", "Apple Music"]),
-    youtubeContentIdEnabled: z.boolean().optional()
+    youtubeContentIdEnabled: z.boolean().optional(),
+    extraArtistSlots: z.number().int().min(0).max(500).default(0)
   })
 ]);
 

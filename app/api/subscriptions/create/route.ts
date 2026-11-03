@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     const signature = String(body.razorpay_signature || "");
     if (!subscriptionId || !paymentId || !signature) return NextResponse.json({ error: "Missing subscription authorization fields." }, { status: 400 });
     if (!verifySubscriptionCheckoutSignature(paymentId, subscriptionId, signature)) return NextResponse.json({ error: "Invalid Razorpay subscription signature." }, { status: 400 });
-    const subscription = await fetchAndSynchronizeSubscription(session.sub, subscriptionId);
+    const subscription = await fetchAndSynchronizeSubscription(session.sub, subscriptionId, paymentId);
     return NextResponse.json({ success: true, active: subscription.status === "active", subscription });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Subscription authorization failed." }, { status: 400 });

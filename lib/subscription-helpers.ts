@@ -69,7 +69,7 @@ export function getReleaseSubmissionRequirements(plan: string, hasActiveSubscrip
  */
 export async function checkArtistLimitReached(userId: number, newArtistCount: number): Promise<boolean> {
   const [subscription, paidPlans] = await Promise.all([getSubscriptionByUserId(userId), listPaidDistributionPlansByUser(userId)]);
-  const subscriptionLimit = subscriptionHasEntitlement(subscription) ? artistProfileLimitForPlan(subscription!.plan) : 0;
+  const subscriptionLimit = subscriptionHasEntitlement(subscription) ? subscription!.artistLimit : 0;
   const oneTimeLimit = paidPlans.some((plan) => ["one_time", "pay_per_release"].includes(plan)) ? 5 : 0;
   return newArtistCount > Math.max(subscriptionLimit, oneTimeLimit);
 }

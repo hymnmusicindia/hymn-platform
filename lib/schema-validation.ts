@@ -41,7 +41,7 @@ export function validateSubscription(subscription: Partial<Subscription>): strin
 
   if (subscription.artistLimit !== undefined && subscription.plan) {
     const expectedLimit = PLAN_LIMITS[subscription.plan];
-    if (subscription.artistLimit !== expectedLimit) {
+    if (!Number.isSafeInteger(subscription.artistLimit) || subscription.artistLimit < expectedLimit || (subscription.plan !== "yearly_plus" && subscription.artistLimit !== expectedLimit)) {
       console.warn(
         `Artist limit mismatch for plan ${subscription.plan}: expected ${expectedLimit}, got ${subscription.artistLimit}`
       );

@@ -1,3 +1,4 @@
+import { labelArtistQuote } from '@/lib/label-artist-pricing';
 import {exclusiveBeatEligible,exclusiveBeatRestriction} from "./beat-rights-policy";
 import { findCouponByCode, findUserById, getCouponUsage, listBeats } from "@/lib/db";
 import {beatUsageRights,beatUsageSummary,licenceClauses,type LicenceClause} from './beat-licence-terms';
@@ -80,14 +81,15 @@ async function buildLineItems(input: CheckoutInput): Promise<CheckoutLineItem[]>
 
     const plan = distributionPlanCards.find((entry) => entry.key === item.plan);
     if (!plan) throw new Error("Invalid distribution plan selected.");
+    if (item.extraArtistSlots && item.plan !== 'yearly_plus') throw Error('Extra artists are available with Yearly+ only.');
     const basePrice = item.plan === "one_time"
       ? getTrackPricingQuote(item.trackCount).finalPrice + getUgcAddonPrice(item.platforms, item.plan) + getYoutubeContentIdAddonPrice(item.plan, item.youtubeContentIdEnabled)
-      : plan.price;
+      : item.plan === 'yearly_plus' ? labelArtistQuote(item.extraArtistSlots ?? 0).total / 100 : plan.price;
 
     return {
       productId: `distribution:${item.plan}`,
       label: plan.title,
-      description: item.plan === "one_time" ? `${item.trackCount} track release submission` : `${plan.cadence} distribution subscription`,
+      description: item.plan === "one_time" ? `${item.trackCount} track release submission` : `${plan.cadence} distribution subscription${item.plan === "yearly_plus" ? ` | 15 included + ${item.extraArtistSlots ?? 0} extra artists${(item.extraArtistSlots ?? 0) > 7 ? " | 5% off extras" : ""}. Extra slots renew annually.` : ""}`,
       quantity: 1,
       unitPrice: basePrice,
       total: basePrice

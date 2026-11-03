@@ -22,6 +22,7 @@ export const footerColumns = {
     { href: "/policies/producer-terms", label: "Producer Terms" }
   ],
   company: [
+    { label: "Refer & earn", href: "/referrals" },
     { href: "/about", label: "About HYMN" },
     { href: "/mission", label: "Mission & Founder" },
     { href: "/contact", label: "Contact" },

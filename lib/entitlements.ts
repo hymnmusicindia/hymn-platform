@@ -23,7 +23,7 @@ export async function getUserEntitlements(userId: number): Promise<UserEntitleme
   ]);
   const activePlan = subscriptionHasEntitlement(subscription) ? subscription!.plan : null;
   const plans = [activePlan, ...paidPlans].filter((plan): plan is string => Boolean(plan));
-  const artistProfileLimit = Math.max(artistProfileLimitForPlan("basic"), ...plans.map(artistProfileLimitForPlan));
+  const artistProfileLimit = Math.max(artistProfileLimitForPlan("basic"), ...plans.map(artistProfileLimitForPlan), activePlan ? subscription!.artistLimit : 0);
   const customLabelAllowed = plans.some((plan) => ["yearly_plus", "elite"].includes(plan));
   const priorityReview = plans.some((plan) => ["yearly", "yearly_plus", "pro", "elite"].includes(plan));
   return {

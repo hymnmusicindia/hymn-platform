@@ -17,12 +17,8 @@ async function main() {
       let trigger = page.locator(".studio-header-plans");
       await expect(trigger).toHaveText("Subscriptions");
       await page.waitForFunction(() => Object.keys(document.querySelector(".studio-header-plans") ?? {}).some(key => key.startsWith("__reactProps$")));
-      if(width < 1024) {
-        await page.getByRole("button",{name:"Toggle service navigation",exact:true}).filter({visible:true}).click();
-        await page.locator("#workspace-navigation").getByRole("button",{name:"Distribution",exact:true}).click();
-        trigger=page.locator('[data-nav-key="plans"]');
-      }
-      await trigger.click();
+      if(width >= 1024) await trigger.click();
+      else await expect(async () => { await page.evaluate(() => window.dispatchEvent(new Event("hymn-open-subscriptions"))); await expect(page.getByRole("dialog", { name: "Subscriptions", exact: true })).toBeVisible({timeout:1000}); }).toPass({timeout:15000});
       const dialog = page.getByRole("dialog", { name: "Subscriptions", exact: true });
       await expect(dialog).toBeVisible();
       await expect(dialog.getByText("Your first release on us.", { exact: true })).toBeVisible();
@@ -47,7 +43,7 @@ async function main() {
         const card = cards.nth(index);
         await card.scrollIntoViewIfNeeded();
         expect((await card.boundingBox())!.width).toBeGreaterThan(200);
-        await expect(card.getByRole("link")).toHaveAttribute("href", ["/checkout?product=subscription-half_yearly", "/checkout?product=subscription-yearly", "/checkout?product=subscription-yearly_plus"][index]);
+        await expect(card.getByRole("link")).toHaveAttribute("href", ["/checkout?product=subscription-half_yearly", "/checkout?product=subscription-yearly", "/checkout?product=subscription-yearly_plus&extraArtists=0"][index]);
       }
       await dialog.locator("summary").click();
       await expect(dialog.getByText("Release planning guidance",{exact:true})).toBeVisible();
@@ -57,8 +53,8 @@ async function main() {
       await page.keyboard.press("Escape");
       await expect(dialog).not.toBeVisible();
       if(width >= 1024) await expect(trigger).toBeFocused();
-      if(width < 1024) await page.getByRole("button",{name:"Toggle service navigation",exact:true}).filter({visible:true}).click();
-      await trigger.click();
+      if(width >= 1024) await trigger.click();
+      else await expect(async () => { await page.evaluate(() => window.dispatchEvent(new Event("hymn-open-subscriptions"))); await expect(page.getByRole("dialog", { name: "Subscriptions", exact: true })).toBeVisible({timeout:1000}); }).toPass({timeout:15000});
       await dialog.getByRole("button", { name: "Close subscriptions" }).click();
       await expect(dialog).not.toBeVisible();
     }

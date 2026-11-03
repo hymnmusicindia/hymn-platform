@@ -83,3 +83,17 @@ html body .subscription-dialog :is(button,a,summary):focus-visible { outline:2px
 html body .subscription-dialog .subscription-comparison-card[data-current="true"] { border-color:var(--border)!important; background:var(--surface-gradient)!important; }
 .subscription-comparison-card[data-current="true"] header > span { color:var(--text-muted); }
 .subscription-comparison-card[data-current="true"] .subscription-plan-action > span { display:flex; align-items:center; gap:8px; color:var(--text-muted); }
+
+.label-artist-selector { padding:14px; margin:4px 0 12px; border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--text); }
+.label-artist-selector-title { display:flex; align-items:center; gap:7px; font-size:11px; font-weight:600; }
+.label-artist-stepper { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:14px 0; }
+.label-artist-stepper > strong { font-size:23px; letter-spacing:-.04em; white-space:nowrap; }
+.label-artist-stepper strong span { color:var(--text-muted); }
+.label-artist-stepper > div { display:flex; align-items:center; border:1px solid var(--border); border-radius:7px; overflow:hidden; }
+.label-artist-stepper button { display:grid; place-items:center; width:32px; height:38px; background:var(--surface); color:var(--text); border:0; }
+.label-artist-stepper button:disabled { opacity:.4; }
+.label-artist-stepper input { width:44px; padding:6px 0; text-align:center; border:0; background:var(--surface); color:var(--text); appearance:textfield; }
+.label-artist-stepper input::-webkit-inner-spin-button { appearance:none; }
+.label-artist-selector > input { width:100%; accent-color:var(--text); }
+.label-artist-selector p { font-size:11px; margin:10px 0 6px; font-weight:600; }
+.label-artist-selector small { display:block; font-size:10px; line-height:1.65; color:var(--text-muted); }

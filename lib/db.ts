@@ -1,3 +1,4 @@
+import { subscriptionArtistCapacity } from '@/lib/subscription-artist-slots';
 import {exclusiveBeatEligible,exclusiveBeatRestriction} from "./beat-rights-policy";
 import { customerBrandText } from "@/lib/customer-message";
 import { accrueReferralCommission } from "@/lib/referral-commissions";
@@ -3386,7 +3387,7 @@ export async function getSubscriptionByUserId(userId: number) {
       status: status,
       releasesUsed,
       releaseLimit: effectiveReleaseLimit,
-      artistLimit: sub.artistLimit || 5,
+      artistLimit: await subscriptionArtistCapacity(sub),
       availableFeatures: sub.availableFeatures ? JSON.parse(sub.availableFeatures) : [],
       daysRemaining: daysRemaining,
       autoRenewal: sub.autoRenewal ?? true,

@@ -13,7 +13,7 @@ import { ArrowRight, BadgePercent, CheckCircle2, Gift, Loader2, ShieldCheck, X }
 
 type CheckoutItem =
   | { type: "beat"; beatId: number; licenseType: "mp3" | "wav" | "stems" | "exclusive" | "general" | "basic" | "premium" }
-  | { type: "distribution"; plan: "one_time" | "half_yearly" | "yearly" | "yearly_plus"; trackCount: number; platforms: string[]; youtubeContentIdEnabled?: boolean };
+  | { type: "distribution"; plan: "one_time" | "half_yearly" | "yearly" | "yearly_plus"; trackCount: number; platforms: string[]; youtubeContentIdEnabled?: boolean; extraArtistSlots?: number };
 
 type CheckoutQuote = {
   productId: string;
@@ -52,7 +52,7 @@ function formatMoney(value: number) {
   return `Rs ${Number(value || 0).toLocaleString("en-IN")}`;
 }
 
-function defaultItems(product?: string | null): CheckoutItem[] {
+function defaultItems(product?: string | null, extraArtistSlots = 0): CheckoutItem[] {
   if (product === "subscription-half_yearly") {
     return [{ type: "distribution", plan: "half_yearly", trackCount: 1, platforms: ["Spotify", "Apple Music"] }];
   }
@@ -60,7 +60,7 @@ function defaultItems(product?: string | null): CheckoutItem[] {
     return [{ type: "distribution", plan: "yearly", trackCount: 1, platforms: ["Spotify", "Apple Music"] }];
   }
   if (product === "subscription-yearly_plus") {
-    return [{ type: "distribution", plan: "yearly_plus", trackCount: 1, platforms: ["Spotify", "Apple Music"] }];
+    return [{ type: "distribution", plan: "yearly_plus", extraArtistSlots, trackCount: 1, platforms: ["Spotify", "Apple Music"] }];
   }
   return [{ type: "distribution", plan: "one_time", trackCount: 1, platforms: ["Spotify", "Apple Music"] }];
 }
@@ -80,9 +80,9 @@ function readBeatCart(): CheckoutItem[] {
 
 
 
-export function CheckoutExperience({ product }: { product?: string | null }) {
+export function CheckoutExperience({ product, extraArtistSlots = 0 }: { product?: string | null; extraArtistSlots?: number }) {
   const [buyerDetails,setBuyerDetails]=useState(emptyBeatBuyer);
-  const [items, setItems] = useState<CheckoutItem[]>(() => product === "beatstore" ? [] : defaultItems(product));
+  const [items, setItems] = useState<CheckoutItem[]>(() => product === "beatstore" ? [] : defaultItems(product, extraArtistSlots));
   const [couponInput, setCouponInput] = useState("");
   const [couponCode, setCouponCode] = useState<string | undefined>();
   const [useReferralCredits, setUseReferralCredits] = useState(false);

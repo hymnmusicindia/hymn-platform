@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { ReferralEarningsCalculator } from "@/components/referral-earnings-calculator";
 import {ReferralConsentManager} from "./referral-consent-manager";
 import { ReferralCircle } from "@/components/referral-circle";
 import { ReferralCommissionPanel } from "@/components/referral-commission-panel";
@@ -42,6 +43,7 @@ export function ReferralPanel() {
     <header className="referral-hero"><div><p className="referral-kicker"><Gift size={15}/> REFER A FRIEND</p><h2>Good music deserves<br/><span>good company.</span></h2><p>Invite an artist to HYMN. Earn <strong>ongoing cash commission</strong> on their paid releases, plans, renewals, beats and studio purchases.</p></div><div className="referral-hero-art" aria-hidden="true"><Users size={57} strokeWidth={1}/><span>Grow together.</span></div></header>
     <div className="referral-invite"><div className="referral-invite-heading"><Link2 size={19}/><div><h3>Your invitation. Their next chapter.</h3><p>Share your personal link, or let your friend enter your code during signup.</p></div></div><div className="referral-share-link"><input aria-label="Your referral link" value={data.referralLink} readOnly onFocus={e=>e.target.select()}/><button type="button" className="referral-primary" onClick={()=>void copy(data.referralLink,"Referral link")}><Copy size={15}/> Copy link</button></div><div className="referral-share-actions"><span>YOUR CODE <button type="button" title="Copy referral code" aria-label={`Copy referral code ${data.referralCode}`} onClick={()=>void copy(data.referralCode,"Referral code")}><strong>{data.referralCode}</strong><Copy size={13}/></button></span><div><a href={`https://wa.me/?text=${encodeURIComponent(`Join me on HYMN for your next music release: ${data.referralLink}`)}`} target="_blank" rel="noopener noreferrer" onClick={()=>track("referral_link_shared")}>WhatsApp <ArrowRight size={13}/></a><button type="button" onClick={()=>void share()}><Share2 size={14}/> Share invitation</button></div></div><p className="referral-feedback" role="status">{feedback}</p></div>
     {data.commission ? <ReferralCommissionPanel key={JSON.stringify(data.commission)} data={data.commission} refresh={() => load()} /> : null}
+    <ReferralEarningsCalculator/>
     <ReferralConsentManager/>
     <ReferralCircle />
     <div className="referral-stats">{[{label:"Friends joined",value:data.totalReferrals},{label:"Invitation visits",value:data.visits},{label:"Legacy credit earned",value:money(data.totalCreditsEarned)},{label:"Separate HYMN credit",value:money(data.availableCredit)}].map(stat=><div key={stat.label}><strong>{stat.value}</strong><span>{stat.label}</span></div>)}</div>
