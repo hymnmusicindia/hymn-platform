@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 import { newReferralRewardPolicy } from "@/lib/referral-reward-policy";
 import { REFERRAL_COMMISSION_RATES } from "@/lib/referral-commission-policy";
+import { referralMailbox } from "@/lib/referral-consent-policy";
 
 export const REFERRER_REWARD_INR = 5;
 export const REFERRED_USER_REWARD_INR = 3;
@@ -55,7 +56,7 @@ export async function registerReferralForNewUser(tx: Tx, input: { referredUserId
   if (!referrer || referrer.status !== "ACTIVE") throw new Error("This referral code isn't valid.");
   if (existing || referredUser.referredById) throw new Error("A referral has already been associated with this account.");
   if (await tx.partnerReferral.findUnique({ where: { userId: input.referredUserId } })) throw new Error("A partner referral has already been associated with this account.");
-  if (referrer.id === referredUser.id || referrer.email.toLowerCase() === input.referredEmail.toLowerCase()) throw new Error("You can't use your own referral code.");
+  if (referrer.id === referredUser.id || referralMailbox(referrer.email) === referralMailbox(referredUser.email)) throw new Error("You can't use your own referral code.");
 
   const reverse = await tx.referral.findFirst({ where: { endedAt:null, userId: input.referredUserId, referredUserId: referrer.id }, select: { id: true } });
   if (reverse) throw new Error("Circular referrals are not eligible.");

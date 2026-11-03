@@ -13,6 +13,7 @@ export function commissionMinor(baseMinor: number, rateBps: number) {
   return Number(BigInt(baseMinor) * BigInt(rateBps) / 10000n);
 }
 export function remainingCommissionMinor(originalMinor: number, paidMinor: number, refundedMinor: number) {
+  if (![originalMinor, paidMinor, refundedMinor].every(value => Number.isSafeInteger(value) && value >= 0)) throw new Error("Invalid commission or refund amount.");
   if (paidMinor <= 0) return 0;
   return Number(BigInt(originalMinor) * BigInt(Math.max(0, paidMinor - Math.min(paidMinor, refundedMinor))) / BigInt(paidMinor));
 }
@@ -26,6 +27,7 @@ export function netNetworkActive(program: { netNetworkEffectiveAt?: Date | null 
   return directRateBps === 200 && !!program.netNetworkEffectiveAt && capturedAt >= program.netNetworkEffectiveAt;
 }
 export function netReferralAmounts(netMinor: number, paidMinor: number, directRateBps: number, networkRates: readonly number[]) {
+  if (![netMinor, paidMinor].every(value => Number.isSafeInteger(value) && value >= 0)) throw new Error("Invalid net revenue or paid amount.");
   const base = Math.min(netMinor, paidMinor), direct = commissionMinor(base, directRateBps);
   let budget = Math.max(0, commissionMinor(base, REFERRAL_NET_TOTAL_CAP_BPS) - direct);
   return [direct, ...networkRates.slice(1, 7).map(rate => { const reward = Math.min(budget, commissionMinor(direct, rate)); budget -= reward; return reward; })];

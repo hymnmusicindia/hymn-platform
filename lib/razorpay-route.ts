@@ -1,6 +1,7 @@
 import { Prisma, type RouteTransfer } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { assertStudioPayoutClear } from "@/lib/studio-payout-guard";
+import { assertBeatPayoutClear } from "@/lib/beat-payout-guard";
 import { gatewayPages, gatewayRequest } from "@/lib/gateway-provider";
 import { allocateCreatorShare, minor, rupeesToMinor } from "@/lib/gateway-finance-domain";
 
@@ -57,6 +58,7 @@ export async function reserveRouteEarning(sourceKey: string, actorId: number | n
     if (existing.length) return existing; // A source cannot be dispatched again, including cancelled sources.
     const source = await allocation(tx, sourceKey);
     await assertStudioPayoutClear(tx, source.userId);
+    await assertBeatPayoutClear(tx, source.userId);
     const user = await tx.user.findUniqueOrThrow({ where: { id: source.userId }, select: { status: true } });
     if (user.status !== "ACTIVE") throw new Error("Creator account is not active.");
     const account = await tx.routeLinkedAccount.findUniqueOrThrow({ where: { userId: source.userId } });
@@ -137,6 +139,7 @@ export async function submitRouteTransfer(id: number, actorId: number | null) {
     if (await tx.routeTransfer.count({ where: { paymentId: intent.paymentId, id: { not: id }, status: { in: ["submitting", "review"] } } })) throw new Error("Another transfer for this payment needs reconciliation.");
     await allocation(tx, intent.sourceKey);
     await assertStudioPayoutClear(tx, intent.userId);
+    await assertBeatPayoutClear(tx, intent.userId);
     return tx.routeTransfer.updateMany({ where: { id, status: "reserved" }, data: { status: "submitting", error: null } });
   });
   if (claimed.count !== 1) return refreshRouteTransfer(id);
@@ -155,7 +158,7 @@ export async function submitRouteTransfer(id: number, actorId: number | null) {
 export async function releaseRouteTransfer(id: number, actorId: number | null) {
   enabled(); const intent = await refreshRouteTransfer(id);
   if (!intent.transferId || intent.status !== "held" || intent.reversedMinor > 0) throw new Error("Only verified, unreversed held transfers can be released.");
-  await prisma.$transaction(async tx => { await allocation(tx, intent.sourceKey); await assertStudioPayoutClear(tx, intent.userId); });
+  await prisma.$transaction(async tx => { await allocation(tx, intent.sourceKey); await assertStudioPayoutClear(tx, intent.userId); await assertBeatPayoutClear(tx, intent.userId); });
   if ((await prisma.user.findUniqueOrThrow({ where: { id: intent.userId }, select: { status: true } })).status !== "ACTIVE") throw new Error("Creator account is not active.");
   const account = await prisma.routeLinkedAccount.findUniqueOrThrow({ where: { userId: intent.userId } });
   await verifiedAccount(account.accountId, account.productId);

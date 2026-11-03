@@ -25,11 +25,11 @@ async function main() {
     await run(["node_modules/prisma/build/index.js", "db", "execute", "--file", "prisma/migrations/20261016160000_studio_refund_recovery/migration.sql", "--schema", "prisma/schema.prisma"]);
     // The historical migration fixture must also include subsequent additive fields.
     // This targets only the freshly-created, isolated database above.
-    await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", "prisma/schema.prisma", "--skip-generate"]);
-    await run(["--import", "tsx", "scripts/verify-studio-services-integration.ts"]);
-    await run(["--import", "tsx", "scripts/verify-managed-uploads.ts"]);
-    if (process.argv.includes("--chat-audit")) await run(["--import", "tsx", "scripts/audit-studio-workflow.ts"]);
-    await run(["--import", "tsx", "scripts/verify-studio-financial-recovery.ts"]);
+    await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", "prisma/schema.prisma", "--skip-generate", "--accept-data-loss"]);
+    await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-studio-services-integration.ts"]);
+    await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-managed-uploads.ts"]);
+    if (process.argv.includes("--chat-audit")) await run(["--conditions=react-server", "--import", "tsx", "scripts/audit-studio-workflow.ts"]);
+    await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-studio-financial-recovery.ts"]);
     if (process.argv.includes("--build")) await run(["node_modules/next/dist/bin/next", "build", "--webpack"]);
     if (process.argv.includes("--browser") || process.argv.includes("--chat-audit")) {
       const serverMode = process.argv.includes("--production") ? "start" : "dev";

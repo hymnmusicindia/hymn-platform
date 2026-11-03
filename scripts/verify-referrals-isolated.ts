@@ -29,14 +29,20 @@ async function main() {
     }
     if (process.argv.includes("--auth-only")) { await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-auth-timeout.ts"]); return; }
     if (process.argv.includes("--mail-only")) { await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-mail.ts"]); return; }
+    if (process.argv.includes("--money-only")) {
+      if (!reuse) await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", "prisma/schema.prisma", "--skip-generate"]);
+      await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-money-audit.ts"]); return;
+    }
     await run(["node_modules/prisma/build/index.js", "db", "push", "--schema", "prisma/schema.prisma", "--skip-generate", "--force-reset"]);
+    await run(["--import", "tsx", "scripts/verify-referral-money-policy.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-lifetime-referral-migration.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-domain.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-lifetime-referrals.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-network.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-mail.ts"]);
     await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-net-network.ts"]);
-    if (process.argv.includes("--payments")) for (const script of ["verify-payment-webhooks-integration", "verify-studio-services-integration"]) await run(["--conditions=react-server", "--import", "tsx", `scripts/${script}.ts`]);
+    await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-referral-money-audit.ts"]);
+    if (process.argv.includes("--payments")) await run(["--conditions=react-server", "--import", "tsx", "scripts/verify-payment-webhooks-integration.ts"]);
   } finally {
     if (process.platform === "win32") await run(["-D", databaseDir, "-m", "fast", "-w", "stop"], path.resolve("node_modules/@embedded-postgres/windows-x64/native/bin/pg_ctl.exe"));
     else await pg.stop();

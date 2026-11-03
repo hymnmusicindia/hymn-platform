@@ -5,6 +5,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { commissionMinor, remainingCommissionMinor, REFERRAL_COMMISSION_RATES, REFERRAL_HOLD_DAYS, REFERRAL_MINIMUM_PAYOUT_MINOR, REFERRAL_NETWORK_RATES_BPS, type ReferralCommissionCategory } from "@/lib/referral-commission-policy";
 import { netNetworkActive, netReferralAmounts, REFERRAL_NET_NETWORK_RATES_BPS, REFERRAL_NET_TOTAL_CAP_BPS } from '@/lib/referral-commission-policy';
+import { paymentRefundState, paymentDisputeState } from '@/lib/payment-refund-state';
+import { proportionalRefundMinor } from '@/lib/acquisition-revenue';
 
 type Tx = Prisma.TransactionClient;
 export type CommissionSource = "distribution_order" | "checkout_order" | "subscription_payment" | "studio_payment";
@@ -113,21 +115,10 @@ export async function refreshReferralCommission(tx: Tx, paymentId: string, now =
   await tx.$queryRaw`SELECT id FROM referral_commissions WHERE payment_id = ${paymentId} ORDER BY id FOR UPDATE`;
   const rows = await tx.referralCommission.findMany({ where: { paymentId }, include: { referral: { include: { owner: true, referredUser: true } }, originReferral: { include: { referredUser: true } } } });
   if (!rows.length) return;
-  const events = await tx.paymentWebhookEvent.findMany({ where: { paymentId, signatureValid: true, eventType: { in: ["refund.created", "refund.processed", "payment.dispute.created", "payment.dispute.won", "payment.dispute.lost"] } }, orderBy: { id: "asc" } });
-  const refunds = new Map<string, number>(); const pendingRefunds = new Set<string>();
-  let dispute = "", unknownRefund = false;
-  for (const event of events) {
-    if (event.eventType.startsWith("payment.dispute.")) {
-      // Terminal outcomes outrank delayed opening events.
-      if (event.eventType === "payment.dispute.lost" || (!dispute.endsWith("lost") && event.eventType === "payment.dispute.won") || !dispute) dispute = event.eventType;
-      continue;
-    }
-    const data = event.payloadRedacted as { entity?: { id?: string } } | null;
-    const refundId = data?.entity?.id;
-    if (!refundId || event.amountMinor === null || event.amountMinor < 0) { unknownRefund = true; continue; }
-    if (event.eventType === "refund.processed") { refunds.set(refundId, Math.max(refunds.get(refundId) || 0, event.amountMinor)); pendingRefunds.delete(refundId); }
-    else if (!refunds.has(refundId)) pendingRefunds.add(refundId);
-  }
+  const events = await tx.paymentWebhookEvent.findMany({ where: { paymentId, signatureValid: true, eventType: { in: ["refund.created", "refund.processed", "refund.failed", "payment.dispute.created", "payment.dispute.won", "payment.dispute.lost"] } }, orderBy: { id: "asc" } });
+  const refundState = paymentRefundState(events);
+  const refunds = refundState.processed, pendingRefunds = refundState.pending;
+  let dispute = paymentDisputeState(events), unknownRefund = refundState.unknown;
   const studioFunding = await tx.studioPayment.findUnique({ where: { razorpayPaymentId: paymentId }, include: { refunds: true } });
   if (studioFunding) {
     refunds.clear(); pendingRefunds.clear(); unknownRefund = false;
@@ -155,21 +146,24 @@ export async function refreshReferralCommission(tx: Tx, paymentId: string, now =
     }
   }
   const refundedMinor = dispute === "payment.dispute.lost" ? row.paidMinor : Math.min(row.paidMinor, [...refunds.values()].reduce((a, b) => a + b, 0));
-  let reconciledEvidence: { eligibleNetRevenueMinor: number | null; status: string } | null = null;
-  if (row.policyVersion >= 2) reconciledEvidence = await tx.acquisitionRevenueEvidence.findUnique({ where: { paymentId }, select: { eligibleNetRevenueMinor: true, status: true } });
+  let reconciledEvidence: { eligibleNetRevenueMinor: number | null; status: string; recognisedRevenueMinor: number; refundsChargebacksMinor: number | null } | null = null;
+  if (row.policyVersion >= 2) reconciledEvidence = await tx.acquisitionRevenueEvidence.findUnique({ where: { paymentId }, select: { eligibleNetRevenueMinor: true, status: true, recognisedRevenueMinor: true, refundsChargebacksMinor: true } });
   const origin = rows.find(entry => entry.level === 1);
   let netMinor = row.policyVersion >= 2
     ? (reconciledEvidence?.status === "RECONCILED" && reconciledEvidence.eligibleNetRevenueMinor !== null ? commissionMinor(Math.min(reconciledEvidence.eligibleNetRevenueMinor, row.paidMinor), row.rateBps) : row.netMinor)
     : remainingCommissionMinor(row.originalMinor, row.paidMinor, refundedMinor);
   if (row.policyVersion >= 3) {
-    if (refundedMinor >= row.paidMinor) netMinor = 0;
-    else if (reconciledEvidence?.status === 'RECONCILED' && reconciledEvidence.eligibleNetRevenueMinor !== null && origin) {
+    if (reconciledEvidence?.status === 'RECONCILED' && reconciledEvidence.eligibleNetRevenueMinor !== null && origin) {
       const frozenRates = Array.from({ length: 7 }, (_, i) => rows.find(entry => entry.level === i + 1)?.rateBps ?? 0);
       netMinor = netReferralAmounts(reconciledEvidence.eligibleNetRevenueMinor, row.paidMinor, origin.rateBps, frozenRates)[row.level - 1] ?? 0;
     }
     if (!origin) validPath = false;
   }
-  const held = !validPath || unknownRefund || pendingRefunds.size > 0 || dispute === "payment.dispute.created" || row.referral.riskStatus !== "clear" || row.referral.status === "REJECTED" || row.referral.owner.status !== "ACTIVE" || row.referral.referredUser?.status !== "ACTIVE" || (row.policyVersion >= 2 && reconciledEvidence?.status !== "RECONCILED");
+  // Full reversals apply to every policy version, including frozen direct-only net rewards.
+  if (refundedMinor >= row.paidMinor) netMinor = 0;
+  const requiredRevenueRefund = reconciledEvidence ? proportionalRefundMinor(reconciledEvidence.recognisedRevenueMinor, row.paidMinor, refundedMinor) : 0;
+  const evidenceHeld = row.policyVersion >= 2 && (reconciledEvidence?.status !== "RECONCILED" || reconciledEvidence.eligibleNetRevenueMinor === null || (reconciledEvidence.refundsChargebacksMinor ?? 0) < requiredRevenueRefund);
+  const held = !validPath || unknownRefund || pendingRefunds.size > 0 || dispute === "payment.dispute.created" || row.referral.riskStatus !== "clear" || row.referral.status === "REJECTED" || row.referral.owner.status !== "ACTIVE" || row.referral.referredUser?.status !== "ACTIVE" || evidenceHeld;
   const status = netMinor === 0 ? "REVERSED" : held ? "HELD" : row.eligibleAt > now ? "PENDING" : "AVAILABLE";
   if (row.netMinor !== netMinor || row.status !== status || row.refundedMinor !== refundedMinor) {
     if (row.netMinor !== netMinor) await tx.referralCommissionAdjustment.create({ data: { commissionId: row.id, previousMinor: row.netMinor, amountMinor: netMinor - row.netMinor, resultingMinor: netMinor, eligibleNetRevenueMinor: reconciledEvidence?.eligibleNetRevenueMinor, rateBps: row.rateBps, policyVersion: row.policyVersion, reason: `Payment ${paymentId}; reference ${adjustmentReference || [...refunds.keys(), ...events.filter(event => event.eventType.startsWith("payment.dispute.")).map(event => event.providerEventId)].join(", ") || "provider reconciliation"}; verified refunds ${refundedMinor}; evidence ${reconciledEvidence?.status ?? "legacy provider reconciliation"}` } });
@@ -189,6 +183,13 @@ export async function clearedReferralMinor(tx: Tx, userId: number) {
     JOIN referrals r ON r.id = COALESCE(c.origin_referral_id,c.referral_id)
     JOIN users owner ON owner.id = r.user_id JOIN users buyer ON buyer.id = r.referred_user_id
     WHERE beneficiary.user_id = ${userId} AND c.status = 'AVAILABLE'
+      AND c.eligible_at <= (${new Date()}::timestamptz AT TIME ZONE 'UTC')
+      AND (c.policy_version < 2 OR EXISTS (
+        SELECT 1 FROM acquisition_revenue_evidence evidence WHERE evidence.payment_id = c.payment_id
+          AND evidence.source_type = c.source_type AND evidence.source_id = c.source_id
+          AND evidence.customer_id = r.referred_user_id AND evidence.currency = 'INR'
+          AND evidence.status = 'RECONCILED' AND evidence.eligible_net_revenue_minor = c.eligible_net_revenue_minor
+      ))
       AND NOT EXISTS (SELECT 1 FROM payment_webhook_events e WHERE e.payment_id = c.payment_id AND e.signature_valid = true AND e.processing_state <> 'processed' AND e.event_type IN ('refund.created','refund.processed','payment.dispute.created','payment.dispute.lost'))
       AND r.created_at <= c.captured_at AND (r.ended_at IS NULL OR r.ended_at > c.captured_at)
       AND r.status <> 'REJECTED' AND r.risk_status = 'clear' AND owner.status = 'ACTIVE' AND buyer.status = 'ACTIVE'

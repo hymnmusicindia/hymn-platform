@@ -14,13 +14,17 @@ export async function reconcileReferralQualifications(deadline = Date.now() + 40
         UNION ALL SELECT c.id, 'checkout_order', c.razorpay_payment_id, c.created_at, c.user_id FROM checkout_orders c WHERE c.payment_status = 'paid' AND c.final_amount > 0 AND c.currency = 'INR'
         UNION ALL SELECT p.id, 'subscription_payment', p.razorpay_payment_id, p.created_at, sub.user_id FROM subscription_payments p JOIN subscriptions sub ON sub.id = p.subscription_id WHERE p.status = 'captured' AND p.amount > 0 AND p.currency = 'INR' AND COALESCE(p.plan_snapshot, sub.plan) IN ('half_yearly','yearly','yearly_plus')
         UNION ALL SELECT s.id, 'studio_payment', s.razorpay_payment_id, s.created_at, so.customer_id AS user_id FROM studio_payments s JOIN studio_service_orders so ON so.id = s.order_id WHERE s.status = 'CAPTURED' AND s.amount > 0 AND s.currency = 'INR'
-      ) SELECT c.id, c.source FROM candidates c JOIN referrals ref ON ref.referred_user_id = c.user_id JOIN users owner ON owner.id = ref.user_id JOIN users buyer ON buyer.id = c.user_id WHERE owner.status = 'ACTIVE' AND buyer.status = 'ACTIVE' AND ref.user_id <> c.user_id AND ref.status <> 'REJECTED' AND c.created_at >= ref.created_at AND (ref.ended_at IS NULL OR c.created_at < ref.ended_at) AND c.created_at >= ${program.effectiveAt}
+      ) SELECT c.id, c.source FROM candidates c JOIN referrals ref ON ref.referred_user_id = c.user_id JOIN users owner ON owner.id = ref.user_id JOIN users buyer ON buyer.id = c.user_id WHERE owner.status = 'ACTIVE' AND buyer.status = 'ACTIVE' AND ref.user_id <> c.user_id AND ref.status <> 'REJECTED' AND c.created_at >= ref.created_at AND (ref.ended_at IS NULL OR c.created_at < ref.ended_at) AND c.created_at >= (${program.effectiveAt}::timestamptz AT TIME ZONE 'UTC')
       AND c.payment_id LIKE 'pay_%' AND NOT EXISTS (SELECT 1 FROM referral_commissions r WHERE r.payment_id = c.payment_id)
+      AND NOT EXISTS (
+        SELECT 1 FROM acquisition_revenue_evidence evidence WHERE evidence.payment_id = c.payment_id
+          AND evidence.status <> 'RECONCILED' AND c.created_at >= (${program.netRevenueEffectiveAt ?? new Date('9999-01-01T00:00:00Z')}::timestamptz AT TIME ZONE 'UTC')
+      )
       ORDER BY c.created_at, c.id LIMIT 100`;
     for (const row of missing) { if (Date.now() >= deadline) break; await prisma.$transaction(tx => accrueReferralCommission(tx, row.source, row.id), { timeout: 20000 }); commissions++; }
     // Rotate cleared entries too: an intermediate account can be held after capture.
     const due = await prisma.referralCommission.findMany({ where: { OR: [{ status: { in: ["PENDING", "HELD"] }, eligibleAt: { lte: new Date() } }, { status: "AVAILABLE" }] }, orderBy: { updatedAt: "asc" }, take: 100 });
-    for (const row of due) { if (Date.now() >= deadline) break; await prisma.$transaction(tx => refreshReferralCommission(tx, row.paymentId)); }
+    for (const paymentId of new Set(due.map(row => row.paymentId))) { if (Date.now() >= deadline) break; await prisma.$transaction(tx => refreshReferralCommission(tx, paymentId)); }
   }
   const payments = await prisma.$queryRaw<Array<{ id: number }>>`SELECT p.id FROM subscription_payments p
     JOIN subscriptions s ON s.id = p.subscription_id JOIN referrals r ON r.referred_user_id = s.user_id

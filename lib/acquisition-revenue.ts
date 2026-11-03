@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { getUserSessionSecret } from "@/lib/env";
+import { paymentRefundState, paymentDisputeState } from "@/lib/payment-refund-state";
 
 export type RevenueSource = "distribution_order" | "checkout_order" | "subscription_payment" | "studio_payment";
 export const ACQUISITION_ATTRIBUTION_COOKIE = "hymn_acquisition_attribution";
@@ -27,7 +28,18 @@ export async function recordVerifiedAcquisitionRevenue(input: { sourceType: Reve
 export async function flagAcquisitionRevenueAdjustment(paymentId: string, providerEventId: string) {
   const evidence = await prisma.acquisitionRevenueEvidence.findUnique({ where: { paymentId } });
   if (!evidence || evidence.status !== "RECONCILED") return;
-  await prisma.acquisitionRevenueEvidence.update({ where: { id: evidence.id }, data: { status: "ADJUSTMENT_REQUIRED" } });
+  const events = await prisma.paymentWebhookEvent.findMany({ where: { paymentId, signatureValid: true, eventType: { in: ['refund.created', 'refund.processed', 'refund.failed', 'payment.dispute.created', 'payment.dispute.won', 'payment.dispute.lost'] } } });
+  const refunds = paymentRefundState(events), dispute = paymentDisputeState(events);
+  const sourceId = Number(evidence.sourceId);
+  const source = !Number.isSafeInteger(sourceId) || sourceId <= 0 ? null : evidence.sourceType === 'distribution_order' ? await prisma.distributionOrder.findUnique({ where: { id: sourceId }, select: { amount: true } }) : evidence.sourceType === 'checkout_order' ? await prisma.checkoutOrder.findUnique({ where: { id: sourceId }, select: { finalAmount: true } }) : evidence.sourceType === 'subscription_payment' ? await prisma.subscriptionPayment.findUnique({ where: { id: sourceId }, select: { amount: true } }) : evidence.sourceType === 'studio_payment' ? await prisma.studioPayment.findUnique({ where: { id: sourceId }, select: { amount: true } }) : null;
+  const gross = source && 'finalAmount' in source ? Math.round(Number(source.finalAmount) * 100) : source && 'amount' in source ? Math.round(Number(source.amount) * (evidence.sourceType === 'subscription_payment' ? 1 : 100)) : 0;
+  const refunded = dispute === 'payment.dispute.lost' ? gross : Math.min(gross, refunds.totalMinor);
+  const required = gross > 0 ? proportionalRefundMinor(evidence.recognisedRevenueMinor, gross, refunded) : 0;
+  // A new delivery ID is not a new financial adjustment. Already-accounted
+  // refunds and delayed opening events must not reopen a settled review.
+  if (source && gross > 0 && !refunds.unknown && !refunds.pending.size && dispute !== 'payment.dispute.created' && (evidence.refundsChargebacksMinor ?? 0) >= required) return;
+  const changed = await prisma.acquisitionRevenueEvidence.updateMany({ where: { id: evidence.id, status: 'RECONCILED', updatedAt: evidence.updatedAt }, data: { status: "ADJUSTMENT_REQUIRED" } });
+  if (!changed.count) return;
   if (evidence.reviewedByEmployeeId && evidence.workspaceId) await prisma.acquisitionProgramAudit.create({ data: { workspaceId: evidence.workspaceId, actorEmployeeId: evidence.reviewedByEmployeeId, action: "revenue.provider_adjustment_received", entityId: evidence.id, metadata: { providerEventId, paymentId, previousStatus: evidence.status } } });
 }
 
@@ -53,7 +65,8 @@ export function studioRetainedRevenueMinor(paymentAmountMinor: number, commissio
 
 export function proportionalRefundMinor(recognisedRevenueMinor: number, grossPaymentMinor: number, refundAmountMinor: number) {
   if (![recognisedRevenueMinor, grossPaymentMinor, refundAmountMinor].every(Number.isSafeInteger) || recognisedRevenueMinor < 0 || grossPaymentMinor <= 0 || refundAmountMinor < 0) throw new Error("Refund allocation inputs are invalid.");
-  return Math.min(recognisedRevenueMinor, Math.round(recognisedRevenueMinor * Math.min(grossPaymentMinor, refundAmountMinor) / grossPaymentMinor));
+  const gross = BigInt(grossPaymentMinor);
+  return Number((BigInt(recognisedRevenueMinor) * BigInt(Math.min(grossPaymentMinor, refundAmountMinor)) + gross / 2n) / gross);
 }
 
 export async function attachNewCustomerToAcquisitionLead(tx: Prisma.TransactionClient, input: { token?: string | null; customerId: number; email: string }) {

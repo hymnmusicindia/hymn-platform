@@ -16,6 +16,7 @@ import { acquisitionEmailStarters } from "./acquisition-email";
 import { can, demand, TeamError, type Actor } from "./policy";
 import { eligibleNetRevenue, proportionalRefundMinor } from "@/lib/acquisition-revenue";
 import { accrueReferralCommission, refreshReferralCommission } from "@/lib/referral-commissions";
+import { paymentRefundState, paymentDisputeState } from "@/lib/payment-refund-state";
 
 type Tx = Prisma.TransactionClient;
 export async function acquisitionRead(a: Actor, resource: string, params: URLSearchParams) {
@@ -308,23 +309,17 @@ export async function acquisitionMutation(tx: Tx, a: Actor, resource: string, bo
     if (evidence.status === "DISPUTED" && body.resolveDispute !== true) throw new TeamError("Explicitly confirm that the documented dispute has been resolved before reconciliation.", 409);
     const source = evidence.sourceType === "distribution_order" ? await tx.distributionOrder.findUnique({ where: { id: Number(evidence.sourceId) } }) : evidence.sourceType === "checkout_order" ? await tx.checkoutOrder.findUnique({ where: { id: Number(evidence.sourceId) } }) : evidence.sourceType === "subscription_payment" ? await tx.subscriptionPayment.findUnique({ where: { id: Number(evidence.sourceId) }, include: { subscription: true } }) : evidence.sourceType === "studio_payment" ? await tx.studioPayment.findUnique({ where: { id: Number(evidence.sourceId) }, include: { order: true, refunds: true } }) : null;
     const paymentId = source && "razorpayPaymentId" in source ? source.razorpayPaymentId : null;
-    const paid = source && "paymentStatus" in source ? source.paymentStatus === "paid" : source && "status" in source ? (evidence.sourceType === "studio_payment" ? source.status === "CAPTURED" : source.status === "captured") : false;
+    // A captured payment with a partial refund still has retained revenue to
+    // reconcile. Provider refund/dispute checks below determine what can clear.
+    const paid = source && "paymentStatus" in source ? ["paid", "partial_refund_review"].includes(source.paymentStatus) : source && "status" in source ? (evidence.sourceType === "studio_payment" ? source.status === "CAPTURED" : source.status === "captured") : false;
     if (!source || !paid || paymentId !== evidence.paymentId) throw new TeamError("The source payment is not currently verified and paid.", 409);
     const providerEvents = await tx.paymentWebhookEvent.findMany({ where: { paymentId: evidence.paymentId, signatureValid: true, eventType: { in: ["refund.created", "refund.processed", "refund.failed", "payment.dispute.created", "payment.dispute.won", "payment.dispute.lost"] } }, orderBy: { id: "asc" } });
-    const processedRefunds = new Map<string, number>(); const pendingRefunds = new Set<string>();
-    for (const event of providerEvents) {
-      if (!event.eventType.startsWith("refund.")) continue;
-      const refund = (event.payloadRedacted as { entity?: { id?: string } } | null)?.entity; const refundId = refund?.id;
-      if (!refundId) throw new TeamError("A provider refund event is missing its refund reference; resolve it before reconciliation.", 409);
-      if (event.eventType === "refund.created" && !processedRefunds.has(refundId)) pendingRefunds.add(refundId);
-      else if (event.eventType === "refund.failed") pendingRefunds.delete(refundId);
-      else if (event.eventType === "refund.processed") { processedRefunds.set(refundId, Math.max(processedRefunds.get(refundId) || 0, event.amountMinor || 0)); pendingRefunds.delete(refundId); }
-    }
+    const refundState = paymentRefundState(providerEvents);
+    const processedRefunds = refundState.processed, pendingRefunds = refundState.pending;
+    if (refundState.unknown) throw new TeamError("A provider refund event has an invalid refund reference or amount; resolve it before reconciliation.", 409);
     if (pendingRefunds.size) throw new TeamError("A provider refund is still pending; reconcile after its final provider status arrives.", 409);
-    const hasDispute = providerEvents.some(event => event.eventType === "payment.dispute.created");
-    const disputeWon = providerEvents.some(event => event.eventType === "payment.dispute.won");
-    const disputeLost = providerEvents.some(event => event.eventType === "payment.dispute.lost");
-    if (hasDispute && !disputeWon && !disputeLost) throw new TeamError("A payment dispute is unresolved; keep rewards out of payout until it is decided.", 409);
+    const dispute = paymentDisputeState(providerEvents), disputeLost = dispute === 'payment.dispute.lost';
+    if (dispute === 'payment.dispute.created') throw new TeamError("A payment dispute is unresolved; keep rewards out of payout until it is decided.", 409);
     const grossPaymentMinor = evidence.sourceType === "subscription_payment" && source && "amount" in source ? Number(source.amount) : evidence.sourceType === "distribution_order" && source && "amount" in source ? Number(source.amount) * 100 : evidence.sourceType === "checkout_order" && source && "finalAmount" in source ? Math.round(Number(source.finalAmount) * 100) : source && "amount" in source ? Math.round(Number(source.amount) * 100) : 0;
     const webhookRefundMinor = [...processedRefunds.values()].reduce((sum, amount) => sum + amount, 0);
     const ledgerRefundMinor = source && "refunds" in source && Array.isArray(source.refunds) ? source.refunds.filter((refund: { status: string }) => refund.status === "PROCESSED").reduce((sum: number, refund: { amountMinor: number }) => sum + refund.amountMinor, 0) : 0;

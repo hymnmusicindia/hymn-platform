@@ -12,6 +12,7 @@ import { checkoutRetainedRevenueMinor, flagAcquisitionRevenueAdjustment, recordV
 import { applyStudioDispute, recordStudioRefund } from "@/lib/studio-refunds";
 import { syncSettlement } from "@/lib/gateway-settlements";
 import { refreshRouteSettlement, refreshRouteTransfer } from "@/lib/razorpay-route";
+import { paymentRefundState, paymentDisputeState } from "@/lib/payment-refund-state";
 
 type RazorpayEntity = { id?: string; order_id?: string; payment_id?: string; subscription_id?: string; invoice_id?: string; plan_id?: string; amount?: number; currency?: string; status?: string; error_code?: string; error_description?: string; current_start?: number | null; current_end?: number | null; start_at?: number | null; ended_at?: number | null; charge_at?: number | null; created_at?: number; notes?: Record<string, unknown> };
 type RazorpayPayload = { event?: string; id?: string; payload?: { dispute?: { entity?: RazorpayEntity }; settlement?: { entity?: RazorpayEntity }; transfer?: { entity?: RazorpayEntity }; payment?: { entity?: RazorpayEntity }; order?: { entity?: RazorpayEntity }; refund?: { entity?: RazorpayEntity }; subscription?: { entity?: RazorpayEntity } } };
@@ -243,35 +244,58 @@ async function applyPaymentState(input: { razorpayOrderId: string; paymentId: st
     else if (["authorized", "failed"].includes(input.state) && !studioPayment.capturedAt) await prisma.studioPayment.updateMany({ where: { id: studioPayment.id, capturedAt: null, status: { in: ["CREATED", "AUTHORIZED", "FAILED"] } }, data: { status: input.state.toUpperCase() } });
     return;
   }
-  if (input.state === "refund_failed") return;
   await prisma.$transaction(async tx => {
     const distribution = await tx.distributionOrder.findUnique({ where: { razorpayOrderId: input.razorpayOrderId } });
     const checkout = await tx.checkoutOrder.findUnique({ where: { razorpayOrderId: input.razorpayOrderId }, include: { items: true } });
     const studio = await tx.studioPayment.findUnique({ where: { razorpayOrderId: input.razorpayOrderId }, include: { order: true } });
     if ([distribution, checkout, studio].filter(Boolean).length > 1) throw new Error("Ambiguous persisted Razorpay order identifier.");
+    if (input.paymentId && ['disputed', 'paid', 'charged_back'].includes(input.state)) {
+      const disputes = await tx.paymentWebhookEvent.findMany({ where: { paymentId: input.paymentId, signatureValid: true, eventType: { in: ['payment.dispute.created', 'payment.dispute.won', 'payment.dispute.lost'] } } });
+      const outcome = paymentDisputeState(disputes);
+      const state = outcome === 'payment.dispute.lost' ? 'charged_back' : outcome === 'payment.dispute.won' ? 'paid' : 'disputed';
+      if (state !== input.state) return;
+    }
+    // Use distinct refund IDs across the payment, not the amount on only the
+    // latest delivery. Two partial refunds can reverse a payment in full.
+    async function refundTransition(current: string, capturedPaymentId: string | null, grossMinor: number) {
+      if (!["refunded", "refund_pending", "refund_failed"].includes(input.state)) return null;
+      if (!input.paymentId || capturedPaymentId !== input.paymentId) throw new Error("Refund event does not match a captured payment.");
+      const events = await tx.paymentWebhookEvent.findMany({ where: { paymentId: input.paymentId, signatureValid: true, eventType: { in: ["refund.created", "refund.processed", "refund.failed"] } } });
+      const refunds = paymentRefundState(events);
+      if (refunds.unknown) throw new Error("Refund reference or amount is invalid; payment requires review.");
+      if (refunds.totalMinor >= grossMinor) return { state: "refunded", full: true };
+      if (["refunded", "charged_back"].includes(current)) return { state: current, full: false };
+      if (refunds.totalMinor > 0) return { state: "partial_refund_review", full: false };
+      if (refunds.pending.size) return { state: current === "disputed" ? current : "refund_pending", full: false };
+      // A failed refund does not undo a live dispute, or reset an unrelated
+      // administrative review. Delayed refund.created must remain terminal.
+      return { state: current === "refund_pending" ? "paid" : current, full: false };
+    }
     if (distribution) {
-      if (ignoreStalePaymentState(distribution.paymentStatus, input.state)) return;
       if (distribution.razorpayPaymentId && input.paymentId && distribution.razorpayPaymentId !== input.paymentId) throw new Error("Payment event does not match the captured order payment.");
-      const fullReversal = ["refunded", "charged_back"].includes(input.state) && input.amountMinor === distribution.amount * 100;
-      const state = ["refunded", "charged_back"].includes(input.state) && !fullReversal ? "partial_refund_review" : input.state;
+      const refund = await refundTransition(distribution.paymentStatus, distribution.razorpayPaymentId, distribution.amount * 100);
+      if (refund ? refund.state === distribution.paymentStatus : ignoreStalePaymentState(distribution.paymentStatus, input.state)) return;
+      const fullReversal = refund?.full ?? (["refunded", "charged_back"].includes(input.state) && input.amountMinor === distribution.amount * 100);
+      const state = refund?.state ?? (["refunded", "charged_back"].includes(input.state) && !fullReversal ? "partial_refund_review" : input.state);
       await tx.distributionOrder.update({ where: { id: distribution.id }, data: { paymentStatus: state } });
       if (fullReversal && distribution.plan !== "one_time") await tx.subscription.updateMany({ where: { userId: distribution.userId, status: "active" }, data: { status: "cancelled" } });
-      if (fullReversal) await reverseReferralForTransactionInTransaction(tx, { transactionType: "distribution_order", transactionId: distribution.id, reason: input.state as "refunded" | "charged_back" });
+      if (fullReversal) await reverseReferralForTransactionInTransaction(tx, { transactionType: "distribution_order", transactionId: distribution.id, reason: state as "refunded" | "charged_back" });
       await tx.auditLog.create({ data: { action: `RAZORPAY_${input.state.toUpperCase()}`, entity: "distribution_order", entityId: String(distribution.id), metadata: { eventId: input.eventId, paymentId: input.paymentId } } });
       return;
     }
     if (studio) throw new Error("Studio payment changed during processing. Retry the event.");
     if (!checkout) return;
-    if (ignoreStalePaymentState(checkout.paymentStatus, input.state)) return;
     if (checkout.razorpayPaymentId && input.paymentId && checkout.razorpayPaymentId !== input.paymentId) throw new Error("Payment event does not match the captured order payment.");
+    const fullAmountMinor = Number(checkout.finalAmount.mul(100));
+    const refund = await refundTransition(checkout.paymentStatus, checkout.razorpayPaymentId, fullAmountMinor);
+    if (refund ? refund.state === checkout.paymentStatus : ignoreStalePaymentState(checkout.paymentStatus, input.state)) return;
     if (input.state === "failed") {
       for (const item of checkout.items.filter((entry) => normalizeBeatLicenseType(entry.licenseType) === "exclusive")) {
         await tx.beat.updateMany({ where: { id: item.beatId, status: "EXCLUSIVE_RESERVED", exclusiveReservationOrderId: checkout.razorpayOrderId }, data: { status: "PUBLISHED", exclusiveReservedByUserId: null, exclusiveReservationOrderId: null, exclusiveReservationExpiresAt: null } });
       }
     }
-    const fullAmountMinor = Number(checkout.finalAmount.mul(100));
-    const isFullReversal = ["refunded", "charged_back"].includes(input.state) && input.amountMinor === fullAmountMinor;
-    const state = ["refunded", "charged_back"].includes(input.state) && !isFullReversal ? "partial_refund_review" : input.state;
+    const isFullReversal = refund?.full ?? (["refunded", "charged_back"].includes(input.state) && input.amountMinor === fullAmountMinor);
+    const state = refund?.state ?? (["refunded", "charged_back"].includes(input.state) && !isFullReversal ? "partial_refund_review" : input.state);
     await tx.checkoutOrder.update({ where: { id: checkout.id }, data: { paymentStatus: state } });
     if (isFullReversal && input.paymentId) {
       await reverseReferralForTransactionInTransaction(tx, { transactionType: "checkout_order", transactionId: checkout.id, reason: state as "refunded" | "charged_back" });
