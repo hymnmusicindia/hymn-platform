@@ -4,7 +4,7 @@ import nodemailer from "nodemailer";
 import { getPublicAppUrl } from "@/lib/public-app-url";
 
 export type EmailAttachment = { filename: string; content: Buffer; contentType: string };
-type EmailSendInput = { from: string; to: string; subject: string; html: string; text: string; replyTo?: string; attachments?: EmailAttachment[]; preserveNames?: string[] };
+type EmailSendInput = { from: string; to: string; subject: string; html: string; text: string; replyTo?: string; priority?: 'high' | 'normal' | 'low'; attachments?: EmailAttachment[]; preserveNames?: string[] };
 type EmailSendResult = { data: { id?: string } | null; error: { message: string } | null };
 
 function mailbox(value?: string) {

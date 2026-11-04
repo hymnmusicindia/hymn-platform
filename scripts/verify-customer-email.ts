@@ -2,8 +2,14 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { requestEmailCode, verifyEmailCode } from '../lib/email-sign-in';
 import { prisma } from '../lib/prisma';
+import { signInEmail } from '../lib/email/sign-in-template';
 async function main() {
   assert.match(process.env.DATABASE_URL || '', /127\.0\.0\.1:55488\/customer_email_fixture/);
+  const mail = signInEmail('000123', new Date('2026-11-04T08:00:00Z'), 'https://hymnmusic.fun');
+  assert.match(mail.subject, /000123/); assert.match(mail.text, /2026-11-04 08:00:00 UTC/);
+  assert.notEqual(mail.subject, signInEmail('654321', new Date(), 'https://hymnmusic.fun').subject);
+  assert.ok(!mail.html.includes('wa.me'), 'Sign-in emails contain no promotional footer.');
+  assert.throws(() => signInEmail('<code>', new Date(), 'https://hymnmusic.fun'));
   const codes = new Map<string, string>();
   const deliver = async (email: string, code: string) => { codes.set(email, code); };
   const email = `${randomUUID()}@fixture.invalid`;
@@ -35,6 +41,12 @@ async function main() {
   const adminCode = await requestEmailCode(admin.email, '', 'admin', deliver); assert.equal(codes.has(admin.email), true);
   const adminLogin = await verifyEmailCode(admin.email, adminCode.challenge, codes.get(admin.email)!, 'admin-verify');
   assert.equal(adminLogin.user.id, admin.id); assert.equal(adminLogin.user.role, 'ADMIN', 'OTP preserves the existing account role.');
+  const originalAuditRead = prisma.auditLog.findFirst;
+  try {
+    prisma.auditLog.findFirst = (async () => { throw Error('Fixture identity lookup unavailable'); }) as typeof prisma.auditLog.findFirst;
+    await assert.rejects(requestEmailCode('database-outage@fixture.invalid', '', 'database-outage', deliver), /identity lookup unavailable/);
+    assert.equal(codes.has('database-outage@fixture.invalid'), false, 'A failed identity lookup cannot pretend mail was delivered.');
+  } finally { prisma.auditLog.findFirst = originalAuditRead; }
   await assert.rejects(requestEmailCode('offline@fixture.invalid', '', 'offline', async () => { throw Error('SMTP unavailable'); }));
   assert.equal(await prisma.user.count({ where: { email: 'offline@fixture.invalid' } }), 0);
   console.log('PASS customer email OTP: verified signup, existing-role preservation, concurrent single use, replay, attempts, wrong email, tampering, expiry, restricted accounts and SMTP failure; no real email sent.');

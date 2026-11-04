@@ -7,7 +7,7 @@ import { consumeRateLimit } from '@/lib/rate-limit';
 import { assertNotMergedIdentity } from '@/lib/merged-account-identity';
 import { createUniqueReferralCode } from '@/lib/referrals';
 import { getEmailClient, getEmailConfig } from '@/lib/email/email-client';
-import { emailLayout, emailText } from '@/lib/email/email-templates';
+import { signInEmail } from '@/lib/email/sign-in-template';
 
 const PURPOSE = 'hymn-customer-email-v1', TTL = 600;
 export class EmailSignInError extends Error {
@@ -22,9 +22,9 @@ async function limit(scope: string, identity: string, count: number, seconds: nu
 async function deliver(email: string, code: string) {
   const config = getEmailConfig(), client = getEmailClient({ timeoutMs: 15000 });
   if (!config.enabled || !client) throw new EmailSignInError('Email sign-in is temporarily unavailable.', 503);
-  const template = { title: 'Your HYMN sign-in code', body: `Your verification code is ${code}.\n\nUse it to sign in or create your HYMN account. It expires in 10 minutes and works once.`, ctaLabel: '', ctaUrl: '', notice: 'Never share this code. If you did not request it, ignore this email.' };
+  const template = signInEmail(code, new Date(), config.appUrl);
   try {
-    const result = await client.emails.send({ from: config.from, to: email, subject: template.title, html: emailLayout(template), text: emailText(template), ...(config.replyTo ? { replyTo: config.replyTo } : {}) });
+    const result = await client.emails.send({ from: config.from, to: email, priority: 'high', ...template, ...(config.replyTo ? { replyTo: config.replyTo } : {}) });
     if (result.error) throw new Error('Delivery rejected.');
     console.info('CUSTOMER_EMAIL_OTP_ACCEPTED', { recipientKey: mac(`delivery:${email}`).slice(0, 16) });
   } catch (error) {
